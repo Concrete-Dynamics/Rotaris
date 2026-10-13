@@ -1,5 +1,5 @@
 import { asSessionId, type Clocks, countNoun, err, type MachineId, millis, type Millis, ok, type Result, type SessionId, toIsoUtc } from '@rotaris/kernel';
-import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
+import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { pathKey } from '@rotaris/platform';
 import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal, type TimelineRow } from '@rotaris/store';
@@ -100,6 +100,13 @@ export interface ToolPortContext {
    */
   readonly modeOverride?: string | null | undefined;
   readonly attended: () => boolean;
+  /**
+   * PD-ORCH-005 clause 9 / REQ-SESSION-031: every question prompt pending in this session right now — the run's own list
+   * (`Run.pendingQuestions`, every port's), which the port mirrors to `pending_questions` each time one of its prompts is
+   * put or ends, so the mirror is the session's whole list and not one conversation's. Absent (a test, a port no run
+   * built) means the port's own list.
+   */
+  readonly pendingQuestionsOfSession?: (() => readonly QuestionPrompt[]) | undefined;
   readonly warn: (message: string) => void;
   /**
    * A line at `info`: the application log (PD-MONITOR-002, whose default threshold keeps it) and the session log at
@@ -1311,6 +1318,11 @@ function mcpEvidenceOf(json: string): Pick<AgentRecord, 'grantedMcp' | 'mcpServe
 }
 
 /** REQ-TOOLS-060: the mirror is a JSON array of payloads; an unreadable mirror reads as empty rather than failing the record. */
+/** REQ-SESSION-031: how many question prompts the run host's mirror lists (v35); a malformed mirror counts none. */
+function pendingQuestionCount(json: string | undefined): number {
+  try { const v = JSON.parse(json ?? '[]') as unknown; return Array.isArray(v) ? v.length : 0; } catch { return 0; }
+}
+
 function parsePending(json: string): SessionRecord['pendingApprovals'] {
   try {
     const v: unknown = JSON.parse(json);
@@ -1415,7 +1427,10 @@ export class Sessions {
         checkpointCount: dal.checkpointCount(asSessionId(row.session_id)),
         relativeTime: relativeTime(row.updated_at, now),
         detail: row.workspace_root,
-        awaitingInput: parsePending(row.pending_approvals).length > 0,
+        // REQ-SESSION-031: awaiting input while an approval OR a question is pending. The questions are the run host's mirror
+        // (v35), since a prompt lives in the live run; until it, a run waiting on a question was listed without the tag
+        // (docs/defects/fixed/the-session-browser-shows-no-awaiting-input-for-a-run-waiting-on-a-question.md).
+        awaitingInput: parsePending(row.pending_approvals).length > 0 || pendingQuestionCount(row.pending_questions) > 0,
         stale: isActiveStatus(row.execution_status) && !live,
         tokens: row.tokens_input + row.tokens_output,
         durationLabel: durationLabel(row.run_started_at, isActiveStatus(row.execution_status) && live ? new Date(now).toISOString() : row.updated_at),
@@ -1572,7 +1587,7 @@ export class Sessions {
     // PD-TOOLS-005: one away holder per RUN, on the same terms — reached by every agent through `baseCtx`, discarded with the run.
     const presence = new UserPresence({ record: warn, writer });
     live.presence = presence;
-    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, info: (m: string) => { log?.info(m); this.deps.log?.(m); }, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
+    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, info: (m: string) => { log?.info(m); this.deps.log?.(m); }, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, pendingQuestionsOfSession: () => runRef.run?.pendingQuestions() ?? [], presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     // With delegation the run creates the root's port itself (its own identity); the base port exists only without it.
     const tools: ToolPort | null = null;
     live.tools = tools;
@@ -1796,7 +1811,7 @@ export class Sessions {
     // PD-TOOLS-005: a continuation is a new run, so it starts with the user present — a previous run's away stretch is not inherited.
     const presence = new UserPresence({ record: warn, writer: s.writer });
     s.presence = presence;
-    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, info: (m: string) => { s.log?.info(m); this.deps.log?.(m); }, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
+    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, info: (m: string) => { s.log?.info(m); this.deps.log?.(m); }, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, pendingQuestionsOfSession: () => runRef.run?.pendingQuestions() ?? [], presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     s.tools = null;
     // PD-ORCH-005 clause 3: what a crash left is recorded before the settle, which leaves every `paused` agent as it is.
     // A run of this process that parked closed no tool port: a ring row still `running` may be its call still under way —

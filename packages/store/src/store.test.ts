@@ -9,8 +9,10 @@ import { asSessionId, fileStamp, millis, mintMachineId, mintWorkspaceId, type Ma
 import { nodeClocks } from '@rotaris/platform';
 import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, FILE_STAMP_LENGTH, openStore, openStoreForInspection, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, storePathLimit, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
-/** PD-TOOLS-006 revision 6 (OQ-220): what v34 added, undone before v33's so a test that lowers `user_version` below 34 can climb it again. */
-const UNDO_V34 = 'ALTER TABLE children DROP COLUMN todo_item;';
+/** PD-ORCH-005 clause 9 / REQ-SESSION-031: what v35 added, undone before v34's so a test that lowers `user_version` below 35 can climb it again. */
+const UNDO_V35 = 'ALTER TABLE sessions DROP COLUMN pending_questions;';
+/** PD-TOOLS-006 revision 6 (OQ-220): what v34 added, undone before v33's so a test that lowers `user_version` below 34 can climb it again. v35's goes first. */
+const UNDO_V34 = `${UNDO_V35} ALTER TABLE children DROP COLUMN todo_item;`;
 /** REQ-SESSION-140 with REQ-MONITOR-102: what v33 added, undone before v32's so a test that lowers `user_version` below 33 can climb it again. v34's goes first. */
 const UNDO_V33 = `${UNDO_V34} ALTER TABLE plan_roots DROP COLUMN tool_calls;`;
 /** REQ-MONITOR-102 (OQ-116, R-071): what v32 added, undone before v31's so a test that lowers `user_version` below 32 can climb it again. v33's goes first. */
@@ -963,8 +965,9 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     // v28 the call's attachments and inherited-context block (REQ-LIBRARY-098, REQ-TOOLS-152); v29 the plan cycle's root
     // under way (REQ-MONITOR-102 with REQ-ORCH-153); v30 every plan cycle's root, for good (REQ-MONITOR-044 with REQ-ORCH-153); v31 the
     // backend a confined run used (REQ-SANDBOX-121); v32 the calls of the plan cycle's root under way that the total holds
-    // (REQ-MONITOR-102, OQ-116); v33 each plan cycle's root's own count, kept past its release (REQ-SESSION-140).
-    expect(CURRENT_SCHEMA_VERSION).toBe(34);
+    // (REQ-MONITOR-102, OQ-116); v33 each plan cycle's root's own count, kept past its release (REQ-SESSION-140); v34 the todo
+    // item a delegation serves (PD-TOOLS-006 revision 6); v35 the pending questions' mirror (PD-ORCH-005 clause 9, REQ-SESSION-031).
+    expect(CURRENT_SCHEMA_VERSION).toBe(35);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null, continuation_of: null, interruption: null, resume_state: null, write_scope: '[]', suppress_auto_context: 0, attach_artifacts: '[]', inherited_context_block: '', todo_item: null });
@@ -1261,10 +1264,10 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
   it('is v19, and the migration list is append-only with nothing renumbered', () => {
     // Part X reserved v11, Part Y v12, Part AB v13, Part AE v14 and Part AK v15 (plan Reservations, ruled 2026-09-09: the ladder and
     // the pin ride with the v15 reservation) before any of them was written; PD-LIBRARY-001 appended v16; the plan gate appended
-    // v17; ADR-0061 appended v18; ADR-0065 appended v19; the plan_cycles cascade appended v20; PD-MONITOR-001 revision 2 appended v21; PD-ORCH-004 appended v22; PD-ORCH-005 appended v23, and its revision 4 v24; REQ-TOOLS-152's `suppress_auto_context` (R-067) appended v25; REQ-MONITOR-102's root count (R-067) appended v26; the explicit cancel's mark (OQ-103, R-067) appended v27; a child's attachments and inherited-context block (REQ-LIBRARY-098, REQ-TOOLS-152, R-067) appended v28; the plan cycle's root under way (REQ-MONITOR-102 with REQ-ORCH-153, R-067) appended v29; every plan cycle's root, kept (REQ-MONITOR-044 with REQ-ORCH-153, R-067), v30; the backend a confined run used (REQ-SANDBOX-121), v31; the calls of the plan cycle's root under way the total holds (REQ-MONITOR-102, OQ-116, R-071), v32; each plan cycle's root's own count (REQ-SESSION-140, fin22), v33. The ladder is asserted whole rather than at its top, so a later part
+    // v17; ADR-0061 appended v18; ADR-0065 appended v19; the plan_cycles cascade appended v20; PD-MONITOR-001 revision 2 appended v21; PD-ORCH-004 appended v22; PD-ORCH-005 appended v23, and its revision 4 v24; REQ-TOOLS-152's `suppress_auto_context` (R-067) appended v25; REQ-MONITOR-102's root count (R-067) appended v26; the explicit cancel's mark (OQ-103, R-067) appended v27; a child's attachments and inherited-context block (REQ-LIBRARY-098, REQ-TOOLS-152, R-067) appended v28; the plan cycle's root under way (REQ-MONITOR-102 with REQ-ORCH-153, R-067) appended v29; every plan cycle's root, kept (REQ-MONITOR-044 with REQ-ORCH-153, R-067), v30; the backend a confined run used (REQ-SANDBOX-121), v31; the calls of the plan cycle's root under way the total holds (REQ-MONITOR-102, OQ-116, R-071), v32; each plan cycle's root's own count (REQ-SESSION-140, fin22), v33; the pending questions' mirror (PD-ORCH-005 clause 9, REQ-SESSION-031, fin41), v35. The ladder is asserted whole rather than at its top, so a later part
     // that renumbers an earlier entry fails here and not on a user's disk.
-    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34]);
-    expect(CURRENT_SCHEMA_VERSION).toBe(34);
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(35);
   });
 });
 
@@ -1630,6 +1633,20 @@ describe('store — v24: the fingerprint an agent started with (PD-ORCH-005 revi
     dal.insertChild({ ...child, task_id: 'bg_00000003' });
     expect(dal.getChild(sid, 'bg_00000002')!.todo_item).toBe('0a1b2c3d');
     expect(dal.getChild(sid, 'bg_00000003')!.todo_item).toBeNull();
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('PD-ORCH-005 clause 9 / REQ-SESSION-031: a v34 store migrates to v35; a session written before it lists no pending question, and a save writes the mirror beside the approvals', () => {
+    const { r, sid } = open('d');
+    r.db.exec(UNDO_V35);
+    r.db.pragma('user_version = 34');
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 34, to: CURRENT_SCHEMA_VERSION });
+    const dal = new StoreDal(r.db);
+    expect(dal.getSession(sid)!.pending_questions).toBe('[]');
+    dal.updateSessionRun(sid, { pending_questions: '[{"request_id":"q"}]' });
+    dal.updateSessionRun(sid, { pending_approvals: '[]' });
+    expect(dal.getSession(sid)!.pending_questions).toBe('[{"request_id":"q"}]');
     r.db.close();
     forgetSpelling(r.dir);
   });

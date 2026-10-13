@@ -119,7 +119,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
   let portClock = new FakeClock();
   /** PD-ORCH-005 clause 9: the presenter fact as the quit leaves it — no window, the quit under way. */
   const presence = { attended: true, quitting: false };
-  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor' | 'planGateHeld' | 'presence' | 'hooks'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}) {
+  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor' | 'planGateHeld' | 'presence' | 'hooks' | 'pendingQuestionsOfSession'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}) {
     mkdirSync(join(dir, '.rotaris'), { recursive: true });
     writeFileSync(join(dir, '.rotaris', 'agents.yaml'), yaml(pin, surface.tools ?? null));
     const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
@@ -291,6 +291,31 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     const timeline = dal.timelineOf(asSessionId('S1'));
     expect(JSON.parse(timeline.find((t) => t.name === 'question_withdrawn')!.metadata)).toMatchObject({ tool: 'ask_questions', interruption: 'stop' });
     expect(dal.issuesOf(asSessionId('S1')).map((i) => i.kind)).not.toContain('tool_error');
+  });
+
+  /*
+   * PD-ORCH-005 clause 9 after a crash, and REQ-SESSION-031 (`docs/defects/fixed/a-crash-with-a-question-pending-records-no-withdrawal.md`):
+   * a question waiting on the user is mirrored to `sessions.pending_questions` — the session's whole list, which the run hands
+   * the port — so a crash's record, written from the store, can withdraw it, and the listing can flag the session. The
+   * column empties once the prompt is answered.
+   */
+  it('PD-ORCH-005 clause 9 / REQ-SESSION-031 through the port: a waiting question is mirrored to pending_questions as the session\'s list, and leaves it when answered', async () => {
+    const other = { request_id: 'q-other', session_id: 'S1', conversation_id: 'bg_000000c1', agent_id: 'reviewer', persona: 'reviewer', steps: [{ id: 'x', title: 'Other?', description: '', options: [], allow_freeform: true }] };
+    let mine: () => readonly unknown[] = () => [];
+    const port = portFor(null, null, { pendingQuestionsOfSession: () => [other, ...mine()] as never }, { tools: '[read_file, ask_questions]' });
+    mine = () => port.pendingQuestions?.() ?? [];
+    const stored = (): { request_id: string }[] => JSON.parse(dal.getSession(asSessionId('S1'))?.pending_questions ?? '[]') as { request_id: string }[];
+    const call = { callId: 'q1', name: 'ask_questions', rawArgs: JSON.stringify({ steps: [{ id: 'a', title: 'Which one?' }] }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' };
+    const pending = port.dispatch(call, new AbortController().signal);
+    await vi.waitFor(() => expect(presented).toHaveLength(1));
+    expect(port.answerApproval(presented[0]!.request_id, 'once')).toBe(true);
+    await vi.waitFor(() => expect(port.pendingQuestions?.()).toHaveLength(1));
+    const asked = port.pendingQuestions!()[0]!;
+    expect(stored().map((q) => q.request_id)).toEqual(['q-other', asked.request_id]);
+    expect(port.answerQuestions?.(asked.request_id, { a: { selected_option: null, freeform_text: 'This one.' } })).toBe(true);
+    const r = await pending;
+    expect(r).toMatchObject({ status: 'ok' });
+    expect(stored().map((q) => q.request_id)).toEqual(['q-other']);
   });
 
   /*

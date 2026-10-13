@@ -94,7 +94,7 @@ function opened() {
 describe("improvement store handles (ADR-0061)", () => {
   it("migrates v19, records the session association and survives reopen", () => {
     const resolved = opened();
-    expect(CURRENT_SCHEMA_VERSION).toBe(34); // REQ-MONITOR-102 (R-067) appended v26; the explicit cancel's mark (OQ-103, R-067) v27; a child's attachments and inherited block (REQ-LIBRARY-098, R-067) v28; the plan cycle's root under way (REQ-MONITOR-102 with REQ-ORCH-153, R-067) v29; every plan cycle's root (REQ-MONITOR-044 with REQ-ORCH-153, R-067) v30; the backend a confined run used (REQ-SANDBOX-121) v31; the plan cycle root's counted calls (REQ-MONITOR-102, OQ-116, R-071) v32; a plan cycle root's own count, kept past its release (REQ-SESSION-140) v33; the todo item a delegation serves (PD-TOOLS-006 revision 6, OQ-220) v34
+    expect(CURRENT_SCHEMA_VERSION).toBe(35); // REQ-MONITOR-102 (R-067) appended v26; the explicit cancel's mark (OQ-103, R-067) v27; a child's attachments and inherited block (REQ-LIBRARY-098, R-067) v28; the plan cycle's root under way (REQ-MONITOR-102 with REQ-ORCH-153, R-067) v29; every plan cycle's root (REQ-MONITOR-044 with REQ-ORCH-153, R-067) v30; the backend a confined run used (REQ-SANDBOX-121) v31; the plan cycle root's counted calls (REQ-MONITOR-102, OQ-116, R-071) v32; a plan cycle root's own count, kept past its release (REQ-SESSION-140) v33; the todo item a delegation serves (PD-TOOLS-006 revision 6, OQ-220) v34; the pending questions' mirror (PD-ORCH-005 clause 9, REQ-SESSION-031) v35
     const sessionDal = new StoreDal(resolved.db);
     sessionDal.upsertSession({
       session_id: "typed-run",

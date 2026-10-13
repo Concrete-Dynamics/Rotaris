@@ -3975,8 +3975,12 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   session still recorded `running` that this process does not hold ended with the process that did, and the crash
   record marks it `crash`.
 - **What a crash can withdraw (clause 9).** The approvals a dead run left listed in `pending_approvals` are withdrawn by
-  the crash record, one `approval_withdrawn` entry each, and the list is emptied. Pending questions are not persisted
-  in this build (REQ-SESSION-025's question half is owed), so a crash leaves none to withdraw.
+  the crash record, one `approval_withdrawn` entry each, and the list is emptied. ~~Pending questions are not persisted
+  in this build (REQ-SESSION-025's question half is owed), so a crash leaves none to withdraw.~~ *Since 2026-10-13
+  (fin41) the questions are too: the run host mirrors the session's pending prompts to `pending_questions` (v35), and the
+  crash record writes one `question_withdrawn` entry for each and empties the list. REQ-SESSION-025's question half is
+  reconciled with `PD-ORCH-005` revision 3 (withdrawn at rest, never restored), so nothing of it is owed; ADR-0010's
+  fourth execution says so in place.*
 - **Cancelling one paused agent.** The cancellation of one agent is a control on a live run, as it is today. A session
   at rest has no run, so a paused agent is ended by clause 6's "continue without them" or resumed; it cannot be
   cancelled on its own while the session rests.

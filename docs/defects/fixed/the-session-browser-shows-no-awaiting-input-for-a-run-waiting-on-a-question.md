@@ -17,3 +17,12 @@ pending questions**.
 - `packages/engine/src/sessions.ts` — the listing's `awaitingInput`.
 - `packages/ui/src/SessionBrowser.tsx` — the tag drawn from it.
 - `apps/desktop/src/run-host/tools.ts` — where the pending questions live.
+
+## Outcome — repaired 2026-10-13 (fin41, `fin41-restore-and-session`)
+
+The listing reads the run host's mirror of the pending prompts (`sessions.pending_questions`, v35; see
+[`a-crash-with-a-question-pending-records-no-withdrawal.md`](a-crash-with-a-question-pending-records-no-withdrawal.md)):
+`awaitingInput` is now `pending approvals > 0 || pending questions > 0` (`Sessions.list`, `packages/engine/src/sessions.ts`),
+so the Session Browser's tag, drawn from the flag, needs no change. Pinned by `packages/engine/src/sessions.test.ts`
+(REQ-SESSION-031: a session waiting on an approval, one on a question, one on neither), red before. Not driven in the
+built app.

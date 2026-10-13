@@ -1130,6 +1130,23 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE children ADD COLUMN todo_item TEXT;
     `,
   },
+  {
+    to: 35,
+    /*
+     * PD-ORCH-005 clause 9 after a crash, with REQ-SESSION-031 (the repair of
+     * `a-crash-with-a-question-pending-records-no-withdrawal.md` and
+     * `the-session-browser-shows-no-awaiting-input-for-a-run-waiting-on-a-question.md`): the question prompts pending
+     * right now, as the session's whole list (`QuestionPrompt[]` as JSON), mirrored by the run host each time one is put
+     * or ends — `pending_approvals`' sibling. It is a mirror for two readers only: a crash's record, written later from
+     * the store, withdraws what it holds (a crash cannot withdraw in the live process), and the listing's awaiting-input
+     * flag. It is never read back as pending: PD-ORCH-005 revision 3 withdraws a question at rest, so none is restored
+     * on reload, and the live record's list stays derived from the live run. '[]' on every row written before this
+     * version, which is true of them as far as anything can now say: a question was never stored before it.
+     */
+    sql: `
+      ALTER TABLE sessions ADD COLUMN pending_questions TEXT NOT NULL DEFAULT '[]';
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

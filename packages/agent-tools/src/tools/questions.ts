@@ -196,6 +196,12 @@ export interface AskQuestionsDeps {
    * answers false when the prompt could not be put in front of anyone, which is REQ-CHAT-094's discard.
    */
   readonly publish: () => boolean;
+  /**
+   * PD-ORCH-005 clause 9 / REQ-SESSION-031: the durable mirror, told once the prompt is pending and once it has ended
+   * however it ended (answered, cancelled, timed out, withdrawn, discarded) — before the publication either time, and
+   * whether or not anyone can be shown it, so the store never lists a prompt that is gone. Absent: nothing mirrored.
+   */
+  readonly pendingChanged?: (() => void) | undefined;
   /** REQ-TOOLS-178 / REQ-CONFIG-126: the shared approval budget in milliseconds; 0 or null waits without limit. */
   readonly timeoutMs: number | null;
   readonly newRequestId?: () => string;
@@ -240,6 +246,7 @@ export function askQuestionsTool(deps: AskQuestionsDeps): ToolExecutor<AskQuesti
       // REQ-CHAT-094: a second concurrent prompt for this conversation is rejected and observes cancelled.
       const wait = deps.pending.create(prompt, deps.timeoutMs);
       if (!wait) return observation(QUESTIONS_CANCELLED, { outcomeKind: 'cancelled' });
+      deps.pendingChanged?.();
       // REQ-CHAT-096: a run that is torn down while the call waits releases it; the registry's bulk cancel does that,
       // and the abort signal is the same release seen from this side.
       const onAbort = () => { deps.pending.cancel(prompt.request_id); };
@@ -268,7 +275,9 @@ export function askQuestionsTool(deps: AskQuestionsDeps): ToolExecutor<AskQuesti
         return observation(userAnswersText(checked.steps, outcome.answers), { outcomeKind: 'resolved' });
       } finally {
         ctx.signal.removeEventListener('abort', onAbort);
-        // The prompt is no longer pending however it ended; the surface is told on the same channel it was told on.
+        // The prompt is no longer pending however it ended; the store's mirror first, then the surface, on the same
+        // channel it was told on.
+        deps.pendingChanged?.();
         deps.publish();
       }
     },

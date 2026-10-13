@@ -415,8 +415,18 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const quitting = (): boolean => deps.quitting?.() === true;
   const questions = new PendingQuestions(deps.clocks.timers, { held: quitting });
   const conversationId = ctx.parentId ?? 'root';
+  /*
+   * PD-ORCH-005 clause 9 after a crash, and REQ-SESSION-031: the session's whole list of pending prompts — the run's, every
+   * port's, so two agents asking at once do not overwrite each other (the overwrite `pending_approvals` suffers,
+   * docs/defects/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md) — mirrored to
+   * `pending_questions` each time one of this port's prompts is put or ends. A crash's record withdraws what it lists; the
+   * listing flags the session as awaiting input. Never read back as pending (PD-ORCH-005 revision 3).
+   */
+  const mirrorQuestions = (): void => {
+    ctx.writer.save(ctx.writer.currentStatus, { pending_questions: JSON.stringify(ctx.pendingQuestionsOfSession?.() ?? questions.pending()) });
+  };
   executors.set('ask_questions', askQuestionsTool({
-    pending: questions, conversationId, agentId: ctx.agentName, timeoutMs: runtime.approvalTimeoutMs,
+    pending: questions, conversationId, agentId: ctx.agentName, timeoutMs: runtime.approvalTimeoutMs, pendingChanged: mirrorQuestions,
     publish: () => {
       // PD-ORCH-005 clause 9 with PD-CHAT-002 revision 2: a prompt put while the quit is under way is held for the quit to
       // withdraw — published to the record, never discarded as unshowable (REQ-CHAT-094's cancellation).

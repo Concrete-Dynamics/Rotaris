@@ -77,7 +77,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     const writer = created(sid);
     dieIn(writer, sid);
     const r = recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined);
-    expect(r).toEqual({ iteration: 2, paused: 3, cancelled: 0, withdrawn: 1, terminals: 1 });
+    expect(r).toEqual({ iteration: 2, paused: 3, cancelled: 0, withdrawn: 1, withdrawnQuestions: 0, terminals: 1 });
     expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'open', interruption: 'crash' });
     const state = (id: string) => dal.getChild(sid, id)!;
     expect(state('bg_000000c1')).toMatchObject({ state: 'paused', interruption: 'crash', resume_state: 'running' });
@@ -101,8 +101,24 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_dead', 'crash'], ['ts_done', 'completed'], ['ts_live', 'running']]);
 
     const before = { messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length };
-    expect(recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined)).toEqual({ iteration: null, paused: 0, cancelled: 0, withdrawn: 0, terminals: 0 });
+    expect(recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined)).toEqual({ iteration: null, paused: 0, cancelled: 0, withdrawn: 0, withdrawnQuestions: 0, terminals: 0 });
     expect({ messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length }).toEqual(before);
+  });
+
+  it('clause 9 after a crash (docs/defects/fixed/a-crash-with-a-question-pending-records-no-withdrawal.md): a question the dead run left in pending_questions is withdrawn by the crash — the list emptied, the timeline naming it as the gate names a live withdrawal — and only once', () => {
+    const sid = 'S-question' as SessionId;
+    const writer = created(sid);
+    const prompt = { request_id: 'q-1', session_id: sid, conversation_id: 'root', agent_id: 'coding-agent', persona: 'coding-agent', steps: [{ id: 'a', title: 'Which one?', description: '', options: [], allow_freeform: true }] };
+    writer.save('running', { pending_questions: JSON.stringify([prompt]) });
+    const record = recordCrash(dal, writer, sid, new Set(), () => undefined);
+    expect(record.withdrawnQuestions).toBe(1);
+    expect(dal.getSession(sid)!.pending_questions).toBe('[]');
+    const entry = dal.timelineOf(sid).find((t) => t.name === 'question_withdrawn')!;
+    expect(entry.actor).toBe('coding-agent');
+    expect(entry.message).toBe('The ask_questions call was withdrawn by a crash before the user answered; it was not run.');
+    expect(JSON.parse(entry.metadata)).toEqual({ tool: 'ask_questions', persona: 'coding-agent', interruption: 'crash' });
+    expect(recordCrash(dal, writer, sid, new Set(), () => undefined).withdrawnQuestions).toBe(0);
+    expect(dal.timelineOf(sid).filter((t) => t.name === 'question_withdrawn')).toHaveLength(1);
   });
 
   it('clauses 3 and 4 (found by phase 3\'s fourth review): a call that completed before the crash keeps what it returned, and only the call still running is answered as interrupted, its row settling (docs/defects/fixed/a-crash-leaves-its-tool-rows-running.md)', () => {
@@ -232,7 +248,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     dal.setIterationInterruption(sid, 1, 'pause');
     writer.spawnChild({ ...child('bg_000000c1', 'running', ROOT), iteration: 1 });
     writer.restChild('bg_000000c1', 'pause', 'running');
-    expect(recordCrash(dal, writer, sid, new Set(), () => undefined)).toEqual({ iteration: null, paused: 0, cancelled: 0, withdrawn: 0, terminals: 0 });
+    expect(recordCrash(dal, writer, sid, new Set(), () => undefined)).toEqual({ iteration: null, paused: 0, cancelled: 0, withdrawn: 0, withdrawnQuestions: 0, terminals: 0 });
     expect(dal.getIteration(sid, 1)!.interruption).toBe('pause');
     expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'paused', interruption: 'pause' });
   });
@@ -286,7 +302,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       const writer = created(sid);
       cancelledThenDied(writer, sid);
       const r = recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined);
-      expect(r).toEqual({ iteration: 2, paused: 0, cancelled: 3, withdrawn: 1, terminals: 1 });
+      expect(r).toEqual({ iteration: 2, paused: 0, cancelled: 3, withdrawn: 1, withdrawnQuestions: 0, terminals: 1 });
       expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'closed', outcome: 'cancelled', interruption: null });
       for (const id of ['bg_000000c1', 'bg_000000c2', 'bg_000000c3']) {
         expect(dal.getChild(sid, id), id).toMatchObject({ state: 'cancelled', interruption: null, resume_state: null });
@@ -309,7 +325,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect(resumableOf(dal, dal.getSession(sid)!)).toBeNull();
 
       const before = { messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length };
-      expect(recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined)).toEqual({ iteration: null, paused: 0, cancelled: 0, withdrawn: 0, terminals: 0 });
+      expect(recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined)).toEqual({ iteration: null, paused: 0, cancelled: 0, withdrawn: 0, withdrawnQuestions: 0, terminals: 0 });
       expect({ messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length }).toEqual(before);
     });
 

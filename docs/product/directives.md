@@ -4128,6 +4128,20 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > paused iteration resumed (clause 4) and closed `succeeded`. The fingerprint's "no warning" half was not separately read
 > from the live packs. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **Clause 9's crash half for a question, first executed 2026-10-13 (fin41, `fin41-restore-and-session`).** A crash withdrew
+> the approvals its record could read from the store and no question, because no question was stored: the prompts lived in
+> each tool port's registry, and the record of a crash is written later, from the store alone
+> ([`../defects/fixed/a-crash-with-a-question-pending-records-no-withdrawal.md`](../defects/fixed/a-crash-with-a-question-pending-records-no-withdrawal.md)).
+> The run host now mirrors the session's pending prompts to `sessions.pending_questions` (v35) each time one is put or
+> ends, as the session's whole list, and `recordCrash` writes one `question_withdrawn` entry per prompt it lists — "The
+> ask_questions call was withdrawn by a crash before the user answered; it was not run.", `{tool, persona, interruption:
+> 'crash'}`, the gate's own words and fields — and empties the list; the cut call is answered and its row settled as every
+> call a crash cut is. Revision 3's "never restored on reload" is untouched: the mirror is never read back as pending.
+> The same column gives REQ-SESSION-031's listing its question half (`awaitingInput`). **What was measured:** `crash.test.ts`,
+> `sessions.test.ts`, the run host's `tools.test.ts` (each red before) and `store.test.ts`'s v34 → v35 migration.
+> **What was not measured:** no built-app proof or live run kills a run host while a question waits; the live scenario
+> that would show it is written in the row in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-orch-006"></a>

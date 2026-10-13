@@ -89,3 +89,33 @@ describe('REQ-SESSION-042: Sessions.list reads nothing but the listing records',
     ]);
   });
 });
+
+describe('REQ-SESSION-031: the listing\'s awaiting-input flag reads pending approvals OR pending questions', () => {
+  let dir: string;
+  let dal: StoreDal;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-awaiting-'));
+    const db = openStore(join(dir, 'workspace.db'));
+    migrateStore(db);
+    dal = new StoreDal(db);
+  });
+  afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
+
+  it('flags a session waiting on a question as it flags one waiting on an approval, and neither when nothing is pending (docs/defects/fixed/the-session-browser-shows-no-awaiting-input-for-a-run-waiting-on-a-question.md)', () => {
+    const list = new Sessions({
+      clocks: new FakeClock(), publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 77, host: HOST,
+      retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-new', model: null,
+      sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid), isProcessAlive: () => false,
+    });
+    const plant = (raw: string, updated: string, patch: { pending_approvals?: string; pending_questions?: string }): void => {
+      dal.upsertSession({ session_id: raw, execution_status: 'running', workspace_root: WS, created_at: '2026-10-13T10:00:00.000Z', updated_at: updated, worktree: null });
+      dal.updateSessionRun(asSessionId(raw), patch);
+    };
+    const approval = { request_id: 'r', session_id: 'S-a', agent_id: 'coding-agent', persona: 'coding-agent', tool_name: 'write_file', command: '', argument_summary: 'w.txt', rule_id: 'ask', reason: 'r', sequence: 1 };
+    const question = { request_id: 'q', session_id: 'S-q', conversation_id: 'root', agent_id: 'coding-agent', persona: 'coding-agent', steps: [{ id: 'a', title: 'Which?', description: '', options: [], allow_freeform: true }] };
+    plant('S-a', '2026-10-13T10:03:00.000Z', { pending_approvals: JSON.stringify([approval]) });
+    plant('S-q', '2026-10-13T10:02:00.000Z', { pending_questions: JSON.stringify([question]) });
+    plant('S-none', '2026-10-13T10:01:00.000Z', {});
+    expect(list.list(dal, WS).map((r) => [r.sessionId, r.awaitingInput])).toEqual([['S-a', true], ['S-q', true], ['S-none', false]]);
+  });
+});

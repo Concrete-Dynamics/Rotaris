@@ -578,6 +578,26 @@ The reason is not economy — a wait restored from disk has no waiting call behi
 success REQ-CHAT-102 forbids — but the requirement still says what it says, and the reconciliation is owed to the
 part that takes REQ-SESSION-025.
 
+> **Reconciled and built, 2026-10-13 (fin41); the paragraph above is kept as what this execution decided.** The
+> reconciliation it owed was made by `PD-ORCH-005` revision 3, which governs REQ-SESSION-025's question half (the
+> specification's back-pointer, `docs/spec/07-sessions-persistence.md`): a question is **withdrawn** at rest — a pause,
+> a stop, a quit or a crash — and is never restored, so "survive a reload" is moot, and the reason given above (a wait
+> restored from disk has no waiting call behind it) is the directive's own. The ruling for the record stands: the live
+> list is derived from the live run, and a stored record lists none. **What the limb still owed was durability for two
+> readers, and that is now a column**, so the ruling above ("not in a column … no store migration was written") is
+> **narrowed**: `sessions.pending_questions` (v35, appended) mirrors the session's whole list each time a prompt is put
+> or ends (`mirrorQuestions` in `apps/desktop/src/run-host/tools.ts`, from `Run.pendingQuestions` through the port's
+> `pendingQuestionsOfSession`). Its first reader is a crash's record, which can only withdraw what the store holds:
+> `withdrawStoredQuestions` (`packages/engine/src/run/crash.ts`) writes one `question_withdrawn` entry per prompt, in the
+> words and fields the gate writes for a live withdrawal, and empties the column — before it, a crash with a question
+> waiting recorded no withdrawal (`docs/defects/fixed/a-crash-with-a-question-pending-records-no-withdrawal.md`). Its
+> second is the listing: REQ-SESSION-031's `awaiting_input` is pending approvals **or** pending questions, and the listing
+> read approvals alone (`docs/defects/fixed/the-session-browser-shows-no-awaiting-input-for-a-run-waiting-on-a-question.md`).
+> Channel 2 is unchanged: the publication still republishes the derived list, and the column is never read back as
+> pending. Pinned by `crash.test.ts` ("clause 9 after a crash"), `sessions.test.ts` (REQ-SESSION-031), the run host's
+> `tools.test.ts` (the mirror as the session's list, emptied on the answer) and `store.test.ts` (v34 → v35); each of the
+> first three red before. Not driven in the built app or live (no proof kills a run host with a question open).
+
 **Found — the control channel's argument space cannot carry the answers map (the thirty-eighth).** REQ-CHAT-095
 fixes the payload as `{step_id: {selected_option, freeform_text}}`, a record of RECORDS, and
 `ControlRequestSchema`'s value space is a scalar, an array of scalars, or a record of scalars —

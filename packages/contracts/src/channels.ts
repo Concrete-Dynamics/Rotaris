@@ -241,8 +241,13 @@ export const SessionRecordSchema = z.object({
    * trailer row is computed. **Widened by Part AC (2026-09-07) from `{requestId, prompt}[]`**, which carried neither
    * the steps nor their titles the trailer must name; the earlier shape forced `trailerRows` to read the LIST as one
    * prompt's steps. It is DERIVED from the live run at every snapshot, like `wait` above and unlike `pendingApprovals`
-   * — a wait held in the run host's memory, so no column mirrors it and a process that died holds none (ADR-0010's
-   * fourth note). REQ-SESSION-025's persistence limb is therefore still owed and is recorded as owed.
+   * — a wait held in the run host's memory (ADR-0010's fourth note), so a stored record's list is empty.
+   * ~~"REQ-SESSION-025's persistence limb is therefore still owed and is recorded as owed."~~ Reconciled 2026-10-13 with
+   * PD-ORCH-005 revision 3, which governs REQ-SESSION-025's question half: a question is withdrawn at rest and never
+   * restored, so the "come back on reload" limb is moot and this list stays derived. What the limb still owed was
+   * durability for two readers, and it is built: the run host mirrors the session's pending prompts to
+   * `sessions.pending_questions` (v35), which a crash's record withdraws (clause 9) and the listing's `awaitingInput` reads
+   * (REQ-SESSION-031). The mirror is never read back into this field.
    */
   pendingQuestions: z.array(QuestionPromptSchema),
   tokenUsage: z.object({ input: z.number().int(), output: z.number().int() }),

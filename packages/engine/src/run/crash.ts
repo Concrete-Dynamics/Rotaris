@@ -1,4 +1,4 @@
-import { ApprovalPayloadSchema, interruptionPhrase, isTerminalChildState, resumeStateFor, type ApprovalPayload, type ChildState, type Interruption } from '@rotaris/contracts';
+import { ApprovalPayloadSchema, interruptionPhrase, isTerminalChildState, QuestionPromptSchema, resumeStateFor, type ApprovalPayload, type ChildState, type Interruption, type QuestionPrompt } from '@rotaris/contracts';
 import type { SessionId } from '@rotaris/kernel';
 import type { ChildRow, IterationRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
@@ -69,6 +69,8 @@ export interface CrashRecord {
   readonly cancelled: number;
   /** The approvals it withdrew. */
   readonly withdrawn: number;
+  /** The question prompts it withdrew (PD-ORCH-005 clause 9; mirrored to `pending_questions` since v35). */
+  readonly withdrawnQuestions: number;
   /** The background terminal sessions it recorded as ended by the crash. */
   readonly terminals: number;
 }
@@ -134,13 +136,14 @@ export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: Ses
   recordPlanRootCrash(dal, writer, sessionId, warn);
   if (!ownCallsMayRun) settleDeadToolCalls(dal, writer, sessionId, warn);
   const withdrawn = withdrawStoredApprovals(dal, writer, sessionId);
+  const withdrawnQuestions = withdrawStoredQuestions(dal, writer, sessionId);
   let terminals = 0;
   for (const t of dal.agentTerminalsOf(sessionId)) {
     if (t.state !== 'running' || liveTerminals.has(t.terminal_id)) continue;
     const r = writer.recordAgentTerminal({ terminal_id: t.terminal_id, task_id: t.task_id, command: t.command, started_at: t.started_at, state: 'crash', exit_code: t.exit_code, output_tail: t.output_tail });
     if (r.ok && r.value) terminals += 1;
   }
-  return { iteration, paused, cancelled, withdrawn, terminals };
+  return { iteration, paused, cancelled, withdrawn, withdrawnQuestions, terminals };
 }
 
 /** The report of an agent the record of an accepted cancel ends (REQ-ORCH-108's shape, as every cancelled agent's). */
@@ -299,5 +302,24 @@ function withdrawStoredApprovals(dal: StoreDal, writer: SessionWriter, sessionId
     writer.appendTimeline('approval_withdrawn', p.agent_id || p.persona, `The approval for ${p.tool_name}${summary === '' ? '' : ` (${summary})`} was withdrawn by ${interruptionPhrase('crash')}; the call was not run.`, { request_id: p.request_id, tool: p.tool_name, persona: p.persona, interruption: 'crash' });
   }
   writer.save(writer.currentStatus, { pending_approvals: '[]' });
+  return pending.length;
+}
+
+/**
+ * Clause 9 after a crash, for a question: every prompt the dead run left in `pending_questions` (the run host's mirror,
+ * v35) leaves the list, and the timeline records it as withdrawn by the crash in the words and fields the gate writes for
+ * a live withdrawal (`question_withdrawn`, `packages/agent-tools/src/gate.ts`). The cut `ask_questions` call itself is
+ * answered and its ring row settled above, as every call a crash cut is. Until v35 no question was stored, so a crash with
+ * one waiting recorded no withdrawal (`docs/defects/fixed/a-crash-with-a-question-pending-records-no-withdrawal.md`).
+ */
+function withdrawStoredQuestions(dal: StoreDal, writer: SessionWriter, sessionId: SessionId): number {
+  const row = dal.getSession(sessionId);
+  let pending: QuestionPrompt[] = [];
+  try { const v = JSON.parse(row?.pending_questions ?? '[]') as unknown; pending = Array.isArray(v) ? v.flatMap((x) => { const r = QuestionPromptSchema.safeParse(x); return r.success ? [r.data] : []; }) : []; } catch { pending = []; }
+  if (pending.length === 0) return 0;
+  for (const p of pending) {
+    writer.appendTimeline('question_withdrawn', p.agent_id || p.persona, `The ask_questions call was withdrawn by ${interruptionPhrase('crash')} before the user answered; it was not run.`, { tool: 'ask_questions', persona: p.persona, interruption: 'crash' });
+  }
+  writer.save(writer.currentStatus, { pending_questions: '[]' });
   return pending.length;
 }

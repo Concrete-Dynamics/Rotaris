@@ -27,3 +27,19 @@ back-pointer): a crash withdraws a pending question and the timeline records it 
 - `apps/desktop/src/run-host/tools.ts` — the port's `PendingQuestions` and the `ask_questions` executor's `publish`.
 - `packages/agent-tools/src/tools/questions.ts` — `PendingQuestions`, `askQuestionsTool`.
 - `packages/store/src/schema.ts`, `packages/store/src/dal.ts` — `pending_approvals` (v5) and no question column.
+
+## Outcome — repaired 2026-10-13 (fin41, `fin41-restore-and-session`)
+
+`sessions.pending_questions` (v35, appended in `packages/store/src/schema.ts`) mirrors the session's whole list of pending
+prompts: the `ask_questions` executor calls its `pendingChanged` once the prompt is pending and once it has ended
+(`packages/agent-tools/src/tools/questions.ts`), and the run host's `mirrorQuestions` writes `Run.pendingQuestions` (every
+port's, through `ToolPortContext.pendingQuestionsOfSession`) into the column (`apps/desktop/src/run-host/tools.ts`).
+`recordCrash` withdraws what it lists (`withdrawStoredQuestions`, `packages/engine/src/run/crash.ts`): one
+`question_withdrawn` entry per prompt in the gate's words and fields, the column emptied, the count returned as
+`withdrawnQuestions`. The mirror is never read back as pending: PD-ORCH-005 revision 3 withdraws a question at rest and
+never restores it, which reconciles REQ-SESSION-025's question half; the four "owed" statements now say so
+(`packages/contracts/src/channels.ts`, ADR-0010's fourth execution, `docs/architecture/codebase.md`, OQ-96).
+
+Pinned by `packages/engine/src/run/crash.test.ts` ("clause 9 after a crash"), `apps/desktop/src/run-host/tools.test.ts`
+(the mirror as the session's list, emptied on the answer) and `packages/store/src/store.test.ts` (v34 → v35); the first
+two red before. Not driven in the built app or live.

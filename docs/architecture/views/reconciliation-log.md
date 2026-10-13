@@ -27,6 +27,11 @@ native executors and where an MCP executor joins the callable map): a named tool
 aborts, so `mcp-proof`'s `cancel-throw` launch reaches the gate's catch through the run host; `scripts/package.mjs`'s seam check
 names it. The **process view**'s main row says so. No package, edge, process, channel, command or store column changed.
 
+**A pending question is mirrored to the store for a crash's record and the listing (PD-ORCH-005 clause 9, REQ-SESSION-031;
+fin41).** `sessions` gains `pending_questions` (v35), written by the run host each time a prompt is put or ends, read by
+`recordCrash` (one `question_withdrawn` each) and the listing's `awaitingInput`, never back into the record. The **runtime view**'s
+`sessions` row says so. No package, edge, process, channel or command changed.
+
 **A restore is refused before its first step where a store it would create sits past the engine's path limit (ADR-0058
 consequence 18, D11; REQ-SESSION-201; fin41).** `RestoreAssessmentSchema`'s refusal gains `path-too-long`; `restoreStore` answers
 step `0-path-too-long` without asking the run host anything. The **process view**'s row for the restore's names says so. No

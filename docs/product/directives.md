@@ -7396,6 +7396,9 @@ live run at `a68f121`); logged as [R-072](requests.md#r-072).*
 > under a 100 s bound in the built app, red on `fee3593` (`timeout`, 124, "exceeded its timeout of 100 seconds",
 > `terminal_timeout` at `error`) and green after (`interrupted`, no exit code, `kill_status` `session_reset`, no issue).
 > **What was not measured.** No live run: the next default live run's quit is the measurement.
+> *(2026-10-13, fin42, N51: no longer left to a quit that happens to land on a call. No live quit had cut one in the 552d346
+> default and duress packs or at 0bc3eee, so the live run gained the `cut` scenario, which cuts a foreground `sleep 60` on
+> purpose; see revision 2's built-app report below. Not yet run.)*
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 > **Revision 2's first execution, 2026-10-13, built under [R-072](requests.md#r-072) (fin34):** the revision held as
@@ -7426,6 +7429,26 @@ live run at `a68f121`); logged as [R-072](requests.md#r-072).*
 > [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
 > [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
 > The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **Revision 2 in the built app, and the live measurement written, 2026-10-13 (fin42, N51):** the revision held as written
+> where fin34 had pinned it by unit cases alone. **What was measured.** `pnpm mcp-proof`'s launches 2c quit the application
+> by SIGTERM while the fixture holds `slow` (60 s, under a 120 s allowance): `cancel` read the MCP executor's catch, failed /
+> `interrupted`, "The call to 'slow' on MCP server 'alpha' was cancelled by the run before it completed; it was not retried."
+> (562 ms), no issue, no `outcome_kind`, the session `paused`, and `summary.md`'s "Tool outcomes: success 0, tool_error 0,
+> rejected 0, unknown 0, interrupted 1" with "Tool errors: 0"; `cancel-throw` read the gate's catch through the run host's
+> new verification seam `ROTARIS_CAPTURE_THROW_ON_ABORT` (`apps/desktop/src/run-host/throw-on-abort.ts`, compiled out of a
+> packaged build), "The 'slow' call was cancelled by the run before it completed." (493 ms), with the same issues and
+> bucket. Each was red with its branch reverted: (c) without its abort test read `execution_error`, "failed: AbortError:
+> This operation was aborted", and (a) with its pre-revision form read `cancelled`. Load average 5.7 to 7.1 on four CPUs,
+> beside a sibling plan. **Found nothing else**: no executor the product ships throws on its abort (fetch, the MCP executor
+> and the terminal each return their own `interrupted` observation), which is why (a) needed a seam to be reached at all.
+> **What was not measured.** No live run: the live run's `cut` scenario (`apps/desktop/scripts/lib/cut-scenario.mjs`,
+> default set) asks a real model for one foreground `echo started > CUT-STARTED.txt && sleep 60` under a 90 s timeout and
+> quits by SIGTERM once the call's record is open and the file marked; it must read revision 1's terminal record
+> (`interrupted`, no exit code, `"timeout":false`, a session reset, no `terminal_timeout` or `tool_error` issue) and
+> `summary.md`'s `interrupted` bucket with Timeouts 0. It is written and unit-tested, and is the orchestrator's to run. A fetch
+> or MCP call cut live stays unmeasured: the scenario cuts the terminal, the case the record has never seen live. The row is
+> in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

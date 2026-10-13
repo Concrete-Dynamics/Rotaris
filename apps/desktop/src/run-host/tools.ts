@@ -10,6 +10,7 @@ import { aliasesAmong, BUILT_IN_PERSONAS, delegationTargetsFor, EMPTY_MCP_EVIDEN
 import { CODE_INTELLIGENCE_MEMORY_GATE } from '@rotaris/config';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
 import { configurationForExecutionRoot, grantEvidence, type McpHost } from './mcp.js';
+import { throwOnAbort } from './throw-on-abort.js';
 import { artifactListTool, artifactReadTool, artifactWriteTool, backgroundOutputTool, delegateTool, waitForTasksTool } from '@rotaris/agent-tools';
 import { z } from 'zod';
 
@@ -101,6 +102,11 @@ export interface ToolPortDeps {
    * budget expires on it. Absent in a test that never quits.
    */
   readonly quitting?: (() => boolean) | undefined;
+  /**
+   * Verification only (`ROTARIS_CAPTURE_THROW_ON_ABORT`, read by `host.ts` under `__ROTARIS_SEAMS__`): the tools whose
+   * executor rejects once its call's signal aborts (`throw-on-abort.ts`). Absent or empty in the product and in a test.
+   */
+  readonly throwOnAbort?: ReadonlySet<string> | undefined;
 }
 
 /** REQ-TOOLS-104/106: the backend by presence alone; the PTY factory loaded once. Null when no shell exists on the host. */
@@ -158,6 +164,8 @@ function backgroundAttribution(writer: SessionWriter, sessionId: string, taskId:
   return { owner: { sessionId, taskId }, onStarted: record, onEnded: record };
 }
 
+const NO_NAMES: ReadonlySet<string> = new Set();
+
 /** The executors this build registers (decision 3 of the plan, plus `fetch` since Part N); the registry removes any other declared name (REQ-TOOLS-004). */
 function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConfiguration, todoExecutor: ToolExecutor, attribution?: BackgroundAttribution): Map<string, ToolExecutor> {
   /*
@@ -209,7 +217,9 @@ function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConf
     },
   };
   if (deps.terminal) list.push(terminalTool(deps.terminal, { ...TERMINAL_DEFAULTS, commandTimeoutS: runtime.shellCommandTimeoutS }, confinement, attribution) as ToolExecutor);
-  return new Map(list.map((e) => [e.name, e]));
+  // The seam wraps here, before the map is keyed, so PD-TOOLS-004's `publicTool` identity test still meets the one object.
+  const seam = deps.throwOnAbort ?? NO_NAMES;
+  return new Map(list.map((e) => [e.name, throwOnAbort(seam, e)]));
 }
 
 /**
@@ -578,7 +588,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
         // the hold until 2026-09-28.
         if (planGateHeld() && withheldUnderPlanGate(e.name, false)) { withheldAtPlanGate.add(e.name); ctx.warn(`mcp: '${e.name}' is withheld while this run is held at the plan gate (REQ-ORCH-153)`); continue; }
         if (callable.has(e.name)) { ctx.warn(`mcp: the tool name '${e.name}' collides with a native tool of ${ctx.persona}; the MCP tool is not offered`); continue; }
-        callable.set(e.name, e);
+        callable.set(e.name, throwOnAbort(deps.throwOnAbort ?? NO_NAMES, e));
         joined.add(e.name);
         specs.push(toolSpec(e));
       }

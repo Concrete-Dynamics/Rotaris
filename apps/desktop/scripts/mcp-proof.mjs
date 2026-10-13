@@ -2,7 +2,7 @@
  * The MCP proof (Part S): ADR-0033 and ADR-0034's first execution behind the real run host — the hand-written
  * fixture server (`fixtures/mcp-fixture-server.mjs`) declared three ways (global YAML, a workspace `.mcp.json`
  * with an envFile and an unknown key, a workspace YAML overlay), a persona carrying the three with a grant, a
- * denial and a rename, one stored secret, and eleven launches against one scratch profile:
+ * denial and a rename, one stored secret, and fifteen launches against one scratch profile:
  *
  *   1. discovery   — the prompt's MCP section character-exact and equal to the callable set; the inert grant reported
  *                    once; gamma's unknown key warned once per load; the discovery file byte-identical after the run;
@@ -17,6 +17,12 @@
  *  2b. schema      — `echo` without its required `text` is refused at the gate (`invalid_request`, REQ-TOOLS-032's text, a
  *                    `tool_error` issue referencing it) and never reaches the fixture; `beta_echo` with an extra property
  *                    reaches it exactly as written (live-run finding G3).
+ *  2c. cancel      — the application quit by SIGTERM while the fixture holds `slow` (60 s, under a 120 s allowance): the call
+ *                    reads failed / `interrupted`, "The call to 'slow' on MCP server 'alpha' was cancelled by the run before it
+ *                    completed; it was not retried.", files no `tool_error` or `terminal_timeout` issue, and counts under
+ *                    `summary.md`'s `interrupted` bucket (PD-TOOLS-013 revision 2 (c), (d)). `cancel-throw` is the same with
+ *                    the run host's `ROTARIS_CAPTURE_THROW_ON_ABORT=slow`, an executor that throws on the cancel: the gate's
+ *                    "The 'slow' call was cancelled by the run before it completed." (revision 2 (a)). Since fin42 (N51).
  *   3. one process — two children calling alpha concurrently share one connection and one fixture process; a third
  *                    child after they end uses the same pid (067/068). The children's persona carries a `tool_restrictions`
  *                    list naming `read_file` and `echo`, and each child's row records that grant — `read_file` alone of its
@@ -48,7 +54,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
@@ -448,6 +454,102 @@ const ROUND_OVER = `(() => {
   if (JSON.stringify(betaCalls) !== JSON.stringify([{ name: 'echo', arguments: asWritten }])) throw new Error(`the valid call did not reach the server as written: ${JSON.stringify(betaCalls)}`);
   if (lines(r.log, /could not be compiled/).length !== 0) throw new Error('a fixture schema was reported uncompilable');
   results.schema = { refused: { status: echo[0].status, failureKind: echo[0].entry.failure_kind, text: refusal.slice(0, 200), reachedServer: alphaCalls.length }, valid: { status: betaEcho[0].status, receivedAsWritten: true } };
+}
+
+// ---- 2c. A call the run cancels in flight ---------------------------------------------------------------------
+/*
+ * PD-TOOLS-013 revision 2 (OQ-238; N51 of the 2026-10-13 survey): every tool call its run's signal cuts off reads
+ * `interrupted` and files no outcome-driven issue. fin34 built (a) the gate's catch and (c) the MCP executor's catch and
+ * pinned them by unit cases; no launch had cut an MCP call or a throwing executor in the built app. Both launches below
+ * hold `slow` in flight at the fixture (`{ ms: 60000 }`, under a 120 s allowance so the allowance can never be read
+ * first) and quit the application by SIGTERM once the fixture has received the call — a quit outside any window, as
+ * `fetch-proof`'s `cancelled` launch does — then read the store and the session's `summary.md`:
+ *
+ *   cancel        — (c): the MCP executor's own catch, "The call to 'slow' on MCP server 'alpha' was cancelled by the run
+ *                   before it completed; it was not retried."
+ *   cancel-throw  — (a): the same call with `ROTARIS_CAPTURE_THROW_ON_ABORT=slow` (`src/run-host/throw-on-abort.ts`, a seam
+ *                   compiled out of a packaged build), whose executor rejects once its signal aborts, as an executor that
+ *                   throws on the cancel does; the gate's catch reads it "The 'slow' call was cancelled by the run before
+ *                   it completed."
+ *
+ * Each must be recorded failed with failure kind `interrupted` and no `outcome_kind` (OQ-208: an MCP call carries none),
+ * file no `tool_error` and no `terminal_timeout` issue at all, and count under `summary.md`'s `interrupted` bucket with a
+ * Tool errors line of 0 (REQ-SESSION-139 and REQ-SESSION-136 as revision 2 narrows them).
+ */
+const cutTexts = {
+  cancel: "The call to 'slow' on MCP server 'alpha' was cancelled by the run before it completed; it was not retried.",
+  'cancel-throw': "The 'slow' call was cancelled by the run before it completed.",
+};
+async function cancelLaunch(name, extra) {
+  const calls = join(output, `${name}.alpha.calls`);
+  writeFileSync(calls, '');
+  writeFileSync(join(configDir, 'agents.yaml'), globalYaml({ alphaFlags: ['--call-file', calls], alphaTimeout: 120 }));
+  writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), WORKSPACE);
+  writeFileSync(join(workspace, '.mcp.json'), MCP_JSON);
+  resetPids();
+  let child = null;
+  let quitAt = null;
+  // The fixture appends each `tools/call` it receives to the call file: the quit is sent 300 ms after `slow` arrives.
+  const watch = setInterval(() => {
+    if (quitAt !== null || child === null) return;
+    const received = readFileSync(calls, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l));
+    if (!received.some((c) => c.name === 'slow')) return;
+    quitAt = Date.now() + 300;
+    setTimeout(() => { try { process.kill(child.pid, 'SIGTERM'); } catch { /* already gone */ } }, 300);
+  }, 100);
+  const started = Date.now();
+  let result;
+  try {
+    result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+      cwd: app, timeoutMs: 150_000, windowsHide: true, onSpawn: (c) => { child = c; },
+      env: {
+        ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
+        ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off',
+        ROTARIS_CAPTURE_PROMPT: 'call slow on alpha, then answer', ROTARIS_SCRIPT: 'mcp:alpha.slow,answer', ROTARIS_SCRIPT_MCP_ARGS: JSON.stringify({ slow: { ms: 60_000 } }),
+        // The capture types the prompt; the quit lands before its wait is satisfied, so no picture is taken.
+        ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_PNG: join(output, `${name}.png`),
+        PROOF_SHELL_VALUE: 'from-the-shell', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', ROTARIS_APP_LOG_LEVEL: 'debug',
+        ...extra,
+      },
+    });
+  } finally {
+    clearInterval(watch);
+  }
+  const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+  writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
+  if (quitAt === null) throw new Error(`${name}: the fixture never received slow, so no quit was sent; see ${name}.log`);
+  if (result.status !== 0) throw new Error(`${name}: the quit by SIGTERM exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
+  const dbPath = oneDatabase();
+  const db = new Database(dbPath, { readonly: true });
+  const s = latestSession(db);
+  const slow = db.prepare("SELECT status, is_error, elapsed_ms, entry FROM tool_calls WHERE session_id = ? AND tool_name = 'slow' ORDER BY ordinal").all(s.session_id).map((r) => ({ ...r, entry: JSON.parse(r.entry) }));
+  const issues = db.prepare('SELECT kind, message, evidence_ref FROM issues WHERE session_id = ? ORDER BY ordinal').all(s.session_id);
+  db.close();
+  const summaryFile = join(dirname(dbPath), 'sessions', s.session_id, 'summary.md');
+  const summary = existsSync(summaryFile) ? readFileSync(summaryFile, 'utf8') : null;
+  if (summary !== null) writeFileSync(join(output, `${name}.summary.md`), summary);
+  return { session: s, slow, issues, summary, elapsedMs: Date.now() - started, quitAtMs: quitAt - started };
+}
+function cancelReading(name, r) {
+  const row = r.slow[0];
+  if (r.slow.length !== 1) throw new Error(`${name}: expected one slow row; found ${JSON.stringify(r.slow)}`);
+  const text = String(row.entry.result ?? '');
+  if (row.status !== 'failed' || row.entry.failure_kind !== 'interrupted') throw new Error(`${name}: the cut call reads ${row.status} / ${row.entry.failure_kind}, not failed / interrupted (PD-TOOLS-013 revision 2): ${text}`);
+  if (text !== cutTexts[name]) throw new Error(`${name}: the cut call's text is not revision 2's:\n  got      ${JSON.stringify(text)}\n  expected ${JSON.stringify(cutTexts[name])}`);
+  if ('outcome_kind' in row.entry) throw new Error(`${name}: the record carries outcome_kind ${row.entry.outcome_kind} (OQ-208: an MCP call carries none)`);
+  const outcomeIssues = r.issues.filter((i) => i.kind === 'tool_error' || i.kind === 'terminal_timeout');
+  if (outcomeIssues.length !== 0) throw new Error(`${name}: the cut call filed an outcome-driven issue (REQ-SESSION-136 as revision 2 narrows it): ${JSON.stringify(outcomeIssues)}`);
+  if (r.summary === null) throw new Error(`${name}: the session ${r.session.session_id} (${r.session.execution_status}) left no summary.md`);
+  const outcomes = /^- Tool outcomes: (.*)$/m.exec(r.summary)?.[1] ?? '';
+  if (!/\binterrupted 1\b/.test(outcomes) || /\btool_error [1-9]/.test(outcomes)) throw new Error(`${name}: summary.md's Tool outcomes line does not count the cut call under interrupted (REQ-SESSION-139 revision 2): ${JSON.stringify(outcomes)}`);
+  const toolErrors = /^- Tool errors: (.*)$/m.exec(r.summary)?.[1] ?? '';
+  if (!/^0 \(/.test(toolErrors)) throw new Error(`${name}: summary.md's Tool errors line counts the cut call: ${JSON.stringify(toolErrors)}`);
+  return { status: row.status, failureKind: row.entry.failure_kind, text, elapsedMs: Math.round(row.elapsed_ms ?? 0), sessionStatus: r.session.execution_status, issues: r.issues.map((i) => i.kind), summaryOutcomes: outcomes, summaryToolErrors: toolErrors, quitAtMs: r.quitAtMs, launchMs: r.elapsedMs };
+}
+{
+  results.cancel = cancelReading('cancel', await cancelLaunch('cancel', {}));
+  results.cancelThrow = cancelReading('cancel-throw', await cancelLaunch('cancel-throw', { ROTARIS_CAPTURE_THROW_ON_ABORT: 'slow' }));
 }
 
 // ---- 3. One connection per server per session ---------------------------------------------------------------

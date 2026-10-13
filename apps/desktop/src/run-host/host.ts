@@ -23,6 +23,7 @@ import { appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 // The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network.
 import { fileLedger, scriptedClient, type ScriptedCallRecord } from './scripted-client.js';
+import { throwOnAbortNames } from './throw-on-abort.js';
 
 /**
  * RUN HOST — one utilityProcess, forked after `app.ready`, living exactly as
@@ -190,6 +191,8 @@ export function createRunHost() {
    * included — which is how the injection proof reads the merged context an agent was actually given rather than a
    * log line saying it was built. The scripted client is the only writer, so no real provider's traffic can reach it.
    */
+  // `ROTARIS_CAPTURE_THROW_ON_ABORT`: the tools whose executor rejects on its call's abort (`throw-on-abort.ts`, N51).
+  const throwOnAbortTools = throwOnAbortNames(__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_THROW_ON_ABORT'] : undefined);
   const modelCallFile = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_MODEL_REQUESTS'] : undefined;
   const recordModelCall = modelCallFile === undefined || modelCallFile === '' ? undefined : (call: ScriptedCallRecord): void => {
     try { appendFileSync(modelCallFile, `${JSON.stringify(call)}\n`); } catch (cause) { log(`capture: the model call could not be recorded (${String(cause)})`, 'warn'); }
@@ -415,6 +418,8 @@ export function createRunHost() {
       clocks, presenter, nextSequence: () => ++approvalSequence, fileStates, terminal, mcp, configured: () => configuredRuns.get(ctx.sessionId) ?? null,
       // PD-ORCH-005 clause 9: the quit closed the last window and its shutdown is still to come (`PresenterRegistry.quitting`).
       quitting: () => presenters.quitting,
+      // Verification only, compiled out of a packaged build: PD-TOOLS-013 revision 2 (a) through the run host (`throw-on-abort.ts`).
+      throwOnAbort: throwOnAbortTools,
       runtime: () => configuredRuns.get(ctx.sessionId)?.runtime ?? configureRunFallback(),
       personas: () => configuredRuns.get(ctx.sessionId)?.personas ?? null,
       // REQ-WORKSPACE-059 (ADR-0063): the cataloged skill directories as additional READ roots, so an agent can

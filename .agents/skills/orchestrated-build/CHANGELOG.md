@@ -3,6 +3,42 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-13 — the improvement steps the 2026-10-13 changes left: faf9525's entry, two reviews, one follow-up
+
+**Prompted by** the 2026-10-13 survey at `6de2a67` (item N97, plan fin41): `faf9525` ("Disk is the session's allowance", in
+`references/environment.md`, Load) landed with no entry here (step 2) and no recorded review (step 4); `d92e595` (the detached
+duress launch) has its entry below but no recorded review, and its "Not run: a duress launch in this form" was never followed
+up; the entry for `c735074` says the skill-review was not run. This entry records what the append-only rule will not let
+those entries say. **Changed:** nothing in the skill but this entry, and the self-test's header comment
+(`tools/orchestrated-build-skill.test.ts`), which still named "serialized merges" among the pinned mechanisms although the
+2026-10-07 change retired them for each bundle's review and landing from its own tree.
+
+- **`faf9525`, 04:21 UTC** (the orchestrator, from fin30's review, optional): the bullet "Disk is the session's allowance,
+  not the device's" under Load. Its evidence holds: the orchestrator's session transcript carries ENOSPC lines at
+  09:39–09:44 UTC on 2026-10-07, and `df -h /` on 2026-10-13 read 9.3 GB free at 28 GB used when fin41 started (the
+  bullet's 7.9 GB at 30 GB was an earlier reading the same day).
+- **`c735074`'s review did happen.** fin38's reviewer (`review:notes-optionals-skill#1`, run `wf_6808e87e-364`) applied
+  `references/skill-review.md`'s checklist to it — the diff, the protected invariants and the entry's claims — and landed
+  it; the entry's "Not run: the skill-review step" was written by the builder before that review.
+- **The skill-review of `faf9525` and `d92e595`**, applied by fin41's builder, which built neither, with the fixed prompt:
+  (1) each diff read in full; `faf9525`'s claims checked as above; `d92e595`'s against AGENTS.md (`LIVE_RUN_DURESS_MS=7800000`
+  in its duress recipe), OQ-214's re-ruling and `references/environment.md` (Long jobs, the detached form). (2)
+  `node scripts/orchestration.mjs self-test` passed; `pnpm check` is the landing reviewer's. (3) No change to `scripts/`.
+  (4) No protected invariant touched: live runs still need the owner's quoted authorization, and a refused detached launch
+  is still handed back with its exact command (the self-test's live-command assertions cover the new command). (5) No
+  change to `references/repository.md`. (6) No template prompt changed. (7) Each is the smallest change for its friction;
+  SKILL.md is not touched. **PASS for both.** One optional observation: `references/live-runs.md` says the profile's
+  duress launch "matches none of the allow rules", which is the reason a refusal of it reaches the orchestrator.
+- **`d92e595`'s follow-up.** The duress run at `552d346` was launched detached, but not in the profile's form: the
+  orchestrator sent `cd <repo>-wt-live && LIVE_RUN_DURESS_MS=7800000 setsid nohup timeout 9600 xvfb-run … --only=duress >
+  <scratchpad>/live-552d346-duress.log 2>&1 < /dev/null & disown` at 08:12:40 UTC on 2026-10-13 (its session transcript),
+  with no `bash -c` wrapper and so no `exit=` line, and it passed in 55 minutes (`live-run PASSED`, 30 PASS, 9 NOTE, 0 FAIL;
+  `live-552d346-duress-autopsy.md`). So the detached shape has run and the window held; the profile's exact command, with its
+  `exit=` line in `.live-run/duress-launch.log` and the Monitor wait on it, has still not been sent by a live-runner.
+
+**Verified** by `node scripts/orchestration.mjs self-test` (all checks passed) and `pnpm vitest run
+tools/orchestrated-build-skill.test.ts`. Not run: the skill-review of this entry, which is the bundle's reviewer's.
+
 ## 2026-10-13 — open questions go to the consortium (R-072), and plans hold their own number ranges
 
 **Prompted by** the 2026-10-13 survey at `6de2a67` (item N94, plan fin41): `references/repository.md` still listed "ruling an

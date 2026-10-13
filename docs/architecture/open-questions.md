@@ -11994,3 +11994,53 @@ info notice, and the Library's two texts. Notes moved to `docs/defects/fixed/`:
 [`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../defects/fixed/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
 [`the-retrospective-start-gesture-is-disabled-while-any-analysis-runs.md`](../defects/fixed/the-retrospective-start-gesture-is-disabled-while-any-analysis-runs.md)
 and [`the-library-proposals-texts-name-only-the-per-run-collector.md`](../defects/fixed/the-library-proposals-texts-name-only-the-per-run-collector.md).
+
+<a id="oq-237"></a>
+
+**OQ-237 — May two directives narrow, or extend, one requirement?** *(`docs/product/README.md`, "Identifiers", "The shape
+of an entry" and "The back-pointer, in place": the meaning of Narrows and Extends, and the generator's refusal of a second
+directive under one verb on one requirement, "precedence must be unambiguous"; `tools/symbol-artifact/generate.mjs`, the
+per-verb maps that hold one directive per requirement; acceptance finding F15, the shape repaired for `PD-ORCH-014`.
+Raised 2026-10-13 from
+[`a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md`](../defects/a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md),
+noticed 2026-10-07 by fin31's reviewer, and ruled the same day under the owner's delegation; the consortium's question GV1.)*
+
+The generator keeps `SUPERSEDED_BY`, `NARROWED_BY` and `EXTENDED_BY` as one directive per requirement each and refuses a
+second under any verb. Three builds met it and wrote a disposition under a verb its ruling did not name, or left it out:
+`PD-TOOLS-013` lists REQ-TOOLS-112 and REQ-SESSION-136 under **Extends** though it adds a member to a closed set and removes
+an issue (OQ-226); `PD-CONFIG-003` names REQ-CONFIG-256 and REQ-CONFIG-417 as narrowed where its ruling named them extended
+(OQ-218); `PD-SHELL-009` carries its ruling's REQ-SHELL-021 through REQ-SHELL-122 (OQ-206). `PD-WORKSPACE-002` left
+REQ-CONFIG-464 out altogether, its own text saying "no single revision could honestly hold" the two halves, and revisions of
+`PD-TOOLS-006`, `PD-ORCH-006` and `PD-MONITOR-001` hold narrowings that "land here whatever [they are] about". The generated
+artifact answers "Extended by PD-TOOLS-013 … This still governs in full" for a requirement that no longer does.
+
+**What a ruling decides.** Whether the register may hold several directives under Narrows or Extends on one requirement,
+on what terms, and which dispositions the one-per-verb rule bent.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** the symbol generator admits several
+directives under **Narrows** and under **Extends** on one requirement, each verb's reach held as a list. **Supersedes** stays
+one per requirement, and a superseded requirement may be neither narrowed nor extended. Two directives that narrow one
+requirement state disjoint cases; at least one of the two names the other in its own entry, and the generator refuses the
+pair otherwise; a case that overlaps an earlier narrowing is written as a revision of that directive. Extends carries no
+citation rule, since nothing is displaced. Every disposition the one-per-verb rule bent is corrected to the verb its ruling
+and the README's definitions give (`PD-TOOLS-013`, `PD-SHELL-009`, `PD-WORKSPACE-002`), and `docs/product/README.md` is
+amended in place. No requirement's behaviour departs, so no directive is minted.
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended lists for Narrows and Extends, a later directive naming every earlier one under
+  the same verb, Supersedes single, and every bent disposition corrected so each requirement's label says what governs:
+  REQ-SHELL-021's only note says the replacement route is governed "in full", and a builder trusting REQ-TOOLS-112's label
+  could remove `interrupted` again. A bounded re-read of the requirements two directives already reach.
+- **Advocate B (the system's lens)** recommended the same lists, with Supersedes beside Extends refused as Supersedes beside
+  Narrows already is, the lists emitted sorted, the citation required of a second narrowing only, and the "lands here
+  whatever it is about" sentences marked as no longer binding; REQ-CONFIG-256 and REQ-CONFIG-417 move to Narrows under
+  `PD-WORKSPACE-002` by the F15 test.
+
+The ruling agreed with both that "precedence must be unambiguous" holds for Supersedes alone: two replacements leave no
+governing text, while two narrowings stating disjoint cases leave the requirement governing outside both, and two
+extensions displace nothing. It took B on the four points they differed (no citation for Extends; Supersedes beside Extends
+refused; sorted lists; the catch-all sentences marked) and A's bounded re-read, limited to the requirements two directives
+reach, since only there could the rule have bent a verb. Its own change: the citation check is order-independent ("at
+least one of the pair names the other"), because order in `directives.md` follows the domain, not the date.
+
+*Built 2026-10-13 (fin34, `fin34-record-and-cancels`); the first execution is reported in `docs/product/README.md`.*

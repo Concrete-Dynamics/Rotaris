@@ -220,8 +220,12 @@ its existing owner under REQ-SANDBOX-113.
 **Readings taken:** `error_class` for the three transport kinds, which no requirement fixes: `FetchTimeout`,
 `NetworkError`, `HttpError`. A three-line body ending in a newline has three lines (one trailing terminator is
 not a line; `\r\n` and `\n` both terminate). `final_url` on a refused hop is the URL of the hop that returned the
-redirect, with its status; on a refusal before any connection both are absent. The run's own abort mid-fetch is
-`network_error` ("cancelled by the run"), never `timeout`. A hop is classified before the permitted set is
+redirect, with its status; on a refusal before any connection both are absent. ~~The run's own abort mid-fetch is
+`network_error` ("cancelled by the run"), never `timeout`.~~ *Replaced 2026-10-13 by
+[`PD-TOOLS-013`](../../product/directives.md#pd-tools-013) revision 2 ([OQ-238](../open-questions.md#oq-238)): the run's own
+abort mid-fetch is `interrupted`, `error_class` `InterruptedError`, "The fetch of <url> was cancelled by the run before it
+completed.", still never `timeout` (a deadline that expired first reads `timeout`), and it files no issue; `network_error`
+read a deliberate cancel as a transport fault and filed a `tool_error` warning for every quit.* A hop is classified before the permitted set is
 consulted (`REQ-SANDBOX-027`: a `deny` verdict refuses whatever preceded it), which is stricter than "permitted →
 follow" and identical in effect while the policy is read once per call.
 

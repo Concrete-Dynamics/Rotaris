@@ -6315,7 +6315,15 @@ logged as [R-072](requests.md#r-072).*
 
 <a id="pd-tools-013"></a>
 
-### PD-TOOLS-013 — a terminal call its run cancels reads `interrupted`
+### PD-TOOLS-013 — a call its run cancels reads `interrupted`
+
+*Revision 2 (2026-10-13, [R-072](requests.md#r-072)) — **every call its run cancels**, the ruling of
+[OQ-238](../architecture/open-questions.md#oq-238) (GC1) under the owner's delegation: the title and the scope widen from the
+terminal to every tool call the run's signal cuts off, in the section **A call its run cancels, of any tool** after the
+terminal's; REQ-TOOLS-092, REQ-SANDBOX-025 and REQ-SESSION-139 join the Narrows line. The terminal's clause stands as written.*
+
+> *Revision 1's title said, and no longer governs:* "a terminal call its run cancels reads `interrupted`" — the scope it
+> named was the foreground `terminal` call alone.
 
 A foreground `terminal` call that its run cancels SHALL be recorded as interrupted: `failure_kind` and `outcome_kind`
 `interrupted`, `outcome_severity` `warning`, `is_error` true, no exit code, and `timeout` false. Its run cancels it when
@@ -6337,6 +6345,38 @@ state was lost, and what was restored; it SHALL NOT say that the command exceede
 The hard-timeout reading (exit code 124, `timeout`, `terminal_timeout`) stays reserved for a call that reached its hard
 bound, as REQ-TOOLS-097, REQ-TOOLS-099 and REQ-TOOLS-179 state; those three, and REQ-TOOLS-103, are untouched.
 
+**A call its run cancels, of any tool — revision 2.** Every tool call that its run's signal cuts off before it completes
+SHALL be recorded with failure kind `interrupted`, SHALL file no outcome-driven issue, and SHALL be answered to its agent as
+interrupted, as the turn already answers it:
+
+- **(a) — revision 2.** A call whose executor throws while the call's signal is aborted SHALL be recorded with failure kind
+  `interrupted` and the text "The '<tool>' call was cancelled by the run before it completed."
+- **(b) — revision 2.** A fetch the run's signal ends SHALL be recorded with `failure_kind` `interrupted`, `error_class`
+  `InterruptedError` and the detail "The fetch of <url> was cancelled by the run before it completed." This kind sits outside
+  REQ-TOOLS-092's three groups (policy refusal, transient fault, call fault): it is the run's rest. `timeout` still wins when
+  the deadline expired first, and the fetch's eight other kinds are unchanged.
+- **(c) — revision 2.** An MCP call the run's signal ends SHALL be recorded with failure kind `interrupted` and a text naming
+  the tool and the server and saying that the run cancelled the call before it completed and that it was not retried. The
+  allowance-timeout reading is tested first and still reads `timeout`, filing `terminal_timeout`; a server fault with no
+  cancel still reads `execution_error` and files `tool_error`.
+- **(d) — revision 2.** None of these files an outcome-driven issue. No `outcome_kind` is added to them, so OQ-208's ruling
+  stands. REQ-SESSION-139's histogram derives the bucket `interrupted` for a record that carries no `outcome_kind` and whose
+  failure kind is `interrupted`; that also reaches a released delegation wait.
+
+- **REQ-TOOLS-092 and REQ-SANDBOX-025 — revision 2:** the fetch vocabulary holds a ninth member, `interrupted`, and
+  REQ-SANDBOX-025's "mints no further kind" holds except for it.
+- **REQ-SESSION-139 — revision 2:** the derived buckets are rejected, tool-error, success, unknown and `interrupted`.
+- **REQ-SESSION-136 — revision 2:** the exemption above reaches every call recorded under (a) to (c).
+
+**Why revision 2, and what it costs.** Revision 1 repaired the terminal's cancel and left three siblings saying otherwise:
+the gate's catch recorded an executor's throw on the cancel as `cancelled`, a kind no vocabulary holds; fetch recorded it as
+`network_error`, the kind of a real transport fault; and the MCP catch recorded it as `execution_error`, though the SDK call
+receives the run's signal. Each filed a `tool_error` warning that `summary.md`'s Tool errors line counts, for every quit,
+stop or pause past the tool deadline that cut such a call, while the turn already answered the call as interrupted. One
+word for one fact, and the gate's existing branch, cost: a ninth fetch kind that a reader of exported fetch records meets
+for the first time, a fifth histogram bucket beside REQ-SESSION-139's four, and the cause of the cancel read from the turn,
+not from the call.
+
 **Why, and what it costs.** The build reported every cancel as a hard timeout: exit 124, "The command exceeded its timeout
 of 100 seconds", `TimeoutError`, a `terminal_timeout` issue at `error`, and a Timeouts count in `summary.md`. In the final
 default live run at `a68f121` (session `5df89df3`, call `#36`) a quit cut a 45 s wedge after 3,505 ms, and the record
@@ -6349,7 +6389,13 @@ sets meets a new token; severity `warning` with `is_error` true is the one termi
 from its severity; and the terminal's own text cannot tell a quit from a stop or a child's limit, so the cause comes from the
 turn's interrupted result, and a child's limit that cut a call is recorded at the child, not at the call.
 
-> **Narrows:** REQ-TOOLS-100, REQ-TOOLS-112, REQ-SESSION-136
+> **Narrows:** REQ-TOOLS-100, REQ-TOOLS-112, REQ-SESSION-136, REQ-TOOLS-092, REQ-SANDBOX-025, REQ-SESSION-139
+
+*Revision 2's disposition (2026-10-13): REQ-TOOLS-092, REQ-SANDBOX-025 and REQ-SESSION-139 join the Narrows line. The ruling
+(GC1) named REQ-SESSION-139, and kept REQ-TOOLS-112 and REQ-SESSION-136, as extended; OQ-237 (GV1), ruled and built the same
+day, reads a change to an exact enumeration as a narrowing, and REQ-SESSION-139's derivation "into rejected, tool-error,
+success or unknown" gains a fifth bucket, so all three are narrowed. No other directive holds a verb on REQ-TOOLS-092,
+REQ-SANDBOX-025 or REQ-SESSION-139.*
 
 *Corrected 2026-10-13 under [OQ-237](../architecture/open-questions.md) (GV1, [R-072](requests.md#r-072)): the three are
 narrowed, as the ruling named them. This directive's case and `PD-TOOLS-009`'s on REQ-TOOLS-112 are disjoint (a cancel that

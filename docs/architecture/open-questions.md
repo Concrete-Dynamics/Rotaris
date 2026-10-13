@@ -10631,6 +10631,10 @@ On fetch it followed B. The terminal-worded timeout issue an MCP or fetch timeou
 (repaired by fin30: the message names the call that ran out of time).
 Built by fin28 (`apps/desktop/src/run-host/mcp.ts`, `packages/agent-tools/src/tools/fetch.ts`); the fetch half is
 [`a-fetch-calls-record-carries-its-tools-name-as-outcome-kind.md`](../defects/fixed/a-fetch-calls-record-carries-its-tools-name-as-outcome-kind.md).
+*Beside this ruling since 2026-10-13 ([OQ-238](#oq-238), `PD-TOOLS-013` revision 2):* a fetch, an MCP call or any call its
+run cancels carries failure kind `interrupted`, and REQ-SESSION-139 derives such a record, which still carries no
+`outcome_kind`, into the bucket `interrupted` rather than `tool_error`. This ruling's reading of `outcome_kind` is unchanged:
+no record gains one.
 
 Until the 2026-10-07 ruling, every MCP tool call's record carried `outcome_kind: 'mcp'`, the call succeeding or failing alike
 (`apps/desktop/src/run-host/mcp.ts`, the `execute` of each MCP tool executor the run host builds). The histogram followed REQ-SESSION-139's letter and
@@ -12068,3 +12072,50 @@ REQ-STARTUP-161 (`PD-SHELL-001`'s window is a window of the one instance, and th
 untouched) and REQ-WORKSPACE-041 (`PD-LIBRARY-002`'s retrospective reads what discovery finds). Every pair of narrowings the
 register now holds names each other. Outside the bound and recorded, not corrected:
 [`pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md`](../defects/pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md).
+
+<a id="oq-238"></a>
+
+**OQ-238 — Does every call its run cancels read `interrupted`, or only the terminal's?** *(PD-ORCH-005 clause 3, a call the
+rest cut off "is recorded as interrupted"; `PD-TOOLS-013`, the terminal's cancel; REQ-SESSION-136, the outcome-driven
+issues; REQ-TOOLS-092 and REQ-SANDBOX-025, fetch's closed vocabulary; REQ-SESSION-139, the histogram's four derived
+buckets; ADR-0023's reading of the run's abort mid-fetch as `network_error`; OQ-208, no `outcome_kind` on an MCP or fetch
+record. Raised 2026-10-13 from
+[`a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md`](../defects/a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md),
+noticed by the consortium while ruling OQ-226 and recorded by fin31, and ruled the same day under the owner's delegation;
+the consortium's question GC1.)*
+
+`PD-TOOLS-013` made the terminal's cancelled call read `interrupted` and file no issue. Three sibling paths still read a cancel
+as a failure. The gate's catch writes `cancelled` for an executor that throws once the signal is aborted
+(`packages/agent-tools/src/gate.ts`), a kind no vocabulary holds; fetch writes `network_error`, the kind of a real transport
+fault (`packages/agent-tools/src/tools/fetch.ts`, `transportFailure`); and the MCP executor's catch writes `execution_error`
+(`apps/desktop/src/run-host/mcp.ts`), though its SDK call receives the run's signal (`packages/mcp/src/client.ts`). All three
+fall through to the gate's `tool_error` warning, which `summary.md`'s Tool errors line counts, while the turn already answers
+each call as interrupted (`callSignal.aborted`). A record with failure kind `interrupted` and no `outcome_kind` (those three,
+and a released delegation wait) derives into the histogram's `tool_error` bucket.
+
+**What a ruling decides.** Whether every call its run cancels reads `interrupted` and files no issue, which requirements that
+departs from, and where such a call is counted in REQ-SESSION-139's histogram.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** [`PD-TOOLS-013`](../product/directives.md#pd-tools-013)
+revision 2, retitled "a call its run cancels reads `interrupted`", governs every tool call cut off by its run's signal: the
+gate's catch, fetch and the MCP executor as well as the terminal. Each such call is recorded with failure kind
+`interrupted` and a detail saying the run cancelled it before it completed, and files no outcome-driven issue. When it
+carries no `outcome_kind`, the tool-outcomes histogram counts it under `interrupted`. A deadline that expired first still
+reads `timeout`, and a fetch keeps its eight other kinds unchanged. The revision narrows REQ-TOOLS-092 and REQ-SANDBOX-025
+(fetch's vocabulary gains `interrupted`, `InterruptedError`) and REQ-SESSION-139 (a fifth derived bucket); OQ-208's
+reading stands, since no record gains an `outcome_kind`.
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended that a call the run cancels read `interrupted` and file no issue whatever its
+  tool, the MCP executor included, with fetch's vocabulary widened by a revision of `PD-TOOLS-013` narrowing REQ-TOOLS-092,
+  and the histogram counting such a call under `interrupted`, since under any other reading `summary.md` would still count
+  a quit as a tool error.
+- **Advocate B (the system's lens)** recommended the same three repairs as revision 2 of `PD-TOOLS-013`, retitled, narrowing
+  REQ-SANDBOX-025 beside REQ-TOOLS-092 (it "mints no further kind" on its own), and the MCP catch testing the allowance
+  timeout before the abort, as fetch tests its deadline first.
+
+The ruling took B's record shape (REQ-SANDBOX-025 narrowed; the timeout tested first in MCP) and A's histogram (a
+one-line derivation of REQ-SESSION-139). Leaving MCP out would reopen the same defect under a new name. The ruling named
+REQ-SESSION-139 as extended and kept REQ-TOOLS-112 and REQ-SESSION-136 as extended; [OQ-237](#oq-237), ruled and built the
+same day, reads a change to an exact enumeration as a narrowing, so the revision narrows all three (recorded in the
+directive's disposition).

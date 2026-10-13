@@ -11,6 +11,10 @@ terminal call). Two other cancel paths do not say so:
 - **fetch.** A fetch the run's signal ends is recorded `network_error` (`NetworkError`, "The fetch of <url> was cancelled by
   the run before it completed."), so the cancel lands in the same failure kind as a real transport fault and files a
   `tool_error` warning.
+- **The MCP executor** *(added 2026-10-13 by OQ-238's ruling, which found the third sibling)*. The SDK call receives the run's
+  signal (`packages/mcp/src/client.ts`, `callTool`), and the executor's catch (`apps/desktop/src/run-host/mcp.ts`) records the
+  throw on the abort as `execution_error`, "The call to '<tool>' on MCP server '<server>' failed: …", which files a
+  `tool_error` warning.
 
 A quit, a stop or a pause past the tool deadline therefore files a warning issue for such a call, where the terminal's
 cancelled call (PD-TOOLS-013), a released wait and a withdrawn question file none.
@@ -32,3 +36,5 @@ which records this and does not repair it. Recorded by fin31, not repaired.
 - `packages/agent-tools/src/gate.ts`: the `catch` after `executor.execute` (`failureKind: aborted ? 'cancelled' : …`) and
   `outcomeIssues`.
 - `packages/agent-tools/src/tools/fetch.ts`: `transportFailure`, the `ctx.signal.aborted` branch.
+- `apps/desktop/src/run-host/mcp.ts`: the `catch` in each MCP tool executor's `execute`.
+- `packages/engine/src/export.ts`: `outcomeOf`, which derives such a record (no `outcome_kind`) into `tool_error`.

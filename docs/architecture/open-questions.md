@@ -12446,3 +12446,64 @@ resolution, is "a write" in REQ-STARTUP-164's sense — and if it is, which of A
 opened only after the record is won (the order fin30 had, with the double-instance window the repaired note describes), or a
 form of endpoint that is no file (Linux's abstract socket namespace; nothing equivalent on macOS), or the record's own write
 taken to include the endpoint it names.
+
+**OQ-240 — Does REQ-TOOLS-145's single active task bound a coordinator's parallel delegations?** *(REQ-TOOLS-145, "at most one
+task may be `IN_PROGRESS` at a time"; REQ-TOOLS-146, `replace`'s protection of the active task; `PD-TOOLS-008` revision 1,
+"Everything else REQ-TOOLS-145 fixes still governs: at most one task is IN_PROGRESS"; REQ-TOOLS-147, the Agent plan as the
+run's primary progress display; REQ-ORCH-029, a list the coordinator "keeps current"; REQ-ORCH-028 with `PD-TOOLS-006`
+revision 6's `todo_item`; REQ-CHAT-086, IN_PROGRESS drawn active and PENDING open. Raised 2026-10-07 from the final live runs:
+finding P3 of the default autopsy at `a68f121` and its recurrence D7 in the duress autopsy, recorded in
+[`a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md`](../defects/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md);
+the consortium's question P3. The round assigned it OQ-227, which fin30 took on main for `single_file_change` (PD-ORCH-011
+revision 2) before this landed, and OQ-235 to OQ-239 were taken meanwhile, so it takes OQ-240, the next free number.
+**Ruled 2026-10-07.**)*
+
+A coordinator running two delegated children at once cannot record both items as in progress. In the default live run at
+`a68f121` (session `52aea43a`, the `edit` scenario) its plan `#5` marked both parallel children's items `IN_PROGRESS` and was
+refused in `PD-TOOLS-008`'s sentence, which left `#7`, the same step's second `delegate`, refused by OQ-213; after the retry
+`#14` tried to mark the running tests child's item `IN_PROGRESS` and was refused in REQ-TOOLS-145's sentence, which advised
+marking the running implementer's item COMPLETED or ABANDONED. While both children ran the plan recorded the tests item
+`PENDING`: 2 refused `todo` calls, 1 refused `delegate`, 2 extra coordinator steps, about 19.5 s on the critical path. The
+duress run at `a68f121` (session `e6747bd0`) repeated it for the whole run: `#19` refused a plan marking three items, `#20` and
+`#42` kept wave 1's items `PENDING` while their children ran, and `#113`, `#246` and `#404` moved wave 2's and wave 3's items
+from `PENDING` straight to `COMPLETED`; the strip drew running work as open for about 67 of 69 minutes. The duress run at
+`c2fdd6a` showed the same (`#305`, e's item never marked active while e ran). OQ-163, which kept the single-active rule
+(`PD-TOOLS-008`), was a direct-work plan with no delegation.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** REQ-TOOLS-145's single-active rule
+bounds the tasks an agent works on itself. A task held as `todo_item` (`PD-TOOLS-006` revision 6) by a non-terminal child of the
+list's owner is outside the count, and the bound is checked only on a write that marks a task IN_PROGRESS. An admitted delegation
+whose item is PENDING in the caller's plan marks it IN_PROGRESS. The product's texts tell a delegating agent to plan work items,
+keep its own item IN_PROGRESS, leave the items it will delegate PENDING and name each in `todo_item`. Recorded as
+[`PD-TOOLS-008`](../product/directives.md#pd-tools-008) **revision 2** (it narrows REQ-TOOLS-145 and now REQ-TOOLS-146) and
+[`PD-TOOLS-006`](../product/directives.md#pd-tools-006) **revision 7** (the marking, within its existing dispositions). No
+directive touches REQ-ORCH-029, REQ-CHAT-086 or REQ-CHAT-088: IN_PROGRESS still maps to active.
+
+The two recommendations weighed, and the ruling followed **A**, with corrections from B:
+- **Advocate A (the user's lens)** recommended exempting from the count the items the agent's own live children serve through
+  `todo_item`, marking a named PENDING item IN_PROGRESS when its delegation is admitted, and teaching the coordinator to leave
+  the items it will delegate PENDING; recorded as `PD-TOOLS-008` revision 2 with one clause in `PD-TOOLS-006`. The ruling
+  followed A's mechanism and its record. Under it the run marks the item at admission, so no extra `update` call is made, and
+  the Agent plan shows active work on a coordinating run, the serial case included.
+- **Advocate B (the system's lens)** recommended keeping REQ-TOOLS-145 as `PD-TOOLS-008` left it, with no directive: the
+  coordinator's IN_PROGRESS marks only its own item, a delegated item's progress is its holder's record, and the texts teach
+  leaving an item a child works on PENDING until the child reports. The ruling did not follow B's texts: they would leave the
+  primary progress display never showing active work on a coordinating run, and they rest on reading the child ledger as the
+  plan's state, a reading B itself expected to be challenged. From B it took three things: the count is checked against the
+  write that marks a task, so an item whose child has ended never fails a write that marks nothing; a plan written with two
+  IN_PROGRESS items before any delegation is still refused, and the text handles it; and a harness finding for an item closed
+  while its holder runs.
+
+Both advocates, and OQ-220, rejected planning delegation steps instead of work items: it records a "Delegate X" item COMPLETED
+while its child still runs, and turns REQ-ORCH-028's per-item ownership and REQ-ORCH-030's per-item attempt count into counts of
+coordinator calls.
+
+**What a live run then shows.** In the edit scenario the coordinator writes its plan, then delegates both children in the next
+step naming their items; each `delegate` observation reads "Todo item … is now IN_PROGRESS" and carries the Todo state; while
+both children run the Agent plan strip shows both rows active, each turning done when the coordinator closes it; after the plan
+write there is no REQ-TOOLS-145 or `PD-TOOLS-008` refusal and no refused `update` like `#14`. In duress a parallel child's
+item, such as e's, reads active while that child runs, so `#305` does not recur. The harness counts items recorded PENDING
+while held (target 0), items marked COMPLETED while held (target 0) and single-active refusals in coordinating sessions (target
+0, each counted as a NOTE). A plan written with two IN_PROGRESS items before any delegation is still refused once, in
+`PD-TOOLS-008`'s sentence with its new hint; a model that re-marks an item the run already marked meets REQ-TOOLS-147's no-op
+error, one cheap row.

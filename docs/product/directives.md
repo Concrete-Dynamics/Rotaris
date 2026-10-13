@@ -2294,7 +2294,8 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > names them (`editArguments`, generated and checked against the server's own input schema); and it changed that path
 > when it returned `ok`. One reading, `writtenPathsOf` (`packages/engine/src/children/report.ts`), now feeds the cut-off's
 > changed paths, the report's `edited_files`, the facts the pass is told never to deny and the fallback's "Files
-> touched". The terminal stays outside, as PD-TOOLS-006 states. **A literal reading taken, open for the owner:** a
+> touched". The terminal stays outside, as PD-TOOLS-006 states. **A literal reading taken, open for the owner
+> ([OQ-245](../architecture/open-questions.md#oq-245), numbered by fin35):** a
 > cross-file EDIT capability is listed by the one file or directory its arguments confine it to — a symbol rename lists
 > the file declaring the symbol, not the files whose references it rewrote, and a replacement across the whole project
 > (no path argument) lists none — because the arguments name no more and the result's text is the server's; a preview

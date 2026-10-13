@@ -174,6 +174,14 @@ one-renderer rule) — and `pnpm rows-proof` compares the two live subtrees rath
 import. The **owe of note 4 above is closed**: `shell.openExternal` exists, in `contracts/src/commands.ts` and in
 main, the open is acknowledged and a failure is reported (`REQ-CHAT-076`).
 
+*Corrected 2026-10-13 (fin41), the sentence above kept as written:* the owe was closed for the transcript only. The
+artifact inspector, this module's first consumer, kept the inert link note 4 allowed: neither of its two mounts (the
+Library in `renderer/main.tsx`, the persona window in `renderer/windows.tsx`) passed an opener, and the Library's mount
+still carried note 4's "No such command exists yet … Recorded as owed" comment. Both now pass the window's `openLink`;
+pinned by `apps/desktop/src/renderer/artifact-inspector-links-wiring.test.ts` (red on the mounts before) and by
+`pnpm artifacts-proof` launch 4, which presses a Preview link in the built app and reads its `shell.openExternal` request
+(`docs/defects/fixed/every-link-in-the-library-artifact-inspectors-preview-is-drawn-disabled.md`).
+
 **Two decisions of this record held and were measured; one thing this record did not decide was wrong in the code
 that met it.**
 

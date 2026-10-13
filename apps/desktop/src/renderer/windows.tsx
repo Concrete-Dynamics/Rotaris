@@ -188,7 +188,8 @@ export function PersonaApp({ persona, initialSelect }: { persona: string; initia
       onOpenArtifact={openArtifact}
     />
     {artifactsOpen.map((entry) => (
-      <ArtifactInspector key={entry.id} id={entry.id} raised={entry.raised} onLoad={loadArtifact} onSave={saveArtifact}
+      // ADR-0051 decision 4: the Preview's links open through this window's `openLink`, as its transcript's do.
+      <ArtifactInspector key={entry.id} id={entry.id} raised={entry.raised} onLoad={loadArtifact} onSave={saveArtifact} onOpenLink={openLink}
         onClose={(id) => setArtifactsOpen((current) => current.filter((x) => x.id !== id))} />
     ))}
     {/* ADR-0049's fourth decision: the acknowledgement stack is PER WINDOW, so this window owns its own — the same

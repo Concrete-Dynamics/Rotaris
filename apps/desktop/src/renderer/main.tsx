@@ -544,11 +544,11 @@ function Library({ prompts, layout, onLayout }: { prompts: PromptsApi; layout: P
         onStart={startImprovement} onRollbackPreview={previewImprovementRollback} onRollback={rollbackImprovement} />}
     />
     {open.map((entry) => (
-      // ADR-0051: a link is an element that requests an external open THROUGH THE COMMAND CHANNEL. No such
-      // command exists yet — `REQ-CHAT-076` fixes the opening, its acknowledgement and its failure report,
-      // and that belongs to the transcript part that consumes this renderer. Until then no opener is passed
-      // and a link renders with its target as its title, inert rather than navigable. Recorded as owed.
-      <ArtifactInspector key={entry.id} id={entry.id} raised={entry.raised} onLoad={load} onSave={save}
+      // ADR-0051 decision 4: a link in the Preview requests an external open THROUGH THE COMMAND CHANNEL — the window's
+      // shared `openLink` (`shell.openExternal`, acknowledged, a failure reported), as the transcript's links do. Without it
+      // `Markdown` draws every link disabled, which is how they stood until 2026-10-13
+      // (docs/defects/fixed/every-link-in-the-library-artifact-inspectors-preview-is-drawn-disabled.md).
+      <ArtifactInspector key={entry.id} id={entry.id} raised={entry.raised} onLoad={load} onSave={save} onOpenLink={openLink}
         onClose={(id) => setOpen((current) => current.filter((x) => x.id !== id))} />
     ))}
   </>);

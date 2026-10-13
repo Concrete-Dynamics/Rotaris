@@ -15,6 +15,11 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-13**
 
+**The artifact inspector's Preview links open (ADR-0051 decision 4; fin41).** Both `<ArtifactInspector>` mounts
+(`renderer/main.tsx`'s Library, `renderer/windows.tsx`'s persona window) pass the window's `openLink`, so a Preview link asks
+for `shell.openExternal` as a transcript link does. The **process view**'s `shell.openExternal` paragraph names every surface
+that asks for it. No package, edge, process, channel, command or store column changed.
+
 **About & Legal carries REQ-STARTUP-160's network-activity disclosure (fin41).** A fourth section of `AboutSettings`, three
 statements held as constants in the renderer bundle, so it draws with no fact from main and no network. The **process view**'s
 About paragraph says it crosses no boundary. No package, edge, process, channel, command or store column changed.

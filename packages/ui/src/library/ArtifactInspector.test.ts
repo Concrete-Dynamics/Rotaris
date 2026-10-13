@@ -41,3 +41,28 @@ describe('PD-LIBRARY-003 — the artifact inspector\'s Preview starts below the 
     expect(previewSource(prose)).toBe(prose);
   });
 });
+
+/**
+ * ADR-0051 decision 4: the Preview's links request an external open through the opener the mount hands in; `Markdown` draws
+ * a link disabled only when there is none. Both renderer mounts pass the window's `openLink`
+ * (`apps/desktop/src/renderer/artifact-inspector-links-wiring.test.ts`); this pins that the inspector forwards it.
+ */
+describe('the artifact inspector\'s Preview links (ADR-0051 decision 4)', () => {
+  const doc = '# Notes\n\nSee [the reference](https://example.com/reference) for more.\n';
+  const preloaded: ArtifactLoaded = { id: 'art_abcdefgh', slug: 'notes', title: 'Notes', artifactKind: 'agent_published', status: 'published', producer: 'planner-1', persona: 'planner', edited: false, body: doc, fallback: false };
+  const never = () => new Promise<never>(() => undefined);
+  const link = (onOpenLink?: (href: string) => void): string => {
+    const html = renderToStaticMarkup(createElement(ArtifactInspector, { id: preloaded.id, raised: 0, onLoad: never, onSave: never, onClose: () => undefined, preloaded, onOpenLink }));
+    return /<button[^>]*data-href="https:\/\/example\.com\/reference"[^>]*>/.exec(html.slice(html.indexOf('data-testid="artifact-preview"')))?.[0] ?? '';
+  };
+
+  it('is an enabled control when the mount hands in an opener', () => {
+    expect(link(() => undefined)).not.toBe('');
+    expect(link(() => undefined)).not.toMatch(/\bdisabled\b/);
+  });
+
+  it('is drawn disabled, its target as its title, only when there is no opener', () => {
+    expect(link()).toMatch(/\bdisabled\b/);
+    expect(link()).toContain('title="https://example.com/reference"');
+  });
+});

@@ -21,7 +21,8 @@
  *                  `can_publish_artifacts: true`; the session log records REQ-TOOLS-004's `artifact_publish_not_granted`
  *                  removal at warning, and the scripted publish stores no artifact.
  *   4. inspector — the inspector opens on the selected row, its Preview starts below the frontmatter
- *                  (PD-LIBRARY-003; captured as `inspector-preview.png`), the Markdown tab is edited and saved, the table's
+ *                  (PD-LIBRARY-003; captured as `inspector-preview.png`), a link in it is pressed and requests its
+ *                  open through `shell.openExternal` (ADR-0051 decision 4), the Markdown tab is edited and saved, the table's
  *                  status cell gains ` · edited`, and opening the same id again RE-RAISES the one dialog
  *                  (REQ-LIBRARY-131/132/133).
  *   5. missing   — the body file is deleted underneath a stored session; on a relaunch that resumes it the
@@ -150,6 +151,9 @@ function toolRows(db, sessionId, tool) {
   return db.prepare('SELECT ordinal, status, is_error, agent_name, entry FROM tool_calls WHERE session_id = ? AND tool_name = ? ORDER BY ordinal').all(sessionId, tool).map((r) => ({ ...r, entry: JSON.parse(r.entry) }));
 }
 const PROBE_ROWS = 'tr[data-artifact-id]';
+// Launch 4's Preview link (ADR-0051 decision 4): the URL the scripted body carries, and its control in the Preview.
+const PREVIEW_LINK = 'https://example.com/reference';
+const PREVIEW_LINK_BUTTON = `[data-testid="artifact-preview"] [data-href="${PREVIEW_LINK}"]`;
 // The Library opens on its FIRST tab (REQ-LIBRARY-103's order), so every launch below picks the Artifacts tab
 // after the view switch (`ARTIFACTS_TAB`, from `lib/library-refresh.mjs`). Before the merge this proof drove a Library
 // that held only this tab and needed no click.
@@ -386,6 +390,10 @@ let edited = null;
   const r = await launch('inspector', {
     ROTARIS_CAPTURE_PROMPT: 'publish the plan', ROTARIS_CAPTURE_PROMPT_MS: '1200',
     ROTARIS_SCRIPT: 'artifact:artifact_write,answer',
+    // The scripted plan's own body with one Markdown link added, so the Preview has a link to open (ADR-0051 decision 4).
+    ROTARIS_SCRIPT_ARTIFACT_ARGS: JSON.stringify({ artifact_write: { slug: 'scripted-plan', title: 'The scripted plan', body: `The first line of the scripted body.\n\nA second paragraph with \`code\` and **bold**, and [the reference](${PREVIEW_LINK}).`, tags: ['research'] } }),
+    // A link the Preview opens goes through `shell.openExternal`, whose capture seam records it rather than starting a browser.
+    ROTARIS_CAPTURE_OPEN_EXTERNAL: 'record',
     // The modeless inspector is 720x560 at the bottom-right (REQ-LIBRARY-131); the window is widened so the
     // tab's own controls stay reachable beside it rather than under it — the proof drives real clicks at real
     // coordinates, so an overlap would be measuring the window's size instead of the requirement.
@@ -399,6 +407,11 @@ let edited = null;
       'textarea[data-testid="artifact-editor"]@15200',     // focus the editor
       '[data-testid="artifact-save"]@17000',               // REQ-LIBRARY-133's save
       '[data-testid="library-artifacts-inspect"]@18600',   // REQ-LIBRARY-131: the same id again
+      // ADR-0051 decision 4: back on the Preview, its link opens through the command channel. Pressed last, because the
+      // acknowledgement it raises stands over the inspector's footer while it shows, and so over Save (a press at 14300
+      // met the toast at Save's point; docs/defects/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md).
+      '[data-testid="artifact-tab-preview"]@19700',
+      `${PREVIEW_LINK_BUTTON}@20200`,
     ].join(';;'),
     ROTARIS_CAPTURE_TYPE_AT: 'EDITED@16000',
     // PD-LIBRARY-003 (f): the Preview as drawn, before the Markdown tab is taken at 14500 (the end-of-launch capture shows
@@ -408,6 +421,7 @@ let edited = null;
       '[data-testid="artifact-inspector"]@13800',
       '[data-testid="artifact-inspector-meta"]@13800',
       '[data-testid="artifact-preview"]@14000',
+      `${PREVIEW_LINK_BUTTON}@14000`,
       '[data-testid="artifact-inspector"]@16600',
       '[data-testid="artifact-inspector-status"]@17800',
       'td[data-edited]@18200',
@@ -430,6 +444,14 @@ let edited = null;
   // paragraph (`id: "art_…" slug: "…" …`) between two rules on every artifact before it.
   if (/\b(?:id|slug|kind|created_at): "/.test(preview[0].text)) throw new Error(`the Preview rendered the frontmatter (PD-LIBRARY-003): ${JSON.stringify(preview[0].text.slice(0, 200))}`);
   if (!existsSync(join(output, 'inspector-preview.png'))) throw new Error('the Preview was not captured (inspector-preview.png)');
+  // ADR-0051 decision 4: the Preview's link is a control that requests an external open through `shell.openExternal`. Until
+  // 2026-10-13 neither inspector mount passed an opener, so `Markdown` drew it disabled and a press reached nothing
+  // (docs/defects/fixed/every-link-in-the-library-artifact-inspectors-preview-is-drawn-disabled.md).
+  const previewLinks = probe(r.log, PREVIEW_LINK_BUTTON, 14000);
+  if (previewLinks.length !== 1 || previewLinks[0].data['data-href'] !== PREVIEW_LINK) throw new Error(`the Preview did not draw the body's link as one control: ${JSON.stringify(previewLinks)}`);
+  const linkMissed = unpressedClicks(r.log, ['[data-testid="artifact-tab-preview"]', PREVIEW_LINK_BUTTON]);
+  if (linkMissed.length > 0) throw new Error(`the Preview link was not pressed on its own control: ${JSON.stringify(linkMissed)}`);
+  if (!r.log.includes(`capture: open-external ${PREVIEW_LINK}`)) throw new Error(`pressing the Preview's link did not request ${PREVIEW_LINK} through shell.openExternal (a disabled link reaches nothing)`);
   if (dirty !== 'yes') throw new Error(`the editor did not take the typed characters (dirty=${dirty})`);
   if (status !== 'Saved.') throw new Error(`the footer did not read "Saved.": ${status}`);
   if (statusCells.length !== 1 || statusCells[0].data['data-edited'] !== 'yes' || !statusCells[0].text.endsWith(' · edited')) throw new Error(`the row's status cell did not gain " · edited": ${JSON.stringify(statusCells)}`);
@@ -444,7 +466,7 @@ let edited = null;
   const body = readFileSync(join(filesDir(s.session_id), record.body_file), 'utf8');
   if (!body.includes('EDITED')) throw new Error('the typed characters did not reach the body file');
   edited = { sessionId: s.session_id, id: record.id, slug: record.slug, bodyFile: record.body_file, directory: filesDir(s.session_id) };
-  results.inspector = { meta, previewStart: preview[0].text.slice(0, 80), dirty, status, statusCell: statusCells[0].text, raisedOnReopen: reopened[0].data['data-raised'], dialogs: reopened.length, editedAt: record.edited_at, bodyCarriesEdit: true, previewPng: join(output, 'inspector-preview.png'), png: r.png };
+  results.inspector = { meta, previewStart: preview[0].text.slice(0, 80), previewLinkOpened: PREVIEW_LINK, dirty, status, statusCell: statusCells[0].text, raisedOnReopen: reopened[0].data['data-raised'], dialogs: reopened.length, editedAt: record.edited_at, bodyCarriesEdit: true, previewPng: join(output, 'inspector-preview.png'), png: r.png };
 }
 
 // ---- 5. A body file deleted underneath: the record stays listed and the inspector reports the failure ----------

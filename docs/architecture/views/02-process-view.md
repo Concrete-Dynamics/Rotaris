@@ -423,7 +423,10 @@ for this command, and it is a command with an OUTCOME rather than a fire-and-for
 makes the opening acknowledged and the failure reported. **Main checks the scheme and nothing else does**: transcript
 text is model-authored, so anything that is not `http:` or `https:` — a `file:`, a `javascript:`, a shell-registered
 scheme — is refused with the target named (`link.scheme`), and an unparseable target with `link.unreadable`. No new
-channel and no run-host hop: main answers it itself, as it answers `theme.set`. Verification seams (under
+channel and no run-host hop: main answers it itself, as it answers `theme.set`. **Every surface that renders Markdown asks
+for it through the window's one `openLink`** (`renderer/shell.ts`): the transcript, the persona window, and since
+2026-10-13 the artifact inspector's Preview in the Library and in a persona window, whose two mounts had passed no
+opener, so `Markdown` drew each link disabled. Verification seams (under
 `ROTARIS_CAPTURE_PNG` only): `ROTARIS_CAPTURE_OPEN_EXTERNAL=record|fail` records or refuses instead of launching a
 browser; `ROTARIS_CAPTURE_NET=1` logs every request the window's session issues, which is how `REQ-CHAT-056`'s "no
 image is ever loaded" is measured from **main** rather than from the page; `ROTARIS_CAPTURE_DRAG_AT="selector@ms"`

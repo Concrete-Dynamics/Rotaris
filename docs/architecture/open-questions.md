@@ -12075,7 +12075,10 @@ untouched) and REQ-WORKSPACE-041 (`PD-LIBRARY-002`'s retrospective reads what di
 register now holds names each other. The generator's one-per-verb reason is marked as no longer binding wherever the
 register still gave it in the present tense: beside the "lands here" sentences of `PD-TOOLS-006` and `PD-ORCH-006`, at
 `PD-MONITOR-004`'s folded revision, and at `PD-ORCH-003`'s "it would also be refused" (whose supersession half still holds).
-Outside the bound and recorded, not corrected:
+**Checked again at the landing rebase** (2026-10-13), against every disposition `origin/main` then carried, those landed while
+this was built included (`PD-CONFIG-003` revision 3, `PD-LIBRARY-002` revision 2's seven narrowings and two extensions,
+`PD-ORCH-011` revision 2): none was bent by the one-per-verb rule, since each requirement they name under a verb carries no
+other directive under it, so nothing more is corrected. Outside the bound and recorded, not corrected:
 [`pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md`](../defects/pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md).
 
 <a id="oq-238"></a>

@@ -1331,6 +1331,16 @@ latest author, pinning, steering, the chips' order across a state change; the st
 `agents.yaml` and read back in Settings; every surface showing a planted running child settled. Figures — the refresh
 time, the persona window's first paint — land in `.proof/mission-proof/results.json`.
 
+**What `pnpm continuation-proof` does** (since fin42, 2026-10-13). It builds Electron and launches the app four times over
+two scratch stores, the per-agent timeout at 3 s and every child scripted to complete a call and then hold past it, so each
+is cut off while making progress (PD-ORCH-004). `later-iteration`: one launch in which a prompt typed while the run goes is
+queued as iteration 2, whose root takes up the offer iteration 1's root left (the scripted `continue:` step); the
+continuation, cut off too, is offered none. `later-run`: the run that cut the child off; a launch that sets Settings ›
+Runtime › Per-agent timeout to 1 minute and saves (`lib/settings-runtime-field.mjs`); a relaunch whose follow-up root reads
+the offer in the handoff and takes it up, the continuation succeeding. Each reads the store — the cut-off report, the later
+root's first recorded message, `continuation_of`, no offer left open — and the sidebar's timed-out tag as it appears; results
+in `.proof/continuation-proof/results.json`; `--only=<scenario>`.
+
 **What `pnpm mcp-proof` does.** It builds Electron and launches the app nine times against hand-written fixture servers
 (`scripts/fixtures/mcp-fixture-server.mjs`, four protocol eras, pid files per launch): discovery and the byte-exact prompt
 section with the inert grant reported once and the discovery file hashed unchanged; a call end to end with `tool.start`

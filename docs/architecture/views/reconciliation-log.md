@@ -15,6 +15,12 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-13**
 
+**A scripted root can take up a continuation offer (PD-ORCH-004 revisions 3 and 4; fin42).** The scripted client gains the
+step `continue:<persona>:<name>`, a `delegate` whose `continuation_of` names the newest offer its conversation was told
+(`offeredTaskId`, `run-host/scripted-client.ts`, reading with the engine's `offersToldIn`), which `continuation-proof` drives
+for a later iteration's root and a later run's. The **runtime view**'s Continuations paragraph says so. Verification only: no
+package, edge, process, channel, command or store column changed.
+
 **The approval dialog's scripted answer is a build-time seam, and answers by tool (fin42).** `presentNext` reads
 `ROTARIS_CAPTURE_APPROVAL`, `_APPROVAL_MS` and `ROTARIS_CAPTURE_DIALOG_PNG` behind `__ROTARIS_SEAMS__`, parsed by
 `main/capture/approval-answers.ts` (`<tool>=<answer>[,<answer>…]`, `none` leaving a dialog to its timeout), and

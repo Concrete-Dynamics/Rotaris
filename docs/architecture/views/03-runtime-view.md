@@ -1322,7 +1322,10 @@ up an offer the session left before — the named child found in the store with 
 or, for a resumed iteration, one of its own children that had ended before this run took it up (`endedInEarlierRun`,
 fixed when `IterationChildren` is built) — and a child of that later iteration cannot (the refusal names both routes
 to the root; a plan cycle's root takes up none, OQ-99). The field itself is not in REQ-TOOLS-152, which the directive
-does not name: **OQ-66**.
+does not name: **OQ-66**. In the built app `continuation-proof` drives both later roots (since fin42): iteration 2's root, a queued prompt's,
+told the offer in its first message (`offersForFirstMessage`), and a later run's root, told it in the handoff
+(`buildContinuationPayload`); the scripted root takes an offer with `continue:<persona>:<name>` (`offeredTaskId` in
+`run-host/scripted-client.ts`, which reads the conversation with `offersToldIn`).
 
 **Follow-ups (PD-ORCH-005 clause 22, PD-TOOLS-006 revision 3, OQ-131; `children/orchestration.ts`).** A `delegate` call
 may carry `session_id`, the task id of a settled child of the caller. `IterationChildren.delegate` hands such a call to

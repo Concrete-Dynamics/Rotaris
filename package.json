@@ -34,6 +34,7 @@
     "sessions-proof": "node apps/desktop/scripts/sessions-proof.mjs",
     "mcp-proof": "node apps/desktop/scripts/mcp-proof.mjs",
     "mission-proof": "node apps/desktop/scripts/mission-proof.mjs",
+    "continuation-proof": "node apps/desktop/scripts/continuation-proof.mjs",
     "code-intel:bundle": "node apps/desktop/scripts/code-intelligence/bundle.mjs",
     "code-intel:manifest": "node apps/desktop/scripts/code-intelligence/manifest.mjs",
     "code-intel-proof": "node apps/desktop/scripts/code-intel-proof.mjs",

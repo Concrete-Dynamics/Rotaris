@@ -151,6 +151,37 @@ describe('scriptedClient — the step a call takes', () => {
   });
 
   /*
+   * PD-ORCH-004 revisions 3 and 4: continuation-proof's later roots take up an offer they were told of — in an offers list (a
+   * handoff, a first message) or in a cut-off child's report — and never one they named already or were never told.
+   */
+  it('`continue:<persona>:<name>` delegates with `continuation_of` set to the newest offer told and not yet taken; with none it answers', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'continue:coding-agent:again,continue:coding-agent:again2,continue:coding-agent:again3');
+    const client = scriptedClient(clock, () => {});
+    const delegating = [...TOOLS, { name: 'delegate', description: 'delegate', parameters: {} }];
+    const callOf = async (messages: readonly ChatMessage[]) => {
+      const parts = client.stream({ ...request(messages), tools: delegating })[Symbol.asyncIterator]();
+      let call: { name: string; argsDelta: string } | null = null;
+      for (;;) {
+        const next = parts.next();
+        let r = await Promise.race([next, settled()]);
+        // A streamed answer paces its words on the clock port; the fake clock is moved on until the part arrives.
+        while (r === undefined) { clock.advance(200); r = await Promise.race([next, settled()]); }
+        if (r.done === true) break;
+        if (r.value.ok && r.value.value.kind === 'tool-call') call = r.value.value;
+      }
+      return call === null ? null : JSON.parse(call.argsDelta) as Record<string, unknown>;
+    };
+    const handoff = text('user', 'Latest user request:\ngo on\nOpen continuation offers (delegate with `continuation_of` set to the task id to take one up):\n- alpha (bg_0000000a)\n- beta (bg_0000000b)');
+    const first = await callOf([text('system', ORCHESTRATOR_SYSTEM), handoff]);
+    expect(first).toMatchObject({ persona: 'coding-agent', task_name: 'again', continuation_of: 'bg_0000000b' });
+    const taken: ChatMessage = { role: 'assistant', content: [{ kind: 'tool-call', callId: 'c1-s1', name: 'delegate', args: JSON.stringify(first) }] };
+    const second = await callOf([text('system', ORCHESTRATOR_SYSTEM), handoff, taken, { role: 'tool', content: [{ kind: 'tool-result', callId: 'c1-s1', name: 'delegate', result: 'task_id: bg_0000000c', isError: false }] }]);
+    expect(second).toMatchObject({ continuation_of: 'bg_0000000a' });
+    // A conversation told of no offer — a task id merely mentioned is not one (`offersToldIn`) — answers instead.
+    expect(await callOf([text('system', ORCHESTRATOR_SYSTEM), text('user', 'bg_0000000d was mentioned')])).toBeNull();
+  });
+
+  /*
    * PD-TOOLS-006 revision 6 (OQ-220): a coordinator that keeps a list names the item each implementation delegation serves. The
    * scripted coordinator writes `plan:<n>` open items, names the next open one at each delegation, and `done` completes them.
    */

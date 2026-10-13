@@ -2400,6 +2400,24 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > which needs the TypeScript language server provisioned (IC-7); a live run. The note is
 > [`fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md`](../defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md);
 > the row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **First built-app execution of revisions 3 and 4, 2026-10-13 (fin42, the survey's N50):** the first built-app run in which a
+> later root took up an offer, which every execution above recorded as not measured ("No built-app run took up an offer").
+> `pnpm continuation-proof`, scripted provider, the per-agent timeout at 3 s and every child scripted to complete a call and
+> then hold past it. **(1) A later iteration's root** (`later-iteration`): the coordinator delegates `alpha` and is woken by
+> its cut-off report without taking the offer; a prompt typed into the composer while the run is going is queued and runs as
+> iteration 2, whose root's first recorded message carries the list ("Open continuation offers … - alpha (bg_…)") and which
+> takes the offer up (`continuation_of` alpha's id, the continuation its own child, iteration 2); the delegating root's first
+> message listed none. The continuation, cut off too, carries the statement and no offer — continued once, never chained.
+> **(2) A later run's root** (`later-run`): the run that cut alpha off completes; a launch sets Settings › Runtime ›
+> Per-agent timeout to 1 minute and saves; the relaunch opens the session from the Sessions browser, and the follow-up's root
+> reads the offer in the continuation handoff ("This is a follow-up within an existing session. …", the list after
+> `Progress:`), takes it up, and the continuation `succeeded` under the 60 s the run read. In both, no offer is left open.
+> The scripted root takes an offer with a step of its own, `continue:<persona>:<name>` (`offeredTaskId`, the run's own
+> `offersToldIn` reading, `apps/desktop/src/run-host/scripted-client.ts`), pinned by `scripted-client.test.ts`. Nothing in
+> the text was wrong. **Not measured:** a live run in which a later root took an offer up — the live `cutoff` scenario
+> (`--only=cutoff`) asks for it and is the orchestrator's to run; a model that declines the offer there is a NOTE. The row is
+> in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 ---
 
 <a id="pd-monitor-002"></a>
@@ -4837,6 +4855,7 @@ them: REQ-ORCH-088, REQ-CONFIG-113 and REQ-MONITOR-286.*
 > (`pnpm mission-proof` item 1d drives a 3 s limit). Repairs
 > [`pd-config-003-writes-a-one-second-limit-as-1-seconds`](../defects/fixed/pd-config-003-writes-a-one-second-limit-as-1-seconds.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 
 ---
 

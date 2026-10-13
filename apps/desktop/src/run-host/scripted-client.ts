@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { millis, ok, type Clocks, type Ok } from '@rotaris/kernel';
 import { type ChatMessage, type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
+import { offersToldIn } from '@rotaris/engine';
 
 /**
  * One call as the scripted client received it: the model it was addressed to, the agent it answered as, and the
@@ -28,7 +29,8 @@ export interface ScriptedCallRecord {
  * It answers the shape a real client answers (`ModelClient`) from a STEP LIST read out of the environment:
  * `ROTARIS_SCRIPT` names the orchestrator's steps, comma-separated, one per model call, and
  * `ROTARIS_CHILD_SCRIPT` every child's. `glob`, `read`, `write`, `rm`, `git`, `push`, `edit`, `todo`, `plan`, `planopen`, `plandone`, `plan:<n>`, `done`, `donereplace` request a tool
- * call; `fetch:<url>` a fetch of that URL; `wait:<ms>` holds the call that long ON THE CLOCK PORT and then
+ * call; `fetch:<url>` a fetch of that URL; `continue:<persona>:<name>` a delegation taking up the newest continuation offer
+ * the conversation was told (`offeredTaskId`, PD-ORCH-004 revisions 3 and 4); `wait:<ms>` holds the call that long ON THE CLOCK PORT and then
  * answers (the Overview proof needs a run longer than one token-sample period); anything else, or the end of
  * the list, answers with a short streamed reply, one delta per 120 ms so the growth tick is visible.
  *
@@ -260,7 +262,25 @@ export function scriptedTodoItem(plan: ScriptedPlan | null, explicit: unknown): 
   return open[plan?.admittedSince ?? 0]?.id;
 }
 
-export function scriptedClient(c: Clocks, log: (message: string) => void, record?: (call: ScriptedCallRecord) => void, ledger?: StandingLedger): ModelClient {
+/**
+ * PD-ORCH-004 revisions 3 and 4 (verification only): the task id of the continuation offer a scripted root takes up with
+ * `continue:<persona>:<name>` — the newest offer its conversation was told (a cut-off child's report, or an offers list in
+ * a handoff, a first message or a continue: `offersToldIn`, the run's own reading) that none of its own `delegate` calls
+ * has named in `continuation_of` yet. `null` when it holds none, and the step then answers as an unknown step does, so a
+ * proof whose root was never told of an offer reads no continuation rather than one the double invented.
+ */
+export function offeredTaskId(messages: readonly ChatMessage[]): string | null {
+  const taken = new Set<string>();
+  for (const m of messages) for (const p of m.content) {
+    if (p.kind !== 'tool-call' || p.name !== 'delegate') continue;
+    const named = /"continuation_of":"(bg_[0-9a-f]{8})"/.exec(p.args)?.[1];
+    if (named !== undefined) taken.add(named);
+  }
+  const open = [...offersToldIn(messages)].filter((id) => !taken.has(id));
+  return open[open.length - 1] ?? null;
+}
+
+export function scriptedClient(c: Clocks,log: (message: string) => void, record?: (call: ScriptedCallRecord) => void, ledger?: StandingLedger): ModelClient {
   const parse = (v: string | undefined) => (v ?? '').split(',').map((x) => x.trim()).filter((x) => x.length > 0);
   // ROTARIS_SCRIPT drives the orchestrator; ROTARIS_CHILD_SCRIPT every child (a `delegate:<persona>:<name>` step delegates).
   const loopScript = /^loop:([^:]+):(\d+)$/.exec(process.env['ROTARIS_SCRIPT'] ?? '');
@@ -521,6 +541,18 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         const item = scriptedTodoItem(latestScriptedPlan(req.messages), 'todo_item' in extra ? explicitItem : undefined);
         yield ok<StreamPart>({ kind: 'text', delta: `Delegating to ${delegate[1]}. ` });
         yield ok<StreamPart>({ kind: 'tool-call', callId, name: 'delegate', argsDelta: JSON.stringify({ persona: delegate[1], task_name: delegate[2], task: `TASK: ${delegate[2]}\nEXPECTED OUTCOME: done\nMUST DO: use your tools\nMUST NOT DO: nothing else\nCONTEXT: scripted`, ...(lastId ? { depends_on: [lastId] } : {}), ...rest, ...(item === undefined ? {} : { todo_item: item }) }) });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
+        yield finished('other');
+        return;
+      }
+      // continue:<persona>:<name> — PD-ORCH-004 revisions 3 and 4: the root takes up the newest open continuation offer it
+      // was told of (`offeredTaskId`), a delegation naming the cut-off child in `continuation_of` with a brief of its own
+      // (revision 5). With no offer told, it answers instead. Verification only.
+      const continuation = /^continue:([a-z-]+):([^:]+)$/.exec(step);
+      const offered = continuation && (req.tools ?? []).some((t) => t.name === 'delegate') ? offeredTaskId(req.messages) : null;
+      if (continuation && offered !== null) {
+        yield ok<StreamPart>({ kind: 'text', delta: `Continuing ${offered} with ${continuation[1]}. ` });
+        yield ok<StreamPart>({ kind: 'tool-call', callId, name: 'delegate', argsDelta: JSON.stringify({ persona: continuation[1], task_name: continuation[2], task: `TASK: ${continuation[2]}\nEXPECTED OUTCOME: done\nMUST DO: finish the work ${offered} was cut off in\nMUST NOT DO: nothing else\nCONTEXT: scripted continuation`, continuation_of: offered }) });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
         yield finished('other');
         return;

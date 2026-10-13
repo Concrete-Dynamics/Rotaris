@@ -1985,6 +1985,23 @@ agent for a full timeout while nobody is there.
 > and the orchestrator's live runs are the first that can. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **Built-app execution of revisions 1 and 2, 2026-10-13, plan fin42:** the two first executions above said "no built-app run";
+> `pnpm approvals-proof`'s `away` launch now drives both against the scripted model, under `ask` with
+> `approval_timeout_seconds: 12`, through real dialogs (the approval seam's per-tool form, `none` leaving a dialog to its
+> timeout). The root writes a todo list and delegates two coding agents; each child writes twice and the root then asks a
+> question. **What it measured** (load average about 3 on four CPUs): the first child's write, shown and left, ended by
+> timeout after 12,003 ms with REQ-TOOLS-052's reason, and `user_away` was written in the same millisecond; the second child's
+> write, queued unshown behind it, ended 6 ms later with this directive's reason and was never shown (revision 2); both
+> children's next writes were resolved `headless` and denied in 2 to 7 ms with the reason, no dialog shown, and no decision
+> claimed that no approval UI exists (revision 1); the question tool's own approval, queued behind the first write before it
+> expired, was not ended but shown 495 ms after the expiry and approved (revision 2's exemption); and the root's last todo
+> call after the return was put to the user in a dialog again. Both mutations taken on `packages/agent-tools/src/gate.ts`
+> turn the proof red: with the `onAway` registration removed, the queued write is shown; with the away arm of `broker`
+> removed, a second `user_away` is written by a second timeout. **The readings above held**, and nothing in the text was
+> found wrong. **Still not measured:** a real model meeting the reason. `live-run.mjs`'s new `away` scenario is that
+> measurement (20 s timeout, every dialog left, the model's answer noted); it is the orchestrator's to run. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-orch-004"></a>
@@ -6433,6 +6450,13 @@ meanwhile.*
 > wherever its start is (`packages/engine/src/run/presence.ts`). **What was measured.** `contracts.test.ts` and
 > `presence.test.ts`, each red on `37f7a98`. **What was not measured.** No built-app or live run marked a user away.
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **Built-app execution of the presence words, 2026-10-13, plan fin42:** `pnpm approvals-proof`'s `away` launch marked a user
+> away and back in the built app. One `user_away` entry (actor `rotaris`, `after_seconds: 12`) was written in the millisecond
+> the first approval wait timed out, and one `user_returned` entry (actor `user`, `after_seconds: 12`) 3.5 s later, by the
+> answer to the question tool's approval, with the session log's two lines at `WARNING` beside them. The rule held as written.
+> The terminal's audit words (`user-input`, `user`) were not driven by it. A live run is still owed: `live-run.mjs`'s `away`
+> scenario reads `user_away` against a real model, and `user_returned` is measured only in the proof.
 
 ---
 

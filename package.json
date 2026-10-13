@@ -47,6 +47,7 @@
     "rows-proof": "node apps/desktop/scripts/rows-proof.mjs",
     "composer-proof": "node apps/desktop/scripts/composer-proof.mjs",
     "questions-proof": "node apps/desktop/scripts/questions-proof.mjs",
+    "approvals-proof": "node apps/desktop/scripts/approvals-proof.mjs",
     "todo-proof": "node apps/desktop/scripts/todo-proof.mjs",
     "attachments-proof": "node apps/desktop/scripts/attachments-proof.mjs",
     "settings-proof": "node apps/desktop/scripts/settings-proof.mjs",

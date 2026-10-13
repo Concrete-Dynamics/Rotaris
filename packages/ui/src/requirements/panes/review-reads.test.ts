@@ -28,6 +28,27 @@ describe('the review pane\'s reads — REQ-TRACE-425, REQ-TRACE-426', () => {
     expect(reads.land(2, 'REQ-102')).toBe('discard');
   });
 
+  it('the read refused while another was outstanding is owed once that one lands, if the pane still shows its requirement (fin36)', () => {
+    // docs/defects/fixed/a-review-pane-retargeted-while-a-read-was-outstanding-is-left-with-nothing-to-show.md
+    const reads = reviewReads();
+    expect(reads.ask('REQ-101')).toEqual({ start: 1 });
+    expect(reads.ask('REQ-102')).toEqual({ busy: true });
+    expect(reads.land(1, 'REQ-102')).toBe('discard');
+    expect(reads.owed('REQ-102')).toBe('REQ-102');
+    // Owed once: asked for, it starts, since nothing is outstanding now (REQ-TRACE-425 holds).
+    expect(reads.owed('REQ-102')).toBeNull();
+    expect(reads.ask('REQ-102')).toEqual({ start: 2 });
+    // A refused read whose pane was closed, or moved on again, is owed nothing.
+    expect(reads.ask('REQ-103')).toEqual({ busy: true });
+    expect(reads.land(2, null)).toBe('discard');
+    expect(reads.owed(null)).toBeNull();
+    // The same requirement asked twice: the landed read shows it, and nothing more is owed.
+    expect(reads.ask('REQ-104')).toEqual({ start: 3 });
+    expect(reads.ask('REQ-104')).toEqual({ busy: true });
+    expect(reads.land(3, 'REQ-104')).toBe('show');
+    expect(reads.owed('REQ-104')).toBeNull();
+  });
+
   it('the decision\'s notice is shown only over the payload the decision was made against; a fresh read replaces both (L12)', () => {
     const decided = { text: 'Accept recorded for REQ-101. The review you were reading is out of date.', readSeq: 1 };
     expect(decidedNoticeShown(decided, 1)).toBe(decided.text);

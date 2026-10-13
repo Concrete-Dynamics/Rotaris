@@ -23,14 +23,27 @@ export interface ReviewReads {
    * shows the requirement it was asked for; `discard` otherwise — a payload is never drawn under another requirement.
    */
   land(seq: number, target: string | null): 'show' | 'discard';
+  /**
+   * After a read has landed: the requirement whose read was refused while it was outstanding, when the pane, now targeting
+   * `target`, still shows that requirement and the landed read was not already its own — the read the person asked for and
+   * was refused, which may start now that nothing is outstanding (REQ-TRACE-425 holds). Null otherwise. Owed once.
+   *
+   * The reason, kept beside it: until fin36 the discarded read left a retargeted pane with no payload and no read, and the
+   * person had to close the pane and press Review again
+   * (docs/defects/fixed/a-review-pane-retargeted-while-a-read-was-outstanding-is-left-with-nothing-to-show.md).
+   */
+  owed(target: string | null): string | null;
 }
 
 export function reviewReads(): ReviewReads {
   let outstanding: { readonly id: string; readonly seq: number } | null = null;
+  let refused: string | null = null;
+  let landedFor: string | null = null;
   let next = 0;
   return {
     ask(id) {
-      if (outstanding !== null) return { busy: true };
+      if (outstanding !== null) { refused = id; return { busy: true }; }
+      refused = null;
       next += 1;
       outstanding = { id, seq: next };
       return { start: next };
@@ -39,7 +52,13 @@ export function reviewReads(): ReviewReads {
       if (outstanding === null || outstanding.seq !== seq) return 'discard';
       const { id } = outstanding;
       outstanding = null;
+      landedFor = id;
       return target === id ? 'show' : 'discard';
+    },
+    owed(target) {
+      const owed = refused;
+      refused = null;
+      return owed !== null && owed === target && owed !== landedFor && outstanding === null ? owed : null;
     },
   };
 }

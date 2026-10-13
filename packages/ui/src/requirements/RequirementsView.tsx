@@ -600,6 +600,8 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   const [reviewLedger] = useState(createReviewReads);
   const [reviewSeq, setReviewSeq] = useState(0);
   const paneTargetNow = useRef<ReqId | null>(null);
+  /** The pane on screen, read where a landed read decides whether the review pane still shows its requirement. */
+  const paneNow = useRef<PaneKey | null>(null);
   const [confirmWrites, setConfirmWrites] = useState(false);
 
   /** REQ-TRACE-425: the surface states that it is reading, keeps responding, and REFUSES a second read rather than starting one. */
@@ -614,7 +616,10 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     void host.readReview(id).then((r) => {
       // A read the pane no longer shows the requirement of — closed, or opened on another while this one was outstanding
       // and the other's read refused (REQ-TRACE-425) — is never drawn under another identifier.
-      if (reviewLedger.land(asked.start, paneTargetNow.current) === 'discard') { setReviewBusy(false); setReview(null); return; }
+      const verdict = reviewLedger.land(asked.start, paneTargetNow.current);
+      // The read refused while this one was outstanding, for the requirement the pane was retargeted to, starts now (fin36).
+      const owed = paneNow.current === 'review' ? reviewLedger.owed(paneTargetNow.current) : null;
+      if (verdict === 'discard') { setReviewBusy(false); setReview(null); if (owed !== null) loadReview(owed, 'open'); return; }
       if (r.ok) { setReview(r.value); setReviewError(undefined); } else { setReview(null); setReviewError(r.reason); }
     });
   }, [host, reviewLedger]);
@@ -626,6 +631,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     setPane(key);
     setPaneTarget(id);
     paneTargetNow.current = id;
+    paneNow.current = key;
     if (key === 'review' && id !== null) loadReview(id, 'open');
     if (key === 'blockers' && id !== null) { setBlockerPayload(null); void host.readBlocker(id).then((r) => { if (r.ok) setBlockerPayload(r.value); }); }
     // REQ-TRACE-436: whether a source write is confirmed first is the workspace's own configuration, and the service
@@ -633,7 +639,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     if (key === 'editor' || key === 'create') void host.previewLocation(undefined).then((r) => { if (r.ok && r.value.ok) setConfirmWrites(r.value.value.confirmSourceWrites); });
   }, [panes, host, loadReview]);
   const closePane = useCallback(() => {
-    setPane(null); setPaneTarget(null); paneTargetNow.current = null;
+    setPane(null); setPaneTarget(null); paneTargetNow.current = null; paneNow.current = null;
     const el = paneOpener.current; paneOpener.current = null;
     requestAnimationFrame(() => el?.focus());
   }, []);

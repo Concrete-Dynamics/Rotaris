@@ -75,12 +75,17 @@ export function isolationRequiredOf(newId: unknown): boolean {
 export { NO_CONFINEMENT_DISCLOSURE };
 
 /**
- * PD-TOOLS-002: the advisory is empty for an `autonomous` run — it proceeds, and nothing is shown.
- * For `ask`/`restricted` the advisory behaves as before except that it never claims a downgrade
- * was applied. The REQ-SANDBOX-107 comment above is kept for that remaining behaviour.
+ * The unattended advisory this dialog shows, which is empty for every permission mode (OQ-239, ruled 2026-10-13 under
+ * R-072; confirmed as built). REQ-TOOLS-072, REQ-TOOLS-192 and REQ-SANDBOX-107 attach the advisory to an UNATTENDED start
+ * (as PD-TOOLS-002 narrows them, it is empty for `autonomous` whatever the start). This dialog is drawn inside a main
+ * window, and every main window holds a presenter registration from its creation until the last one's close quits the
+ * application, so the run it starts is attended at launch (REQ-TOOLS-053, REQ-TOOLS-069, REQ-SANDBOX-101, ADR-0019): the
+ * condition never holds here, and the three requirements are met by showing nothing. A surface that can start a run with
+ * no registered presenter must have the advisory's text re-ruled before it shows one: under PD-TOOLS-002 the settings the
+ * old text named are inert or insufficient. It takes no input, so none can be mistaken for one it reads; the `advisory`
+ * prop and the `start-session-advisory` paragraph stay as REQ-TOOLS-192's presentation seam.
  */
-export function unattendedAdvisory(input: { readonly permissionMode: string; readonly confinementActive: boolean; readonly allowUnsandboxedAutonomous: boolean }): string {
-  void input;
+export function unattendedAdvisory(): string {
   return '';
 }
 

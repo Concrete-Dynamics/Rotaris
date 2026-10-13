@@ -1086,7 +1086,7 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
    * releases the followed session, empties the composer and shows Workspace — the previous run carries
    * on in the background.
    */
-  const [launch, setLaunch] = useState<{ sessionId: string; sandboxMode: SandboxModeName; runStartMode: 'auto' | 'plan'; runActive: boolean; permissionMode: string; allowUnsandboxedAutonomous: boolean } | null>(null);
+  const [launch, setLaunch] = useState<{ sessionId: string; sandboxMode: SandboxModeName; runStartMode: 'auto' | 'plan'; runActive: boolean } | null>(null);
   // REQ-SANDBOX-119/120/130: the dialog shows this host's own verdict, never a hardcoded answer.
   const launchConfinement = useConfinement();
   const openStartDialog = useCallback(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
@@ -1095,16 +1095,9 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
     const sandboxMode = config.ok ? (config.value as ConfigSnapshot).runtime.sandbox_mode : 'off';
     // REQ-ORCH-152: the persisted mode is what the dialog preselects; it holds none of its own.
     const runStartMode = config.ok ? (config.value as ConfigSnapshot).runtime.run_start_mode : 'auto';
-    /*
-     * REQ-SANDBOX-107: the advisory's three inputs, read from the same snapshot the modes come from.
-     * `allow_unsandboxed_autonomous` is not on the settings snapshot — it is not a key this screen
-     * edits — so an absent value reads as its shipped default, `false`, which is the side that
-     * produces the advisory rather than suppresses it.
-     */
-    const permissionMode = config.ok ? (config.value as ConfigSnapshot).runtime.permission_mode : 'ask';
     // REQ-MONITOR-251 / REQ-GIT-119 under PD-GIT-001: the dialog locks isolation on exactly when main's answer says a run
     // shares this workspace's tree (or the count could not be read) — the one count `session.start` forces a worktree on.
-    setLaunch({ sessionId: (id.value as { sessionId: string }).sessionId, sandboxMode, runStartMode, runActive: isolationRequiredOf(id.value), permissionMode, allowUnsandboxedAutonomous: false });
+    setLaunch({ sessionId: (id.value as { sessionId: string }).sessionId, sandboxMode, runStartMode, runActive: isolationRequiredOf(id.value) });
     return { ok: true };
   }, []);
   const acceptLaunch = useCallback(async (options: LaunchOptions) => {
@@ -1393,7 +1386,7 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
         onTake={(index, remove) => { void prompts.take('stash', index, remove).then(loadIntoComposer); }} />
     )}
     {launch && (
-      <StartSessionDialog sessionId={launch.sessionId} runActive={launch.runActive} defaultSandboxMode={launch.sandboxMode} defaultRunStartMode={launch.runStartMode} confinement={launchConfinement.verdict} advisory={unattendedAdvisory({ permissionMode: launch.permissionMode, confinementActive: launchConfinement.verdict?.available === true && launch.sandboxMode !== 'off', allowUnsandboxedAutonomous: launch.allowUnsandboxedAutonomous })}
+      <StartSessionDialog sessionId={launch.sessionId} runActive={launch.runActive} defaultSandboxMode={launch.sandboxMode} defaultRunStartMode={launch.runStartMode} confinement={launchConfinement.verdict} advisory={unattendedAdvisory() /* OQ-239: a run this dialog starts is attended at launch, so no advisory is owed */}
         onChooseAttach={async () => { const r = await bridge.command({ kind: 'worktree.chooseAttach' }); if (!r.ok) return { ok: false, reason: r.detail ?? r.headline }; const v = r.value as { cancelled?: boolean; path?: string; branch?: string }; return v.cancelled || !v.path ? { ok: true, cancelled: true } : { ok: true, path: v.path, branch: v.branch ?? '' }; }}
         onAccept={(options) => { void acceptLaunch(options); }} onCancel={() => setLaunch(null)} />
     )}

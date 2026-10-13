@@ -1338,7 +1338,7 @@ export class Run {
      * iteration, so no death between two writes leaves a closed iteration without it.
      */
     const title = cut(taskTitle(task), 80);
-    writer.endIteration(iteration, { task: task.text, outcome, summary }, outcome, this.todoJson(), { name: 'iteration_end', actor: 'rotaris', message: `Iteration ${iteration} (${title}): ${outcome}${summary.trim() === '' ? '' : ` — ${summary.trim()}`}`, metadata: { iteration, task_id: task.id, task: title, outcome, summary } });
+    writer.endIteration(iteration, { task: task.text, outcome, summary }, outcome, this.todoJson(), { message: `Iteration ${iteration} (${title}): ${outcome}${summary.trim() === '' ? '' : ` — ${summary.trim()}`}`, metadata: { iteration, task_id: task.id, task: title, outcome, summary } });
     this.iterationTask = null;
     // ADR-0039 / REQ-GIT-051: exactly one capture per iteration that closes, at the moment it closes — after
     // `iteration.end` is recorded and BEFORE the hooks' `iteration_end`: the checkpoint records the iteration's work as

@@ -12,7 +12,7 @@ import { SessionWriter } from './index.js';
  * iteration with no entry, missing from the follow-up's "last 5 outer-loop iterations".
  */
 const HOST = mintMachineId('0000000000000000000000000000000e') as MachineId;
-const ENTRY = { name: 'iteration_end', actor: 'rotaris', message: 'Iteration 1 (first): succeeded', metadata: { iteration: 1, outcome: 'succeeded' } };
+const ENTRY = { message: 'Iteration 1 (first): succeeded', metadata: { iteration: 1, outcome: 'succeeded' } };
 
 describe('the iteration_end entry closes with its iteration (REQ-ORCH-139, REQ-SESSION-115, PD-ORCH-005)', () => {
   let dir: string;

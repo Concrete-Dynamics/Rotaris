@@ -61,3 +61,54 @@ the fibers holding the pending work on each of the 51 commits. Nothing was repai
 **What a live run should show.** The next duress run's `duress/app.log`: any "capture: renderer console: Uncaught Error:
 Minified React error #185" line, its time against the children's streams. The harness reads the line at `info` and passes; a
 count of them in the live run's NOTE lines is owed to whoever takes this note next.
+
+## Read from the code 2026-10-13 (fin35) — no path found; open
+
+One more attempt, by reading rather than driving: every effect, subscription and store selector of the main window's
+renderer (`packages/ui/src`, `apps/desktop/src/renderer`) against what React 19.2.8 actually counts. Nothing was changed in the
+product.
+
+**What has to happen, read from the shipped `react-dom` (`react-dom-client`, 19.2.8).** At the end of every commit React reads
+`root.pendingLanes`; when the commit's lanes are update lanes (mask `261930`) and Sync, InputContinuous or Default work is still
+pending (mask `42`) it adds one to `nestedUpdateCount`, otherwise it sets it to 0, and the 52nd update scheduled while the count
+is above 50 throws #185 from `getRootForUpdatedFiber`. Three facts of this build narrow what can keep the count rising:
+
+- A sync flush renders every pending Default update with it (`getHighestPriorityLanes` returns `lanes & 42` whole), so a Default
+  update pending when a push arrives is consumed by the push's own render; it cannot stay pending across it.
+- A Default render is not time-sliced (`performWorkOnRoot` renders concurrently only when `lanes & 127` is 0), so a push cannot
+  interrupt and starve a long Default render of the transcript: fin32's "a queue behind a starved default render" is ruled out
+  by the scheduler itself, not only by the drive.
+- No lane can stay pending suspended: the renderer has no `Suspense`, `lazy`, `use`, `startTransition`, `useTransition` or
+  `useDeferredValue` (searched; none outside tests).
+
+So 51 counting commits in a row need every one of them to schedule new work **during its own commit** — a layout effect
+(Sync) or a passive effect of a sync commit, which React flushes before the check (`pendingEffectsLanes & 3`), at Default
+priority — and the last of them to leave a Default update pending while the next IPC push runs ahead of the scheduler's task.
+
+**Ruled out, effect by effect.** An AST pass over every `useEffect` and `useLayoutEffect` in the two trees listed each direct
+call in an effect body (a TypeScript-compiler pass, not kept in the repository); those that run on a push commit:
+
+- `TranscriptPane`'s every-commit layout effect (`measureAtCommit`) schedules `setMeasuredVersion` only while a bound row's
+  measurement key is unmeasured AND its height differs from its identity's last; the next commit finds it measured, so the
+  chain is bounded by the pool's capacity and its last commit leaves nothing pending. Its re-observing layout effect, its
+  table commit and its scroll-restoring layout effect set no state (`scrollSelf` moves `scrollTop`; the scroll event is a later
+  task). Its observer delivery renders in `flushSync` and releases the held range by a Default update after it, which the next
+  push's sync render consumes — one counting commit at most.
+- `WorkspaceView`'s every-commit passive effect calls `registerComposer` with a new object; no subscriber selects `composer`
+  (every `useShellState` selector reads one field), so it schedules nothing. `registerOverlay` runs on its own dependencies only.
+- `useWorkspaceUsage` re-reads on every change of the session's usage, but its `setUsage` comes in the reply's own task, with
+  no commit of its own before the next push consumes it. `useNeedsRecovery`, `useConfigSnapshot`, the Overview and Mission
+  configuration reads and the attachment reads set state only from promises, timers or microtasks, and only when a value moved.
+- The 1 s clocks (`useElapsedTick`, `RunHeader`, `WorkspaceView`, `TranscriptPane`'s live tick) schedule from timers, outside a
+  commit.
+- Every store selector reads a field or derives a primitive (`stripModel` returns the model's string); `useTerminalCounts`
+  returns a string and `useChatControls` the bound object, both stable between notifications; `displayPrefs` and
+  `refreshStats` are selected whole but set only on a preference change or a whole-session reset.
+
+**What this leaves.** The code holds no self-renewing update on a push commit, so the mechanism is not in the main window's
+own effects as read. Not covered by this reading: a component library's own effects, and a persona window's renderer (`windows.tsx`),
+which D8's pack does not say was open — its replica reaches React through one trailing 120 ms timer (`followCoalesced`), a
+Default update outside any commit, so it is the less likely of the two. The discriminating evidence is still the drive fin32 named — a
+development build, where #185 names the update's owner, with the `pendingLanes` trap logging, per counting commit, the fibers
+holding the pending lanes — or a duress pack whose `app.log` carries the trap's lines. **What a live run should show** is
+unchanged: any "Minified React error #185" line in `duress/app.log`, its time against the children's streams.

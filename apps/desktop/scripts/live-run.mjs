@@ -31,7 +31,11 @@
  *                 credential file, the snapshot record and the catalogue asserted, the logs free of the key. An
  *                 endpoint that discovers no models takes the dialog's "Continue anyway", and the script writes
  *                 the `models:` entry the run needs by hand (REQ-CONFIG-082..097) rather than pretending.
- *   2. ask      — one real run that reads a file and answers. The lease, the request, a settled tool row, usage.
+ *   2. ask      — one real run that reads a file and answers. The lease, the request, a settled tool row, usage. Since fin42
+ *                 (N58) its post-run analysis is let finish under an Improvement analysis timeout set through Settings
+ *                 (`LIVE_RUN_ANALYST_TIMEOUT_S`, default 300): one artifact with proposals or the timed-out notes, and the
+ *                 notice it owes; then `ask-retrospective` presses the Library's retrospective gesture and lets it finish:
+ *                 its artifact, the sessions it read, and the workspace root's instruction files alone (PD-LIBRARY-002).
  *   3. edit     — one real run that implements REQ-103 and runs the suite in the terminal. Asserted from the
  *                 files on disk, from `git diff`, and by running `node --test` again in this script. The work is
  *                 split between two children writing IN PARALLEL, each under a declared write scope (PD-TOOLS-006):
@@ -172,6 +176,7 @@ import { attributeWait, commandsReading, compressionNote, compressionTrigger, de
 import { withRuntimeKey } from './lib/runtime-key.mjs';
 import { runApprovalsScenario, runAwayScenario, runPlanGateScenario } from './lib/approval-scenarios.mjs';
 import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-field.mjs';
+import { passOutcome, retrospectiveInstructionFiles, settledAfterMs, settledWait } from './lib/analysis-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
 import { LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, attemptCount, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
@@ -268,6 +273,15 @@ const RUN_WAIT_MS = Number(process.env['LIVE_RUN_WAIT_MS'] ?? 420_000);
  * work, and the prompt closes the detour.
  */
 const EDIT_WAIT_MS = Number(process.env['LIVE_RUN_EDIT_WAIT_MS'] ?? RUN_WAIT_MS * 2);
+/**
+ * The Improvement analysis timeout the `ask` scenario sets through Settings before its run, in whole seconds within the
+ * control's 10–600 (PD-CONFIG-003 revision 2): real analyst calls took 22 to 134 s against the 60 s default (live-run-1 F4),
+ * and the scenario now lets the analysis finish (N58). Checked here, before any launch spends anything.
+ */
+const ANALYST_TIMEOUT_S = Number(process.env['LIVE_RUN_ANALYST_TIMEOUT_S'] ?? 300);
+if (!(Number.isInteger(ANALYST_TIMEOUT_S) && ANALYST_TIMEOUT_S >= 10 && ANALYST_TIMEOUT_S <= 600)) {
+  throw new Error(`LIVE_RUN_ANALYST_TIMEOUT_S must be whole seconds from 10 to 600, the Improvement analysis timeout control's range (PD-CONFIG-003 revision 2); got ${JSON.stringify(process.env['LIVE_RUN_ANALYST_TIMEOUT_S'])}`);
+}
 const OPTIONAL = ['ask', 'edit', 'resume', 'requirements', 'shell', 'frictions', 'faults', 'terminal', 'away', 'approvals', 'plan-gate'];
 /**
  * Scenarios that `--only` accepts and the default set never contains.
@@ -893,6 +907,15 @@ function readSession() {
     return { session, rows, events, totals, byAgent };
   } finally { db.close(); }
 }
+/** Every improvement artifact the store holds (N58), newest first, its body parsed: what the two improvement passes left. */
+function improvementArtifacts() {
+  const Database = require('better-sqlite3');
+  const db = new Database(oneDatabase(), { readonly: true });
+  try {
+    return db.prepare('SELECT artifact_id, source_session_id, source_kind, body FROM improvement_artifacts ORDER BY generated_at DESC, artifact_id ASC').all()
+      .map((row) => { let artifact = {}; try { artifact = JSON.parse(row.body); } catch { /* a body that will not parse reads as empty */ } return { ...row, artifact }; });
+  } finally { db.close(); }
+}
 /**
  * Every tool call of one session with its `entry` parsed — `{ ordinal, tool_name, agent_name, status, args, result,
  * elapsedMs, endedAt }`.
@@ -1371,19 +1394,33 @@ check(['large_model', 'medium_model', 'small_model'].every((slot) => agents.incl
 
 // ── 2. One real run that reads and answers ───────────────────────────────────────────────────────────────────
 if (wanted.includes('ask')) {
+  /*
+   * The 2026-10-13 survey's N58 (fin42): this run's post-run analysis is let finish. Every scenario quit 2.5 to 6 s after its
+   * result, which cancels the analysis by design (REQ-LIBRARY-127), so no analysis had finished against a real model, and real
+   * analyst calls took 22 to 134 s against the 60 s default (live-run-1 F4). So the Improvement analysis timeout is raised to
+   * `LIVE_RUN_ANALYST_TIMEOUT_S` (default 300, the control's 10–600) through Settings › Runtime and its Save, as a person
+   * raises it; the capture waits until the title-bar indicator has named the post-run pass and gone (`settledWait`), bounded
+   * by the run's wait plus that limit; and the workspace file is restored afterwards (`lib/analysis-reading.mjs`).
+   */
+  const agentsBeforeAsk = readFileSync(agentsFile, 'utf8');
+  const setAnalyst = await launch('ask-settings', runtimeFieldSteps({ id: 'improvement-timeout', value: ANALYST_TIMEOUT_S }), 90_000);
+  const analystSaved = fieldSaveReading(setAnalyst, { id: 'improvement-timeout' });
+  check(analystSaved.afterEdit === 'Unsaved changes' && analystSaved.atEnd === 'All changes saved' && new RegExp(`^\\s+improvement_collector_timeout: ${ANALYST_TIMEOUT_S}\\s*$`, 'm').test(readFileSync(agentsFile, 'utf8')),
+    `Settings › Runtime › Improvement analysis timeout took ${ANALYST_TIMEOUT_S} s and Save stored it (PD-CONFIG-003 revision 2)`, `${JSON.stringify(analystSaved)}; ${/^\s+improvement_collector_timeout:.*$/m.exec(readFileSync(agentsFile, 'utf8'))?.[0]?.trim() ?? 'no improvement_collector_timeout line'}`);
+  const ASK_WAIT_MS = RUN_WAIT_MS + ANALYST_TIMEOUT_S * 1000 + 60_000;
   const log = await launch('ask', {
     ROTARIS_CAPTURE_PROMPT: 'Read src/todos.js in this workspace and reply, in one sentence, with the names of the functions it exports.',
-    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
+    ROTARIS_CAPTURE_WAIT: settledWait('post_run'), ROTARIS_CAPTURE_WAIT_MS: String(ASK_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
     // Acceptance A36: the inspector's ring caption, which `ask.png` showed denying the reading it stated one line above.
-    ROTARIS_CAPTURE_PROBE: ['.inspector__ring-caption', ...DURATION_PROBES].join(';;'),
-  }, RUN_WAIT_MS + 90_000);
+    ROTARIS_CAPTURE_PROBE: ['.inspector__ring-caption', ...DURATION_PROBES, '[data-testid="notice"]'].join(';;'),
+  }, ASK_WAIT_MS + 90_000);
   const requests = [...new Set((log.match(/model request POST (\S+)/g) ?? []).map((line) => line.replace('model request POST ', '')))];
   // The lease's report is the run host's (REQ-PROVIDER-068, `LeaseReportLog`); main no longer restates it (a71-9).
   check(log.includes(`credentials: leased for ${PROVIDER_ID}`), 'main leased the bearer to the run host');
   // `appBaseUrl`, not the endpoint: the assertion is about what the PRODUCT did, and when the proxy is recording
   // the product was given the proxy. The traffic file below is what says the call reached the endpoint itself.
   check(requests.some((url) => url.startsWith(`${appBaseUrl}/chat/completions`)), 'a request reached the endpoint', requests.join(', '));
-  check(!/capture: wait for result timed out/.test(log), 'the run reached its result inside the wait');
+  check(/\brun \S+ ended /.test(log), 'the run reached its result inside the wait', /\brun \S+ ended [^\n]*/.exec(log)?.[0] ?? 'no run-end line');
   const read = readSession();
   checkPricing('ask', read?.session);
   const answer = (read?.rows ?? []).filter((row) => row.kind === 'agent').map((row) => row.body).join(' ');
@@ -1413,8 +1450,49 @@ if (wanted.includes('ask')) {
     askTraffic = { records: traffic.length, completions: completions.length, slowestMs: Math.max(0, ...traffic.map((r) => r.ms ?? 0)) };
   }
   // The summary joins the scenario's record rather than being written onto it before it exists.
-  results.scenarios.ask = { ...(askTraffic === null ? {} : { traffic: askTraffic }), status: read?.session.execution_status, iterations: read?.session.iterations_completed, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: tools.map((row) => row.tool_name), answer: answer.trim().slice(0, 400) };
+  // N58: the post-run analysis finished — one artifact for this session, with proposals or the timed-out notes, and the
+  // notice that outcome owes (REQ-LIBRARY-124, REQ-NOTIFY-100's detail for a timeout).
+  const analysisMs = settledAfterMs(log);
+  const askNotices = JSON.parse(/capture: probe \[data-testid="notice"\] → (\[.*\])\s*$/m.exec(log)?.[1] ?? '[]');
+  const askArtifacts = read === null ? [] : improvementArtifacts().filter((a) => a.source_session_id === read.session.session_id);
+  const analysis = passOutcome(askArtifacts[0]?.artifact ?? null, askNotices);
+  check(analysisMs !== null, 'the post-run analysis was seen running and ended before the capture quit (REQ-LIBRARY-125/127)', analysisMs === null ? `the wait for it ran out at ${ASK_WAIT_MS} ms` : `${analysisMs} ms from the prompt's submission`);
+  check(askArtifacts.length === 1 && (analysis.outcome === 'proposals' || analysis.outcome === 'timed-out'), 'the post-run analysis stored one artifact for the run, with proposals or the timed-out notes (REQ-LIBRARY-023/123)', `${askArtifacts.length} artifact(s); ${analysis.outcome}, ${analysis.proposals} proposal(s), notes ${JSON.stringify(analysis.notes)}`);
+  if (analysis.outcome === 'timed-out') noted('the post-run analysis reached its limit before it proposed anything', `${analysis.limitS} s (LIVE_RUN_ANALYST_TIMEOUT_S ${ANALYST_TIMEOUT_S}); live-run-1 F4 measured 22 to 134 s per call`);
+  if (askArtifacts.length === 1) check(analysis.noticeMatches === true, 'the notice on screen is the one the analysis outcome owes (REQ-LIBRARY-124, REQ-NOTIFY-100)', askNotices.map((n) => n.text.slice(0, 160)).join(' | ') || 'no notice on screen');
+  // The summary joins the scenario's record rather than being written onto it before it exists.
+  results.scenarios.ask = { ...(askTraffic === null ? {} : { traffic: askTraffic }), status: read?.session.execution_status, iterations: read?.session.iterations_completed, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: tools.map((row) => row.tool_name), answer: answer.trim().slice(0, 400), analysis: { ...analysis, settledAfterMs: analysisMs, analystTimeoutS: ANALYST_TIMEOUT_S, control: analystSaved } };
   if (read) preserveRun('ask', read.session.session_id);
+
+  /*
+   * N58's second half: PD-LIBRARY-002's retrospective pressed in the Library as a person presses it — Ctrl+6, the Proposals
+   * tab, the gesture — and let finish (the indicator naming the retrospective, then gone, inside `retrospective_timeout`'s
+   * 120 s default, which no control exposes). Its artifact must be the retrospective's, read over the sessions this workspace
+   * holds, and the run host must have handed it the workspace root's instruction files and no other base's (revision 2,
+   * OQ-235). A real model whose proposals repeat the post-run pass's has them suppressed (REQ-LIBRARY-046): an empty
+   * artifact saying so is an outcome, not a failure.
+   */
+  if (read !== null) {
+    const RETRO_WAIT_MS = 120_000 + 60_000;
+    const retroLog = await launch('ask-retrospective', {
+      ROTARIS_CAPTURE_VIEW: '6',
+      ROTARIS_CAPTURE_CLICKS: '[data-testid="library-tab"][data-tab="proposals"]@~10000;;[data-testid="library-retrospective"]:not([aria-disabled="true"])@~20000',
+      ROTARIS_CAPTURE_WAIT: settledWait('retrospective'), ROTARIS_CAPTURE_WAIT_MS: String(RETRO_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
+      ROTARIS_CAPTURE_PROBE: '[data-testid="notice"]',
+    }, RETRO_WAIT_MS + 90_000);
+    const retroArtifacts = improvementArtifacts().filter((a) => a.source_kind === 'retrospective');
+    const retroNotices = JSON.parse(/capture: probe \[data-testid="notice"\] → (\[.*\])\s*$/m.exec(retroLog)?.[1] ?? '[]');
+    const retro = passOutcome(retroArtifacts[0]?.artifact ?? null, retroNotices, { retrospective: true });
+    const files = retrospectiveInstructionFiles(retroLog);
+    check(settledAfterMs(retroLog) !== null, 'the retrospective pressed in the Library ran and ended before the capture quit (PD-LIBRARY-002)', settledAfterMs(retroLog) === null ? `the wait for it ran out at ${RETRO_WAIT_MS} ms (see ask-retrospective/app.log)` : `${settledAfterMs(retroLog)} ms`);
+    check(retroArtifacts.length === 1 && retroArtifacts[0].source_session_id === null && (retroArtifacts[0].artifact.considered_session_ids ?? []).includes(read.session.session_id),
+      'one retrospective artifact, belonging to no session and having read the ask session (PD-LIBRARY-002 revision 2 (a))',
+      retroArtifacts.map((a) => `${a.artifact_id}: ${retro.outcome}, ${retro.proposals} proposal(s), considered ${JSON.stringify(a.artifact.considered_session_ids ?? [])}, notes ${JSON.stringify(a.artifact.notes ?? null)}`).join(' | ') || 'none stored');
+    check(files !== null && files.rootOnly, 'the retrospective was handed the workspace root\'s instruction files and no other base\'s (PD-LIBRARY-002 revision 2, OQ-235)', files === null ? 'no "at the workspace root" line in ask-retrospective/app.log' : `${files.handed} of ${files.enabled}: ${files.ids.join(', ') || 'none'}`);
+    if (retroArtifacts.length === 1) check(retro.noticeMatches === true, 'the notice on screen is the one the retrospective\'s outcome owes (PD-LIBRARY-002 revision 2 (c))', retroNotices.map((n) => n.text.slice(0, 160)).join(' | ') || 'no notice on screen');
+    results.scenarios['ask-retrospective'] = { ...retro, settledAfterMs: settledAfterMs(retroLog), instructionFiles: files };
+  }
+  writeFileSync(agentsFile, agentsBeforeAsk);
   await budgetGate();
 }
 

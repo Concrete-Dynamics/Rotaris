@@ -1431,6 +1431,25 @@ italic note; on OQ-236 both advocates' recommendations followed in part.
 > post-run analysis runs, in the built app (the proof drives no run; the unit cases carry it), and the Library's empty label
 > (g), which shows only when artifacts exist and no proposal matches. Recorded in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **The two built-app gaps above closed, and the live steps written, 2026-10-13 (fin42, the survey's N58):** `pnpm
+> retrospective-proof`, 54 of 54 at a load average of 2 to 7 on four CPUs. **(e) A press during a post-run analysis**
+> (launch 7): a scripted run completes and its analysis is held 10 s; the Library's gesture reads available beside the
+> `post_run` indicator, a press queues the retrospective and then rests the gesture with "A retrospective is already queued or
+> running.", the indicator names the retrospective only after the post-run pass ends, and both artifacts are stored — the
+> retrospective's empty, its proposals suppressed as duplicates of the post-run pass's (REQ-LIBRARY-046), its notes saying so.
+> **(g) The empty label** (launch 5): beside the timed-out pass's empty artifact the proposals card reads "No proposals yet.
+> They appear here after a run's improvement collector finds signals, or after a retrospective over this workspace's history."
+> and the no-artifact state is gone. **Found by building:** once a retrospective artifact stood among a workspace's five newest,
+> no later run's analysis was captured — its null source session reached the post-run job's `considered_session_ids` and the
+> parse threw; repaired in `captureImprovementJob`, which records no session for it, and the reading raised as
+> [OQ-271](../architecture/open-questions.md#oq-271)
+> ([`fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md`](../defects/fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md)).
+> **The live steps:** `live-run.mjs`'s `ask` now lets its run's analysis finish and its `ask-retrospective` presses the
+> gesture (Ctrl+6, Proposals) and waits for the pass to end, asserting one retrospective artifact with no session that read the
+> ask session, its notice, and the run host's "at the workspace root" line listing `workspace:` files alone; launch 8 of the
+> proof runs those very capture steps against the scripted provider, green. **Not measured:** a live retrospective — the
+> orchestrator's run. Recorded in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -4872,6 +4891,17 @@ them: REQ-ORCH-088, REQ-CONFIG-113 and REQ-MONITOR-286.*
 > the offer, and the sidebar's tag titled "Cut off at its per-agent timeout of 1 minute while making progress. Settings ›
 > Runtime › Per-agent timeout sets this limit for runs started from now." (`=2` measures the plural form). **Not measured:**
 > that live run. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Revision 2's control driven before a run, and its timed-out notice, in the built app, 2026-10-13 (fin42, the survey's
+> N58):** revision 2's first execution left "a timed-out analysis's notice in the built app" unmeasured. `pnpm
+> retrospective-proof`'s launch 8 sets Settings › Runtime › Improvement analysis timeout to 300 and saves (the run start then
+> logs `improvement_collector_timeout=300 s` and its analysis ends with proposals), then to 10 with an analyst that never
+> answers: the run's empty artifact notes "collector timed out after 10 seconds" and the notice reads "Improvement analysis
+> complete — no proposals" with "The review of this run reached its 10-second limit before it proposed anything. Settings ›
+> Runtime › Improvement analysis timeout allows it longer." That launch found
+> [`a-post-run-analysis-after-a-retrospective-is-never-captured.md`](../defects/fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md)
+> (repaired; PD-LIBRARY-002's record above). The live `ask` scenario sets the control to `LIVE_RUN_ANALYST_TIMEOUT_S` (default
+> 300) the same way before its run. **Not measured:** that live run, the orchestrator's.
 
 ---
 

@@ -33,6 +33,14 @@
  *      artifact whose notes say it timed out, the indicators go, and the composer still accepts input.
  *   6. SHUTDOWN — the application closed while a pass is running leaves no artifact and no proposal behind
  *      (REQ-LIBRARY-127).
+ *   7. DURING A POST-RUN ANALYSIS (since fin42) — a scripted run completes and its post-run analysis is held open; the
+ *      Library's gesture is available beside it, a press queues the retrospective behind it (REQ-LIBRARY-123's FIFO) and
+ *      then rests the gesture with its reason, and both artifacts are stored in that order (PD-LIBRARY-002 revision 2 (e)).
+ *      Launch 5 also reads the Proposals card's empty label (g) beside the timed-out pass's empty artifact.
+ *   8. THE LIVE RUN'S STEPS (since fin42, N58) — what `live-run.mjs`'s `ask` scenario does to a real model, here through the
+ *      same capture seams against the scripted provider: the Improvement analysis timeout set through Settings and saved,
+ *      a run whose capture holds until its post-run analysis has ended, and the Library's gesture pressed and waited for;
+ *      then the limit set to 10 s and an analyst that never answers: the empty artifact and the notice naming the limit.
  *
  * Evidence under `.proof/retrospective-proof/`: a PNG per scenario, each launch's `app.log`, `results.json`.
  * `--skip-build` skips the build.
@@ -40,8 +48,11 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { buildDesktop, evidenceDirectory, findDatabases } from './lib/harness.mjs';
+import { buildDesktop, cleanEnvironment, evidenceDirectory, findDatabases, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
 import { startApp } from './lib/driver.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-field.mjs';
+import { passOutcome, retrospectiveInstructionFiles, settledAfterMs, settledWait } from './lib/analysis-reading.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -567,6 +578,17 @@ await (async () => {
     const composer = await one(d, '.composer__input');
     check('the application stayed usable while the pass ran and after it ended', composer !== null && composer.value === 'the composer still accepts input', `the composer holds ${JSON.stringify(composer?.value ?? null)}`);
     await d.screenshot(join(output, 'timeout.png'));
+
+    // PD-LIBRARY-002 revision 2 (g), REQ-LIBRARY-109: an artifact exists and no proposal matches — the timed-out pass's empty
+    // artifact — so the Library's proposals card draws its empty label beside the artifact's row, not the no-artifact state.
+    await openProposals(d);
+    const artifactRows = await until(d, '.library-proposals__artifacts tbody tr', (m) => m.length === 1, 20_000);
+    const label = await one(d, '.library-proposals__proposals .empty-state-title');
+    const noArtifactState = await probe(d, '[data-testid="library-improvements-empty"]');
+    check('with an artifact stored and no proposal in it, the proposals card reads its empty label word for word (PD-LIBRARY-002 revision 2 (g))',
+      artifactRows && noArtifactState.length === 0 && label !== null && label.text.trim() === "No proposals yet. They appear here after a run's improvement collector finds signals, or after a retrospective over this workspace's history.",
+      `artifact rows ${artifactRows ? 1 : (await probe(d, '.library-proposals__artifacts tbody tr')).length}, no-artifact state ${noArtifactState.length}, label ${label === null ? 'absent' : `"${label.text.trim()}"`}`);
+    await d.screenshot(join(output, 'filtered-empty.png'));
     return root;
   });
   const stored = artifactsIn(join(output, 'timeout', 'app'));
@@ -594,6 +616,136 @@ await (async () => {
     /retrospective .* queued over/.test(log) && /scripted improvement analyst: wait:60000/.test(log),
     log.split('\n').filter((line) => /retrospective|improvement analyst/.test(line)).slice(0, 3).join(' | ') || 'no retrospective line in the log');
   check('a pass cancelled by shutdown leaves no artifact behind (REQ-LIBRARY-127)', stored.length === 0, `${stored.length} artifact(s) in the store`);
+}
+
+// ── 7. A press made while a post-run analysis runs (PD-LIBRARY-002 revision 2 (e), REQ-LIBRARY-123/125): a scripted run
+//    completes and its post-run analysis is held open; the Library's gesture is available beside it, a press queues the
+//    retrospective behind it in the FIFO and only then rests the gesture with its reason; the indicator names the post-run
+//    pass first and the retrospective after it; both artifacts are stored, the retrospective's after the post-run one's.
+{
+  const workspace = workspaceAt('during');
+  await launch('during-post-run', workspace, { ROTARIS_IMPROVEMENT_SCRIPT: 'wait:10000' }, async (d, root) => {
+    await d.click('.nav-item', { text: 'Workspace', timeoutMs: 15_000 });
+    await d.click('.composer__input', { timeoutMs: 20_000 });
+    await d.type('tidy the workspace and say so', { enter: true });
+    const postRun = await until(d, '[data-testid="improvement-activity-title-bar"]', (m) => m.some((x) => x.data['data-pass'] === 'post_run'), 60_000);
+    const indicator = await one(d, '[data-testid="improvement-activity-title-bar"]');
+    check('a completed run\'s post-run analysis runs and its indicator names it (REQ-LIBRARY-125)',
+      postRun && indicator !== null && /Reviewing run for improvements/.test(indicator.text),
+      indicator === null ? 'no indicator after the run' : `pass=${indicator.data['data-pass']} "${indicator.text.slice(0, 60)}"`);
+    await openProposals(d);
+    const offered = (await d.inspect('[data-testid="library-retrospective"]')).matches[0] ?? null;
+    const stillPostRun = (await one(d, '[data-testid="improvement-activity-title-bar"]'))?.data['data-pass'] ?? null;
+    check('while a post-run analysis runs, the retrospective gesture stays available (PD-LIBRARY-002 revision 2 (e))',
+      offered !== null && offered.attrs['aria-disabled'] === 'false' && stillPostRun === 'post_run',
+      offered === null ? 'no gesture on the tab' : `aria-disabled=${offered.attrs['aria-disabled']} title="${offered.attrs['title'] ?? ''}" with the ${stillPostRun ?? 'no'} pass running`);
+    await d.screenshot(join(output, 'during-post-run.png'));
+    await d.click('[data-testid="library-retrospective"]', { timeoutMs: 15_000 });
+    const queued = await until(d, '[data-testid="library-retrospective"]', (m) => m[0]?.data?.['aria-disabled'] === 'true' || m[0]?.data?.['data-disabled'] === 'true', 3_000);
+    const rested = (await d.inspect('[data-testid="library-retrospective"]')).matches[0] ?? null;
+    const passAfterPress = (await one(d, '[data-testid="improvement-activity-title-bar"]'))?.data['data-pass'] ?? null;
+    check('the press queues the retrospective behind the post-run analysis, and the gesture then rests with its reason (PD-LIBRARY-002 revision 2 (e))',
+      rested !== null && rested.attrs['aria-disabled'] === 'true' && rested.attrs['title'] === 'A retrospective is already queued or running.' && passAfterPress === 'post_run',
+      `${queued ? '' : '(not seen within 3 s) '}aria-disabled=${rested?.attrs['aria-disabled']} title="${rested?.attrs['title'] ?? ''}"; the indicator names the ${passAfterPress ?? 'no'} pass`);
+    await d.screenshot(join(output, 'during-post-run-queued.png'));
+    const turned = await until(d, '[data-testid="improvement-activity-title-bar"]', (m) => m.some((x) => x.data['data-pass'] === 'retrospective'), 60_000);
+    check('the retrospective runs once the post-run analysis has ended — REQ-LIBRARY-123\'s FIFO', turned, turned ? 'the indicator names the retrospective' : 'the indicator never named the retrospective');
+    const ended = await until(d, '[data-testid="improvement-activity-title-bar"]', (m) => m.length === 0, 60_000);
+    const free = (await d.inspect('[data-testid="library-retrospective"]')).matches[0] ?? null;
+    check('when both passes have ended the indicator goes and the gesture is available again', ended && free?.attrs['aria-disabled'] === 'false', `indicator ${ended ? 'gone' : 'still there'}, aria-disabled=${free?.attrs['aria-disabled']}`);
+    return root;
+  }, 180_000);
+  const stored = artifactsIn(join(output, 'during-post-run', 'app'));
+  const postRun = stored.find((a) => a.source_kind === 'post_run') ?? null;
+  const retro = stored.find((a) => a.source_kind === 'retrospective') ?? null;
+  check('both passes stored their artifact, the retrospective\'s generated after the post-run one\'s',
+    stored.length === 2 && postRun !== null && retro !== null && postRun.source_session_id !== null && retro.source_session_id === null
+      && Date.parse(retro.artifact.generated_at) >= Date.parse(postRun.artifact.generated_at)
+      && (retro.artifact.considered_session_ids ?? []).includes(postRun.source_session_id),
+    stored.map((a) => `${a.source_kind} ${a.artifact_id} at ${a.artifact.generated_at}, ${a.artifact.proposals.length} proposal(s), session ${a.source_session_id}${a.source_kind === 'retrospective' ? `, considered ${JSON.stringify(a.artifact.considered_session_ids ?? [])}` : ''}`).join(' | ') || 'none stored');
+  // The queue's order, from the log: the post-run analyst's call, then the press queuing the retrospective while it holds,
+  // then the post-run artifact stored, and only then the retrospective's analyst call. (Its proposals repeat the post-run
+  // pass's word for word, so REQ-LIBRARY-046 suppresses them and its artifact says so in its notes.)
+  const lines = readFileSync(join(output, 'during-post-run.log'), 'utf8').split('\n');
+  const at = (pattern, from = 0) => { const i = lines.slice(from).findIndex((line) => pattern.test(line)); return i < 0 ? -1 : i + from; };
+  const firstCall = at(/scripted improvement analyst/);
+  const queuedAt = at(/retrospective \S+ queued over/);
+  const storedAt = at(/library change \(improvement-artifacts\)/, Math.max(queuedAt, 0));
+  const secondCall = at(/scripted improvement analyst/, firstCall + 1);
+  check('the log orders them: the post-run call, the press queued while it held, the post-run artifact, then the retrospective\'s call (REQ-LIBRARY-123)',
+    firstCall >= 0 && queuedAt > firstCall && storedAt > queuedAt && secondCall > storedAt,
+    `lines ${firstCall}, ${queuedAt}, ${storedAt}, ${secondCall}; retrospective notes ${JSON.stringify(retro?.artifact.notes ?? null)}`);
+}
+
+// ── 8. The live run's `ask` steps, through the capture seams it uses, against the scripted provider (fin42, N58): the
+//    Improvement analysis timeout set through Settings and saved, a run whose capture waits until its post-run analysis
+//    has ended (`settledWait`), and a launch that presses the Library's retrospective gesture and waits for it the same
+//    way — so a live run that spends a real model's time meets steps this build has already run.
+{
+  const workspace = workspaceAt('live-shape');
+  const root = join(output, 'live-shape', 'app');
+  const local = join(root, 'local');
+  mkdirSync(local, { recursive: true });
+  const electron = process.platform === 'win32' ? join(import.meta.dirname, '..', '..', '..', 'node_modules', 'electron', 'dist', 'electron.exe') : join(import.meta.dirname, '..', '..', '..', 'node_modules', 'electron', 'dist', 'electron');
+  const capture = async (name, extra, timeoutMs) => {
+    const png = join(output, `${name}.png`);
+    const r = await spawnBounded(electron, [mainEntry, ...hostSwitches, workspace], {
+      cwd: join(import.meta.dirname, '..'), timeoutMs, windowsHide: true,
+      env: { ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences: join(root, 'preferences') }), ROTARIS_MODEL_DIALECT: 'scripted', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', ROTARIS_CAPTURE_PNG: png, ...extra },
+    });
+    const log = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
+    writeFileSync(join(output, `${name}.log`), log);
+    launches.push({ name, log: `${name}.log` });
+    if (r.overran) throw new Error(`${overrunMessage(name, r, log)}\n(see ${name}.log)`);
+    if (r.status !== 0) throw new Error(`${name} exited ${r.status ?? r.signal ?? 'unknown'}; see ${name}.log`);
+    return log;
+  };
+  const setLog = await capture('live-shape-settings', runtimeFieldSteps({ id: 'improvement-timeout', value: 300 }), 90_000);
+  const saved = fieldSaveReading(setLog, { id: 'improvement-timeout' });
+  const yaml = readFileSync(join(workspace, '.rotaris', 'agents.yaml'), 'utf8');
+  check('Settings › Runtime › Improvement analysis timeout set to 300 and saved through the save bar (PD-CONFIG-003 revision 2)',
+    saved.afterEdit === 'Unsaved changes' && saved.atEnd === 'All changes saved' && saved.field === '300' && /^\s+improvement_collector_timeout: 300\s*$/m.test(yaml),
+    `${JSON.stringify(saved)}; ${/^\s+improvement_collector_timeout:.*$/m.exec(yaml)?.[0]?.trim() ?? 'no improvement_collector_timeout line'}`);
+
+  const askLog = await capture('live-shape-ask', {
+    ROTARIS_IMPROVEMENT_SCRIPT: 'wait:6000', ROTARIS_CAPTURE_PROMPT: 'tidy the workspace and say so',
+    ROTARIS_CAPTURE_WAIT: settledWait('post_run'), ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '2500', ROTARIS_CAPTURE_PROBE: '[data-testid="notice"]',
+  }, 150_000);
+  const askArtifacts = artifactsIn(root);
+  const notices = JSON.parse(/capture: probe \[data-testid="notice"\] → (\[.*\])\s*$/m.exec(askLog)?.[1] ?? '[]');
+  const post = passOutcome(askArtifacts.find((a) => a.source_kind === 'post_run')?.artifact ?? null, notices);
+  check('the run read the timeout Settings saved, and the capture held until its post-run analysis had ended (the live `ask` wait)',
+    /improvement_collector_timeout=300 s/.test(askLog) && settledAfterMs(askLog) !== null && post.outcome === 'proposals' && post.noticeMatches === true,
+    `${/improvement_collector_timeout=\d+ s/.exec(askLog)?.[0] ?? 'no improvement_collector_timeout line'}; settled after ${settledAfterMs(askLog)} ms; ${post.outcome}, ${post.proposals} proposal(s), notice ${post.noticeMatches} (${notices.map((n) => n.text.slice(0, 60)).join(' | ')})`);
+
+  const retroLog = await capture('live-shape-retrospective', {
+    ROTARIS_IMPROVEMENT_SCRIPT: 'wait:4000', ROTARIS_CAPTURE_VIEW: '6',
+    ROTARIS_CAPTURE_CLICKS: '[data-testid="library-tab"][data-tab="proposals"]@~10000;;[data-testid="library-retrospective"]:not([aria-disabled="true"])@~20000',
+    ROTARIS_CAPTURE_WAIT: settledWait('retrospective'), ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '2500', ROTARIS_CAPTURE_PROBE: '[data-testid="notice"]',
+  }, 150_000);
+  const all = artifactsIn(root);
+  const retroRow = all.find((a) => a.source_kind === 'retrospective') ?? null;
+  const retroNotices = JSON.parse(/capture: probe \[data-testid="notice"\] → (\[.*\])\s*$/m.exec(retroLog)?.[1] ?? '[]');
+  const retro = passOutcome(retroRow?.artifact ?? null, retroNotices, { retrospective: true });
+  const files = retrospectiveInstructionFiles(retroLog);
+  check('the Library\'s gesture pressed through the capture seams ran the retrospective to its end, its artifact read the run\'s session, and it was handed the root\'s instruction file alone (the live `ask-retrospective` steps)',
+    settledAfterMs(retroLog) !== null && retroRow !== null && retroRow.source_session_id === null && (retroRow.artifact.considered_session_ids ?? []).length === 1 && retro.noticeMatches === true && files !== null && files.rootOnly && files.handed === 1,
+    `settled after ${settledAfterMs(retroLog)} ms; ${retro.outcome}, notes ${JSON.stringify(retro.notes)}, considered ${JSON.stringify(retroRow?.artifact.considered_session_ids ?? null)}; notice ${retro.noticeMatches} (${retroNotices.map((n) => n.text.slice(0, 60)).join(' | ')}); files ${JSON.stringify(files)}`);
+
+  // The other outcome the live wait may meet (live-run-1 F4: 3 of 6 real analyst calls ran past 60 s): the limit set to 10 s
+  // the same way, an analyst that never answers, and the run's empty artifact with REQ-NOTIFY-100's detail naming the limit
+  // and the control (PD-CONFIG-003 revision 2) — the notice its first execution left unmeasured in the built app.
+  await capture('live-shape-settings-10', runtimeFieldSteps({ id: 'improvement-timeout', value: 10 }), 90_000);
+  const slowLog = await capture('live-shape-timeout', {
+    ROTARIS_IMPROVEMENT_SCRIPT: 'timeout', ROTARIS_CAPTURE_PROMPT: 'tidy the workspace once more',
+    ROTARIS_CAPTURE_WAIT: settledWait('post_run'), ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '2500', ROTARIS_CAPTURE_PROBE: '[data-testid="notice"]',
+  }, 150_000);
+  const newest = artifactsIn(root).find((a) => a.source_kind === 'post_run') ?? null;
+  const slowNotices = JSON.parse(/capture: probe \[data-testid="notice"\] → (\[.*\])\s*$/m.exec(slowLog)?.[1] ?? '[]');
+  const slow = passOutcome(newest?.artifact ?? null, slowNotices);
+  check('an analysis past its 10 s limit stores the empty artifact, and its notice names the limit and the control (REQ-LIBRARY-023/124, REQ-NOTIFY-100, PD-CONFIG-003 revision 2)',
+    /improvement_collector_timeout=10 s/.test(slowLog) && settledAfterMs(slowLog) !== null && slow.outcome === 'timed-out' && slow.limitS === 10 && slow.noticeMatches === true,
+    `${/improvement_collector_timeout=\d+ s/.exec(slowLog)?.[0] ?? 'no improvement_collector_timeout line'}; ${slow.outcome}, notes ${JSON.stringify(slow.notes)}; notice ${slow.noticeMatches} (${slowNotices.map((n) => n.text.slice(0, 200)).join(' | ')})`);
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures, launches }, null, 2)}\n`);

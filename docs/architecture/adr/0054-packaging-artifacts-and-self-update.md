@@ -1303,7 +1303,7 @@ plan; the manifest is what they will read, and `SETUP_MANIFEST_FILE` is the name
 resolves the two About files. (5) **`afterPack` does not assert the manifest inside `win-unpacked`.** The yml entry is
 tested through electron-builder's own `copyFiles` over a fixture (`about-assets.test.ts`), which is the step of a real
 pack that places the file; the "assets" rule was left to its two files, and the artifact check is owed to the next
-Windows package (IC-3), as the two About files' is.
+Windows package (IC-3 — *corrected 2026-10-13: a Windows x64 host, deferred with the pipeline under R-071; IC-3 binds Linux and macOS artifacts*), as the two About files' is.
 
 **Measured:** 14 cases in `setup-manifest.test.ts` (6 over the shipped file, 8 over malformed shapes); 4 new cases in
 `pins.test.ts` (the shipped manifest against the shipped defaults; the two platform-key lists equal, every shipped archive
@@ -1599,7 +1599,7 @@ passing case rewritten to the new signature); counted from `pnpm vitest run … 
 30 cases in all, 4 of them `naming.test.ts`'s older ones. *Corrected 2026-09-28 by the review round: the first report
 said 16, 11 and 32 new, which no run shows.* `pnpm check` and `pnpm build` green under Node 24.
 
-**Not shown here — IC-3.** No Windows package can run on this host, so the repaired path has produced no installer. The
+**Not shown here — IC-3** (*corrected 2026-10-13: a Windows x64 host, deferred with the pipeline under R-071; IC-3 binds Linux and macOS artifacts*). No Windows package can run on this host, so the repaired path has produced no installer. The
 **next Windows `pnpm package`** must show, with the manifest temporarily declaring `0.1.0rc1`: the line
 a line beginning `[package] declared 0.1.0rc1 → Rotaris-0.1.0rc1-windows-x64-setup.exe, written into release` (the
 separator Windows prints, then `electron-builder.package.yml (from electron-builder.yml)`);
@@ -1691,7 +1691,7 @@ proxy sink that every request of Chromium's stack would reach (`--proxy-server=1
 `github.com`. **Not executed here, and not faked:** a check that goes out to the endpoint; an offer on screen; a
 download; the installer and portable apply against a real artifact; the restart between two real processes. Every one
 of them needs a packaged Windows artifact launched from its install directory or through its launcher, which IC-3
-places on the Windows host; their first execution is owed to the next `pnpm package` on Windows, with the "assets"
+places on the Windows host (*corrected 2026-10-13: a Windows x64 host, deferred with the pipeline under R-071; IC-3 binds Linux and macOS artifacts*); their first execution is owed to the next `pnpm package` on Windows, with the "assets"
 rule's. **The proof found one thing beside the mechanism:** the sink recorded `CONNECT redirector.gvt1.com:443` —
 Chromium's own component updater reaching out from the built application, a request no requirement names and
 REQ-STARTUP-160's disclosure cannot carry — filed as

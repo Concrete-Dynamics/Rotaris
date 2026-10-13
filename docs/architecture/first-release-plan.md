@@ -426,7 +426,7 @@ lives in `tools/release-naming`. What the build decided and found:
   `../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`) — Git and ripgrep listed with
   their four fields and stated not yet downloaded by this build (OQ-73's reading), `@playwright/mcp` under a third
   sub-heading (REQ-STARTUP-152, OQ-92);
-  `afterPack` does not yet assert the manifest inside `win-unpacked` (the next Windows package, IC-3).
+  `afterPack` does not yet assert the manifest inside `win-unpacked` (the next Windows package, IC-3 — *corrected 2026-10-13: a Windows x64 host, deferred with the pipeline under R-071; IC-3 binds Linux and macOS artifacts*).
 - **electron-builder hyphenates a prerelease version** (`0.1.0rc1` → `0.1.0-rc1`), so step 5's prerelease would be named
   `Rotaris-0.1.0-rc1-…` unless §4.2/§4.5 render the name from the tag through `tools/release-naming`
   (`../defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md`). *Repaired 2026-09-28 (R-062; ADR-0054,
@@ -434,8 +434,8 @@ lives in `tools/release-naming`. What the build decided and found:
   and writes it as a literal into the configuration electron-builder runs with (`release/electron-builder.package.yml`);
   `electron-builder.yml` carries no `artifactName`; `afterPack` refuses any other configured name and a new
   `artifactBuildCompleted` hook any other produced file. The installer's own Windows metadata (`DisplayVersion`,
-  `ProductVersion`) still carries the normalised value — **OQ-80**. Unmeasured on a Windows package (IC-3): the next one
-  must show the lines ADR-0054 names.*
+  `ProductVersion`) still carries the normalised value — **OQ-80**. Unmeasured on a Windows package (IC-3 — corrected 2026-10-13: a Windows x64 host, deferred with the pipeline under
+  R-071; IC-3 binds Linux and macOS artifacts): the next one must show the lines ADR-0054 names.*
 - Two readings were raised rather than taken silently: **OQ-69**, whether the switched-off `browser` default counts
   (built: it does), and **OQ-70**, whether tag numbers are canonical decimals (built: they are).
 
@@ -644,7 +644,7 @@ so that the next release can add the updater without stranding anyone.
 > (R-062), and the cause corrected:* it was Electron's spellchecker fetching a Hunspell dictionary, not the component
 > updater; each session now has no dictionary and no spellchecker (`main/runtime-requests.ts`), and `pnpm updater-proof`
 > asserts zero connections from launch to first paint and quit (9 checks). OQ-93 raised (spell-checking a text field; OQ-91 on its branch, renumbered at the merge).
-> The packaged Windows build behind the same sink is owed to the next `pnpm package` (IC-3). **Raised:** OQ-83 (the
+> The packaged Windows build behind the same sink is owed to the next `pnpm package` (IC-3 — *corrected 2026-10-13: a Windows x64 host, deferred with the pipeline under R-071; IC-3 binds Linux and macOS artifacts*). **Raised:** OQ-83 (the
 > signature's form), OQ-84 (a packaged Windows build with neither a registry match nor the launcher's variable —
 > ADR-0054 says not updatable, REQ-STARTUP-106's copied-tree sentence says portable), OQ-85 (REQ-STARTUP-118 against
 > REQ-SHELL-118 on the download notice's title, persistence and the pause before the apply). **Two obligations the
@@ -672,7 +672,7 @@ so that the next release can add the updater without stranding anyone.
 > the rewrite. A successor that stopped waiting leaves the record intact and fails the restart
 > (ADR-0055's *Amended 2026-09-28*;
 > [note](../defects/fixed/the-record-can-pass-to-a-successor-that-stopped-waiting.md)). The restart between two real
-> processes on Windows is still owed to the next package (IC-3).
+> processes on Windows is still owed to the next package (IC-3 — *corrected 2026-10-13: a Windows x64 host, deferred with the pipeline under R-071; IC-3 binds Linux and macOS artifacts*).
 >
 > **Repaired the same day: the artifact variables stay with their launch.** `APPIMAGE` and `ROTARIS_PORTABLE_ARTIFACT`
 > stayed in main's environment and reached every child — observed in the built app, a scripted terminal call's shell
@@ -758,7 +758,7 @@ choice only the owner can make about their own repository, and it un-defers with
    - ~~§3.2 the latency measurement plus §3.3 the injection proof;~~ **built 2026-09-27** (the Windows gate-class
      reading owed);
    - ~~§4.1 the version guard~~ **built 2026-09-27**; *the prerelease naming defect it found repaired 2026-09-28 (R-062),
-     unmeasured on a Windows package (IC-3)*. It found that **the setup manifest is owed and scheduled nowhere**.
+     unmeasured on a Windows package (IC-3; corrected 2026-10-13: a Windows x64 host, deferred under R-071)*. It found that **the setup manifest is owed and scheduled nowhere**.
      The manifest has to exist, with Git, ripgrep, the language servers and the `@playwright/mcp` pin
      (`REQ-STARTUP-058/059`), before §5's first check can pass. §4.3's section is generated from the same file, so
      that step is where it most naturally lands, and it lands packed: an `extraResources` entry, and either the

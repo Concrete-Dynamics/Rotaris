@@ -25,3 +25,18 @@ R-071 and out of this plan).
   repair's "Not shown here", the updater's "Not executed here".
 - `docs/architecture/views/06-sequences.md` — the update sequence.
 - `docs/architecture/open-questions.md` — the spell-checking entry.
+
+## Repaired — 2026-10-13 (fin41)
+
+Each "(IC-3)" on a Windows-owed check keeps its words and gains the correction beside it ("a Windows x64 host, deferred
+with the pipeline under R-071; IC-3 binds Linux and macOS artifacts"): `first-release-plan.md` (the manifest rule, the
+prerelease naming, the packaged sink, the restart between two processes, §7's version-guard line), ADR-0054 (the "assets"
+rule, the naming repair's "Not shown here", the updater's "Not executed here"), `open-questions.md`'s spell-checking entry,
+and the two views (`02-process-view.md`'s portable update row, `06-sequences.md`'s update sequence; entry at the top of
+`views/reconciliation-log.md`). No new condition: the checks stay owed where they are recorded and held by
+REQ-STARTUP-156's release gate.
+
+Left as written: "(IC-3)" where it is correct (a Linux or macOS artifact, `codebase.md`'s "Windows only (IC-3)" for the
+package step, ADR-0054's "IC-3 bars a Linux artifact"), and the fixed defect notes, which record what their authors
+wrote on their day; this note is the correction they point back to. The Windows package itself — the ~14 checks owed to
+it and the missing `afterPack` setup-manifest rule — is deferred under R-071 with the pipeline and is not this repair.

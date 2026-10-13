@@ -158,7 +158,7 @@ stopped waiting: the offer, the acknowledgement within the interval, then the re
 hand-over (REQ-STARTUP-162) is one line in and `{"ok":true}` out, unchanged.
 Nothing of the installation is moved or modified before the replacement is fetched whole and verified
 (REQ-STARTUP-126). The apply strategies and the restart are decided by unit tests over fakes; their run against a real
-Windows artifact is owed to the next Windows package (IC-3) — ADR-0054's "The updater" note says what was executed.
+Windows artifact is owed to the next Windows package (IC-3 — *corrected 2026-10-13: a Windows x64 host, deferred with the pipeline under R-071; IC-3 binds Linux and macOS artifacts*) — ADR-0054's "The updater" note says what was executed.
 
 ### Opening another project, from inside
 

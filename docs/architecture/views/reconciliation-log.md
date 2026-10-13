@@ -15,6 +15,12 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-13**
 
+**Windows-owed checks no longer cite IC-3 as their reason (fin41, record only).** The **process view**'s portable
+update row and the **sequences view**'s update sequence said a real-artifact run was owed to the next Windows package
+"(IC-3)"; IC-3 binds Linux and macOS artifacts, and what holds these back is a Windows x64 host and the pipeline R-071
+deferred. Each keeps its tag with the correction beside it. No package, edge, process, channel, command or store column
+changed. *(This is the first entry written here rather than in `README.md`.)*
+
 **A snapshot reads a directory's file statuses in batches (OQ-245; fin39, from fin38's review).** `snapshotTree`
 (`agent-tools/src/tools/observe.ts`) reads at most `SNAPSHOT_STAT_BATCH` (256) statuses at once and checks the file limit after
 each batch, so a directory past the limit stops within one batch of it. The **runtime view**'s cut-off passage says so. No

@@ -3827,7 +3827,7 @@ somewhere else in the file.
 
 The specification says nothing about spell-checking the composer or any other text field. The runtime's built-in
 spellchecker, left at its default, fetches a Hunspell dictionary for the OS locale from `redirector.gvt1.com` whenever a
-session is created — on Linux measured, on Windows owed to the next package (IC-3); on macOS the OS spellchecker is used
+session is created — on Linux measured, on Windows owed to the next package (IC-3 — *corrected 2026-10-13: a Windows x64 host, deferred with the pipeline under R-071; IC-3 binds Linux and macOS artifacts*); on macOS the OS spellchecker is used
 and nothing is fetched. That request is one REQ-STARTUP-160's disclosure may not name ("SHALL name no host, endpoint, or
 request this document does not require"), one REQ-SHELL-005's demo mode forbids for the whole lifetime, and one the
 offline launch of REQ-STARTUP-159 would attempt and fail. Three readings:

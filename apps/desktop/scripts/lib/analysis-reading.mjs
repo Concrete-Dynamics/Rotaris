@@ -56,6 +56,19 @@ export function passOutcome(artifact, notices, { retrospective = false } = {}) {
 }
 
 /**
+ * The live `ask` scenario's verdict on its run's post-run analysis, from the artifacts stored for that session (`count`) and
+ * `passOutcome`'s reading of the newest: one artifact with proposals or with the timed-out notes is `pass`; one with no
+ * proposal for another reason is a `note`, since an analyst that finds nothing to propose over a one-file run is the model's
+ * judgement and REQ-LIBRARY-124 gives that outcome its own notice ("Improvement analysis complete — no proposals"); no
+ * artifact, or more than one for the one run, is `fail`. The notice is checked apart, for whichever outcome stands.
+ */
+export function postRunVerdict(count, outcome) {
+  if (count !== 1) return 'fail';
+  if (outcome?.outcome === 'proposals' || outcome?.outcome === 'timed-out') return 'pass';
+  return outcome?.outcome === 'empty' ? 'note' : 'fail';
+}
+
+/**
  * PD-LIBRARY-002 revision 2 (OQ-235): the run host's line naming the instruction files a retrospective was handed —
  * "retrospective: <n> of <m> enabled instruction file(s) at the workspace root (<ids>)" — and whether every id it lists is
  * a workspace-root one (`workspace:`). Null when the log holds no such line.

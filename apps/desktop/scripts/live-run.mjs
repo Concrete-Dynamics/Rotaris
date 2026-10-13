@@ -33,8 +33,8 @@
  *                 the `models:` entry the run needs by hand (REQ-CONFIG-082..097) rather than pretending.
  *   2. ask      — one real run that reads a file and answers. The lease, the request, a settled tool row, usage. Since fin42
  *                 (N58) its post-run analysis is let finish under an Improvement analysis timeout set through Settings
- *                 (`LIVE_RUN_ANALYST_TIMEOUT_S`, default 300): one artifact with proposals or the timed-out notes, and the
- *                 notice it owes; then `ask-retrospective` presses the Library's retrospective gesture and lets it finish:
+ *                 (`LIVE_RUN_ANALYST_TIMEOUT_S`, default 300): one artifact with proposals or the timed-out notes (one
+ *                 that proposed nothing is a NOTE), and the notice it owes; then `ask-retrospective` presses the Library's retrospective gesture and lets it finish:
  *                 its artifact, the sessions it read, and the workspace root's instruction files alone (PD-LIBRARY-002).
  *   3. edit     — one real run that implements REQ-103 and runs the suite in the terminal. Asserted from the
  *                 files on disk, from `git diff`, and by running `node --test` again in this script. The work is
@@ -176,7 +176,7 @@ import { attributeWait, commandsReading, compressionNote, compressionTrigger, de
 import { withRuntimeKey } from './lib/runtime-key.mjs';
 import { runApprovalsScenario, runAwayScenario, runPlanGateScenario } from './lib/approval-scenarios.mjs';
 import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-field.mjs';
-import { passOutcome, retrospectiveInstructionFiles, settledAfterMs, settledWait } from './lib/analysis-reading.mjs';
+import { passOutcome, postRunVerdict, retrospectiveInstructionFiles, settledAfterMs, settledWait } from './lib/analysis-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
 import { LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, attemptCount, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
@@ -1457,7 +1457,12 @@ if (wanted.includes('ask')) {
   const askArtifacts = read === null ? [] : improvementArtifacts().filter((a) => a.source_session_id === read.session.session_id);
   const analysis = passOutcome(askArtifacts[0]?.artifact ?? null, askNotices);
   check(analysisMs !== null, 'the post-run analysis was seen running and ended before the capture quit (REQ-LIBRARY-125/127)', analysisMs === null ? `the wait for it ran out at ${ASK_WAIT_MS} ms` : `${analysisMs} ms from the prompt's submission`);
-  check(askArtifacts.length === 1 && (analysis.outcome === 'proposals' || analysis.outcome === 'timed-out'), 'the post-run analysis stored one artifact for the run, with proposals or the timed-out notes (REQ-LIBRARY-023/123)', `${askArtifacts.length} artifact(s); ${analysis.outcome}, ${analysis.proposals} proposal(s), notes ${JSON.stringify(analysis.notes)}`);
+  // An analyst that proposed nothing for another reason is the model's judgement over a one-file run, REQ-LIBRARY-124's own
+  // "no proposals" outcome: a NOTE, its notice still checked below (`postRunVerdict`).
+  const analysisVerdict = postRunVerdict(askArtifacts.length, analysis);
+  const analysisDetail = `${askArtifacts.length} artifact(s); ${analysis.outcome}, ${analysis.proposals} proposal(s), notes ${JSON.stringify(analysis.notes)}`;
+  if (analysisVerdict === 'note') noted('the post-run analysis stored one artifact for the run and proposed nothing (REQ-LIBRARY-124)', analysisDetail);
+  else check(analysisVerdict === 'pass', 'the post-run analysis stored one artifact for the run, with proposals or the timed-out notes (REQ-LIBRARY-023/123)', analysisDetail);
   if (analysis.outcome === 'timed-out') noted('the post-run analysis reached its limit before it proposed anything', `${analysis.limitS} s (LIVE_RUN_ANALYST_TIMEOUT_S ${ANALYST_TIMEOUT_S}); live-run-1 F4 measured 22 to 134 s per call`);
   if (askArtifacts.length === 1) check(analysis.noticeMatches === true, 'the notice on screen is the one the analysis outcome owes (REQ-LIBRARY-124, REQ-NOTIFY-100)', askNotices.map((n) => n.text.slice(0, 160)).join(' | ') || 'no notice on screen');
   // The summary joins the scenario's record rather than being written onto it before it exists.

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { INDICATOR, passOutcome, retrospectiveInstructionFiles, settledAfterMs, settledWait } from './analysis-reading.mjs';
+import { INDICATOR, passOutcome, postRunVerdict, retrospectiveInstructionFiles, settledAfterMs, settledWait } from './analysis-reading.mjs';
 
 describe('analysis reading (live-run `ask`, REQ-LIBRARY-123..127, PD-LIBRARY-002)', () => {
   it('the wait holds only once the named pass was seen and no indicator stands', () => {
@@ -40,6 +40,18 @@ describe('analysis reading (live-run `ask`, REQ-LIBRARY-123..127, PD-LIBRARY-002
     expect(passOutcome({ proposals: [], notes: 'collector timed out after 300 seconds' }, [{ text: 'Improvement analysis complete — no proposalsDetailsNothing was proposed in impart_x.' }])).toMatchObject({ outcome: 'timed-out', noticeMatches: false });
     expect(passOutcome({ proposals: [], notes: 'Suppressed duplicate proposals already covered by: impart_a.' }, [{ text: 'The retrospective found nothing to proposeDetailsNothing was proposed in impart_b.' }], { retrospective: true })).toMatchObject({ outcome: 'empty', noticeMatches: true });
     expect(passOutcome(null, [])).toEqual({ outcome: 'none', proposals: 0, notes: null, noticeMatches: null });
+  });
+
+  it('the live `ask` verdict: proposals or a timeout pass, an analyst that proposed nothing is a NOTE, no artifact or two fail', () => {
+    const notice = [{ text: 'Improvement analysis complete — no proposalsDetailsNothing was proposed in impart_x.' }];
+    expect(postRunVerdict(1, passOutcome({ proposals: [{}], notes: null }, []))).toBe('pass');
+    expect(postRunVerdict(1, passOutcome({ proposals: [], notes: 'collector timed out after 300 seconds' }, []))).toBe('pass');
+    // REQ-LIBRARY-124's no-proposals outcome, notes null: the model found nothing over a one-file run, not a product failure.
+    const empty = passOutcome({ proposals: [], notes: null }, notice);
+    expect(empty).toMatchObject({ outcome: 'empty', noticeMatches: true });
+    expect(postRunVerdict(1, empty)).toBe('note');
+    expect(postRunVerdict(0, passOutcome(null, []))).toBe('fail');
+    expect(postRunVerdict(2, passOutcome({ proposals: [{}], notes: null }, []))).toBe('fail');
   });
 
   it('the retrospective\'s instruction files: the root\'s alone, a file from another base, and none at all', () => {

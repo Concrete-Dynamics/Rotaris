@@ -13333,3 +13333,37 @@ level and lines in place of a "+0 -0" write row.
 *Built 2026-10-13 (fin39, `fin39-insert-noop-optionals`); its first execution is reported in `PD-TOOLS-016` revision 3, in
 place.* `windowNoOpMessage` and the edit branch's comparison before `commit` (`packages/agent-tools/src/tools/files.ts`); pinned by
 the "PD-TOOLS-016 revision 3" cases in `tools.test.ts`, red on the code before. The note is repaired.
+
+<a id="oq-261"></a>
+
+**OQ-261 — Which moments does REQ-STARTUP-160's setup statement name, when the build fetches at a tool's first start
+rather than at machine setup or cache warm-up?** *(REQ-STARTUP-160 with REQ-STARTUP-058, REQ-STARTUP-064 and
+REQ-STARTUP-084; `PD-STARTUP-005`; OQ-73, deferred, which records that machine setup is not built. Raised
+2026-10-13 by fin41, building the disclosure the note
+[`the-about-page-carries-no-network-activity-disclosure`](../defects/the-about-page-carries-no-network-activity-disclosure.md)
+records. Open.)*
+
+REQ-STARTUP-160 has About & Legal state "that first-launch machine setup and cache warm-up may contact the pinned
+tool-archive hosts and the package registries the configured package runners use, and only for work the machine does not
+already satisfy". It also requires the disclosure to name "no host, endpoint, or request this document does not require",
+and calls a build "whose disclosure and behavior disagree" non-conformant on the disclosure. This build meets the clause
+from the other side:
+
+- **Neither moment exists in this build.** Machine setup (REQ-STARTUP-058's first list, REQ-STARTUP-060 onward, the tool
+  archives of REQ-STARTUP-084) and the MCP cache warm-up of REQ-STARTUP-064 are not built (OQ-73, deferred by R-071). The
+  build downloads no Git and no ripgrep archive, and it warms no cache.
+- **The same kind of request happens at another moment.** The package runner fetches a pinned tool-server package
+  (`@playwright/mcp` 0.0.80) from its registry the first time that tool server starts (`PD-STARTUP-005` says so of the
+  notices file). The bundled code-intelligence runtime provisions a language server from the npm registry or PyPI at the
+  first use of a language (REQ-STARTUP-058's second list, ESC-32). Both are requests this document requires, and both are
+  made only for work the machine has not already done.
+
+**What the build proceeds under.** The disclosure states the clause as the requirement words it, "may contact", and
+names the third moment beside the two: "Setting up this machine's tools, on first launch, while warming caches, or the
+first time a tool is needed, may contact …". It names no host. Without the third moment the disclosure would be silent
+on the only requests of this kind the build makes; with the first two the text keeps the requirement's statement, which
+a build that ships machine setup makes true without a change.
+
+**What a ruling decides.** Whether "the first time a tool is needed" may stand beside the requirement's two moments
+(extending REQ-STARTUP-160), whether a build that does not carry machine setup or warm-up must leave those two moments out
+of its disclosure, or whether both stand as built.

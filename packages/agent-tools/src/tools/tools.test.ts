@@ -541,7 +541,7 @@ describe('PD-TOOLS-014: a haet_edit miss that matches but for whitespace names t
   });
 });
 
-describe('PD-TOOLS-015:a level-3 write_file edit shifts new_string when it shares old_string\'s indentation, writes it as given when it has the file\'s, and refuses otherwise', () => {
+describe('PD-TOOLS-015: a level-3 write_file edit shifts new_string when it shares old_string\'s indentation, writes it as given when it has the file\'s, and refuses otherwise', () => {
   // OQ-233 (R-072, 2026-10-13). The six level-3 misses of the a68f121 duress pack carried the same extra space in new_string as
   // in old_string; written unshifted, each would have landed one space off beside a success.
   const quoteOf = (text: string): string => JSON.parse(/as this JSON string: ("(?:[^"\\]|\\.)*") If these are not/.exec(text)![1]!) as string;

@@ -124,7 +124,24 @@ export function sessionCommands(
          */
         const unreachable = (cause: Error) => ({ kind: 'refused' as const, code: 'link.unreachable', headline: 'The workspace service did not answer', detail: cause.message });
         if (effectiveIsolation) {
-          const made = await svc.link.request({ kind: 'worktree.create', workspaceRoot: root, branch: effectiveIsolation.branch, collisionSafe: true, target: { kind: 'session', sessionId } }, millis(120_000)).catch(unreachable);
+          /*
+           * REQ-GIT-073 / REQ-CONFIG-068 / REQ-GIT-005: the tree goes under the directory `worktree_storage_subpath` names, read
+           * from the workspace service's resolved view (main parses no YAML) and sent on the session target. Until 2026-10-13 no
+           * subpath was sent and every tree went under `worktrees/` whatever the file said
+           * (docs/defects/fixed/a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md).
+           * REQ-GIT-071 / REQ-GIT-138: a configuration that does not load creates nothing — not even the tree the run host
+           * would refuse a moment later — so the start is refused here, on the run host's own terms, with the load's report.
+           */
+          const config = await svc.link.request({ kind: 'config.read', workspaceRoot: root }, millis(10_000)).catch(unreachable);
+          if (config.kind !== 'config.snapshot') return bindFailure(config);
+          if (!config.snapshot.loadOk) {
+            const headline = 'The run was refused before it started';
+            const detail = config.snapshot.fatal ?? 'The configuration could not be loaded.';
+            raiseNotice('error', headline, detail);
+            log(`run refused before start: the configuration did not load, so no worktree was created — ${detail.split('\n')[0]}`);
+            return { ok: false, code: 'session.configuration', headline, detail };
+          }
+          const made = await svc.link.request({ kind: 'worktree.create', workspaceRoot: root, branch: effectiveIsolation.branch, collisionSafe: true, target: { kind: 'session', sessionId, subpath: config.snapshot.worktreeStorageSubpath } }, millis(120_000)).catch(unreachable);
           if (made.kind !== 'worktree.created') return bindFailure(made);
           binding = { worktree_path: made.path, branch: made.branch, base_branch: made.baseBranch, base_revision: made.baseRevision, created_by_session: true, merge_status: 'ready', integration_session_id: null };
         } else if (effectiveAttach) {

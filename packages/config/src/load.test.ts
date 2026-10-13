@@ -711,6 +711,29 @@ describe('REQ-GIT-070/071/072 the checkpoints section (Part P)', () => {
   });
 });
 
+describe('REQ-GIT-073 / REQ-CONFIG-068 / REQ-GIT-138: worktree_storage_subpath', () => {
+  // docs/defects/fixed/a-worktree-storage-subpath-inside-the-requirement-checkout-directory-is-not-rejected-at-load.md
+  it('defaults to worktrees and loads a stated value unchanged', () => {
+    expect(loaded(null, null).worktreeStorageSubpath).toBe('worktrees');
+    expect(loaded(null, 'worktree_storage_subpath: trees/sessions\n').worktreeStorageSubpath).toBe('trees/sessions');
+    expect(loaded('worktree_storage_subpath: global-trees\n', null).worktreeStorageSubpath).toBe('global-trees');
+  });
+  it('REQ-GIT-138: a value resolving to the requirement checkout directory or inside it fails the load as a whole, naming key, value and namespace', () => {
+    for (const bad of ['requirements/worktrees', 'requirements/worktrees/sessions', './requirements//worktrees/', 'other/../requirements/worktrees']) {
+      const r = loadConfiguration(scopes(null, `worktree_storage_subpath: ${JSON.stringify(bad)}\n`));
+      expect(r.ok, bad).toBe(false);
+      if (r.ok) continue;
+      expect(r.error.path).toBe('worktree_storage_subpath');
+      const text = renderFatal(r.error);
+      expect(text).toContain(JSON.stringify(bad));
+      expect(text).toContain('.rotaris/requirements/worktrees');
+      expect(text).toContain('REQ-GIT-138');
+    }
+    // Beside it, above it and the default all pass (a value CONTAINING the directory is OQ-262's question, loaded as stated).
+    for (const good of ['requirements', '.', 'requirements/worktrees-x', 'requirement/worktrees', 'worktrees']) expect(loaded(null, `worktree_storage_subpath: ${good}\n`).worktreeStorageSubpath).toBe(good);
+  });
+});
+
 describe('REQ-CONFIG-225: the unresolved-placeholder warning names the file the entry came from', () => {
   // docs/defects/fixed/the-unresolved-placeholder-warning-names-no-configuration-file.md
   const lineFor = (r: ReturnType<typeof loadConfiguration>, server: string): string => {

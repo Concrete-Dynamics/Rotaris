@@ -13448,6 +13448,32 @@ a build that ships machine setup makes true without a change.
 (extending REQ-STARTUP-160), whether a build that does not carry machine setup or warm-up must leave those two moments out
 of its disclosure, or whether both stand as built.
 
+<a id="oq-262"></a>
+
+**OQ-262 — Is a `worktree_storage_subpath` that contains the requirement checkout directory rejected at load?**
+*(REQ-GIT-138, whose first sentence keeps the worktree directories of the three namespaces disjoint, "no worktree directory of one
+namespace SHALL lie inside the directory of another", and whose directory-side rejection names only a value that "resolves to the
+fixed requirement checkout directory of REQ-GIT-137 or to any directory inside it"; REQ-GIT-005, REQ-GIT-073, REQ-CONFIG-068.
+Raised 2026-10-13 by fin41 while building the load-time half of REQ-GIT-138, task N72, as OQ-261; renumbered OQ-262 at
+landing, because origin/main had given OQ-261 to REQ-STARTUP-160's question first.)*
+
+**What is open.** A session worktree lies at `<workspace>/.rotaris/<subpath>/<session-id>`. A `worktree_storage_subpath` of
+`requirements` or `.` names a session directory (`.rotaris/requirements/`, `.rotaris/`) that CONTAINS the requirement checkout
+directory `.rotaris/requirements/worktrees/`. No session tree ever lands in that directory, since a session id is never
+`worktrees`, but the requirement directory then lies inside the session one, which the first sentence of REQ-GIT-138 forbids. The
+rejection the requirement states names only the two cases the other way round: the fixed directory itself, and a directory inside
+it. The two sentences read differently over `requirements` and `.`, and the specification does not say which governs.
+
+**What the build proceeds under.** The rejection as stated: only a value that resolves to `.rotaris/requirements/worktrees` or
+inside it fails the load (`worktreeStorageCollision`, `packages/config/src/sections/requirements.ts`); `requirements` and `.`
+load, and a session tree is placed at `.rotaris/requirements/<sid>` or `.rotaris/<sid>`. The cases are pinned as loading in
+`load.test.ts` and `requirements-section.test.ts`, so a ruling the other way turns them red.
+
+**What a ruling decides.** Whether a value whose session directory contains the requirement checkout directory is rejected at load
+too, on REQ-GIT-071's terms, with the same report (key, value, the namespace it collided with), or loads as built.
+
+**What a live run then shows.** Nothing: the live-run workspaces keep the default `worktrees`.
+
 <a id="oq-271"></a>
 
 **OQ-271 — Is a retrospective's artifact part of a later run's analysis history?** *(REQ-LIBRARY-034, the analyst's prior

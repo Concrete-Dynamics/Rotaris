@@ -25,3 +25,16 @@ Recorded 2026-10-13 by fin41 (task N72, confirmed on main `6de2a67`).
 - `packages/config/src/sections/requirements.ts` — the branch-template half of `REQ-GIT-138`, beside which the directory half
   belongs.
 - `packages/workspace/src/delivery/runs.ts` — `REQUIREMENT_WORKTREES_SUBPATH`, the fixed directory.
+
+## Outcome
+
+**Repaired 2026-10-13 (fin41, `fin41-config-and-proposals`).** `worktreeStorageCollision` (`packages/config/src/sections/requirements.ts`)
+reads the value as the placement reads it (trimmed, empty meaning `worktrees`, either separator, `.` and `..` normalised; case
+folded on Windows only) and the load reports a value resolving to `.rotaris/requirements/worktrees` or inside it as a fatal problem
+at `worktree_storage_subpath`, naming the value, the directory it resolves to and the requirement checkout directory it collided
+with. Pinned by `load.test.ts`'s "REQ-GIT-073 / REQ-CONFIG-068 / REQ-GIT-138" case (red on the code before) and
+`requirements-section.test.ts`; `apps/desktop/src/workspace-service/worktree-storage.test.ts` pins the load-time check and
+`sessionWorktreePath` agreeing value by value, and config's copy of the directory equal to the workspace package's. Such a load
+now also stops an isolated start in main before anything is created (the companion note). A value whose session directory
+CONTAINS the requirement directory (`requirements`, `.`) still loads: REQ-GIT-138's two sentences read differently over it, raised
+as [OQ-262](../../architecture/open-questions.md#oq-262) (raised as OQ-261, renumbered at landing).

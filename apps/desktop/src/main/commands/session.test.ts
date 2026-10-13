@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ProcessReply, RunHostRequest, WorkspaceServiceRequest } from '@rotaris/contracts';
+import type { ConfigSnapshot, ProcessReply, RunHostRequest, WorkspaceServiceRequest } from '@rotaris/contracts';
 import { canonicalPath } from '@rotaris/platform';
 import { FakeClock } from '@rotaris/kernel';
 import { sessionCommands } from './session.js';
@@ -44,6 +44,14 @@ interface Harness {
   /** REQ-NOTIFY-058: the sessions `NoticeStore.clearForRunStart` was called for, in order. */
   readonly cleared: string[];
 }
+
+/** The workspace service's resolved view as an isolated start reads it (REQ-GIT-073); only the fields main reads are meaningful. */
+function snapshotReply(worktreeStorageSubpath = 'worktrees', fatal: string | null = null): ProcessReply {
+  return { kind: 'config.snapshot', snapshot: { workspaceRoot: WORKSPACE, loadOk: fatal === null, fatal, worktreeStorageSubpath } as unknown as ConfigSnapshot };
+}
+/** A service whose `config.read` answers the default view, every other request going to `rest`. */
+const configured = (rest: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | ProcessReply, view: ProcessReply = snapshotReply()) =>
+  (req: WorkspaceServiceRequest): Promise<ProcessReply> | ProcessReply => (req.kind === 'config.read' ? view : rest(req));
 
 function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | ProcessReply, host: (req: RunHostRequest) => Promise<ProcessReply> | ProcessReply): Harness {
   const logs: string[] = [];
@@ -145,7 +153,7 @@ describe('REQ-NOTIFY-061: a sandboxed launch that was refused', () => {
 describe('session.start, driven without a process behind it', () => {
   it('a rejecting worktree link refuses with the cause instead of throwing (R0-2)', async () => {
     const h = harness(
-      () => Promise.reject(new Error('no reply to worktree.create within 120000 ms')),
+      configured(() => Promise.reject(new Error('no reply to worktree.create within 120000 ms'))),
       () => ({ kind: 'session.started', sessionId: 'minted-1' }),
     );
     const out = await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Write the notes in a worktree.', isolation: { branch: 'rotaris/session/minted-1' } }, windowOn('ws-1'));
@@ -159,12 +167,12 @@ describe('session.start, driven without a process behind it', () => {
 
   it('an unanswered run host refuses and takes the created worktree away again', async () => {
     const h = harness(
-      (req) => (req.kind === 'worktree.remove' ? { kind: 'worktree.removed', path: created.path } : { ...created, kind: 'worktree.created' }),
+      configured((req) => (req.kind === 'worktree.remove' ? { kind: 'worktree.removed', path: created.path } : { ...created, kind: 'worktree.created' })),
       () => Promise.reject(new Error('no reply to session.start within 10000 ms')),
     );
     const out = await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Write the notes in a worktree.', isolation: { branch: 'rotaris/session/minted-1' } }, windowOn('ws-1'));
     expect(out).toEqual({ ok: false, code: 'run-host.unreachable', headline: 'The session could not be started', detail: expect.stringContaining('no reply to session.start') });
-    expect(h.svcAsked.map((r) => r.kind)).toEqual(['worktree.create', 'worktree.remove']);
+    expect(h.svcAsked.map((r) => r.kind)).toEqual(['config.read', 'worktree.create', 'worktree.remove']);
     expect(h.raised.some((n) => n.severity === 'error')).toBe(true);
     expect(h.logs.some((l) => l.startsWith('run refused:'))).toBe(true);
   });
@@ -184,7 +192,7 @@ describe('session.start, driven without a process behind it', () => {
 
   it('the isolated happy path carries the minted id and the binding to the run host', async () => {
     const h = harness(
-      () => ({ ...created, kind: 'worktree.created' }),
+      configured(() => ({ ...created, kind: 'worktree.created' })),
       () => ({ kind: 'session.started', sessionId: 'minted-1' }),
     );
     const out = await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Write the notes in a worktree.', isolation: { branch: 'rotaris/session/minted-1' }, sandboxMode: 'off' }, windowOn('ws-1'));
@@ -203,7 +211,7 @@ describe('session.start, driven without a process behind it', () => {
   const SHARED_TREE_HINT = 'Another run is already active, so this session gets its own Git worktree. Two runs sharing one working tree would overwrite each other\'s edits.';
   it("a launch in an idle project while another project's run is active shares its own base tree (PD-GIT-001)", async () => {
     const h = harness(
-      () => ({ ...created, kind: 'worktree.created' }),
+      configured(() => ({ ...created, kind: 'worktree.created' })),
       (req) => (req.kind === 'runs.active'
         ? { kind: 'runs.count', workspaceId: req.workspaceId, count: req.workspaceId === '' ? 1 : 0 }
         : { kind: 'session.started', sessionId: (req as { sessionId: string }).sessionId }),
@@ -218,12 +226,12 @@ describe('session.start, driven without a process behind it', () => {
 
   it('a launch while a run shares this workspace\'s tree is forced into a worktree, and says so in an informational notice naming the branch (PD-GIT-001)', async () => {
     const h = harness(
-      () => ({ ...created, kind: 'worktree.created' }),
+      configured(() => ({ ...created, kind: 'worktree.created' })),
       (req) => (req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: req.workspaceId, count: 1 } : { kind: 'session.started', sessionId: 'minted-1' }),
     );
     expect(await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'))).toEqual({ ok: true, value: { sessionId: 'minted-1' } });
     expect(h.hostAsked[0]).toEqual({ kind: 'runs.active', workspaceId: 'ws-1', scope: 'sharing' });
-    expect(h.svcAsked).toEqual([expect.objectContaining({ kind: 'worktree.create', branch: 'rotaris/session/minted-1' })]);
+    expect(h.svcAsked).toEqual([{ kind: 'config.read', workspaceRoot: canonicalPath(WORKSPACE) }, expect.objectContaining({ kind: 'worktree.create', branch: 'rotaris/session/minted-1' })]);
     expect(h.hostAsked.find((r) => r.kind === 'session.start')).toMatchObject({ sessionId: 'minted-1', effectiveRoot: created.path });
     expect(h.logs.some((l) => l.includes('force-creating isolated worktree rotaris/session/minted-1'))).toBe(true);
     // Raised after the run start's clear, scoped to the new session, so the clear does not take it away.
@@ -233,11 +241,11 @@ describe('session.start, driven without a process behind it', () => {
 
   it('a count that cannot be read forces the worktree, as a run active does (PD-GIT-001)', async () => {
     const h = harness(
-      () => ({ ...created, kind: 'worktree.created' }),
+      configured(() => ({ ...created, kind: 'worktree.created' })),
       (req) => (req.kind === 'runs.active' ? Promise.reject(new Error('no reply to runs.active within 5000 ms')) : { kind: 'session.started', sessionId: 'minted-1' }),
     );
     expect(await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'))).toEqual({ ok: true, value: { sessionId: 'minted-1' } });
-    expect(h.svcAsked).toEqual([expect.objectContaining({ kind: 'worktree.create', branch: 'rotaris/session/minted-1' })]);
+    expect(h.svcAsked).toEqual([{ kind: 'config.read', workspaceRoot: canonicalPath(WORKSPACE) }, expect.objectContaining({ kind: 'worktree.create', branch: 'rotaris/session/minted-1' })]);
     expect(h.raised).toEqual([expect.objectContaining({ severity: 'info', headline: SHARED_TREE_HINT })]);
   });
 
@@ -255,8 +263,54 @@ describe('session.start, driven without a process behind it', () => {
     expect((await ask(() => ({ kind: 'refused', code: 'x', headline: 'no' }))).out).toEqual({ ok: true, value: { sessionId: expect.any(String), isolationRequired: true } });
   });
 
+  /*
+   * REQ-GIT-073 / REQ-CONFIG-068 / REQ-GIT-005: docs/defects/fixed/a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md.
+   * Main sent the session target with no subpath, so the service placed every tree under `worktrees/` whatever the file said.
+   */
+  describe('REQ-GIT-073: the configured worktree_storage_subpath reaches worktree creation', () => {
+    const started = (req: RunHostRequest): ProcessReply => (req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: req.workspaceId, count: 1 } : { kind: 'session.started', sessionId: 'minted-1' });
+    it('an isolated start sends the subpath the workspace configuration resolves', async () => {
+      const h = harness(configured(() => ({ ...created, kind: 'worktree.created' }), snapshotReply('trees/sessions')), started);
+      expect(await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.', isolation: { branch: 'rotaris/session/minted-1' } }, windowOn('ws-1'))).toEqual({ ok: true, value: { sessionId: 'minted-1' } });
+      expect(h.svcAsked).toEqual([
+        { kind: 'config.read', workspaceRoot: canonicalPath(WORKSPACE) },
+        { kind: 'worktree.create', workspaceRoot: canonicalPath(WORKSPACE), branch: 'rotaris/session/minted-1', collisionSafe: true, target: { kind: 'session', sessionId: 'minted-1', subpath: 'trees/sessions' } },
+      ]);
+    });
+    it('a start main forces into a worktree (PD-GIT-001) honours it too, and the default is sent as the default', async () => {
+      const forced = harness(configured(() => ({ ...created, kind: 'worktree.created' }), snapshotReply('elsewhere')), started);
+      expect((await sessionCommands(forced.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'))).ok).toBe(true);
+      expect(forced.svcAsked[1]).toMatchObject({ kind: 'worktree.create', target: { kind: 'session', sessionId: 'minted-1', subpath: 'elsewhere' } });
+      const plain = harness(configured(() => ({ ...created, kind: 'worktree.created' })), started);
+      expect((await sessionCommands(plain.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.', isolation: { branch: 'rotaris/session/minted-1' } }, windowOn('ws-1'))).ok).toBe(true);
+      expect(plain.svcAsked[1]).toMatchObject({ target: { kind: 'session', sessionId: 'minted-1', subpath: 'worktrees' } });
+    });
+    it('an attach reads no configuration: the tree is the one the user named', async () => {
+      const h = harness(() => ({ kind: 'worktree.attachable', path: 'D:/trees/mine', branch: 'feature', baseBranch: 'main', baseRevision: 'abc' }), started);
+      expect((await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.', attach: { path: 'D:/trees/mine' } }, windowOn('ws-1'))).ok).toBe(true);
+      expect(h.svcAsked.map((r) => r.kind)).toEqual(['worktree.checkAttach']);
+    });
+    it('REQ-GIT-071 / REQ-GIT-138: a configuration that does not load refuses the start before any worktree is created', async () => {
+      const report = 'worktree_storage_subpath: "requirements/worktrees" resolves to .rotaris/requirements/worktrees, inside the requirement checkout directory (REQ-GIT-138)';
+      const h = harness(configured(() => ({ ...created, kind: 'worktree.created' }), snapshotReply('worktrees', report)), started);
+      const out = await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.', isolation: { branch: 'rotaris/session/minted-1' } }, windowOn('ws-1'));
+      expect(out).toEqual({ ok: false, code: 'session.configuration', headline: 'The run was refused before it started', detail: report });
+      expect(h.svcAsked.map((r) => r.kind)).toEqual(['config.read']);
+      expect(h.hostAsked.filter((r) => r.kind === 'session.start')).toEqual([]);
+      expect(h.raised).toEqual([{ severity: 'error', headline: 'The run was refused before it started', detail: report }]);
+      expect(h.logs.some((l) => l.startsWith('run refused before start: the configuration did not load'))).toBe(true);
+    });
+    it('an unanswered configuration read refuses the start as an unanswered worktree request does', async () => {
+      const h = harness((req) => (req.kind === 'config.read' ? Promise.reject(new Error('no reply to config.read within 10000 ms')) : { ...created, kind: 'worktree.created' }), started);
+      const out = await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.', isolation: { branch: 'rotaris/session/minted-1' } }, windowOn('ws-1'));
+      expect(out).toEqual({ ok: false, code: 'session.worktree', headline: expect.stringContaining('could not create or attach'), detail: expect.stringContaining('no reply to config.read') });
+      expect(h.svcAsked.map((r) => r.kind)).toEqual(['config.read']);
+      expect(h.hostAsked.filter((r) => r.kind === 'session.start')).toEqual([]);
+    });
+  });
+
   it('a launch with no run active anywhere shares the base tree (REQ-GIT-120)', async () => {
-    const h = harness(() => ({ ...created, kind: 'worktree.created' }), (req) => (req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: req.workspaceId, count: 0 } : { kind: 'session.started', sessionId: 'minted-1' }));
+    const h = harness(configured(() => ({ ...created, kind: 'worktree.created' })), (req) => (req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: req.workspaceId, count: 0 } : { kind: 'session.started', sessionId: 'minted-1' }));
     expect(await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'))).toEqual({ ok: true, value: { sessionId: 'minted-1' } });
     expect(h.svcAsked).toEqual([]);
     expect(h.hostAsked.find((r) => r.kind === 'session.start')).not.toHaveProperty('effectiveRoot');
@@ -282,7 +336,7 @@ describe('REQ-NOTIFY-030/032: the window that starts a session follows it from t
   });
 
   it('an isolated start marks the minted id it binds', async () => {
-    const h = harness(() => ({ ...created, kind: 'worktree.created' }), () => ({ kind: 'session.started', sessionId: 'minted-1' }));
+    const h = harness(configured(() => ({ ...created, kind: 'worktree.created' })), () => ({ kind: 'session.started', sessionId: 'minted-1' }));
     await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Write the notes in a worktree.', isolation: { branch: 'rotaris/session/minted-1' } }, windowOn('ws-1'));
     expect(h.starts).toEqual([{ op: 'begin', wcId: 7, sessionId: 'minted-1', hostAskedBefore: 0 }]);
   });
@@ -292,7 +346,7 @@ describe('REQ-NOTIFY-030/032: the window that starts a session follows it from t
     await sessionCommands(refused.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'));
     expect(refused.starts.map((s) => s.op)).toEqual(['begin', 'end']);
     expect(refused.starts[1]?.sessionId).toBe(refused.starts[0]?.sessionId);
-    const unanswered = harness(() => ({ ...created, kind: 'worktree.created' }), () => Promise.reject(new Error('no reply to session.start within 10000 ms')));
+    const unanswered = harness(configured(() => ({ ...created, kind: 'worktree.created' })), () => Promise.reject(new Error('no reply to session.start within 10000 ms')));
     await sessionCommands(unanswered.ctx)['session.start']({ kind: 'session.start', prompt: 'Write the notes in a worktree.', isolation: { branch: 'rotaris/session/minted-1' } }, windowOn('ws-1'));
     expect(unanswered.starts).toEqual([{ op: 'begin', wcId: 7, sessionId: 'minted-1', hostAskedBefore: 0 }, { op: 'end', wcId: 7, sessionId: 'minted-1', hostAskedBefore: 1 }]);
   });

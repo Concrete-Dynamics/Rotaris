@@ -205,6 +205,34 @@ function hasPlaceholder(template: string, names: readonly string[]): boolean {
 
 /** REQ-GIT-138: the two namespaces a requirement-execution template may not render into. */
 export const FORBIDDEN_NAMESPACES = ['rotaris/session/', 'rotaris/integration/'] as const;
+/**
+ * REQ-GIT-137: the fixed requirement-unit checkout directory, relative to `<workspace>/.rotaris/`. The workspace package's
+ * `REQUIREMENT_WORKTREES_SUBPATH` is the one a run uses; config sits below it and cannot import it, so the requirement's
+ * text is repeated here for the load-time check only (`apps/desktop/src/workspace-service/worktree-storage.test.ts`, which imports both, pins the two equal).
+ */
+export const REQUIREMENT_CHECKOUT_SUBPATH = 'requirements/worktrees';
+/**
+ * REQ-GIT-138's directory half: the session checkout directory `worktree_storage_subpath` names (under `.rotaris/`,
+ * REQ-GIT-005) must not resolve to the fixed requirement checkout directory or to any directory inside it. Returns the
+ * rejection text, or null when the value passes. The value is read as `sessionWorktreePath` reads it — trimmed, empty
+ * meaning `worktrees`, either separator — and normalised, so `./requirements//worktrees/x` is caught. A value that leaves
+ * `.rotaris` is not this check's: REQ-GIT-005 refuses it where the worktree is placed. Windows folds case, so there
+ * `Requirements/Worktrees` names the same directory; elsewhere it does not. A value that CONTAINS the requirement
+ * directory (`requirements`, `.`) is not rejected: REQ-GIT-138 names only "to … or … inside it" (OQ-262).
+ */
+export function worktreeStorageCollision(subpath: string, platform: NodeJS.Platform = process.platform): string | null {
+  const trimmed = subpath.trim() === '' ? 'worktrees' : subpath.trim();
+  const segments: string[] = [];
+  for (const part of trimmed.replace(/\\/g, '/').split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') { if (segments.length === 0) return null; segments.pop(); continue; }
+    segments.push(part);
+  }
+  const fold = (x: string) => (platform === 'win32' ? x.toLowerCase() : x);
+  const fixed = REQUIREMENT_CHECKOUT_SUBPATH.split('/');
+  if (segments.length < fixed.length || !fixed.every((f, i) => fold(segments[i]!) === f)) return null;
+  return `${JSON.stringify(subpath)} resolves to .rotaris/${segments.join('/')}, inside the requirement checkout directory .rotaris/${REQUIREMENT_CHECKOUT_SUBPATH} (REQ-GIT-137), which session worktrees must not share (REQ-GIT-138)`;
+}
 /** REQ-GIT-139's slug, repeated here only for the load-time example (the workspace package holds the one a run uses; both are the requirement's text). */
 function slugSample(value: string): string {
   const folded = value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '');

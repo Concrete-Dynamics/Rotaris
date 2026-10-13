@@ -21,7 +21,7 @@ const snapshotWith = (improvementTimeout: number): ConfigSnapshot => ({
   runtime: runtime(improvementTimeout),
   rawRuntime: { workspace: null, global: null },
   circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { show_tool_results: true, show_tool_inputs: true, tool_result_lines: 10, tool_input_lines: 2 },
-  skills: { enabled: true, overrides: {}, invocation_overrides: {} }, instructionsPolicy: { overrides: {} }, injectAgentsMd: true, delegationStrategy: 'orchestrator', instructions: [], referential: [], warnings: [],
+  skills: { enabled: true, overrides: {}, invocation_overrides: {} }, instructionsPolicy: { overrides: {} }, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', instructions: [], referential: [], warnings: [],
   files: { workspace: '/ws/.rotaris/agents.yaml', global: '/cfg/agents.yaml' },
 });
 const outcome = async () => ({ ok: true as const });

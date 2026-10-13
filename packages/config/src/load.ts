@@ -14,7 +14,7 @@ import { readModelsSection, type ModelEntry } from './sections/models.js';
 import { readPersonasSection, type PersonaEntry } from './sections/personas.js';
 import { readCompressorSection, type CompressorSection } from './sections/compressor.js';
 import { readCheckpointsSection, type CheckpointsSection } from './sections/checkpoints.js';
-import { readRequirementsSection, type RequirementsSection } from './sections/requirements.js'; // Part AP
+import { readRequirementsSection, worktreeStorageCollision, type RequirementsSection } from './sections/requirements.js'; // Part AP
 import { readSkillsSection, type SkillsSection } from './sections/skills.js'; // ADR-0063
 import { readInstructionsSection, type InstructionsSection } from './sections/instructions.js'; // PD-WORKSPACE-002
 import { readDisplaySection, type DisplaySection } from './display-section.js';
@@ -388,6 +388,9 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
   const { slots, thinking } = readSlots(top, sink);
   const defaultPersona = new FieldReader(top, '', sink).string('default_persona', 'orchestrator');
   const worktree = new FieldReader(top, '', sink).string('worktree_storage_subpath', 'worktrees');
+  // REQ-GIT-138's directory half, caught here while the configuration loads so no session worktree is ever created from it (REQ-GIT-071's rule).
+  const worktreeCollision = worktreeStorageCollision(worktree);
+  if (worktreeCollision !== null) new FieldReader(top, '', sink).error('worktree_storage_subpath', worktreeCollision);
   const injectAgentsMd = new FieldReader(top, '', sink).bool('inject_agents_md', true);
   const models = readModelsSection(top['models'], sink);
   const personas = readPersonasSection(top['personas'], sink);

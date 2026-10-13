@@ -187,6 +187,16 @@ linked worktree is **11 reads in 710–876 ms**; the unit test's repository with
 `write_file` lands `NOTES.md` in it and not in the base, which stays clean (`.rotaris/` ignored). The two-step delete
 was executed against a real refusal: Git's phrase matched, the forced removal took the directory with it.
 
+*Reported back 2026-10-13 (fin41): the configured storage subpath, first executed.* The sentence above names the default
+directory because the default was the only one ever used: main sent `worktree.create`'s session target with no `subpath`, and the
+`worktree_storage_subpath` the loader read reached nothing
+([`a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md`](../../defects/fixed/a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md)).
+Main now reads the key from the service's `config.read` snapshot and sends it; `pnpm git-proof` launch 7 (`configured-subpath`)
+creates, writes and lists a session tree at `.rotaris/trees/sessions/<sid>` with no `.rotaris/worktrees/` made. The write path of
+this record (REQ-GIT-005's placement and its `Worktree storage path must stay inside .rotaris.` refusal in
+`sessionWorktreePath`) held as written; the defect was upstream of it. REQ-GIT-138's directory half, which the record did not
+place, is now made at load (`worktreeStorageCollision`); OQ-262 asks about a value that contains the requirement directory.
+
 **REQ-GIT-010/012's phrase matches, now executed:** the collision phrase was hit by a real `worktree add` on an existing
 branch (`a branch named '…' already exists`), the suffix `-2` taken; the long-path phrases are matched against a
 Git-shaped fixture only — no path on this machine exceeds the limit, so that branch is tested, not measured.

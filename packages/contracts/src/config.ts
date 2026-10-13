@@ -189,6 +189,13 @@ export const ConfigSnapshotSchema = z.object({
    * write this key (REQ-CONFIG-256 does not name it); it says so in words instead.
    */
   injectAgentsMd: z.boolean(),
+  /**
+   * REQ-GIT-073 / REQ-CONFIG-068: `worktree_storage_subpath` as the files resolve it — the directory under `.rotaris/` that
+   * holds per-session isolated checkouts. Main reads it here at an isolated start and sends it on `worktree.create`'s
+   * session target, so the workspace service places the tree where the user configured (REQ-GIT-005). `worktrees` in a
+   * fatal snapshot, where main refuses the isolated start instead of creating anything (REQ-GIT-071).
+   */
+  worktreeStorageSubpath: z.string(),
   delegationStrategy: z.enum(DELEGATION_STRATEGY_NAMES),
   referential: z.array(z.string()),
   warnings: z.array(z.string()),

@@ -18,7 +18,7 @@ const snapshot = (over: Partial<ConfigSnapshot> = {}): ConfigSnapshot => ({
   circuitBreakerEnabled: true, compressorThresholdPercentage: 60,
   display: { show_tool_results: true, show_tool_inputs: true, tool_result_lines: 10, tool_input_lines: 2 },
   skills: { enabled: true, overrides: {}, invocation_overrides: {} },
-  instructionsPolicy: { overrides: {} }, injectAgentsMd: true,
+  instructionsPolicy: { overrides: {} }, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees',
   delegationStrategy: 'orchestrator', referential: [], warnings: [],
   instructions: [
     { id: 'workspace:AGENTS.md', name: 'AGENTS.md', path: 'C:/ws/AGENTS.md', source: 'workspace', enabled: true },

@@ -35,7 +35,8 @@ sequenceDiagram
 
   W->>M: command session.start {prompt, isolation? {branch}, attach? {path}, sandboxMode?} — the launch dialog's choices ride the composer's next submission (REQ-SHELL-125)
   opt isolation or attach (Part O, REQ-GIT-022)
-    M->>WS: worktree.create {target: session {sessionId: the id session.newId minted}} — collision-safe, under <ws>/.rotaris/worktrees/<sid> — or worktree.checkAttach {path}
+    M->>WS: (isolation only) config.read — the resolved view's loadOk and worktreeStorageSubpath (REQ-GIT-073); a view that did not load refuses the start here, `session.configuration` with the load's report, before anything is created (REQ-GIT-071/138)
+    M->>WS: worktree.create {target: session {sessionId: the id session.newId minted, subpath: worktreeStorageSubpath}} — collision-safe, under <ws>/.rotaris/<subpath>/<sid> (default worktrees) — or worktree.checkAttach {path}
     WS-->>M: worktree.created {path, branch, baseBranch, baseRevision} | worktree.attachable | refused → "Error: could not create or attach the requested worktree: <detail>"; NO session exists (REQ-GIT-023 by construction)
   end
   M->>RH: session.start {workspaceId, prompt, sessionId?, effectiveRoot?, worktree?, sandboxMode?, boardPermissions?}
@@ -1923,7 +1924,12 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   so the workspace still opens. `evidence`, `delivery` and `board` are accepted as mappings and carried opaque until the
   part that consumes them validates them. `execution.branch_template` is checked at load against REQ-GIT-138's two
   forbidden namespaces on a **rendered** example rather than a literal prefix, so a template that would collide by
-  construction is refused before anything is created from it.
+  construction is refused before anything is created from it. REQ-GIT-138's directory half is the top-level
+  `worktree_storage_subpath`'s (`worktreeStorageCollision`, beside the template check): a value resolving to the fixed
+  requirement checkout directory `.rotaris/requirements/worktrees` or inside it fails the load as a whole (since 2026-10-13,
+  fin41; a value containing it loads, OQ-262). The key is read by main at an isolated start through the snapshot's
+  `worktreeStorageSubpath` and sent on `worktree.create`'s session target (REQ-GIT-073); until 2026-10-13 it was read by
+  nothing but the loader.
 - **The `skills:` block (ADR-0063)** — registered for the first time (`packages/config/src/sections/skills.ts`)
   and read at load onto `LoadedConfiguration.skills`. It is **Tier C with one Tier A writer** (the Settings Skills
   tab's Save), but the thing it governs has a lifetime of its own: the **catalog** is the run host's, cached per

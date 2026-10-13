@@ -189,7 +189,11 @@ baseRevision}` | `refused` (the Git failure text as the headline); `worktree.rem
 `worktree.removed` | `refused {…, needsForce}`; `worktree.checkAttach {workspaceRoot, path}` → `worktree.attachable
 {path, branch, baseBranch, baseRevision}` | `refused`. Main → run host: `session.start` gains `sessionId`,
 `effectiveRoot`, `worktree` (REQ-GIT-015's binding) and `sandboxMode`; the binding is made BEFORE the run host is
-asked, so a binding failure leaves no session behind (REQ-GIT-023 by construction). *Since 2026-10-06 (finacc2's A1):*
+asked, so a binding failure leaves no session behind (REQ-GIT-023 by construction). *Since 2026-10-13 (fin41):* an
+isolated start first asks the service `config.read` and sends the snapshot's `worktreeStorageSubpath` as the session
+target's `subpath` (REQ-GIT-073, REQ-CONFIG-068); a snapshot with `loadOk: false` refuses the start in main as
+`session.configuration`, the load's report its detail, and nothing is created (REQ-GIT-071/138). An attach reads no
+configuration. *Since 2026-10-06 (finacc2's A1):*
 main sends `sessionId` on every start, minting the base tree's too, and marks it as the asking window's start
 (`MainWindows.beginStart`) before the run host is asked, so the focus test reads a run that fails before the renderer's
 `session.subscribe` as the focused session's (REQ-NOTIFY-032); the message's shape is unchanged. `SessionListItem` gains `worktree`

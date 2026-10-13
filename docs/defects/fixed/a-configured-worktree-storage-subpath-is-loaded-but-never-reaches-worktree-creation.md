@@ -29,3 +29,16 @@ finds no commit that wired the field through, and `docs/architecture/codebase.md
   for (`config.read`); it does not carry the key.
 - `apps/desktop/src/workspace-service/index.ts` (`worktree.create`) and `packages/workspace/src/git/worktrees.ts`
   (`sessionWorktreePath`) — honour a `subpath` when one arrives.
+
+## Outcome
+
+**Repaired 2026-10-13 (fin41, `fin41-config-and-proposals`).** The `ConfigSnapshot` contract carries `worktreeStorageSubpath`
+(`snapshotOf`; `worktrees` in a fatal snapshot). An isolated start in main (`session.start`, the explicit isolation and the one
+PD-GIT-001 forces alike) asks the workspace service `config.read` first and sends the snapshot's value as the session target's
+`subpath`; a snapshot with `loadOk: false` refuses the start as `session.configuration`, the load's report its detail, before any
+worktree is created (REQ-GIT-071), and an unanswered read refuses as an unanswered worktree request does. An attach reads no
+configuration. Pinned by the "REQ-GIT-073" cases in `apps/desktop/src/main/commands/session.test.ts` (four of five red on the code
+before, with three existing cases that now see the read), and shown by `pnpm git-proof` launch 7 (`configured-subpath`): a
+repository whose file names `trees/sessions` had its isolated session bound, written and listed by Git at
+`.rotaris/trees/sessions/<sid>`, with no `.rotaris/worktrees/` created (2026-10-13, load about 1 to 2.5 on four CPUs, all eleven
+launches green). Reported back into ADR-0038.

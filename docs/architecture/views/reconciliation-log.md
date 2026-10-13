@@ -15,6 +15,13 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-13**
 
+**A configured `worktree_storage_subpath` places session worktrees, and one inside the requirement checkout directory fails the
+load (REQ-GIT-073, REQ-CONFIG-068, REQ-GIT-138; fin41).** An isolated start in main asks the workspace service `config.read` and
+sends the snapshot's new `worktreeStorageSubpath` on `worktree.create`'s session target; a snapshot that did not load refuses the
+start before anything is created. `worktreeStorageCollision` (`config/src/sections/requirements.ts`) is REQ-GIT-138's directory
+half at load. The **process view**'s Git paragraph and the **runtime view**'s run-start sequence and `requirements:` passage say
+so. No package, edge or process changed; the `ConfigSnapshot` contract gained one field and main one request at an isolated start.
+
 **A run's analysis is captured beside a retrospective's artifact (REQ-LIBRARY-025/034, PD-LIBRARY-002; fin42).**
 `captureImprovementJob` (`engine/src/improvements/capture.ts`) names in `considered_session_ids` the source session of each prior
 artifact that has one, so a retrospective's artifact, which has none, stays in a later run's history and names no session; until

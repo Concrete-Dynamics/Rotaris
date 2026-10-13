@@ -1,8 +1,9 @@
 /**
  * The Git proof (Part O): the Git view and the worktrees, painted from what the workspace service reads and writes
  * (REQ-GIT-075..090, 102..112, 115..122, 158, 161; REQ-SHELL-125; ADR-0038's second execution). Scripted client,
- * scratch store, ten launches against one scratch profile whose workspace is a repository with three commits, a local
- * bare "remote" one commit behind (so `ahead 1` and one local-tinted row exist) and `.rotaris/` ignored:
+ * scratch store, eleven launches against one scratch profile (7 with a store directory of its own) whose workspace is a
+ * repository with three commits, a local bare "remote" one commit behind (so `ahead 1` and one local-tinted row exist)
+ * and `.rotaris/` ignored:
  *
  *   1. painted   — the header (branch, `ahead 1  behind 0`), one worktree row carrying the base and active markers and
  *                  `+0 -0 / 0`, three history rows exactly one of them local, the checkpoints card's no-session sentence,
@@ -40,6 +41,9 @@
  *   6c. unborn-branch — a repository before its first commit, outside this one: REQ-WORKSPACE-029's branch name is empty,
  *                  so the strip's branch item is REQ-WORKSPACE-020's empty item — no text, no branch icon, no tooltip, no
  *                  accessible description (`results.unbornBranch`).
+ *   7. configured-subpath — a repository whose file sets `worktree_storage_subpath: trees/sessions`: an isolated session's
+ *                  tree is bound, written and listed by Git at `.rotaris/trees/sessions/<sid>`, and no `.rotaris/worktrees/`
+ *                  is created (REQ-GIT-073, REQ-CONFIG-068, REQ-GIT-005; `results.configuredSubpath`).
  *
  * Evidence under `.proof/git-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */
@@ -477,6 +481,48 @@ const unbornRun = await launch('unborn-branch', unborn, local, preferences, { RO
   if ((p[STRIP_BRANCH_TITLED] ?? []).length !== 0 || (p[STRIP_BRANCH_DESCRIBED] ?? []).length !== 0) throw new Error('for an unborn branch the strip\'s branch item carries a tooltip or an accessible description');
   results.unbornBranch = { strip: '', icon: false, tooltip: false, description: false, png: unbornRun.png };
   try { rmSync(unbornRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* scratch left to the temp folder */ }
+}
+
+// 7. A configured `worktree_storage_subpath` (REQ-GIT-073, REQ-CONFIG-068, REQ-GIT-005): an isolated session in a repository whose
+// file names `trees/sessions` is placed under `.rotaris/trees/sessions/<sid>`, and nothing is created under the default
+// `.rotaris/worktrees/`. Until fin41 main sent no subpath and the tree went under `worktrees/` whatever the file said
+// (`docs/defects/fixed/a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md`). Its own
+// repository and its own store directory, so the session and the database read here are this launch's alone.
+const subpathRoot = join(root, 'configured-subpath');
+const subpathWorkspace = join(subpathRoot, 'workspace');
+const subpathLocal = join(subpathRoot, 'local');
+mkdirSync(join(subpathWorkspace, '.rotaris'), { recursive: true });
+mkdirSync(subpathLocal, { recursive: true });
+writeFileSync(join(subpathWorkspace, '.rotaris', 'agents.yaml'), `${readFileSync(join(workspace, '.rotaris', 'agents.yaml'), 'utf8')}worktree_storage_subpath: trees/sessions\n`);
+git(subpathWorkspace, 'init', '-q', '-b', 'main');
+writeFileSync(join(subpathWorkspace, '.gitignore'), '.rotaris/\n.serena/\n');
+writeFileSync(join(subpathWorkspace, 'README.md'), '# Configured subpath\n');
+git(subpathWorkspace, 'add', 'README.md', '.gitignore');
+git(subpathWorkspace, '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'first');
+const subpathRun = await launch('configured-subpath', subpathWorkspace, subpathLocal, preferences, {
+  ROTARIS_SCRIPT: 'write,answer',
+  ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
+  ROTARIS_CAPTURE_TYPE: 'Write the notes.>>composer@4400',
+  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500',
+}, 180_000);
+{
+  const databases = findDatabases(subpathLocal);
+  if (databases.length !== 1) throw new Error(`configured-subpath: expected one workspace database below ${subpathLocal}; found ${databases.length}`);
+  const db = new Database(databases[0], { readonly: true });
+  const session = db.prepare('SELECT session_id, execution_status, worktree FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
+  db.close();
+  if (!session) throw new Error('configured-subpath: no session row was written');
+  if (session.execution_status !== 'completed') throw new Error(`configured-subpath: the run ended ${session.execution_status}`);
+  if (session.worktree === null) throw new Error('configured-subpath: the session row carries no worktree binding');
+  const binding = JSON.parse(session.worktree);
+  const expectedPath = join(subpathWorkspace, '.rotaris', 'trees', 'sessions', session.session_id);
+  if (fold(binding.worktree_path) !== fold(expectedPath)) throw new Error(`configured-subpath: the binding's path is ${binding.worktree_path}, expected ${expectedPath} (REQ-GIT-073)`);
+  if (!existsSync(join(expectedPath, 'NOTES.md'))) throw new Error(`configured-subpath: NOTES.md was not written in the worktree ${expectedPath}`);
+  if (existsSync(join(subpathWorkspace, '.rotaris', 'worktrees'))) throw new Error('configured-subpath: a .rotaris/worktrees directory was created although the file names trees/sessions');
+  const listed = git(subpathWorkspace, 'worktree', 'list', '--porcelain').split('\n').filter((l) => l.startsWith('worktree ')).map((l) => fold(l.slice('worktree '.length)));
+  if (!listed.includes(fold(expectedPath))) throw new Error(`configured-subpath: git worktree list does not report ${expectedPath}: ${JSON.stringify(listed)}`);
+  if (!new RegExp(`worktree created: rotaris/session/${session.session_id} at .*trees.sessions.${session.session_id}`).test(subpathRun.log)) throw new Error('configured-subpath: the workspace service did not log the tree under trees/sessions');
+  results.configuredSubpath = { sessionId: session.session_id, subpath: 'trees/sessions', worktreePath: binding.worktree_path, defaultDirectoryCreated: false, png: subpathRun.png };
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

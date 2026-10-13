@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readRequirementsSection, REQUIREMENTS_DEFAULTS, renderNamespaceExample, validateRequirementsPatch } from './sections/requirements.js';
+import { readRequirementsSection, REQUIREMENTS_DEFAULTS, renderNamespaceExample, validateRequirementsPatch, worktreeStorageCollision } from './sections/requirements.js';
 import type { ProblemSink } from './sections/field.js';
 
 /**
@@ -72,5 +72,16 @@ describe('REQ-GIT-138/139: the branch template is checked at load', () => {
     // slug (no `/` survives), so a template must spell the prefix itself — the check still runs on the example.
     const integration = read({ execution: { integration_branch_template: 'rotaris/integration/{req}/{id}' } });
     expect(integration.sink.errors.map((e) => e.path)).toEqual(['requirements.execution.integration_branch_template']);
+  });
+});
+
+describe('REQ-GIT-138: the session checkout directory stays out of the requirement checkout directory', () => {
+  it('rejects the fixed directory and anything inside it, read as the worktree placement reads it', () => {
+    for (const bad of ['requirements/worktrees', ' requirements/worktrees ', 'requirements\\worktrees\\x', './requirements/./worktrees', 'a/../requirements/worktrees/b']) expect(worktreeStorageCollision(bad, 'linux'), bad).toMatch(/requirement checkout directory .rotaris\/requirements\/worktrees.*REQ-GIT-138/);
+    for (const good of ['worktrees', '', '  ', '.', 'requirements', 'requirements/worktrees2', 'x/requirements/worktrees', '../requirements/worktrees']) expect(worktreeStorageCollision(good, 'linux'), good).toBeNull();
+  });
+  it('folds case where the file system does: Windows only', () => {
+    expect(worktreeStorageCollision('Requirements/Worktrees', 'win32')).not.toBeNull();
+    expect(worktreeStorageCollision('Requirements/Worktrees', 'linux')).toBeNull();
   });
 });

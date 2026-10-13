@@ -89,6 +89,8 @@ export function snapshotOf(cfg: LoadedConfiguration, env: InstructionSnapshotEnv
     // master switch beside it, so the screen can tell "this file is off" from "injection is off".
     instructionsPolicy: { overrides: { ...cfg.instructions.overrides } },
     injectAgentsMd: cfg.injectAgentsMd,
+    // REQ-GIT-073 / REQ-CONFIG-068: main sends it on an isolated start's `worktree.create` (REQ-GIT-005).
+    worktreeStorageSubpath: cfg.worktreeStorageSubpath,
     delegationStrategy: cfg.delegationStrategy,
     referential: [...cfg.referential],
     warnings: [...cfg.warnings],
@@ -111,7 +113,7 @@ export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: 
       network_allowed_hosts: [...RUNTIME_DEFAULTS.network_allowed_hosts], network_denied_hosts: [...RUNTIME_DEFAULTS.network_denied_hosts],
     },
     rawRuntime: { workspace: null, global: null },
-    circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { ...DISPLAY_DEFAULTS }, skills: { ...SKILLS_CONFIG_DEFAULT }, instructionsPolicy: { ...INSTRUCTIONS_CONFIG_DEFAULT }, injectAgentsMd: true, delegationStrategy: 'orchestrator', referential: [], warnings: [],
+    circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { ...DISPLAY_DEFAULTS }, skills: { ...SKILLS_CONFIG_DEFAULT }, instructionsPolicy: { ...INSTRUCTIONS_CONFIG_DEFAULT }, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', referential: [], warnings: [],
     // The instruction files exist or do not whatever the configuration says, so the inventory stands in a fatal snapshot too.
     instructions: instructionFiles(workspaceRoot, { ...env, globalDir: env.globalDir ?? globalDir }).map((f) => ({ ...f, enabled: true })),
     files: { workspace: files.workspace.agents, global: files.global.agents },

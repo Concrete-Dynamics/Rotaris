@@ -96,7 +96,8 @@ head before every push: the reviewer runs it once per landing. Before handing ov
 
 The same commits as the code carry:
 - the affected architecture view and the "Last reconciled with the code" date in
-  `docs/architecture/views/README.md`, when a view's content changed;
+  `docs/architecture/views/README.md`, when a view's content changed, with the change's entry at the top of
+  `docs/architecture/views/reconciliation-log.md` (never in the README, since 2026-10-13);
 - a mechanism's first execution reported in place into the record that decided it, plus one row in
   `docs/architecture/first-executions.md`; a falsified claim corrected in place with the old reason kept beside it;
 - a repaired defect note: its outcome written on it (what changed, which test or proof pins it), `git mv` to

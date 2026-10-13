@@ -3,6 +3,16 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-13 — a view's reconciliation entry goes to the log, not the views README
+
+**Prompted by** the 2026-10-13 survey at `6de2a67` (item N96, plan fin41): since 2026-09-16 every change had written its
+reconciliation entry in `docs/architecture/views/README.md`, about 350 of them (2,658 lines), although that day's
+navigation pass split them into `reconciliation-log.md` so that consulting a view costs a page. Builders followed this
+page's Records bullet, which named only the README's date. **Changed:** the bullet names the log for the entry and the
+README for the date only, as the README's maintenance rule now says; the entries moved to the log verbatim in the same
+plan. **Verified** by `node scripts/orchestration.mjs self-test` and `node tools/check-record-links.mjs`. Not run: the
+skill-review step, which is the bundle's reviewer's.
+
 ## 2026-10-13 — the improvement steps the 2026-10-13 changes left: faf9525's entry, two reviews, one follow-up
 
 **Prompted by** the 2026-10-13 survey at `6de2a67` (item N97, plan fin41): `faf9525` ("Disk is the session's allowance", in

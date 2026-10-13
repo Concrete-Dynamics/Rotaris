@@ -138,3 +138,42 @@ in the product was changed.
 `renderer-console.test.ts`): the count goes to `results.json` (`scenarioEvidence.<name>.reactUpdateDepthErrors`), and a launch
 with any is a NOTE naming each line. **What a live run should show** is unchanged, and is now on the console: no such NOTE, and
 `reactUpdateDepthErrors: 0` for `duress`.
+
+## The trap kept, the shape driven again, 2026-10-13 (fin42) — 0 errors; open
+
+**What was built.** fin32's `pendingLanes` trap was an ad-hoc eval that was never kept. It now lives in the repository as
+`apps/desktop/scripts/lib/lanes-trap.mjs`, with eight cases in `lanes-trap.test.ts` that run its source against a fake React
+root. The trap finds the FiberRoot behind `#root`'s container key and defines an accessor on its `current`, which React replaces
+once per commit; the accessor stores and returns the same value. Every commit is counted. After each commit, a microtask queued
+during it reads `root.pendingLanes & 42`. Work left pending extends the run of counting commits, which simulates React's
+nested-update count; no work pending resets it. At each new high the trap names two things: the fibers that hold the pending
+lanes, and the components the commit re-rendered. It writes one `rotaris-lanes-trap:` warning line, which the console relay
+carries into `app.log`, at each new high from 10 on and at any uncaught update-depth error. Its lines never repeat React's
+message, so `reactUpdateDepthErrors` counts what it counted before. Two places use it:
+
+- **the duress live launch** (`live-run.mjs`). It installs the trap through `ROTARIS_CAPTURE_EVAL_AT` at 2.5 s, before the
+  prompt, and reads it every two minutes. A NOTE gives what the trap saw.
+- **`pnpm update-depth-proof`** (new; scripted provider, free). It drives a coordinator that delegates two children, each
+  streaming 2,000 reasoning deltas, one every 10 ms, at the same time on the Workspace view. The trap is installed at 1.5 s and
+  read every 3 s.
+
+**What the built app showed.** The proof ran under Xvfb on Linux, at load 1.5 to 1.7 beside a sibling plan. The trap
+installed and counted 1,904 commits, 491 of them leaving counting lanes pending. The run's high was 2, with the window's first
+paint; React throws past 50. The longest synchronous burst was 2. An earlier run at load 3.5 counted 1,138 commits, with a high
+of 4. Both children succeeded, the run completed, and no relayed line named React error 185. At the high, no fiber held the
+pending lanes. The likeliest reading, not verified, is that the update was still in React's concurrent queue, which marks the
+root's lanes before any fiber's. The commit re-rendered `Button` ×34, `StatusStripItem` ×10, `Attribution` ×9 and four each of
+`SearchableSelect`, `PopoverMenu`, `StripActionButton` and `ChipShell`. The renderer is the production build, so React's message would still name no
+component. A development build remains the one step of fin32's route not taken.
+
+**What it does not do.** It reproduces nothing. `a68f121`'s seven errors are still unexplained, and this is one more absence.
+Closing the note unreproduced is not something the record provides for: `docs/defects/README.md` moves only a repaired note to
+`fixed/`. Whether the note may close with the trap and the per-launch count as a standing monitor is raised as
+[OQ-278](../architecture/open-questions.md#oq-278). Nothing in the product was changed.
+
+**What a live run should show.** In the next duress pack:
+- the NOTE "the long run's pendingLanes trap (D8)", with its commits and the run's high;
+- `results.json` `scenarioEvidence.duress.lanesTrap.installed: true` and `reactUpdateDepthErrors: 0`.
+
+If an error comes back, the `rotaris-lanes-trap:` lines in `duress/app.log` beside it name the pending work's holders and the
+re-rendered components, at the high before the throw.

@@ -150,6 +150,9 @@
  *                 `LIVE_RUN_DURESS_CHILD_TIMEOUT_MIN` (default 45 minutes), as a user on a slow reasoning model
  *                 would raise it (OQ-214 reopened and ruled 2026-10-07 under R-072; PD-CONFIG-003); `=20` measures
  *                 the product's default.
+ *                 Since 2026-10-13 (fin42) its launch carries the `pendingLanes` trap of finding D8
+ *                 (`lib/lanes-trap.mjs`): a NOTE gives its commits, the nested-update run's high against React's 50, the
+ *                 fibers holding the pending work and the components re-rendered, and any `rotaris-lanes-trap:` line.
  *
  * The key is never passed on a command line and never written to the repository. For one endpoint `<name>`:
  *   1. `ROTARIS_LIVE_API_KEY` in the environment (for a one-off, or a machine where the prompt cannot run);
@@ -198,6 +201,7 @@ import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { KNOWN_RESTATEMENTS, restatedFacts } from './lib/restated-facts.mjs';
 import { updateDepthErrors } from './lib/renderer-console.mjs';
+import { lanesTrapReading, lanesTrapSteps } from './lib/lanes-trap.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
 import { preserveSummary, summaryReading } from './lib/summary-sections.mjs';
 import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
@@ -3242,11 +3246,21 @@ if (wanted.includes('duress')) {
     log = await launch('duress', {
       ROTARIS_CAPTURE_PROMPT: PROMPT,
       ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(DURESS_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
+      // Live-run finding D8: the `pendingLanes` trap (`lib/lanes-trap.mjs`), installed before the prompt is typed and
+      // read every two minutes. It simulates React's nested-update count and writes a `rotaris-lanes-trap:` line, carried
+      // into duress/app.log by the console relay, at each new high from 10 on and at any update-depth error, naming the
+      // fibers that hold the pending work and the components the commit re-rendered.
+      ROTARIS_CAPTURE_EVAL_AT: lanesTrapSteps({ installAtMs: 2500, readEveryMs: 120_000, untilMs: DURESS_MS }),
     }, DURESS_MS + 180_000);
   } finally {
     writeFileSync(agentsFile, agentsBeforeDuress);
   }
   const elapsed = Date.now() - startedAt;
+  // Live-run finding D8: what the trap saw. Its lines are a NOTE, as the update-depth count is (the cause is not identified).
+  const lanes = lanesTrapReading(log);
+  scenarioEvidence.duress.lanesTrap = { installed: lanes.installed, reason: lanes.reason, readings: lanes.readings, last: lanes.last, lines: lanes.lines };
+  if (!lanes.installed) noted('the long run\'s pendingLanes trap did not install (D8)', lanes.reason ?? 'no reading');
+  else noted('the long run\'s pendingLanes trap (D8)', `${lanes.last?.commits ?? 0} commits; the nested-update run's high ${lanes.last?.maxRun ?? 0} of React's 50 (holders ${JSON.stringify(lanes.last?.maxRunHolders ?? [])}; re-rendered ${JSON.stringify(lanes.last?.maxRunRendered ?? [])}), the longest synchronous burst ${lanes.last?.maxBurst ?? 0}, ${lanes.last?.updateDepthErrors ?? 0} update-depth errors seen${lanes.lines.length > 0 ? `; its lines: ${lanes.lines.map((l) => JSON.stringify(l)).join(' | ')}` : ''}`);
   // OQ-214 as re-ruled: the run host read the Per-agent timeout this launch wrote (`configuration.ts`'s loaded line).
   check(log.includes(`child_timeout=${DURESS_CHILD_TIMEOUT_S} s`), 'the long run\'s children ran under the Per-agent timeout the harness set', `runtime.child_timeout: ${DURESS_CHILD_TIMEOUT_S} written; the run host's line ${/child_timeout=\d+ s/.exec(log)?.[0] ?? 'is absent'}`);
   if (DURESS_CHILD_TIMEOUT_S !== 1200) noted('the long run\'s per-agent timeout', `${DURESS_CHILD_TIMEOUT_S} s — PD-CONFIG-003's Per-agent timeout raised as a user on a slow reasoning model would raise it (OQ-214, re-ruled 2026-10-07); LIVE_RUN_DURESS_CHILD_TIMEOUT_MIN=20 measures the product's 1200 s default`);

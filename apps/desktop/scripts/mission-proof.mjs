@@ -302,11 +302,14 @@ const s1d = scenario('timed-out', ['  child_timeout: 3']);
 // and is refused, naming alpha; `gamma` names no item although the coordinator keeps a list, and is refused with the open
 // items listed; `delta` names the next open item and runs. Each child's record holds the item it served; no refusal spawns a
 // child; each is logged as a warning citing its requirement. Before the ruling a delegation named no item, and nothing refused
-// a second implementation delegation for one.
+// a second implementation delegation for one. Since PD-TOOLS-008 revision 3 (OQ-254) the coordinator waits for both children to
+// end and closes its plan as a model usually does, with one `replace` sending every item COMPLETED (`donereplace`): the items the
+// run marked close, the `replace` names nothing it kept, and the run completes with no PD-ORCH-015 correction. Until then such a
+// `replace` left both items IN_PROGRESS, and `done` closed them with one `update` each instead.
 const s1e = scenario('todo-item');
 {
   const r = await launch('todo-item', s1e, {
-    ROTARIS_SCRIPT: 'plan:2,delegate:coding-agent:alpha,delegate:coding-agent:beta,delegate:coding-agent:gamma,delegate:coding-agent:delta,done,answer', ROTARIS_CHILD_SCRIPT: 'wait:6000,answer',
+    ROTARIS_SCRIPT: 'plan:2,delegate:coding-agent:alpha,delegate:coding-agent:beta,delegate:coding-agent:gamma,delegate:coding-agent:delta,wait:16000,donereplace,answer', ROTARIS_CHILD_SCRIPT: 'wait:6000,answer',
     ROTARIS_SCRIPT_DELEGATE_ARGS: JSON.stringify({ beta: { todo_item: '@1' }, gamma: { todo_item: null } }),
     ROTARIS_CAPTURE_PROMPT: 'delegate two items', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1000',
   });
@@ -317,7 +320,9 @@ const s1e = scenario('todo-item');
     .map((c) => ({ status: c.status, result: String(JSON.parse(c.entry).result ?? '') }));
   const stored = JSON.parse(db.prepare('SELECT todo FROM sessions WHERE session_id = ?').get(row.session_id).todo);
   const todoCalls = db.prepare("SELECT status, entry FROM tool_calls WHERE session_id = ? AND agent_name = 'orchestrator' AND tool_name = 'todo' ORDER BY ordinal").all(row.session_id)
-    .map((c) => ({ status: c.status, op: JSON.parse(c.entry).args?.operation }));
+    .map((c) => ({ status: c.status, op: JSON.parse(c.entry).args?.operation, result: String(JSON.parse(c.entry).result ?? '') }));
+  const ended = db.prepare('SELECT canonical_name, completed_at FROM children WHERE session_id = ? AND completed_at IS NOT NULL').all(row.session_id);
+  const iterations = db.prepare('SELECT COUNT(*) AS n FROM iterations WHERE session_id = ?').get(row.session_id).n;
   db.close();
   const items = (stored.agent?.phases ?? []).flatMap((p) => p.tasks.map((t) => t.id));
   expect(row.execution_status === 'completed', `the run ended ${row.execution_status} (${row.stop_reason})`);
@@ -329,15 +334,21 @@ const s1e = scenario('todo-item');
   expect(new RegExp(`^Task 'beta': rejected — todo_item '${items[0]}' \\('Scripted item 1'\\) is held by alpha \\(coding-agent, task_id bg_[0-9a-f]{8}, state \\w+\\)`).test(beta.result), `beta's refusal: ${beta.result}`);
   expect(gamma.result.startsWith("Task 'gamma': rejected — This delegation names no todo item") && gamma.result.includes(`Scripted item 1 (${items[0]}), Scripted item 2 (${items[1]})`), `gamma's refusal: ${gamma.result}`);
   // PD-TOOLS-006 revision 7 and PD-TOOLS-008 revision 2 (OQ-249): each admitted delegation marked its PENDING item IN_PROGRESS,
-  // alpha's and delta's side by side while both ran, and `done` completed both with one update each, none refused.
+  // alpha's and delta's side by side while both ran. PD-TOOLS-008 revision 3 (OQ-254): once both children had ended, one
+  // `replace` sending every item COMPLETED closed both, named nothing kept, and the run took no plan correction.
   expect(alpha.result.includes(`Todo item Scripted item 1 (${items[0]}) is now IN_PROGRESS.`) && delta.result.includes(`Todo item Scripted item 2 (${items[1]}) is now IN_PROGRESS.`), `the marks: ${alpha.result.slice(0, 200)} / ${delta.result.slice(0, 200)}`);
   expect(/\[IN_PROGRESS\] Scripted item 1 .*\n {2}\[IN_PROGRESS\] Scripted item 2 /s.test(delta.result), `delta's Todo state shows both items active: ${delta.result}`);
-  expect(todoCalls.length >= 3 && todoCalls.every((c) => c.status === 'ok'), `the coordinator's todo calls: ${JSON.stringify(todoCalls)}`);
+  expect(todoCalls.length === 2 && todoCalls.every((c) => c.status === 'ok' && c.op === 'replace'), `the coordinator's todo calls: ${JSON.stringify(todoCalls.map((c) => ({ status: c.status, op: c.op })))}`);
+  expect(ended.length === 2, `the children ended before the close: ${JSON.stringify(ended)}`);
+  const close = todoCalls[1]?.result ?? '';
+  expect(/^Replaced the todo list: 1 phase, 2 tasks\.\n/.test(close) && !close.includes('Kept as they were') && /\[COMPLETED\] Scripted item 1 .*\n {2}\[COMPLETED\] Scripted item 2 /s.test(close), `the closing replace answered: ${close}`);
   expect((stored.agent?.phases ?? []).every((p) => p.tasks.every((t) => t.state === 'COMPLETED')), `the stored plan ends ${JSON.stringify(stored.agent)}`);
+  const corrected = /a correction is sent into its conversation/.test(r.log);
+  expect(!corrected && iterations === 1, `the run took a plan correction (${corrected}) or a second iteration (${iterations} iteration(s); see todo-item.log)`);
   const warned028 = /was refused for its todo item \(REQ-ORCH-028\)/.test(r.log);
   const warned029 = /was refused for its todo item \(REQ-ORCH-029\)/.test(r.log);
   expect(warned028 && warned029, `the refusals were not logged as warnings citing REQ-ORCH-028 and REQ-ORCH-029 (see todo-item.log): ${warned028} ${warned029}`);
-  results.todoItem = { items, children: kids, refusals: { beta: beta.result.slice(0, 240), gamma: gamma.result.slice(0, 240) }, warnings: { 'REQ-ORCH-028': warned028, 'REQ-ORCH-029': warned029 }, marked: { alpha: alpha.result.split('\n')[0], delta: delta.result.split('\n')[0] }, todoCalls };
+  results.todoItem = { items, children: kids, refusals: { beta: beta.result.slice(0, 240), gamma: gamma.result.slice(0, 240) }, warnings: { 'REQ-ORCH-028': warned028, 'REQ-ORCH-029': warned029 }, marked: { alpha: alpha.result.split('\n')[0], delta: delta.result.split('\n')[0] }, todoCalls: todoCalls.map((c) => ({ status: c.status, op: c.op })), close: close.split('\n')[0], corrected, iterations };
 }
 
 // 1f. REQ-ORCH-089's stalled tag in the narrow rows (the repair of

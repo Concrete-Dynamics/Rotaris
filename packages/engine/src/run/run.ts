@@ -818,6 +818,13 @@ export class Run {
   heldTodoItems(callerId: string): ReadonlySet<string> {
     return this.children?.heldTodoItems(callerId) ?? NO_HELD_ITEMS;
   }
+  /**
+   * PD-TOOLS-008 revision 3 (OQ-254): the items of `callerId`'s plan any of its children serves, terminal ones included; read
+   * through the iteration's children at every `todo` call.
+   */
+  servedTodoItems(callerId: string): ReadonlySet<string> {
+    return this.children?.servedTodoItems(callerId) ?? NO_HELD_ITEMS;
+  }
   /** REQ-CHAT-006 / REQ-SESSION-026: the session-wide overrides in force, by model key, for the record (`overridesInForce`). */
   get modelOverridesInForce(): { from: string; to: string }[] {
     return overridesInForce(this.catalogue, this.memory);

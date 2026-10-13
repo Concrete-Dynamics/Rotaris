@@ -17,7 +17,7 @@ kept; the only signal is an `[IN_PROGRESS]` marker in the Todo state below it.
 - **The observation is false by omission.** A success that does not say a sent state was overridden tells the agent its list
   was stored as sent.
 
-Ruled as [OQ-254](../architecture/open-questions.md#oq-254) under the owner's delegation (R-072): `PD-TOOLS-008` revision 3.
+Ruled as [OQ-254](../../architecture/open-questions.md#oq-254) under the owner's delegation (R-072): `PD-TOOLS-008` revision 3.
 
 ## Specs
 
@@ -37,3 +37,20 @@ Ruled as [OQ-254](../architecture/open-questions.md#oq-254) under the owner's de
   caller's children and their `todo_item`, which the run reads for the tool.
 - `apps/desktop/src/run-host/scripted-client.ts` — the scripted `done` step changed to work around the restore.
 - `packages/engine/src/run/stop-conditions.ts` — PD-ORCH-015's correction text.
+
+## Outcome
+
+Repaired 2026-10-13 (fin37, `fin37-replace-closes-delegated`) under `PD-TOOLS-008` revision 3
+([OQ-254](../../architecture/open-questions.md#oq-254)). The `todo` tool reads, beside the held set, the items any child of the
+list's owner serves, ended ones included (`TodoToolOptions.served`, read through `ToolPortContext.servedTodoItems` from
+`IterationChildren.servedTodoItems`). In `replace`, a served IN_PROGRESS task no running child holds takes the COMPLETED or
+ABANDONED the list sends and no longer counts as the active task against a mark in the same list; finished work, held tasks and
+the agent's own active task are still restored. Every task restored over a different incoming state is named after the success
+sentence, with its kept state, the reason and `update` as the remedy. The scripted coordinator gains `donereplace`, the close
+with one `replace`; `done` keeps its updates.
+
+Pinned by `packages/agent-tools/src/tools/tools.test.ts` ("a replace after a delegated child has ended"),
+`apps/desktop/src/run-host/tools.test.ts` (the whole-list close after two parallel delegations ended) and
+`packages/engine/src/children/children.test.ts` (the served set through `toolsFor`), each red on the code before; shown in the
+built app by `pnpm mission-proof` item 1e (the close by one `replace`, no correction, one iteration); read from the live run by
+`heldItemReading`'s `restoredOverClose` and `namedRestores` (`apps/desktop/scripts/lib/coordinator-todo.mjs`).

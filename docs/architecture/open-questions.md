@@ -12946,7 +12946,7 @@ protection is otherwise unchanged"; `PD-TOOLS-006` revision 7, an admitted deleg
 REQ-TOOLS-147; REQ-ORCH-029, REQ-ORCH-075 and PD-ORCH-015, the correction and re-queue an open plan meets; OQ-249 and OQ-163.
 Raised 2026-10-13 from revision 7's first execution in [`directives.md`](../product/directives.md#pd-tools-006) ("`replace`
 cannot complete an active item") and the `todo` tool's `replace` branch (`packages/agent-tools/src/tools/todo.ts`), recorded in
-[`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../defects/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md);
+[`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md);
 the consortium's question RC1. **Ruled 2026-10-13.**)*
 
 Since revision 7 the run sets a delegated item IN_PROGRESS at admission (`markDelegatedItem`,
@@ -12988,3 +12988,11 @@ delegated items are stored COMPLETED, the root reaches `succeeded` with no PD-OR
 `system` row appears. A `replace` that sends COMPLETED for an item a running child holds, or for the coordinator's own active
 item, has its observation name that item, the state kept and the reason, and tell it to use `update`; the next `todo` call is
 then an `update` for that item. The harness reads 0 served-and-ended items restored over a close.
+
+*Built 2026-10-13 (fin37, `fin37-replace-closes-delegated`); its first execution is reported in `PD-TOOLS-008` revision 3.*
+`TodoToolOptions.served`, `closes` and `keptReason` in `todoTool`'s `replace` (`packages/agent-tools/src/tools/todo.ts`);
+`IterationChildren.servedTodoItems`, `Run.servedTodoItems` and `ToolPortContext.servedTodoItems` (`packages/engine`), passed by
+`createToolPort` (`apps/desktop/src/run-host/tools.ts`); the scripted `donereplace` step
+(`apps/desktop/src/run-host/scripted-client.ts`), shown in the built app by `pnpm mission-proof` item 1e; the live run's
+`restoredOverClose` and `namedRestores` (`apps/desktop/scripts/lib/coordinator-todo.mjs`). Pinned by `tools/tools.test.ts`,
+`run-host/tools.test.ts` and `children/children.test.ts`, each red on the code before. The note is repaired.

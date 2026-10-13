@@ -1164,6 +1164,120 @@ describe('todo (REQ-TOOLS-144..147)', () => {
   });
 
   /**
+   * PD-TOOLS-008 revision 3 (OQ-254, ruled 2026-10-13 under R-072): a `replace` closes a delegated item once its child has
+   * ended, and names every task it restores over a different incoming state. Until then REQ-TOOLS-146 restored the delegated
+   * item `PD-TOOLS-006` revision 7 had marked, over a closing `replace` that still answered only "Replaced the todo list…"
+   * (docs/defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
+   */
+  describe('a replace after a delegated child has ended (PD-TOOLS-008 revision 3)', () => {
+    /** impl and tests delegated (served, both IN_PROGRESS), own the agent's own active task, done finished, later open. */
+    const plan = async (held: Set<string>, served: Set<string>) => {
+      const list = new TodoList();
+      const t = todoTool(list, { held: () => held, served: () => served });
+      await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ name: 'impl' }, { name: 'tests' }, { name: 'own' }, { name: 'done' }, { name: 'later' }] }] }, ctx());
+      const [impl, tests, own, done, later] = list.phases[0]!.tasks.map((x) => x.id) as [string, string, string, string, string];
+      for (const id of [impl, tests]) { held.add(id); served.add(id); await t.execute({ operation: 'update', task_id: id, state: 'IN_PROGRESS' }, ctx()); }
+      await t.execute({ operation: 'update', task_id: own, state: 'IN_PROGRESS' }, ctx());
+      await t.execute({ operation: 'update', task_id: done, state: 'COMPLETED' }, ctx());
+      return { list, t, impl, tests, own, done, later };
+    };
+    const states = (list: TodoList) => Object.fromEntries(list.phases[0]!.tasks.map((x) => [x.name, x.state]));
+    const sent = (ids: Record<string, string>, s: Record<string, string | undefined>) => [{ name: 'main', tasks: Object.entries(ids).map(([name, id]) => ({ id, name, ...(s[name] ? { state: s[name] as 'PENDING' } : {}) })) }];
+
+    it('the ended holders\' items take the COMPLETED and ABANDONED the list sends, and nothing is named', async () => {
+      const held = new Set<string>();
+      const served = new Set<string>();
+      const { list, t, impl, tests, own, done, later } = await plan(held, served);
+      held.clear();
+      const r = await t.execute({ operation: 'replace', phases: sent({ impl, tests, own, done, later }, { impl: 'COMPLETED', tests: 'ABANDONED', own: 'IN_PROGRESS', done: 'COMPLETED', later: 'PENDING' }) }, ctx());
+      expect(r.isError).toBe(false);
+      expect(states(list)).toEqual({ impl: 'COMPLETED', tests: 'ABANDONED', own: 'IN_PROGRESS', done: 'COMPLETED', later: 'PENDING' });
+      expect(r.text).toMatch(/^Replaced the todo list: 1 phase, 5 tasks\.\nTodo state:\n/);
+    });
+
+    it('a whole-list COMPLETED close: the ended items close, the agent\'s own active task is kept and named with update as the remedy', async () => {
+      const held = new Set<string>();
+      const served = new Set<string>();
+      const { list, t, impl, tests, own, done, later } = await plan(held, served);
+      held.clear();
+      const r = await t.execute({ operation: 'replace', phases: sent({ impl, tests, own, done, later }, { impl: 'COMPLETED', tests: 'COMPLETED', own: 'COMPLETED', done: 'COMPLETED', later: 'COMPLETED' }) }, ctx());
+      expect(r.isError).toBe(false);
+      expect(states(list)).toEqual({ impl: 'COMPLETED', tests: 'COMPLETED', own: 'IN_PROGRESS', done: 'COMPLETED', later: 'COMPLETED' });
+      expect(r.text.split('\n')[0]).toBe(`Replaced the todo list: 1 phase, 5 tasks. Kept as they were: own (${own}) IN_PROGRESS, your active task is closed with update. Change a task's state with update.`);
+      expect(r.text.split('\n')[1]).toBe('Todo state:');
+    });
+
+    it('a task a running child holds is kept over any state and named, and closes on a later replace once the child has ended', async () => {
+      const held = new Set<string>();
+      const served = new Set<string>();
+      const { list, t, impl, tests } = await plan(held, served);
+      held.delete(tests);
+      const r = await t.execute({ operation: 'replace', phases: sent({ impl, tests }, { impl: 'COMPLETED', tests: 'COMPLETED' }) }, ctx());
+      expect(r.isError).toBe(false);
+      expect(r.text.split('\n')[0]).toBe(`Replaced the todo list: 1 phase, 4 tasks. Kept as they were: impl (${impl}) IN_PROGRESS, a running delegated agent holds it. Change a task's state with update.`);
+      expect(states(list)).toMatchObject({ impl: 'IN_PROGRESS', tests: 'COMPLETED' });
+      held.clear();
+      expect((await t.execute({ operation: 'replace', phases: sent({ impl }, { impl: 'COMPLETED' }) }, ctx())).text).toMatch(/^Replaced the todo list: 1 phase, 4 tasks\.\n/);
+      expect(states(list)).toMatchObject({ impl: 'COMPLETED' });
+    });
+
+    it('a served-and-ended item sent PENDING and a finished task sent PENDING are kept and named, in list order', async () => {
+      const held = new Set<string>();
+      const served = new Set<string>();
+      const { list, t, impl, tests, done } = await plan(held, served);
+      held.clear();
+      const r = await t.execute({ operation: 'replace', phases: sent({ done, impl, tests }, { done: 'PENDING', impl: 'PENDING', tests: 'IN_PROGRESS' }) }, ctx());
+      expect(r.isError).toBe(false);
+      expect(r.text.split('\n')[0]).toBe(`Replaced the todo list: 1 phase, 4 tasks. Kept as they were: done (${done}) COMPLETED, finished work is never reopened; impl (${impl}) IN_PROGRESS, an active task is never set back to PENDING. Change a task's state with update.`);
+      expect(states(list)).toMatchObject({ done: 'COMPLETED', impl: 'IN_PROGRESS', tests: 'IN_PROGRESS' });
+    });
+
+    it('one list closes an ended item and marks another IN_PROGRESS: accepted, the closed task not counted as the active one', async () => {
+      const list = new TodoList();
+      const held = new Set<string>();
+      const served = new Set<string>();
+      const t = todoTool(list, { held: () => held, served: () => served });
+      await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ name: 'impl' }, { name: 'next' }] }] }, ctx());
+      const [impl, next] = list.phases[0]!.tasks.map((x) => x.id) as [string, string];
+      held.add(impl); served.add(impl);
+      await t.execute({ operation: 'update', task_id: impl, state: 'IN_PROGRESS' }, ctx());
+      held.clear();
+      const r = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: impl, name: 'impl', state: 'COMPLETED' }, { id: next, name: 'next', state: 'IN_PROGRESS' }] }] }, ctx());
+      expect(r.isError).toBe(false);
+      expect(states(list)).toEqual({ impl: 'COMPLETED', next: 'IN_PROGRESS' });
+      // the agent's own active task, unserved, still bars such a list (REQ-TOOLS-146)
+      const own = todoTool(list, { held: () => held, served: () => new Set() });
+      const third = await own.execute({ operation: 'add_task', phase_id: list.phases[0]!.id, name: 'third' }, ctx());
+      const thirdId = /Added task third \(([0-9a-f]{8})\)/.exec(third.text)![1]!;
+      const barred = await own.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: next, name: 'next', state: 'COMPLETED' }, { id: thirdId, name: 'third', state: 'IN_PROGRESS' }] }] }, ctx());
+      expect(barred.text).toBe(`Only one task can be IN_PROGRESS at a time. Active task: ${next} (next). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`);
+    });
+
+    it('nothing is named when no restored task was sent a different state: same states, no state and omitted tasks', async () => {
+      const held = new Set<string>();
+      const served = new Set<string>();
+      const { t, impl, own, done } = await plan(held, served);
+      const r = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: impl, name: 'impl', state: 'IN_PROGRESS' }, { id: own, name: 'own' }, { id: done, name: 'done', state: 'COMPLETED' }] }] }, ctx());
+      expect(r.isError).toBe(false);
+      expect(r.text).toMatch(/^Replaced the todo list: 1 phase, 4 tasks\.\nTodo state:\n/);
+    });
+
+    it('with no served set, an IN_PROGRESS task is restored as before revision 3, and named', async () => {
+      const list = new TodoList();
+      const t = todoTool(list);
+      await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ name: 'impl', state: 'IN_PROGRESS' }] }] }, ctx());
+      const impl = list.phases[0]!.tasks[0]!.id;
+      const r = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: impl, name: 'impl', state: 'COMPLETED' }] }] }, ctx());
+      expect(list.phases[0]!.tasks[0]!.state).toBe('IN_PROGRESS');
+      expect(r.text.split('\n')[0]).toBe(`Replaced the todo list: 1 phase, 1 task. Kept as they were: impl (${impl}) IN_PROGRESS, your active task is closed with update. Change a task's state with update.`);
+    });
+
+    it('the description says a delegated task whose agent has ended may be closed by replace, and that kept tasks are named', () => {
+      expect(todoTool(new TodoList()).description).toContain('replace {phases: [{name, tasks: [{name, description, state}]}]} — the WHOLE list at once, and the only operation that takes a batch; COMPLETED and ABANDONED tasks, your own IN_PROGRESS task and a task a running delegated agent holds are kept by id whatever the incoming list says, and the result names each one kept over a different state; a delegated task whose agent has ended takes the COMPLETED or ABANDONED the list sends.');
+    });
+  });
+
+  /**
    * Observed live 2026-09-16 (run `a26918e8`): a run sent five phases to `add_phase` — a call the advertised
    * schema accepts, since `phases` is one of its fields — and read back the six words `add_phase requires a
    * name.` It retried with `name` AND `phases` together, which adds one empty phase and drops the rest.

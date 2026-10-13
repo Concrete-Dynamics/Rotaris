@@ -900,7 +900,7 @@ describe('PD-TOOLS-006 revision 7: an admitted delegation marks its PENDING item
    * The entry orchestrator's port over the built-in table, its plan `PLAN`; the port answers each delegation with `answer`
    * (the item the engine resolved travels back as `todoItem`) and the run's held set is `held`.
    */
-  function port(answer: (req: { todoItem?: string; continuationOf?: string; taskName: string }) => Record<string, unknown>, held: Set<string> = new Set()) {
+  function port(answer: (req: { todoItem?: string; continuationOf?: string; taskName: string }) => Record<string, unknown>, held: Set<string> = new Set(), served: Set<string> = new Set()) {
     const written: { phases: { tasks: { id: string; state: string }[] }[] }[] = [];
     const delegation = {
       delegate: async (_parent: string, req: { todoItem?: string; continuationOf?: string; taskName: string }) => answer(req),
@@ -915,7 +915,7 @@ describe('PD-TOOLS-006 revision 7: an admitted delegation marks its PENDING item
     const p = createToolPort({
       sessionId: asSessionId('S1'), workspaceRoot: dir, writer, persona: 'orchestrator', agentName: 'orchestrator', parentId: 'root:1', depth: 0, delegation,
       requestedMode: 'autonomous', modeOverride: null, attended: () => true, warn: () => undefined, abortRun: () => undefined,
-      readTodo: () => structuredClone(PLAN), writeTodo: (d) => { written.push(structuredClone(d) as never); return true; }, heldTodoItems: () => held,
+      readTodo: () => structuredClone(PLAN), writeTodo: (d) => { written.push(structuredClone(d) as never); return true; }, heldTodoItems: () => held, servedTodoItems: () => served,
     }, { clocks: new FakeClock(), runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver, presenter: { present: async () => ({ ok: true }), close: () => undefined }, nextSequence: () => 1, fileStates: new Map(), terminal: null, egress: () => permissivePolicyRead });
     const call = (callId: string, name: string, args: Record<string, unknown>) => p.dispatch({ callId, name, rawArgs: JSON.stringify(args), persona: 'orchestrator', agentId: 'orchestrator', agentName: 'orchestrator' }, new AbortController().signal);
     const stateOf = (doc: (typeof written)[number] | undefined, id: string) => doc?.phases.flatMap((ph) => ph.tasks).find((t) => t.id === id)?.state;
@@ -976,6 +976,31 @@ describe('PD-TOOLS-006 revision 7: an admitted delegation marks its PENDING item
     held.clear();
     const refused = await e.call('t2', 'todo', { operation: 'add_task', phase_id: 'p0000001', name: 'extra', state: 'IN_PROGRESS' });
     expect(refused.text).toMatch(/Active task: aaaaaaa1 \(impl\)/);
+  });
+
+  /**
+   * PD-TOOLS-008 revision 3 (OQ-254, ruled 2026-10-13 under R-072): once both parallel children have ended, the coordinator's
+   * usual close — one `replace` sending every item COMPLETED — stores the plan closed. Until then the two items the run had
+   * marked stayed IN_PROGRESS under REQ-TOOLS-146 and the `replace` answered success
+   * (docs/defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
+   */
+  it('two parallel delegations marked, both children ended: one whole-list COMPLETED replace leaves the stored plan closed (PD-TOOLS-008 revision 3)', async () => {
+    const held = new Set<string>();
+    const served = new Set<string>();
+    const e = port((req) => { if (req.todoItem) { held.add(req.todoItem); served.add(req.todoItem); } return accepted(req); }, held, served);
+    await e.call('d1', 'delegate', { persona: 'coding-agent', task_name: 'impl', task: 'TASK: i', todo_item: 'aaaaaaa1' });
+    await e.call('d2', 'delegate', { persona: 'tester', task_name: 'tests', task: 'TASK: t', todo_item: 'aaaaaaa2' });
+    const all = (state: string) => [{ name: 'main', tasks: [['aaaaaaa1', 'impl'], ['aaaaaaa2', 'tests'], ['aaaaaaa3', 'review'], ['aaaaaaa4', 'done'], ['aaaaaaa5', 'dropped']].map(([id, name]) => ({ id, name, state: name === 'dropped' ? 'ABANDONED' : state })) }];
+    // while tests still runs, the close keeps its item and says so; impl's child has ended and its item closes
+    held.delete('aaaaaaa1');
+    const early = await e.call('t1', 'todo', { operation: 'replace', phases: all('COMPLETED') });
+    expect(early.status).toBe('ok');
+    expect(early.text.split('\n')[0]).toBe("Replaced the todo list: 1 phase, 5 tasks. Kept as they were: tests (aaaaaaa2) IN_PROGRESS, a running delegated agent holds it. Change a task's state with update.");
+    expect(['aaaaaaa1', 'aaaaaaa2', 'aaaaaaa3'].map((id) => e.stateOf(e.last(), id))).toEqual(['COMPLETED', 'IN_PROGRESS', 'COMPLETED']);
+    held.clear();
+    const close = await e.call('t2', 'todo', { operation: 'replace', phases: all('COMPLETED') });
+    expect(close.text.split('\n')[0]).toBe('Replaced the todo list: 1 phase, 5 tasks.');
+    expect(e.last()!.phases.flatMap((ph) => ph.tasks).map((t) => t.state)).toEqual(['COMPLETED', 'COMPLETED', 'COMPLETED', 'COMPLETED', 'ABANDONED']);
   });
 });
 

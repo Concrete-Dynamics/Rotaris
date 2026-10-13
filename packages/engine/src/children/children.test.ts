@@ -2551,9 +2551,10 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
      * back the item it serves, so the caller's port marks it IN_PROGRESS, and the items the caller's non-terminal children hold
      * are the set REQ-TOOLS-145's count leaves out — read live, so an item whose child has ended counts again.
      */
-    it('revision 7: an admitted delegation hands back its item, a rejected one none, and the held set is the live children\'s items', async () => {
+    it('revision 7: an admitted delegation hands back its item, a rejected one none, and the held set is the live children\'s items (and, revision 3, the served set every child\'s)', async () => {
       const observed: string[] = [];
       const heldAt: string[][] = [];
+      const servedAt: string[][] = [];
       const hold = gate();
       const { sessions } = sessionsWith((persona, turn, req) => {
         if (persona === 'orchestrator') {
@@ -2568,6 +2569,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         return childAnswer(req, hold.p);
       }, { tool: (name, a, ctx, builtIn) => {
         if (name === 'todo') heldAt.push([...(ctx.heldTodoItems?.() ?? [])].sort());
+        if (name === 'todo') servedAt.push([...(ctx.servedTodoItems?.() ?? [])].sort());
         return tools(observed)(name, a, ctx, builtIn);
       } });
       const sid = (sessions.start(dal, 'C:/ws', 'build it') as { value: SessionId }).value;
@@ -2580,6 +2582,9 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(observed[3]).not.toContain('serves todo item');
       // before any child, nothing is held; while the three run, all three items; once they ended, none
       expect(heldAt).toEqual([[], ['0000000a', '0000000b', '0000000c'], []]);
+      // PD-TOOLS-008 revision 3 (OQ-254): the served set keeps the ended children's items, so the closing `todo` call (turn 5)
+      // reads all three served and none held — the items a `replace` may close; the rejected `rival` serves nothing
+      expect(servedAt).toEqual([[], ['0000000a', '0000000b', '0000000c'], ['0000000a', '0000000b', '0000000c']]);
     });
 
     it('revision 7: a follow-up hands back the item it keeps', async () => {

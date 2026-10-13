@@ -616,6 +616,17 @@ export class IterationChildren implements DelegationOps {
   }
 
   /**
+   * PD-TOOLS-008 revision 3 (OQ-254, ruled 2026-10-13 under R-072): the items of `callerId`'s own plan any of its children
+   * records as its `todo_item`, terminal children included — the same children `heldTodoItems` reads, without its non-terminal
+   * filter. A served item outside the held set is one whose delegation has ended, and a `replace` closes it.
+   */
+  servedTodoItems(callerId: string): ReadonlySet<string> {
+    const served = new Set<string>();
+    for (const c of this.ledger.all()) if (c.todo_item !== null && this.owns(callerId, c)) served.add(c.todo_item);
+    return served;
+  }
+
+  /**
    * PD-TOOLS-006: the claim that refuses the agent `callerId` (its own task id; the root's for the entry agent) a
    * write to the workspace-relative path `rel`, or null when no live claim reaches it for this caller.
    */

@@ -1409,6 +1409,15 @@ child the caller owns, of any persona. REQ-TOOLS-145's bound and REQ-TOOLS-146's
 set, and are checked only on a write that marks a task IN_PROGRESS; an item whose child has ended counts again at the next such
 write. `PD-TOOLS-008`'s sentence gains a hint for an agent whose resolved set holds `delegate`.
 
+**A `replace` closes a delegated item once its child has ended (`PD-TOOLS-008` revision 3; OQ-254 ruled 2026-10-13 under R-072;
+fin37).** Beside the held set the `todo` tool reads `ctx.servedTodoItems` at each call (`TodoToolOptions.served`), which both
+`toolsFor` closures fill from `Run.servedTodoItems` → `IterationChildren.servedTodoItems`: the `todo_item` of every child the
+caller owns, terminal ones included. In `replace`, a protected IN_PROGRESS task that is served and not held takes the COMPLETED
+or ABANDONED the list sends (`closes`), and is then not the `activeProtected` task that rejects a mark in the same list; every
+other protected task is restored as REQ-TOOLS-146 states. Each restored task the list sent in a different state is named, in
+list order, after the success sentence ("Kept as they were: <name> (<id>) <STATE>, <reason>; … Change a task's state with
+update.") with `keptReason`'s four reasons; a task sent with no state, and an omitted one, are not named.
+
 **The record the agent surfaces read (Part R; REQ-MONITOR-044).** Each child's `AgentRecord` carries, beside what Part B
 projected, `reasoning` (the persona's configured level, `medium` when none), `contextUsed` (the input count of its latest
 model step) and `contextLimit` — **from Part AH the model's own `max_input_tokens`** where the configuration states one

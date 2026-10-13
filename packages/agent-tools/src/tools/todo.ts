@@ -81,6 +81,12 @@ export const DELEGATE_HINT = 'Leave the items you will delegate PENDING: a deleg
  */
 export interface TodoToolOptions {
   readonly held?: (() => ReadonlySet<string>) | undefined;
+  /**
+   * PD-TOOLS-008 revision 3 (OQ-254, ruled 2026-10-13 under R-072): the task ids any child of the list's owner records as its
+   * `todo_item`, terminal children included, read at each call. A served IN_PROGRESS task outside `held` is one whose delegation
+   * has ended, and a `replace` closes it. Absent, nothing is served and `replace` restores every IN_PROGRESS task as before.
+   */
+  readonly served?: (() => ReadonlySet<string>) | undefined;
   readonly delegates?: boolean | (() => boolean) | undefined;
 }
 const NONE_HELD: ReadonlySet<string> = new Set();
@@ -118,6 +124,18 @@ const todoSchema = z.object({
 });
 
 const PROTECTED: ReadonlySet<TodoState> = new Set(['COMPLETED', 'ABANDONED', 'IN_PROGRESS']);
+const CLOSED: ReadonlySet<TodoState | undefined> = new Set<TodoState | undefined>(['COMPLETED', 'ABANDONED']);
+
+/**
+ * PD-TOOLS-008 revision 3: why a `replace` kept a protected task in a state other than the one its list sent, in the
+ * directive's four words. Finished work first (a held task can be finished: a read-only child may serve one), then a running
+ * holder, then an active task sent back to PENDING; what is left is the agent's own active task sent closed.
+ */
+const keptReason = (task: TodoTask, sent: TodoState, held: boolean): string =>
+  task.state === 'COMPLETED' || task.state === 'ABANDONED' ? 'finished work is never reopened'
+    : held ? 'a running delegated agent holds it'
+      : sent === 'PENDING' ? 'an active task is never set back to PENDING'
+        : 'your active task is closed with update';
 
 /**
  * REQ-TOOLS-013 / REQ-TOOLS-147's shape: a refusal says what to do instead. A call carrying `phases` to an
@@ -137,6 +155,7 @@ const fieldsFor = (op: string): string => ({
 
 export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecutor<z.infer<typeof todoSchema>> {
   const heldNow = (): ReadonlySet<string> => opts.held?.() ?? NONE_HELD;
+  const servedNow = (): ReadonlySet<string> => opts.served?.() ?? NONE_HELD;
   const hint = () => {
     const phases = list.phases.map((p) => `${p.name} (${p.id})`).join(', ') || '(none)';
     const tasks = list.phases.flatMap((p) => p.tasks.map((t) => `${t.name} (${t.id})`)).join(', ') || '(none)';
@@ -149,7 +168,10 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
     // else, and a run read `add_phase` as the way to send a whole plan's phases — the shape only `replace` takes.
     description: [
       'Maintain the task list. One operation per call, and each reads its own fields:',
-      'replace {phases: [{name, tasks: [{name, description, state}]}]} — the WHOLE list at once, and the only operation that takes a batch; COMPLETED, ABANDONED and IN_PROGRESS tasks are kept by id whatever the incoming list says.',
+      // PD-TOOLS-008 revision 3 (OQ-254): it said, until 2026-10-13, "COMPLETED, ABANDONED and IN_PROGRESS tasks are kept by id
+      // whatever the incoming list says." — true of the code until then, and the reason a coordinator that closed its delegated
+      // plan with one replace left the items the run had marked IN_PROGRESS open, with no word of it.
+      'replace {phases: [{name, tasks: [{name, description, state}]}]} — the WHOLE list at once, and the only operation that takes a batch; COMPLETED and ABANDONED tasks, your own IN_PROGRESS task and a task a running delegated agent holds are kept by id whatever the incoming list says, and the result names each one kept over a different state; a delegated task whose agent has ended takes the COMPLETED or ABANDONED the list sends.',
       'add_phase {name} — ONE empty phase; it does not read `phases`.',
       'add_task {phase_id, name, description, state} — ONE task in an existing phase.',
       'update {task_id, name, description, state} — one task; a change that changes nothing is an error.',
@@ -166,7 +188,20 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
         case 'replace': {
           const incoming = a.phases ?? [];
           const held = heldNow();
+          const served = servedNow();
           const protectedTasks = list.phases.flatMap((p) => p.tasks.filter((t) => PROTECTED.has(t.state)).map((t) => ({ phaseIndex: list.phases.indexOf(p), taskIndex: p.tasks.indexOf(t), task: { ...t } })));
+          /*
+           * PD-TOOLS-008 revision 3 (OQ-254): a served IN_PROGRESS task no running child holds — its delegation has ended — takes
+           * the COMPLETED or ABANDONED the list sends for its id, and is then no active task against a mark in the same list.
+           * Every other protected task is restored as REQ-TOOLS-146 states. Until 2026-10-13 every IN_PROGRESS task was restored,
+           * so a delegated item `PD-TOOLS-006` revision 7 had marked could not be closed by a replace
+           * (docs/defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
+           */
+          const closes = new Map<string, TodoState>();
+          for (const p of incoming) for (const t of p.tasks) {
+            if (t.id === undefined || closes.has(t.id) || !CLOSED.has(t.state) || !served.has(t.id) || held.has(t.id)) continue;
+            if (protectedTasks.some((x) => x.task.id === t.id && x.task.state === 'IN_PROGRESS')) closes.set(t.id, t.state!);
+          }
           const protectedActive = new Set(protectedTasks.filter((x) => x.task.state === 'IN_PROGRESS').map((x) => x.task.id));
           /*
            * PD-TOOLS-008 revision 2: what this replace newly marks IN_PROGRESS — an incoming task marked so that is not already a
@@ -175,16 +210,24 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
            * list could carry only one running delegation's item (OQ-249).
            */
           const newlyMarked = incoming.flatMap((p) => p.tasks.filter((t) => t.state === 'IN_PROGRESS' && !(t.id !== undefined && (protectedActive.has(t.id) || held.has(t.id)))));
-          const activeProtected = protectedTasks.find((x) => x.task.state === 'IN_PROGRESS' && !held.has(x.task.id));
+          const activeProtected = protectedTasks.find((x) => x.task.state === 'IN_PROGRESS' && !held.has(x.task.id) && !closes.has(x.task.id));
           // REQ-TOOLS-146: a replace that marks some OTHER task IN_PROGRESS while an unheld protected active task exists is rejected.
           if (activeProtected && newlyMarked.length > 0) {
             return errorObservation(singleActive(activeProtected.task.id, activeProtected.task.name));
           }
+          // PD-TOOLS-008 revision 3: each task restored over a different state the list sent, in list order; a task sent with no
+          // state, and an omitted one, differ from nothing.
+          const kept: string[] = [];
           const next: TodoPhase[] = incoming.map((p) => ({
             id: p.id ?? hexId(), name: p.name,
             tasks: p.tasks.map((t) => {
               const prot = protectedTasks.find((x) => x.task.id === t.id);
-              if (prot) return { ...prot.task };
+              if (prot) {
+                const closed = closes.get(prot.task.id);
+                if (closed !== undefined) return { ...prot.task, state: closed };
+                if (t.state !== undefined && t.state !== prot.task.state) kept.push(`${prot.task.name} (${prot.task.id}) ${prot.task.state}, ${keptReason(prot.task, t.state, held.has(prot.task.id))}`);
+                return { ...prot.task };
+              }
               return { id: t.id ?? hexId(), name: t.name ?? t.title ?? 'task', description: t.description ?? '', state: t.state ?? 'PENDING' };
             }),
           }));
@@ -200,7 +243,8 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
           const actives = next.flatMap((p) => p.tasks.filter((t) => t.state === 'IN_PROGRESS' && !protectedActive.has(t.id) && !held.has(t.id)));
           if (actives.length > 1) return errorObservation(listMarksSeveralActive(actives.map((t) => t.name), typeof opts.delegates === 'function' ? opts.delegates() : opts.delegates === true));
           list.phases.splice(0, list.phases.length, ...next);
-          return done(`Replaced the todo list: ${countNoun(next.length, 'phase')}, ${countNoun(next.reduce((n, p) => n + p.tasks.length, 0), 'task')}.`);
+          const keptSentence = kept.length === 0 ? '' : ` Kept as they were: ${kept.join('; ')}. Change a task's state with update.`;
+          return done(`Replaced the todo list: ${countNoun(next.length, 'phase')}, ${countNoun(next.reduce((n, p) => n + p.tasks.length, 0), 'task')}.${keptSentence}`);
         }
         case 'add_phase': {
           const name = a.name ?? a.title;

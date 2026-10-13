@@ -2943,7 +2943,7 @@ from OQ-249 (the consortium's question P3), revision 8 from OQ-250 (the consorti
 >   *Falsified as a rule for a served-and-ended item, 2026-10-13, by [OQ-254](../architecture/open-questions.md#oq-254)'s ruling
 >   (`PD-TOOLS-008` revision 3, under [R-072](requests.md#r-072)):* the reason held of the code as built, but no live model is
 >   told it, and the restore it describes is the defect
->   [`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../defects/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
+>   [`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
 >   Since revision 3 a `replace` closes an item whose child has ended; an item a running child holds, and the agent's own
 >   active item, are still closed with `update`, and the `replace` that kept them says so.
 >
@@ -4246,6 +4246,39 @@ question RC1, from revision 7's first execution).*
 > run's edit session should show no refused `update` like `#14` and both parallel items active, and the harness's
 > `heldItemReading` (`apps/desktop/scripts/lib/coordinator-todo.mjs`) counts items read PENDING while held and single-active
 > refusals (target 0). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 3, 2026-10-13, ruled under [R-072](requests.md#r-072) ([OQ-254](../architecture/open-questions.md#oq-254)),
+> built by fin37 (`fin37-replace-closes-delegated`):** built as written, and the text met the code in three places.
+>
+> - **The served set is a second read through the run, beside the held one.** `todoTool` takes `TodoToolOptions.served`
+>   (`packages/agent-tools/src/tools/todo.ts`), which the run host fills from `ToolPortContext.servedTodoItems`; both `toolsFor`
+>   closures in `packages/engine/src/sessions.ts` answer it from `IterationChildren.servedTodoItems`, the same children
+>   `heldTodoItems` reads without its non-terminal filter. With no served set the tool restores every IN_PROGRESS task as before.
+> - **A close is decided before the REQ-TOOLS-146 rejection, not after it.** The tasks the list closes (`closes`) are left out
+>   of the protected active task, so a list that closes an ended item and marks another is accepted, which the ruling added to
+>   B's text; the resulting-list count needed nothing, since a closed task is no longer IN_PROGRESS.
+> - **"Incoming state differed" needs a reading for a task sent with no state.** The schema lets a task carry no `state`; such a
+>   task, like an omitted one, differs from nothing and is not named. The four reasons are chosen in this order: finished work,
+>   a running holder, an active task sent PENDING, the agent's own active task sent closed (`keptReason`).
+>
+> **What was measured.** Eight cases in `packages/agent-tools/src/tools/tools.test.ts` ("a replace after a delegated child has
+> ended"), seven red on the code before (the eighth, nothing named when nothing differed, held of both): the ended holders'
+> items closed COMPLETED and ABANDONED; a whole-list close keeping and naming the agent's own active task; a held item kept and
+> named, then closed once its child ended; a served-and-ended item and a finished task sent PENDING, named in list order; a close
+> and a mark in one list accepted while the agent's own active task still bars one; no served set; the description.
+> `apps/desktop/src/run-host/tools.test.ts` drives the port with two parallel delegations: a close while one child runs keeps and
+> names its item, and once both ended one whole-list COMPLETED `replace` stores the plan closed (red before).
+> `children/children.test.ts` pins the served set through the `toolsFor` closures, the ended children's items included (red
+> before). In the built app, `pnpm mission-proof` item 1e (2026-10-13, load 2.2 at the start and 3.9 at the end on 4 CPUs): the
+> scripted coordinator waits for alpha and delta to end and closes with one `replace` sending both items COMPLETED
+> (`donereplace`); both `todo` calls were `ok`, the close answered "Replaced the todo list: 1 phase, 2 tasks." with nothing kept,
+> the stored plan ends COMPLETED, and the run completed in one iteration with no PD-ORCH-015 correction logged. **What was not
+> measured.** No live run: the next default run's edit session, when its coordinator closes with a `replace` after its children
+> ended, should store the delegated items COMPLETED with no correction and no "items not done" `system` row; a `replace` sending
+> COMPLETED for a held item or the coordinator's own active item should name it and be followed by an `update`. The harness's
+> `heldItemReading` counts `restoredOverClose` (target 0) and `namedRestores` (a NOTE). The note is repaired:
+> [`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

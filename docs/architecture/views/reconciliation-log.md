@@ -51,6 +51,11 @@ package, edge, process, channel, command or store column changed.
 so, and names the grip drag `capture/seams.ts` gained the same day (`ROTARIS_CAPTURE_GRIP_DRAG`, a real pointer drag of a
 resize grip, read by `plan-gate-proof`). No package, edge, process, channel, command or store column changed.
 
+**The iteration's checkpoint is captured after its `iteration_end` hooks (REQ-HOOKS-082; fin41, N68).** The **runtime
+view**'s iteration-close flowchart and its "checkpoint at iteration close" paragraph put the hooks first and the capture
+after them, in a `finally`; the old order and ADR-0039's falsified reason for it are kept beside the correction. No
+package, edge, process, channel, command or store column changed; one run-loop step moved.
+
 **Ctrl+F and the reasoning toggle join the one action vocabulary (REQ-SHELL-049, REQ-CHAT-167; fin41, N71).** The
 **state-ownership view**'s shell-state row names the transcript search panel's opener the pane now registers, which the
 registry's "Search transcript" calls after the switch to Workspace; the pane binds no chord of its own. The **process

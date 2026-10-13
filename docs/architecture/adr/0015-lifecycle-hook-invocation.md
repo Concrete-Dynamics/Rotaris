@@ -200,7 +200,9 @@ shows the displaced entries as `superseded` with the scope that replaced them (R
 
 **Owed and stated:** the working directory is the workspace until worktrees exist (REQ-HOOKS-030/084);
 `verifier_finished` never fires (no verifier); REQ-HOOKS-082's before-the-checkpoint guarantee is vacuous
-(no checkpoints); the notice slot is single (ADR-0049's note); the 50 ms / 10 ms / 1 ms bounds are tested
+(no checkpoints) *(corrected 2026-10-13, fin41, N68: stale from 2026-09-05, when checkpoints were built (Part P, ADR-0039)
+with the capture placed BEFORE the `iteration_end` hooks, against this requirement; the hooks now finish first and the
+capture follows — ADR-0039's report of that date)*; the notice slot is single (ADR-0049's note); the 50 ms / 10 ms / 1 ms bounds are tested
 under vitest on this workstation, not under a benchmark harness (ADR-0053).
 
 **2026-09-05, the hooks section inside the one configuration load.** ADR-0036's loader now reads `hooks:` as a

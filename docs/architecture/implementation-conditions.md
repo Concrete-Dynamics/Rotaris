@@ -363,7 +363,7 @@ first slice of ADR-0036's loader beneath it. Its first-execution note holds the 
 started process only" (`cmd.exe` is never the command; a timeout always spends the 5 s grace) and the
 REQ-HOOKS-013 consequence a reviewer will read as a bug. The eighth defect of decision 3's pattern was found by
 it and not in it: kernel's redaction pass (ADR-0007) was quadratic and had never run at size. Owed and stated:
-worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints, ADR-0049's single notice
+worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints *(built 2026-10-13, fin41, N68)*, ADR-0049's single notice
 slot losing the advisory, the benchmark harness for REQ-HOOKS-139.
 
 ## Intent classification and the playbooks — 2026-09-04: no condition bound; found nothing

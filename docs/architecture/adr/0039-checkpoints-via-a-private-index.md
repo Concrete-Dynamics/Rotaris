@@ -428,9 +428,14 @@ and the reason had been that a read is a read; `diff-index` compares the same tr
 as `%00`, not the `%x00` of `git log`'s format — the listing parsed nothing until corrected. **Found: nothing** in the
 decision itself, in the table, in the two orderings, or in the flow's gates.
 
-**Readings taken.** *Capture position:* after `iteration.end` is recorded and BEFORE the hooks' `iteration_end`, so the
+**Readings taken.** ~~*Capture position:* after `iteration.end` is recorded and BEFORE the hooks' `iteration_end`, so the
 checkpoint records the iteration's work as the agent left it and a hook that later carries the checkpoint (REQ-HOOKS-082
-with checkpoints — owed) can be handed it; awaited, so it precedes the next iteration and teardown (REQ-GIT-051).
+with checkpoints — owed) can be handed it; awaited, so it precedes the next iteration and teardown (REQ-GIT-051).~~
+*Falsified 2026-10-13 (fin41, N68; the section at the end of this record):* REQ-HOOKS-082 is an ordering requirement —
+"`iteration_end` hooks SHALL finish before that iteration's checkpoint is taken" — and says nothing of a hook carrying a
+checkpoint; the reading put the capture on the wrong side of the hooks, so a hook's edit reached the next iteration's
+checkpoint, or none after the last. *Capture position, as built since:* after `iteration.end` is recorded and AFTER the
+hooks' `iteration_end` have finished; still awaited, so it precedes the next iteration and teardown (REQ-GIT-051).
 *REQ-GIT-094's open-time repair is reachable:* ADR-0005's reap at resume releases a dead lock but leaves the status
 `running`, and a session never resumed keeps both; the listing repairs a persisted-active session whose liveness is
 `not-live` (a lock on this host with a dead pid, no lock at all, or this process's own lock with no run behind it) —
@@ -456,7 +461,8 @@ recorded as REQ-GIT-045's warning; not measured. *`files` on a parentless commit
 the proof's continuation scripts are `readnotes,edit,answer`.
 
 **Not built, said so.** REQ-GIT-069's ref cleanup at session deletion (the browser has no delete); REQ-GIT-058 gate 5's
-`manual` checkpoints (no surface asks for one — the vocabulary is in the schema); REQ-HOOKS-082 with checkpoints; the export
+`manual` checkpoints (no surface asks for one — the vocabulary is in the schema); ~~REQ-HOOKS-082 with checkpoints~~
+*(built 2026-10-13, the section at the end)*; the export
 of the two events (REQ-SESSION-199); improvement checkpoints (`REQ-LIBRARY-*`, the disjoint namespace and the fixed
 retention of consequence 4); the row-side rebuild of consequence 6; REQ-GIT-054's unknown-session refusal reaches the
 card as a disabled Restore with the reason (built) but no proof launch names an absent session.
@@ -517,4 +523,28 @@ over that session's rows), breaks REQ-SESSION-042's "read nothing but those list
 The reading recorded here: the count this record derives **is** REQ-SESSION-030's `checkpoint_count` field, held as a count
 over rows rather than stored twice. It reads no session state, transcript or history, and no Git. Nothing in the code
 changed. The same note's other half (the sessions card's token, duration and detail labels) waits on OQ-192. *(Ruled 2026-10-06, [R-071](../../product/requests.md#r-071): the labels stay and the listing record gains the three fields, [`PD-SESSION-001`](../../product/directives.md#pd-session-001); the note is closed.)*
+
+## The capture after the iteration's hooks — reported back 2026-10-13 (fin41, N68)
+
+*The defect note is [`an-iterations-checkpoint-is-captured-before-its-iteration-end-hooks-run`](../../defects/fixed/an-iterations-checkpoint-is-captured-before-its-iteration-end-hooks-run.md); the proof is `pnpm checkpoint-proof`'s `hook-capture`
+launch.*
+
+**What was falsified, and why it stood.** The first execution's "capture position" put the capture BEFORE the
+`iteration_end` hooks and gave a reason: a hook "that later carries the checkpoint" could only be handed it if the capture
+came first. REQ-HOOKS-082 asks for no such hook. It fixes an order — the hooks finish, then the iteration's checkpoint is
+taken — so that a hook's edit to the tree (a formatter, a build artifact) belongs to the iteration whose hooks made it.
+HARD constraint H-06 and `proposals/runtime.md` C8.6 say the same. Read as a payload rather than an order, the requirement
+looked unbuilt ("owed") instead of contradicted, and the engine test pinned the built order (`capture:1` before
+`hook:iteration_end`). The reading is struck through above and kept.
+
+**As built.** `Run.iterate` records `iteration.end`, fires the `iteration_end` hooks and awaits them, then awaits the
+capture, in a `finally`, so hooks that raise still leave the iteration its one capture (REQ-GIT-051) and the raise goes on
+as before. The capture still finishes before the next iteration and before teardown. The two closes that fire no
+`iteration_end` are unchanged: the decline's close of an iteration an earlier run left open captures without hooks, and
+the record of an accepted explicit cancel captures nothing (`PD-ORCH-005` clause 36).
+
+**Measured.** `checkpoints.test.ts`: the order is `iteration_end` then `capture:1`; a hook that edits the tree after an
+`await` has its edit in iteration 1's snapshot — the run's last; hooks that raise still leave one capture. The first two
+were red on the code before. `checkpoint-proof`'s `hook-capture` launch, against Git: a global `iteration_end` hook writes
+`HOOK.txt` after the scripted agent wrote `NOTES.md`, and checkpoint 1 lists both and its tree holds the hook's text.
 

@@ -1357,15 +1357,26 @@ export class Run {
     const title = cut(taskTitle(task), 80);
     writer.endIteration(iteration, { task: task.text, outcome, summary }, outcome, this.todoJson(), { message: `Iteration ${iteration} (${title}): ${outcome}${summary.trim() === '' ? '' : ` — ${summary.trim()}`}`, metadata: { iteration, task_id: task.id, task: title, outcome, summary } });
     this.iterationTask = null;
-    // ADR-0039 / REQ-GIT-051: exactly one capture per iteration that closes, at the moment it closes — after
-    // `iteration.end` is recorded and BEFORE the hooks' `iteration_end`: the checkpoint records the iteration's work as
-    // the agent left it, and a hook that later carries the checkpoint (REQ-HOOKS-082 with checkpoints, owed) can only
-    // do so if the capture precedes it. Awaited, so it finishes before the next iteration and before teardown.
-    await this.captureCheckpoint(iteration, this.creditedChild());
-    // REQ-HOOKS-075/077/080/082: iteration_end for N finishes before N+1 begins; the iteration's own state beside the dispatched outcome.
-    if (this.hooks) {
-      const iterationState = outcome === 'cancelled' ? 'cancelled' : outcome === 'failed' || outcome === 'abandoned' ? 'failed' : 'succeeded';
-      await this.hooks.fireLifecycle('iteration_end', { iteration, outcome, child_name: this.rootIterationId, status: iterationState, summary });
+    /*
+     * REQ-HOOKS-075/077/080/082: iteration_end for N finishes before N+1 begins, and before N's checkpoint is taken; the
+     * iteration's own state beside the dispatched outcome.
+     *
+     * ADR-0039 / REQ-GIT-051: exactly one capture per iteration that closes, at the moment it closes — after
+     * `iteration.end` is recorded and AFTER the hooks' `iteration_end` have finished (REQ-HOOKS-082), so what such a hook
+     * writes to the tree (a formatter's rewrite, a build artifact) is in this iteration's checkpoint rather than the next
+     * one's, or, after the run's last iteration, in none. Awaited, so it finishes before the next iteration and before
+     * teardown. Until 2026-10-13 the capture came first, on ADR-0039's reading that a hook might later "carry" the
+     * checkpoint (`docs/defects/fixed/an-iterations-checkpoint-is-captured-before-its-iteration-end-hooks-run.md`).
+     * `finally`: hooks that raise still leave the iteration its one capture, and the raise goes on as it did before.
+     */
+    const credited = this.creditedChild();
+    try {
+      if (this.hooks) {
+        const iterationState = outcome === 'cancelled' ? 'cancelled' : outcome === 'failed' || outcome === 'abandoned' ? 'failed' : 'succeeded';
+        await this.hooks.fireLifecycle('iteration_end', { iteration, outcome, child_name: this.rootIterationId, status: iterationState, summary });
+      }
+    } finally {
+      await this.captureCheckpoint(iteration, credited);
     }
     this.iterationsCompleted += 1;
     this.saveRunning({});

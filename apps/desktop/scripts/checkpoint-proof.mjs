@@ -25,6 +25,8 @@
  *   loaded-restore  the isolated session resumed and run in the launch, so it stays loaded after its run releases the
  *               lock; a lock naming another machine planted once the run has ended; then a restore → refused at gate 5
  *               under that holder's lock, the hand edit untouched, the planted lock kept (ADR-0005, REQ-EVENTS-098).
+ *   hook-capture  its own profile: a global `iteration_end` hook writes HOOK.txt after the agent wrote NOTES.md → the
+ *               run's only (last) iteration's checkpoint holds both (REQ-HOOKS-082; N68, 2026-10-13). POSIX hosts only.
  *
  * Evidence under `.proof/checkpoint-proof/`: one PNG and one log per launch, the confirmation dialog's PNG, `results.json`
  * with the capture, preview and restore times and the Git invocation counts. `--skip-build` skips the build.
@@ -482,6 +484,54 @@ const disabled = await launch('disabled', workspace, local, preferences, {
   if (readFileSync(join(binding.worktree_path, 'NOTES.md'), 'utf8') !== NOTES_HAND) throw new Error('the restore rewrote the file under another holder\'s lock');
   if (!lock || lock.pid !== 4242 || lock.host !== OTHER_HOST) throw new Error(`the other holder's lock was not left as it was: ${JSON.stringify(lock)}`);
   results.loadedRestore = { sessionId: iso.session_id, plantedAfterMs: planted, refused: true, fileUntouched: true, otherHolderKept: true, png: loaded.png };
+}
+
+// hook-capture (N68, 2026-10-13) — REQ-HOOKS-082: an `iteration_end` hook's edit to the working tree is in THAT
+// iteration's checkpoint. Its own profile, so nothing above is disturbed: a global `iteration_end` hook (global entries
+// run without a workspace review, ADR-0015) writes HOOK.txt in the workspace after the scripted agent wrote NOTES.md, and
+// the run's only — so last — iteration's checkpoint must hold both. Until the repair the capture ran before the hook, so
+// HOOK.txt reached no checkpoint at all.
+{
+  const hroot = join(output, 'hooked');
+  const hws = join(hroot, 'workspace');
+  const hlocal = join(hroot, 'local');
+  const hprefs = join(hroot, 'preferences');
+  mkdirSync(join(hws, '.rotaris'), { recursive: true });
+  mkdirSync(hlocal, { recursive: true });
+  writeFileSync(join(hws, '.rotaris', 'agents.yaml'), agentsYaml(['checkpoints:', '  enabled: true']));
+  git(hws, 'init', '-q', '-b', 'main');
+  git(hws, 'config', 'core.autocrlf', 'false');
+  writeFileSync(join(hws, '.gitignore'), '.rotaris/\n.serena/\n');
+  writeFileSync(join(hws, 'README.md'), '# Checkpoint proof workspace (hooked)\n');
+  git(hws, 'add', 'README.md', '.gitignore');
+  git(hws, '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'first');
+  // The global scope: `<XDG_CONFIG_HOME>/rotaris/agents.yaml` (`resolveUserDirs`); proofIsolationEnv points XDG_CONFIG_HOME
+  // at `<local>/rotaris/config`. Windows reads `%LOCALAPPDATA%\\rotaris\\rotaris\\`; the command is POSIX shell, so this launch
+  // speaks for POSIX hosts only and says so on Windows.
+  if (process.platform === 'win32') results.hookCapture = { skipped: 'the hook command is POSIX shell; not run on Windows' };
+  else {
+    const globalDir = join(hlocal, 'rotaris', 'config', 'rotaris');
+    mkdirSync(globalDir, { recursive: true });
+    writeFileSync(join(globalDir, 'agents.yaml'), ['hooks:', '  entries:', '    - event: iteration_end', '      command: "printf \'formatted by the iteration_end hook\\n\' > HOOK.txt"', ''].join('\n'));
+    const hooked = await launch('hook-capture', hws, hlocal, hprefs, {
+      ROTARIS_SCRIPT: 'write,answer', ROTARIS_CAPTURE_PROMPT: 'Write the notes.',
+      ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500',
+    });
+    const dbs = findDatabases(hlocal);
+    if (dbs.length !== 1) throw new Error(`hook-capture: expected one workspace database below ${hlocal}; found ${dbs.length}`);
+    const hdb = new Database(dbs[0], { readonly: true });
+    const hs = hdb.prepare('SELECT session_id, execution_status FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
+    const hrows = hdb.prepare('SELECT * FROM checkpoints WHERE session_id = ? ORDER BY sequence').all(hs.session_id);
+    const hookRuns = hdb.prepare("SELECT count(*) AS n FROM events WHERE session_id = ? AND kind = 'hook.finish'").get(hs.session_id).n;
+    hdb.close();
+    if (hs.execution_status !== 'completed') throw new Error(`hook-capture: the run ended ${hs.execution_status} (see hook-capture.log)`);
+    if (!existsSync(join(hws, 'HOOK.txt'))) throw new Error(`hook-capture: the iteration_end hook did not run (no HOOK.txt; ${hookRuns} hook.finish event(s); see hook-capture.log)`);
+    if (hrows.length !== 1 || hrows[0].iteration !== 1) throw new Error(`hook-capture: checkpoint rows ${JSON.stringify(hrows)}`);
+    const files = JSON.parse(hrows[0].files);
+    if (!files.includes('NOTES.md') || !files.includes('HOOK.txt')) throw new Error(`REQ-HOOKS-082: iteration 1's checkpoint lists ${JSON.stringify(files)} — the iteration_end hook's HOOK.txt is not in it`);
+    if (git(hws, 'show', `${hrows[0].commit_id}:HOOK.txt`) !== 'formatted by the iteration_end hook') throw new Error('REQ-HOOKS-082: the checkpoint tree does not hold the hook\'s HOOK.txt');
+    results.hookCapture = { sessionId: hs.session_id, checkpoint: hrows[0].sequence, iteration: hrows[0].iteration, files, hookFinishEvents: hookRuns, png: hooked.png };
+  }
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

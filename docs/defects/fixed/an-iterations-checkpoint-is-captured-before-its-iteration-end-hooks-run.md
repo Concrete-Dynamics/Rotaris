@@ -34,3 +34,17 @@ Recorded 2026-10-13 by fin41 (item N68 of the whats-next survey at main `6de2a67
 - `docs/architecture/adr/0015-lifecycle-hook-invocation.md` — "vacuous (no checkpoints)".
 - `docs/architecture/views/03-runtime-view.md`, `docs/architecture/codebase.md`,
   `docs/architecture/implementation-conditions.md` — "REQ-HOOKS-082 with checkpoints, owed".
+
+## Outcome — repaired 2026-10-13 (fin41, `fin41-palette-and-hooks`)
+
+`Run.iterate` now fires the `iteration_end` hooks and awaits them, then awaits the iteration's capture in a `finally`, so a
+hook's edit is in that iteration's checkpoint — the last iteration's included — and hooks that raise still leave the
+iteration its one capture (REQ-GIT-051). The capture still finishes before the next iteration and before teardown. The
+decline's close (no hooks fired, one capture) and `PD-ORCH-005` clause 36's no-capture close are unchanged.
+
+**Pinned by** `packages/engine/src/run/checkpoints.test.ts`: the order `hook:iteration_end` then `capture:1`, and a hook's
+asynchronous edit present in iteration 1's snapshot — both red on the code before — and a raising hook port still leaving
+one capture. **Shown by** `pnpm checkpoint-proof`'s `hook-capture` launch: a global `iteration_end` hook's `HOOK.txt` is in
+checkpoint 1's file list and tree beside the agent's `NOTES.md`. ADR-0039 reports back in place with its capture-position
+reading struck through and kept; ADR-0015, the runtime view, `codebase.md`, implementation-conditions.md and the OQ prose
+that stated the old order are corrected in place.

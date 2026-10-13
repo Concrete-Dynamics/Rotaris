@@ -4842,7 +4842,8 @@ say what the decline's wording means before the crash is recorded.
   is left busy with nothing open and its last request `complete`. A `paused` session reaches the same state with no
   crash: a pause, a stop or the application's quit (`application_shutdown`, which rests `paused` as the stop does,
   clause 15) the run accepts after the iteration closed, while its checkpoint is captured, its `iteration_end` hooks
-  fire or its events drain, is met at the loop head, which comes to rest before the stop conditions run. Only a pause,
+  fire or its events drain *(corrected 2026-10-13, fin41, N68: the hooks fire first and the checkpoint is captured after
+  them, REQ-HOOKS-082; the window this sentence names is the same)*, is met at the loop head, which comes to rest before the stop conditions run. Only a pause,
   a stop or a quit accepted during the turn puts the iteration's task back to pending. A third route is the plan mode's:
   a resumed iteration closes the continue's message `complete` (clause 17), the gate then holds before the first new
   iteration (`PD-ORCH-003` revision 2), and a plan Cancel, or a stop or a quit during that plan cycle (clause 15, which

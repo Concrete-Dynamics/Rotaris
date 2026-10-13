@@ -9,7 +9,8 @@ import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type CheckpointCaptureInp
 
 /**
  * ADR-0039's engine half, first execution: the run's ONE call per iteration close (REQ-GIT-051) — after
- * `iteration.end` is recorded and before the hooks' `iteration_end`, awaited before the next iteration and before
+ * `iteration.end` is recorded and, since 2026-10-13, AFTER the hooks' `iteration_end` have finished (REQ-HOOKS-082; until
+ * then the capture preceded them, the order ADR-0039 took as a reading), awaited before the next iteration and before
  * the terminal transaction — and the writer's two units: `recordCheckpoint` (one transaction: the row, the trim,
  * the timeline entry, the event; the event observable only on `publish()`, REQ-GIT-048) and `recordRestore`
  * (REQ-GIT-062/068/155).
@@ -45,7 +46,7 @@ describe('engine/run — the checkpoint port at iteration close (ADR-0039, REQ-G
     return { sessions, client };
   }
 
-  it('captures exactly once per iteration that closes, after iteration.end and before the hooks\' iteration_end, with the iteration number and no credited child', async () => {
+  it('captures exactly once per iteration that closes, after iteration.end and after the hooks\' iteration_end, with the iteration number and no credited child', async () => {
     const order: string[] = [];
     const captures: CheckpointCaptureInput[] = [];
     const port: CheckpointPort = { enabled: true, capture: async (input) => { captures.push(input); order.push(`capture:${input.iteration}`); return { outcome: 'recorded', sequence: input.iteration, files: 1, invocations: 11, elapsedMs: 5 }; } };
@@ -58,12 +59,49 @@ describe('engine/run — the checkpoint port at iteration close (ADR-0039, REQ-G
     const result = await sessions.running(sid)!;
     expect(result.status).toBe('completed');
     expect(captures).toEqual([{ iteration: 1, childName: '' }]);
-    expect(order).toEqual(['hook:session_start', 'capture:1', 'hook:iteration_end', 'hook:session_end']);
+    // REQ-HOOKS-082: the iteration's hooks finish before its checkpoint is taken (the order was the reverse until 2026-10-13).
+    expect(order).toEqual(['hook:session_start', 'hook:iteration_end', 'capture:1', 'hook:session_end']);
     // A run that closes no iteration yields no checkpoint: a port that is not enabled is never called.
     const never: CheckpointPort = { enabled: false, capture: async () => { throw new Error('must not be called'); } };
     const { sessions: s2 } = sessionsWith([answer('again')], never);
     const sid2 = (s2.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
     expect((await s2.running(sid2)!).status).toBe('completed');
+  });
+
+  /*
+   * REQ-HOOKS-082 (N68, 2026-10-13): what an `iteration_end` hook writes to the working tree — a formatter's rewrite, a build
+   * artifact — is in THAT iteration's checkpoint. The tree is a list the agent's turn and the hook append to and the
+   * port snapshots at capture. Until the repair the snapshot was taken first, so for the run's only (and so last)
+   * iteration the hook's edit reached no checkpoint at all.
+   */
+  it('REQ-HOOKS-082: an iteration_end hook\'s edit to the tree is captured by that iteration\'s checkpoint, the last iteration\'s included', async () => {
+    const tree: string[] = ['agent: src/app.ts'];
+    const snapshots: { iteration: number; tree: string[] }[] = [];
+    const port: CheckpointPort = { enabled: true, capture: async (input) => { snapshots.push({ iteration: input.iteration, tree: [...tree] }); return { outcome: 'recorded', sequence: input.iteration, files: tree.length, invocations: 11, elapsedMs: 5 }; } };
+    const hooks: HookPort = {
+      auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+      // The hook does real (asynchronous) work before it finishes, as a formatter would: the capture must wait for it.
+      fireLifecycle: async (event, fields) => { if (event === 'iteration_end') { await Promise.resolve(); tree.push(`hook: formatted after iteration ${String(fields['iteration'])}`); } return []; },
+      advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+    };
+    const { sessions } = sessionsWith([answer('done')], port, hooks);
+    const sid = (sessions.start(dal, 'C:/ws', 'format the sources') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(snapshots).toEqual([{ iteration: 1, tree: ['agent: src/app.ts', 'hook: formatted after iteration 1'] }]);
+  });
+
+  it('REQ-GIT-051 with REQ-HOOKS-082: iteration_end hooks that raise still leave the iteration its one capture', async () => {
+    const captures: number[] = [];
+    const port: CheckpointPort = { enabled: true, capture: async (input) => { captures.push(input.iteration); return { outcome: 'recorded', sequence: input.iteration, files: 1, invocations: 11, elapsedMs: 5 }; } };
+    const hooks: HookPort = {
+      auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+      fireLifecycle: async (event) => { if (event === 'iteration_end') throw new Error('hook port raised'); return []; },
+      advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+    };
+    const { sessions } = sessionsWith([answer('done')], port, hooks);
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    expect(captures).toEqual([1]);
   });
 
   it('REQ-GIT-045: a port that fails or raises never aborts the run; the failure is a warning', async () => {

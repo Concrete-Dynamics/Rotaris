@@ -263,7 +263,7 @@ flowchart TB
   L0 -. "a continue: the open iteration first" .-> RES["iterate(open row): the same number, root and task;<br/>resumePaused() · the root from its record;<br/>iteration_resumed (PD-ORCH-005 clause 4)"]
   RES --> TURN
   OUT -- "the explicit cancel, an abort, or a rest<br/>that found nothing unfinished" --> PEND["task back to pending"]
-  C & RQ & AB & PEND --> E["endIteration(): iteration.end event · the row closed · the todo stored ·<br/>iteration_end timeline entry (REQ-ORCH-139; read by REQ-SESSION-115's Recent iterations) — ONE transaction since fin34 ·<br/>CHECKPOINT capture (ADR-0039, awaited) · iteration_end hooks ·<br/>iterationsCompleted += 1 · save running (aggregates, todo, progress — published)"]
+  C & RQ & AB & PEND --> E["endIteration(): iteration.end event · the row closed · the todo stored ·<br/>iteration_end timeline entry (REQ-ORCH-139; read by REQ-SESSION-115's Recent iterations) — ONE transaction since fin34 ·<br/>iteration_end hooks · then the CHECKPOINT capture (ADR-0039, awaited; REQ-HOOKS-082) ·<br/>iterationsCompleted += 1 · save running (aggregates, todo, progress — published)"]
   E --> ML{"message limit in force<br/>and count ≥ limit?"}
   ML -- yes --> PL["pauseAtLimit(): status paused_message_limit + count + limit (durable),<br/>run.paused event to main, no terminal pair; the Run ends"]
   ML -- no --> L0
@@ -527,7 +527,7 @@ after a resumed iteration).
 **An iteration a previous run left open, declined (PD-ORCH-005 clause 6; the repair of the crashed-iteration defect).**
 Every execution iteration has an `iterations` row from the moment its root is minted, and `iteration.end` and the row's
 close commit in one transaction (`endIteration`) — with the session's todo, its task and held messages already closed
-in it, so a death while the capture or the `iteration_end` hooks run leaves no task in progress with nothing open to
+in it, so a death while the `iteration_end` hooks or the capture run leaves no task in progress with nothing open to
 hold it (the repair of `an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`, 2026-09-29;
 until then the todo was saved only after them; the close takes no save generation and publishes nothing, so the
 renderer sees the closed task with the save that follows the hooks). A rest or a dead run host leaves that row open. **Declined** —
@@ -554,9 +554,10 @@ root's and every recorded conversation's id in the session (`takenTaskIds`), sin
 session-wide.
 
 **The checkpoint at iteration close (Part P; ADR-0039's first execution).** Exactly once per iteration that closes, after
-`iteration.end` is recorded and BEFORE the hooks' `iteration_end` (the checkpoint records the iteration's work as the agent
-left it; a hook that later carries the checkpoint — REQ-HOOKS-082 with checkpoints, owed — can only do so if the capture
-precedes it), the run awaits `CheckpointPort.capture({ iteration, childName })`, so the attempt finishes before the next
+`iteration.end` is recorded and AFTER the hooks' `iteration_end` have finished (REQ-HOOKS-082: what a hook writes to the
+tree is in that iteration's checkpoint; the capture runs in a `finally`, so hooks that raise still leave it — since
+2026-10-13, fin41, N68; until then the capture came first, on ADR-0039's falsified reading that a hook might later
+"carry" the checkpoint), the run awaits `CheckpointPort.capture({ iteration, childName })`, so the attempt finishes before the next
 iteration and before teardown (REQ-GIT-051). `childName` is the one child that succeeded in the iteration, `''` when none or
 more than one. The port (`run-host/checkpoints.ts`) is built per run from `checkpoints.enabled` against the session's
 binding (REQ-GIT-044: unset = isolated only; `false` stays off even when isolated), `include_untracked` and

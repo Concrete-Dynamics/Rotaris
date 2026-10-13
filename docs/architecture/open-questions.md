@@ -12181,7 +12181,11 @@ register still gave it in the present tense: beside the "lands here" sentences o
 this was built included (`PD-CONFIG-003` revision 3, `PD-LIBRARY-002` revision 2's seven narrowings and two extensions,
 `PD-ORCH-011` revision 2): none was bent by the one-per-verb rule, since each requirement they name under a verb carries no
 other directive under it, so nothing more is corrected. Outside the bound and recorded, not corrected:
-[`pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md`](../defects/pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md).
+[`pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md`](../defects/fixed/pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md).
+**Corrected the same day** (fin36, `fin36-last-notes-and-optionals`): on the same test `PD-LIBRARY-001` now narrows REQ-LIBRARY-088
+(a closed field inventory gaining `commands[]`) and REQ-LIBRARY-090 (a fixed section order gaining **Commands**), the disposition
+it replaces quoted beside it and the two back-pointers relabelled; no other directive reaches either, and no behaviour moves.
+Whether another directive that alone reaches a requirement carries the same shape is still not swept.
 
 <a id="oq-238"></a>
 

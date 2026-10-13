@@ -140,14 +140,20 @@ its earliest calls, and the list is of what survived in the transcript the repor
 bound is stated in the record rather than hidden, and closing it needs the durable tool-call evidence
 of REQ-SESSION-136, which this directive does not require and does not forbid.
 
-> **Narrows:** REQ-LIBRARY-099, REQ-TOOLS-148
-> **Extends:** REQ-LIBRARY-088, REQ-LIBRARY-090
+> **Narrows:** REQ-LIBRARY-088, REQ-LIBRARY-090, REQ-LIBRARY-099, REQ-TOOLS-148
 
 *Corrected 2026-10-13 under [OQ-237](../architecture/open-questions.md) (GV1, [R-072](requests.md#r-072)): REQ-LIBRARY-099
 and REQ-TOOLS-148 move from Extends to Narrows. Each closes its section filter over a set, and `commands` joins that set
 (a section name outside it is still refused), a change to an exact enumeration and so a narrowing (acceptance finding F15).
 Their case is disjoint from `PD-LIBRARY-004`'s, which consumer a read marks. The disposition read until then, and no longer
 governs:* "> **Extends:** REQ-LIBRARY-088, REQ-LIBRARY-090, REQ-LIBRARY-099, REQ-TOOLS-148"
+
+*Corrected again 2026-10-13 on the same test (GV1, [R-072](requests.md#r-072)), outside the ruling's bounded re-read:
+REQ-LIBRARY-088 and REQ-LIBRARY-090 move from Extends to Narrows. REQ-LIBRARY-088's field inventory is closed and gains
+`commands[]` on a `child_report` record; REQ-LIBRARY-090 fixes its sections "in this order" and gains **Commands** before
+Edited Files. Each is a change to an exact enumeration, so a narrowing (acceptance finding F15); no other directive reaches
+either. No behaviour moves and no revision is taken. The disposition read until then, and no longer governs:*
+"> **Narrows:** REQ-LIBRARY-099, REQ-TOOLS-148" *beside* "> **Extends:** REQ-LIBRARY-088, REQ-LIBRARY-090"
 
 *Raised by the owner, 2026-09-12; logged as [R-006](requests.md#r-006).*
 

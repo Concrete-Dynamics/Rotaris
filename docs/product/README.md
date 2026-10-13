@@ -326,5 +326,5 @@ beside a requirement whose stated set it leaves whole. Every pair of narrowings 
 names each other, so the new refusal fires on nothing committed. Outside the bounded re-read, `PD-LIBRARY-001`'s Extends
 on REQ-LIBRARY-088 (a field inventory the requirement calls closed) and REQ-LIBRARY-090 (a fixed section order) are the
 same shape and are recorded, not corrected
-([`pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md`](../defects/pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md)).
+([`pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md`](../defects/fixed/pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md)); corrected the same day by fin36, both now under Narrows with their notes relabelled.
 The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).

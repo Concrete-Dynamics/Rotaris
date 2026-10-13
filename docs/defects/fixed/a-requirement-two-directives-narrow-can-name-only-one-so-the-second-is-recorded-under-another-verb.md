@@ -63,4 +63,4 @@ Pinned by `tools/symbol-artifact/back-pointers.test.ts`'s OQ-237 case (red on th
 'PD-TOOLS-009' ] to deeply equal [ 'PD-TOOLS-009', 'PD-TOOLS-013' ]`) and by `pnpm directive-proof`'s new counterfactuals
 (42/42; 29/42 on the old generator). Recorded beside it, not repaired: `PD-LIBRARY-001`'s Extends on REQ-LIBRARY-088 and
 REQ-LIBRARY-090, outside the bounded re-read
-([`pd-library-001-extends-two-requirements-whose-closed-sets-it-changes`](../pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md)).
+([`pd-library-001-extends-two-requirements-whose-closed-sets-it-changes`](pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md); repaired since, the same day, by fin36).

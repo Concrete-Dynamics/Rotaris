@@ -128,6 +128,20 @@ describe('the back-pointers in docs/spec agree with the directive register', () 
     expect(backPointers().filter((p) => p.requirement === 'REQ-ORCH-025').map((p) => `${p.verb} ${p.directive}`)).toEqual(['Narrowed PD-ORCH-006']);
   });
 
+  it('OQ-237 (GV1, R-072), outside the bounded re-read: PD-LIBRARY-001 narrows the closed inventory and section order it widens', () => {
+    // REQ-LIBRARY-088's field inventory is closed and gains `commands[]`; REQ-LIBRARY-090 fixes its sections "in this order"
+    // and gains Commands. A change to an exact enumeration is a narrowing (acceptance finding F15).
+    for (const req of ['REQ-LIBRARY-088', 'REQ-LIBRARY-090']) {
+      expect(narrowed(req)).toEqual(['PD-LIBRARY-001']);
+      expect(extended(req)).toBeUndefined();
+      expect(
+        backPointers()
+          .filter((p) => p.requirement === req)
+          .map((p) => `${p.verb} ${p.directive}`),
+      ).toEqual(['Narrowed PD-LIBRARY-001']);
+    }
+  });
+
   it('OQ-237 (GV1, R-072): a requirement two directives narrow lists both, and the dispositions the one-per-verb rule bent are corrected', () => {
     expect(narrowed('REQ-TOOLS-112')).toEqual(['PD-TOOLS-009', 'PD-TOOLS-013']);
     expect(narrowed('REQ-SESSION-136')).toEqual(['PD-SESSION-003', 'PD-TOOLS-013']);

@@ -48,3 +48,14 @@ client records no user message).
 
 Not written, and not repaired here: the vocabulary's `iteration_start` timeline entry. No requirement reads it, and an
 iteration's start is in the `events` record (`iteration.start`).
+
+## Reported back 2026-10-13 (fin41): the live packs at `552d346` and `0bc3eee`
+
+The `iteration_end` entries are written live: 10 for 10 closed iterations in `552d346`'s default pack, each with `iteration`,
+`task_id`, `task`, `outcome` and `summary` and stamped at its iteration's `closed_at` before `run_end` (a paused iteration wrote
+none at the pause and one at its close); 1 for 1 in its duress pack; 10 for 10 at `0bc3eee`. No live scenario sends a follow-up,
+so the payload that reads them was not driven. Evidence:
+[`live-552d346-default-autopsy.md`](../../architecture/live-runs/live-552d346-default-autopsy.md),
+[`live-552d346-duress-autopsy.md`](../../architecture/live-runs/live-552d346-duress-autopsy.md),
+[`live-0bc3eee-default-autopsy.md`](../../architecture/live-runs/live-0bc3eee-default-autopsy.md). The row is in
+[`first-executions.md`](../../architecture/first-executions.md).

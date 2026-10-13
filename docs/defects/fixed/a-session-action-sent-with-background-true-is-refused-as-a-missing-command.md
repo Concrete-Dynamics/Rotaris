@@ -32,3 +32,12 @@ issues, about 3.8 s, in any run that signals a background session.
 Q1): the description says a session action is sent with session_id and background false or absent"), red without the change.
 No proof reads the description; **what a live run should show**: in the `frictions` scenario, the signal to the background
 session sent with `background` false or absent on the first try, and no "A command is required when background=True." issue.
+
+## Reported back 2026-10-13 (fin41): the default live run at `0bc3eee`
+
+The repair's first live execution held, once. In the `frictions` scenario (session `652a40e8`) the signal went out with
+`background: false` on the first try (`#5`, `session_action: send_signal`, after `#4` started the background session) and
+stopped it ("killed (exit -1)" at `#6`); 0 "A command is required when background=True." issues, against 2 refused calls at
+`552d346`. One sample. Read from a copy of the pack:
+[`live-0bc3eee-default-autopsy.md`](../../architecture/live-runs/live-0bc3eee-default-autopsy.md). The row is in
+[`first-executions.md`](../../architecture/first-executions.md).

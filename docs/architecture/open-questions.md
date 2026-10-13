@@ -11216,6 +11216,11 @@ off: the recorded summarising request carrying "Outcome of this agent, not of th
 pinned by its test against the engine's `OUTCOME_HEAD`). It is the orchestrator's to run (`--only=cutoff`); a child the
 limit never reaches is a NOTE there.
 
+**Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`:** the repair's live measure,
+**NOT REACHED**. No child failed or timed out in any of the three packs, so no summarising request opened its facts with an
+Outcome line and no timeline entry could read "The run failed". Found nothing, because nothing met the case. Evidence:
+[`live-552d346-duress-autopsy.md`](live-runs/live-552d346-duress-autopsy.md), [`live-552d346-default-autopsy.md`](live-runs/live-552d346-default-autopsy.md), [`live-0bc3eee-default-autopsy.md`](live-runs/live-0bc3eee-default-autopsy.md). The row is in [`first-executions.md`](first-executions.md).
+
 **OQ-214 — Does a working child's 1200 s ceiling stay when a model that reasons before it answers fills each life with
 generation?** *(REQ-ORCH-088, the child timeout and its expiry path; REQ-CONFIG-113, `runtime.child_timeout`, default 1200;
 REQ-NOTIFY-100; REQ-MONITOR-121; REQ-ORCH-062 and REQ-TOOLS-156, which forbid a separate deadline on a wait because every
@@ -11314,6 +11319,15 @@ its own task (condition a′). The question of whether a child cut off at its pe
 the person sees the failure is raised and ruled on its own, not here: [OQ-234](#oq-234), ruled as
 [`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 3.
 
+**Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`:** the harness change's first
+execution, read from the duress pack. `duress/app.log` read `child_timeout=2700 s` (lines 13 and 31), `results.json` carried
+`childTimeoutS: 2700` with its NOTE, and the pack holds `duress/agents.yaml`. Each child's life: a 208.5 s, b 150.2 s, c 123.0 s,
+d 449.2 s, e1 547.9 s, e2 389.9 s, **f1 1,253.2 s**, f2 515.3 s. No child was cut off, none compressed inside its life (the largest
+child prompt 55,449 tokens), no parent resumed, and condition a′ does not apply. f1, the verifier, is the case the raise was
+for: 1,217.2 s of its 1,253.2 s generating, ten steps over 45 s, its last step landing at +1,221.5 s; at the 1,200 s default
+the ceiling falls inside that step and the child would have ended `failed`, the third duress verifier to do so. What the raise
+costs elsewhere is not shown: only f1 crossed 1,200 s. Evidence: [`live-552d346-duress-autopsy.md`](live-runs/live-552d346-duress-autopsy.md). The row is in [`first-executions.md`](first-executions.md).
+
 **OQ-215 — Do the built-in search and listing tools skip the code-intelligence runtime's marker directory, and do its
 memories leave the workspace?** *(REQ-TOOLS-140, the hard-coded ignore components, a closed list holding `.rotaris` and not
 the runtime's directory; REQ-TOOLS-139, the scan filters, which honour "the workspace's `.gitignore`" and nothing else, and
@@ -11371,6 +11385,12 @@ and `**/.*` (#65) listed neither directory, and 0 file-tool calls named one — 
 memory. So the remainder clause fired, and it is raised as OQ-230. **Instructions clause revised 2026-10-07 by OQ-230 (below)
 ([R-072](../product/requests.md#r-072)):** "the agents' instructions are unchanged" no longer holds: every agent receives a
 product statement as its last context unit (`PD-TOOLS-012` revision 2). The text above is kept as it was ruled.
+
+**Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`:** the duress measure. No
+file-tool result listed the marker directory, no memory, answer or delivered file named it, and `.rotaris` reached a deliverable
+only as `docs/overview.md`'s faithful quote of the workspace's `.gitignore` line; the calls and rows naming either directory are
+read in [`PD-TOOLS-012`](../product/directives.md#pd-tools-012)'s report-back, which breaks down why their count is not like for
+like with `a68f121`'s. Held as ruled. Evidence: [`live-552d346-duress-autopsy.md`](live-runs/live-552d346-duress-autopsy.md). The row is in [`first-executions.md`](first-executions.md).
 
 **OQ-219 — Beneath an explicit `grep` path or `glob` base inside an ignored directory, what does a scan return?**
 *(REQ-TOOLS-139, the scan filters: "paths containing a hard-coded ignore component are skipped", the workspace's
@@ -11794,6 +11814,13 @@ activity that satisfied the trigger.
 agent's last three messages with text were normalised-equal or its last four tool calls were identical in name and whole
 arguments.
 
+**Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`:** reached once, not
+discriminating. The duress orchestrator's 60th call (`#300`, a `grep`) activated the supervisor; the classifier was cut at
+1,994 ms by the activation budget, and the raw-count fallback found no evidence (three `read_file` calls on three windows and
+the `grep`), so no `loop_supervisor_activation` was recorded and the run went on 2.02 s later. `#296` to `#299` were four
+`read_file` calls, the case the ruling decided, but the trigger fell one call later. No default agent came near 60 calls.
+Evidence: [`live-552d346-duress-autopsy.md`](live-runs/live-552d346-duress-autopsy.md), [`live-552d346-default-autopsy.md`](live-runs/live-552d346-default-autopsy.md), [`live-0bc3eee-default-autopsy.md`](live-runs/live-0bc3eee-default-autopsy.md). The row is in [`first-executions.md`](first-executions.md).
+
 <a id="oq-231"></a>
 
 **OQ-231 — Does a `haet_edit` miss that matches at REQ-TOOLS-136 level 2 or 3 say so?** *(REQ-TOOLS-189, `haet_edit`
@@ -11861,6 +11888,10 @@ Every one of the six carried the same extra space in its `new_string` too, so `w
 as OQ-233. The next default and duress live runs are the measurement (`live-run.mjs`'s near-miss NOTE). Finding D5 closes
 with it.
 
+**Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`:** **NOT REACHED**: no
+`haet_edit` missed at level 2 or 3 in any pack (the harness NOTE each time). Evidence: [`live-552d346-default-autopsy.md`](live-runs/live-552d346-default-autopsy.md), [`live-552d346-duress-autopsy.md`](live-runs/live-552d346-duress-autopsy.md), [`live-0bc3eee-default-autopsy.md`](live-runs/live-0bc3eee-default-autopsy.md). The row is in
+[`first-executions.md`](first-executions.md).
+
 <a id="oq-230"></a>
 
 **OQ-230 — Are the agents told what the product's own directories in the workspace are?** *(PD-TOOLS-012, the marker
@@ -11923,6 +11954,12 @@ review, 2026-10-07:* it left out point (b)'s last words, that elsewhere version 
 untracked; with them it is 662 characters, nearer 165 tokens). Finding D4 closes with it;
 the next default and duress live runs are the measurement.
 
+**Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`:** the statement reached 144 of
+144 agent requests at `552d346`'s default pack, 188 of 188 in its duress pack and 188 of 188 at `0bc3eee`; no delivered file
+named either directory in any pack. At `0bc3eee` two coordinator briefs named both as tooling not to write about, the one
+sign of priming. Read in [`PD-TOOLS-012`](../product/directives.md#pd-tools-012)'s report-back. Evidence: [`live-552d346-default-autopsy.md`](live-runs/live-552d346-default-autopsy.md), [`live-552d346-duress-autopsy.md`](live-runs/live-552d346-duress-autopsy.md),
+[`live-0bc3eee-default-autopsy.md`](live-runs/live-0bc3eee-default-autopsy.md). The row is in [`first-executions.md`](first-executions.md).
+
 <a id="oq-233"></a>
 
 **OQ-233 — When `write_file`'s edit matches at REQ-TOOLS-136 level 3, is `new_string` shifted by the same prefix?**
@@ -11978,6 +12015,9 @@ the refusal through `nearMissMessage` in `write_file`'s wording; pinned by nine 
 `packages/agent-tools/src/tools/tools.test.ts`, seven red on the code before; the `a68f121` pack's six level-3 misses replayed
 through the built `write_file` over the rebuilt `docs/verification.md` each shifted to the file's depth (6 of 6). The first
 execution is in place under the directive.
+
+**Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`:** **NOT REACHED**: no
+`write_file` edit matched at level 3 or said "shifted". Evidence: [`live-552d346-default-autopsy.md`](live-runs/live-552d346-default-autopsy.md), [`live-552d346-duress-autopsy.md`](live-runs/live-552d346-duress-autopsy.md), [`live-0bc3eee-default-autopsy.md`](live-runs/live-0bc3eee-default-autopsy.md). The row is in [`first-executions.md`](first-executions.md).
 
 <a id="oq-234"></a>
 
@@ -12424,6 +12464,10 @@ pinned by cases in five test files, red on the code before, and `pnpm code-intel
 the unrepaired build with `[]`, green with both files). The report-back is in `PD-ORCH-004`; the note is
 [fixed](../defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
 
+**Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`:** **NOT REACHED**: 0
+code-intelligence EDIT-tier calls in any pack; the duress tester held the tier and wrote through `write_file` and `haet_edit`.
+Evidence: [`live-552d346-duress-autopsy.md`](live-runs/live-552d346-duress-autopsy.md), [`live-552d346-default-autopsy.md`](live-runs/live-552d346-default-autopsy.md), [`live-0bc3eee-default-autopsy.md`](live-runs/live-0bc3eee-default-autopsy.md). The row is in [`first-executions.md`](first-executions.md).
+
 <a id="oq-246"></a>
 
 **OQ-246 — When `write_file`'s edit matches at REQ-TOOLS-136 level 2, does the replacement keep the window's line endings
@@ -12725,6 +12769,10 @@ each "(red)" case red on the code before), `run-host/tools.test.ts` (the catalog
 overriding `intent-classifier`) and `tools/delegation.test.ts` (`gatekeeper` no longer among the research and decision roles). The
 note is repaired.
 
+**Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`:** held. `intent-classifier`
+appeared in 0 of 64 `delegate` descriptions at `552d346`'s default pack (71 of 71 at `a68f121`), 0 of 41 in its duress pack and
+0 of 94 at `0bc3eee`, and every child was a listed target. Evidence: [`live-552d346-default-autopsy.md`](live-runs/live-552d346-default-autopsy.md), [`live-552d346-duress-autopsy.md`](live-runs/live-552d346-duress-autopsy.md), [`live-0bc3eee-default-autopsy.md`](live-runs/live-0bc3eee-default-autopsy.md). The row is in [`first-executions.md`](first-executions.md).
+
 <a id="oq-229"></a>
 
 **OQ-229 — Does a persona's `delegates_to` narrow which roles it may delegate to?** *(REQ-CONFIG-101, `delegates_to` "roles this
@@ -12797,6 +12845,9 @@ only `gatekeeper`, the check ahead of a continuation, the writers among the targ
 a follow-up not checked, the key unset), `run-host/tools.test.ts` (the catalogue equal to what admission accepts in both
 directions; a global list narrowing and a workspace `[]` lifting it), `run-host/configuration.test.ts` (the carried list and the
 four log lines) and `tools/delegation.test.ts`. The note is repaired.
+
+**Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`:** **NOT REACHED**: no live
+configuration sets `delegates_to`, so the narrowing is shown in scripted evidence only. The row is in [`first-executions.md`](first-executions.md).
 
 <a id="oq-250"></a>
 
@@ -13130,6 +13181,11 @@ attachment warning, and `HAND_OFF_SENTENCE` in `delegate`'s description (`packag
 run's NOTE (`apps/desktop/scripts/lib/hand-off-cuts.mjs`). Pinned by `children/notify.test.ts`, `children/children.test.ts` and
 `tools/delegation.test.ts`, red on the code before. The note is repaired.
 
+**Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`:** the hand-off was **NOT
+REACHED** at `0bc3eee`: no delegation used `depends_on` or `inherited_context`, so the harness's 0 cut answers does not
+discriminate. The duress pack named above is still owed; none has been made since `552d346`. Evidence: [`live-0bc3eee-default-autopsy.md`](live-runs/live-0bc3eee-default-autopsy.md). The row is in
+[`first-executions.md`](first-executions.md).
+
 <a id="oq-257"></a>
 
 **OQ-257 — Does `delegate`'s write-scope sentence tie file work to a writer, and what bound replaces OQ-216's target of zero
@@ -13188,6 +13244,11 @@ unchanged apart from the tokens.
 with the seconds to re-route (`routingMissReading`'s `rerouted`, `secondsToNext` and `flagged`, `apps/desktop/scripts/lib/routing-misses.mjs`).
 Pinned by `tools/delegation.test.ts` and `lib/routing-misses.test.ts`, red on the code before. The note is repaired.
 
+**Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`:** at `0bc3eee` the new
+sentence and the field's description were in 94 of 94 `delegate` offers, 8 write scopes went to writers only, and 0 were refused
+for a non-writer. The default run is unchanged but for the tokens, as foreseen; the duress bound is still owed. Evidence:
+[`live-0bc3eee-default-autopsy.md`](live-runs/live-0bc3eee-default-autopsy.md). The row is in [`first-executions.md`](first-executions.md).
+
 <a id="oq-258"></a>
 
 **OQ-258 — Does the intent classifier's strict rung name the classification object's fields?** *(REQ-ORCH-010, the three-rung
@@ -13235,6 +13296,16 @@ read `fallback: true` less often.
 place, and in `PD-ORCH-011` revision 2's first live execution.* `KEYS_INSTRUCTION`, `SCHEMA_INSTRUCTION` and
 `JSON_OBJECT_INSTRUCTION` (`packages/engine/src/intent/classifier.ts`); pinned by `intent.test.ts`'s OQ-258 case, red on the code
 before. The note is repaired.
+
+**Reported back 2026-10-13 (fin41), from the default pack at `0bc3eee`, "the next default pack":** the reopening
+condition is **not met** on either limb. Every `json_schema` request (10 of 10) ended with the keys sentence naming `intent`,
+`confidence` and `reason`; no reasoning debated `category`, `classification` or `intent` as the key; 9 of 10 launches
+classified in 2.3 to 9.8 s, against 6 of 10 at `552d346`. The one cut, requirements at 11,973 ms, came after 91 kB of stream
+while the reasoning was still weighing `small_feature`, `moderate_feature` and `single_file_change`: category deliberation, not
+a category named and then lost, and 1 cut in 10, not 3. faults-args did run direct (46.1 s, against 169.1 s), but as
+`explicit_trivial` 0.78 rather than the `single_file_change` foreseen above; terminal (`explicit_trivial` 0.92) ran its shapes
+itself in 183.5 s against 338.8 s. Duress was not run at this head, so "duress classifies `whole_project` in time" is still
+unmeasured. Evidence: [`live-0bc3eee-default-autopsy.md`](live-runs/live-0bc3eee-default-autopsy.md). The row is in [`first-executions.md`](first-executions.md).
 
 <a id="oq-259"></a>
 

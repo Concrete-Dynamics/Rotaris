@@ -123,7 +123,9 @@ children streaming at once — 08:14:11 to 08:16:11 (119 s; a, b and c) and 08:1
 138.1 s request 80 overlapping e1's requests 78, 79 and 81 by 40.7, 49.7 and 45.5 s, the shape of the `a68f121` errors, over a
 929 kB transcript ([`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md), finding D8;
 the orchestrator's scratchpad copy until 2026-10-13). The default pack of the same build
-carried 0 as well, with two children streaming at once in `edit` and `resume`. One more absence does not discharge the note:
+carried 0 as well, with two children streaming at once in `edit` and `resume`, and so did the default pack at `0bc3eee`
+(12 logs, two children streaming at once in `edit`, `resume` and `requirements`;
+[`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md), recorded 2026-10-13 by fin41). One more absence does not discharge the note:
 the seven errors of `a68f121` were never explained, only not seen again.
 
 **Read from the code again.** The renderer commits since fin35's reading (`40914f9`, the Mission table's persona cell in CSS;

@@ -209,3 +209,11 @@ names the object's three keys in the sentence rung 2 carries, without rung 2's e
 `packages/engine/src/intent/classifier.ts`); every other part of this correction stands. The loop classifier's strict rung still
 carries the bare sentence (`apps/desktop/src/run-host/loop.ts`), its three fields named only in its system prompt; it is outside
 this ruling.
+
+**Reported back 2026-10-13 (fin41): the correction's first live execution, the default pack at `0bc3eee`.** The strict rung
+held: 10 of 10 classifier requests went out at `json_schema` ending with the keys sentence, no reasoning debated which key to
+write, and 9 of 10 answered in 2.3 to 9.8 s (6 of 10 at `552d346`). The one cut (requirements, 11,973 ms, 91 kB of stream) was
+category deliberation, which naming the keys does not touch. The loop classifier's strict rung was reached once, in the duress
+pack at `552d346` before this change, and cut by the activation budget, so its bare sentence is unmeasured. Read from a copy
+of the pack: [`live-0bc3eee-default-autopsy.md`](../live-runs/live-0bc3eee-default-autopsy.md). The row is in
+[`../first-executions.md`](../first-executions.md).

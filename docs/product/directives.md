@@ -1451,6 +1451,14 @@ italic note; on OQ-236 both advocates' recommendations followed in part.
 > proof runs those very capture steps against the scripted provider, green. **Not measured:** a live retrospective — the
 > orchestrator's run. Recorded in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: **NOT REACHED** in any
+> of the three. No retrospective gesture was driven, and the post-run analyst was cut at the harness's exit in every
+> session, as at every pack (REQ-LIBRARY-127). Found nothing, because nothing met the case. Evidence:
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-shell-002"></a>
@@ -2437,6 +2445,17 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > the text was wrong. **Not measured:** a live run in which a later root took an offer up — the live `cutoff` scenario
 > (`--only=cutoff`) asks for it and is the orchestrator's to run; a model that declines the offer there is a NOTE. The row is
 > in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: **NOT REACHED** in any
+> of the three. The changed-paths repair (finding D1) and the cross-file EDIT reading (XE1, OQ-245) met no
+> code-intelligence EDIT-tier call:
+> the duress tester held the tier and wrote through `write_file` and `haet_edit`, and every child's `edited_files` equals its
+> successful `write_file` and `haet_edit` paths. Found nothing, because nothing met the case. Evidence:
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-monitor-002"></a>
@@ -3168,6 +3187,35 @@ revision 9 from OQ-256 and OQ-257 (the consortium's questions V1 and V2, the dur
 > [`an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters`](../defects/fixed/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md)
 > and [`the-routing-sentence-did-not-stop-a-write-scope-for-architect`](../defects/fixed/the-routing-sentence-did-not-stop-a-write-scope-for-architect.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`** — revisions 5, 6, 7 and 9, whose
+> blocks above say "No live run" and keep their words. Evidence:
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+>
+> - **Revision 5 (attached artifacts): reached once, below the budget.** No default delegation attached an artifact (0 of 11
+>   at `552d346`, 0 of 9 at `0bc3eee`). The duress coordinator attached one (`#247`, the verifier's report artifact
+>   `art_t5eFGWLq`, to f2): the observation read "1 attached artifact will be given to the child whole" and the
+>   `context_selection` entry `attached_included: 1` with nothing elided. Nothing came near the 100,000-character budget, so the
+>   skip-and-continue path is still shown by `artifacts-proof` launch 7 alone.
+> - **Revision 6 (a delegation names its item): PASS.** At `552d346` 9 children named their item and 1 delegation was refused
+>   (requirements `#39`, a docs-writer naming none), re-routed by `add_task` (`#40`) and a named delegation (`#41`) about 11.9 s
+>   later. In the duress pack the 6 implementation delegations after the list all named an item and none was refused for it;
+>   at `0bc3eee` 8 of 8, none refused. That is within the target of at most one refusal a run, each followed by a named
+>   delegation, and the harness found no two holders of one item at once in any pack.
+> - **Revision 7 (admission marks the item IN_PROGRESS): PASS.** Every admission naming a PENDING item answered "Todo item … is
+>   now IN_PROGRESS": 9 of 9 at `552d346`'s default pack (its autopsy wrote "10 of 10" over a list of nine), 6 of 6 in the
+>   duress pack, 7 of 7 at `0bc3eee`. A delegation naming an item already IN_PROGRESS wrote no line, as built (duress `#247`,
+>   `0bc3eee` requirements `#64`). Parallel delegations left two items (default) and three (duress, after `#17`) active at once
+>   with no refusal, so `a68f121`'s `#305` did not recur. The Agent plan strip was not read.
+> - **Revision 9: the sentences HELD at `0bc3eee`; the hand-off was NOT REACHED.** The write-scope sentence, the field's
+>   description and the hand-off sentence were in 94 of 94 `delegate` offers; 8 write scopes went to writers only (7
+>   coding-agent, 1 docs-writer); 0 write-scope refusals; 0 unknown-tool calls. No delegation used `depends_on` or
+>   `inherited_context`, so the harness's "0 cut answers" does not discriminate. The duress pack named above as the measure is
+>   still owed: no duress run has been made since `552d346`.
+>
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -4146,6 +4194,16 @@ under the owner's delegation, 2026-10-07, ruling OQ-205; logged as [R-072](reque
 > now records the tool names it was offered). **What was not measured.** No live run: no live scenario takes a strategy, so
 > the built-app launch stands in. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: revision 1's live measure,
+> the `frictions` scenario. Its coordinator's first request after an `explicit_trivial` classification went straight to the
+> work both times, `write_file` and a background `terminal` in one step: 4,329 ms and 227 output tokens (514 characters of
+> reasoning) at `552d346`, 4,530 ms and 240 (463) at `0bc3eee`, against `27a5127`'s 14.5 s and 1,034 output tokens. Neither
+> reasoning weighs what a coordinator may do ("Simple task. Create file, then run the command in background terminal, then
+> send SIGINT."). Held as written. Evidence:
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-orch-007"></a>
@@ -4173,6 +4231,15 @@ recent part of the transcript, which the report's deterministic facts (OQ-111) p
 > closing section, and a task past 12,000 characters held within the total. **What was not measured.** No built-app proof
 > delegates a task that long; the orchestrator's duress live run's summarising requests should each begin with the whole task.
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: the duress measure.
+> All 8 summarising requests of the duress run carried their child's task whole at the start of the transcript, after the
+> marker for the payload ahead of it: tasks of 2,091 to 7,123 characters, every one longer than the 2,000 the per-event cut
+> allowed. The default packs agree: 10 of 10 at `552d346` (929 to 8,608 characters) and 9 of 9 at `0bc3eee` (940 to 2,868).
+> Read from each summariser request's text in `model-traffic.jsonl` against `children.task`. Held as written. Evidence:
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -4231,6 +4298,17 @@ per pass, and one more counter on the session's row for a plan cycle's root, whi
 > remainder is now every call the attempt's turns counted, a replay included (`attemptCounted`, told by the turn's new
 > `onToolCounted` as it counts each call), less those it completed, with or without an outcome. Two more cases in
 > `run/ladder.test.ts`, one per shape, red on the first repair.
+
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: the duress measure.
+> At the run's end (no deadline was reached) `sessions.tool_calls` read **303**, equal to the 303 `tool_calls` rows and to
+> `root_tool_calls` 63 plus the children's 240 (23, 12, 23, 36, 32, 42, 27, 45); `ring_state` held 303 with 0 dropped. Every
+> session of both default packs agrees the same way (at `552d346` edit 13 + 15, requirements 25 + 43, terminal 6 + 15,
+> faults-args 1 + 3, resume 6 + 10; at `0bc3eee` edit 11 + 16, resume 6 + 14, requirements 37 + 75). No pack samples the total
+> while a pass is still open, so the mid-pass half stays shown by the unit cases alone. Evidence:
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -4503,6 +4581,24 @@ question RC1, from revision 7's first execution).*
 > revision-2 behaviour, safe and named, not the close revision 3 allows; no live run has met it.
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**.
+>
+> - **Revision 2: PASS in all three packs.** Parallel delegations left their items IN_PROGRESS together with no single-active
+>   refusal (at `552d346` edit `#8` and resume `#3`, two each, and three in the duress run after `#17`; at `0bc3eee` edit,
+>   resume and requirements, two each), and the harness counted 0 `replace` calls refused for marking more than one task in
+>   progress. `a68f121`'s P3 (2 refused `todo` calls and a refused `delegate`, about 19.5 s) did not recur.
+> - **The restore revision 3 repairs was latent at `552d346`:** 6 `replace` calls across both packs, each the opening write of
+>   a plan, every close an `update`; 0 restored COMPLETED items, 0 s.
+> - **Revision 3: NOT REACHED at `0bc3eee`.** Its 5 `replace` calls were again opening writes and every close an `update`;
+>   `restoredOverClose` read 0 and `namedRestores` named none, neither discriminating. The next default run whose coordinator
+>   closes with a `replace` after its children end is still the measure.
+>
+> Evidence:
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-mcp-001"></a>
@@ -4551,6 +4647,17 @@ rewords its description is not seen until the product's text is revisited.
 > imperative only under the other server. `code-intel-proof`'s discovery step now asserts the section against the built app.
 > **What was not measured.** A live run against a real model; the next one shows whether agents still open with the manual.
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: whether agents still open
+> with the manual. They do not. The usage-instruction tool (`initial_instructions`) was offered with the product's text in every
+> agent request of the three packs, 144 of 144, 188 of 188 and 188 of 188, and called **0 times** in any of them. The MCP calls
+> made were memory and diagnostics tools only: `list_memories` ×4 and `get_diagnostics_for_file` ×1 at `552d346`'s default pack;
+> `list_memories` ×7, `read_memory` ×3, `write_memory` ×3 and `edit_memory` ×1 in its duress pack; `get_diagnostics_for_file`
+> ×3, `list_memories` ×4, `read_memory` ×1 and `write_memory` ×1 at `0bc3eee`. Held as written. Evidence:
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -4902,6 +5009,22 @@ them: REQ-ORCH-088, REQ-CONFIG-113 and REQ-MONITOR-286.*
 > [`a-post-run-analysis-after-a-retrospective-is-never-captured.md`](../defects/fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md)
 > (repaired; PD-LIBRARY-002's record above). The live `ask` scenario sets the control to `LIVE_RUN_ANALYST_TIMEOUT_S` (default
 > 300) the same way before its run. **Not measured:** that live run, the orchestrator's.
+
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**.
+>
+> - **The raised limit (OQ-214's second ruling, the harness's 2,700 s): measured once, and it mattered.** The duress pack's
+>   `app.log` read `child_timeout=2700 s` (lines 13 and 31), `results.json` `childTimeoutS: 2700`, and the pack holds
+>   `duress/agents.yaml`. No child was cut off. The verifier f1 lived **1,253.2 s**, 53.2 s past the 1,200 s default, and
+>   succeeded; under the default its last step would have landed 21.5 s after the ceiling and the child would have ended
+>   `failed`. The limit was set by the harness's file edit; the Settings control was not driven.
+> - **Revision 3's tag (CN1) and revision 4's "1 second": NOT REACHED.** No child timed out in any of the three packs; the
+>   longest default children lived 176.2 s (`552d346`) and 268.5 s (`0bc3eee`).
+>
+> Evidence:
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -5422,6 +5545,14 @@ that fails; a root that wrote nothing on purpose is asked anyway.
 > `answerless.test.ts`'s five cases and the case "PD-ORCH-009 beside REQ-ORCH-078" stay green. Found nothing against the
 > text.
 
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: **NOT REACHED** in any
+> of the three. Revision 2's re-prompt was owed nowhere: 0 requests carry it, and every root's last request ended with text.
+> Found nothing, because nothing met the case. Evidence:
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-hooks-001"></a>
@@ -5593,6 +5724,17 @@ advocate's first execution against the registered self-hosted endpoint.
 > applying the tie-break, and terminal's was the endpoint queueing. So this revision's sentence is not shown to have lengthened
 > classification; the key deliberation is OQ-258's, repaired by naming the keys on the strict rung, and the next default pack is
 > the measure.
+
+> **Reported back 2026-10-13 (fin41): revision 2 at `0bc3eee`, "the next default pack" named above** (pack
+> `2026-10-13T12-18-40-282Z`; [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md)). The classifier answered on its strict rung in **9 of 10 launches** (2.3 to 9.8 s),
+> against 6 of 10 at `552d346`; every request ended with OQ-258's keys sentence and no reasoning debated which key to write. The
+> one cut, requirements at 11,973 ms, received 91 kB of stream and was still weighing `small_feature`, `moderate_feature` and
+> `single_file_change` against the prompt's tie-break, so neither of OQ-258's reopening limbs is met. **faults-args, the prompt
+> this revision defines:** classified `explicit_trivial` 0.78 in 9.1 s, not `single_file_change`, and the coordinator wrote the
+> file itself in 46.1 s (169.1 s at `552d346`, 43.3 s at `a68f121`). Both are direct-work categories, so the route the revision
+> wants was taken and the label it defines was not. Whether the sentence lengthens classification is still not separable from
+> the endpoint; with the keys named it no longer shows as cuts.
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -6903,6 +7045,28 @@ logged as [R-072](requests.md#r-072).* *Revision 2 raised under the owner's dele
 > either directory, calls and rows naming them well below 21 and 32, and in the default run no priming. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: revision 1's duress
+> measure and revision 2's default and duress measures. Evidence:
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+>
+> - **Revision 2's statement reached every agent:** 144 of 144 agent requests at `552d346`'s default pack, 188 of 188 in its
+>   duress pack, 188 of 188 at `0bc3eee`.
+> - **Duress: held.** No file-tool result listed `.serena`, and no memory, answer or delivered file named it; the one deliverable
+>   naming `.rotaris` is `docs/overview.md`'s faithful quote of the workspace's `.gitignore` line (`#64`). 23 calls and 33 rows
+>   name either directory, against 21 and 32 at `a68f121`, but the two counts are not like for like: 15 of the 23 calls are that
+>   `.gitignore` line read back (directly or through `docs/overview.md`), 3 are e2's reads into `.rotaris` hunting the answer V1
+>   cut, 3 are terminal listings that show them (`#31`'s `ls -a`, `#215`, `#229`), and 2 are the verifier's `find` excluding
+>   both. Calls naming `.serena` itself: 5.
+> - **Default: no delivered file names either directory in either pack, and the priming clause is mixed.** At `552d346`
+>   `.serena` showed only in two terminal listings (requirements `#36`, `#53`), no answer, child report or artifact named it,
+>   and the worktree's `git status` (`#22`, `#35`) listed no `.serena/`. At `0bc3eee` two of the coordinator's briefs named
+>   both directories as tooling not to write about (requirements `#65`, `#90`) and the verifier's report repeated it (`#108`),
+>   so the default run carried some priming, though nothing delivered named them.
+>
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-git-001"></a>
@@ -7048,6 +7212,16 @@ logged as [R-072](requests.md#r-072).*
 > `completed` / `tasks_complete` inside the 420 s wait. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: **NOT REACHED** in any
+> of the three. Every root closed its own plan before it answered: 0 of 174, 199 and 215 requests carry "of your plan not
+> complete" or "previous iteration on this task", and every iteration closed `succeeded` on the first try. At `552d346`
+> terminal's coordinator closed both items itself (`#20`, `#21`) before answering, so no correction was owed; at `0bc3eee` it
+> ran the shapes itself. Found nothing, because nothing met the case. Evidence:
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-tools-013"></a>
@@ -7181,6 +7355,16 @@ live run at `a68f121`); logged as [R-072](requests.md#r-072).*
 > quit that cuts a fetch or an MCP call is the measurement. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: **NOT REACHED** in any
+> of the three. No tool call was cut in flight at any quit; every run ended before its capture's quit, and 0 tool records read
+> `interrupted`. The neighbour case held at `552d346`: the resume Pause left three calls of the step it ended unstarted
+> (rows 12 to 14), each reading "This call was not run: it was interrupted by the pause before it started …" with no
+> `tool_calls` record and no issue. Found nothing, because nothing met the case. Evidence:
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-orch-016"></a>
@@ -7233,6 +7417,18 @@ PD-ORCH-015 (P1) was assigned the number before it.*
 > step, `reads4`, makes the four calls in one step, since every other scripted step speaks "Calling read_file." and would meet
 > the message limb first. The text met the code in no other place. **What was not measured:** a live run since the change. The
 > row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: **reached once, held, not
+> discriminating.** The supervisor activated once in the three packs, at the duress orchestrator's 60th call (`#300`, `grep`,
+> 09:06:51.839); the loop classifier was cut at 1,994 ms by the activation budget, the run went on 2.02 s after `#300` started
+> (the loop-classification cap held), and the raw-count fallback found no evidence: the last four calls were three `read_file`
+> calls on three windows and the `grep`, so `continue`, with no injection and no timeline entry. The rule's discriminating
+> case was one call away: `#296` to `#299` were four `read_file` calls, which the name-only reading would have counted, but the
+> trigger fell on the `grep`. No agent of either default pack came near 60 calls (25 and 37 at most). Evidence:
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -7354,6 +7550,15 @@ carries up to the window's size.
 > [`a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly`](../defects/fixed/a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: **NOT REACHED** in any
+> of the three. Every `haet_edit` and `write_file` edit applied first time or failed on a stale hash, never on a level-2 or level-3
+> near miss (3 + 9 edits at `552d346`'s default pack, 13 + 5 in its duress pack, 21 at `0bc3eee`), and the harness NOTE read "no
+> haet_edit miss matched at match level 2 or 3" each time. Found nothing, because nothing met the case. Evidence:
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-tools-015"></a>
@@ -7440,6 +7645,14 @@ Narrows REQ-TOOLS-136 (a level-3 match the case names is refused rather than app
 > [OQ-246](../architecture/open-questions.md#oq-246),
 > [`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../defects/fixed/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md)).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: **NOT REACHED** in any
+> of the three. No `write_file` edit result said "shifted" or was refused; each `old_string` was among the lines the agent had read
+> or written, so all matched at level 1 by that proxy. Found nothing, because nothing met the case. Evidence:
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -7569,6 +7782,14 @@ added to the edit's success).*
 > window edit that lands on the file's own bytes; no proof script drives `write_file` in the built app. Repairs
 > [`a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success`](../defects/fixed/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: **NOT REACHED** in any
+> of the three. The fixtures are LF files on Linux and no edit needed a window match.
+> Found nothing, because nothing met the case. Evidence:
+> [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
+> [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
+> [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
+> The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

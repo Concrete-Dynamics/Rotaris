@@ -28,3 +28,10 @@ delegation naming none) names both ways forward; the sentence for a plan with no
 change, and the refusal texts in `todo-item.test.ts` and `children.test.ts`; `mission-proof` item 1e now reads the sentence in
 gamma's refusal. **What a live run should show**: a no-item refusal in the `requirements` scenario (if the model meets one)
 ending with that sentence, followed by an `add_task` and a delegation naming the new item.
+
+## Reported back 2026-10-13 (fin41): the default live run at `0bc3eee`
+
+**Not reached.** No delegation was refused for its todo item in any session of the pack: the 8 implementation delegations
+after a plan each named an open item, and the verifier owed none. The repaired sentence has not yet met a live model. Read from a
+copy of the pack: [`live-0bc3eee-default-autopsy.md`](../../architecture/live-runs/live-0bc3eee-default-autopsy.md). The row is in
+[`first-executions.md`](../../architecture/first-executions.md).

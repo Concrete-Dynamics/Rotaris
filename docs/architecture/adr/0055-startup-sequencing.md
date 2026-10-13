@@ -486,7 +486,7 @@ anywhere, and that is OQ-43.** It is left open rather than closed by this record
   its private directory below the temporary directory), which it closes and unlinks before it hands over (`closeEndpoint`,
   `packages/platform/src/instance.ts`). On Windows the endpoint is a named pipe and nothing is written. Whether that
   transient socket is a write `REQ-STARTUP-164` forbids, and which of the two decisions gives way if it is, is
-  [OQ-241](../open-questions.md#oq-241).
+  [OQ-248](../open-questions.md#oq-248).
 - **The workspace directory travels as a declared field over that endpoint, never as a command line.**
   The launch resolves the directory the operating system handed it (`REQ-STARTUP-024`,
   `REQ-STARTUP-041` (a)) on `REQ-STARTUP-163`'s same-directory terms and sends it as one named value with
@@ -1124,4 +1124,4 @@ record names at the instant the record is written, and fails on the old order
 both become the instance needed launches started within one `listen` of each other; it was read from the code, never
 measured, and is closed by construction rather than by a measured bound. The order has a cost this record did not price: a launch that loses
 the claim has opened, and then removes, an endpoint of its own, which on a platform whose endpoint is a file contradicts "a
-launch that is handed over writes nothing" above (corrected there; [OQ-241](../open-questions.md#oq-241)).
+launch that is handed over writes nothing" above (corrected there; [OQ-248](../open-questions.md#oq-248)).

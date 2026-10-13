@@ -12396,13 +12396,14 @@ The specification fixes neither keeping the window's endings nor writing `new_st
 into the replacement, writes `new_string` as given, or is refused with `PD-TOOLS-014`'s level-2 near-miss facts, as `haet_edit`'s
 is.
 
-<a id="oq-240"></a>
+<a id="oq-247"></a>
 
-**OQ-240 — Does REQ-STARTUP-147's list of the variables the domain reads name the platform-convention ones?** *(REQ-STARTUP-147,
+**OQ-247 — Does REQ-STARTUP-147's list of the variables the domain reads name the platform-convention ones?** *(REQ-STARTUP-147,
 "Environment variables read by this domain"; REQ-STARTUP-145, the platform-conventional per-user directories; REQ-STARTUP-161
 and -164, the instance claim and its hand-over endpoint; `packages/platform/src/dirs.ts`, `packages/platform/src/instance.ts`.
 Raised 2026-10-13 by fin34 from fin30's review of the platform paths, which left it as an optional finding. Numbered after
-OQ-235 to OQ-239, which this plan's other bundles hold.)*
+OQ-235 to OQ-239, which this plan's other bundles hold; raised as OQ-240 and renumbered OQ-247 at the landing, since
+origin/main had skipped to OQ-245 and OQ-246 past a block another plan may still hold.)*
 
 REQ-STARTUP-147 lists the environment variables this domain reads: `APPIMAGE`, `ROTARIS_BUNDLED`, `COMSPEC`, and the variable by
 which an artifact form names the file a launch started from. The domain also reads `XDG_CONFIG_HOME` and `XDG_DATA_HOME` (Linux)
@@ -12417,14 +12418,14 @@ second sentence holds for them either way. **What a ruling decides.** Whether RE
 whether it should name the platform-convention variables, or REQ-STARTUP-145 should say the convention's variables are read —
 or whether it lists only the variables this product defines or depends on beyond the platform's own conventions.
 
-<a id="oq-241"></a>
+<a id="oq-248"></a>
 
-**OQ-241 — Is the hand-over endpoint a launch opens before it loses the claim a write REQ-STARTUP-164 forbids?** *(REQ-STARTUP-164,
+**OQ-248 — Is the hand-over endpoint a launch opens before it loses the claim a write REQ-STARTUP-164 forbids?** *(REQ-STARTUP-164,
 "a launch SHALL write nothing but the record itself while resolving it"; REQ-STARTUP-161, REQ-STARTUP-162; ADR-0055, "The
 endpoint is listening before the record is written, not after" and "A launch that is handed over writes nothing";
 `packages/platform/src/instance.ts`, `claimInstance`'s `attempt`, `openEndpoint`, `closeEndpoint`, `socketDirectoryFor`. Raised
 2026-10-13 by fin34's review of the repair of `docs/defects/fixed/the-instance-record-is-written-before-its-endpoint-listens.md`,
-with fin30's optional finding #13 folded in. Numbered after OQ-240.)*
+with fin30's optional finding #13 folded in. Raised as OQ-241 and renumbered OQ-248 at the landing, after OQ-247.)*
 
 ADR-0055 decides two things that the code, once it keeps both, shows cannot both hold on a platform whose endpoint is a file.
 The endpoint listens before the record naming it is written, so a second launch never reads a record naming an address that

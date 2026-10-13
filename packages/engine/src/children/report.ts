@@ -1,8 +1,9 @@
 import { countNoun, millis, type Millis, type Timers } from '@rotaris/kernel';
 import { normaliseReportStatus, type ReportStatus } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
-import { codeIntelligenceEdit } from '@rotaris/config';
+import { CODE_INTELLIGENCE_SERVER_NAME, codeIntelligenceEdit } from '@rotaris/config';
 import type { CutOff } from './cut-off.js';
+import type { AgentGrant } from './personas.js';
 import { ranBeforeItWasCut } from '../run/interruption.js';
 
 /**
@@ -68,6 +69,11 @@ export interface ReportInput {
    * is told it in the Outcome line and never writes it.
    */
   readonly cutOffStatement?: string | undefined;
+  /**
+   * REQ-MCP-015 (fin36): the callables the child's grant gives the code-intelligence server (`editTierNamesOf`), so a tool of
+   * another server named like the EDIT tier is no edit. Absent where no grant is known, when the name alone decides.
+   */
+  readonly editTier?: EditTierNames;
 }
 
 export interface SummariserDeps {
@@ -201,8 +207,8 @@ export function outcomeLine(outcome: Pick<ReportInput, 'status' | 'errors' | 'cu
  * as it was. The reason it was not there, kept beside the repair: until the ruling the pass was given no outcome, and 2 of
  * the 5 timed-out children of the duress runs at c2fdd6a and c2a9444 got summaries that read as success.
  */
-export function reportFacts(messages: readonly ChatMessage[], outcome?: Pick<ReportInput, 'status' | 'errors' | 'cutOffStatement'>): string {
-  const { edited, unnamedBy } = writesFrom(messages, []);
+export function reportFacts(messages: readonly ChatMessage[], outcome?: Pick<ReportInput, 'status' | 'errors' | 'cutOffStatement' | 'editTier'>): string {
+  const { edited, unnamedBy } = writesFrom(messages, [], outcome?.editTier);
   const ran = commandsFrom(messages);
   const head = outcomeLine(outcome);
   // OQ-245: a cross-file call the record holds no observation of is said, so the pass is never told "(none)" over it.
@@ -261,8 +267,25 @@ export function isNativeFileWritingTool(toolName: string): boolean {
  * file-writing calls changed no workspace paths.", its edited files empty
  * (`docs/defects/fixed/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md`).
  */
-export function writtenPathsOf(toolName: string, args: Readonly<Record<string, unknown>> | null): readonly string[] | null {
-  return writeReadingOf(toolName, args, undefined)?.paths ?? null;
+export function writtenPathsOf(toolName: string, args: Readonly<Record<string, unknown>> | null, tier?: EditTierNames): readonly string[] | null {
+  return writeReadingOf(toolName, args, undefined, tier)?.paths ?? null;
+}
+
+/**
+ * REQ-MCP-015: the EDIT tier is the code-intelligence server's. A call's runtime name carries that server's prefix only when
+ * two servers expose one name, so the name alone cannot tell the product's `replace_content` from a user's own server's tool
+ * called the same. The readers are given instead the callables the child's grant gives the code-intelligence server, in
+ * lower case (`McpGrantEvidence.granted`, keyed by server); a call whose name is not among them is no EDIT call whatever it
+ * is called. `undefined` where no grant is known (a port not yet ready, a test double), when the name alone decides as before.
+ *
+ * The reason, kept beside it: until fin36 every reader matched the name alone, so with the shipped entry disabled another
+ * server's `replace_content` listed whatever its `relative_path` argument held among the child's edited files
+ * (docs/defects/fixed/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md).
+ */
+export type EditTierNames = ReadonlySet<string> | undefined;
+export function editTierNamesOf(grant: AgentGrant | null | undefined): EditTierNames {
+  if (grant === null || grant === undefined) return undefined;
+  return new Set((grant.mcp.granted[CODE_INTELLIGENCE_SERVER_NAME] ?? []).map((name) => name.toLowerCase()));
 }
 
 /**
@@ -283,11 +306,13 @@ export interface WriteReading {
   readonly paths: readonly string[];
   readonly unnamed: boolean;
 }
-export function writeReadingOf(toolName: string, args: Readonly<Record<string, unknown>> | null, observed: readonly string[] | undefined): WriteReading | null {
+export function writeReadingOf(toolName: string, args: Readonly<Record<string, unknown>> | null, observed: readonly string[] | undefined, tier?: EditTierNames): WriteReading | null {
   if (isNativeFileWritingTool(toolName)) {
     const target = asText(args?.['path']) || asText(args?.['file_path']);
     return { paths: target === '' ? [] : [target], unnamed: false };
   }
+  // REQ-MCP-015 (fin36): only the code-intelligence server's tools are of its EDIT tier (`editTierNamesOf`).
+  if (tier !== undefined && !tier.has(toolName.toLowerCase())) return null;
   const edit = codeIntelligenceEdit(toolName, args);
   if (edit === null) return null;
   if (edit.reach === null) return { paths: edit.paths, unnamed: false };
@@ -393,8 +418,8 @@ export function commandsFrom(messages: readonly ChatMessage[]): readonly { comma
  * against a relative one, which would need the workspace root; a `..` segment, which is resolved only against a root
  * too (`docs/../docs/a.md` stays its own spelling); and letter case, which a Windows workspace does not distinguish.
  */
-export function editedFilesFrom(messages: readonly ChatMessage[], reported: readonly string[] = []): readonly string[] {
-  return writesFrom(messages, reported).edited;
+export function editedFilesFrom(messages: readonly ChatMessage[], reported: readonly string[] = [], tier?: EditTierNames): readonly string[] {
+  return writesFrom(messages, reported, tier).edited;
 }
 
 /**
@@ -402,8 +427,8 @@ export function editedFilesFrom(messages: readonly ChatMessage[], reported: read
  * observation of — each may have changed files the record cannot name (`writeReadingOf`). A call answered as refused is not
  * one: it never ran.
  */
-export function unnamedChangesFrom(messages: readonly ChatMessage[]): readonly string[] {
-  return writesFrom(messages, []).unnamedBy;
+export function unnamedChangesFrom(messages: readonly ChatMessage[], tier?: EditTierNames): readonly string[] {
+  return writesFrom(messages, [], tier).unnamedBy;
 }
 
 /**
@@ -411,7 +436,7 @@ export function unnamedChangesFrom(messages: readonly ChatMessage[]): readonly s
  * says the run host observed it change, listed whatever the call returned — a replacement that failed part-way had still
  * written the files before the failure; a call answered as refused and observed to change nothing lists nothing.
  */
-function writesFrom(messages: readonly ChatMessage[], reported: readonly string[]): { readonly edited: readonly string[]; readonly unnamedBy: readonly string[] } {
+function writesFrom(messages: readonly ChatMessage[], reported: readonly string[], tier: EditTierNames): { readonly edited: readonly string[]; readonly unnamedBy: readonly string[] } {
   const erred = new Set<string>();
   const observedOf = new Map<string, readonly string[]>();
   for (const m of messages) {
@@ -433,7 +458,7 @@ function writesFrom(messages: readonly ChatMessage[], reported: readonly string[
     for (const p of m.content) {
       if (p.kind !== 'tool-call') continue;
       const observed = observedOf.get(p.callId);
-      const reading = writeReadingOf(p.name, jsonObject(p.args), observed);
+      const reading = writeReadingOf(p.name, jsonObject(p.args), observed, tier);
       if (reading === null) continue;
       // What was observed is what the call changed, whatever it returned (OQ-245).
       if (observed !== undefined) { for (const path of reading.paths) add(path); continue; }
@@ -461,7 +486,7 @@ function pathKey(v: string): string {
  * fields it fills are REQ-ORCH-108's, and it fills them from evidence rather than leaving them blank.
  */
 export function fallbackReport(input: ReportInput, why: string): ChildReport {
-  const { edited, unnamedBy } = writesFrom(input.messages, []);
+  const { edited, unnamedBy } = writesFrom(input.messages, [], input.editTier);
   const ran = commandsFrom(input.messages);
   const ended = (input.errors ?? []).map((e) => e.message).join('; ');
   const unnamed = unnamedChangesSentence(unnamedBy);
@@ -489,7 +514,7 @@ export function deterministicTesterReport(input: ReportInput): ChildReport | nul
   if (input.role !== 'tester' || input.status !== 'succeeded' || input.messages.length > 8 || input.toolCallCount < 1 || !input.finalTextIsFinal || !input.lastText) return null;
   return {
     agent_name: input.agentName, role: input.role, status: 'succeeded', summary: cut(input.lastText, SUMMARY_CAP), key_findings: [],
-    last_response: input.lastText, final_response: input.lastText, edited_files: editedFilesFrom(input.messages), commands: commandsFrom(input.messages),
+    last_response: input.lastText, final_response: input.lastText, edited_files: editedFilesFrom(input.messages, [], input.editTier), commands: commandsFrom(input.messages),
     errors: [...(input.errors ?? [])], next_actions: [], tags: ['verification'],
   };
 }
@@ -511,7 +536,7 @@ function shape(raw: unknown, input: ReportInput): ChildReport | null {
   return {
     agent_name: input.agentName, role: input.role, status: input.status !== 'succeeded' ? input.status : normaliseReportStatus(str(o['status']) || input.status), summary: o['summary'],
     key_findings: list(o['key_findings']), last_response: input.lastText, final_response: input.finalTextIsFinal ? input.lastText : '',
-    edited_files: editedFilesFrom(input.messages, list(o['edited_files'])), commands: commandsFrom(input.messages),
+    edited_files: editedFilesFrom(input.messages, list(o['edited_files']), input.editTier), commands: commandsFrom(input.messages),
     errors: [...(input.errors ?? [])], next_actions: list(o['next_actions']),
     tags: list(o['tags']).filter((t) => ['research', 'planning', 'implementation', 'review', 'verification', 'errors'].includes(t)),
   };

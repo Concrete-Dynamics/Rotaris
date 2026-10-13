@@ -60,6 +60,14 @@ occurrences (`levelOneLines`). `live-run.mjs`'s near-miss NOTE counts retries re
 (`lib/near-miss-edits.mjs`). The **runtime view**'s file-tools paragraph says so. No package, edge, process, channel, command or
 store column changed.
 
+**The EDIT tier is the code-intelligence server's, in every reader (REQ-MCP-015, REQ-ORCH-109; fin36).** The run host's MCP
+executor asks `codeIntelligenceEdit` only of a tool of the server named `code_intelligence`, by the name the runtime reports;
+`writeReadingOf`, the report's edited files and facts (`ReportInput.editTier`) and `ProgressLog` are given the callables the
+child's grant gives that server (`editTierNamesOf` in `engine/src/children/report.ts`, read from `ToolPort.grant()`), and a call
+of another name is no EDIT call; before the grant is known the name alone decides, as before. The **runtime view**'s cut-off
+passage and the **state ownership view**'s observation row say so. No package, edge, process, channel, command or store
+column changed.
+
 **The Mission table's persona cell does not wrap (fin36).** `shell.css` gives `.agent-table__persona` `white-space: nowrap`,
 and `pnpm mission-proof` item 1f reads it on one line; the **seams view**'s timed-out-tag passage says so. Nothing else moved.
 

@@ -18,6 +18,7 @@ import { resumableOf } from '../sessions.js';
 import { summaryFactsOf } from '../run/summary.js';
 import { FULL_CONTEXT_BUDGET } from '../artifacts/context.js';
 import { userCancellation } from './ledger.js';
+import { CODE_INTELLIGENCE_MANIFEST } from '@rotaris/config';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -471,6 +472,34 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
   }
   const children = (sid: SessionId): ChildRow[] => dal.childrenOf(sid);
   const kinds = (sid: SessionId) => dal.eventsFrom(sid, 1, 10_000).map((e) => e.kind);
+
+  describe('REQ-MCP-015 (fin36): only the code-intelligence server\'s tools are its EDIT tier in a child\'s report', () => {
+    // docs/defects/fixed/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md
+    const name = CODE_INTELLIGENCE_MANIFEST.tiers.edit.replaceInFile;
+    const path = CODE_INTELLIGENCE_MANIFEST.editArguments.replaceInFile.path;
+    const editedFor = async (server: string): Promise<string[]> => {
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'tidy', task: 'TASK: tidy' } }]) : answer('done');
+        if (persona === 'summariser') return answer('{"summary":"Tidied."}');
+        return turn === 1 ? toolCalls([{ callId: 'e1', name, args: { [path]: 'notes/inbox.md', needle: 'a', repl: 'b', mode: 'literal' } }], 'Tidying.') : answer('Tidied.');
+      }, {
+        grant: (ctx) => (ctx.depth === 1 ? { tools: [], mcp: { granted: { [server]: [name] }, servers: [] } } : null),
+        tool: (n, a) => (n === name ? Promise.resolve({ text: 'OK', isError: false, status: 'ok' as const, durationMs: 1, label: n, args: a }) : undefined),
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      const row = children(sid).find((c) => c.canonical_name === 'tidy')!;
+      return (JSON.parse(row.report!) as { edited_files: string[] }).edited_files;
+    };
+
+    it('a call of another server\'s tool named like the tier is not in the edited files', async () => {
+      expect(await editedFor('notes')).toEqual([]);
+    });
+
+    it('the same call of the code-intelligence server\'s tool is', async () => {
+      expect(await editedFor('code_intelligence')).toEqual(['notes/inbox.md']);
+    });
+  });
 
   it('delegate in the background → the child runs its own turn, reports, the parent is resumed once with the report, the run completes', async () => {
     const { sessions, client } = sessionsWith((persona, turn) => {

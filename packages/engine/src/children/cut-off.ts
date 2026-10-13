@@ -1,7 +1,7 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { millis, type Millis } from '@rotaris/kernel';
 import type { ChildRow } from '@rotaris/store';
-import { unnamedChangesSentence, writeReadingOf } from './report.js';
+import { unnamedChangesSentence, writeReadingOf, type EditTierNames } from './report.js';
 
 /**
  * PD-ORCH-004 — a child cut off while making progress hands its work back to the parent. REQ-ORCH-088's expiry path
@@ -107,7 +107,12 @@ export class ProgressLog {
   private readonly changed: string[] = [];
   private readonly unnamed: string[] = [];
 
-  constructor(private readonly workspaceRoot: string) {}
+  /**
+   * `editTier`: the callables the child's grant gives the code-intelligence server, read at each call (REQ-MCP-015, fin36;
+   * `editTierNamesOf`), so another server's tool named like the EDIT tier changes no path here; undefined until the port's
+   * grant is known, when the name alone decides.
+   */
+  constructor(private readonly workspaceRoot: string, private readonly editTier: () => EditTierNames = () => undefined) {}
 
   /**
    * One tool call returned to the child at `at`. A call completes whatever it returned — an error or a refusal is a
@@ -131,7 +136,7 @@ export class ProgressLog {
    */
   completed(at: Millis, toolName: string, args: Readonly<Record<string, unknown>>, ok: boolean, seen: { readonly observedPaths?: readonly string[] | undefined; readonly ran?: boolean | undefined } = {}): void {
     this.lastCompletedAt = at;
-    const reading = writeReadingOf(toolName, args, seen.observedPaths);
+    const reading = writeReadingOf(toolName, args, seen.observedPaths, this.editTier());
     if (reading === null) return;
     if (seen.observedPaths === undefined && !ok && seen.ran !== true) return;
     for (const target of reading.paths) {

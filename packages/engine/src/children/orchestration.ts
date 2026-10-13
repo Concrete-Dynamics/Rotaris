@@ -14,7 +14,7 @@ import { ChildLedger, storeChildReport, userCancellation, writeCancelledTeardown
 import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
 import { CHILD_STALL_TIMEOUT_MS, childTimedOutMessage, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
 import { resolveDelegationTarget, resolveRole, type Persona, type PersonaResolver } from './personas.js';
-import { fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
+import { editTierNamesOf, fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
 import { correctiveInstruction, hadCorrectiveMessage, recordCorrectiveMessage, StallWatch, stallRecords, stallRecoveryDue } from './stall.js';
 import { fileWriters, scopeWithoutWriterReason, validateWriteScope, WriteClaims, writeScopeBlock, writesFiles, type ClaimHit, type ScopeDisclosure } from './write-scope.js';
@@ -1215,7 +1215,8 @@ export class IterationChildren implements DelegationOps {
     // PD-ORCH-004: the progress rule's window — the role's own `stall_timeout` (REQ-CONFIG-108), else the run's
     // `runtime.child_stall_timeout` — and the log it reads, kept across both attempts of REQ-ORCH-088's retry.
     const stallMs = millis(persona?.stallTimeoutMs ?? deps.childStallTimeoutMs ?? CHILD_STALL_TIMEOUT_MS);
-    const progress = new ProgressLog(deps.workspaceRoot);
+    // REQ-MCP-015 (fin36): which callables are the code-intelligence server's is read from the child's port once it is ready.
+    const progress = new ProgressLog(deps.workspaceRoot, () => editTierNamesOf(tools?.grant?.() ?? null));
     // REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch over the same window — visibility only, it cancels nothing. What
     // it reports is written only while this execution still belongs to a live run (REQ-SESSION-094): the warning with its
     // `stall` issue at entry and at REQ-MONITOR-120's throttle (PD-MONITOR-005 revision 2), and the wait on tools and the
@@ -1585,7 +1586,7 @@ export class IterationChildren implements DelegationOps {
     // summariser falls back to where its own pair is held out of quota.
     const agentModel = resilience ? resilience.memory.effective(resilience.cell.model, resilience.catalogue) : configured;
     // OQ-217 (R-072): the status, the errors and the cut-off statement reach the summarising pass as its Outcome line.
-    const reportInput: ReportInput = { agentModel: { model: agentModel.model, thinking: agentModel.thinking }, agentName: row.canonical_name, role: row.persona, status, messages, toolCallCount: toolCalls, toolsUsed: [...new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-call' ? [p.name] : []))))], lastText, finalTextIsFinal: finalIsFinal, errors, task: row.task, ...(cutOff === null ? {} : { cutOffStatement: cutOff.statement }) };
+    const reportInput: ReportInput = { agentModel: { model: agentModel.model, thinking: agentModel.thinking }, agentName: row.canonical_name, role: row.persona, status, messages, toolCallCount: toolCalls, toolsUsed: [...new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-call' ? [p.name] : []))))], lastText, finalTextIsFinal: finalIsFinal, errors, task: row.task, editTier: editTierNamesOf(tools?.grant?.() ?? null), ...(cutOff === null ? {} : { cutOffStatement: cutOff.statement }) };
     let produced: Awaited<ReturnType<typeof produceReport>>;
     try {
       produced = await produceReport(reportInput, cancelled || this.resting ? null : deps.summariser, summarising.signal, this.resting && !cancelled ? 'the run was coming to rest, so no summarising call was made' : undefined, () => this.resting);

@@ -100,6 +100,23 @@ describe('PD-ORCH-004: the paths a child\'s own file-writing calls changed', () 
       .toBe('Workspace paths its file-writing calls changed, in the order first changed: docs/verification.md, src/a.ts, src/c.ts.');
   });
 
+  it('another server\'s tool named like the EDIT tier changes no path once the child\'s grant is known (REQ-MCP-015, fin36)', () => {
+    const edit = CODE_INTELLIGENCE_MANIFEST.tiers.edit;
+    const path = CODE_INTELLIGENCE_MANIFEST.editArguments.replaceInFile.path;
+    let tier: ReadonlySet<string> | undefined;
+    const log = new ProgressLog(ROOT, () => tier);
+    tier = new Set(['code_intelligence_' + edit.replaceInFile]);
+    log.completed(millis(1), edit.replaceInFile, { [path]: 'notes/inbox.md', needle: 'a', repl: 'b', mode: 'literal' }, true);
+    log.completed(millis(2), edit.replaceAcrossFiles, { needle: 'a', repl: 'b', mode: 'literal' }, true);
+    log.completed(millis(3), `code_intelligence_${edit.replaceInFile}`, { [path]: 'docs/a.md', needle: 'a', repl: 'b', mode: 'literal' }, true);
+    expect(log.changedPaths()).toEqual(['docs/a.md']);
+    expect(log.unnamedBy()).toEqual([]);
+    // Before the port's grant is known the name alone decides, as before.
+    tier = undefined;
+    log.completed(millis(4), edit.replaceInFile, { [path]: 'notes/later.md', needle: 'a', repl: 'b', mode: 'literal' }, true);
+    expect(log.changedPaths()).toEqual(['docs/a.md', 'notes/later.md']);
+  });
+
   /**
    * OQ-245 (XE1, 2026-10-13, R-072): a cross-file EDIT call changed the files the run host observed it change, whatever it
    * returned; with no observation it is said, and the report never reads "changed no workspace paths" over it.

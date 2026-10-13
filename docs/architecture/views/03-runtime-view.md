@@ -793,10 +793,13 @@ inclusive). If it did, and the child then ends failed on that timeout, the store
 the workspace paths its own file-writing calls changed with `ok` — `write_file`/`haet_edit`/`haet` and, since fin32, the
 code-intelligence EDIT tier of REQ-MCP-015, each call's path read by the one `writtenPathsOf` (`children/report.ts`) the
 report's edited files share, an EDIT-tier tool's from the argument the binding manifest's `editArguments` names (the name
-matched in lower case, as the gate's fallback dispatches it; resolved lexically against the root; both attempts, in the
-order first changed, each once; the terminal outside, as PD-TOOLS-006 has it) — and, since fin35 (OQ-245), a cross-file
+matched in lower case, as the gate's fallback dispatches it, and since fin36 only among the callables the child's grant gives
+the code-intelligence server, `editTierNamesOf` over `McpGrantEvidence.granted`, so another server's tool called like the tier
+is no write (REQ-MCP-015; the name alone decides only before the port's grant is known); resolved lexically against the root;
+both attempts, in the order first changed, each once; the terminal outside, as PD-TOOLS-006 has it) — and, since fin35 (OQ-245), a cross-file
 EDIT call (a rename, a cross-file replacement: `scope: 'reach'`) by the files the run host observed it change, whatever it
-returned (`observeReach` around the MCP executor in `run-host/mcp.ts`: a snapshot of what the call can reach before and
+returned (`observeReach` around the MCP executor in `run-host/mcp.ts`, which since fin36 asks `codeIntelligenceEdit` only of the
+code-intelligence server's tools, by the name the runtime reports: a snapshot of what the call can reach before and
 after, less what another agent's native writes noted in the run host's `WriteJournal` meanwhile, carried as `observedPaths`
 on the `PortToolResult` and the tool-result part, persisted with the conversation and never sent to a model); with no
 observation (a walk the run host could not complete marks the call `unobserved`, which counts as having run even when it

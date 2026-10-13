@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
 import type { ChatMessage } from '@rotaris/model';
 import { CODE_INTELLIGENCE_MANIFEST } from '@rotaris/config';
-import { commandsFrom, deterministicTesterReport, editedFilesFrom, fallbackReport, isFileWritingTool, produceReport, reportFacts, reportTranscript, TRANSCRIPT_CAP, unnamedChangesFrom, writeReadingOf, writtenPathsOf, type ReportInput, type SummariserDeps } from './report.js';
+import { commandsFrom, deterministicTesterReport, editedFilesFrom, editTierNamesOf, fallbackReport, isFileWritingTool, produceReport, reportFacts, reportTranscript, TRANSCRIPT_CAP, unnamedChangesFrom, writeReadingOf, writtenPathsOf, type ReportInput, type SummariserDeps } from './report.js';
 import { commandsForArtifact } from './ledger.js';
 import { childPayload } from './notify.js';
 import { interruptedResult, ranBeforeItWasCut } from '../run/interruption.js';
@@ -158,6 +158,48 @@ describe('engine/children/report — a code-intelligence EDIT-tier write is an e
     expect(writtenPathsOf(CODE_INTELLIGENCE_MANIFEST.tiers.memoryWrite.memoryWriting, { memory_file_name: 'm' })).toBeNull();
     for (const name of Object.values(edit)) expect(isFileWritingTool(name)).toBe(true);
     expect(isFileWritingTool('read_file')).toBe(false);
+  });
+});
+
+/**
+ * REQ-MCP-015: the EDIT tier is the code-intelligence server's. A call's runtime name carries that server's prefix only on a
+ * collision, so another server's tool called like the tier reached the readers unprefixed and its argument was listed as an
+ * edit (docs/defects/fixed/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md). The
+ * readers are given the callables the child's grant gives that server (`editTierNamesOf`), and only those are EDIT calls.
+ */
+describe('engine/children/report — another server\'s tool named like the EDIT tier is no edit (REQ-MCP-015, REQ-ORCH-109)', () => {
+  const edit = CODE_INTELLIGENCE_MANIFEST.tiers.edit;
+  const at = CODE_INTELLIGENCE_MANIFEST.editArguments;
+  const grant = (granted: Record<string, readonly string[]>) => ({ tools: [], mcp: { granted, servers: [] } });
+  const theirs = editTierNamesOf(grant({ notes: [edit.replaceInFile, edit.replaceAcrossFiles] }));
+  const ours = editTierNamesOf(grant({ code_intelligence: [edit.replaceInFile.toUpperCase(), `code_intelligence_${edit.replaceAcrossFiles}`], notes: [edit.replaceAcrossFiles] }));
+  const messages = [
+    say('user', 'TASK: tidy the notes'),
+    call('n1', edit.replaceInFile, { [at.replaceInFile.path]: 'notes/inbox.md', needle: 'a', repl: 'b', mode: 'literal' }), result('n1', edit.replaceInFile, 'OK'),
+    call('n2', edit.replaceAcrossFiles, { needle: 'a', repl: 'b', mode: 'literal' }), result('n2', edit.replaceAcrossFiles, 'OK'),
+    call('w1', 'write_file', { path: 'src/a.ts', content: 'x' }), result('w1', 'write_file', 'ok'),
+  ];
+
+  it('with the grant known, a call whose name is not the code-intelligence server\'s lists nothing and is never said as unnamed', () => {
+    expect(editedFilesFrom(messages, [], theirs)).toEqual(['src/a.ts']);
+    expect(unnamedChangesFrom(messages, theirs)).toEqual([]);
+    expect(reportFacts(messages, { status: 'succeeded', editTier: theirs })).toBe('Edited files: src/a.ts\nCommands run: (none)');
+    expect(fallbackReport(input({ messages, toolCallCount: 3, lastText: '', editTier: theirs }), 'no summariser is configured').edited_files).toEqual(['src/a.ts']);
+    expect(writeReadingOf(edit.replaceInFile, { [at.replaceInFile.path]: 'notes/inbox.md' }, undefined, theirs)).toBeNull();
+    // A native file tool is the product's own whatever the grant says.
+    expect(writeReadingOf('WRITE_FILE', { path: 'b.md' }, undefined, theirs)).toEqual({ paths: ['b.md'], unnamed: false });
+  });
+
+  it('the code-intelligence server\'s own callables still read as EDIT calls, in any casing and under the collision prefix', () => {
+    expect(writeReadingOf(edit.replaceInFile, { [at.replaceInFile.path]: 'docs/a.md' }, undefined, ours)).toEqual({ paths: ['docs/a.md'], unnamed: false });
+    expect(writeReadingOf(`code_intelligence_${edit.replaceAcrossFiles}`, { needle: 'a' }, undefined, ours)?.unnamed).toBe(true);
+    // The other server's unprefixed `replace_in_files` beside it is not the tier.
+    expect(writeReadingOf(edit.replaceAcrossFiles, { needle: 'a' }, undefined, ours)).toBeNull();
+  });
+
+  it('with no grant known, the name alone decides, as before', () => {
+    expect(editTierNamesOf(null)).toBeUndefined();
+    expect(editedFilesFrom(messages)).toEqual(['notes/inbox.md', 'src/a.ts']);
   });
 });
 

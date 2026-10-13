@@ -561,7 +561,7 @@ describe('a cross-file EDIT call is observed by the files it changed (OQ-245)', 
   const SCHEMA = { type: 'object', properties: { needle: { type: 'string' }, repl: { type: 'string' }, mode: { type: 'string' }, relative_path: { type: 'string' }, dry_run: { type: 'boolean' } }, required: ['needle', 'repl', 'mode'] };
   const roots: string[] = [];
   afterEach(() => { for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true }); });
-  function rig(answer: (root: string) => { isError: boolean; text: string }) {
+  function rig(answer: (root: string) => { isError: boolean; text: string }, serverName = 'code_intelligence') {
     const root = mkdtempSync(join(tmpdir(), 'rotaris-oq245-'));
     roots.push(root);
     mkdirSync(join(root, 'src'));
@@ -576,8 +576,8 @@ describe('a cross-file EDIT call is observed by the files it changed (OQ-245)', 
     } as unknown as ReturnType<typeof mcp.connectionsFor>);
     const entry = { type: 'stdio', enabled: true, disabled_tools: [], tool_name_map: {}, command: 'ci' };
     const cfg = {
-      personas: { refactorer: { mcp_servers: ['code_intelligence'], tools: [] } },
-      mcp: { servers: { code_intelligence: { name: 'code_intelligence', entry, origin: 'workspace', availability: { available: true }, description: {}, resolved: { command: 'ci', args: [] } } }, origins: { code_intelligence: 'workspace' }, diagnostics: [] },
+      personas: { refactorer: { mcp_servers: [serverName], tools: [] } },
+      mcp: { servers: { [serverName]: { name: serverName, entry, origin: 'workspace', availability: { available: true }, description: {}, resolved: { command: 'ci', args: [] } } }, origins: { [serverName]: 'workspace' }, diagnostics: [] },
     } as unknown as LoadedConfiguration;
     const surface = mcp.surfaceFor(cfg, root, 'refactorer', null);
     const executors = mcp.executorsFor({ cfg, workspaceRoot: root, role: 'refactorer', surface, ctx: { sessionId: 'S1', writer: null }, remove: () => undefined, log: () => undefined });
@@ -607,6 +607,20 @@ describe('a cross-file EDIT call is observed by the files it changed (OQ-245)', 
     journal = r.mcp.writes;
     expect((await r.run({ needle: 'total', repl: 'sum', mode: 'literal', relative_path: '' })).observedPaths).toEqual(['src/a.ts']);
     expect((await r.run({ needle: 'total', repl: 'sum', mode: 'literal', dry_run: true })).observedPaths).toBeUndefined();
+  });
+
+  it('another server\'s tool named like a cross-file EDIT tool is not observed: the EDIT tier is the code-intelligence server\'s (REQ-MCP-015)', async () => {
+    // Before the repair the executor asked the name alone, so a user's own server's tool called like the tier was walked
+    // over the whole project and its changes read as an EDIT call's
+    // (docs/defects/fixed/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md).
+    const r = rig((root) => {
+      writeFileSync(join(root, 'src', 'a.ts'), 'export const sum = 1;\n');
+      return { isError: false, text: 'done' };
+    }, 'notes');
+    const obs = await r.run({ needle: 'total', repl: 'sum', mode: 'literal' });
+    expect(obs).toMatchObject({ isError: false });
+    expect(obs.observedPaths).toBeUndefined();
+    expect(obs.unobserved).toBeUndefined();
   });
 
   it('a call whose reach cannot be walked is marked unobserved, also when it errs (the fin35 review)', async () => {

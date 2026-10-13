@@ -360,8 +360,12 @@ export class McpHost {
            * and after it, whatever it returned, and the observation rides on its result for the child's report
            * (`observeReach`, `codeIntelligenceEdit`). Until the ruling such a call was listed by its argument path alone
            * (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+           * The tier is the code-intelligence server's (REQ-MCP-015), so only that server's tools are asked, by the name the
+           * runtime reports; until fin36 every server's tool was asked by its callable name, and another server's tool named
+           * like the tier was walked over its reach and read as an EDIT call
+           * (docs/defects/fixed/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md).
            */
-          execute: async (a, tctx) => observeReach({ root: workspaceRoot, reach: codeIntelligenceEdit(tool.callable, a as Record<string, unknown>)?.reach ?? null, journal: this.writes, agent: tctx.agentName }, async () => {
+          execute: async (a, tctx) => observeReach({ root: workspaceRoot, reach: server.name === CODE_INTELLIGENCE_SERVER_NAME ? codeIntelligenceEdit(tool.reported, a as Record<string, unknown>)?.reach ?? null : null, journal: this.writes, agent: tctx.agentName }, async () => {
             const started = this.deps.clocks.monotonic.now();
             try {
               // PD-MCP-002: REQ-MCP-070's `lsp_init` names the root this port's run executes in.

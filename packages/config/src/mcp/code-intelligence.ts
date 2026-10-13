@@ -38,7 +38,9 @@ export function neverGrantNames(): string[] {
  * PD-ORCH-004 / REQ-ORCH-109 (fin32; the a68f121 duress run's finding D1), and OQ-245 (XE1, ruled 2026-10-13 under R-072):
  * what a call of the EDIT tier writes, or null when `callable` is no tool of that tier. The tool is matched by the name the
  * model called — the runtime's own, or that name under the `<server>_` prefix a collision gives it (`persona.ts`,
- * `reservedNames`) — in lower case, as the native file tools are.
+ * `reservedNames`) — in lower case, as the native file tools are. The name says nothing of the server when no collision
+ * prefixed it, so since fin36 (REQ-MCP-015) every reader asks this only of the code-intelligence server's tools: the MCP
+ * executor by its server, the engine's readers by the callables the child's grant gives that server (`editTierNamesOf`).
  *
  * - `paths`: the files its arguments name as the manifest's `editArguments` defines them. For a tool of `argument` scope that
  *   is everything it writes. For a tool of `reach` scope it is only what is known without looking: a rename's declaring

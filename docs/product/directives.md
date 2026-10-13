@@ -4784,6 +4784,10 @@ name, and the root named like an earlier child stays drawn as both until after t
 
 *Renumbered before landing: built as `PD-ORCH-010` on its branch, it took the next free number, `PD-ORCH-011`, when `PD-ORCH-009` (the answerless entry role, OQ-199) landed on `main` first; its citations followed.*
 
+*Revision 2 (2026-10-13, [R-072](requests.md#r-072), ruling [OQ-227](../architecture/open-questions.md)) — **what
+`single_file_change` means**: one clause added after the rule's first paragraph, and the As-built paragraph replaced,
+revision 1's quoted beneath it. Revision 1's meaning for `explicit_trivial` and its tie-break clause stay in force.*
+
 `explicit_trivial` SHALL mean an explicitly stated, trivial **edit**: with `single_file_change`, one of the two smallest
 edits, as REQ-ORCH-021's micro group holds them. A request that changes nothing is not `explicit_trivial`, however small
 it is: a question about one file belongs to the answer group (`question`, `exploration`). REQ-ORCH-006's tie-break, "when
@@ -4792,11 +4796,26 @@ plausible for the request: it prefers `moderate_feature` where `moderate_feature
 into reach of a request for which no build is plausible. The thirteen categories, REQ-ORCH-006's two fixed meanings and
 REQ-ORCH-007's fallback are unchanged.
 
-**As built.** The classifier's instruction already calls `explicit_trivial` and `single_file_change` "the two smallest
-edits" and passes the tie-break on in REQ-ORCH-006's words (`packages/engine/src/intent/classifier.ts`); neither is
-changed. The product takes the category the model answers: it does not overrule a model that classifies a question
-`explicit_trivial`. `slice-proof` accepts the answer group alone for its question about `README.md` (`INTENTS`,
-`apps/desktop/scripts/lib/live-answers.mjs`), so that answer is a red there.
+**`single_file_change` — revision 2 (OQ-227).** `single_file_change` SHALL mean a small edit confined to one file, as the
+request states or implies. A change requested together with a test of it, or one naming several files to change, is
+outside it unless the request places all of it in one file. The classifier's instructions SHALL state this on every rung.
+`explicit_trivial` keeps revision 1's meaning — an explicitly stated trivial edit, with no file count — so a small chore
+across files that the request states to be trivial stays in the micro group. REQ-ORCH-016 and `PD-ORCH-006` are unchanged:
+the direct-work grant follows the category, never a measured size.
+
+**As built — revision 2.** The classifier's system prompt, which every rung sends, carries the clause above in one sentence
+beside revision 1's "the two smallest edits" and the tie-break (`CLASSIFIER_SYSTEM_PROMPT`,
+`packages/engine/src/intent/classifier.ts`); the json_object rung's example ("one file, one edit") agrees with it and is
+kept. The product still takes the category the model answers. `slice-proof` keeps its accepted sets and its single
+ask-once-more retry (`INTENTS`, `intentOutcome`, `apps/desktop/scripts/lib/live-answers.mjs`), which now cite this revision
+for why the micro group is out of reach of a feature and its test.
+
+> **Revision 1 said, and no longer governs:** "**As built.** The classifier's instruction already calls `explicit_trivial`
+> and `single_file_change` "the two smallest edits" and passes the tie-break on in REQ-ORCH-006's words
+> (`packages/engine/src/intent/classifier.ts`); neither is changed. The product takes the category the model answers: it
+> does not overrule a model that classifies a question `explicit_trivial`. `slice-proof` accepts the answer group alone for
+> its question about `README.md` (`INTENTS`, `apps/desktop/scripts/lib/live-answers.mjs`), so that answer is a red there."
+> The last two sentences still hold.
 
 **Why, and what it costs.** OQ-198: REQ-ORCH-006 names `explicit_trivial` without a meaning, and REQ-ORCH-021 groups it with
 `single_file_change` apart from the answer group. The two readings route a run differently: the micro group's playbook cells
@@ -4806,9 +4825,23 @@ in place of the answer group's, and in `plan` mode a hold at the plan gate, whic
 still answers `explicit_trivial` for a question (one run in nine against the registered endpoint on 2026-10-03) routes it
 as an edit, and `slice-proof` reports that run red where it accepted it before.
 
+**Why, and what it costs — revision 2.** OQ-227: REQ-ORCH-006 fixes no meaning for `single_file_change`, and the build gave
+it a rung-dependent one: only the json_object rung's example said "one file, one edit", while the json_schema rung — which
+carried finacc3 A2-03's `single_file_change` (0.82) for a flag and its unit test — said nothing. REQ-ORCH-014 shows the
+identifier on screen, so the user saw their request mislabelled, and under `PD-ORCH-006` the category granted the
+coordinator the direct-work bundle and the micro cell, so the same prompt ran directly in one launch and delegated in the
+next. Letting the grant follow a measured size instead would need a repository measurement REQ-ORCH-008 excludes, and would
+hide from REQ-ORCH-016's user-inspectable mapping what decides the grant. What it costs: a small change requested with its
+test now classifies as a build and runs delegated, which the live record measured at 114 to 146 s against 19 to 33 s for
+direct work; in languages that keep unit tests in the same file, the request must say so to stay in the micro group; and
+prompt guidance is probabilistic, so a sampled model may still miss, which `slice-proof`'s one retry absorbs.
+
 > **Narrows:** REQ-ORCH-006
 
 *Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-198.*
+Revision 2 logged as [R-072](requests.md#r-072) (OQ-227), ruled by the consortium under the owner's delegation, both
+advocates' recommendation followed: the system-lens advocate's wording, with "small", and glossary step; the user-lens
+advocate's first execution against the registered self-hosted endpoint.
 
 ---
 

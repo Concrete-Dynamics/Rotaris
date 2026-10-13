@@ -11605,6 +11605,30 @@ held to nothing about it.
 beside REQ-ORCH-006's three fixed meanings), whether a request that names a test beside its change is out of its reach,
 and whether PD-ORCH-006's direct-work grant should follow the category or the size of the change.
 
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** `single_file_change` SHALL mean a
+small edit confined to one file, as the request states or implies. A request for a change together with a test of it, or
+one that names several files to change, is outside the category unless the request puts all of it in one file. The
+classifier's system prompt states this meaning on every rung. This is [`PD-ORCH-011`](../product/directives.md#pd-orch-011)
+revision 2, which narrows REQ-ORCH-006. `PD-ORCH-006`'s direct-work grant keeps following the category, as REQ-ORCH-016
+states, and `slice-proof` keeps its accepted sets and its single retry. The entry's status above ("Open.") is history.
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended the one-file meaning as PD-ORCH-011 revision 2, one sentence in the system
+  prompt, the grant left keyed to the category, and a first execution against the registered self-hosted endpoint: the
+  identifier is on screen under REQ-ORCH-014, and the same prompt ran directly in one launch and delegated in the next.
+- **Advocate B (the system's lens)** recommended the same, worded "a small edit confined to one file, as the request
+  states or implies", with the micro group's glossary entry naming it: the system prompt goes out on every rung while only
+  rung 2's example carried a meaning, and `slice-proof` already judged the product by a one-file meaning nothing in the
+  record stated; B held that the live first execution needed the owner's fresh consent.
+
+The ruling confirmed what both rest on: `CLASSIFIER_SYSTEM_PROMPT` goes out on every rung, only rung 2 carries the "one
+file, one edit" example, and the 0.82 miss came through rung 1, so the category's meaning depended on which rung the
+provider accepted. Letting the grant follow measured size would conflict with REQ-ORCH-008 and REQ-ORCH-016. It adopted B's
+wording — "small" agrees with revision 1's "the two smallest edits" and keeps a large one-file rewrite out of micro — and
+B's glossary step. On the first execution it followed A: R-068's standing authorization covers the unmetered self-hosted
+default. The cost both name stays: a small change requested with its test now runs delegated and slower, and same-file test
+languages depend on the request saying so.
+
 <a id="oq-232"></a>
 
 **OQ-232 — When the loop classifier is cut on a raw-count trigger, are four consecutive calls of one tool evidence of a loop

@@ -13563,3 +13563,27 @@ looking for a transcript display preference looks, and it keeps REQ-CONFIG-403's
 **What a ruling decides.** Whether REQ-CONFIG-403's "two" is an enumeration a third preference may join (extending it
 by a directive), or whether the switch belongs in another category (Interface holds the other desktop-preference
 toggles), or whether it stands as built.
+
+<a id="oq-272"></a>
+
+**OQ-272 — Is a person's edit inside an artifact document's frontmatter kept, or rewritten away at the next re-render?**
+*(PD-LIBRARY-003 (d) and (f), REQ-LIBRARY-133, REQ-LIBRARY-095, REQ-LIBRARY-092; REQ-SESSION-115. Raised 2026-10-13 by fin42
+(`fin42-live-gaps`), found by building `artifacts-proof` launches 8 and 9 (item N57). Minted on its branch as OQ-271 and
+renumbered OQ-272 at its landing, `origin/main` having taken OQ-271 meanwhile.)*
+
+The inspector's Markdown tab shows and edits the whole document, its leading frontmatter included (PD-LIBRARY-003 (f)), and a
+re-render of an edited document rewrites that block from the record and keeps what follows it (clause (d)). So a person's edit
+typed inside the frontmatter is saved, `edited_at` is stamped and the table shows ` · edited`, and the next supersession or
+re-materialisation removes it without a word. Measured on the built app: launch 8's first build clicked the editor at its centre,
+which lies inside the frontmatter, and typed there; the save read "Saved.", the document held the text, and after launch 9's
+superseding publish the document's frontmatter was rewritten and the text was gone, while the continued run's handoff still
+named the artifact `(… , edited)` and carried no edit. The directive's costs name a deleted frontmatter coming back; an edit
+inside it, and a record that keeps saying `edited` once nothing edited remains, are not named.
+
+**What the build proceeds under.** As built: the frontmatter is the record's, and an edit inside it lasts until the next
+re-render. The proofs now move the caret below the frontmatter before typing (`Ctrl+End`), and the live run's `delegation-edit`
+launch does the same.
+
+**What a ruling decides.** One of: the Markdown tab keeps the frontmatter out of the person's reach (shown read-only, or not
+shown), as the Preview already does (clause (f)); the tab says, when a save changes the block, that frontmatter edits are not
+kept; a re-render keeps a person's changed values; or the cost stands as built and is added to PD-LIBRARY-003's list.

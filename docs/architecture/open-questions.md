@@ -12464,6 +12464,13 @@ couples the product to unpinned prose); deferral (a refactorer's rename is ordin
 pinned by cases in five test files, red on the code before, and `pnpm code-intel-proof`'s ninth launch (`child-across`, red on
 the unrepaired build with `[]`, green with both files). The report-back is in `PD-ORCH-004`; the note is
 [fixed](../defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+*Measured for the rename 2026-10-13 (fin42, N59):* `pnpm code-intel-proof`'s tenth launch (`child-rename`) renames a TypeScript
+function across two files through the language server after a reference search, and the child's report and artifact list exactly
+both; its eleventh (`child-rename-cold`), the rename alone, lists exactly the one file it changed — the observation holds — and
+finds the runtime's rename reaching the declaring file alone, recorded as
+[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
+and raised as [OQ-272](#oq-272). Not measured: a live run (the opt-in `rename` scenario, written). The report-back is in
+`PD-ORCH-004`, in place.
 
 **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`:** **NOT REACHED**: 0
 code-intelligence EDIT-tier calls in any pack; the duress tester held the tier and wrote through `write_file` and `haet_edit`.
@@ -13623,3 +13630,44 @@ read without the `\r`, level 3 takes cases level 4 took, so an edit that applied
 the near-miss quote of such a window carries `\r`s the caller must send back; kept exact, on Windows a model's commonest
 mis-indented edit lands unshifted beside a success at level 4 — the case `PD-TOOLS-015` was ruled to prevent — and `haet_edit`
 gives no near miss for it.
+
+<a id="oq-272"></a>
+
+**OQ-272 — When the pinned runtime's symbol rename answers before its language server has loaded the project, does the product
+warm it, change the runtime, or tell the model?** *(REQ-MCP-015, the EDIT tier's symbol rename; REQ-MCP-011 and ADR-0035, the
+pinned runtime the product bundles and drives as it is; REQ-MCP-116, the binding manifest, the one place the runtime's
+identifiers are written; [OQ-245](#oq-245), the reach observation that records what the call changed. Raised 2026-10-13 by
+fin42 (N59) from
+[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+Open. fin42 held OQ-271 to OQ-280; OQ-271 was taken on main by another of the plan's bundles, so this is the next free number.)*
+
+The first rename of a server session that needs the language server's cross-file view renames the declaring file alone and says
+it succeeded: `code-intel-proof`'s eleventh launch (`child-rename-cold`) and four arrangements over the runtime's stdio branch,
+a copy of the live run's `todo-app` fixture among them, all changed one file. The same rename after one referencing-symbol search
+of the symbol reaches every file (launch 10, `child-rename`). The pinned runtime (`serena-agent` 1.7.0) waits for the TypeScript
+server's project loading before a references request and not before a rename, so the server answers the rename before it has
+loaded the other files. The run host's record of the call is true; the tool's success is not, and the model is not told.
+
+**What the build proceeds under.** As built: the call is forwarded as the model made it, the result is the runtime's, and the
+reach observation lists the one file it changed. A model that searched for references first, as many do, renames correctly.
+
+**What a ruling decides.** Which of these, or none:
+
+- **(a) A product-side warm-up.** The MCP executor (`apps/desktop/src/run-host/mcp.ts`) sends the runtime's referencing-symbol
+  search for the same `name_path` and `relative_path` before the first rename of each server session, discards its answer and
+  then forwards the rename. Costs: one extra server request the model did not make, the search's name written into the manifest
+  as a new capability of the binding (REQ-MCP-116), and a dependency on the runtime's internals that a later pin may change.
+- **(b) A runtime-side repair.** The bundle recipe patches the pinned distribution's rename to take the references path's wait,
+  or the pin moves to a version that does. Costs: a patched third-party tree the recipe must carry and the drift check must know
+  of (ADR-0035, ADR-0054), or an upgrade measured like any pin change.
+- **(c) Tell the model.** The rename's description in the manifest (as `PD-MCP-001` describes the usage-instruction tool) says to
+  search for references first, or the run host appends to a rename result whose reach observation lists one file that the files
+  referencing the symbol may not have been renamed. Costs: advice a model may ignore; the second needs a reading of "one file"
+  that a single-file symbol would trip.
+- **(d) Nothing.** A rename made first in a session is the runtime's behaviour, and the record already lists what changed.
+
+**What a live run then shows.** The opt-in `rename` scenario (`live-run.mjs --only=rename`) delegates a coding-agent to rename
+`remaining` to `countRemaining` with `rename_symbol` and reads whether the agent searched for references before its first rename,
+which of the three files still name `remaining` and which were written by another tool after the rename, and whether
+`node --test` passes; a cold rename whose importing files were left behind, or were mended by hand afterwards, is a NOTE naming
+this question.

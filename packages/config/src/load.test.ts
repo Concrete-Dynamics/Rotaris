@@ -162,6 +162,16 @@ describe('REQ-CONFIG-051 the end-to-end two-scope fixture', () => {
     expect(syntheticOriginOf(entry!.model, c.syntheticOrigins)).toBe('gpt-4o-mini');
     expect(c.warnings).toEqual([]);
   });
+  // OQ-228 and OQ-229 (ruled 2026-10-07 under R-072): `intent-classifier` is no delegation target, and a non-empty `delegates_to`
+  // narrows a persona's targets. Both are refusals at delegation, never at load: an override of the persona, and a list naming
+  // it, still load with nothing refused (fin33's plan for P5 asked for this case; it had existing coverage only).
+  it('OQ-228 / OQ-229: an intent-classifier override, and a delegates_to naming it, still load (REQ-CONFIG-031, REQ-CONFIG-101)', () => {
+    const c = loaded('personas:\n  intent-classifier:\n    thinking: low\n    tools: [read_file]\n  orchestrator:\n    delegates_to: [intent-classifier, coding-agent]\n', null);
+    expect(c.personas['intent-classifier']).toMatchObject({ name: 'intent-classifier', tools: ['read_file'], mcp_servers: [] });
+    expect(c.personas['orchestrator']?.delegates_to).toEqual(['intent-classifier', 'coding-agent']);
+    expect(c.referential).toEqual([]);
+    expect(c.warnings).toEqual([]);
+  });
 });
 
 describe('REQ-CONFIG-063..081 tier aliases and reasoning synthesis', () => {

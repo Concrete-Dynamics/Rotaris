@@ -12386,7 +12386,8 @@ replacement writes file by file, so a failure part-way leaves files written unde
 would hide); from B the plain "may have changed files the record cannot name" statement when the observation was not completed,
 and a proof that needs no language server. B's attribution concern is real and taken with A's mitigation; the bound that remains
 is stated: a sibling's terminal write in the window can still be listed under this child, and REQ-ORCH-109 and `report.ts`'s own
-policy prefer overstating to concealing. **Rejected:** confirming the literal reading (a known false "changed no workspace
+policy prefer overstating to concealing. *(Written down 2026-10-13 by fin36, from fin35's review: the same bound covers a
+sibling's own code-intelligence EDIT call landing in the window, since only the native tools are journaled.)* **Rejected:** confirming the literal reading (a known false "changed no workspace
 paths" and a directory listed as a file); parsing the server's text (cannot name a rename's files, hides a partial failure,
 couples the product to unpinned prose); deferral (a refactorer's rename is ordinary first-release use).
 **Built 2026-10-13 (fin35):** the manifest's `scope`, `codeIntelligenceEdit`, `observeReach` and `WriteJournal`

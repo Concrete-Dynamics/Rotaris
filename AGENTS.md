@@ -47,7 +47,8 @@ process group of its own as a `spawnBounded` one does, and both drain it once th
 (`drainGroup`): whatever of that group is still running three seconds later, an Electron helper or a child the app started
 in it, is ended with SIGKILL and named on the proof's standard error as `bounded-launch: … outlived it …`. Since fin34 the
 drain also reaches a child the app puts in a process group of its own (a project-setup step, `packages/mcp/src/setup.ts`),
-on Linux, by the launch's `XDG_DATA_HOME` in its environment: it is given REQ-WORKSPACE-092's 5 s and a second's margin to
+on Linux, by an `XDG_DATA_HOME` the launch was given in its environment (since `3c54f02` never one it inherited from the
+proof's own shell, so a launch given none is not swept this way): it is given REQ-WORKSPACE-092's 5 s and a second's margin to
 end by itself, then ended with SIGKILL and named as `bounded-launch: … in group(s) of their own outlived …`
 ([note](docs/defects/fixed/a-proof-can-exit-while-a-setup-step-the-app-started-in-its-own-process-group-is-still-ending.md)). A proof that exits or is
 signalled takes every live group with it. Before that, `layout-proof`, `driver-proof` and `workspace-proof` exited beside

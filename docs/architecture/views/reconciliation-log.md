@@ -15,6 +15,10 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-13**
 
+**About & Legal carries REQ-STARTUP-160's network-activity disclosure (fin41).** A fourth section of `AboutSettings`, three
+statements held as constants in the renderer bundle, so it draws with no fact from main and no network. The **process view**'s
+About paragraph says it crosses no boundary. No package, edge, process, channel, command or store column changed.
+
 **Windows-owed checks no longer cite IC-3 as their reason (fin41, record only).** The **process view**'s portable
 update row and the **sequences view**'s update sequence said a real-artifact run was owed to the next Windows package
 "(IC-3)"; IC-3 binds Linux and macOS artifacts, and what holds these back is a Windows x64 host and the pipeline R-071

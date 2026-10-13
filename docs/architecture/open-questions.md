@@ -13340,7 +13340,7 @@ the "PD-TOOLS-016 revision 3" cases in `tools.test.ts`, red on the code before. 
 rather than at machine setup or cache warm-up?** *(REQ-STARTUP-160 with REQ-STARTUP-058, REQ-STARTUP-064 and
 REQ-STARTUP-084; `PD-STARTUP-005`; OQ-73, deferred, which records that machine setup is not built. Raised
 2026-10-13 by fin41, building the disclosure the note
-[`the-about-page-carries-no-network-activity-disclosure`](../defects/the-about-page-carries-no-network-activity-disclosure.md)
+[`the-about-page-carries-no-network-activity-disclosure`](../defects/fixed/the-about-page-carries-no-network-activity-disclosure.md)
 records. Open.)*
 
 REQ-STARTUP-160 has About & Legal state "that first-launch machine setup and cache warm-up may contact the pinned

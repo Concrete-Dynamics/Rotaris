@@ -33,3 +33,23 @@ the repair.
   REQ-STARTUP-111, REQ-STARTUP-114).
 - `packages/config/src/setup-manifest.ts`, `packages/config/src/mcp/code-intelligence.ts` — the pins the setup clause
   describes (REQ-STARTUP-058).
+
+## Outcome
+
+*Repaired 2026-10-13 (fin41).* `AboutSettings` (`packages/ui/src/settings/About.tsx`) draws a fourth section, **Network
+activity**, after Licensing: a `<section>` labelled by its own `settings__heading`, holding REQ-STARTUP-160's three
+statements as plain paragraphs at the surface's own type token (`.about__value`). The text is held in the renderer bundle
+(`NETWORK_DISCLOSURE`) and depends on no fact main supplies, so it draws before `shell.hello` answers and with the network
+blocked. Nothing in it is a modal, a disclosure control, a checkbox, a button or a tooltip, and it names no host.
+
+The setup statement names a third moment beside the requirement's two, "the first time a tool is needed", because that is
+when this build makes such a request: machine setup and cache warm-up are not built (OQ-73), while a pinned tool-server
+package and the code-intelligence runtime's language servers are fetched at first use. Raised as
+[OQ-261](../../architecture/open-questions.md#oq-261) with that reading; the wording follows its ruling.
+
+**Pinned by** `packages/ui/src/settings/About.test.ts` ("the network-activity disclosure on About & Legal"), whose section
+cases are red on the surface without the section, and by `pnpm settings-proof`'s launch 1″: the built app at REQ-SHELL-022's
+1000×680 content size, where a real pointer selection dragged across the section after it is scrolled into view reads the
+heading and all three statements (683 characters, 2026-10-13, load 0.8 with nothing else running), and launch 1 reads the
+same three at the default size. The stale "needs no change" in
+`docs/defects/fixed/the-built-app-opens-a-connection-to-chromiums-component-updater.md` is corrected in place.

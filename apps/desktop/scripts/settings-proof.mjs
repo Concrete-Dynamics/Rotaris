@@ -10,6 +10,10 @@
  *   1′. about-present — the same About page with both of its files present (first-release-plan.md §4.4): the Build
  *                     row carries the identifier `pnpm build-id` wrote for this tree, no caption stands under the
  *                     licensing control, and the control opens the notices file where about.ts found it.
+ *   1″. about-minimum — the same About page at REQ-SHELL-022's minimum content size, 1000×680: REQ-STARTUP-160's
+ *                     network-activity disclosure is under its labelled heading, carries its three statements, and a
+ *                     real pointer selection across it, once it is scrolled into view, reads every one of them
+ *                     (`docs/defects/fixed/the-about-page-carries-no-network-activity-disclosure.md`).
  *   2. instructions — the same workspace with `AGENTS.md` and `AGENTS.override.md` on disk: two rows, in the
  *                     requirement's order, source `workspace`, described by absolute path; the first row's switch
  *                     is turned off and saved, and the `instructions.overrides` policy lands in the file
@@ -108,6 +112,7 @@ const PROBES = [
   '[data-testid="show-tool-results"]', '[data-testid="show-tool-inputs"]',
   '[data-testid="auto-collapse-tools"]', '[data-testid="group-tools"]',
   '.settings__body', '[data-testid="run-start-hint"]',
+  '#about-network-heading', '[data-testid="network-disclosure-statement"]',
 ];
 
 async function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
@@ -269,6 +274,41 @@ if (existsSync(stash)) throw new Error(`the stash ${stash} was not given back`);
 const after = { [BUILD_ID]: digest(BUILD_ID), [NOTICES]: digest(NOTICES) };
 if (JSON.stringify(after) !== JSON.stringify(found)) throw new Error(`apps/desktop/resources was not left as found: before ${JSON.stringify(found)}, after ${JSON.stringify(after)}`);
 results.assetsRestored = { [BUILD_ID]: found[BUILD_ID] ? 'the file that was there, byte for byte' : 'absent, as before', [NOTICES]: found[NOTICES] ? 'the file that was there, byte for byte' : 'absent, as before' };
+
+// ── 1″. REQ-STARTUP-160's disclosure, at REQ-SHELL-022's minimum window size ─────────────────────────────────────
+// Static text, so it reads as launch 1 drew it whatever main supplied; here the window is shrunk to the minimum content
+// size first, and a REAL pointer selection is dragged across the section after the seam scrolls it into view: text a
+// hover revealed, a collapsed control hid or an overflow clipped would not be selected (REQ-STARTUP-160: "reachable,
+// operable and fully labelled at the minimum window size").
+const disclosureOf = (probes) => text(probes, '[data-testid="network-disclosure-statement"]');
+const disclosure = disclosureOf(noWorkspace.probes);
+const heading = text(noWorkspace.probes, '#about-network-heading')[0] ?? '';
+if (heading !== 'Network activity') throw new Error(`the disclosure's heading read "${heading}", not "Network activity"`);
+if (disclosure.length !== 3) throw new Error(`the About page carried ${disclosure.length} disclosure statements, not REQ-STARTUP-160's three: ${JSON.stringify(disclosure)}`);
+const owed = [
+  ['first launch', 'warming caches', 'may contact', 'tool archives', 'package registries', 'only for work this machine has not already done'],
+  ['supported standalone build', 'release endpoint', 'each time one of its windows is activated', 'cannot be turned off'],
+  ['IP address', 'never carry', 'project files', 'prompt text', 'provider credentials'],
+];
+owed.forEach((parts, i) => { for (const part of parts) if (!disclosure[i].includes(part)) throw new Error(`disclosure statement ${i + 1} does not say "${part}": "${disclosure[i]}"`); });
+// REQ-STARTUP-160: "SHALL name no host, endpoint, or request this document does not require" — this text names none at all.
+for (const statement of disclosure) if (/:\/\/|\bwww\.|\.(com|org|io|net|ai|dev)\b|github|npmjs|pypi|api\./i.test(statement)) throw new Error(`a disclosure statement names a host: "${statement}"`);
+const minimum = await launch('about-minimum', null, local, preferences, {
+  ...openCategory('About'),
+  ROTARIS_CAPTURE_RESIZE: '1000x680@400',
+  ROTARIS_CAPTURE_DRAG_AT: '[data-testid="network-disclosure"]@2400',
+  ROTARIS_CAPTURE_AFTER_MS: '3400',
+});
+const resized = /capture: resize at \d+ → content (\d+)×(\d+)/.exec(minimum.log);
+if (!resized || resized[1] !== '1000' || resized[2] !== '680') throw new Error(`the window was not shrunk to REQ-SHELL-022's 1000×680 (${resized?.[0] ?? 'no resize line'})`);
+const dragged = /capture: drag-at \d+ \[data-testid="network-disclosure"\] → (.*)$/m.exec(minimum.log);
+if (!dragged) throw new Error('the pointer selection across the disclosure did not run (no drag-at line in about-minimum.log)');
+const selected = JSON.parse(dragged[1]);
+if (typeof selected !== 'string') throw new Error(`the disclosure was not found at the minimum size: ${dragged[1]}`);
+const flat = (s) => s.replace(/\s+/g, ' ').trim();
+for (const statement of [heading, ...disclosureOf(minimum.probes)]) if (!flat(selected).includes(flat(statement))) throw new Error(`a pointer selection across the disclosure at 1000×680 did not read "${statement}"; it read ${JSON.stringify(selected)}`);
+if (JSON.stringify(disclosureOf(minimum.probes)) !== JSON.stringify(disclosure)) throw new Error('the disclosure at the minimum size differs from the one at the default size');
+results.networkDisclosure = { heading, statements: disclosure.length, minimumSize: `${resized[1]}×${resized[2]}`, selectedAtMinimum: flat(selected).length };
 
 // The Tools inventory, and the empty Instructions, in the same launch profile (no workspace at all).
 const tools = await launch('tools', null, local, preferences, { ...openCategory('Tools'), ROTARIS_CAPTURE_AFTER_MS: '2600' });

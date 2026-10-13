@@ -89,3 +89,8 @@ The same proof run against the unrepaired `index.ts` with the new check in place
 `pnpm package` on Windows, launched behind the same sink, can measure that it makes no such connection (IC-3). REQ-SHELL-005's demo mode is not built, so its whole-lifetime claim is not observed; this launch is
 observed only to first paint and an orderly quit. About & Legal's disclosure needs no change: REQ-STARTUP-160 requires
 it to name no host the document does not require, and the request it could not name no longer happens.
+
+*Corrected 2026-10-13 (fin41), the sentence above kept as written:* "About & Legal's disclosure needs no change" assumed a
+disclosure that did not exist. About & Legal carried no network-activity text at all until fin41 drew REQ-STARTUP-160's
+(`docs/defects/fixed/the-about-page-carries-no-network-activity-disclosure.md`). What the sentence meant still holds: the
+disclosure names no host, and the dictionary request it could not have named does not happen.

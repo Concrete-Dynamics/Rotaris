@@ -36,7 +36,7 @@ home (`<home>/.local/share/rotaris`) and no product directory was made in the wo
 0 failed, 2 skipped (load 4.5 to 7.7 on 4 CPUs). The same scenario on the unrepaired base (`a68f121`, a throwaway worktree with
 only the proof file changed, load 5.7 to 9.3) failed it: no store under the home, and `rel-data/rotaris` made under
 `apps/desktop`. Electron's own Chromium profile still went to `rel-config/Electron` in both runs: main never places it, and that is
-recorded on its own (`docs/defects/electrons-own-profile-is-written-outside-the-per-user-directories.md`).
+recorded on its own (`docs/defects/fixed/electrons-own-profile-is-written-outside-the-per-user-directories.md`).
 
 ## Specs
 

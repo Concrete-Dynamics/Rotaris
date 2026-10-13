@@ -59,6 +59,7 @@ import { ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBef
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
 import { withoutRuntimeRequests } from './runtime-requests.js'; // REQ-STARTUP-160
+import { placeChromiumProfile } from './chromium-profile.js'; // REQ-STARTUP-145
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
 import { refusal, type ApprovalDialogState, type CommandContext, type CommandHandler, type CommandHandlers, type MainWindowState, type Recovery } from './commands/context.js';
 
@@ -104,6 +105,9 @@ const exitCleanly = (code: number): void => { quit.exiting(); exitAfterChildWind
 const dirs = resolveUserDirs();
 const layout = dataLayout(dirs);
 mkdirSync(dirs.data, { recursive: true });
+// REQ-STARTUP-145: Chromium's own profile below the machine-local data directory, placed synchronously here because
+// Chromium reads these paths while it starts — after main's first `await` it already has (`chromium-profile.ts`).
+placeChromiumProfile(app, layout.chromiumProfile, (dir) => { mkdirSync(dir, { recursive: true }); });
 const machineId = readOrMintMachineId(layout.machineId);
 
 // ADR-0028: the catalogue's integrity is checked at process start as well as in the build's test (REQ-PROVIDER-003).

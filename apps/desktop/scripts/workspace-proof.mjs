@@ -756,11 +756,11 @@ try {
      * proof's `apps/desktop` (`docs/defects/fixed/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`).
      * Now both variables are ignored and the launch takes the defaults below the scratch HOME the harness gives it.
      *
-     * What this asserts is the product's own per-user state (`resolveUserDirs`, `resolvePreferenceRoot`). Electron's own
-     * profile is not among it: main never places it, so Chromium still puts it at `$XDG_CONFIG_HOME/<name>` taken as it
-     * stands, `rel-config/Electron` here — recorded on its own
-     * (`docs/defects/electrons-own-profile-is-written-outside-the-per-user-directories.md`) and reported in the detail
-     * below rather than failed, because this repair does not reach it.
+     * What this asserts is the product's own per-user state (`resolveUserDirs`, `resolvePreferenceRoot`) and, since fin34,
+     * Chromium's own profile too: until then main never placed it, so Chromium put it at `$XDG_CONFIG_HOME/<name>` taken as
+     * it stands, `rel-config/Electron` here, and this scenario reported it without failing. Main now places it below the
+     * data directory before `app` is ready (`placeChromiumProfile`), and the second check below fails a launch that writes
+     * it anywhere else (`docs/defects/fixed/electrons-own-profile-is-written-outside-the-per-user-directories.md`).
      */
     if (process.platform === 'win32' || process.platform === 'darwin') {
       skip('REQ-STARTUP-145: a relative XDG base directory is ignored', `${process.platform} reads no XDG base-directory variable`);
@@ -783,8 +783,14 @@ try {
         const electronProfile = existsSync(join(appDirectory, 'rel-config')) ? readdirSync(join(appDirectory, 'rel-config')) : [];
         check('REQ-STARTUP-145: a launch with relative XDG_CONFIG_HOME and XDG_DATA_HOME keeps its per-user state under its home, never under the working directory',
           stores.length === 1 && existsSync(join(dataDir, 'machine-id')) && existsSync(join(dataDir, 'instance.json')) && made.length === 0,
-          `${stores.length} store(s) under ${dataDir}; machine-id ${existsSync(join(dataDir, 'machine-id')) ? 'there' : 'missing'}; the product's own made in the working directory: ${JSON.stringify(made)}; Electron's own profile under rel-config (a separate note): ${JSON.stringify(electronProfile)}`);
+          `${stores.length} store(s) under ${dataDir}; machine-id ${existsSync(join(dataDir, 'machine-id')) ? 'there' : 'missing'}; the product's own made in the working directory: ${JSON.stringify(made)}`);
         await closeAll();
+        // Read once the launch has ended: Chromium writes `Local State` as it shuts down, not when it starts.
+        const chromiumProfile = join(dataDir, 'chromium');
+        const profileEntries = existsSync(chromiumProfile) ? readdirSync(chromiumProfile) : [];
+        check('REQ-STARTUP-145: Chromium\'s own profile is written below the machine-local data directory, never at $XDG_CONFIG_HOME/<name> under the working directory',
+          electronProfile.length === 0 && !existsSync(join(appDirectory, 'rel-config')) && profileEntries.includes('Local State') && profileEntries.includes('Preferences'),
+          `under rel-config: ${JSON.stringify(electronProfile)}; ${chromiumProfile}: ${JSON.stringify(profileEntries)}`);
       } finally {
         // Whatever an unrepaired build made in the working directory is not left in the repository.
         for (const name of strays()) if (!before.includes(name)) rmSync(join(appDirectory, name), { recursive: true, force: true });

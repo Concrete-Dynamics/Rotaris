@@ -105,6 +105,8 @@ describe('platform — per-user directories (REQ-STARTUP-145)', () => {
     expect(layout.instanceRecord).toBe(win32.join(win.data, 'instance.json'));
     expect(layout.machineId).toBe(win32.join(win.data, 'machine-id'));
     expect(layout.tokens).toBe(win32.join(win.data, 'tokens'));
+    // Chromium's profile is below the LOCAL data directory, never `%APPDATA%` (REQ-STARTUP-145).
+    expect(layout.chromiumProfile).toBe('C:\\U\\me\\AppData\\Local\\rotaris\\data\\chromium');
     const store = new PreferenceStore('X:\\proof', 'win32');
     expect(store.file).toBe(win32.join('X:\\proof', 'preferences.json'));
     // `environmentWithout` folds case on Windows however the host spells its own variables.

@@ -103,6 +103,15 @@ export function dataLayout(dirs: UserDirs, platform: NodeJS.Platform = process.p
     // REQ-PROVIDER-014 fixes `tokens/`; the name reserved here before the store was built was `credentials`,
     // which no requirement names — corrected when ADR-0029 was first executed (Part K, 2026-09-05).
     tokens: join(dirs.data, 'tokens'),
+    /**
+     * Chromium's own profile — `Local State`, `Preferences`, the caches, local and session storage, `Crashpad` — which
+     * every launch writes. REQ-STARTUP-145 decides conformance by the directories the product actually writes to, and
+     * Electron's default (`$XDG_CONFIG_HOME/<name>` taken as it stands, `%APPDATA%\<name>` on Windows, the roaming profile)
+     * is not one of them, so main places it here, under the machine-local data directory, before `app` is ready
+     * (`placeChromiumProfile`, `apps/desktop/src/main/chromium-profile.ts`;
+     * `docs/defects/fixed/electrons-own-profile-is-written-outside-the-per-user-directories.md`).
+     */
+    chromiumProfile: join(dirs.data, 'chromium'),
   } as const;
 }
 

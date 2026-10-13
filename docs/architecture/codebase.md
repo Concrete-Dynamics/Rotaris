@@ -295,7 +295,9 @@ in `configuration.ts`'s header.)
    small slot and never fall back, the answering rung recorded. **Measured on the owner's re-run:** the first attempt
    fell again — the model put the category under its own key (`classification`) and the parser knew two names; now
    any string value naming a category counts. Then `question`, `explicit_trivial`, `small_feature`, all on the
-   `json_schema` rung, none with a confidence (the endpoint accepts the schema and does not enforce it). The proof's
+   `json_schema` rung, none with a confidence (the endpoint accepts the schema and does not enforce it). Since 2026-10-13
+   (OQ-258, fin38) the strict rung's user text names the object's three keys (`KEYS_INSTRUCTION`): a reasoning model never sees
+   the schema while it reasons, and at `552d346` it was cut at the 12 s bound deliberating over key names. The proof's
    scratch workspace now runs autonomous after the starter file is asserted, so no one sits at the approval dialog.
 
 19. **the Overview view (2026-09-05, Part M):** REQ-SHELL-026's startup view drawn — the header with the session

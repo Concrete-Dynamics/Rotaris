@@ -198,3 +198,14 @@ the schema and does not enforce it, the model answers in roughly its shape. The 
 `.slice-proof/results.json`. **What it does not settle:**
 which rung *this* endpoint honours is one measurement; a second provider is a second one, and the memory is per
 session by REQ-ORCH-010, so the first call of every session still pays the descent.
+
+**Reported back 2026-10-13 ([OQ-258](../open-questions.md#oq-258), ruled under R-072; fin38).** One reading of this correction is
+falsified: "the strict rung's says only that the reply is the object" because "the schema was meant to be the instruction". A
+reasoning model never sees `response_format` while it reasons — the schema shapes only the decoded answer — so against the
+registered self-hosted endpoint at `552d346` (`qwen3.8-flash-next`) the duress classification chose `whole_project`, deliberated
+which key to write it under from character 1,464, and was cut at 11,975 ms mid-way through `{"classification":"whole_project"}`
+(finding V3); the default pack was cut in 4 of 10 launches, three deliberating the same way (finding Q2). The strict rung now
+names the object's three keys in the sentence rung 2 carries, without rung 2's example (`KEYS_INSTRUCTION`,
+`packages/engine/src/intent/classifier.ts`); every other part of this correction stands. The loop classifier's strict rung still
+carries the bare sentence (`apps/desktop/src/run-host/loop.ts`), its three fields named only in its system prompt; it is outside
+this ruling.

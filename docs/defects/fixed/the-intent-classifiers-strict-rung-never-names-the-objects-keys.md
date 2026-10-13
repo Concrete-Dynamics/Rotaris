@@ -18,7 +18,15 @@ Measured at `552d346` against the registered self-hosted endpoint (`qwen3.8-flas
   43.3 s and 23 k); edit was cut while applying the tie-break; terminal received 0 bytes in 11,967 ms (the endpoint queueing).
   The launches that finished in time (frictions, faults-ladder, requirements) also guessed at `category` or `classification`.
 
-Raised as [OQ-258](../architecture/open-questions.md#oq-258).
+Raised as [OQ-258](../../architecture/open-questions.md#oq-258).
+
+**Repaired 2026-10-13 (fin38, `fin38-edits-handoff-classifier`)**, the R-072 consortium's ruling of OQ-258, as covered work under
+REQ-ORCH-010 (no directive). `KEYS_INSTRUCTION` (`packages/engine/src/intent/classifier.ts`) names the three keys; rung 1's
+`SCHEMA_INSTRUCTION` is that sentence alone and rung 2's `JSON_OBJECT_INSTRUCTION` that sentence and its example, word for word
+as before. The text rung, the system prompt, the schema and the 12 s bound are unchanged. Pinned by the OQ-258 case in
+`intent.test.ts` (both structured rungs name every key `CLASSIFICATION_SCHEMA` requires, the strict rung carries no example, the
+text rung asks for the identifier), red on the code before, and the ADR-0026 case's updated assertion. Not measured live: the
+next default and duress packs count classifier cuts and key deliberation.
 
 ## Specs
 
@@ -28,6 +36,8 @@ Raised as [OQ-258](../architecture/open-questions.md#oq-258).
 - `PD-ORCH-011` revision 2's sentence reached every rung, and its first live measurement is confounded by these cuts.
 
 ## Relevant files
+
+As they stood when the note was written.
 
 - `packages/engine/src/intent/classifier.ts`: `SCHEMA_INSTRUCTION` (rung 1), `JSON_OBJECT_INSTRUCTION` (rung 2),
   `CLASSIFICATION_SCHEMA`, `CLASSIFICATION_TIMEOUT_MS`.

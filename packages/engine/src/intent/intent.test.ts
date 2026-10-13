@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
 import { modelError, type AgentBackend, type TurnInput, type TurnReport } from '@rotaris/model';
-import { carryOver, classifyIntent, firstJsonObject, isRungRejection, normaliseReason, parseClassification, RungMemory, selectSlot, type ClassifierSlots } from './classifier.js';
+import { carryOver, CLASSIFICATION_SCHEMA, classifyIntent, firstJsonObject, isRungRejection, normaliseReason, parseClassification, RungMemory, selectSlot, type ClassifierSlots } from './classifier.js';
 import { BUILT_IN_INTENT_MAPPING, intentGrant, resolveIntentMapping } from './gate.js';
 
 const M = (id: string) => ({ providerId: 'p', modelId: id, dialect: 'chat' as const });
@@ -107,6 +107,29 @@ describe('REQ-ORCH-005..013 the classifier', () => {
     // Revision 1's sentence stands beside it: the two smallest edits, and the tie-break among the plausible.
     expect(inputs[0]!.systemPrompt).toContain('explicit_trivial and single_file_change are the two smallest edits');
   });
+  /*
+   * OQ-258 (ruled 2026-10-13 under R-072; findings V3 and Q2 of the live runs at 552d346): a reasoning model never sees
+   * `response_format` while it reasons, so a strict rung that names no keys left it deliberating over "category",
+   * "classification" or "intent" after it had chosen — the duress classification was cut at 11,975 ms mid-way through
+   * `{"classification":"whole_project"}`. The strict rung now names the object's three keys, without rung 2's example.
+   */
+  it('OQ-258: both structured rungs name every key of the object; the strict rung carries no example; the text rung asks for the identifier', async () => {
+    const { b, inputs } = backend((input) => (input.output?.kind === 'json_schema' ? fail(400, 'response_format json_schema is not supported') : input.output?.kind === 'json_object' ? fail(400, 'json mode not supported') : ok('whole_project\nthe whole thing')));
+    await classifyIntent({ prompt: 'Build the whole app.', metadata: {} }, SLOTS, deps(b, new FakeClock(), new RungMemory()), new AbortController().signal);
+    expect(inputs.map((i) => i.output?.kind ?? 'text')).toEqual(['json_schema', 'json_object', 'text']);
+    const text = (i: number) => inputs[i]!.messages[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
+    const keys = CLASSIFICATION_SCHEMA['required'] as readonly string[];
+    expect(keys).toEqual(['intent', 'confidence', 'reason']);
+    for (const key of keys) {
+      expect(text(0)).toContain(`"${key}"`);
+      expect(text(1)).toContain(`"${key}"`);
+    }
+    const sentence = 'Answer with one JSON object and nothing else, with exactly these keys: "intent" (one of the categories), "confidence" (a number from 0 to 1, or null), "reason" (a short sentence).';
+    expect(text(0).endsWith(sentence)).toBe(true);
+    expect(text(0)).not.toContain('Example:');
+    expect(text(1).endsWith(`${sentence} Example: {"intent":"single_file_change","confidence":0.8,"reason":"one file, one edit"}`)).toBe(true);
+    expect(text(2).endsWith('Answer with the single category identifier on the first line, then one sentence of reason.')).toBe(true);
+  });
   it('REQ-ORCH-010: a rung the adapter could not send descends exactly like a provider refusal', async () => {
     // What OpenRouter produced on 2026-09-16 (session 6696f6ed): no refusal came back, because the SDK
     // had replaced the schema with bare json_object before the request left. The adapter now reports it.
@@ -150,7 +173,8 @@ describe('REQ-ORCH-005..013 the classifier', () => {
     // the frame: the request is a delimited quotation, every rung carries an instruction, the system prompt forbids acting
     const first = inputs[0]!.messages[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
     expect(first).toContain('<request>\nRead README.md and name its first heading.\n</request>');
-    expect(first).toContain('Reply with the classification object only.');
+    // OQ-258: the strict rung names the keys (until 2026-10-13 it read "Reply with the classification object only.").
+    expect(first).toContain('with exactly these keys: "intent" (one of the categories)');
     expect(inputs[0]!.systemPrompt).toContain('never carry the request out');
     const second = inputs[1]!.messages[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
     expect(second).toContain('exactly these keys');

@@ -5696,6 +5696,15 @@ activation. The bound is kept as ruled on 2026-10-06; what changed is the fallba
 [`PD-ORCH-016`](../product/directives.md#pd-orch-016), whose cost the run measured: one 24.5 s step of a child told to pause
 over four reads of its own document.)*
 
+*(Added 2026-10-13, a further case of the intent bound (F2), from findings V3 and Q2 of the live runs at `552d346` and
+[OQ-258](#oq-258)'s ruling. The default pack was cut at the 12 s bound in 4 of 10 launches and the duress launch too; three of
+those cuts (duress, resume, faults-args) were spent deliberating which key to write the category under, because the strict rung
+named none, one (edit) was applying the tie-break, and one (terminal) received no bytes, the endpoint queueing. The bound is kept
+as ruled on 2026-10-06; what changed is the strict rung's text, which now names the object's three keys. **The intent-bound limb
+reopens** if a default pack after that change shows a classification cut after its reasoning has named its category with no
+deliberation about field names, or 3 or more cuts in 10 launches where the endpoint was not queueing (bytes were received before
+the cut).)*
+
 **OQ-115 — Should the bundled code-intelligence server's tool descriptions reach the system prompt verbatim?** *(REQ-MCP-101, which renders each tool's description text in the persona's MCP section; REQ-MCP-015, which puts usage-instruction retrieval in the READ tier every persona carrying the server holds. Raised 2026-09-29 from the first live run's finding L8 under [R-067](../product/requests.md#r-067). Open until 2026-10-06; ruled then, below. Raised as OQ-114 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** as recommended, the bundled server's binding
@@ -13177,7 +13186,7 @@ ladder, rung 2's keys and example fixed and rung 1's wording open; REQ-ORCH-007 
 bound, kept by OQ-114's ruling under R-071; REQ-ORCH-011, the result's fields; ADR-0026's third execution, "the schema
 was meant to be the instruction"; `PD-ORCH-011` revision 2. Raised 2026-10-13 from finding V3 of the duress live-run autopsy and
 finding Q2 of the default autopsy at `552d346`, recorded in
-[`the-intent-classifiers-strict-rung-never-names-the-objects-keys`](../defects/the-intent-classifiers-strict-rung-never-names-the-objects-keys.md);
+[`the-intent-classifiers-strict-rung-never-names-the-objects-keys`](../defects/fixed/the-intent-classifiers-strict-rung-never-names-the-objects-keys.md);
 the consortium's question V3. **Ruled 2026-10-13.**)*
 
 Every classifier request went out at `json_schema` with user text ending "Reply with the classification object only.", naming no
@@ -13212,6 +13221,11 @@ launches where the endpoint was not queueing (bytes were received before the cut
 12 s bound fall toward `a68f121`'s 2 of 10 and come only from category deliberation or a queueing endpoint; duress classifies
 `whole_project` in time; faults-args classifies `single_file_change` and runs direct (about 43 s, against 169 s); launch audits
 read `fallback: true` less often.
+
+*Built 2026-10-13 (fin38, `fin38-edits-handoff-classifier`); its first execution is reported in ADR-0026's third execution, in
+place, and in `PD-ORCH-011` revision 2's first live execution.* `KEYS_INSTRUCTION`, `SCHEMA_INSTRUCTION` and
+`JSON_OBJECT_INSTRUCTION` (`packages/engine/src/intent/classifier.ts`); pinned by `intent.test.ts`'s OQ-258 case, red on the code
+before. The note is repaired.
 
 <a id="oq-259"></a>
 

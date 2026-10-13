@@ -69,3 +69,11 @@ warning line.
 
 The live half is owed: only a real endpoint proves the schema is accepted rather than merely sent,
 and `pnpm live-run` spends the owner's money, so it was not run.
+
+**Falsified in part, 2026-10-13 (OQ-258, fin38).** The reason given above for rung 1's one sentence — "deliberately naming no keys
+**because the schema was meant to carry them**" — does not hold for a reasoning model, which never sees `response_format` while it
+reasons: at `552d346` the duress classification chose its category and was cut at the 12 s bound deliberating which key to write
+it under, and three of the default pack's four cuts did the same (findings V3 and Q2). The strict rung now names the three keys,
+without rung 2's example
+([`the-intent-classifiers-strict-rung-never-names-the-objects-keys`](the-intent-classifiers-strict-rung-never-names-the-objects-keys.md)).
+The text above is kept as written; the adapter's repair it records stands.

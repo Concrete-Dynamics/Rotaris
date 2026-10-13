@@ -384,6 +384,8 @@ directory per scenario:
 session store and a session id; the live run produced all three and used to delete two of them with the sandbox,
 which is why every defect that skill has found came from a session somebody drove by hand. Read a pack with
 `pnpm autopsy .live-run/runs/<stamp>/workspace.db <session-id>`, or point the skill at the pack directory.
+The pack stays out of the repository; an autopsy the record cites is kept in
+[`docs/architecture/live-runs/`](docs/architecture/live-runs/README.md) (since 2026-10-13), with no host, URL, key or token in it.
 
 The sandbox itself is deleted at the end unless `--keep`. The record of what happened in it is not.
 

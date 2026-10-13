@@ -113,7 +113,7 @@ export function grantFacets(tools: readonly string[]): readonly string[] {
  * which hold no `terminal`, to run the tests themselves (findings L4 and N3).
  */
 /*
- * PD-TOOLS-006 revision 8 (OQ-241): the closing instruction also forbids a brief offering a command or tool the persona's entry
+ * PD-TOOLS-006 revision 8 (OQ-250): the closing instruction also forbids a brief offering a command or tool the persona's entry
  * does not show. It read "Ask a persona only for work its tools allow: …" until then, and in the duress live run at a68f121 a
  * brief still offered `node --test` to a docs-writer (call 114), which then called `run_command` (call 164).
  */
@@ -139,7 +139,7 @@ export function renderDelegateCatalogue(catalogue: DelegateCatalogue): string {
 export const TODO_ITEM_SENTENCE = 'Give todo_item: the id of the item of your todo list this delegation serves, as the todo tool\'s last result shows it. Once you keep a todo list, every delegation to a persona that writes workspace files names an open item, and no two such delegations hold one item at once. Write the list in one step and delegate in the next: an item\'s id exists only once the todo call has returned.';
 
 /**
- * PD-TOOLS-006 revision 7 (OQ-240, ruled 2026-10-07 under R-072): the sentence that tells the caller an admitted delegation marks
+ * PD-TOOLS-006 revision 7 (OQ-249, ruled 2026-10-07 under R-072): the sentence that tells the caller an admitted delegation marks
  * the PENDING item it serves IN_PROGRESS, so the items it will delegate are left PENDING in its list.
  */
 export const TODO_ITEM_MARK_SENTENCE = 'A delegation the run admits marks the PENDING item it serves IN_PROGRESS in your list, so leave the items you will delegate PENDING and keep IN_PROGRESS for the item you work on yourself.';

@@ -1,5 +1,5 @@
 /**
- * PD-TOOLS-006 revision 8 (OQ-241): the duress counts OQ-216's target of zero is measured by, pinned against the shapes the duress
+ * PD-TOOLS-006 revision 8 (OQ-250): the duress counts OQ-216's target of zero is measured by, pinned against the shapes the duress
  * live run at a68f121 recorded (session e6747bd0: call 115, architect given a write scope; call 164, a docs-writer's `run_command`).
  */
 import { describe, expect, it } from 'vitest';
@@ -8,7 +8,7 @@ import { routingMissReading } from './routing-misses.mjs';
 
 const call = (ordinal: number, tool_name: string, agent_name: string, status: string, result: string, failureKind: string | null = null) => ({ ordinal, tool_name, agent_name, status, result, failureKind });
 
-describe('routingMissReading (PD-TOOLS-006 revision 8, OQ-241)', () => {
+describe('routingMissReading (PD-TOOLS-006 revision 8, OQ-250)', () => {
   it('counts the a68f121 duress shapes: one write-scope refusal for architect, one unknown tool a child called', () => {
     const r = routingMissReading([{ scenario: 'duress', rootNames: ['orchestrator'], calls: [
       call(115, 'delegate', 'orchestrator', 'failed', "Task 'decisions': rejected — write_scope was given to 'architect', which cannot write files: it holds no file-writing tool (write_file, haet_edit). The delegation was not started."),

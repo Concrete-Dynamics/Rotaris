@@ -19,7 +19,7 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *   1d. timed out  — a child cut off at a 3 s per-agent timeout, with and without progress: the tree and table tags, the
  *                    inspector's and the persona window's line, and their geometry (PD-CONFIG-003 revision 3, OQ-234).
  *   1e. todo item  — PD-TOOLS-006 revision 6 (OQ-220): a held item and an unnamed delegation after the list are refused;
- *                    revision 7 with PD-TOOLS-008 revision 2 (OQ-240): each admitted delegation marks its PENDING item
+ *                    revision 7 with PD-TOOLS-008 revision 2 (OQ-249): each admitted delegation marks its PENDING item
  *                    IN_PROGRESS, two side by side while their children run, and no todo call is refused;
  *                    named ones run, and each child's record holds its item.
  *   1f. stalled    — a child silent past a 3 s stall threshold: REQ-ORCH-089's `stalled Ns` tag in the Workspace sidebar's
@@ -328,7 +328,7 @@ const s1e = scenario('todo-item');
   expect(/^Task 'alpha': queued/.test(alpha.result) && /^Task 'delta': queued/.test(delta.result), `the named delegations: ${alpha.result.slice(0, 80)} / ${delta.result.slice(0, 80)}`);
   expect(new RegExp(`^Task 'beta': rejected — todo_item '${items[0]}' \\('Scripted item 1'\\) is held by alpha \\(coding-agent, task_id bg_[0-9a-f]{8}, state \\w+\\)`).test(beta.result), `beta's refusal: ${beta.result}`);
   expect(gamma.result.startsWith("Task 'gamma': rejected — This delegation names no todo item") && gamma.result.includes(`Scripted item 1 (${items[0]}), Scripted item 2 (${items[1]})`), `gamma's refusal: ${gamma.result}`);
-  // PD-TOOLS-006 revision 7 and PD-TOOLS-008 revision 2 (OQ-240): each admitted delegation marked its PENDING item IN_PROGRESS,
+  // PD-TOOLS-006 revision 7 and PD-TOOLS-008 revision 2 (OQ-249): each admitted delegation marked its PENDING item IN_PROGRESS,
   // alpha's and delta's side by side while both ran, and `done` completed both with one update each, none refused.
   expect(alpha.result.includes(`Todo item Scripted item 1 (${items[0]}) is now IN_PROGRESS.`) && delta.result.includes(`Todo item Scripted item 2 (${items[1]}) is now IN_PROGRESS.`), `the marks: ${alpha.result.slice(0, 200)} / ${delta.result.slice(0, 200)}`);
   expect(/\[IN_PROGRESS\] Scripted item 1 .*\n {2}\[IN_PROGRESS\] Scripted item 2 /s.test(delta.result), `delta's Todo state shows both items active: ${delta.result}`);

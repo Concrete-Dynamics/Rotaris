@@ -223,8 +223,8 @@ of REQ-ORCH-029: from a task's second work item on the run refuses the next unti
 open items hold the task's completion (REQ-ORCH-075, OQ-203), and a background child's completion notification names them
 (REQ-ORCH-059). The Todo pane shows it as "Agent plan" (REQ-CHAT-088). At most one of its tasks is IN_PROGRESS that the agent
 works on itself; a task one of its running delegated children holds as `todo_item` is outside that count, and an admitted
-delegation marks its PENDING item IN_PROGRESS (`PD-TOOLS-008` revision 2, `PD-TOOLS-006` revision 7, OQ-240). — `REQ-TOOLS-144`,
-`REQ-TOOLS-145`, `REQ-TOOLS-147`, `REQ-ORCH-029`, `REQ-ORCH-075`, OQ-213, OQ-240
+delegation marks its PENDING item IN_PROGRESS (`PD-TOOLS-008` revision 2, `PD-TOOLS-006` revision 7, OQ-249). — `REQ-TOOLS-144`,
+`REQ-TOOLS-145`, `REQ-TOOLS-147`, `REQ-ORCH-029`, `REQ-ORCH-075`, OQ-213, OQ-249
 _Avoid_: planner plan (the run's todo list), task ledger
 
 ### Finishing work

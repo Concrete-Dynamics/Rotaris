@@ -812,7 +812,7 @@ export class Run {
     return this.children?.writeClaimFor(callerId, rel) ?? null;
   }
   /**
-   * PD-TOOLS-008 revision 2 (OQ-240): the items of the agent `callerId`'s plan its non-terminal children hold, outside
+   * PD-TOOLS-008 revision 2 (OQ-249): the items of the agent `callerId`'s plan its non-terminal children hold, outside
    * REQ-TOOLS-145's count; read through the iteration's children at every `todo` call.
    */
   heldTodoItems(callerId: string): ReadonlySet<string> {

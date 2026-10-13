@@ -134,7 +134,7 @@ export interface ToolPortContext {
   readonly readTodo?: (() => AgentTodoDocument | null) | undefined;
   readonly writeTodo?: ((document: AgentTodoDocument) => boolean) | undefined;
   /**
-   * PD-TOOLS-008 revision 2 (OQ-240): the items of this agent's own plan its non-terminal children hold as their
+   * PD-TOOLS-008 revision 2 (OQ-249): the items of this agent's own plan its non-terminal children hold as their
    * `todo_item`, which REQ-TOOLS-145's count leaves out. A live read through the run at each `todo` call.
    */
   readonly heldTodoItems?: (() => ReadonlySet<string>) | undefined;

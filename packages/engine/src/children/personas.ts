@@ -277,7 +277,7 @@ export function runOverrideLayer(override: 'single' | 'swarm' | null, grant: Int
  * let it do is stated in `delegate`'s description, built per caller (PD-TOOLS-006 revision 4).
  */
 /**
- * PD-TOOLS-006 revision 8 (OQ-241, ruled 2026-10-07 under R-072): the one sentence that closes the routing table, the same for
+ * PD-TOOLS-006 revision 8 (OQ-250, ruled 2026-10-07 under R-072): the one sentence that closes the routing table, the same for
  * every configuration and naming no persona's tools, so it stays true under every `tools:` override, `tool_restrictions` entry
  * and `delegates_to`: the route names whose judgement a need calls for, and `delegate`'s catalogue says who can do the work. The
  * reason it exists, kept beside it: with revision 4's catalogue in all 35 coordinator requests of the duress live run at a68f121,

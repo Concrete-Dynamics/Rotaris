@@ -403,7 +403,7 @@ export class IterationChildren implements DelegationOps {
     // may start the child and assemble its payload before this call returns.
     this.acceptScope(row, scope.patterns);
     const alias = aliasResolved ? ` Alias '${aliasResolved}' resolved to '${row.persona}'.` : '';
-    // PD-TOOLS-006 revision 7 (OQ-240): the admitted item travels back, so the caller's port marks it IN_PROGRESS when PENDING.
+    // PD-TOOLS-006 revision 7 (OQ-249): the admitted item travels back, so the caller's port marks it IN_PROGRESS when PENDING.
     const item = admitted.item !== null ? { todoItem: admitted.item } : {};
     // REQ-ORCH-056/058: a state change triggers a pass; the delegate observation returns at once.
     this.scheduler.pass();
@@ -466,7 +466,7 @@ export class IterationChildren implements DelegationOps {
     this.scheduler.pass();
     const now = this.ledger.get(taskId) ?? r.row;
     const said = `Following up ${now.canonical_name} (${now.persona}): it resumes from its record under its own task id, with this task as its next message, and reports again when it ends.`;
-    // PD-TOOLS-006 revision 7 (OQ-240): a follow-up keeps its stored item, which the caller's port marks IN_PROGRESS when PENDING.
+    // PD-TOOLS-006 revision 7 (OQ-249): a follow-up keeps its stored item, which the caller's port marks IN_PROGRESS when PENDING.
     const item = row.todo_item !== null ? { todoItem: row.todo_item } : {};
     if (now.state === 'waiting_on_model_slot') {
       const cap = this.deps.modelCap(now.model_key) ?? 0;
@@ -604,7 +604,7 @@ export class IterationChildren implements DelegationOps {
   }
 
   /**
-   * PD-TOOLS-008 revision 2 (OQ-240, ruled 2026-10-07 under R-072): the items of `callerId`'s own plan its non-terminal
+   * PD-TOOLS-008 revision 2 (OQ-249, ruled 2026-10-07 under R-072): the items of `callerId`'s own plan its non-terminal
    * children hold as their `todo_item` — its direct children, every root's counting as one plan as `owns` reads them; queued,
    * waiting, running, summarising and paused children all hold (`PD-TOOLS-006` revision 6's set). Read at each `todo` call,
    * so an item whose child has ended counts against the next write that marks a task.

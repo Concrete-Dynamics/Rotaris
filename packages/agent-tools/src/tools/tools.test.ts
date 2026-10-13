@@ -899,7 +899,7 @@ describe('todo (REQ-TOOLS-144..147)', () => {
   });
 
   /*
-   * PD-TOOLS-008 revision 2 (OQ-240, ruled 2026-10-07 under R-072): a task a non-terminal child of the list's owner holds as
+   * PD-TOOLS-008 revision 2 (OQ-249, ruled 2026-10-07 under R-072): a task a non-terminal child of the list's owner holds as
    * its `todo_item` is outside REQ-TOOLS-145's count, and the bound is checked only on a write that marks a task IN_PROGRESS.
    * The default live run at a68f121 (edit, #14) was refused a mark of its second running child's item, and the plan recorded
    * running work PENDING (docs/defects/fixed/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md).

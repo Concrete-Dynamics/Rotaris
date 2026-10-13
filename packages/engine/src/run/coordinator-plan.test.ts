@@ -433,7 +433,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     });
 
     /*
-     * PD-TOOLS-008 revision 2 and PD-TOOLS-006 revision 7 (OQ-240): the refusal tells the coordinator to plan pieces of work,
+     * PD-TOOLS-008 revision 2 and PD-TOOLS-006 revision 7 (OQ-249): the refusal tells the coordinator to plan pieces of work,
      * keep only its own item IN_PROGRESS and leave the items it will delegate PENDING, which the delegation then marks. It said
      * "one item per step with only the step you are on IN_PROGRESS", and the live runs at a68f121 planned two parallel children
      * IN_PROGRESS and were refused (edit #5, duress #19).

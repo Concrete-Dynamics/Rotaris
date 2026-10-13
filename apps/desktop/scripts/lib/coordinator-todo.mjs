@@ -163,7 +163,7 @@ export function todoStates(text) {
 }
 
 /**
- * PD-TOOLS-008 revision 2 and PD-TOOLS-006 revision 7 (OQ-240, ruled 2026-10-07 under R-072): what the coordinator's plan
+ * PD-TOOLS-008 revision 2 and PD-TOOLS-006 revision 7 (OQ-249, ruled 2026-10-07 under R-072): what the coordinator's plan
  * recorded of the items its running children held, read from each root `todo` or `delegate` result that carries the Todo state
  * (the plan as it stood when that call ended), against each root child's `todo_item` and its life (`spawned_at` to
  * `completed_at`, or still open).

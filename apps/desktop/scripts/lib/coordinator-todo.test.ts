@@ -118,11 +118,11 @@ describe('todoItemReading (PD-TOOLS-006 revision 6, OQ-220)', () => {
 });
 
 /**
- * PD-TOOLS-008 revision 2 and PD-TOOLS-006 revision 7 (OQ-240): what the coordinator's plan recorded of the items its running
+ * PD-TOOLS-008 revision 2 and PD-TOOLS-006 revision 7 (OQ-249): what the coordinator's plan recorded of the items its running
  * children held, pinned against the default live run's edit session at a68f121 (#14 refused, the tests item PENDING while its
  * child ran) and the shape the build records (each delegate result carries the Todo state with its item IN_PROGRESS).
  */
-describe('heldItemReading (PD-TOOLS-008 revision 2, OQ-240)', () => {
+describe('heldItemReading (PD-TOOLS-008 revision 2, OQ-249)', () => {
   const state = (rows: [string, string, string][]) => `Todo state:\nPhase main (e002ab7d)\n${rows.map(([st, name, id]) => `  [${st}] ${name} (${id})`).join('\n')}`;
   const at = (iso: string) => Date.parse(iso);
   const kids = [

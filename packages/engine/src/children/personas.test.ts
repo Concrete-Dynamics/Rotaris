@@ -96,7 +96,7 @@ describe('engine/personas — the coordinator\'s routing table (REQ-ORCH-028)', 
   });
 
   /*
-   * PD-TOOLS-006 revision 8 (OQ-241, ruled 2026-10-07 under R-072): the table closes with one fixed sentence sending the work a
+   * PD-TOOLS-006 revision 8 (OQ-250, ruled 2026-10-07 under R-072): the table closes with one fixed sentence sending the work a
    * route implies to a persona whose catalogue entry allows it. In the duress run at a68f121 the coordinator gave architect
    * docs/decisions.md with a write_scope (call 115), as "design → architect" read
    * (docs/defects/fixed/the-routing-table-leads-the-coordinator-past-delegates-catalogue.md).

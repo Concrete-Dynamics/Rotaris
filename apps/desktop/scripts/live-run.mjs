@@ -1006,16 +1006,16 @@ function checkCoordinatorTodo() {
   check(items.stale.length === 0, 'every todo item a child served is one its plan still holds (PD-TOOLS-006 revision 6)', items.stale.length === 0 ? `${items.named.length} named item(s)` : items.stale.map((c) => `${child(c)} on ${c.item}`).join(', '));
   const itemRefusals = preservedSessions.flatMap(({ scenario, sessionId }) => readToolCalls(sessionId).filter((c) => c.tool_name === 'delegate' && /todo item|todo_item '/.test(c.result) && /rejected/.test(c.result)).map((c) => ({ scenario, ordinal: c.ordinal, tool_name: c.tool_name })));
   if (itemRefusals.length > 0) noted('delegations refused for their todo item: unnamed, unknown, finished or held (PD-TOOLS-006 revision 6; target at most one per run, each followed by a named delegation)', itemRefusals.map(at).join(', '));
-  // PD-TOOLS-008 revision 2 and PD-TOOLS-006 revision 7 (OQ-240): a running child's item reads IN_PROGRESS in its coordinator's
+  // PD-TOOLS-008 revision 2 and PD-TOOLS-006 revision 7 (OQ-249): a running child's item reads IN_PROGRESS in its coordinator's
   // plan, and no item is closed while an implementation child still holds it; single-active refusals are a NOTE (target 0).
   const heldAt = (h) => `${h.scenario} #${h.ordinal}: ${h.child} on ${h.item}`;
-  check(held.heldPending.length === 0, 'no coordinator\'s plan recorded a running child\'s todo item PENDING (PD-TOOLS-008 revision 2, PD-TOOLS-006 revision 7, OQ-240)', held.heldPending.length === 0 ? `${held.coordinating.length} coordinating session(s): ${held.coordinating.join(', ') || 'none'}` : held.heldPending.map(heldAt).join(', '));
-  check(held.closedWhileHeld.length === 0, 'no coordinator marked a todo item COMPLETED while an implementation child still held it (REQ-ORCH-029, OQ-240)', held.closedWhileHeld.length === 0 ? `${held.coordinating.length} coordinating session(s)` : held.closedWhileHeld.map(heldAt).join(', '));
-  if (held.singleActive.length > 0) noted('todo calls refused under REQ-TOOLS-145 or PD-TOOLS-008 in coordinating sessions (OQ-240; target 0)', held.singleActive.map((h) => `${h.scenario} #${h.ordinal}`).join(', '));
+  check(held.heldPending.length === 0, 'no coordinator\'s plan recorded a running child\'s todo item PENDING (PD-TOOLS-008 revision 2, PD-TOOLS-006 revision 7, OQ-249)', held.heldPending.length === 0 ? `${held.coordinating.length} coordinating session(s): ${held.coordinating.join(', ') || 'none'}` : held.heldPending.map(heldAt).join(', '));
+  check(held.closedWhileHeld.length === 0, 'no coordinator marked a todo item COMPLETED while an implementation child still held it (REQ-ORCH-029, OQ-249)', held.closedWhileHeld.length === 0 ? `${held.coordinating.length} coordinating session(s)` : held.closedWhileHeld.map(heldAt).join(', '));
+  if (held.singleActive.length > 0) noted('todo calls refused under REQ-TOOLS-145 or PD-TOOLS-008 in coordinating sessions (OQ-249; target 0)', held.singleActive.map((h) => `${h.scenario} #${h.ordinal}`).join(', '));
 }
 
 /**
- * PD-TOOLS-006 revision 8 (OQ-241, R-072) over every preserved session (`lib/routing-misses.mjs`): OQ-216's two counts, each with
+ * PD-TOOLS-006 revision 8 (OQ-250, R-072) over every preserved session (`lib/routing-misses.mjs`): OQ-216's two counts, each with
  * its target of zero — `delegate` refused for a `write_scope` given to a persona that cannot write files, and a child's call of a
  * tool it does not hold refused at the gate. NOTEs: the enforced bounds answered each; the duress run at a68f121 had one of each.
  */
@@ -1032,7 +1032,7 @@ function checkRoutingMisses() {
     check(false, 'the delegate and child calls of every session the run kept were read for PD-TOOLS-006 revision 8', cause instanceof Error ? cause.message : String(cause));
     return;
   }
-  noted('write scopes given to a persona that cannot write files, and child calls of a tool they do not hold (PD-TOOLS-006 revision 8, OQ-241; target 0 each)',
+  noted('write scopes given to a persona that cannot write files, and child calls of a tool they do not hold (PD-TOOLS-006 revision 8, OQ-250; target 0 each)',
     `${r.scopeRefusals.length} write-scope refusal(s)${r.scopeRefusals.length === 0 ? '' : ` (${r.scopeRefusals.map((x) => `${x.scenario} #${x.ordinal}: ${x.persona}`).join(', ')})`}; ${r.unknownTools.length} unknown-tool call(s) by a child${r.unknownTools.length === 0 ? '' : ` (${r.unknownTools.map((x) => `${x.scenario} #${x.ordinal}: ${x.agent} ${x.tool}`).join(', ')})`}`);
 }
 

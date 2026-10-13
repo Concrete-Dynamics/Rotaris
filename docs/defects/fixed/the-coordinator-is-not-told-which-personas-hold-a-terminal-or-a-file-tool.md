@@ -57,7 +57,7 @@ coordinator requests; one `write_scope` refusal remained (`#115`, `architect` gi
 2 per run before, and one brief offered `node --test` to a docs-writer (`#114`, then `run_command` refused at the gate, `#164`)
 against 2 to 3 before; 16 of 117 docs-writer requests carried a one-sentence missing-shell aside against 22 to 23 rows per failed
 child before, and no impossible brief sat on a failed child's path. The target of zero was missed, and the remainder is recorded
-as its own defect, ruled as OQ-241:
+as its own defect, ruled as OQ-250:
 [`the-routing-table-leads-the-coordinator-past-delegates-catalogue.md`](the-routing-table-leads-the-coordinator-past-delegates-catalogue.md).
 This note stays repaired: what it described, a coordinator told nothing of each persona's tools, no longer holds.
 

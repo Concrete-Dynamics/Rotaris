@@ -624,7 +624,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       }
       // plan:<n> — PD-TOOLS-006 revision 6 (OQ-220): a todo list of n open items, which the delegations after it name in turn;
       // `done` completes every open item of the latest list, so REQ-ORCH-075 holds the task by none of them. Since PD-TOOLS-006
-      // revision 7 (OQ-240) an admitted delegation marks its item IN_PROGRESS, and REQ-TOOLS-146 restores an IN_PROGRESS task
+      // revision 7 (OQ-249) an admitted delegation marks its item IN_PROGRESS, and REQ-TOOLS-146 restores an IN_PROGRESS task
       // over a `replace`, so `done` sends one `update` per open item, as a model must. It was one `replace` writing every
       // item COMPLETED until then.
       const planSteps = /^plan:(\d+)$/.exec(step);

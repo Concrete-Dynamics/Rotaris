@@ -865,7 +865,7 @@ ${orchestrator}runtime:
 });
 
 /**
- * PD-TOOLS-006 revision 7 with PD-TOOLS-008 revision 2 (OQ-240, ruled 2026-10-07 under R-072): an admitted delegation marks its
+ * PD-TOOLS-006 revision 7 with PD-TOOLS-008 revision 2 (OQ-249, ruled 2026-10-07 under R-072): an admitted delegation marks its
  * PENDING item IN_PROGRESS in the caller's own plan and persists it, and the items the caller's non-terminal children hold are
  * outside REQ-TOOLS-145's count. The default live run at a68f121 (edit, #14) could not mark its second running child's item
  * (docs/defects/fixed/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md).

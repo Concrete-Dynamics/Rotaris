@@ -167,9 +167,9 @@ export function planHeldRowText(iteration: number, open: readonly string[], give
  * is one `todo` call away, and the same call then runs as it was asked. PD-TOOLS-006 revision 6 (OQ-220) adds what the list
  * is for at a delegation: once it is written, a delegation to a persona that writes workspace files names the item it serves,
  * by the id the `todo` result gives. It said, until 2026-10-07: "… one item per step with only the step you are on
- * IN_PROGRESS, then make this call again." `PD-TOOLS-008` revision 2 and `PD-TOOLS-006` revision 7 (OQ-240) count only the
+ * IN_PROGRESS, then make this call again." `PD-TOOLS-008` revision 2 and `PD-TOOLS-006` revision 7 (OQ-249) count only the
  * items the agent works on itself and mark a delegated item at admission, so the list is one item per piece of work, the
- * delegated ones PENDING. It said, until OQ-240's build: "Write one with the todo tool, one item per step with only the step you
+ * delegated ones PENDING. It said, until OQ-249's build: "Write one with the todo tool, one item per step with only the step you
  * are on IN_PROGRESS; its result gives each item's id. Then make this call again, and on a delegate call to a persona that
  * writes workspace files give todo_item: the id of the item it serves."
  */

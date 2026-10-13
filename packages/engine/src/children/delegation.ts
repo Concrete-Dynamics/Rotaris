@@ -69,7 +69,7 @@ export interface AttachmentOutcome {
 
 export type DelegateOutcome =
   /**
-   * `todoItem` (PD-TOOLS-006 revision 7, OQ-240): the item of the caller's plan the admitted delegation serves — named,
+   * `todoItem` (PD-TOOLS-006 revision 7, OQ-249): the item of the caller's plan the admitted delegation serves — named,
    * inherited through `continuation_of`, or kept on a `session_id` follow-up — which the caller's port marks IN_PROGRESS
    * when it is PENDING. Absent when the delegation serves none.
    */

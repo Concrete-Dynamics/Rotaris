@@ -312,7 +312,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const runtime = deps.runtime(ctx.workspaceRoot);
   const todo = new TodoList(ctx.readTodo?.());
   /*
-   * PD-TOOLS-008 revision 2 (OQ-240): the items this agent's non-terminal children hold are outside REQ-TOOLS-145's count, read
+   * PD-TOOLS-008 revision 2 (OQ-249): the items this agent's non-terminal children hold are outside REQ-TOOLS-145's count, read
    * through the run at each call; the hint to leave delegated items PENDING is given to an agent whose resolved set holds
    * `delegate`, known once the one resolution below has run (`callable`).
    */
@@ -328,7 +328,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     },
   };
   /*
-   * PD-TOOLS-006 revision 7 (OQ-240, ruled 2026-10-07 under R-072): an admitted delegation's item — named, inherited or kept on a
+   * PD-TOOLS-006 revision 7 (OQ-249, ruled 2026-10-07 under R-072): an admitted delegation's item — named, inherited or kept on a
    * follow-up — is marked IN_PROGRESS in THIS port's own plan when it is PENDING, on the same `TodoList` the `todo` tool holds, so
    * a later `todo` call in the turn keeps the mark, and the plan is persisted as any `todo` write is. The child is non-terminal
    * from its admission, so the item is held and outside REQ-TOOLS-145's count (PD-TOOLS-008 revision 2). A COMPLETED, ABANDONED

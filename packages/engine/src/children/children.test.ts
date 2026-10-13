@@ -401,7 +401,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: (a['inherited_context'] as string[] | undefined) ?? [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [], ...(typeof a['continuation_of'] === 'string' ? { continuationOf: a['continuation_of'] } : {}), ...(typeof a['session_id'] === 'string' ? { sessionId: a['session_id'] } : {}), ...(a['suppress_auto_context'] === true ? { suppressAutoContext: true } : {}), ...(Array.isArray(a['attach_artifacts']) ? { attachArtifacts: a['attach_artifacts'] as string[] } : {}), ...(typeof a['todo_item'] === 'string' ? { todoItem: a['todo_item'] } : {}) });
         if (r.status === 'rejected') return { ...ok(`Task '${r.canonicalName}': rejected — ${r.message}`), isError: true, status: 'failed' };
         let text = `Task '${r.canonicalName}': ${r.status} — ${r.message}\ntask_id: ${r.taskId}`;
-        // PD-TOOLS-006 revision 7 (OQ-240): the item the admitted delegation serves, which the run host's port marks IN_PROGRESS.
+        // PD-TOOLS-006 revision 7 (OQ-249): the item the admitted delegation serves, which the run host's port marks IN_PROGRESS.
         if (r.todoItem !== undefined) text += `\nserves todo item ${r.todoItem}`;
         if (a['run_in_background'] === false) { const w = await ops.waitForTasks(parentId, [r.taskId]); text += `\n\n${'refused' in w ? w.refused : 'interrupted' in w ? w.interrupted : w.text}`; }
         return ok(text);
@@ -2518,7 +2518,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     });
 
     /**
-     * PD-TOOLS-006 revision 7 and PD-TOOLS-008 revision 2 (OQ-240, ruled 2026-10-07 under R-072): an admitted delegation hands
+     * PD-TOOLS-006 revision 7 and PD-TOOLS-008 revision 2 (OQ-249, ruled 2026-10-07 under R-072): an admitted delegation hands
      * back the item it serves, so the caller's port marks it IN_PROGRESS, and the items the caller's non-terminal children hold
      * are the set REQ-TOOLS-145's count leaves out — read live, so an item whose child has ended counts again.
      */

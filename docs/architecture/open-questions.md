@@ -10909,7 +10909,7 @@ over every session it keeps (`apps/desktop/scripts/lib/coordinator-todo.mjs`). T
 "…; its result gives each item's id. Then make this call again, and on a delegate call to a persona that writes workspace files
 give todo_item: the id of the item it serves." It read, until then: "…, one item per step with only the step you are on
 IN_PROGRESS, then make this call again."
-*Amended again by OQ-240's ruling (`PD-TOOLS-008` revision 2, `PD-TOOLS-006` revision 7, fin33):* it now reads "Write one with
+*Amended again by OQ-249's ruling (`PD-TOOLS-008` revision 2, `PD-TOOLS-006` revision 7, fin33):* it now reads "Write one with
 the todo tool, one item per piece of work, with only an item you work on yourself IN_PROGRESS and the items you will delegate
 PENDING; its result gives each item's id. Then make this call again, and on a delegate call give todo_item: the id of the item it
 serves, which the call marks IN_PROGRESS." It read, until then: "Write one with the todo tool, one item per step with only the
@@ -11109,7 +11109,7 @@ aside, against 22 to 23 rows per failed child before; no stray file, no impossib
 claimed no test run. The default run at `a68f121` chose by facet in 71 of 71 requests. **The target stands at 0, and its first
 reading is falsified for revision 4 alone:** revision 4's catalogue did not by itself bring either count to zero, because the
 routing table sent the work a route implies to the route's persona (the same task went to `codebase-analyst` at `c2fdd6a`, `#107`,
-and to `architect` here). OQ-241 rules the next step, `PD-TOOLS-006` revision 8, measured against the same target.
+and to `architect` here). OQ-250 rules the next step, `PD-TOOLS-006` revision 8, measured against the same target.
 
 **OQ-217 — What is the report summariser told of how the child ended?** *(REQ-ORCH-088, a timed-out child recorded failed
 with a report of the form "Child timed out after <N>s"; REQ-ORCH-108, the report condenses what already happened;
@@ -12462,7 +12462,7 @@ opened only after the record is won (the order fin30 had, with the double-instan
 form of endpoint that is no file (Linux's abstract socket namespace; nothing equivalent on macOS), or the record's own write
 taken to include the endpoint it names.
 
-**OQ-240 — Does REQ-TOOLS-145's single active task bound a coordinator's parallel delegations?** *(REQ-TOOLS-145, "at most one
+**OQ-249 — Does REQ-TOOLS-145's single active task bound a coordinator's parallel delegations?** *(REQ-TOOLS-145, "at most one
 task may be `IN_PROGRESS` at a time"; REQ-TOOLS-146, `replace`'s protection of the active task; `PD-TOOLS-008` revision 1,
 "Everything else REQ-TOOLS-145 fixes still governs: at most one task is IN_PROGRESS"; REQ-TOOLS-147, the Agent plan as the
 run's primary progress display; REQ-ORCH-029, a list the coordinator "keeps current"; REQ-ORCH-028 with `PD-TOOLS-006`
@@ -12470,7 +12470,8 @@ revision 6's `todo_item`; REQ-CHAT-086, IN_PROGRESS drawn active and PENDING ope
 finding P3 of the default autopsy at `a68f121` and its recurrence D7 in the duress autopsy, recorded in
 [`a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md`](../defects/fixed/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md);
 the consortium's question P3. The round assigned it OQ-227, which fin30 took on main for `single_file_change` (PD-ORCH-011
-revision 2) before this landed, and OQ-235 to OQ-239 were taken meanwhile, so it takes OQ-240, the next free number.
+revision 2) before this landed; raised as OQ-240 and renumbered OQ-249 before the landing, since origin/main moved to OQ-248
+past a block (OQ-240 to OQ-244) another plan may still hold, so it takes the next free number after main's highest.
 **Ruled 2026-10-07.**)*
 
 A coordinator running two delegated children at once cannot record both items as in progress. In the default live run at
@@ -12663,15 +12664,15 @@ a follow-up not checked, the key unset), `run-host/tools.test.ts` (the catalogue
 directions; a global list narrowing and a workspace `[]` lifting it), `run-host/configuration.test.ts` (the carried list and the
 four log lines) and `tools/delegation.test.ts`. The note is repaired.
 
-**OQ-241 — Does the coordinator's routing table send the work a route implies to a persona whose tools allow it?**
+**OQ-250 — Does the coordinator's routing table send the work a route implies to a persona whose tools allow it?**
 *(REQ-ORCH-028, the routing table from need to role, with capability clauses for `codebase-analyst` and `librarian` only;
 REQ-TOOLS-001, the three facets; REQ-CONFIG-100, a configured `system_prompt` replacing the built-in one; REQ-CONFIG-101;
 `PD-TOOLS-006` revisions 3 (the write-scope refusal) and 4 (the catalogue); OQ-216, whose target of zero the duress run
 at `a68f121` missed; OQ-228 and OQ-229, the delegation targets. Raised 2026-10-07 from the final live runs: finding D3 of the duress
 autopsy at `a68f121` (pack `2026-10-07T07-09-30-708Z`, session `e6747bd0`, `#114`, `#115`, `#164`), recorded in
 [`the-routing-table-leads-the-coordinator-past-delegates-catalogue.md`](../defects/fixed/the-routing-table-leads-the-coordinator-past-delegates-catalogue.md);
-the consortium's question D3. The round assigned it OQ-233, which fin32 took on main for `write_file`'s level-3 shift; OQ-234 to
-OQ-240 being taken, it takes OQ-241, the next free number. **Ruled 2026-10-07.**)*
+the consortium's question D3. The round assigned it OQ-233, which fin32 took on main for `write_file`'s level-3 shift; raised
+as OQ-241 and renumbered OQ-250 before the landing, after OQ-249, for the reason OQ-249's entry gives. **Ruled 2026-10-07.**)*
 
 Revision 4's catalogue reached every coordinator request, and the coordinator still gave the work a route implies to the route's
 persona: `docs/decisions.md` to `architect` with a `write_scope` (`#115`, refused in 170 ms, re-briefed in 19.4 s), and a brief

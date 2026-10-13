@@ -184,7 +184,7 @@ describe('scriptedClient — the step a call takes', () => {
     const three = await callOf(messages);
     expect(three.args['todo_item']).toBe('0000000a');
     messages = [...messages, ...answered('c4', 'delegate', three.args, "Task 'three': queued — Accepted.\ntask_id: bg_00000003")];
-    // PD-TOOLS-006 revision 7 (OQ-240): the delegations marked their items IN_PROGRESS, which a replace would restore
+    // PD-TOOLS-006 revision 7 (OQ-249): the delegations marked their items IN_PROGRESS, which a replace would restore
     // (REQ-TOOLS-146), so `done` completes each open item with its own update, in one step.
     const parts = client.stream({ ...request(messages), tools })[Symbol.asyncIterator]();
     const calls: { name: string; args: Record<string, unknown> }[] = [];

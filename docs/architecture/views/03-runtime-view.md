@@ -1280,7 +1280,7 @@ whose targets exist, then the instruction to ask a persona only for work its too
 through `depends_on` or `inherited_context` (`renderDelegateCatalogue`, `agent-tools`). It is computed once, at port
 creation. The coordinator's routing table (`ROUTING`, `children/personas.ts`) carries REQ-ORCH-028's two capability clauses
 for `codebase-analyst` and `librarian`; a configured `system_prompt` replaces it, and not the description. Since `PD-TOOLS-006`
-revision 8 (OQ-241) the table closes with one fixed sentence (`ROUTING_WORK_SENTENCE`) that names no persona's tools and sends the
+revision 8 (OQ-250) the table closes with one fixed sentence (`ROUTING_WORK_SENTENCE`) that names no persona's tools and sends the
 work a route implies to a persona whose catalogue entry allows it, so the prompt stays the constant `entryInstructionsFor`
 recognises; the catalogue's closing instruction also forbids a brief offering a command or tool the persona's entry lacks.
 
@@ -1395,7 +1395,7 @@ child (`children.todo_item`, **v34**); a continuation naming none inherits its p
 `followUp` keeps the stored item and refuses only while another implementation child holds it. Each refusal is a warning
 citing REQ-ORCH-028 or REQ-ORCH-029.
 
-**A running delegation's item is held, and marked at admission (`PD-TOOLS-008` revision 2, `PD-TOOLS-006` revision 7; OQ-240
+**A running delegation's item is held, and marked at admission (`PD-TOOLS-008` revision 2, `PD-TOOLS-006` revision 7; OQ-249
 ruled 2026-10-07 under R-072; fin33).** An accepted `DelegateOutcome` (and a follow-up's) carries `todoItem`, the item the
 admission resolved — named, inherited or kept. The run host's `delegateTool` is built with `markItem` (`createToolPort`'s
 `markDelegatedItem`): it sets that item IN_PROGRESS on the port's own `TodoList` when it is PENDING, persists it through

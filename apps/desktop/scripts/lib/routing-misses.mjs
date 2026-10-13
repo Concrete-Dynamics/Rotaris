@@ -1,5 +1,5 @@
 /**
- * PD-TOOLS-006 revision 8 (OQ-241, ruled 2026-10-07 under the owner's delegation, R-072): the two counts OQ-216's target of zero
+ * PD-TOOLS-006 revision 8 (OQ-250, ruled 2026-10-07 under the owner's delegation, R-072): the two counts OQ-216's target of zero
  * is measured by, over every preserved session — each `delegate` refused because its `write_scope` named a persona that cannot
  * write files (revision 3's refusal: the routing table sent a write to a reader, the duress run at a68f121's call 115), and each
  * call a child made of a tool it does not hold, refused at the gate as unknown (a brief offered it a command its entry lacks,

@@ -73,7 +73,7 @@ const listMarksSeveralActive = (names: readonly string[], delegates: boolean) =>
 export const DELEGATE_HINT = 'Leave the items you will delegate PENDING: a delegate call that names one in todo_item marks it IN_PROGRESS.';
 
 /**
- * PD-TOOLS-008 revision 2 (OQ-240, ruled 2026-10-07 under the owner's delegation, R-072): what the run tells the tool about
+ * PD-TOOLS-008 revision 2 (OQ-249, ruled 2026-10-07 under the owner's delegation, R-072): what the run tells the tool about
  * its owner. `held` is the set of task ids a non-terminal child of the list's owner holds as its `todo_item`
  * (`PD-TOOLS-006` revision 6), read at each call; those tasks are outside REQ-TOOLS-145's count. `delegates` is whether the
  * owner's resolved tool set holds `delegate`, which adds the hint to this directive's sentence. With neither, the tool
@@ -154,7 +154,7 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
       'add_task {phase_id, name, description, state} — ONE task in an existing phase.',
       'update {task_id, name, description, state} — one task; a change that changes nothing is an error.',
       'remove_task {task_id}.',
-      // PD-TOOLS-008 revision 2 (OQ-240): the bound is the agent's own tasks. It said, until 2026-10-07, "At most one task
+      // PD-TOOLS-008 revision 2 (OQ-249): the bound is the agent's own tasks. It said, until 2026-10-07, "At most one task
       // IN_PROGRESS." — true of a list no delegation holds, and the reason a coordinator's second running child's item stayed
       // PENDING (the default live run at a68f121, edit #14).
       'Phases and tasks carry stable 8-hex ids; target by id, never by name. At most one task IN_PROGRESS of your own; a task a running delegated agent holds through todo_item is not counted, and a delegate call naming a PENDING task marks it IN_PROGRESS.',
@@ -172,7 +172,7 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
            * PD-TOOLS-008 revision 2: what this replace newly marks IN_PROGRESS — an incoming task marked so that is not already a
            * protected IN_PROGRESS task (a protected task the replace restores never counts against it) and that no running
            * delegation holds. Revision 1 counted every incoming IN_PROGRESS task beside the one active task, so a coordinator's
-           * list could carry only one running delegation's item (OQ-240).
+           * list could carry only one running delegation's item (OQ-249).
            */
           const newlyMarked = incoming.flatMap((p) => p.tasks.filter((t) => t.state === 'IN_PROGRESS' && !(t.id !== undefined && (protectedActive.has(t.id) || held.has(t.id)))));
           const activeProtected = protectedTasks.find((x) => x.task.state === 'IN_PROGRESS' && !held.has(x.task.id));

@@ -42,7 +42,27 @@ function longCommand() {
 }
 
 /**
- * The shapes, in the dialect of one platform: ten on Windows, fourteen elsewhere.
+ * REQ-CONFIG-116's default for `runtime.shell_command_timeout`, in seconds: the hard cap (`hardMs`) a terminal call that
+ * supplies no `timeout` is bounded by (REQ-TOOLS-097). The live run's sandbox does not set the key, so the default governs.
+ */
+export const DEFAULT_SHELL_COMMAND_TIMEOUT_S = 100;
+/** How often the `steady` shape prints, and how many lines: well inside the 30 s no-output window, and well past the cap. */
+export const STEADY_INTERVAL_MS = 2_000;
+export const STEADY_TICKS = 65;
+
+/**
+ * The `steady` shape's command: one `tick-<n>` line every `STEADY_INTERVAL_MS` for `STEADY_TICKS` lines (130 s), issued with
+ * no `timeout`. It never goes quiet for the no-output window, so REQ-TOOLS-098's soft pause never fires, and it runs past
+ * the default hard cap, so the cap is the bound that ends it. The `wedge` prints nothing and soft-pauses 70 s before the cap
+ * (`docs/defects/fixed/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`). No `$`, so PowerShell's
+ * double quotes expand nothing in it; no `setTimeout`, `sleep` or `LINE-`, so no other shape's pattern reads it.
+ */
+function steadyCommand() {
+  return `node -e "let n = 0; const t = setInterval(() => { n += 1; console.log('tick-' + n); if (n === ${STEADY_TICKS}) clearInterval(t); }, ${STEADY_INTERVAL_MS})"`;
+}
+
+/**
+ * The shapes, in the dialect of one platform: eleven on Windows, fifteen elsewhere.
  *
  * `match` is a pattern rather than a substring because the question is whether the SHAPE was issued, not
  * whether the model reproduced this file's whitespace. Too strict and a call that happened reads as a call that
@@ -82,6 +102,10 @@ export function terminalShapes(platform = process.platform) {
     // explain away its own evidence.
     { id: 'diff-exit-1', match: /--no-index/, command: diff },
   ];
+  // REQ-TOOLS-097's default-path hard cap (`hardMs`, REQ-CONFIG-116's `runtime.shell_command_timeout`): a command that keeps
+  // printing past it, issued with no `timeout`. Last on both platforms: the cap resets the session's shell, and no shape after
+  // it should meet a fresh one.
+  const steady = { id: 'steady', match: /setInterval/, command: steadyCommand() };
   return platform === 'win32'
     ? [
       // A multi-line command lost its newlines in the PTY, so the here-string never found its delimiter.
@@ -91,6 +115,7 @@ export function terminalShapes(platform = process.platform) {
       ...common,
       // `starter:deny-pipe-to-shell` — the single deny among 340 permission decisions in run `2e21e324`.
       { id: 'pipe-to-shell', match: /\|\s*(?:pwsh|powershell)/i, command: 'git status --porcelain | powershell -NoProfile -Command "$input | Select-Object -First 5"' },
+      steady,
     ]
     : [
       { id: 'here-string', match: /<<\s*'?EOF/, command: "cat <<'EOF'\nalpha-one\nbeta-two\nEOF" },
@@ -118,6 +143,7 @@ export function terminalShapes(platform = process.platform) {
       { id: 'ends-shell', match: /^\s*exit\s+3\s*$/, command: 'exit 3' },
       ...common,
       { id: 'pipe-to-shell', match: /\|\s*(?:sh|bash|zsh)\b/, command: "git status --porcelain | sh -c 'head -5'" },
+      steady,
     ];
 }
 
@@ -337,6 +363,36 @@ export function longCommandReading(command, result, elapsedMs) {
   const paused = d?.outcome_kind === 'soft_pause' || exit === -1 || !(Number.isFinite(elapsedMs) && elapsedMs < 30_000);
   const whole = !paused && exit === 0 && expected !== null && counted === expected;
   return { kind: paused ? 'paused' : whole ? 'whole' : 'other', bytes, exit, expected, counted, printed };
+}
+
+/**
+ * What the `steady` shape met (REQ-TOOLS-097's default-path hard cap, `hardMs`), read from one recorded call: its arguments,
+ * its observation and its own duration, against the cap the session was configured with (`capSeconds`, REQ-CONFIG-116).
+ *
+ * - `capped`: the call supplied no `timeout`, and the observation is a hard timeout naming `capSeconds`, not a soft pause —
+ *   the cap a call that names no bound of its own is held to, reached while the command still printed.
+ * - `supplied`: the call carried a `timeout` of its own, which is the hard bound and turns the soft pause off, so `hardMs` was
+ *   never read — a NOTE: the question is unasked.
+ * - `paused`: a soft pause over a command that never went quiet for the no-output window — a FAIL.
+ * - `other-cap`: a hard timeout naming another bound than `capSeconds` — a FAIL: the configured cap did not govern.
+ * - `uncapped`: the command ended with a status of its own after running past the cap — the defect `hardMs` once was (passed
+ *   and read nowhere, so the default path had no hard cap), a FAIL.
+ * - `other`: none of those (no diagnostic, or an end before the cap) — a NOTE.
+ *
+ * `ticks` is how many `tick-<n>` lines came back in the output section, `killStatus` the diagnostic's `kill_status`.
+ */
+export function hardCapReading(call, { capSeconds = DEFAULT_SHELL_COMMAND_TIMEOUT_S } = {}) {
+  const d = diagnosticOf(call?.result);
+  const printed = outputOf(call?.result) ?? '';
+  const ticks = new Set([...printed.matchAll(/tick-(\d+)/g)].map((m) => m[1])).size;
+  const elapsedMs = Number.isFinite(call?.elapsedMs) ? call.elapsedMs : null;
+  const base = { ticks, elapsedMs, killStatus: d?.kill_status ?? null, timeoutSeconds: typeof d?.timeout_seconds === 'number' ? d.timeout_seconds : null, exit: typeof d?.exit_code === 'number' ? d.exit_code : null };
+  if (call?.args?.timeout !== undefined) return { kind: 'supplied', ...base };
+  if (d === null) return { kind: 'other', ...base };
+  if (d.outcome_kind === 'soft_pause') return { kind: 'paused', ...base };
+  if (d.timeout === true) return { kind: d.timeout_seconds === capSeconds ? 'capped' : 'other-cap', ...base };
+  if (elapsedMs !== null && elapsedMs > capSeconds * 1000) return { kind: 'uncapped', ...base };
+  return { kind: 'other', ...base };
 }
 
 /**

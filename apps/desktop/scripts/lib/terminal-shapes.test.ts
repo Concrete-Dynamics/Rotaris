@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
 // @ts-expect-error — the shapes are plain ESM beside the script that replays them.
-import { LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, attemptCount, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
+import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, STEADY_INTERVAL_MS, STEADY_TICKS, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
 
 interface Shape { readonly id: string; readonly match: RegExp; readonly command: string; readonly prompt?: string }
 
@@ -37,10 +37,11 @@ describe('the terminal shapes the live run replays', () => {
         // The interrupt (OQ-147) follows the poll on both, and its prompt asks for the poll after it.
         // `ends-shell` (OQ-144's sibling case) is POSIX only here, and the wedge after it is the call that must report the
         // respawn. `wedge-again` and the command issued behind it (OQ-164) follow the interrupt on both. Live-run M1's
-        // `long-command` is POSIX only, ahead of `replaces-shell` so it meets the session's own `/bin/sh`.
+        // `long-command` is POSIX only, ahead of `replaces-shell` so it meets the session's own `/bin/sh`. `steady`, the
+        // default hard cap's shape, is last on both: the cap resets the shell, and no shape after it should meet a fresh one.
         expect(shapes.map((s) => s.id)).toEqual(platform === 'win32'
-          ? ['here-string', 'long-output', 'wedge', 'poll', 'interrupt', 'wedge-again', 'behind-paused', 'failed-word', 'diff-exit-1', 'pipe-to-shell']
-          : ['here-string', 'long-output', 'long-command', 'replaces-shell', 'unexpandable', 'ends-shell', 'wedge', 'poll', 'interrupt', 'wedge-again', 'behind-paused', 'failed-word', 'diff-exit-1', 'pipe-to-shell']);
+          ? ['here-string', 'long-output', 'wedge', 'poll', 'interrupt', 'wedge-again', 'behind-paused', 'failed-word', 'diff-exit-1', 'pipe-to-shell', 'steady']
+          : ['here-string', 'long-output', 'long-command', 'replaces-shell', 'unexpandable', 'ends-shell', 'wedge', 'poll', 'interrupt', 'wedge-again', 'behind-paused', 'failed-word', 'diff-exit-1', 'pipe-to-shell', 'steady']);
       });
 
       it('matches its own command — the round trip the scenario depends on', () => {
@@ -76,6 +77,21 @@ describe('the terminal shapes the live run replays', () => {
         // OQ-164: the second wedge soft-pauses at 30 s and is still running when the next command is issued.
         const again = Number(/(\d+)/.exec(shapes.find((s) => s.id === 'wedge-again')?.command ?? '')?.[1] ?? 0);
         expect(again * 1000).toBeGreaterThan(30_000);
+      });
+
+      /*
+       * `docs/defects/fixed/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`: the silent wedge soft-pauses
+       * at 30 s, 70 s before REQ-CONFIG-116's 100 s cap, so the cap was never reached. `steady` prints more often than the
+       * no-output window, so the soft pause never fires, and for longer than the cap, so the cap is the bound that ends it.
+       */
+      it('prints more often than the no-output window and for longer than the default hard cap', () => {
+        const steady = shapes.find((s) => s.id === 'steady')!;
+        expect(steady.command).toContain(`n === ${STEADY_TICKS}`);
+        expect(steady.command).toContain(`}, ${STEADY_INTERVAL_MS})`);
+        expect(STEADY_INTERVAL_MS).toBeLessThan(30_000);
+        expect(STEADY_INTERVAL_MS * STEADY_TICKS).toBeGreaterThan(DEFAULT_SHELL_COMMAND_TIMEOUT_S * 1000 + 20_000);
+        // PowerShell expands `$` inside double quotes; the command has none, so it reaches node as written on both.
+        expect(steady.command).not.toContain('$');
       });
     });
   }
@@ -344,6 +360,40 @@ describe('the poll after the interrupt shape (OQ-147)', () => {
     expect(interruptedPollReading(stillRunning)).toMatchObject({ kind: 'still-running', exit: -1 });
     expect(interruptedPollReading(endedOwn)).toMatchObject({ kind: 'ended-own', exit: 0 });
     expect(interruptedPollReading('the tool was blocked before it ran').kind).toBe('other');
+  });
+});
+
+describe('the steady shape and its hard-cap reading (REQ-TOOLS-097, REQ-CONFIG-116)', () => {
+  /*
+   * `docs/defects/fixed/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`. Run for real for a few
+   * seconds, so the line it prints is measured rather than assumed; it is ended long before its 130 s.
+   */
+  it('prints one tick line per interval, run for real', () => {
+    const command = terminalShapes().find((s: Shape) => s.id === 'steady')!.command;
+    const run = process.platform === 'win32'
+      ? spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8', timeout: STEADY_INTERVAL_MS * 2 + 1_500 })
+      : spawnSync('sh', ['-c', command], { encoding: 'utf8', timeout: STEADY_INTERVAL_MS * 2 + 1_500 });
+    expect(run.stdout.split('\n').filter((line) => /^tick-\d+$/.test(line)).slice(0, 2)).toEqual(['tick-1', 'tick-2']);
+  }, 20_000);
+
+  const diagnostic = (fields: Record<string, unknown>) => `[terminal_diagnostic] ${JSON.stringify({ backend: 'single-session', command: 'node -e "…"', warnings: [], ...fields })}`;
+  const ticks = Array.from({ length: 50 }, (_, i) => `tick-${i + 1}`).join('\n');
+  const capped = (seconds: number) => `Command timed out after ${seconds} seconds; the terminal session was forcibly restarted to terminate the process tree.\n[partial_terminal_output]\n${ticks}\n${diagnostic({ exit_code: 124, timeout: true, timeout_seconds: seconds, failure_kind: 'timeout', kill_status: 'session_reset', outcome_kind: 'timeout', outcome_severity: 'error' })}`;
+  const paused = `No output for 30 seconds …\n[terminal_output]\n${ticks}\n${diagnostic({ exit_code: -1, timeout: false, timeout_seconds: 100, outcome_kind: 'soft_pause', outcome_severity: 'warning' })}`;
+  const ended = `The command exited with code 0.\n[terminal_output]\n${ticks}\n${diagnostic({ exit_code: 0, timeout: false, timeout_seconds: 100, outcome_kind: 'success', outcome_severity: 'info' })}`;
+
+  it('credits only a hard timeout at the configured cap, on a call that supplied no timeout', () => {
+    expect(hardCapReading({ args: { command: 'x' }, result: capped(100), elapsedMs: 100_400 })).toMatchObject({ kind: 'capped', ticks: 50, killStatus: 'session_reset', timeoutSeconds: 100, exit: 124 });
+    expect(hardCapReading({ args: { command: 'x' }, result: capped(4), elapsedMs: 4_100 }, { capSeconds: 4 }).kind).toBe('capped');
+  });
+
+  it('fails a soft pause, another bound, and a command that ran past the cap to its own end; a supplied timeout is unasked', () => {
+    expect(hardCapReading({ args: { command: 'x' }, result: paused, elapsedMs: 30_000 }).kind).toBe('paused');
+    expect(hardCapReading({ args: { command: 'x' }, result: capped(4), elapsedMs: 4_100 }).kind).toBe('other-cap');
+    expect(hardCapReading({ args: { command: 'x' }, result: ended, elapsedMs: 130_200 }).kind).toBe('uncapped');
+    expect(hardCapReading({ args: { command: 'x', timeout: 120 }, result: capped(120), elapsedMs: 120_000 }).kind).toBe('supplied');
+    expect(hardCapReading({ args: { command: 'x' }, result: 'the tool was blocked before it ran', elapsedMs: 3 }).kind).toBe('other');
+    expect(hardCapReading({ args: { command: 'x' }, result: ended, elapsedMs: 5_000 }).kind).toBe('other');
   });
 });
 

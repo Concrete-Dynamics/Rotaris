@@ -37,6 +37,16 @@ navigating to `chrome://crash` is refused, as it ought to be — so they are wir
 events rather than exercised. A session that wants that evidence wants `webContents.forcefullyCrashRenderer()`
 behind a capture seam, which is a surface this note does not justify adding.
 
+**Measured 2026-10-13 (fin42), two of the three.** The paragraph above stands as what was true on 2026-09-22.
+`pnpm exit-trace-proof` (`apps/desktop/scripts/exit-trace-proof.mjs`) now fires them from outside the process, so no seam
+was added: the run host killed with SIGKILL wrote `error   CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 9)`
+beside `run host exited (9)`, and the renderer crashed with SIGSEGV (not navigated to `chrome://crash`) wrote
+`error   RENDERER GONE (crashed, exit 11) for file:///…/index.html`, on the built app under `xvfb-run` on Linux.
+`unhandledRejection` is still argued, not measured: it cannot be raised in main from outside
+([`the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`](the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md)).
+The same launch found the application's quit held for good once the renderer had crashed
+([`a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`](../a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md), open).
+
 **Not in scope, and still true:** the second half of this note — that the dev run's detached launch captured
 no stdio at all — is a property of how the process was launched, not of the product. What the product writes
 is now worth capturing, which was not the case before.

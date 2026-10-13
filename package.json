@@ -67,6 +67,8 @@
     "app:drive": "node apps/desktop/scripts/drive.mjs",
     "driver-proof": "node apps/desktop/scripts/driver-proof.mjs",
     "updater-proof": "node apps/desktop/scripts/updater-proof.mjs",
+    "exit-trace-proof": "node apps/desktop/scripts/exit-trace-proof.mjs",
+    "tool-shapes-proof": "node apps/desktop/scripts/tool-shapes-proof.mjs",
     "layout-proof": "node apps/desktop/scripts/layout-proof.mjs",
     "workspace-proof": "node apps/desktop/scripts/workspace-proof.mjs",
     "ui-audit": "node apps/desktop/scripts/ui-audit.mjs",

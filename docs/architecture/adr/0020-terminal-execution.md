@@ -225,6 +225,15 @@ line is what stopped `tsc` failing the excess property. Both bounds are armed to
 governing, and the cast is gone. **The lesson is the cast, not the branch**: a widening `as` on a call
 argument turns a compiler error into a silent no-op, and this one hid a missing safety bound for six parts.
 
+*Reached in the built application 2026-10-13 (fin42).* The repair was measured by a real-PTY unit test only
+(`terminal.test.ts`, `commandTimeoutS: 1`): the live run's wedge prints nothing, so it soft-paused 70 s before the
+default 100 s cap on every run and could never reach it
+([`the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`](../../defects/fixed/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md)).
+`pnpm tool-shapes-proof`'s `hard-cap` launch saves `runtime.shell_command_timeout: 4` and sends a call with no `timeout`
+that prints every 0.5 s: it ended at 4 s (4,232 ms at load 5.2), exit 124, `timeout_seconds` 4, `session_reset`, the
+printed lines kept, a `terminal_timeout` issue filed. The live run asks the default 100 s cap since then with its `steady`
+shape; that measurement is the next default live run's.
+
 **Found — defect B: ConPTY SWALLOWS the newlines of a submitted line, so every multi-line command arrived
 folded.** The wrapper interpolates the command into one written line. The PTY echo of a wedged call shows the
 agent's here-string arriving as `@"VERIFICATION CHECKLIST FOR PROJECT_STRUCTURE.mdMUST DO REQUIREMENTS:…` —

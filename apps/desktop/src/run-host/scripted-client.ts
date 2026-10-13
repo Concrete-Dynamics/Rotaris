@@ -28,7 +28,7 @@ export interface ScriptedCallRecord {
  *
  * It answers the shape a real client answers (`ModelClient`) from a STEP LIST read out of the environment:
  * `ROTARIS_SCRIPT` names the orchestrator's steps, comma-separated, one per model call, and
- * `ROTARIS_CHILD_SCRIPT` every child's. `glob`, `read`, `write`, `rm`, `git`, `push`, `edit`, `todo`, `plan`, `planopen`, `plandone`, `plan:<n>`, `done`, `donereplace` request a tool
+ * `ROTARIS_CHILD_SCRIPT` every child's. `glob`, `read`, `write`, `writeinfer`, `rm`, `git`, `push`, `edit`, `todo`, `plan`, `planopen`, `plandone`, `plan:<n>`, `done`, `donereplace` request a tool
  * call; `fetch:<url>` a fetch of that URL; `continue:<persona>:<name>` a delegation taking up the newest continuation offer
  * the conversation was told (`offeredTaskId`, PD-ORCH-004 revisions 3 and 4); `wait:<ms>` holds the call that long ON THE CLOCK PORT and then
  * answers (the Overview proof needs a run longer than one token-sample period); anything else, or the end of
@@ -299,6 +299,9 @@ export function scriptedClient(c: Clocks,log: (message: string) => void, record?
     readnotes: { name: 'read_file', args: { path: 'NOTES.md' } },
     write: { name: 'write_file', args: { operation: 'create', path: 'NOTES.md', content: '# Notes\n\nWritten by the scripted agent through the gate.\n' } },
     edit: { name: 'write_file', args: { operation: 'edit', path: 'NOTES.md', old_string: 'scripted agent', new_string: 'scripted agent (edited)' } },
+    // PD-TOOLS-007: a `write_file` with a path and content and NO `operation`, the call the gate reads as a create when its file
+    // does not exist (`tool-shapes-proof`; the scripted `write` always named its operation, so no proof sent the shape).
+    writeinfer: { name: 'write_file', args: { path: 'INFERRED.md', content: 'inferred-ok\n' } },
     rm: { name: 'terminal', args: { command: 'rm -rf build' } },
     git: { name: 'terminal', args: { command: 'git status' } },
     push: { name: 'terminal', args: { command: 'git push origin main' } },

@@ -1003,7 +1003,9 @@ one call the scenario exists for was the one call missing from the pack
 `stop_reason !== 'user_cancelled'` passes just as well on a run that met no fault at all, so it now carries a
 positive half read from the product's own `issues` table — the stall must be shown to have been noticed, and
 what it was classified as must not be fatal. Two smaller ones: the wedge **soft-paused before the hard cap**,
-so `hardMs`'s own question is still unmeasured live and now says so; and `duress`'s `zero cost with tokens`
+so `hardMs`'s own question is still unmeasured live and now says so (*corrected 2026-10-13, fin42: a silent wedge can never
+reach the cap, since the 30 s soft pause comes first; the `steady` shape that prints past 100 s asks it, and
+`pnpm tool-shapes-proof` reached it in the built app*); and `duress`'s `zero cost with tokens`
 check would have reported a fault on an unmetered endpoint that has no cost to record, so it is conditioned on
 the accounting kind — caught before the forty-minute scenario was run rather than after. *Corrected 2026-09-29 (live-run
 finding K2(b)): the condition is gone. The reader was wrong, not the endpoint: `autopsy.mjs` now reads the session's

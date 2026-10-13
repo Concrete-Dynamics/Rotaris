@@ -4388,6 +4388,16 @@ wrong, rather than telling it so first. The result says what was read, so the mo
 > applies after it): a call carrying `replace_all: false` or a key no operation reads is create-shaped, an empty path or a
 > `file_path` that is no string is not, and a test runs both readers over the same nineteen shapes:
 > [`the-live-runs-create-shape-reading-differs-from-the-products-create-only-target.md`](../defects/fixed/the-live-runs-create-shape-reading-differs-from-the-products-create-only-target.md).
+>
+> **The built app, and a live run that asks, 2026-10-13 (fin42).** The shape had met the product live only by chance, and no
+> proof had sent it: the scripted `write` step names its operation, and the live run's `frictions` prompt said only "Create a
+> file", so a model that read the schema named the operation and every run since printed "PD-TOOLS-007's inferred create was
+> not asked" ([`the-live-runs-frictions-prompt-never-asks-pd-tools-007s-inferred-create.md`](../defects/fixed/the-live-runs-frictions-prompt-never-asks-pd-tools-007s-inferred-create.md)).
+> `pnpm tool-shapes-proof` now sends it through the built application with the scripted step `writeinfer`: for an absent
+> file the call settled `ok`, its result carrying the sentence and its record `operation: create`, and the file landed; for
+> an existing one it was refused `invalid_request`, saying the file exists, its content untouched, with the `tool_error` issue
+> REQ-SESSION-136 files for it. Held as written; nothing found. The `frictions` prompt asks for the write with only `path` and
+> `content`, and checks it read as a create: the next default live run's to show.
 
 ---
 

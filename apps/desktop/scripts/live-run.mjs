@@ -60,9 +60,10 @@
  *                 never take: the work is handed over by the board, not typed into a prompt.
  *   5. shell    — a relaunch with no prompt: Overview painted from the store, the sessions the runs left.
  *   6. frictions — one real run engineered to trip the inducible run-autopsy frictions (first-use
- *                 `write_file` without `operation`, a SIGINT stop on a win32 pipe session), read back from
- *                 the store rather than from the model's report. Red by design until the fixes land; the
- *                 exit-trace friction is recorded but not inducible on demand. Its root's requests, read from the
+ *                 `write_file` without `operation`, asked for by name since PD-TOOLS-007 reads it as a create, a
+ *                 SIGINT stop on a win32 pipe session), read back from the store rather than from the model's
+ *                 report. The exit-trace friction needs a crash, and is fired by `pnpm exit-trace-proof` in the
+ *                 built app rather than here. Its root's requests, read from the
  *                 traffic, also carry the entry role's ROUTE wording (K3 of the default live run at c2fdd6a).
  *                 Then, in a launch of its own (`frictions-cut`), a command that fails with output past
  *                 REQ-SESSION-136's 2,000-character error-path cut, whose record must end with REQ-SESSION-194's
@@ -82,7 +83,8 @@
  *                 with no `timeout` supplied, one poll of it and a `C-c` with a poll after it (OQ-147), a second wedge
  *                 and a command issued while it is soft-paused (OQ-164),
  *                 an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` with
- *                 differences exiting 1, and a read-only git pipeline through a pipe. Asserted from
+ *                 differences exiting 1, a read-only git pipeline through a pipe, and last a command that keeps
+ *                 printing past the default hard cap with no `timeout` supplied (REQ-TOOLS-097's `hardMs`). Asserted from
  *                 `tool_calls`, never from the model's prose; a shape the model never attempted is a NOTE,
  *                 not a failure, but a run that ended `failed` before any terminal call is a FAILURE (one that
  *                 stopped otherwise before any is a NOTE), so a dead run never reads green.
@@ -178,7 +180,7 @@ import { runApprovalsScenario, runAwayScenario, runPlanGateScenario } from './li
 import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-field.mjs';
 import { passOutcome, postRunVerdict, retrospectiveInstructionFiles, settledAfterMs, settledWait } from './lib/analysis-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
-import { LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, attemptCount, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
+import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, STEADY_INTERVAL_MS, STEADY_TICKS, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -1936,12 +1938,15 @@ if (wanted.includes('shell')) {
  *
  * Red by design until the fixes land: each check below fails while its friction reproduces and passes once
  * the product absorbs it, which is what makes this scenario the fixes' verification. Two recorded frictions
- * are NOT covered because they are not inducible on demand — the stream-stall abort needs an endpoint fault
- * and the exit-trace gap needs a crash — and are noted as such instead of asserted.
+ * are NOT induced here: the stream-stall abort needs an endpoint fault (the `faults` scenario induces it), and the
+ * exit-trace gap needs a crash (`pnpm exit-trace-proof` fires it in the built app).
  */
 if (wanted.includes('frictions')) {
   const log = await launch('frictions', {
-    ROTARIS_CAPTURE_PROMPT: 'Create a file called friction-probe.txt in the workspace root containing exactly one line with the text probe-ok. Then run `node -e "setTimeout(() => {}, 20000)"` in the terminal and stop it by sending SIGINT to its session. Reply DONE when both are finished.',
+    // PD-TOOLS-007: the write is asked with only `path` and `content`, the shape the directive reads as a create; worded only
+    // "Create a file …", a model that reads the schema names the operation and the shape is never asked
+    // (docs/defects/fixed/the-live-runs-frictions-prompt-never-asks-pd-tools-007s-inferred-create.md).
+    ROTARIS_CAPTURE_PROMPT: 'Create a file called friction-probe.txt in the workspace root containing exactly one line with the text probe-ok: call write_file with only the two arguments path and content, and leave out operation. Then run `node -e "setTimeout(() => {}, 20000)"` in the terminal and stop it by sending SIGINT to its session. Reply DONE when both are finished.',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000', ROTARIS_CAPTURE_PROBE: DURATION_PROBES.join(';;'),
   }, RUN_WAIT_MS + 90_000);
   check(!/capture: wait for result timed out/.test(log), 'the probe run reached its result inside the wait');
@@ -1970,6 +1975,13 @@ if (wanted.includes('frictions')) {
   const miscounted = creates.filter((call) => { const reported = /: (\d+) line\S* created/.exec(resultOf(call)); return reported === null || Number(reported[1]) !== linesIn(argsOf(call).content); });
   if (creates.length === 0) noted('no write_file create settled ok, so its line count was not observed', names.join(', '));
   else check(miscounted.length === 0, 'every write_file create reported the lines its content holds (a final newline ends a line)', miscounted.length === 0 ? `${creates.length} settled, e.g. ${JSON.stringify(resultOf(creates[0]).split(' (sha256')[0])} for ${JSON.stringify(argsOf(creates[0]).content)}` : `ordinal ${miscounted[0].ordinal}: ${JSON.stringify(resultOf(miscounted[0]).slice(0, 120))} for ${JSON.stringify(argsOf(miscounted[0]).content)}`);
+  // PD-TOOLS-007, asked by name: the probe's write sent with no operation for a file that does not exist is read as a create,
+  // its result saying so. A write that named its operation anyway left the shape unasked, which is a NOTE.
+  const probeWrites = calls.filter((call) => call.tool_name === 'write_file' && /friction-probe\.txt$/.test(String(argsOf(call).path ?? argsOf(call).file_path ?? '')));
+  const inferredHere = probeWrites.filter((call) => /No operation was given, so this call was read as 'create'/.test(resultOf(call)));
+  if (probeWrites.length === 0) noted('the probe file was not written with write_file', names.join(', '));
+  else if (inferredHere.length === 0 && writeOp.length === 0) noted("the probe's write named its operation, so PD-TOOLS-007's inferred create was not asked", `${probeWrites.length} write(s), e.g. ordinal ${probeWrites[0].ordinal}: ${resultOf(probeWrites[0]).split('\n')[0].slice(0, 120)}`);
+  else check(inferredHere.length > 0 && inferredHere.every((call) => call.status === 'ok' && argsOf(call).operation === 'create'), "the probe's write with no operation was read as a create, its result saying so and its record storing the create (PD-TOOLS-007)", inferredHere.length > 0 ? `ordinal(s) ${inferredHere.map((call) => `${call.ordinal} ${call.status}`).join(', ')}` : `${writeOp.length} refused for want of an operation`);
   const signalled = calls.some((call) => call.tool_name === 'terminal' && argsOf(call).session_action === 'send_signal');
   check(signalled, 'the probe run attempted the SIGINT stop', signalled ? 'send_signal dispatched' : 'no send_signal in the record — the model did not attempt it');
   const sigint = calls.filter((call) => call.tool_name === 'terminal' && resultOf(call).includes('cannot be delivered'));
@@ -2002,8 +2014,10 @@ if (wanted.includes('frictions')) {
     rmSync(join(workspace, 'friction-probe.txt'), { force: true });
   }
   noted('the stream-stall abort is not covered here', 'the `faults` scenario induces it through the recording proxy; the observed shape is recorded in docs/defects/fixed/single-retry-stream-stall-aborted-a-76-minute-run.md');
-  noted('the exit-trace gap is not covered here', 'it needs a crash; the observed shape is recorded in docs/defects/fixed/process-exit-left-no-diagnosable-trace.md');
-  results.scenarios.frictions = { status: read?.session.execution_status, tools: names, writeOpRefusals: writeOp.map((call) => call.ordinal), sigintRefusals: sigint.map((call) => call.ordinal) };
+  // The exit trace's crash handlers are not induced here: no live launch crashes a process. They are fired in the built app
+  // by `pnpm exit-trace-proof` (the run host killed, the renderer crashed; PD-MONITOR-002), which reads main's GONE lines
+  // (docs/defects/fixed/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md).
+  results.scenarios.frictions = { status: read?.session.execution_status, tools: names, writeOpRefusals: writeOp.map((call) => call.ordinal), inferredCreates: inferredHere.map((call) => call.ordinal), sigintRefusals: sigint.map((call) => call.ordinal) };
   if (read) preserveRun('frictions', read.session.session_id);
   await budgetGate();
   /*
@@ -2263,11 +2277,12 @@ if (wanted.includes('faults')) {
  * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — PD-TOOLS-003's capitals-only marker, and a real regression guard |
  * | `diff-exit-1`   | `git-diff-with-differences-read-as-a-failure.md` — ESC-41's carve-out, and a real regression guard |
  * | `pipe-to-shell` | `a-read-only-git-pipeline-was-withheld-by-the-pipe-to-shell-rule.md` — also cost, not contradiction |
+ * | `steady`        | `the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`: the silent wedge soft-pauses 70 s before REQ-CONFIG-116's 100 s cap, so the default-path hard cap (`hardMs`) is asked by a command that prints every 2 s for 130 s |
  *
  * **A shape the model never attempted is a NOTE, not a failure.** `pipe-to-shell` is a cost observation whose
  * behaviour is faithful to a requirement, and reporting it as a fault would train a reader to ignore this
- * scenario — the mistake the board scenario made twice. `here-string`, `long-output`, the wedge's bound,
- * `failed-word`, `diff-exit-1` and the marker leak are asserted as product facts.
+ * scenario — the mistake the board scenario made twice. `here-string`, `long-output`, the wedge's bound, `steady`'s
+ * hard cap, `failed-word`, `diff-exit-1` and the marker leak are asserted as product facts.
  */
 if (wanted.includes('terminal')) {
   /*
@@ -2285,10 +2300,13 @@ if (wanted.includes('terminal')) {
     '',
     ...SHAPES.map((shape, i) => `${i + 1}. ${shape.prompt ?? shape.command}`),
   ].join('\n');
+  // The `steady` shape runs until the default hard cap ends it, 100 s by design (REQ-CONFIG-116), so the run's wait carries
+  // the shape's own length on top of the scenarios' common one.
+  const TERMINAL_WAIT_MS = RUN_WAIT_MS + STEADY_INTERVAL_MS * STEADY_TICKS;
   const log = await launch('terminal', {
     ROTARIS_CAPTURE_PROMPT: PROMPT,
-    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000', ROTARIS_CAPTURE_PROBE: DURATION_PROBES.join(';;'),
-  }, RUN_WAIT_MS + 120_000);
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(TERMINAL_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000', ROTARIS_CAPTURE_PROBE: DURATION_PROBES.join(';;'),
+  }, TERMINAL_WAIT_MS + 120_000);
   check(!/capture: wait for result timed out/.test(log), 'the terminal run reached its result inside the wait');
   const read = readSession();
   checkPricing('terminal', read?.session);
@@ -2461,7 +2479,30 @@ if (wanted.includes('terminal')) {
       check(Number.isFinite(d.timeout_seconds), 'the hard cap named its own bound', `timeout_seconds ${d.timeout_seconds}`);
       // PD-TOOLS-001: the reset must say what it lost AND what it put back, never be silent about the shell.
       check(/restored|failed|no earlier shell state/.test(wedge.result), 'the reset reported what it restored', 'the detail names the shell state');
-    } else noted('the wedge did not reach the hard cap', 'it soft-paused first; the hard bound is unmeasured this run');
+    } else noted('the wedge soft-paused, as a silent command must', 'it prints nothing, so the 30 s no-output window ends it 70 s before the hard cap; the cap is read from the `steady` shape below');
+  }
+
+  // REQ-TOOLS-097's default-path hard cap (`hardMs` = REQ-CONFIG-116's `runtime.shell_command_timeout`, 100 s unset): a call
+  // that names no `timeout` and keeps printing is ended by the cap, never by the soft pause (it is never quiet for the window)
+  // and never by its own end (130 s). The silent wedge above could never ask it
+  // (`docs/defects/fixed/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`).
+  const steady = attempted('steady')[0];
+  if (steady === undefined) unread('steady', 'the steady printer was not attempted', 'no terminal call carried it; the default hard cap is unasked', 'the default hard cap is unasked');
+  else {
+    const cap = hardCapReading(steady, { capSeconds: DEFAULT_SHELL_COMMAND_TIMEOUT_S });
+    const said = `${cap.kind}: timeout_seconds ${cap.timeoutSeconds ?? 'none'}, exit ${cap.exit ?? 'none'}, kill_status ${cap.killStatus ?? 'none'}, ${cap.ticks} tick line(s), ${cap.elapsedMs === null ? '?' : Math.round(cap.elapsedMs)} ms`;
+    if (cap.kind === 'supplied') noted('the steady printer was issued with a timeout of its own', `timeout ${steady.args.timeout}: the caller's bound governs and turns the soft pause off, so hardMs is unasked (${said})`);
+    else if (cap.kind === 'other') noted('the steady printer met neither a bound nor its own end past the cap', said);
+    else {
+      check(cap.kind === 'capped', `a call supplying no timeout that kept printing was ended by the ${DEFAULT_SHELL_COMMAND_TIMEOUT_S} s default hard cap, not by the soft pause or its own end (REQ-TOOLS-097, REQ-CONFIG-116)`, said);
+      if (cap.kind === 'capped') {
+        check(cap.elapsedMs !== null && cap.elapsedMs >= DEFAULT_SHELL_COMMAND_TIMEOUT_S * 1000 && cap.elapsedMs < (DEFAULT_SHELL_COMMAND_TIMEOUT_S + 30) * 1000, 'the cap ended it when the cap was reached', said);
+        check(cap.killStatus === 'session_reset', 'the cap reset the session to end the process tree', said);
+        check(cap.ticks > 0, 'what it printed before the cap came back with the timeout', said);
+        // PD-TOOLS-001: the reset must say what it lost AND what it put back, never be silent about the shell.
+        check(/restored|failed|no earlier shell state/.test(steady.result), 'the reset reported what it restored', 'the detail names the shell state');
+      }
+    }
   }
 
   // Live-run L2: the first poll after the wedge. What it says it waited must be no more than the time between the wedge's

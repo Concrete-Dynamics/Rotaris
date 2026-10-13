@@ -86,6 +86,20 @@ describe('scriptedClient — the step a call takes', () => {
   });
 
   /*
+   * PD-TOOLS-007 (`docs/defects/fixed/the-live-runs-frictions-prompt-never-asks-pd-tools-007s-inferred-create.md`): the shape
+   * the directive governs is a `write_file` that names a path and content and no operation, which `write` never sent.
+   */
+  it('`writeinfer` writes a file with a path and content and no operation; `write` names its operation', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'writeinfer');
+    const inferred = await calls(scriptedClient(clock, () => {}), [text('system', ORCHESTRATOR_SYSTEM), text('user', 'go')]);
+    expect(inferred.map((c) => c.name)).toEqual(['write_file']);
+    expect(JSON.parse(inferred[0]!.args)).toEqual({ path: 'INFERRED.md', content: 'inferred-ok\n' });
+    vi.stubEnv('ROTARIS_SCRIPT', 'write');
+    const named = await calls(scriptedClient(clock, () => {}), [text('system', ORCHESTRATOR_SYSTEM), text('user', 'go')]);
+    expect(JSON.parse(named[0]!.args)).toMatchObject({ operation: 'create' });
+  });
+
+  /*
    * Finding D8 of the final duress run at a68f121: the renderer threw React error 185 while two children streamed minutes of
    * reasoning. `think:<deltas>:<ms>` is the scripted producer of that stream — that many reasoning deltas, one every <ms> on
    * the clock port, then the answer — so a drive can put two long deliberations on screen at once.

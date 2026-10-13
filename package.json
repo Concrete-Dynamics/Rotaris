@@ -33,6 +33,7 @@
     "checkpoint-proof": "node apps/desktop/scripts/checkpoint-proof.mjs",
     "sessions-proof": "node apps/desktop/scripts/sessions-proof.mjs",
     "mcp-proof": "node apps/desktop/scripts/mcp-proof.mjs",
+    "edits-proof": "node apps/desktop/scripts/edits-proof.mjs",
     "mission-proof": "node apps/desktop/scripts/mission-proof.mjs",
     "continuation-proof": "node apps/desktop/scripts/continuation-proof.mjs",
     "code-intel:bundle": "node apps/desktop/scripts/code-intelligence/bundle.mjs",

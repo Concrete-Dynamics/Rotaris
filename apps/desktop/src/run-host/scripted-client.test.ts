@@ -601,3 +601,38 @@ async function interrupted(clock: FakeClock, client: ReturnType<typeof scriptedC
   const after = await next;
   return after.done === true ? 'answer' : after.value.ok ? `took:${after.value.value.kind}` : `failed:${after.value.error.headline}`;
 }
+
+describe('scriptedClient — `tool:<key>` (fin42, N52; edits-proof)', () => {
+  afterEach(() => { vi.unstubAllEnvs(); });
+  const HASH_A = 'a'.repeat(64);
+  const HASH_B = 'b'.repeat(64);
+  const result = (callId: string, name: string, text: string): ChatMessage => ({ role: 'tool', content: [{ kind: 'tool-result', callId, name, result: text, isError: false }] });
+  const editing = [...TOOLS, { name: 'haet_edit', description: 'haet_edit', parameters: {} }];
+
+  it('calls the named tool with the arguments ROTARIS_SCRIPT_TOOL_ARGS gives its key', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'tool:insert');
+    vi.stubEnv('ROTARIS_SCRIPT_TOOL_ARGS', JSON.stringify({ insert: { name: 'write_file', args: { operation: 'insert', path: 'a.js', insert_line: 1, content: '// x' } } }));
+    const out = await calls(scriptedClient(new FakeClock(), () => undefined), [text('system', ORCHESTRATOR_SYSTEM), text('user', 'go')]);
+    expect(out).toEqual([{ name: 'write_file', args: JSON.stringify({ operation: 'insert', path: 'a.js', insert_line: 1, content: '// x' }) }]);
+  });
+
+  it('sends `@content_hash` as the newest hash a tool result carried, and answers for a tool it does not hold', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'tool:edit,tool:edit,tool:absent');
+    vi.stubEnv('ROTARIS_SCRIPT_TOOL_ARGS', JSON.stringify({ edit: { name: 'haet_edit', args: { path: 'e.js', content_hash: '@content_hash', old_string: 'a', new_string: 'b' } }, absent: { name: 'git_commit', args: {} } }));
+    const clock = new FakeClock();
+    const client = scriptedClient(clock, () => undefined);
+    const ask = async (messages: readonly ChatMessage[]) => {
+      const out: { name: string; args: string }[] = [];
+      for await (const part of client.stream({ ...request(messages), tools: editing })) if (part.ok && part.value.kind === 'tool-call') out.push({ name: part.value.name, args: part.value.argsDelta });
+      return out;
+    };
+    const root = [text('system', ORCHESTRATOR_SYSTEM), text('user', 'go'), result('r0', 'haet_read', `e.js | lines 1-2 of 2 | content_hash: ${HASH_A}\n1: a`)];
+    const first = await ask(root);
+    expect(JSON.parse(first[0]!.args)).toMatchObject({ content_hash: HASH_A, old_string: 'a' });
+    const after = [...root, { role: 'assistant' as const, content: [{ kind: 'tool-call' as const, callId: 'c1', name: 'haet_edit', args: '{}' }] }, result('c1', 'haet_edit', 'old_string was not found exactly in e.js.'), result('c2', 'haet_edit', `Replaced 1 line. content_hash: ${HASH_B}`)];
+    const second = await ask(after);
+    expect(JSON.parse(second[0]!.args)).toMatchObject({ content_hash: HASH_B });
+    // `git_commit` is not in this listing: the step answers instead (the reply streams on the clock).
+    expect(await taken(clock, client, [...after, ...step('c3', 'haet_edit')])).toBe('answer');
+  });
+});

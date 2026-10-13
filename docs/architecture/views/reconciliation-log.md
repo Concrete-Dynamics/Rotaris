@@ -15,6 +15,12 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-13**
 
+**The scripted client calls any tool by key (fin42, N52).** The step `tool:<key>` takes `{ name, args }` from
+`ROTARIS_SCRIPT_TOOL_ARGS`, an argument `@content_hash` filled from the newest hash a tool result carried
+(`run-host/scripted-client.ts`, `withLatestHash`), which `edits-proof` drives `write_file`'s edit and insert and `haet_edit`
+through on a generated CRLF fixture. The **process view**'s MCP-arguments sentence says so. Verification only: no package,
+edge, process, channel, command or store column changed.
+
 **A call the run cancels, driven in the built app (PD-TOOLS-013 revision 2; fin42, N51).** The run host reads one more seam
 under `__ROTARIS_SEAMS__`, `ROTARIS_CAPTURE_THROW_ON_ABORT` (`run-host/throw-on-abort.ts`, applied where `tools.ts` builds the
 native executors and where an MCP executor joins the callable map): a named tool's executor rejects once its call's signal

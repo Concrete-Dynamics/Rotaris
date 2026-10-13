@@ -7644,6 +7644,8 @@ carries up to the window's size.
 > [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
 > The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **In the built app, 2026-10-13 (fin42, N52):** `pnpm edits-proof` drove this directive through the run host on a CRLF, tab-indented fixture it generates (`apps/desktop/scripts/lib/crlf-fixture.mjs`), the scripted coordinator's calls sent by the new step `tool:<key>`; load average 6.8 to 12.2 on four CPUs beside a sibling plan. **Held as written.** `near`: a `haet_edit` whose two-line LF `old_string` met the CRLF file at match level 2 was refused, named "match level 2" and lines 2-3 before the quote, and quoted the window as `"\tconst greeting = 'Hello';\r\n\tif (name) {\r"`; `retry`, that quote sent back with the same hash, applied with `PD-TOOLS-017`'s sentence before ` content_hash:`; the file stayed CRLF throughout, and `lib/near-miss-edits.mjs`'s reading counted one level-2 miss, retried, not probed. **Found:** on a CRLF file an LF `old_string` one indent off never reaches level 3 (the `\r` takes part in level 3's comparison), so this directive's level-3 near miss is not given there: the plain miss is ([`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3`](../defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md), raised as [OQ-280](../architecture/open-questions.md#oq-280)). **What was not measured.** No live run. The live run's `crlf` scenario (`apps/desktop/scripts/lib/crlf-scenario.mjs`, default set) is written and unit-tested and is the orchestrator's to run; what it reads depends on the shapes the model chooses. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-tools-015"></a>
@@ -7738,6 +7740,8 @@ Narrows REQ-TOOLS-136 (a level-3 match the case names is refused rather than app
 > [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
 > [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
 > The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **In the built app, 2026-10-13 (fin42, N52):** `pnpm edits-proof` drove this directive through the run host on a CRLF, tab-indented fixture it generates (`apps/desktop/scripts/lib/crlf-fixture.mjs`), the scripted coordinator's calls sent by the new step `tool:<key>`; load average 6.8 to 12.2 on four CPUs beside a sibling plan. **Held as written, for the `old_string` that reaches level 3 on a CRLF file.** `shift`: an `old_string` one tab shallow that carries the file's `\r`s matched at level 3 and applied with "new_string was shifted by the same leading prefix \"\t\" (1 character added) to the file's indentation." and `PD-TOOLS-016`'s CRLF sentence, the block at the file's depth and every line CRLF. **Found:** the shape a model sends, an LF `old_string` one tab shallow (`shift-lf`, recorded and not asserted), does not reach level 3 on a CRLF file: it applied at "Match level: 4 (similarity: 0.91). Verify the result." and wrote the block one tab too shallow beside a success — the case this directive was ruled to prevent, one level down ([`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3`](../defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md), raised as [OQ-280](../architecture/open-questions.md#oq-280)). **What was not measured.** No live run. The live run's `crlf` scenario (`apps/desktop/scripts/lib/crlf-scenario.mjs`, default set) is written and unit-tested and is the orchestrator's to run; what it reads depends on the shapes the model chooses. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -7876,6 +7880,8 @@ added to the edit's success).*
 > [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
 > The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **In the built app, 2026-10-13 (fin42, N52):** `pnpm edits-proof` drove this directive through the run host on a CRLF, tab-indented fixture it generates (`apps/desktop/scripts/lib/crlf-fixture.mjs`), the scripted coordinator's calls sent by the new step `tool:<key>`; load average 6.8 to 12.2 on four CPUs beside a sibling plan. **Held as written.** `window`: a two-line LF `old_string` matched the CRLF file at level 2 only and applied with "Match level: 2." and the CRLF sentence, the unchanged line written verbatim and the file CRLF throughout (clauses 1 to 3); `noop-window`: the same window with `new_string` already what the file holds was refused in clause 4's words, "old_string matches crlf/window.js only at match level 2 (lines 2-3), and those lines already hold new_string as this edit would write it; …" (revision 3), the bytes unchanged; `shift` carried the endings at level 3 after `PD-TOOLS-015`'s sentence. **What was not measured.** No live run. The live run's `crlf` scenario (`apps/desktop/scripts/lib/crlf-scenario.mjs`, default set) is written and unit-tested and is the orchestrator's to run; what it reads depends on the shapes the model chooses. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-tools-017"></a>
@@ -7960,6 +7966,8 @@ refusal).*
 > [`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../defects/fixed/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **In the built app, 2026-10-13 (fin42, N52):** `pnpm edits-proof` drove this directive through the run host on a CRLF, tab-indented fixture it generates (`apps/desktop/scripts/lib/crlf-fixture.mjs`), the scripted coordinator's calls sent by the new step `tool:<key>`; load average 6.8 to 12.2 on four CPUs beside a sibling plan. **Held as written.** `exact`: a one-line anchor replaced by two LF lines at level 1 landed CRLF with clause 4's sentence and no match level named; `replace-all`: `alpha` replaced by two LF lines at both occurrences landed CRLF with the sentence; `noop-endings`: an exact `old_string` with CRLF and `new_string` the same with LF was refused in clause 3's words; `retry` (`haet_edit`) placed the sentence before ` content_hash:` (clause 4). **What was not measured.** No live run. The live run's `crlf` scenario (`apps/desktop/scripts/lib/crlf-scenario.mjs`, default set) is written and unit-tested and is the orchestrator's to run; what it reads depends on the shapes the model chooses. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-tools-018"></a>
@@ -8015,6 +8023,8 @@ Extends REQ-TOOLS-135 (fills its silence on the line endings an insert writes, a
 > file; no proof script drives `write_file` in the built app, and the executor runs unchanged inside the run host. Repairs
 > [`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](../defects/fixed/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **In the built app, 2026-10-13 (fin42, N52):** `pnpm edits-proof` drove this directive through the run host on a CRLF, tab-indented fixture it generates (`apps/desktop/scripts/lib/crlf-fixture.mjs`), the scripted coordinator's calls sent by the new step `tool:<key>`; load average 6.8 to 12.2 on four CPUs beside a sibling plan. **Held as written.** `insert`: two LF lines inserted at line 0 of a CRLF file landed CRLF with "Inserted 2 lines into crlf/exact.js at line 0." and clause 3's sentence. Red with clause 1's test forced false (the pre-directive insert): the two inserted lines LF-only and no sentence. **What was not measured.** No live run. The live run's `crlf` scenario (`apps/desktop/scripts/lib/crlf-scenario.mjs`, default set) is written and unit-tested and is the orchestrator's to run; what it reads depends on the shapes the model chooses. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

@@ -290,6 +290,25 @@ export function offeredTaskId(messages: readonly ChatMessage[]): string | null {
   return open[open.length - 1] ?? null;
 }
 
+/**
+ * `tool:<key>`'s arguments with every `@content_hash` value replaced by the newest `content_hash: <64 hex>` a tool result of
+ * the conversation carries, newest result first; left as written when none does, so the gate's schema refuses it visibly.
+ */
+export function withLatestHash(args: unknown, messages: readonly ChatMessage[]): unknown {
+  let hash: string | null = null;
+  for (const m of [...messages].reverse()) {
+    if (m.role !== 'tool') continue;
+    for (const part of m.content) {
+      if (part.kind !== 'tool-result') continue;
+      const all = [...part.result.matchAll(/content_hash: ([0-9a-f]{64})/g)];
+      if (all.length > 0) { hash = all.at(-1)![1]!; break; }
+    }
+    if (hash !== null) break;
+  }
+  if (hash === null || args === null || typeof args !== 'object') return args;
+  return Object.fromEntries(Object.entries(args as Record<string, unknown>).map(([k, v]) => [k, v === '@content_hash' ? hash : v]));
+}
+
 export function scriptedClient(c: Clocks,log: (message: string) => void, record?: (call: ScriptedCallRecord) => void, ledger?: StandingLedger): ModelClient {
   const parse = (v: string | undefined) => (v ?? '').split(',').map((x) => x.trim()).filter((x) => x.length > 0);
   // ROTARIS_SCRIPT drives the orchestrator; ROTARIS_CHILD_SCRIPT every child (a `delegate:<persona>:<name>` step delegates).
@@ -620,6 +639,26 @@ export function scriptedClient(c: Clocks,log: (message: string) => void, record?
           return;
         }
         log(`scripted: the step ${step} names no callable tool (the listing holds ${(req.tools ?? []).map((t) => t.name).join(', ')}); answering instead`);
+      }
+      // tool:<key> — one call of any tool the agent holds, its `{ name, args }` taken from ROTARIS_SCRIPT_TOOL_ARGS by key (a JSON
+      // map). An argument whose value is the string `@content_hash` is sent as the newest `content_hash: <64 hex>` a tool result
+      // of this conversation carries (haet_read's header, a haet_edit success), as a model copies the hash it was handed. The
+      // edits proof (N52) drives write_file's edit and insert and haet_edit over a CRLF file through it. Verification only.
+      const toolStep = /^tool:([\w-]+)$/.exec(step);
+      if (toolStep) {
+        let scripted: Record<string, unknown> = {};
+        try { scripted = JSON.parse(process.env['ROTARIS_SCRIPT_TOOL_ARGS'] ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
+        const entry = scripted[toolStep[1]!] as { name?: unknown; args?: unknown } | undefined;
+        const name = typeof entry?.name === 'string' ? entry.name : null;
+        if (name !== null && (req.tools ?? []).some((t) => t.name === name)) {
+          const args = withLatestHash(entry?.args, req.messages);
+          yield ok<StreamPart>({ kind: 'text', delta: `Calling ${name} for ${toolStep[1]}. ` });
+          yield ok<StreamPart>({ kind: 'tool-call', callId, name, argsDelta: JSON.stringify(args) });
+          yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
+          yield finished('other');
+          return;
+        }
+        log(`scripted: the step ${step} names ${name === null ? 'no entry in ROTARIS_SCRIPT_TOOL_ARGS' : `'${name}', which is not callable here`} (the listing holds ${(req.tools ?? []).map((t) => t.name).join(', ')}); answering instead`);
       }
       // ask[:<key>] — Part AC's step: one `ask_questions` call, with the steps taken from ROTARIS_SCRIPT_QUESTIONS by
       // key (a JSON map) or the two-step default below. Verification only.

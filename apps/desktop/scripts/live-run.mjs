@@ -105,6 +105,13 @@
  *                 session reset and the run's-cancel wording, file no `terminal_timeout` or `tool_error` issue, and count under
  *                 `summary.md`'s `interrupted` bucket with Timeouts 0. A model that never ran the sleep, or ran it soft-paused, is
  *                 a NOTE: nothing was cut.
+ *   8h. crlf     — PD-TOOLS-014 to PD-TOOLS-018 against a real model (fin42, N52): three CRLF, tab-indented files generated into the
+ *                 sandbox (`lib/crlf-fixture.mjs`; a committed CRLF fixture is normalised away) and four edits asked for, each
+ *                 with the tool named — a two-line `haet_edit` (an LF `old_string` meets them at level 2: the near miss and its
+ *                 retry), a three-line `write_file` window edit, a `write_file` insert and a multi-line `replace_all`
+ *                 (`lib/crlf-scenario.mjs`). No line of a file only edits and inserts touched may lose its `\r`, and an insert
+ *                 or multi-line replace-all that landed must say it kept the CRLF endings; which shapes the model chose, the
+ *                 near-miss reading and the window edit's level (OQ-280's level-4 case) are NOTEs.
  *   8e. cutoff   — OPT-IN (`--only=cutoff`), a few minutes: Settings › Runtime › Per-agent timeout set to
  *                 `LIVE_RUN_CUTOFF_MIN` (default 1) minute(s) through the control and Save, then one delegated child given
  *                 more work than that: the cut-off child's report, the timed-out tag's line in the minutes form
@@ -188,6 +195,7 @@ import { attributeWait, commandsReading, compressionNote, compressionTrigger, de
 import { withPersonaKey, withRuntimeKey, withSectionKey } from './lib/runtime-key.mjs';
 import { runApprovalsScenario, runAwayScenario, runPlanGateScenario } from './lib/approval-scenarios.mjs';
 import { runCutScenario } from './lib/cut-scenario.mjs';
+import { runCrlfScenario } from './lib/crlf-scenario.mjs';
 import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-field.mjs';
 import { passOutcome, postRunVerdict, retrospectiveInstructionFiles, settledAfterMs, settledWait } from './lib/analysis-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
@@ -297,7 +305,7 @@ const ANALYST_TIMEOUT_S = Number(process.env['LIVE_RUN_ANALYST_TIMEOUT_S'] ?? 30
 if (!(Number.isInteger(ANALYST_TIMEOUT_S) && ANALYST_TIMEOUT_S >= 10 && ANALYST_TIMEOUT_S <= 600)) {
   throw new Error(`LIVE_RUN_ANALYST_TIMEOUT_S must be whole seconds from 10 to 600, the Improvement analysis timeout control's range (PD-CONFIG-003 revision 2); got ${JSON.stringify(process.env['LIVE_RUN_ANALYST_TIMEOUT_S'])}`);
 }
-const OPTIONAL = ['ask', 'edit', 'resume', 'requirements', 'shell', 'frictions', 'faults', 'terminal', 'away', 'approvals', 'plan-gate', 'delegation', 'cut'];
+const OPTIONAL = ['ask', 'edit', 'resume', 'requirements', 'shell', 'frictions', 'faults', 'terminal', 'away', 'approvals', 'plan-gate', 'delegation', 'cut', 'crlf'];
 /**
  * Scenarios that `--only` accepts and the default set never contains.
  *
@@ -2644,6 +2652,10 @@ if (wanted.includes('plan-gate')) await runPlanGateScenario(approvalContext());
 // ── 8g. A call cut in flight ───────────────────────────────────────────────────────────────────────────────
 // PD-TOOLS-013 (N51): `lib/cut-scenario.mjs` quits the launch it is handed (`inFlight`) once the sleep's record is open.
 if (wanted.includes('cut')) await runCutScenario({ ...approvalContext(), inFlight: () => launchInFlight });
+
+// ── 8h. The edit directives on a CRLF file ─────────────────────────────────────────────────────────────────
+// PD-TOOLS-014 to PD-TOOLS-018 (N52): `lib/crlf-scenario.mjs` generates the fixture into the sandbox and removes it after.
+if (wanted.includes('crlf')) await runCrlfScenario(approvalContext());
 
 // ── 8e. A child cut off at the Per-agent timeout a person set ───────────────────────────────────────────────
 /**

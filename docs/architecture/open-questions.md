@@ -13587,3 +13587,39 @@ launch does the same.
 **What a ruling decides.** One of: the Markdown tab keeps the frontmatter out of the person's reach (shown read-only, or not
 shown), as the Preview already does (clause (f)); the tab says, when a save changes the block, that frontmatter edits are not
 kept; a re-render keeps a person's changed values; or the cost stands as built and is added to PD-LIBRARY-003's list.
+
+<a id="oq-280"></a>
+
+**OQ-280 — Does match level 3 compare a line without its carriage return?** *(REQ-TOOLS-136, the four match levels — level 2
+"each line equal once trailing whitespace is ignored", level 3 "each line equal once one uniform leading prefix is added or
+removed"; REQ-TOOLS-189, `haet_edit`'s exact match; [`PD-TOOLS-014`](../product/directives.md#pd-tools-014)'s near miss at
+levels 2 and 3, [`PD-TOOLS-015`](../product/directives.md#pd-tools-015)'s level-3 shift, and
+[`PD-TOOLS-016`](../product/directives.md#pd-tools-016), each stating that REQ-TOOLS-136's levels are unchanged. Raised
+2026-10-13 by fin42 (N52) from
+[`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`](../defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md);
+numbered from the top of the plan's range, OQ-271 to OQ-280, to keep clear of its sibling bundles.)*
+
+On a CRLF file every line ends in `\r`, and an `old_string` a model writes as a JSON string almost never carries one. Level 2
+strips trailing whitespace, the `\r` with it, so an LF `old_string` matches a CRLF file there (`PD-TOOLS-016` was ruled for
+exactly that). Level 3 as built (`matchEdit`, `packages/agent-tools/src/tools/files.ts`) compares each window line with the
+shifted `old_string` line exactly, so the `\r` keeps an LF `old_string` one indent off from level 3 on a CRLF file. Measured
+in the built app (`pnpm edits-proof`, `shift-lf`) and with the tools directly, the same three-line block one tab shallow:
+on an LF file, `write_file` applies at level 3 with `PD-TOOLS-015`'s shift and `haet_edit` gives `PD-TOOLS-014`'s near miss with
+the quote; on a CRLF file, `write_file` applies at "Match level: 4 (similarity: 0.91). Verify the result." and writes the block
+**one tab too shallow beside a success**, and `haet_edit` gives the plain "not found exactly" with no quote. A shorter window
+scores under 0.85 and reads "not found at any of the four match levels". Windows is the only platform shipped
+(`PD-STARTUP-001`), where CRLF files are ordinary; the guarantee `PD-TOOLS-015` was ruled for (OQ-233: a mis-indented block
+never lands beside a success) holds there only for an `old_string` that carries the file's `\r`s.
+
+**What the build proceeds under.** The letter of REQ-TOOLS-136 as built: level 3 compares lines exactly, `\r` included; on a
+CRLF file an LF `old_string` one indent off reaches level 4 or no match. Nothing was changed; `edits-proof` records the reading
+and asserts neither way.
+
+**What a ruling decides.** Whether level 3's "each line equal" reads a line without its line ending (the `\r` of a CRLF line
+being part of its ending, not its text) — so that an LF `old_string` one indent off matches a CRLF file at level 3 and
+`PD-TOOLS-015` (shift, as given, or refusal) and `PD-TOOLS-014` (the near miss and quote) answer it, with `PD-TOOLS-016` clause 2
+carrying the endings as it already does at level 3 — or whether the build's exact reading stands. **The costs either way:**
+read without the `\r`, level 3 takes cases level 4 took, so an edit that applied at level 4 is shifted or refused instead, and
+the near-miss quote of such a window carries `\r`s the caller must send back; kept exact, on Windows a model's commonest
+mis-indented edit lands unshifted beside a success at level 4 — the case `PD-TOOLS-015` was ruled to prevent — and `haet_edit`
+gives no near miss for it.

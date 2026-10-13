@@ -543,7 +543,9 @@ cancellation's grace already running to 2 s from the shutdown (since `PD-MCP-003
 only the close was cut from 5 s, the build's reading of OQ-172 while it was open)
 and exits only once the step has gone (REQ-WORKSPACE-092/109; 2026-10-01); the
 category polls the status every 500 ms while it runs.
-`ROTARIS_SCRIPT_MCP_ARGS` (verification only) hands the scripted client the arguments of an MCP step.
+`ROTARIS_SCRIPT_MCP_ARGS` (verification only) hands the scripted client the arguments of an MCP step, and since fin42
+(N52) `ROTARIS_SCRIPT_TOOL_ARGS` any tool's `{ name, args }` for a `tool:<key>` step, an argument written `@content_hash` sent as
+the newest `content_hash:` a tool result of the conversation carried (`withLatestHash`; `pnpm edits-proof`).
 
 **`initialization.*` (Part AS, ADR-0064).** Five commands, renderer → main and no further: `initialization.read`
 (REQ-WORKSPACE-115's refresh — the persisted section as it is on disk, nothing else disturbed),

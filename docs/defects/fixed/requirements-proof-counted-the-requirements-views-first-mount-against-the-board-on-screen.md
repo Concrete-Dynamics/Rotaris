@@ -44,6 +44,6 @@ paint's answer is reported apart and not counted; a task spanning the answer cou
 `pnpm requirements-proof --skip-build` on 2026-10-07 at load 9.5 to 9.8: board 36 ms with no long task, the minimum window
 62 ms, the generated store's arrival 47 ms with one 52 ms task, every functional stage green; it exited 1 on the axis switch
 alone (144 ms), which is recorded open in
-[`switching-the-board-to-a-hundred-epic-columns-costs-a-long-task-over-the-budget-under-load.md`](../switching-the-board-to-a-hundred-epic-columns-costs-a-long-task-over-the-budget-under-load.md).
+[`switching-the-board-to-a-hundred-epic-columns-costs-a-long-task-over-the-budget-under-load.md`](switching-the-board-to-a-hundred-epic-columns-costs-a-long-task-over-the-budget-under-load.md).
 The first form of the reader spanned lines, so the seam's log line for it was never matched and the stage read `undefined`;
 the same run found it.

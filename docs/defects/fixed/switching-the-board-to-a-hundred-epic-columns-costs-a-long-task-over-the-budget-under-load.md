@@ -39,3 +39,15 @@ many). Not shown contradicted: the figure is over the budget only on a loaded ho
 - `packages/ui/src/requirements/Column.tsx` — the layout effect that reads the list's height.
 - `packages/ui-core/src/requirements/display.ts` — the grouping by axis.
 - `apps/desktop/scripts/requirements-proof.mjs` — the scale stage's axis window (armed at 11000, read at 14500).
+
+## Closed 2026-10-13 (fin38) — the quiet reading: load, not the product
+
+The quiet run this note waited for was taken: three `pnpm requirements-proof --skip-build` runs under `xvfb-run`, alone, at load
+0.3 to 1.1 on 4 CPUs, on 2026-10-13 at `552d346`, all **PASSED**. Their `results.json` read `axisSwitchLongestTaskMs` **0** —
+no long task at all on the switch to the 100 populated epic columns of the generated 1,500-requirement board, against
+REQ-TRACE-239's 100 ms (the third run's copy is the orchestrator's `quiet-reqproof-results-run3.json`: `stage2.scale`
+`axisSwitchLongestTaskMs: 0`, `realisedOnEpicAxis: 35`; `stage2.board.longTasks: 0`). The board's paint read 17 to 20 ms on the
+fixture and 31 to 41 ms at 1,500 requirements (the minimum window 26 ms in run 3). The 144 to 181 ms of A2-02, and the
+129 to 140 ms of fin30's runs, were taken at loads of 1.85 to 15.6 beside sibling plans and live runs; REQ-TRACE-088's reference
+conditions exclude them. Nothing in the product was changed, and the candidates the profile named (the grouping, the forced
+layout) stay unbuilt: no quiet figure asks for them.

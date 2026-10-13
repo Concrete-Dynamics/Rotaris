@@ -41,4 +41,4 @@ function and no longer reads the focus two frames after the reveal; red before t
 requirements-proof --skip-build` on 2026-10-07 at load 9.6 to 15.2: the drop stage green with the focus taken in 2 frames
 (47 ms), every functional stage green; the run exited 1 on two timing budgets at that load, the generated store's arrival
 (121 ms) and the epic-axis switch (140 ms), recorded open in
-[`switching-the-board-to-a-hundred-epic-columns-costs-a-long-task-over-the-budget-under-load.md`](../switching-the-board-to-a-hundred-epic-columns-costs-a-long-task-over-the-budget-under-load.md).
+[`switching-the-board-to-a-hundred-epic-columns-costs-a-long-task-over-the-budget-under-load.md`](switching-the-board-to-a-hundred-epic-columns-costs-a-long-task-over-the-budget-under-load.md).

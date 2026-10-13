@@ -6,7 +6,7 @@ import type { ArtifactStore } from '../artifacts/store.js';
 import { canonicaliseName, mintTaskId, recordedRootNames, takenTaskIds, uniqueUnderParent } from './naming.js';
 import { EMPTY_MCP_EVIDENCE, resolveDelegationTarget, type AgentGrant, type Persona, type PersonaResolver } from './personas.js';
 import type { RanCommand } from '../artifacts/record.js';
-import { inheritedContextBlock } from './notify.js';
+import { inheritedContext, type HandOffCut } from './notify.js';
 
 /**
  * PD-LIBRARY-001: the report's `commands` as the artifact record wants them. The report carries `exit_code`
@@ -165,6 +165,8 @@ export interface Spawned {
    * call was made, in the caller's order and once each; the ids naming a failed or unfinished sibling are not here.
    */
   readonly inherited: readonly ChildRow[];
+  /** `PD-TOOLS-006` revision 9 (OQ-256): the inherited answers the stored block cut under the hand-off budget, in order. */
+  readonly inheritedCuts: readonly HandOffCut[];
 }
 
 export class ChildLedger {
@@ -344,6 +346,9 @@ export class ChildLedger {
     const held = input.dependsOn.length === 0 && !this.slotFree(input.modelKey);
     const state: ChildState = input.dependsOn.length > 0 ? 'waiting_on_dependencies' : held ? 'waiting_on_model_slot' : 'queued';
     const effectiveParentId = this.isRoot(input.parentId) ? this.root.taskId : input.parentId;
+    // PD-TOOLS-006 revision 9 (OQ-256): the block and the answers it cut come from one rendering, so the caller's warning is
+    // exactly what the stored block holds.
+    const handedOn = inheritedContext(inherited);
     const row: Omit<ChildInsert, 'session_id' | 'spawned_at'> = {
       task_id: taskId, canonical_name: canonical, given_name: input.taskName, persona: role.persona.name, state, parent_id: effectiveParentId, depth,
       iteration: this.deps.iteration, model_key: input.modelKey, category: input.category, background: input.background ? 1 : 0, task: input.task,
@@ -369,7 +374,7 @@ export class ChildLedger {
       // it too. The inherited block is rendered now, from the reports as they stand at the call: a sibling ignored here as
       // unfinished may have completed by then, so the ids alone would not say which counted.
       attach_artifacts: JSON.stringify(input.attachArtifacts ?? []),
-      inherited_context_block: inheritedContextBlock(inherited),
+      inherited_context_block: handedOn.block,
       // PD-TOOLS-006 revision 6 (REQ-ORCH-028/029): the item the delegation serves, so a second implementation delegation for
       // it is refused while this child is outstanding, and the run's records say which item each child answered for.
       todo_item: input.todoItem ?? null,
@@ -377,7 +382,7 @@ export class ChildLedger {
     const r = this.deps.writer.spawnChild(row);
     if (!r.ok) return { ok: false, error: { reason: `The child could not be recorded: ${r.error.code}` } };
     if (held) this.deps.dal.enqueueSlot(this.deps.sessionId, input.modelKey, taskId);
-    return { ok: true, value: { row: r.value, persona: role.persona, aliasResolved: role.alias, held, inherited } };
+    return { ok: true, value: { row: r.value, persona: role.persona, aliasResolved: role.alias, held, inherited, inheritedCuts: handedOn.cuts } };
   }
 
   /** The one transition function; a refusal names both states and leaves the record untouched. */

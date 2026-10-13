@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, isDelegationTarget, ROLE_SPAWN_ALIASES } from '@rotaris/contracts';
 import { expandDeclared } from '../registry.js';
-import { attachmentWarnings, delegateTool, grantFacets, renderDelegateCatalogue, TODO_ITEM_MARK_SENTENCE, TODO_ITEM_SENTENCE, type AttachmentReport, type DelegateCatalogue, type DelegationPort } from './delegation.js';
+import { attachmentWarnings, delegateTool, grantFacets, HAND_OFF_SENTENCE, handOffWarnings, renderDelegateCatalogue, TODO_ITEM_MARK_SENTENCE, TODO_ITEM_SENTENCE, WRITE_SCOPE_FIELD_SENTENCE, WRITE_SCOPE_SENTENCE, type AttachmentReport, type DelegateCatalogue, type DelegationPort, type HandOffReport } from './delegation.js';
 import type { ToolContext } from './types.js';
 
 /**
@@ -162,9 +163,60 @@ describe('delegate — what each persona can do (PD-TOOLS-006 revision 4)', () =
   it('keeps the sentences after the persona list word for word', () => {
     const text = description();
     expect(text).toContain('Write the task with the sections TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Returns at once with a task_id; the child runs in the background unless run_in_background is false.');
-    expect(text).toContain('When the child will write files, give write_scope: path globs relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into those paths with write_file or haet_edit.');
+    // PD-TOOLS-006 revision 9 (OQ-257) replaced the write-scope sentence; its own case is below.
     expect(text).toContain("When a child's report makes a continuation offer, give continuation_of: that child's task_id, to delegate the remaining work as its continuation. A continuation starts with no memory of the child it continues: write its task as a complete brief of what was asked, what that child did and found, and what remains.");
     expect(text).toContain('To ask a child of yours that has ended something more, give session_id: its task_id — it resumes its own conversation with task as its next message and reports again; a child cut off by its time limit is continued with continuation_of instead.');
+  });
+});
+
+/**
+ * PD-TOOLS-006 revision 9 (OQ-256 and OQ-257, ruled 2026-10-13 under R-072): the write-scope sentence makes the persona the
+ * condition of file work, the field carries its own description, the description says what each hand-off field carries, and
+ * the observation names each hand-off answer cut under the budget.
+ */
+describe('delegate — PD-TOOLS-006 revision 9', () => {
+  const port = (handOff?: HandOffReport): DelegationPort => ({
+    delegate: async (_parent, req) => ({ status: 'queued', canonicalName: req.taskName, taskId: 'bg_00000002', message: 'Accepted.', ...(handOff ? { handOff } : {}) }),
+    backgroundOutput: () => ({ status: 'not_found', state: '', text: '' }),
+    waitForTasks: async () => ({ immediate: true, requested: 0, text: '' }),
+  });
+  const tool = (handOff?: HandOffReport) => delegateTool(port(handOff), 'root:1', BUILT_IN_CATALOGUE);
+  const call = { persona: 'docs-writer', task_name: 'doc', task: 'TASK: write', depends_on: [], inherited_context: ['bg_0afe2a2a'], run_in_background: true, attach_artifacts: [], suppress_auto_context: false, write_scope: [] };
+
+  it('the write-scope sentence ties file work to a persona whose entry writes workspace files, and says any other is refused', () => {
+    expect(WRITE_SCOPE_SENTENCE).toBe('Work that writes files goes to a persona whose entry above writes workspace files; give that child write_scope: path globs relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into those paths with write_file or haet_edit. A write_scope given to any other persona is refused and nothing is started.');
+    const text = tool().description;
+    expect(text).toContain(WRITE_SCOPE_SENTENCE);
+    expect(text).not.toContain('When the child will write files, give write_scope');
+  });
+
+  it('the offered schema gives write_scope its own description', () => {
+    const schema = z.toJSONSchema(tool().schema, { io: 'input' }) as { properties: Record<string, { description?: string }> };
+    expect(schema.properties['write_scope']?.description).toBe("The paths this child will write; only a persona whose entry in delegate's list writes workspace files may be given them.");
+    expect(WRITE_SCOPE_FIELD_SENTENCE).toBe(schema.properties['write_scope']?.description);
+  });
+
+  it('neither write-scope text names a persona of the vocabulary: the facts are the catalogue\'s', () => {
+    for (const name of [...BUILT_IN_ROLE_NAMES, ...Object.keys(ROLE_SPAWN_ALIASES)]) {
+      expect(WRITE_SCOPE_SENTENCE).not.toMatch(new RegExp(`\\b${name}\\b`));
+      expect(WRITE_SCOPE_FIELD_SENTENCE).not.toMatch(new RegExp(`\\b${name}\\b`));
+    }
+  });
+
+  it('the description says what each hand-off field carries, with the budget', () => {
+    expect(HAND_OFF_SENTENCE).toBe('depends_on and inherited_context each carry the whole answer of every task they name, up to 100,000 characters per field (a longer answer is cut, and both you and the child are told); attach_artifacts carries artifact bodies.');
+    expect(tool().description).toContain(`${WRITE_SCOPE_SENTENCE} ${HAND_OFF_SENTENCE} When a child's report`);
+  });
+
+  it('names each inherited answer cut and each forecast dependency cut, beside the attachment warning', async () => {
+    const handOff: HandOffReport = { inherited: [{ taskId: 'bg_0afe2a2a', name: 'e1', given: 100_000, omitted: 24_330 }], dependsOn: [{ taskId: 'bg_00000009', name: 'f1', given: 4_000, omitted: 1 }], budget: 100_000 };
+    expect(handOffWarnings(handOff)).toEqual([
+      'The inherited answer of e1 (bg_0afe2a2a) is longer than the 100,000-character hand-off budget allows: the child is given 100000 characters of it and 24330 are omitted; the child is told, and nothing it can reach holds the rest.',
+      'As the reports stand now, the answer of f1 (bg_00000009), which this child depends on, will reach it cut to 4000 characters under the 100,000-character hand-off budget, 1 omitted; the child is told.',
+    ]);
+    const r = await tool(handOff).execute(call, {} as ToolContext);
+    expect(r.text).toBe(`Task 'doc': queued — Accepted. ${handOffWarnings(handOff).join(' ')}\ntask_id: bg_00000002`);
+    expect((await tool().execute(call, {} as ToolContext)).text).toBe("Task 'doc': queued — Accepted.\ntask_id: bg_00000002");
   });
 });
 

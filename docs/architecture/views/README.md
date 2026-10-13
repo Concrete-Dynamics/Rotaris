@@ -68,6 +68,14 @@ package, edge, process, channel, command or store column changed.
 to that name, so `writeReadingOf` asks the manifest by it. The **runtime view**'s cut-off passage and its `children` row say so.
 No package, edge, process, channel, command or store column changed.
 
+**A sibling's whole answer reaches the next child, and `delegate`'s write-scope sentence ties file work to a writer
+(PD-TOOLS-006 revision 9, OQ-256 and OQ-257; fin38).** `inheritedContext` and `priorAgentContextParts` (`engine/src/children/notify.ts`)
+render both hand-off blocks under one 100,000-character budget per block (`HAND_OFF_BUDGET`, a new `kernel` export read by the
+engine and by `agent-tools`), a cut answer ending in `handOffMarker`; `Spawned.inheritedCuts` and `DelegateOutcome.handOff` carry
+the cuts to `handOffWarnings`. `delegate`'s description carries `WRITE_SCOPE_SENTENCE` and `HAND_OFF_SENTENCE`, and the
+`write_scope` field `WRITE_SCOPE_FIELD_SENTENCE`. The **runtime view**'s delegate-description and inherited-context paragraphs and
+the **state ownership view**'s inherited-block row say so. No package, edge, process, channel, command or store column changed.
+
 **An exact or replace-all edit keeps a CRLF file's line endings (PD-TOOLS-017, OQ-254; fin38).** `carryExact`
 (`agent-tools/src/tools/files.ts`) carries each level-1 or `replace_all` occurrence through `write_file` and `haet_edit`/`haet`,
 reading `PD-TOOLS-016`'s test (`crlfLines`, now shared with `carryWindow`) on the lines the span touches; a carried result equal

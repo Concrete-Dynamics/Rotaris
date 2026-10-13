@@ -141,6 +141,7 @@ import { starterMissing } from './lib/starter-config.mjs';
 import { preserveSummary, summaryReading } from './lib/summary-sections.mjs';
 import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
 import { routingMissReading } from './lib/routing-misses.mjs';
+import { handOffCutReading } from './lib/hand-off-cuts.mjs';
 import { agentPlanTaskCount, coordinatorTodoReading, heldItemReading, launchRunOverride, planItemIds, rootAgentPlan, todoItemReading } from './lib/coordinator-todo.mjs';
 import { PAUSE, pauseEvalSteps, pauseReading } from './lib/resume-pause.mjs';
 import { typingAllowanceMs } from './lib/prompt-typing.mjs';
@@ -1027,9 +1028,11 @@ function checkCoordinatorTodo() {
 }
 
 /**
- * PD-TOOLS-006 revision 8 (OQ-250, R-072) over every preserved session (`lib/routing-misses.mjs`): OQ-216's two counts, each with
- * its target of zero — `delegate` refused for a `write_scope` given to a persona that cannot write files, and a child's call of a
- * tool it does not hold refused at the gate. NOTEs: the enforced bounds answered each; the duress run at a68f121 had one of each.
+ * PD-TOOLS-006 revision 8 (OQ-250, R-072) over every preserved session (`lib/routing-misses.mjs`): OQ-216's two counts —
+ * `delegate` refused for a `write_scope` given to a persona that cannot write files, and a child's call of a tool it does not hold
+ * refused at the gate (target 0). NOTEs: the enforced bounds answered each; the duress run at a68f121 had one of each. Since
+ * OQ-257 (revision 9) the write-scope count is read against a bound — at most one a run, each re-routed by the coordinator's next
+ * `delegate`, the seconds to it printed — and a scenario over the bound is named in a NOTE of its own, which reopens OQ-257.
  */
 function checkRoutingMisses() {
   if (preservedSessions.length === 0) return;
@@ -1044,8 +1047,33 @@ function checkRoutingMisses() {
     check(false, 'the delegate and child calls of every session the run kept were read for PD-TOOLS-006 revision 8', cause instanceof Error ? cause.message : String(cause));
     return;
   }
-  noted('write scopes given to a persona that cannot write files, and child calls of a tool they do not hold (PD-TOOLS-006 revision 8, OQ-250; target 0 each)',
-    `${r.scopeRefusals.length} write-scope refusal(s)${r.scopeRefusals.length === 0 ? '' : ` (${r.scopeRefusals.map((x) => `${x.scenario} #${x.ordinal}: ${x.persona}`).join(', ')})`}; ${r.unknownTools.length} unknown-tool call(s) by a child${r.unknownTools.length === 0 ? '' : ` (${r.unknownTools.map((x) => `${x.scenario} #${x.ordinal}: ${x.agent} ${x.tool}`).join(', ')})`}`);
+  const reroute = (x) => `${x.scenario} #${x.ordinal}: ${x.persona}, ${x.rerouted ? 're-routed' : 'NOT re-routed'} by the next delegate${x.secondsToNext === null ? '' : ` ${x.secondsToNext} s later`}`;
+  noted('write scopes given to a persona that cannot write files (PD-TOOLS-006 revision 9, OQ-257; bound: at most one a run, each re-routed by the next delegate), and child calls of a tool they do not hold (OQ-250; target 0)',
+    `${r.scopeRefusals.length} write-scope refusal(s)${r.scopeRefusals.length === 0 ? '' : ` (${r.scopeRefusals.map(reroute).join('; ')})`}; ${r.unknownTools.length} unknown-tool call(s) by a child${r.unknownTools.length === 0 ? '' : ` (${r.unknownTools.map((x) => `${x.scenario} #${x.ordinal}: ${x.agent} ${x.tool}`).join(', ')})`}`);
+  if (r.flagged.length > 0) noted('write-scope refusals over OQ-257\'s bound (reopens OQ-257)', r.flagged.map((f) => `${f.scenario}${f.ordinal === null ? '' : ` #${f.ordinal}`}: ${f.why}`).join('; '));
+}
+
+/**
+ * PD-TOOLS-006 revision 9 (OQ-256, R-072) over every preserved session (`lib/hand-off-cuts.mjs`): each answer a child received cut
+ * by its inherited-context or prior-agent-context block, read by the block's marker in the child's recorded messages. A NOTE;
+ * the target is 0 cuts of an answer of 100,000 characters or fewer. The duress run at 552d346 cut two (finding V1), under the
+ * 4,000-character report block that revision 9 replaced.
+ */
+function checkHandOffCuts() {
+  if (preservedSessions.length === 0) return;
+  let r;
+  try {
+    const Database = require('better-sqlite3');
+    const db = new Database(oneDatabase(), { readonly: true });
+    try {
+      r = handOffCutReading(preservedSessions.map(({ scenario, sessionId }) => ({ scenario, rootIds: [], messages: db.prepare('SELECT task_id, body FROM agent_messages WHERE session_id = ? AND task_id IN (SELECT task_id FROM children WHERE session_id = ?) ORDER BY task_id, seq').all(sessionId, sessionId) })));
+    } finally { db.close(); }
+  } catch (cause) {
+    check(false, 'the children\'s messages of every session the run kept were read for PD-TOOLS-006 revision 9', cause instanceof Error ? cause.message : String(cause));
+    return;
+  }
+  noted('hand-off answers a child received cut (PD-TOOLS-006 revision 9, OQ-256; target 0 for answers of 100,000 characters or fewer)',
+    `${r.cuts.length} cut answer(s)${r.cuts.length === 0 ? '' : ` (${r.cuts.map((c) => `${c.scenario} ${c.child}: ${c.answer} ${c.given} of ${c.total}`).join('; ')})`}; ${r.underBudget.length} under the budget`);
 }
 
 /**
@@ -1195,6 +1223,7 @@ function finish(code) {
   checkToolRecord();
   checkCoordinatorTodo();
   checkRoutingMisses();
+  checkHandOffCuts();
   checkNearMissEdits();
   results.finishedAt = new Date().toISOString();
   results.checks = checks;

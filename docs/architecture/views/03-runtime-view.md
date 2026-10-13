@@ -1289,6 +1289,10 @@ for `codebase-analyst` and `librarian`; a configured `system_prompt` replaces it
 revision 8 (OQ-250) the table closes with one fixed sentence (`ROUTING_WORK_SENTENCE`) that names no persona's tools and sends the
 work a route implies to a persona whose catalogue entry allows it, so the prompt stays the constant `entryInstructionsFor`
 recognises; the catalogue's closing instruction also forbids a brief offering a command or tool the persona's entry lacks.
+Since revision 9 (OQ-257, fin38) the description's write-scope sentence (`WRITE_SCOPE_SENTENCE`, `agent-tools`) ties file work to a
+persona whose entry writes workspace files and says a scope given to any other is refused, and the `write_scope` field carries the
+same in the offered schema (`WRITE_SCOPE_FIELD_SENTENCE`, through `z.toJSONSchema`); a sentence after it (`HAND_OFF_SENTENCE`) says
+what `depends_on`, `inherited_context` and `attach_artifacts` each carry, with the hand-off budget (`HAND_OFF_BUDGET`, `kernel`).
 
 **Which personas a delegation may name (OQ-228, OQ-229, ruled 2026-10-07 under R-072; fin33).** One list answers it:
 `delegationTargetsFor(resolver, caller)` (`children/personas.ts`) — the resolver's `delegationTargets()` (every configured
@@ -1353,9 +1357,17 @@ task has refuses the call with no record and no id, reported as REQ-TOOLS-153's 
 and has not completed — the root, the caller's own task, any task that failed, was cancelled, has not finished, or
 succeeded without its report stored — is ignored; the caller's own children `succeeded` with a report stored are returned on
 `Spawned.inherited`, once each in the caller's order; a completed task that is not the caller's own child is refused for
-ownership, naming its parent as the `depends_on` refusal does, never as nonexistent (**OQ-81**). `IterationChildren.delegate` renders them at once — a heading saying
-the reports are context and not a dependency, then one REQ-ORCH-060 `reportBlock` per sibling, the same block the parent
-reads on a resume — and `ChildLedger.spawn` stores the rendered text with the child (`children.inherited_context_block`,
+ownership, naming its parent as the `depends_on` refusal does, never as nonexistent (**OQ-81**). `ChildLedger.spawn` renders them at once
+with `inheritedContext` — a heading saying the reports are context and not a dependency, then each sibling's canonical name, role
+and status and its whole result text (final, else last, else key findings, else summary) under `PD-TOOLS-006` revision 9's
+100,000-character hand-off budget (OQ-256; `HAND_OFF_BUDGET`, `kernel`): an answer that does not fit is cut to the larger of the
+remainder and REQ-ORCH-060's 4,000 characters and ends in `handOffMarker`. Until revision 9 each sibling was REQ-ORCH-060's
+`reportBlock`, its answer cut to 4,000 characters
+(`docs/defects/fixed/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md`). REQ-ORCH-047's
+prior-agent-context block (`priorAgentContextParts`) shares the budget, floor and marker. The cuts travel back on
+`Spawned.inheritedCuts`, and `Orchestration.delegate` adds a forecast for each `depends_on` task already complete (the block is
+assembled when the child becomes ready); `DelegateOutcome.handOff` carries both, rendered beside the attachment warning by
+`handOffWarnings` (`agent-tools`). `ChildLedger.spawn` stores the rendered text with the child (`children.inherited_context_block`,
 **v28**), beside the call's `attach_artifacts` (`children.attach_artifacts`, v28). Until 2026-09-30 both were kept per task
 id in memory for the life of the run, so a child PD-ORCH-005 resumed in a later run lost both at REQ-ORCH-088's retry
 (`docs/defects/fixed/a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`). `childPayload`'s sixth

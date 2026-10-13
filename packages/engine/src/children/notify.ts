@@ -1,4 +1,4 @@
-import { countNoun } from '@rotaris/kernel';
+import { countNoun, HAND_OFF_BUDGET } from '@rotaris/kernel';
 import type { ChildRow } from '@rotaris/store';
 import { cutOffLines, type CutOff } from './cut-off.js';
 
@@ -93,26 +93,98 @@ export function resumeMessage(newlyTerminal: readonly ChildRow[], stillRunning: 
   return lines.join('\n\n');
 }
 
-/** REQ-ORCH-047: the prior-agent-context block, prepended exactly once when the dependent becomes ready. */
-export function priorAgentContext(deps: readonly ChildRow[]): string {
-  if (deps.length === 0) return '';
-  const sections = deps.map((d) => {
-    const r = parseReport(d);
-    return `#### ${d.canonical_name} (${d.persona}, ${r?.status ?? d.state})\n${r?.final_response || r?.last_response || r?.summary || '(no report)'}`;
-  });
-  return ['[Prior agent context — authoritative: rely on these findings rather than repeating the investigation]', ...sections].join('\n\n');
+/**
+ * `PD-TOOLS-006` revision 9 (OQ-256): one answer a hand-off block left partly out — the named task, its canonical name, the
+ * characters of its result text the child is given and the characters omitted. Read by the `delegate` observation's warning.
+ */
+export interface HandOffCut {
+  readonly taskId: string;
+  readonly name: string;
+  readonly given: number;
+  readonly omitted: number;
+}
+
+/** A hand-off block and the answers it cut, in the caller's order. */
+export interface HandOffBlock {
+  readonly block: string;
+  readonly cuts: readonly HandOffCut[];
 }
 
 /**
- * REQ-TOOLS-152 / REQ-TOOLS-154 item (5): the inherited-context block — the reports of the completed siblings the
- * caller named in `inherited_context`, as they stood when the call was made. Each is REQ-ORCH-060's report block, the
- * same rendering the parent reads on a resume, so a child inherits exactly what its parent was told. The heading says
- * what the block is and is not: context, not a dependency (REQ-ORCH-032 — "without imposing an ordering dependency"),
- * which is what tells it apart from REQ-ORCH-047's authoritative prior-agent context. Empty when nothing was carried.
+ * `PD-TOOLS-006` revision 9 (OQ-256): the marker a cut answer ends in. It tells the child what it was given and what it was not,
+ * that nothing it can reach holds the rest, and that its report must say so.
  */
+export function handOffMarker(name: string, given: number, total: number): string {
+  const omitted = total - given;
+  return `… [hand-off cut: ${given} of ${total} characters of ${name}'s answer are given here and ${omitted} ${omitted === 1 ? 'is' : 'are'} omitted, under the ${HAND_OFF_BUDGET.toLocaleString('en-US')}-character hand-off budget. The rest is in neither the workspace nor the artifact store; say in your report which parts of this answer you did not receive.]`;
+}
+
+/**
+ * `PD-TOOLS-006` revision 9 (OQ-256): the answers of the named tasks, in the caller's order, under one hand-off budget per block.
+ * Each result text (final response, else last response, else key findings, else summary) is carried whole while it fits; one that
+ * does not is cut to the larger of the budget's remainder and REQ-ORCH-060's 4,000 characters, so no child receives less than a
+ * report block gave it and a block passes the budget by at most 4,000 characters per cut answer, and it ends in `handOffMarker`.
+ */
+function handOff(rows: readonly ChildRow[], section: (row: ChildRow, report: StoredReport | null, text: string) => string): { sections: string[]; cuts: HandOffCut[] } {
+  let used = 0;
+  const sections: string[] = [];
+  const cuts: HandOffCut[] = [];
+  for (const row of rows) {
+    const r = parseReport(row);
+    const text = r?.final_response || r?.last_response || (r?.key_findings ?? []).map((k) => `- ${k}`).join('\n') || r?.summary || '(no report)';
+    const allowed = Math.max(HAND_OFF_BUDGET - used, REPORT_BLOCK_CAP);
+    if (text.length <= allowed) {
+      used += text.length;
+      sections.push(section(row, r, text));
+      continue;
+    }
+    used += allowed;
+    cuts.push({ taskId: row.task_id, name: row.canonical_name, given: allowed, omitted: text.length - allowed });
+    sections.push(section(row, r, `${text.slice(0, allowed)}\n${handOffMarker(row.canonical_name, allowed, text.length)}`));
+  }
+  return { sections, cuts };
+}
+
+/**
+ * REQ-ORCH-047: the prior-agent-context block, prepended exactly once when the dependent becomes ready, under `PD-TOOLS-006`
+ * revision 9's hand-off budget (OQ-256), and the answers it cut. Until revision 9 each dependency's answer was carried with no
+ * bound, the summary its last fallback.
+ */
+export function priorAgentContextParts(deps: readonly ChildRow[]): HandOffBlock {
+  if (deps.length === 0) return { block: '', cuts: [] };
+  const { sections, cuts } = handOff(deps, (d, r, text) => `#### ${d.canonical_name} (${d.persona}, ${r?.status ?? d.state})\n${text}`);
+  return { block: ['[Prior agent context — authoritative: rely on these findings rather than repeating the investigation]', ...sections].join('\n\n'), cuts };
+}
+
+/** REQ-ORCH-047's block alone (`priorAgentContextParts`). */
+export function priorAgentContext(deps: readonly ChildRow[]): string {
+  return priorAgentContextParts(deps).block;
+}
+
+/**
+ * REQ-TOOLS-152 / REQ-TOOLS-154 item (5): the inherited-context block — the answers of the completed siblings the caller named in
+ * `inherited_context`, as they stood when the call was made, and the answers it cut. Each reads as REQ-ORCH-060's report block
+ * does — canonical name, role and status, then the result text, then a cut-off child's additions (PD-ORCH-004) — but its result
+ * text is carried whole under `PD-TOOLS-006` revision 9's hand-off budget (OQ-256), not cut to that block's 4,000 characters. The
+ * heading says what the block is and is not: context, not a dependency (REQ-ORCH-032 — "without imposing an ordering
+ * dependency"), which is what tells it apart from REQ-ORCH-047's authoritative prior-agent context. Empty when nothing was carried.
+ *
+ * The falsified reason, kept beside its replacement: the block was each sibling's `reportBlock`, "the same rendering the parent
+ * reads on a resume, so a child inherits exactly what its parent was told". A resume is the parent's overview of many children;
+ * a hand-off is the one answer the child was delegated to build on, and the routing sentence (`PD-TOOLS-006` revision 8) sends
+ * exactly the long answers through it. In the duress live run at 552d346 the architect's 28,330-character answer reached the
+ * writer as 4,000 characters and a marker, and the writer wrote 7 of the document's 8 sections from its own reading
+ * (docs/defects/fixed/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md).
+ */
+export function inheritedContext(siblings: readonly ChildRow[]): HandOffBlock {
+  if (siblings.length === 0) return { block: '', cuts: [] };
+  const { sections, cuts } = handOff(siblings, (row, r, text) => [`### ${row.canonical_name} (${row.persona}) — ${r?.status ?? row.state}`, text, ...cutOffLines(r?.cut_off)].join('\n'));
+  return { block: ['[Inherited context — the reports of sibling tasks that had already completed when you were delegated; read them as context, not as work to repeat, and not as a dependency of yours]', ...sections].join('\n\n'), cuts };
+}
+
+/** The inherited-context block alone (`inheritedContext`). */
 export function inheritedContextBlock(siblings: readonly ChildRow[]): string {
-  if (siblings.length === 0) return '';
-  return ['[Inherited context — the reports of sibling tasks that had already completed when you were delegated; read them as context, not as work to repeat, and not as a dependency of yours]', ...siblings.map(reportBlock)].join('\n\n');
+  return inheritedContext(siblings).block;
 }
 
 /**

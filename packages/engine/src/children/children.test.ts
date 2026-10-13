@@ -18,6 +18,7 @@ import { resumableOf } from '../sessions.js';
 import { summaryFactsOf } from '../run/summary.js';
 import { FULL_CONTEXT_BUDGET } from '../artifacts/context.js';
 import { userCancellation } from './ledger.js';
+import { inheritedContext } from './notify.js';
 import { CODE_INTELLIGENCE_MANIFEST } from '@rotaris/config';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
@@ -404,6 +405,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         let text = `Task '${r.canonicalName}': ${r.status} — ${r.message}\ntask_id: ${r.taskId}`;
         // PD-TOOLS-006 revision 7 (OQ-249): the item the admitted delegation serves, which the run host's port marks IN_PROGRESS.
         if (r.todoItem !== undefined) text += `\nserves todo item ${r.todoItem}`;
+        // PD-TOOLS-006 revision 9 (OQ-256): the hand-off answers the delegation cut, as the run host's tool renders them.
+        if (r.handOff !== undefined) text += `\nhand-off cuts: ${JSON.stringify(r.handOff)}`;
         if (a['run_in_background'] === false) { const w = await ops.waitForTasks(parentId, [r.taskId]); text += `\n\n${'refused' in w ? w.refused : 'interrupted' in w ? w.interrupted : w.text}`; }
         return ok(text);
       }
@@ -1511,6 +1514,62 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(payloads.get('survey')).not.toContain('[Inherited context');
       // The delegation itself was ordinary: accepted, no wait on the sibling (REQ-ORCH-032).
       expect(JSON.parse(build.depends_on)).toEqual([]);
+    });
+
+    /*
+     * PD-TOOLS-006 revision 9 (OQ-256): the duress live run at 552d346 handed the architect's 28,330-character answer to the
+     * writer cut to 4,000 characters (finding V1). Each hand-off field now carries a whole answer up to 100,000 characters,
+     * and the caller is told at acceptance exactly what the stored block, or the dependency's block as a forecast, cut.
+     */
+    const handOffRun = async (answerLength: number, field: 'inherited_context' | 'depends_on') => {
+      const payloads = new Map<string, string>();
+      const observed: string[] = [];
+      const long = `A${'x'.repeat(answerLength - 2)}Z`;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'architect', task_name: 'design', task: 'TASK: design', run_in_background: false } }], 'Designing.');
+          if (turn === 2) {
+            const designId = /task_id: (bg_[0-9a-f]{8})/.exec(textOf(req))![1]!;
+            return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'docs-writer', task_name: 'write', task: 'TASK: write', [field]: [designId], run_in_background: false } }], 'Writing.');
+          }
+          observed.push(textOf(req));
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        const text = textOf(req);
+        const name = text.includes('TASK: write') ? 'write' : 'design';
+        if (!payloads.has(name)) payloads.set(name, text);
+        return answer(name === 'design' ? long : 'Written.');
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'design then write') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const rows = children(sid);
+      return { long, payload: payloads.get('write') ?? '', observed: observed.join('\n'), design: rows.find((c) => c.canonical_name === 'design')!, write: rows.find((c) => c.canonical_name === 'write')! };
+    };
+
+    it('PD-TOOLS-006 revision 9: a 28,330-character answer reaches the writer whole through inherited_context, and the caller is warned of nothing', async () => {
+      const r = await handOffRun(28_330, 'inherited_context');
+      expect(r.payload).toContain(`### design (architect) — succeeded\n${r.long}\n\nTASK: write`);
+      expect(r.payload).not.toContain('omitted');
+      expect(r.observed).not.toContain('hand-off cuts');
+    });
+
+    it('PD-TOOLS-006 revision 9: an answer over the budget is cut with the marker, and the observation names the very cut the stored block holds', async () => {
+      const r = await handOffRun(120_000, 'inherited_context');
+      expect(r.write.inherited_context_block).toContain(`${r.long.slice(0, 100_000)}\n… [hand-off cut: 100000 of 120000 characters of design's answer are given here and 20000 are omitted`);
+      expect(r.payload).toContain(r.write.inherited_context_block);
+      const stored = inheritedContext([r.design]);
+      expect(stored.block).toBe(r.write.inherited_context_block);
+      expect(r.observed).toContain(`hand-off cuts: ${JSON.stringify({ inherited: stored.cuts, dependsOn: [], budget: 100_000 })}`);
+      expect(stored.cuts).toEqual([{ taskId: r.design.task_id, name: 'design', given: 100_000, omitted: 20_000 }]);
+    });
+
+    it('PD-TOOLS-006 revision 9: depends_on on a completed task forecasts the cut REQ-ORCH-047\'s block then makes', async () => {
+      const r = await handOffRun(120_000, 'depends_on');
+      expect(r.payload.indexOf('[Prior agent context — authoritative')).toBeGreaterThanOrEqual(0);
+      expect(r.payload.indexOf('[Prior agent context — authoritative')).toBeLessThan(r.payload.indexOf('Workspace root: C:/ws.'));
+      expect(r.payload).toContain(`#### design (architect, succeeded)\n${r.long.slice(0, 100_000)}\n… [hand-off cut: 100000 of 120000`);
+      expect(r.observed).toContain(`hand-off cuts: ${JSON.stringify({ inherited: [], dependsOn: [{ taskId: r.design.task_id, name: 'design', given: 100_000, omitted: 20_000 }], budget: 100_000 })}`);
     });
 
     it('an id naming no task refuses the delegation: no child, no task id, the reason names the id (REQ-TOOLS-153)', async () => {

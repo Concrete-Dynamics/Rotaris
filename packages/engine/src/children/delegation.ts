@@ -67,13 +67,25 @@ export interface AttachmentOutcome {
   readonly budget: number;
 }
 
+/**
+ * `PD-TOOLS-006` revision 9 (OQ-256): what the child will be given of the answers its hand-off fields name, as the blocks'
+ * one rendering decides it — each inherited answer the stored inherited-context block cut, and, as a forecast from the reports
+ * as they stand at the call, each answer of a dependency already complete that REQ-ORCH-047's block will cut when the child
+ * becomes ready. `budget` is the hand-off budget in characters. Absent when nothing is cut.
+ */
+export interface HandOffOutcome {
+  readonly inherited: readonly { readonly taskId: string; readonly name: string; readonly given: number; readonly omitted: number }[];
+  readonly dependsOn: readonly { readonly taskId: string; readonly name: string; readonly given: number; readonly omitted: number }[];
+  readonly budget: number;
+}
+
 export type DelegateOutcome =
   /**
    * `todoItem` (PD-TOOLS-006 revision 7, OQ-249): the item of the caller's plan the admitted delegation serves — named,
    * inherited through `continuation_of`, or kept on a `session_id` follow-up — which the caller's port marks IN_PROGRESS
    * when it is PENDING. Absent when the delegation serves none.
    */
-  | { readonly status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; readonly canonicalName: string; readonly taskId: string; readonly message: string; readonly attachments?: AttachmentOutcome | undefined; readonly todoItem?: string | undefined }
+  | { readonly status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; readonly canonicalName: string; readonly taskId: string; readonly message: string; readonly attachments?: AttachmentOutcome | undefined; readonly todoItem?: string | undefined; readonly handOff?: HandOffOutcome | undefined }
   | { readonly status: 'rejected'; readonly canonicalName: string; readonly message: string };
 
 export interface BackgroundOutput {

@@ -13061,7 +13061,7 @@ the inherited-context block; REQ-ORCH-047, the prior-agent-context block; REQ-OR
 message's report block; REQ-TOOLS-153, the observation's warnings; `PD-TOOLS-006` revision 8, whose routing sentence sends an
 answer through either channel, and revision 5, the 100,000-character attachment budget. Raised 2026-10-13 from finding V1 of the
 duress live-run autopsy at `552d346` (session `18a9d22d`), recorded in
-[`an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters`](../defects/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md);
+[`an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters`](../defects/fixed/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md);
 the consortium's question V1. **Ruled 2026-10-13.**)*
 
 The inherited-context block rendered each sibling with REQ-ORCH-060's report block, so a long answer reached the child as 4,000
@@ -13105,6 +13105,13 @@ block at 4,000 characters.
 report on. A `delegate` observation names a cut only when an answer exceeds the budget; the coordinator's resume and wait blocks
 still show 4,000 characters per child.
 
+*Built 2026-10-13 (fin38, `fin38-edits-handoff-classifier`); its first execution is reported in `PD-TOOLS-006` revision 9.*
+`inheritedContext`, `priorAgentContextParts` and `handOffMarker` (`packages/engine/src/children/notify.ts`) under `HAND_OFF_BUDGET`
+(`packages/kernel/src/hand-off.ts`); `Spawned.inheritedCuts` and `DelegateOutcome.handOff`, rendered by `handOffWarnings` beside the
+attachment warning, and `HAND_OFF_SENTENCE` in `delegate`'s description (`packages/agent-tools/src/tools/delegation.ts`); the live
+run's NOTE (`apps/desktop/scripts/lib/hand-off-cuts.mjs`). Pinned by `children/notify.test.ts`, `children/children.test.ts` and
+`tools/delegation.test.ts`, red on the code before. The note is repaired.
+
 <a id="oq-257"></a>
 
 **OQ-257 — Does `delegate`'s write-scope sentence tie file work to a writer, and what bound replaces OQ-216's target of zero
@@ -13113,7 +13120,7 @@ persona that writes no files; revision 4, the catalogue; revision 8, the routing
 OQ-216's target of zero; [OQ-250](#oq-250)'s reopening condition, whose first limb is "any `write_scope` refused for a
 non-writer". Raised 2026-10-13 from finding V2 and the D3 verdict of the duress live-run autopsy at `552d346` (session
 `18a9d22d`, #92), recorded in
-[`the-routing-sentence-did-not-stop-a-write-scope-for-architect`](../defects/the-routing-sentence-did-not-stop-a-write-scope-for-architect.md);
+[`the-routing-sentence-did-not-stop-a-write-scope-for-architect`](../defects/fixed/the-routing-sentence-did-not-stop-a-write-scope-for-architect.md);
 the consortium's question V2. **Ruled 2026-10-13.**)*
 
 With the routing sentence in 41 of 41 coordinator requests, req 59 still gave `architect` a `write_scope` for
@@ -13157,6 +13164,11 @@ architect's answer handed on, and the scope is given to the writer; at most one 
 before any record and re-routed by the coordinator's next request, the harness NOTE printing the seconds to re-route; 0 briefs
 offering a command or tool the target lacks, and no non-writer child reporting it was asked to write a file. The default run is
 unchanged apart from the tokens.
+
+*Built 2026-10-13 (fin38, `fin38-edits-handoff-classifier`); its first execution is reported in `PD-TOOLS-006` revision 9.*
+`WRITE_SCOPE_SENTENCE` and `WRITE_SCOPE_FIELD_SENTENCE` (`packages/agent-tools/src/tools/delegation.ts`); the live run reads the bound
+with the seconds to re-route (`routingMissReading`'s `rerouted`, `secondsToNext` and `flagged`, `apps/desktop/scripts/lib/routing-misses.mjs`).
+Pinned by `tools/delegation.test.ts` and `lib/routing-misses.test.ts`, red on the code before. The note is repaired.
 
 <a id="oq-259"></a>
 

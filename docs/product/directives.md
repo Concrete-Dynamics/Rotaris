@@ -3032,6 +3032,42 @@ revision 9 from OQ-256 and OQ-257 (the consortium's questions V1 and V2, the dur
 > Agent plan strip drawing both rows active while both children run; the duress run, a parallel child's item active while it
 > runs (`#305` not recurring). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First execution of revision 9, 2026-10-13, ruled under [R-072](requests.md#r-072) ([OQ-256](../architecture/open-questions.md#oq-256)
+> and [OQ-257](../architecture/open-questions.md#oq-257)), built by fin38 (`fin38-edits-handoff-classifier`):** built as written, and
+> the text met the code in three places.
+>
+> - **One figure, two packages.** The engine renders the blocks and `agent-tools` writes the description, and neither imports the
+>   other; the outcome carries the budget for the warning as revision 5's does, but the description is written before any
+>   delegation, so the figure is a `kernel` export (`HAND_OFF_BUDGET`, `packages/kernel/src/hand-off.ts`) both read.
+> - **One rendering for the block and the warning.** `inheritedContext` and `priorAgentContextParts` (`packages/engine/src/children/notify.ts`)
+>   return the block with the answers it cut, so `ChildLedger.spawn` stores the block and returns its cuts from one call
+>   (`Spawned.inheritedCuts`), and `Orchestration.delegate`'s forecast for a completed dependency runs the prior-agent block's own
+>   function over the rows as they stand; `DelegateOutcome.handOff` carries both to `handOffWarnings` (`agent-tools`).
+> - **REQ-ORCH-047's fallback.** The prior-agent block fell back to the summary but never to the key findings, which clause 1 puts
+>   before it; both blocks now read the same order. `reportBlock` and REQ-ORCH-060's cap still serve the resume message and the wait
+>   results.
+>
+> The write-scope sentence is `WRITE_SCOPE_SENTENCE` and the field's description `WRITE_SCOPE_FIELD_SENTENCE` (`.describe()` on the
+> zod field, which `z.toJSONSchema` carries into the offered schema); `HAND_OFF_SENTENCE` follows it. **What was measured.** In
+> `children/notify.test.ts`: the budget is 100,000; a 28,330-character answer carried whole with no cut; 100,001 characters cut to
+> 100,000 with the marker verbatim; two siblings across the budget, the second cut to the remainder, and the 4,000-character floor
+> with a short third answer still whole; the fallback order; the prior-agent block under the same budget, floor and marker; the
+> resume message still capped at 4,000. In `children/children.test.ts`, end to end: a 28,330-character architect answer reaches the
+> writer whole through `inherited_context` with no warning; a 120,000-character one is cut, and the observation's cuts equal the
+> stored block's; `depends_on` on a completed task forecasts the cut its prior-agent block then makes. In `tools/delegation.test.ts`:
+> the write-scope sentence verbatim and the old one gone, the field's description in the offered schema, neither text naming a
+> persona or alias of the vocabulary, the hand-off sentence after it, and the warning's two forms in the observation. In
+> `scripts/lib/routing-misses.test.ts` the `552d346` shape (`#92` re-routed 30.0 s later, inside the bound) and the flags (not
+> re-routed, no later delegate, a second refusal), and `scripts/lib/hand-off-cuts.test.ts` the marker count. Fourteen cases, each
+> red on the code before. In the built app `pnpm mission-proof` passed (exit 0, load 0.7 to 1.5 on 4 CPUs): its scripted coordinator
+> delegates with a `depends_on` chain and short answers, so it shows nothing regressed; it drives no answer over the budget and no
+> write scope, so it does not discriminate. **What was not measured.** No live run: the next duress pack is the measure — 0
+> hand-off markers for answers under 100,000 characters, no hunting calls for a missing answer, at most one write-scope refusal for
+> a non-writer, re-routed by the next request. Repairs
+> [`an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters`](../defects/fixed/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md)
+> and [`the-routing-sentence-did-not-stop-a-write-scope-for-architect`](../defects/fixed/the-routing-sentence-did-not-stop-a-write-scope-for-architect.md).
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-startup-001"></a>

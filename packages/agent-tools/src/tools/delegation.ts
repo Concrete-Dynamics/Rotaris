@@ -1,4 +1,4 @@
-import { countNoun } from '@rotaris/kernel';
+import { countNoun, HAND_OFF_BUDGET } from '@rotaris/kernel';
 import { z } from 'zod';
 import { grantsOn, type Facet } from '../registry.js';
 import { errorObservation, INTERRUPTED_FAILURE_KIND, observation, type ToolExecutor } from './types.js';
@@ -43,15 +43,62 @@ export function attachmentWarnings(a: AttachmentReport): readonly string[] {
   return warnings;
 }
 
+/**
+ * `PD-TOOLS-006` revision 9 (OQ-256, ruled 2026-10-13 under R-072): what the child will be given of the answers its hand-off
+ * fields name, as the engine's one rendering decides it — each inherited answer the stored block cut, and a forecast for each
+ * dependency already complete whose answer REQ-ORCH-047's block will cut, with the budget in characters.
+ */
+export interface HandOffReport {
+  inherited: readonly { taskId: string; name: string; given: number; omitted: number }[];
+  dependsOn: readonly { taskId: string; name: string; given: number; omitted: number }[];
+  budget: number;
+}
+
+/**
+ * `PD-TOOLS-006` revision 9 (d): the warning, beside revision 5's attachment warning (REQ-TOOLS-153's "any attachment warning"),
+ * naming each answer a hand-off cut and how much of it is omitted. A `depends_on` warning is a forecast: that block is assembled
+ * when the child becomes ready, and the marker in the child's payload is the record. None when nothing is cut.
+ */
+export function handOffWarnings(h: HandOffReport): readonly string[] {
+  const budget = `${h.budget.toLocaleString('en-US')}-character hand-off budget`;
+  return [
+    ...h.inherited.map((c) => `The inherited answer of ${c.name} (${c.taskId}) is longer than the ${budget} allows: the child is given ${c.given} characters of it and ${c.omitted} ${c.omitted === 1 ? 'is' : 'are'} omitted; the child is told, and nothing it can reach holds the rest.`),
+    ...h.dependsOn.map((c) => `As the reports stand now, the answer of ${c.name} (${c.taskId}), which this child depends on, will reach it cut to ${c.given} characters under the ${budget}, ${c.omitted} omitted; the child is told.`),
+  ];
+}
+
 export interface DelegationPort {
   delegate(parentId: string, req: { persona: string; taskName: string; task: string; dependsOn: readonly string[]; inheritedContext: readonly string[]; category: string; runInBackground: boolean; attachArtifacts: readonly string[]; writeScope: readonly string[]; continuationOf?: string | undefined; suppressAutoContext?: boolean | undefined; sessionId?: string | undefined; todoItem?: string | undefined }): Promise<
-    | { status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; canonicalName: string; taskId: string; message: string; attachments?: AttachmentReport | undefined; todoItem?: string | undefined }
+    | { status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; canonicalName: string; taskId: string; message: string; attachments?: AttachmentReport | undefined; todoItem?: string | undefined; handOff?: HandOffReport | undefined }
     | { status: 'rejected'; canonicalName: string; message: string }
   >;
   backgroundOutput(parentId: string, taskId: string, detail: 'summary' | 'verbatim'): { status: 'ok' | 'still_running' | 'not_found'; state: string; text: string };
   /** PD-ORCH-005: `interrupted` when the run came to rest while the caller waited — the tasks waited on were paused with it. */
   waitForTasks(parentId: string, taskIds: readonly string[]): Promise<{ immediate: boolean; requested: number; text: string } | { refused: string } | { interrupted: string }>;
 }
+
+/**
+ * `PD-TOOLS-006` revision 9 (OQ-257, ruled 2026-10-13 under R-072): `delegate`'s write-scope sentence ties file-writing work to a
+ * persona whose catalogue entry writes workspace files, and says a scope given to any other persona is refused. It names no
+ * persona: the facts are the catalogue's. The persona, not the scope, is the condition, so a habitual scope on a non-writer
+ * still meets revision 3's refusal rather than being dropped.
+ *
+ * The sentence it replaces, kept beside it with its reason: "When the child will write files, give write_scope: path globs
+ * relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into
+ * those paths with write_file or haet_edit." It made the task the condition and never the persona, and in the duress live run
+ * at 552d346 the coordinator gave `architect` a scope for `docs/decisions.md` by that habit (#92, refused in 5 ms; finding V2,
+ * docs/defects/fixed/the-routing-sentence-did-not-stop-a-write-scope-for-architect.md).
+ */
+export const WRITE_SCOPE_SENTENCE = 'Work that writes files goes to a persona whose entry above writes workspace files; give that child write_scope: path globs relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into those paths with write_file or haet_edit. A write_scope given to any other persona is refused and nothing is started.';
+
+/** `PD-TOOLS-006` revision 9 (OQ-257): the `write_scope` field's own description in the offered schema. */
+export const WRITE_SCOPE_FIELD_SENTENCE = "The paths this child will write; only a persona whose entry in delegate's list writes workspace files may be given them.";
+
+/**
+ * `PD-TOOLS-006` revision 9 (e) (OQ-256): what each hand-off field carries, so a caller choosing one knows a long answer arrives
+ * whole and an artifact body travels by `attach_artifacts`.
+ */
+export const HAND_OFF_SENTENCE = `depends_on and inherited_context each carry the whole answer of every task they name, up to ${HAND_OFF_BUDGET.toLocaleString('en-US')} characters per field (a longer answer is cut, and both you and the child are told); attach_artifacts carries artifact bodies.`;
 
 const delegateSchema = z.object({
   persona: z.string().min(1),
@@ -65,8 +112,11 @@ const delegateSchema = z.object({
   run_in_background: z.boolean().default(true),
   attach_artifacts: z.array(z.string()).default([]),
   suppress_auto_context: z.boolean().default(false),
-  /** PD-TOOLS-006: path patterns, relative to the workspace root in the glob tool's dialect, the child claims while it runs. */
-  write_scope: z.array(z.string()).default([]),
+  /**
+   * PD-TOOLS-006: path patterns, relative to the workspace root in the glob tool's dialect, the child claims while it runs.
+   * Revision 9 (OQ-257) gives the field the description the offered schema carries (`WRITE_SCOPE_FIELD_SENTENCE`).
+   */
+  write_scope: z.array(z.string()).default([]).describe(WRITE_SCOPE_FIELD_SENTENCE),
   /** PD-ORCH-004: the task_id of your own child whose report offered a continuation; the new child is recorded as continuing it. */
   continuation_of: z.string().optional(),
   /** PD-TOOLS-006 revision 6 (OQ-220): the id of the item of your own todo list this delegation serves. */
@@ -161,7 +211,7 @@ export function delegateTool(port: DelegationPort, parentId: string, catalogue: 
     // OQ-114 as ruled (R-071, PD-ORCH-004 revision 5): `continuation_of`'s sentence says a continuation starts with no memory.
     // PD-TOOLS-006 revision 4 (OQ-216): the persona list is the caller's catalogue with each persona's facets; the sentences
     // after it are unchanged.
-    description: `Delegate a task to a specialist persona. ${renderDelegateCatalogue(catalogue)} Write the task with the sections TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Returns at once with a task_id; the child runs in the background unless run_in_background is false. When the child will write files, give write_scope: path globs relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into those paths with write_file or haet_edit. When a child's report makes a continuation offer, give continuation_of: that child\'s task_id, to delegate the remaining work as its continuation. A continuation starts with no memory of the child it continues: write its task as a complete brief of what was asked, what that child did and found, and what remains. To ask a child of yours that has ended something more, give session_id: its task_id — it resumes its own conversation with task as its next message and reports again; a child cut off by its time limit is continued with continuation_of instead. ${TODO_ITEM_SENTENCE} ${TODO_ITEM_MARK_SENTENCE}`,
+    description: `Delegate a task to a specialist persona. ${renderDelegateCatalogue(catalogue)} Write the task with the sections TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Returns at once with a task_id; the child runs in the background unless run_in_background is false. ${WRITE_SCOPE_SENTENCE} ${HAND_OFF_SENTENCE} When a child's report makes a continuation offer, give continuation_of: that child\'s task_id, to delegate the remaining work as its continuation. A continuation starts with no memory of the child it continues: write its task as a complete brief of what was asked, what that child did and found, and what remains. To ask a child of yours that has ended something more, give session_id: its task_id — it resumes its own conversation with task as its next message and reports again; a child cut off by its time limit is continued with continuation_of instead. ${TODO_ITEM_SENTENCE} ${TODO_ITEM_MARK_SENTENCE}`,
     schema: delegateSchema,
     label: (a) => `delegate ${a.persona}: ${a.task_name}`,
     execute: async (a) => {
@@ -172,7 +222,8 @@ export function delegateTool(port: DelegationPort, parentId: string, catalogue: 
       // (PD-TOOLS-006 revision 5: the count given, the ids left out for size, the unresolved and the unreadable). The
       // placeholder this replaced said "the artifact store is not built yet"; it is, and the falsified line is gone from
       // the code with its reason kept in this comment.
-      const warnings = r.attachments ? attachmentWarnings(r.attachments) : [];
+      // PD-TOOLS-006 revision 9 (OQ-256): each hand-off answer cut under the budget is named beside the attachment warning.
+      const warnings = [...(r.attachments ? attachmentWarnings(r.attachments) : []), ...(r.handOff ? handOffWarnings(r.handOff) : [])];
       // PD-TOOLS-006 revision 7: the admitted delegation's PENDING item is marked IN_PROGRESS now, before any wait below.
       const marked = r.todoItem !== undefined && opts.markItem ? opts.markItem(r.todoItem) : null;
       let text = renderDelegateObservation(r.canonicalName, r.status, [r.message, ...warnings, ...(marked ? [marked.sentence] : [])].join(' '), r.taskId);

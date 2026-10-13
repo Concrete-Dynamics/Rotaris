@@ -1,4 +1,4 @@
-import { type Clocks, countNoun, millis, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
+import { type Clocks, countNoun, HAND_OFF_BUDGET, millis, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
 import { interruptionPhrase, isTerminalChildState, reportStatusToState, resumeStateFor, TASK_ID_PATTERN, type ChildState, type Interruption, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
 import type { ChildRow, StoreDal } from '@rotaris/store';
@@ -7,11 +7,11 @@ import type { SessionWriter } from '../session-writer.js';
 import { isSteeringMessage, runTurn, type SteeringPrompt, type ToolPort, type TurnOutcome } from '../run/turn.js';
 import { answerOpenCalls, recordCutChild } from '../run/crash.js';
 import { callsRun } from '../run/interruption.js';
-import type { AttachmentOutcome, BackgroundOutput, DelegateOutcome, DelegateRequest, DelegationOps, WaitOutcome } from './delegation.js';
+import type { AttachmentOutcome, BackgroundOutput, DelegateOutcome, DelegateRequest, DelegationOps, HandOffOutcome, WaitOutcome } from './delegation.js';
 import { FULL_CONTEXT_BUDGET, fullContextBlock, siblingIndexBlock, type AttachedResolution, type FullContextBlock } from '../artifacts/context.js';
 import type { ArtifactStore } from '../artifacts/store.js';
 import { ChildLedger, storeChildReport, userCancellation, writeCancelledTeardown, writeTeardown, type Budget } from './ledger.js';
-import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
+import { childPayload, completionNotification, parseReport, priorAgentContext, priorAgentContextParts, reportBlock, resumeMessage } from './notify.js';
 import { CHILD_STALL_TIMEOUT_MS, childTimedOutMessage, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
 import { resolveDelegationTarget, resolveRole, type Persona, type PersonaResolver } from './personas.js';
 import { editTierNamesOf, fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
@@ -399,6 +399,14 @@ export class IterationChildren implements DelegationOps {
     const { row, held, aliasResolved } = r.value;
     // REQ-LIBRARY-098: the references are resolved now, so the caller is told at once what could not be.
     const attachments = this.resolveAttachments(req.attachArtifacts ?? []);
+    /*
+     * PD-TOOLS-006 revision 9 (OQ-256): what the hand-off fields carry, told at acceptance — the inherited answers the stored
+     * block cut, and a forecast for the dependencies already complete, rendered by the block's own function over the reports as
+     * they stand now (REQ-ORCH-047's block is assembled when the child becomes ready, so the payload's marker is the record).
+     */
+    const completeDeps = req.dependsOn.map((d) => this.ledger.get(d)).filter((d): d is ChildRow => d !== undefined && d.state === 'succeeded' && d.report_stored === 1);
+    const dependsOnCuts = priorAgentContextParts(completeDeps).cuts;
+    const handOff: { handOff?: HandOffOutcome } = r.value.inheritedCuts.length + dependsOnCuts.length > 0 ? { handOff: { inherited: r.value.inheritedCuts, dependsOn: dependsOnCuts, budget: HAND_OFF_BUDGET } } : {};
     // PD-TOOLS-006: the claim starts at acceptance, and the disclosure is fixed now — before the pass below, which
     // may start the child and assemble its payload before this call returns.
     this.acceptScope(row, scope.patterns);
@@ -410,10 +418,10 @@ export class IterationChildren implements DelegationOps {
     const now = this.ledger.get(row.task_id) ?? row;
     if (held || now.state === 'waiting_on_model_slot') {
       const cap = this.deps.modelCap(row.model_key) ?? 0;
-      return { status: 'waiting_on_model_slot', canonicalName: row.canonical_name, taskId: row.task_id, message: `Queued behind model '${row.model_key}''s slot cap: ${this.ledger.slotsInUse(row.model_key)} of ${cap} slots in use; the task starts by itself once a slot opens.${alias}`, attachments, ...item };
+      return { status: 'waiting_on_model_slot', canonicalName: row.canonical_name, taskId: row.task_id, message: `Queued behind model '${row.model_key}''s slot cap: ${this.ledger.slotsInUse(row.model_key)} of ${cap} slots in use; the task starts by itself once a slot opens.${alias}`, attachments, ...item, ...handOff };
     }
-    if (now.state === 'waiting_on_dependencies') return { status: 'waiting_on_dependencies', canonicalName: row.canonical_name, taskId: row.task_id, message: `Waiting on ${req.dependsOn.join(', ')}.${alias}`, attachments, ...item };
-    return { status: 'queued', canonicalName: row.canonical_name, taskId: row.task_id, message: `Accepted; the child runs in the ${req.runInBackground ? 'background' : 'foreground'}.${alias}`, attachments, ...item };
+    if (now.state === 'waiting_on_dependencies') return { status: 'waiting_on_dependencies', canonicalName: row.canonical_name, taskId: row.task_id, message: `Waiting on ${req.dependsOn.join(', ')}.${alias}`, attachments, ...item, ...handOff };
+    return { status: 'queued', canonicalName: row.canonical_name, taskId: row.task_id, message: `Accepted; the child runs in the ${req.runInBackground ? 'background' : 'foreground'}.${alias}`, attachments, ...item, ...handOff };
   }
 
   /**

@@ -4278,6 +4278,11 @@ question RC1, from revision 7's first execution).*
 > COMPLETED for a held item or the coordinator's own active item should name it and be followed by an `update`. The harness's
 > `heldItemReading` counts `restoredOverClose` (target 0) and `namedRestores` (a NOTE). The note is repaired:
 > [`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
+> **A known limit, written down by fin38 (fin37's review):** the served set has the held set's scope, this iteration's ledger
+> (`IterationChildren.servedTodoItems` reads `ChildLedger.all()`, the children of the current iteration). After a REQ-ORCH-075
+> re-queue or in a resumed session, an item an earlier iteration's child served is not served, so a `replace` sending it
+> COMPLETED restores it IN_PROGRESS and names it as the agent's own active task, to be closed with `update`. That is the
+> revision-2 behaviour, safe and named, not the close revision 3 allows; no live run has met it.
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---

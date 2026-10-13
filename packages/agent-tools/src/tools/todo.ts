@@ -237,9 +237,10 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
             const phase = next[Math.min(prot.phaseIndex, Math.max(0, next.length - 1))] ?? (next.push({ id: hexId(), name: 'main', tasks: [] }), next[0]!);
             phase.tasks.splice(Math.min(prot.taskIndex, phase.tasks.length), 0, { ...prot.task });
           }
-          // No unheld task is active here (the REQ-TOOLS-146 rejection above answers a list that marks another beside one), so
-          // the second IN_PROGRESS can only come from the submitted list itself: PD-TOOLS-008's sentence, not REQ-TOOLS-145's. It
-          // counts the unheld tasks the list newly marks (revision 2); a held task and a restored protected one are not counted.
+          // An unheld protected active task can remain here only when the list newly marks nothing (the REQ-TOOLS-146 rejection
+          // above answers a list that marks another beside one), and it is restored, not counted. So a second IN_PROGRESS can
+          // only come from the submitted list itself: PD-TOOLS-008's sentence, not REQ-TOOLS-145's. It counts the unheld tasks
+          // the list newly marks (revision 2); a held task and a restored protected one are not counted.
           const actives = next.flatMap((p) => p.tasks.filter((t) => t.state === 'IN_PROGRESS' && !protectedActive.has(t.id) && !held.has(t.id)));
           if (actives.length > 1) return errorObservation(listMarksSeveralActive(actives.map((t) => t.name), typeof opts.delegates === 'function' ? opts.delegates() : opts.delegates === true));
           list.phases.splice(0, list.phases.length, ...next);

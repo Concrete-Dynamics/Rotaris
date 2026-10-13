@@ -624,9 +624,11 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       }
       // plan:<n> — PD-TOOLS-006 revision 6 (OQ-220): a todo list of n open items, which the delegations after it name in turn;
       // `done` completes every open item of the latest list, so REQ-ORCH-075 holds the task by none of them. Since PD-TOOLS-006
-      // revision 7 (OQ-249) an admitted delegation marks its item IN_PROGRESS, and REQ-TOOLS-146 restores an IN_PROGRESS task
-      // over a `replace`, so `done` sends one `update` per open item, as a model must. It was one `replace` writing every
-      // item COMPLETED until then.
+      // revision 7 (OQ-249) an admitted delegation marks its item IN_PROGRESS, and REQ-TOOLS-146 restored an IN_PROGRESS task
+      // over a `replace`, so `done` was changed to send one `update` per open item. It was one `replace` writing every item
+      // COMPLETED until then. Since PD-TOOLS-008 revision 3 (OQ-255) a `replace` closes a delegated item once its child has
+      // ended, so a model may close either way: `done` keeps the per-item updates, and `donereplace` below is the one-replace
+      // close.
       // `donereplace` — PD-TOOLS-008 revision 3 (OQ-255): that one `replace` again, the latest list re-sent whole by its ids with
       // every task COMPLETED, the close a model usually writes; once the delegations' children have ended it closes their items.
       // A proof scripts it after a wait long enough for them to end (`wait:<ms>,donereplace`).

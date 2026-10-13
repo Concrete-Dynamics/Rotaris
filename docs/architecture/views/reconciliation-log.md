@@ -15,6 +15,13 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-13**
 
+**The approval dialog's scripted answer is a build-time seam, and answers by tool (fin42).** `presentNext` reads
+`ROTARIS_CAPTURE_APPROVAL`, `_APPROVAL_MS` and `ROTARIS_CAPTURE_DIALOG_PNG` behind `__ROTARIS_SEAMS__`, parsed by
+`main/capture/approval-answers.ts` (`<tool>=<answer>[,<answer>…]`, `none` leaving a dialog to its timeout), and
+`scripts/package.mjs` refuses an artifact that keeps them
+(`docs/defects/fixed/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md`). The **process view**'s main row says
+so. No package, edge, process, channel, command or store column changed.
+
 **The artifact inspector's Preview links open (ADR-0051 decision 4; fin41).** Both `<ArtifactInspector>` mounts
 (`renderer/main.tsx`'s Library, `renderer/windows.tsx`'s persona window) pass the window's `openLink`, so a Preview link asks
 for `shell.openExternal` as a transcript link does. The **process view**'s `shell.openExternal` paragraph names every surface

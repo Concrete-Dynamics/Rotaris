@@ -37,6 +37,7 @@ import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LA
 import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
 import { deliverSetupCancel, InitializationCoordinator, serviceMarkerWriter } from './initialization.js'; // Part AS (ADR-0064)
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)
+import { approvalAnswerer, approvalButtonLabel } from './capture/approval-answers.js'; // the approval dialog's scripted answers (verification only)
 import { authRecoveryCommands } from './commands/auth-recovery.js';
 import { checkpointsCommands } from './commands/checkpoints.js';
 import { configAnnouncer, configCommands } from './commands/config.js';
@@ -236,6 +237,15 @@ async function main(): Promise<void> {
   const preferenceRoot = resolvePreferenceRoot();
   const preferences = new PreferenceStore(preferenceRoot);
   const capturing = Boolean(process.env['ROTARIS_CAPTURE_PNG']);
+  /*
+   * Verification seam: the approval dialog answered with a real click or Escape (`capture/approval-answers.ts`). Read behind
+   * the build-time flag, so a packaged build compiles the reads out; behind `capturing` alone it shipped
+   * (docs/defects/fixed/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md).
+   */
+  const scriptedApprovals = __ROTARIS_SEAMS__ && capturing ? approvalAnswerer(process.env['ROTARIS_CAPTURE_APPROVAL']) : null;
+  const scriptedApprovalMs = __ROTARIS_SEAMS__ ? Number(process.env['ROTARIS_CAPTURE_APPROVAL_MS'] ?? 700) : 700;
+  const scriptedDialogPng = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_DIALOG_PNG'] : undefined;
+  for (const problem of scriptedApprovals?.problems ?? []) log(`capture: approval answers: ${problem}`, 'warn');
   const capturedTheme = capturing ? process.env['ROTARIS_CAPTURE_THEME'] : undefined;
   if (capturedTheme) preferences.writeThemeSync(capturedTheme);
   let currentTheme: Theme = resolveTheme(capturedTheme ?? preferences.read('appearance/theme'));
@@ -890,20 +900,22 @@ async function main(): Promise<void> {
       dlg.focus();
       await runHost.request({ kind: 'approval.shown', requestId: payload.request_id, ok: true }, millis(5_000));
       log(`approval ${payload.request_id} presented (${payload.tool_name}, rule ${payload.rule_id}); ${mainWindows.approvalQueue(w.wcId).length} waiting`);
-      // Verification seam (only with ROTARIS_CAPTURE_PNG): answer the dialog with a real click or Escape.
-      const scripted = capturing ? process.env['ROTARIS_CAPTURE_APPROVAL'] : undefined;
-      if (scripted) {
-        clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_APPROVAL_MS'] ?? 700)), async () => {
+      // Verification seam (only with ROTARIS_CAPTURE_PNG, compiled out of a packaged build): answer the dialog with a real
+      // click or Escape, or leave it to its timeout (`none`), by the tool the dialog asks for (`capture/approval-answers.ts`).
+      const scripted = scriptedApprovals?.next(payload.tool_name) ?? null;
+      if (scripted?.kind === 'none') log(`capture: approval dialog (${payload.tool_name}) left unanswered`);
+      else if (scripted) {
+        const kind = scripted.kind;
+        clocks.timers.after(millis(scripted.afterMs ?? scriptedApprovalMs), async () => {
           if (dlg.isDestroyed()) return;
-          const dialogPng = process.env['ROTARIS_CAPTURE_DIALOG_PNG'];
-          if (dialogPng) { const { writeFileSync } = await import('node:fs'); writeFileSync(dialogPng, (await dlg.webContents.capturePage()).toPNG()); log(`captured dialog ${dialogPng}`); }
-          if (scripted === 'escape') { dlg.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' }); dlg.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' }); log('capture: approval dialog → Escape'); return; }
-          const label = scripted === 'once' ? 'Approve once' : scripted === 'session' ? 'Approve for this session' : 'Deny';
+          if (scriptedDialogPng) { const { writeFileSync } = await import('node:fs'); writeFileSync(scriptedDialogPng, (await dlg.webContents.capturePage()).toPNG()); log(`captured dialog ${scriptedDialogPng}`); }
+          if (kind === 'escape') { dlg.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' }); dlg.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' }); log('capture: approval dialog → Escape'); return; }
+          const label = approvalButtonLabel(kind);
           const rect = await dlg.webContents.executeJavaScript(`(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === ${JSON.stringify(label)}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
           if (!rect) { log(`capture: no "${label}" button in the approval dialog`); return; }
           dlg.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
           dlg.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
-          log(`capture: approval dialog → clicked "${label}"`);
+          log(`capture: approval dialog (${payload.tool_name}) → clicked "${label}"`);
         });
       }
     } catch (cause) {

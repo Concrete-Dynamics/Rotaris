@@ -497,3 +497,13 @@ build, and every `*-proof` launches `out/main/index.js` expecting the seams, so 
 must come before the next proof. *Since 2026-09-27 it says so only when the build ran: a run refused before
 `electron-vite build` had left `out/` as it was and said otherwise
 (`docs/defects/fixed/pnpm-package-announced-a-seam-free-build-it-had-not-made.md`).*
+
+> **2026-10-13, plan fin42 — the list above was not the whole surface.** "Rollup then removes every branch behind it …
+> the scripted clicks" held for the seams behind the flag, but one scripted click in main was never put behind it: the
+> approval dialog's answer (`ROTARIS_CAPTURE_APPROVAL`, read in `presentNext` behind the run-time `capturing` test alone),
+> which can press "Approve for this session" in a permission dialog. A `ROTARIS_BUILD=package` build of `6de2a67` carried the
+> name in `out/main/index.js`, and the seam check passed because its `forbidden` list did not name it. The reads now sit
+> behind the flag and the check names them
+> ([`../../defects/fixed/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md`](../../defects/fixed/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md)).
+> The rest of main's dialog answers read behind `capturing` alone are recorded, not repaired:
+> [`../../defects/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md`](../../defects/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md).

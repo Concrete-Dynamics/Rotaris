@@ -25,3 +25,21 @@ proof set the variable: `grep -rn CAPTURE_APPROVAL` over the repository found it
 - `apps/desktop/scripts/package.mjs` — the seam check's `forbidden` list, which does not name the variable.
 - `docs/architecture/adr/0056-the-build-toolchain.md` — the fourth execution.
 - `docs/architecture/views/02-process-view.md` — main's row, the seams compiled in only where the flag is true.
+
+## Outcome — repaired 2026-10-13 (plan fin42)
+
+Main reads the three variables behind `__ROTARIS_SEAMS__` (`scriptedApprovals`, `scriptedApprovalMs`, `scriptedDialogPng` in
+`apps/desktop/src/main/index.ts`), so a packaged build compiles the reads out, and the answer is parsed by
+`apps/desktop/src/main/capture/approval-answers.ts`, which names no variable. The same change gave the seam a per-tool form
+(`<tool>=<answer>[,<answer>…]`, `none` leaving a dialog to its timeout) for the away-state proof. `scripts/package.mjs`'s seam
+check now names `ROTARIS_CAPTURE_APPROVAL` and `ROTARIS_CAPTURE_DIALOG_PNG`.
+
+Pinned by `approval-answers.test.ts`'s source case (every read of the three in `index.ts` carries the flag), red on the
+unrepaired `index.ts`. Measured on the artifact: `ROTARIS_BUILD=package pnpm --filter @rotaris/desktop build` on `6de2a67`
+left `ROTARIS_CAPTURE_APPROVAL` in `out/main/index.js`; after the repair the same build left neither name in any emitted file of
+`out/main/` while `ROTARIS_CAPTURE_PNG` stayed, and the ordinary build still carries the seam. `pnpm package` itself was not run.
+
+Left as found, beside it in main: the other dialog answers read behind `capturing` alone (`ROTARIS_CAPTURE_HOOK_REVIEW`, `ROTARIS_CAPTURE_PAUSE_ANSWER`, `ROTARIS_CAPTURE_BACKUP_TO`,
+`ROTARIS_CAPTURE_RESTORE_FROM`, `ROTARIS_CAPTURE_SAVE_PATH`, `ROTARIS_CAPTURE_ANSWERS` and others). They are not
+this note's repair, which concerned the permission dialog the task extended, and are recorded in
+[`../a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md`](../a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md).

@@ -60,6 +60,9 @@ occurrences (`levelOneLines`). `live-run.mjs`'s near-miss NOTE counts retries re
 (`lib/near-miss-edits.mjs`). The **runtime view**'s file-tools paragraph says so. No package, edge, process, channel, command or
 store column changed.
 
+**The Mission table's persona cell does not wrap (fin36).** `shell.css` gives `.agent-table__persona` `white-space: nowrap`,
+and `pnpm mission-proof` item 1f reads it on one line; the **seams view**'s timed-out-tag passage says so. Nothing else moved.
+
 **A cross-file code-intelligence EDIT call lists every file it changed (OQ-245, XE1 ruled under R-072; PD-ORCH-004,
 REQ-ORCH-108, REQ-ORCH-109; fin35).** The manifest's `editArguments` carry a `scope` (`argument`, or `reach` with `project` or
 `path`); `codeIntelligenceEdit` (`config/src/mcp/code-intelligence.ts`) returns a reach call's base; the run host's MCP

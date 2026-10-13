@@ -175,4 +175,12 @@ describe('minimum-window layout regressions', () => {
     expect(heading).toContain('overflow: hidden');
     expect(heading).toContain('overflow-wrap: anywhere');
   });
+
+  it('keeps a persona on one line in the Mission table, so a hyphenated name never breaks at its hyphen (REQ-MONITOR-274)', () => {
+    // Measured 2026-10-13 in the built app at 1440x900: with no wrapping rule the table's automatic layout gave the persona
+    // column 65 to 71 px and "coding-agent" read "coding-" over "agent"
+    // (docs/defects/fixed/the-mission-tables-persona-cell-breaks-a-hyphenated-persona-over-two-lines.md). A persona is one
+    // identifier, and the design material draws it on one line wherever it draws one.
+    expect(rule('.agent-table__persona')).toContain('white-space: nowrap');
+  });
 });

@@ -46,4 +46,4 @@ row's is not; red before) and `pnpm mission-proof` item 1f (red on the build bef
 {"w":41,"h":36,…}"). The persona window draws the tag in its context line, which is not narrow, and is unchanged.
 
 Seen beside it and recorded, not repaired: the Mission table's persona cell breaks "coding-agent" at its hyphen with or
-without any tag ([`the-mission-tables-persona-cell-breaks-a-hyphenated-persona-over-two-lines.md`](../the-mission-tables-persona-cell-breaks-a-hyphenated-persona-over-two-lines.md)).
+without any tag ([`the-mission-tables-persona-cell-breaks-a-hyphenated-persona-over-two-lines.md`](the-mission-tables-persona-cell-breaks-a-hyphenated-persona-over-two-lines.md); repaired since by fin36).

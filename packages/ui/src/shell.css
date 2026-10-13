@@ -1704,6 +1704,8 @@
 .agent-table__state .agent-row__dot { display: inline-block; margin-right: 6px; vertical-align: middle; }
 .agent-table__name { display: flex; flex-direction: column; gap: 1px; }
 .agent-table__canonical { font-size: var(--rt-text-2xs, 10px); }
+/* A persona is one identifier: the table's automatic layout broke "coding-agent" at its hyphen (fin36). */
+.agent-table__persona { white-space: nowrap; }
 .agent-table__activity { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-table th, .agent-table td { padding-left: 6px; padding-right: 6px; }
 .agent-table__context { white-space: nowrap; }

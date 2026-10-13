@@ -361,7 +361,9 @@ path to a control is built from the labels Settings itself renders, never typed 
 surfaces draw it where the design gives a qualifier: a row's closes its meta label with a design `Tag` in the slot the stalled
 tag uses (`AgentTree.tsx`, `AgentTable.tsx`) — on a line of its own under the state, because beside it the tag took its width
 from the persona column (112 → 35 px in the 235 px sidebar) and scrolled the Mission card sideways; the stalled tag takes the
-same line of its own since fin35, for the same measured reason (`pnpm mission-proof` item 1f) — and the inspector and a
+same line of its own since fin35, for the same measured reason (`pnpm mission-proof` item 1f), and since fin36 the table's
+persona cell does not wrap (`.agent-table__persona`, `white-space: nowrap`), since the table's automatic layout broke
+"coding-agent" at its hyphen in a 71 px column with or without a tag — and the inspector and a
 persona window's instance tab a sentence of their own under the line the specification fixes (`TimeoutLine.tsx` in
 `Inspector.tsx` and `PersonaWindow.tsx`), so REQ-MONITOR-052's meta-line form is kept. `agent-timeout.test.ts` renders all
 four; `pnpm mission-proof` item 1d reads them and their geometry in the built app.

@@ -513,8 +513,9 @@ function announceSuccessor(deps: ClaimDeps, predecessorEndpoint: string, record:
 }
 
 /**
- * Resolve the launch to exactly one of two outcomes (and `refused` only for the
- * bounded failure the requirement names: two claim attempts both lost).
+ * Resolve the launch to exactly one of two outcomes, and `refused` only for a bounded failure: two claim attempts both
+ * lost (REQ-STARTUP-164); an attempt whose endpoint cannot listen anywhere, refused before any record is written
+ * (`openEndpoint`); or an exclusive create that failed with an error rather than finding a record.
  */
 export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): Promise<ClaimOutcome> {
   const platform = deps.platform ?? process.platform;

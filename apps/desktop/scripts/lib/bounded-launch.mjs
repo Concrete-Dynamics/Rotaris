@@ -70,11 +70,17 @@ function removeFatalHandlers() {
  * The environment entry that marks every process a launch started, its own groups included: the launch's
  * `XDG_DATA_HOME`, which `proofIsolationEnv` makes unique to its scratch profile and which every child of the product
  * inherits. Linux alone, where `/proc/<pid>/environ` can be read; elsewhere `null`, and only the group is drained.
+ *
+ * Only a value the launch was GIVEN marks it: one equal to the proof's own `XDG_DATA_HOME` (a launch whose environment is
+ * `cleanEnvironment()` and no profile, `terminal-proof`'s, on a host that sets the variable) is carried by the proof's
+ * parents and by every other process of the operator's session as well, and a sweep by it would end them (fin34's review,
+ * `bounded-launch.test.ts`). Such a launch is not marked, and only its group is drained.
  */
 const marks = new WeakMap();
 function markOf(env) {
   const data = env?.XDG_DATA_HOME;
-  return process.platform === 'linux' && typeof data === 'string' && data !== '' ? `XDG_DATA_HOME=${data}` : null;
+  if (process.platform !== 'linux' || typeof data !== 'string' || data === '' || data === process.env.XDG_DATA_HOME) return null;
+  return `XDG_DATA_HOME=${data}`;
 }
 function track(child, env) {
   const mark = markOf(env);

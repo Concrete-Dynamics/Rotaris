@@ -35,7 +35,10 @@ margin) to end by themselves, then ended with SIGKILL — the group they lead, n
 error as `bounded-launch: … in group(s) of their own outlived …`; the drain's result reports them as `ownGroups`. The sweep
 waits while another live launch carries the same mark (a hand-over's second launch beside the instance cannot be told from
 it), so the last of a profile's launches to end sweeps. `spawnBounded` marks every launch from its `env`, and the driver's
-`startApp` passes its launch's environment to `trackLaunch`.
+`startApp` passes its launch's environment to `trackLaunch`. A launch whose `XDG_DATA_HOME` is the proof's own (one given no
+profile, `terminal-proof`'s, on a host that sets the variable) is not marked: the proof's parents and the rest of the
+operator's session carry that value too, and the first form of the sweep, found by fin34's review, would have ended them six
+seconds after such a launch (`markOf`; red in `bounded-launch.test.ts` on that form, a bystander SIGKILLed).
 
 Pinned by `apps/desktop/scripts/lib/bounded-launch.test.ts`: a leader that starts a SIGTERM-ignoring child in a process group
 of its own (Node's `detached`, as `processGroup` does) and exits sees the child ended and named within the grace (red before:

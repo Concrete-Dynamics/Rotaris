@@ -258,6 +258,29 @@ describe('R-062: ending a proof launch within its bound', () => {
     expect(r.group.ownGroups === null || r.group.ownGroups.endedBy === null).toBe(true);
   }, 30_000);
 
+  /*
+   * fin34's review: the mark is the launch's own only where the launch was GIVEN it. A launch whose environment carries the
+   * proof's own `XDG_DATA_HOME` (`terminal-proof`'s, built from `cleanEnvironment()` alone, on a host that sets the
+   * variable) shares it with the proof's parents and every other process of the operator's session, and the sweep must
+   * not end them.
+   */
+  it.skipIf(!PROC)('a launch whose XDG_DATA_HOME is the proof\'s own is not swept: a process it did not start, carrying the same value, is left alone', async () => {
+    const inherited = `/tmp/bounded-launch-inherited-${process.pid}-${Date.now()}`;
+    const saved = process.env['XDG_DATA_HOME'];
+    process.env['XDG_DATA_HOME'] = inherited;
+    // A bystander the launch never started, carrying the proof's own environment: the shell or the pnpm that ran the proof.
+    const bystander = await child("console.log('ready'); setInterval(() => {}, 1000);", { detached: true });
+    try {
+      const r = await spawnBounded(process.execPath, ['-e', 'process.exit(0)'], { timeoutMs: 10_000, groupGraceMs: 300, env: { ...process.env } });
+      expect(r.group).toMatchObject({ endedBy: null, lingered: [] });
+      expect(r.group.ownGroups).toBeNull();
+      expect(alive(bystander.pid!)).toBe(true);
+    } finally {
+      if (saved === undefined) delete process.env['XDG_DATA_HOME']; else process.env['XDG_DATA_HOME'] = saved;
+      try { process.kill(bystander.pid!, 'SIGKILL'); } catch { /* gone */ }
+    }
+  }, 30_000);
+
   it.skipIf(!POSIX)('a proof with nothing else left to wait on still finishes the drain: its top-level await settles', async () => {
     // The first form waited on unreferenced timers: a scratch loop's `await spawnBounded(…)` ended its process with exit
     // 13, "unsettled top-level await", the moment the leader was gone and only the drain was left.

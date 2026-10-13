@@ -13009,3 +13009,43 @@ then an `update` for that item. The harness reads 0 served-and-ended items resto
 (`apps/desktop/src/run-host/scripted-client.ts`), shown in the built app by `pnpm mission-proof` item 1e; the live run's
 `restoredOverClose` and `namedRestores` (`apps/desktop/scripts/lib/coordinator-todo.mjs`). Pinned by `tools/tools.test.ts`,
 `run-host/tools.test.ts` and `children/children.test.ts`, each red on the code before. The note is repaired.
+
+<a id="oq-259"></a>
+
+**OQ-259 — Does a `write_file` insert into a CRLF file carry the file's line endings into the inserted lines?**
+*(REQ-TOOLS-135, `insert` and its success; `PD-TOOLS-016` and `PD-TOOLS-017`, which keep a CRLF file's line endings for every
+`edit`; `PD-STARTUP-001`, Windows the only platform shipped. Raised 2026-10-13 by fin38 from the R-072 consortium's ruling of
+[OQ-254](#oq-254), which confirmed the case in the code and asked that it be recorded as its own note and question. Open.)*
+
+`write_file`'s `insert` joins the file's lines and the content's lines with `\n`. The file's lines keep their `\r` and the
+inserted ones have none unless the caller sent it: `a\r\nb\r\n` with `content` `X` at `insert_line` 1 leaves `a\r\nX\nb\r\n`,
+beside "Inserted 1 line into … at line 1.". Recorded as
+[`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](../defects/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md).
+No requirement's text is contradicted: REQ-TOOLS-135 names `insert_line` and its bounds and says nothing of line endings.
+
+**What the build proceeds under.** The inserted lines written as given.
+
+**What a ruling decides.** Whether an insert into a CRLF file (by `PD-TOOLS-016` clause 2's test, read on the lines around the
+insertion point or the file's other lines) gives each inserted line the file's `\r`, with `PD-TOOLS-017`'s success sentence
+(extending REQ-TOOLS-135), or stands as built, `overwrite`'s and `insert`'s bytes being the caller's.
+
+<a id="oq-260"></a>
+
+**OQ-260 — Is a window edit whose carried replacement leaves the file unchanged refused, or applied as a success?**
+*(REQ-TOOLS-135, `edit`'s "identical strings rejected"; `PD-TOOLS-016`, which carries a window match's line endings and, at
+level 2, the bytes of every line `new_string` repeats; `PD-TOOLS-017` clause 3, which refuses an exact or replace-all edit left
+with the file's own bytes. Raised 2026-10-13 by fin38 from the probe the R-072 consortium's ruling of [OQ-254](#oq-254) asked
+for. Open.)*
+
+A window edit can land on the window's own bytes once `PD-TOOLS-016` has carried it: `one\r\ntwo\r\nthree\r\n` edited `one
+\ntwo` → `one\ntwo` matches at level 2, pairs `two` with the file's `two\r` and gives `one` the window's `\r`, so the file is
+rewritten unchanged beside `Edited n.txt: 2 lines replaced by 2 at line 1 (+0 -0). Match level: 2. new_string was written with
+the file's CRLF line endings.`, with an undo entry that restores the same content. Recorded as
+[`a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success`](../defects/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
+The strings differ, so REQ-TOOLS-135's rejection of identical strings does not reach it, and `PD-TOOLS-016` does not decide it.
+
+**What the build proceeds under.** Applied as a success, as built.
+
+**What a ruling decides.** Whether a window edit whose result equals the file is refused before writing, with no undo entry and a
+reply saying the file already holds that text (extending `PD-TOOLS-016` as `PD-TOOLS-017` clause 3 extends the exact edit), or
+stands as built.

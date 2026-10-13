@@ -1103,7 +1103,16 @@ record back and is refused with the reason, which main logs at `error` before it
 rather than a launch left running with no window. No platform dialog is raised for it: ADR-0019's prohibition on a synchronous
 native box in main stands.
 
-**The order this record fixes is not yet what the code does.** "The endpoint is listening before the record is written" is the
+~~**The order this record fixes is not yet what the code does.** "The endpoint is listening before the record is written" is the
 rule above; `claimInstance` takes the record first and opens the endpoint after it, and fin30 kept that order, giving the record
-back when the listen fails rather than reordering the claim. Recorded, not repaired:
-`docs/defects/the-instance-record-is-written-before-its-endpoint-listens.md`.
+back when the listen fails rather than reordering the claim. Recorded, not repaired:~~
+~~`docs/defects/the-instance-record-is-written-before-its-endpoint-listens.md`.~~ <!-- historical-path: docs/defects/the-instance-record-is-written-before-its-endpoint-listens.md -->
+
+**Since fin34 (2026-10-13) the code keeps the order this record fixes.** Each claim attempt opens its endpoint first
+(`openEndpoint`) and only then takes the record by exclusive create naming it; an attempt that loses the record closes the
+endpoint it opened (`closeEndpoint`), and a listen that fails writes no record at all, so there is nothing to give back. The
+property is pinned where a second launch stands: `packages/platform/src/instance-order.test.ts` connects to the endpoint the
+record names at the instant the record is written, and fails on the old order
+(`docs/defects/fixed/the-instance-record-is-written-before-its-endpoint-listens.md`). The interval in which two launches could
+both become the instance needed launches started within one `listen` of each other; it was read from the code, never
+measured, and is closed by construction rather than by a measured bound.

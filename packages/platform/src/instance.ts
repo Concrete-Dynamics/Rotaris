@@ -23,7 +23,7 @@ import { isLockLive, type LockRecord } from './liveness.js';
  * existence would strand every later launch for ever. What makes it an
  * exclusion is that it names a pid and a host and the launch probes them.
  *
- * Order (REQ-STARTUP-164): (1) exclusive claim; (2) on failure, hand over to
+ * Order (REQ-STARTUP-164): (1) exclusive claim, its endpoint already listening (ADR-0055); (2) on failure, hand over to
  * the named instance, complete when acknowledged; (3) not acknowledged within
  * 5 s — record unreadable, no process, process dead, or process silent —
  * reclaim once and retry the claim exactly once. At most one reclaim, two
@@ -385,21 +385,28 @@ function socketDirectoryFor(deps: ClaimDeps, platform: NodeJS.Platform): string 
 }
 
 /**
- * Open the endpoint the record just claimed names, or give the claim back. A listen that fails — no directory could hold
- * the socket — would otherwise leave a record naming an endpoint nobody serves and reject the launch with nothing awaiting
- * it, which on 2026-10-07 was a launch with no window that said nothing at all; refused, main logs the reason and ends the
- * launch (REQ-STARTUP-164's bounded end), and the next launch finds no record to wait on.
+ * Open the endpoint a claim attempt will name, BEFORE the record naming it is written (ADR-0055: "the endpoint is listening
+ * before the record is written, not after"). A second launch that reads the record the moment it appears and connects to the
+ * endpoint it names must find it accepting: one that cannot connect treats the instance as one that does not answer and,
+ * by REQ-STARTUP-164 (3), reclaims, so a record written first named an address nothing served yet and two launches started
+ * within one `listen` of each other could both become the instance (REQ-STARTUP-161). Repaired by fin34
+ * (`docs/defects/fixed/the-instance-record-is-written-before-its-endpoint-listens.md`); until then the record was taken
+ * first and given back when the listen failed. A listen that fails — no directory could hold the socket — now writes no
+ * record at all: the claim is refused with the reason, which main logs before it ends the launch (REQ-STARTUP-164's bounded
+ * end), and the next launch finds no record to wait on.
  */
-async function listenOrRelease(deps: ClaimDeps, record: InstanceRecord, platform: NodeJS.Platform): Promise<{ readonly server: Server } | { readonly refused: string }> {
+async function openEndpoint(deps: ClaimDeps, endpoint: string, platform: NodeJS.Platform): Promise<{ readonly server: Server } | { readonly refused: string }> {
   try {
-    return { server: await listen(record.endpoint, deps.onHandOver, platform, (successor, link) => passRecord(deps, successor, link)) };
+    return { server: await listen(endpoint, deps.onHandOver, platform, (successor, link) => passRecord(deps, successor, link)) };
   } catch (cause) {
-    try {
-      const now = readRecord(deps.recordFile);
-      if (now !== undefined && now.pid === record.pid && now.endpoint === record.endpoint) rmSync(deps.recordFile, { force: true });
-    } catch { /* the record could not be read again: left for REQ-STARTUP-164 (3) to reclaim */ }
-    return { refused: `this launch could not open its hand-over endpoint ${record.endpoint}: ${String(cause)}; the instance record it claimed is released (REQ-STARTUP-164)` };
+    return { refused: `this launch could not open its hand-over endpoint ${endpoint}: ${String(cause)}; no instance record was written (REQ-STARTUP-164)` };
   }
+}
+
+/** Close an endpoint whose claim was lost or refused: the server and its socket, never the record, which is not ours. */
+async function closeEndpoint(server: Server, endpoint: string, platform: NodeJS.Platform): Promise<void> {
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  if (platform !== 'win32') { try { unlinkSync(endpoint); } catch { /* */ } }
 }
 
 /** Release what this process holds: its record (only while it still names this process), its server, its socket. */
@@ -522,13 +529,15 @@ export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): P
   const attempt = async (): Promise<ClaimOutcome | 'lost'> => {
     const endpoint = endpointFor(deps.endpointDir, deps.pid, platform, socketDir);
     const record: InstanceRecord = { pid: deps.pid, host: deps.machineId, acquired_at: toIsoUtc(deps.wall.instant()), endpoint };
+    // The endpoint listens first; only then does the record name it (ADR-0055, REQ-STARTUP-161/164).
+    const opened = await openEndpoint(deps, endpoint, platform);
+    if ('refused' in opened) return { outcome: 'refused', reason: opened.refused };
     const r = exclusiveCreate(deps.recordFile, `${JSON.stringify(record)}\n`);
-    if (!r.ok) return { outcome: 'refused', reason: `${r.error.headline}: ${r.error.detail ?? ''}` };
-    if (r.value.minted) {
-      const opened = await listenOrRelease(deps, record, platform);
-      if ('refused' in opened) return { outcome: 'refused', reason: opened.refused };
+    if (r.ok && r.value.minted) {
       return { outcome: 'instance', record, server: opened.server, close: closerFor(deps, opened.server, endpoint, platform) };
     }
+    await closeEndpoint(opened.server, endpoint, platform);
+    if (!r.ok) return { outcome: 'refused', reason: `${r.error.headline}: ${r.error.detail ?? ''}` };
     return 'lost';
   };
 

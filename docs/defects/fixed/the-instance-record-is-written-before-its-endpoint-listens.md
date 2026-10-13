@@ -25,3 +25,17 @@ not after".
 - `packages/platform/src/instance.ts` — `claimInstance`'s `attempt`: `exclusiveCreate` of the record, then `listenOrRelease`;
   and `tryHandOver`, which settles on a refused connection at once.
 - `docs/architecture/adr/0055-startup-sequencing.md` — the ordering it fixes and the reason for it.
+
+## Outcome
+
+Repaired by fin34 (2026-10-13). `claimInstance`'s `attempt` now opens the hand-over endpoint first (`openEndpoint`) and writes
+the record by exclusive create only once it is listening; an attempt that loses the record (another launch holds it) or whose
+create fails closes the endpoint it opened (`closeEndpoint`) without touching the record, which is not its own. A listen that
+fails is refused before any record exists, so `listenOrRelease`'s give-back is gone with the window it covered. ADR-0055's
+report-back is in place under "The order this record fixes".
+
+Pinned by `packages/platform/src/instance-order.test.ts`: the first case wraps `exclusiveCreate` and, at the instant the record
+is written, finds the socket it names and connects to it (fails on the old order: the socket did not exist and the connection
+was refused); the second asserts a launch handed over leaves no socket of its own behind. `instance.test.ts`'s refusal case
+(no directory can hold the socket) still finds no record. Not driven in the built app: the race needs two launches within one
+`listen`, which no proof can time; `pnpm workspace-proof`'s scenario 13b exercises the reordered claim and hand-over on Linux.

@@ -33,10 +33,10 @@ sequenceDiagram
 
   OS->>M: launch (argv may carry a folder)
   Note over M: Phase 0 — BEFORE app.whenReady(),<br/>before any window, before any write
-  M->>M: claimInstance(...)
+  M->>M: claimInstance(...) — the endpoint listens first, then the record naming it is written (ADR-0055)
   alt handed over
     M-->>OS: app.exit(0) — shows nothing, writes nothing
-  else refused (both claims lost, or no directory could hold the endpoint — the record given back)
+  else refused (both claims lost, or no directory could hold the endpoint — no record written)
     M-->>OS: one error line, app.exit(2)
   else claimed
     M->>M: preferences, theme, provider catalogue

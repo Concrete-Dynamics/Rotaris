@@ -11582,6 +11582,11 @@ with a longer one, which is what the ruling's own test ("Recorded." keeps the an
 `packages/engine/src/run/coordinator-plan.test.ts` (seven red on `a68f121`) and `run-pure.test.ts`; shown by `pnpm
 part-h-proof`'s `plan-correction` launch. First execution reported in [`PD-ORCH-015`](../product/directives.md#pd-orch-015)
 and in [`first-executions.md`](first-executions.md); the live terminal scenario waits on the orchestrator's next default run.
+*Not reached at `552d346` (2026-10-13), written back by fin42:* the default and duress live runs met no root that answered with
+its plan open (0 of 174 requests carry the correction; terminal session `8cf99832` closed both of its items before answering)
+and no re-queue (0 requests carry "previous iteration on this task"), and no root answered empty (0 re-prompts). The terminal
+outcome held by the model's behaviour, not by the correction. The live measure stays owed and a default run does not reliably
+owe it, so fin42 wrote the opt-in `plan-open` and `empty-answer` scenarios; the report is in `PD-ORCH-015` and `PD-ORCH-009`.
 
 **OQ-222 — Do six back-pointers that name a directive whose disposition block omits their requirement mark reaches the
 register left out, or are they cross-references written in a back-pointer's shape?** *(`docs/product/README.md`, "The

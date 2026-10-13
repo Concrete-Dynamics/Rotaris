@@ -5633,6 +5633,9 @@ that fails; a root that wrote nothing on purpose is asked anyway.
 > [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
 > The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> *fin42, the same day:* a default run cannot be relied on to produce a silent root, so the live measure stays owed; fin42
+> adds the opt-in `empty-answer` scenario, in which the recording proxy gives the coordinating root an empty completion.
+
 ---
 
 <a id="pd-hooks-001"></a>
@@ -7314,6 +7317,10 @@ logged as [R-072](requests.md#r-072).*
 > [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
 > [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
 > The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> *fin42, the same day:* the terminal outcome the measure above names held at `552d346` — one iteration, `completed` /
+> `tasks_complete` inside the wait — by the model's own behaviour, not through the correction, so the live measure stays owed
+> and a default run cannot be relied on to owe it; fin42 adds the opt-in `plan-open` scenario, which asks for it.
 
 ---
 

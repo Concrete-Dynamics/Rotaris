@@ -12324,6 +12324,51 @@ how many; over it, the observation names the id left out for size with the budge
 the child's block names the same id, the `context_selection` entry's `attached_elided` lists it and `summary.md`'s Mostly-elided
 line counts it.
 
+<a id="oq-245"></a>
+
+**OQ-245 — Does a child's report list every file a cross-file code-intelligence EDIT call changed, or the path its arguments
+name?** *(`PD-ORCH-004` revision 1's changed-paths clause, "the workspace paths the child's own file-writing calls changed", and
+its report-back "The changed-paths reading falsified" (fin32), which took the argument path as a literal reading open for the
+owner; REQ-ORCH-109, a report "cannot conceal files it failed to account for", and OQ-111's ruling; REQ-ORCH-108's edited files;
+REQ-LIBRARY-088 and REQ-LIBRARY-090, the artifact's Edited Files; REQ-MCP-015, the EDIT tier of coding-agent, tester and
+refactorer. Raised 2026-10-13 from PD-ORCH-004's report-back and ruled the same day; the number is the round's assigned one.)*
+
+fin32 made the EDIT tier's calls file-writing calls and reads the path each changed from its arguments
+(`codeIntelligenceEditPaths`). For the two cross-file tools the arguments name less than the call changes: a symbol rename is
+listed by the declaring file alone, a whole-project cross-file replacement by nothing, and a directory-scoped one by the
+directory. A child whose only writes are such calls is told to its parent as having changed no workspace paths, and the pass's
+facts read "Edited files: (none)" — D1's falsehood for the two tools a refactorer exists to use. Recorded as
+[`a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md`](../defects/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+
+**What the build proceeds under.** fin32's literal reading: the argument path, none for a whole-project replacement.
+
+**What a ruling decides.** Where the list of a cross-file call's files comes from — the arguments, the server's result text, or
+the workspace observed around the call — and what the report says when that source cannot name them.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a delegated child's report lists every
+workspace file that a cross-file code-intelligence EDIT call (a symbol rename, a cross-file replacement) changed. The run host
+learns these files by observing the files the call can reach, before and after the call, whatever the call returned. This
+replaces fin32's literal reading (the argument path alone), which is falsified and kept beside its replacement in
+`PD-ORCH-004`'s report-back. When the observation could not be completed, the report names what it does know, says that the call
+may have changed files the record cannot name, and never says the child changed no workspace paths. No directive is minted:
+`PD-ORCH-004` already asks for the paths the calls "changed", so this repairs a defect against that wording and REQ-ORCH-109.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: overturn the literal reading; observe the workspace the call
+can reach (the project for a rename; the directory, or the project, for a cross-file replacement) before and after it, whether
+it succeeds or errs, subtract other agents' recorded writes in the window, and carry the result as a product-owned field the
+model never sees — a repair of PD-ORCH-004 and REQ-ORCH-109 with no new directive. *Advocate B (the system's lens)*: `PD-ORCH-004`
+revision 6; read a cross-file replacement's files from its applied summary, list a rename by its declaring file with a counted
+statement, and say plainly when the result names fewer files than the call may have changed; no worktree observation, since
+siblings share the workspace and a terminal writes outside every count. **The ruling followed both**: from A the observation,
+the only source that tells the truth in every case (the pinned runtime's rename returns a count and no file, and a cross-file
+replacement writes file by file, so a failure part-way leaves files written under an error result, which parsing the result
+would hide); from B the plain "may have changed files the record cannot name" statement when the observation was not completed,
+and a proof that needs no language server. B's attribution concern is real and taken with A's mitigation; the bound that remains
+is stated: a sibling's terminal write in the window can still be listed under this child, and REQ-ORCH-109 and `report.ts`'s own
+policy prefer overstating to concealing. **Rejected:** confirming the literal reading (a known false "changed no workspace
+paths" and a directory listed as a file); parsing the server's text (cannot name a rename's files, hides a partial failure,
+couples the product to unpinned prose); deferral (a refactorer's rename is ordinary first-release use).
+
 <a id="oq-246"></a>
 
 **OQ-246 — When `write_file`'s edit matches at REQ-TOOLS-136 level 2, does the replacement keep the window's line endings

@@ -308,6 +308,15 @@ literals (`configurationWithNames`, `namedConfigurationText`) — and the rule a
 `checkNaming` and in `artifactBuildCompleted`; it imports `tools/release-naming/src/index.ts` by path, as the hook did
 before it. **Edges unchanged**: a script reaching a tool, as above.
 
+### The requirement coverage report (2026-10-13; fin42, whats-next item N90)
+
+`tools/requirement-coverage/` is a **report-time tool** with no `package.json`. It runs from `pnpm req-coverage`
+(`coverage.mjs`, tests in `coverage.test.ts`) and is in no gate. It imports the generated artifact
+(`packages/kernel/src/generated/requirements.ts`, through Node's type stripping) and reads the tracked files under
+`packages/`, `apps/` and `tools/` through `git ls-files`. Nothing in `packages/` or `apps/` imports it, and it changes nothing
+the product ships. **Edges unchanged**: `tools/**` is outside the boundary rule, and its test reaches the artifact through
+`@rotaris/kernel`, as `symbol-artifact`'s does.
+
 ### The setup manifest and its schema (2026-09-28; `first-release-plan.md` §4.1, ADR-0054)
 
 `apps/desktop/resources/setup-manifest.json` is REQ-STARTUP-058's manifest: committed, not generated, and carried by

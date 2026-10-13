@@ -15,6 +15,10 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-13**
 
+**The requirement coverage report, a report-time tool (fin42, N90).** `tools/requirement-coverage/` (`pnpm req-coverage`) lists
+every live shipping requirement's implementation, test and proof citations. The **component view** gains its section beside
+the notices generator and the build-identifier writer. No package, edge, process, channel, command or store column changed.
+
 **The scripted client calls any tool by key (fin42, N52).** The step `tool:<key>` takes `{ name, args }` from
 `ROTARIS_SCRIPT_TOOL_ARGS`, an argument `@content_hash` filled from the newest hash a tool result carried
 (`run-host/scripted-client.ts`, `withLatestHash`), which `edits-proof` drives `write_file`'s edit and insert and `haet_edit`

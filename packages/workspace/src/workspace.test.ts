@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
-import { forgetSpelling, openStore, openWorkspaceStore, readWorkspaceId, StoreDal, storeFile, takeBackup, type RunHostControl } from '@rotaris/store';
+import { forgetSpelling, openStore, openWorkspaceStore, readWorkspaceId, SIDECAR_PATTERN, StoreDal, storeFile, takeBackup, type RunHostControl } from '@rotaris/store';
 import { assessRestore, backupWorkspace, decisionAllowed, performRestore } from './index.js';
 
 const M = mintMachineId('0000000000000000000000000000000a') as MachineId;
@@ -177,5 +177,64 @@ describe('workspace — performing the restore into the artifact\'s identifier, 
     const ok = await performRestore({ ...deps(art), decisions: { identifier: 'workspace', proceedWithForeignLocks: true }, runHost: runHost(), timers: clocks.timers, wall: clocks.wall, ackBoundMs: millis(2_000) });
     expect(ok.ok).toBe(true);
     expect(sids(A)).toEqual(['S-new']);
+  });
+});
+
+describe('workspace — D8: the assessment and a refused restore leave the target directory as they found it (ADR-0058 consequence 18)', () => {
+  const listing = (id: WorkspaceId): string[] => readdirSync(join(root, id)).sort();
+  const sidecars = (names: string[]): string[] => names.filter((n) => SIDECAR_PATTERN.test(n));
+
+  it('assessing a cleanly closed target creates no write-ahead files beside it and changes no byte of it', () => {
+    writeId(A);
+    seed(root, A, ['S-old']);
+    const before = listing(A);
+    expect(sidecars(before)).toEqual([]);
+    const bytes = readFileSync(storeFile(root, A));
+    const a = assessRestore(deps(artifactOf(A, ['S-new'])));
+    expect(a.target.sessions).toBe(1);
+    // The read-only open this replaced left `workspace.db-shm` and `workspace.db-wal` here (D8).
+    expect(listing(A)).toEqual(before);
+    expect(readFileSync(storeFile(root, A)).equals(bytes)).toBe(true);
+  });
+
+  it('a restore refused before the swap — on a decision the case does not admit, or on a lock naming another machine — leaves the target listing and bytes exactly as found', async () => {
+    writeId(A);
+    seed(root, A, ['S-old'], { sid: 'S-old', pid: 1, host: OTHER });
+    const art = artifactOf(A, ['S-new']);
+    const before = listing(A);
+    const bytes = readFileSync(storeFile(root, A));
+    // Refused after the assessment and before the mechanism: the assessment's read-only open left both files (D8).
+    const bad = await performRestore({ ...deps(art), decisions: { identifier: 'establish', proceedWithForeignLocks: false }, runHost: runHost(), timers: clocks.timers, wall: clocks.wall });
+    expect(bad.steps).toEqual(['assess-refused']);
+    expect(listing(A)).toEqual(before);
+    // Refused at the mechanism's step 2: its own gate is a read-write connection whose close is the last one.
+    const r = await performRestore({ ...deps(art), decisions: { identifier: 'workspace', proceedWithForeignLocks: false }, runHost: runHost(), timers: clocks.timers, wall: clocks.wall });
+    expect(r.refusal?.why).toBe('foreign-locks');
+    expect(listing(A)).toEqual(before);
+    expect(readFileSync(storeFile(root, A)).equals(bytes)).toBe(true);
+  });
+
+  it('a target that already holds both write-ahead files (a writer holds them, or died holding them) keeps them and its bytes', () => {
+    writeId(A);
+    seed(root, A, ['S-old']);
+    // A writer holding the store open with a committed row still in its log: copy the directory as it stands.
+    const live = openStore(storeFile(root, A));
+    live.pragma('wal_autocheckpoint = 0');
+    new StoreDal(live).upsertSession({ session_id: 'S-logged', execution_status: 'completed', workspace_root: ws, created_at: 't', updated_at: 't' });
+    const held = mkdtempSync(join(tmpdir(), 'rotaris-held-'));
+    for (const n of readdirSync(join(root, A))) if (n !== 'sessions') copyFileSync(join(root, A, n), join(held, n));
+    live.close();
+    forgetSpelling(join(root, A));
+    rmSync(join(root, A), { recursive: true, force: true });
+    renameSync(held, join(root, A));
+    const before = listing(A);
+    expect(sidecars(before)).toEqual(['workspace.db-shm', 'workspace.db-wal']);
+    const bytes = readFileSync(storeFile(root, A));
+    const wal = readFileSync(`${storeFile(root, A)}-wal`);
+    const a = assessRestore(deps(artifactOf(A, ['S-new'])));
+    expect(a.target.sessions).toBe(2); // the logged row is read
+    expect(listing(A)).toEqual(before);
+    expect(readFileSync(storeFile(root, A)).equals(bytes)).toBe(true);
+    expect(readFileSync(`${storeFile(root, A)}-wal`).equals(wal)).toBe(true);
   });
 });

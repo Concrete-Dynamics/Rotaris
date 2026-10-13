@@ -45,9 +45,12 @@ import { forgetSpelling, openStore, type StoreHandle } from './open.js';
  * may be writing now.
  *
  * Open, and stated in ADR-0058 consequence 18: D5 (nothing deletes the
- * staging copy or the obstruction aside), D8 (the liveness gate's read-only
- * open creates -wal/-shm in the target), D11 (the suffix against the engine's
- * path thresholds).
+ * staging copy or the obstruction aside), D11 (the suffix against the engine's
+ * path thresholds). D8 is repaired (2026-10-13): the -wal/-shm left in the
+ * target came from the ASSESSMENT's read-only open, never from this gate —
+ * `svc` below is a read-write connection whose close, the last one, removes
+ * the two files its open created; the assessment now opens through
+ * `openStoreForInspection` (open.ts).
  *
  * IC-5: `store.test.ts` aims a test at the layout conversion against an artifact
  * whose container layout differs from the store layout, with `skipArrange` as

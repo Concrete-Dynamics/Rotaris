@@ -30,3 +30,17 @@ in the target, which consequence 18 states as D8.
 - `packages/store/src/restore.ts` — `restoreStore`'s gate connection (read-write) and the header comment naming D8 open.
 - `packages/store/src/layout.ts` — `SIDECAR_PATTERN`, the two file names.
 - `docs/architecture/adr/0058-the-workspace-database.md` — consequence 18 (D8), and consequence 17's harness note.
+
+## Outcome — repaired 2026-10-13 (fin41, `fin41-restore-and-session`)
+
+The assessment opens the target through `openStoreForInspection` (`packages/store/src/open.ts`), which chooses by what the
+directory holds: neither write-ahead file there means no connection is open, so it opens read-write and its own close,
+the last one, removes the two files its open created; both there means a connection holds them (or died holding them),
+so it opens read-only, which reads the logged rows and creates nothing; `-wal` alone opens read-write. `restoreStore`'s
+gate is unchanged, being read-write already. The engine's `immutable` flag was not available (the binding is compiled
+with `SQLITE_USE_URI=0`) and would have read past a raced run's logged lock row; a copy is O(store) and not one moment.
+
+Pinned by `packages/workspace/src/workspace.test.ts`'s D8 block (the target's listing and bytes before and after an
+assessment, a refusal before the mechanism and one at its step 2, and a target holding both files; the first two red on
+the read-only open) and `packages/store/src/store.test.ts`'s two D8 cases, with the read-only open as the
+counterfactual. Reported back in ADR-0058 consequence 18 and in `docs/architecture/first-executions.md`.

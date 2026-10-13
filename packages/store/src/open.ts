@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { existsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { canonicalPath } from '@rotaris/platform';
 
@@ -84,6 +85,35 @@ export function openStore(file: string, opts: OpenOptions = {}): StoreHandle {
   }
   openSpellings.set(key, canonicalDir);
   return db;
+}
+
+/**
+ * ADR-0058 consequence 18, D8 — a connection that only READS a store (the restore's assessment of its target),
+ * opened so that it leaves the store's directory holding the files it found.
+ *
+ * The store is write-ahead logged, so ANY connection that reads it creates `-wal` and `-shm` beside it where they
+ * are absent, and only the LAST connection's close removes them — by checkpointing, which a read-only connection
+ * cannot do. The read-only open the assessment used therefore left both files in a target that had been closed
+ * cleanly (measured 2026-09-02, and again 2026-10-13: `-shm` 32,768 B, `-wal` 0 B), so a restore refused or declined
+ * after its assessment left the target different from how it found it. The rule, by what the directory holds:
+ *  - neither file: no connection is open (an open one holds both), so open read-write by the ordinary sequence
+ *    above; this connection's close is then the last one, and it removes the two files its open created.
+ *  - both files: a connection holds them, or a process died holding them. Open read-only, which reads them, creates
+ *    nothing and leaves them to their owner — recovering a dead writer's log is the next ordinary open's business.
+ *  - `-wal` alone (a dead writer's log whose index is gone): read-write too, since a read-only open would create
+ *    `-shm` and leave it; the close recovers the log into the store and removes it. The one case in which the
+ *    listing changes, and the contents read the same either way.
+ * A read-write open that fails other than on the spelling rule (a directory this user may not write) falls back to
+ * the read-only open, so an inspection is never refused where it used to succeed.
+ */
+export function openStoreForInspection(file: string): StoreHandle {
+  if (existsSync(`${file}-wal`) && existsSync(`${file}-shm`)) return openStore(file, { readonly: true, mustExist: true });
+  try {
+    return openStore(file, { mustExist: true });
+  } catch (e) {
+    if (e instanceof StoreOpenError && e.code === 'spelling-mismatch') throw e;
+    return openStore(file, { readonly: true, mustExist: true });
+  }
 }
 
 /** For tests and for the restore's own bookkeeping: forget a spelling once the directory is gone. */

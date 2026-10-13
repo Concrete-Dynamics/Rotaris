@@ -4,7 +4,7 @@ import { parseWorkspaceId, type MachineId, type Millis, type Timers, type WallCl
 import { exclusiveCreate, isLockForeign, isLockLive, probePid, replaceDocument, type Liveness } from '@rotaris/platform';
 import type { RestoreAssessment, RestoreDecisions, RestoreReportPayload } from '@rotaris/contracts';
 import {
-  CONTAINER_MANIFEST, CONTAINER_STORE_FILE, CURRENT_SCHEMA_VERSION, expandArtifact, forgetSpelling, openStore, readWorkspaceId, restoreStore,
+  CONTAINER_MANIFEST, CONTAINER_STORE_FILE, CURRENT_SCHEMA_VERSION, expandArtifact, forgetSpelling, openStore, openStoreForInspection, readWorkspaceId, restoreStore,
   StoreDal, storeFile, WORKSPACE_ID_HEADER, workspaceIdFile, type BackupManifest, type RunHostControl,
 } from '@rotaris/store';
 
@@ -103,7 +103,9 @@ export function assessRestore(d: AssessDeps): RestoreAssessment {
   const targetFile = storeFile(d.workspacesRoot, targetId);
   let target: RestoreAssessment['target'] = noTarget;
   if (existsSync(targetFile)) {
-    const db = openStore(targetFile, { readonly: true, mustExist: true });
+    // D8 (ADR-0058 consequence 18): an inspection that leaves the target's directory holding the files it found —
+    // the read-only open this replaced left `-wal` and `-shm` in a target that had been closed cleanly.
+    const db = openStoreForInspection(targetFile);
     try {
       const dal = new StoreDal(db);
       const locks = dal.listLocks();

@@ -32,6 +32,12 @@ names it. The **process view**'s main row says so. No package, edge, process, ch
 `answerless` and `answer-when-asked` launches take to meet the answer re-prompt in the built app. The **runtime view**'s
 re-prompt paragraph says so. No package, edge, process, channel, command or store column changed.
 
+**The restore's assessment leaves the target's directory holding the files it found (ADR-0058 consequence 18, D8; REQ-SESSION-201;
+fin41).** `assessRestore` opens the target through `openStoreForInspection` (`store/src/open.ts`): read-write where no `-wal`/`-shm`
+is there, so its own close removes the two its open created, read-only where both are. The **process view**'s files-on-disk table
+gains a row for the restore's names beside the live store (`.restoring-`, `.displaced-`, `.obstruction-`, `.assess-`). No package,
+edge, process, channel, command or store column changed.
+
 **A run's proposed technical requirement is accepted from the review (REQ-TRACE-427..433; fin41).** `accept-proposal` is a
 record admitted in `review` (`decide`, `workspace/src/delivery/transition.ts`), its write made in the delivery service's
 `beforeCommit` (`acceptProposal`, `workspace-service/delivery.ts`) through `requirements.source.write`'s units.

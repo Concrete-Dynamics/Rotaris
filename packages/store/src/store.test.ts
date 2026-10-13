@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
-import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, openStore, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
+import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, openStore, openStoreForInspection, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
 /** PD-TOOLS-006 revision 6 (OQ-220): what v34 added, undone before v33's so a test that lowers `user_version` below 34 can climb it again. */
 const UNDO_V34 = 'ALTER TABLE children DROP COLUMN todo_item;';
@@ -317,6 +317,36 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
     const displaced = readdirSync(root).filter((n) => n.includes('.displaced-'));
     expect(displaced).toHaveLength(2);
     for (const d of displaced) expect(existsSync(join(root, d, 'workspace.db'))).toBe(true);
+  });
+
+  it('D8 (ADR-0058 consequence 18): an inspection of a cleanly closed store leaves its directory holding what it found; the read-only open (counterfactual, D8 as it was) leaves -wal and -shm', () => {
+    seed(root, id, [{ sid: 'S-1', rows: 1 }]);
+    const dir = storeDir(root, id);
+    const before = readdirSync(dir).sort();
+    expect(before.filter((n) => SIDECAR_PATTERN.test(n))).toEqual([]);
+    const insp = openStoreForInspection(storeFile(root, id));
+    expect(new StoreDal(insp).listSessions().map((s) => s.session_id)).toEqual(['S-1']);
+    insp.close();
+    forgetSpelling(dir);
+    expect(readdirSync(dir).sort()).toEqual(before);
+    const ro = openStore(storeFile(root, id), { readonly: true, mustExist: true });
+    expect(new StoreDal(ro).listSessions()).toHaveLength(1);
+    ro.close();
+    expect(readdirSync(dir).filter((n) => SIDECAR_PATTERN.test(n)).sort()).toEqual(['workspace.db-shm', 'workspace.db-wal']);
+  });
+  it('D8: an inspection while another connection holds the store reads its logged rows and leaves its two files to it', () => {
+    seed(root, id, [{ sid: 'S-1', rows: 1 }]);
+    const holder = openStore(storeFile(root, id), { mustExist: true });
+    holder.pragma('wal_autocheckpoint = 0');
+    new StoreDal(holder).upsertSession({ session_id: 'S-held', execution_status: 'running', workspace_root: 'C:\\ws', created_at: 't', updated_at: 't' });
+    const insp = openStoreForInspection(storeFile(root, id));
+    expect(insp.readonly).toBe(true);
+    expect(new StoreDal(insp).listSessions().map((s) => s.session_id).sort()).toEqual(['S-1', 'S-held']);
+    insp.close();
+    expect(readdirSync(storeDir(root, id)).filter((n) => SIDECAR_PATTERN.test(n)).sort()).toEqual(['workspace.db-shm', 'workspace.db-wal']);
+    holder.close();
+    forgetSpelling(storeDir(root, id));
+    expect(readdirSync(storeDir(root, id)).filter((n) => SIDECAR_PATTERN.test(n))).toEqual([]);
   });
 });
 

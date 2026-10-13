@@ -1833,7 +1833,8 @@ maintained, and is not consulted — so there is nothing for the store to disagr
     that would not cause a conformant implementation to be built wrong does not block building against that
     record. The standard is only worth anything if the statement exists, and until this consequence was
     written this ADR was the one carrying open defects and not naming them. **Three are open. None is in the
-    build-wrong class. A builder is expected to meet all three.**
+    build-wrong class. A builder is expected to meet all three.** *Since 2026-10-13 two are: D8 is repaired, and
+    its bullet says how.*
 
     - **D5 — nothing deletes a leftover staging copy or an obstruction aside, and nothing knows they
       exist.** The full table is in consequence 5 above. Each is the size of a store. What is owed is
@@ -1845,6 +1846,29 @@ maintained, and is not consulted — so there is nothing for the store to disagr
       literal sentence does not — **a refused restore leaves the target directory different from how it
       found it**. It is stated here rather than repaired because this record is cited for exactly this kind
       of guarantee, and it met the defect a second time inside the IC-1 harness, uninvited.
+
+      ***Repaired 2026-10-13 (fin41); the bullet above is kept as what was measured.*** Built, the defect sat in
+      one of the two gate connections and not the other. **The read-only open was the assessment's**
+      (`assessRestore`, `packages/workspace/src/restore.ts`), the read the product makes before the
+      confirmations; the mechanism's own gate (steps 2 and 4 in `restoreStore`) is a **read-write** open, and a
+      read-write connection whose close is the last one checkpoints and removes the two files its open created —
+      so the mechanism's refusals already left the target as they found it (`workspace.test.ts` compares the
+      listing across a step-2 refusal; `store.test.ts`'s `treeHash` skips the two files and so never could), and
+      what reached the user was the assessment's: **a restore declined or refused
+      after its assessment left `workspace.db-shm` and `workspace.db-wal` in a target closed cleanly**, re-measured
+      on this host (`better-sqlite3` 13.0.3, Node 24) exactly as above. *"The liveness gate's read-only open" is
+      corrected to "the assessment's read-only open".* The repair is an open chosen by what the directory holds
+      (`openStoreForInspection`, `packages/store/src/open.ts`): with neither file there no connection is open, so
+      the assessment opens read-write and its own close removes both; with both there a connection holds them (or
+      died holding them), so it opens read-only, which reads the logged rows and creates nothing; `-wal` alone opens
+      read-write, the one case in which the listing changes. Neither the engine's `immutable` flag nor a copy was
+      taken: the binding is compiled with `SQLITE_USE_URI=0` (`deps/defines.gypi`; a `file:…?immutable=1` name was
+      refused, `SQLITE_CANTOPEN`, measured), and the engine documents an immutable open as one that turns off
+      locking and change detection on a file it assumes nobody changes — the opposite of a gate whose purpose is a
+      run that may be writing its lock row now; a copy is O(store) and is not one moment. Pinned by `workspace.test.ts`'s D8 block (the listing and the bytes of the target before and after
+      an assessment, a refusal before the mechanism and one at step 2, and a target holding both files; the first
+      two red on the read-only open) and `store.test.ts`'s two D8 cases (the read-only open as the counterfactual).
+      Note: [`../../defects/fixed/a-refused-restore-leaves-write-ahead-files-in-the-target-store-directory.md`](../../defects/fixed/a-refused-restore-leaves-write-ahead-files-in-the-target-store-directory.md).
     - **D11 — the `.displaced-` suffix can make the kept store unreadable, and the kept store is the whole
       point.** The suffix costs +35 characters. The store binding throws `unable to open database file` on
       any statement at an absolute database path of 252–259 characters and on open at ≥ 260, **while Node's

@@ -627,7 +627,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       // revision 7 (OQ-249) an admitted delegation marks its item IN_PROGRESS, and REQ-TOOLS-146 restores an IN_PROGRESS task
       // over a `replace`, so `done` sends one `update` per open item, as a model must. It was one `replace` writing every
       // item COMPLETED until then.
-      // `donereplace` — PD-TOOLS-008 revision 3 (OQ-254): that one `replace` again, the latest list re-sent whole by its ids with
+      // `donereplace` — PD-TOOLS-008 revision 3 (OQ-255): that one `replace` again, the latest list re-sent whole by its ids with
       // every task COMPLETED, the close a model usually writes; once the delegations' children have ended it closes their items.
       // A proof scripts it after a wait long enough for them to end (`wait:<ms>,donereplace`).
       const planSteps = /^plan:(\d+)$/.exec(step);

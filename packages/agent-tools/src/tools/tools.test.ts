@@ -1164,7 +1164,7 @@ describe('todo (REQ-TOOLS-144..147)', () => {
   });
 
   /**
-   * PD-TOOLS-008 revision 3 (OQ-254, ruled 2026-10-13 under R-072): a `replace` closes a delegated item once its child has
+   * PD-TOOLS-008 revision 3 (OQ-255, ruled 2026-10-13 under R-072): a `replace` closes a delegated item once its child has
    * ended, and names every task it restores over a different incoming state. Until then REQ-TOOLS-146 restored the delegated
    * item `PD-TOOLS-006` revision 7 had marked, over a closing `replace` that still answered only "Replaced the todo list…"
    * (docs/defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).

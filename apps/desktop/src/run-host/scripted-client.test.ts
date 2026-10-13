@@ -196,7 +196,7 @@ describe('scriptedClient — the step a call takes', () => {
   });
 
   /*
-   * PD-TOOLS-008 revision 3 (OQ-254): `donereplace` closes the plan the way a model usually does, one `replace` re-sending the
+   * PD-TOOLS-008 revision 3 (OQ-255): `donereplace` closes the plan the way a model usually does, one `replace` re-sending the
    * latest list whole by its ids with every task COMPLETED — the case revision 7's first execution had moved `done` off.
    */
   it('`donereplace` re-sends the latest list by its ids with every task COMPLETED, in one replace', async () => {

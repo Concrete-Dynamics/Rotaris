@@ -2582,7 +2582,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(observed[3]).not.toContain('serves todo item');
       // before any child, nothing is held; while the three run, all three items; once they ended, none
       expect(heldAt).toEqual([[], ['0000000a', '0000000b', '0000000c'], []]);
-      // PD-TOOLS-008 revision 3 (OQ-254): the served set keeps the ended children's items, so the closing `todo` call (turn 5)
+      // PD-TOOLS-008 revision 3 (OQ-255): the served set keeps the ended children's items, so the closing `todo` call (turn 5)
       // reads all three served and none held — the items a `replace` may close; the rejected `rival` serves nothing
       expect(servedAt).toEqual([[], ['0000000a', '0000000b', '0000000c'], ['0000000a', '0000000b', '0000000c']]);
     });

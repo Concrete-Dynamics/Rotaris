@@ -1409,7 +1409,7 @@ child the caller owns, of any persona. REQ-TOOLS-145's bound and REQ-TOOLS-146's
 set, and are checked only on a write that marks a task IN_PROGRESS; an item whose child has ended counts again at the next such
 write. `PD-TOOLS-008`'s sentence gains a hint for an agent whose resolved set holds `delegate`.
 
-**A `replace` closes a delegated item once its child has ended (`PD-TOOLS-008` revision 3; OQ-254 ruled 2026-10-13 under R-072;
+**A `replace` closes a delegated item once its child has ended (`PD-TOOLS-008` revision 3; OQ-255 ruled 2026-10-13 under R-072;
 fin37).** Beside the held set the `todo` tool reads `ctx.servedTodoItems` at each call (`TodoToolOptions.served`), which both
 `toolsFor` closures fill from `Run.servedTodoItems` → `IterationChildren.servedTodoItems`: the `todo_item` of every child the
 caller owns, terminal ones included. In `replace`, a protected IN_PROGRESS task that is served and not held takes the COMPLETED

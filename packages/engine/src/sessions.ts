@@ -139,7 +139,7 @@ export interface ToolPortContext {
    */
   readonly heldTodoItems?: (() => ReadonlySet<string>) | undefined;
   /**
-   * PD-TOOLS-008 revision 3 (OQ-254): the items of this agent's own plan any of its children records as its `todo_item`, terminal
+   * PD-TOOLS-008 revision 3 (OQ-255): the items of this agent's own plan any of its children records as its `todo_item`, terminal
    * children included; an item served and not held is one whose delegation has ended, which a `replace` may close.
    */
   readonly servedTodoItems?: (() => ReadonlySet<string>) | undefined;

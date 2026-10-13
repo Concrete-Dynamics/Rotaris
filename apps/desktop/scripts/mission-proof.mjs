@@ -302,7 +302,7 @@ const s1d = scenario('timed-out', ['  child_timeout: 3']);
 // and is refused, naming alpha; `gamma` names no item although the coordinator keeps a list, and is refused with the open
 // items listed; `delta` names the next open item and runs. Each child's record holds the item it served; no refusal spawns a
 // child; each is logged as a warning citing its requirement. Before the ruling a delegation named no item, and nothing refused
-// a second implementation delegation for one. Since PD-TOOLS-008 revision 3 (OQ-254) the coordinator waits for both children to
+// a second implementation delegation for one. Since PD-TOOLS-008 revision 3 (OQ-255) the coordinator waits for both children to
 // end and closes its plan as a model usually does, with one `replace` sending every item COMPLETED (`donereplace`): the items the
 // run marked close, the `replace` names nothing it kept, and the run completes with no PD-ORCH-015 correction. Until then such a
 // `replace` left both items IN_PROGRESS, and `done` closed them with one `update` each instead.
@@ -334,7 +334,7 @@ const s1e = scenario('todo-item');
   expect(new RegExp(`^Task 'beta': rejected — todo_item '${items[0]}' \\('Scripted item 1'\\) is held by alpha \\(coding-agent, task_id bg_[0-9a-f]{8}, state \\w+\\)`).test(beta.result), `beta's refusal: ${beta.result}`);
   expect(gamma.result.startsWith("Task 'gamma': rejected — This delegation names no todo item") && gamma.result.includes(`Scripted item 1 (${items[0]}), Scripted item 2 (${items[1]})`), `gamma's refusal: ${gamma.result}`);
   // PD-TOOLS-006 revision 7 and PD-TOOLS-008 revision 2 (OQ-249): each admitted delegation marked its PENDING item IN_PROGRESS,
-  // alpha's and delta's side by side while both ran. PD-TOOLS-008 revision 3 (OQ-254): once both children had ended, one
+  // alpha's and delta's side by side while both ran. PD-TOOLS-008 revision 3 (OQ-255): once both children had ended, one
   // `replace` sending every item COMPLETED closed both, named nothing kept, and the run took no plan correction.
   expect(alpha.result.includes(`Todo item Scripted item 1 (${items[0]}) is now IN_PROGRESS.`) && delta.result.includes(`Todo item Scripted item 2 (${items[1]}) is now IN_PROGRESS.`), `the marks: ${alpha.result.slice(0, 200)} / ${delta.result.slice(0, 200)}`);
   expect(/\[IN_PROGRESS\] Scripted item 1 .*\n {2}\[IN_PROGRESS\] Scripted item 2 /s.test(delta.result), `delta's Todo state shows both items active: ${delta.result}`);

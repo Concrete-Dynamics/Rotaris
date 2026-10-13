@@ -979,7 +979,7 @@ describe('PD-TOOLS-006 revision 7: an admitted delegation marks its PENDING item
   });
 
   /**
-   * PD-TOOLS-008 revision 3 (OQ-254, ruled 2026-10-13 under R-072): once both parallel children have ended, the coordinator's
+   * PD-TOOLS-008 revision 3 (OQ-255, ruled 2026-10-13 under R-072): once both parallel children have ended, the coordinator's
    * usual close — one `replace` sending every item COMPLETED — stores the plan closed. Until then the two items the run had
    * marked stayed IN_PROGRESS under REQ-TOOLS-146 and the `replace` answered success
    * (docs/defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).

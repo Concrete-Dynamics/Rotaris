@@ -174,7 +174,7 @@ export function todoStates(text) {
  * - `heldPending` — each reading of a held item as PENDING (the default live run's `#14` at a68f121; target 0);
  * - `closedWhileHeld` — each reading of an item COMPLETED while an implementation child (`WRITER_ROLES`) still held it (target 0);
  * - `singleActive` — each root `todo` call refused under REQ-TOOLS-145 or PD-TOOLS-008 (a NOTE; target 0);
- * - `restoredOverClose` — PD-TOOLS-008 revision 3 (OQ-254): each item a root `replace` sent COMPLETED or ABANDONED that its
+ * - `restoredOverClose` — PD-TOOLS-008 revision 3 (OQ-255): each item a root `replace` sent COMPLETED or ABANDONED that its
  *   result still reads IN_PROGRESS although a root child had served it and none still held it (the close revision 3 makes
  *   possible; target 0). The calls carry `args`, the arguments the record stores;
  * - `namedRestores` — each accepted root `replace` whose observation names a task it kept over a different state (a NOTE).

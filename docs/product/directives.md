@@ -2940,7 +2940,7 @@ from OQ-249 (the consortium's question P3), revision 8 from OQ-250 (the consorti
 > - **`replace` cannot complete an active item.** REQ-TOOLS-146 restores an IN_PROGRESS task over a `replace`, so an item the
 >   run marked is closed with `update`. The scripted coordinator's `done` step (`apps/desktop/src/run-host/scripted-client.ts`)
 >   wrote one `replace` with every item COMPLETED; it now sends one `update` per open item, as a model must.
->   *Falsified as a rule for a served-and-ended item, 2026-10-13, by [OQ-254](../architecture/open-questions.md#oq-254)'s ruling
+>   *Falsified as a rule for a served-and-ended item, 2026-10-13, by [OQ-255](../architecture/open-questions.md#oq-255)'s ruling
 >   (`PD-TOOLS-008` revision 3, under [R-072](requests.md#r-072)):* the reason held of the code as built, but no live model is
 >   told it, and the restore it describes is the defect
 >   [`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
@@ -4101,7 +4101,7 @@ wrong, rather than telling it so first. The result says what was read, so the mo
 
 *Revision 3 (2026-10-13, [R-072](requests.md#r-072)) — **a `replace` closes a delegated item once its child has ended, and
 names every task it restores**, a section added after revision 2's; the ruling of
-[OQ-254](../architecture/open-questions.md#oq-254) under the owner's delegation. It replaces revision 2's "REQ-TOOLS-146's
+[OQ-255](../architecture/open-questions.md#oq-255) under the owner's delegation. It replaces revision 2's "REQ-TOOLS-146's
 protection is otherwise unchanged", quoted below; the Narrows line is unchanged.*
 
 *Revision 2 (2026-10-07, [R-072](requests.md#r-072)) — **a task a running delegation holds is outside the single-active
@@ -4192,7 +4192,7 @@ REQ-ORCH-075's re-queue of a met request. What it costs:
 
 *Raised by the owner, 2026-10-06, ruling OQ-163 as recommended; logged as [R-071](requests.md#r-071). Revision 2 ruled under the
 owner's delegation, [R-072](requests.md#r-072), from OQ-249 (the consortium's question P3, the final live runs' findings P3 and
-D7). Revision 3 ruled under the same delegation from [OQ-254](../architecture/open-questions.md#oq-254) (the consortium's
+D7). Revision 3 ruled under the same delegation from [OQ-255](../architecture/open-questions.md#oq-255) (the consortium's
 question RC1, from revision 7's first execution).*
 
 > **First execution, 2026-10-06, built under [R-071](requests.md#r-071) (fin21):** the rule held as written. The case it
@@ -4247,7 +4247,7 @@ question RC1, from revision 7's first execution).*
 > `heldItemReading` (`apps/desktop/scripts/lib/coordinator-todo.mjs`) counts items read PENDING while held and single-active
 > refusals (target 0). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
-> **First execution of revision 3, 2026-10-13, ruled under [R-072](requests.md#r-072) ([OQ-254](../architecture/open-questions.md#oq-254)),
+> **First execution of revision 3, 2026-10-13, ruled under [R-072](requests.md#r-072) ([OQ-255](../architecture/open-questions.md#oq-255)),
 > built by fin37 (`fin37-replace-closes-delegated`):** built as written, and the text met the code in three places.
 >
 > - **The served set is a second read through the run, beside the held one.** `todoTool` takes `TodoToolOptions.served`

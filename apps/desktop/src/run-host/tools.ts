@@ -314,7 +314,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   /*
    * PD-TOOLS-008 revision 2 (OQ-249): the items this agent's non-terminal children hold are outside REQ-TOOLS-145's count, read
    * through the run at each call; the hint to leave delegated items PENDING is given to an agent whose resolved set holds
-   * `delegate`, known once the one resolution below has run (`callable`). Since revision 3 (OQ-254) the items any child of this
+   * `delegate`, known once the one resolution below has run (`callable`). Since revision 3 (OQ-255) the items any child of this
    * agent serves, ended ones included, are read the same way: a served item no running child holds is closed by a `replace`.
    */
   let holdsDelegate = false;

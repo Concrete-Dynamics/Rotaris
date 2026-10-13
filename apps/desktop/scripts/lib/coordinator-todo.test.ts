@@ -170,7 +170,7 @@ describe('heldItemReading (PD-TOOLS-008 revision 2, OQ-249)', () => {
   });
 
   /*
-   * PD-TOOLS-008 revision 3 (OQ-254): a whole-list COMPLETED `replace` after the children ended. Before the revision its result
+   * PD-TOOLS-008 revision 3 (OQ-255): a whole-list COMPLETED `replace` after the children ended. Before the revision its result
    * still read both delegated items IN_PROGRESS; since, they close, and a kept task is named in the observation.
    */
   it('revision 3: a closing replace whose ended children\'s items still read IN_PROGRESS is reported; a named restore is a NOTE', () => {

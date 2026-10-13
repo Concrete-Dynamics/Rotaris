@@ -1012,10 +1012,10 @@ function checkCoordinatorTodo() {
   check(held.heldPending.length === 0, 'no coordinator\'s plan recorded a running child\'s todo item PENDING (PD-TOOLS-008 revision 2, PD-TOOLS-006 revision 7, OQ-249)', held.heldPending.length === 0 ? `${held.coordinating.length} coordinating session(s): ${held.coordinating.join(', ') || 'none'}` : held.heldPending.map(heldAt).join(', '));
   check(held.closedWhileHeld.length === 0, 'no coordinator marked a todo item COMPLETED while an implementation child still held it (REQ-ORCH-029, OQ-249)', held.closedWhileHeld.length === 0 ? `${held.coordinating.length} coordinating session(s)` : held.closedWhileHeld.map(heldAt).join(', '));
   if (held.singleActive.length > 0) noted('todo calls refused under REQ-TOOLS-145 or PD-TOOLS-008 in coordinating sessions (OQ-249; target 0)', held.singleActive.map((h) => `${h.scenario} #${h.ordinal}`).join(', '));
-  // PD-TOOLS-008 revision 3 (OQ-254): a `replace` closing an item whose children have all ended closes it; a task a `replace` kept
+  // PD-TOOLS-008 revision 3 (OQ-255): a `replace` closing an item whose children have all ended closes it; a task a `replace` kept
   // over a different state is named in its observation, a NOTE (the next call should be an `update` for it).
-  check(held.restoredOverClose.length === 0, 'no closing todo replace left an item IN_PROGRESS once every child serving it had ended (PD-TOOLS-008 revision 3, OQ-254)', held.restoredOverClose.length === 0 ? `${held.coordinating.length} coordinating session(s)` : held.restoredOverClose.map((h) => `${h.scenario} #${h.ordinal} on ${h.item}`).join(', '));
-  if (held.namedRestores.length > 0) noted('todo replaces that named a task kept over a different state (PD-TOOLS-008 revision 3, OQ-254)', held.namedRestores.map((h) => `${h.scenario} #${h.ordinal}`).join(', '));
+  check(held.restoredOverClose.length === 0, 'no closing todo replace left an item IN_PROGRESS once every child serving it had ended (PD-TOOLS-008 revision 3, OQ-255)', held.restoredOverClose.length === 0 ? `${held.coordinating.length} coordinating session(s)` : held.restoredOverClose.map((h) => `${h.scenario} #${h.ordinal} on ${h.item}`).join(', '));
+  if (held.namedRestores.length > 0) noted('todo replaces that named a task kept over a different state (PD-TOOLS-008 revision 3, OQ-255)', held.namedRestores.map((h) => `${h.scenario} #${h.ordinal}`).join(', '));
 }
 
 /**

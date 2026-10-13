@@ -616,7 +616,7 @@ export class IterationChildren implements DelegationOps {
   }
 
   /**
-   * PD-TOOLS-008 revision 3 (OQ-254, ruled 2026-10-13 under R-072): the items of `callerId`'s own plan any of its children
+   * PD-TOOLS-008 revision 3 (OQ-255, ruled 2026-10-13 under R-072): the items of `callerId`'s own plan any of its children
    * records as its `todo_item`, terminal children included — the same children `heldTodoItems` reads, without its non-terminal
    * filter. A served item outside the held set is one whose delegation has ended, and a `replace` closes it.
    */

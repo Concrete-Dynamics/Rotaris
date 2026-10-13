@@ -82,7 +82,7 @@ export const DELEGATE_HINT = 'Leave the items you will delegate PENDING: a deleg
 export interface TodoToolOptions {
   readonly held?: (() => ReadonlySet<string>) | undefined;
   /**
-   * PD-TOOLS-008 revision 3 (OQ-254, ruled 2026-10-13 under R-072): the task ids any child of the list's owner records as its
+   * PD-TOOLS-008 revision 3 (OQ-255, ruled 2026-10-13 under R-072): the task ids any child of the list's owner records as its
    * `todo_item`, terminal children included, read at each call. A served IN_PROGRESS task outside `held` is one whose delegation
    * has ended, and a `replace` closes it. Absent, nothing is served and `replace` restores every IN_PROGRESS task as before.
    */
@@ -168,7 +168,7 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
     // else, and a run read `add_phase` as the way to send a whole plan's phases — the shape only `replace` takes.
     description: [
       'Maintain the task list. One operation per call, and each reads its own fields:',
-      // PD-TOOLS-008 revision 3 (OQ-254): it said, until 2026-10-13, "COMPLETED, ABANDONED and IN_PROGRESS tasks are kept by id
+      // PD-TOOLS-008 revision 3 (OQ-255): it said, until 2026-10-13, "COMPLETED, ABANDONED and IN_PROGRESS tasks are kept by id
       // whatever the incoming list says." — true of the code until then, and the reason a coordinator that closed its delegated
       // plan with one replace left the items the run had marked IN_PROGRESS open, with no word of it.
       'replace {phases: [{name, tasks: [{name, description, state}]}]} — the WHOLE list at once, and the only operation that takes a batch; COMPLETED and ABANDONED tasks, your own IN_PROGRESS task and a task a running delegated agent holds are kept by id whatever the incoming list says, and the result names each one kept over a different state; a delegated task whose agent has ended takes the COMPLETED or ABANDONED the list sends.',
@@ -191,7 +191,7 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
           const served = servedNow();
           const protectedTasks = list.phases.flatMap((p) => p.tasks.filter((t) => PROTECTED.has(t.state)).map((t) => ({ phaseIndex: list.phases.indexOf(p), taskIndex: p.tasks.indexOf(t), task: { ...t } })));
           /*
-           * PD-TOOLS-008 revision 3 (OQ-254): a served IN_PROGRESS task no running child holds — its delegation has ended — takes
+           * PD-TOOLS-008 revision 3 (OQ-255): a served IN_PROGRESS task no running child holds — its delegation has ended — takes
            * the COMPLETED or ABANDONED the list sends for its id, and is then no active task against a mark in the same list.
            * Every other protected task is restored as REQ-TOOLS-146 states. Until 2026-10-13 every IN_PROGRESS task was restored,
            * so a delegated item `PD-TOOLS-006` revision 7 had marked could not be closed by a replace

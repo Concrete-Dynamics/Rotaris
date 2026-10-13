@@ -12945,9 +12945,9 @@ and pinned as built by "PD-TOOLS-016 … level 1, replace_all and haet_edit are 
 REQ-TOOLS-136 and REQ-TOOLS-189 for both tools, `PD-TOOLS-016`'s rule extended to level 1 and `replace_all`), or stands as built
 (the caller's bytes written exactly, `PD-TOOLS-016`'s cost "an exact level-1 `old_string` still does either" kept).
 
-<a id="oq-254"></a>
+<a id="oq-255"></a>
 
-**OQ-254 — May a `replace` close a delegated item once its child has ended, and does its success say what it kept?**
+**OQ-255 — May a `replace` close a delegated item once its child has ended, and does its success say what it kept?**
 *(REQ-TOOLS-146, `replace`'s protection of finished and active work, "a replace can neither silently retire the task the agent is
 working on nor introduce a second IN_PROGRESS task"; REQ-TOOLS-145 as `PD-TOOLS-008` revision 2 bounds it, "REQ-TOOLS-146's
 protection is otherwise unchanged"; `PD-TOOLS-006` revision 7, an admitted delegation marks its PENDING item IN_PROGRESS;
@@ -12955,7 +12955,8 @@ REQ-TOOLS-147; REQ-ORCH-029, REQ-ORCH-075 and PD-ORCH-015, the correction and re
 Raised 2026-10-13 from revision 7's first execution in [`directives.md`](../product/directives.md#pd-tools-006) ("`replace`
 cannot complete an active item") and the `todo` tool's `replace` branch (`packages/agent-tools/src/tools/todo.ts`), recorded in
 [`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md);
-the consortium's question RC1. **Ruled 2026-10-13.**)*
+the consortium's question RC1. Raised as OQ-254 and renumbered OQ-255 before the landing, since origin/main took OQ-254 for the
+level-1 CRLF edit meanwhile. **Ruled 2026-10-13.**)*
 
 Since revision 7 the run sets a delegated item IN_PROGRESS at admission (`markDelegatedItem`,
 `apps/desktop/src/run-host/tools.ts`) without the coordinator writing it. Once the child has ended, the item is held by no one,

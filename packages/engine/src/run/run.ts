@@ -819,7 +819,7 @@ export class Run {
     return this.children?.heldTodoItems(callerId) ?? NO_HELD_ITEMS;
   }
   /**
-   * PD-TOOLS-008 revision 3 (OQ-254): the items of `callerId`'s plan any of its children serves, terminal ones included; read
+   * PD-TOOLS-008 revision 3 (OQ-255): the items of `callerId`'s plan any of its children serves, terminal ones included; read
    * through the iteration's children at every `todo` call.
    */
   servedTodoItems(callerId: string): ReadonlySet<string> {

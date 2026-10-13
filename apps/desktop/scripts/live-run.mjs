@@ -93,6 +93,11 @@
  *   8d. plan-gate — `run_start_mode: plan`, three launches: the prompt held at the gate with a real plan drawn as Markdown,
  *                 nothing written and no loop supervision while held (PD-ORCH-001/002); approved through the gate's button
  *                 and the work done; a second prompt in the released session not held (PD-ORCH-003).
+ *   8e. cutoff   — OPT-IN (`--only=cutoff`), a few minutes: Settings › Runtime › Per-agent timeout set to
+ *                 `LIVE_RUN_CUTOFF_MIN` (default 1) minute(s) through the control and Save, then one delegated child given
+ *                 more work than that: the cut-off child's report, the timed-out tag's line in the minutes form
+ *                 (PD-CONFIG-003 revisions 3 and 4), OQ-217's facts head and summary opening and no "The run failed" relayed
+ *                 (D9), then a follow-up run asked to take the continuation offer up (PD-ORCH-004 revisions 3 and 4).
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -166,6 +171,8 @@ import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, toolIntervals, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
 import { withRuntimeKey } from './lib/runtime-key.mjs';
 import { runApprovalsScenario, runAwayScenario, runPlanGateScenario } from './lib/approval-scenarios.mjs';
+import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-field.mjs';
+import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
 import { LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, attemptCount, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
@@ -270,7 +277,7 @@ const OPTIONAL = ['ask', 'edit', 'resume', 'requirements', 'shell', 'frictions',
  * that trebles its wall clock does not belong in it by default, and a scenario nobody can leave out is a
  * scenario people stop running. Naming it is the consent.
  */
-const OPT_IN = ['duress'];
+const OPT_IN = ['duress', 'cutoff'];
 const SCENARIOS = [...OPTIONAL, ...OPT_IN];
 const only = value('only', null);
 const wanted = only === null ? OPTIONAL : only.split(',').map((s) => s.trim()).filter((s) => s !== '');
@@ -409,7 +416,8 @@ const USAGE = `pnpm live-run — the application against a real model endpoint, 
                        an endpoint registered --unmetered carries no ceiling unless one of these two is named here
   --max-iterations=<n> the ceiling written into the workspace's runtime configuration (default 500)
   --only=<csv>         run only some of ${OPTIONAL.join(', ')} (sign-in always runs; the sandbox is fresh)
-                       and ${OPT_IN.join(', ')}, which only run when named — the long one, tens of minutes
+                       and ${OPT_IN.join(', ')}, which only run when named (duress the long one, tens of minutes;
+                       cutoff a few, LIVE_RUN_CUTOFF_MIN its Per-agent timeout in minutes, default 1)
   --duress-fixture=<dir>  the workspace duress opens (default: the same small todo-app the others use)
   --keep-runs=<n>      evidence packs to keep under .live-run/runs (default 10; the oldest are pruned)
   --session-log-level=<lvl>  the sandbox's session_log_level (default INFO; WARNING is the product's own default)
@@ -2495,6 +2503,121 @@ const approvalContext = () => ({ launch, check, noted, readSession, readSessionL
 if (wanted.includes('away')) await runAwayScenario(approvalContext());
 if (wanted.includes('approvals')) await runApprovalsScenario(approvalContext());
 if (wanted.includes('plan-gate')) await runPlanGateScenario(approvalContext());
+
+// ── 8e. A child cut off at the Per-agent timeout a person set ───────────────────────────────────────────────
+/**
+ * OPT-IN (`--only=cutoff`), a few minutes: the one path no live run had reached since the fin32 and fin33 repairs, a child cut
+ * off at its per-agent timeout (the 2026-10-13 survey's N50; the 552d346 duress pack cut no child off at 2,700 s). Three
+ * launches, the limit set the way a person sets it:
+ *
+ *   1. `cutoff-settings` — Settings › Runtime › Per-agent timeout set to `LIVE_RUN_CUTOFF_MIN` (default 1) minute(s) and
+ *      saved through the save bar (`lib/settings-runtime-field.mjs`), never written into the file by the harness;
+ *   2. `cutoff`          — one delegated child given more work than the limit allows; the Workspace sidebar's timed-out tag
+ *      read as it appears;
+ *   3. `cutoff-continue` — the session reopened from the Sessions browser and a follow-up that asks for the offer to be taken.
+ *
+ * Asserted (each from the store, the recorded traffic or the screen, never from the model's prose): the limit Settings saved
+ * is the one the run read; a child cut off at it ends `failed` with "Child timed out after <N>s", PD-ORCH-004's statement and
+ * its offer; the tag's line is PD-CONFIG-003's minutes form (revisions 3 and 4, CN1); OQ-217 as repaired for D9 — the
+ * summarising request's facts open "Outcome of this agent, not of the session: failed — Child timed out after <N>s.", the
+ * stored summary's first sentence states the limit and never opens "The run failed", and no `child_result` entry of a session
+ * that completed relays "The run failed". A child the limit never reached, or an offer the follow-up's root did not take, is a
+ * NOTE: the model's pace and its choice, not the product's. The workspace's `agents.yaml` is restored afterwards, so a scenario
+ * after this one runs under the product's 1200 s (`lib/cut-off-reading.mjs`).
+ */
+const CUTOFF_MIN = Number(process.env['LIVE_RUN_CUTOFF_MIN'] ?? 1);
+if (wanted.includes('cutoff') && !(Number.isInteger(CUTOFF_MIN) && CUTOFF_MIN >= 1 && CUTOFF_MIN <= 240)) {
+  throw new Error(`LIVE_RUN_CUTOFF_MIN must be whole minutes from 1 to 240, the Per-agent timeout control's range (PD-CONFIG-003); got ${JSON.stringify(process.env['LIVE_RUN_CUTOFF_MIN'])}`);
+}
+if (wanted.includes('cutoff')) {
+  const limitS = CUTOFF_MIN * 60;
+  const agentsBeforeCutoff = readFileSync(agentsFile, 'utf8');
+  const PROMPT = [
+    'Delegate exactly one task to a single child and wait for it to end; do not do the work yourself and do not delegate',
+    'anything else. The child\'s task: for every file under src/ and test/ in this repository, one file at a time, read the',
+    'file, then add to docs/walkthrough.md a section naming the file and explaining each function in it line by line with an',
+    'example call, and after every file run `node --test` in the terminal and record its result in that section. It must not',
+    'stop before every file has its section. When the child has ended, reply with one sentence saying how it ended.',
+  ].join('\n');
+  const Database = require('better-sqlite3');
+  const readCut = (sessionId) => {
+    const db = new Database(oneDatabase(), { readonly: true });
+    try {
+      const children = db.prepare('SELECT task_id, canonical_name, state, parent_id, continuation_of, report FROM children WHERE session_id = ? ORDER BY spawned_at').all(sessionId);
+      const timeline = db.prepare('SELECT name, message FROM timeline WHERE session_id = ? ORDER BY ordinal').all(sessionId);
+      const ids = new Set(children.map((c) => c.task_id));
+      const roots = [...new Set(db.prepare('SELECT task_id FROM agent_messages WHERE session_id = ? ORDER BY seq').all(sessionId).map((r) => r.task_id))].filter((id) => !ids.has(id));
+      return { children, timeline, roots };
+    } finally { db.close(); }
+  };
+  let cutoffRecord = { limitS };
+  try {
+    // 1. The limit, through the control.
+    const setLog = await launch('cutoff-settings', runtimeFieldSteps({ id: 'child-timeout', value: CUTOFF_MIN }), 90_000);
+    const saved = fieldSaveReading(setLog, { id: 'child-timeout' });
+    const yaml = readFileSync(agentsFile, 'utf8');
+    cpSync(agentsFile, join(scenarioDir('cutoff-settings'), 'agents.yaml'));
+    check(saved.afterEdit === 'Unsaved changes' && saved.atEnd === 'All changes saved' && saved.field === String(CUTOFF_MIN), `Settings › Runtime › Per-agent timeout took ${CUTOFF_MIN} and Save stored it (PD-CONFIG-003)`, JSON.stringify(saved));
+    check(new RegExp(`^\\s+child_timeout: ${limitS}\\s*$`, 'm').test(yaml), `the control's Save wrote child_timeout: ${limitS} into the workspace file`, /^\s+child_timeout:.*$/m.exec(yaml)?.[0]?.trim() ?? 'no child_timeout line');
+    cutoffRecord = { ...cutoffRecord, control: saved };
+
+    // 2. The run that meets it.
+    const log = await launch('cutoff', {
+      ROTARIS_CAPTURE_PROMPT: PROMPT,
+      ROTARIS_CAPTURE_EVAL_AT: `${TAG_EVAL}>>${TAG_SELECTOR}@~${RUN_WAIT_MS}`,
+      ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
+    }, RUN_WAIT_MS + 90_000);
+    check(log.includes(`child_timeout=${limitS} s`), 'the run read the Per-agent timeout Settings saved', /child_timeout=\d+ s/.exec(log)?.[0] ?? 'no child_timeout line');
+    const read = readSession();
+    checkPricing('cutoff', read?.session);
+    if (read === null) check(false, 'the cut-off run left a session row', 'no session was recorded');
+    else {
+      const sessionId = read.session.session_id;
+      preserveRun('cutoff', sessionId);
+      const { children, timeline } = readCut(sessionId);
+      const bodies = readTraffic('cutoff').map((r) => String(r.requestBody ?? ''));
+      const cut = cutOffChildren(children, limitS, bodies);
+      cutoffRecord = { ...cutoffRecord, sessionId, status: read.session.execution_status, children: children.map((c) => `${c.canonical_name} ${c.state}`), cut };
+      if (cut.length === 0) noted(`no child reached the ${timeoutLimitText(limitS)} limit`, `${children.length} child(ren): ${children.map((c) => `${c.canonical_name} ${c.state}`).join(', ') || 'none'} — the cut-off checks are unasked; LIVE_RUN_CUTOFF_MIN is ${CUTOFF_MIN}`);
+      else {
+        const first = cut[0];
+        check(cut.every((c) => c.state === 'failed'), `every child cut off at ${limitS} s ended failed with "Child timed out after ${limitS}s" (REQ-ORCH-088)`, cut.map((c) => `${c.name} ${c.state}`).join(', '));
+        if (!first.makingProgress) noted('the first cut-off child was not making progress', `${first.name}: no tool call completed inside the stall window, so no statement and no offer (PD-ORCH-004)`);
+        else check(first.offer !== null && first.offer.includes(`continuation_of: "${first.taskId}"`), 'the cut-off child made progress and its report carries the continuation offer (PD-ORCH-004)', first.offer ?? 'no offer');
+        // PD-CONFIG-003 revisions 3 and 4 (CN1): the sidebar's tag, read as it appeared.
+        const tag = tagReading(log);
+        const expected = timeoutLine(limitS, first.makingProgress);
+        check(tag !== null && tag.text === 'timed out' && tag.title === expected && tag.description === expected, `the timed-out tag reads PD-CONFIG-003's line in the minutes form ("${timeoutLimitText(limitS)}")`, tag === null ? 'the tag was never read (see cutoff/app.log)' : `title "${tag.title}"`);
+        // OQ-217 as repaired (D9).
+        check(cut.every((c) => c.factsHead), `each cut-off child's summarising request opened its facts with "${OUTCOME_HEAD} failed — Child timed out after ${limitS}s." (OQ-217)`, cut.map((c) => `${c.name}: ${c.factsHead ? 'head' : 'no head in the recorded traffic'}`).join('; '));
+        check(cut.every((c) => !c.opensAsRunFailed && c.statesLimit), 'each cut-off child\'s summary opens with its own outcome at the limit, never "The run failed" (OQ-217, D9)', cut.map((c) => `${c.name}: "${c.opening}"`).join(' | '));
+        const relays = runFailedRelays(timeline);
+        if (read.session.execution_status === 'completed') check(relays.length === 0, 'no child_result entry of the completed session relays "The run failed" (OQ-217, D9)', relays.map((e) => e.message).join(' | ') || 'none');
+        else noted('the cut-off session did not complete, so the D9 relay question is unasked', `${read.session.execution_status} (${read.session.stop_reason})`);
+
+        // 3. A later run's root takes the offer up (PD-ORCH-004 revisions 3 and 4).
+        if (first.offer !== null) {
+          const followLog = await launch('cutoff-continue', {
+            ROTARIS_CAPTURE_RESUME: 'latest',
+            ROTARIS_CAPTURE_PROMPT: `The child ${first.name} was cut off at its time limit before it finished. Take up its continuation offer: delegate its continuation with continuation_of set to its task id and a complete brief, wait for it to end, then reply with one sentence.`,
+            ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
+          }, RUN_WAIT_MS + 90_000);
+          check(/capture: opened session "latest" from the browser/.test(followLog), 'the follow-up reopened the cut-off session from the Sessions browser');
+          const after = readCut(sessionId);
+          preserveRun('cutoff-continue', sessionId);
+          const taken = offerTaken(after.children, first.taskId, after.roots);
+          cutoffRecord = { ...cutoffRecord, followUp: taken };
+          if (!taken.taken) noted('the follow-up\'s root did not take the offer up', `no child records continuation_of ${first.taskId}; children: ${after.children.map((c) => c.canonical_name).join(', ')}`);
+          else check(taken.byLaterRoot, 'the offer was taken up by the later run\'s root (PD-ORCH-004 revisions 3 and 4)', JSON.stringify(taken.continuation));
+        }
+      }
+    }
+  } finally {
+    writeFileSync(agentsFile, agentsBeforeCutoff);
+  }
+  results.scenarios.cutoff = cutoffRecord;
+  await budgetGate();
+}
 
 // ── 9. The long run ──────────────────────────────────────────────────────────────────────────────────────
 /**

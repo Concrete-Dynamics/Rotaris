@@ -11207,6 +11207,15 @@ on the wording before ([`a-timed-out-childs-summary-opens-as-if-the-run-failed.m
 outcome, and no "The run failed" on the timeline of a session that completed. The row is in
 [`first-executions.md`](first-executions.md).
 
+*2026-10-13 (fin42, the survey's N50): the live measurement written, not run.* No live run had cut a child off since the
+repair (the 552d346 duress pack: 0 failed children at a 2,700 s limit). `live-run.mjs`'s opt-in `cutoff` scenario sets the
+Per-agent timeout to one minute through Settings and gives one child more work than that, then reads, for every child cut
+off: the recorded summarising request carrying "Outcome of this agent, not of the session: failed — Child timed out after
+60s." with the agent's name, the stored summary's first sentence stating the limit and not opening "The run failed", and no
+`child_result` entry relaying "The run failed" when the session completed (`apps/desktop/scripts/lib/cut-off-reading.mjs`,
+pinned by its test against the engine's `OUTCOME_HEAD`). It is the orchestrator's to run (`--only=cutoff`); a child the
+limit never reaches is a NOTE there.
+
 **OQ-214 — Does a working child's 1200 s ceiling stay when a model that reasons before it answers fills each life with
 generation?** *(REQ-ORCH-088, the child timeout and its expiry path; REQ-CONFIG-113, `runtime.child_timeout`, default 1200;
 REQ-NOTIFY-100; REQ-MONITOR-121; REQ-ORCH-062 and REQ-TOOLS-156, which forbid a separate deadline on a wait because every

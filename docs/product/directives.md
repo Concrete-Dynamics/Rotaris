@@ -4855,7 +4855,23 @@ them: REQ-ORCH-088, REQ-CONFIG-113 and REQ-MONITOR-286.*
 > (`pnpm mission-proof` item 1d drives a 3 s limit). Repairs
 > [`pd-config-003-writes-a-one-second-limit-as-1-seconds`](../defects/fixed/pd-config-003-writes-a-one-second-limit-as-1-seconds.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
-
+>
+> **The control set through Settings before a run, in the built app, and the live scenario written, 2026-10-13 (fin42, the
+> survey's N50):** the first live execution's NOT REACHED above — the control itself, which no harness had driven before a
+> run, every launch writing `agents.yaml` itself (`withRuntimeKey`) — is reached in the built app. `pnpm continuation-proof`'s
+> later-run scenario opens Settings › Runtime, selects and deletes the Per-agent timeout's text, types `1`, leaves the field
+> and presses Save (`apps/desktop/scripts/lib/settings-runtime-field.mjs`): the bar read `Unsaved changes`, then `All changes
+> saved`; the workspace file read `child_timeout: 60`; the next run start logged `child_timeout=60 s`. The same proof reads the
+> Workspace sidebar's tag as it appears ("Cut off at its per-agent timeout of 3 seconds while making progress. …"), the reading
+> the live scenario takes. **Found:** a value typed over a selection that already shows the same digits is no change to the
+> field, so a stored 3 s shown clamped as `1` and overtyped `1` stayed 3 s with the bar clean; recorded, not repaired
+> ([`a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`](../defects/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md)).
+> **Written, not run (the orchestrator's):** `live-run.mjs`'s opt-in `cutoff` scenario sets the control to
+> `LIVE_RUN_CUTOFF_MIN` (default 1) minute(s) the same way and gives one child more work than that; it should show the
+> control's Save storing `child_timeout: 60`, the run reading it, a child ended `failed` with "Child timed out after 60s" and
+> the offer, and the sidebar's tag titled "Cut off at its per-agent timeout of 1 minute while making progress. Settings ›
+> Runtime › Per-agent timeout sets this limit for runs started from now." (`=2` measures the plural form). **Not measured:**
+> that live run. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

@@ -2581,6 +2581,15 @@ are not recorded, and cannot be recovered afterwards.
 > a driven run with a failing hook. The note is moved to
 > [`hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`](../defects/fixed/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md)
 > and the row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Driven in the built app, 2026-10-13 (fin42, whats-next N61).** Two hook-fault paths now run on the built app. A global hook
+> that always fails is switched off by `notice-proof`'s section 1 (since 2026-09-18), and its launch output carries "switched off".
+> `notice-proof`'s new section 1b gives the run an invalid entry (`timeout_seconds: 0`). That entry never reaches the account
+> above: REQ-HOOKS-012 fails the **configuration** load first, so the run is refused with REQ-CONFIG-478's report, which names
+> the file, the global scope and `hooks.entries.0.timeout_seconds`. No hook runs, and no "Could not resolve this run's hooks"
+> line is written. So in the built app, an invalid entry does not lead to REQ-HOOKS-085's `info` line. The line needs a hook set
+> that fails to assemble after the configuration has loaded, and no free seam produces that. Its run-host unit cases remain its
+> evidence. Neither section reads the hook engine's own `log` sink lines (REQ-HOOKS-128) in the application log.
 
 > **2026-09-28, under [R-062](requests.md#r-062):** the quit's race over each `shutdown` is unchanged, and main now also
 > waits, bounded, for the run host's EXIT before it is gone (`endBeforeMain`, `main/exit.ts`; ADR-0014's "Main is gone

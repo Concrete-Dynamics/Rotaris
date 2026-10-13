@@ -15,6 +15,9 @@ import { startApp, stopApp, until } from './lib/driver.mjs';
  *     publishes the "Hooks need attention" advisory and its own outcome in one turn. The screen still holds the last
  *     of the burst — REQ-NOTIFY-024 makes single-slot replacement canonical — and the advisory is now READ BACK OUT
  *     OF THE SESSION'S TIMELINE, which is what REQ-NOTIFY-268 requires and what ADR-0049's Part C note found missing.
+ *  1b. An invalid hook entry (a global `timeout_seconds: 0`) fails the configuration load before the hook port sees it
+ *     (REQ-HOOKS-012): the run is refused with REQ-CONFIG-478's report — file, scope, key path — on screen, and no hook
+ *     runs. REQ-HOOKS-085's "continuing without them" line is therefore not reachable this way; its unit cases stand.
  *  2. Scoping (REQ-NOTIFY-028/029/058): a notice about another session survives a run start; an unscoped one does not.
  *  3. Compare-and-clear (REQ-NOTIFY-026): dismissing a superseded identifier leaves its successor standing.
  *  4. The ONE transient surface (REQ-NOTIFY-012/013/016/017/021): four published, three visible, newest nearest the
@@ -181,6 +184,43 @@ const s1 = scenario('advisory', {
     burst: { outcomePublished: outcomeLogged, advisoryPublished: advisoryLogged, slotHeld: parsedScreen.length },
     png: r.png, elapsedMs: r.elapsedMs,
   };
+  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1b. An invalid hook entry in the built app (REQ-HOOKS-012 before REQ-HOOKS-085). The run host's unit case for
+// REQ-HOOKS-085 (`run-host/hooks.test.ts`) fails the hook port's own load with a `timeout_seconds: 0` entry and reads
+// "Could not resolve this run's hooks; continuing without them." on the application log (first-executions, 2026-09-28:
+// "Not measured on a run with a failing hook in the built app"). Driven here on 2026-10-13, the same entry never reaches
+// that port: REQ-HOOKS-012 makes the CONFIGURATION load fail first, naming the YAML path, so the run is refused before
+// it starts — REQ-CONFIG-478's report, file, scope and key path — and no hook runs. So REQ-HOOKS-085's line is not
+// reachable in the built app by an invalid entry; it needs a hook set that fails to assemble after the configuration
+// loaded, which no free seam produces, and its unit cases stay its evidence. What this launch pins is the order.
+// The workspace itself opens with the global configuration unloaded, and the refusal's notice comes at the first prompt;
+// REQ-CONFIG-478 says no workspace opens (OQ-279, raised 2026-10-13). This launch asserts the refusal, not when it first shows.
+const s1b = scenario('hook-load-fault', {
+  globalHooks: ['# an entry with a budget of zero (REQ-HOOKS-012)', 'hooks:', '  entries:', '    - event: pre_tool', '      command: "exit 1"', '      timeout_seconds: 0', ''].join('\n'),
+});
+{
+  const r = await launch('hook-load-fault', s1b, {
+    ROTARIS_SCRIPT: 'read,answer',
+    ROTARIS_CAPTURE_PROMPT: 'read a file; no hook should run',
+    // The run is refused, so no result comes: the wait is short and its timeout is the expected end.
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '12000', ROTARIS_CAPTURE_AFTER_MS: '800',
+    ROTARIS_CAPTURE_PROBE: '[data-testid="notice-title"]',
+  }, { timeout: 150_000 });
+  const db = open(s1b);
+  const rows = timelineOf(db);
+  const sessions = db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n;
+  db.close();
+  const refused = r.log.split('\n').find((l) => / info +run refused: The run was refused before it started — The configuration could not be loaded: /.test(l));
+  expect(refused !== undefined, 'the run was not refused on the configuration load — see hook-load-fault.log');
+  expect(/agents\.yaml at hooks\.entries\.0\.timeout_seconds \(global scope\): /.test(refused), `the refusal does not name the file, the key path and the scope (REQ-HOOKS-012, REQ-CONFIG-478): ${refused}`);
+  expect(!r.log.includes("Could not resolve this run's hooks"), "the hook port's load ran although the configuration did not load");
+  expect(rows.filter((t) => t.name === 'hook_run').length === 0 && sessions === 0, `a run started or a hook ran: ${sessions} session(s), ${rows.filter((t) => t.name === 'hook_run').length} hook_run entries`);
+  const onScreen = JSON.parse((r.log.match(/capture: probe \[data-testid="notice-title"\] → (\[.*\])/) ?? [])[1] ?? '[]');
+  expect(onScreen.some((n) => n.text === 'The run was refused before it started'), `the refusal is not the notice on screen: ${JSON.stringify(onScreen)}`);
+  results.hookLoadFault = { refusal: refused.slice(refused.indexOf('The configuration could not be loaded')), notice: onScreen.map((n) => n.text), sessions, hookRuns: 0, hookPortLoadLine: 'not reached (REQ-HOOKS-012 fails the configuration load first)', png: r.png, elapsedMs: r.elapsedMs };
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
 }
 

@@ -40,6 +40,10 @@
  *                  servers' working directory name the worktree, and `lsp`'s `lsp_init`, made by the launch's one
  *                  scripted call to it, names the worktree's root.
  *
+ *   5. undecodable — its own profile: a workspace `AGENTS.md` that is not UTF-8 beside a valid `CLAUDE.md`. The model
+ *                  receives the sibling's block alone, and the application log carries the run host's warning naming
+ *                  the path and the decoder's error (REQ-WORKSPACE-045's decoding half, PD-WORKSPACE-002).
+ *
  * The latency half (§3.2, REQ-WORKSPACE-049): a second scratch profile holding a fixture AT the bound — every
  * instruction-file slot discovery can reach filled (14 where the platform has an `/etc` hierarchy, 12 on Windows;
  * the requirement's 20 is unreachable, see OQ-68), totalling exactly 1 MiB — and `--latency-runs` (default and minimum
@@ -342,6 +346,34 @@ if (lspInit.length === 0) fail('isolated: PD-MCP-002 — the lsp server received
 for (const c of lspInit) if (real(c.arguments?.root ?? '') !== real(worktree)) fail(`isolated: PD-MCP-002 — lsp_init named ${c.arguments?.root}, not the worktree ${worktree} (REQ-MCP-070)`);
 results.push({ launch: 'isolated', sessionId: bound[1], executionRoot: worktree, received: sourcesOf(isoSystem), codeIntelligence: ciBinding.detail, baseCodeIntelligence: ciBase.detail, userServers: { launches: launched.length, filesystemFillIn: fsLaunches.map((l) => l.argv.at(-1)), cwd: [...new Set(launched.map((l) => l.cwd))], lspInitRoot: lspInit.map((c) => c.arguments?.root) } });
 
+// ── 5. undecodable ──────────────────────────────────────────────────────────────────────────────────────────────────
+// REQ-WORKSPACE-045's decoding half (PD-WORKSPACE-002; first-release-plan §3.3): an instruction file that is not UTF-8
+// contributes nothing, and the run carries on with a warning naming its path and the decoder's error. Until 2026-10-13
+// only the unit cases over the real port showed it (first-executions, 2026-09-28: "no proof lays an undecodable file
+// down for the built app"). Its own profile and workspace, so nothing of launches 1 to 4 is read: a workspace
+// `AGENTS.md` holding the defect note's bytes, and a valid `CLAUDE.md` beside it whose block must arrive whole.
+const undecodable = join(output, 'undecodable');
+const uprofile = { local: join(undecodable, 'local'), preferences: join(undecodable, 'prefs'), home: join(undecodable, 'home'), machine: join(undecodable, 'machine-codex') };
+const uworkspace = join(undecodable, 'workspace');
+for (const dir of [uprofile.local, uprofile.preferences, uprofile.home, uprofile.machine, uworkspace]) mkdirSync(dir, { recursive: true });
+write(join(uworkspace, '.rotaris', 'agents.yaml'), ['models:', '  scripted: { provider: scripted, model_id: scripted }', 'small_model: scripted', 'medium_model: scripted', 'large_model: scripted', 'runtime:', '  permission_mode: autonomous', ''].join('\n'));
+const badAgents = join(uworkspace, 'AGENTS.md');
+// `h i \n`, then 0xFF 0xFE (never UTF-8) and 0xC3 0x28 (a lead byte with no continuation): the note's eight bytes.
+writeFileSync(badAgents, Buffer.from([0x68, 0x69, 0x0a, 0xff, 0xfe, 0xc3, 0x28, 0x0a]));
+const goodClaude = join(uworkspace, 'CLAUDE.md');
+write(goodClaude, body('workspace:CLAUDE.md', 'beside an undecodable sibling'));
+const und = await launch('undecodable', uprofile, uworkspace, runPrompt, 180_000);
+const undSystem = contextCalls(und.records, 'undecodable')[0].system;
+const undSources = sourcesOf(undSystem);
+if (JSON.stringify(undSources) !== JSON.stringify([goodClaude])) fail(`undecodable: the model received ${JSON.stringify(undSources)}, not the valid sibling alone (${goodClaude})`);
+if (!undSystem.includes(blockOf(goodClaude, readFileSync(goodClaude, 'utf8')))) fail('undecodable: the valid sibling\'s block was not received whole');
+if (undSystem.includes('\ufffd') || /^hi$/m.test(undSystem)) fail('undecodable: text decoded leniently from the undecodable file reached the model');
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// PD-MONITOR-002's line: `[main <time>] warning run host: workspace context: <path> could not be read (<error>); …`.
+const undWarning = new RegExp(`\\] warning +run host: workspace context: ${escapeRe(badAgents)} could not be read \\(([^\\n]+)\\); it contributes nothing`).exec(und.log);
+if (!undWarning) fail(`undecodable: the application log carries no warning naming ${badAgents} and the decoder's error (REQ-WORKSPACE-045); see undecodable.log`);
+results.push({ launch: 'undecodable', received: undSources, warning: undWarning[0].slice(undWarning[0].indexOf('workspace context:')), decoderError: undWarning[1] });
+
 // ═══ The latency half (§3.2, REQ-WORKSPACE-049) ════════════════════════════════════════════════════════════════════
 
 let latency = null;
@@ -488,6 +520,7 @@ console.log(`injection-proof: ${results.length} sections, evidence in ${output}`
 console.log(`  all-on received ${allOnExpected.length} blocks in discovery order; workspace:AGENTS.md suppressed by its on override`);
 console.log(`  ${SWITCHED_OFF} switched off → absent; ${OVERRIDE_OFF} switched off → workspace:AGENTS.md back in the merge (OQ-64 as ruled)`);
 console.log(`  the isolated run read its workspace files from ${worktree}`);
+console.log(`  an undecodable AGENTS.md contributed nothing, its sibling arrived whole, and the log named it: ${results.find((r) => r.launch === 'undecodable')?.decoderError}`);
 if (latency) console.log(`  REQ-WORKSPACE-049: p95 ${latency.p95Ms} ms over ${latency.runs} runs (${latency.cold.startsWith('NOT') ? 'WARM' : 'cold'}), median ${latency.medianMs} ms, max ${latency.maxMs} ms — ${latency.verdict}; ${latency.fixture.files} files, ${latency.fixture.bytes} bytes; byte-identical across processes: ${latency.byteIdenticalAcrossProcesses}`);
 else console.log('  latency skipped (--skip-latency)');
 if (!existsSync(join(repo, '.proof'))) fail('the evidence directory vanished');

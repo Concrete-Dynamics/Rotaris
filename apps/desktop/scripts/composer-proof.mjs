@@ -3,7 +3,7 @@
  * (REQ-CHAT-004, -006, -007, -008, -009, -010, -014, -015, -016, -017, -038, -039, -155, -156, -158;
  * REQ-SHELL-069, REQ-SHELL-159, REQ-NOTIFY-066). ADR-0042's fifth execution.
  *
- * Six launches against one scratch profile, plus one measurement made without a window:
+ * Seven launches against one scratch profile, plus one measurement made without a window:
  *
  *   1. draft      — a draft typed into workspace A through the composer's own change path, the divider dragged
  *                   by keyboard, then the window CLOSED by the user (REQ-SHELL-159's fourth flush point). The
@@ -19,6 +19,11 @@
  *                   the tooltip and the accessible description, the text area still editable (REQ-CHAT-156), the
  *                   queue header grammatical at one and at two (REQ-CHAT-168), and a send refused while the run
  *                   is cancelling with REQ-CHAT-007's exact sentence.
+ *   4b. stop-run  — workspace B, a run inside a 20 s model call: the composer's own "Stop run" clicked; the label
+ *                   reads "Cancelling…" and the control "Force stop" while the graceful stop waits for the call; the
+ *                   permission mode changed through its chip inside that window, and the label still "Cancelling…"
+ *                   (OQ-165's hold, REQ-SESSION-186); the run ends `user_cancelled` and does not rest at `running` or
+ *                   `cancelling`.
  *   5. history    — three history entries pushed through the real command, then Up, Up, Down, Down over a typed
  *                   draft: the walk loads, clamps, walks back and restores the draft (REQ-CHAT-016).
  *   6. autonomous — REQ-CHAT-009/155: the confirmation raised, Cancel holding initial focus, a reflex Return
@@ -313,6 +318,49 @@ results.run = {
   labelDuringRun: runState, labelAtEnd: endState, composerEditableDuringRun: true, primaryAction: 'Queue',
   chipReasons, queueHeaders: [queueAtOne, queueAtTwo], timing: { early, later, frozenSeconds: Number(frozen?.data['data-seconds']), runTotal: total },
   queuedPrompts: queuedRows.map((p) => ({ owner: p.session_id, status: p.status, snapshot: p.context_snapshot })),
+};
+
+// ── 4b. The composer's Stop run, pressed, and the mode changed while the stop is pending (REQ-SESSION-186, OQ-165) ──
+// Until 2026-10-13 no proof pressed it: the stop's hold (`Run.stopAccepted`, first-executions 2026-10-06) was shown by
+// the engine's case driving `op: 'cancel'` through `Sessions.control`. Here the real button is clicked while the run is
+// inside a 20 s model call, in workspace B (A's session is the one launches 5 and 6 read). The first press stops
+// gracefully (REQ-SESSION-092): the call in flight is let finish, so the stop stays pending for most of the wait — the
+// window the 2026-10-06 defect lived in. Inside it the permission mode is changed through the chip, which saves the run;
+// before the repair that save wrote `running` over the stop's `cancelling`. The label must hold "Cancelling…" past the
+// mode change, the button offer "Force stop", and the run end `user_cancelled` once the call returns.
+const STOP_WAIT_MS = 20_000;
+const stopped = await launch('stop-run', workspaceB, local, preferences, {
+  ROTARIS_SCRIPT: `wait:${STOP_WAIT_MS},answer`,
+  ROTARIS_CAPTURE_PROMPT: 'Run long enough to be stopped.',
+  ROTARIS_CAPTURE_PROMPT_MS: '2500',
+  // `~`: pressed as soon as the control is on screen, inside the model call's wait.
+  ROTARIS_CAPTURE_CLICKS: '.btn-danger>>Stop run@~6000',
+  ROTARIS_CAPTURE_MODE: 'restricted', ROTARIS_CAPTURE_MODE_MS: '9000',
+  ROTARIS_CAPTURE_INSPECT_AT: ['[data-testid="run-state"]@7500', '.btn-danger@7500', '[data-testid="run-state"]@14000', '[data-testid="chip-mode-label"]@14000'].join(';;'),
+  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(STOP_WAIT_MS + 45_000), ROTARIS_CAPTURE_AFTER_MS: '1500',
+}, STOP_WAIT_MS + 120_000);
+expect(stopped.log.includes('capture: clicked "Stop run"') && !stopped.log.includes('capture: "Stop run" is not under the pointer'), 'the Stop run press was not made on its own control — see stop-run.log');
+expect(/control cancel on [0-9a-f-]+ → ok/.test(stopped.log), 'the press reached no `session.control` cancel — see stop-run.log');
+const pendingLabel = match(stopped, '[data-testid="run-state"]', 7500)?.text;
+expect(pendingLabel === 'Cancelling…', `after the press the run-state label reads ${JSON.stringify(pendingLabel)}, not "Cancelling…"`);
+const forceButton = (inspect(stopped, '.btn-danger', 7500)?.matches ?? []).map((m) => m.text);
+expect(forceButton.includes('Force stop'), `the pending stop's control does not offer "Force stop": ${JSON.stringify(forceButton)}`);
+expect(stopped.log.includes('capture: clicked "restricted"'), 'the permission mode was not changed during the stop — see stop-run.log');
+const modeAfter = match(stopped, '[data-testid="chip-mode-label"]', 14000)?.text;
+expect(modeAfter === 'mode: restricted', `the mode change during the stop did not take: ${JSON.stringify(modeAfter)}`);
+const heldLabel = match(stopped, '[data-testid="run-state"]', 14000)?.text;
+expect(heldLabel === 'Cancelling…', `after a mode change during the stop the run-state label reads ${JSON.stringify(heldLabel)}: the stop's cancelling was not held (OQ-165, REQ-SESSION-186)`);
+const sdb = new Database(databaseFor(workspaceB), { readonly: true });
+const stoppedRow = sdb.prepare('SELECT session_id, execution_status, stop_reason, run_started_at, updated_at FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
+sdb.close();
+expect(stoppedRow?.stop_reason === 'user_cancelled', `the pressed stop did not end the run user_cancelled: ${JSON.stringify(stoppedRow)}`);
+expect(stoppedRow.execution_status !== 'running' && stoppedRow.execution_status !== 'cancelling', `the stopped session still reads ${stoppedRow.execution_status} once the run rests (OQ-165's hold must end with the run)`);
+const stoppedLabel = first(stopped.probes, '[data-testid="run-state"]')?.text;
+expect(stoppedLabel !== 'Run active' && stoppedLabel !== 'Cancelling…', `the run-state label once the run rests reads ${JSON.stringify(stoppedLabel)}`);
+results.stopRun = {
+  pressed: 'Stop run', pendingLabel, pendingControl: 'Force stop', modeChangedDuringStop: modeAfter, labelAfterModeChange: heldLabel,
+  status: stoppedRow.execution_status, stopReason: stoppedRow.stop_reason, labelAtRest: stoppedLabel,
+  runSeconds: (Date.parse(stoppedRow.updated_at) - Date.parse(stoppedRow.run_started_at)) / 1000,
 };
 
 // ── 5. REQ-CHAT-016: the history walk over a typed draft ──

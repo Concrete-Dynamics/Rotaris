@@ -360,6 +360,12 @@ execution root.
 > shown by the unit cases over the real port alone; and `skills-proof`'s launches after its policy launch did not run
 > on Linux, for the reason [`skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](../defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)
 > records, so the run launch's catalog naming the machine skill is asserted in the script and unproven on this host.
+>
+> **Observed in the built app 2026-10-13 (fin42, whats-next N61).** `injection-proof`'s launch 5, `undecodable`, lays the
+> note's eight bytes down as a workspace `AGENTS.md` beside a valid `CLAUDE.md`: the model received the sibling's block
+> alone, no leniently decoded text, and main's log carried `warning run host: workspace context: <path> could not be read
+> (The encoded data was not valid for encoding utf-8); it contributes nothing`. The "did not observe" above is answered for
+> the decoding half; the `skills-proof` sentence beside it is the fixed note's, not this one's.
 
 **3.4 A live run.** One `pnpm live-run` scenario with a workspace `AGENTS.md` whose instruction the model can
 only follow if it was injected. Owner-approved, like §2.3.

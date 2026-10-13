@@ -2445,7 +2445,7 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > before a rename, so a rename that is a server session's first cross-file request reaches the declaring file alone (measured
 > also over the runtime's own stdio branch, a copy of the live run's `todo-app` fixture among four arrangements). Recorded as
 > [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
-> and raised as [OQ-272](../architecture/open-questions.md#oq-272); launch 11 keeps the assertion and is red until it is repaired;
+> and raised as [OQ-273](../architecture/open-questions.md#oq-273); launch 11 keeps the assertion and is red until it is repaired;
 > **launch 12** (`child-renamed-tool`) — the global configuration's `tool_name_map` offers the cross-file replacement as
 > `replace_across_project`, and a tester's call by that name lists both files it changed in its report and artifact, with the
 > evidence's `renamed` map `{"replace_across_project":"replace_in_files"}` (41.5 s): fin38's repair of
@@ -2454,7 +2454,7 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > measured:** a live run. The opt-in `rename` scenario (`live-run.mjs --only=rename`) is written and is the orchestrator's: a
 > coding-agent renames the fixture's `remaining` to `countRemaining` with `rename_symbol`; it should show the rename row `ok`,
 > none of `src/todos.js`, `src/App.jsx` and `src/todos.test.js` still calling or importing `remaining`, all three in the child's
-> `edited_files` and its artifact's, and `node --test` green — or, where the model renamed with nothing before it, OQ-272's
+> `edited_files` and its artifact's, and `node --test` green — or, where the model renamed with nothing before it, OQ-273's
 > signature named as a NOTE beside a red files check; a run with no rename call is a NOTE, "not reached". `summary.md` has no
 > edited-files section (REQ-SESSION-140), so whether it names the files is the model's prose and only noted. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).

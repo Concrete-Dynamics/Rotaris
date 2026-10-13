@@ -41,7 +41,7 @@ have to edit them one by one.
 - `REQ-ORCH-109`: a report "cannot conceal files it failed to account for" — not contradicted (the report lists the one file the
   call changed), but a report saying the rename succeeded hides that the work is broken.
 - No requirement says how the product drives the runtime's language server, or whether it may warm it, so the repair is a
-  question: [OQ-272](../architecture/open-questions.md#oq-272).
+  question: [OQ-273](../architecture/open-questions.md#oq-273).
 
 ## Relevant files
 

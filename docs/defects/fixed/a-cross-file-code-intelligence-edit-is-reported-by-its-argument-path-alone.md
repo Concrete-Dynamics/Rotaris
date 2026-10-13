@@ -90,4 +90,4 @@ report-back keeps fin32's literal reading beside its replacement; the row is in 
 provisions the server on first use (launch 4). The eleventh launch found the rename itself reaching the declaring file alone when
 nothing came before it in the server session, a separate defect:
 [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
-([OQ-272](../../architecture/open-questions.md#oq-272)). A live run is still not shown.
+([OQ-273](../../architecture/open-questions.md#oq-273)). A live run is still not shown.

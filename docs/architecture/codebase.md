@@ -1394,7 +1394,7 @@ project read back with both files it changed, observed by the run host around th
 files through the runtime's TypeScript language server after a reference search, both files read back, the same rename with
 nothing before it — red until
 [the note](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
-it found is repaired (OQ-272): the pinned runtime renamed the declaring file alone — and a cross-file replacement renamed by
+it found is repaired (OQ-273): the pinned runtime renamed the declaring file alone — and a cross-file replacement renamed by
 the global configuration's `tool_name_map`, read back with both files (REQ-MCP-005). Evidence under
 `.proof/code-intel-proof/`. The runtime's home, which it keeps across runs, is the product's own on the running platform
 (`join(dataDirFor(local), 'code-intelligence')`, as `main/sentinel.ts` joins it) since 2026-09-29 (R-067; the Windows

@@ -128,7 +128,7 @@
  *                 and its child-report artifact list every one of the three that changed (OQ-245's reach observation,
  *                 PD-ORCH-004, REQ-ORCH-109); `node --test` green. No rename call is a NOTE, "not reached" — a live model may
  *                 choose another tool. Whether the child searched for references first, and whether a cold rename left the
- *                 importing files behind or had them mended by hand, is named beside OQ-272
+ *                 importing files behind or had them mended by hand, is named beside OQ-273
  *                 (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
  *   8g. plan-open — OPT-IN (`--only=plan-open`), a few minutes (fin42, N56): `PD-ORCH-015` against a real model, two launches
  *                 whose prompt has the coordinator write a three-item plan and answer with the last item left PENDING:
@@ -2965,7 +2965,7 @@ if (wanted.includes('delegation')) {
  * the session's summary names the files is a NOTE. A run with no `rename_symbol` call is a NOTE, "not reached": a live model may
  * choose another tool, and the questions above are then unasked. Whether the child searched for the symbol's references before its
  * first rename is recorded beside the reading: a rename with nothing before it renames the declaring file alone in the pinned
- * runtime (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-272),
+ * runtime (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273),
  * so a cold rename whose importing files were left behind, or mended by another tool afterwards, is named as that defect.
  *
  * It renames a symbol every later scenario's prompts may read, so it runs after the default set and the workspace's three files
@@ -3009,12 +3009,12 @@ if (wanted.includes('rename')) {
       writeFileSync(join(scenarioDir('rename'), 'node-test.log'), `${suiteRun.stdout ?? ''}\n${suiteRun.stderr ?? ''}`);
       renameRecord = { sessionId, status: read.session.execution_status, children: children.map((c) => `${c.canonical_name} (${c.persona}) ${c.state}`), ...r, suiteExit: suiteRun.status };
       if (!r.reached) {
-        noted('rename: no agent called rename_symbol, so the rename was NOT REACHED', `tools used: ${[...new Set(calls.map((c) => c.tool_name))].join(', ') || 'none'}; files still naming ${RENAME_FROM}: ${r.leftBehind.join(', ') || 'none'} — OQ-245's rename and OQ-272 are unasked in this run`);
+        noted('rename: no agent called rename_symbol, so the rename was NOT REACHED', `tools used: ${[...new Set(calls.map((c) => c.tool_name))].join(', ') || 'none'}; files still naming ${RENAME_FROM}: ${r.leftBehind.join(', ') || 'none'} — OQ-245's rename and OQ-273 are unasked in this run`);
       } else {
         check(r.first.status === 'ok', 'rename: the first rename_symbol call is ok', `${r.agent}: ${r.first.status} — ${JSON.stringify(r.first.result)}`);
-        noted(`rename: ${r.agent} ${r.searchedFirst ? 'searched for the symbol\'s references before its first rename' : 'renamed with no reference search before it (a cold rename, OQ-272)'}`, `${r.renames} rename call(s); the first said ${JSON.stringify(r.first.result)}`);
-        if (r.oq272) noted('rename: the cold rename did not reach the importing files on its own (OQ-272)', `left behind: ${r.leftBehind.join(', ') || 'none'}; written by another tool after it: ${r.mendedAfter.join(', ') || 'none'} — docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md`);
-        check(r.leftBehind.length === 0 && r.carrying.length === RENAME_FILES.length, `rename: ${RENAME_FILES.join(', ')} call and import ${RENAME_TO} and no longer ${RENAME_FROM} (REQ-MCP-015)`, `carrying ${r.carrying.join(', ') || 'none'}; still naming ${RENAME_FROM}: ${r.leftBehind.join(', ') || 'none'}${r.cold ? ' (cold rename, OQ-272)' : ''}`);
+        noted(`rename: ${r.agent} ${r.searchedFirst ? 'searched for the symbol\'s references before its first rename' : 'renamed with no reference search before it (a cold rename, OQ-273)'}`, `${r.renames} rename call(s); the first said ${JSON.stringify(r.first.result)}`);
+        if (r.oq273) noted('rename: the cold rename did not reach the importing files on its own (OQ-273)', `left behind: ${r.leftBehind.join(', ') || 'none'}; written by another tool after it: ${r.mendedAfter.join(', ') || 'none'} — docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md`);
+        check(r.leftBehind.length === 0 && r.carrying.length === RENAME_FILES.length, `rename: ${RENAME_FILES.join(', ')} call and import ${RENAME_TO} and no longer ${RENAME_FROM} (REQ-MCP-015)`, `carrying ${r.carrying.join(', ') || 'none'}; still naming ${RENAME_FROM}: ${r.leftBehind.join(', ') || 'none'}${r.cold ? ' (cold rename, OQ-273)' : ''}`);
         check(r.reportFiles !== null && r.reportMissing.length === 0, 'rename: the renaming child\'s stored report lists every file the rename changed (OQ-245, PD-ORCH-004, REQ-ORCH-109)', `edited_files ${JSON.stringify(r.reportFiles)}; missing ${JSON.stringify(r.reportMissing)}`);
         check(r.artifactMissing.length === 0, 'rename: the child-report artifact lists every file the rename changed (REQ-LIBRARY-088)', `${JSON.stringify(r.artifactFiles)}; missing ${JSON.stringify(r.artifactMissing)}`);
         check(suiteRun.status === 0, 'rename: node --test is green in the workspace afterwards', `exit ${suiteRun.status ?? suiteRun.signal}`);

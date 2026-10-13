@@ -36,7 +36,7 @@
  *                   disk, and exactly those two files in the child's stored report's `edited_files` and its child-report
  *                   artifact's: launch 9's reach observation met through the TypeScript language server, which the runtime
  *                   provisions on first use (launch 4).
- *  11. child rename, cold — (fin42, N59, OQ-272) the same rename as the child's only call. The report must list exactly the files
+ *  11. child rename, cold — (fin42, N59, OQ-273) the same rename as the child's only call. The report must list exactly the files
  *                   that changed on disk (OQ-245), and the rename must reach the calling file: RED until
  *                   docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md
  *                   is repaired — the pinned runtime renames the declaring file alone when the rename is its first cross-file request.
@@ -568,7 +568,7 @@ if (want(9)) {
 // before it. The first launch of this pair as built was launch 11's shape, and its rename changed the declaring file alone while
 // saying "Successfully renamed … (1 changes applied)": the pinned runtime waits for the language server's project loading before
 // a references request and not before a rename
-// (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-272). Launch 11
+// (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273). Launch 11
 // keeps the assertion the product should meet and is red until that note is repaired; it records what it read, the launches after it
 // still run, and the proof fails at its end.
 /** Failures a launch records and the proof raises only at its end, after every later launch has run (launch 11). */
@@ -617,7 +617,7 @@ async function childRename({ name, symbol, renamed, files, childScript }) {
   const called = readFileSync(calling, 'utf8');
   const both = [declaringRel, callingRel].sort();
   const reached = new RegExp(`function ${renamed}\\(`).test(declared) && !declared.includes(symbol) && new RegExp(`import \\{ ${renamed} \\}`).test(called) && !called.includes(symbol);
-  return { reading: { ...reading, reachedBoth: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) }, failure: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) ? null : `${name}: the rename of ${symbol} changed ${JSON.stringify(changedOnDisk)}, not both ${JSON.stringify(both)} — ${callingRel} still reads ${JSON.stringify(called)} (the call said ${JSON.stringify(resultText.slice(0, 200))}; REQ-MCP-015; docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-272)` };
+  return { reading: { ...reading, reachedBoth: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) }, failure: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) ? null : `${name}: the rename of ${symbol} changed ${JSON.stringify(changedOnDisk)}, not both ${JSON.stringify(both)} — ${callingRel} still reads ${JSON.stringify(called)} (the call said ${JSON.stringify(resultText.slice(0, 200))}; REQ-MCP-015; docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273)` };
 }
 if (want(10)) {
   const { reading, failure } = await childRename({ name: 'child-rename', symbol: 'countItems', renamed: 'tallyItems', files: ['src/rename-a.ts', 'src/rename-b.ts'], childScript: 'mcp:code_intelligence.find_referencing_symbols,mcp:code_intelligence.rename_symbol,answer' });

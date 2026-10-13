@@ -12478,7 +12478,7 @@ function across two files through the language server after a reference search, 
 both; its eleventh (`child-rename-cold`), the rename alone, lists exactly the one file it changed — the observation holds — and
 finds the runtime's rename reaching the declaring file alone, recorded as
 [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
-and raised as [OQ-272](#oq-272). Not measured: a live run (the opt-in `rename` scenario, written). The report-back is in
+and raised as [OQ-273](#oq-273). Not measured: a live run (the opt-in `rename` scenario, written). The report-back is in
 `PD-ORCH-004`, in place.
 
 **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`:** **NOT REACHED**: 0
@@ -13640,15 +13640,16 @@ the near-miss quote of such a window carries `\r`s the caller must send back; ke
 mis-indented edit lands unshifted beside a success at level 4 — the case `PD-TOOLS-015` was ruled to prevent — and `haet_edit`
 gives no near miss for it.
 
-<a id="oq-272"></a>
+<a id="oq-273"></a>
 
-**OQ-272 — When the pinned runtime's symbol rename answers before its language server has loaded the project, does the product
+**OQ-273 — When the pinned runtime's symbol rename answers before its language server has loaded the project, does the product
 warm it, change the runtime, or tell the model?** *(REQ-MCP-015, the EDIT tier's symbol rename; REQ-MCP-011 and ADR-0035, the
 pinned runtime the product bundles and drives as it is; REQ-MCP-116, the binding manifest, the one place the runtime's
 identifiers are written; [OQ-245](#oq-245), the reach observation that records what the call changed. Raised 2026-10-13 by
 fin42 (N59) from
 [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
-Open. fin42 held OQ-271 to OQ-280; OQ-271 was taken on main by another of the plan's bundles, so this is the next free number.)*
+Open. fin42 held OQ-271 to OQ-280; raised as OQ-272 (OQ-271 was taken on main by another of the plan's bundles), renumbered
+OQ-273 at its landing, `origin/main` having taken OQ-272 meanwhile.)*
 
 The first rename of a server session that needs the language server's cross-file view renames the declaring file alone and says
 it succeeded: `code-intel-proof`'s eleventh launch (`child-rename-cold`) and four arrangements over the runtime's stdio branch,

@@ -7147,7 +7147,7 @@ added to the edit's success).*
 > line (`p q q r` → `P q R` pairs the second `q`), as the directive states; and level 1 is not covered: an exact match writes
 > `new_string`'s LF lines into a CRLF file through both tools and `replace_all`, recorded as
 > [`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md)
-> and left for a ruling. **What was not measured.** No live run: the live-run fixtures are LF files on Linux, and none of the six
+> and raised as [OQ-254](../architecture/open-questions.md#oq-254) for a ruling. **What was not measured.** No live run: the live-run fixtures are LF files on Linux, and none of the six
 > autopsies records a level-2 `write_file` edit; no proof script drives `write_file` in the built app, and the executor runs
 > unchanged inside the run host. Repairs
 > [`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../defects/fixed/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md).

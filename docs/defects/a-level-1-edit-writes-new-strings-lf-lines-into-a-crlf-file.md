@@ -10,7 +10,8 @@ retry after a `PD-TOOLS-014` near miss that sends the quote (which carries the `
 case. Windows is the only platform shipped (`PD-STARTUP-001`), where CRLF files are ordinary.
 
 `PD-TOOLS-016` (OQ-246) keeps the file's line endings for a window match (levels 2 to 4) and says it does not decide level 1;
-the R-072 consortium's ruling asked that this case be probed and recorded on its own. Recorded, not repaired.
+the R-072 consortium's ruling asked that this case be probed and recorded on its own. Recorded, not repaired; raised
+as [OQ-254](../architecture/open-questions.md#oq-254) for a ruling.
 
 ## Specs
 

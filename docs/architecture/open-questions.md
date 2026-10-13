@@ -12446,7 +12446,7 @@ once built.
 cases under "PD-TOOLS-016" in `packages/agent-tools/src/tools/tools.test.ts` (ten red on the code before) and `diff.test.ts`. The
 level-1 sibling the ruling asked to probe writes `new_string`'s LF lines into a CRLF file through both tools; recorded as
 [`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md),
-not decided here. The first execution is in place under the directive.
+not decided here (raised as [OQ-254](#oq-254)). The first execution is in place under the directive.
 
 <a id="oq-247"></a>
 
@@ -12907,3 +12907,26 @@ normative, so the change is revision 4. **Rejected:** changing the code to "1 se
 **Costs kept on record:** none in code; one more revision on a directive already at three.
 **Recorded 2026-10-13 (fin36):** revision 4 written in place in `PD-CONFIG-003` with its first execution (held as already
 built; `agent-timeout.test.ts` green), the two back-pointers amended in place.
+
+<a id="oq-254"></a>
+
+**OQ-254 — Does an exact (level-1) edit of a CRLF file keep the file's line endings in `new_string`'s added lines?**
+*(REQ-TOOLS-136, level 1 "exact" and replace-all "replaces every exact occurrence as plain text"; REQ-TOOLS-189, `haet_edit`'s
+level-1 match; REQ-TOOLS-135, the success; `PD-TOOLS-016`, which keeps the file's line endings for a window match at levels 2
+to 4 and says it does not decide level 1; `PD-STARTUP-001`, Windows the only platform shipped. Raised 2026-10-13 by fin36's
+review from the probe OQ-246's ruling asked for, recorded by fin36's builder without a number; the number is the next free one
+on `origin/main` when raised; if another plan lands it first, this one takes the next free number. Open.)*
+
+An edit whose `old_string` matches at level 1 replaces the exact span with `new_string` verbatim. When `new_string` has several
+lines written with `\n` alone and the file is CRLF, the result has LF-only lines among CRLF ones: `write_file` on
+`one\r\ntwo\r\n` with `old_string` `one` and `new_string` `ONE\nX` leaves `ONE\nX\r\ntwo\r\n`; `haet_edit` does the same, and so
+does a `replace_all`. Recorded as
+[`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md),
+and pinned as built by "PD-TOOLS-016 … level 1, replace_all and haet_edit are unchanged on a CRLF file" in
+`packages/agent-tools/src/tools/tools.test.ts`. No requirement's text is contradicted: "exact" writes `new_string` as given.
+
+**What the build proceeds under.** `new_string` written as given at level 1 and by `replace_all`, through both tools.
+
+**What a ruling decides.** Whether an exact match carries the file's line endings into `new_string`'s added lines (narrowing
+REQ-TOOLS-136 and REQ-TOOLS-189 for both tools, `PD-TOOLS-016`'s rule extended to level 1 and `replace_all`), or stands as built
+(the caller's bytes written exactly, `PD-TOOLS-016`'s cost "an exact level-1 `old_string` still does either" kept).

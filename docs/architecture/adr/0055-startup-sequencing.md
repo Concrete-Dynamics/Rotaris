@@ -480,6 +480,13 @@ anywhere, and that is OQ-43.** It is left open rather than closed by this record
   construction. The only launch that writes is one that **reclaims**, and a launch that reclaims becomes
   the instance rather than being handed over. `REQ-STARTUP-164`'s "a launch SHALL write nothing but the
   record itself while resolving it" is therefore satisfied with the record as the sole exception it names.
+  **Corrected 2026-10-13 (fin34's review): this no longer holds as written beside the order above, once the code keeps
+  that order.** ~~"An exclusive create that fails writes nothing"~~ is true of the create; but the endpoint is opened
+  first, so on Linux and macOS a launch that loses the create has already made a unix socket (and, on the fallback path,
+  its private directory below the temporary directory), which it closes and unlinks before it hands over (`closeEndpoint`,
+  `packages/platform/src/instance.ts`). On Windows the endpoint is a named pipe and nothing is written. Whether that
+  transient socket is a write `REQ-STARTUP-164` forbids, and which of the two decisions gives way if it is, is
+  [OQ-241](../open-questions.md#oq-241).
 - **The workspace directory travels as a declared field over that endpoint, never as a command line.**
   The launch resolves the directory the operating system handed it (`REQ-STARTUP-024`,
   `REQ-STARTUP-041` (a)) on `REQ-STARTUP-163`'s same-directory terms and sends it as one named value with
@@ -1115,4 +1122,6 @@ property is pinned where a second launch stands: `packages/platform/src/instance
 record names at the instant the record is written, and fails on the old order
 (`docs/defects/fixed/the-instance-record-is-written-before-its-endpoint-listens.md`). The interval in which two launches could
 both become the instance needed launches started within one `listen` of each other; it was read from the code, never
-measured, and is closed by construction rather than by a measured bound.
+measured, and is closed by construction rather than by a measured bound. The order has a cost this record did not price: a launch that loses
+the claim has opened, and then removes, an endpoint of its own, which on a platform whose endpoint is a file contradicts "a
+launch that is handed over writes nothing" above (corrected there; [OQ-241](../open-questions.md#oq-241)).

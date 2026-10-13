@@ -12416,3 +12416,30 @@ none selects a workspace, enables diagnostics, touches the update check or permi
 second sentence holds for them either way. **What a ruling decides.** Whether REQ-STARTUP-147's list is exhaustive — and then
 whether it should name the platform-convention variables, or REQ-STARTUP-145 should say the convention's variables are read —
 or whether it lists only the variables this product defines or depends on beyond the platform's own conventions.
+
+<a id="oq-241"></a>
+
+**OQ-241 — Is the hand-over endpoint a launch opens before it loses the claim a write REQ-STARTUP-164 forbids?** *(REQ-STARTUP-164,
+"a launch SHALL write nothing but the record itself while resolving it"; REQ-STARTUP-161, REQ-STARTUP-162; ADR-0055, "The
+endpoint is listening before the record is written, not after" and "A launch that is handed over writes nothing";
+`packages/platform/src/instance.ts`, `claimInstance`'s `attempt`, `openEndpoint`, `closeEndpoint`, `socketDirectoryFor`. Raised
+2026-10-13 by fin34's review of the repair of `docs/defects/fixed/the-instance-record-is-written-before-its-endpoint-listens.md`,
+with fin30's optional finding #13 folded in. Numbered after OQ-240.)*
+
+ADR-0055 decides two things that the code, once it keeps both, shows cannot both hold on a platform whose endpoint is a file.
+The endpoint listens before the record naming it is written, so a second launch never reads a record naming an address that
+is not yet accepting; and a launch that is handed over writes nothing, "structural rather than a discipline", because "an
+exclusive create that fails writes nothing". Since fin34 every claim attempt opens its endpoint first, so on Linux and macOS a
+launch that then loses the exclusive create has created a unix socket in the socket directory (and, on the fallback path,
+the private `rotaris-<uid>` directory below the temporary directory, as it already did before fin34) and removes the socket
+again before it hands over. On Windows the endpoint is a named pipe and nothing is written to disk. REQ-STARTUP-164 says a
+launch SHALL write nothing but the record itself while resolving it; REQ-STARTUP-162 that a handed-over launch writes nothing
+to any per-user or per-workspace state.
+
+**What the build proceeds under.** ADR-0055's order: the endpoint first, the socket of a launch that loses the claim closed
+and unlinked before it hands over (`closeEndpoint`), so nothing it created outlives it and nothing it wrote is per-user or
+per-workspace state the product reads. **What a ruling decides.** Whether a transient endpoint, created and removed within the
+resolution, is "a write" in REQ-STARTUP-164's sense — and if it is, which of ADR-0055's two decisions gives way: the endpoint
+opened only after the record is won (the order fin30 had, with the double-instance window the repaired note describes), or a
+form of endpoint that is no file (Linux's abstract socket namespace; nothing equivalent on macOS), or the record's own write
+taken to include the endpoint it names.

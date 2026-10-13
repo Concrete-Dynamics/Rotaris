@@ -35,7 +35,7 @@ sequenceDiagram
   Note over M: Phase 0 — BEFORE app.whenReady(),<br/>before any window, before any write
   M->>M: claimInstance(...) — the endpoint listens first, then the record naming it is written (ADR-0055)
   alt handed over
-    M-->>OS: app.exit(0) — shows nothing, writes nothing
+    M-->>OS: app.exit(0) — shows nothing, its own endpoint (opened first) closed and unlinked, OQ-241
   else refused (both claims lost, or no directory could hold the endpoint — no record written)
     M-->>OS: one error line, app.exit(2)
   else claimed

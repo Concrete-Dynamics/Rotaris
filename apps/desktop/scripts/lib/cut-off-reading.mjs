@@ -66,7 +66,10 @@ const STATES_LIMIT = /time limit|timed out|timeout|cut off/i;
  */
 export function cutOffChildren(children, limitS, requestBodies = []) {
   const error = `Child timed out after ${limitS}s`;
-  const head = `${OUTCOME_HEAD} failed — ${error}.`;
+  // `outcomeLine` (packages/engine/src/children/report.ts) closes the error with a full stop only when PD-ORCH-004's statement
+  // follows it, so a child cut off with no progress has "… after <N>s" and then the next fact; the head is matched without the
+  // stop. "after 60s" is no substring of "after 600s", so the limit still matches exactly.
+  const head = `${OUTCOME_HEAD} failed — ${error}`;
   return children.flatMap((child) => {
     const report = reportOf(child);
     if (!(report.errors ?? []).some((e) => e?.type === 'timeout' && e?.message === error)) return [];

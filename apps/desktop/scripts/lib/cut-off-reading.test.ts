@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { timeoutLine as productLine } from '@rotaris/ui';
-import { OUTCOME_HEAD as productHead } from '@rotaris/engine';
+import { OUTCOME_HEAD as productHead, outcomeLine } from '@rotaris/engine';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { OUTCOME_HEAD, TAG_EVAL, cutOffChildren, firstSentence, offerTaken, runFailedRelays, tagReading, timeoutLine } from './cut-off-reading.mjs';
 
@@ -32,6 +32,17 @@ describe('cut-off reading (live-run `cutoff`, PD-CONFIG-003 revisions 3 and 4, O
     expect(cut[0]).toMatchObject({ makingProgress: true, statesLimit: true, opensAsRunFailed: false, factsHead: true, opening: 'This agent was stopped at its time limit while writing docs/walkthrough.md.' });
     expect(typeof cut[0].offer).toBe('string');
     expect(cut[1]).toMatchObject({ offer: null, opensAsRunFailed: true, factsHead: false });
+  });
+
+  it('the facts head of a child cut off with no progress, which the engine closes with no full stop, is found; another limit\'s is not', () => {
+    // The engine's own Outcome line for a child the limit reached before any call completed (no PD-ORCH-004 statement), as
+    // the summarising request carries it, JSON-encoded and followed by the next fact.
+    const line = outcomeLine({ status: 'failed', errors: [{ type: 'timeout', message: 'Child timed out after 60s' }] }) ?? '';
+    expect(line).toBe(`${OUTCOME_HEAD} failed — Child timed out after 60s`);
+    const body = JSON.stringify({ messages: [{ role: 'user', content: `… names the agent (epsilon) …\n\nFacts:\n${line}\nEdited files: (none)` }] });
+    const children = [{ canonical_name: 'epsilon', task_id: 'bg_0000000e', state: 'failed', report: report({ summary: 'This agent was stopped at its time limit before it read anything.' }) }];
+    expect(cutOffChildren(children, 60, [body])[0]).toMatchObject({ makingProgress: false, offer: null, factsHead: true });
+    expect(cutOffChildren(children, 60, [body.replace('after 60s', 'after 600s')])[0]).toMatchObject({ factsHead: false });
   });
 
   it('a first sentence ends at its full stop, not inside a file name or a figure', () => {

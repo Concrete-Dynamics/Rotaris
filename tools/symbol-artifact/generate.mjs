@@ -13,6 +13,13 @@
 // @deprecated for the same reason a withdrawn one is: prose nobody parses is prose
 // that drifts.
 //
+// OQ-237 (GV1, ruled under R-072): SUPERSEDED_BY holds one directive per requirement, because two
+// replacements leave no governing text. NARROWED_BY and EXTENDED_BY hold a list each: two narrowings
+// that state disjoint cases leave the requirement governing outside both, and two extensions displace
+// nothing. This held one directive per verb until 2026-10-13, and the builds that met it wrote a
+// narrowing under Extends, or left a requirement out, to get past it
+// (docs/defects/fixed/a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md).
+//
 // Shared by the build and by vitest's globalSetup, so the two cannot drift.
 
 import { readdirSync, readFileSync, mkdirSync, existsSync } from 'node:fs';
@@ -66,7 +73,7 @@ const PD_SECTION = /^#{2,5}\s+(PD-[A-Z]+-\d+)(.*)$/;
 const DISPOSITION = /^>?\s*\*\*(Supersedes|Narrows|Extends|New):\*\*\s*(.*)$/;
 const RETIRED = /^PD-(TUI|CLI)-/; // domains 17 and 18 are closed here as they are in the corpus
 
-/** @type {Map<string, {domain: string, line: number, withdrawn: boolean, stated: boolean, statedNew: boolean, supersedes: string[], narrows: string[], extends: string[]}>} */
+/** @type {Map<string, {domain: string, line: number, withdrawn: boolean, stated: boolean, statedNew: boolean, supersedes: string[], narrows: string[], extends: string[], text: string[]}>} */
 const directives = new Map();
 if (existsSync(directivesFile)) {
   const lines = readFileSync(directivesFile, 'utf8').split(/\r?\n/);
@@ -129,9 +136,13 @@ if (existsSync(directivesFile)) {
         supersedes: [],
         narrows: [],
         extends: [],
+        // The entry's own text, from its heading to the next directive's: where a second narrowing of one
+        // requirement is looked for the identifier of the first (OQ-237).
+        text: [line],
       });
       return;
     }
+    if (current) directives.get(current)?.text.push(line);
     const d = DISPOSITION.exec(line);
     if (!d) return;
     if (!current) {
@@ -163,9 +174,9 @@ if (existsSync(directivesFile)) {
 // failure the back-pointer discipline exists to prevent, and the one a reader cannot see.
 /** @type {Map<string, string>} */
 const supersededBy = new Map();
-/** @type {Map<string, string>} */
+/** @type {Map<string, string[]>} */
 const narrowedBy = new Map();
-/** @type {Map<string, string>} */
+/** @type {Map<string, string[]>} */
 const extendedBy = new Map();
 for (const [id, v] of directives) {
   const where = `docs/product/directives.md:${v.line}`;
@@ -175,25 +186,56 @@ for (const [id, v] of directives) {
   if (v.statedNew && v.supersedes.length + v.narrows.length + v.extends.length > 0) {
     throw new Error(`symbol artifact: ${id} (${where}) declares itself New beside another disposition; New means nothing is displaced and is used alone (OQ-222)`);
   }
-  for (const [verb, list, into] of /** @type {const} */ ([
-    ['supersedes', v.supersedes, supersededBy],
-    ['narrows', v.narrows, narrowedBy],
-    ['extends', v.extends, extendedBy],
+  for (const [verb, list] of /** @type {const} */ ([
+    ['supersedes', v.supersedes],
+    ['narrows', v.narrows],
+    ['extends', v.extends],
   ])) {
     for (const req of list) {
       const target = ids.get(req);
       if (!target) throw new Error(`symbol artifact: ${id} ${verb} ${req} (${where}), which docs/spec does not define`);
       if (target.withdrawn) throw new Error(`symbol artifact: ${id} ${verb} ${req} (${where}), which is withdrawn in place and carries no behaviour`);
-      const held = into.get(req);
-      if (held && held !== id) throw new Error(`symbol artifact: ${req} is ${verb} by both ${held} and ${id} (${where}); precedence must be unambiguous`);
-      into.set(req, id);
+      if (verb === 'supersedes') {
+        // Two replacements of one requirement leave no text that governs: this refusal is the one the rule was for.
+        const held = supersededBy.get(req);
+        if (held && held !== id) throw new Error(`symbol artifact: ${req} is ${verb} by both ${held} and ${id} (${where}); precedence must be unambiguous`);
+        supersededBy.set(req, id);
+        continue;
+      }
+      const into = verb === 'narrows' ? narrowedBy : extendedBy;
+      const held = into.get(req) ?? [];
+      if (!held.includes(id)) into.set(req, [...held, id]);
     }
   }
 }
 for (const req of supersededBy.keys()) {
-  // A requirement cannot both stop governing and keep governing in the narrowed case.
-  if (narrowedBy.has(req)) throw new Error(`symbol artifact: ${req} is both superseded by ${supersededBy.get(req)} and narrowed by ${narrowedBy.get(req)}`);
+  // A requirement cannot both stop governing and keep governing in the narrowed case, nor stop governing and still
+  // govern in full beside an extension (OQ-237).
+  if (narrowedBy.has(req)) throw new Error(`symbol artifact: ${req} is both superseded by ${supersededBy.get(req)} and narrowed by ${narrowedBy.get(req)?.join(', ')}`);
+  if (extendedBy.has(req)) throw new Error(`symbol artifact: ${req} is both superseded by ${supersededBy.get(req)} and extended by ${extendedBy.get(req)?.join(', ')}`);
 }
+// OQ-237: two directives narrowing one requirement state disjoint cases, and at least one of the pair names the other in
+// its own entry, so a reader of either reaches both. Which one comes later cannot be read from the register's order, which
+// follows the domain, so either direction answers. Extends carries no such rule: nothing is displaced.
+/** @param {string} id */
+const entryText = (id) => directives.get(id)?.text.join('\n') ?? '';
+/** @param {string} text @param {string} id */
+const names = (text, id) => new RegExp(`(^|[^A-Z0-9-])${id}(?![0-9])`).test(text);
+for (const [req, list] of narrowedBy) {
+  for (let i = 0; i < list.length; i += 1) {
+    for (let j = i + 1; j < list.length; j += 1) {
+      const a = /** @type {string} */ (list[i]);
+      const b = /** @type {string} */ (list[j]);
+      if (!names(entryText(a), b) && !names(entryText(b), a)) {
+        throw new Error(
+          `symbol artifact: ${req} is narrowed by both ${a} and ${b}, and neither entry names the other; two narrowings of one requirement must name each other and state disjoint cases, and an overlapping case is a revision of the earlier directive (OQ-237)`,
+        );
+      }
+    }
+  }
+}
+/** @param {string[]} list */
+const sortedList = (list) => [...list].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 const directivesSorted = [...directives.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 const directivesWithdrawn = directivesSorted.filter(([, v]) => v.withdrawn).length;
@@ -203,6 +245,13 @@ const emitMap = (m) =>
   [...m.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([req, pd]) => `  '${req}': '${pd}',\n`)
+    .join('');
+
+/** @param {Map<string, string[]>} m */
+const emitLists = (m) =>
+  [...m.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([req, pds]) => `  '${req}': [${sortedList(pds).map((pd) => `'${pd}'`).join(', ')}],\n`)
     .join('');
 
 let src = `// GENERATED by tools/symbol-artifact/generate.mjs from docs/spec and docs/product — do not edit.
@@ -225,8 +274,18 @@ for (const [id, v] of sorted) {
   const pd = supersededBy.get(id);
   if (v.withdrawn) src += `  /** @deprecated Withdrawn in place — REQ-TRACE-181. */\n`;
   else if (pd) src += `  /** @deprecated Superseded by ${pd} — docs/product/directives.md. Cite the directive, not this. */\n`;
-  else if (narrowedBy.has(id)) src += `  /** Narrowed by ${narrowedBy.get(id)} — docs/product/directives.md. It governs in the case it names. */\n`;
-  else if (extendedBy.has(id)) src += `  /** Extended by ${extendedBy.get(id)} — docs/product/directives.md. This still governs in full. */\n`;
+  else {
+    // Every directive under every verb (OQ-237): an else-if here once hid an extension behind a narrowing.
+    const narrowing = sortedList(narrowedBy.get(id) ?? []);
+    const extending = sortedList(extendedBy.get(id) ?? []);
+    if (narrowing.length > 0 && extending.length > 0) {
+      src += `  /** Narrowed by ${narrowing.join(', ')}; extended by ${extending.join(', ')} — docs/product/directives.md. It governs outside the cases the narrowing names. */\n`;
+    } else if (narrowing.length > 0) {
+      src += `  /** Narrowed by ${narrowing.join(', ')} — docs/product/directives.md. ${narrowing.length > 1 ? 'Each governs in the case it names.' : 'It governs in the case it names.'} */\n`;
+    } else if (extending.length > 0) {
+      src += `  /** Extended by ${extending.join(', ')} — docs/product/directives.md. This still governs in full. */\n`;
+    }
+  }
   src += `  '${id}': { id: '${id}', domain: '${v.domain}', file: '${v.file}', line: ${v.line}, withdrawn: ${v.withdrawn} },\n`;
 }
 src += `} as const satisfies Record<string, RequirementSymbol>;
@@ -269,13 +328,16 @@ export const DIRECTIVE_COUNT = ${directivesSorted.length};
 export const SUPERSEDED_BY = {
 ${emitMap(supersededBy)}} as const satisfies Partial<Record<RequirementId, DirectiveId>>;
 
-/** Requirement → the directive that carved a case out of it. Both govern; read the directive first. */
+/**
+ * Requirement → the directives that carved a case out of it, sorted. All govern, each in the case it names, and the
+ * requirement outside all of them; read the directives first (OQ-237: their cases are disjoint).
+ */
 export const NARROWED_BY = {
-${emitMap(narrowedBy)}} as const satisfies Partial<Record<RequirementId, DirectiveId>>;
+${emitLists(narrowedBy)}} as const satisfies Partial<Record<RequirementId, readonly DirectiveId[]>>;
 
-/** Requirement → the directive that added behaviour beside it. The requirement is untouched. */
+/** Requirement → the directives that added behaviour beside it, sorted. The requirement is untouched. */
 export const EXTENDED_BY = {
-${emitMap(extendedBy)}} as const satisfies Partial<Record<RequirementId, DirectiveId>>;
+${emitLists(extendedBy)}} as const satisfies Partial<Record<RequirementId, readonly DirectiveId[]>>;
 `;
 
 mkdirSync(outDir, { recursive: true });

@@ -16,6 +16,10 @@
  * (docs/defects/fixed/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md). A note
  * that names a directive with no disposition for that requirement is a cross-reference in its own words and takes none
  * of the three labels (docs/product/README.md, "The back-pointer, in place").
+ *
+ * Since OQ-237 (GV1, ruled under R-072) Narrows and Extends hold a list per requirement, so a note agrees when its
+ * directive is in its verb's list; Supersedes stays one directive per requirement
+ * (docs/defects/fixed/a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md).
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -26,11 +30,14 @@ const repo = join(import.meta.dirname, '..', '..');
 const specDir = join(repo, 'docs', 'spec');
 
 type Verb = 'Superseded' | 'Narrowed' | 'Extended';
-const REGISTER: Record<Verb, Readonly<Record<string, string>>> = {
-  Superseded: SUPERSEDED_BY,
+/** Each verb's register as lists, Supersedes' single directive read as a list of one. */
+const REGISTER: Record<Verb, Readonly<Record<string, readonly string[]>>> = {
+  Superseded: Object.fromEntries(Object.entries(SUPERSEDED_BY as Readonly<Record<string, string>>).map(([req, pd]) => [req, [pd]])),
   Narrowed: NARROWED_BY,
   Extended: EXTENDED_BY,
 };
+const narrowed = (req: string): readonly string[] | undefined => (NARROWED_BY as Readonly<Record<string, readonly string[]>>)[req];
+const extended = (req: string): readonly string[] | undefined => (EXTENDED_BY as Readonly<Record<string, readonly string[]>>)[req];
 
 /** A requirement's definition, in the generator's three shapes (tools/symbol-artifact/generate.mjs). */
 const DEFINITION = [/^-\s+\*\*(REQ-[A-Z]+-\d+)\*\*/, /^\*\*(REQ-[A-Z]+-\d+)\*\*\s*[—:]/, /^#{2,5}\s+(REQ-[A-Z]+-\d+)/];
@@ -66,14 +73,14 @@ function backPointers(): BackPointer[] {
   return found;
 }
 
-const agrees = (p: BackPointer): boolean => p.requirement !== null && REGISTER[p.verb][p.requirement] === p.directive;
+const agrees = (p: BackPointer): boolean => p.requirement !== null && (REGISTER[p.verb][p.requirement] ?? []).includes(p.directive);
 
 const key = (p: BackPointer): string => `${p.requirement} ${p.verb} ${p.directive}`;
 
 /** Every register entry, as "<requirement> <verb> <directive>", the converse side of the notes. */
 function registerEntries(): string[] {
-  return (Object.entries(REGISTER) as [Verb, Readonly<Record<string, string>>][]).flatMap(([verb, map]) =>
-    Object.entries(map).map(([req, pd]) => `${req} ${verb} ${pd}`),
+  return (Object.entries(REGISTER) as [Verb, Readonly<Record<string, readonly string[]>>][]).flatMap(([verb, map]) =>
+    Object.entries(map).flatMap(([req, pds]) => pds.map((pd) => `${req} ${verb} ${pd}`)),
   );
 }
 
@@ -94,30 +101,30 @@ describe('the back-pointers in docs/spec agree with the directive register', () 
   });
 
   it('OQ-222 (BP1, R-072): the five reaches the six notes marked are in the register, and the introduction is no back-pointer', () => {
-    expect(NARROWED_BY['REQ-SANDBOX-104' as keyof typeof NARROWED_BY]).toBe('PD-TOOLS-002');
-    expect(NARROWED_BY['REQ-TOOLS-071' as keyof typeof NARROWED_BY]).toBe('PD-TOOLS-002');
-    expect(NARROWED_BY['REQ-TOOLS-072' as keyof typeof NARROWED_BY]).toBe('PD-TOOLS-002');
+    expect(narrowed('REQ-SANDBOX-104')).toEqual(['PD-TOOLS-002']);
+    expect(narrowed('REQ-TOOLS-071')).toEqual(['PD-TOOLS-002']);
+    expect(narrowed('REQ-TOOLS-072')).toEqual(['PD-TOOLS-002']);
     for (const req of ['REQ-MONITOR-173', 'REQ-WORKSPACE-041', 'REQ-LIBRARY-017', 'REQ-NOTIFY-251']) {
-      expect(EXTENDED_BY[req as keyof typeof EXTENDED_BY]).toBe('PD-LIBRARY-002');
+      expect(extended(req)).toContain('PD-LIBRARY-002');
     }
     // REQ-WORKSPACE-041 keeps its narrowing beside the extension.
-    expect(NARROWED_BY['REQ-WORKSPACE-041' as keyof typeof NARROWED_BY]).toBe('PD-WORKSPACE-002');
+    expect(narrowed('REQ-WORKSPACE-041')).toEqual(['PD-WORKSPACE-002']);
     expect(backPointers().filter((p) => p.requirement === null)).toEqual([]);
   });
 
   it('F15 (PD-ORCH-014, OQ-53): REQ-CONFIG-135 is narrowed by PD-ORCH-014, not extended, and its note says so', () => {
-    expect(NARROWED_BY['REQ-CONFIG-135' as keyof typeof NARROWED_BY]).toBe('PD-ORCH-014');
-    expect(EXTENDED_BY['REQ-CONFIG-135' as keyof typeof EXTENDED_BY]).toBeUndefined();
+    expect(narrowed('REQ-CONFIG-135')).toEqual(['PD-ORCH-014']);
+    expect(extended('REQ-CONFIG-135')).toBeUndefined();
     const notes = backPointers().filter((p) => p.requirement === 'REQ-CONFIG-135');
     expect(notes.map((p) => `${p.verb} ${p.directive}`)).toEqual(['Narrowed PD-ORCH-014']);
     // The directive keeps extending the two whose text it leaves whole.
-    expect(EXTENDED_BY['REQ-ORCH-139' as keyof typeof EXTENDED_BY]).toBe('PD-ORCH-014');
-    expect(EXTENDED_BY['REQ-NOTIFY-268' as keyof typeof EXTENDED_BY]).toBe('PD-ORCH-014');
+    expect(extended('REQ-ORCH-139')).toContain('PD-ORCH-014');
+    expect(extended('REQ-NOTIFY-268')).toContain('PD-ORCH-014');
   });
 
   it('PD-ORCH-006 revision 3 (OQ-205 as ruled, R-072): REQ-ORCH-025 is narrowed by PD-ORCH-006 beside REQ-ORCH-029, and each note says so', () => {
-    expect(NARROWED_BY['REQ-ORCH-025' as keyof typeof NARROWED_BY]).toBe('PD-ORCH-006');
-    expect(NARROWED_BY['REQ-ORCH-029' as keyof typeof NARROWED_BY]).toBe('PD-ORCH-006');
+    expect(narrowed('REQ-ORCH-025')).toContain('PD-ORCH-006');
+    expect(narrowed('REQ-ORCH-029')).toContain('PD-ORCH-006');
     expect(backPointers().filter((p) => p.requirement === 'REQ-ORCH-025').map((p) => `${p.verb} ${p.directive}`)).toEqual(['Narrowed PD-ORCH-006']);
   });
 });

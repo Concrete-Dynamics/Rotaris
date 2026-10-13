@@ -124,8 +124,9 @@ try {
     assert('the directive is a typed symbol', /'PD-CHAT-001': \{ id: 'PD-CHAT-001'/.test(art), art.slice(0, 200));
     assert('DIRECTIVE_COUNT counts it', /export const DIRECTIVE_COUNT = 1;/.test(art));
     assert('SUPERSEDED_BY maps the requirement to it', /SUPERSEDED_BY = \{\n  'REQ-CHAT-004': 'PD-CHAT-001',/.test(art));
-    assert('NARROWED_BY maps the narrowed one', /NARROWED_BY = \{\n  'REQ-CHAT-006': 'PD-CHAT-001',/.test(art));
-    assert('EXTENDED_BY maps the extended one', /EXTENDED_BY = \{\n  'REQ-SHELL-023': 'PD-CHAT-001',/.test(art));
+    // OQ-237: NARROWED_BY and EXTENDED_BY hold a list per requirement; SUPERSEDED_BY stays one directive.
+    assert('NARROWED_BY maps the narrowed one', /NARROWED_BY = \{\n  'REQ-CHAT-006': \['PD-CHAT-001'\],/.test(art));
+    assert('EXTENDED_BY maps the extended one', /EXTENDED_BY = \{\n  'REQ-SHELL-023': \['PD-CHAT-001'\],/.test(art));
     assert(
       'the superseded requirement is deprecated at its symbol',
       /@deprecated Superseded by PD-CHAT-001[^\n]*\n  'REQ-CHAT-004':/.test(art),
@@ -162,6 +163,23 @@ try {
       'one requirement both superseded and narrowed',
       '### PD-CHAT-001 — x\n\n> **Supersedes:** REQ-CHAT-004\n\n### PD-CHAT-002 — y\n\n> **Narrows:** REQ-CHAT-004\n',
       /both superseded by .* and narrowed by/,
+    ],
+    // OQ-237 (GV1, R-072): Supersedes beside Extends contradicts itself as Supersedes beside Narrows does, and two
+    // narrowings of one requirement must name each other. The passing forms are in section 5.
+    [
+      'one requirement both superseded and extended',
+      '### PD-CHAT-001 — x\n\n> **Supersedes:** REQ-CHAT-004\n\n### PD-CHAT-002 — y\n\n> **Extends:** REQ-CHAT-004\n',
+      /both superseded by .* and extended by/,
+    ],
+    [
+      'two narrowings of one requirement, neither naming the other',
+      '### PD-CHAT-001 — x\n\nOne case.\n\n> **Narrows:** REQ-CHAT-006\n\n### PD-CHAT-002 — y\n\nAnother case.\n\n> **Narrows:** REQ-CHAT-006\n',
+      /REQ-CHAT-006 is narrowed by both PD-CHAT-001 and PD-CHAT-002, and neither entry names the other/,
+    ],
+    [
+      'two narrowings where the second names only a longer identifier sharing the first one\'s prefix',
+      '### PD-CHAT-001 — x\n\nOne case.\n\n> **Narrows:** REQ-CHAT-006\n\n### PD-CHAT-002 — y\n\nBeside PD-CHAT-0011, not the first.\n\n> **Narrows:** REQ-CHAT-006\n',
+      /neither entry names the other/,
     ],
     ['a directive stating no disposition at all', '### PD-CHAT-001 — x\n\nIt says nothing about what it reaches.\n', /states no disposition/],
     ['a disposition naming nothing', '### PD-CHAT-001 — x\n\n> **Supersedes:**\n', /names no requirement identifier/],
@@ -212,7 +230,44 @@ try {
     assert('the reached requirement named under Extends instead generates', named.ok, named.out);
     assert(
       'and reaches the register',
-      named.ok && /EXTENDED_BY = \{\n  'REQ-CHAT-004': 'PD-CHAT-001',/.test(readFileSync(artifact, 'utf8')),
+      named.ok && /EXTENDED_BY = \{\n  'REQ-CHAT-004': \['PD-CHAT-001'\],/.test(readFileSync(artifact, 'utf8')),
+    );
+  }
+
+  console.log('\n5. several directives on one requirement (OQ-237)');
+  {
+    // The passing form of section 3's unnamed pair: the later entry names the earlier, in either order of the register.
+    withDirectives(
+      '### PD-CHAT-001 — x\n\nOne case.\n\n> **Narrows:** REQ-CHAT-006\n\n### PD-CHAT-002 — y\n\nAnother case, disjoint from PD-CHAT-001\'s.\n\n> **Narrows:** REQ-CHAT-006\n',
+    );
+    const pair = generate();
+    assert('two narrowings where the second names the first generate', pair.ok, pair.out);
+    assert(
+      'and both are in the requirement\'s list, sorted',
+      pair.ok && /NARROWED_BY = \{\n  'REQ-CHAT-006': \['PD-CHAT-001', 'PD-CHAT-002'\],/.test(readFileSync(artifact, 'utf8')),
+    );
+    assert(
+      'and the requirement\'s symbol names both',
+      pair.ok && /\/\*\* Narrowed by PD-CHAT-001, PD-CHAT-002[^\n]*\n  'REQ-CHAT-006':/.test(readFileSync(artifact, 'utf8')),
+    );
+    withDirectives(
+      '### PD-CHAT-001 — x\n\nOne case, disjoint from PD-CHAT-002\'s.\n\n> **Narrows:** REQ-CHAT-006\n\n### PD-CHAT-002 — y\n\nAnother case.\n\n> **Narrows:** REQ-CHAT-006\n',
+    );
+    const reversed = generate();
+    assert('the same pair where the first names the second generates', reversed.ok, reversed.out);
+    withDirectives('### PD-CHAT-001 — x\n\n> **Extends:** REQ-SHELL-023\n\n### PD-CHAT-002 — y\n\n> **Extends:** REQ-SHELL-023\n');
+    const extensions = generate();
+    assert('two extensions of one requirement, naming nothing, generate', extensions.ok, extensions.out);
+    assert(
+      'and both are in its list',
+      extensions.ok && /EXTENDED_BY = \{\n  'REQ-SHELL-023': \['PD-CHAT-001', 'PD-CHAT-002'\],/.test(readFileSync(artifact, 'utf8')),
+    );
+    withDirectives('### PD-CHAT-001 — x\n\n> **Narrows:** REQ-CHAT-006\n\n### PD-CHAT-002 — y\n\n> **Extends:** REQ-CHAT-006\n');
+    const both = generate();
+    assert(
+      'a narrowing and an extension of one requirement generate, and its symbol names each under its verb',
+      both.ok && /\/\*\* Narrowed by PD-CHAT-001; extended by PD-CHAT-002[^\n]*\n  'REQ-CHAT-006':/.test(readFileSync(artifact, 'utf8')),
+      both.out,
     );
   }
 } finally {

@@ -120,7 +120,7 @@ for (const c of rawCases) {
   scratchAgentsYaml(ws);
   const base = readFileSync(join(ws, '.rotaris', 'agents.yaml'), 'utf8').replace('  permission_mode: autonomous\n', ['  permission_mode: autonomous', ...(c.runtime ?? []), ''].join('\n'));
   writeFileSync(join(ws, '.rotaris', 'agents.yaml'), `${base}circuit_breaker:\n  tool_call_threshold: 4\n  repetition_threshold: 99\n  cycle_threshold: 99\n`);
-  await launch(c.name, ws, local, join(root, 'preferences'), {
+  const { log } = await launch(c.name, ws, local, join(root, 'preferences'), {
     ROTARIS_SCRIPT: c.script,
     ROTARIS_LOOP_SCRIPT: 'timeout',
     ROTARIS_CAPTURE_PROMPT: 'read the files',
@@ -131,7 +131,12 @@ for (const c of rawCases) {
   const activations = db.prepare("SELECT message, metadata FROM timeline WHERE name = 'loop_supervisor_activation' ORDER BY ordinal").all();
   const reads = db.prepare("SELECT tool_name, status, entry FROM tool_calls WHERE tool_name = 'read_file' ORDER BY ordinal").all();
   db.close();
-  rawObserved[c.name] = { session, activations, reads: reads.map((r) => JSON.parse(r.entry).args) };
+  // The positive control (fin32's review): the raw-count trigger fired and its classification was dispatched — and, the
+  // scripted classifier answering only its abort (`ROTARIS_LOOP_SCRIPT=timeout`), cut — so a launch with no activation
+  // says the fallback found no evidence, not that the trigger never fired.
+  const classifications = (log.match(/scripted model call: [^\n]*\(loop-classifier\)/g) ?? []).length;
+  rawObserved[c.name] = { session, activations, classifications, reads: reads.map((r) => JSON.parse(r.entry).args) };
+  if (classifications !== 1) throw new Error(`${c.name}: expected one loop classification dispatched (the raw-count trigger fired and the call was cut), found ${classifications} (see ${c.name}.log)`);
   if (reads.length !== 4) throw new Error(`${c.name}: expected four read_file calls, found ${reads.length}`);
   if (activations.length !== c.activations) throw new Error(`${c.name}: expected ${c.activations} loop_supervisor_activation entries, found ${activations.length}: ${JSON.stringify(activations)} (PD-ORCH-016)`);
   for (const a of activations) {

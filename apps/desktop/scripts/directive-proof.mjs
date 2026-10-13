@@ -181,6 +181,14 @@ try {
       '### PD-CHAT-001 — x\n\nOne case.\n\n> **Narrows:** REQ-CHAT-006\n\n### PD-CHAT-002 — y\n\nBeside PD-CHAT-0011, not the first.\n\n> **Narrows:** REQ-CHAT-006\n',
       /neither entry names the other/,
     ],
+    // fin36 (fin34's review of GV1): an entry ends at any section heading, so a mention in the next section's introduction
+    // is not in the entry and cannot satisfy the pair rule
+    // (docs/defects/fixed/a-directives-entry-text-runs-past-a-section-heading-into-the-next-sections-introduction.md).
+    [
+      'two narrowings where the only mention of the first follows a section heading after the second\'s entry',
+      '### PD-CHAT-001 — x\n\nOne case.\n\n> **Narrows:** REQ-CHAT-006\n\n### PD-CHAT-002 — y\n\nAnother case.\n\n> **Narrows:** REQ-CHAT-006\n\n## Another section\n\nIts introduction mentions PD-CHAT-001 in passing.\n',
+      /neither entry names the other/,
+    ],
     ['a directive stating no disposition at all', '### PD-CHAT-001 — x\n\nIt says nothing about what it reaches.\n', /states no disposition/],
     ['a disposition naming nothing', '### PD-CHAT-001 — x\n\n> **Supersedes:**\n', /names no requirement identifier/],
     ['the same identifier minted twice', '### PD-CHAT-001 — x\n\n> **New:** none.\n\n### PD-CHAT-001 — y\n\n> **New:** none.\n', /defined twice/],

@@ -86,6 +86,8 @@ if (existsSync(directivesFile)) {
   // refused like one on the line itself.
   /** @type {number | null} */
   let newLine = null;
+  // Whether the lines being read still belong to the current directive's entry text (OQ-237's pair rule reads it).
+  let entryOpen = false;
   /**
    * @param {string} text
    * @param {number} at
@@ -124,6 +126,7 @@ if (existsSync(directivesFile)) {
         throw new Error(`symbol artifact: ${id} is defined twice in docs/product/directives.md (line ${i + 1}); identifiers are never reused`);
       }
       current = id;
+      entryOpen = true;
       directives.set(id, {
         domain: id.split('-')[1],
         line: i + 1,
@@ -142,7 +145,12 @@ if (existsSync(directivesFile)) {
       });
       return;
     }
-    if (current) directives.get(current)?.text.push(line);
+    // An entry's text ends at any heading of level 1 to 3 that opens no directive: a section heading and the introduction
+    // under it belong to no entry, so a mention there cannot satisfy the pair rule below (fin36; until then the last entry
+    // before a section took the section's introduction,
+    // docs/defects/fixed/a-directives-entry-text-runs-past-a-section-heading-into-the-next-sections-introduction.md).
+    if (/^#{1,3}\s/.test(line)) entryOpen = false;
+    if (current && entryOpen) directives.get(current)?.text.push(line);
     const d = DISPOSITION.exec(line);
     if (!d) return;
     if (!current) {

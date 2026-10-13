@@ -13403,3 +13403,41 @@ from informing a run's analysis — and, if it stays, whether `considered_sessio
 itself read. **The costs either way:** kept, a run's analyst reads proposals written over sessions it was never shown, and only
 their summaries; excluded, a run's analyst may propose again what a retrospective already proposed, which REQ-LIBRARY-046's
 suppression at store time still catches.
+
+<a id="oq-262"></a>
+
+**OQ-262 — Which notice offers REQ-NOTIFY-044's project-initialization action, and what does the action open for a
+workspace this window does not hold?** *(REQ-NOTIFY-044, the action vocabulary; REQ-NOTIFY-047, actions write nothing into
+the project; REQ-SHELL-115, "start project initialization; resolve project initialization"; REQ-CONFIG-404; ADR-0064, the
+initialization registry and its surface. Raised 2026-10-13 by fin41 while correcting the stale comment on the renderer's
+notice-action switch, recorded in
+[`code-comments-call-built-mechanisms-unbuilt-or-owed`](../defects/code-comments-call-built-mechanisms-unbuilt-or-owed.md).
+Open.)*
+
+REQ-NOTIFY-044 lists "open the project-initialization surface for a named workspace" among the actions a notice may carry,
+and the contract carries it (`open-project-init`, with a `workspace`, `packages/contracts/src/notices.ts`). The renderer's
+arm (`apps/desktop/src/renderer/main.tsx`, `dispatchNoticeAction`) dispatches nothing and logs that the action "has no target in
+this build". Its comment gave the reason as "no project-initialization surface". That reason is false since ADR-0064:
+Settings › Project draws the initialization tasks and their outcomes (`packages/ui/src/settings/ProjectSettings.tsx`,
+`project-init.ts`). Nothing in the build raises the action either: no notice offers it, so the arm cannot be reached.
+
+The specification leaves two things open:
+
+- **Which notice carries it.** REQ-NOTIFY-044 fixes the vocabulary, not which notice offers which member. The
+  initialization banners (PD-WORKSPACE-005) offer no action today. REQ-WORKSPACE-103 puts the recorded outcome in
+  Settings › Project, which a banner could lead to with this action or with the existing "open settings at a named
+  category". Nothing says whether a banner should offer it at all.
+- **What it opens for another workspace.** The action names a workspace. Settings › Project shows the window's own
+  workspace. A notice is an application notice shown in every open window (ADR-0049, PD-WORKSPACE-005), so another window
+  may hold a different workspace. The specification does not say whether the action focuses the window that holds the
+  named workspace, opens Settings › Project in the window it was activated in only when the workspace matches, or is not
+  dispatched otherwise (REQ-NOTIFY-044's "an action naming a value outside the owning domain's vocabulary is not
+  dispatched" covers vocabularies, not windows).
+
+**What the build proceeds under.** Unchanged: the arm logs and dispatches nothing, and no notice raises the action. Only
+the comment changed, to say that the surface exists and that nothing raises the action.
+
+**What a ruling decides.** Whether any notice offers the action, and, if one does, which surface it opens in which
+window.
+
+**What a live run then shows.** Nothing until a ruling adds a notice that carries the action: no live scenario raises one.

@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
 // @ts-expect-error — the shapes are plain ESM beside the script that replays them.
-import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, STEADY_INTERVAL_MS, STEADY_TICKS, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
+import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, GATE_REFUSALS, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, STEADY_INTERVAL_MS, STEADY_TICKS, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pairNotReachedNote, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
 
 interface Shape { readonly id: string; readonly match: RegExp; readonly command: string; readonly prompt?: string }
 
@@ -502,5 +502,49 @@ describe('which send of a shape the scenario reads (docs/defects/fixed/the-live-
     expect(notReachedNote('wedge', [{ ordinal: 7, failureKind: 'invalid_request' }], 'the hard cap is unasked').title).toBe('wedge was not reached: refused at the tool gate');
     expect(shapeSends(shape('long-output'), []).kind).toBe('not-attempted');
     expect(shapeSends(shape('here-string'), [refusedAtGate, ranAfterList]).kind).toBe('not-attempted');
+  });
+});
+
+// docs/defects/fixed/the-live-runs-terminal-reader-counts-a-send-the-gate-refused-for-another-reason-as-reached.md (fin40's
+// reviewer, item N92): every refusal the tool gate settles before a call runs leaves the shape's question unasked, not only
+// the todo gate's and the schema check's.
+describe('the gate refusals that leave a shape unasked, all of them (N92)', () => {
+  const shapes: Shape[] = terminalShapes('linux');
+  const wedge = shapes.find((s) => s.id === 'wedge')!;
+  const send = (ordinal: number, status: string, failureKind: string | null, result = 'refused') => ({ ordinal, tool_name: 'terminal', agent_name: 'Orchestrator', status, failureKind, args: { command: wedge.command }, result });
+
+  it('names every refusal packages/agent-tools/src/gate.ts settles before a call runs', () => {
+    // plan_gate_withheld (the run held at the plan gate), write_scope_claimed (inside another agent's live write scope: never a
+    // terminal call, kept so the set is the gate's whole list), hook_blocked (a pre_tool hook), beside the two it held.
+    expect([...GATE_REFUSALS].sort()).toEqual(['hook_blocked', 'invalid_request', 'plan_gate_withheld', 'todo_list_owed', 'write_scope_claimed']);
+    for (const kind of ['plan_gate_withheld', 'write_scope_claimed', 'hook_blocked']) expect(reachedShape({ status: 'blocked', failureKind: kind }), kind).toBe(false);
+  });
+
+  it('reads an approval withdrawn before the call ran as not reached, and a call the run cut while it ran as reached', () => {
+    // PD-ORCH-005 clause 9: the approval withdrawn when the run came to rest settles `blocked`, `interrupted`; never run.
+    expect(reachedShape({ status: 'blocked', failureKind: 'interrupted' })).toBe(false);
+    // PD-TOOLS-013 revision 2: a call cut in flight is `failed`, `interrupted`, and it RAN; its output is the shape's answer.
+    expect(reachedShape({ status: 'failed', failureKind: 'interrupted' })).toBe(true);
+    const sends = shapeSends(wedge, [send(3, 'blocked', 'interrupted'), send(4, 'failed', 'interrupted', '[terminal_output]\n')]);
+    expect(sends.reached.map((c: { ordinal: number }) => c.ordinal)).toEqual([4]);
+    expect(sends.refused.map((c: { ordinal: number }) => c.ordinal)).toEqual([3]);
+    expect(notReachedNote('wedge', [send(3, 'blocked', 'interrupted')], 'the hard cap is unasked').title).toBe('wedge was not reached: refused at the tool gate');
+    expect(shapeSends(wedge, [send(5, 'blocked', 'hook_blocked'), send(6, 'blocked', 'plan_gate_withheld')]).kind).toBe('not-reached');
+  });
+
+  it('names the shape of a pair that was never sent beside the one the gate refused', () => {
+    const again = shapes.find((s) => s.id === 'wedge-again')!;
+    const behind = shapes.find((s) => s.id === 'behind-paused')!;
+    const refused = { ordinal: 9, tool_name: 'terminal', agent_name: 'Orchestrator', status: 'blocked', failureKind: 'todo_list_owed', args: { command: again.command }, result: 'refused' };
+    const note = pairNotReachedNote([['wedge-again', shapeSends(again, [refused])], ['behind-paused', shapeSends(behind, [refused])]], 'OQ-164\'s report is unasked');
+    expect(note).toEqual({
+      title: 'wedge-again was not reached: refused at the todo gate',
+      detail: '1 send(s) refused before running (REQ-ORCH-029) and not re-sent (#9 todo_list_owed); behind-paused was never sent; OQ-164\'s report is unasked',
+    });
+    // Both refused: both named in the title, nothing said never sent.
+    const behindRefused = { ...refused, ordinal: 10, args: { command: behind.command } };
+    expect(pairNotReachedNote([['wedge-again', shapeSends(again, [refused])], ['behind-paused', shapeSends(behind, [behindRefused])]], 'unasked')?.title).toBe('wedge-again and behind-paused were not reached: refused at the todo gate');
+    // Neither refused: not this NOTE.
+    expect(pairNotReachedNote([['wedge-again', shapeSends(again, [])], ['behind-paused', shapeSends(behind, [])]], 'unasked')).toBeNull();
   });
 });

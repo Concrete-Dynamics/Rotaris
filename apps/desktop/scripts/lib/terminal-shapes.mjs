@@ -148,21 +148,29 @@ export function terminalShapes(platform = process.platform) {
 }
 
 /**
- * The tool gate's refusals that come before a call runs and leave a shape's question unasked: REQ-ORCH-029's todo gate
- * (`todo_list_owed`, OQ-213 as ruled) and the schema check (`invalid_request`, REQ-TOOLS-032), both settled in
- * `packages/agent-tools/src/gate.ts`. A permission block is NOT among them: `pipe-to-shell` is measured by its block
- * (`blocked`, no `failure_kind`), so the selection never drops a call for being `blocked` alone, as
- * `coordinator-todo.mjs`'s `ran` does.
+ * The tool gate's refusals that come before a call runs and leave a shape's question unasked, every one
+ * `packages/agent-tools/src/gate.ts` settles: REQ-ORCH-029's todo gate (`todo_list_owed`, OQ-213 as ruled), the schema check
+ * (`invalid_request`, REQ-TOOLS-032), the plan gate's hold (`plan_gate_withheld`), another agent's live write scope
+ * (`write_scope_claimed`; it fences `write_file` and `haet_edit` alone, so it never meets a terminal call, and is listed so the
+ * set is the gate's whole list) and a `pre_tool` hook's block (`hook_blocked`). The terminal scenario sets up no plan gate and no
+ * hook, so the last three cannot fire as it stands; a shape read from one would carry the refusal's text as its answer
+ * (docs/defects/fixed/the-live-runs-terminal-reader-counts-a-send-the-gate-refused-for-another-reason-as-reached.md).
+ * `interrupted` is not in the set: it is also the kind of a call the run cut WHILE it ran (PD-TOOLS-013 revision 2, status
+ * `failed`), which did run; only the approval withdrawn before the call ran (PD-ORCH-005 clause 9, status `blocked`) is a
+ * refusal, and `reachedShape` reads the pair. A permission block is NOT a refusal here: `pipe-to-shell` is measured by its block
+ * (`blocked`, no `failure_kind`), so the selection never drops a call for being `blocked` alone, as `coordinator-todo.mjs`'s
+ * `ran` does.
  */
-export const GATE_REFUSALS = new Set(['todo_list_owed', 'invalid_request']);
+export const GATE_REFUSALS = new Set(['todo_list_owed', 'invalid_request', 'plan_gate_withheld', 'write_scope_claimed', 'hook_blocked']);
 
 /**
  * Whether a recorded terminal call reached the question its shape asks, rather than a gate refusal before it ran. The
  * confirming live run at 0bc3eee read `long-output` from the send the todo gate refused, whose result is the refusal's
  * text, and failed "all 40 lines" on 0 markers while the same command, sent again after the list, had returned all 40
- * (`docs/defects/fixed/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md`).
+ * (`docs/defects/fixed/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md`). An `interrupted`
+ * call reached it unless it settled `blocked` (an approval withdrawn before it ran, `GATE_REFUSALS` above).
  */
-export const reachedShape = (call) => !GATE_REFUSALS.has(call.failureKind ?? '');
+export const reachedShape = (call) => !GATE_REFUSALS.has(call.failureKind ?? '') && !(call.failureKind === 'interrupted' && call.status === 'blocked');
 
 /**
  * One shape's sends among a session's terminal calls (in ordinal order, as `readToolCalls` gives them): `reached`, the sends
@@ -188,6 +196,19 @@ export function notReachedNote(id, refused, unasked) {
     title: `${id} was not reached: refused at the ${todo ? 'todo gate' : 'tool gate'}`,
     detail: `${refused.length} send(s) refused before running${todo ? ' (REQ-ORCH-029)' : ''} and not re-sent (${which}); ${unasked}`,
   };
+}
+
+/**
+ * The NOTE a pair of shapes leaves (`wedge-again` and the command `behind-paused` it) when one or both were not reached
+ * (`shapeSends`'s `not-reached`), or null when neither was: the not-reached ones in the title, and in the detail, beside their
+ * refusals, the ones of the pair never sent, so neither goes unnamed. `pairs` is `[id, shapeSends(...)]` in the pair's order.
+ */
+export function pairNotReachedNote(pairs, unasked) {
+  const unreached = pairs.filter(([, sends]) => sends.kind === 'not-reached');
+  if (unreached.length === 0) return null;
+  const neverSent = pairs.filter(([, sends]) => sends.kind === 'not-attempted').map(([id]) => id);
+  const note = notReachedNote(unreached.map(([id]) => id).join(' and '), unreached.flatMap(([, sends]) => sends.refused), `${neverSent.length === 0 ? '' : `${neverSent.join(' and ')} ${neverSent.length === 1 ? 'was' : 'were'} never sent; `}${unasked}`);
+  return unreached.length > 1 ? { ...note, title: note.title.replace(' was not reached', ' were not reached') } : note;
 }
 
 /**

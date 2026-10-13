@@ -37,3 +37,15 @@ Recorded 2026-10-13 by fin41 (item N92) before the repair.
 - `apps/desktop/scripts/lib/terminal-shapes.test.ts` — the selection's tests.
 - `apps/desktop/scripts/live-run.mjs` — the header's scenario 8, the terminal docblock, and the wedge pair's NOTE.
 - `packages/agent-tools/src/gate.ts` — the refusals settled before a call runs.
+
+## Outcome
+
+Repaired 2026-10-13 by fin41 (item N92), in the harness only. `GATE_REFUSALS` holds every refusal `gate.ts` settles before
+a call runs: `todo_list_owed`, `invalid_request`, `plan_gate_withheld`, `write_scope_claimed` (listed though it never meets
+a terminal call, so the set is the gate's whole list) and `hook_blocked`. `reachedShape` also reads `interrupted` with status
+`blocked` (an approval withdrawn before the call ran) as not reached, and keeps `interrupted` with status `failed` (a call the
+run cut while it ran) as reached. The scenario's header (scenario 8 and the terminal docblock) says a shape whose every send
+the gate refused is a NOTE, and the wedge pair's NOTE goes through the new `pairNotReachedNote`, which names the member never
+sent beside the one refused. Pinned by `apps/desktop/scripts/lib/terminal-shapes.test.ts`'s "the gate refusals that leave a
+shape unasked, all of them (N92)" block, three cases red before the change. Not driven live: as the scenario stands none of
+the added refusals can fire, so a live run shows the same terminal readings as before.

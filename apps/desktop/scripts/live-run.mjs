@@ -86,7 +86,9 @@
  *                 differences exiting 1, a read-only git pipeline through a pipe, and last a command that keeps
  *                 printing past the default hard cap with no `timeout` supplied (REQ-TOOLS-097's `hardMs`). Asserted from
  *                 `tool_calls`, never from the model's prose; a shape the model never attempted is a NOTE,
- *                 not a failure, but a run that ended `failed` before any terminal call is a FAILURE (one that
+ *                 not a failure, and so is one whose every send the tool gate refused before it ran (not reached:
+ *                 the todo gate, the schema check, the plan gate, a write scope, a hook or a withdrawn approval,
+ *                 `GATE_REFUSALS`), but a run that ended `failed` before any terminal call is a FAILURE (one that
  *                 stopped otherwise before any is a NOTE), so a dead run never reads green.
  *   8b. away     — the first scenario at a permission mode that ASKS (every other forces `autonomous`): `ask`, a 20 s
  *                 approval timeout and every dialog left unanswered. The first ask must wait its full timeout, the run
@@ -229,7 +231,7 @@ import { CLASSIFIER_MARK, ROOT_MARK, answerReading, planReading } from './lib/pl
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
 import { ARTIFACTS_TAB } from './lib/library-refresh.mjs';
 import { attachReading, delegatesToReading, followUpReading, handoffReading, requestOf, swarmReading } from './lib/delegation-readings.mjs';
-import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, STEADY_INTERVAL_MS, STEADY_TICKS, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
+import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, STEADY_INTERVAL_MS, STEADY_TICKS, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pairNotReachedNote, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -2328,7 +2330,9 @@ if (wanted.includes('faults')) {
  * | `pipe-to-shell` | `a-read-only-git-pipeline-was-withheld-by-the-pipe-to-shell-rule.md` — also cost, not contradiction |
  * | `steady`        | `the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`: the silent wedge soft-pauses 70 s before REQ-CONFIG-116's 100 s cap, so the default-path hard cap (`hardMs`) is asked by a command that prints every 2 s for 130 s |
  *
- * **A shape the model never attempted is a NOTE, not a failure.** `pipe-to-shell` is a cost observation whose
+ * **A shape the model never attempted is a NOTE, not a failure, and so is a shape whose every send the tool gate refused
+ * before it ran** ("not reached", naming each refusal: `GATE_REFUSALS` and `reachedShape` in `lib/terminal-shapes.mjs`, which
+ * hold every refusal `gate.ts` settles before a call runs). `pipe-to-shell` is a cost observation whose
  * behaviour is faithful to a requirement, and reporting it as a fault would train a reader to ignore this
  * scenario — the mistake the board scenario made twice. `here-string`, `long-output`, the wedge's bound, `steady`'s
  * hard cap, `failed-word`, `diff-exit-1` and the marker leak are asserted as product facts.
@@ -2363,8 +2367,8 @@ if (wanted.includes('terminal')) {
   const calls = read === null ? [] : readToolCalls(read.session.session_id);
   const terminals = calls.filter((call) => call.tool_name === 'terminal');
   const shapeOf = (id) => SHAPES.find((shape) => shape.id === id);
-  // Every reading below takes the first send that REACHED execution (`shapeSends`, `reachedShape`): a send REQ-ORCH-029's todo
-  // gate or the schema check refused before it ran carries the refusal's text, not the shape's answer, and the confirming
+  // Every reading below takes the first send that REACHED execution (`shapeSends`, `reachedShape`): a send the tool gate refused
+  // before it ran (REQ-ORCH-029's todo gate, the schema check, or any other `GATE_REFUSALS`) carries the refusal's text, not the shape's answer, and the confirming
   // run at 0bc3eee failed "all 40 lines" on exactly that while the same command, sent again, had returned all 40. A
   // permission block is a reached send (`pipe-to-shell` is measured by it). `ran` is the same filter over every call, for
   // the finds that follow a shape rather than match one (the poll, the interrupt, the next command after `exit 3`).
@@ -2599,11 +2603,10 @@ if (wanted.includes('terminal')) {
   // silence. Only when the second wedge did soft-pause first and the same agent issued the command behind it.
   const again = attempted('wedge-again')[0];
   const behindPaused = attempted('behind-paused')[0];
-  const unreachedPair = ['wedge-again', 'behind-paused'].filter((id) => sendsOf(id).kind === 'not-reached');
-  if ((again === undefined || behindPaused === undefined) && unreachedPair.length > 0) {
-    const note = notReachedNote(unreachedPair.join(' and '), unreachedPair.flatMap((id) => sendsOf(id).refused), 'OQ-164\'s report is unasked');
-    noted(note.title, note.detail);
-  } else if (again === undefined || behindPaused === undefined) noted('the command behind a soft-paused one was not attempted', `wedge-again×${seen['wedge-again']}, behind-paused×${seen['behind-paused']}; OQ-164's report is unasked`);
+  // One of the pair not reached names its refusals, and the other beside it if it was never sent (`pairNotReachedNote`, N92).
+  const pairNote = pairNotReachedNote(['wedge-again', 'behind-paused'].map((id) => [id, sendsOf(id)]), 'OQ-164\'s report is unasked');
+  if ((again === undefined || behindPaused === undefined) && pairNote !== null) noted(pairNote.title, pairNote.detail);
+  else if (again === undefined || behindPaused === undefined) noted('the command behind a soft-paused one was not attempted', `wedge-again×${seen['wedge-again']}, behind-paused×${seen['behind-paused']}; OQ-164's report is unasked`);
   else if (diagnosticOf(again.result)?.outcome_kind !== 'soft_pause') noted('the second wedge did not soft-pause', `outcome ${diagnosticOf(again.result)?.outcome_kind ?? 'none'}; nothing was paused when the next command came`);
   else if (again.agent_name !== behindPaused.agent_name || behindPaused.ordinal < again.ordinal) noted('the command behind the second wedge ran elsewhere', `wedge-again in ${again.agent_name}, behind-paused in ${behindPaused.agent_name}; each agent's foreground session is its own (REQ-TOOLS-187)`);
   else {

@@ -49,8 +49,11 @@ describe('snapshotTree reads a large directory in batches', () => {
     const snapshot = await snapshotTree(root, '');
     ticking = false;
     expect(snapshot!.size).toBe(FILES);
+    // The in-flight bound is what pins the batching: one Promise.all over every file, the walk before OQ-245's repair, puts
+    // all 1,000 reads in flight at once.
     expect(reads.maxInFlight).toBeLessThanOrEqual(SNAPSHOT_STAT_BATCH);
-    // Four batches of 1,000 files: the event loop turns at least once between each.
+    // Four batches of 1,000 files: the event loop turns at least once between each. This alone does not tell batches from one
+    // Promise.all, since the I/O completions of a single Promise.all span loop turns too; it guards that the walk yields at all.
     expect(turns).toBeGreaterThanOrEqual(Math.ceil(FILES / SNAPSHOT_STAT_BATCH) - 1);
   });
 });

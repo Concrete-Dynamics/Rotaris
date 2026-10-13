@@ -7,6 +7,14 @@ per-attempt nonce, so each crash adds one `instance-<pid>-<nonce>.sock` for good
 `XDG_RUNTIME_DIR` is unset (always on macOS), where it persists across reboots. Read from the code by advocate B of OQ-248's
 ruling (R-072, 2026-10-13, risk 2); recorded by fin36 before the repair.
 
+
+**Repaired 2026-10-13 (fin36), under [OQ-248](../../architecture/open-questions.md#oq-248)'s ruling (R-072).**
+`removeDeadEndpoint` (`packages/platform/src/instance.ts`) runs before a reclaim removes a record whose process is dead on this
+host: it unlinks the endpoint the record names when that is a socket owned by this user named
+`instance-<recorded pid>-<8 hex>.sock`, and the per-attempt `rotaris-XXXXXX` directory it sat in once empty; a live but silent
+process's endpoint, and anything not so named, are left alone. Pinned by `instance.test.ts`'s reclaim case (all three branches;
+red on the code before). Not driven in the built app: no proof crashes an instance.
+
 ## Specs
 
 - REQ-STARTUP-164 (3), the reclaim of a record naming a process that is gone. OQ-248's ruling makes the endpoint part of the

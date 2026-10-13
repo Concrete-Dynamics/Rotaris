@@ -267,8 +267,9 @@ export function launchOptions({ local, preferences, home, extra = {} }) {
  * nothing else, so nothing but the socket moves (`socketDirectoryCandidates`, `packages/platform/src/instance.ts`).
  * Until fin30 this comment said "the product never reads this variable", which was untrue: the claim has read it
  * since 2026-09-19 (`docs/defects/fixed/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`).
- * Since fin30 the product also falls back on its own, to a private directory below the temporary directory, when
- * neither the runtime directory nor the data directory can hold the socket
+ * Since fin30 the product also falls back on its own, to a private directory below the temporary directory (since
+ * OQ-248, 2026-10-13, one each claim attempt makes and removes, `rotaris-XXXXXX`), when neither the runtime directory nor
+ * the data directory can hold the socket
  * (`docs/defects/fixed/a-deep-data-directory-leaves-the-launch-windowless.md`), so this variable is no longer what
  * makes a deep profile launchable; it still keeps each profile's socket in a directory of that profile's own, and
  * `workspace-proof`'s scenario 13b takes it away to drive the fallback.

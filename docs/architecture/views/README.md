@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-13**
 
+**The hand-over endpoint is part of the instance record (OQ-248 ruled under R-072; REQ-STARTUP-161, REQ-STARTUP-164; fin36).**
+Below a temporary directory each claim attempt makes its own private socket directory (`placeSocket`, `mkdtemp`,
+`platform/instance.ts`), removed with the socket by `closeEndpoint` when the attempt loses or the instance closes; a reclaim
+removes a dead recorded process's socket with its record (`removeDeadEndpoint`). The **process view**'s instance-claim row and
+the **sequences view**'s launch diagram (the handed-over branch) say so. No package, edge, process, channel, command or store
+column changed.
+
 **A window-match `write_file` edit keeps the file's line endings and unchanged lines (PD-TOOLS-016, OQ-246); a near-miss quote
 whose text recurs is flagged (PD-TOOLS-014 revision 2, OQ-252; fin36).** `carryWindow` (`agent-tools/src/tools/files.ts`) runs
 after `shiftNewString` for every single-window match above level 1, pairing at level 2 through `linePairs`, which

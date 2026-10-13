@@ -12547,10 +12547,14 @@ removes the endpoint too. **Rejected:** the endpoint opened after the record is 
 killed between its `listen` and its `closeEndpoint`, or an instance that crashes, still leaves its endpoint until the next
 reclaim removes it; a reclaim leaves the endpoint of a recorded process that is running but unresponsive, whose own closer
 removes it. Settles
-[`another-local-user-can-deny-the-instance-sockets-temporary-fallback`](../defects/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md),
-[`a-handed-over-launch-can-leave-the-private-socket-directory-behind`](../defects/a-handed-over-launch-can-leave-the-private-socket-directory-behind.md)
-and [`a-reclaim-leaves-the-dead-instances-socket-behind`](../defects/a-reclaim-leaves-the-dead-instances-socket-behind.md)
+[`another-local-user-can-deny-the-instance-sockets-temporary-fallback`](../defects/fixed/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md),
+[`a-handed-over-launch-can-leave-the-private-socket-directory-behind`](../defects/fixed/a-handed-over-launch-can-leave-the-private-socket-directory-behind.md)
+and [`a-reclaim-leaves-the-dead-instances-socket-behind`](../defects/fixed/a-reclaim-leaves-the-dead-instances-socket-behind.md)
 once built.
+**Built 2026-10-13 (fin36):** `placeSocket`, `removeOwnDirectory` and `removeDeadEndpoint` in
+`packages/platform/src/instance.ts`, `closeEndpoint` shared by the closers; pinned by cases in `instance.test.ts` and
+`instance-order.test.ts`, red on the code before, and `pnpm workspace-proof`'s scenario 13b (63 passed; the unrepaired build
+failed its new checks). The report-back is in place in ADR-0055.
 
 **OQ-249 — Does REQ-TOOLS-145's single active task bound a coordinator's parallel delegations?** *(REQ-TOOLS-145, "at most one
 task may be `IN_PROGRESS` at a time"; REQ-TOOLS-146, `replace`'s protection of the active task; `PD-TOOLS-008` revision 1,

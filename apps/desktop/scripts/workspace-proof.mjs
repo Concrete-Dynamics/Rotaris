@@ -710,6 +710,11 @@ try {
      * was ever built (`docs/defects/fixed/a-deep-data-directory-leaves-the-launch-windowless.md`); and the empty one put
      * the socket in the working directory, this proof's `apps/desktop`, where it stayed after the launch ended
      * (`docs/defects/fixed/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`).
+     *
+     * Since OQ-248 (R-072, 2026-10-13) the fallback below the temporary directory is a private directory each claim attempt
+     * makes (`rotaris-XXXXXX`) and removes with its socket: the handed-over launch must leave none of its own, and the ended
+     * instance must take its own with it (`docs/defects/fixed/a-handed-over-launch-can-leave-the-private-socket-directory-behind.md`,
+     * `docs/defects/fixed/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md`).
      */
     if (process.platform === 'win32') {
       skip('REQ-STARTUP-164: the hand-over socket from a profile too deep for one', 'Windows hands over through a named pipe, which has no directory and no length cap');
@@ -734,14 +739,26 @@ try {
         check(`REQ-STARTUP-164/155: with XDG_RUNTIME_DIR ${label}, a launch from a profile too deep for a socket paints and claims`,
           posix.isAbsolute(endpoint) && bytes <= limit && !endpoint.startsWith(`${dataDir}/`) && stray.length === 0,
           `endpoint ${endpoint || '(no record)'} (${bytes} bytes, cap ${limit}); data directory ${Buffer.byteLength(dataDir)} bytes; socket files in the working directory: ${JSON.stringify(stray)}`);
+        // The instance's own private directory, and the temporary directory it was made below.
+        const own = posix.dirname(endpoint);
+        const isPrivate = /^rotaris-[A-Za-z0-9]{6}$/.test(posix.basename(own));
+        const temp = posix.dirname(own);
+        const privates = () => (isPrivate && existsSync(temp) ? readdirSync(temp).filter((name) => /^rotaris-[A-Za-z0-9]{6}$/.test(name)) : []);
+        const beforeHandOver = new Set(privates());
         const exit = await handOver(s, A, extra);
         const windows = await waitForWindowCount(s.driver, 1);
         check(`REQ-STARTUP-162: with XDG_RUNTIME_DIR ${label}, a second launch is handed over through that socket`,
           exit.code === 0 && windows.length === 1 && logOf(s).includes('hand-over surfaced window'),
           `secondary exit ${exit.code ?? exit.signal}; ${windows.length} main window(s)`);
+        const leftByHandOver = privates().filter((name) => !beforeHandOver.has(name));
+        check(`OQ-248: with XDG_RUNTIME_DIR ${label}, the instance's socket sits in a private directory of its own below the temporary directory, and the handed-over launch leaves no directory of its own`,
+          isPrivate && leftByHandOver.length === 0, `endpoint directory ${own}${isPrivate ? '' : ' (not a per-attempt private directory)'}; left by the handed-over launch ${JSON.stringify(leftByHandOver)}`);
         await closeAll();
         check(`REQ-STARTUP-145: with XDG_RUNTIME_DIR ${label}, the ended launch leaves no socket behind, here or in the working directory`,
           !existsSync(endpoint) && strays().length === 0, `endpoint ${existsSync(endpoint) ? 'still present' : 'removed'}; strays ${JSON.stringify(strays())}`);
+        // Here the socket can only be below the temporary directory, so whatever directory holds it is the instance's to remove.
+        check(`OQ-248: with XDG_RUNTIME_DIR ${label}, the ended instance takes its private directory with it`,
+          !existsSync(own), `${own} ${existsSync(own) ? 'still present' : 'removed'}`);
       }
     }
   }

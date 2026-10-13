@@ -1,7 +1,7 @@
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { millis, type MachineId } from '@rotaris/kernel';
 import { nodeClocks } from './clock.js';
@@ -67,5 +67,31 @@ describe('the claim\'s order — ADR-0055, REQ-STARTUP-161, REQ-STARTUP-164', ()
     expect(sockets).toEqual([first.record.endpoint.slice(dir.length + 1)]);
     await first.close();
     expect(readdirSync(dir).filter((f) => f.endsWith('.sock'))).toEqual([]);
+  });
+
+  // OQ-248 (R-072, 2026-10-13): what an attempt creates to hold its endpoint is the record's, and a launch that is handed over
+  // leaves nothing behind — on the temporary-directory fallback too, where the directory below the temporary one was shared
+  // and never removed (docs/defects/fixed/a-handed-over-launch-can-leave-the-private-socket-directory-behind.md).
+  it.skipIf(process.platform === 'win32')('on the temporary-directory fallback a handed-over launch leaves nothing behind, and the instance takes its own directory with it when it closes', async () => {
+    const temp = join(dir, 'tmp');
+    mkdirSync(temp);
+    const deep = join(dir, 'a'.repeat(60), 'b'.repeat(60));
+    mkdirSync(deep, { recursive: true });
+    const fallback = (pid: number) => {
+      // As production claims: no socket directory of its own, no runtime directory, a data directory too deep for a socket.
+      const { socketDir: _named, ...rest } = deps(pid);
+      return { ...rest, endpointDir: deep, tempDirs: [temp], env: {} };
+    };
+    const first = await claimInstance(fallback(process.ppid));
+    if (first.outcome !== 'instance') throw new Error(first.outcome);
+    const own = dirname(first.record.endpoint);
+    expect(dirname(own)).toBe(temp);
+    const second = await claimInstance(fallback(process.pid), { workspace: '/w' });
+    expect(second.outcome).toBe('handed-over');
+    // Only the instance's own directory, holding only its own socket.
+    expect(readdirSync(temp)).toEqual([basename(own)]);
+    expect(readdirSync(own)).toEqual([basename(first.record.endpoint)]);
+    await first.close();
+    expect(readdirSync(temp)).toEqual([]);
   });
 });

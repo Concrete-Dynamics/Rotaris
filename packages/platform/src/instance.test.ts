@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { connect, createServer, type Socket } from 'node:net';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -451,7 +452,7 @@ describe('the hand-over socket\'s directory — REQ-STARTUP-145, REQ-STARTUP-161
     expect(Buffer.byteLength(endpoint)).toBeLessThanOrEqual(socketPathLimit(process.platform));
     expect(endpoint.startsWith(`${deep}/`)).toBe(false);
     // The fallback is a directory of this user's alone, below the temporary directory.
-    expect(posix.dirname(endpoint)).toMatch(/\/rotaris-[^/]+$/);
+    expect(posix.dirname(endpoint)).toMatch(/\/rotaris-[A-Za-z0-9]{6}$/);
     expect(statSync(posix.dirname(endpoint)).mode & 0o077).toBe(0);
     const second = await claimInstance(asProduction({ endpointDir: deep, tempDirs: [dir] }), { workspace: '/w' });
     expect(second.outcome).toBe('handed-over');
@@ -494,21 +495,82 @@ describe('the hand-over socket\'s directory — REQ-STARTUP-145, REQ-STARTUP-161
     expect(existsSync(join(dir, 'instance.json'))).toBe(false);
   });
 
-  it('the candidates, in order: named, runtime, data, then a private directory below each temporary one — each absolute and short enough', () => {
+  it('the candidates, in order: named, runtime, data, then each temporary directory, below which every attempt makes a private directory of its own — each absolute and short enough', () => {
     const at = (over: Partial<Parameters<typeof socketDirectoryCandidates>[0]> = {}) => socketDirectoryCandidates({
-      platform: 'linux', pid: 4242, endpointDir: '/home/me/.local/share/rotaris', tempDirs: ['/tmp'], user: '1000', ...over,
+      platform: 'linux', pid: 4242, endpointDir: '/home/me/.local/share/rotaris', tempDirs: ['/tmp'], ...over,
     }).map((c) => `${c.dir}${c.private ? ' (private)' : ''}`);
-    expect(at({ socketDir: '/s', runtimeDir: '/run/user/1000' })).toEqual(['/s', '/run/user/1000', '/home/me/.local/share/rotaris', '/tmp/rotaris-1000 (private)']);
+    expect(at({ socketDir: '/s', runtimeDir: '/run/user/1000' })).toEqual(['/s', '/run/user/1000', '/home/me/.local/share/rotaris', '/tmp (private)']);
     // Unset, empty, relative, and a Windows-spelled value are none of them a directory a POSIX launch can name.
     for (const runtimeDir of [undefined, '', 'run', 'D:/run']) {
-      expect(at({ runtimeDir })).toEqual(['/home/me/.local/share/rotaris', '/tmp/rotaris-1000 (private)']);
+      expect(at({ runtimeDir })).toEqual(['/home/me/.local/share/rotaris', '/tmp (private)']);
     }
     // A data directory too deep for the socket is passed over: the defect's own shape, the default data directory below a
     // home of sixty-six characters (with a four-digit pid the socket fits only below a home of fifty-eight or fewer).
     const deepHome = `/home/${'x'.repeat(60)}/.local/share/rotaris`;
-    expect(at({ endpointDir: deepHome })).toEqual(['/tmp/rotaris-1000 (private)']);
+    expect(at({ endpointDir: deepHome })).toEqual(['/tmp (private)']);
     // A relative temporary directory is skipped; duplicates are kept once.
-    expect(at({ tempDirs: ['tmp', '/tmp', '/tmp'] })).toEqual(['/home/me/.local/share/rotaris', '/tmp/rotaris-1000 (private)']);
+    expect(at({ tempDirs: ['tmp', '/tmp', '/tmp'] })).toEqual(['/home/me/.local/share/rotaris', '/tmp (private)']);
+    // A temporary directory is sized with the per-attempt `rotaris-XXXXXX/` component its socket sits below (OQ-248).
+    const name = 'instance-4242-00000000.sock'.length + 1;
+    const bare = `/${'t'.repeat(107 - name - 1)}`;
+    expect(socketDirectoryCandidates({ platform: 'linux', pid: 4242, endpointDir: bare, tempDirs: [bare] }).map((c) => `${c.dir}${c.private ? ' (private)' : ''}`)).toEqual([bare]);
+    const room = `/${'t'.repeat(107 - name - 'rotaris-XXXXXX/'.length - 1)}`;
+    expect(socketDirectoryCandidates({ platform: 'linux', pid: 4242, endpointDir: bare, tempDirs: [room] }).map((c) => `${c.dir}${c.private ? ' (private)' : ''}`)).toEqual([bare, `${room} (private)`]);
+  });
+
+  // OQ-248 (R-072, 2026-10-13) closes docs/defects/fixed/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md:
+  // the private directory below the temporary one is made per attempt under an unpredictable name, so nothing already there
+  // can deny it. A file standing where the old shared `rotaris-<uid>` directory went is what another local user could create.
+  it.skipIf(!posixHost)('a name already taken below the temporary directory no longer denies the fallback: each attempt makes its own private directory', async () => {
+    vi.stubEnv('XDG_RUNTIME_DIR', undefined);
+    const deep = join(dir, 'a'.repeat(60), 'b'.repeat(60));
+    mkdirSync(deep, { recursive: true });
+    const temp = join(dir, 'tmp');
+    mkdirSync(temp);
+    writeFileSync(join(temp, `rotaris-${process.getuid?.() ?? 0}`), 'not yours');
+    const claim = await claimInstance(asProduction({ endpointDir: deep, tempDirs: [temp] }));
+    expect(claim.outcome).toBe('instance');
+    if (claim.outcome !== 'instance') return;
+    const own = posix.dirname(claim.record.endpoint);
+    expect(posix.dirname(own)).toBe(temp);
+    expect(posix.basename(own)).toMatch(/^rotaris-[A-Za-z0-9]{6}$/);
+    expect(statSync(own).mode & 0o077).toBe(0);
+    await claim.close();
+    expect(existsSync(own)).toBe(false);
+  });
+
+  // OQ-248: the endpoint is the record's, so the reclaim that removes a dead process's record removes its endpoint with it
+  // (docs/defects/fixed/a-reclaim-leaves-the-dead-instances-socket-behind.md).
+  it.skipIf(!posixHost)('a reclaim removes the socket a dead recorded process left, and its own private directory; it leaves a live process\'s endpoint and a name that is not one', async () => {
+    const dead = spawnSync(process.execPath, ['-e', '0']).pid as number;
+    const own = join(dir, 'rotaris-Ab12Cd');
+    mkdirSync(own, { mode: 0o700 });
+    const stale = join(own, `instance-${dead}-0123abcd.sock`);
+    const holder = createServer();
+    await new Promise<void>((resolve) => holder.listen(stale, resolve));
+    writeFileSync(join(dir, 'instance.json'), `${JSON.stringify({ pid: dead, host: M, acquired_at: toIsoUtc(clocks.wall.instant()), endpoint: stale })}\n`);
+    const claim = await claimInstance(deps());
+    expect(claim.outcome).toBe('instance');
+    expect(existsSync(stale)).toBe(false);
+    expect(existsSync(own)).toBe(false);
+    await new Promise<void>((resolve) => holder.close(() => resolve()));
+    if (claim.outcome === 'instance') await claim.close();
+    // A file whose name is not the dead pid's endpoint is not touched.
+    const other = join(dir, 'other.sock');
+    writeFileSync(other, '');
+    writeFileSync(join(dir, 'instance.json'), `${JSON.stringify({ pid: dead, host: M, acquired_at: toIsoUtc(clocks.wall.instant()), endpoint: other })}\n`);
+    const again = await claimInstance(deps());
+    expect(again.outcome).toBe('instance');
+    expect(existsSync(other)).toBe(true);
+    if (again.outcome === 'instance') await again.close();
+    // A live process that does not answer is reclaimed from, but its endpoint is its own closer's to remove.
+    const silent = join(dir, `instance-${PREDECESSOR_PID}-89abcdef.sock`);
+    writeFileSync(silent, '');
+    writeFileSync(join(dir, 'instance.json'), `${JSON.stringify({ pid: PREDECESSOR_PID, host: M, acquired_at: toIsoUtc(clocks.wall.instant()), endpoint: silent })}\n`);
+    const third = await claimInstance(deps({ handOverIntervalMs: millis(200) }));
+    expect(third.outcome).toBe('instance');
+    expect(existsSync(silent)).toBe(true);
+    if (third.outcome === 'instance') await third.close();
   });
 
   it('the length is measured in bytes against the platform asked about: 107 on Linux, 103 on macOS', () => {
@@ -517,12 +579,12 @@ describe('the hand-over socket\'s directory — REQ-STARTUP-145, REQ-STARTUP-161
     const name = 'instance-4242-00000000.sock'.length + 1;
     const exactly = (bytes: number) => `/${'d'.repeat(bytes - name - 1)}`;
     const linuxEdge = exactly(107);
-    expect(socketDirectoryCandidates({ platform: 'linux', pid: 4242, endpointDir: linuxEdge, tempDirs: [], user: '1' }).map((c) => c.dir)).toEqual([linuxEdge]);
-    expect(socketDirectoryCandidates({ platform: 'linux', pid: 4242, endpointDir: `${linuxEdge}d`, tempDirs: [], user: '1' })).toEqual([]);
-    expect(socketDirectoryCandidates({ platform: 'darwin', pid: 4242, endpointDir: exactly(104), tempDirs: [], user: '1' })).toEqual([]);
+    expect(socketDirectoryCandidates({ platform: 'linux', pid: 4242, endpointDir: linuxEdge, tempDirs: [] }).map((c) => c.dir)).toEqual([linuxEdge]);
+    expect(socketDirectoryCandidates({ platform: 'linux', pid: 4242, endpointDir: `${linuxEdge}d`, tempDirs: [] })).toEqual([]);
+    expect(socketDirectoryCandidates({ platform: 'darwin', pid: 4242, endpointDir: exactly(104), tempDirs: [] })).toEqual([]);
     // A multi-byte character costs its bytes, not one.
     const wide = `/${'é'.repeat(40)}`;
     expect(wide.length + name).toBeLessThan(107);
-    expect(socketDirectoryCandidates({ platform: 'linux', pid: 4242, endpointDir: wide, tempDirs: [], user: '1' })).toEqual([]);
+    expect(socketDirectoryCandidates({ platform: 'linux', pid: 4242, endpointDir: wide, tempDirs: [] })).toEqual([]);
   });
 });

@@ -1,7 +1,7 @@
 import { createServer, connect, type Server, type Socket } from 'node:net';
-import { accessSync, chmodSync, constants, lstatSync, mkdirSync, readFileSync, rmSync, unlinkSync } from 'node:fs';
+import { accessSync, constants, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, rmSync, statSync, unlinkSync } from 'node:fs';
 import { createHash, randomBytes } from 'node:crypto';
-import { tmpdir, userInfo } from 'node:os';
+import { tmpdir } from 'node:os';
 import { posix } from 'node:path';
 import type { MachineId, Millis, Timers, WallClock } from '@rotaris/kernel';
 import { toIsoUtc } from '@rotaris/kernel';
@@ -98,12 +98,16 @@ export interface ClaimDeps {
    * candidate (`socketDirectoryCandidates`). Production names none; a test names its own directory.
    */
   readonly socketDir?: string;
-  /** The environment `XDG_RUNTIME_DIR` is read from, once per launch; `process.env` unless a test substitutes one. */
+  /**
+   * The environment `XDG_RUNTIME_DIR` is read from, once per launch; `process.env` unless a test substitutes one. One of the
+   * platform-convention directory variables REQ-STARTUP-147 names (amended 2026-10-13, OQ-247): it locates the socket's
+   * directory and decides nothing else.
+   */
   readonly env?: Readonly<Record<string, string | undefined>>;
   /**
    * The shallow directories a socket falls back to when neither the runtime directory nor the data directory can hold
-   * one, each used through a private `rotaris-<user>` directory below it. `[tmpdir(), '/tmp']` unless a test substitutes
-   * its own.
+   * one, each used through a private directory every claim attempt makes below it (`rotaris-XXXXXX`, OQ-248).
+   * `[tmpdir(), '/tmp']` unless a test substitutes its own.
    */
   readonly tempDirs?: readonly string[];
 }
@@ -116,12 +120,19 @@ export function socketPathLimit(platform: NodeJS.Platform): number {
   return platform === 'linux' ? 107 : 103;
 }
 
-/** One directory a hand-over socket may be placed in, and whether it is a private one this launch makes and checks. */
+/** One directory a hand-over socket may be placed in, and whether each attempt places it in a private directory below it. */
 export interface SocketCandidate {
   readonly dir: string;
-  /** A `rotaris-<user>` directory below a shared temporary directory: created `0700` and used only while it is ours alone. */
+  /**
+   * A shared temporary directory: each claim attempt makes its own `0700` directory below it under an unpredictable name
+   * (`mkdtemp`), places its socket there, and removes both when the attempt loses or the instance closes (OQ-248).
+   */
   readonly private: boolean;
 }
+
+/** The per-attempt directory below a temporary one, as `mkdtemp` names it: the prefix and six characters. */
+const PRIVATE_PREFIX = 'rotaris-';
+const PRIVATE_DIRECTORY = /^rotaris-[A-Za-z0-9]{6}$/;
 
 export interface SocketPlacement {
   readonly platform: NodeJS.Platform;
@@ -131,18 +142,23 @@ export interface SocketPlacement {
   /** `XDG_RUNTIME_DIR` as the launch read it: unset, empty, relative or absolute. */
   readonly runtimeDir?: string | undefined;
   readonly tempDirs: readonly string[];
-  /** Names the private directory below a temporary one: the numeric user id where the platform has one. */
-  readonly user: string;
 }
 
 /**
  * Where a unix socket for the hand-over endpoint may be placed, in the order a launch tries them (REQ-STARTUP-161/164):
  * a socket directory the caller names; `XDG_RUNTIME_DIR`, the directory the XDG Base Directory Specification sets aside
- * for exactly this; the data directory beside the record; and a private `rotaris-<user>` directory below each temporary
- * directory, the "replacement directory with similar capabilities" that specification tells an application to fall back
- * to. A directory is a candidate only when it is absolute, since the record names the socket for a launch started from any
- * working directory and a relative value is one the specification calls invalid and says to ignore; and only when the
- * socket's whole path fits `socketPathLimit`, measured in bytes with this launch's pid.
+ * for exactly this (one of REQ-STARTUP-147's platform-convention directory variables, OQ-247); the data directory beside
+ * the record; and each temporary directory, below which every attempt makes a private directory of its own — the
+ * "replacement directory with similar capabilities" that specification tells an application to fall back to. A directory is
+ * a candidate only when it is absolute, since the record names the socket for a launch started from any working directory
+ * and a relative value is one the specification calls invalid and says to ignore; and only when the socket's whole path fits
+ * `socketPathLimit`, measured in bytes with this launch's pid (and, below a temporary directory, the private directory's
+ * `rotaris-XXXXXX/` component).
+ *
+ * Until OQ-248's ruling (R-072, 2026-10-13) the fallback was one predictable `rotaris-<uid>` directory, made before the
+ * claim and never removed: another local user who made that name first denied every launch the fallback
+ * (`docs/defects/fixed/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md`), and a launch that was handed
+ * over could leave it behind (`docs/defects/fixed/a-handed-over-launch-can-leave-the-private-socket-directory-behind.md`).
  *
  * Until fin30 the claim took `XDG_RUNTIME_DIR` with `??`, so a set-but-empty value addressed the socket relative to the
  * working directory (`docs/defects/fixed/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`),
@@ -153,18 +169,17 @@ export interface SocketPlacement {
 export function socketDirectoryCandidates(p: SocketPlacement): SocketCandidate[] {
   const limit = socketPathLimit(p.platform);
   // The nonce is minted per attempt and always eight hex digits, so any eight stand in for it here.
-  const fits = (dir: string): boolean => Buffer.byteLength(posix.join(dir, `instance-${p.pid}-00000000.sock`), 'utf8') <= limit;
+  const fits = (dir: string, isPrivate: boolean): boolean =>
+    Buffer.byteLength(posix.join(dir, ...(isPrivate ? [`${PRIVATE_PREFIX}XXXXXX`] : []), `instance-${p.pid}-00000000.sock`), 'utf8') <= limit;
   const out: SocketCandidate[] = [];
   const consider = (dir: string | undefined, isPrivate: boolean): void => {
-    if (dir === undefined || !posix.isAbsolute(dir) || !fits(dir) || out.some((c) => c.dir === dir)) return;
+    if (dir === undefined || !posix.isAbsolute(dir) || !fits(dir, isPrivate) || out.some((c) => c.dir === dir)) return;
     out.push({ dir, private: isPrivate });
   };
   consider(p.socketDir, false);
   consider(p.runtimeDir, false);
   consider(p.endpointDir, false);
-  for (const temp of p.tempDirs) {
-    if (posix.isAbsolute(temp)) consider(posix.join(temp, `rotaris-${p.user}`), true);
-  }
+  for (const temp of p.tempDirs) consider(temp, true);
   return out;
 }
 
@@ -345,22 +360,16 @@ async function passRecord(deps: ClaimDeps, successor: InstanceRecord, link: Succ
 }
 
 /**
- * Whether a candidate can hold the socket: it exists as a directory (made here when it does not, since a scratch runtime
- * directory does not exist until the harness's launch makes the profile that names it) and this process may create a
- * file in it. A private one must also be this user's alone — not a link, owned by this user, and closed to everyone else —
- * because a directory below a shared temporary directory may have been made by someone else first, and whoever controls
- * the directory controls which socket a later launch connects to.
+ * Whether a candidate can hold the socket: it exists as a directory and this process may create a file in it. A directory
+ * the socket goes in directly is made here when it does not exist, since a scratch runtime directory does not exist until
+ * the harness's launch makes the profile that names it; a temporary directory, below which each attempt makes its own
+ * private directory, is the system's and is only checked. Nothing below a temporary directory is made or trusted here: the
+ * private directory is made per attempt by `placeSocket`, under a name nobody can take first (OQ-248).
  */
 function preparedSocketDirectory(candidate: SocketCandidate): boolean {
   try {
-    mkdirSync(candidate.dir, { recursive: true, ...(candidate.private ? { mode: 0o700 } : {}) });
-    const stat = lstatSync(candidate.dir);
-    if (!stat.isDirectory()) return false;
-    if (candidate.private) {
-      const uid = process.getuid?.();
-      if (uid !== undefined && stat.uid !== uid) return false;
-      if ((stat.mode & 0o077) !== 0) chmodSync(candidate.dir, 0o700);
-    }
+    if (!candidate.private) mkdirSync(candidate.dir, { recursive: true });
+    if (!statSync(candidate.dir).isDirectory()) return false;
     accessSync(candidate.dir, constants.W_OK | constants.X_OK);
     return true;
   } catch {
@@ -373,15 +382,56 @@ function preparedSocketDirectory(candidate: SocketCandidate): boolean {
  * launch. `undefined` on Windows (a named pipe), and where no candidate can hold a socket — the endpoint is then addressed
  * under the data directory, its listen fails, and the claim is refused with the reason rather than left unhandled.
  */
-function socketDirectoryFor(deps: ClaimDeps, platform: NodeJS.Platform): string | undefined {
+function socketDirectoryFor(deps: ClaimDeps, platform: NodeJS.Platform): SocketCandidate | undefined {
   if (platform === 'win32') return undefined;
   const candidates = socketDirectoryCandidates({
     platform, pid: deps.pid, endpointDir: deps.endpointDir, socketDir: deps.socketDir,
     runtimeDir: (deps.env ?? process.env)['XDG_RUNTIME_DIR'],
     tempDirs: deps.tempDirs ?? [tmpdir(), '/tmp'],
-    user: String(process.getuid?.() ?? userInfo().username),
   });
-  return candidates.find(preparedSocketDirectory)?.dir;
+  return candidates.find(preparedSocketDirectory);
+}
+
+/**
+ * Where one attempt's socket goes: the candidate itself, or, below a temporary directory, a fresh private directory this
+ * attempt makes (`mkdtemp`: `0700`, a name nobody could have taken first) and owns — `own`, removed with the socket when the
+ * attempt loses or the instance closes, so a launch that is handed over leaves nothing behind (OQ-248, R-072, 2026-10-13:
+ * what an attempt creates to hold its endpoint is part of "the record itself" REQ-STARTUP-164 allows, removed when it loses).
+ */
+function placeSocket(base: SocketCandidate | undefined): { readonly dir?: string; readonly own?: string } | { readonly refused: string } {
+  if (base === undefined || !base.private) return base === undefined ? {} : { dir: base.dir };
+  try {
+    const own = mkdtempSync(posix.join(base.dir, PRIVATE_PREFIX));
+    return { dir: own, own };
+  } catch (cause) {
+    return { refused: `this launch could not make a private directory for its hand-over endpoint below ${base.dir}: ${String(cause)}; no instance record was written (REQ-STARTUP-164)` };
+  }
+}
+
+/** Remove the private directory an attempt made for its endpoint, once its socket is gone; never recursively. */
+function removeOwnDirectory(own: string | undefined): void {
+  if (own === undefined) return;
+  try { rmdirSync(own); } catch { /* not empty, or already gone */ }
+}
+
+/**
+ * OQ-248: the reclaim of a record whose process is dead on this host removes the endpoint that record names with it — the
+ * socket a crash or a force-quit left, and the per-attempt private directory it sat in once that is empty. Only what is
+ * plainly that process's endpoint: a socket, owned by this user, named `instance-<recorded pid>-<8 hex>.sock`. Until then
+ * every crash left a socket nothing would read again
+ * (`docs/defects/fixed/a-reclaim-leaves-the-dead-instances-socket-behind.md`).
+ */
+function removeDeadEndpoint(dead: InstanceRecord, platform: NodeJS.Platform): void {
+  if (platform === 'win32' || !posix.isAbsolute(dead.endpoint)) return;
+  if (!new RegExp(`^instance-${dead.pid}-[0-9a-f]{8}\\.sock$`).test(posix.basename(dead.endpoint))) return;
+  try {
+    const stat = lstatSync(dead.endpoint);
+    const uid = process.getuid?.();
+    if (!stat.isSocket() || (uid !== undefined && stat.uid !== uid)) return;
+    unlinkSync(dead.endpoint);
+  } catch { return; }
+  const parent = posix.dirname(dead.endpoint);
+  if (PRIVATE_DIRECTORY.test(posix.basename(parent))) removeOwnDirectory(parent);
 }
 
 /**
@@ -403,21 +453,24 @@ async function openEndpoint(deps: ClaimDeps, endpoint: string, platform: NodeJS.
   }
 }
 
-/** Close an endpoint whose claim was lost or refused: the server and its socket, never the record, which is not ours. */
-async function closeEndpoint(server: Server, endpoint: string, platform: NodeJS.Platform): Promise<void> {
+/**
+ * Close an endpoint whose claim was lost or refused: the server, its socket and the private directory the attempt made for
+ * it, never the record, which is not ours. A launch that is handed over leaves nothing behind (OQ-248).
+ */
+async function closeEndpoint(server: Server, endpoint: string, platform: NodeJS.Platform, own?: string): Promise<void> {
   await new Promise<void>((resolve) => server.close(() => resolve()));
   if (platform !== 'win32') { try { unlinkSync(endpoint); } catch { /* */ } }
+  removeOwnDirectory(own);
 }
 
-/** Release what this process holds: its record (only while it still names this process), its server, its socket. */
-function closerFor(deps: ClaimDeps, server: Server, endpoint: string, platform: NodeJS.Platform): () => Promise<void> {
+/** Release what this process holds: its record (only while it still names this process), its server, its socket and its directory. */
+function closerFor(deps: ClaimDeps, server: Server, endpoint: string, platform: NodeJS.Platform, own?: string): () => Promise<void> {
   return async () => {
     try {
       const now = readRecord(deps.recordFile);
       if (now && now.pid === deps.pid) rmSync(deps.recordFile, { force: true });
     } catch { /* */ }
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-    if (platform !== 'win32') { try { unlinkSync(endpoint); } catch { /* */ } }
+    await closeEndpoint(server, endpoint, platform, own);
   };
 }
 
@@ -520,24 +573,26 @@ function announceSuccessor(deps: ClaimDeps, predecessorEndpoint: string, record:
 export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): Promise<ClaimOutcome> {
   const platform = deps.platform ?? process.platform;
   /**
-   * The socket directory is read ONCE, before the record exists: a nonce is minted per attempt and the
-   * record names the endpoint the first attempt listened on, so re-reading the environment inside the
-   * retry would address a directory the record never named. The directory is created here rather than
-   * left to the listen, because a scratch runtime directory does not exist until the harness's launch
-   * makes the profile that names it.
+   * The socket directory is chosen ONCE, before the record exists, so the environment is read once per launch. The
+   * directory is created here rather than left to the listen, because a scratch runtime directory does not exist until the
+   * harness's launch makes the profile that names it. Below a temporary directory each attempt then makes its own private
+   * directory (`placeSocket`), and the record names the endpoint of the attempt that won.
    */
-  const socketDir = socketDirectoryFor(deps, platform);
+  const base = socketDirectoryFor(deps, platform);
   const attempt = async (): Promise<ClaimOutcome | 'lost'> => {
-    const endpoint = endpointFor(deps.endpointDir, deps.pid, platform, socketDir);
+    const placed = placeSocket(base);
+    if ('refused' in placed) return { outcome: 'refused', reason: placed.refused };
+    const endpoint = endpointFor(deps.endpointDir, deps.pid, platform, placed.dir);
     const record: InstanceRecord = { pid: deps.pid, host: deps.machineId, acquired_at: toIsoUtc(deps.wall.instant()), endpoint };
     // The endpoint listens first; only then does the record name it (ADR-0055, REQ-STARTUP-161/164).
     const opened = await openEndpoint(deps, endpoint, platform);
-    if ('refused' in opened) return { outcome: 'refused', reason: opened.refused };
+    if ('refused' in opened) { removeOwnDirectory(placed.own); return { outcome: 'refused', reason: opened.refused }; }
     const r = exclusiveCreate(deps.recordFile, `${JSON.stringify(record)}\n`);
     if (r.ok && r.value.minted) {
-      return { outcome: 'instance', record, server: opened.server, close: closerFor(deps, opened.server, endpoint, platform) };
+      return { outcome: 'instance', record, server: opened.server, close: closerFor(deps, opened.server, endpoint, platform, placed.own) };
     }
-    await closeEndpoint(opened.server, endpoint, platform);
+    // OQ-248: what this attempt made for its endpoint goes with it; a launch that is handed over leaves nothing behind.
+    await closeEndpoint(opened.server, endpoint, platform, placed.own);
     if (!r.ok) return { outcome: 'refused', reason: `${r.error.headline}: ${r.error.detail ?? ''}` };
     return 'lost';
   };
@@ -553,6 +608,8 @@ export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): P
     const answer = await tryHandOver(existing.endpoint, handOver, deps.timers, deps.handOverIntervalMs);
     if (answer.acked) return { outcome: 'handed-over' };
   }
+  // OQ-248: the endpoint is the record's, so a dead process's goes with its record; a live but silent one's stays its own.
+  if (existing && !live) removeDeadEndpoint(existing, platform);
   rmSync(deps.recordFile, { force: true });
   const second = await attempt();
   if (second !== 'lost') return second;
@@ -576,16 +633,18 @@ export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): P
  */
 export async function inheritInstance(deps: ClaimDeps, predecessorEndpoint: string): Promise<ClaimOutcome> {
   const platform = deps.platform ?? process.platform;
-  const socketDir = socketDirectoryFor(deps, platform);
-  const endpoint = endpointFor(deps.endpointDir, deps.pid, platform, socketDir);
+  const placed = placeSocket(socketDirectoryFor(deps, platform));
+  if ('refused' in placed) return { outcome: 'refused', reason: placed.refused };
+  const endpoint = endpointFor(deps.endpointDir, deps.pid, platform, placed.dir);
   const record: InstanceRecord = { pid: deps.pid, host: deps.machineId, acquired_at: toIsoUtc(deps.wall.instant()), endpoint };
   let server: Server;
   try {
     server = await listen(endpoint, deps.onHandOver, platform, (successor, link) => passRecord(deps, successor, link));
   } catch (cause) {
+    removeOwnDirectory(placed.own);
     return { outcome: 'refused', reason: `the successor could not open its hand-over endpoint: ${String(cause)}` };
   }
-  const close = closerFor(deps, server, endpoint, platform);
+  const close = closerFor(deps, server, endpoint, platform, placed.own);
   const answer = await announceSuccessor(deps, predecessorEndpoint, record);
   if (!answer.acked) {
     await close();

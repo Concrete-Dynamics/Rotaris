@@ -72,6 +72,8 @@ export function resolveUserDirs(e: DirEnv = { platform: process.platform, env: p
  * relative value was still used as it stood, so the per-user directories landed under the working directory
  * (`docs/defects/fixed/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`). The variables are read off
  * Windows and macOS alone, so "absolute" is POSIX's: a Windows spelling such as `D:/x` names nothing a POSIX launch can resolve.
+ * `XDG_CONFIG_HOME` and `XDG_DATA_HOME` are two of REQ-STARTUP-147's platform-convention directory variables (amended
+ * 2026-10-13, OQ-247): each locates a directory and decides nothing else.
  */
 export function xdgBaseDirectory(value: string | undefined, fallback: string): string {
   return value === undefined || value === '' || !posix.isAbsolute(value) ? fallback : value;
@@ -84,6 +86,8 @@ export function xdgBaseDirectory(value: string | undefined, fallback: string): s
  * directory and the preference store at `rotaris\rotaris`, `rotaris\data` and `Rotaris\Rotaris`, relative to the working
  * directory (`docs/defects/fixed/an-empty-localappdata-puts-the-per-user-directories-at-a-relative-path.md`). REQ-STARTUP-145's
  * per-user location is never one relative to wherever the application happened to be started.
+ * `LOCALAPPDATA` is one of REQ-STARTUP-147's platform-convention directory variables (amended 2026-10-13, OQ-247): it
+ * locates the machine-local per-user root and decides nothing else.
  *
  * "Absolute" here is fully qualified: a drive letter and a separator (`C:\x`), or a UNC share (`\\server\share\x`). Until
  * fin34 it was `win32.isAbsolute`, which also accepts a value rooted at no drive (`\Local`) — absolute to whichever drive

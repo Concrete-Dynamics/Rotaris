@@ -10,6 +10,15 @@ directory, and every launch is refused with exit 2 and no window. A per-attempt 
 directory, named in the record as the endpoint already is, would leave nothing to pre-empt. Read from the code by fin30's
 review; not measured here (one user on this host).
 
+
+**Repaired 2026-10-13 (fin36), under [OQ-248](../../architecture/open-questions.md#oq-248)'s ruling (R-072).** A
+temporary-directory candidate is now the temporary directory itself (`socketDirectoryCandidates`, sized with the
+`rotaris-XXXXXX/` component), and each claim attempt makes its own `0700` directory below it with `mkdtempSync`
+(`placeSocket`, `packages/platform/src/instance.ts`), a name nobody can take first; the attempt's socket goes there, and the
+directory is removed with the socket when the attempt loses or the instance closes. Pinned by `instance.test.ts`'s "a name
+already taken below the temporary directory no longer denies the fallback" (a file standing at `rotaris-<uid>`, which another
+local user could create: refused on the code before, claimed after) and the candidates' sizing case; and by `pnpm workspace-proof`'s scenario 13b, extended with two OQ-248 checks per launch (the instance's socket in a per-attempt directory and none left by the handed-over launch; the ended instance's directory removed): 63 passed, 0 failed, 2 skipped on the repaired build, twice, at a load of 1.3 to 3.6 on four CPUs; on the unrepaired build both launches failed the first (`/tmp/rotaris-0 (not a per-attempt private directory)`) and showed `/tmp/rotaris-0 still present` after the close.
+
 ## Specs
 
 REQ-STARTUP-164: a record naming a process that cannot be reached SHALL never leave the application unlaunchable, and every

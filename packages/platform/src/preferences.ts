@@ -181,7 +181,8 @@ export interface PreferenceRootEnv { readonly platform: NodeJS.Platform; readonl
  * home (`XDG_CONFIG_HOME`, REQ-UIBENCH-039) is honoured on Linux alone, as OQ-33 was ruled (R-071): on Windows and macOS
  * the benchmark-private variable carries the same job. That is the branch `resolveUserDirs` reads it on, so the preference
  * store and the rest of the per-user state never part, and through the same reading (`xdgBaseDirectory`: an empty or relative
- * value takes the default; on Windows `localAppDataDirectory`, the same for `LOCALAPPDATA`). Until fin22 it was read before the platform branch, on every platform
+ * value takes the default; on Windows `localAppDataDirectory`, the same for `LOCALAPPDATA`; both are REQ-STARTUP-147's
+ * platform-convention directory variables since its amendment of 2026-10-13, OQ-247). Until fin22 it was read before the platform branch, on every platform
  * (`docs/defects/fixed/the-preference-root-honours-xdg-config-home-on-every-platform.md`).
  */
 export function resolvePreferenceRoot(e: PreferenceRootEnv = { platform: process.platform, env: process.env, home: homedir() }): string {

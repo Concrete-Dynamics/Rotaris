@@ -191,8 +191,11 @@ export function captureImprovementJob(
     generated_at: input.generatedAt,
     timeout_seconds: input.timeoutSeconds,
     collector_model: input.collectorModel,
+    // REQ-LIBRARY-025: the source session of each prior artifact supplied as history. A retrospective's artifact has none
+    // (PD-LIBRARY-002 revision 2 (a)) and REQ-LIBRARY-034's filter keeps it, so it records none; until fin42 its null
+    // reached the job and the parse threw, and no later run's analysis was captured (OQ-271 asks whether it belongs here).
     considered_session_ids: [
-      ...new Set(priorArtifacts.map((artifact) => artifact.source_session_id)),
+      ...new Set(priorArtifacts.flatMap((artifact) => (artifact.source_session_id === null ? [] : [artifact.source_session_id]))),
     ],
     progress: jsonEntries(
       row.progress,

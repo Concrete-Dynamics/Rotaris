@@ -13376,3 +13376,30 @@ a build that ships machine setup makes true without a change.
 **What a ruling decides.** Whether "the first time a tool is needed" may stand beside the requirement's two moments
 (extending REQ-STARTUP-160), whether a build that does not carry machine setup or warm-up must leave those two moments out
 of its disclosure, or whether both stand as built.
+
+<a id="oq-271"></a>
+
+**OQ-271 — Is a retrospective's artifact part of a later run's analysis history?** *(REQ-LIBRARY-034, the analyst's prior
+artifacts — `task_run` artifacts other than the session's own, the five newest; REQ-LIBRARY-025, `considered_session_ids`
+records the source session of each; REQ-LIBRARY-017, "Data from another run, another session, or another workspace MUST NOT
+inform it", beside "the bounded prior-artifact history of REQ-LIBRARY-034"; [`PD-LIBRARY-002`](../product/directives.md#pd-library-002)
+revision 2 (a), a retrospective artifact stores `source_session_id` null and names the sessions it read. Raised 2026-10-13 by
+fin42 from [`a-post-run-analysis-after-a-retrospective-is-never-captured.md`](../defects/fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md).)*
+
+A retrospective's artifact carries `source_run_type` `task_run` and no source session, so REQ-LIBRARY-034's filter, read by its
+letter, keeps it among a later run's five prior artifacts, and REQ-LIBRARY-025 has no session of it to record. Until fin42 the
+null reached the job and its parse threw, so no run's analysis was captured while a retrospective artifact stood among the five
+newest. The specification was written before the retrospective existed, and PD-LIBRARY-002 revision 2 names REQ-LIBRARY-011,
+-020, -109, -124, -125 and -130 and REQ-NOTIFY-250, not REQ-LIBRARY-025 or -034.
+
+**What the build proceeds under.** The letter of REQ-LIBRARY-034: a retrospective's artifact stays in a later run's history,
+bounded like any prior artifact, and contributes no session to `considered_session_ids`, since it has none
+(`captureImprovementJob`, `packages/engine/src/improvements/capture.ts`). Its proposals then reach the per-run analyst as history,
+and REQ-LIBRARY-046's duplicate suppression already reads them.
+
+**What a ruling decides.** Whether a retrospective's artifact belongs to the per-run analyst's history — as built, by the letter of
+REQ-LIBRARY-034, or excluded, since its content is drawn from other sessions and REQ-LIBRARY-017 keeps another session's data
+from informing a run's analysis — and, if it stays, whether `considered_session_ids` should carry the sessions the retrospective
+itself read. **The costs either way:** kept, a run's analyst reads proposals written over sessions it was never shown, and only
+their summaries; excluded, a run's analyst may propose again what a retrospective already proposed, which REQ-LIBRARY-046's
+suppression at store time still catches.

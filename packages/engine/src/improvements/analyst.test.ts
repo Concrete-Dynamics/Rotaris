@@ -348,4 +348,38 @@ describe("REQ-LIBRARY-032/165 improvement capture", () => {
     ).toBeNull();
     db.close();
   });
+
+  /*
+   * docs/defects/fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md (fin42): a retrospective artifact carries no
+   * source session (PD-LIBRARY-002 revision 2 (a)) and is a `task_run`, so REQ-LIBRARY-034's filter keeps it among a later
+   * run's prior artifacts; REQ-LIBRARY-025 records the source session of each, and a retrospective has none to record. Before
+   * the repair the null reached `considered_session_ids` and the job's parse threw, so the run's analysis was never captured.
+   */
+  it("captures a run's analysis when a retrospective artifact is among the prior ones, recording no session for it (REQ-LIBRARY-025/034, OQ-271)", () => {
+    const root = mkdtempSync(join(tmpdir(), "rotaris-improvement-capture-"));
+    paths.push(root);
+    const workspaceId = mintWorkspaceId("000000000000000000000000000000ac");
+    const opened = openWorkspaceStore(root, workspaceId, "C:\\workspace");
+    paths.push(storeDir(root, workspaceId));
+    const db = opened.db;
+    const dal = new StoreDal(db);
+    dal.upsertSession({ session_id: "session-2", workspace_root: "C:\\workspace", execution_status: "completed", created_at: "2026-10-13T09:00:00.000Z", updated_at: "2026-10-13T10:00:00.000Z", run_type: "task_run" });
+    dal.updateSessionRun(asSessionId("session-2"), { stop_reason: "completed" });
+    const artifact = (id: string, source: string | null, considered: string[]) => ImprovementArtifactSchema.parse({
+      artifact_id: id, source_session_id: source, source_kind: source === null ? "retrospective" : "post_run", source_run_type: "task_run",
+      generated_at: "2026-10-13T08:00:00.000Z", collector_model: "medium", considered_session_ids: considered, notes: null,
+      checkpoints: [], rolled_back_at: null, proposals: [],
+    });
+    const retrospective = artifact("impart_0000000r", null, ["session-0", "session-1"]);
+    const postRun = artifact("impart_0000000p", "session-1", []);
+    const captured = captureImprovementJob(dal, {
+      workspaceId, workspaceRoot: "C:\\workspace", sessionId: "session-2", generatedAt: "2026-10-13T10:00:00.000Z",
+      timeoutSeconds: 60, collectorModel: "medium", priorArtifacts: [retrospective, postRun],
+    });
+    expect(captured).not.toBeNull();
+    expect(captured?.considered_session_ids).toEqual(["session-1"]);
+    expect(captured?.prior_artifacts.map((a) => a.artifact_id)).toEqual(["impart_0000000r", "impart_0000000p"]);
+    db.close();
+  });
 });
+

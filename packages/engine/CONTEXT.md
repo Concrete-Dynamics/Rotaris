@@ -242,6 +242,16 @@ consulted before acceptance is allowed. — `REQ-ORCH-129`, `REQ-ORCH-039`
 **Loop supervisor**:
 The hidden observer that detects a run circling and escalates. — `REQ-ORCH-105`
 
+**Plan correction**:
+The message the run sends a coordinating root, in its own conversation, when it answers `succeeded` with items of its own
+plan still open: it asks for each item's true state through the todo tool, up to the larger of 1 and the validation-retry
+setting times, before the task is re-queued. — `PD-ORCH-015` (over `REQ-ORCH-075`, `REQ-ORCH-078`)
+
+**Held answer**:
+The answer a held iteration's root wrote, cut to 6,000 characters, kept with the re-queued task and carried beside the
+marker block to that task's next fresh root only, labelled as the answer the person was shown; dropped when the task
+completes or is given up on. — `PD-ORCH-015` (over `REQ-ORCH-075`)
+
 ### Watching and steering a live run
 
 **Control**:

@@ -87,6 +87,15 @@ describe('a named planner task (REQ-CHAT-040, REQ-ORCH-071)', () => {
     expect(decodeStoredTodo(JSON.stringify(withIds)).planner).toEqual(withIds);
   });
 
+  it('PD-ORCH-015: a held answer kept with a re-queued task never reaches the projection the renderer draws, nor a line of the plan', () => {
+    const held = 'x'.repeat(6_000);
+    const withHeld = { ...planner, phases: [{ ...planner.phases[0]!, tasks: [{ ...planner.phases[0]!.tasks[0]!, state: 'pending' as const, heldAnswer: held }] }, planner.phases[1]!] };
+    const projected = projectPlannerTodo(withHeld);
+    expect(Object.keys(projected.phases[0]!.tasks[0]!).sort()).toEqual(['id', 'state', 'text']);
+    expect(JSON.stringify(projected)).not.toContain(held);
+    expect(todoLinesFromStored(JSON.stringify(withHeld)).join('\n')).not.toContain(held);
+  });
+
   it('a stored name that is not a string is not a planner document', () => {
     expect(isPlannerTodoDocument(planner)).toBe(true);
     expect(isPlannerTodoDocument({ ...planner, phases: [{ name: 'main', tasks: [{ id: 'a', text: 't', state: 'pending', name: 7 }] }] })).toBe(false);

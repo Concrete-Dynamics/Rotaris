@@ -1927,7 +1927,7 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   construction is refused before anything is created from it. REQ-GIT-138's directory half is the top-level
   `worktree_storage_subpath`'s (`worktreeStorageCollision`, beside the template check): a value resolving to the fixed
   requirement checkout directory `.rotaris/requirements/worktrees` or inside it fails the load as a whole (since 2026-10-13,
-  fin41; a value containing it loads, OQ-262). The key is read by main at an isolated start through the snapshot's
+  fin41; a value containing it loads, OQ-263). The key is read by main at an isolated start through the snapshot's
   `worktreeStorageSubpath` and sent on `worktree.create`'s session target (REQ-GIT-073); until 2026-10-13 it was read by
   nothing but the loader.
 - **The `skills:` block (ADR-0063)** — registered for the first time (`packages/config/src/sections/skills.ts`)

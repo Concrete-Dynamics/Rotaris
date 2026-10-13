@@ -218,7 +218,7 @@ export const REQUIREMENT_CHECKOUT_SUBPATH = 'requirements/worktrees';
  * meaning `worktrees`, either separator — and normalised, so `./requirements//worktrees/x` is caught. A value that leaves
  * `.rotaris` is not this check's: REQ-GIT-005 refuses it where the worktree is placed. Windows folds case, so there
  * `Requirements/Worktrees` names the same directory; elsewhere it does not. A value that CONTAINS the requirement
- * directory (`requirements`, `.`) is not rejected: REQ-GIT-138 names only "to … or … inside it" (OQ-262).
+ * directory (`requirements`, `.`) is not rejected: REQ-GIT-138 names only "to … or … inside it" (OQ-263).
  */
 export function worktreeStorageCollision(subpath: string, platform: NodeJS.Platform = process.platform): string | null {
   const trimmed = subpath.trim() === '' ? 'worktrees' : subpath.trim();

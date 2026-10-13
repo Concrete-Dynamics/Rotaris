@@ -37,4 +37,4 @@ with. Pinned by `load.test.ts`'s "REQ-GIT-073 / REQ-CONFIG-068 / REQ-GIT-138" ca
 `sessionWorktreePath` agreeing value by value, and config's copy of the directory equal to the workspace package's. Such a load
 now also stops an isolated start in main before anything is created (the companion note). A value whose session directory
 CONTAINS the requirement directory (`requirements`, `.`) still loads: REQ-GIT-138's two sentences read differently over it, raised
-as [OQ-262](../../architecture/open-questions.md#oq-262) (raised as OQ-261, renumbered at landing).
+as [OQ-263](../../architecture/open-questions.md#oq-263) (raised as OQ-261, renumbered at landing).

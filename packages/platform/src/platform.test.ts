@@ -94,6 +94,10 @@ describe('platform — per-user directories (REQ-STARTUP-145)', () => {
     expect(resolvePreferenceRoot({ platform: 'win32', env: set, home })).toBe('D:\\Local\\Rotaris\\Rotaris');
     expect(localAppDataDirectory('\\\\server\\share\\Local', 'C:\\fallback')).toBe('\\\\server\\share\\Local');
     expect(localAppDataDirectory(undefined, 'C:\\fallback')).toBe('C:\\fallback');
+    // fin34: rooted at no drive is relative to the working drive, so it names no directory either; a forward slash is a separator.
+    expect(localAppDataDirectory('\\Local', 'C:\\fallback')).toBe('C:\\fallback');
+    expect(localAppDataDirectory('/Local', 'C:\\fallback')).toBe('C:\\fallback');
+    expect(localAppDataDirectory('D:/Local', 'C:\\fallback')).toBe('D:/Local');
   });
   it('the sub-locations are spelled by the platform asked about, not the host asking (R3 separator residue)', () => {
     // The defect this pins: a bare host-bound `join` spelled the Windows answer with POSIX separators

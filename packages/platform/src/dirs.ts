@@ -84,9 +84,14 @@ export function xdgBaseDirectory(value: string | undefined, fallback: string): s
  * directory and the preference store at `rotaris\rotaris`, `rotaris\data` and `Rotaris\Rotaris`, relative to the working
  * directory (`docs/defects/fixed/an-empty-localappdata-puts-the-per-user-directories-at-a-relative-path.md`). REQ-STARTUP-145's
  * per-user location is never one relative to wherever the application happened to be started.
+ *
+ * "Absolute" here is fully qualified: a drive letter and a separator (`C:\x`), or a UNC share (`\\server\share\x`). Until
+ * fin34 it was `win32.isAbsolute`, which also accepts a value rooted at no drive (`\Local`) — absolute to whichever drive
+ * the process's working directory is on, so it moved with the working drive.
  */
+const FULLY_QUALIFIED_WINDOWS = /^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)/;
 export function localAppDataDirectory(value: string | undefined, fallback: string): string {
-  return value === undefined || value === '' || !win32.isAbsolute(value) ? fallback : value;
+  return value === undefined || value === '' || !FULLY_QUALIFIED_WINDOWS.test(value) ? fallback : value;
 }
 
 /** Fixed sub-locations inside the data directory. Fixed-length by construction where a path budget matters (ADR-0058 c.13). */

@@ -13779,3 +13779,38 @@ its report and asserts nothing about when the notice first shows.
 **What a ruling decides.** Whether "no workspace opens" means the window refuses to open any workspace while the global file
 is invalid (a blocking failure screen naming the file and the step), or that every workspace opens unconfigured — and, either
 way, whether REQ-CONFIG-478's notice must be raised when the workspace is opened rather than at the first refused run.
+
+<a id="oq-278"></a>
+
+**OQ-278 — May a defect note that cannot be reproduced be closed, with a standing monitor in place of a repair?**
+*([`the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`](../defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md),
+live-run finding D8; `CLAUDE.md`, "Defects noticed along the way" — "When a noted defect is repaired, move its note to
+`docs/defects/fixed/`"; `docs/defects/README.md`. Raised 2026-10-13 by fin42 (`fin42-coverage-and-react`, whats-next item
+N49); numbered from the top of the plan's range, OQ-271 to OQ-280, to keep clear of its sibling bundles.)*
+
+The note is the only open one at the top of `docs/defects/`. The `a68f121` duress run's renderer threw React error 185 seven
+times in 46 s while two children streamed. Every attempt since has come up empty:
+- fin32 drove the built app with a `pendingLanes` trap;
+- fin35 read every effect against React 19.2.8;
+- fin38 re-read the code;
+- the `552d346` default and duress packs had 0 such lines over 525 s of concurrent streaming, and the `0bc3eee` default pack
+  had 0 in all 12 launches;
+- fin42 kept the trap, ran it in `pnpm update-depth-proof` (1,904 commits, the simulated nested-update run's high 2 against
+  React's 50, 0 errors), and installed it on the duress launch.
+
+The cause is unidentified, so no repair exists. The record moves a note to `fixed/` only once it is repaired, and has no
+other way to close one. Two routes remain. The first is a reproduction on a development build, which is open-ended and may
+never come. The second is to keep the note open indefinitely, which leaves the one open note standing against "no open
+defects". Meanwhile, every live launch counts the error (`reactUpdateDepthErrors`, a NOTE when not 0), and the duress launch
+carries the trap.
+
+**What the build proceeds under.** The note stays open in `docs/defects/`, and the monitors stay as they are: the per-launch
+count, and the trap on the duress launch, each a NOTE rather than a failure.
+
+**What a ruling decides.** One of the following:
+- a note may be closed unreproduced. It would move to a place other than `fixed/` (or to `fixed/` with an outcome that says
+  "not reproduced; monitored"), after a stated number of clean duress packs, with the monitors kept. A recurrence would then
+  reopen it as a new note;
+- the note stays open until it is reproduced and repaired;
+- the monitor is promoted. A launch with an update-depth error becomes a live-run FAILURE rather than a NOTE, so a recurrence
+  cannot pass unread, and the note closes on that guard.

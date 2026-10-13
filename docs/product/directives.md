@@ -2466,6 +2466,12 @@ are not recorded, and cannot be recovered afterwards.
 
 ### PD-TOOLS-006 — a delegated child may declare a write scope that its siblings may not write into
 
+*Revision 9 (2026-10-13, [R-072](requests.md#r-072)): the rulings of [OQ-256](../architecture/open-questions.md#oq-256) (the
+consortium's question V1) and [OQ-257](../architecture/open-questions.md#oq-257) (V2), from the duress live run at `552d346`. Two
+sections added after revision 8's, "What an answer handed on carries" and "What `delegate` says of a write scope", each clause
+marked "— revision 9" and naming the question it rules; REQ-TOOLS-152's `depends_on` clause is quoted below as no longer
+governing, and REQ-ORCH-047 joins the Narrows line. Nothing else is replaced.*
+
 *Revision 8 (2026-10-07, [R-072](requests.md#r-072)): the ruling of the OQ raised from live-run finding D3,
 [OQ-250](../architecture/open-questions.md#oq-250). Nothing is replaced. A section added after revision 7's, "What the routing table says
 of the work a route implies (revision 8)"; the dispositions stay as they were.*
@@ -2607,6 +2613,42 @@ answer, through `depends_on` or `inherited_context`, to a persona that has what 
 show is available to it. A configured `system_prompt` (REQ-CONFIG-100) is unchanged: it replaces the routing table and its
 sentence, and the catalogue still reaches that coordinator. Revision 3's refusal and revision 4's catalogue are unchanged.
 
+**What an answer handed on carries (revision 9, [OQ-256](../architecture/open-questions.md#oq-256)).** The two hand-off blocks
+of a delegated child's payload — the inherited-context block (REQ-TOOLS-154 item 5) and REQ-ORCH-047's prior-agent-context block —
+SHALL carry each named task's answer as follows *(— revision 9, OQ-256)*:
+1. Each block renders, in the caller's order, every named sibling's (inherited) or dependency's (prior-agent) result text — the
+   final response, else the last response, else the key findings, else the summary — under a heading of its canonical name, role
+   and status. The inherited block keeps its heading that the reports are context and not a dependency, and a cut-off child's
+   additions (`PD-ORCH-004`) after the result text; the prior-agent block keeps its authoritative flag and REQ-ORCH-047's
+   once-only injection.
+2. Each block's result texts are budgeted at 100,000 characters, each block on its own. A text is carried whole while it fits;
+   a text that does not fit is cut to the larger of the budget's remainder and 4,000 characters, so a block passes the budget by
+   at most 4,000 characters for each cut text, and no child receives less of an answer than REQ-ORCH-060's report block gave it.
+3. A cut text SHALL end in a marker naming the characters given and the characters omitted and citing the budget, saying that the
+   rest is in neither the workspace nor the artifact store, and saying that the child's report must state which parts of the
+   answer it did not receive.
+4. The `delegate` observation (REQ-TOOLS-153) SHALL name each inherited answer the stored block cut and the characters omitted,
+   beside revision 5's attachment warning; for a `depends_on` task already complete at the call it names the cut REQ-ORCH-047's
+   block would make as the reports then stand — a forecast, the payload's marker being the record. Nothing is said when nothing
+   is cut.
+5. `delegate`'s description SHALL say that `depends_on` and `inherited_context` each carry the whole answer of every task they
+   name up to 100,000 characters per field, that a longer answer is cut and both caller and child are told, and that
+   `attach_artifacts` carries artifact bodies.
+
+REQ-ORCH-060's 4,000-character cap is unchanged: it governs the report blocks of the resume message and the wait results, and no
+hand-off block.
+
+> REQ-TOOLS-152 says, and for `depends_on` no longer governs: "each upstream task's summary and key findings appear in the
+> child's payload" — REQ-ORCH-047's block and clause 1 above state what a dependency's answer carries. Its "reports" for
+> `inherited_context` is read as clause 1's result text under clause 2's budget.
+
+**What `delegate` says of a write scope (revision 9, [OQ-257](../architecture/open-questions.md#oq-257)).** `delegate`'s
+description SHALL tie work that writes files to a persona whose entry in its catalogue writes workspace files, SHALL tell the
+caller to give that child `write_scope`, and SHALL say that a `write_scope` given to any other persona is refused and nothing is
+started; the `write_scope` field's description in the offered schema SHALL say the same in one sentence. Both texts are fixed
+and name no persona *(— revision 9, OQ-257)*. Revision 3's refusal, revision 4's catalogue, revision 8's routing sentence and
+REQ-ORCH-028's routes are unchanged.
+
 **What is unchanged.** A child delegated without a `write_scope` claims nothing and is refused only where a
 live sibling's claim reaches. A `write_scope` never limits the child that declared it: that child may write
 outside its own patterns wherever no other claim reaches. A claim belongs to one run and lapses with its child, so a
@@ -2708,13 +2750,31 @@ reached all 35 coordinator requests, and the coordinator still gave the work a r
 - the coordinator may commission two children for one document (the route's persona for its answer, a writer for the file);
 - the directive grows by one revision.
 
-> **Narrows:** REQ-TOOLS-152, REQ-TOOLS-154, REQ-LIBRARY-098
+**Why revision 9, and what it costs.** In the duress live run at `552d346` (session `18a9d22d`) revision 8's hand-off ran twice
+and lost most of what it handed on (finding V1): the inherited-context block reused REQ-ORCH-060's resume-message block, so the
+architect's 28,330-character analysis reached the writer as 4,000 characters and a marker, and the verifier's 20,195-character
+report as 4,000; the writer wrote 7 of the document's 8 file sections from its own reading, and the user's answer credited them to
+the architect. REQ-ORCH-047's channel carried an answer unbounded, so two channels one sentence presents as equivalent delivered
+14 % and 100 % of the same answer. The same run gave `architect` a `write_scope` with the routing sentence in every request
+(finding V2, `#92`): the coordinator chose the scope by habit, and the text it followed was `delegate`'s own sentence, which made
+the task the condition and never the persona. What it costs:
+- a child's payload grows on every turn that carries it, up to about 300,000 characters of answers across three blocks in the
+  worst case (two hand-off blocks and revision 5's attachments);
+- a `depends_on` answer over 100,000 characters, unbounded until now, is cut;
+- the write-scope sentence is still advice, about 40 more tokens on every delegating request, and a model that drops the scope
+  but still briefs a non-writer to write is caught only by OQ-257's reopening condition;
+- OQ-216's write-scope target of zero becomes a bound (at most one refusal a run, each re-routed by the next request);
+- an implementation built from the specification alone caps the inherited block at 4,000 characters and words the sentence as
+  before.
+
+> **Narrows:** REQ-TOOLS-152, REQ-TOOLS-154, REQ-LIBRARY-098, REQ-ORCH-047
 > **Extends:** REQ-ORCH-028
 
 *Raised by the owner, 2026-09-23; logged as [R-049](requests.md#r-049). Revision 2 logged as [R-059](requests.md#r-059),
 revision 3 as [R-067](requests.md#r-067). Revision 4 ruled under the owner's delegation, [R-072](requests.md#r-072), from
 the final live runs' findings L4 and N3. Revision 5 ruled under the same delegation from OQ-221 (the consortium's question AB1), revision 6 from OQ-220, revision 7
-from OQ-249 (the consortium's question P3), revision 8 from OQ-250 (the consortium's question D3, the duress live run's finding D3).*
+from OQ-249 (the consortium's question P3), revision 8 from OQ-250 (the consortium's question D3, the duress live run's finding D3),
+revision 9 from OQ-256 and OQ-257 (the consortium's questions V1 and V2, the duress live run at `552d346`).*
 
 > **First execution, 2026-09-23, the day it was ruled:** the mechanism was built as written, and one clause of
 > the disclosure proved false for one reader. The block lists "the `write_scope` of every other child of the run
@@ -2870,6 +2930,18 @@ from OQ-249 (the consortium's question P3), revision 8 from OQ-250 (the consorti
 > measure — 0 `write_scope` refusals for a non-writer and 0 briefs offering a command or tool the target lacks, a design or decision
 > document going to a docs-writer directly or with `architect`'s answer handed on; the reopening condition is OQ-250's. The row is
 > in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Revision 8's first live execution, the duress run at `552d346` (session `18a9d22d`, 2026-10-13; findings V1, V2 and the D3
+> verdict), reported in place:** the sentence in 41 of 41 coordinator requests and the brief clause in 41 of 41 `delegate`
+> descriptions; 1 `write_scope` refusal for a non-writer (`#92`, req 59, row 168: `architect` given `docs/decisions.md`, refused
+> in 5 ms before any record, re-routed by req 65's next `delegate` 30.0 s later as `architect` without a scope, `#111`, and a
+> docs-writer with `inherited_context`, `#163`); 0 impossible briefs, 0 unknown-tool calls by a child, 0 stray files; missing-shell
+> asides in 5 of 117 requests of the non-commanding personas, against 16 of 117 at `a68f121`. The sentence worked as recovery,
+> not prevention, so OQ-250's reopening condition was met (first limb). **The target of zero, kept beside its replacement as
+> falsified:** "0 `write_scope` refusals for a non-writer" — replaced by OQ-257's bound, at most one a run, each refused before any
+> record and re-routed by the next request, which this run met. And the route the sentence prescribes lost what it handed on: the
+> inherited block cut the architect's 28,330-character answer and the verifier's 20,195-character report to 4,000 characters each
+> (V1). Both are revision 9's.
 
 > **First execution of revision 5, 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-221](../architecture/open-questions.md)),
 > built by fin29:** built as written, and the text met the code in two places.

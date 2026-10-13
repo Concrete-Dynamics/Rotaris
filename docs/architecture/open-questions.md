@@ -11110,6 +11110,12 @@ claimed no test run. The default run at `a68f121` chose by facet in 71 of 71 req
 reading is falsified for revision 4 alone:** revision 4's catalogue did not by itself bring either count to zero, because the
 routing table sent the work a route implies to the route's persona (the same task went to `codebase-analyst` at `c2fdd6a`, `#107`,
 and to `architect` here). OQ-250 rules the next step, `PD-TOOLS-006` revision 8, measured against the same target.
+~~The `write_scope` refusal target: 0 per run.~~ **Falsified 2026-10-13 and replaced by a bound ([OQ-257](#oq-257), ruled under
+[R-072](../product/requests.md#r-072)):** at the duress run at `552d346`, with revision 8's routing sentence in 41 of 41 coordinator
+requests, one refusal remained (`#92`, `architect` given `docs/decisions.md`, refused in 5 ms before any record and re-routed by the
+next `delegate` 30.0 s later); a target of zero for one stochastic sample is replaced by an enforced, recovered bound — at most one
+`write_scope` refusal for a non-writer per duress run, each refused before any record exists and re-routed by the coordinator's
+next request. The impossible-brief target stays at 0 (0 at `552d346`).
 
 **OQ-217 — What is the report summariser told of how the child ended?** *(REQ-ORCH-088, a timed-out child recorded failed
 with a report of the form "Child timed out after <N>s"; REQ-ORCH-108, the report condenses what already happened;
@@ -12833,6 +12839,11 @@ instruction carries the brief clause (`packages/agent-tools/src/tools/delegation
 naming no persona; the direct-work swap and a configured `system_prompt` carrying neither) and `tools/delegation.test.ts` (the brief
 clause), both red on the code before. The note is repaired.
 
+**Reopening condition met 2026-10-13, first limb, and ruled as [OQ-257](#oq-257):** the duress run at `552d346` refused one
+`write_scope` for `architect` (`#92`); the second limb (an enforced bound broken) was not met. Advocate A's computed per-route
+clause was weighed again and declined again, for the reason above; `delegate`'s own write-scope sentence was rewritten instead
+(`PD-TOOLS-006` revision 9), and OQ-216's target became a bound. OQ-257's entry states the new reopening condition.
+
 <a id="oq-252"></a>
 
 **OQ-252 — When a near-miss reply's quoted text occurs more than once in the file, does the reply still promise it matches
@@ -13041,6 +13052,111 @@ then an `update` for that item. The harness reads 0 served-and-ended items resto
 (`apps/desktop/src/run-host/scripted-client.ts`), shown in the built app by `pnpm mission-proof` item 1e; the live run's
 `restoredOverClose` and `namedRestores` (`apps/desktop/scripts/lib/coordinator-todo.mjs`). Pinned by `tools/tools.test.ts`,
 `run-host/tools.test.ts` and `children/children.test.ts`, each red on the code before. The note is repaired.
+
+<a id="oq-256"></a>
+
+**OQ-256 — Does a sibling's answer handed on through `inherited_context` or `depends_on` reach the next child whole?**
+*(REQ-TOOLS-152, `depends_on` "summary and key findings" and `inherited_context` "reports", with no cap; REQ-TOOLS-154 item (5),
+the inherited-context block; REQ-ORCH-047, the prior-agent-context block; REQ-ORCH-060, the 4,000-character cap of a resume
+message's report block; REQ-TOOLS-153, the observation's warnings; `PD-TOOLS-006` revision 8, whose routing sentence sends an
+answer through either channel, and revision 5, the 100,000-character attachment budget. Raised 2026-10-13 from finding V1 of the
+duress live-run autopsy at `552d346` (session `18a9d22d`), recorded in
+[`an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters`](../defects/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md);
+the consortium's question V1. **Ruled 2026-10-13.**)*
+
+The inherited-context block rendered each sibling with REQ-ORCH-060's report block, so a long answer reached the child as 4,000
+characters and a marker, while REQ-ORCH-047's block carried a dependency's answer unbounded. In the duress run the architect's
+28,330-character analysis reached the writer as 14 % of itself and the verifier's 20,195-character report as 20 %; the writer
+hunted for the rest with 7 calls, then wrote 7 of `docs/decisions.md`'s 8 file sections from its own reading, and the user's
+answer credited them to the architect. No channel a child holds carries the rest.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** both hand-off channels revision 8 names,
+the inherited-context block and REQ-ORCH-047's prior-agent-context block, carry each named sibling's or dependency's result text
+whole (final response, else last response, else key findings, else summary), each block under a 100,000-character budget. An
+answer that does not fit is given the larger of the remaining budget and 4,000 characters, and ends in a marker telling the child
+what was omitted, that the rest is in neither the workspace nor the artifact store, and that its report must say what it did not
+receive. The caller is warned at acceptance (for a `depends_on` answer already complete, a forecast), `delegate`'s description
+says what each channel carries, and REQ-ORCH-060's cap stays on the resume message and the wait results. Recorded as
+[`PD-TOOLS-006`](../product/directives.md#pd-tools-006) **revision 9**, "What an answer handed on carries" (it narrows
+REQ-TOOLS-152, REQ-TOOLS-154 and, newly, REQ-ORCH-047). The falsified reason the block was built on, "a child inherits exactly
+what its parent was told", is kept beside its replacement in `notify.ts`.
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended revision 9 with both channels under one 100,000-character budget, a cut answer
+  given the larger of the remainder and 4,000 characters so no child ever receives less than before, a marker telling the child
+  what it lacks and that its report must say so, a warning to the caller, and a description sentence saying what each channel
+  carries. The ruling followed A on the floor, since B's prefix rule would leave every later sibling a heading and a marker,
+  less than a child gets today, and on making the description sentence required, since the coordinator's req 98 believed the
+  architect had published no artifact.
+- **Advocate B (the system's lens)** recommended the same budget and marker with a prefix rule, the cut warned to the caller as
+  a forecast for `depends_on`, REQ-ORCH-060's cap kept on the resume message and wait results, the test cases, and the falsified
+  `reportBlock` reason kept beside its replacement. The ruling took B's test cases and the kept reason.
+
+Both rejected the artifact route (a child report's artifact holding its final response): it duplicates the stored report,
+depends on an id the wait results do not carry, and drops an over-budget body whole. **Costs kept on record:** a child's payload
+grows on every turn that carries it, up to about 300,000 characters across three blocks in the worst case; a `depends_on` answer
+over 100,000 characters, unbounded until now, is cut; an implementation built from the specification alone caps the inherited
+block at 4,000 characters.
+
+**What a live run then shows.** In the next duress pack a writer handed the architect's or the verifier's answer through
+`inherited_context` or `depends_on` sees it whole in its first request: 0 hand-off markers for answers under 100,000 characters
+(the harness NOTE `hand-off answers a child received cut`), no hunting calls (`artifact_read`, `glob` or `read_file` of
+`.rotaris`) for the missing answer, and no `background_output` verbatim retrieval or re-typed brief by the coordinator to hand a
+report on. A `delegate` observation names a cut only when an answer exceeds the budget; the coordinator's resume and wait blocks
+still show 4,000 characters per child.
+
+<a id="oq-257"></a>
+
+**OQ-257 — Does `delegate`'s write-scope sentence tie file work to a writer, and what bound replaces OQ-216's target of zero
+`write_scope` refusals?** *(REQ-TOOLS-152's `write_scope` as `PD-TOOLS-006` narrows it; revision 3, the refusal of a scope for a
+persona that writes no files; revision 4, the catalogue; revision 8, the routing sentence; REQ-ORCH-028, the routing table;
+OQ-216's target of zero; [OQ-250](#oq-250)'s reopening condition, whose first limb is "any `write_scope` refused for a
+non-writer". Raised 2026-10-13 from finding V2 and the D3 verdict of the duress live-run autopsy at `552d346` (session
+`18a9d22d`, #92), recorded in
+[`the-routing-sentence-did-not-stop-a-write-scope-for-architect`](../defects/the-routing-sentence-did-not-stop-a-write-scope-for-architect.md);
+the consortium's question V2. **Ruled 2026-10-13.**)*
+
+With the routing sentence in 41 of 41 coordinator requests, req 59 still gave `architect` a `write_scope` for
+`docs/decisions.md`, chosen by habit while reasoning about scope overlap, and revision 3 refused it in 5 ms before any record; the
+next `delegate`, 30.0 s later, re-routed the work exactly as revision 8 prescribes. `delegate`'s sentence read "When the child will
+write files, give write_scope: …", which makes the task the condition and never the persona, and the field had no description.
+Every enforced bound held.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** `delegate`'s write-scope sentence, and
+a description on the `write_scope` field, say that work writing files goes to a persona whose catalogue entry writes workspace
+files and that a scope given to any other persona is refused before the child starts; both texts are fixed and name no persona.
+Revision 3's refusal, the routing table's order and revision 8's sentence stay as built, and Advocate A's computed per-route clause
+of OQ-250 is declined again, for OQ-250's reason. OQ-216's write-scope target of zero is replaced by a bound: at most one refusal
+per duress run, each refused before any record exists and re-routed by the coordinator's next request; the falsified target is
+kept beside the bound in OQ-216's entry, and the impossible-brief target of zero stands. Recorded as
+[`PD-TOOLS-006`](../product/directives.md#pd-tools-006) **revision 9**, in the same revision as [OQ-256](#oq-256), and revision 8's
+first live execution is reported in place under it.
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended rewriting `delegate`'s write-scope sentence and giving the field a schema
+  description, so that the moment the coordinator fills in a scope it is told file work goes to a persona whose entry writes
+  workspace files, keeping revision 3's refusal as the tripwire and the routing order as it is, and replacing the target with a
+  bounded, recovered refusal. The ruling followed A on the wording: the text the coordinator followed was `delegate`'s own
+  sentence, and A's wording names no persona and makes the persona the condition of the file work, so a habitual scope on a
+  non-writer still trips revision 3 rather than teaching the model to drop the scope.
+- **Advocate B (the system's lens)** recommended confirming the tool, the refusal and the table as built and amending the record:
+  the refusal counts as the enforced bound doing its job, OQ-216's target becomes a bound, the falsified target is kept, and the
+  harness reports the seconds to re-route. The ruling took B's bound, the harness's seconds to re-route, revision 8's first
+  execution recorded in place, and B's reopening limb for a non-writer briefed to write without a scope — the one risk A's change
+  adds.
+
+**Reopening condition:** more than one `write_scope` refusal for a non-writer in a duress run; a refusal whose work is not
+re-routed by the coordinator's next `delegate`; a non-writer child briefed to write a file, with or without a scope (its report
+says it cannot write); or at once if any enforced bound OQ-250 lists breaks. **Costs kept on record:** still advice; about 40
+tokens more on every delegating request; a model that leaves out the scope but still briefs a non-writer to write is caught only
+by the reopening limb.
+
+**What a live run then shows.** Every delegating request's `delegate` description carries the new sentence and the offered schema
+gives `write_scope` its description. In the duress run a design or decision document goes to a docs-writer, directly or with the
+architect's answer handed on, and the scope is given to the writer; at most one write-scope refusal for a non-writer, refused
+before any record and re-routed by the coordinator's next request, the harness NOTE printing the seconds to re-route; 0 briefs
+offering a command or tool the target lacks, and no non-writer child reporting it was asked to write a file. The default run is
+unchanged apart from the tokens.
 
 <a id="oq-259"></a>
 

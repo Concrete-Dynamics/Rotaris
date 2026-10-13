@@ -27,7 +27,7 @@ export interface ScriptedCallRecord {
  *
  * It answers the shape a real client answers (`ModelClient`) from a STEP LIST read out of the environment:
  * `ROTARIS_SCRIPT` names the orchestrator's steps, comma-separated, one per model call, and
- * `ROTARIS_CHILD_SCRIPT` every child's. `glob`, `read`, `write`, `rm`, `git`, `push`, `edit`, `todo`, `plan`, `planopen`, `plandone` request a tool
+ * `ROTARIS_CHILD_SCRIPT` every child's. `glob`, `read`, `write`, `rm`, `git`, `push`, `edit`, `todo`, `plan`, `planopen`, `plandone`, `plan:<n>`, `done`, `donereplace` request a tool
  * call; `fetch:<url>` a fetch of that URL; `wait:<ms>` holds the call that long ON THE CLOCK PORT and then
  * answers (the Overview proof needs a run longer than one token-sample period); anything else, or the end of
  * the list, answers with a short streamed reply, one delta per 120 ms so the growth tick is visible.
@@ -627,6 +627,9 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       // revision 7 (OQ-249) an admitted delegation marks its item IN_PROGRESS, and REQ-TOOLS-146 restores an IN_PROGRESS task
       // over a `replace`, so `done` sends one `update` per open item, as a model must. It was one `replace` writing every
       // item COMPLETED until then.
+      // `donereplace` — PD-TOOLS-008 revision 3 (OQ-254): that one `replace` again, the latest list re-sent whole by its ids with
+      // every task COMPLETED, the close a model usually writes; once the delegations' children have ended it closes their items.
+      // A proof scripts it after a wait long enough for them to end (`wait:<ms>,donereplace`).
       const planSteps = /^plan:(\d+)$/.exec(step);
       const latest = step === 'done' ? latestScriptedPlan(req.messages) : null;
       const open = latest ? latest.phases.flatMap((p) => p.tasks).filter((t) => t.state !== 'COMPLETED' && t.state !== 'ABANDONED') : [];
@@ -637,9 +640,12 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         yield finished('other');
         return;
       }
+      const closing = step === 'donereplace' ? latestScriptedPlan(req.messages) : null;
       const dynamic = planSteps
         ? { name: 'todo', args: { operation: 'replace', phases: [{ name: 'Scripted plan', tasks: Array.from({ length: Number(planSteps[1]) }, (_, i) => ({ name: `Scripted item ${i + 1}`, description: 'Delegated by the scripted coordinator.', state: 'PENDING' })) }] } }
-        : null;
+        : closing
+          ? { name: 'todo', args: { operation: 'replace', phases: closing.phases.map((p) => ({ id: p.id, name: p.name, tasks: p.tasks.map((t) => ({ id: t.id, name: t.name, state: 'COMPLETED' })) })) } }
+          : null;
       // fetch:<url> — everything after the first `fetch:` is the URL (the fetch proof's step).
       const tool = dynamic ?? (step.startsWith('fetch:') ? { name: 'fetch', args: { url: step.slice('fetch:'.length) } } : TOOL_STEPS[step]);
       if (tool && (req.tools ?? []).some((t) => t.name === tool.name)) {

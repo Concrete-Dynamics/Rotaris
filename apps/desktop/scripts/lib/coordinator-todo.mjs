@@ -173,12 +173,18 @@ export function todoStates(text) {
  * delegated):
  * - `heldPending` — each reading of a held item as PENDING (the default live run's `#14` at a68f121; target 0);
  * - `closedWhileHeld` — each reading of an item COMPLETED while an implementation child (`WRITER_ROLES`) still held it (target 0);
- * - `singleActive` — each root `todo` call refused under REQ-TOOLS-145 or PD-TOOLS-008 (a NOTE; target 0).
+ * - `singleActive` — each root `todo` call refused under REQ-TOOLS-145 or PD-TOOLS-008 (a NOTE; target 0);
+ * - `restoredOverClose` — PD-TOOLS-008 revision 3 (OQ-254): each item a root `replace` sent COMPLETED or ABANDONED that its
+ *   result still reads IN_PROGRESS although a root child had served it and none still held it (the close revision 3 makes
+ *   possible; target 0). The calls carry `args`, the arguments the record stores;
+ * - `namedRestores` — each accepted root `replace` whose observation names a task it kept over a different state (a NOTE).
  */
 export function heldItemReading(sessions) {
   const heldPending = [];
   const closedWhileHeld = [];
   const singleActive = [];
+  const restoredOverClose = [];
+  const namedRestores = [];
   const coordinating = [];
   for (const s of sessions) {
     const roots = new Set(s.rootNames);
@@ -203,6 +209,27 @@ export function heldItemReading(sessions) {
         if (state === 'COMPLETED' && WRITER_ROLES.has(k.persona)) closedWhileHeld.push({ scenario: s.scenario, ordinal: c.ordinal, child: k.canonical_name, item: k.todo_item });
       }
     }
+    for (const c of rootCalls) {
+      if (c.tool_name !== 'todo' || c.status !== 'ok' || c.endedAt === null || c.endedAt === undefined) continue;
+      const args = argsOf(c.args);
+      if (args?.operation !== 'replace') continue;
+      if (/ Kept as they were: /.test(String(c.result ?? '').split('\n')[0])) namedRestores.push({ scenario: s.scenario, ordinal: c.ordinal });
+      const states = todoStates(c.result);
+      if (states === null) continue;
+      for (const t of (Array.isArray(args.phases) ? args.phases : []).flatMap((p) => (Array.isArray(p?.tasks) ? p.tasks : []))) {
+        if (typeof t?.id !== 'string' || (t.state !== 'COMPLETED' && t.state !== 'ABANDONED') || states.get(t.id) !== 'IN_PROGRESS') continue;
+        const servers = kids.filter((k) => k.todo_item === t.id && Date.parse(k.spawned_at) <= c.endedAt);
+        if (servers.length === 0 || servers.some((k) => !k.completed_at || Date.parse(k.completed_at) > c.endedAt)) continue;
+        restoredOverClose.push({ scenario: s.scenario, ordinal: c.ordinal, item: t.id });
+      }
+    }
   }
-  return { coordinating, heldPending, closedWhileHeld, singleActive };
+  return { coordinating, heldPending, closedWhileHeld, singleActive, restoredOverClose, namedRestores };
+}
+
+/** A recorded call's arguments as an object: the record keeps an object, or the cut string of one a refusal stored. */
+function argsOf(args) {
+  if (args !== null && typeof args === 'object') return args;
+  if (typeof args !== 'string') return null;
+  try { const parsed = JSON.parse(args); return parsed !== null && typeof parsed === 'object' ? parsed : null; } catch { return null; }
 }

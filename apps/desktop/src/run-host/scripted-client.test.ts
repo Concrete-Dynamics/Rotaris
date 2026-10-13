@@ -196,6 +196,24 @@ describe('scriptedClient — the step a call takes', () => {
   });
 
   /*
+   * PD-TOOLS-008 revision 3 (OQ-254): `donereplace` closes the plan the way a model usually does, one `replace` re-sending the
+   * latest list whole by its ids with every task COMPLETED — the case revision 7's first execution had moved `done` off.
+   */
+  it('`donereplace` re-sends the latest list by its ids with every task COMPLETED, in one replace', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'plan:2,donereplace');
+    const client = scriptedClient(clock, () => {});
+    const tools = [...TOOLS, { name: 'todo', description: 'todo', parameters: {} }];
+    const plan = 'Todo state:\nPhase Scripted plan (0000aaaa)\n  [IN_PROGRESS] Scripted item 1 (0000000a) — Delegated by the scripted coordinator.\n  [COMPLETED] Scripted item 2 (0000000b)';
+    const messages: ChatMessage[] = [text('system', ORCHESTRATOR_SYSTEM), text('user', 'close it'),
+      { role: 'assistant', content: [{ kind: 'tool-call', callId: 'c1', name: 'todo', args: '{}' }] },
+      { role: 'tool', content: [{ kind: 'tool-result', callId: 'c1', name: 'todo', result: `Replaced the todo list: 1 phase, 2 tasks.\n${plan}`, isError: false }] }];
+    const parts = client.stream({ ...request(messages), tools })[Symbol.asyncIterator]();
+    const calls: { name: string; args: unknown }[] = [];
+    for (let r = await parts.next(); r.done !== true; r = await parts.next()) if (r.value.ok && r.value.value.kind === 'tool-call') calls.push({ name: r.value.value.name, args: JSON.parse(r.value.value.argsDelta) });
+    expect(calls).toEqual([{ name: 'todo', args: { operation: 'replace', phases: [{ id: '0000aaaa', name: 'Scripted plan', tasks: [{ id: '0000000a', name: 'Scripted item 1', state: 'COMPLETED' }, { id: '0000000b', name: 'Scripted item 2', state: 'COMPLETED' }] }] } }]);
+  });
+
+  /*
    * The repair of fixed/the-scripted-clients-wait-prefix-is-spliced-out-of-the-list-every-child-shares.md: every child
    * shares ROTARIS_CHILD_SCRIPT, so a completed wait may not remove anything from it. Three children started together,
    * each scripted `wait:1000,read,glob`, each read after the wait and then glob — where the shared list's splices handed

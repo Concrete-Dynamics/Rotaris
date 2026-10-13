@@ -168,4 +168,27 @@ describe('heldItemReading (PD-TOOLS-008 revision 2, OQ-249)', () => {
     expect(r.coordinating).toEqual(['duress']);
     expect(r.singleActive).toEqual([]);
   });
+
+  /*
+   * PD-TOOLS-008 revision 3 (OQ-254): a whole-list COMPLETED `replace` after the children ended. Before the revision its result
+   * still read both delegated items IN_PROGRESS; since, they close, and a kept task is named in the observation.
+   */
+  it('revision 3: a closing replace whose ended children\'s items still read IN_PROGRESS is reported; a named restore is a NOTE', () => {
+    const closeAll = { operation: 'replace', phases: [{ name: 'main', tasks: [{ id: '0000000a', name: 'Implement it', state: 'COMPLETED' }, { id: '0000000b', name: 'Test it', state: 'COMPLETED' }] }] };
+    const withArgs = (ordinal: number, result: string, endedAt: string, args: unknown) => ({ ...c(ordinal, 'todo', 'ok', result, endedAt), args });
+    const before = heldItemReading([{ scenario: 'edit', rootNames: ['orchestrator'], children: kids, calls: [
+      c(12, 'delegate', 'ok', "Task 'impl': queued", '2026-10-07T07:00:10Z'),
+      withArgs(20, `Replaced the todo list: 1 phase, 2 tasks.\n${state([['IN_PROGRESS', 'Implement it', '0000000a'], ['IN_PROGRESS', 'Test it', '0000000b']])}`, '2026-10-07T07:03:05Z', closeAll),
+    ] }]);
+    expect(before.restoredOverClose).toEqual([{ scenario: 'edit', ordinal: 20, item: '0000000a' }, { scenario: 'edit', ordinal: 20, item: '0000000b' }]);
+    expect(before.namedRestores).toEqual([]);
+    // while tests still runs, its item is kept and named — no finding; impl's has ended and closes
+    const built = heldItemReading([{ scenario: 'edit', rootNames: ['orchestrator'], children: kids, calls: [
+      c(12, 'delegate', 'ok', "Task 'impl': queued", '2026-10-07T07:00:10Z'),
+      withArgs(20, `Replaced the todo list: 1 phase, 2 tasks. Kept as they were: Test it (0000000b) IN_PROGRESS, a running delegated agent holds it. Change a task's state with update.\n${state([['COMPLETED', 'Implement it', '0000000a'], ['IN_PROGRESS', 'Test it', '0000000b']])}`, '2026-10-07T07:02:30Z', JSON.stringify(closeAll)),
+      withArgs(21, `Replaced the todo list: 1 phase, 2 tasks.\n${state([['COMPLETED', 'Implement it', '0000000a'], ['COMPLETED', 'Test it', '0000000b']])}`, '2026-10-07T07:03:05Z', closeAll),
+    ] }]);
+    expect(built.restoredOverClose).toEqual([]);
+    expect(built.namedRestores).toEqual([{ scenario: 'edit', ordinal: 20 }]);
+  });
 });

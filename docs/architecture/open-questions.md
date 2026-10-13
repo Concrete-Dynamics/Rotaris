@@ -11770,6 +11770,8 @@ activity that satisfied the trigger.
 agent's last three messages with text were normalised-equal or its last four tool calls were identical in name and whole
 arguments.
 
+<a id="oq-231"></a>
+
 **OQ-231 — Does a `haet_edit` miss that matches at REQ-TOOLS-136 level 2 or 3 say so?** *(REQ-TOOLS-189, `haet_edit`
 matches at level 1 only "because the anchoring hash exists precisely to make the edit exact", and "a failure to match reports
 the path and directs the caller to read the file again"; its stale-hash clause, whose message "SHALL NOT quote the file's
@@ -11834,6 +11836,8 @@ level-3 misses replayed through the built tool each name their lines and apply w
 Every one of the six carried the same extra space in its `new_string` too, so `write_file`'s unshifted level-3 apply is raised
 as OQ-233. The next default and duress live runs are the measurement (`live-run.mjs`'s near-miss NOTE). Finding D5 closes
 with it.
+
+<a id="oq-230"></a>
 
 **OQ-230 — Are the agents told what the product's own directories in the workspace are?** *(PD-TOOLS-012, the marker
 directory among REQ-TOOLS-140's hard-coded ignore components; OQ-161's ruling (R-071), "the agents are not told that the

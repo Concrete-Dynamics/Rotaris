@@ -13,6 +13,9 @@ describe('PD-TOOLS-012 revision 2: the product statement every agent receives', 
     // (b) the lines the application writes, the marker's only at a repository's top level
     expect(PRODUCT_DIRECTORIES_UNIT).toContain(`\`${WORKSPACE_SCOPE_DIR}/\` in the workspace's \`.gitignore\``);
     expect(PRODUCT_DIRECTORIES_UNIT).toContain(`\`${marker}/\` in the repository's \`info/exclude\`, only at a repository's top level`);
+    // ... "so elsewhere version control may list it as untracked" (point (b)'s last words; the bundle's review, D4's
+    // `git check-ignore` probes #281 to #286 being the agents' own way of finding that out)
+    expect(PRODUCT_DIRECTORIES_UNIT).toContain(`only at a repository's top level, so elsewhere version control may list \`${marker}/\` as untracked)`);
     // (c) hidden from the file tools, shown by a terminal
     expect(PRODUCT_DIRECTORIES_UNIT).toContain('glob, grep and directory listings hide them; a terminal shows them.');
     // (d) left out of what the agent writes, and not counted as changes
@@ -23,7 +26,7 @@ describe('PD-TOOLS-012 revision 2: the product statement every agent receives', 
     const source = readFileSync(new URL('./product-directories.ts', import.meta.url), 'utf8');
     expect(source).not.toContain(`'${WORKSPACE_SCOPE_DIR}`);
     expect(source).not.toContain(marker);
-    // the ruling priced it at about 80 tokens a request; at 599 characters it is nearer 150 (reported in PD-TOOLS-012); a bound, so it cannot creep
-    expect(PRODUCT_DIRECTORIES_UNIT.length).toBeLessThan(620);
+    // the ruling priced it at about 80 tokens a request; at 662 characters it is nearer 165 (reported in PD-TOOLS-012); a bound, so it cannot creep
+    expect(PRODUCT_DIRECTORIES_UNIT.length).toBeLessThan(680);
   });
 });

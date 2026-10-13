@@ -22,7 +22,7 @@ const marker = `${CODE_INTELLIGENCE_MARKER_SEGMENTS[0] as string}/`;
 
 export const PRODUCT_DIRECTORIES_UNIT: string = [
   `Product directories: where present, \`${scope}\` holds this application's own state and \`${marker}\` its code-intelligence runtime's project data; neither belongs to the user's project.`,
-  `The application keeps them out of version control with lines it writes itself (\`${scope}\` in the workspace's \`.gitignore\`; \`${marker}\` in the repository's \`info/exclude\`, only at a repository's top level).`,
+  `The application keeps them out of version control with lines it writes itself (\`${scope}\` in the workspace's \`.gitignore\`; \`${marker}\` in the repository's \`info/exclude\`, only at a repository's top level, so elsewhere version control may list \`${marker}\` as untracked).`,
   'glob, grep and directory listings hide them; a terminal shows them.',
   'Unless your task concerns them, keep them out of documents, reports, findings, answers and project memories, and do not count them as changes.',
 ].join(' ');

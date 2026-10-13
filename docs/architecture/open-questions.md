@@ -11768,7 +11768,9 @@ still carries either directory when the task does not concern them, the question
 `SkillHost.contextUnits` (`apps/desktop/src/run-host/skills.ts`) on every call; pinned by
 `packages/config/src/product-directories.test.ts`, seven cases in `apps/desktop/src/run-host/skills.test.ts` red on the code
 before, an engine guard in `packages/engine/src/run/record.test.ts`, and `pnpm mcp-proof`'s launch 1 reading the built app's
-prompt. The statement is 599 characters, nearer 150 tokens than the ruling's estimate of about 80. Finding D4 closes with it;
+prompt. The statement is 599 characters, nearer 150 tokens than the ruling's estimate of about 80 (*corrected by the bundle's
+review, 2026-10-07:* it left out point (b)'s last words, that elsewhere version control may list the marker's directory as
+untracked; with them it is 662 characters, nearer 165 tokens). Finding D4 closes with it;
 the next default and duress live runs are the measurement.
 
 **OQ-233 — When `write_file`'s edit matches at REQ-TOOLS-136 level 3, is `new_string` shifted by the same prefix?**

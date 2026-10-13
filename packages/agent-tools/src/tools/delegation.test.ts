@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, ROLE_SPAWN_ALIASES } from '@rotaris/contracts';
+import { BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, isDelegationTarget, ROLE_SPAWN_ALIASES } from '@rotaris/contracts';
 import { expandDeclared } from '../registry.js';
 import { attachmentWarnings, delegateTool, grantFacets, renderDelegateCatalogue, TODO_ITEM_MARK_SENTENCE, TODO_ITEM_SENTENCE, type AttachmentReport, type DelegateCatalogue, type DelegationPort } from './delegation.js';
 import type { ToolContext } from './types.js';
@@ -10,7 +10,8 @@ import type { ToolContext } from './types.js';
  * the product; `tools.test.ts` holds the two equal).
  */
 const BUILT_IN_CATALOGUE: DelegateCatalogue = {
-  personas: BUILT_IN_ROLE_NAMES.filter((n) => n !== 'orchestrator').map((name) => ({ name, tools: expandDeclared(BUILT_IN_ROLE_TOOLS[name]) })),
+  // OQ-228: `gatekeeper` is not a delegation target (REQ-ORCH-126), so the catalogue never carries it.
+  personas: BUILT_IN_ROLE_NAMES.filter((n) => n !== 'orchestrator' && isDelegationTarget(n)).map((name) => ({ name, tools: expandDeclared(BUILT_IN_ROLE_TOOLS[name]) })),
   aliases: Object.entries(ROLE_SPAWN_ALIASES).map(([alias, target]) => ({ alias, target })),
 };
 
@@ -125,7 +126,6 @@ describe('delegate — what each persona can do (PD-TOOLS-006 revision 4)', () =
     ['architect', 'architect (reads workspace files)'],
     ['planner', 'planner (reads workspace files)'],
     ['requirements-engineer', 'requirements-engineer (reads workspace files)'],
-    ['gatekeeper', 'gatekeeper (reads workspace files)'],
   ])('the built-in table: %s', (_name, line) => {
     expect(description()).toContain(line);
   });
@@ -284,5 +284,16 @@ describe('delegate — the admitted item is marked (PD-TOOLS-006 revision 7)', (
   it('the description ends with the marking sentence', () => {
     const { tool } = capture({ status: 'rejected', canonicalName: 'x', message: 'x' });
     expect(tool.description.endsWith(` ${TODO_ITEM_MARK_SENTENCE}`)).toBe(true);
+  });
+});
+
+/** OQ-229 (ruled 2026-10-07 under R-072): a caller whose `delegates_to` narrowed its catalogue is told so. */
+describe('delegate — a narrowed catalogue (OQ-229, REQ-CONFIG-101)', () => {
+  it('says the list is narrowed and that any other persona is refused, or that it leaves no persona; an unnarrowed list says neither', () => {
+    const narrowed = renderDelegateCatalogue({ personas: [{ name: 'tester', tools: ['read_file', 'terminal'] }], aliases: [], narrowedBy: ['tester'] });
+    expect(narrowed).toContain('tester (reads workspace files, runs commands). Your delegates_to (tester) narrows this list: a delegation to any other persona is refused. Ask a persona only');
+    expect(renderDelegateCatalogue({ personas: [], aliases: [], narrowedBy: ['gatekeeper'] })).toBe('You can delegate to no persona. Your delegates_to (gatekeeper) leaves you no persona to delegate to: every delegation is refused.');
+    expect(renderDelegateCatalogue(BUILT_IN_CATALOGUE)).not.toContain('delegates_to');
+    expect(renderDelegateCatalogue(BUILT_IN_CATALOGUE)).not.toContain('gatekeeper');
   });
 });

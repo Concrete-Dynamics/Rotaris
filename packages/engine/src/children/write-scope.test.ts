@@ -107,9 +107,9 @@ describe('PD-TOOLS-006 revision 3 (OQ-112) — a write scope is for a persona th
   it("the catalogue's writers: the built-in table in its order, or the configured known roles resolved", () => {
     expect(fileWriters(undefined)).toEqual(['coding-agent', 'tester', 'docs-writer', 'refactorer']);
     const table: Record<string, Persona> = { orchestrator: BUILT_IN_PERSONAS.orchestrator, scribe: p('scribe', ['haet_edit']), 'codebase-analyst': BUILT_IN_PERSONAS['codebase-analyst'], frozen: p('frozen', ['write_file'], { readOnly: true }) };
-    const resolver: PersonaResolver = { resolve: (n) => (table[n] ? { persona: table[n]!, alias: null } : null), knownRoles: () => Object.keys(table) };
+    const resolver: PersonaResolver = { resolve: (n) => (table[n] ? { persona: table[n]!, alias: null } : null), delegationTargets: () => Object.keys(table) };
     expect(fileWriters(resolver)).toEqual(['scribe']);
-    expect(fileWriters({ ...resolver, knownRoles: () => ['codebase-analyst'] })).toEqual([]);
+    expect(fileWriters({ ...resolver, delegationTargets: () => ['codebase-analyst'] })).toEqual([]);
   });
 
   it('the reason says the persona cannot write files and names those that can, where there are any', () => {

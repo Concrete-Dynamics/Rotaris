@@ -23,3 +23,13 @@ question: no live run sets the key.
 - `apps/desktop/src/run-host/tools.ts` — `delegateCatalogue`.
 - `packages/engine/src/children/personas.ts`, `ledger.ts`, `orchestration.ts`, `write-scope.ts` — the resolution, the spawn,
   the admission and the writers list.
+
+## Outcome
+
+Repaired 2026-10-13 (fin33, `fin33-delegation-targets-and-plan`) as [OQ-229](../../architecture/open-questions.md) rules it,
+covered work under REQ-CONFIG-101. A non-empty `delegates_to` becomes `Persona.delegatesTo` (`personaResolverFor`), and
+`delegationTargetsFor` narrows the caller's targets by it for the catalogue (which then says it is narrowed), admission, the
+ledger and the write-scope refusal's writers; a persona outside the list is refused naming the caller's `delegates_to`. An empty
+list narrows nothing. Four shapes a person could misread are logged once at run setup. Pinned by
+`packages/engine/src/children/children.test.ts`, `apps/desktop/src/run-host/tools.test.ts`,
+`apps/desktop/src/run-host/configuration.test.ts` and `packages/agent-tools/src/tools/delegation.test.ts`.

@@ -90,6 +90,25 @@ export function declaredToolsOf(role: string, stated: readonly string[]): readon
 /** REQ-ORCH-034: `coder` → `coding-agent`, `playwright` → `ui-verifier`; resolved only when the target exists. */
 export const ROLE_SPAWN_ALIASES: Readonly<Record<string, BuiltInRoleName>> = Object.freeze({ coder: 'coding-agent', playwright: 'ui-verifier' });
 
+/**
+ * OQ-228 (ruled 2026-10-07 under the owner's delegation, R-072): the personas the specification keeps out of delegation, each
+ * mapped to what the product runs it for. REQ-MCP-014 names `intent-classifier` and `project-initializer` "personas that are not
+ * delegation targets", and REQ-ORCH-126 makes `gatekeeper` "reachable only through the gate-authoring path and never as an
+ * ordinary delegation target". A persona of these names, built in or configured, is never offered by `delegate`, never admitted
+ * and never named among the targets a refusal lists. Until the ruling the catalogue offered every `personas:` key, and 71 of 71
+ * coordinator requests of the default live run at a68f121 offered `intent-classifier` (finding P5).
+ */
+export const NOT_DELEGATION_TARGETS: Readonly<Record<string, string>> = Object.freeze({
+  'intent-classifier': 'request classification',
+  'project-initializer': 'project onboarding',
+  gatekeeper: 'verification-gate authoring',
+});
+
+/** OQ-228: whether a persona of this name may be named by a delegation (every name but the three the specification reserves). */
+export function isDelegationTarget(name: string): boolean {
+  return !Object.prototype.hasOwnProperty.call(NOT_DELEGATION_TARGETS, name);
+}
+
 /** REQ-CONFIG-062: the legacy role-name vocabulary a configuration file is canonicalised by, per scope, before any merge. */
 export const LEGACY_ROLE_ALIASES: Readonly<Record<string, BuiltInRoleName>> = Object.freeze({ oracle: 'codebase-analyst' });
 

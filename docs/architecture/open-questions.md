@@ -12530,7 +12530,7 @@ delegation vocabulary; REQ-ORCH-034, the unknown-role rejection "listing the kno
 as `<alias>-><target>`"; REQ-ORCH-038, an unknown role rejected with no spawn; `PD-TOOLS-006` revision 4, "every persona that
 agent can delegate to". Raised 2026-10-07 from the final live runs: finding P5 of the default autopsy at `a68f121` (pack
 `2026-10-07T06-48-50-123Z`, all ten sessions; 71 of 71 coordinator requests), recorded in
-[`delegate-offers-and-admits-personas-that-are-not-delegation-targets.md`](../defects/delegate-offers-and-admits-personas-that-are-not-delegation-targets.md);
+[`delegate-offers-and-admits-personas-that-are-not-delegation-targets.md`](../defects/fixed/delegate-offers-and-admits-personas-that-are-not-delegation-targets.md);
 the consortium's question P5, numbered OQ-228 as the round assigned. **Ruled 2026-10-07.**)*
 
 `delegate`'s catalogue lists every persona the configuration holds: in the default live run at `a68f121` every coordinator
@@ -12573,6 +12573,16 @@ configuration, `orchestrator` and the eleven specialists, each with its facets, 
 that names one sees one `rejected` observation saying the product runs that persona itself and listing the targets and aliases,
 with no child row.
 
+*Built 2026-10-13 (fin33, `fin33-delegation-targets-and-plan`); reported in `PD-TOOLS-006`'s revision 4 first execution.*
+`NOT_DELEGATION_TARGETS` and `isDelegationTarget` (`packages/contracts/src/roles.ts`); `PersonaResolver.delegationTargets`
+(renamed from `knownRoles`), `delegationTargetsFor`, `aliasesAmong` and `resolveDelegationTarget`
+(`packages/engine/src/children/personas.ts`), read by `ChildLedger.spawn`, `IterationChildren.delegate` (first, before every other
+admission check), `fileWriters` and the run host's `delegateCatalogue`; `personaResolverFor`'s targets
+(`apps/desktop/src/run-host/configuration.ts`). Pinned by `contracts.test.ts`, `children/children.test.ts` ("OQ-228 / OQ-229",
+each "(red)" case red on the code before), `run-host/tools.test.ts` (the catalogue under the default configuration and under one
+overriding `intent-classifier`) and `tools/delegation.test.ts` (`gatekeeper` no longer among the research and decision roles). The
+note is repaired.
+
 **OQ-229 — Does a persona's `delegates_to` narrow which roles it may delegate to?** *(REQ-CONFIG-101, `delegates_to` "roles this
 one may spawn", "defaulting to empty"; REQ-CONFIG-045, a user's personas; REQ-CONFIG-062, the role vocabulary a file is
 canonicalised by; REQ-CONFIG-231 and REQ-CONFIG-232, the referential and cycle checks over the lists; REQ-CONFIG-246, a
@@ -12580,7 +12590,7 @@ referential error with no one present refuses the run; REQ-CONFIG-464; REQ-ORCH-
 REQ-ORCH-034, REQ-ORCH-038; REQ-TOOLS-005 and REQ-TOOLS-006, an absent narrowing narrowing nothing; `PD-TOOLS-006` revision 4.
 Raised 2026-10-07 by OQ-228's ruling, which set it aside, from the final live runs' finding P5 (the default autopsy at `a68f121`);
 recorded in
-[`a-personas-delegates-to-never-narrows-its-delegations.md`](../defects/a-personas-delegates-to-never-narrows-its-delegations.md);
+[`a-personas-delegates-to-never-narrows-its-delegations.md`](../defects/fixed/a-personas-delegates-to-never-narrows-its-delegations.md);
 the consortium's question DT1, numbered OQ-229 as the round assigned. **Ruled 2026-10-07.**)*
 
 The loader parses, canonicalises and validates `delegates_to`, reports an entry that names no role and any cycle through the
@@ -12633,3 +12643,13 @@ coordinator request's description stays as OQ-228 leaves it and admission is unc
 coordinator a list shows only the listed delegation targets with the sentence saying the catalogue is narrowed, each delegation
 outside the list as one `rejected` observation naming the list with no child row, and one log line at setup for an entry that
 permits nothing. The evidence is scripted only.
+
+*Built 2026-10-13 (fin33, `fin33-delegation-targets-and-plan`); reported in `PD-TOOLS-006`'s revision 4 first execution.*
+`Persona.delegatesTo`, set by `personaResolverFor` from a non-empty `delegates_to`, with its four log lines; `delegationTargetsFor`
+and `resolveDelegationTarget`'s third refusal (`packages/engine/src/children/personas.ts`); the caller's persona into
+`ChildLedger.spawn` (`SpawnInput.callerPersona`); `DelegateCatalogue.narrowedBy` and its two sentences
+(`renderDelegateCatalogue`). Pinned by `children/children.test.ts` (a narrowed root, an alias of a listed persona, a list naming
+only `gatekeeper`, the check ahead of a continuation, the writers among the targets, a child persona checked against its own list,
+a follow-up not checked, the key unset), `run-host/tools.test.ts` (the catalogue equal to what admission accepts in both
+directions; a global list narrowing and a workspace `[]` lifting it), `run-host/configuration.test.ts` (the carried list and the
+four log lines) and `tools/delegation.test.ts`. The note is repaired.

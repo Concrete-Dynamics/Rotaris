@@ -2806,11 +2806,16 @@ from OQ-240 (the consortium's question P3).*
 > (`knownRoles()`, `Object.keys(cfg.personas)`), with `gatekeeper` among the research and decision roles; that reading stays
 > here, and is replaced by the **delegation targets**: every persona of the configuration except the three REQ-MCP-014 and
 > REQ-ORCH-126 reserve (`intent-classifier`, `project-initializer`, `gatekeeper`). The directive's text and dispositions are
-> unchanged; this is covered work.
+> unchanged; this is covered work. Built 2026-10-13 by fin33 (`delegationTargetsFor`, `resolveDelegationTarget`,
+> `packages/engine/src/children/personas.ts`): under the default configuration the catalogue names twelve personas and the two
+> aliases, and a delegation to a reserved persona is refused before any other admission check, naming what the product runs it
+> for. Found by building: the resolver path's unknown-persona message listed no aliases, which REQ-ORCH-034 requires; it now
+> does. **What was not measured:** no live run yet; the next default run should show neither reserved name in any catalogue.
 >
 > **Reported back 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-229](../architecture/open-questions.md), the consortium's
 > question DT1):** for a caller whose `delegates_to` names any persona, "every persona that agent can delegate to" means the
-> delegation targets that list names (REQ-CONFIG-101); an empty list narrows nothing.
+> delegation targets that list names (REQ-CONFIG-101); an empty list narrows nothing. Built 2026-10-13 by fin33
+> (`Persona.delegatesTo`, `DelegateCatalogue.narrowedBy`); the evidence is scripted only, since no live run sets the key.
 
 > **First execution of revision 5, 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-221](../architecture/open-questions.md)),
 > built by fin29:** built as written, and the text met the code in two places.

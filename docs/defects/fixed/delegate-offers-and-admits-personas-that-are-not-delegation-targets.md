@@ -33,3 +33,15 @@ through `fileWriters`), and the resolver path's unknown-persona message omits th
 - `packages/engine/src/children/write-scope.ts` — `fileWriters`.
 - `apps/desktop/src/run-host/configuration.ts` — `personaResolverFor`'s `knownRoles`.
 - `apps/desktop/src/run-host/tools.ts` — `delegateCatalogue`.
+
+## Outcome
+
+Repaired 2026-10-13 (fin33, `fin33-delegation-targets-and-plan`) as [OQ-228](../../architecture/open-questions.md) rules it,
+covered work under REQ-MCP-014, REQ-ORCH-126, REQ-ORCH-034 and REQ-ORCH-038. `NOT_DELEGATION_TARGETS` (`packages/contracts/src/roles.ts`)
+names the three reserved personas with what the product runs each for; `PersonaResolver.delegationTargets` (renamed from
+`knownRoles`, now filtered) and `delegationTargetsFor` are the one list the catalogue, `ChildLedger.spawn`, `fileWriters` and
+`IterationChildren.delegate` read; `resolveDelegationTarget` refuses an unknown or reserved persona first in `delegate()`, with no
+record and no task id, its reason listing the targets and the `<alias>-><target>` aliases. Pinned by
+`packages/contracts/src/contracts.test.ts`, `packages/engine/src/children/children.test.ts` ("OQ-228 / OQ-229"),
+`apps/desktop/src/run-host/tools.test.ts` ("OQ-228 (red)") and `packages/agent-tools/src/tools/delegation.test.ts`, each red on the
+code before where it pins a behaviour.

@@ -86,6 +86,8 @@ export function renderDelegateObservation(canonical: string, status: string, mes
 export interface DelegateCatalogue {
   readonly personas: readonly { readonly name: string; readonly tools: readonly string[] }[];
   readonly aliases: readonly { readonly alias: string; readonly target: string }[];
+  /** OQ-229: the caller's `delegates_to` when it names any persona and so narrowed the personas above; absent narrows nothing. */
+  readonly narrowedBy?: readonly string[] | undefined;
 }
 
 const FACET_WORDS: readonly (readonly [Facet, string])[] = [
@@ -116,7 +118,13 @@ export function renderDelegateCatalogue(catalogue: DelegateCatalogue): string {
     return `${p.name} (${facets.length > 0 ? facets.join(', ') : 'none of these: it neither reads nor writes workspace files nor runs commands'})`;
   });
   const aliases = catalogue.aliases.length > 0 ? ` Aliases: ${catalogue.aliases.map((a) => `${a.alias} (${a.target})`).join(', ')}.` : '';
-  return `The personas you can delegate to, each with what the product's own tools a child of yours would be granted let it do (tool-server and plugin tools are not described): ${personas.join('; ')}.${aliases} Ask a persona only for work its tools allow: a persona that does not run commands cannot run tests, builds or scripts, and one that does not write workspace files cannot change a file. Where a persona that runs no commands needs command output, delegate the command to a persona that runs commands and hand its result on with depends_on or inherited_context.`;
+  // OQ-229 (R-072): a caller whose `delegates_to` narrowed the list is told so, and told when it leaves no persona at all, so a
+  // routing table naming another role is not read as an offer (each such delegation is refused).
+  const narrowed = catalogue.narrowedBy === undefined ? '' : catalogue.personas.length > 0
+    ? ` Your delegates_to (${catalogue.narrowedBy.join(', ')}) narrows this list: a delegation to any other persona is refused.`
+    : ` Your delegates_to (${catalogue.narrowedBy.join(', ')}) leaves you no persona to delegate to: every delegation is refused.`;
+  if (catalogue.personas.length === 0) return `You can delegate to no persona.${narrowed}`;
+  return `The personas you can delegate to, each with what the product's own tools a child of yours would be granted let it do (tool-server and plugin tools are not described): ${personas.join('; ')}.${aliases}${narrowed} Ask a persona only for work its tools allow: a persona that does not run commands cannot run tests, builds or scripts, and one that does not write workspace files cannot change a file. Where a persona that runs no commands needs command output, delegate the command to a persona that runs commands and hand its result on with depends_on or inherited_context.`;
 }
 
 /**

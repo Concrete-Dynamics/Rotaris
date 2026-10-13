@@ -1022,7 +1022,8 @@ a time, re-runnable, cancellable; the status held in the run host for the applic
 
 ## 4. Children (ADR-0012)
 
-`delegate` is a tool call admitted through five checks in order (role known, depth, total, active, dependencies)
+`delegate` is a tool call admitted through five checks in order (role known — since OQ-228 and OQ-229 "a delegation target
+of the caller", `resolveDelegationTarget` in `children/personas.ts`; depth, total, active, dependencies)
 into the **ledger** (one row per child, every transition one transaction with its `child.transition` event);
 the **scheduler** is a pass to quiescence triggered by a state change, never a timer (cascade `blocked`, admit
 on `succeeded` + report stored, promote one held child per freed model slot, claim starts); a child runs its own
@@ -1279,6 +1280,20 @@ whose targets exist, then the instruction to ask a persona only for work its too
 through `depends_on` or `inherited_context` (`renderDelegateCatalogue`, `agent-tools`). It is computed once, at port
 creation. The coordinator's routing table (`ROUTING`, `children/personas.ts`) carries REQ-ORCH-028's two capability clauses
 for `codebase-analyst` and `librarian`; a configured `system_prompt` replaces it, and not the description.
+
+**Which personas a delegation may name (OQ-228, OQ-229, ruled 2026-10-07 under R-072; fin33).** One list answers it:
+`delegationTargetsFor(resolver, caller)` (`children/personas.ts`) — the resolver's `delegationTargets()` (every configured
+persona but the three `NOT_DELEGATION_TARGETS` reserves, `@rotaris/contracts`; `knownRoles` until the ruling, unfiltered), or the
+built-in table filtered the same way, narrowed to the caller's `Persona.delegatesTo` when its `delegates_to` names any. The
+catalogue (`delegateCatalogue`, its aliases from `aliasesAmong`, and `narrowedBy` for the sentence a narrowed caller reads),
+`ChildLedger.spawn` (`SpawnInput.callerPersona`), the write-scope refusal's writers (`fileWriters`) and
+`IterationChildren.delegate` all read it. `delegate()` resolves the named persona through `resolveDelegationTarget` FIRST, after
+the `session_id` branch and ahead of the plan gate, the write scope, the continuation check and OQ-220's todo-item checks: an
+unknown name, a reserved persona (its purpose named) or a persona outside a non-empty list is refused `rejected` with no record,
+each reason ending with REQ-ORCH-034's known personas and `<alias>-><target>` aliases. `resolveRole` and
+`PersonaResolver.resolve` still answer every persona, so the classifier, the entry role, a parent's persona, resumes and
+follow-ups are unaffected. `personaResolverFor` carries a non-empty `delegates_to` onto the persona and logs, once per run, an
+entry naming a reserved persona, a list on a persona without `delegate`, a list leaving no target and a stated empty list.
 
 **Continuations (PD-ORCH-004; `children/cut-off.ts`).** The pure half: `ProgressLog` (fed by the turn's
 `onToolCompleted`, one per child execution), `cutOffReport` and `cutOffLines`, and `continuationRefusal`. A `delegate`

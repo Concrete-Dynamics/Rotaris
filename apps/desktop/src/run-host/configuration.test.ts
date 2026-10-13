@@ -470,3 +470,59 @@ describe('run-host/configuration — the post-run analyst\'s model (REQ-LIBRARY-
     expect(postRunAnalystOf(collector, () => ({ ok: false, reason: 'p/medium is held out of quota for this session' }))).toEqual({ ok: false, reason: 'p/medium is held out of quota for this session' });
   });
 });
+
+/**
+ * OQ-229 (ruled 2026-10-07 under R-072): a `delegates_to` that names any persona is carried onto the persona and narrows its
+ * delegations; and four shapes a person could misread are logged once at run setup, the loader's referential messages unchanged.
+ */
+describe('delegates_to reaches the persona, and its misreadable shapes are logged (OQ-229, REQ-CONFIG-101)', () => {
+  it('carries a non-empty list, and logs a reserved entry, a list without delegate, a list leaving no target and a stated empty list', () => {
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), `default_persona: orchestrator
+models:
+  selected:
+    provider: openai
+    model_id: first
+    api_key: k
+large_model: selected
+medium_model: selected
+small_model: selected
+personas:
+  orchestrator:
+    name: orchestrator
+    model: selected
+    delegates_to: [coding-agent, gatekeeper]
+  planner:
+    name: planner
+    model: selected
+    delegates_to: [codebase-analyst]
+  lead:
+    name: lead
+    model: selected
+    tools: [read_file, delegate]
+    delegates_to: [gatekeeper]
+  helper:
+    name: helper
+    model: selected
+    tools: [read_file, delegate]
+    delegates_to: []
+`);
+    const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: join(dir, 'ws') });
+    if (!loaded.ok) throw new Error('configuration');
+    const logged: string[] = [];
+    const personas = personaResolverFor(loaded.value, true, (m) => logged.push(m));
+    expect(personas.resolve('orchestrator')!.persona.delegatesTo).toEqual(['coding-agent', 'gatekeeper']);
+    expect(personas.resolve('helper')!.persona.delegatesTo).toBeUndefined();
+    expect(personas.resolve('tester')!.persona.delegatesTo).toBeUndefined();
+    expect(logged).toEqual([
+      "persona orchestrator: delegates_to names 'gatekeeper', a persona the product runs itself (verification-gate authoring), which is not a delegation target; the entry permits nothing (OQ-228, OQ-229)",
+      'persona planner: delegates_to has no effect, since its tools hold no delegate (REQ-CONFIG-101, OQ-229)',
+      "persona lead: delegates_to names 'gatekeeper', a persona the product runs itself (verification-gate authoring), which is not a delegation target; the entry permits nothing (OQ-228, OQ-229)",
+      'persona lead: delegates_to (gatekeeper) leaves it no delegation target, so every delegation it makes is refused (REQ-CONFIG-101, OQ-229)',
+      'persona helper: delegates_to is stated empty, which narrows nothing; leave delegate out of its tools to stop it delegating (REQ-CONFIG-101, OQ-229)',
+    ]);
+    expect(personas.delegationTargets()).not.toContain('intent-classifier');
+    expect(personas.delegationTargets()).not.toContain('gatekeeper');
+    expect(personas.delegationTargets()).toContain('lead');
+  });
+});

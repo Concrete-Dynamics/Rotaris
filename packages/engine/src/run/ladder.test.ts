@@ -119,7 +119,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const catalogue = opts.catalogue ?? [entry('a1', 'a', A1, ['small_model'])];
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: opts.entryModel ?? A1, credentialFor: () => async () => 'k', llmResponseTimeoutMs: opts.llmResponseTimeoutMs ?? 120_000, ...opts.over };
     const models = (key: string): ModelLookup => { const e = catalogue.find((c) => c.key === key); return e ? { ok: true, key, choice: { model: e.model, thinking: e.thinking } } : { ok: false, reason: `'${key}' is not a configured model` }; };
-    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: { ...base, ...(opts.roleModels?.[name] ? { modelRef: opts.roleModels[name] } : {}), ...(opts.roleFallback ? { fallbackModel: opts.roleFallback } : {}), ...(opts.roleStallTimeoutMs === undefined ? {} : { stallTimeoutMs: opts.roleStallTimeoutMs }) }, alias: null } : null; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
+    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: { ...base, ...(opts.roleModels?.[name] ? { modelRef: opts.roleModels[name] } : {}), ...(opts.roleFallback ? { fallbackModel: opts.roleFallback } : {}), ...(opts.roleStallTimeoutMs === undefined ? {} : { stallTimeoutMs: opts.roleStallTimeoutMs }) }, alias: null } : null; }, delegationTargets: () => Object.keys(BUILT_IN_PERSONAS) };
     const backend = new DefaultAgentBackend(client);
     const results: string[] = [];
     const restingReads: string[] = [];

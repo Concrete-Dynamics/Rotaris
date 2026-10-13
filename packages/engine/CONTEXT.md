@@ -122,6 +122,13 @@ _Avoid_: subagent, worker, sub-task
 An explicit `delegate` tool call naming a target role, a task name and a task. It never suspends the
 parent's conversation. — `REQ-ORCH-031`, `REQ-TOOLS-153`
 
+**Delegation target**:
+A persona a delegation may name: every persona of the configuration except the three the product runs itself
+(`intent-classifier`, `project-initializer`, `gatekeeper`), and, for a caller whose `delegates_to` names any persona, only those it
+names. `delegate`'s catalogue lists exactly these, and admission refuses any other. — `REQ-MCP-014`, `REQ-ORCH-126`,
+`REQ-ORCH-034`, `REQ-CONFIG-101`, OQ-228, OQ-229
+_Avoid_: known role (the name the build used for every `personas:` key, reserved ones included)
+
 **Write scope**:
 The path patterns a delegation may declare for its child, in the `glob` tool's dialect and relative to the
 workspace root. While the child is live it **claims** every path they match; any other agent of the run except the

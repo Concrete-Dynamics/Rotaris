@@ -6,7 +6,7 @@ import {
   askQuestionsTool, buildPolicy, directWorkBundle, grantsOn, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
   resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type DelegateCatalogue, type GateSink, type PolicyRead, type Prerequisites, type PresenterPort, type ResolvedToolSet, type ToolExecutor,
 } from '@rotaris/agent-tools';
-import { BUILT_IN_PERSONAS, EMPTY_MCP_EVIDENCE, isNativeFileWritingTool, ROLE_ALIASES, toolRestrictionsFor, type AgentGrant, type ModeChange, type Persona, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
+import { aliasesAmong, BUILT_IN_PERSONAS, delegationTargetsFor, EMPTY_MCP_EVIDENCE, isNativeFileWritingTool, toolRestrictionsFor, type AgentGrant, type ModeChange, type Persona, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import { CODE_INTELLIGENCE_MEMORY_GATE } from '@rotaris/config';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
 import { configurationForExecutionRoot, grantEvidence, type McpHost } from './mcp.js';
@@ -266,17 +266,21 @@ export function resolveAgentGrant(persona: Persona, opts: { name?: string; decla
  * the grant that holds once execution is released, and REQ-ORCH-153's refusal covers a held run.
  */
 export function delegateCatalogue(resolver: PersonaResolver | null, caller: Persona, prerequisites: Prerequisites): DelegateCatalogue {
-  const names = resolver ? resolver.knownRoles() : Object.keys(BUILT_IN_PERSONAS);
+  /*
+   * OQ-228 and OQ-229 (ruled 2026-10-07 under R-072): the caller's delegation targets — never a persona the product runs itself,
+   * and only those its `delegates_to` names when it names any — the one list admission accepts. It was `resolver.knownRoles()`
+   * (every `personas:` key) or the whole built-in table, so every coordinator was offered `intent-classifier` and `gatekeeper`
+   * (finding P5 at a68f121).
+   */
+  const names = delegationTargetsFor(resolver, caller);
   const personaOf = (name: string): Persona | null => (resolver ? resolver.resolve(name)?.persona ?? null : BUILT_IN_PERSONAS[name as RoleName] ?? null);
   const personas: { name: string; tools: readonly string[] }[] = [];
   for (const name of names) {
     const p = personaOf(name);
     if (p) personas.push({ name, tools: resolveAgentGrant(p, { parentPersona: caller, coordinating: true, prerequisites, isEntry: false }).tools });
   }
-  const aliases = Object.entries(ROLE_ALIASES)
-    .filter(([alias]) => (resolver ? resolver.resolve(alias) !== null : true))
-    .map(([alias, target]) => ({ alias, target: (resolver ? resolver.resolve(alias)?.persona.name : undefined) ?? target }));
-  return { personas, aliases };
+  const aliases = aliasesAmong(resolver, names);
+  return { personas, aliases, ...(caller.delegatesTo !== undefined && caller.delegatesTo.length > 0 ? { narrowedBy: caller.delegatesTo } : {}) };
 }
 
 /**

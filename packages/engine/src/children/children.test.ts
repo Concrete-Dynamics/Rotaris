@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import { FakeClock, millis, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type ChildRow } from '@rotaris/store';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
-import { CHILD_STATES, CHILD_TRANSITIONS, FOLLOW_UP_STATE, isLegalChildMove, isLegalFollowUp, RUN_AGENT_ID, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type PermissionPreset, type SessionRecord, type TranscriptIncrement } from '@rotaris/contracts';
+import { CHILD_STATES, CHILD_TRANSITIONS, FOLLOW_UP_STATE, isDelegationTarget, isLegalChildMove, isLegalFollowUp, RUN_AGENT_ID, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type PermissionPreset, type SessionRecord, type TranscriptIncrement } from '@rotaris/contracts';
 import { BUILT_IN_PERSONAS, canonicaliseName, ChildLedger, RUN_CONFIG_DEFAULTS, Scheduler, Sessions, SessionWriter, uniqueUnderParent, type DelegationOps, type PortToolResult, type Publisher, type RunConfig, type RoleName, type ToolPort, type ToolPortContext } from '../index.js';
-import type { AgentGrant, PersonaResolver } from './personas.js';
+import type { AgentGrant, Persona, PersonaResolver } from './personas.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { HookPort } from '../hooks-port.js';
 import { conversationOf } from '../run/record.js';
@@ -833,7 +833,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
           if (!base) return null;
           return { persona: name === 'orchestrator' ? { ...base, toolRestrictions: { 'coding-agent': ['read_file', 'grep'], tester: ['read_file'] } } : base, alias: null };
         },
-        knownRoles: () => Object.keys(BUILT_IN_PERSONAS),
+        delegationTargets: () => Object.keys(BUILT_IN_PERSONAS),
       };
       const { sessions, client } = sessionsWith((persona, turn) => {
         if (persona === 'orchestrator') {
@@ -860,6 +860,150 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect((await sessions.running(sid)!).status).toBe('completed');
       expect(contexts.get('api')?.parentPersona).toBe('orchestrator');
       expect(contexts.get('orchestrator')?.parentPersona).toBeUndefined();
+    });
+  });
+
+  /**
+   * OQ-228 (ruled 2026-10-07 under R-072), REQ-MCP-014, REQ-ORCH-126, REQ-ORCH-034 and REQ-ORCH-038: a delegation names only a
+   * delegation target. The three personas the product runs itself are refused first, with no record and no task id, by the
+   * unknown-role message carrying the targets, the aliases and what the persona is run for (finding P5 at a68f121: 71 of 71
+   * coordinator requests offered `intent-classifier`, docs/defects/fixed/delegate-offers-and-admits-personas-that-are-not-delegation-targets.md).
+   * OQ-229: a non-empty `delegates_to` narrows the caller's targets; an empty one narrows nothing
+   * (docs/defects/fixed/a-personas-delegates-to-never-narrows-its-delegations.md).
+   */
+  describe('OQ-228 / OQ-229: a delegation names only a delegation target of its caller', () => {
+    const textOfReq = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n');
+    const extra = (name: string, tools: readonly string[], prompt = `You are ${name}.`): Persona => ({ ...BUILT_IN_PERSONAS['codebase-analyst'], name, tools, systemPrompt: prompt, implementer: tools.some((t) => t === 'write_file' || t === 'terminal') });
+    /** A configured table over the built-in one, resolved as the run host's resolver does: aliases to an existing target, the delegation targets filtered. */
+    function resolverOf(over: Record<string, Partial<Persona>> = {}, added: Record<string, Persona> = {}): PersonaResolver {
+      const table: Record<string, Persona> = { ...BUILT_IN_PERSONAS, 'intent-classifier': extra('intent-classifier', []), ...added };
+      for (const [name, o] of Object.entries(over)) table[name] = { ...(table[name] ?? extra(name, [])), ...o };
+      const aliases: Record<string, string> = { coder: 'coding-agent', playwright: 'ui-verifier' };
+      return {
+        resolve: (name) => (table[name] ? { persona: table[name]!, alias: null } : aliases[name] && table[aliases[name]!] ? { persona: table[aliases[name]!]!, alias: name } : null),
+        delegationTargets: () => Object.keys(table).filter(isDelegationTarget),
+      };
+    }
+    const del = (callId: string, persona: string, name: string, more: Record<string, unknown> = {}) => ({ callId, name: 'delegate', args: { persona, task_name: name, task: `TASK: ${name}`, ...more } });
+    /** The root makes `calls` in one step and answers; every child answers. Returns each delegate observation, in order. */
+    async function rootDelegates(calls: ReturnType<typeof del>[], personas?: PersonaResolver) {
+      const observed: string[] = [];
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls(calls, 'Delegating.') : answer('Done.');
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        return answer('Did it.');
+      }, { ...(personas ? { personas } : {}), tool: (name, _a, _ctx, builtIn) => (name === 'delegate' ? builtIn().then((r) => { observed.push(r.text); return r; }) : undefined) });
+      const sid = (sessions.start(dal, 'C:/ws', 'work') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      return { observed, rows: children(sid) };
+    }
+
+    it('(red) intent-classifier and gatekeeper are refused first, with no record, the purpose named, the targets without the three and the aliases listed', async () => {
+      const { observed, rows } = await rootDelegates([del('d1', 'intent-classifier', 'classify'), del('d2', 'gatekeeper', 'gate', { write_scope: ['src/**'] })], resolverOf());
+      expect(rows).toEqual([]);
+      expect(observed[0]).toMatch(/^Task 'classify': rejected — 'intent-classifier' is a persona the product runs itself \(request classification\); it is not a delegation target\. Known personas: orchestrator, /);
+      // write_scope's own refusal never answers: the target check comes first
+      expect(observed[1]).toMatch(/^Task 'gate': rejected — 'gatekeeper' is a persona the product runs itself \(verification-gate authoring\); it is not a delegation target\./);
+      for (const o of observed) {
+        expect(o).toContain('Supported aliases: coder->coding-agent, playwright->ui-verifier.');
+        expect(o).not.toMatch(/Known personas: [^.]*(intent-classifier|gatekeeper|project-initializer)/);
+        expect(o).not.toContain('task_id:');
+      }
+      expect(warnings.some((w) => w.includes("'classify'") && w.includes('REQ-ORCH-038'))).toBe(true);
+    });
+
+    it('(red) a configured project-initializer is refused with its purpose; a configured release-manager is a target and accepted', async () => {
+      const personas = resolverOf({}, { 'project-initializer': extra('project-initializer', ['read_file']), 'release-manager': extra('release-manager', ['read_file']) });
+      const { observed, rows } = await rootDelegates([del('d1', 'project-initializer', 'init'), del('d2', 'release-manager', 'release')], personas);
+      expect(observed[0]).toMatch(/^Task 'init': rejected — 'project-initializer' is a persona the product runs itself \(project onboarding\)/);
+      expect(observed[1]).toMatch(/^Task 'release': queued/);
+      expect(rows.map((r) => r.persona)).toEqual(['release-manager']);
+    });
+
+    it('(red) an unknown persona\'s message carries the aliases, as REQ-ORCH-034 requires, on the resolver path too', async () => {
+      const { observed } = await rootDelegates([del('d1', 'wizard', 'magic')], resolverOf());
+      expect(observed[0]).toMatch(/^Task 'magic': rejected — Unknown persona 'wizard'\. Known personas: .*\. Supported aliases: coder->coding-agent, playwright->ui-verifier\.$/);
+    });
+
+    it('(red) an intent-classifier configured to write files is refused and never named among a write-scope refusal\'s writers', async () => {
+      const personas = resolverOf({ 'intent-classifier': { tools: ['read_file', 'write_file'] } });
+      const { observed } = await rootDelegates([del('d1', 'intent-classifier', 'classify'), del('d2', 'codebase-analyst', 'survey', { write_scope: ['docs/**'] })], personas);
+      expect(observed[0]).toMatch(/^Task 'classify': rejected — 'intent-classifier' is a persona the product runs itself/);
+      expect(observed[1]).toMatch(/Personas that can write files: coding-agent, tester, docs-writer, refactorer\./);
+      expect(observed[1]).not.toContain('intent-classifier');
+    });
+
+    it('OQ-229 (red): a non-empty delegates_to narrows the root: an unlisted persona is refused naming the list; an alias of a listed one is accepted', async () => {
+      const personas = resolverOf({ orchestrator: { delegatesTo: ['codebase-analyst', 'coding-agent'] } });
+      const { observed, rows } = await rootDelegates([del('d1', 'tester', 'test'), del('d2', 'coder', 'build'), del('d3', 'playwright', 'look'), del('d4', 'gatekeeper', 'gate')], personas);
+      expect(observed[0]).toBe("Task 'test': rejected — 'tester' is not a persona orchestrator may delegate to: its delegates_to lists codebase-analyst, coding-agent. Known personas: codebase-analyst, coding-agent. Supported aliases: coder->coding-agent.");
+      expect(observed[1]).toMatch(/^Task 'build': queued — .*Alias 'coder' resolved to 'coding-agent'\./);
+      expect(observed[2]).toMatch(/^Task 'look': rejected — 'playwright' \(alias of 'ui-verifier'\) is not a persona orchestrator may delegate to/);
+      expect(observed[2]).not.toContain('playwright->');
+      // a reserved persona keeps OQ-228's reason, whatever the list holds
+      expect(observed[3]).toMatch(/^Task 'gate': rejected — 'gatekeeper' is a persona the product runs itself/);
+      expect(rows.map((r) => r.persona)).toEqual(['coding-agent']);
+    });
+
+    it('OQ-229 (red): a list naming only gatekeeper refuses every delegation, saying the caller can delegate to no persona', async () => {
+      const { observed, rows } = await rootDelegates([del('d1', 'coding-agent', 'build')], resolverOf({ orchestrator: { delegatesTo: ['gatekeeper'] } }));
+      expect(observed[0]).toBe("Task 'build': rejected — 'coding-agent' is not a persona orchestrator may delegate to: its delegates_to lists gatekeeper. orchestrator can delegate to no persona.");
+      expect(rows).toEqual([]);
+    });
+
+    it('OQ-229 (red): the target check comes before the continuation check, and the write-scope reason names only writers among the caller\'s targets', async () => {
+      const personas = resolverOf({ orchestrator: { delegatesTo: ['codebase-analyst', 'docs-writer'] } });
+      const { observed } = await rootDelegates([del('d1', 'tester', 'more', { continuation_of: 'bg_0000dead' }), del('d2', 'codebase-analyst', 'survey', { write_scope: ['docs/**'] })], personas);
+      expect(observed[0]).toMatch(/^Task 'more': rejected — 'tester' is not a persona orchestrator may delegate to/);
+      expect(observed[1]).toMatch(/Personas that can write files: docs-writer\./);
+    });
+
+    it('OQ-229 (red): a child persona holding delegate is checked against its own list; the root\'s list does not bind it', async () => {
+      const lead = { ...extra('lead', ['read_file', 'delegate'], 'You lead the work.'), delegatesTo: ['tester'] };
+      const personas = resolverOf({ orchestrator: { delegatesTo: ['lead'] } }, { lead });
+      const observed: string[] = [];
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([del('d1', 'lead', 'lead', { run_in_background: false })]) : answer('Done.');
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        const isLead = textOfReq(req).startsWith('You lead the work.');
+        const leadTurn = req.messages.filter((m) => m.role === 'assistant').length;
+        if (isLead && leadTurn === 0) return toolCalls([del('l1', 'tester', 'check'), del('l2', 'codebase-analyst', 'read')]);
+        return answer('Did it.');
+      }, { personas, tool: (name, _a, _ctx, builtIn) => (name === 'delegate' ? builtIn().then((r) => { observed.push(r.text); return r; }) : undefined) });
+      const sid = (sessions.start(dal, 'C:/ws', 'work') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      const byName = (n: string) => observed.find((o) => o.startsWith(`Task '${n}'`));
+      expect(byName('check')).toMatch(/^Task 'check': queued/);
+      expect(byName('read')).toMatch(/^Task 'read': rejected — 'codebase-analyst' is not a persona lead may delegate to: its delegates_to lists tester\. Known personas: tester\. Supported aliases: none\.$/);
+      expect(children(sid).map((c) => c.persona).sort()).toEqual(['lead', 'tester']);
+    });
+
+    it('OQ-229: a session_id follow-up is not checked against the list', async () => {
+      const personas = resolverOf({ orchestrator: { delegatesTo: ['coding-agent'] } });
+      let firstId = '';
+      const observed: string[] = [];
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([del('d1', 'coding-agent', 'build', { run_in_background: false })]);
+          if (turn === 2) return toolCalls([del('d2', 'tester', 'again', { session_id: firstId, run_in_background: false })]);
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        return answer('Did it.');
+      }, { personas, tool: (name, _a, _ctx, builtIn) => (name === 'delegate' ? builtIn().then((r) => { if (firstId === '') firstId = /task_id: (bg_[0-9a-f]{8})/.exec(r.text)?.[1] ?? ''; observed.push(r.text); return r; }) : undefined) });
+      const sid = (sessions.start(dal, 'C:/ws', 'work') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(observed[1]).toMatch(/^Task 'build': queued — Following up build/);
+    });
+
+    it('OQ-229: with the key unset every delegation target is accepted, a user-defined one included', async () => {
+      const open = resolverOf({}, { 'release-manager': extra('release-manager', ['read_file']) });
+      // the last six targets (the default active-children limit), the user-defined one among them
+      const all = open.delegationTargets().filter((n) => n !== 'orchestrator').slice(-6);
+      expect(all).toContain('release-manager');
+      const { observed: o2, rows } = await rootDelegates(all.map((n, i) => del(`a${i}`, n, `t${i}`, { run_in_background: true })), open);
+      expect(o2.filter((o) => !/: (queued|waiting_on_[a-z_]+) — /.test(o))).toEqual([]);
+      expect(rows.map((r) => r.persona)).toEqual(all);
     });
   });
 
@@ -904,7 +1048,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     it('REQ-CONFIG-107: the persona-level setting forces the same omission for a call that did not ask for it, and only for that role', async () => {
       const personas: PersonaResolver = {
         resolve: (name) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: name === 'coding-agent' ? { ...base, skipAutoSiblingContext: true } : base, alias: null } : null; },
-        knownRoles: () => Object.keys(BUILT_IN_PERSONAS),
+        delegationTargets: () => Object.keys(BUILT_IN_PERSONAS),
       };
       const { payloads, build } = await surveyThenBuild({}, { personas });
       expect(payloads.get('build')).toContain('TASK: build');
@@ -2917,7 +3061,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const KEY = 'openai-compatible--other/bare-id';
       const personas: PersonaResolver = {
         resolve: (name) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: name === 'coding-agent' ? { ...base, modelRef: { providerId: 'openai-compatible', modelId: 'bare-id', dialect: 'chat' }, modelKey: KEY } : base, alias: null } : null; },
-        knownRoles: () => Object.keys(BUILT_IN_PERSONAS),
+        delegationTargets: () => Object.keys(BUILT_IN_PERSONAS),
       };
       const { parked, rows } = await twoChildren({ personas, modelKey: 'run-key', capFor: (k) => (k === KEY ? 1 : null) });
       expect(rows.map((c) => c.model_key)).toEqual([KEY, KEY]);

@@ -1,7 +1,7 @@
 import { posix } from 'node:path';
 import { globToRegExp } from '@rotaris/kernel';
 import { restrictionsAllow } from '@rotaris/contracts';
-import { BUILT_IN_PERSONAS, toolRestrictionsFor, type Persona, type PersonaResolver } from './personas.js';
+import { BUILT_IN_PERSONAS, delegationTargetsFor, toolRestrictionsFor, type Persona, type PersonaResolver, type RoleName } from './personas.js';
 import { isNativeFileWritingTool } from './report.js';
 
 /**
@@ -51,8 +51,10 @@ export function writesFiles(persona: Pick<Persona, 'name' | 'tools' | 'coordinat
  * unknown-persona refusal lists, or the built-in table where no configuration resolves them. Each is judged as a child of
  * `parentPersona` would be granted it (OQ-145), so the refusal never names a writer the delegating agent's map forbids.
  */
-export function fileWriters(personas: PersonaResolver | undefined, parentPersona?: Pick<Persona, 'toolRestrictions'> | null): readonly string[] {
-  const catalogue = personas ? personas.knownRoles().map((n) => personas.resolve(n)?.persona) : Object.values(BUILT_IN_PERSONAS);
+export function fileWriters(personas: PersonaResolver | undefined, parentPersona?: Pick<Persona, 'toolRestrictions' | 'delegatesTo'> | null): readonly string[] {
+  // OQ-228 and OQ-229: the writers named are among the caller's delegation targets — never a persona the product runs itself,
+  // nor one outside the caller's non-empty `delegates_to`.
+  const catalogue = delegationTargetsFor(personas, parentPersona).map((n) => (personas ? personas.resolve(n)?.persona : BUILT_IN_PERSONAS[n as RoleName]));
   return catalogue.filter((p): p is Persona => p !== undefined && writesFiles(p, parentPersona)).map((p) => p.name);
 }
 

@@ -96,7 +96,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' };
     const backend = new DefaultAgentBackend(client);
     const models = (key: string): ModelLookup => ({ ok: false, reason: `'${key}' is not a configured model` });
-    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: base, alias: null } : null; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
+    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: base, alias: null } : null; }, delegationTargets: () => Object.keys(BUILT_IN_PERSONAS) };
     const sessions = new Sessions({
       clocks: clock, publisher: NONE, pid: 79, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S-rec-${++minted}`,
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: () => undefined,
@@ -455,7 +455,7 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', systemPrompt: over.rootPrompt ?? ROOT, ...(over.rootPersona === undefined ? {} : { persona: over.rootPersona }) };
     const backend = new DefaultAgentBackend(client);
     const models = (key: string): ModelLookup => ({ ok: false, reason: `'${key}' is not a configured model` });
-    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; if (!base) return null; const child = name === 'coding-agent'; return { persona: { ...base, ...(child && over.childPrompt ? { systemPrompt: over.childPrompt } : {}), ...(child && over.childTools ? { tools: over.childTools } : {}), ...(child && over.childFallback ? { fallbackModel: over.childFallback } : {}) }, alias: null }; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
+    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; if (!base) return null; const child = name === 'coding-agent'; return { persona: { ...base, ...(child && over.childPrompt ? { systemPrompt: over.childPrompt } : {}), ...(child && over.childTools ? { tools: over.childTools } : {}), ...(child && over.childFallback ? { fallbackModel: over.childFallback } : {}) }, alias: null }; }, delegationTargets: () => Object.keys(BUILT_IN_PERSONAS) };
     const sessions = new Sessions({
       clocks: clock, publisher: NONE, pid: 79, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => `S-fp-${++minted}`,
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: () => undefined,

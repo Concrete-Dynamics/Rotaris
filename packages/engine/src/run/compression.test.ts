@@ -276,7 +276,7 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: A1, credentialFor: () => async () => 'k' };
     const backend = new DefaultAgentBackend(client);
     const models = (key: string): ModelLookup => ({ ok: false, reason: `'${key}' is not a configured model` });
-    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: base, alias: null } : null; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
+    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: base, alias: null } : null; }, delegationTargets: () => Object.keys(BUILT_IN_PERSONAS) };
     const pub = recorder();
     const sessions = new Sessions({
       clocks: clock, publisher: pub, pid: 78, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), log: (m) => infos.push(m), mintSessionId: () => `S${++minted}`,

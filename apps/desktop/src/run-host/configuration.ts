@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
 import { countNoun, err, ok } from '@rotaris/kernel';
-import { declaredToolsOf, resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
+import { declaredToolsOf, isDelegationTarget, NOT_DELEGATION_TARGETS, resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
 import { compressionTrigger, effectivePricing, isPlainMap, modelCapInForce, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type HelperModel, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
@@ -259,9 +259,28 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
       // tool port and the write-scope refusal read it through `toolRestrictionsFor` (OQ-145); until acceptance finding A4
       // (R-067) the loader parsed it and nothing carried it here, so it narrowed no grant.
       ...(entry?.tool_restrictions ? { toolRestrictions: entry.tool_restrictions } : {}),
+      // REQ-CONFIG-101 as OQ-229 reads it (R-072): a `delegates_to` that names any persona narrows the role's delegation targets;
+      // an empty one narrows nothing. Until OQ-229's build the loader validated the list and nothing carried it here.
+      ...(entry && entry.delegates_to.length > 0 ? { delegatesTo: entry.delegates_to } : {}),
     };
     return persona;
   };
+  /*
+   * OQ-229 (ruled 2026-10-07 under R-072): at run setup, once per run, each configured list whose effect a person could misread
+   * is logged — an entry naming a persona the product runs itself, which permits nothing (OQ-228); a list on a persona whose
+   * declared tools hold no `delegate`, which has no effect; a list that leaves its persona no delegation target; and an
+   * explicitly stated empty list on a persona that holds `delegate`, which narrows nothing. The loader's referential and cycle
+   * messages (REQ-CONFIG-231/232) are unchanged.
+   */
+  for (const role of Object.keys(cfg.personas)) {
+    const entry = cfg.personas[role]!;
+    const tools = declaredToolsOf(role, entry.tools ?? []);
+    const list = entry.delegates_to;
+    for (const target of list) if (!isDelegationTarget(target)) warn(`persona ${role}: delegates_to names '${target}', a persona the product runs itself (${NOT_DELEGATION_TARGETS[target]}), which is not a delegation target; the entry permits nothing (OQ-228, OQ-229)`);
+    if (list.length > 0 && !tools.includes('delegate')) warn(`persona ${role}: delegates_to has no effect, since its tools hold no delegate (REQ-CONFIG-101, OQ-229)`);
+    else if (list.length > 0 && !list.some((t) => isDelegationTarget(t) && Object.prototype.hasOwnProperty.call(cfg.personas, t))) warn(`persona ${role}: delegates_to (${list.join(', ')}) leaves it no delegation target, so every delegation it makes is refused (REQ-CONFIG-101, OQ-229)`);
+    if (list.length === 0 && stated(role, 'delegates_to') && tools.includes('delegate')) warn(`persona ${role}: delegates_to is stated empty, which narrows nothing; leave delegate out of its tools to stop it delegating (REQ-CONFIG-101, OQ-229)`);
+  }
   return {
     resolve: (name) => {
       const direct = cache.has(name) ? cache.get(name)! : (cache.set(name, build(name)), cache.get(name)!);
@@ -271,7 +290,9 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
       const target = cache.has(alias.persona.name) ? cache.get(alias.persona.name)! : (cache.set(alias.persona.name, build(alias.persona.name)), cache.get(alias.persona.name)!);
       return target ? { persona: target, alias: name } : null;
     },
-    knownRoles: () => Object.keys(cfg.personas),
+    // OQ-228 (R-072): the delegation targets, every configured persona but the three the specification reserves. It was
+    // `knownRoles: () => Object.keys(cfg.personas)`, which offered `intent-classifier` to every coordinator (finding P5).
+    delegationTargets: () => Object.keys(cfg.personas).filter(isDelegationTarget),
   };
 }
 

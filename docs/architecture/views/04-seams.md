@@ -253,6 +253,11 @@ it, the screen's runtime keys (`pendingFrom`) must equal it and `TIER_B_RUNTIME_
 confinement and egress fields (`improvement-timeout.test.ts`, `writers.test.ts`), so a runtime key the screen edits is
 added in the list or the save refuses it.
 
+A persona field the engine must act on rides on `Persona` (`packages/engine/src/children/personas.ts`), set in
+`personaResolverFor` (`apps/desktop/src/run-host/configuration.ts`) from the loaded entry: `delegates_to` (REQ-CONFIG-101) is
+the latest (OQ-229, 2026-10-07), parsed and validated for years and read by nothing until it became `Persona.delegatesTo`,
+which `delegationTargetsFor` narrows by. A field read nowhere but the loader is a key that validates and does nothing.
+
 Invariants:
 
 - **Configuration is resolved once per run start.** A run does not re-read; a surface that changes a value

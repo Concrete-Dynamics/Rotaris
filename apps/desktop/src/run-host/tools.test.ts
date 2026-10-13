@@ -6,7 +6,7 @@ import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
 import { TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset } from '@rotaris/contracts';
 import { CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS, loadConfiguration, renderMcpSection, type LoadedConfiguration, type PersonaMcpSurface } from '@rotaris/config';
 import { anySchema, gitReadTool, grantFacets, permissivePolicyRead, simpleExecutor, TodoList, todoTool, type TerminalManager, type ToolExecutor } from '@rotaris/agent-tools';
-import { SessionWriter, UserPresence, type ArtifactOps, type ToolPortContext } from '@rotaris/engine';
+import { resolveDelegationTarget, SessionWriter, UserPresence, type ArtifactOps, type ToolPortContext } from '@rotaris/engine';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { personaResolverFor, runtimeFromConfiguration, type ConfiguredRun } from './configuration.js';
 import type { McpHost } from './mcp.js';
@@ -1035,12 +1035,12 @@ ${personas === '' ? '' : `personas:\n${personas}`}runtime:
       sessionId: asSessionId('S1'), workspaceRoot: dir, writer, persona, agentName: persona, delegation, artifacts: undefined,
       requestedMode: 'ask', modeOverride: null, attended: () => true, warn: (m) => warnings.push(m), info: () => undefined, abortRun: () => undefined, ...extra,
     }, deps);
-    return { resolver, portOf };
+    return { resolver, portOf, cfg };
   }
 
   /** The catalogue as the description states it: persona name → its facets in the description's words. */
   function catalogueOf(description: string): Map<string, string> {
-    const m = /not described\): (.*?)\.(?: Aliases: | Ask a persona)/.exec(description);
+    const m = /not described\): (.*?)\.(?: Aliases: | Your delegates_to | Ask a persona)/.exec(description);
     if (!m) throw new Error(`no catalogue in: ${description}`);
     return new Map(m[1]!.split('; ').map((entry) => { const i = entry.indexOf(' ('); return [entry.slice(0, i), entry.slice(i + 2, -1)] as const; }));
   }
@@ -1051,8 +1051,8 @@ ${personas === '' ? '' : `personas:\n${personas}`}runtime:
     const { resolver, portOf } = setup(personas);
     const callerPort = portOf(caller, { parentId: 'root:1', depth: 0 });
     const catalogue = catalogueOf(descriptionOf(callerPort));
-    expect([...catalogue.keys()]).toEqual(resolver!.knownRoles());
-    for (const role of resolver!.knownRoles()) {
+    expect([...catalogue.keys()]).toEqual(resolver!.delegationTargets());
+    for (const role of resolver!.delegationTargets()) {
       const child = portOf(role, { parentPersona: caller, parentId: 'bg_0a1b2c3d', depth: 1 });
       await child.ready?.();
       expect({ role, facets: catalogue.get(role) }).toEqual({ role, facets: facetsOf(child.grant?.()?.tools ?? []) });
@@ -1070,6 +1070,52 @@ ${personas === '' ? '' : `personas:\n${personas}`}runtime:
     expect(catalogue.get('orchestrator')).toBe('reads workspace files');
     const text = descriptionOf(setup('').portOf('orchestrator', { parentId: 'root:1', depth: 0 }));
     expect(text).toContain('Aliases: coder (coding-agent), playwright (ui-verifier).');
+  });
+
+  /*
+   * OQ-228 (ruled 2026-10-07 under R-072): the catalogue lists the delegation targets — never `intent-classifier` (in the defaults)
+   * nor `gatekeeper` (built in), whatever the configuration says of them — and a persona the configuration adds. Under the
+   * default configuration it named every `personas:` key (finding P5 at a68f121, 71 of 71 coordinator requests).
+   */
+  it('OQ-228 (red): the reserved personas are in no catalogue, under the default configuration and one that overrides intent-classifier; a configured persona is', async () => {
+    for (const personas of ['', '  intent-classifier:\n    name: intent-classifier\n    model: selected\n    tools: [read_file, write_file]\n  release-manager:\n    name: release-manager\n    model: selected\n    tools: [read_file, grep]\n']) {
+      const { resolver, portOf, cfg } = setup(personas);
+      expect(Object.keys(cfg.personas)).toContain('intent-classifier');
+      const catalogue = catalogueOf(descriptionOf(portOf('orchestrator', { parentId: 'root:1', depth: 0 })));
+      expect([...catalogue.keys()]).toEqual(resolver!.delegationTargets());
+      expect(catalogue.has('intent-classifier')).toBe(false);
+      expect(catalogue.has('gatekeeper')).toBe(false);
+      if (personas !== '') expect(catalogue.get('release-manager')).toBe('reads workspace files');
+    }
+  });
+
+  /*
+   * OQ-229 (ruled 2026-10-07 under R-072): a non-empty `delegates_to` narrows the catalogue, and the catalogue is exactly what
+   * admission accepts, in both directions; an unnarrowed caller's too.
+   */
+  it('OQ-229 (red): the catalogue equals what admission accepts, for a narrowed caller and an unnarrowed one', () => {
+    const { resolver, portOf } = setup('  orchestrator:\n    name: orchestrator\n    model: selected\n    delegates_to: [codebase-analyst, coding-agent]\n  lead:\n    name: lead\n    model: selected\n    tools: [read_file, delegate]\n');
+    for (const [caller, expected] of [['orchestrator', ['codebase-analyst', 'coding-agent']], ['lead', resolver!.delegationTargets()]] as const) {
+      const callerPersona = resolver!.resolve(caller)!.persona;
+      const port = portOf(caller, caller === 'orchestrator' ? { parentId: 'root:1', depth: 0 } : { parentPersona: 'orchestrator', parentId: 'bg_0a1b2c3d', depth: 1 });
+      const description = descriptionOf(port);
+      const listed = [...catalogueOf(description).keys()];
+      const admitted = [...new Set([...resolver!.delegationTargets(), 'intent-classifier', 'gatekeeper', 'project-initializer'])].filter((n) => resolveDelegationTarget(resolver, n, callerPersona).ok);
+      expect(listed).toEqual([...expected]);
+      expect(admitted).toEqual(listed);
+      expect(description.includes('Your delegates_to (codebase-analyst, coding-agent) narrows this list')).toBe(caller === 'orchestrator');
+      if (caller === 'orchestrator') expect(description).toContain('Aliases: coder (coding-agent).');
+    }
+  });
+
+  it('OQ-229 (red): a global delegates_to narrows the caller, and a workspace [] over it lifts the narrowing', () => {
+    mkdirSync(join(dir, 'global'), { recursive: true });
+    writeFileSync(join(dir, 'global', 'agents.yaml'), 'personas:\n  orchestrator:\n    name: orchestrator\n    delegates_to: [tester]\n');
+    const narrowed = setup('');
+    expect([...catalogueOf(descriptionOf(narrowed.portOf('orchestrator', { parentId: 'root:1', depth: 0 }))).keys()]).toEqual(['tester']);
+    const lifted = setup('  orchestrator:\n    name: orchestrator\n    model: selected\n    delegates_to: []\n');
+    expect([...catalogueOf(descriptionOf(lifted.portOf('orchestrator', { parentId: 'root:1', depth: 0 }))).keys()]).toEqual(lifted.resolver!.delegationTargets());
+    rmSync(join(dir, 'global'), { recursive: true, force: true });
   });
 
   it('a configured tools: override changes that persona\'s line', async () => {
@@ -1126,7 +1172,7 @@ ${personas === '' ? '' : `personas:\n${personas}`}runtime:
     for (const caller of ['orchestrator', 'planner']) {
       const catalogue = catalogueOf(descriptionOf(portOf(caller, { parentId: 'root:1', depth: 0 })));
       const callerPersona = resolver!.resolve(caller)!.persona;
-      for (const role of resolver!.knownRoles()) {
+      for (const role of resolver!.delegationTargets()) {
         expect({ caller, role, implementation: implementationRole(resolver!.resolve(role)!.persona, callerPersona) }).toEqual({ caller, role, implementation: catalogue.get(role)!.split(', ').includes('writes workspace files') });
       }
     }

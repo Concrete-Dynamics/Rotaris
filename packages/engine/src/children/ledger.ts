@@ -4,7 +4,7 @@ import type { ChildInsert, ChildRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
 import type { ArtifactStore } from '../artifacts/store.js';
 import { canonicaliseName, mintTaskId, recordedRootNames, takenTaskIds, uniqueUnderParent } from './naming.js';
-import { EMPTY_MCP_EVIDENCE, knownRolesMessage, resolveRole, type AgentGrant, type Persona, type PersonaResolver } from './personas.js';
+import { EMPTY_MCP_EVIDENCE, resolveDelegationTarget, type AgentGrant, type Persona, type PersonaResolver } from './personas.js';
 import type { RanCommand } from '../artifacts/record.js';
 import { inheritedContextBlock } from './notify.js';
 
@@ -145,6 +145,11 @@ export interface SpawnInput {
   readonly attachArtifacts?: readonly string[] | undefined;
   /** PD-TOOLS-006 revision 6: the item of the caller's own plan the delegation serves, admitted before the spawn; absent means none. */
   readonly todoItem?: string | undefined;
+  /**
+   * OQ-228 and OQ-229: the delegating agent's persona, whose `delegates_to` narrows the targets `spawn` admits and lists; absent
+   * narrows nothing.
+   */
+  readonly callerPersona?: Pick<Persona, 'name' | 'delegatesTo'> | undefined;
 }
 
 export type SpawnRejection = { readonly reason: string };
@@ -269,8 +274,11 @@ export class ChildLedger {
    * REQ-ORCH-034 aliases; REQ-ORCH-044/045 naming; the initial state per REQ-ORCH-040 and REQ-ORCH-050.
    */
   spawn(input: SpawnInput): { ok: true; value: Spawned } | { ok: false; error: SpawnRejection } {
-    const role = this.deps.personas ? this.deps.personas.resolve(input.persona) : resolveRole(input.persona);
-    if (!role) return { ok: false, error: { reason: `Unknown persona '${input.persona}'. ${this.deps.personas ? `Known personas: ${this.deps.personas.knownRoles().join(', ')}.` : knownRolesMessage()}` } };
+    // OQ-228 and OQ-229 (R-072): (1) is "role known" among the caller's delegation targets — the three personas the product runs
+    // itself and a persona outside a non-empty `delegates_to` are refused like an unknown one, each listing the targets and their
+    // aliases (REQ-ORCH-034). Until the ruling this resolved every persona and listed `knownRoles()` with no alias.
+    const role = resolveDelegationTarget(this.deps.personas, input.persona, input.callerPersona);
+    if (!role.ok) return { ok: false, error: { reason: role.reason } };
     const all = this.all();
     const b = this.deps.budget;
     const depth = input.parentDepth + 1;

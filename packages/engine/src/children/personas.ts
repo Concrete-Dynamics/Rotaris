@@ -1,4 +1,4 @@
-import { BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, ROLE_SPAWN_ALIASES, type BuiltInRoleName, type IntentGrant, type PermissionPreset } from '@rotaris/contracts';
+import { BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, isDelegationTarget, NOT_DELEGATION_TARGETS, ROLE_SPAWN_ALIASES, type BuiltInRoleName, type IntentGrant, type PermissionPreset } from '@rotaris/contracts';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
 /**
  * Decision 2 of the plan: REQ-ORCH-028's thirteen roles and the two aliases as a BUILT-IN table, each
@@ -52,6 +52,11 @@ export interface Persona {
    * lists. Absent for the built-in table, which restricts nothing. Read through `toolRestrictionsFor`.
    */
   readonly toolRestrictions?: Readonly<Record<string, readonly string[]>> | undefined;
+  /**
+   * REQ-CONFIG-101 as OQ-229 reads it (ruled 2026-10-07 under R-072): the role's `delegates_to` when it names any persona — the
+   * delegation targets an agent of this role may delegate to. Absent, or empty, narrows nothing; the built-in table carries none.
+   */
+  readonly delegatesTo?: readonly string[] | undefined;
 }
 
 /**
@@ -93,8 +98,67 @@ export interface AgentGrant {
 
 /** ADR-0036: the configured `personas:` overlaid on the built-in table, resolved per run by the root. */
 export interface PersonaResolver {
+  /** Every persona of the configuration, a reserved one included: the classifier, the entry role and resumes read it. */
   readonly resolve: (name: string) => { readonly persona: Persona; readonly alias: string | null } | null;
-  readonly knownRoles: () => readonly string[];
+  /**
+   * OQ-228 (ruled 2026-10-07 under R-072): the delegation targets — every persona of the configuration but the three the
+   * specification reserves (`NOT_DELEGATION_TARGETS`). Named `knownRoles` until the ruling, when it was every `personas:` key and
+   * the catalogue, the ledger's rejection and the write-scope refusal's writers all read it unfiltered (finding P5).
+   */
+  readonly delegationTargets: () => readonly string[];
+}
+
+/**
+ * OQ-228 and OQ-229 (ruled 2026-10-07 under R-072): the personas an agent of `caller`'s persona may delegate to — the resolver's
+ * delegation targets (the built-in table's where none resolved), narrowed to the caller's `delegates_to` when that names any.
+ * `delegate`'s catalogue, admission, the ledger and the write-scope refusal's writers all read this one list.
+ */
+export function delegationTargetsFor(resolver: PersonaResolver | null | undefined, caller?: Pick<Persona, 'delegatesTo'> | null): readonly string[] {
+  const all = resolver ? resolver.delegationTargets() : ROLE_VOCABULARY.filter(isDelegationTarget);
+  const list = caller?.delegatesTo;
+  return list !== undefined && list.length > 0 ? all.filter((n) => list.includes(n)) : all;
+}
+
+/** REQ-ORCH-034: the aliases whose target is among `targets`, as `<alias>-><target>`, resolved as admission resolves them. */
+export function aliasesAmong(resolver: PersonaResolver | null | undefined, targets: readonly string[]): readonly { readonly alias: string; readonly target: string }[] {
+  return Object.keys(ROLE_ALIASES).flatMap((alias) => {
+    const r = resolver ? resolver.resolve(alias) : resolveRole(alias);
+    return r !== null && targets.includes(r.persona.name) ? [{ alias, target: r.persona.name }] : [];
+  });
+}
+
+/** REQ-ORCH-034's list after every refusal of a persona: the caller's targets and the aliases among them. */
+function knownTargetsSentence(resolver: PersonaResolver | null | undefined, caller: Pick<Persona, 'name' | 'delegatesTo'> | null | undefined): string {
+  const targets = delegationTargetsFor(resolver, caller);
+  if (targets.length === 0) return `${caller?.name ?? 'This agent'} can delegate to no persona.`;
+  const aliases = aliasesAmong(resolver, targets);
+  return `Known personas: ${targets.join(', ')}. Supported aliases: ${aliases.length > 0 ? aliases.map((a) => `${a.alias}->${a.target}`).join(', ') : 'none'}.`;
+}
+
+export type DelegationTargetResolution =
+  | { readonly ok: true; readonly persona: Persona; readonly alias: string | null }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * OQ-228 and OQ-229 (ruled 2026-10-07 under R-072), building REQ-ORCH-034 and REQ-ORCH-038: the persona a delegation names,
+ * resolved alias first, or the refusal, in this order — a name no persona answers to; a persona the product runs itself (one of
+ * `NOT_DELEGATION_TARGETS`, built in or configured); a persona outside the caller's non-empty `delegates_to`. Every refusal lists
+ * the caller's targets and the aliases among them. `resolveRole` and `PersonaResolver.resolve` are unchanged: the classifier, the
+ * entry role, a parent's persona, PD-ORCH-005's resumes and a `session_id` follow-up still resolve every persona.
+ */
+export function resolveDelegationTarget(resolver: PersonaResolver | null | undefined, name: string, caller?: Pick<Persona, 'name' | 'delegatesTo'> | null): DelegationTargetResolution {
+  const resolved = resolver ? resolver.resolve(name) : resolveRole(name);
+  if (resolved === null) return { ok: false, reason: `Unknown persona '${name}'. ${knownTargetsSentence(resolver, caller)}` };
+  const target = resolved.persona.name;
+  const named = resolved.alias !== null ? `'${name}' (alias of '${target}')` : `'${name}'`;
+  if (!isDelegationTarget(target)) {
+    return { ok: false, reason: `${named} is a persona the product runs itself (${NOT_DELEGATION_TARGETS[target]!}); it is not a delegation target. ${knownTargetsSentence(resolver, caller)}` };
+  }
+  const list = caller?.delegatesTo;
+  if (list !== undefined && list.length > 0 && !list.includes(target)) {
+    return { ok: false, reason: `${named} is not a persona ${caller?.name ?? 'this agent'} may delegate to: its delegates_to lists ${list.join(', ')}. ${knownTargetsSentence(resolver, caller)}` };
+  }
+  return { ok: true, persona: resolved.persona, alias: resolved.alias };
 }
 
 /*
@@ -242,6 +306,7 @@ export function resolveRole(name: string): { persona: Persona; alias: string | n
   return null;
 }
 
+/** REQ-ORCH-034 over the built-in table: its delegation targets (OQ-228: `gatekeeper` is not one) and the aliases. */
 export function knownRolesMessage(): string {
-  return `Known personas: ${ROLE_VOCABULARY.join(', ')}. Supported aliases: ${Object.entries(ROLE_ALIASES).map(([a, t]) => `${a}->${t}`).join(', ')}.`;
+  return knownTargetsSentence(null, null);
 }

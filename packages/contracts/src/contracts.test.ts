@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { z } from 'zod';
 import {
-  BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, declaredToolsOf,
+  BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, declaredToolsOf, isDelegationTarget, NOT_DELEGATION_TARGETS,
   CHANNEL_SCHEMAS,
   CONTRACT_SCHEMA_VERSION,
   CONTROL_OPS,
@@ -264,5 +264,20 @@ describe('the requirements command envelope (REQ-TRACE-472/478)', () => {
     expect(WorkspaceServiceRequestSchema.safeParse(base).success).toBe(true);
     // `unattended` is the preview's silence (REQ-TRACE-474), never a standing value main stamps.
     expect(WorkspaceServiceRequestSchema.safeParse({ ...base, disclosure: 'unattended' }).success).toBe(false);
+  });
+});
+
+/** OQ-228 (ruled 2026-10-07 under R-072): the three personas REQ-MCP-014 and REQ-ORCH-126 keep out of delegation. */
+describe('delegation targets (OQ-228, REQ-MCP-014, REQ-ORCH-126)', () => {
+  it('names exactly the three reserved personas, each with what the product runs it for', () => {
+    expect(NOT_DELEGATION_TARGETS).toEqual({ 'intent-classifier': 'request classification', 'project-initializer': 'project onboarding', gatekeeper: 'verification-gate authoring' });
+    expect(Object.isFrozen(NOT_DELEGATION_TARGETS)).toBe(true);
+  });
+  it('every other built-in role, and a user-defined persona, is a delegation target', () => {
+    expect(BUILT_IN_ROLE_NAMES.filter((n) => !isDelegationTarget(n))).toEqual(['gatekeeper']);
+    expect(isDelegationTarget('release-manager')).toBe(true);
+    expect(isDelegationTarget('intent-classifier')).toBe(false);
+    expect(isDelegationTarget('project-initializer')).toBe(false);
+    expect(isDelegationTarget('toString')).toBe(true);
   });
 });

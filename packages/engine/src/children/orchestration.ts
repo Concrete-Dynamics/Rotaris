@@ -13,7 +13,7 @@ import type { ArtifactStore } from '../artifacts/store.js';
 import { ChildLedger, storeChildReport, userCancellation, writeCancelledTeardown, writeTeardown, type Budget } from './ledger.js';
 import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
 import { CHILD_STALL_TIMEOUT_MS, childTimedOutMessage, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
-import { resolveRole, type Persona, type PersonaResolver } from './personas.js';
+import { resolveDelegationTarget, resolveRole, type Persona, type PersonaResolver } from './personas.js';
 import { fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
 import { correctiveInstruction, hadCorrectiveMessage, recordCorrectiveMessage, StallWatch, stallRecords, stallRecoveryDue } from './stall.js';
@@ -330,7 +330,22 @@ export class IterationChildren implements DelegationOps {
     if ((req.sessionId ?? '') !== '') return await this.followUp(parentId, req.sessionId!, req);
     const parent = this.ledger.get(parentId);
     const parentDepth = parent ? parent.depth : (this.ledger.isRoot(parentId) ? this.ledger.root.depth : 0);
-    const persona = personaOf(this.deps, req.persona);
+    // REQ-TOOLS-006 (4), OQ-145: the parent agent's `tool_restrictions` bind the child's grant, so they bind the checks below.
+    const parentName = this.parentPersonaOf(parentId);
+    const parentPersona = parentName === undefined ? undefined : personaOf(this.deps, parentName);
+    /*
+     * OQ-228 and OQ-229 (ruled 2026-10-07 under R-072): the persona named must be one of the caller's delegation targets —
+     * not a persona the product runs itself, and within the caller's `delegates_to` when that names any. Refused FIRST, with no
+     * record and no task id, so no later refusal (the plan gate, the write scope, a continuation, OQ-220's todo item) answers a
+     * delegation that cannot happen. Every check below reads the resolved target. A `session_id` follow-up returned above and
+     * is not checked: it resumes a child already admitted.
+     */
+    const target = resolveDelegationTarget(this.deps.personas, req.persona, parentPersona);
+    if (!target.ok) {
+      this.deps.warn(`a delegation of '${req.taskName}' to '${req.persona}' was refused: not a delegation target of ${parentName ?? 'the caller'} (REQ-ORCH-034, REQ-ORCH-038)`);
+      return { status: 'rejected', canonicalName: req.taskName, message: target.reason };
+    }
+    const persona: Persona | undefined = target.persona;
     /*
      * REQ-ORCH-153: refused at ADMISSION, before a record exists. The dispatch check in the tool gate is the
      * authoritative line and would refuse the child's calls one by one; this refusal is kept beside it because it
@@ -353,9 +368,6 @@ export class IterationChildren implements DelegationOps {
      * will resolve, an alias included (`personaOf`), so `playwright` is refused as `ui-verifier`. An unknown persona is
      * the ledger's refusal.
      */
-    // REQ-TOOLS-006 (4), OQ-145: the parent agent's `tool_restrictions` bind the child's grant, so they bind this check too.
-    const parentName = this.parentPersonaOf(parentId);
-    const parentPersona = parentName === undefined ? undefined : personaOf(this.deps, parentName);
     if (scope.patterns.length > 0 && persona !== undefined && !writesFiles(persona, parentPersona)) {
       return { status: 'rejected', canonicalName: req.taskName, message: scopeWithoutWriterReason(persona.name, fileWriters(this.deps.personas, parentPersona)) };
     }
@@ -381,6 +393,7 @@ export class IterationChildren implements DelegationOps {
       // (the repair of `a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`).
       ...((req.attachArtifacts ?? []).length > 0 ? { attachArtifacts: req.attachArtifacts } : {}),
       ...(admitted.item !== null ? { todoItem: admitted.item } : {}),
+      ...(parentPersona !== undefined ? { callerPersona: parentPersona } : {}),
     });
     if (!r.ok) return { status: 'rejected', canonicalName: req.taskName, message: r.error.reason };
     const { row, held, aliasResolved } = r.value;

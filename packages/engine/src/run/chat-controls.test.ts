@@ -123,7 +123,7 @@ describe('engine/sessions — forceCompression and clearTranscript in a run (REQ
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: A1, credentialFor: () => async () => 'k' };
     const backend = new DefaultAgentBackend(client);
     const models = (key: string): ModelLookup => ({ ok: false, reason: `'${key}' is not a configured model` });
-    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: base, alias: null } : null; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
+    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: base, alias: null } : null; }, delegationTargets: () => Object.keys(BUILT_IN_PERSONAS) };
     const pub = recorder();
     const toasts: { kind: string; title: string; body?: string }[] = [];
     const reports: { severity: string; title: string; message: string; detail: string; sessionId: string }[] = [];

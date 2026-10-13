@@ -12880,7 +12880,7 @@ The directive's template writes every limit that is not a whole number of minute
 first execution recorded that without the directive following. The case is reachable: the workspace file takes any integer of
 at least 1 second (`child_timeout: z.number().int().min(1)`, `packages/contracts/src/config.ts`; no maximum in
 `packages/config/src/sections/runtime.ts`), though the widget offers 60 to 14,400. Recorded as
-[`pd-config-003-writes-a-one-second-limit-as-1-seconds`](../defects/pd-config-003-writes-a-one-second-limit-as-1-seconds.md).
+[`pd-config-003-writes-a-one-second-limit-as-1-seconds`](../defects/fixed/pd-config-003-writes-a-one-second-limit-as-1-seconds.md).
 
 **What the build proceeds under.** "1 second", as built at revision 3.
 
@@ -12905,3 +12905,5 @@ on the form: a dated "Corrected" note is the record's form for reasons and direc
 makes a change to a directive's own normative text a new revision, its replaced text quoted beside it. The `<limit>` bullet is
 normative, so the change is revision 4. **Rejected:** changing the code to "1 seconds"; ruling the case unreachable (false).
 **Costs kept on record:** none in code; one more revision on a directive already at three.
+**Recorded 2026-10-13 (fin36):** revision 4 written in place in `PD-CONFIG-003` with its first execution (held as already
+built; `agent-timeout.test.ts` green), the two back-pointers amended in place.

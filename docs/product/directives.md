@@ -4368,6 +4368,10 @@ disposition: "Narrows: REQ-CONFIG-322, REQ-CONFIG-256, REQ-CONFIG-417 / Extends:
 where its failure shows. The clause marked "— revision 3" below is added; the heading stays as revision 2 left it, and the
 text of revisions 1 and 2 stands unchanged beside it.*
 
+*Revision 4 (2026-10-13, [R-072](requests.md#r-072), the ruling of [OQ-253](../architecture/open-questions.md#oq-253)) — the
+`<limit>` bullet of revision 3 states both singular forms; revision 3's bullet is quoted beneath it, and every other clause
+stands unchanged.*
+
 Settings › Runtime › **Delegation limits** SHALL show a third numeric control, "Per-agent timeout", after the depth cap and
 the fan-out limit: whole minutes with a "minutes" suffix (REQ-CONFIG-325's pattern), clamped at the widget to **1–240**. It
 is REQ-MONITOR-286's per-agent timeout, initialised from the effective `runtime.child_timeout` (REQ-CONFIG-113, in seconds)
@@ -4403,7 +4407,10 @@ screen's runtime keys equal, and a save naming any other runtime key is refused.
   directly under its state (REQ-MONITOR-069), one line: "Cut off at its per-agent timeout of <limit>[ while making progress].
   Settings › Runtime › Per-agent timeout sets this limit for runs started from now."
 - **`<limit>`.** N, the limit the agent ran under, written "1 minute" or "<m> minutes" when N is a whole number of minutes,
-  and "<N> seconds" otherwise.
+  and "1 second" or "<N> seconds" otherwise *(— revision 4)*.
+
+  > Revision 3 said, and no longer governs: "N, the limit the agent ran under, written '1 minute' or '<m> minutes' when N is a
+  > whole number of minutes, and '<N> seconds' otherwise." — which wrote a one-second limit "1 seconds".
 - **"while making progress".** It appears exactly when the report carries PD-ORCH-004's cut-off statement.
 - **One wording.** The line is worded once, and its path segments are the labels the Settings screen renders.
 
@@ -4450,6 +4457,13 @@ child that was looping; the line names the control without urging that, and says
 child was. The limit is read back from REQ-ORCH-088's error text, so one formatter writes it and one parser reads it, pinned
 by a round trip. Black-box conformance will see a tag and a line the reference lacks.
 
+*Revision 4's why, and what it costs.* OQ-253, ruled 2026-10-13 under the owner's delegation (R-072, TS1, both advocates
+followed on substance). A one-second limit is reachable: the workspace file takes any integer of at least 1 second
+(REQ-CONFIG-113; the widget offers 60 to 14,400). The minutes clause already spells "1 minute", so the template was meant to
+agree in number, as R-071 read REQ-GIT-122's form; the build wrote "1 second" from revision 3's first execution on. REQ-ORCH-088's
+"Child timed out after <N>s" is a different text, the one the limit is parsed back from, and is unchanged. What it costs:
+nothing in code; a revision rather than a correction note, because the bullet is the directive's own normative text.
+
 > **Narrows:** REQ-CONFIG-322, REQ-CONFIG-256, REQ-CONFIG-417, REQ-CONFIG-325
 > **Extends:** REQ-CONFIG-263, REQ-CONFIG-323, REQ-LIBRARY-041, REQ-MONITOR-040, REQ-MONITOR-044, REQ-MONITOR-052, REQ-MONITOR-069
 
@@ -4473,6 +4487,10 @@ REQ-LIBRARY-023, REQ-LIBRARY-124, REQ-NOTIFY-100, REQ-CONFIG-446, REQ-CONFIG-419
 ruling of [OQ-234](../architecture/open-questions.md) (CN1), the question the D2 ruling raised. Cites, without changing them:
 REQ-ORCH-088, PD-ORCH-004 revisions 1 to 5, REQ-CONFIG-113, REQ-MONITOR-041, REQ-MONITOR-285, REQ-MONITOR-286, REQ-NOTIFY-092,
 REQ-NOTIFY-100, REQ-NOTIFY-261, OQ-217 and revision 2's notice detail.*
+
+*Revision 4 raised by the consortium under the owner's delegation, 2026-10-13; logged as [R-072](requests.md#r-072), the
+ruling of [OQ-253](../architecture/open-questions.md#oq-253) (TS1), from revision 3's first execution. Cites, without changing
+them: REQ-ORCH-088, REQ-CONFIG-113 and REQ-MONITOR-286.*
 
 > **First execution, 2026-10-07, built under [R-072](requests.md#r-072):** the directive held as written. **What was
 > measured.** `settings/child-timeout.test.ts` (the minutes and seconds both ways, the stored-value line, a stored 1250 s and
@@ -4529,7 +4547,8 @@ REQ-NOTIFY-100, REQ-NOTIFY-261, OQ-217 and revision 2's notice detail.*
 > which shares the slot, is recorded, not repaired
 > ([`the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md`](../defects/fixed/the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md));
 > repaired 2026-10-13 (fin35) the same way, the stalled tag on a line of its own.
-> The limit is written "<N> seconds" except that one second reads "1 second", the way "1 minute" does. **As built.**
+> The limit is written "<N> seconds" except that one second reads "1 second", the way "1 minute" does — since revision 4
+> (2026-10-13, [OQ-253](../architecture/open-questions.md#oq-253)) the directive's own text. **As built.**
 > `childTimedOutMessage` and `timedOutOf` (`packages/engine/src/children/cut-off.ts`), `AgentRecord.timedOut`
 > (`packages/contracts/src/children.ts`) filled by `toAgentRecord` (`packages/engine/src/sessions.ts`), `TIMED_OUT_TAG`,
 > `timeoutLimitText`, `perAgentTimeoutPath` and `timeoutLine` (`packages/ui/src/agents.ts`) over `RUNTIME_CATEGORY_LABEL` and
@@ -4544,6 +4563,14 @@ REQ-NOTIFY-100, REQ-NOTIFY-261, OQ-217 and revision 2's notice detail.*
 > (the orchestrator's: D2's 45-minute duress run, where any child cut off should read "45 minutes"), and the `ui-review`
 > pack (skipped: it renders no cut-off agent; the geometry above was read from the built app instead). The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Revision 4's first execution, 2026-10-13 (fin36):** the revision held as already built — nothing changed in code, test or
+> proof. `timeoutLimitText` (`packages/ui/src/agents.ts`) writes the limit through `countNoun`, and
+> `packages/ui/src/agent-timeout.test.ts` pins `timeoutLimitText(1)` as "1 second" beside "1 minute" and the plural forms; that
+> file was run again on this branch, green. **What was not measured.** A cut-off at a one-second limit in the built app
+> (`pnpm mission-proof` item 1d drives a 3 s limit). Repairs
+> [`pd-config-003-writes-a-one-second-limit-as-1-seconds`](../defects/fixed/pd-config-003-writes-a-one-second-limit-as-1-seconds.md).
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

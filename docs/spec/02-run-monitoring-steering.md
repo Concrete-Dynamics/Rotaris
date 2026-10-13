@@ -161,7 +161,7 @@ While a task run is executing, a user must be able to watch what every agent is 
 **REQ-MONITOR-051** — Below a viewport width of 1180 px, choosing an agent opens the inspector as an overlay drawer that is mutually exclusive with the agents/todos drawer. The workspace must remain usable down to 1000×680.
 
 **REQ-MONITOR-052** — The inspector for an agent shows: a state-colored status dot that pulses while live; the agent name; a meta line of the form `{state} · {elapsed or em-dash} · {N} tool calls`; a context ring showing used against limit with the compression threshold marked; a caption naming it the context window and stating the compression threshold percentage; a model selector; a reasoning selector offering low / medium / high; a scope note; tool chips; artifact links; a cascade note; and Steer, Cancel, and Pop out actions.
-  > **Extended by [`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 3, 2026-10-07.** Directly under the meta line, unchanged in form, the
+  > **Extended by [`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 3, 2026-10-07 (revision 4, 2026-10-13: a one-second limit reads "1 second").** Directly under the meta line, unchanged in form, the
   > inspector of an agent cut off at its per-agent timeout shows one line giving the limit and naming
   > Settings › Runtime › Per-agent timeout.
 
@@ -207,7 +207,7 @@ While a task run is executing, a user must be able to watch what every agent is 
 **REQ-MONITOR-068** — A pop-out window exists per persona, titled with the product name and the persona, sized 820×620 by default, with a header summarizing the number of instances, one tab per agent instance of that persona (tab tooltip `{state} · {activity}`), and a persona-wide artifacts card listing artifacts from all instances with an explicit empty state.
 
 **REQ-MONITOR-069** — Each instance tab shows: status dot, agent name in the persona color, and state; an agent-scoped transcript card with an explicit empty state; a context card with a ring and a line of the form `{N} tool calls · {elapsed or hyphen}`; an instance-controls card with read-only model and reasoning values; a current-activity card rendering the activity text as Markdown with an explicit empty state; a tools-and-artifacts card listing available tools (the same resolved set the inspector shows), one line per MCP server, the currently active tools, and artifact links; and a steer card.
-  > **Extended by [`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 3, 2026-10-07.** Directly under the state, the instance tab of an agent cut
+  > **Extended by [`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 3, 2026-10-07 (revision 4, 2026-10-13: a one-second limit reads "1 second").** Directly under the state, the instance tab of an agent cut
   > off at its per-agent timeout shows the inspector's line, worded once.
 
 **REQ-MONITOR-070** — The steer card offers a multi-line plain-text box whose placeholder invites the user to add context or redirect the agent, a primary send action, and a cancel action marked as destructive; both act on the agent shown in that tab. Sending while the box is empty or holds only whitespace issues no request and changes nothing. A send that is accepted clears the box; a send that is refused leaves the typed text in place so the user can retry it.

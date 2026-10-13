@@ -275,17 +275,24 @@ export function writtenPathsOf(toolName: string, args: Readonly<Record<string, u
  * REQ-MCP-015: the EDIT tier is the code-intelligence server's. A call's runtime name carries that server's prefix only when
  * two servers expose one name, so the name alone cannot tell the product's single-file content replacement from a user's own server's
  * tool called the same (the names themselves are written only in the binding manifest, REQ-MCP-116). The readers are given instead the callables the child's grant gives the code-intelligence server, in
- * lower case (`McpGrantEvidence.granted`, keyed by server); a call whose name is not among them is no EDIT call whatever it
- * is called. `undefined` where no grant is known (a port not yet ready, a test double), when the name alone decides as before.
+ * lower case (`McpGrantEvidence.granted`, keyed by server), each mapped to the name the server reports for it
+ * (`McpGrantEvidence.renamed`, REQ-MCP-005); a call whose name is not among them is no EDIT call whatever it is called, and
+ * one that is, is matched against the manifest by its reported name. `undefined` where no grant is known (a port not yet
+ * ready, a test double), when the name alone decides as before.
+ *
+ * Until fin38 the map was a set of callables and the manifest was asked by the callable, so a `tool_name_map` rename on the
+ * code-intelligence entry made its EDIT tool no write
+ * (docs/defects/fixed/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
  *
  * The reason, kept beside it: until fin36 every reader matched the name alone, so with the shipped entry disabled another
  * server's tool named like the single-file content replacement listed whatever its `relative_path` argument held among the child's edited files
  * (docs/defects/fixed/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md).
  */
-export type EditTierNames = ReadonlySet<string> | undefined;
+export type EditTierNames = ReadonlyMap<string, string> | undefined;
 export function editTierNamesOf(grant: AgentGrant | null | undefined): EditTierNames {
   if (grant === null || grant === undefined) return undefined;
-  return new Set((grant.mcp.granted[CODE_INTELLIGENCE_SERVER_NAME] ?? []).map((name) => name.toLowerCase()));
+  const renamed = grant.mcp.renamed?.[CODE_INTELLIGENCE_SERVER_NAME] ?? {};
+  return new Map((grant.mcp.granted[CODE_INTELLIGENCE_SERVER_NAME] ?? []).map((name) => [name.toLowerCase(), renamed[name] ?? name] as const));
 }
 
 /**
@@ -311,9 +318,11 @@ export function writeReadingOf(toolName: string, args: Readonly<Record<string, u
     const target = asText(args?.['path']) || asText(args?.['file_path']);
     return { paths: target === '' ? [] : [target], unnamed: false };
   }
-  // REQ-MCP-015 (fin36): only the code-intelligence server's tools are of its EDIT tier (`editTierNamesOf`).
-  if (tier !== undefined && !tier.has(toolName.toLowerCase())) return null;
-  const edit = codeIntelligenceEdit(toolName, args);
+  // REQ-MCP-015 (fin36): only the code-intelligence server's tools are of its EDIT tier (`editTierNamesOf`), asked by the name
+  // the server reports (REQ-MCP-005), so a tool its entry's `tool_name_map` renamed is still the tool the manifest names.
+  const reported = tier === undefined ? toolName : tier.get(toolName.toLowerCase());
+  if (reported === undefined) return null;
+  const edit = codeIntelligenceEdit(reported, args);
   if (edit === null) return null;
   if (edit.reach === null) return { paths: edit.paths, unnamed: false };
   return observed === undefined ? { paths: edit.paths, unnamed: true } : { paths: observed, unnamed: false };

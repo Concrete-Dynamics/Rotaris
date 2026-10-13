@@ -204,6 +204,36 @@ describe('engine/children/report — another server\'s tool named like the EDIT 
 });
 
 /**
+ * REQ-MCP-005 with REQ-MCP-015: a `tool_name_map` on the code-intelligence entry offers an EDIT tool under another callable
+ * name. The readers matched the callable against the manifest's names, so a renamed EDIT call was no write: its path was
+ * missing from the report, its facts and the cut-off's changed paths
+ * (docs/defects/fixed/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md). The grant evidence
+ * now carries each renamed callable's reported name (`McpGrantEvidence.renamed`), and the readers ask by it.
+ */
+describe('engine/children/report — a renamed code-intelligence EDIT tool is read as a write (REQ-MCP-005, REQ-MCP-015, REQ-ORCH-109)', () => {
+  const edit = CODE_INTELLIGENCE_MANIFEST.tiers.edit;
+  const at = CODE_INTELLIGENCE_MANIFEST.editArguments;
+  const tier = editTierNamesOf({ tools: [], mcp: { granted: { code_intelligence: ['edit_text', 'rewrite_everywhere'] }, renamed: { code_intelligence: { edit_text: edit.replaceInFile, rewrite_everywhere: edit.replaceAcrossFiles } }, servers: [] } });
+  const messages = [
+    say('user', 'TASK: tidy the docs'),
+    call('e1', 'edit_text', { [at.replaceInFile.path]: 'docs/a.md', needle: 'a', repl: 'b', mode: 'literal' }), result('e1', 'edit_text', 'OK'),
+    call('e2', 'rewrite_everywhere', { needle: 'a', repl: 'b', mode: 'literal' }), result('e2', 'rewrite_everywhere', 'OK'),
+  ];
+
+  it('lists the renamed single-file EDIT call\'s path and says the renamed cross-file one as unnamed', () => {
+    expect(writeReadingOf('edit_text', { [at.replaceInFile.path]: 'docs/a.md' }, undefined, tier)).toEqual({ paths: ['docs/a.md'], unnamed: false });
+    expect(writeReadingOf('EDIT_TEXT', { [at.replaceInFile.path]: 'docs/a.md' }, undefined, tier)).toEqual({ paths: ['docs/a.md'], unnamed: false });
+    expect(writeReadingOf('rewrite_everywhere', { needle: 'a' }, ['docs/b.md'], tier)).toEqual({ paths: ['docs/b.md'], unnamed: false });
+    expect(editedFilesFrom(messages, [], tier)).toEqual(['docs/a.md']);
+    expect(unnamedChangesFrom(messages, tier)).toEqual(['rewrite_everywhere']);
+  });
+
+  it('the manifest\'s own name, no longer a callable of the server, is no EDIT call', () => {
+    expect(writeReadingOf(edit.replaceInFile, { [at.replaceInFile.path]: 'docs/a.md' }, undefined, tier)).toBeNull();
+  });
+});
+
+/**
  * OQ-245 (XE1, ruled 2026-10-13 under R-072): a cross-file EDIT call — a symbol rename, a cross-file replacement — changes
  * files its arguments do not name. The run host observes what it can reach before and after it and puts what changed on its
  * result part (`observedPaths`); the report lists that, and where nothing was observed it says the call may have changed files

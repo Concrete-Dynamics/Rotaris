@@ -44,7 +44,7 @@ server's own callables still read, in any casing and under the collision prefix,
 (PASSED, load about 3 on 4 CPUs). Still matched by name, and recorded rather than repaired: a code-intelligence tool
 renamed by the entry's `tool_name_map` is read by the engine under its callable, which the manifest does not know, so its
 writes are not listed — the opposite error, unreachable with the shipped entry, which renames nothing; recorded as
-[`a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md`](../a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
+[`a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md`](a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
 
 ## Specs
 

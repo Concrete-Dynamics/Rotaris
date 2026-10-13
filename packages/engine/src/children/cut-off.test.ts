@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { millis } from '@rotaris/kernel';
 import { CODE_INTELLIGENCE_MANIFEST } from '@rotaris/config';
 import type { ChildRow } from '@rotaris/store';
+import type { EditTierNames } from './report.js';
 import { CHILD_STALL_TIMEOUT_MS, childTimedOutMessage, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, timedOutOf, workspacePath } from './cut-off.js';
 
 const ROOT = '/ws';
@@ -100,12 +101,19 @@ describe('PD-ORCH-004: the paths a child\'s own file-writing calls changed', () 
       .toBe('Workspace paths its file-writing calls changed, in the order first changed: docs/verification.md, src/a.ts, src/c.ts.');
   });
 
+  it('a code-intelligence EDIT tool its entry renamed changes its path (REQ-MCP-005, fin38)', () => {
+    const path = CODE_INTELLIGENCE_MANIFEST.editArguments.replaceInFile.path;
+    const log = new ProgressLog(ROOT, () => new Map([['edit_text', CODE_INTELLIGENCE_MANIFEST.tiers.edit.replaceInFile]]));
+    log.completed(millis(1), 'edit_text', { [path]: 'docs/a.md', needle: 'a', repl: 'b', mode: 'literal' }, true);
+    expect(log.changedPaths()).toEqual(['docs/a.md']);
+  });
+
   it('another server\'s tool named like the EDIT tier changes no path once the child\'s grant is known (REQ-MCP-015, fin36)', () => {
     const edit = CODE_INTELLIGENCE_MANIFEST.tiers.edit;
     const path = CODE_INTELLIGENCE_MANIFEST.editArguments.replaceInFile.path;
-    let tier: ReadonlySet<string> | undefined;
+    let tier: EditTierNames;
     const log = new ProgressLog(ROOT, () => tier);
-    tier = new Set(['code_intelligence_' + edit.replaceInFile]);
+    tier = new Map([['code_intelligence_' + edit.replaceInFile, 'code_intelligence_' + edit.replaceInFile]]);
     log.completed(millis(1), edit.replaceInFile, { [path]: 'notes/inbox.md', needle: 'a', repl: 'b', mode: 'literal' }, true);
     log.completed(millis(2), edit.replaceAcrossFiles, { needle: 'a', repl: 'b', mode: 'literal' }, true);
     log.completed(millis(3), `code_intelligence_${edit.replaceInFile}`, { [path]: 'docs/a.md', needle: 'a', repl: 'b', mode: 'literal' }, true);

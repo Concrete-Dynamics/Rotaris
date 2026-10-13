@@ -581,8 +581,15 @@ export class McpHost {
  */
 export function grantEvidence(surface: PersonaMcpSurface, granted: (server: string, callable: string) => boolean = () => true): McpGrantEvidence {
   const carried = surface.active.filter((a) => !a.discoveryFailed);
+  // REQ-MCP-005: each granted callable the server reports under another name (a `tool_name_map` rename or REQ-MCP-057's
+  // collision prefix), so the engine's readers ask the binding manifest by the reported name (`editTierNamesOf`).
+  const renamed = Object.fromEntries(carried.flatMap((a) => {
+    const pairs = a.tools.filter((t) => t.callable !== t.reported && granted(a.name, t.callable)).map((t) => [t.callable, t.reported] as const);
+    return pairs.length === 0 ? [] : [[a.name, Object.fromEntries(pairs)] as const];
+  }));
   return {
     granted: Object.fromEntries(carried.map((a) => [a.name, a.tools.map((t) => t.callable).filter((c) => granted(a.name, c))])),
+    ...(Object.keys(renamed).length === 0 ? {} : { renamed }),
     servers: [
       ...surface.active.map((a) => a.discoveryFailed
         ? { name: a.name, transport: a.entry.type, origin: a.origin, fate: 'dropped' as const, reason: 'discovery-failed' satisfies DropReason }

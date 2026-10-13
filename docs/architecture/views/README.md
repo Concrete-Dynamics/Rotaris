@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-13**
 
+**A renamed code-intelligence EDIT tool is read as a write (REQ-MCP-005, REQ-MCP-015, REQ-ORCH-109; fin38).** `grantEvidence`
+(`run-host/mcp.ts`) records, beside each server's granted callables, the reported name of every one that differs
+(`McpGrantEvidence.renamed`, also stored in `children.granted_mcp`), and `editTierNamesOf` maps each code-intelligence callable
+to that name, so `writeReadingOf` asks the manifest by it. The **runtime view**'s cut-off passage and its `children` row say so.
+No package, edge, process, channel, command or store column changed.
+
 **The hand-over endpoint is part of the instance record (OQ-248 ruled under R-072; REQ-STARTUP-161, REQ-STARTUP-164; fin36).**
 Below a temporary directory each claim attempt makes its own private socket directory (`placeSocket`, `mkdtemp`,
 `platform/instance.ts`), removed with the socket by `closeEndpoint` when the attempt loses or the instance closes; a reclaim

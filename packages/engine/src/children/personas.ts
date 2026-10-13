@@ -80,6 +80,13 @@ export function toolRestrictionsFor(persona: Pick<Persona, 'name' | 'toolRestric
 
 export interface McpGrantEvidence {
   readonly granted: Readonly<Record<string, readonly string[]>>;
+  /**
+   * REQ-MCP-005: per server, each granted callable whose server-reported name differs (a `tool_name_map` rename, or the
+   * collision prefix of REQ-MCP-057), mapped to that reported name; absent when none differs. The engine's readers of a
+   * child's writes ask the binding manifest by the reported name (`editTierNamesOf`), so a renamed code-intelligence EDIT
+   * tool is still read as a write (docs/defects/fixed/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
+   */
+  readonly renamed?: Readonly<Record<string, Readonly<Record<string, string>>>>;
   readonly servers: readonly { readonly name: string; readonly transport: string; readonly origin: string; readonly fate: 'connected' | 'dropped'; readonly reason?: string }[];
 }
 export const EMPTY_MCP_EVIDENCE: McpGrantEvidence = Object.freeze({ granted: {}, servers: [] });

@@ -50,6 +50,20 @@ describe('a persona\'s MCP lines on its first spawn (REQ-MCP-059, REQ-MCP-065, R
     expect(grantLines(lines)).toHaveLength(1);
   });
 
+  // REQ-MCP-005: a callable a `tool_name_map` renamed carries its reported name in the evidence, so the engine's readers ask the
+  // binding manifest by it (docs/defects/fixed/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
+  it('REQ-MCP-005: the evidence maps a granted renamed callable to its reported name, and says nothing where none is renamed', () => {
+    const plain = host();
+    expect(grantEvidence(plain.mcp.surfaceFor(plain.cfg, '/ws', 'tester', null)).renamed).toBeUndefined();
+    const { mcp, cfg } = host();
+    const ci = (cfg.mcp.servers as Record<string, { entry: { tool_name_map: Record<string, string> } }>)['ci']!;
+    ci.entry.tool_name_map = { lookup: 'find', notes_write: 'jot' };
+    const evidence = grantEvidence(mcp.surfaceFor(cfg, '/ws', 'tester', null));
+    expect(evidence.granted).toEqual({ ci: ['find', 'notes_read'] });
+    // `notes_write` is renamed but not granted, so it is not carried.
+    expect(evidence.renamed).toEqual({ ci: { find: 'lookup' } });
+  });
+
   // Acceptance finding A41: REQ-MCP-059 calls the grant count a debug log, and it was written at `info`, which
   // PD-MONITOR-002's default threshold keeps in every packaged build. At `debug` it is dropped unless
   // ROTARIS_APP_LOG_LEVEL=debug is set; the persona's surface line stays at `info`.

@@ -13170,6 +13170,49 @@ unchanged apart from the tokens.
 with the seconds to re-route (`routingMissReading`'s `rerouted`, `secondsToNext` and `flagged`, `apps/desktop/scripts/lib/routing-misses.mjs`).
 Pinned by `tools/delegation.test.ts` and `lib/routing-misses.test.ts`, red on the code before. The note is repaired.
 
+<a id="oq-258"></a>
+
+**OQ-258 — Does the intent classifier's strict rung name the classification object's fields?** *(REQ-ORCH-010, the three-rung
+ladder, rung 2's keys and example fixed and rung 1's wording open; REQ-ORCH-007 and REQ-ORCH-008, the fallback and the 12 s
+bound, kept by OQ-114's ruling under R-071; REQ-ORCH-011, the result's fields; ADR-0026's third execution, "the schema
+was meant to be the instruction"; `PD-ORCH-011` revision 2. Raised 2026-10-13 from finding V3 of the duress live-run autopsy and
+finding Q2 of the default autopsy at `552d346`, recorded in
+[`the-intent-classifiers-strict-rung-never-names-the-objects-keys`](../defects/the-intent-classifiers-strict-rung-never-names-the-objects-keys.md);
+the consortium's question V3. **Ruled 2026-10-13.**)*
+
+Every classifier request went out at `json_schema` with user text ending "Reply with the classification object only.", naming no
+key, because the schema was to carry them; a reasoning model never sees `response_format` while it reasons. The duress
+classification chose `whole_project` early, deliberated over the key from character 1,464 and was cut at 11,975 ms mid-way
+through `{"classification":"whole_project"}`; the default pack was cut in 4 of 10 launches, three of them deliberating the same way
+(the fourth received no bytes: the endpoint queueing), and faults-args lost its direct-work route.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** the intent classifier's `json_schema`
+rung names the classification object's three fields in its user text, in the same sentence the `json_object` rung carries and
+without that rung's example. The `json_object` rung keeps its example; the text rung, the system prompt and the 12 s bound
+(REQ-ORCH-008, OQ-114 as ruled under R-071) are unchanged. It is covered work under REQ-ORCH-010, REQ-ORCH-007, REQ-ORCH-008 and
+REQ-ORCH-011, which leaves rung 1's wording open: **no directive**, no specification text and no symbol changes. ADR-0026's
+reading "the schema was meant to be the instruction" is kept beside its replacement as falsified.
+
+The two recommendations weighed, and the ruling followed **both** — they recommended the same repair (one keys sentence on rung
+1, no example there, the bound kept):
+- **Advocate A (the user's lens)** recommended naming the fields on rung 1, leaving the bound alone, reporting `PD-ORCH-011`
+  revision 2's first execution in place as a NOTE, and keeping the falsified reason beside its replacement. The ruling took A's
+  dated paragraph on the earlier fixed note and the reopening limb "cut after naming its category".
+- **Advocate B (the system's lens)** recommended the same change as covered work under REQ-ORCH-010, the same sentence without
+  the example and nothing else, with the gap recorded as a defect against ADR-0026's correction and reported back to every record
+  that decided it. The ruling took B's shared constant, the ADR-0026 report-back, the `codebase.md` line and the count limb.
+
+**Rejected:** a longer bound (the owner kept it on 2026-10-06, and terminal's queueing would make a longer wait pure loss);
+confirming as built. **Reopening condition (OQ-114's intent-bound limb):** a default pack after this change that shows a
+classification cut after its reasoning has named its category, with no deliberation about field names; or 3 or more cuts in 10
+launches where the endpoint was not queueing (bytes were received before the cut).
+
+**What a live run then shows.** Every `json_schema` classifier request's user text ends with the keys sentence naming `intent`,
+`confidence` and `reason`, and the reasoning no longer debates `category`, `classification` or `intent` as the key. Cuts at the
+12 s bound fall toward `a68f121`'s 2 of 10 and come only from category deliberation or a queueing endpoint; duress classifies
+`whole_project` in time; faults-args classifies `single_file_change` and runs direct (about 43 s, against 169 s); launch audits
+read `fallback: true` less often.
+
 <a id="oq-259"></a>
 
 **OQ-259 — Does a `write_file` insert into a CRLF file carry the file's line endings into the inserted lines?**

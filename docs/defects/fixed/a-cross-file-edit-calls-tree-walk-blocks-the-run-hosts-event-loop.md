@@ -20,3 +20,19 @@ and its cost on a large repository has not been measured.
 
 - `packages/agent-tools/src/tools/observe.ts` — `snapshotTree` (synchronous), `observeReach` (calls it twice per call).
 - `apps/desktop/src/run-host/mcp.ts` — the MCP executor that runs every code-intelligence EDIT call inside `observeReach`.
+
+## Outcome (fin38, 2026-10-13) — repaired
+
+`snapshotTree` is asynchronous: it lists each directory with `readdir` and reads its files' status with `lstat` from
+`node:fs/promises`, a directory's files together (`Promise.all`), and `observeReach` awaits both snapshots. What is observed is
+unchanged (the same pruning, the same identity, the same limit and the same `null` for a walk that cannot be completed); only the
+event loop moves between reads. Pinned by `observe.test.ts` ("the walk yields to the event loop while it reads the tree": a
+`setImmediate` queued before the walk runs before it ends), red on the synchronous walk; the other observe tests now await it.
+
+**Measured** (vitest, load 1.0 on 4 CPUs, a scratch tree of 20,000 empty files in 200 directories, two runs each, a 1 ms interval
+counting how long the loop went unserved): the synchronous walk took 265 and 186 ms with the loop held for all of it (0 interval
+ticks, longest stall 265 and 186 ms); the asynchronous walk took 472 and 375 ms with the longest stall 8.9 and 8.8 ms (283 and 255
+ticks). So a project-wide call costs about twice the wall time per walk and no longer stalls the run host; at
+`SNAPSHOT_FILE_LIMIT` (200,000 files) the old stall would have been about two seconds per walk, twice per call. This repository's
+own tree (2,195 files once the ignores prune it) walked in 73 to 92 ms with a longest stall of 11 to 15 ms. No proof drives a
+large project-wide call; `code-intel-proof`'s `child-across` launch drives the path on its small fixture.

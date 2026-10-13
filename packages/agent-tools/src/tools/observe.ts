@@ -1,4 +1,5 @@
-import { lstatSync, readdirSync, type Dirent } from 'node:fs';
+import type { Dirent } from 'node:fs';
+import { lstat, readdir } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { ignoredHere, loadRules, type IgnoreRule } from '@rotaris/config';
 import { realPathOf } from './fence.js';
@@ -30,8 +31,15 @@ export const SNAPSHOT_FILE_LIMIT = 200_000;
  * The files under `base` (relative to `root`; `''` is the whole tree), as root-relative `/` paths mapped to their identity, or
  * null when the walk cannot be completed: a base outside the root, an unreadable base, or more than `limit` files. A base the
  * root-down walk would prune is pruned here too, so it holds nothing; a base that is a file is that one file.
+ *
+ * Asynchronous: every directory listing and every file's status is read through `node:fs/promises`, a directory's files
+ * together, so the run host's event loop moves between them — other agents' model streams, tool results and the events the
+ * window draws are not held behind a project-wide walk. The reason, kept beside it: until fin38 the walk read with
+ * `lstatSync` and `readdirSync`, so a symbol rename or a whole-project replacement stalled everything else the run host did
+ * for the length of two walks of up to `SNAPSHOT_FILE_LIMIT` files
+ * (docs/defects/fixed/a-cross-file-edit-calls-tree-walk-blocks-the-run-hosts-event-loop.md).
  */
-export function snapshotTree(root: string, base: string, limit: number = SNAPSHOT_FILE_LIMIT): TreeSnapshot | null {
+export async function snapshotTree(root: string, base: string, limit: number = SNAPSHOT_FILE_LIMIT): Promise<TreeSnapshot | null> {
   const rootAbs = resolve(root);
   const baseAbs = resolve(rootAbs, base);
   const relOf = (abs: string): string => relative(rootAbs, abs).split(sep).join('/');
@@ -40,9 +48,9 @@ export function snapshotTree(root: string, base: string, limit: number = SNAPSHO
   let rules: readonly IgnoreRule[];
   try { rules = loadRules(rootAbs); } catch { rules = []; }
   const out = new Map<string, string>();
-  const identity = (abs: string): string | null => {
+  const identity = async (abs: string): Promise<string | null> => {
     try {
-      const st = lstatSync(abs, { bigint: true });
+      const st = await lstat(abs, { bigint: true });
       return st.isFile() ? `${st.size}:${st.mtimeNs}:${st.ctimeNs}` : null;
     } catch {
       return null;
@@ -50,7 +58,7 @@ export function snapshotTree(root: string, base: string, limit: number = SNAPSHO
   };
   let baseIsDir: boolean;
   try {
-    const st = lstatSync(baseAbs);
+    const st = await lstat(baseAbs);
     if (st.isSymbolicLink()) return out;
     baseIsDir = st.isDirectory();
   } catch {
@@ -59,35 +67,41 @@ export function snapshotTree(root: string, base: string, limit: number = SNAPSHO
   }
   if (scanExcludes(rules, baseRel, baseIsDir)) return out;
   if (!baseIsDir) {
-    const id = identity(baseAbs);
+    const id = await identity(baseAbs);
     if (id !== null) out.set(baseRel, id);
     return out;
   }
-  const visit = (dir: string): boolean => {
+  const visit = async (dir: string): Promise<boolean> => {
     let entries: Dirent[];
     try {
-      entries = readdirSync(dir, { withFileTypes: true });
+      entries = await readdir(dir, { withFileTypes: true });
     } catch {
       return dir !== baseAbs;
     }
+    const files: { readonly abs: string; readonly rel: string }[] = [];
+    const dirs: string[] = [];
     for (const e of entries) {
       if (e.isSymbolicLink() || IGNORE_COMPONENTS.has(e.name)) continue;
       const abs = join(dir, e.name);
       const r = relOf(abs);
       if (e.isDirectory()) {
-        if (ignoredHere(rules, r, true)) continue;
-        if (!visit(abs)) return false;
+        if (!ignoredHere(rules, r, true)) dirs.push(abs);
         continue;
       }
-      if (!e.isFile() || ignoredHere(rules, r, false)) continue;
-      const id = identity(abs);
-      if (id === null) continue;
-      out.set(r, id);
+      if (e.isFile() && !ignoredHere(rules, r, false)) files.push({ abs, rel: r });
+    }
+    // A directory's files are read together; the listing's order is kept for what the snapshot holds.
+    const ids = await Promise.all(files.map((f) => identity(f.abs)));
+    for (let i = 0; i < files.length; i += 1) {
+      const id = ids[i];
+      if (id === null || id === undefined) continue;
+      out.set(files[i]!.rel, id);
       if (out.size > limit) return false;
     }
+    for (const d of dirs) if (!(await visit(d))) return false;
     return true;
   };
-  return visit(baseAbs) ? out : null;
+  return (await visit(baseAbs)) ? out : null;
 }
 
 /** The paths changed, created or removed between two snapshots of one base, in code-point order. */
@@ -156,11 +170,11 @@ export async function observeReach(o: { readonly root: string; readonly reach: {
   // them, so the spellings could still differ there (fin36's review).
   const root = realPathOf(o.root);
   const mark = o.journal.mark();
-  const before = snapshotTree(root, o.reach.base, o.limit);
+  const before = await snapshotTree(root, o.reach.base, o.limit);
   const obs = await call();
   // The ruling's `unobserved` mark: the call ran and nothing names what it changed, so an erred one is not read as refused.
   if (before === null) return { ...obs, unobserved: true };
-  const after = snapshotTree(root, o.reach.base, o.limit);
+  const after = await snapshotTree(root, o.reach.base, o.limit);
   if (after === null) return { ...obs, unobserved: true };
   const others = o.journal.since(mark, o.agent);
   const rootAbs = resolve(root);

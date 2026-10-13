@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-13**
 
+**A cross-file EDIT call's tree walk no longer blocks the run host (OQ-245; fin38).** `snapshotTree`
+(`agent-tools/src/tools/observe.ts`) reads the tree through `node:fs/promises` and is awaited by `observeReach`, so other
+agents' streams and results move while a project-wide call is observed. The **runtime view**'s cut-off passage says so. No
+package, edge, process, channel, command or store column changed.
+
 **A renamed code-intelligence EDIT tool is read as a write (REQ-MCP-005, REQ-MCP-015, REQ-ORCH-109; fin38).** `grantEvidence`
 (`run-host/mcp.ts`) records, beside each server's granted callables, the reported name of every one that differs
 (`McpGrantEvidence.renamed`, also stored in `children.granted_mcp`), and `editTierNamesOf` maps each code-intelligence callable

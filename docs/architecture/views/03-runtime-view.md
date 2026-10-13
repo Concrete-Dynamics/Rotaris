@@ -802,7 +802,8 @@ both attempts, in the order first changed, each once; the terminal outside, as P
 EDIT call (a rename, a cross-file replacement: `scope: 'reach'`) by the files the run host observed it change, whatever it
 returned (`observeReach` around the MCP executor in `run-host/mcp.ts`, which since fin36 asks `codeIntelligenceEdit` only of the
 code-intelligence server's tools, by the name the runtime reports: a snapshot of what the call can reach before and
-after, less what another agent's native writes noted in the run host's `WriteJournal` meanwhile, carried as `observedPaths`
+after — since fin38 an asynchronous walk (`snapshotTree` over `node:fs/promises`, a directory's files read together), so the
+run host's event loop keeps moving during it — less what another agent's native writes noted in the run host's `WriteJournal` meanwhile, carried as `observedPaths`
 on the `PortToolResult` and the tool-result part, persisted with the conversation and never sent to a model); with no
 observation (a walk the run host could not complete marks the call `unobserved`, which counts as having run even when it
 erred), its argument file and "a <tool> call may have changed files the record cannot name", never "changed no

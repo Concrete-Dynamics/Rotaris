@@ -22,43 +22,54 @@ beforeEach(() => {
 afterEach(() => { rmSync(root, { recursive: true, force: true }); });
 
 describe('snapshotTree and snapshotChanges (OQ-245)', () => {
-  it('a change, a creation and a removal are each a changed path, in code-point order; an untouched file is not', () => {
-    const before = snapshotTree(root, '')!;
+  it('a change, a creation and a removal are each a changed path, in code-point order; an untouched file is not', async () => {
+    const before = (await snapshotTree(root, ''))!;
     writeFileSync(join(root, 'src', 'a.ts'), 'export const sum = 1;\n');
     writeFileSync(join(root, 'src', 'c.ts'), 'new\n');
     unlinkSync(join(root, 'docs', 'api.md'));
-    const after = snapshotTree(root, '')!;
+    const after = (await snapshotTree(root, ''))!;
     expect(snapshotChanges(before, after)).toEqual(['docs/api.md', 'src/a.ts', 'src/c.ts']);
   });
 
   it('a file rewritten with the same size and its modification time put back is still seen, by its status-change time', async () => {
     const file = join(root, 'src', 'b.ts');
     const { atime, mtime } = statSync(file);
-    const before = snapshotTree(root, '')!;
+    const before = (await snapshotTree(root, ''))!;
     await new Promise((r) => { setImmediate(r); });
     writeFileSync(file, 'import { TOTAL } from "./a";\n');
     utimesSync(file, atime, mtime);
     expect(statSync(file).size).toBe(Number(before.get('src/b.ts')!.split(':')[0]));
-    expect(snapshotChanges(before, snapshotTree(root, '')!)).toEqual(['src/b.ts']);
+    expect(snapshotChanges(before, (await snapshotTree(root, ''))!)).toEqual(['src/b.ts']);
   });
 
-  it('the ignored directories are not walked: the hard-coded components, the runtime\'s marker directory, the product\'s, and the workspace .gitignore', () => {
+  it('the ignored directories are not walked: the hard-coded components, the runtime\'s marker directory, the product\'s, and the workspace .gitignore', async () => {
     const marker = CODE_INTELLIGENCE_MARKER_SEGMENTS[0] as string;
     for (const dir of ['node_modules', '.git', '.rotaris', marker, 'generated']) mkdirSync(join(root, dir), { recursive: true });
     writeFileSync(join(root, '.gitignore'), 'generated/\n');
-    const before = snapshotTree(root, '')!;
+    const before = (await snapshotTree(root, ''))!;
     for (const dir of ['node_modules', '.git', '.rotaris', marker, 'generated']) writeFileSync(join(root, dir, 'cache.json'), '{}');
-    const after = snapshotTree(root, '')!;
+    const after = (await snapshotTree(root, ''))!;
     expect(snapshotChanges(before, after)).toEqual([]);
     expect([...after.keys()].some((p) => p.includes('cache.json'))).toBe(false);
   });
 
-  it('a base narrows the walk to a directory or one file; a base outside the root, or a tree past the limit, cannot be observed', () => {
-    expect([...snapshotTree(root, 'src')!.keys()].sort()).toEqual(['src/a.ts', 'src/b.ts']);
-    expect([...snapshotTree(root, 'docs/api.md')!.keys()]).toEqual(['docs/api.md']);
-    expect(snapshotTree(root, 'missing')!.size).toBe(0);
-    expect(snapshotTree(root, '../elsewhere')).toBeNull();
-    expect(snapshotTree(root, '', 2)).toBeNull();
+  it('a base narrows the walk to a directory or one file; a base outside the root, or a tree past the limit, cannot be observed', async () => {
+    expect([...(await snapshotTree(root, 'src'))!.keys()].sort()).toEqual(['src/a.ts', 'src/b.ts']);
+    expect([...(await snapshotTree(root, 'docs/api.md'))!.keys()]).toEqual(['docs/api.md']);
+    expect((await snapshotTree(root, 'missing'))!.size).toBe(0);
+    expect(await snapshotTree(root, '../elsewhere')).toBeNull();
+    expect(await snapshotTree(root, '', 2)).toBeNull();
+  });
+
+  // The walk is asynchronous, so the run host's event loop moves while it runs: a callback queued before it starts runs before
+  // it ends. With the synchronous walk it ran after, whatever the tree held
+  // (docs/defects/fixed/a-cross-file-edit-calls-tree-walk-blocks-the-run-hosts-event-loop.md).
+  it('the walk yields to the event loop while it reads the tree', async () => {
+    let yielded = false;
+    setImmediate(() => { yielded = true; });
+    const snapshot = await snapshotTree(root, '');
+    expect(yielded).toBe(true);
+    expect([...snapshot!.keys()].sort()).toEqual(['docs/api.md', 'src/a.ts', 'src/b.ts']);
   });
 });
 

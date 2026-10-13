@@ -40,6 +40,7 @@
  *                   that changed on disk (OQ-245), and the rename must reach the calling file: RED until
  *                   docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md
  *                   is repaired — the pinned runtime renames the declaring file alone when the rename is its first cross-file request.
+ *                   Its failure is held: the launches after it run, results.json is written, and the proof fails at its end.
  *  12. renamed tool — (fin42, N59; REQ-MCP-005, REQ-ORCH-109) the global configuration's own `tool_name_map` on the
  *                   code-intelligence entry offers the cross-file replacement as `replace_across_project`; a delegated tester
  *                   calls it by that name → both files changed on disk in the child's stored report and its child-report artifact.
@@ -568,7 +569,10 @@ if (want(9)) {
 // saying "Successfully renamed … (1 changes applied)": the pinned runtime waits for the language server's project loading before
 // a references request and not before a rename
 // (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-272). Launch 11
-// keeps the assertion the product should meet and is red until that note is repaired; it records what it read before it fails.
+// keeps the assertion the product should meet and is red until that note is repaired; it records what it read, the launches after it
+// still run, and the proof fails at its end.
+/** Failures a launch records and the proof raises only at its end, after every later launch has run (launch 11). */
+const heldFailures = [];
 async function childRename({ name, symbol, renamed, files, childScript }) {
   const [declaringRel, callingRel] = files;
   const declaring = join(workspace, declaringRel);
@@ -624,10 +628,8 @@ if (want(10)) {
 if (want(11)) {
   const { reading, failure } = await childRename({ name: 'child-rename-cold', symbol: 'sumItems', renamed: 'totalItems', files: ['src/cold-a.ts', 'src/cold-b.ts'], childScript: 'mcp:code_intelligence.rename_symbol,answer' });
   results.childRenameCold = reading;
-  if (failure !== null) {
-    writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
-    throw new Error(failure);
-  }
+  // Held to the end, so the launches after this one still run and report: the proof fails on it once they have.
+  if (failure !== null) heldFailures.push(failure);
 }
 
 // ---- 12. an EDIT tool renamed by the entry's tool_name_map is still read as a write --------------------------------
@@ -697,4 +699,5 @@ if (want(7) && packaged) {
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
+if (heldFailures.length > 0) throw new Error(`code-intel-proof FAILED after every launch ran (results.json written):\n${heldFailures.join('\n')}`);
 console.log(`[code-intel-proof] PASSED → ${join(output, 'results.json')}`);

@@ -13,6 +13,9 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
 - **Headless app launches** run under `xvfb-run -a -s "-screen 0 1600x1000x24"`. As root, Chromium needs
   `--no-sandbox`; the proof harness passes it (`hostSwitches` in `apps/desktop/scripts/lib/harness.mjs`). A restart
   can leave an orphaned `Xvfb`; `pgrep -a Xvfb` and kill only leftovers no live agent owns.
+- **Electron proofs need a display.** A proof or `app:drive` launch with no X server exits at once with `SIGTRAP` and
+  "Missing X server or $DISPLAY" in its log, which reads like a crash of the product. Run every proof under `xvfb-run` as the
+  bullet above gives it; the scripts do not start one themselves.
 
 ## Long jobs
 
@@ -37,6 +40,10 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   live-run allow rules, so for a live run it is the orchestrator's):
   `setsid nohup bash -c '<command> > <log> 2>&1; echo "exit=$?" >> <log>' > /dev/null 2>&1 < /dev/null & disown`,
   then a background `until grep -q "^exit=" <log>; do sleep 30; done; tail -5 <log>`, re-armed when it is stopped.
+- **The duress live run outlasts a background command.** At `LIVE_RUN_DURESS_MS=7800000` (AGENTS.md's recipe) the run needs
+  about 8,000 s, past the 7,200,000 ms cap, so it is launched detached (`setsid nohup … &`, the form above) and waited on by
+  its own pid (`kill -0 <pid>` from the Monitor tool) or by its log's `exit=` line in the loop shape above. Never wait with
+  `pgrep -f <pattern>`: the waiter's own command line holds the pattern, so it finds itself and never ends (2026-10-13).
 
 ## Load
 
@@ -47,11 +54,19 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   gates red on timing, each passing alone). Expect timing reds at that load and re-run them alone (next point).
 - **Timing-sensitive tests and proofs flake under load.** Every prompt carries the rule: re-run a timing red once
   alone and say what else was running. A red reproduced alone is real; "flake" is never a root cause.
+- **Concurrent reviewers each run the full gate.** Two plans' reviewers landing at once, each with `pnpm check`, its proofs
+  and its builders beside it, put the load at 10 to 17 on four CPUs (2026-10-06 to 13): a review then took up to three hours,
+  and timing proofs went red on load alone (the board's axis switch read 144 to 181 ms loaded, and 0 ms in three runs alone at load 0.3 to 1.1).
+  Run a timing proof alone, and record the load beside every figure it gives.
 - **Disk is the session's allowance, not the device's.** `df` reports a 252 GB `/dev/vda`, but the session's effective limit
   is far smaller: on 2026-10-07 at about 09:44 UTC (fin30) it reached 0 bytes free at about 38 GB used, which emptied a proof
   log and stopped tool output until space was freed; on 2026-10-13 `df` showed 7.9 GB free at 30 GB used. Every worktree
   with its `node_modules`, `out/` and `.proof/` costs gigabytes: remove a landed bundle's worktree, a proof's evidence once
   it is reported, and scratch files under `/tmp` a run created, and read `df -h /` before a long proof.
+- **A full disk reads as ENOSPC test failures**, not as a disk problem: tests that write a store or a temporary file fail
+  first. Every worktree shares the one allowance, so remove each landed plan's worktrees (bundle and landing) and the stale
+  `.proof/` and `.live-run/` directories of trees no one is judging. Unit tests' temporary directories add up as well
+  (about 29,900 `rotaris-*` directories, 360 MB, in `/tmp` on 2026-10-13, until fin38 made the tests remove theirs).
 
 ## Restarts
 
@@ -81,6 +96,9 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   on 2026-10-01 (fin3 20:10, fin4 20:16) on "weekly limit · resets Oct 5, 9pm (UTC)"; the "Continue from where you
   left off." turns at 21:16 UTC that day and 01:06 UTC the next were answered by the limit message; and a probe sent
   when the owner wrote "Continue" succeeded at 06:43 UTC on 2026-10-02.
+- **On a limit's reset**, nothing resumes by itself: the limit stopped every agent mid-step. Probe with one small agent; once
+  it answers, `render --runs RUNS.txt` (SKILL.md §4) and relaunch each plan, which resumes from its journal where it stopped
+  (2026-10-06 to 13, every time with nothing lost).
 - **A reviewer lost mid-landing** (a merge agent, before 2026-10-07) leaves its bundle branch rebased but unpushed
   (the rebased head detached in its landing worktree, `<repo>-wt-integ-<id>-<short>`), or a rebase in progress in the
   bundle worktree. Nothing is lost: the re-rendered review's landing step 0, which it runs first, finds a landing that
@@ -88,6 +106,16 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   rebases again, gates the head and pushes. Before rebase landing (2026-10-04), the same limit left fin3's `c6e5d96`
   and fin4's `bfc3f33`, merge commits unpushed in `<repo>-wt-integ-<id>`, and the re-rendered merge stages merged
   again from origin/main.
+
+## Parallel plans
+
+- **Never message an agent a workflow runs.** Sending a message to it resumes a second copy of that agent beside the
+  workflow's own, and both act on one worktree. Steer a plan through its workflow (a relaunch, a next round), never through
+  its agents.
+- **Numbers collide when a builder takes one it was not given.** Two plans running at once each took the next free open
+  question, directive or request number from the same `origin/main`, and the second to land had to renumber its entry and
+  every citation (four entries raised as OQ-240 or OQ-241 landed as OQ-247 to OQ-250, and one OQ-254 as OQ-255, 2026-10-07 to 13). Assign every number a plan may need in its prompt,
+  and let the plan that lands second renumber, as `references/repository.md` says.
 
 ## Pause and backup
 

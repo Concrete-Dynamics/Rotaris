@@ -3,6 +3,19 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-13 — the host notes carry what the 2026-10-06 to 13 rounds showed
+
+**Prompted by** the orchestrator's fin38 brief (Task 3 of `fin38-notes-optionals-skill`), from the rounds' own record: reviews
+of up to three hours at a load of 10 to 17 and timing reds that passed alone (the hundred-epic-columns note, closed by fin38 at
+0 ms alone); a message to a workflow's agent that resumed a second copy of it; ENOSPC failures on a full session disk and
+about 29,900 test directories in `/tmp`; agents stopped mid-step by an account limit and resumed by `render --runs`; the duress
+run at `LIVE_RUN_DURESS_MS=7800000` past the background cap, and a `pgrep -f` waiter that matched itself; Electron proofs
+exiting `SIGTRAP` with no display; and OQ numbers that collided between parallel plans (OQ-240 and OQ-241, landed as OQ-247 to OQ-250; OQ-254, landed as OQ-255). **Changed:**
+`references/environment.md` gains one short bullet for each, in the section it concerns (Toolchain, Long jobs, Load, Limits),
+and a new section, "Parallel plans", for the messaging and numbering rules. No script, profile or protected invariant changed.
+**Verified** by `node scripts/orchestration.mjs self-test` and `node tools/check-record-links.mjs` (both green). Not run: the
+skill-review step (`references/skill-review.md`), which is the bundle's reviewer's.
+
 ## 2026-10-13 — the profile's duress launch is detached, at the window AGENTS.md names
 
 **Prompted by** fin32's review (`review:child-reports-and-limits#1`, an optional finding handed to fin35): AGENTS.md's duress

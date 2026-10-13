@@ -12866,3 +12866,42 @@ quote.
 cases under "PD-TOOLS-014" and one under "PD-TOOLS-015" in `packages/agent-tools/src/tools/tools.test.ts`, each red on the code
 before; `lib/near-miss-edits.mjs` counts retries refused "Found N occurrences". The first execution is in place under the
 directive.
+
+<a id="oq-253"></a>
+
+**OQ-253 — Does a one-second per-agent limit read "1 second" or "1 seconds"?** *(`PD-CONFIG-003` revision 3, "Where a cut-off
+agent shows", the `<limit>` bullet: "written '1 minute' or '<m> minutes' when N is a whole number of minutes, and '<N> seconds'
+otherwise", and revision 3's first execution, "except that one second reads '1 second'"; REQ-MONITOR-052, REQ-MONITOR-069;
+REQ-CONFIG-113, `runtime.child_timeout` in whole seconds; REQ-ORCH-088's "Child timed out after <N>s". Raised 2026-10-13 from
+that first execution's evidence and ruled the same day; the number is the round's assigned one.)*
+
+The directive's template writes every limit that is not a whole number of minutes as "<N> seconds", so a one-second limit reads
+"1 seconds"; the build writes "1 second" (`timeoutLimitText`, `packages/ui/src/agents.ts`, through `countNoun`), and revision 3's
+first execution recorded that without the directive following. The case is reachable: the workspace file takes any integer of
+at least 1 second (`child_timeout: z.number().int().min(1)`, `packages/contracts/src/config.ts`; no maximum in
+`packages/config/src/sections/runtime.ts`), though the widget offers 60 to 14,400. Recorded as
+[`pd-config-003-writes-a-one-second-limit-as-1-seconds`](../defects/pd-config-003-writes-a-one-second-limit-as-1-seconds.md).
+
+**What the build proceeds under.** "1 second", as built at revision 3.
+
+**What a ruling decides.** Whether the directive's template follows English number agreement ("1 second"), the code follows
+the template's letter ("1 seconds"), or the case is ruled out of reach.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** the built "1 second" stands.
+`PD-CONFIG-003` gains **revision 4**, which changes only revision 3's `<limit>` bullet so it reads: N, the limit the agent ran
+under, written "1 minute" or "<m> minutes" when N is a whole number of minutes, and "1 second" or "<N> seconds" otherwise.
+Revision 3's text is quoted beside it as no longer governing. REQ-ORCH-088's error form "Child timed out after <N>s", which the
+parser reads, REQ-CONFIG-113's range, REQ-MONITOR-286 and every other clause of revisions 1 to 3 are unchanged. No code, test
+or proof changes.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: keep the built "1 second" and correct revision 3's bullet
+with a dated note in the style of OQ-237's correction, keeping the original wording quoted; the case is reachable through the
+workspace file, so it is not to be ruled unreachable. *Advocate B (the system's lens)*: the same, with an explicit statement that
+REQ-ORCH-088's machine-read error form is unchanged, and R-071's reading of REQ-GIT-122's form as a template of singular and
+plural as the precedent. **The ruling followed both** on substance — the case is reachable (the file's integer of at least 1
+second), the minutes clause already spells "1 minute", so the template was meant to agree in number, and showing "1 seconds"
+would put a grammar defect on screen to match an omission; B's carve-out for REQ-ORCH-088 is taken — and **departed from both**
+on the form: a dated "Corrected" note is the record's form for reasons and directive verbs, while `docs/product/README.md`
+makes a change to a directive's own normative text a new revision, its replaced text quoted beside it. The `<limit>` bullet is
+normative, so the change is revision 4. **Rejected:** changing the code to "1 seconds"; ruling the case unreachable (false).
+**Costs kept on record:** none in code; one more revision on a directive already at three.

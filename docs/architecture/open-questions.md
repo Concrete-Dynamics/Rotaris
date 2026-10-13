@@ -12398,7 +12398,8 @@ and trailing whitespace?** *(REQ-TOOLS-136, level 2 "exact after trailing whites
 and "a window match replaces whole lines"; REQ-TOOLS-135, the success that reports the lines changed; `PD-STARTUP-001`, Windows
 the only platform shipped; `PD-TOOLS-014`, `haet_edit`'s near miss, which quotes the `\r`. Raised 2026-10-13 by fin35 from the
 case both advocates of OQ-233's ruling read from the code, which that ruling set aside. The number is the next after the round's
-assigned OQ-245, taken by this plan; if another plan lands it first, this one takes the next free number. Open.)*
+assigned OQ-245, taken by this plan; if another plan lands it first, this one takes the next free number. Ruled 2026-10-13
+under R-072.)*
 
 On a CRLF file a multi-line `old_string` written with `\n` alone matches only at level 2, and `applyMatch`
 (`packages/agent-tools/src/tools/files.ts`) writes `new_string`'s `\n`-only lines over the window's `\r\n` lines: the file is
@@ -12412,6 +12413,35 @@ The specification fixes neither keeping the window's endings nor writing `new_st
 **What a ruling decides.** Whether a level-2 `write_file` edit carries each window line's line ending (and trailing whitespace)
 into the replacement, writes `new_string` as given, or is refused with `PD-TOOLS-014`'s level-2 near-miss facts, as `haet_edit`'s
 is.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** when a `write_file` edit
+(`replace_all` false) matches one window at REQ-TOOLS-136 level 2, every line of `new_string` that pairs with an identical line of
+`old_string` is written as the window's own line, byte for byte, its trailing whitespace and `\r` included. At levels 2, 3 and 4,
+a window whose terminated lines all end in `\r` gives a `\r` to each other replacement line that a line break follows (a window
+with no terminated line takes the reading from the file's other lines), and when such a `\r` is added the success says so in
+one sentence, `new_string was written with the file's CRLF line endings.` Recorded as
+[`PD-TOOLS-016`](../product/directives.md#pd-tools-016), which extends REQ-TOOLS-136 (its silence on what a window match's
+replacement lines carry) and REQ-TOOLS-135 (the sentence); level 1, `replace_all`, several windows, `haet_edit` and `haet`
+(`PD-TOOLS-014`) and `PD-TOOLS-015`'s level-3 decision and refusal are unchanged.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: `PD-TOOLS-016`; pair `new_string`'s lines with
+`old_string`'s by an exact-text line LCS and write every paired line as the window's own; give a CRLF window's other lines `\r`
+at levels 2 to 4; add the CRLF sentence to the success. *Advocate B (the system's lens)*: `PD-TOOLS-016`; the same line-ending
+rule at levels 2 to 4, but pair only the leading and trailing runs of equal lines, because a second implementation could not
+reproduce an LCS; leave the success unchanged. **The ruling followed both**: from both the line-ending rule at levels 2, 3 and 4
+(they share `applyMatch`, so an LF `old_string` with a typo on a CRLF file writes the same mixed endings at level 4), and the
+rejection of a level-2 refusal (the retry matches at level 1 and writes `new_string`'s LF lines anyway); from A the LCS pairing,
+since B's runs leave an unchanged interior line (the Markdown hard break the defect note names) losing its trailing spaces and
+counted as changed, and B's objection holds only while the tie-break goes unstated — `lcsChanges` in `diff.ts` already settles
+it, and the directive writes the walk out; from A the success sentence, after `PD-TOOLS-015`'s precedent. Added by the ruling: a
+window with no terminated line takes its reading from the file. **Rejected:** confirming as built (silent mixed line endings
+and a success that counts an untouched line as changed, on the only platform shipped, `PD-STARTUP-001`); refusing level 2 as
+`haet_edit` does; amending the record only; deferring. **Costs kept on record:** a window edit can no longer convert CRLF lines
+to LF nor strip an unchanged line's trailing whitespace (`overwrite` or an exact level-1 `old_string` still can); where
+`old_string` repeats a line, the walk fixes which copy's bytes a paired line takes; `write_file` and `haet_edit` still differ at
+level 2; an implementation built from the specification alone writes `new_string` as given. Closes
+[`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../defects/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md)
+once built.
 
 <a id="oq-247"></a>
 
@@ -12721,3 +12751,50 @@ instruction carries the brief clause (`packages/agent-tools/src/tools/delegation
 naming no persona; the direct-work swap and a configured `system_prompt` carrying neither) and `tools/delegation.test.ts` (the brief
 clause), both red on the code before. The note is repaired.
 
+<a id="oq-252"></a>
+
+**OQ-252 — When a near-miss reply's quoted text occurs more than once in the file, does the reply still promise it matches
+exactly?** *(`PD-TOOLS-014` clause 5, the quote "sent back as `old_string` with the same hash it matches at level 1", and its
+"Several windows" paragraph; `PD-TOOLS-015` clause 4, which reuses both for `write_file`'s level-3 refusal; REQ-TOOLS-136's level
+1, a plain substring search, and its "Found <n> occurrences" refusal; REQ-TOOLS-189. Raised 2026-10-13 from `PD-TOOLS-014`'s
+block and the near-miss code (`nearMissMessage`, `packages/agent-tools/src/tools/files.ts`), after fin32's review named the gap
+and fin35 deferred it, and ruled the same day; the number is the round's assigned one.)*
+
+The near-miss window is whole lines, but level 1 is a substring search, so the window's text can occur again inside a longer line
+or across a line boundary. A file `x = 1\nmax = 1\n` with `old_string` `x = 1 ` matches one window at level 2 and is quoted as
+`"x = 1"` with "Sent back as old_string with the same content_hash, the file's text over line 1 matches exactly"; the retry is
+refused "Found 2 occurrences of old_str at lines 1, 2" and writes nothing. The several-windows reply ("send its exact text as
+old_string") fails the same way whenever the windows' text is identical (two lines `x = 1`, `old_string` `x = 1 `). Clause 5's
+promise of a level-1 match holds; it is silent on whether that match is unique. Recorded as
+[`a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly`](../defects/a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly.md).
+
+**What the build proceeds under.** The quote and its promise as built, whatever the text's occurrences.
+
+**What a ruling decides.** Whether a reply whose quote is not unique says so, widens the quote until it is, or stands as built.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** `PD-TOOLS-014` goes to revision 2.
+When a near-miss reply's quoted text occurs more than once in the file at REQ-TOOLS-136 level 1, the reply still gives the quote.
+Before the quote it states the count and the lines where the occurrences start (at most 10, then "and N more"), drops the promise
+that the quote "matches exactly" when sent back alone, and asks that one neighbouring line, unchanged, be added to both
+`old_string` and `new_string`, naming the reader's offset and limit for the window and one line on each side, clamped to the
+file. The over-30,000-character direction carries the same sentence, and the several-windows reply carries it when a window's
+text is not unique. The quote is never widened. `PD-TOOLS-015` inherits all of this through its clause 4, in `write_file`'s
+voice (`read_file`, no hash). Every reply whose quoted text is unique stays word for word; REQ-TOOLS-136's levels and its "Found
+<n> occurrences" refusal are unchanged.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: flag the repeat before the quote, naming the count and the
+lines, withdraw "matches exactly", ask for a neighbouring line in both strings with the reader's offset and limit, and flag the
+over-30,000-character branch too; revision 2 of `PD-TOOLS-014`. *Advocate B (the system's lens)*: the same flag among the facts,
+the listed lines capped at 10 then "and N more", revision 2 of `PD-TOOLS-014` reaching `PD-TOOLS-015` through its clause 4, and a
+live-run count of retries answered "Found N occurrences". **The ruling followed both**: they agree on the remedy, flag and never
+widen, on `PD-TOOLS-015`'s principle that "a refusal costs one call where a wrong success costs a corrupted file" — a widened quote
+no longer lines up with the `new_string` the caller already wrote, so a resend would delete the added context lines beside a
+success. From B the cap of 10 and B's example, which the code confirms (A's example, `  return x` against `    return x`, is a
+plain substring and matches at level 1, never reaching the near miss; A's conclusion stands on B's mechanism); from A the
+concrete read window and the over-30,000-character flag. Added by the ruling: the several-windows reply fails the same way when
+the windows' text is identical, likely its common case, so the same count covers it. **Rejected:** widening the quote (a wrong
+success that deletes context lines); confirming as built (a reply the next call contradicts); deferring (the model doing the
+user's task receives the reply). **Costs kept on record:** in the non-unique case one read and one retry where widening would
+have taken one retry; a caller that adds the neighbouring line to `old_string` only would delete it with a success, which the
+wording's "to both" is the only guard against; a second implementation built from the specification alone keeps the unflagged
+quote.

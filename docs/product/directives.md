@@ -6852,6 +6852,10 @@ PD-ORCH-015 (P1) was assigned the number before it.*
 
 ### PD-TOOLS-014 — a `haet_edit` miss that matches but for whitespace names the level and quotes the file's lines
 
+*Revision 2 (2026-10-13, [R-072](requests.md#r-072), ruling [OQ-252](../architecture/open-questions.md#oq-252)) — **a quote
+whose text occurs more than once**: clause 5 and the "Several windows" paragraph each gain the flag, and revision 1's text is
+quoted beneath each.*
+
 **The case, stated exhaustively.** `haet_edit` or its alias `haet` is called with a `content_hash` equal to the SHA-256 of the
 file's current bytes, `old_string` and `new_string` different, `replace_all` false; `old_string` matches nowhere at REQ-TOOLS-136
 level 1; and it matches at level 2 (each line equal once trailing whitespace, a carriage return included, is ignored) or level 3
@@ -6869,13 +6873,31 @@ and then:
 4. ask that `new_string` carry the file's indentation and line endings;
 5. quote the window's exact text — the file's lines over that range joined by `\n`, so that sent back as `old_string` with the
    same hash it matches at level 1 — as one JSON string, when that string is at most 30,000 characters. A longer window SHALL
-   NOT be quoted, and the reply SHALL direct `haet_read` with that window's offset and limit instead;
+   NOT be quoted, and the reply SHALL direct `haet_read` with that window's offset and limit instead. When the quoted text
+   occurs more than once in the file at REQ-TOOLS-136 level 1, the reply SHALL say so among its facts, before the quote: it
+   SHALL name the count and the line where each occurrence starts, listing at most 10 and then "and N more"; it SHALL NOT say
+   the quote matches exactly when sent back alone; and it SHALL ask that a neighbouring line, unchanged, be added to both
+   `old_string` and `new_string`, giving `haet_read`'s offset and limit for the window and one line on each side, clamped to the
+   file. The over-30,000-character direction carries the same sentence. The quote SHALL NOT be widened *(— revision 2)*;
+
+   > Revision 1 said, and no longer governs: "quote the window's exact text — the file's lines over that range joined by `\n`,
+   > so that sent back as `old_string` with the same hash it matches at level 1 — as one JSON string, when that string is at
+   > most 30,000 characters. A longer window SHALL NOT be quoted, and the reply SHALL direct `haet_read` with that window's
+   > offset and limit instead;" — silent on whether that level-1 match is unique, so a quote whose text recurs inside a longer
+   > line was promised to match exactly and the retry was refused "Found 2 occurrences".
 6. end with: if these are not the lines meant, read the file again with `haet_read`.
 
 The facts SHALL come before the quote, so that REQ-SESSION-136's 2,000-character error record keeps them.
 
 **Several windows.** When more than one window matches at the deciding level, the reply SHALL open with the same sentence,
-name the level and each window's starting line, quote nothing, and direct `haet_read` with an offset and limit.
+name the level and each window's starting line, quote nothing, and direct `haet_read` with an offset and limit. When any
+window's text occurs more than once in the file at level 1, the reply SHALL add clause 5's sentence for those windows: the
+count and the lines where each occurrence starts, at most 10, and a neighbouring line, unchanged, in both `old_string` and
+`new_string`, with `haet_read`'s offset and limit for the window and one line on each side *(— revision 2)*.
+
+> Revision 1 said, and no longer governs: "When more than one window matches at the deciding level, the reply SHALL open with
+> the same sentence, name the level and each window's starting line, quote nothing, and direct `haet_read` with an offset and
+> limit." — whose "send its exact text as old_string" fails the same way when the windows' text is identical.
 
 **Unchanged.** A level-4 match and no match reply as REQ-TOOLS-189 fixes ("… Read it again with haet_read."); `replace_all`
 true keeps its own miss; the stale-hash refusal keeps its words and its rule that it SHALL NOT quote the file's content; and
@@ -6962,7 +6984,10 @@ REQ-TOOLS-135's and REQ-TOOLS-136's, exactly as written.
    `new_string` carry the file's indentation; the quote, sent back as `old_string`, needs no hash; and every pointer names
    `read_file`. The window is quoted as one JSON string of at most 30,000 characters; a longer window is not quoted and the
    reply gives `read_file`'s offset and limit instead. The facts SHALL come before the quote, so that REQ-SESSION-136's
-   2,000-character error record keeps them.
+   2,000-character error record keeps them. Since `PD-TOOLS-014` revision 2 (2026-10-13, [OQ-252](../architecture/open-questions.md#oq-252)),
+   this clause inherits revised clause 5's flag, in `write_file`'s voice (`read_file`, no hash): a quote whose text occurs more
+   than once in the file at level 1 is preceded by the count and the lines, is not said to match exactly, and asks for a
+   neighbouring line, unchanged, in both strings.
 
 **Why, and what it costs.** REQ-TOOLS-136 says a level-3 window "still matches" and that "a window match replaces whole
 lines", and is silent on whether the replacement takes the shift that let `old_string` match; the build wrote `new_string`
@@ -7010,6 +7035,57 @@ Narrows REQ-TOOLS-136 (a level-3 match the case names is refused rather than app
 > [OQ-246](../architecture/open-questions.md#oq-246),
 > [`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../defects/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md)).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-tools-016"></a>
+
+### PD-TOOLS-016 — a window-match `write_file` edit keeps the file's line endings and the bytes of the lines it leaves unchanged
+
+**The case, stated exhaustively.** `write_file` is called with `operation: edit`, `replace_all` false, `old_string` and
+`new_string` different, and `old_string` matches nowhere at REQ-TOOLS-136 level 1 and exactly one window at level 2, 3 or 4. At
+level 3 this directive applies after [`PD-TOOLS-015`](#pd-tools-015) has decided the replacement, and its refusal is unchanged.
+Everything outside this case — level 1, `replace_all`, several windows, and `haet_edit` and its alias `haet`
+([`PD-TOOLS-014`](#pd-tools-014)) — is REQ-TOOLS-135's and REQ-TOOLS-136's, exactly as written, and REQ-TOOLS-136's levels and
+their order are unchanged.
+
+1. **Pairing, at level 2 only.** The lines of `new_string` SHALL be paired with the lines of `old_string` by exact text
+   equality: first the longest run of equal leading lines; then the longest run of equal trailing lines, which does not overlap
+   the leading run; then a longest common subsequence of the lines between, chosen by this walk from the front — pair the two
+   current lines when they are equal; otherwise skip the `old_string` line when that leaves the remaining common subsequence no
+   shorter, and skip the `new_string` line otherwise. When the lines between are more than 4,000,000 line pairs (the product of
+   their counts), only the two runs pair. Every paired line of `new_string` SHALL be written as the corresponding line of the
+   window, verbatim, including its trailing whitespace and carriage return.
+2. **Line endings, at levels 2, 3 and 4.** The window is CRLF when at least one of its lines is followed by a line break in the
+   file and every such line ends in `\r`; a window with no such line is CRLF when the file's lines outside it pass the same
+   test. On a CRLF window, every line of the replacement that a line break follows in the result SHALL gain `\r` when it lacks
+   one; a `\r` is never doubled, and the replacement's last line is followed by a line break exactly when the window's last line
+   was. Any other window's unpaired lines are written as given.
+3. **Success.** When clause 2 added at least one `\r`, the success SHALL add the sentence `new_string was written with the
+   file's CRLF line endings.` after "Match level: N." — after `PD-TOOLS-015`'s sentence at level 3, and after "Verify the
+   result." at level 4. Every other success is unchanged.
+
+**Why, and what it costs.** REQ-TOOLS-136 says "a window match replaces whole lines" and is silent on what the replacement lines
+carry. On a CRLF file a multi-line `old_string` written with `\n` alone matches only at level 2, since stripping trailing
+whitespace strips the `\r`, and the build wrote `new_string`'s LF lines over the window: probed at `d1f081c`, `one\r\ntwo\r\nthree\r\n`
+edited `one\ntwo` → `ONE\ntwo` left `ONE\ntwo\nthree\r\n` beside "2 lines replaced by 2 at line 1 (+2 -2)", the unchanged `two`
+counted as changed because it lost its `\r`, and a replaced line's trailing spaces that `new_string` does not repeat (a Markdown
+hard break) were dropped. Windows is the only platform shipped (`PD-STARTUP-001`), where CRLF files are ordinary, so this is the
+common multi-line edit. Line endings belong to the file and say nothing of the caller's intent, and a line the caller repeats
+from `old_string` unchanged was not meant to change, so the tool already knows what to write; there is nothing ambiguous to
+refuse, and a level-2 refusal would fix nothing (its retry matches at level 1 and writes `new_string`'s LF lines verbatim).
+Levels 3 and 4 share the apply: an LF `old_string` with a typo on a CRLF file matches at level 4 and wrote the same mixed
+endings. The walk is the one the diff row's line LCS already takes, written out so a second implementation can reproduce it.
+What it costs: a window edit can no longer convert CRLF lines to LF, nor strip an unchanged line's trailing whitespace —
+`overwrite` or an exact level-1 `old_string` still does either; where `old_string` repeats a line, the walk fixes which copy's
+bytes a paired line takes; `write_file` and `haet_edit` still differ at level 2 (one applies, the other refuses with the
+quote); and an implementation built from the specification alone writes `new_string` as given.
+
+> **Extends:** REQ-TOOLS-136, REQ-TOOLS-135
+
+*Ruled under the owner's delegation, 2026-10-13 ([OQ-246](../architecture/open-questions.md#oq-246)); logged as [R-072](requests.md#r-072).
+Extends REQ-TOOLS-136 (fills its silence on what a window match's replacement lines carry) and REQ-TOOLS-135 (one sentence
+added to the edit's success).*
 
 ---
 

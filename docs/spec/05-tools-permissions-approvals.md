@@ -385,9 +385,9 @@ Captured foreground output is capped at 100,000 characters per call. When a comm
 > exit code 1 from `diff`, `git … diff …`, `grep`, `egrep`, `fgrep`, `rg` or `findstr`, which classifies `success`
 > / `info`. Every other test, and every other non-zero exit, is unchanged.
 
-> **Extended by [`PD-TOOLS-013`](../product/directives.md#pd-tools-013), 2026-10-07.** The `outcome_kind` vocabulary
+> **Narrowed by [`PD-TOOLS-013`](../product/directives.md#pd-tools-013), 2026-10-07.** The `outcome_kind` vocabulary
 > also holds `interrupted`, and test 1 maps the failure kind `interrupted` to `interrupted` / `warning`. Every other test
-> and value is unchanged.
+> and value is unchanged. *(Labelled* Extended by *until 2026-10-13; relabelled under [OQ-237](../architecture/open-questions.md), the directive's disposition corrected.)*
 
 **REQ-TOOLS-113** — Three independent checks run over the output of a command that exited 0. Each contributes at most one warning, and one or more warnings makes the observation `suspicious_success`:
 - **Literal failure markers**, searched case-insensitively anywhere in the output, in this fixed order: `Traceback (most recent call last):`, `ERROR: file or directory not found`, `no tests ran`, `AssertionError`, `FAILED ` (the trailing space is part of the marker). The earliest marker in that order that is present produces the single marker warning, whose text names the marker that matched; further markers present in the same output add nothing.
@@ -500,9 +500,9 @@ Given `haet_edit` is called, when the SHA-256 digest of the file's current bytes
 ### 19. Artifact Tools
 
 **REQ-TOOLS-148** — `artifact_read(id_or_slug, sections=[])` returns the full Markdown body by default; `sections` may filter to any of `summary`, `key_findings`, `snippets`, `highlights`, `files`. An unknown reference errors with `Artifact not found: <ref>`. Reading marks the artifact as consumed by the reading persona.
-  > **Extended by [`PD-LIBRARY-001`](../product/directives.md#pd-library-001), 2026-09-12.** The section
+  > **Narrowed by [`PD-LIBRARY-001`](../product/directives.md#pd-library-001), 2026-09-12.** The section
   > vocabulary follows REQ-LIBRARY-099 as widened by the directive: it gains `commands`. The default,
-  > miss observation and consumer marking above keep their meanings.
+  > miss observation and consumer marking above keep their meanings. *(Labelled* Extended by *until 2026-10-13; relabelled under [OQ-237](../architecture/open-questions.md), the directive's disposition corrected.)*
   > **Narrowed by [`PD-LIBRARY-004`](../product/directives.md#pd-library-004), 2026-10-07.** "The reading persona" is the
   > reading agent instance, recorded by its canonical name, so two instances of one persona are two consumers; the
   > default, the section filter and the miss observation are unchanged.
@@ -533,7 +533,7 @@ Ids that resolve to nothing are handled by field and never uniformly: an id in `
 
 What the caller observes is fixed by REQ-TOOLS-153 and by nothing else: the call returns as soon as the child has been accepted, carrying the canonical name, status, task id and any warning that requirement specifies, and the parent's turn continues — `delegate` neither suspends nor ends it, in background or foreground. This requirement together with REQ-TOOLS-153 (what the caller observes) and REQ-TOOLS-154 (how the child's payload is assembled) is the whole of the `delegate` contract, and a requirement in another domain that depends on it cites these three rather than restating any part of them.
   > **Narrowed by [`PD-TOOLS-006`](../product/directives.md#pd-tools-006), 2026-09-23; revision 3, 2026-09-29; revision 4, 2026-10-07.** The fields above still govern, and there is one more: `write_scope`, optional path patterns the child claims while it is live, which other agents of the run may not write into through the file tools. Since revision 3, `session_id` names a settled child of the caller, which the follow-up resumes from its record (`PD-ORCH-005` clause 22), and two refusals stand beside the ones above, each `rejected` with no record: a `write_scope` for a persona that holds no file-writing tool, and a `session_id` that names no settled child of the caller. Since revision 4, the tool's description names every persona the caller can delegate to with the facets a child of the caller would be granted.
-  > **Extended by [`PD-ORCH-004`](../product/directives.md#pd-orch-004), 2026-09-27 (revision 2).** The fields above still govern, and beside them one more: `continuation_of`, the task id of a timed-out child whose continuation offer the new child takes up.
+  > **Narrowed by [`PD-ORCH-004`](../product/directives.md#pd-orch-004), 2026-09-27 (revision 2).** The fields above still govern, and beside them one more: `continuation_of`, the task id of a timed-out child whose continuation offer the new child takes up. *(Labelled* Extended by *until 2026-10-13; relabelled under [OQ-237](../architecture/open-questions.md), the directive's disposition corrected.)*
 
 **REQ-TOOLS-153** — The `delegate` observation carries `canonical_name` (the child's name after de-duplication), `status` ∈ {`queued`, `waiting_on_dependencies`, `waiting_on_model_slot`, `rejected`}, `task_id` in the `bg_XXXXXXXX` shape, and a human-readable message that includes any alias resolution and any attachment warning. When the target model has no free slot the task is enqueued rather than rejected, and the message conveys that the task is queued behind that model's slot cap, names the model, gives how many of its slots are in use out of how many exist, and states that the task starts by itself once a slot opens; the model name and the two counts are required content and the wording around them is the implementation's. `delegate` never suspends the parent conversation. The call returns as soon as the child has been accepted, carrying the status above, and the parent's turn continues. With `run_in_background: true` (the default) it ends there: the parent learns of completion through the system notification of REQ-TOOLS-152. `run_in_background: false` does not change the `delegate` call at all — it enrolls the parent in a wait for that one task through exactly the mechanism of REQ-TOOLS-156, as though the parent had called `wait_for_tasks` with the returned task id immediately afterwards, so the parent is paused non-blockingly and resumed with the structured summary that requirement specifies. There is one waiting mechanism in the product, not two.
 

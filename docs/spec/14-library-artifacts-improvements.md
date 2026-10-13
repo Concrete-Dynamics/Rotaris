@@ -307,10 +307,11 @@ After every completed task run the product may perform an optional, strictly non
 **REQ-LIBRARY-098** — Explicitly attached artifacts MUST be injected as a `PRIOR AGENT CONTEXT (FULL)` block within a 48,000-character budget, reporting unresolvable references and elided ids; both injection paths record a context-selection diagnostic.
 
 **REQ-LIBRARY-099** — The agent-facing `artifact_read(id_or_slug, sections=[])` tool MUST return the full Markdown body by default, or a filtered view of sections from {`summary`, `key_findings`, `snippets`, `highlights`, `files`}; a miss returns the error observation `Artifact not found: <ref>`; every successful read marks the reading persona as a consumer.
-  > **Extended by [`PD-LIBRARY-001`](../product/directives.md#pd-library-001), 2026-09-12.** The set
+  > **Narrowed by [`PD-LIBRARY-001`](../product/directives.md#pd-library-001), 2026-09-12.** The set
   > above gains one member, `commands`, and nothing else about this requirement moves: the default is
   > still the full body, a miss still returns the same observation, and a read still marks the persona
   > a consumer. An agent asking for a section name outside the widened set is refused as before.
+  > *(Labelled* Extended by *until 2026-10-13; relabelled under [OQ-237](../architecture/open-questions.md), the directive's disposition corrected.)*
   > **Narrowed by [`PD-LIBRARY-004`](../product/directives.md#pd-library-004), 2026-10-07.** The consumer a successful
   > read marks is the reading agent INSTANCE by its canonical name (a child's canonical name, a root's
   > `root_canonical_name`), not its persona, so two instances of one persona that read one artifact are two consumers.

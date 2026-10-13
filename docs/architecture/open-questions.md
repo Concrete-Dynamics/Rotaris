@@ -3015,7 +3015,10 @@ payload is assembled as any child's is.
 
 **Ruled 2026-09-27 — by [`PD-ORCH-004`](../product/directives.md#pd-orch-004) revision 2, [R-058](../product/requests.md#r-058).**
 The owner took the recommendation: the directive now states `continuation_of` and its refusals, and extends REQ-TOOLS-152,
-which carries the back-pointer. The two limits named above are not settled by this ruling. Which agent may take up an
+which carries the back-pointer. *Relabelled 2026-10-13 by [OQ-237](#oq-237) (GV1): `PD-ORCH-004` narrows REQ-TOOLS-152, whose "whole
+of the `delegate` contract" its field widens, the verb `PD-TOOLS-006` took for `write_scope`; R-058 recorded Extends because
+"the symbol artifact holds one narrowing directive per requirement", which no longer holds. The field and its refusals are
+unchanged.* The two limits named above are not settled by this ruling. Which agent may take up an
 offer after the iteration that raised it has ended belongs to the run-continuation policy the same request opened, and
 until that is ruled the build keeps the same-iteration reading.
 
@@ -10511,7 +10514,9 @@ outside any window (a signal, the end of the desktop session, the driver's or th
 confirmation, as built. Recorded as [`PD-SHELL-009`](../product/directives.md#pd-shell-009), which narrows REQ-STARTUP-046,
 REQ-SHELL-119 and REQ-SHELL-122; the ruling also named REQ-SHELL-021, which PD-SHELL-001 already narrows and the symbol
 generator admits one narrowing directive per requirement, so gate 3's change is carried through REQ-SHELL-122, whose test
-the gate applies (found while building, 2026-10-07).
+the gate applies (found while building, 2026-10-07). *Reversed 2026-10-13 by [OQ-237](#oq-237) (GV1): `PD-SHELL-009` now narrows
+REQ-SHELL-021 itself, as this ruling named it, beside `PD-SHELL-001`'s disjoint case; its REQ-SHELL-122 narrowing stays.
+The reason in the sentence before no longer holds.*
 
 **The two recommendations weighed.** *Advocate A (the user's lens)*: ask at the close of a window whose own workspace has a
 run active, with its own title, and have its Yes stop those runs, so that every active run always has a window and the box
@@ -10937,7 +10942,9 @@ stored value the control cannot express is shown clamped for display with its ex
 rewritten until the user changes the field (REQ-CONFIG-446). The Overview caps line keeps REQ-MONITOR-169's caption. Recorded
 as [`PD-CONFIG-003`](../product/directives.md#pd-config-003), which narrows REQ-CONFIG-322, REQ-CONFIG-256 and REQ-CONFIG-417
 and extends REQ-CONFIG-263 (the ruling named 256 and 417 as extended; PD-WORKSPACE-002 already extends both and the symbol
-generator admits one directive per verb, so they are named as narrowed — found while building).
+generator admits one directive per verb, so they are named as narrowed — found while building). *Revised 2026-10-13 by
+[OQ-237](#oq-237) (GV1): Narrows is the verb these two take on the exact-enumeration test (acceptance finding F15), not by force of the
+generator, and `PD-WORKSPACE-002` now narrows both as well; the reason in parentheses no longer holds.*
 
 **The two recommendations weighed.** *Advocate A (the user's lens)*: a third Delegation limits control in whole minutes,
 1–240, writing seconds through Save and Tier B, minted as a directive; the caps line unchanged. *Advocate B (the system's
@@ -11001,7 +11008,8 @@ REQ-TOOLS-001 facets (reads workspace files, writes workspace files, runs comman
 granted after REQ-TOOLS-006's controls, and it tells the caller to ask a persona only for work its tools allow; revision 3's
 write-scope refusal stays as built. By [`PD-TOOLS-006`](../product/directives.md#pd-tools-006) revision 4, which already
 extends REQ-ORCH-028 and narrows REQ-TOOLS-152: the symbol generator admits one directive per requirement for each
-relation, so a new directive extending REQ-ORCH-028 could not be built. Separately, the built routing table carries the two
+relation, so a new directive extending REQ-ORCH-028 could not be built. *(No longer so since 2026-10-13, [OQ-237](#oq-237): Extends
+may repeat freely; the revision stays where it landed.)* Separately, the built routing table carries the two
 capability clauses REQ-ORCH-028 states for `codebase-analyst` and `librarian`; that repair is covered by REQ-ORCH-028 and
 needs no directive
 ([`the-built-routing-table-drops-req-orch-028s-capability-clauses.md`](../defects/fixed/the-built-routing-table-drops-req-orch-028s-capability-clauses.md)).
@@ -11578,7 +11586,9 @@ a call the run cancels
 `timedOut: false`), the `interrupted` kind, `InterruptedError` and the cancel's detail in `terminal/index.ts`, and the kind in
 both vocabularies of `classify.ts`; `gate.ts` and `export.ts` unchanged. The ruling's dispositions could not stand as
 written: the symbol generator admits one directive per verb on a requirement, and `PD-TOOLS-009` already narrows
-REQ-TOOLS-112 and `PD-SESSION-003` REQ-SESSION-136, so PD-TOOLS-013 narrows REQ-TOOLS-100 and extends those two. Pinned by
+REQ-TOOLS-112 and `PD-SESSION-003` REQ-SESSION-136, so PD-TOOLS-013 narrows REQ-TOOLS-100 and extends those two.
+*Reversed 2026-10-13 by [OQ-237](#oq-237) (GV1): PD-TOOLS-013 narrows all three, as this ruling named them; the substitution and its
+reason no longer stand.* Pinned by
 the cases named in the repaired note and `pnpm driver-proof`'s launch 13d, a quit during `sleep 60`, red before and green
 after.
 
@@ -12002,7 +12012,7 @@ of an entry" and "The back-pointer, in place": the meaning of Narrows and Extend
 directive under one verb on one requirement, "precedence must be unambiguous"; `tools/symbol-artifact/generate.mjs`, the
 per-verb maps that hold one directive per requirement; acceptance finding F15, the shape repaired for `PD-ORCH-014`.
 Raised 2026-10-13 from
-[`a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md`](../defects/a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md),
+[`a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md`](../defects/fixed/a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md),
 noticed 2026-10-07 by fin31's reviewer, and ruled the same day under the owner's delegation; the consortium's question GV1.)*
 
 The generator keeps `SUPERSEDED_BY`, `NARROWED_BY` and `EXTENDED_BY` as one directive per requirement each and refuses a
@@ -12044,3 +12054,17 @@ reach, since only there could the rule have bent a verb. Its own change: the cit
 least one of the pair names the other"), because order in `directives.md` follows the domain, not the date.
 
 *Built 2026-10-13 (fin34, `fin34-record-and-cancels`); the first execution is reported in `docs/product/README.md`.*
+**The bounded re-read, what it found.** Of the fifteen requirements two directives reached, read under the README's
+definitions and the exact-enumeration test: corrected to Narrows, the six the ruling named (REQ-TOOLS-112 and
+REQ-SESSION-136 under `PD-TOOLS-013`; REQ-SHELL-021 under `PD-SHELL-009`; REQ-CONFIG-464, REQ-CONFIG-256 and REQ-CONFIG-417
+under `PD-WORKSPACE-002`), and three it did not: **REQ-TOOLS-152 under `PD-ORCH-004`**, whose field list calls itself "the
+whole of the `delegate` contract" and gains `continuation_of` (R-058 had recorded Extends because "the symbol artifact holds
+one narrowing directive per requirement", the rule bending a verb the note did not list), and **REQ-LIBRARY-099 and
+REQ-TOOLS-148 under `PD-LIBRARY-001`**, whose closed section sets gain `commands`. **Found nothing** at REQ-CHAT-057 and
+REQ-CHAT-069 (`PD-CHAT-005`'s colour and indent leave every stated figure whole), REQ-ORCH-075 (`PD-ORCH-015` adds the held
+answer to a payload the requirement does not close), REQ-SESSION-115 (`PD-LIBRARY-003` keeps the exact budgets and changes
+only how an edited artifact is read), REQ-SHELL-119 (`PD-SHELL-003`'s title-bar control enters the same guards),
+REQ-STARTUP-161 (`PD-SHELL-001`'s window is a window of the one instance, and the closed set there is the launch outcomes,
+untouched) and REQ-WORKSPACE-041 (`PD-LIBRARY-002`'s retrospective reads what discovery finds). Every pair of narrowings the
+register now holds names each other. Outside the bound and recorded, not corrected:
+[`pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md`](../defects/pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md).

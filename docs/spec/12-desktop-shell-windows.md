@@ -57,6 +57,8 @@ Rotaris presents a single main desktop window containing seven primary views sel
   > gates above govern every activation of the chip but the two add-a-window gestures that directive
   > names, on which they are not evaluated because such a request adds a window rather than displacing
   > one. Every other activation is the replacement route and this requirement governs it in full.
+  > *Added 2026-10-13 ([OQ-237](../architecture/open-questions.md)):* in full except gate (3)'s count, which
+  > [`PD-SHELL-009`](../product/directives.md#pd-shell-009) narrows (below).
   >
   > **Extended by [`PD-WORKSPACE-001`](../product/directives.md#pd-workspace-001), 2026-09-12.** The
   > sentence above still governs — selecting the folder already open builds no replacement window and
@@ -66,7 +68,15 @@ Rotaris presents a single main desktop window containing seven primary views sel
   > *Cross-reference, 2026-10-07 (no text above changes).* Gate (3)'s "with a run active" is REQ-SHELL-122's test, and
   > [`PD-SHELL-009`](../product/directives.md#pd-shell-009) narrows REQ-SHELL-122's count, at this gate, to the runs active
   > in the requesting window's own workspace: a window whose project has no run active passes gate (3) while another
-  > window's project runs. This requirement's own narrowing directive is still `PD-SHELL-001` alone.
+  > window's project runs. This requirement's own narrowing directive is still `PD-SHELL-001` alone. *(No longer so since
+  > 2026-10-13: the note below.)*
+  >
+  > **Narrowed by [`PD-SHELL-009`](../product/directives.md#pd-shell-009), 2026-10-13.** Gate (3) on the replacement route
+  > counts the active runs of the requesting window's own workspace (REQ-SHELL-122's test as that directive narrows it): a
+  > window whose project has no run active passes gate (3) while another window's project runs, and a window whose project
+  > runs is declined with "Finish the active run before opening another project." as before. Gates (1) and (2), their order,
+  > and every other clause above still govern. Its case is disjoint from `PD-SHELL-001`'s, the add-a-window gestures, on
+  > which no gate is evaluated. Written under [OQ-237](../architecture/open-questions.md), as OQ-206's ruling named it.
 
 ### Main window structure
 

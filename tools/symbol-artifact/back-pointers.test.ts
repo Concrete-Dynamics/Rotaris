@@ -127,4 +127,35 @@ describe('the back-pointers in docs/spec agree with the directive register', () 
     expect(narrowed('REQ-ORCH-029')).toContain('PD-ORCH-006');
     expect(backPointers().filter((p) => p.requirement === 'REQ-ORCH-025').map((p) => `${p.verb} ${p.directive}`)).toEqual(['Narrowed PD-ORCH-006']);
   });
+
+  it('OQ-237 (GV1, R-072): a requirement two directives narrow lists both, and the dispositions the one-per-verb rule bent are corrected', () => {
+    expect(narrowed('REQ-TOOLS-112')).toEqual(['PD-TOOLS-009', 'PD-TOOLS-013']);
+    expect(narrowed('REQ-SESSION-136')).toEqual(['PD-SESSION-003', 'PD-TOOLS-013']);
+    expect(narrowed('REQ-SHELL-021')).toEqual(['PD-SHELL-001', 'PD-SHELL-009']);
+    expect(narrowed('REQ-CONFIG-464')).toEqual(['PD-CONFIG-001', 'PD-WORKSPACE-002']);
+    expect(narrowed('REQ-CONFIG-256')).toEqual(['PD-CONFIG-003', 'PD-WORKSPACE-002']);
+    expect(narrowed('REQ-CONFIG-417')).toEqual(['PD-CONFIG-003', 'PD-WORKSPACE-002']);
+    // The bounded re-read's own finds: a closed set widened is a narrowing (F15).
+    expect(narrowed('REQ-TOOLS-152')).toEqual(['PD-ORCH-004', 'PD-TOOLS-006']);
+    expect(narrowed('REQ-LIBRARY-099')).toEqual(['PD-LIBRARY-001', 'PD-LIBRARY-004']);
+    expect(narrowed('REQ-TOOLS-148')).toEqual(['PD-LIBRARY-001', 'PD-LIBRARY-004']);
+    for (const [req, pd] of [
+      ['REQ-TOOLS-112', 'PD-TOOLS-013'],
+      ['REQ-SESSION-136', 'PD-TOOLS-013'],
+      ['REQ-SHELL-021', 'PD-SHELL-009'],
+      ['REQ-CONFIG-464', 'PD-WORKSPACE-002'],
+      ['REQ-CONFIG-256', 'PD-WORKSPACE-002'],
+      ['REQ-CONFIG-417', 'PD-WORKSPACE-002'],
+      ['REQ-TOOLS-152', 'PD-ORCH-004'],
+      ['REQ-LIBRARY-099', 'PD-LIBRARY-001'],
+      ['REQ-TOOLS-148', 'PD-LIBRARY-001'],
+    ] as const) {
+      expect(extended(req) ?? []).not.toContain(pd);
+      expect(
+        backPointers()
+          .filter((p) => p.requirement === req && p.directive === pd)
+          .map((p) => p.verb),
+      ).toEqual(['Narrowed']);
+    }
+  });
 });

@@ -140,7 +140,14 @@ its earliest calls, and the list is of what survived in the transcript the repor
 bound is stated in the record rather than hidden, and closing it needs the durable tool-call evidence
 of REQ-SESSION-136, which this directive does not require and does not forbid.
 
-> **Extends:** REQ-LIBRARY-088, REQ-LIBRARY-090, REQ-LIBRARY-099, REQ-TOOLS-148
+> **Narrows:** REQ-LIBRARY-099, REQ-TOOLS-148
+> **Extends:** REQ-LIBRARY-088, REQ-LIBRARY-090
+
+*Corrected 2026-10-13 under [OQ-237](../architecture/open-questions.md) (GV1, [R-072](requests.md#r-072)): REQ-LIBRARY-099
+and REQ-TOOLS-148 move from Extends to Narrows. Each closes its section filter over a set, and `commands` joins that set
+(a section name outside it is still refused), a change to an exact enumeration and so a narrowing (acceptance finding F15).
+Their case is disjoint from `PD-LIBRARY-004`'s, which consumer a read marks. The disposition read until then, and no longer
+governs:* "> **Extends:** REQ-LIBRARY-088, REQ-LIBRARY-090, REQ-LIBRARY-099, REQ-TOOLS-148"
 
 *Raised by the owner, 2026-09-12; logged as [R-006](requests.md#r-006).*
 
@@ -1654,13 +1661,20 @@ no longer governs everywhere.
 **Where REQ-CONFIG-464 sits.** That requirement's "no per-file switch over individual instruction
 files" clause states its own ground in the same breath — "the Instructions category remaining a
 read-only inventory (REQ-CONFIG-276, REQ-CONFIG-277)" — so the two inventory requirements are what
-this directive narrows, and the clause stops governing with them. REQ-CONFIG-464 is deliberately
-**not** named in the dispositions below: `PD-CONFIG-001` already narrows it for the MCP-grant half,
-one requirement carries one narrowing directive so that precedence is unambiguous, and the two halves
-are unrelated subjects that no single revision could honestly hold. Its back-pointer says as much.
+this directive narrows, and the clause stops governing with them. *Since 2026-10-13
+([OQ-237](../architecture/open-questions.md), GV1, [R-072](requests.md#r-072)) REQ-CONFIG-464 is named under Narrows
+below, beside `PD-CONFIG-001`'s disjoint case, the MCP-grant half. The reason it was first left out no longer holds:*
+"REQ-CONFIG-464 is deliberately **not** named in the dispositions below: `PD-CONFIG-001` already narrows it for the MCP-grant
+half, one requirement carries one narrowing directive so that precedence is unambiguous, and the two halves are unrelated
+subjects that no single revision could honestly hold. Its back-pointer says as much."
 
-> **Narrows:** REQ-WORKSPACE-041, REQ-WORKSPACE-042, REQ-CONFIG-276, REQ-CONFIG-277, REQ-TOOLS-165
-> **Extends:** REQ-CONFIG-040, REQ-CONFIG-047, REQ-WORKSPACE-043, REQ-WORKSPACE-048, REQ-CONFIG-256, REQ-CONFIG-258, REQ-CONFIG-417, REQ-WORKSPACE-039
+> **Narrows:** REQ-WORKSPACE-041, REQ-WORKSPACE-042, REQ-CONFIG-276, REQ-CONFIG-277, REQ-TOOLS-165, REQ-CONFIG-464, REQ-CONFIG-256, REQ-CONFIG-417
+> **Extends:** REQ-CONFIG-040, REQ-CONFIG-047, REQ-WORKSPACE-043, REQ-WORKSPACE-048, REQ-CONFIG-258, REQ-WORKSPACE-039
+
+*Corrected 2026-10-13 under OQ-237: REQ-CONFIG-256 and REQ-CONFIG-417 move from Extends to Narrows. The `instructions:` key
+joins REQ-CONFIG-256's written keys, which are "exactly" a list, and the per-file switches join REQ-CONFIG-417's destination
+1, an enumerated set; a change to an exact enumeration is a narrowing (acceptance finding F15). Their cases are disjoint
+from `PD-CONFIG-003`'s, the two runtime timeouts.*
 
 *Raised by the owner, 2026-09-21; logged as [R-046](requests.md#r-046).*
 
@@ -2054,8 +2068,15 @@ the parent to rediscover it. The report now hands back what a continuation needs
 report for these children, and one more relationship in the child record. The limit itself is not raised,
 so a child that genuinely loops is still stopped at the same point.
 
-> **Narrows:** REQ-ORCH-088, REQ-CONFIG-113 (revision 5)
-> **Extends:** REQ-TOOLS-152 (revision 2)
+> **Narrows:** REQ-ORCH-088, REQ-CONFIG-113 (revision 5), REQ-TOOLS-152 (revision 2)
+
+*Corrected 2026-10-13 under [OQ-237](../architecture/open-questions.md) (GV1, [R-072](requests.md#r-072)): REQ-TOOLS-152
+moves from Extends to Narrows. It calls its field list "the whole of the `delegate` contract", and `continuation_of` joins
+that list, a change to an exact enumeration and so a narrowing (acceptance finding F15), the verb `PD-TOOLS-006` took for
+`write_scope`. R-058 recorded *Extends* because "the symbol artifact holds one narrowing directive per requirement", which no
+longer holds. The two cases are disjoint: this directive's field names the child a continuation continues;
+`PD-TOOLS-006`'s fields claim a write scope and resume a settled child. The disposition read until then, and no longer
+governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 
 *Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048). Revision 2 logged as [R-058](requests.md#r-058), revision 3 as [R-059](requests.md#r-059), revision 4 as [R-064](requests.md#r-064), revision 5 as [R-071](requests.md#r-071).*
 
@@ -2406,12 +2427,12 @@ are not recorded, and cannot be recovered afterwards.
 *Revision 4 (2026-10-07, [R-072](requests.md#r-072)) — **what `delegate` tells its caller about each persona**, a section
 added after revision 3's; the ruling of [OQ-216](../architecture/open-questions.md) under the owner's delegation. Nothing is
 replaced. It lands here for the reason revision 3 did: this directive already extends REQ-ORCH-028 and narrows
-REQ-TOOLS-152, and the symbol generator admits one directive per requirement for each relation.*
+REQ-TOOLS-152, and the symbol generator admits one directive per requirement for each relation.* *(No longer binding since 2026-10-13, [OQ-237](../architecture/open-questions.md): two directives may narrow, or extend, one requirement in disjoint cases, so a later narrowing need not land here when it is about something else; what landed here stays.)*
 
 *Revision 3 (2026-09-29, [R-067](requests.md#r-067)) — **what else `delegate` refuses, and what `session_id` names**,
 a section added after "The disclosure"; the owner's rulings on OQ-112 and on OQ-66's open part. Nothing is replaced. This
 directive is the one that narrows REQ-TOOLS-152, and the symbol generator admits one narrowing directive per requirement,
-so a narrowing of `delegate`'s fields lands here whatever it is about.*
+so a narrowing of `delegate`'s fields lands here whatever it is about.* *(No longer binding since 2026-10-13, [OQ-237](../architecture/open-questions.md): two directives may narrow, or extend, one requirement in disjoint cases, so a later narrowing need not land here when it is about something else; what landed here stays.)*
 
 *Revision 2 (2026-09-27, [R-059](requests.md#r-059)) — **a resumed child re-claims its scope**, in "What is unchanged",
 ruled with PD-ORCH-005. Revision 1 (2026-09-23, [R-049](requests.md#r-049)) is otherwise unchanged.*
@@ -3503,7 +3524,7 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 *Revision 3 (2026-10-07, [R-072](requests.md#r-072)) — **a `swarm` run the mapping grants**, the ruling of OQ-205 under the
 owner's delegation: the paragraph **A `swarm` run** becomes a governing clause, and REQ-ORCH-025 joins the Narrows line. The
 generator admits one narrowing directive per requirement, so any later narrowing of REQ-ORCH-025 also lands here. Revisions 1
-and 2 are otherwise unchanged.*
+and 2 are otherwise unchanged.* *(No longer binding since 2026-10-13, [OQ-237](../architecture/open-questions.md): two directives may narrow, or extend, one requirement in disjoint cases, so a later narrowing need not land here when it is about something else; what landed here stays.)*
 
 *Revision 2 (2026-10-06, [R-071](requests.md#r-071)) — **which todo items REQ-ORCH-029's success clause ranges over**, a
 section added after the directive's first two paragraphs; the owner's ruling of OQ-203. One clause of the first paragraph is
@@ -3512,7 +3533,7 @@ generator admits one narrowing directive per requirement, so a narrowing of REQ-
 (as `PD-TOOLS-006` holds REQ-TOOLS-152's). Revision 1 (2026-10-06, the ruling of OQ-202) is otherwise unchanged. The
 paragraph **A `swarm` run** was added the same day as a wording addition (fin22), not a revision: it changes no clause,
 names how the clauses above reach a `swarm` run, and cites [OQ-205](../architecture/open-questions.md) for what they do not
-decide.*
+decide.* *(No longer binding since 2026-10-13, [OQ-237](../architecture/open-questions.md): two directives may narrow, or extend, one requirement in disjoint cases, so a later narrowing need not land here when it is about something else; what landed here stays.)*
 
 Where the intent-to-tools mapping grants the entry role the direct-work bundle of REQ-ORCH-016 — with the built-in
 mapping, on a run whose intent is `explicit_trivial` or `single_file_change` — three of REQ-ORCH-029's constraints on the
@@ -4096,9 +4117,14 @@ by a round trip. Black-box conformance will see a tag and a line the reference l
 *Raised by the consortium under the owner's delegation, 2026-10-07; logged as [R-072](requests.md#r-072), the ruling of
 [OQ-218](../architecture/open-questions.md) (T1). Cites, without changing them: REQ-MONITOR-286, REQ-CONFIG-113,
 REQ-ORCH-088, REQ-CONFIG-446, REQ-NOTIFY-100 and PD-ORCH-004 revision 5. The ruling named REQ-CONFIG-256 and REQ-CONFIG-417
-as extended; both are already extended by PD-WORKSPACE-002 and the symbol generator admits one directive per verb, so this
-directive names them as narrowed — it changes their exact enumerations, which is what narrowing records (found while
-building).*
+as extended, and this directive names them as narrowed: it changes their exact enumerations, which is what narrowing records
+(acceptance finding F15).*
+
+*Corrected 2026-10-13 under [OQ-237](../architecture/open-questions.md): the verb follows that change and was never forced;
+`PD-WORKSPACE-002` now narrows both as well, in the disjoint case of the instruction files. The reason first given here no
+longer is one:* "both are already extended by PD-WORKSPACE-002 and the symbol generator admits one directive per verb, so
+this directive names them as narrowed … (found while building)."
+
 
 *Revision 2 raised by the consortium under the owner's delegation, 2026-10-07; logged as [R-072](requests.md#r-072), the
 ruling of [OQ-223](../architecture/open-questions.md) (IT1). Cites, without changing them: REQ-CONFIG-118, REQ-LIBRARY-039,
@@ -5331,8 +5357,10 @@ first, after REQ-SHELL-119's earlier guards. Which close asks what:
 - **A window with no active run of its own** closes without asking, whatever runs in other projects, and touches no run.
   So does a window that holds no workspace and leaves another main window open.
 - **REQ-SHELL-021's gate 3** counts the requesting window's own workspace (through REQ-SHELL-122, whose test "a run is
-  active" is the gate's; REQ-SHELL-021 itself is already narrowed by PD-SHELL-001, and the generator admits one narrowing
-  directive per requirement, so this directive narrows the count rather than the gate): a window whose project has no run active may
+  active" is the gate's; *since 2026-10-13 this directive narrows REQ-SHELL-021 itself as well, beside PD-SHELL-001's
+  disjoint case of the add-a-window gestures, [OQ-237](../architecture/open-questions.md); the reason first given here no
+  longer is one:* "REQ-SHELL-021 itself is already narrowed by PD-SHELL-001, and the generator admits one narrowing
+  directive per requirement, so this directive narrows the count rather than the gate"): a window whose project has no run active may
   open another project while another window's project runs, and the window whose project runs is declined with "Finish the
   active run before opening another project." as before. A switch's outgoing window therefore closes asking nothing, its
   workspace's count being zero once the gate has passed; a run started in between is asked about at that close, and a
@@ -5363,7 +5391,12 @@ Windows Electron emits no `before-quit` at a logout or shutdown at all,
 Dock Quit is a person's quit outside any window, which asks nothing — to be reopened when a macOS release is authorized
 (IC-3, PD-STARTUP-001).
 
-> **Narrows:** REQ-STARTUP-046, REQ-SHELL-119, REQ-SHELL-122
+> **Narrows:** REQ-STARTUP-046, REQ-SHELL-119, REQ-SHELL-122, REQ-SHELL-021
+
+*REQ-SHELL-021 joined the Narrows line on 2026-10-13 under [OQ-237](../architecture/open-questions.md) (GV1,
+[R-072](requests.md#r-072)): OQ-206's ruling named it, and the one-narrowing-per-requirement rule that kept it out no longer
+holds. Its case, gate (3)'s count on the replacement route, is disjoint from `PD-SHELL-001`'s, the two add-a-window
+gestures on which no gate is evaluated.*
 
 *Raised by the consortium under the owner's delegation, 2026-10-07; logged as [R-072](requests.md#r-072), the ruling of
 [OQ-206](../architecture/open-questions.md) (advocate A, the user's lens, followed).*
@@ -6316,19 +6349,22 @@ sets meets a new token; severity `warning` with `is_error` true is the one termi
 from its severity; and the terminal's own text cannot tell a quit from a stop or a child's limit, so the cause comes from the
 turn's interrupted result, and a child's limit that cut a call is recorded at the child, not at the call.
 
-> **Narrows:** REQ-TOOLS-100
-> **Extends:** REQ-TOOLS-112, REQ-SESSION-136
+> **Narrows:** REQ-TOOLS-100, REQ-TOOLS-112, REQ-SESSION-136
 
-*The ruling named all three as narrowed. The symbol generator admits one directive per verb on a requirement
-(`README.md`: "precedence must be unambiguous"), and `PD-TOOLS-009` already narrows REQ-TOOLS-112 and `PD-SESSION-003`
-REQ-SESSION-136, so those two are named as extended, as OQ-218's build did for PD-CONFIG-003; the case each one meets is
-stated above, exhaustively. Found while building, 2026-10-07.*
+*Corrected 2026-10-13 under [OQ-237](../architecture/open-questions.md) (GV1, [R-072](requests.md#r-072)): the three are
+narrowed, as the ruling named them. This directive's case and `PD-TOOLS-009`'s on REQ-TOOLS-112 are disjoint (a cancel that
+has no exit code; exit 1 from a diff or a search), and so are its case and `PD-SESSION-003`'s on REQ-SESSION-136 (which
+issues are filed; how the error-path arguments are cut). The disposition read until then, and the reason it gave, no longer
+govern:* "> **Extends:** REQ-TOOLS-112, REQ-SESSION-136" — *"The ruling named all three as narrowed. The symbol generator
+admits one directive per verb on a requirement (`README.md`: "precedence must be unambiguous"), and `PD-TOOLS-009` already
+narrows REQ-TOOLS-112 and `PD-SESSION-003` REQ-SESSION-136, so those two are named as extended, as OQ-218's build did for
+PD-CONFIG-003; the case each one meets is stated above, exhaustively. Found while building, 2026-10-07."*
 
 *Raised under the owner's delegation, 2026-10-07, ruling OQ-226 (the consortium's ruling of finding P2 of the final default
 live run at `a68f121`); logged as [R-072](requests.md#r-072).*
 
 > **First execution, 2026-10-07, built under [R-072](requests.md#r-072) (fin31):** the rule held as written, and the ruling's
-> dispositions did not: the generator admits one directive per verb on a requirement, so REQ-TOOLS-112 and REQ-SESSION-136,
+> dispositions did not *(corrected 2026-10-13: they stand as the ruling named them, OQ-237)*: the generator admits one directive per verb on a requirement, so REQ-TOOLS-112 and REQ-SESSION-136,
 > already narrowed by `PD-TOOLS-009` and `PD-SESSION-003`, are named as extended (above). `ForegroundSession.run`
 > (`packages/agent-tools/src/terminal/foreground.ts`) returns `cancelled` with no exit code from both abort branches, and
 > `terminal/index.ts` records the call `interrupted` / `warning`, `InterruptedError`, `is_error` true; the gate's existing

@@ -290,9 +290,11 @@ writing, not after:
 - a named requirement `docs/spec/` does not define — a typo becomes a failed check rather than a
   disposition that quietly governs nothing
 - a named requirement that is **withdrawn in place** and therefore carries no behaviour
-- **two directives applying the same verb to one requirement** — precedence must be unambiguous. This
-  is why a changed directive takes a **revision** rather than a second directive beside it.
-- one requirement both superseded and narrowed
+- **two directives superseding one requirement** — precedence must be unambiguous
+- one requirement both superseded and narrowed, or both superseded and extended
+- **two directives narrowing one requirement where neither entry names the other** (OQ-237). Two
+  narrowings state disjoint cases; a case that overlaps an earlier one is a **revision** of that
+  directive, never a second directive beside it. Two extensions of one requirement are admitted.
 
 ## The commit
 

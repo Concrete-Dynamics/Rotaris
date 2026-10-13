@@ -402,10 +402,10 @@ This requirement is the product's single definition of `message_limit` — its n
 - **REQ-CONFIG-254** — A stored reasoning level of `auto` is presented under its **own** label, distinct from the label an unset level carries, so the two are always told apart on screen. "Provider default" labels the unset entry alone (REQ-CONFIG-332, REQ-CONFIG-340); a stored `auto` is appended to the control's options and shown as the current selection (REQ-CONFIG-093, REQ-CONFIG-318), and the two entries are never rendered with the same text on the same control. Reading model preferences back therefore reports a stored `auto` as `auto` and an unset level as unset, and the presentation filter never folds one into the other.
 - **REQ-CONFIG-255** — Each role's preference record exposes: the raw configured model (absent when the role is not overridden), the effective resolved model with a role-level synthetic unwrapped but a slot-level synthetic left wrapped, whether the value is inherited, the built-in default model for that role so a surface can offer "back to default", and the raw reasoning value after the presentation filter. The tier names offered in place of a concrete model in a role editor are exactly `small_model`, `medium_model`, `large_model`.
 - **REQ-CONFIG-256** — The desktop save path writes to `<workspace>/.rotaris/agents.yaml`. An existing file that is not a mapping is refused with an error saying so. A missing file starts from an empty document. Written keys are exactly: the five model slots (**only when the store value is non-empty**, so an empty selection leaves the existing key alone); each slot's reasoning companion (null **removes** the key); `runtime.max_depth`, `runtime.max_active_children`, `runtime.max_iterations`, `runtime.allow_outside_workspace`, `runtime.permission_mode`, `runtime.improvement_collector_enabled`, `runtime.keep_going`, `runtime.run_start_mode` (REQ-CONFIG-476), plus all six confinement/egress fields; `circuit_breaker.enabled`; `compressor.threshold_percentage`; the delegation strategy; the four `display:` fields (REQ-CONFIG-472), written per field so a `display:` key this screen does not offer is left as the file states it; `skills.enabled`, `skills.overrides` and `skills.invocation_overrides`; and workspace-scoped role values and unsets. Skill policies are written into the **workspace** file only and carry no per-field scope of their own; because `skills` is section-class and its two override maps overlay per skill name (REQ-CONFIG-042, REQ-CONFIG-048), doing so overlays exactly the skills the workspace names and **never discards the global scope's policy for any other skill**. A save is therefore not a wholesale replacement of the user's skill policy, and the only skill a workspace save can change is one the user changed on this screen (REQ-CONFIG-258).
-  > **Extended by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The desktop
+  > **Narrowed by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The desktop
   > save additionally writes `instructions.overrides` into the workspace file only, on the same sparse terms:
   > only files the user switched away from the baseline land in the map, and never at the cost of another
-  > file's inherited policy.
+  > file's inherited policy. *(Labelled* Extended by *until 2026-10-13; relabelled under [OQ-237](../architecture/open-questions.md), the directive's disposition corrected.)*
   >
   > **Narrowed by [`PD-CONFIG-003`](../product/directives.md#pd-config-003), 2026-10-07 (revision 2 the same day).** The
   > written keys also include `runtime.child_timeout`, in seconds, from the per-agent timeout control, and (revision 2)
@@ -574,15 +574,19 @@ This requirement is the product's single definition of `message_limit` — its n
   > `tools:`, `delegates_to` and `custom_tools` stay file-edited, and the write remains an overlay on
   > files the user owns (REQ-CONFIG-477), never a move into an application-owned store.
 
-  > **The instruction-file clause follows [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002),
-  > 2026-09-21.** "No per-file switch over individual instruction files" is stated here on the ground it
+  > **Narrowed by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** "No per-file switch over
+  > individual instruction files" is stated here on the ground it
   > names — "the Instructions category remaining a read-only inventory (REQ-CONFIG-276, REQ-CONFIG-277)" —
   > and that directive narrows those two, so the clause stops governing with them: the Instructions
   > category edits the per-file `instructions.overrides` policy through each row's switch, writing a
-  > sparse overlay into the workspace file. The register names the narrowing at REQ-CONFIG-276 and
-  > REQ-CONFIG-277 and not here, because one requirement carries one narrowing directive and
-  > `PD-CONFIG-001` above already holds this one. Everything else here governs verbatim — the category
-  > still creates, renames and deletes nothing, and the empty states still name the files to edit.
+  > sparse overlay into the workspace file. Everything else here governs verbatim — the category
+  > still creates, renames and deletes nothing, and the empty states still name the files to edit. This case is
+  > disjoint from `PD-CONFIG-001`'s above, the MCP-grant fields.
+  > *(Written as a cross-reference until 2026-10-13, headed "The instruction-file clause follows", and labelled under
+  > [OQ-237](../architecture/open-questions.md), which admits two narrowing directives on one requirement. The reason it
+  > gave for naming the narrowing at REQ-CONFIG-276 and REQ-CONFIG-277 and not here no longer holds:* "The register names
+  > the narrowing at REQ-CONFIG-276 and REQ-CONFIG-277 and not here, because one requirement carries one narrowing
+  > directive and `PD-CONFIG-001` above already holds this one."*)*
 - **REQ-CONFIG-351** — The category header offers a status probe whose accessible description states that it probes every configured server. It is enabled **only when a configuration service is available**.
 - **REQ-CONFIG-352** — The probe partitions servers before probing: a server that is **not available** is marked unreachable immediately with the detail that its command was not found on the executable search path, and **is never probed**; a server that is available and present in the configuration's server map is marked as checking and added to the probe set; a server that is available but absent from the map is left untouched. If the probe set ends up empty the action returns **without disabling the button**, so it stays usable when there is nothing to probe. A probe already in flight prevents a second one from starting, so repeated clicks cannot start two.
 - **REQ-CONFIG-353** — Per-server results map to healthy or unreachable with the error string as detail, and a discovered tool count carried through only when it is an integer (otherwise absent). When the probe finishes, the action is re-enabled if a service still exists. The observable health vocabulary is exactly `unknown`, `checking`, `healthy`, `unreachable`.
@@ -676,9 +680,9 @@ This requirement is the product's single definition of `message_limit` — its n
 ### Persistence destinations and reload discipline
 
 - **REQ-CONFIG-417** — Five persistence destinations are reachable from the settings screen. (1) **Workspace/global configuration**, committed by Save: the five model slots and their reasoning strengths, roles per the role edit scope, delegation strategy, depth and fan-out, the four runtime toggles including `runtime.keep_going` (REQ-CONFIG-323), permission mode, the run-start mode (REQ-CONFIG-476), compression threshold, iteration cap, the six confinement/egress fields, the four tool-row display fields (REQ-CONFIG-472), and the skills master switch and per-skill policies (REQ-CONFIG-256). Destination 1 is committed by Save with exactly one stated exception: the diagnostics toggle of REQ-CONFIG-471 writes its single key immediately, into the scope that card has selected, and is consequently not undone by Discard — the card says so in words. (2) **Desktop preferences**, written the moment the control moves (REQ-CONFIG-405). (3) **The external hook policy store**, written immediately by the hook checkboxes (REQ-CONFIG-360). (4) **Provider credential storage and the provider catalog**, written asynchronously by the authentication, logout, registration and deletion operations, entirely outside the dirty flag. (5) **Theme and reduced motion**, persisted by their own services, which this screen only invokes (REQ-CONFIG-406). Tool-server enablement is not a further destination and is not written to any configuration file: toggling a server records a session-scoped override (REQ-CONFIG-349) that a run picks up per REQ-CONFIG-263.
-  > **Extended by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The per-file
+  > **Narrowed by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The per-file
   > instruction switches join destination 1: they defer to Save, revert on Discard, and are governed by the
-  > save bar like every other value there.
+  > save bar like every other value there. *(Labelled* Extended by *until 2026-10-13; relabelled under [OQ-237](../architecture/open-questions.md), the directive's disposition corrected.)*
   >
   > **Narrowed by [`PD-CONFIG-003`](../product/directives.md#pd-config-003), 2026-10-07 (revision 2 the same day).**
   > Destination 1 also holds the per-agent timeout and (revision 2) the improvement analysis timeout, each committed by

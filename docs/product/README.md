@@ -77,9 +77,13 @@ specification's own, deliberately:
   changes marked `— revision N`; and the text it replaces **quoted beside it** in a blockquote reading
   *"Revision N−1 said, and no longer governs: …"*, which is the same discipline as a falsified reason
   kept beside its replacement. `PD-CHAT-004` is the first and is the worked example. The back-pointer
-  at the requirement is **amended in place** rather than a second note added, and the reason is also
-  why this is a revision rather than a new directive beside the old one: the symbol generator refuses
-  two directives narrowing one requirement, because **precedence must be unambiguous**.
+  at the requirement is **amended in place** rather than a second note added. A revision is for a change
+  to the directive's **own case**; a disjoint case on a requirement another directive already narrows may
+  be a directive of its own (below, "Two directives on one requirement"; [OQ-237](../architecture/open-questions.md),
+  ruled under [R-072](requests.md#r-072)). The reason this bullet gave until 2026-10-13 **no longer governs
+  (GV1)**: *"the reason is also why this is a revision rather than a new directive beside the old one: the
+  symbol generator refuses two directives narrowing one requirement, because precedence must be
+  unambiguous."* That holds for Supersedes alone.
 - A directive that no longer applies is **withdrawn in place** — it keeps its number, carries no
   behaviour, and states what replaced it. Withdrawing a directive does **not** silently restore the
   requirement it superseded; the withdrawal says explicitly whether that requirement governs again.
@@ -117,6 +121,19 @@ written exactly as shown.
    A directive with no disposition block does not build. The generator refuses an identifier it
    cannot find in the specification, which is what makes a typo a failed `pnpm check` rather than a
    disposition that quietly governs nothing.
+
+   **Two directives on one requirement** ([OQ-237](../architecture/open-questions.md), ruled under
+   [R-072](requests.md#r-072)). **Supersedes is single**: one directive per requirement, and a superseded
+   requirement is neither narrowed nor extended, since a requirement that no longer governs cannot keep
+   governing outside a case or in full. **Narrowings state disjoint cases**: two directives may narrow one
+   requirement, each stating its own case exhaustively, and the requirement governs outside all of them. A
+   case that **overlaps** an earlier narrowing is a **revision** of that directive, never a second one beside
+   it. The later directive **names the earlier** in its own entry, and the generator refuses a pair of which
+   neither names the other (its order in this register follows the domain, not the date, so either direction
+   satisfies it); it cannot tell whether the cases truly stay apart, which is the writer's to state and the
+   reviewer's to check. **Extends may repeat freely**: two extensions displace nothing and need no citation.
+   `NARROWED_BY` and `EXTENDED_BY` in the generated artifact hold a sorted list per requirement;
+   `SUPERSEDED_BY` holds one directive.
 5. **Raised by** — who asked, when, and where. For a request made in conversation:
    `*Raised by the owner, <YYYY-MM-DD>; logged as [R-NNN](requests.md#r-nnn).*`
 
@@ -135,12 +152,17 @@ repairing it quietly, and the same discipline applies here:
 ```
 
 Use `Superseded by`, `Narrowed by` or `Extended by` to match the disposition. The note is a
-blockquote so that it can never be mistaken for part of the requirement.
+blockquote so that it can never be mistaken for part of the requirement. A requirement carries **one labelled note per
+directive** that reaches it. A new narrowing that qualifies an earlier note's "governs in full" **appends a line** to that
+note, dated and naming the new directive, rather than rewriting it (REQ-SHELL-021's note on `PD-SHELL-001`, beside its
+note on `PD-SHELL-009`, OQ-237).
 
 The three labels are reserved for a disposition the register holds. A note that names a directive where the register
 holds no disposition of that directive for that requirement is a **cross-reference** written in its own words and never
-takes one of the three labels: a domain's introduction, which names no requirement, or a requirement whose reach the
-register records elsewhere (REQ-CONFIG-464's note on `PD-WORKSPACE-002`). The reverse holds too: every requirement a
+takes one of the three labels: a domain's introduction, which names no requirement. *(Until 2026-10-13 this named a
+second case, "a requirement whose reach the register records elsewhere (REQ-CONFIG-464's note on `PD-WORKSPACE-002`)",
+which existed only because the generator held one narrowing per requirement; that note is now labelled, OQ-237.)* The
+reverse holds too: every requirement a
 disposition block names carries its labelled note. [`tools/symbol-artifact/back-pointers.test.ts`](../../tools/symbol-artifact/back-pointers.test.ts)
 reads both directions and fails `pnpm check` on either gap (OQ-222, ruled under [R-072](requests.md#r-072)).
 
@@ -285,3 +307,24 @@ directive is numbered in would have led anyone to them — only asking "which re
 behaviour lands on" does. Recorded as the **eighty-ninth** entry in `codebase.md`'s ledger alongside the seam
 defect found the same hour, and as a row in `first-executions.md`, because this is the directive layer's first
 execution and the rule is that a mechanism's first execution reports back into the record that decided it.
+
+## Several directives on one requirement, 2026-10-13 — first execution (OQ-237)
+
+The rule above was built and run the day it was ruled (fin34, `fin34-record-and-cancels`), and **it found what the defect
+note said it would, and one disposition the note had not named**. `tools/symbol-artifact/generate.mjs` holds Narrows and
+Extends as lists, refuses Supersedes beside Extends, and refuses two narrowings of which neither entry names the other;
+`pnpm directive-proof` pairs each new refusal with its passing form (42 checks; 29 of them pass on the old generator,
+every new case and the two map shapes failing). Read under the verbs' definitions and the exact-enumeration test of
+acceptance finding F15, the fifteen requirements two directives reached gave six corrections: `PD-TOOLS-013` narrows
+REQ-TOOLS-112 and REQ-SESSION-136, as its ruling named them; `PD-SHELL-009` narrows REQ-SHELL-021, as OQ-206's ruling
+named it; `PD-WORKSPACE-002` narrows REQ-CONFIG-464, REQ-CONFIG-256 and REQ-CONFIG-417; **`PD-ORCH-004` narrows REQ-TOOLS-152**,
+whose "whole of the `delegate` contract" its `continuation_of` widens, recorded as *Extends* in R-058 because "the symbol
+artifact holds one narrowing directive per requirement" — the bent verb the note did not list; and `PD-LIBRARY-001`
+narrows REQ-LIBRARY-099 and REQ-TOOLS-148, whose closed section sets gain `commands`. **Found nothing** at REQ-CHAT-057,
+REQ-CHAT-069, REQ-ORCH-075, REQ-SESSION-115, REQ-SHELL-119, REQ-STARTUP-161 and REQ-WORKSPACE-041: each extension adds
+beside a requirement whose stated set it leaves whole. Every pair of narrowings the register now holds on one requirement
+names each other, so the new refusal fires on nothing committed. Outside the bounded re-read, `PD-LIBRARY-001`'s Extends
+on REQ-LIBRARY-088 (a field inventory the requirement calls closed) and REQ-LIBRARY-090 (a fixed section order) are the
+same shape and are recorded, not corrected
+([`pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md`](../defects/pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md)).
+The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).

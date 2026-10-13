@@ -18,7 +18,7 @@ the record cannot say so, and the builds have written it under the other verb (o
 Each build stated the substitution in its directive and its first-executions row, so nothing is hidden, but the generated
 artifact (`packages/kernel/src/generated/requirements.ts`) answers "extended by PD-TOOLS-013 … still governs in full" for
 REQ-TOOLS-112, which no longer governs in full, the shape acceptance finding F15 repaired for `PD-ORCH-014`
-([`pd-orch-014-records-req-config-135-as-extended-where-oq-53-narrows-it`](fixed/pd-orch-014-records-req-config-135-as-extended-where-oq-53-narrows-it.md)).
+([`pd-orch-014-records-req-config-135-as-extended-where-oq-53-narrows-it`](pd-orch-014-records-req-config-135-as-extended-where-oq-53-narrows-it.md)).
 Whether two directives may narrow one requirement in disjoint cases (the register then holding a list), or a later one
 must revise the earlier, is a decision for the record's owner, not this note.
 
@@ -36,3 +36,30 @@ Noticed 2026-10-07 by fin31's reviewer while reviewing PD-TOOLS-013. Recorded, n
 - `docs/product/directives.md`: the disposition blocks of `PD-TOOLS-013`, `PD-CONFIG-003` and `PD-SHELL-009`, and the
   italic lines under them that state the substitution.
 - `packages/kernel/src/generated/requirements.ts`: `NARROWED_BY` and `EXTENDED_BY`, generated from those blocks.
+
+## Repaired — 2026-10-13
+
+Ruled as [OQ-237](../../architecture/open-questions.md) (GV1, under the owner's delegation, R-072): Narrows and Extends hold
+a list per requirement, Supersedes stays single, and two narrowings of one requirement state disjoint cases with at least
+one naming the other. Built by fin34 (`fin34-record-and-cancels`):
+
+- `tools/symbol-artifact/generate.mjs` holds `narrowedBy` and `extendedBy` as lists and emits `NARROWED_BY` and
+  `EXTENDED_BY` as sorted arrays (`Partial<Record<RequirementId, readonly DirectiveId[]>>`); the double-Supersedes refusal
+  stays; Supersedes beside Extends is refused; a pair of narrowings of which neither entry names the other is refused; each
+  requirement's JSDoc names every directive under every verb.
+- The dispositions are corrected, each old line or reason kept beside its replacement: `PD-TOOLS-013` narrows REQ-TOOLS-100,
+  REQ-TOOLS-112 and REQ-SESSION-136; `PD-SHELL-009` narrows REQ-SHELL-021 beside REQ-SHELL-122, with a new note at
+  REQ-SHELL-021 and a line appended to `PD-SHELL-001`'s; `PD-WORKSPACE-002` narrows REQ-CONFIG-464 (its cross-reference now
+  a labelled note), REQ-CONFIG-256 and REQ-CONFIG-417; `PD-CONFIG-003`'s Narrows stays, its forced-by-the-generator reason
+  marked as no longer one. The re-read the ruling asked for found two more the note did not list: `PD-ORCH-004` narrows
+  REQ-TOOLS-152 (Extends in R-058 "because the symbol artifact holds one narrowing directive per requirement"), and
+  `PD-LIBRARY-001` narrows REQ-LIBRARY-099 and REQ-TOOLS-148, whose closed section sets gain `commands`. The "lands here
+  whatever it is about" sentences of `PD-TOOLS-006` and `PD-ORCH-006` are marked as no longer binding.
+- `docs/product/README.md` is amended in place (Identifiers; "Two directives on one requirement"; "The back-pointer, in
+  place") and carries the first execution; OQ-66, OQ-206, OQ-216, OQ-218 and OQ-226 carry pointer lines.
+
+Pinned by `tools/symbol-artifact/back-pointers.test.ts`'s OQ-237 case (red on the uncorrected register: `expected [
+'PD-TOOLS-009' ] to deeply equal [ 'PD-TOOLS-009', 'PD-TOOLS-013' ]`) and by `pnpm directive-proof`'s new counterfactuals
+(42/42; 29/42 on the old generator). Recorded beside it, not repaired: `PD-LIBRARY-001`'s Extends on REQ-LIBRARY-088 and
+REQ-LIBRARY-090, outside the bounded re-read
+([`pd-library-001-extends-two-requirements-whose-closed-sets-it-changes`](../pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md)).

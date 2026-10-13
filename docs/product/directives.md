@@ -2467,11 +2467,11 @@ are not recorded, and cannot be recovered afterwards.
 ### PD-TOOLS-006 — a delegated child may declare a write scope that its siblings may not write into
 
 *Revision 8 (2026-10-07, [R-072](requests.md#r-072)): the ruling of the OQ raised from live-run finding D3,
-[OQ-250](../architecture/open-questions.md). Nothing is replaced. A section added after revision 7's, "What the routing table says
+[OQ-250](../architecture/open-questions.md#oq-250). Nothing is replaced. A section added after revision 7's, "What the routing table says
 of the work a route implies (revision 8)"; the dispositions stay as they were.*
 
 *Revision 7 (2026-10-07, [R-072](requests.md#r-072)) — **an admitted delegation marks its PENDING item in progress**, a section
-added after revision 6's; the ruling of [OQ-249](../architecture/open-questions.md) under the owner's delegation, with
+added after revision 6's; the ruling of [OQ-249](../architecture/open-questions.md#oq-249) under the owner's delegation, with
 `PD-TOOLS-008` revision 2. Nothing is replaced, and the dispositions stay as they were.*
 
 *Revision 6 (2026-10-07, [R-072](requests.md#r-072)) — **which todo item a delegation serves**, a section added after
@@ -2833,7 +2833,7 @@ from OQ-249 (the consortium's question P3), revision 8 from OQ-250 (the consorti
 > coordinator delegated to it). **Still owed:** the duress counts named above (briefs, `write_scope` refusals, rows spent on a
 > missing tool, stray files). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 >
-> **Reported back 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-228](../architecture/open-questions.md), the consortium's
+> **Reported back 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-228](../architecture/open-questions.md#oq-228), the consortium's
 > question P5):** the build read "every persona that agent can delegate to" as **every `personas:` key of the configuration**
 > (`knownRoles()`, `Object.keys(cfg.personas)`), with `gatekeeper` among the research and decision roles; that reading stays
 > here, and is replaced by the **delegation targets**: every persona of the configuration except the three REQ-MCP-014 and
@@ -2844,13 +2844,13 @@ from OQ-249 (the consortium's question P3), revision 8 from OQ-250 (the consorti
 > for. Found by building: the resolver path's unknown-persona message listed no aliases, which REQ-ORCH-034 requires; it now
 > does. **What was not measured:** no live run yet; the next default run should show neither reserved name in any catalogue.
 >
-> **Reported back 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-229](../architecture/open-questions.md), the consortium's
+> **Reported back 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-229](../architecture/open-questions.md#oq-229), the consortium's
 > question DT1):** for a caller whose `delegates_to` names any persona, "every persona that agent can delegate to" means the
 > delegation targets that list names (REQ-CONFIG-101); an empty list narrows nothing. Built 2026-10-13 by fin33
 > (`Persona.delegatesTo`, `DelegateCatalogue.narrowedBy`); the evidence is scripted only, since no live run sets the key.
 >
 > **Measured 2026-10-07 (the duress live run at `a68f121`, pack `2026-10-07T07-09-30-708Z`, session `e6747bd0`; recorded
-> 2026-10-13 under [OQ-250](../architecture/open-questions.md)):** the "What was not measured" above, now measured. The catalogue
+> 2026-10-13 under [OQ-250](../architecture/open-questions.md#oq-250)):** the "What was not measured" above, now measured. The catalogue
 > was in 35 of 35 coordinator requests. Briefs asking a persona without a terminal to run commands: 1, against 2 to 3 per run
 > before (`#114`, `node --test` offered to a docs-writer, then `run_command` refused at the gate, `#164`). `write_scope` refusals:
 > 1, against 2 per run (`#115`, `architect` given `docs/decisions.md`, refused in 170 ms with the writers named, re-briefed in
@@ -2858,7 +2858,7 @@ from OQ-249 (the consortium's question P3), revision 8 from OQ-250 (the consorti
 > failed child before. No stray workaround file, no impossible brief on a failed child's path, and the answer claimed no test run.
 > The target of zero was missed for revision 4 alone; revision 8 is the next step, measured against the same target.
 
-> **First execution of revision 8, 2026-10-13, ruled under [R-072](requests.md#r-072) ([OQ-250](../architecture/open-questions.md)),
+> **First execution of revision 8, 2026-10-13, ruled under [R-072](requests.md#r-072) ([OQ-250](../architecture/open-questions.md#oq-250)),
 > built by fin33 (`fin33-delegation-targets-and-plan`):** built as written. The sentence is `ROUTING_WORK_SENTENCE`, appended to
 > `ROUTING` after "final acceptance → verifier." (`packages/engine/src/children/personas.ts`), so `BUILT_IN_ORCHESTRATOR_PROMPT` stays
 > a constant and `entryInstructionsFor` still swaps it whole on a direct-work grant; a configured `system_prompt` carries neither the
@@ -2929,7 +2929,7 @@ from OQ-249 (the consortium's question P3), revision 8 from OQ-250 (the consorti
 > item, and the refusals counted (target at most one per run, each followed by a named delegation). The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
-> **First execution of revision 7, 2026-10-13, ruled under [R-072](requests.md#r-072) ([OQ-249](../architecture/open-questions.md)),
+> **First execution of revision 7, 2026-10-13, ruled under [R-072](requests.md#r-072) ([OQ-249](../architecture/open-questions.md#oq-249)),
 > built by fin33 (`fin33-delegation-targets-and-plan`):** built as written, and the text met the code in two places.
 >
 > - **The mark is the run host's, made before a foreground wait.** The engine hands the admitted item back on the accepted
@@ -4105,7 +4105,7 @@ names every task it restores**, a section added after revision 2's; the ruling o
 protection is otherwise unchanged", quoted below; the Narrows line is unchanged.*
 
 *Revision 2 (2026-10-07, [R-072](requests.md#r-072)) — **a task a running delegation holds is outside the single-active
-count**, a section added after revision 1's text; the ruling of [OQ-249](../architecture/open-questions.md) under the owner's
+count**, a section added after revision 1's text; the ruling of [OQ-249](../architecture/open-questions.md#oq-249) under the owner's
 delegation. It replaces revision 1's "at most one task is `IN_PROGRESS`", quoted below, and adds REQ-TOOLS-146 to the Narrows
 line.*
 
@@ -4222,7 +4222,7 @@ question RC1, from revision 7's first execution).*
 > tests child's item `PENDING` (`#14`, refused again). The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
-> **First execution of revision 2, 2026-10-13, ruled under [R-072](requests.md#r-072) ([OQ-249](../architecture/open-questions.md)),
+> **First execution of revision 2, 2026-10-13, ruled under [R-072](requests.md#r-072) ([OQ-249](../architecture/open-questions.md#oq-249)),
 > built by fin33 (`fin33-delegation-targets-and-plan`):** built as written, and the text met the code in two places.
 >
 > - **The held set is read at each call, through the run.** `todoTool` takes `TodoToolOptions.held`

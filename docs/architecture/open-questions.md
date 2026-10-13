@@ -12562,6 +12562,8 @@ once built.
 `instance-order.test.ts`, red on the code before, and `pnpm workspace-proof`'s scenario 13b (63 passed; the unrepaired build
 failed its new checks). The report-back is in place in ADR-0055.
 
+<a id="oq-249"></a>
+
 **OQ-249 — Does REQ-TOOLS-145's single active task bound a coordinator's parallel delegations?** *(REQ-TOOLS-145, "at most one
 task may be `IN_PROGRESS` at a time"; REQ-TOOLS-146, `replace`'s protection of the active task; `PD-TOOLS-008` revision 1,
 "Everything else REQ-TOOLS-145 fixes still governs: at most one task is IN_PROGRESS"; REQ-TOOLS-147, the Agent plan as the
@@ -12634,6 +12636,8 @@ scripted `done` step closing each item with `update`; the live run's `heldItemRe
 (`apps/desktop/scripts/lib/coordinator-todo.mjs`). Shown in the built app by `pnpm mission-proof` item 1e. The note is repaired:
 [`a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md`](../defects/fixed/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md).
 
+<a id="oq-228"></a>
+
 **OQ-228 — Which personas may a delegation name?** *(REQ-MCP-014, `intent-classifier` and `project-initializer` "are personas
 that are not delegation targets"; REQ-ORCH-126, `gatekeeper` "never as an ordinary delegation target"; REQ-ORCH-028, the
 delegation vocabulary; REQ-ORCH-034, the unknown-role rejection "listing the known role names and the supported aliases rendered
@@ -12692,6 +12696,8 @@ admission check), `fileWriters` and the run host's `delegateCatalogue`; `persona
 each "(red)" case red on the code before), `run-host/tools.test.ts` (the catalogue under the default configuration and under one
 overriding `intent-classifier`) and `tools/delegation.test.ts` (`gatekeeper` no longer among the research and decision roles). The
 note is repaired.
+
+<a id="oq-229"></a>
 
 **OQ-229 — Does a persona's `delegates_to` narrow which roles it may delegate to?** *(REQ-CONFIG-101, `delegates_to` "roles this
 one may spawn", "defaulting to empty"; REQ-CONFIG-045, a user's personas; REQ-CONFIG-062, the role vocabulary a file is
@@ -12763,6 +12769,8 @@ only `gatekeeper`, the check ahead of a continuation, the writers among the targ
 a follow-up not checked, the key unset), `run-host/tools.test.ts` (the catalogue equal to what admission accepts in both
 directions; a global list narrowing and a workspace `[]` lifting it), `run-host/configuration.test.ts` (the carried list and the
 four log lines) and `tools/delegation.test.ts`. The note is repaired.
+
+<a id="oq-250"></a>
 
 **OQ-250 — Does the coordinator's routing table send the work a route implies to a persona whose tools allow it?**
 *(REQ-ORCH-028, the routing table from need to role, with capability clauses for `codebase-analyst` and `librarian` only;

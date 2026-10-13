@@ -11516,7 +11516,7 @@ reaches have arguable verbs and go to a note of their own, with two further ques
 [`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../defects/fixed/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
 [`pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md`](../defects/fixed/pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md)
 and
-[`the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md`](../defects/the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md),
+[`the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md`](../defects/fixed/the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md),
 recorded and not repaired.
 
 **As built** (fin29, 2026-10-07). `PD-TOOLS-002`'s Narrows line names REQ-TOOLS-071, REQ-TOOLS-072 and REQ-SANDBOX-104 and
@@ -12119,3 +12119,54 @@ one-line derivation of REQ-SESSION-139). Leaving MCP out would reopen the same d
 REQ-SESSION-139 as extended and kept REQ-TOOLS-112 and REQ-SESSION-136 as extended; [OQ-237](#oq-237), ruled and built the
 same day, reads a change to an exact enumeration as a narrowing, so the revision narrows all three (recorded in the
 directive's disposition).
+
+<a id="oq-239"></a>
+
+**OQ-239 — Does the launch dialog owe the unattended advisory for `ask` and `restricted`?** *(REQ-TOOLS-072, "before the
+application starts an unattended run"; REQ-TOOLS-192, "a run whose session will have no approval presenter"; REQ-SANDBOX-107,
+"whenever the session being started would be unattended"; `PD-TOOLS-002`, which empties the advisory for `autonomous` and
+says that for `ask` and `restricted` it "behaves as today"; REQ-TOOLS-053, REQ-TOOLS-069, REQ-SANDBOX-101 and ADR-0019, what
+makes a run attended; REQ-SANDBOX-130, the disclosure shown "when that advisory is empty". Raised 2026-10-13 from
+[`the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md`](../defects/fixed/the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md),
+recorded 2026-10-07 at OQ-222's request, and ruled the same day under the owner's delegation; the consortium's question UA1.)*
+
+`unattendedAdvisory` (`packages/ui/src/StartSessionDialog.tsx`) took the permission mode, whether confinement was active and
+the permissive opt-in, discarded all three and returned `''`, so the "Start session" dialog never showed the advisory, and its
+comment said the `ask`/`restricted` behaviour was kept. `apps/desktop/src/renderer/main.tsx` read the mode for it and passed
+`allowUnsandboxedAutonomous: false`, "the side that produces the advisory". Whether `''` is right for `ask` and `restricted`
+was not settled.
+
+**What a ruling decides.** Whether a run the dialog starts can be unattended at launch, and so whether the three advisory
+requirements owe it any text.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** the Start session dialog's
+unattended advisory is empty for every permission mode, **confirmed as built**. Every run that dialog starts is attended at
+launch (REQ-TOOLS-053, REQ-TOOLS-069, REQ-SANDBOX-101, ADR-0019), so the unattended-launch condition that REQ-TOOLS-072,
+REQ-TOOLS-192 and REQ-SANDBOX-107 (as `PD-TOOLS-002` narrows them) attach the advisory to never holds on that surface, and
+those requirements are met as written. The misleading comment and the dead inputs are corrected and the reason is pinned by a
+test. **Forward guard:** a future surface that can start a run with no registered presenter must have the advisory's text
+re-ruled before it shows one, because under `PD-TOOLS-002` the settings the old text named
+(`runtime.allow_unsandboxed_autonomous`, the downgrade to `ask`) are inert or insufficient. No directive, no specification
+text and no back-pointer change.
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended confirming the empty advisory as built for all three modes, since every
+  dialog start is attended and a non-empty advisory would show a false sentence on every default launch; correct the code
+  and the record to say why, pin it with a test that renders the dialog, and close the note.
+- **Advocate B (the system's lens)** recommended the same reading as a record-only amendment: an OQ entry, the comment
+  corrected, the behaviour pinned, the note moved; and a guard that a windowless launch surface re-rules the text first.
+
+The ruling labelled it confirm-as-built, as A did: the code comment, the inputs and the test are more than a record-only
+amendment. It took B's forward guard and A's render-level test, so REQ-SANDBOX-130's disclosure is shown to survive the empty
+advisory. The evidence it checked: `PresenterRegistry.attended` is true while a window is registered and liveness has not
+lapsed (`packages/agent-tools/src/approvals.ts`); each main window registers on creation (`main-windows.ts`,
+`registerPresenter`; `index.ts`); the last window closing quits (`window-all-closed`); and `ed1c167` shows the function
+already returned `''` for `ask` and `restricted` before `PD-TOOLS-002`, so "as today" never meant visible text. The
+liveness-lapse edge is narrow: a start reaches the run host through main, the process whose reply clears the lapse, and the
+run reports any refusal as REQ-SANDBOX-107 allows.
+
+**As built (2026-10-13, fin34):** `unattendedAdvisory()` takes no input and returns `''`, its comment stating this ruling;
+the renderer's launch state no longer carries `permissionMode` or `allowUnsandboxedAutonomous`, and the dialog is given
+`unattendedAdvisory()`. The `advisory` prop and the `start-session-advisory` paragraph stay as REQ-TOOLS-192's presentation
+seam. Pinned by `packages/ui/src/start-session-advisory.test.ts` (its first case red on the old form: the function took one
+input). Nothing a user sees changes.

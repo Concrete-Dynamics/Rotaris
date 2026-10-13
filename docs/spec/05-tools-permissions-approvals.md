@@ -463,12 +463,18 @@ Independently of exit code, a pipeline check adds the warning `Pipeline command 
 
 > **Extended by [`PD-TOOLS-016`](../product/directives.md#pd-tools-016), 2026-10-13.** The success of an `edit` that matches
 > one window at REQ-TOOLS-136 level 2, 3 or 4 and gave a replacement line the file's `\r` adds one sentence after the match
-> level: `new_string was written with the file's CRLF line endings.`
+> level: `new_string was written with the file's CRLF line endings.`; and, since revision 3 (2026-10-13, OQ-260), such an edit
+> whose carried result would leave the file's bytes unchanged is refused with nothing written, naming the match level and the
+> window's lines.
 
 > **Extended by [`PD-TOOLS-017`](../product/directives.md#pd-tools-017), 2026-10-13.** The success of an `edit` that matched at
 > REQ-TOOLS-136 level 1 or with `replace_all` and gave the replacement the file's `\r` adds the same sentence after the message,
 > and an `edit` whose result would leave the file's bytes unchanged once the file's line endings are carried is refused like
 > identical strings, naming `overwrite` as the way to change line endings.
+
+> **Extended by [`PD-TOOLS-018`](../product/directives.md#pd-tools-018), 2026-10-13.** An `insert` of non-empty `content` into a
+> CRLF file (read on the lines either side of the insertion point) gives every line break it writes the file's `\r`, and its
+> success then adds `content was written with the file's CRLF line endings.`
 
 **REQ-TOOLS-136** — Edit matching runs four levels, and the first level that produces any match decides the outcome: (1) exact; (2) exact after trailing whitespace is stripped from every line on both sides; (3) exact after one and the same leading-whitespace prefix is added to or removed from every line of the candidate, so a block differing only by a uniform indentation shift still matches; (4) fuzzy — the single best-scoring window of the same number of lines, accepted only at similarity ≥ 0.85. A match above level 1 is flagged in the result (`Match level: <level>`; a fuzzy match adds `(similarity: 0.NN)` and `Verify the result.`). When no level matches, the message names the levels tried and the file's line count and suggests a fresh read or `overwrite`. When a level matches more than once, the result is `Found <n> occurrences of old_str at lines <a, b, …>` with guidance to add surrounding context or set replace-all. Replace-all replaces every exact occurrence as plain text. Level 4 scores each candidate window with the similarity function of REQ-TOOLS-188, comparing the window's text against the old-string text; when two windows score equally the one starting on the lower line number wins, so a fuzzy edit is deterministic on any given file.
 

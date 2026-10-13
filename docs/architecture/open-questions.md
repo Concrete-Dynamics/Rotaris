@@ -13232,7 +13232,8 @@ before. The note is repaired.
 **OQ-259 — Does a `write_file` insert into a CRLF file carry the file's line endings into the inserted lines?**
 *(REQ-TOOLS-135, `insert` and its success; `PD-TOOLS-016` and `PD-TOOLS-017`, which keep a CRLF file's line endings for every
 `edit`; `PD-STARTUP-001`, Windows the only platform shipped. Raised 2026-10-13 by fin38 from the R-072 consortium's ruling of
-[OQ-254](#oq-254), which confirmed the case in the code and asked that it be recorded as its own note and question. Open.)*
+[OQ-254](#oq-254), which confirmed the case in the code and asked that it be recorded as its own note and question.
+**Ruled 2026-10-13.**)*
 
 `write_file`'s `insert` joins the file's lines and the content's lines with `\n`. The file's lines keep their `\r` and the
 inserted ones have none unless the caller sent it: `a\r\nb\r\n` with `content` `X` at `insert_line` 1 leaves `a\r\nX\nb\r\n`,
@@ -13246,13 +13247,43 @@ No requirement's text is contradicted: REQ-TOOLS-135 names `insert_line` and its
 insertion point or the file's other lines) gives each inserted line the file's `\r`, with `PD-TOOLS-017`'s success sentence
 (extending REQ-TOOLS-135), or stands as built, `overwrite`'s and `insert`'s bytes being the caller's.
 
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a `write_file` insert of non-empty
+`content` into a CRLF file gives every line break it writes the file's `\r` — the break after each inserted line that a break
+follows, and the break added after a previously unterminated last line — never doubling one and changing no byte of the file's
+existing lines. The test is `PD-TOOLS-016` clause 2's, read on the file's line before the insertion point and the line at it
+(the file's other lines when neither is followed by a line break; an empty file is not CRLF), and the success then adds
+`content was written with the file's CRLF line endings.`. Minted as a new directive,
+[`PD-TOOLS-018`](../product/directives.md#pd-tools-018), extending REQ-TOOLS-135 and naming `PD-TOOLS-016` and `PD-TOOLS-017`;
+`PD-TOOLS-017` is not revised, its case being `operation: edit` and its no-op and `content_hash:` clauses edit-only. An insert
+with empty `content` writes nothing new and stays outside the case.
+
+The two recommendations weighed, and the ruling followed **both** — they recommended the same change and differed only on the
+vehicle:
+- **Advocate A (the user's lens)** recommended giving every line break an insert writes the file's `\r` with `PD-TOOLS-017`'s test,
+  write rule and success sentence, recorded as revision 1 of `PD-TOOLS-017` with an insert clause, so that one directive holds "line
+  endings belong to the file" for every incremental write. The ruling took A's edge cases, the unterminated end above all
+  (`a\r\nb` + `X\n` at 2 → `a\r\nb\r\nX\r\n`), and its reading that no refusal is needed.
+- **Advocate B (the system's lens)** recommended the same behaviour as a new directive, `PD-TOOLS-018`, since `docs/product/README.md`
+  keeps a revision for a change to a directive's own case and `PD-TOOLS-017`'s is `edit` alone; and added that LF lines an insert
+  leaves behind later fail `PD-TOOLS-016`'s test, so the 016/017 guarantees decay wherever an insert has been. The ruling took B's
+  vehicle and that reason; A's point that one directive is easier to find is met by `PD-TOOLS-018` naming both and by its
+  back-pointer at REQ-TOOLS-135.
+
+**Costs kept on record:** an insert can no longer write LF lines into a CRLF file (`overwrite` and `create` still write the
+caller's bytes); the test is local, so a mixed neighbourhood is written as given and existing drift is not repaired; an
+implementation built from the specification alone writes `content` as given.
+
+**What a live run then shows.** Nothing in the current live-run fixtures, which are LF files on Linux; an LF insert is unchanged.
+On Windows, an agent's insert into a CRLF file leaves the file uniformly CRLF, and the success adds "content was written with the
+file's CRLF line endings.".
+
 <a id="oq-260"></a>
 
 **OQ-260 — Is a window edit whose carried replacement leaves the file unchanged refused, or applied as a success?**
 *(REQ-TOOLS-135, `edit`'s "identical strings rejected"; `PD-TOOLS-016`, which carries a window match's line endings and, at
 level 2, the bytes of every line `new_string` repeats; `PD-TOOLS-017` clause 3, which refuses an exact or replace-all edit left
 with the file's own bytes. Raised 2026-10-13 by fin38 from the probe the R-072 consortium's ruling of [OQ-254](#oq-254) asked
-for. Open.)*
+for. **Ruled 2026-10-13.**)*
 
 A window edit can land on the window's own bytes once `PD-TOOLS-016` has carried it: `one\r\ntwo\r\nthree\r\n` edited `one
 \ntwo` → `one\ntwo` matches at level 2, pairs `two` with the file's `two\r` and gives `one` the window's `\r`, so the file is
@@ -13266,3 +13297,31 @@ The strings differ, so REQ-TOOLS-135's rejection of identical strings does not r
 **What a ruling decides.** Whether a window edit whose result equals the file is refused before writing, with no undo entry and a
 reply saying the file already holds that text (extending `PD-TOOLS-016` as `PD-TOOLS-017` clause 3 extends the exact edit), or
 stands as built.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a `write_file` edit that matches one
+window at REQ-TOOLS-136 level 2, 3 or 4, and whose carried result equals the file's bytes, fails before writing: no undo entry is
+pushed, the read record does not change, and the reply is `old_string matches <p> only at match level <N> (lines <a>-<b>), and
+those lines already hold new_string as this edit would write it; nothing to change. Use write_file's 'overwrite' to write a file
+exactly as given.` (`(line <a>)` for a one-line window). Published as [`PD-TOOLS-016`](../product/directives.md#pd-tools-016)
+revision 3, clause 4 "No-op, at levels 2, 3 and 4", which mirrors `PD-TOOLS-017` clause 3 for the window path; the PD-TOOLS-016
+back-pointer under REQ-TOOLS-135 is amended in place. The reply differs from `PD-TOOLS-017`'s "differ only in line endings",
+since at levels 2 to 4 the difference may be trailing whitespace, indentation or a fuzzy near miss. `haet_edit` is unchanged: its
+levels 2 and 3 already refuse (`PD-TOOLS-014`), a level-4 match replies as a miss, and level 1 is `PD-TOOLS-017`'s.
+
+The two recommendations weighed, and the ruling followed **both** — they agreed on the outcome, the vehicle and the cost:
+- **Advocate A (the user's lens)** recommended refusing the no-op as revision 3 of `PD-TOOLS-016`, showing the success false three
+  times over (nothing replaced, no CRLF written, the caller's intended fix never needed) and the live-run precedent in which a
+  model said a no-op "should have errored but didn't", and an undo entry that pushes a real one out of REQ-TOOLS-132's ten. The
+  ruling took A's argument from the user's view and its LF level-2 case.
+- **Advocate B (the system's lens)** recommended the same refusal as a clause within `PD-TOOLS-016`'s own case, since every other
+  edit path refuses its no-op and `docs/product/README.md` makes a change to a directive's own case a revision. The ruling took
+  B's reply text ("already hold new_string as this edit would write it"), which stays true at levels 3 and 4, and B's level-4
+  retry case; the overwrite hint is made general.
+
+**Costs kept on record:** a refusal is one more failed tool call, so its text says plainly there is nothing to change; a caller
+that relied on a no-op success to touch a file loses it (`overwrite` remains); an implementation built from the specification
+alone applies the no-op.
+
+**What a live run then shows.** Nothing: the live-run fixtures are LF files on Linux, and none of the six autopsies records a
+window edit that lands on the file's own bytes. If one occurs, the transcript shows a refused `write_file` call naming the match
+level and lines in place of a "+0 -0" write row.

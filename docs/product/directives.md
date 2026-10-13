@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Eighty-seven.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Eighty-eight.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -7300,6 +7300,10 @@ Narrows REQ-TOOLS-136 (a level-3 match the case names is refused rather than app
 `replace_all` are [`PD-TOOLS-017`](#pd-tools-017)'s**: the case's "Everything outside this case" names it, and the cost sentence
 no longer says an exact `old_string` converts endings; revision 1's text is quoted beneath each.*
 
+*Revision 3 (2026-10-13, [R-072](requests.md#r-072), ruling [OQ-260](../architecture/open-questions.md#oq-260)) — **a window
+edit whose carried result equals the file is refused**: clause 4 is added, and the cost sentence says so; revision 2's cost
+text is quoted beneath it. The case is unchanged: it already held the edit clause 4 refuses.*
+
 **The case, stated exhaustively.** `write_file` is called with `operation: edit`, `replace_all` false, `old_string` and
 `new_string` different, and `old_string` matches nowhere at REQ-TOOLS-136 level 1 and exactly one window at level 2, 3 or 4. At
 level 3 this directive applies after [`PD-TOOLS-015`](#pd-tools-015) has decided the replacement, and its refusal is unchanged.
@@ -7327,6 +7331,11 @@ levels and their order are unchanged *(— revision 2)*.
 3. **Success.** When clause 2 added at least one `\r`, the success SHALL add the sentence `new_string was written with the
    file's CRLF line endings.` after "Match level: N." — after `PD-TOOLS-015`'s sentence at level 3, and after "Verify the
    result." at level 4. Every other success is unchanged.
+4. **No-op, at levels 2, 3 and 4** *(— revision 3)*. When the single window's result, after `PD-TOOLS-015` and clauses 1 and
+   2, equals the file's bytes, the call SHALL fail before writing: no undo entry is pushed and the read record does not change.
+   The reply SHALL be: `old_string matches <p> only at match level <N> (lines <a>-<b>), and those lines already hold new_string
+   as this edit would write it; nothing to change. Use write_file's 'overwrite' to write a file exactly as given.` — for a
+   one-line window `(line <a>)`. The lines are the window's, numbered from 1 and cut at the file's last line.
 
 **Why, and what it costs.** REQ-TOOLS-136 says "a window match replaces whole lines" and is silent on what the replacement lines
 carry. On a CRLF file a multi-line `old_string` written with `\n` alone matches only at level 2, since stripping trailing
@@ -7339,7 +7348,16 @@ from `old_string` unchanged was not meant to change, so the tool already knows w
 refuse, and a level-2 refusal would fix nothing (its retry matches at level 1 and writes `new_string`'s LF lines verbatim).
 Levels 3 and 4 share the apply: an LF `old_string` with a typo on a CRLF file matches at level 4 and wrote the same mixed
 endings. The walk is the one the diff row's line LCS already takes, written out so a second implementation can reproduce it.
-What it costs: a window edit can no longer convert CRLF lines to LF, nor strip an unchanged line's trailing whitespace —
+Clause 4 *(— revision 3)*: carried this way, a window edit can land on the window's own bytes, and the build rewrote the
+file unchanged beside a success — probed by fin38, `one\r\ntwo\r\nthree\r\n` edited `one \ntwo` → `one\ntwo` answered "2 lines
+replaced by 2 at line 1 (+0 -0). Match level: 2. new_string was written with the file's CRLF line endings.", false three times
+over, with an undo entry that restored the same content and pushed a real one out of REQ-TOOLS-132's ten; an LF file does the
+same at level 2 (`foo ` → `foo` on `foo`), and a level-4 retry of an edit that already landed does it on any file. Every other
+edit path refuses its no-op (REQ-TOOLS-135's identical strings, `haet_edit`, `PD-TOOLS-017` clause 3), and clause 4's reply
+differs from `PD-TOOLS-017`'s because at levels 2 to 4 the difference may be whitespace, indentation or a fuzzy near miss
+rather than line endings. What it costs: a window edit can no longer convert CRLF lines to LF, nor strip an unchanged line's
+trailing whitespace, and a window edit that would leave the file's bytes unchanged is refused rather than applied *(— revision
+3)* —
 `overwrite` still does either, and an exact level-1 `old_string` still strips an unchanged line's trailing whitespace other
 than its `\r` ([`PD-TOOLS-017`](#pd-tools-017)) *(— revision 2)*; where `old_string` repeats a line, the walk fixes which copy's
 bytes a paired line takes; `write_file` and `haet_edit` still differ at level 2 (one applies, the other refuses with the
@@ -7347,6 +7365,9 @@ quote); and an implementation built from the specification alone writes `new_str
 
 > Revision 1 said, and no longer governs: "`overwrite` or an exact level-1 `old_string` still does either" — false once
 > `PD-TOOLS-017` keeps a CRLF file's line endings at level 1 too.
+
+> Revision 2 said, and no longer governs: "What it costs: a window edit can no longer convert CRLF lines to LF, nor strip an
+> unchanged line's trailing whitespace —" — it applied an edit that changed nothing as a success.
 
 > **Extends:** REQ-TOOLS-136, REQ-TOOLS-135
 
@@ -7459,6 +7480,44 @@ refusal).*
 > executors run unchanged inside the run host. Repairs
 > [`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../defects/fixed/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-tools-018"></a>
+
+### PD-TOOLS-018 — a `write_file` insert keeps a CRLF file's line endings
+
+**The case, stated exhaustively.** `write_file` is called with `operation: insert` on an existing, previously read file, with
+`insert_line` in bounds and `content` not empty. Everything else is REQ-TOOLS-135's, [`PD-TOOLS-016`](#pd-tools-016)'s and
+[`PD-TOOLS-017`](#pd-tools-017)'s, exactly as written; `create` and `overwrite` still write the caller's bytes.
+
+1. **The test.** The insertion is CRLF by `PD-TOOLS-016` clause 2's test, read on the file's line before the insertion point and
+   the line at it, where those exist: at least one of them is followed by a line break in the file, and every such line ends in
+   `\r`. When neither is followed by a line break, the file's other lines are read the same way. An empty file is not CRLF.
+2. **The write.** For a CRLF insertion, every line break the insert writes SHALL gain `\r` when the character before it in the
+   result is not `\r`: the break after each inserted line that a break follows, and the break added after a previously
+   unterminated last line. A `\r` is never doubled, no byte of the file's existing lines changes, and every other insertion is
+   written as given.
+3. **Success.** When at least one `\r` was added, the success SHALL add the sentence `content was written with the file's CRLF
+   line endings.` after "Inserted N lines into <p> at line L.". The line counts are unchanged.
+
+**Why, and what it costs.** REQ-TOOLS-135's `insert` names `insert_line` and its bounds and is silent on the line endings the
+inserted lines carry. The build joined the file's lines and `content`'s with `\n`, so on a CRLF file the inserted lines were LF
+among CRLF ones beside a clean success: probed by fin38, `a\r\nb\r\n` with `X` at line 1 left `a\r\nX\nb\r\n`
+([OQ-259](../architecture/open-questions.md#oq-259)). Windows is the only platform shipped (`PD-STARTUP-001`), where CRLF files
+are ordinary, and a model writing JSON tool arguments almost never sends `\r`. `PD-TOOLS-016` and `PD-TOOLS-017` ruled that line
+endings belong to the file and say nothing of the caller's intent, and LF lines an insert leaves behind later fail their test, so
+their guarantees decayed wherever an insert had been. It is a directive of its own rather than a revision of `PD-TOOLS-017`,
+whose case is `operation: edit` and whose no-op and `content_hash:` clauses cannot apply to an insert. What it costs: an insert
+can no longer write LF lines into a CRLF file (`overwrite` and `create` still write the caller's bytes); the test is local, so a
+mixed neighbourhood is written as given and existing drift is not repaired; and an implementation built from the specification
+alone writes `content` as given.
+
+> **Extends:** REQ-TOOLS-135
+
+*Ruled under the owner's delegation, 2026-10-13 ([OQ-259](../architecture/open-questions.md#oq-259)); logged as [R-072](requests.md#r-072).
+Extends REQ-TOOLS-135 (fills its silence on the line endings an insert writes, and adds one success sentence). Names
+`PD-TOOLS-016`, whose clause 2 test it reads, and `PD-TOOLS-017`, whose write rule and sentence it mirrors; neither is revised.*
 
 ---
 

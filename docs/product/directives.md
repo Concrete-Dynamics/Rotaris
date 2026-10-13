@@ -2800,6 +2800,17 @@ from OQ-240 (the consortium's question P3).*
 > `intent-classifier`, which the defaults call a persona outside the delegation vocabulary (the pack's finding P5; no
 > coordinator delegated to it). **Still owed:** the duress counts named above (briefs, `write_scope` refusals, rows spent on a
 > missing tool, stray files). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Reported back 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-228](../architecture/open-questions.md), the consortium's
+> question P5):** the build read "every persona that agent can delegate to" as **every `personas:` key of the configuration**
+> (`knownRoles()`, `Object.keys(cfg.personas)`), with `gatekeeper` among the research and decision roles; that reading stays
+> here, and is replaced by the **delegation targets**: every persona of the configuration except the three REQ-MCP-014 and
+> REQ-ORCH-126 reserve (`intent-classifier`, `project-initializer`, `gatekeeper`). The directive's text and dispositions are
+> unchanged; this is covered work.
+>
+> **Reported back 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-229](../architecture/open-questions.md), the consortium's
+> question DT1):** for a caller whose `delegates_to` names any persona, "every persona that agent can delegate to" means the
+> delegation targets that list names (REQ-CONFIG-101); an empty list narrows nothing.
 
 > **First execution of revision 5, 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-221](../architecture/open-questions.md)),
 > built by fin29:** built as written, and the text met the code in two places.

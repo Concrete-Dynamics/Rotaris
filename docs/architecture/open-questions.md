@@ -12523,3 +12523,113 @@ and `PD-TOOLS-006` revision 7.* `todoTool`'s `TodoToolOptions` (`held`, `delegat
 scripted `done` step closing each item with `update`; the live run's `heldItemReading`
 (`apps/desktop/scripts/lib/coordinator-todo.mjs`). Shown in the built app by `pnpm mission-proof` item 1e. The note is repaired:
 [`a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md`](../defects/fixed/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md).
+
+**OQ-228 — Which personas may a delegation name?** *(REQ-MCP-014, `intent-classifier` and `project-initializer` "are personas
+that are not delegation targets"; REQ-ORCH-126, `gatekeeper` "never as an ordinary delegation target"; REQ-ORCH-028, the
+delegation vocabulary; REQ-ORCH-034, the unknown-role rejection "listing the known role names and the supported aliases rendered
+as `<alias>-><target>`"; REQ-ORCH-038, an unknown role rejected with no spawn; `PD-TOOLS-006` revision 4, "every persona that
+agent can delegate to". Raised 2026-10-07 from the final live runs: finding P5 of the default autopsy at `a68f121` (pack
+`2026-10-07T06-48-50-123Z`, all ten sessions; 71 of 71 coordinator requests), recorded in
+[`delegate-offers-and-admits-personas-that-are-not-delegation-targets.md`](../defects/delegate-offers-and-admits-personas-that-are-not-delegation-targets.md);
+the consortium's question P5, numbered OQ-228 as the round assigned. **Ruled 2026-10-07.**)*
+
+`delegate`'s catalogue lists every persona the configuration holds: in the default live run at `a68f121` every coordinator
+request offered "intent-classifier (none of these: it neither reads nor writes workspace files nor runs commands)", and the
+built-in table's `gatekeeper` among the research and decision roles. The ledger resolves through the same resolver, so a
+delegation to either would be admitted, and a child of `intent-classifier` would run with an empty prompt and no tools. No
+coordinator tried. The specification keeps three personas out of delegation; the build read `PD-TOOLS-006` revision 4's "every
+persona that agent can delegate to" as every `personas:` key.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** `intent-classifier` is not
+delegable, and neither are the other two personas the specification reserves, `project-initializer` (REQ-MCP-014) and
+`gatekeeper` (REQ-ORCH-126), whether built in or configured under those names. One predicate, the **delegation targets**, decides
+what `delegate`'s catalogue lists, what admission and the ledger accept, and which personas the unknown-role rejection and the
+write-scope refusal name; a delegation to a reserved persona is refused `rejected` before any other admission check, with no
+record and no task id, by REQ-ORCH-034's unknown-role message carrying the targets, the aliases as `<alias>-><target>` and what
+the product runs that persona for. Every other persona the configuration holds, a user-defined one included, stays delegable,
+listed with its facets and accepted, as built. This is **covered work** under REQ-MCP-014, REQ-ORCH-126, REQ-ORCH-034 and
+REQ-ORCH-038; no directive. It records one reading: REQ-ORCH-034's "known role names" are the delegation targets. It corrects the
+reading revision 4's first execution built (every `knownRoles()` entry, with `gatekeeper` among the research and decision
+roles), which stays beside its replacement in `PD-TOOLS-006`'s revision 4 report; OQ-216's ruling text stands.
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended that the three reserved personas be left out of the catalogue and refused with
+  REQ-ORCH-038's unknown-role rejection and a reason that says why, through one shared predicate, user-defined personas staying
+  delegable. The ruling took A's reason that names what the product runs the persona for.
+- **Advocate B (the system's lens)** recommended the same predicate read by every reader — the catalogue, the ledger's
+  admission, the rejection text and the write-scope writers list. The ruling took B's rename of `knownRoles` to
+  `delegationTargets()`, so no reader can reach the unfiltered list, and the aliases REQ-ORCH-034 requires in the rejection,
+  which the resolver path dropped.
+
+Both showed that a catalogue-only fix would leave the ledger's rejection advertising the names and `fileWriters` able to list one,
+so the description could disagree with admission, the rule OQ-216 and OQ-220 secured. The ruling adds an order neither stated:
+this refusal comes first in `delegate()`'s admission, so OQ-220's todo-item refusals never answer a delegation that cannot happen.
+Whether `delegates_to` narrows which personas a caller may name is set aside as its own question, OQ-229: read as an
+allow-list, its empty default would forbid every delegation.
+
+**What a live run then shows.** Every coordinator request's `delegate` description lists twelve personas under the default
+configuration, `orchestrator` and the eleven specialists, each with its facets, and the two aliases; `intent-classifier` and
+`gatekeeper` appear in none (about 20 to 40 tokens saved per delegating request). No child of either is recorded. A coordinator
+that names one sees one `rejected` observation saying the product runs that persona itself and listing the targets and aliases,
+with no child row.
+
+**OQ-229 — Does a persona's `delegates_to` narrow which roles it may delegate to?** *(REQ-CONFIG-101, `delegates_to` "roles this
+one may spawn", "defaulting to empty"; REQ-CONFIG-045, a user's personas; REQ-CONFIG-062, the role vocabulary a file is
+canonicalised by; REQ-CONFIG-231 and REQ-CONFIG-232, the referential and cycle checks over the lists; REQ-CONFIG-246, a
+referential error with no one present refuses the run; REQ-CONFIG-464; REQ-ORCH-002, REQ-ORCH-028, REQ-ORCH-029, REQ-ORCH-030,
+REQ-ORCH-034, REQ-ORCH-038; REQ-TOOLS-005 and REQ-TOOLS-006, an absent narrowing narrowing nothing; `PD-TOOLS-006` revision 4.
+Raised 2026-10-07 by OQ-228's ruling, which set it aside, from the final live runs' finding P5 (the default autopsy at `a68f121`);
+recorded in
+[`a-personas-delegates-to-never-narrows-its-delegations.md`](../defects/a-personas-delegates-to-never-narrows-its-delegations.md);
+the consortium's question DT1, numbered OQ-229 as the round assigned. **Ruled 2026-10-07.**)*
+
+The loader parses, canonicalises and validates `delegates_to`, reports an entry that names no role and any cycle through the
+lists, Settings shows those messages, and an unattended run refuses to start over them. Admission and the catalogue never read
+the list: a delegation is admitted to any target whatever the caller's list holds. Read as an allow-list, the empty default would
+forbid every delegation, and no shipped persona sets the key.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** when a persona's `delegates_to` names
+any persona, that agent may delegate only to the delegation targets the list names. Targets are matched after alias resolution,
+and OQ-228's three reserved personas stay refused whatever the list holds. That agent's `delegate` catalogue lists only those
+personas, plus the aliases whose target is among them. Admission refuses any other persona as `rejected`, before any record
+exists and with no task id, with a reason that names the caller's `delegates_to` and lists its targets. An empty list is the
+default and what every shipped persona carries, and it narrows nothing: the shipped orchestrator, and every configuration that
+never sets the key, keep OQ-228's delegation targets. A persona stops delegating only when `delegate` is left out of its `tools`.
+This is **covered work** under REQ-CONFIG-101 ("roles this one may spawn"), read together with REQ-CONFIG-045, -062, -231, -232
+and -464, REQ-ORCH-002, -028, -029, -030, -034 and -038, and REQ-TOOLS-005 and -006; no directive and no back-pointer.
+
+**The reading recorded.** An empty list narrows nothing at any layer, so a workspace that writes `[]` lifts a global list;
+entries are role names, matched against the persona a delegation resolves to after alias resolution; OQ-228's reserved personas
+stay refused; the list removes no tool; REQ-ORCH-034's "known role names" for a narrowed caller are its permitted targets. **The
+reading rejected, kept beside its reason:** "an empty list means spawn none" — no shipped persona carries the key, `orchestrator`
+alone declares `delegate`, and REQ-ORCH-002, -028 and -029 require it to delegate, so it would stop every shipped run; a
+populated default would instead hide each persona a user adds (REQ-CONFIG-045) and reverse OQ-228. REQ-CONFIG-102, -103 and
+REQ-TOOLS-006's run allow-list each read an absent narrowing as no narrowing. If a later round reads the empty case as departing
+from REQ-CONFIG-101, it lands as `PD-CONFIG-004`, narrowing REQ-CONFIG-101 for the empty case alone, and the build stays as ruled.
+
+**What it costs.** REQ-ORCH-028's routing table still names roles a narrowed coordinator may not reach (each such delegation is
+refused once, 17.7 to 19.6 s a refused step); REQ-ORCH-030's diagnosis route is refused when the list leaves out
+`codebase-analyst` and `librarian`; during a plan cycle a list naming only implementers leaves no admissible delegation; a list
+naming its own persona, for example to keep a child orchestrator, is reported as a delegation cycle at every load (REQ-CONFIG-232),
+which refuses an unattended run (REQ-CONFIG-246), so such a coordinator runs attended; and lists already in users' files start to
+bind after the upgrade.
+
+The two recommendations weighed, and the ruling followed **both**; they take the same position:
+- **Advocate A (the user's lens)** recommended that a non-empty list narrow the catalogue and admission to the targets it names,
+  aliases resolved first, the reserved personas still refused, a delegation outside it refused `rejected` with a reason naming the
+  caller's `delegates_to`, and an empty list narrowing nothing. The ruling took A's sentence telling a narrowed caller its
+  catalogue is narrowed, and the layering test (a workspace `[]` lifting a global list).
+- **Advocate B (the system's lens)** recommended the same, with the refusal as REQ-ORCH-034's unknown-role message listing the
+  caller's permitted personas and aliases, as covered work. The ruling took B's placement of this ruling in the OQ OQ-228's record
+  raised, and the run's log lines.
+
+The ruling adds three things neither stated: a log line for an explicitly empty list on a persona that holds `delegate`, the
+order of the checks (unknown name, then a reserved persona, then a persona outside a non-empty list, all ahead of the plan gate,
+the write scope, the continuation check and OQ-220's todo-item checks), and REQ-CONFIG-246's cost for a list naming its own
+persona.
+
+**What a live run then shows.** Nothing changes in the default or duress live runs, which set no `delegates_to`: every
+coordinator request's description stays as OQ-228 leaves it and admission is unchanged. A run whose configuration gives the
+coordinator a list shows only the listed delegation targets with the sentence saying the catalogue is narrowed, each delegation
+outside the list as one `rejected` observation naming the list with no child row, and one log line at setup for an entry that
+permits nothing. The evidence is scripted only.

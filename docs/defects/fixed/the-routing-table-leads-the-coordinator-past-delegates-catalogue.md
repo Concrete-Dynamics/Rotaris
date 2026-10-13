@@ -24,3 +24,13 @@ revision 4's catalogue say what each persona can do.
 
 - `packages/engine/src/children/personas.ts` — `ROUTING`, the coordinating instructions' routing table.
 - `packages/agent-tools/src/tools/delegation.ts` — `renderDelegateCatalogue`, the catalogue's closing instruction.
+
+## Outcome
+
+Repaired 2026-10-13 (fin33, `fin33-delegation-targets-and-plan`) as [OQ-241](../../architecture/open-questions.md) rules it,
+`PD-TOOLS-006` revision 8: the routing table closes with one fixed sentence (`ROUTING_WORK_SENTENCE`,
+`packages/engine/src/children/personas.ts`) sending the work a route implies to a persona whose catalogue entry allows it and the
+route's persona's answer on to one that has the tools, and the catalogue's closing instruction forbids a brief offering a command
+or tool the persona's entry lacks (`renderDelegateCatalogue`). Pinned by `packages/engine/src/children/personas.test.ts` and
+`packages/agent-tools/src/tools/delegation.test.ts`, both red on the code before; the live run counts both measures
+(`apps/desktop/scripts/lib/routing-misses.mjs`). The measure is the next duress live run, against OQ-216's target of zero.

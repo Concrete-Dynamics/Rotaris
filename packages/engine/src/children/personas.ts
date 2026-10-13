@@ -276,7 +276,17 @@ export function runOverrideLayer(override: 'single' | 'swarm' | null, grant: Int
  * runs of 2026-10-06 the coordinator gave `codebase-analyst` a write task (OQ-216, covered work). What every persona's tools
  * let it do is stated in `delegate`'s description, built per caller (PD-TOOLS-006 revision 4).
  */
-const ROUTING = 'Route work to specialists: an ambiguous or under-specified request → requirements-engineer; a question about the repository as it stands → codebase-analyst, which reads the workspace but does not modify it; a question answerable only from outside the repository → librarian, which likewise does not modify the workspace; design → architect; an ordered plan → planner; implementation → coding-agent; testing → tester; documentation → docs-writer; behaviour-preserving restructuring → refactorer; final acceptance → verifier.';
+/**
+ * PD-TOOLS-006 revision 8 (OQ-241, ruled 2026-10-07 under R-072): the one sentence that closes the routing table, the same for
+ * every configuration and naming no persona's tools, so it stays true under every `tools:` override, `tool_restrictions` entry
+ * and `delegates_to`: the route names whose judgement a need calls for, and `delegate`'s catalogue says who can do the work. The
+ * reason it exists, kept beside it: with revision 4's catalogue in all 35 coordinator requests of the duress live run at a68f121,
+ * the coordinator still gave `architect` `docs/decisions.md` with a write scope (call 115, as "design → architect" reads) and offered
+ * a docs-writer `node --test` (call 114); the same task had gone to `codebase-analyst` at c2fdd6a (call 107). A per-route clause computed
+ * from each caller's grants (the ruling's advocate A) is the named next step if the duress target of zero is missed again.
+ */
+export const ROUTING_WORK_SENTENCE = "Each route names the persona whose judgement the need calls for; give the work itself to a persona whose entry in delegate's list allows it: a file to write, whether a design or decision document, a plan or a report, needs one that writes workspace files, and a test or other command to run needs one that runs commands. Where the route's persona lacks what the work needs, ask it for its answer and hand that answer to one that has it, through depends_on or inherited_context.";
+const ROUTING = `Route work to specialists: an ambiguous or under-specified request → requirements-engineer; a question about the repository as it stands → codebase-analyst, which reads the workspace but does not modify it; a question answerable only from outside the repository → librarian, which likewise does not modify the workspace; design → architect; an ordered plan → planner; implementation → coding-agent; testing → tester; documentation → docs-writer; behaviour-preserving restructuring → refactorer; final acceptance → verifier. ${ROUTING_WORK_SENTENCE}`;
 
 export const BUILT_IN_PERSONAS: Readonly<Record<RoleName, Persona>> = Object.freeze({
   orchestrator: persona('orchestrator', BUILT_IN_ROLE_TOOLS['orchestrator'], ORCHESTRATOR_COORDINATING(ROUTING), { coordinatorOnly: true }),

@@ -12669,7 +12669,7 @@ REQ-TOOLS-001, the three facets; REQ-CONFIG-100, a configured `system_prompt` re
 `PD-TOOLS-006` revisions 3 (the write-scope refusal) and 4 (the catalogue); OQ-216, whose target of zero the duress run
 at `a68f121` missed; OQ-228 and OQ-229, the delegation targets. Raised 2026-10-07 from the final live runs: finding D3 of the duress
 autopsy at `a68f121` (pack `2026-10-07T07-09-30-708Z`, session `e6747bd0`, `#114`, `#115`, `#164`), recorded in
-[`the-routing-table-leads-the-coordinator-past-delegates-catalogue.md`](../defects/the-routing-table-leads-the-coordinator-past-delegates-catalogue.md);
+[`the-routing-table-leads-the-coordinator-past-delegates-catalogue.md`](../defects/fixed/the-routing-table-leads-the-coordinator-past-delegates-catalogue.md);
 the consortium's question D3. The round assigned it OQ-233, which fin32 took on main for `write_file`'s level-3 shift; OQ-234 to
 OQ-240 being taken, it takes OQ-241, the next free number. **Ruled 2026-10-07.**)*
 
@@ -12712,4 +12712,11 @@ no routing sentence. In the duress run: 0 `write_scope` refusals for a non-write
 target's entry lacks; a design or decision document such as `docs/decisions.md` goes to a docs-writer directly or with
 `architect`'s answer handed on through `depends_on` or `inherited_context`. The harness's duress NOTE prints both counts;
 missing-shell asides are counted only. The default run is unchanged apart from the tokens.
+
+*Built 2026-10-13 (fin33, `fin33-delegation-targets-and-plan`); its first execution is reported in `PD-TOOLS-006` revision 8.*
+`ROUTING_WORK_SENTENCE` closes `ROUTING` (`packages/engine/src/children/personas.ts`); `renderDelegateCatalogue`'s closing
+instruction carries the brief clause (`packages/agent-tools/src/tools/delegation.ts`); the live run's NOTE counts both measures
+(`apps/desktop/scripts/lib/routing-misses.mjs`). Pinned by `children/personas.test.ts` (the sentence verbatim after the last route,
+naming no persona; the direct-work swap and a configured `system_prompt` carrying neither) and `tools/delegation.test.ts` (the brief
+clause), both red on the code before. The note is repaired.
 

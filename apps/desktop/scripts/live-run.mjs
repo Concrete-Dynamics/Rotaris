@@ -139,6 +139,7 @@ import { KNOWN_RESTATEMENTS, restatedFacts } from './lib/restated-facts.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
 import { preserveSummary, summaryReading } from './lib/summary-sections.mjs';
 import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
+import { routingMissReading } from './lib/routing-misses.mjs';
 import { agentPlanTaskCount, coordinatorTodoReading, heldItemReading, launchRunOverride, planItemIds, rootAgentPlan, todoItemReading } from './lib/coordinator-todo.mjs';
 import { PAUSE, pauseEvalSteps, pauseReading } from './lib/resume-pause.mjs';
 import { typingAllowanceMs } from './lib/prompt-typing.mjs';
@@ -1014,6 +1015,28 @@ function checkCoordinatorTodo() {
 }
 
 /**
+ * PD-TOOLS-006 revision 8 (OQ-241, R-072) over every preserved session (`lib/routing-misses.mjs`): OQ-216's two counts, each with
+ * its target of zero — `delegate` refused for a `write_scope` given to a persona that cannot write files, and a child's call of a
+ * tool it does not hold refused at the gate. NOTEs: the enforced bounds answered each; the duress run at a68f121 had one of each.
+ */
+function checkRoutingMisses() {
+  if (preservedSessions.length === 0) return;
+  let r;
+  try {
+    const Database = require('better-sqlite3');
+    const db = new Database(oneDatabase(), { readonly: true });
+    try {
+      r = routingMissReading(preservedSessions.map(({ scenario, sessionId }) => ({ scenario, rootNames: db.prepare('SELECT DISTINCT root_persona FROM iterations WHERE session_id = ?').all(sessionId).map((row) => row.root_persona), calls: readToolCalls(sessionId) })));
+    } finally { db.close(); }
+  } catch (cause) {
+    check(false, 'the delegate and child calls of every session the run kept were read for PD-TOOLS-006 revision 8', cause instanceof Error ? cause.message : String(cause));
+    return;
+  }
+  noted('write scopes given to a persona that cannot write files, and child calls of a tool they do not hold (PD-TOOLS-006 revision 8, OQ-241; target 0 each)',
+    `${r.scopeRefusals.length} write-scope refusal(s)${r.scopeRefusals.length === 0 ? '' : ` (${r.scopeRefusals.map((x) => `${x.scenario} #${x.ordinal}: ${x.persona}`).join(', ')})`}; ${r.unknownTools.length} unknown-tool call(s) by a child${r.unknownTools.length === 0 ? '' : ` (${r.unknownTools.map((x) => `${x.scenario} #${x.ordinal}: ${x.agent} ${x.tool}`).join(', ')})`}`);
+}
+
+/**
  * PD-TOOLS-014 (OQ-231, R-072) over every preserved session (`lib/near-miss-edits.mjs`): each `haet_edit`/`haet` refusal
  * that named a match level, whether the same agent probed the file through its terminal before its next edit, or within its
  * next three calls where it never edits again (finding D5 of
@@ -1158,6 +1181,7 @@ function finish(code) {
   // Every session's tool-call record, read while the sandbox still holds the store (`checkToolRecord`).
   checkToolRecord();
   checkCoordinatorTodo();
+  checkRoutingMisses();
   checkNearMissEdits();
   results.finishedAt = new Date().toISOString();
   results.checks = checks;

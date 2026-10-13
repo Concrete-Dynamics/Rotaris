@@ -206,6 +206,10 @@ Invariants:
   every coordinator's description with no edit beyond step 2. The same resolution answers which delegations are
   implementation delegations (`implementationRole`, injected as `SessionsDeps.implementationRole`), so the todo-item
   refusals of `PD-TOOLS-006` revision 6 (OQ-220) and the description never disagree about a persona.
+- **What the coordinator is told about who does the work** lives in two places, and neither names a persona's tools twice: the
+  facts are `delegate`'s catalogue (`renderDelegateCatalogue`, computed per caller), and the routing table (`ROUTING`,
+  `engine/children/personas.ts`) only points to it (`ROUTING_WORK_SENTENCE`, `PD-TOOLS-006` revision 8). A per-route capability
+  clause would make the built-in prompt a per-configuration render, which `entryInstructionsFor`'s constant comparison forbids.
 - **What the run does to the caller's own plan at admission** (`PD-TOOLS-006` revision 7, OQ-240) is the run host's, not the
   engine's: the accepted `DelegateOutcome` hands back the resolved `todoItem`, and `createToolPort` passes `delegateTool` a
   `markItem` over the port's own `TodoList`, the instance the `todo` tool holds, so the plan the agent reads and the one stored

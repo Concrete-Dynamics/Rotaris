@@ -1279,7 +1279,10 @@ under this agent's `tool_restrictions` map, with this run's prerequisites; the p
 whose targets exist, then the instruction to ask a persona only for work its tools allow and to hand command output on
 through `depends_on` or `inherited_context` (`renderDelegateCatalogue`, `agent-tools`). It is computed once, at port
 creation. The coordinator's routing table (`ROUTING`, `children/personas.ts`) carries REQ-ORCH-028's two capability clauses
-for `codebase-analyst` and `librarian`; a configured `system_prompt` replaces it, and not the description.
+for `codebase-analyst` and `librarian`; a configured `system_prompt` replaces it, and not the description. Since `PD-TOOLS-006`
+revision 8 (OQ-241) the table closes with one fixed sentence (`ROUTING_WORK_SENTENCE`) that names no persona's tools and sends the
+work a route implies to a persona whose catalogue entry allows it, so the prompt stays the constant `entryInstructionsFor`
+recognises; the catalogue's closing instruction also forbids a brief offering a command or tool the persona's entry lacks.
 
 **Which personas a delegation may name (OQ-228, OQ-229, ruled 2026-10-07 under R-072; fin33).** One list answers it:
 `delegationTargetsFor(resolver, caller)` (`children/personas.ts`) — the resolver's `delegationTargets()` (every configured

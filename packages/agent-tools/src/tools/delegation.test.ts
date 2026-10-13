@@ -153,7 +153,9 @@ describe('delegate — what each persona can do (PD-TOOLS-006 revision 4)', () =
   it('closes the catalogue with the instruction to ask a persona only for work its tools allow, and how to hand command output on', () => {
     const text = description();
     expect(text).toContain("(tool-server and plugin tools are not described)");
-    expect(text).toContain('Ask a persona only for work its tools allow: a persona that does not run commands cannot run tests, builds or scripts, and one that does not write workspace files cannot change a file.');
+    // PD-TOOLS-006 revision 8 (OQ-241): the brief clause. In the duress run at a68f121 a brief offered `node --test` to a
+    // docs-writer, which holds no terminal (call 114), and the child called a tool that does not exist (call 164).
+    expect(text).toContain('Ask a persona only for work its tools allow, and never write in a brief that a command or tool its entry does not show is available to it: a persona that does not run commands cannot run tests, builds or scripts, and one that does not write workspace files cannot change a file.');
     expect(text).toContain('Where a persona that runs no commands needs command output, delegate the command to a persona that runs commands and hand its result on with depends_on or inherited_context.');
   });
 

@@ -2852,6 +2852,19 @@ from OQ-240 (the consortium's question P3), revision 8 from OQ-241 (the consorti
 > failed child before. No stray workaround file, no impossible brief on a failed child's path, and the answer claimed no test run.
 > The target of zero was missed for revision 4 alone; revision 8 is the next step, measured against the same target.
 
+> **First execution of revision 8, 2026-10-13, ruled under [R-072](requests.md#r-072) ([OQ-241](../architecture/open-questions.md)),
+> built by fin33 (`fin33-delegation-targets-and-plan`):** built as written. The sentence is `ROUTING_WORK_SENTENCE`, appended to
+> `ROUTING` after "final acceptance → verifier." (`packages/engine/src/children/personas.ts`), so `BUILT_IN_ORCHESTRATOR_PROMPT` stays
+> a constant and `entryInstructionsFor` still swaps it whole on a direct-work grant; a configured `system_prompt` carries neither the
+> routes nor the sentence. The brief clause opens the catalogue's closing instruction ("Ask a persona only for work its tools
+> allow, and never write in a brief that a command or tool its entry does not show is available to it: …"). **What was measured.**
+> `children/personas.test.ts` (the sentence verbatim after the last route, red before; no persona of the vocabulary named; the swap
+> and a configured prompt) and `tools/delegation.test.ts` (the clause, red before); `lib/routing-misses.test.ts` pins the harness
+> NOTE against the a68f121 duress shapes (`#115`, `#164`). **What was not measured.** No live run: the next duress run is the
+> measure — 0 `write_scope` refusals for a non-writer and 0 briefs offering a command or tool the target lacks, a design or decision
+> document going to a docs-writer directly or with `architect`'s answer handed on; the reopening condition is OQ-241's. The row is
+> in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 > **First execution of revision 5, 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-221](../architecture/open-questions.md)),
 > built by fin29:** built as written, and the text met the code in two places.
 >

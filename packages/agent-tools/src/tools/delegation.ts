@@ -112,6 +112,11 @@ export function grantFacets(tools: readonly string[]): readonly string[] {
  * same list for every caller, and in both duress live runs of 2026-10-06 the coordinator briefed `docs-writer` children,
  * which hold no `terminal`, to run the tests themselves (findings L4 and N3).
  */
+/*
+ * PD-TOOLS-006 revision 8 (OQ-241): the closing instruction also forbids a brief offering a command or tool the persona's entry
+ * does not show. It read "Ask a persona only for work its tools allow: …" until then, and in the duress live run at a68f121 a
+ * brief still offered `node --test` to a docs-writer (call 114), which then called `run_command` (call 164).
+ */
 export function renderDelegateCatalogue(catalogue: DelegateCatalogue): string {
   const personas = catalogue.personas.map((p) => {
     const facets = grantFacets(p.tools);
@@ -124,7 +129,7 @@ export function renderDelegateCatalogue(catalogue: DelegateCatalogue): string {
     ? ` Your delegates_to (${catalogue.narrowedBy.join(', ')}) narrows this list: a delegation to any other persona is refused.`
     : ` Your delegates_to (${catalogue.narrowedBy.join(', ')}) leaves you no persona to delegate to: every delegation is refused.`;
   if (catalogue.personas.length === 0) return `You can delegate to no persona.${narrowed}`;
-  return `The personas you can delegate to, each with what the product's own tools a child of yours would be granted let it do (tool-server and plugin tools are not described): ${personas.join('; ')}.${aliases}${narrowed} Ask a persona only for work its tools allow: a persona that does not run commands cannot run tests, builds or scripts, and one that does not write workspace files cannot change a file. Where a persona that runs no commands needs command output, delegate the command to a persona that runs commands and hand its result on with depends_on or inherited_context.`;
+  return `The personas you can delegate to, each with what the product's own tools a child of yours would be granted let it do (tool-server and plugin tools are not described): ${personas.join('; ')}.${aliases}${narrowed} Ask a persona only for work its tools allow, and never write in a brief that a command or tool its entry does not show is available to it: a persona that does not run commands cannot run tests, builds or scripts, and one that does not write workspace files cannot change a file. Where a persona that runs no commands needs command output, delegate the command to a persona that runs commands and hand its result on with depends_on or inherited_context.`;
 }
 
 /**

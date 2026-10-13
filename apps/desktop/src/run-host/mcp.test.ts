@@ -490,6 +490,17 @@ describe('an MCP call checked against the input schema the model was given (REQ-
     expect(fault.issues).toEqual([expect.objectContaining({ kind: 'tool_error', severity: 'warning' })]);
   });
 
+  it('an allowance that ran out as the run cancelled reads timeout: the allowance is tested before the abort (PD-TOOLS-013 revision 2, fin34\'s review)', async () => {
+    // Both land together: the server's timeout error after the whole allowance, the run's signal already aborted. Swapping the
+    // two tests in the executor's catch would read this call interrupted.
+    const run = new AbortController();
+    const both = rig(EDIT_MEMORY, (_signal, hostClock) => { hostClock.advance(300_000); run.abort(); throw new Error('MCP error -32001: Request timed out'); });
+    const ctx = { workspaceRoot: '/ws', sessionId: 'S1', agentName: 'verifier', persona: 'verifier', monotonic: new FakeClock(), wall: new FakeClock(), signal: run.signal, warn: () => undefined };
+    const obs = await both.executors[0]!.execute({ memory_name: 'm', needle: 'a', repl: 'b', mode: 'literal' }, ctx as never);
+    expect(obs).toMatchObject({ isError: true, failureKind: 'timeout' });
+    expect(obs.text).toContain('within its allowance of 300 s');
+  });
+
   it('the model is still handed the server\'s own input schema', () => {
     const r = rig(EDIT_MEMORY);
     expect(r.executors[0]!.parameters).toEqual(EDIT_MEMORY);

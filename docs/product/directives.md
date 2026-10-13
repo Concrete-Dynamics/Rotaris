@@ -2460,6 +2460,10 @@ are not recorded, and cannot be recovered afterwards.
 
 ### PD-TOOLS-006 — a delegated child may declare a write scope that its siblings may not write into
 
+*Revision 8 (2026-10-07, [R-072](requests.md#r-072)): the ruling of the OQ raised from live-run finding D3,
+[OQ-241](../architecture/open-questions.md). Nothing is replaced. A section added after revision 7's, "What the routing table says
+of the work a route implies (revision 8)"; the dispositions stay as they were.*
+
 *Revision 7 (2026-10-07, [R-072](requests.md#r-072)) — **an admitted delegation marks its PENDING item in progress**, a section
 added after revision 6's; the ruling of [OQ-240](../architecture/open-questions.md) under the owner's delegation, with
 `PD-TOOLS-008` revision 2. Nothing is replaced, and the dispositions stay as they were.*
@@ -2586,6 +2590,17 @@ IN_PROGRESS item is left as it is, and a rejected delegation marks nothing. The 
 (<id>) is now IN_PROGRESS.` and append the Todo state REQ-TOOLS-147 renders. `delegate`'s description SHALL say that the call
 marks the item it names.
 
+**What the routing table says of the work a route implies (revision 8).** The built-in coordinating instructions' routing
+table SHALL keep every route REQ-ORCH-028 states, and its two capability clauses for `codebase-analyst` and `librarian`, word for
+word. The table SHALL close with one sentence, the same for every configuration, that names no persona's tools. The sentence says
+that each route names the persona whose judgement the need calls for; that the work itself goes to a persona whose entry in
+`delegate`'s list allows it — a file to write needs one that writes workspace files, and a test or other command to run needs one
+that runs commands; and that where the route's persona lacks what the work needs, the caller asks it for its answer and hands that
+answer, through `depends_on` or `inherited_context`, to a persona that has what the work needs. Revision 4's closing instruction in
+`delegate`'s description SHALL also tell the caller never to write in a brief that a command or tool the persona's entry does not
+show is available to it. A configured `system_prompt` (REQ-CONFIG-100) is unchanged: it replaces the routing table and its
+sentence, and the catalogue still reaches that coordinator. Revision 3's refusal and revision 4's catalogue are unchanged.
+
 **What is unchanged.** A child delegated without a `write_scope` claims nothing and is refused only where a
 live sibling's claim reaches. A `write_scope` never limits the child that declared it: that child may write
 outside its own patterns wherever no other claim reaches. A claim belongs to one run and lapses with its child, so a
@@ -2676,13 +2691,24 @@ second parallel child (`OQ-240`, the default live run's `#14` at `a68f121`). Mar
 costs: the run writes the agent's plan, so a model that also sends `update … IN_PROGRESS` meets REQ-TOOLS-147's no-op error,
 one cheap refused row; and an item stays IN_PROGRESS after its child ends until the coordinator closes it.
 
+**Why revision 8, and what it costs.** In the duress live run at `a68f121` (session `e6747bd0`, finding D3) revision 4's catalogue
+reached all 35 coordinator requests, and the coordinator still gave the work a route implies to the route's persona: `#115` gave
+`architect` `docs/decisions.md` with a `write_scope` (refused in 170 ms; a docs-writer re-briefed in 19.4 s), and `#114` offered
+`node --test` to a docs-writer, which called a tool that does not exist (`#164`, refused at the gate in a 2.5 s step; issues 3 and 4);
+16 of 117 docs-writer requests carried a missing-shell aside. The misroute moved with the subject: the same task went to
+`codebase-analyst` at `c2fdd6a` (`#107`). OQ-216's target of zero was missed. What it costs:
+- the sentence is still advice;
+- about 80 tokens join every coordinating request;
+- the coordinator may commission two children for one document (the route's persona for its answer, a writer for the file);
+- the directive grows by one revision.
+
 > **Narrows:** REQ-TOOLS-152, REQ-TOOLS-154, REQ-LIBRARY-098
 > **Extends:** REQ-ORCH-028
 
 *Raised by the owner, 2026-09-23; logged as [R-049](requests.md#r-049). Revision 2 logged as [R-059](requests.md#r-059),
 revision 3 as [R-067](requests.md#r-067). Revision 4 ruled under the owner's delegation, [R-072](requests.md#r-072), from
 the final live runs' findings L4 and N3. Revision 5 ruled under the same delegation from OQ-221 (the consortium's question AB1), revision 6 from OQ-220, revision 7
-from OQ-240 (the consortium's question P3).*
+from OQ-240 (the consortium's question P3), revision 8 from OQ-241 (the consortium's question D3, the duress live run's finding D3).*
 
 > **First execution, 2026-09-23, the day it was ruled:** the mechanism was built as written, and one clause of
 > the disclosure proved false for one reader. The block lists "the `write_scope` of every other child of the run
@@ -2816,6 +2842,15 @@ from OQ-240 (the consortium's question P3).*
 > question DT1):** for a caller whose `delegates_to` names any persona, "every persona that agent can delegate to" means the
 > delegation targets that list names (REQ-CONFIG-101); an empty list narrows nothing. Built 2026-10-13 by fin33
 > (`Persona.delegatesTo`, `DelegateCatalogue.narrowedBy`); the evidence is scripted only, since no live run sets the key.
+>
+> **Measured 2026-10-07 (the duress live run at `a68f121`, pack `2026-10-07T07-09-30-708Z`, session `e6747bd0`; recorded
+> 2026-10-13 under [OQ-241](../architecture/open-questions.md)):** the "What was not measured" above, now measured. The catalogue
+> was in 35 of 35 coordinator requests. Briefs asking a persona without a terminal to run commands: 1, against 2 to 3 per run
+> before (`#114`, `node --test` offered to a docs-writer, then `run_command` refused at the gate, `#164`). `write_scope` refusals:
+> 1, against 2 per run (`#115`, `architect` given `docs/decisions.md`, refused in 170 ms with the writers named, re-briefed in
+> 19.4 s). Rows spent on a missing tool: 16 of 117 docs-writer requests carried a one-sentence aside, against 22 to 23 rows per
+> failed child before. No stray workaround file, no impossible brief on a failed child's path, and the answer claimed no test run.
+> The target of zero was missed for revision 4 alone; revision 8 is the next step, measured against the same target.
 
 > **First execution of revision 5, 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-221](../architecture/open-questions.md)),
 > built by fin29:** built as written, and the text met the code in two places.

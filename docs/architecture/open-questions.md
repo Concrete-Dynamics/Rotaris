@@ -11098,9 +11098,18 @@ whether it removes the impossible briefs is measured at the next duress live run
 in `PD-TOOLS-006`'s report: the facets include what REQ-TOOLS-004's prerequisites remove (a run with no terminal backend
 tells the caller no persona runs commands); `git_commit`, having no executor, never reads as a writer; the catalogue names
 `orchestrator`, which the ledger accepts. Pinned by `delegation.test.ts`, `run-host/tools.test.ts` (each known role's facets
-told equal to its child port's grant) and `personas.test.ts`. **Not yet measured:** the duress live run that counts briefs
+told equal to its child port's grant) and `personas.test.ts`. ~~**Not yet measured:** the duress live run that counts briefs
 asking a persona without a terminal to run commands (2 to 3 per run before; target 0) and `write_scope` refusals (2 per run;
-target 0).
+target 0).~~ **Measured 2026-10-07 at `a68f121` (the duress live run, session `e6747bd0`, finding D3):** the catalogue was in 35 of
+35 coordinator requests; one `write_scope` refusal remained, against 2 per run before (`#115` gave `architect`
+`docs/decisions.md`; the refusal answered in 170 ms naming the writers, and request 77 re-briefed a docs-writer in 19.4 s); one
+impossible brief remained, against 2 to 3 before (`#114` offered `node --test` to a docs-writer, which called `run_command`,
+`#164`, refused at the gate in a 2.5 s step; issues 3 and 4); 16 of 117 docs-writer requests carried a one-sentence missing-shell
+aside, against 22 to 23 rows per failed child before; no stray file, no impossible brief on a failed child's path, and the answer
+claimed no test run. The default run at `a68f121` chose by facet in 71 of 71 requests. **The target stands at 0, and its first
+reading is falsified for revision 4 alone:** revision 4's catalogue did not by itself bring either count to zero, because the
+routing table sent the work a route implies to the route's persona (the same task went to `codebase-analyst` at `c2fdd6a`, `#107`,
+and to `architect` here). OQ-241 rules the next step, `PD-TOOLS-006` revision 8, measured against the same target.
 
 **OQ-217 — What is the report summariser told of how the child ended?** *(REQ-ORCH-088, a timed-out child recorded failed
 with a report of the form "Child timed out after <N>s"; REQ-ORCH-108, the report condenses what already happened;
@@ -12653,3 +12662,54 @@ only `gatekeeper`, the check ahead of a continuation, the writers among the targ
 a follow-up not checked, the key unset), `run-host/tools.test.ts` (the catalogue equal to what admission accepts in both
 directions; a global list narrowing and a workspace `[]` lifting it), `run-host/configuration.test.ts` (the carried list and the
 four log lines) and `tools/delegation.test.ts`. The note is repaired.
+
+**OQ-241 — Does the coordinator's routing table send the work a route implies to a persona whose tools allow it?**
+*(REQ-ORCH-028, the routing table from need to role, with capability clauses for `codebase-analyst` and `librarian` only;
+REQ-TOOLS-001, the three facets; REQ-CONFIG-100, a configured `system_prompt` replacing the built-in one; REQ-CONFIG-101;
+`PD-TOOLS-006` revisions 3 (the write-scope refusal) and 4 (the catalogue); OQ-216, whose target of zero the duress run
+at `a68f121` missed; OQ-228 and OQ-229, the delegation targets. Raised 2026-10-07 from the final live runs: finding D3 of the duress
+autopsy at `a68f121` (pack `2026-10-07T07-09-30-708Z`, session `e6747bd0`, `#114`, `#115`, `#164`), recorded in
+[`the-routing-table-leads-the-coordinator-past-delegates-catalogue.md`](../defects/the-routing-table-leads-the-coordinator-past-delegates-catalogue.md);
+the consortium's question D3. The round assigned it OQ-233, which fin32 took on main for `write_file`'s level-3 shift; OQ-234 to
+OQ-240 being taken, it takes OQ-241, the next free number. **Ruled 2026-10-07.**)*
+
+Revision 4's catalogue reached every coordinator request, and the coordinator still gave the work a route implies to the route's
+persona: `docs/decisions.md` to `architect` with a `write_scope` (`#115`, refused in 170 ms, re-briefed in 19.4 s), and a brief
+offering `node --test` to a docs-writer (`#114`), which then called a tool that does not exist (`#164`). At `c2fdd6a` the same task
+had gone to `codebase-analyst` (`#107`): the misroute follows whichever route matches the subject.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)), as
+[`PD-TOOLS-006`](../product/directives.md#pd-tools-006) revision 8:** the built-in coordinator's routing table keeps every route
+and REQ-ORCH-028's two clauses word for word. It closes with one fixed sentence that names no persona's tools and sends the work a
+route implies to a persona whose entry in `delegate`'s list allows it: a file to write goes to a persona that writes workspace
+files, and a test or other command goes to one that runs commands. Where the route's own persona lacks the tools, it is asked for
+its answer, which is handed on. `delegate`'s catalogue also tells the caller never to offer a persona, in its brief, a command or
+tool its entry does not show. Revision 3's write-scope refusal and revision 4's catalogue stay as built. OQ-216's target of zero
+stands, and its falsified first reading is recorded beside the `a68f121` measurement in OQ-216's entry.
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended a per-route clause beside each target saying what that target's grant lacks
+  ("writes no workspace files", "runs no commands"), rendered for the calling coordinator from the resolution that builds
+  revision 4's catalogue, recorded as revision 8 and measured at the next duress run. The ruling took A's point that the
+  coordinator decides at the routing table, so confirming the build leaves OQ-216's measure missed; it did not take the computed
+  per-route clause, which would make the built-in prompt a per-configuration render (no longer the constant `entryInstructionsFor`
+  recognises) for about 20 s a run.
+- **Advocate B (the system's lens)** recommended keeping the advice as built, with revision 3's refusal, recording the duress
+  measurement in place, and replacing OQ-216's target with enforced bounds and a reopening condition. The ruling took B's points
+  that enforcement now bounds the structured miss, that revision 3 already names the writers, and that facts about a persona's
+  tools belong in one computed place — so the new sentence names no persona's tools and points to the catalogue.
+
+One fixed routing sentence and one brief clause stay true under every `tools:` override, every `tool_restrictions` entry,
+OQ-228's targets and OQ-229's narrowing. **Reopening condition:** if a later duress run shows any `write_scope` refused for a
+non-writer, or any brief offering a command or tool its target lacks, A's computed per-route clause is weighed as the next
+`PD-TOOLS-006` revision; if any enforced bound breaks (a scoped misroute not refused before a record, an invented tool not stopped
+at the gate, a stray workaround file, an impossible brief on a failed child's path, an answer claiming a command a persona could
+not run), the question reopens at once.
+
+**What a live run then shows.** Every coordinating request carries the routing table with its closing sentence (about 80 more
+tokens) and `delegate`'s closing instruction with the brief clause; direct-work runs and runs with a configured `system_prompt` show
+no routing sentence. In the duress run: 0 `write_scope` refusals for a non-writer and 0 briefs offering a command or tool the
+target's entry lacks; a design or decision document such as `docs/decisions.md` goes to a docs-writer directly or with
+`architect`'s answer handed on through `depends_on` or `inherited_context`. The harness's duress NOTE prints both counts;
+missing-shell asides are counted only. The default run is unchanged apart from the tokens.
+

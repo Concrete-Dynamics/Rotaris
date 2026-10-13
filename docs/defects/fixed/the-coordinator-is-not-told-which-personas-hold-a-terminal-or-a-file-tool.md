@@ -49,3 +49,15 @@ unchanged. Pinned by the "delegate — what each persona can do" cases in `deleg
 description) and by the "PD-TOOLS-006 revision 4" cases in `apps/desktop/src/run-host/tools.test.ts`, which hold the facets told
 equal to each child port's grant. The statement is advice: whether the impossible briefs stop is the next duress live run's
 to show.
+
+## Measured 2026-10-07
+
+The duress live run at `a68f121` (session `e6747bd0`) measured the repair OQ-216 named. The catalogue reached 35 of 35
+coordinator requests; one `write_scope` refusal remained (`#115`, `architect` given `docs/decisions.md`, refused in 170 ms) against
+2 per run before, and one brief offered `node --test` to a docs-writer (`#114`, then `run_command` refused at the gate, `#164`)
+against 2 to 3 before; 16 of 117 docs-writer requests carried a one-sentence missing-shell aside against 22 to 23 rows per failed
+child before, and no impossible brief sat on a failed child's path. The target of zero was missed, and the remainder is recorded
+as its own defect, ruled as OQ-241:
+[`the-routing-table-leads-the-coordinator-past-delegates-catalogue.md`](../the-routing-table-leads-the-coordinator-past-delegates-catalogue.md).
+This note stays repaired: what it described, a coordinator told nothing of each persona's tools, no longer holds.
+

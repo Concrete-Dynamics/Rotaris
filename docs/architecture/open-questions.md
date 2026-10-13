@@ -12543,8 +12543,9 @@ per-attempt directory, since `socketDirectoryFor` creates `rotaris-<uid>` before
 it behind — B's "standing runtime location" is the weaker reading, and the per-attempt directory makes the rule literally true
 and closes the denial note; and B's risk 2 followed to its end: if the endpoint belongs to the record, reclaiming the record
 removes the endpoint too. **Rejected:** the endpoint opened after the record is won; the abstract socket namespace; deferring.
-**Costs kept on record:** the reading takes "the record itself" broadly, anchored in REQ-STARTUP-161's own words; a launch
-killed between its `listen` and its `closeEndpoint`, or an instance that crashes, still leaves its endpoint until the next
+**Costs kept on record:** the reading takes "the record itself" broadly, anchored in REQ-STARTUP-161's own words; an instance
+that crashes leaves its endpoint until the next reclaim removes it; a launch killed between its `mkdtemp` (or its `listen`)
+and its `closeEndpoint` while it is losing the claim leaves its private directory (and socket), which no record names, so no
 reclaim removes it; a reclaim leaves the endpoint of a recorded process that is running but unresponsive, whose own closer
 removes it. Settles
 [`another-local-user-can-deny-the-instance-sockets-temporary-fallback`](../defects/fixed/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md),

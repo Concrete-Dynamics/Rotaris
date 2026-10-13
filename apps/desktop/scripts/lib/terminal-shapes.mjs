@@ -122,6 +122,57 @@ export function terminalShapes(platform = process.platform) {
 }
 
 /**
+ * The tool gate's refusals that come before a call runs and leave a shape's question unasked: REQ-ORCH-029's todo gate
+ * (`todo_list_owed`, OQ-213 as ruled) and the schema check (`invalid_request`, REQ-TOOLS-032), both settled in
+ * `packages/agent-tools/src/gate.ts`. A permission block is NOT among them: `pipe-to-shell` is measured by its block
+ * (`blocked`, no `failure_kind`), so the selection never drops a call for being `blocked` alone, as
+ * `coordinator-todo.mjs`'s `ran` does.
+ */
+export const GATE_REFUSALS = new Set(['todo_list_owed', 'invalid_request']);
+
+/**
+ * Whether a recorded terminal call reached the question its shape asks, rather than a gate refusal before it ran. The
+ * confirming live run at 0bc3eee read `long-output` from the send the todo gate refused, whose result is the refusal's
+ * text, and failed "all 40 lines" on 0 markers while the same command, sent again after the list, had returned all 40
+ * (`docs/defects/fixed/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md`).
+ */
+export const reachedShape = (call) => !GATE_REFUSALS.has(call.failureKind ?? '');
+
+/**
+ * One shape's sends among a session's terminal calls (in ordinal order, as `readToolCalls` gives them): `reached`, the sends
+ * that reached execution, of which the scenario reads the first; `refused`, those the gate refused before they ran; and
+ * `kind` — `reached` where one did, `not-reached` where every send was refused (a NOTE: the question is unasked, never a
+ * failure), `not-attempted` where none was sent.
+ */
+export function shapeSends(shape, calls) {
+  const sent = calls.filter((call) => shape.match.test(String(call.args?.command ?? '')));
+  const reached = sent.filter(reachedShape);
+  const refused = sent.filter((call) => !reachedShape(call));
+  return { reached, refused, kind: reached.length > 0 ? 'reached' : refused.length > 0 ? 'not-reached' : 'not-attempted' };
+}
+
+/**
+ * The NOTE a shape leaves whose every send was refused before it ran (`shapeSends`'s `not-reached`): its title says it was
+ * not reached and at which gate, its detail names each refused send and what stays unasked.
+ */
+export function notReachedNote(id, refused, unasked) {
+  const todo = refused.every((call) => call.failureKind === 'todo_list_owed');
+  const which = refused.map((call) => `#${call.ordinal} ${call.failureKind}`).join(', ');
+  return {
+    title: `${id} was not reached: refused at the ${todo ? 'todo gate' : 'tool gate'}`,
+    detail: `${refused.length} send(s) refused before running${todo ? ' (REQ-ORCH-029)' : ''} and not re-sent (${which}); ${unasked}`,
+  };
+}
+
+/**
+ * The count the "what the model attempted" NOTE gives one shape: its sends that reached execution, and beside them the sends
+ * refused before running, so a refused send is neither hidden nor counted as a try (`long-output×1 (+1 refused at the gate)`).
+ */
+export function attemptCount(id, sends) {
+  return `${id}×${sends.reached.length}${sends.refused.length > 0 ? ` (+${sends.refused.length} refused at the gate)` : ''}`;
+}
+
+/**
  * The `[terminal_diagnostic] {…}` block every terminal observation ends with (`terminal/classify.ts`), or null.
  *
  * Read rather than inferred from prose: `exit_code`, `outcome_kind`, `timeout`, `timeout_seconds` and

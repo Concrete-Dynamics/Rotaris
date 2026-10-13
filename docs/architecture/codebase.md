@@ -933,6 +933,11 @@ trip in both directions — every shape matches its own command, no shape matche
 breaking one pattern and confirming the red, then restoring it. Writing it found one defect in the reader as
 first drafted: `diagnosticOf` took the FIRST `[terminal_diagnostic]` block, and an observation whose output
 quotes an earlier one would have had a previous call's exit code read as its own; it takes the last now.
+Since fin40 (2026-10-13) each shape is read from the first send that reached execution (`shapeSends`, `reachedShape`): the
+confirming run at `0bc3eee` read `long-output` from a send REQ-ORCH-029's todo gate had refused unrun and failed "all 40
+lines" on 0 markers while the same command, sent again after the list, had returned all 40; a gate-refused send is now
+counted beside its shape, a shape whose every send was refused is a NOTE, and a permission block is still read
+(`docs/defects/fixed/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md`).
 It reads `tool_calls` — `args.command` and the `[terminal_diagnostic]` block — never the model's prose, and the
 shapes whose behaviour is faithful to a requirement (`REQ-TOOLS-113`'s marker, `REQ-TOOLS-036/038`'s deny) are
 **NOTEs measuring their cost** rather than checks accusing the product; so is a shape the model never issued.

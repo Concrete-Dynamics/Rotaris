@@ -154,7 +154,7 @@ import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mj
 import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, toolIntervals, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
 import { withRuntimeKey } from './lib/runtime-key.mjs';
-import { LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, attemptCount, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -2193,7 +2193,20 @@ if (wanted.includes('terminal')) {
   const calls = read === null ? [] : readToolCalls(read.session.session_id);
   const terminals = calls.filter((call) => call.tool_name === 'terminal');
   const shapeOf = (id) => SHAPES.find((shape) => shape.id === id);
-  const attempted = (id) => terminals.filter((call) => shapeOf(id).match.test(String(call.args.command ?? '')));
+  // Every reading below takes the first send that REACHED execution (`shapeSends`, `reachedShape`): a send REQ-ORCH-029's todo
+  // gate or the schema check refused before it ran carries the refusal's text, not the shape's answer, and the confirming
+  // run at 0bc3eee failed "all 40 lines" on exactly that while the same command, sent again, had returned all 40. A
+  // permission block is a reached send (`pipe-to-shell` is measured by it). `ran` is the same filter over every call, for
+  // the finds that follow a shape rather than match one (the poll, the interrupt, the next command after `exit 3`).
+  const sendsOf = (id) => shapeSends(shapeOf(id), terminals);
+  const attempted = (id) => sendsOf(id).reached;
+  const ran = terminals.filter(reachedShape);
+  // A shape no reached send carried: "not attempted" where none was sent, "not reached" where the gate refused every send.
+  const unread = (id, title, detail, unasked) => {
+    const { refused } = sendsOf(id);
+    if (refused.length === 0) noted(title, detail);
+    else { const note = notReachedNote(id, refused, unasked); noted(note.title, note.detail); }
+  };
   // Reaching a result is not reaching the terminal: a run that ended `failed` before any terminal call asked none of the
   // questions below, and each would read as a NOTE over a green run (`terminalRunEndReading`).
   const runEnd = terminalRunEndReading(read?.session ?? null, terminals.length);
@@ -2206,11 +2219,12 @@ if (wanted.includes('terminal')) {
   // agent ran again counts twice; the NOTE read "×2" as if the model had tried one shape twice in one pass. It says what it
   // counted, and by which agents when more than one ran the shapes.
   const byAgent = new Map();
-  for (const call of terminals) if (SHAPES.some((shape) => shape.match.test(String(call.args.command ?? '')))) byAgent.set(call.agent_name, (byAgent.get(call.agent_name) ?? 0) + 1);
-  noted('what the model attempted', `${SHAPES.map((s) => `${s.id}×${seen[s.id]}`).join(', ')} — counted over every terminal call the session holds, every iteration and agent included, so a count above 1 can be a later iteration's or another agent's repeat rather than a retry${byAgent.size > 1 ? `; the shapes' calls by agent: ${[...byAgent].map(([agent, n]) => `${agent} ${n}`).join(', ')}` : ''}`);
+  for (const call of ran) if (SHAPES.some((shape) => shape.match.test(String(call.args.command ?? '')))) byAgent.set(call.agent_name, (byAgent.get(call.agent_name) ?? 0) + 1);
+  // A send the gate refused before it ran is counted beside the shape, never as a try (`attemptCount`).
+  noted('what the model attempted', `${SHAPES.map((s) => attemptCount(s.id, sendsOf(s.id))).join(', ')} — counted over every terminal call the session holds, every iteration and agent included, so a count above 1 can be a later iteration's or another agent's repeat rather than a retry${byAgent.size > 1 ? `; the shapes' calls by agent: ${[...byAgent].map(([agent, n]) => `${agent} ${n}`).join(', ')}` : ''}`);
 
   const hereString = attempted('here-string')[0];
-  if (hereString === undefined) noted('the here-string was not attempted', 'no terminal call carried it; nothing is asserted about the PTY');
+  if (hereString === undefined) unread('here-string', 'the here-string was not attempted', 'no terminal call carried it; nothing is asserted about the PTY', 'nothing is asserted about the PTY');
   else {
     const d = diagnosticOf(hereString.result);
     // The defect's signature is the here-string never terminating: newlines lost, so the shell waits for a
@@ -2225,7 +2239,7 @@ if (wanted.includes('terminal')) {
   }
 
   const longOutput = attempted('long-output')[0];
-  if (longOutput === undefined) noted('the long-output command was not attempted', 'no terminal call carried it; the concatenation and VT questions are unasked');
+  if (longOutput === undefined) unread('long-output', 'the long-output command was not attempted', 'no terminal call carried it; the concatenation and VT questions are unasked', 'the concatenation and VT questions are unasked');
   else {
     const reading = longOutputReading(longOutput.result);
     check(reading.distinct === LONG_OUTPUT_LINES, `all ${LONG_OUTPUT_LINES} lines of output reached the agent`, `${reading.distinct} distinct of ${reading.markers.length} marker(s)`);
@@ -2241,7 +2255,7 @@ if (wanted.includes('terminal')) {
   // where the command the model SENT was past the line (`longCommandReading`): a shorter copy may have fit, and is a NOTE.
   if (shapeOf('long-command') !== undefined) {
     const long = attempted('long-command')[0];
-    if (long === undefined) noted('the long command was not attempted', 'no terminal call carried it; the PTY\'s input line is unasked');
+    if (long === undefined) unread('long-command', 'the long command was not attempted', 'no terminal call carried it; the PTY\'s input line is unasked', 'the PTY\'s input line is unasked');
     else {
       const elapsed = long.elapsedMs ?? NaN;
       const reading = longCommandReading(long.args.command, long.result, elapsed);
@@ -2260,7 +2274,7 @@ if (wanted.includes('terminal')) {
   const replaced = shapeOf('replaces-shell') === undefined ? undefined : attempted('replaces-shell')[0];
   const replacedReading = replaced === undefined ? null : replacedShellReading(replaced.result, replaced.elapsedMs ?? NaN);
   if (shapeOf('replaces-shell') !== undefined) {
-    if (replaced === undefined) noted('the shell replacement was not attempted', 'no terminal call carried `exec bash`; the watch is unasked');
+    if (replaced === undefined) unread('replaces-shell', 'the shell replacement was not attempted', 'no terminal call carried `exec bash`; the watch is unasked', 'the watch is unasked');
     else {
       const d = diagnosticOf(replaced.result);
       const elapsed = replaced.elapsedMs ?? NaN;
@@ -2281,7 +2295,7 @@ if (wanted.includes('terminal')) {
   // all three with the guard never asked.
   if (shapeOf('unexpandable') !== undefined) {
     const unexpandable = attempted('unexpandable')[0];
-    if (unexpandable === undefined) noted('the unexpandable bash-ism was not attempted', 'no terminal call carried it; the wrapper\'s guard is unasked');
+    if (unexpandable === undefined) unread('unexpandable', 'the unexpandable bash-ism was not attempted', 'no terminal call carried it; the wrapper\'s guard is unasked', 'the wrapper\'s guard is unasked');
     else {
       const d = diagnosticOf(unexpandable.result);
       const elapsed = unexpandable.elapsedMs ?? NaN;
@@ -2310,7 +2324,7 @@ if (wanted.includes('terminal')) {
   // respawned, and the same agent's next call says the session was reinitialized. POSIX only (`terminalShapes`).
   if (shapeOf('ends-shell') !== undefined) {
     const ended = attempted('ends-shell')[0];
-    if (ended === undefined) noted('the shell exit was not attempted', 'no terminal call carried `exit 3`; the exit watch is unasked');
+    if (ended === undefined) unread('ends-shell', 'the shell exit was not attempted', 'no terminal call carried `exit 3`; the exit watch is unasked', 'the exit watch is unasked');
     else {
       const d = diagnosticOf(ended.result);
       const elapsed = ended.elapsedMs ?? NaN;
@@ -2323,7 +2337,7 @@ if (wanted.includes('terminal')) {
         if (reading.kind === 'restarted') {
           check(reading.killStatus === 'session_reset', 'the shell was respawned', `kill_status ${reading.killStatus ?? 'none'}`);
           // Only the SAME agent's next call ran in the respawned shell: each agent's foreground session is its own (REQ-TOOLS-187).
-          const next = terminals.find((call) => call.ordinal > ended.ordinal && call.agent_name === ended.agent_name && call.args.is_input !== true && call.args.background !== true && call.args.session_action === undefined && String(call.args.command ?? '') !== '');
+          const next = ran.find((call) => call.ordinal > ended.ordinal && call.agent_name === ended.agent_name && call.args.is_input !== true && call.args.background !== true && call.args.session_action === undefined && String(call.args.command ?? '') !== '');
           if (next === undefined) noted('no later command of the same agent followed the shell exit', 'what the next call reports is unasked');
           else check(diagnosticOf(next.result)?.session_reinitialized === true, 'the next command the same agent issued reported the session reinitialized', `ordinal ${next.ordinal}: session_reinitialized ${String(diagnosticOf(next.result)?.session_reinitialized ?? 'absent')}`);
         }
@@ -2332,7 +2346,7 @@ if (wanted.includes('terminal')) {
   }
 
   const wedge = attempted('wedge')[0];
-  if (wedge === undefined) noted('the wedge was not attempted', 'no terminal call carried it; the hard cap is unasked');
+  if (wedge === undefined) unread('wedge', 'the wedge was not attempted', 'no terminal call carried it; the hard cap is unasked', 'the hard cap is unasked');
   else {
     const d = diagnosticOf(wedge.result);
     check(wedge.args.timeout === undefined, 'the wedge was issued with no timeout argument, as asked', `timeout ${wedge.args.timeout ?? 'absent'}`);
@@ -2350,8 +2364,11 @@ if (wanted.includes('terminal')) {
   // Live-run L2: the first poll after the wedge. What it says it waited must be no more than the time between the wedge's
   // end and its own, both as the product recorded them; the no-output window it never waited out must not be claimed.
   const poll = wedge === undefined ? undefined
-    : terminals.find((call) => call.ordinal > wedge.ordinal && String(call.args.command ?? '') === '' && call.args.is_input !== true && call.args.session_action === undefined && call.args.background !== true);
-  if (poll === undefined) noted('no poll followed the wedge', 'no empty-command call after it; what a poll states is unasked');
+    : ran.find((call) => call.ordinal > wedge.ordinal && String(call.args.command ?? '') === '' && call.args.is_input !== true && call.args.session_action === undefined && call.args.background !== true);
+  // A poll the gate refused before it ran polled nothing: the poll that followed it, if any, is the one read above.
+  const pollRefused = wedge === undefined ? [] : terminals.filter((call) => call.ordinal > wedge.ordinal && (poll === undefined || call.ordinal < poll.ordinal) && !reachedShape(call) && String(call.args.command ?? '') === '' && call.args.is_input !== true && call.args.session_action === undefined && call.args.background !== true);
+  if (poll === undefined && pollRefused.length > 0) { const note = notReachedNote('poll', pollRefused, 'what a poll states is unasked'); noted(note.title, note.detail); }
+  else if (poll === undefined) noted('no poll followed the wedge', 'no empty-command call after it; what a poll states is unasked');
   else {
     const d = diagnosticOf(poll.result);
     const since = /No new output in (under 0\.1|\d+\.\d) seconds since the previous observation/.exec(poll.result);
@@ -2367,10 +2384,12 @@ if (wanted.includes('terminal')) {
   // OQ-147: the interrupt and the first poll after it. The poll must hand the interrupted wedge over as ended — exit −1,
   // an execution_error saying it ended without a status of its own — and never as still running.
   const interrupt = wedge === undefined ? undefined
-    : terminals.find((call) => call.ordinal > wedge.ordinal && call.args.is_input === true && shapeOf('interrupt').match.test(String(call.args.command ?? '')));
+    : ran.find((call) => call.ordinal > wedge.ordinal && call.args.is_input === true && shapeOf('interrupt').match.test(String(call.args.command ?? '')));
   const interruptPoll = interrupt === undefined ? undefined
-    : terminals.find((call) => call.ordinal > interrupt.ordinal && String(call.args.command ?? '') === '' && call.args.is_input !== true && call.args.session_action === undefined && call.args.background !== true);
-  if (interrupt === undefined) noted('the interrupt was not attempted', 'no C-c with is_input followed the wedge; what a poll after it reads is unasked');
+    : ran.find((call) => call.ordinal > interrupt.ordinal && String(call.args.command ?? '') === '' && call.args.is_input !== true && call.args.session_action === undefined && call.args.background !== true);
+  const interruptRefused = wedge === undefined ? [] : terminals.filter((call) => call.ordinal > wedge.ordinal && (interrupt === undefined || call.ordinal < interrupt.ordinal) && !reachedShape(call) && call.args.is_input === true && shapeOf('interrupt').match.test(String(call.args.command ?? '')));
+  if (interrupt === undefined && interruptRefused.length > 0) { const note = notReachedNote('interrupt', interruptRefused, 'what a poll after it reads is unasked'); noted(note.title, note.detail); }
+  else if (interrupt === undefined) noted('the interrupt was not attempted', 'no C-c with is_input followed the wedge; what a poll after it reads is unasked');
   else if (interruptPoll === undefined) noted('no poll followed the interrupt', 'no empty-command call after the C-c; what it reads is unasked');
   else {
     const reading = interruptedPollReading(interruptPoll.result);
@@ -2387,7 +2406,11 @@ if (wanted.includes('terminal')) {
   // silence. Only when the second wedge did soft-pause first and the same agent issued the command behind it.
   const again = attempted('wedge-again')[0];
   const behindPaused = attempted('behind-paused')[0];
-  if (again === undefined || behindPaused === undefined) noted('the command behind a soft-paused one was not attempted', `wedge-again×${seen['wedge-again']}, behind-paused×${seen['behind-paused']}; OQ-164's report is unasked`);
+  const unreachedPair = ['wedge-again', 'behind-paused'].filter((id) => sendsOf(id).kind === 'not-reached');
+  if ((again === undefined || behindPaused === undefined) && unreachedPair.length > 0) {
+    const note = notReachedNote(unreachedPair.join(' and '), unreachedPair.flatMap((id) => sendsOf(id).refused), 'OQ-164\'s report is unasked');
+    noted(note.title, note.detail);
+  } else if (again === undefined || behindPaused === undefined) noted('the command behind a soft-paused one was not attempted', `wedge-again×${seen['wedge-again']}, behind-paused×${seen['behind-paused']}; OQ-164's report is unasked`);
   else if (diagnosticOf(again.result)?.outcome_kind !== 'soft_pause') noted('the second wedge did not soft-pause', `outcome ${diagnosticOf(again.result)?.outcome_kind ?? 'none'}; nothing was paused when the next command came`);
   else if (again.agent_name !== behindPaused.agent_name || behindPaused.ordinal < again.ordinal) noted('the command behind the second wedge ran elsewhere', `wedge-again in ${again.agent_name}, behind-paused in ${behindPaused.agent_name}; each agent's foreground session is its own (REQ-TOOLS-187)`);
   else {
@@ -2403,7 +2426,7 @@ if (wanted.includes('terminal')) {
   }
 
   const failedWord = attempted('failed-word')[0];
-  if (failedWord === undefined) noted('the docker line was not attempted', 'no terminal call carried it; PD-TOOLS-003 is unasked');
+  if (failedWord === undefined) unread('failed-word', 'the docker line was not attempted', 'no terminal call carried it; PD-TOOLS-003 is unasked', 'PD-TOOLS-003 is unasked');
   else {
     const d = diagnosticOf(failedWord.result);
     // PD-TOOLS-003: REQ-TOOLS-113's `FAILED ` marker matches in capitals only. This is the lower-case docker line
@@ -2420,7 +2443,7 @@ if (wanted.includes('terminal')) {
   }
 
   const diffExitOne = attempted('diff-exit-1')[0];
-  if (diffExitOne === undefined) noted('the git diff was not attempted', 'no terminal call carried it; ESC-41 is unasked');
+  if (diffExitOne === undefined) unread('diff-exit-1', 'the git diff was not attempted', 'no terminal call carried it; ESC-41 is unasked', 'ESC-41 is unasked');
   else {
     const d = diagnosticOf(diffExitOne.result);
     // ESC-41's carve-out: `git diff` exiting 1 IS the answer, and classifying it a failure made the agent
@@ -2430,7 +2453,7 @@ if (wanted.includes('terminal')) {
   }
 
   const piped = attempted('pipe-to-shell')[0];
-  if (piped === undefined) noted('the piped git pipeline was not attempted', 'no terminal call carried it');
+  if (piped === undefined) unread('pipe-to-shell', 'the piped git pipeline was not attempted', 'no terminal call carried it', 'the pipe-to-shell rule is unasked');
   else noted('a read-only git pipeline through a pipe', `${piped.status}${/pipe to shell/i.test(piped.result) ? ' by starter:deny-pipe-to-shell' : ''} — REQ-TOOLS-036/038 firing as specified; recorded for cost`);
 
   // The end marker is the harness the terminal uses to find where a command finished; the model must never
@@ -2441,9 +2464,13 @@ if (wanted.includes('terminal')) {
   results.scenarios.terminal = {
     platform: process.platform, status: read?.session.execution_status, stopReason: read?.session.stop_reason,
     attempted: seen, terminalCalls: terminals.length,
+    // `attempted` names the call each shape was read from, which is one that reached execution; `refusedAtGate` lists the
+    // ordinals of the sends the gate refused before they ran (`shapeSends`), so a shape read as not attempted is told
+    // apart from one the gate kept from running.
     diagnostics: SHAPES.map((shape) => {
       const call = shape.id === 'poll' ? poll : shape.id === 'interrupt' ? interruptPoll : attempted(shape.id)[0];
-      return { id: shape.id, command: shape.command, ...(call === undefined ? { attempted: false } : { attempted: true, ordinal: call.ordinal, status: call.status, diagnostic: diagnosticOf(call.result) }) };
+      const refusedAtGate = (shape.id === 'poll' ? pollRefused : shape.id === 'interrupt' ? interruptRefused : sendsOf(shape.id).refused).map((refused) => refused.ordinal);
+      return { id: shape.id, command: shape.command, refusedAtGate, ...(call === undefined ? { attempted: false } : { attempted: true, ordinal: call.ordinal, status: call.status, diagnostic: diagnosticOf(call.result) }) };
     }),
   };
   if (read) preserveRun('terminal', read.session.session_id);

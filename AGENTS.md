@@ -468,7 +468,12 @@ is about size specifically.
 The shapes and the readers (`diagnosticOf`, `longOutputReading`, `outputOf`, `hereStringLinesReturned`, `unexpandableReading`, `replacedShellReading`) live in `apps/desktop/scripts/lib/terminal-shapes.mjs`, pinned by
 `terminal-shapes.test.ts` — a pattern that stopped matching its own command would turn every check in the
 scenario into "never attempted" without anybody being told, so the test asserts the round trip in both
-directions: every shape matches its own command, and none matches another's.
+directions: every shape matches its own command, and none matches another's. Each shape is read from the first send that
+reached execution (`shapeSends`, `reachedShape`): a send REQ-ORCH-029's todo gate or the schema check refused before it ran
+(`todo_list_owed`, `invalid_request`) is counted beside the shape in the "what the model attempted" NOTE and never read, a
+shape whose every send was refused is a NOTE ("not reached: refused at the todo gate"), and a permission block is read, since
+`pipe-to-shell` is measured by it (fin40; the confirming run at 0bc3eee failed "all 40 lines" by reading the refused send,
+`docs/defects/fixed/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md`).
 
 **`terminal` was executed against a real endpoint on 2026-09-22 and every check passed**: all six shapes were
 issued, the here-string terminated, forty distinct lines arrived with none concatenated and no escape sequence

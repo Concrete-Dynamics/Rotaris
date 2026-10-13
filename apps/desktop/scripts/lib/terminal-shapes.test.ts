@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
 // @ts-expect-error — the shapes are plain ESM beside the script that replays them.
-import { LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalRunEndReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, attemptCount, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
 
 interface Shape { readonly id: string; readonly match: RegExp; readonly command: string; readonly prompt?: string }
 
@@ -405,5 +405,52 @@ describe('how the terminal run ended (docs/defects/fixed/a-tool-call-whose-argum
     expect(terminalRunEndReading({ execution_status: 'stopped', stop_reason: 'user_cancelled' }, 0)).toEqual({ kind: 'ended-early', detail: 'stopped (user_cancelled) after 0 terminal call(s)' });
     expect(terminalRunEndReading({ execution_status: 'interrupted', stop_reason: null }, 0).kind).toBe('ended-early');
     expect(terminalRunEndReading({ execution_status: 'stopped', stop_reason: 'user_cancelled' }, 2).kind).toBe('ended');
+  });
+});
+
+describe('which send of a shape the scenario reads (docs/defects/fixed/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md)', () => {
+  const shapes: Shape[] = terminalShapes('linux');
+  const shape = (id: string): Shape => shapes.find((s) => s.id === id)!;
+  const awk = shape('long-output').command;
+  const lines = Array.from({ length: LONG_OUTPUT_LINES }, (_, i) => `LINE-${String(i + 1).padStart(3, '0')} ${'x'.repeat(100)}`).join('\n');
+  // The 0bc3eee pack's terminal session, as `readToolCalls` gives it: ordinal 2 refused by REQ-ORCH-029's todo gate before
+  // it ran (the refusal's text, no marker), the list written, ordinal 5 the same command, run, with all forty lines.
+  const refusedAtGate = { ordinal: 2, tool_name: 'terminal', agent_name: 'Orchestrator', status: 'blocked', failureKind: 'todo_list_owed', args: { command: awk }, result: 'This call was not run: this task now spans more than one step and you keep no todo list for it (REQ-ORCH-029).' };
+  const ranAfterList = { ordinal: 5, tool_name: 'terminal', agent_name: 'Orchestrator', status: 'ok', failureKind: null, args: { command: awk }, result: `[terminal_output]\n${lines}\n[terminal_diagnostic] {"exit_code":0,"outcome_kind":"success"}` };
+
+  it('a todo_list_owed send followed by the same command run selects the run, and the forty lines are read from it', () => {
+    const sends = shapeSends(shape('long-output'), [refusedAtGate, ranAfterList]);
+    expect(sends.kind).toBe('reached');
+    expect(sends.reached.map((call: { ordinal: number }) => call.ordinal)).toEqual([5]);
+    expect(sends.refused.map((call: { ordinal: number }) => call.ordinal)).toEqual([2]);
+    // The FAIL of 0bc3eee: the first matching send was the refused one, and it carried no marker at all.
+    expect(longOutputReading(refusedAtGate.result).distinct).toBe(0);
+    expect(longOutputReading(sends.reached[0].result).distinct).toBe(LONG_OUTPUT_LINES);
+    expect(attemptCount('long-output', sends)).toBe('long-output×1 (+1 refused at the gate)');
+  });
+
+  it('a schema refusal never runs either; a permission-blocked pipe-to-shell is still the send it is measured by', () => {
+    expect(reachedShape({ failureKind: 'invalid_request' })).toBe(false);
+    expect(reachedShape({ failureKind: 'todo_list_owed' })).toBe(false);
+    // Ordinal 33 of the same session: `blocked` by the deny, no failure_kind. Dropping every `blocked` call, as
+    // coordinator-todo's `ran` does, would read the shape as not attempted.
+    const piped = { ordinal: 33, tool_name: 'terminal', agent_name: 'Orchestrator', status: 'blocked', failureKind: null, args: { command: shape('pipe-to-shell').command }, result: 'Denied by starter:deny-pipe-to-shell (pipe to shell).' };
+    const sends = shapeSends(shape('pipe-to-shell'), [piped]);
+    expect(sends.kind).toBe('reached');
+    expect(sends.reached[0]).toBe(piped);
+    expect(attemptCount('pipe-to-shell', sends)).toBe('pipe-to-shell×1');
+  });
+
+  it('a shape whose every send was refused at the gate is NOT REACHED, a NOTE that names the refusals; one never sent is not attempted', () => {
+    const sends = shapeSends(shape('long-output'), [refusedAtGate]);
+    expect(sends.kind).toBe('not-reached');
+    expect(sends.reached).toEqual([]);
+    expect(notReachedNote('long-output', sends.refused, 'the concatenation and VT questions are unasked')).toEqual({
+      title: 'long-output was not reached: refused at the todo gate',
+      detail: '1 send(s) refused before running (REQ-ORCH-029) and not re-sent (#2 todo_list_owed); the concatenation and VT questions are unasked',
+    });
+    expect(notReachedNote('wedge', [{ ordinal: 7, failureKind: 'invalid_request' }], 'the hard cap is unasked').title).toBe('wedge was not reached: refused at the tool gate');
+    expect(shapeSends(shape('long-output'), []).kind).toBe('not-attempted');
+    expect(shapeSends(shape('here-string'), [refusedAtGate, ranAfterList]).kind).toBe('not-attempted');
   });
 });

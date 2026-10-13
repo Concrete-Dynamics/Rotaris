@@ -39,3 +39,30 @@ same session, `blocked` with no `failure_kind`), so a predicate that drops every
 - `apps/desktop/scripts/lib/terminal-shapes.test.ts` — the shapes' tests.
 - `apps/desktop/scripts/lib/coordinator-todo.mjs` — `ran`, the precedent that excludes every `blocked` call (too broad here).
 - `packages/agent-tools/src/gate.ts` — where `todo_list_owed` and `invalid_request` are settled.
+
+## Repaired — 2026-10-13
+
+Repaired by fin40, in the harness alone. `lib/terminal-shapes.mjs` gains `GATE_REFUSALS` (`todo_list_owed`,
+`invalid_request`), `reachedShape` (a call is dropped only for one of those kinds, never for being `blocked` alone, so the
+permission-blocked `pipe-to-shell` stays the send it is measured by), `shapeSends` (a shape's `reached` sends, its
+`refused` ones, and `kind`: `reached`, `not-reached` or `not-attempted`), `notReachedNote` and `attemptCount`. In
+`live-run.mjs`'s terminal scenario `attempted(id)` is `shapeSends(…).reached`, so every `attempted(id)[0]` site reads the
+first send that ran; the poll, the interrupt, the interrupt's poll and the command after `exit 3` are found among `ran`,
+the same filter over every terminal call; a shape whose every send was refused reads as a NOTE, "<id> was not reached:
+refused at the todo gate", naming the refused ordinals (the poll and the interrupt likewise), never a FAIL and never "not
+attempted"; the "what the model attempted" NOTE counts the refused sends beside the shape (`long-output×1 (+1 refused at
+the gate)`); and `results.json`'s `diagnostics` gives each shape `refusedAtGate`, the ordinals refused before the call it
+was read from.
+
+Pinned by the three cases of "which send of a shape the scenario reads" in `apps/desktop/scripts/lib/terminal-shapes.test.ts`
+(a `todo_list_owed` row followed by an `ok` row of the same command selects the `ok` row and reads 40 distinct markers; a
+permission-blocked `pipe-to-shell` row is still selected; a shape with only refused rows is `not-reached` and its NOTE names
+`#2 todo_list_owed`), all three red on the code before (`shapeSends is not a function`, `reachedShape is not a function`).
+
+The 0bc3eee pack re-read through the repaired selection: `live-run.mjs` has no mode that evaluates a stored pack without
+launching, so a scratch script read the pack's own `workspace.db` (copied out of `.live-run/runs/2026-10-13T12-18-40-282Z`)
+through `readToolCalls`'s row shape and the library's `shapeSends` and `longOutputReading`. The old selection read ordinal
+2 (`blocked`, `todo_list_owed`, 0 markers); the repaired one reads ordinal 5 (`ok`, 40 distinct of 40, 0 doubled, no
+escape sequence), so the FAIL and its two hollow PASSes become three measured PASSes. Every other shape kept the call it was
+read from (`pipe-to-shell` ordinal 33, `blocked` by the deny), and the NOTE reads `long-output×1 (+1 refused at the gate)`.
+The next live run of `terminal` is the repair's first execution against an endpoint.

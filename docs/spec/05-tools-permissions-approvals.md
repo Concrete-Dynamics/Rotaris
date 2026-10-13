@@ -465,6 +465,11 @@ Independently of exit code, a pipeline check adds the warning `Pipeline command 
 > one window at REQ-TOOLS-136 level 2, 3 or 4 and gave a replacement line the file's `\r` adds one sentence after the match
 > level: `new_string was written with the file's CRLF line endings.`
 
+> **Extended by [`PD-TOOLS-017`](../product/directives.md#pd-tools-017), 2026-10-13.** The success of an `edit` that matched at
+> REQ-TOOLS-136 level 1 or with `replace_all` and gave the replacement the file's `\r` adds the same sentence after the message,
+> and an `edit` whose result would leave the file's bytes unchanged once the file's line endings are carried is refused like
+> identical strings, naming `overwrite` as the way to change line endings.
+
 **REQ-TOOLS-136** — Edit matching runs four levels, and the first level that produces any match decides the outcome: (1) exact; (2) exact after trailing whitespace is stripped from every line on both sides; (3) exact after one and the same leading-whitespace prefix is added to or removed from every line of the candidate, so a block differing only by a uniform indentation shift still matches; (4) fuzzy — the single best-scoring window of the same number of lines, accepted only at similarity ≥ 0.85. A match above level 1 is flagged in the result (`Match level: <level>`; a fuzzy match adds `(similarity: 0.NN)` and `Verify the result.`). When no level matches, the message names the levels tried and the file's line count and suggests a fresh read or `overwrite`. When a level matches more than once, the result is `Found <n> occurrences of old_str at lines <a, b, …>` with guidance to add surrounding context or set replace-all. Replace-all replaces every exact occurrence as plain text. Level 4 scores each candidate window with the similarity function of REQ-TOOLS-188, comparing the window's text against the old-string text; when two windows score equally the one starting on the lower line number wins, so a fuzzy edit is deterministic on any given file.
 
 > **Narrowed by [`PD-TOOLS-015`](../product/directives.md#pd-tools-015), 2026-10-13.** This requirement still governs every
@@ -479,6 +484,11 @@ Independently of exit code, a pipeline check adds the warning `Pipeline command 
 > `old_string` is written as the window's own line, byte for byte, and on a window whose terminated lines all end in `\r` every
 > replacement line a line break follows gains `\r`.
 
+> **Narrowed by [`PD-TOOLS-017`](../product/directives.md#pd-tools-017), 2026-10-13.** Level 1's "exact" and replace-all's "as
+> plain text" still decide what matches and where; what is written is narrowed: for an occurrence whose touched lines all end in
+> `\r` (the file's other lines when none is followed by a break), every line break inside the replacement or directly after it
+> gains `\r` when it lacks one, never doubled.
+
 **REQ-TOOLS-137** — The hash-anchored read and edit tools (`haet_read`, `haet_edit`, and the alias `haet`) enforce the same workspace fence as REQ-TOOLS-129 and honor the same `runtime.allow_outside_workspace` opt-out. Their record of which files have been read is scoped to the workspace root and shared by every run in that workspace, so a file read during one run can be edited by a later run without being read again. Their action surface is fixed by REQ-TOOLS-189.
 
 **REQ-TOOLS-188** — One similarity function serves every threshold in this domain. For two strings *a* and *b*, similarity(*a*, *b*) = 1 − editDistance(*a*, *b*) / max(length(*a*), length(*b*)), where editDistance is the unit-cost edit distance over Unicode code points — insertion, deletion, and substitution each costing 1 — length is counted in code points, and the similarity of two empty strings is 1. The result lies in [0, 1] and is symmetric in its arguments. The 0.85 fuzzy-edit threshold of REQ-TOOLS-136 and the 0.45 filename-suggestion cutoff of REQ-TOOLS-134 are both read against this function and against no other, so two implementations of this specification return the same score for the same pair of strings and accept the same edits and suggestions.
@@ -490,6 +500,8 @@ Given `haet_edit` is called, when the SHA-256 digest of the file's current bytes
 `haet_edit` matches `old_string` at level 1 of REQ-TOOLS-136 only — exact text, with no trailing-whitespace normalization, no indentation shift, and no fuzzy window — because the anchoring hash exists precisely to make the edit exact; a failure to match reports the path and directs the caller to read the file again, and multiple occurrences with `replace_all` false are reported as REQ-TOOLS-136 reports them. Writes are atomic and enter the same per-path undo history as REQ-TOOLS-132's writes. A successful edit reports the file's new `content_hash`, so consecutive edits chain without an intervening read.
 
 > **Narrowed by [`PD-TOOLS-014`](../product/directives.md#pd-tools-014), 2026-10-07.** The failure-to-match clause above still governs every miss but one: when the hash is current, `replace_all` is false and `old_string` matches exactly one window at REQ-TOOLS-136 level 2 or 3, the edit is still refused and nothing is written, and the reply names the level, the lines and what differs, states that the hash is still current and quotes the window as one JSON string instead of only directing a re-read. Since revision 2 (2026-10-13), a quote whose text occurs more than once in the file at REQ-TOOLS-136 level 1, and a several-windows reply whose windows' text does, names the count and the lines, is not said to match exactly, and asks for a neighbouring line, unchanged, in both strings.
+
+> **Narrowed by [`PD-TOOLS-017`](../product/directives.md#pd-tools-017), 2026-10-13.** The level-1 match above stays exact; what an exact match or a `replace_all` writes is narrowed as REQ-TOOLS-136 is: on an occurrence whose touched lines are CRLF, every line break inside the replacement or directly after it gains `\r` when it lacks one, the success says so before ` content_hash:`, and an edit left with the file's own bytes is refused with nothing written.
 
 ### 16. Search Tools (grep, glob)
 

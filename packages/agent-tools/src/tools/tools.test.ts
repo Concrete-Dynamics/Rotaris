@@ -768,22 +768,141 @@ describe('PD-TOOLS-016: a window-match write_file edit keeps the file\'s line en
     expect(read('q.txt')).toBe('P\nq  \nR\n');
   });
 
-  it('level 1, replace_all and haet_edit are unchanged on a CRLF file', async () => {
-    // Level 1 writes new_string verbatim (REQ-TOOLS-136's "exact"); its LF lines in a CRLF file are recorded separately
-    // (docs/defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md), not decided by PD-TOOLS-016.
+  it('haet_edit still refuses a window match; level 1 and replace_all are PD-TOOLS-017\'s', async () => {
+    // Until PD-TOOLS-017 (OQ-254) this case pinned level 1 and replace_all writing new_string's LF lines into a CRLF file
+    // (docs/defects/fixed/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md); they keep the file's endings now.
     await prepare('e.txt', 'one\r\ntwo\r\n');
     const exact = await edit('e.txt', 'one', 'ONE\nX');
-    expect(read('e.txt')).toBe('ONE\nX\r\ntwo\r\n');
+    expect(read('e.txt')).toBe('ONE\r\nX\r\ntwo\r\n');
     expect(exact.text).not.toMatch(/Match level/);
+    expect(exact.text).toContain(CRLF);
     await prepare('all.txt', 'a\r\nb\r\na\r\n');
     await edit('all.txt', 'a', 'X\nY', true);
-    expect(read('all.txt')).toBe('X\nY\r\nb\r\nX\nY\r\n');
+    expect(read('all.txt')).toBe('X\r\nY\r\nb\r\nX\r\nY\r\n');
     writeFileSync(join(root, 'he.txt'), 'one\r\ntwo\r\n');
     const hash = sha256(readFileSync(join(root, 'he.txt')));
     const haet = await haetEditTool(state, fence).execute({ path: 'he.txt', content_hash: hash, old_string: 'one\ntwo', new_string: 'ONE\ntwo', replace_all: false }, ctx());
     expect(haet.isError).toBe(true);
     expect(read('he.txt')).toBe('one\r\ntwo\r\n');
-    expect(writeFileTool(state, fence).description).toContain("A window match keeps the file's line endings");
+    expect(writeFileTool(state, fence).description).toContain("An edit keeps a CRLF file's line endings");
+  });
+});
+
+describe('PD-TOOLS-017: an exact or replace-all edit keeps a CRLF file\'s line endings', () => {
+  // OQ-254 (R-072, 2026-10-13). A level-1 match and a replace_all wrote new_string as given, so a one-line anchor replaced by
+  // several LF lines left LF lines among CRLF ones beside a clean success, through write_file, haet_edit and haet alike.
+  const CRLF = " new_string was written with the file's CRLF line endings.";
+  const NOOP = "old_string and new_string differ only in line endings, which an edit keeps as the file's; nothing to change. Use write_file's 'overwrite' to change a file's line endings.";
+  const prepare = async (rel: string, text: string) => {
+    writeFileSync(join(root, rel), text);
+    await readFileTool(state, fence).execute({ path: rel, offset: 1, limit: 2000, grep_context: 3 }, ctx());
+  };
+  const edit = (path: string, old_string: string, new_string: string, replace_all = false) =>
+    writeFileTool(state, fence).execute({ operation: 'edit', path, old_string, new_string, replace_all }, ctx());
+  const haet = (path: string, old_string: string, new_string: string, replace_all = false, name: 'haet_edit' | 'haet' = 'haet_edit') =>
+    haetEditTool(state, fence, name).execute({ path, content_hash: sha256(readFileSync(join(root, path))), old_string, new_string, replace_all }, ctx());
+  const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
+
+  it('the probe: a one-line anchor replaced by two LF lines leaves the file wholly CRLF and says so', async () => {
+    await prepare('p.txt', 'one\r\ntwo\r\n');
+    const r = await edit('p.txt', 'one', 'ONE\nX');
+    expect(r.isError).toBe(false);
+    expect(read('p.txt')).toBe('ONE\r\nX\r\ntwo\r\n');
+    expect(r.text).toMatch(/^Edited p\.txt: 1 line replaced by 2 at line 1 \(\+2 -1\)\. new_string was written with the file's CRLF line endings\. \(sha256 [0-9a-f]{64}\)$/);
+  });
+
+  it('haet_edit and haet at level 1 carry the endings, the sentence before content_hash', async () => {
+    writeFileSync(join(root, 'h.txt'), 'one\r\ntwo\r\n');
+    const r = await haet('h.txt', 'one', 'ONE\nX');
+    expect(read('h.txt')).toBe('ONE\r\nX\r\ntwo\r\n');
+    expect(r.text).toMatch(/^Edited h\.txt: 1 line replaced by 2 at line 1 \(\+2 -1\)\. new_string was written with the file's CRLF line endings\. content_hash: [0-9a-f]{64}$/);
+    writeFileSync(join(root, 'g.txt'), 'one\r\ntwo\r\n');
+    await haet('g.txt', 'two', 'TWO\nY', false, 'haet');
+    expect(read('g.txt')).toBe('one\r\nTWO\r\nY\r\n');
+  });
+
+  it('the PD-TOOLS-014 retry: the quote carries the \\r, an LF new_string keeps the break after the span CRLF too', async () => {
+    writeFileSync(join(root, 'q.txt'), 'one\r\ntwo\r\nthree\r\n');
+    const miss = await haet('q.txt', 'one\ntwo', 'ONE\ntwo');
+    expect(miss.isError).toBe(true);
+    expect(miss.text).toContain(JSON.stringify('one\r\ntwo\r'));
+    const r = await haet('q.txt', 'one\r\ntwo\r', 'ONE\ntwo');
+    expect(r.isError).toBe(false);
+    expect(read('q.txt')).toBe('ONE\r\ntwo\r\nthree\r\n');
+    expect(r.text).toContain(`2 lines replaced by 2 at line 1 (+1 -1).${CRLF} content_hash:`);
+  });
+
+  it('a line break at the head of new_string gains the \\r the span took with it', async () => {
+    await prepare('b.txt', 'one\r\ntwo\r\nthree\r\n');
+    const r = await edit('b.txt', '\r\ntwo', '\nTWO');
+    expect(read('b.txt')).toBe('one\r\nTWO\r\nthree\r\n');
+    expect(r.text).toContain(CRLF);
+  });
+
+  it('replace_all carries each occurrence by its own lines: the CRLF region only, and counts the bytes written', async () => {
+    await prepare('all.txt', 'a\r\nb\r\na\r\n');
+    const r = await edit('all.txt', 'a', 'X\nY', true);
+    expect(read('all.txt')).toBe('X\r\nY\r\nb\r\nX\r\nY\r\n');
+    expect(r.text).toMatch(/^Edited all\.txt: 2 occurrences replaced, 2 lines replaced by 4 \(\+4 -2\)\. new_string was written with the file's CRLF line endings\. \(sha256 [0-9a-f]{64}\)$/);
+    await prepare('mix.txt', 'a\r\nb\r\na\nc\n');
+    await edit('mix.txt', 'a', 'X\nY', true);
+    expect(read('mix.txt')).toBe('X\r\nY\r\nb\r\nX\nY\nc\n');
+    writeFileSync(join(root, 'ha.txt'), 'a\r\nb\r\na\r\n');
+    const h = await haet('ha.txt', 'a', 'X\nY', true);
+    expect(read('ha.txt')).toBe('X\r\nY\r\nb\r\nX\r\nY\r\n');
+    expect(h.text).toContain(`(+4 -2).${CRLF} content_hash:`);
+  });
+
+  it('an edit that differs only in line endings is refused with nothing written, no undo entry, through both tools', async () => {
+    await prepare('n.txt', 'a\r\nb\r\n');
+    const w = await edit('n.txt', 'a\r\nb', 'a\nb');
+    expect(w.isError).toBe(true);
+    expect(w.text).toBe(NOOP);
+    expect(read('n.txt')).toBe('a\r\nb\r\n');
+    const all = await edit('n.txt', 'a\r\n', 'a\n', true);
+    expect(all.text).toBe(NOOP);
+    expect((await writeFileTool(state, fence).execute({ operation: 'undo', path: 'n.txt', replace_all: false }, ctx())).text).toBe('No edit history for n.txt.');
+    writeFileSync(join(root, 'hn.txt'), 'a\r\nb\r\n');
+    const h = await haet('hn.txt', 'a\r\nb', 'a\nb');
+    expect(h.isError).toBe(true);
+    expect(h.text).toBe(NOOP);
+    expect(read('hn.txt')).toBe('a\r\nb\r\n');
+    expect((await writeFileTool(state, fence).execute({ operation: 'undo', path: 'hn.txt', replace_all: false }, ctx())).text).toBe('No edit history for hn.txt.');
+  });
+
+  it('guards: a CRLF new_string, an LF file, a mixed span and a one-line new_string are written as given, with no sentence', async () => {
+    await prepare('c.txt', 'one\r\ntwo\r\n');
+    const crlf = await edit('c.txt', 'one', 'ONE\r\nX');
+    expect(read('c.txt')).toBe('ONE\r\nX\r\ntwo\r\n');
+    expect(crlf.text).not.toContain(CRLF);
+    await prepare('l.txt', 'one\ntwo\n');
+    const lf = await edit('l.txt', 'one', 'ONE\nX');
+    expect(read('l.txt')).toBe('ONE\nX\ntwo\n');
+    expect(lf.text).not.toContain(CRLF);
+    await prepare('m.txt', 'one\r\ntwo\nthree\r\n');
+    const mixed = await edit('m.txt', 'one\r\ntwo', 'ONE\nTWO');
+    expect(read('m.txt')).toBe('ONE\nTWO\nthree\r\n');
+    expect(mixed.text).not.toContain(CRLF);
+    await prepare('s.txt', 'one\r\ntwo\r\n');
+    const single = await edit('s.txt', 'one', 'ONE');
+    expect(read('s.txt')).toBe('ONE\r\ntwo\r\n');
+    expect(single.text).toMatch(/^Edited s\.txt: 1 line replaced by 1 at line 1 \(\+1 -1\)\. \(sha256 [0-9a-f]{64}\)$/);
+  });
+
+  it('a span in the unterminated last line takes its reading from the file\'s other lines', async () => {
+    await prepare('u.txt', 'a\r\nb');
+    const r = await edit('u.txt', 'b', 'B\nC');
+    expect(read('u.txt')).toBe('a\r\nB\r\nC');
+    expect(r.text).toContain(CRLF);
+    await prepare('v.txt', 'a\nb');
+    expect((await edit('v.txt', 'b', 'B\nC')).text).not.toContain(CRLF);
+    expect(read('v.txt')).toBe('a\nB\nC');
+  });
+
+  it('both descriptions say an edit keeps a CRLF file\'s line endings', () => {
+    expect(writeFileTool(state, fence).description).toContain("An edit keeps a CRLF file's line endings");
+    expect(writeFileTool(state, fence).description).not.toContain('A window match keeps');
+    expect(haetEditTool(state, fence).description).toContain("An edit keeps a CRLF file's line endings.");
   });
 });
 

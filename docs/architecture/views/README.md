@@ -68,6 +68,12 @@ package, edge, process, channel, command or store column changed.
 to that name, so `writeReadingOf` asks the manifest by it. The **runtime view**'s cut-off passage and its `children` row say so.
 No package, edge, process, channel, command or store column changed.
 
+**An exact or replace-all edit keeps a CRLF file's line endings (PD-TOOLS-017, OQ-254; fin38).** `carryExact`
+(`agent-tools/src/tools/files.ts`) carries each level-1 or `replace_all` occurrence through `write_file` and `haet_edit`/`haet`,
+reading `PD-TOOLS-016`'s test (`crlfLines`, now shared with `carryWindow`) on the lines the span touches; a carried result equal
+to the file is refused; `replaceAllMessage` counts the written replacements; `applyMatch` became `applyWindow`, levels 2 to 4
+only. The **runtime view**'s file-tools paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **The hand-over endpoint is part of the instance record (OQ-248 ruled under R-072; REQ-STARTUP-161, REQ-STARTUP-164; fin36).**
 Below a temporary directory each claim attempt makes its own private socket directory (`placeSocket`, `mkdtemp`,
 `platform/instance.ts`), removed with the socket by `closeEndpoint` when the attempt loses or the instance closes; a reclaim

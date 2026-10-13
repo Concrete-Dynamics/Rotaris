@@ -22,7 +22,7 @@ was written with the file's CRLF line endings.". The probe now leaves `ONE\r\ntw
 2 at line 1 (+1 -1)", and an unchanged interior hard break keeps its spaces. Pinned by twelve cases under "PD-TOOLS-016" in
 `packages/agent-tools/src/tools/tools.test.ts` (ten red on the code before, one of them on the description sentence alone) and `diff.test.ts`'s `linePairs` cases. The level-1
 sibling (an exact match writing `new_string`'s LF lines) is not decided by the directive and is recorded on its own as
-[`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md).
+[`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md).
 
 ## Specs
 

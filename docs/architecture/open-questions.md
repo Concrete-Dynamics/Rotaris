@@ -12454,7 +12454,7 @@ once built.
 **Built 2026-10-13 (fin36):** `carryWindow` in `writeFileTool`'s edit branch and `linePairs` in `diff.ts`; pinned by twelve
 cases under "PD-TOOLS-016" in `packages/agent-tools/src/tools/tools.test.ts` (ten red on the code before) and `diff.test.ts`. The
 level-1 sibling the ruling asked to probe writes `new_string`'s LF lines into a CRLF file through both tools; recorded as
-[`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md),
+[`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../defects/fixed/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md),
 not decided here (raised as [OQ-254](#oq-254)). The first execution is in place under the directive.
 
 <a id="oq-247"></a>
@@ -12933,13 +12933,13 @@ built; `agent-timeout.test.ts` green), the two back-pointers amended in place.
 level-1 match; REQ-TOOLS-135, the success; `PD-TOOLS-016`, which keeps the file's line endings for a window match at levels 2
 to 4 and says it does not decide level 1; `PD-STARTUP-001`, Windows the only platform shipped. Raised 2026-10-13 by fin36's
 review from the probe OQ-246's ruling asked for, recorded by fin36's builder without a number; the number is the next free one
-on `origin/main` when raised; if another plan lands it first, this one takes the next free number. Open.)*
+on `origin/main` when raised; if another plan lands it first, this one takes the next free number. **Ruled 2026-10-13.**)*
 
 An edit whose `old_string` matches at level 1 replaces the exact span with `new_string` verbatim. When `new_string` has several
 lines written with `\n` alone and the file is CRLF, the result has LF-only lines among CRLF ones: `write_file` on
 `one\r\ntwo\r\n` with `old_string` `one` and `new_string` `ONE\nX` leaves `ONE\nX\r\ntwo\r\n`; `haet_edit` does the same, and so
 does a `replace_all`. Recorded as
-[`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md),
+[`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../defects/fixed/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md),
 and pinned as built by "PD-TOOLS-016 … level 1, replace_all and haet_edit are unchanged on a CRLF file" in
 `packages/agent-tools/src/tools/tools.test.ts`. No requirement's text is contradicted: "exact" writes `new_string` as given.
 
@@ -12948,6 +12948,38 @@ and pinned as built by "PD-TOOLS-016 … level 1, replace_all and haet_edit are 
 **What a ruling decides.** Whether an exact match carries the file's line endings into `new_string`'s added lines (narrowing
 REQ-TOOLS-136 and REQ-TOOLS-189 for both tools, `PD-TOOLS-016`'s rule extended to level 1 and `replace_all`), or stands as built
 (the caller's bytes written exactly, `PD-TOOLS-016`'s cost "an exact level-1 `old_string` still does either" kept).
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** an exact edit keeps a CRLF file's
+line endings. When `write_file`'s `edit` matches at level 1 or uses `replace_all`, and when `haet_edit` or `haet` matches at
+level 1 or uses `replace_all`, each occurrence is tested by `PD-TOOLS-016` clause 2's test read on the lines its span touches;
+on a CRLF occurrence every line break inside the replacement, or directly after it in the result, gains a `\r` when it lacks
+one, and a `\r` is never doubled. An edit whose carried result leaves the file's bytes unchanged is refused with nothing
+written. The success says when a `\r` was added. Recorded as [`PD-TOOLS-017`](../product/directives.md#pd-tools-017) (it
+narrows REQ-TOOLS-136 and REQ-TOOLS-189 and extends REQ-TOOLS-135), with [`PD-TOOLS-016`](../product/directives.md#pd-tools-016)
+**revision 2**, whose cost sentence "an exact level-1 `old_string` still does either" became false and is kept quoted beneath.
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended a new directive under which a level-1 edit and a `replace_all`, through both
+  tools, give a `\r` to every line break inside the replacement or directly after it, tested on each occurrence, with
+  `PD-TOOLS-016`'s sentence on the success. The ruling followed A on the break after the span: `PD-TOOLS-014`'s quote ends in
+  the file's `\r` (`one\r\ntwo\r`), so a retry with `ONE\ntwo` takes the file's own `\r` with it, and only a rule that reads the
+  result gives it back. It followed A on testing each occurrence by its own lines, as `PD-TOOLS-016` reads only its window.
+- **Advocate B (the system's lens)** recommended the same directive with the `\n`s of `new_string` carried, one test over all
+  of a `replace_all`'s occurrences, an explicit refusal when the carried edit changes nothing, a revision of `PD-TOOLS-016`'s
+  cost sentence, and the sibling `insert` path recorded as its own note and question. The ruling followed B on the refusal (an
+  edit `a\r\nb` → `a\nb` would otherwise rewrite identical bytes beside a success, the no-op already repaired for `haet_edit`),
+  on revising `PD-TOOLS-016` rather than extending it (each identifier's case stays exhaustive), and on `insert`, which the code
+  confirms writes LF lines into a CRLF file the same way.
+
+**Rejected:** confirming the build (a silent format corruption on the only shipped platform, in the commonest edit shape, and
+level-1 drift that later defeats `PD-TOOLS-016`'s own test); a tool-description sentence asking callers to send CRLF (a model
+does not see an invisible `\r`, as `PD-TOOLS-014`'s first execution measured); deferring. **Costs kept on record:** an edit can
+no longer write LF lines into a CRLF file (`overwrite` still can, and `haet_edit` has none); a mixed file keeps the old
+behaviour; a model predicting its own bytes may meet one near miss; an implementation built from the specification alone writes
+`new_string` as given; nothing measures it live, since the live-run fixtures are LF files on Linux.
+
+**What a live run then shows.** Nothing new on Linux. On Windows, a CRLF file edited by an exact or replace-all edit keeps
+uniform CRLF endings, and its success carries `new_string was written with the file's CRLF line endings.`
 
 <a id="oq-255"></a>
 

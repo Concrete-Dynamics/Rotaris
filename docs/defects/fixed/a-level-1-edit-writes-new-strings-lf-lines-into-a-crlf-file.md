@@ -11,7 +11,19 @@ case. Windows is the only platform shipped (`PD-STARTUP-001`), where CRLF files 
 
 `PD-TOOLS-016` (OQ-246) keeps the file's line endings for a window match (levels 2 to 4) and says it does not decide level 1;
 the R-072 consortium's ruling asked that this case be probed and recorded on its own. Recorded, not repaired; raised
-as [OQ-254](../architecture/open-questions.md#oq-254) for a ruling.
+as [OQ-254](../../architecture/open-questions.md#oq-254) for a ruling.
+
+**Repaired 2026-10-13 (fin38, `fin38-edits-handoff-classifier`) under [`PD-TOOLS-017`](../../product/directives.md#pd-tools-017)**,
+the R-072 consortium's ruling of OQ-254. `carryExact` (`packages/agent-tools/src/tools/files.ts`) carries every level-1 match and
+every `replace_all` occurrence through `write_file`, `haet_edit` and `haet`: each occurrence is tested on the lines its span
+touches by `PD-TOOLS-016` clause 2's test (`crlfLines`, factored out of `carryWindow`), and on a CRLF occurrence every line break
+inside the replacement or directly after it gains `\r` when it lacks one, never doubled; the success adds "new_string was
+written with the file's CRLF line endings."; a carried result equal to the file is refused with nothing written. The probe now
+leaves `ONE\r\nX\r\ntwo\r\n`, the `replace_all` `X\r\nY\r\nb\r\nX\r\nY\r\n`, and the `PD-TOOLS-014` retry (`one\r\ntwo\r` →
+`ONE\ntwo`) `ONE\r\ntwo\r\nthree\r\n`. Pinned by the cases under "PD-TOOLS-017" in `packages/agent-tools/src/tools/tools.test.ts`
+(eight red on the code before, the guards green before and after) and by the reversed case under "PD-TOOLS-016". The sibling
+`insert` path is recorded on its own
+([`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](../a-write-file-insert-writes-lf-lines-into-a-crlf-file.md), OQ-259).
 
 ## Specs
 
@@ -22,6 +34,8 @@ as [OQ-254](../architecture/open-questions.md#oq-254) for a ruling.
 - REQ-TOOLS-135's success counts the lines as written, so it is truthful about what it did.
 
 ## Relevant files
+
+As they stood when the note was written; since the repair `applyMatch` is `applyWindow`, levels 2 to 4 only.
 
 - `packages/agent-tools/src/tools/files.ts`: `applyMatch`'s level-1 branch (the exact span replaced by `new_string`), the
   `replace_all` branches of `writeFileTool` and `haetEditTool`; `carryWindow`, which `PD-TOOLS-016` applies above level 1 only.

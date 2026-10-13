@@ -409,31 +409,47 @@ function replacementMessage(rel: string, before: string, after: string, oldText:
  * meets), and occurrences whose regions overlap or meet become one region. Text outside the regions is the same on both sides, so a
  * region's replacement is the region's own text with its occurrences replaced.
  */
-function replaceAllMessage(rel: string, before: string, oldText: string, newText: string, count: number): string {
-  const regions: [number, number][] = [];
+function replaceAllMessage(rel: string, before: string, oldText: string, newText: string, count: number, written?: readonly string[]): string {
+  // `PD-TOOLS-017`: `written` holds each occurrence's replacement as written (its line endings carried), so the counts describe
+  // the bytes written; each region's replacement is its text with its own occurrences spliced in order.
+  const regions: [number, number, number[]][] = [];
   const lineEnd = (at: number): number => {
     const nl = before.indexOf('\n', at);
     return nl === -1 ? before.length : nl + 1;
   };
-  if (oldText === '') regions.push([0, before.length]);
+  if (oldText === '') regions.push([0, before.length, []]);
   else {
     for (let at = before.indexOf(oldText); at !== -1; at = before.indexOf(oldText, at + oldText.length)) {
       const from = at === 0 ? 0 : before.lastIndexOf('\n', at - 1) + 1;
       // The line the first character after the occurrence sits on: its own last line, or the next one after a newline.
       const to = lineEnd(at + oldText.length);
       const last = regions[regions.length - 1];
-      if (last !== undefined && from <= last[1]) last[1] = Math.max(last[1], to);
-      else regions.push([from, to]);
+      if (last !== undefined && from <= last[1]) { last[1] = Math.max(last[1], to); last[2].push(at); }
+      else regions.push([from, to, [at]]);
     }
   }
+  let occurrence = 0;
+  const replacedRegion = (from: number, to: number, ats: readonly number[]): string => {
+    const region = before.slice(from, to);
+    if (oldText === '') return region.split('').join(newText);
+    if (written === undefined) return region.split(oldText).join(newText);
+    let text = '';
+    let cursor = from;
+    for (const at of ats) {
+      text += before.slice(cursor, at) + (written[occurrence] as string);
+      occurrence += 1;
+      cursor = at + oldText.length;
+    }
+    return text + before.slice(cursor, to);
+  };
   let replaced = 0;
   let by = 0;
   let added = 0;
   let removed = 0;
-  for (const [from, to] of regions) {
+  for (const [from, to, ats] of regions) {
     const region = before.slice(from, to);
     const b = splitLines(region);
-    const a = splitLines(oldText === '' ? region.split('').join(newText) : region.split(oldText).join(newText));
+    const a = splitLines(replacedRegion(from, to, ats));
     const changes = lineChanges(b, a);
     replaced += b.length;
     by += a.length;
@@ -658,17 +674,7 @@ export function carryWindow(newText: string, oldText: string, fileLines: readonl
   // A line break follows every line of the split but its last element, the text after the final break. A window has such a
   // line unless it is that last element alone; then the file's other lines are read instead.
   const windowEnd = Math.min(fileLines.length, start + k);
-  const inWindow = (at: number) => at >= start && at < windowEnd;
-  const allCr = (counted: (at: number) => boolean): boolean => {
-    let any = false;
-    for (let at = 0; at < fileLines.length - 1; at += 1) {
-      if (!counted(at)) continue;
-      if (!(fileLines[at] as string).endsWith('\r')) return false;
-      any = true;
-    }
-    return any;
-  };
-  const crlf = start < fileLines.length - 1 ? allCr(inWindow) : allCr((at) => !inWindow(at));
+  const crlf = crlfLines(fileLines, start, windowEnd - 1);
   let crlfAdded = false;
   if (crlf) {
     const lastFollowed = windowEnd - 1 < fileLines.length - 1;
@@ -680,12 +686,95 @@ export function carryWindow(newText: string, oldText: string, fileLines: readonl
   return { text: out.join('\n'), crlfAdded };
 }
 
-/** Apply the single match: a level-1 match replaces the exact span; a window match replaces whole lines. */
-function applyMatch(text: string, lines: readonly string[], m: EditMatch, oldText: string, newText: string): string {
-  if (m.level === 1 && m.offsets) {
-    const o = m.offsets[0] as number;
-    return `${text.slice(0, o)}${newText}${text.slice(o + oldText.length)}`;
+/**
+ * `PD-TOOLS-016` clause 2's test, which `PD-TOOLS-017` reads too: the lines `first` to `last` of `fileLines` (a `split('\n')`
+ * of the file) are CRLF when at least one of them is followed by a line break and every such line ends in `\r`; when none of
+ * them is followed by one (the span lies in the file's unterminated last element), the file's other lines are read the same way.
+ */
+function crlfLines(fileLines: readonly string[], first: number, last: number): boolean {
+  const allCr = (counted: (at: number) => boolean): boolean => {
+    let any = false;
+    for (let at = 0; at < fileLines.length - 1; at += 1) {
+      if (!counted(at)) continue;
+      if (!(fileLines[at] as string).endsWith('\r')) return false;
+      any = true;
+    }
+    return any;
+  };
+  const inside = (at: number) => at >= first && at <= last;
+  return first < fileLines.length - 1 ? allCr(inside) : allCr((at) => !inside(at));
+}
+
+/**
+ * `PD-TOOLS-017` (OQ-254, R-072, 2026-10-13): an exact edit — REQ-TOOLS-136 level 1 through `write_file`, `haet_edit` and
+ * `haet`, and every occurrence of a `replace_all` — keeps a CRLF file's line endings. Each occurrence of `oldText` at
+ * `offsets` (ascending, non-overlapping) is tested on the lines its span touches, from the line holding its first character to
+ * the line holding its last, by `PD-TOOLS-016` clause 2's test (`crlfLines`). For a CRLF occurrence every `\n` of the written
+ * replacement, and a `\n` directly after it in the result, gains a `\r` when the character before it in the result is not
+ * `\r`; a `\r` is never doubled, and every other occurrence is written as given. Decided on the result, so a span that took
+ * the file's own `\r` with it (`PD-TOOLS-014`'s quote, `one\r\ntwo\r`, retried with `ONE\ntwo`) gives it back.
+ *
+ * Until this directive the replacement was `new_string` as given: `one\r\ntwo\r\n` edited `one` → `ONE\nX` left
+ * `ONE\nX\r\ntwo\r\n` beside a clean success (docs/defects/fixed/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md).
+ * Returns the file's new text, each occurrence's written replacement (a `\r` added after the span is counted in it) and
+ * whether a `\r` was added.
+ */
+export function carryExact(before: string, offsets: readonly number[], oldText: string, newText: string): { after: string; replacements: string[]; crlfAdded: boolean } {
+  const fileLines = before.split('\n');
+  const breaks: number[] = [];
+  for (let nl = before.indexOf('\n'); nl !== -1; nl = before.indexOf('\n', nl + 1)) breaks.push(nl);
+  // The line holding the character at `at`: the number of line breaks before it (a `\n` belongs to the line it ends).
+  const lineOf = (at: number): number => {
+    let lo = 0;
+    let hi = breaks.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if ((breaks[mid] as number) < at) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
+  let out = '';
+  let cursor = 0;
+  let crlfAdded = false;
+  const replacements: string[] = [];
+  for (let i = 0; i < offsets.length; i += 1) {
+    const at = offsets[i] as number;
+    const end = at + oldText.length;
+    out += before.slice(cursor, at);
+    let text = newText;
+    if (oldText.length > 0 && crlfLines(fileLines, lineOf(at), lineOf(end - 1))) {
+      text = '';
+      const prev = () => (text.length > 0 ? text[text.length - 1] : out[out.length - 1]);
+      for (const ch of newText) {
+        if (ch === '\n' && prev() !== '\r') { text += '\r'; crlfAdded = true; }
+        text += ch;
+      }
+      if (before[end] === '\n' && offsets[i + 1] !== end && prev() !== '\r') { text += '\r'; crlfAdded = true; }
+    }
+    out += text;
+    replacements.push(text);
+    cursor = end;
   }
+  return { after: out + before.slice(cursor), replacements, crlfAdded };
+}
+
+/** Every offset of `oldText` in `text`, found as REQ-TOOLS-136 level 1 and `replace_all` find them: plain text, each search resuming after the last occurrence. */
+function occurrences(text: string, oldText: string): number[] {
+  const out: number[] = [];
+  if (oldText.length === 0) return out;
+  for (let i = text.indexOf(oldText); i !== -1; i = text.indexOf(oldText, i + oldText.length)) out.push(i);
+  return out;
+}
+
+/** `PD-TOOLS-017` clause 3's refusal: the carried edit would leave the file's bytes as they are. */
+const LINE_ENDINGS_ONLY = "old_string and new_string differ only in line endings, which an edit keeps as the file's; nothing to change. Use write_file's 'overwrite' to change a file's line endings.";
+
+/** `PD-TOOLS-017` clause 4's sentence, which `PD-TOOLS-016` clause 3 also adds. */
+const CRLF_SENTENCE = " new_string was written with the file's CRLF line endings.";
+
+/** Apply the single window match (levels 2 to 4): it replaces whole lines. A level-1 match is `carryExact`'s (`PD-TOOLS-017`). */
+function applyWindow(lines: readonly string[], m: EditMatch, oldText: string, newText: string): string {
   const start = m.starts[0] as number;
   const k = oldText.split('\n').length;
   return [...lines.slice(0, start), ...newText.split('\n'), ...lines.slice(start + k)].join('\n');
@@ -727,7 +816,7 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
      * docs/defects/fixed/write-files-first-use-refusal-recurred-under-duress.md). The duress run after it still had 1 of 4
      * children omit the field; reading the selector from the call is the fourth repair PD-TOOLS-007 allows (`inferArguments`).
      */
-    description: 'Create, edit, overwrite, insert into, or undo the last write of a workspace file. Every call names its `operation` — one of create, edit, overwrite, insert, undo — with the fields that operation reads: create {path, content}; edit {path, old_string, new_string, replace_all?}; overwrite {path, content}; insert {path, content, insert_line} (0 = beginning); undo {path} (undoing a create removes the file it made). Example: {"operation": "create", "path": "notes.txt", "content": "hello\\n"}. Read a file before editing or overwriting it. An edit whose old_string matches only once its indentation is shifted moves new_string by the same shift when new_string shares old_string\'s indentation, writes it as given when it already has the file\'s, and otherwise is refused with the file\'s lines quoted. A window match keeps the file\'s line endings and, at match level 2, the exact bytes of every line new_string repeats unchanged from old_string.',
+    description: 'Create, edit, overwrite, insert into, or undo the last write of a workspace file. Every call names its `operation` — one of create, edit, overwrite, insert, undo — with the fields that operation reads: create {path, content}; edit {path, old_string, new_string, replace_all?}; overwrite {path, content}; insert {path, content, insert_line} (0 = beginning); undo {path} (undoing a create removes the file it made). Example: {"operation": "create", "path": "notes.txt", "content": "hello\\n"}. Read a file before editing or overwriting it. An edit whose old_string matches only once its indentation is shifted moves new_string by the same shift when new_string shares old_string\'s indentation, writes it as given when it already has the file\'s, and otherwise is refused with the file\'s lines quoted. An edit keeps a CRLF file\'s line endings and, at match level 2, the exact bytes of every line new_string repeats unchanged from old_string.',
     schema: writeSchema,
     /**
      * REQ-TOOLS-032's recoverable refusal, with the expected shape named: the run's first uses omitted
@@ -834,7 +923,11 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
           if (a.replace_all) {
             const count = (before ?? '').split(a.old_string).length - 1;
             if (count === 0) return errorObservation(`old_string was not found in ${rel} (${countNoun(lineCount(before ?? ''), 'line')}). Read the file again or use 'overwrite'.`);
-            return commit((before ?? '').split(a.old_string).join(a.new_string), replaceAllMessage(rel, before ?? '', a.old_string, a.new_string, count));
+            if (a.old_string === '') return commit((before ?? '').split(a.old_string).join(a.new_string), replaceAllMessage(rel, before ?? '', a.old_string, a.new_string, count));
+            // PD-TOOLS-017: every occurrence keeps a CRLF file's line endings; an edit left with the file's own bytes is refused.
+            const carried = carryExact(before ?? '', occurrences(before ?? '', a.old_string), a.old_string, a.new_string);
+            if (carried.after === before) return errorObservation(LINE_ENDINGS_ONLY);
+            return commit(carried.after, `${replaceAllMessage(rel, before ?? '', a.old_string, a.new_string, count, carried.replacements)}${carried.crlfAdded ? CRLF_SENTENCE : ''}`);
           }
           const m = matchEdit(lines, a.old_string);
           if (!m) return errorObservation(`old_string was not found in ${rel} at any of the four match levels (exact, trailing-whitespace, indentation shift, fuzzy ≥ 0.85); the file has ${countNoun(lineCount(before ?? ''), 'line')}. Read the file again or use 'overwrite'.`);
@@ -862,10 +955,17 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
           if (m.level > 1) {
             const carried = carryWindow(replacement, a.old_string, lines, start, m.level as 2 | 3 | 4);
             replacement = carried.text;
-            if (carried.crlfAdded) said += " new_string was written with the file's CRLF line endings.";
+            if (carried.crlfAdded) said += CRLF_SENTENCE;
           }
-          const after = applyMatch(before ?? '', lines, m, a.old_string, replacement);
-          const note = m.level > 1 ? ` Match level: ${m.level}${m.level === 4 ? ` (similarity: ${m.similarity!.toFixed(2)}). Verify the result.` : '.'}${said}` : '';
+          // PD-TOOLS-017: an exact match keeps a CRLF file's line endings; an edit left with the file's own bytes is refused.
+          let after: string;
+          if (m.level === 1) {
+            const carried = carryExact(before ?? '', [m.offsets?.[0] as number], a.old_string, replacement);
+            if (carried.after === before) return errorObservation(LINE_ENDINGS_ONLY);
+            after = carried.after;
+            if (carried.crlfAdded) said = CRLF_SENTENCE;
+          } else after = applyWindow(lines, m, a.old_string, replacement);
+          const note = m.level > 1 ? ` Match level: ${m.level}${m.level === 4 ? ` (similarity: ${m.similarity!.toFixed(2)}). Verify the result.` : '.'}${said}` : said;
           return commit(after, `${replacementMessage(rel, before ?? '', after, a.old_string, start)}${note}`);
         }
         case 'undo': {
@@ -931,7 +1031,7 @@ const haetEditSchema = z.object({
 export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'haet_edit' | 'haet' = 'haet_edit'): ToolExecutor<z.infer<typeof haetEditSchema>> {
   return {
     name,
-    description: 'Hash-anchored exact edit: replace old_string with new_string in a file whose current SHA-256 equals content_hash (from haet_read). Reports the new content_hash. A miss that differs from the file only in trailing whitespace or a uniform indentation shift is refused, names the lines and quotes the file\'s text; a retry with that text needs the same content_hash and no read.',
+    description: 'Hash-anchored exact edit: replace old_string with new_string in a file whose current SHA-256 equals content_hash (from haet_read). Reports the new content_hash. A miss that differs from the file only in trailing whitespace or a uniform indentation shift is refused, names the lines and quotes the file\'s text; a retry with that text needs the same content_hash and no read. An edit keeps a CRLF file\'s line endings.',
     schema: haetEditSchema,
     /**
      * REQ-TOOLS-032's recoverable refusal, with the expected shape named: the run's first uses omitted
@@ -984,11 +1084,20 @@ export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'ha
       const lines = before.split('\n');
       let after: string;
       let message: string;
+      // PD-TOOLS-017: an exact edit and every replace_all occurrence keep a CRLF file's line endings, and an edit left with
+      // the file's own bytes is refused before anything is written.
       if (a.replace_all) {
         const count = before.split(a.old_string).length - 1;
         if (count === 0) return errorObservation(`old_string was not found in ${rel}. Read it again with haet_read.`);
-        after = before.split(a.old_string).join(a.new_string);
-        message = replaceAllMessage(rel, before, a.old_string, a.new_string, count);
+        if (a.old_string === '') {
+          after = before.split(a.old_string).join(a.new_string);
+          message = replaceAllMessage(rel, before, a.old_string, a.new_string, count);
+        } else {
+          const carried = carryExact(before, occurrences(before, a.old_string), a.old_string, a.new_string);
+          if (carried.after === before) return errorObservation(LINE_ENDINGS_ONLY);
+          after = carried.after;
+          message = `${replaceAllMessage(rel, before, a.old_string, a.new_string, count, carried.replacements)}${carried.crlfAdded ? CRLF_SENTENCE : ''}`;
+        }
       } else {
         const m = matchEdit(lines, a.old_string);
         // PD-TOOLS-014: a level-2 or level-3 near miss says so; a level-4 match and no match keep REQ-TOOLS-189's reply.
@@ -998,8 +1107,10 @@ export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'ha
         if (!m || m.level !== 1) return errorObservation(`old_string was not found exactly in ${rel}. Read it again with haet_read.`);
         if (m.starts.length > 1) return errorObservation(`Found ${m.starts.length} occurrences of old_str at lines ${m.starts.map((s) => s + 1).join(', ')}. Add surrounding context to make the match unique, or set replace_all.`);
         const start = m.starts[0] as number;
-        after = applyMatch(before, lines, m, a.old_string, a.new_string);
-        message = replacementMessage(rel, before, after, a.old_string, start);
+        const carried = carryExact(before, [m.offsets?.[0] as number], a.old_string, a.new_string);
+        if (carried.after === before) return errorObservation(LINE_ENDINGS_ONLY);
+        after = carried.after;
+        message = `${replacementMessage(rel, before, after, a.old_string, start)}${carried.crlfAdded ? CRLF_SENTENCE : ''}`;
       }
       state.pushUndo(resolved, { previous: before });
       atomicWrite(resolved, after);

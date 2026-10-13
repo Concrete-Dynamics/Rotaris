@@ -273,13 +273,13 @@ export function writtenPathsOf(toolName: string, args: Readonly<Record<string, u
 
 /**
  * REQ-MCP-015: the EDIT tier is the code-intelligence server's. A call's runtime name carries that server's prefix only when
- * two servers expose one name, so the name alone cannot tell the product's `replace_content` from a user's own server's tool
- * called the same. The readers are given instead the callables the child's grant gives the code-intelligence server, in
+ * two servers expose one name, so the name alone cannot tell the product's single-file content replacement from a user's own server's
+ * tool called the same (the names themselves are written only in the binding manifest, REQ-MCP-116). The readers are given instead the callables the child's grant gives the code-intelligence server, in
  * lower case (`McpGrantEvidence.granted`, keyed by server); a call whose name is not among them is no EDIT call whatever it
  * is called. `undefined` where no grant is known (a port not yet ready, a test double), when the name alone decides as before.
  *
  * The reason, kept beside it: until fin36 every reader matched the name alone, so with the shipped entry disabled another
- * server's `replace_content` listed whatever its `relative_path` argument held among the child's edited files
+ * server's tool named like the single-file content replacement listed whatever its `relative_path` argument held among the child's edited files
  * (docs/defects/fixed/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md).
  */
 export type EditTierNames = ReadonlySet<string> | undefined;

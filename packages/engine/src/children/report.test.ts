@@ -193,7 +193,7 @@ describe('engine/children/report — another server\'s tool named like the EDIT 
   it('the code-intelligence server\'s own callables still read as EDIT calls, in any casing and under the collision prefix', () => {
     expect(writeReadingOf(edit.replaceInFile, { [at.replaceInFile.path]: 'docs/a.md' }, undefined, ours)).toEqual({ paths: ['docs/a.md'], unnamed: false });
     expect(writeReadingOf(`code_intelligence_${edit.replaceAcrossFiles}`, { needle: 'a' }, undefined, ours)?.unnamed).toBe(true);
-    // The other server's unprefixed `replace_in_files` beside it is not the tier.
+    // The other server's unprefixed cross-file replacement beside it is not the tier.
     expect(writeReadingOf(edit.replaceAcrossFiles, { needle: 'a' }, undefined, ours)).toBeNull();
   });
 

@@ -47,6 +47,11 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   gates red on timing, each passing alone). Expect timing reds at that load and re-run them alone (next point).
 - **Timing-sensitive tests and proofs flake under load.** Every prompt carries the rule: re-run a timing red once
   alone and say what else was running. A red reproduced alone is real; "flake" is never a root cause.
+- **Disk is the session's allowance, not the device's.** `df` reports a 252 GB `/dev/vda`, but the session's effective limit
+  is far smaller: on 2026-10-07 at about 09:44 UTC (fin30) it reached 0 bytes free at about 38 GB used, which emptied a proof
+  log and stopped tool output until space was freed; on 2026-10-13 `df` showed 7.9 GB free at 30 GB used. Every worktree
+  with its `node_modules`, `out/` and `.proof/` costs gigabytes: remove a landed bundle's worktree, a proof's evidence once
+  it is reported, and scratch files under `/tmp` a run created, and read `df -h /` before a long proof.
 
 ## Restarts
 

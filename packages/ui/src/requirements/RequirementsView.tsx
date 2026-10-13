@@ -602,6 +602,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   const paneTargetNow = useRef<ReqId | null>(null);
   /** The pane on screen, read where a landed read decides whether the review pane still shows its requirement. */
   const paneNow = useRef<PaneKey | null>(null);
+  const loadReviewNow = useRef<(id: ReqId, via: 'open' | 'reload') => void>(() => undefined);
   const [confirmWrites, setConfirmWrites] = useState(false);
 
   /** REQ-TRACE-425: the surface states that it is reading, keeps responding, and REFUSES a second read rather than starting one. */
@@ -619,10 +620,13 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
       const verdict = reviewLedger.land(asked.start, paneTargetNow.current);
       // The read refused while this one was outstanding, for the requirement the pane was retargeted to, starts now (fin36).
       const owed = paneNow.current === 'review' ? reviewLedger.owed(paneTargetNow.current) : null;
-      if (verdict === 'discard') { setReviewBusy(false); setReview(null); if (owed !== null) loadReview(owed, 'open'); return; }
+      if (verdict === 'discard') { setReviewBusy(false); setReview(null); if (owed !== null) loadReviewNow.current(owed, 'open'); return; }
       if (r.ok) { setReview(r.value); setReviewError(undefined); } else { setReview(null); setReviewError(r.reason); }
     });
   }, [host, reviewLedger]);
+
+  // The owed read starts through the latest `loadReview`, which cannot name itself in its own body.
+  useEffect(() => { loadReviewNow.current = loadReview; }, [loadReview]);
 
   const openPane = useCallback((key: PaneKey, id: ReqId | null) => {
     paneOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;

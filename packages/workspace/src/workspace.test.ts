@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
@@ -236,5 +236,33 @@ describe('workspace — D8: the assessment and a refused restore leave the targe
     expect(listing(A)).toEqual(before);
     expect(readFileSync(storeFile(root, A)).equals(bytes)).toBe(true);
     expect(readFileSync(`${storeFile(root, A)}-wal`).equals(wal)).toBe(true);
+  });
+});
+
+describe('workspace — D11: a restore whose kept store the engine could not open is refused at the assessment (ADR-0058 consequence 18)', () => {
+  it('a target at 230 characters is refused before any confirmation, naming the length and the limit; with no limit it is assessed as before', async () => {
+    // A workspaces root that puts the live `workspace.db` at 230 characters.
+    const base = realpathSync(mkdtempSync(join(tmpdir(), 'rotaris-long-')));
+    const longRoot = join(base, 'p'.repeat(230 - (1 + A.length + 1 + 'workspace.db'.length) - base.length - 1));
+    mkdirSync(longRoot);
+    try {
+      expect(storeFile(longRoot, A).length).toBe(230);
+      writeId(A);
+      seed(longRoot, A, ['S-old']);
+      const art = artifactOf(A, ['S-new']);
+      const d = { ...deps(art), workspacesRoot: longRoot };
+      const a = assessRestore({ ...d, storePathLimit: 251 });
+      expect(a.refusal?.why).toBe('path-too-long');
+      expect(a.refusal?.detail).toContain('267 characters');
+      expect(a.refusal?.detail).toContain('251');
+      expect(assessRestore({ ...d, storePathLimit: null }).refusal).toBeNull();
+      const r = await performRestore({ ...d, storePathLimit: 251, decisions: { identifier: 'workspace', proceedWithForeignLocks: false }, runHost: runHost(), timers: clocks.timers, wall: clocks.wall });
+      expect(r.ok).toBe(false);
+      expect(r.steps).toEqual(['assess-refused']);
+      const sidsAt = (): string[] => { const db = openStore(storeFile(longRoot, A), { readonly: true, mustExist: true }); const s = new StoreDal(db).listSessions().map((x) => x.session_id); db.close(); return s; };
+      expect(sidsAt()).toEqual(['S-old']);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
   });
 });

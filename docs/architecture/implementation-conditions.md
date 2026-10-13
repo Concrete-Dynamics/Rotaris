@@ -64,7 +64,8 @@ predict. A run that cannot be raced into the window is not a pass; it is an inco
 harness needs fixing, because the unmodified mechanism admitted one on the first attempt.
 
 **What it does not cover.** The eight defects spike 22 found and did not correct (D3, D5, D6, D7, D8, D9,
-D10, D11) are open items in their own right and are not discharged by this condition.
+D10, D11) are open items in their own right and are not discharged by this condition. *(2026-10-13: D8 and D11
+repaired, and D5 deferred with OQ-48 under R-071 — ADR-0058 consequence 18 says how; this condition is unchanged.)*
 
 ---
 

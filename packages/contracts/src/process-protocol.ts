@@ -312,8 +312,8 @@ export const RestoreAssessmentSchema = z.object({
   identifier: z.object({ case: z.enum(['same', 'absent', 'different', 'unreadable']), current: z.string().nullable() }),
   /** The store the restore would replace: what is there now, and the lock rows that gate it (D9 as one condition). */
   target: z.object({ exists: z.boolean(), sessions: z.number().int(), foreignLocks: z.array(z.string()), liveLocks: z.array(z.string()) }),
-  /** A refusal decided before any confirmation is asked (ADR-0058 gates 1 and 2, REQ-SESSION-197). */
-  refusal: z.object({ why: z.enum(['unreadable-artifact', 'corrupt', 'newer-schema', 'unreadable-identifier']), detail: z.string() }).nullable(),
+  /** A refusal decided before any confirmation is asked (ADR-0058 gates 1 and 2, REQ-SESSION-197; `path-too-long`: consequence 18's D11, a store the restore would create at a path the engine cannot open). */
+  refusal: z.object({ why: z.enum(['unreadable-artifact', 'corrupt', 'newer-schema', 'unreadable-identifier', 'path-too-long']), detail: z.string() }).nullable(),
 });
 export type RestoreAssessment = z.infer<typeof RestoreAssessmentSchema>;
 

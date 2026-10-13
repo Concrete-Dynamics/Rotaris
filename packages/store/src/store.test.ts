@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import Database from 'better-sqlite3';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
+import { asSessionId, fileStamp, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
-import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, openStore, openStoreForInspection, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
+import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, FILE_STAMP_LENGTH, openStore, openStoreForInspection, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, storePathLimit, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
 /** PD-TOOLS-006 revision 6 (OQ-220): what v34 added, undone before v33's so a test that lowers `user_version` below 34 can climb it again. */
 const UNDO_V34 = 'ALTER TABLE children DROP COLUMN todo_item;';
@@ -347,6 +347,90 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
     holder.close();
     forgetSpelling(storeDir(root, id));
     expect(readdirSync(storeDir(root, id)).filter((n) => SIDECAR_PATTERN.test(n))).toEqual([]);
+  });
+});
+
+describe('store — D11: a restore refuses before step 1 where a store it would create crosses the engine\'s path limit (ADR-0058 consequence 18)', () => {
+  const id = mintWorkspaceId('00000000000000000000000000000012');
+  const made: string[] = [];
+  afterEach(() => { for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true }); });
+  /** A workspaces root whose live `workspace.db` path is exactly `dbLength` characters long. */
+  const rootFor = (dbLength: number): string => {
+    const base = realpathSync(mkdtempSync(join(tmpdir(), 'rotaris-long-')));
+    made.push(base);
+    let dir = base;
+    let rem = dbLength - (1 + id.length + 1 + 'workspace.db'.length) - dir.length;
+    while (rem > 0) {
+      const take = rem >= 103 ? 100 : rem === 102 ? 99 : rem - 1;
+      dir = join(dir, 'p'.repeat(take));
+      rem -= take + 1;
+    }
+    mkdirSync(dir, { recursive: true });
+    expect(storeFile(dir, id).length).toBe(dbLength);
+    return dir;
+  };
+  const ctxAt = (r: string, rh: RunHostControl, artifact: string) => ({
+    workspacesRoot: r, id, artifact, thisMachine: M, originLabel: 'C:\\ws', runHost: rh, timers: clocks.timers, wall: clocks.wall,
+  });
+
+  it('the limit is the engine\'s on Windows, 251 characters of database path, and none where none was measured', () => {
+    expect(storePathLimit('win32')).toBe(251);
+    expect(storePathLimit('linux')).toBeNull();
+    expect(storePathLimit('darwin')).toBeNull();
+    // The assessment reads no clock, so it measures the kept name with the stamp's fixed length.
+    expect(fileStamp(clocks.wall.instant())).toHaveLength(FILE_STAMP_LENGTH);
+  });
+
+  for (const live of [215, 230, 251]) {
+    it(`a live store at ${live} characters is refused before step 1 — nothing asked of the run host, the target untouched, nothing beside it`, async () => {
+      const r0 = rootFor(live);
+      seed(r0, id, [{ sid: 'S-1', rows: 2 }]);
+      const artifact = makeArtifact(r0, id, [{ sid: 'S-from-backup', rows: 1 }]);
+      const before = treeHash(storeDir(r0, id));
+      const listing = readdirSync(r0).sort();
+      const rh = fakeRunHost(r0, id, { raceAtStep: 'none', closeAnswers: true });
+      const r = await restoreStore(ctxAt(r0, rh, artifact), { storePathLimit: 251 });
+      expect(r.ok).toBe(false);
+      expect(r.abandoned).toBe(true);
+      expect(r.steps).toEqual(['0-path-too-long']);
+      expect(r.error).toContain(`${live + 37} characters`);
+      expect(r.error).toContain('251');
+      expect(rh.log).toEqual([]);
+      expect(treeHash(storeDir(r0, id))).toBe(before);
+      expect(readdirSync(r0).sort()).toEqual(listing);
+    });
+  }
+
+  it('at 214 characters the widest kept name is 251 and the restore proceeds; the kept store opens', async () => {
+    const r0 = rootFor(214);
+    seed(r0, id, [{ sid: 'S-1', rows: 2 }]);
+    const artifact = makeArtifact(r0, id, [{ sid: 'S-from-backup', rows: 1 }]);
+    const r = await restoreStore(ctxAt(r0, fakeRunHost(r0, id, { raceAtStep: 'none', closeAnswers: true }), artifact), { storePathLimit: 251 });
+    expect(r.ok).toBe(true);
+    expect(join(r.displaced!, 'workspace.db').length).toBeLessThanOrEqual(251);
+    expect(counts(r0, id).sids).toEqual(['S-from-backup']);
+  });
+
+  it('(counterfactual, D11 as it was) with no limit the same 230-character store is restored and the copy it keeps lands past 251', async () => {
+    const r0 = rootFor(230);
+    seed(r0, id, [{ sid: 'S-1', rows: 2 }]);
+    const artifact = makeArtifact(r0, id, [{ sid: 'S-from-backup', rows: 1 }]);
+    const r = await restoreStore(ctxAt(r0, fakeRunHost(r0, id, { raceAtStep: 'none', closeAnswers: true }), artifact), { storePathLimit: null });
+    expect(r.ok).toBe(true);
+    expect(join(r.displaced!, 'workspace.db').length).toBe(265);
+  });
+
+  it('with nothing to displace only the staging store is measured, 12 characters longer: 239 characters proceeds, 240 is refused', async () => {
+    const ok = rootFor(239);
+    const a1 = makeArtifact(ok, id, [{ sid: 'S-from-backup', rows: 1 }]);
+    const r1 = await restoreStore(ctxAt(ok, fakeRunHost(ok, id, { raceAtStep: 'none', closeAnswers: true }), a1), { storePathLimit: 251 });
+    expect(r1.ok).toBe(true);
+    const no = rootFor(240);
+    const a2 = makeArtifact(no, id, [{ sid: 'S-from-backup', rows: 1 }]);
+    const r2 = await restoreStore(ctxAt(no, fakeRunHost(no, id, { raceAtStep: 'none', closeAnswers: true }), a2), { storePathLimit: 251 });
+    expect(r2.abandoned).toBe(true);
+    expect(r2.error).toContain('252 characters');
+    expect(existsSync(storeDir(no, id))).toBe(false);
   });
 });
 

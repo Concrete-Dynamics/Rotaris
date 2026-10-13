@@ -4,8 +4,9 @@ import { parseWorkspaceId, type MachineId, type Millis, type Timers, type WallCl
 import { exclusiveCreate, isLockForeign, isLockLive, probePid, replaceDocument, type Liveness } from '@rotaris/platform';
 import type { RestoreAssessment, RestoreDecisions, RestoreReportPayload } from '@rotaris/contracts';
 import {
-  CONTAINER_MANIFEST, CONTAINER_STORE_FILE, CURRENT_SCHEMA_VERSION, expandArtifact, forgetSpelling, openStore, openStoreForInspection, readWorkspaceId, restoreStore,
-  StoreDal, storeFile, WORKSPACE_ID_HEADER, workspaceIdFile, type BackupManifest, type RunHostControl,
+  CONTAINER_MANIFEST, CONTAINER_STORE_FILE, CURRENT_SCHEMA_VERSION, expandArtifact, FILE_STAMP_LENGTH, forgetSpelling, openStore, openStoreForInspection, pathTooLongDetail,
+  readWorkspaceId, restorePathTooLong, restoreStore, StoreDal, storeDir, storeFile, storePathLimit, WORKSPACE_ID_HEADER, workspaceIdFile, type BackupManifest,
+  type RunHostControl,
 } from '@rotaris/store';
 
 /**
@@ -32,6 +33,8 @@ export interface AssessDeps {
   readonly artifact: string;
   readonly thisMachine: MachineId;
   readonly probe?: (pid: number) => Liveness;
+  /** D11: the engine's database-path limit the restore is held to; `null` for none. Defaults to this platform's (`storePathLimit`). */
+  readonly storePathLimit?: number | null;
 }
 
 function readManifest(dir: string): BackupManifest | null {
@@ -101,6 +104,15 @@ export function assessRestore(d: AssessDeps): RestoreAssessment {
   // The target: the store every outcome writes — the artifact's own identifier on this machine.
   const targetId = artifact.workspaceId as WorkspaceId;
   const targetFile = storeFile(d.workspacesRoot, targetId);
+
+  // D11 (ADR-0058 consequence 18): a store the restore would create beside the target — the staging copy, or the copy it
+  // keeps of the store it replaces — at a path the engine cannot open is refused here, before any confirmation is asked.
+  const tooLong = restorePathTooLong(d.workspacesRoot, targetId, {
+    limit: d.storePathLimit === undefined ? storePathLimit() : d.storePathLimit,
+    stampLength: FILE_STAMP_LENGTH,
+    targetExists: existsSync(storeDir(d.workspacesRoot, targetId)),
+  });
+  if (tooLong) return refuse('path-too-long', pathTooLongDetail(tooLong), artifact);
   let target: RestoreAssessment['target'] = noTarget;
   if (existsSync(targetFile)) {
     // D8 (ADR-0058 consequence 18): an inspection that leaves the target's directory holding the files it found —
@@ -148,7 +160,10 @@ export async function performRestore(d: PerformDeps): Promise<RestoreReportPaylo
   const targetId = a.artifact.workspaceId as WorkspaceId;
   const r = await restoreStore(
     { workspacesRoot: d.workspacesRoot, id: targetId, artifact: d.artifact, thisMachine: d.thisMachine, originLabel: d.workspaceRoot, runHost: d.runHost, timers: d.timers, wall: d.wall },
-    { proceedWithForeignLocks: d.decisions.proceedWithForeignLocks, ...(d.ackBoundMs === undefined ? {} : { ackBoundMs: d.ackBoundMs }) },
+    {
+      proceedWithForeignLocks: d.decisions.proceedWithForeignLocks, ...(d.ackBoundMs === undefined ? {} : { ackBoundMs: d.ackBoundMs }),
+      ...(d.storePathLimit === undefined ? {} : { storePathLimit: d.storePathLimit }),
+    },
   );
   const refusal: RestoreReportPayload['refusal'] = r.refusal === undefined ? undefined
     : r.refusal.why === 'ack-timeout' ? { why: 'ack-timeout', step: r.refusal.step, boundMs: r.refusal.boundMs }

@@ -27,6 +27,11 @@ native executors and where an MCP executor joins the callable map): a named tool
 aborts, so `mcp-proof`'s `cancel-throw` launch reaches the gate's catch through the run host; `scripts/package.mjs`'s seam check
 names it. The **process view**'s main row says so. No package, edge, process, channel, command or store column changed.
 
+**A restore is refused before its first step where a store it would create sits past the engine's path limit (ADR-0058
+consequence 18, D11; REQ-SESSION-201; fin41).** `RestoreAssessmentSchema`'s refusal gains `path-too-long`; `restoreStore` answers
+step `0-path-too-long` without asking the run host anything. The **process view**'s row for the restore's names says so. No
+package, edge, process, channel, command or store column changed.
+
 **A scripted root can end its turn with nothing (PD-ORCH-009; fin42).** The scripted client gains the verification-only step
 `silent`, a call that ends `stop` with neither text nor a tool call (`run-host/scripted-client.ts`), which `part-h-proof`'s
 `answerless` and `answer-when-asked` launches take to meet the answer re-prompt in the built app. The **runtime view**'s

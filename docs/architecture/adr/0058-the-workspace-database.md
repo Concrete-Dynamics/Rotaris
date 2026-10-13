@@ -1833,8 +1833,9 @@ maintained, and is not consulted — so there is nothing for the store to disagr
     that would not cause a conformant implementation to be built wrong does not block building against that
     record. The standard is only worth anything if the statement exists, and until this consequence was
     written this ADR was the one carrying open defects and not naming them. **Three are open. None is in the
-    build-wrong class. A builder is expected to meet all three.** *Since 2026-10-13 two are: D8 is repaired, and
-    its bullet says how.*
+    build-wrong class. A builder is expected to meet all three.** *Since 2026-10-13 one is: D8 and D11 are
+    repaired, and their bullets say how; D5 is deferred with OQ-48's surface under R-071 ("after the first
+    release"), and OQ-265 asks whether the restore should delete its own staging copy without that surface.*
 
     - **D5 — nothing deletes a leftover staging copy or an obstruction aside, and nothing knows they
       exist.** The full table is in consequence 5 above. Each is the size of a store. What is owed is
@@ -1880,6 +1881,28 @@ maintained, and is not consulted — so there is nothing for the store to disagr
       corrects consequence 13, which names the right hazard and points at the deepest path when the limit
       bites at the shallowest one, `workspace.db`, because it is the engine and not the filesystem that
       refuses.*
+
+      ***Repaired 2026-10-13 (fin41) by a refusal, not a shorter name; the bullet above is kept as what was
+      measured.*** No suffix closes it: a live store at 251 characters is one character from the limit, so any
+      name longer than `<identifier>` crosses it, and the kept store's name must say what it is. **The restore now
+      refuses, before its first step and before any confirmation, where a store it would create sits past the
+      engine's limit**: `restorePathTooLong` (`packages/store/src/restore.ts`) measures the canonical path the engine
+      would be handed, of the staging store and — where there is a store to displace — of the kept one at the widest
+      name step 8 can claim (counter `.4`), against `storePathLimit` (`layout.ts`: 251 on Windows; none elsewhere,
+      where nothing was measured and this host's engine opened every length its filesystem would create).
+      `restoreStore` returns it as step `0-path-too-long` having asked nothing of the run host; `assessRestore` returns
+      it as the refusal `path-too-long` (`RestoreAssessmentSchema`), which main raises as "The restore was refused" with
+      the detail — the length, the path, the limit, and that nothing was changed. **Two corrections to the bullet,
+      found by building:** the window starts at **217** characters (215 at a counter), not 230 — 230 to 251 is the
+      range sampled, and 252 − 35 is the boundary; and **the staging store crosses it too**, from 240 characters
+      (`.restoring-1` is 12 longer), where the restore used to fail at step 6 *after* the run host had closed its
+      connection, leaving the staging copy behind. Pinned by `store.test.ts`'s D11 block (215, 230 and 251 refused with
+      the target's tree and the root's listing unchanged and nothing asked of the run host; 214 proceeds and its kept
+      store opens; 239 and 240 with nothing to displace; the counterfactual, no limit, keeps a store at 265) and
+      `workspace.test.ts`'s D11 case (the assessment refuses at 230, and assesses as before with no limit). Not
+      measured on Windows by this build: the limit is the 2026-09-02 measurement's, and the refusal is exercised on
+      Linux with the limit given. Note:
+      [`../../defects/fixed/a-restore-at-a-long-store-path-keeps-a-displaced-store-the-engine-cannot-open.md`](../../defects/fixed/a-restore-at-a-long-store-path-keeps-a-displaced-store-the-engine-cannot-open.md).
 
     **Two rules this record owns are not defects and are owed evidence rather than a fix**, and they are
     named here so the list is the whole list: rule 6's canonical path spelling **needs a conformance test

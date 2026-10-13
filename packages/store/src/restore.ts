@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileStamp, millis, type MachineId, type Millis, type Timers, type WallClock, type WorkspaceId } from '@rotaris/kernel';
-import { isLockForeign, isLockLive } from '@rotaris/platform';
+import { canonicalPath, isLockForeign, isLockLive } from '@rotaris/platform';
 import { expandArtifact } from './backup.js';
 import { StoreDal } from './dal.js';
-import { asideName, CONTAINER_MANIFEST, CONTAINER_STORE_FILE, ORIGIN_FILE, STORE_FILE, stagingDir, storeDir, storeFile } from './layout.js';
+import { ASIDE_TRIES, asideName, CONTAINER_MANIFEST, CONTAINER_STORE_FILE, ORIGIN_FILE, restoreStorePaths, STORE_FILE, stagingDir, storeDir, storeFile, storePathLimit } from './layout.js';
 import { forgetSpelling, openStore, type StoreHandle } from './open.js';
 
 /**
@@ -45,12 +45,14 @@ import { forgetSpelling, openStore, type StoreHandle } from './open.js';
  * may be writing now.
  *
  * Open, and stated in ADR-0058 consequence 18: D5 (nothing deletes the
- * staging copy or the obstruction aside), D11 (the suffix against the engine's
- * path thresholds). D8 is repaired (2026-10-13): the -wal/-shm left in the
- * target came from the ASSESSMENT's read-only open, never from this gate —
- * `svc` below is a read-write connection whose close, the last one, removes
- * the two files its open created; the assessment now opens through
- * `openStoreForInspection` (open.ts).
+ * staging copy or the obstruction aside; deferred with OQ-48 under R-071).
+ * D8 is repaired (2026-10-13): the -wal/-shm left in the target came from the
+ * ASSESSMENT's read-only open, never from this gate — `svc` below is a
+ * read-write connection whose close, the last one, removes the two files its
+ * open created; the assessment now opens through `openStoreForInspection`
+ * (open.ts). D11 is repaired (2026-10-13): step 0 below refuses, before
+ * anything is asked of the run host, a restore whose staging store or kept
+ * store would cross the engine's path limit (`storePathLimit`, layout.ts).
  *
  * IC-5: `store.test.ts` aims a test at the layout conversion against an artifact
  * whose container layout differs from the store layout, with `skipArrange` as
@@ -92,6 +94,24 @@ export interface RestoreOptions {
   readonly singleLiveness?: boolean;
   readonly oldReversal?: boolean;
   readonly stamp?: string;
+  /** D11: the engine's database-path limit to hold the restore to; `null` for none (D11 as it was). Defaults to this platform's. */
+  readonly storePathLimit?: number | null;
+}
+
+/** D11 — the restore's database paths measured against the engine's limit, as the engine will be handed them (canonical). */
+export function restorePathTooLong(
+  workspacesRoot: string, id: WorkspaceId, opts: { readonly limit: number | null; readonly stampLength: number; readonly stagingN?: number; readonly targetExists: boolean },
+): { readonly which: 'kept' | 'staging'; readonly path: string; readonly length: number; readonly limit: number } | null {
+  if (opts.limit === null) return null;
+  const p = restoreStorePaths(canonicalPath(workspacesRoot), id, opts.stampLength, opts.stagingN ?? 1, opts.targetExists);
+  const widest = p.kept !== null && p.kept.length >= p.staging.length ? { which: 'kept' as const, path: p.kept } : { which: 'staging' as const, path: p.staging };
+  return widest.path.length > opts.limit ? { ...widest, length: widest.path.length, limit: opts.limit } : null;
+}
+
+/** What a restore refused on D11 says, in the words a person reads before anything is changed. */
+export function pathTooLongDetail(t: { readonly which: 'kept' | 'staging'; readonly path: string; readonly length: number; readonly limit: number }): string {
+  const what = t.which === 'kept' ? 'the copy a restore keeps of the store it replaces' : 'the copy a restore prepares the backup in';
+  return `This machine keeps this workspace's sessions at a path too long to restore into: ${what} would be up to ${t.length} characters long (${t.path}), and the store engine on this platform opens none longer than ${t.limit}. Nothing was changed.`;
 }
 
 export type Refusal =
@@ -121,7 +141,7 @@ function bounded<T>(p: Promise<T>, ms: Millis, timers: Timers): Promise<T> {
 }
 
 /** Step 8's claim. The rename IS the exclusive claim: a directory cannot be renamed onto an existing one here. */
-export function claimAsideName(workspacesRoot: string, id: WorkspaceId, stamp: string, kind: 'displaced' | 'obstruction', from: string, tries = 5): { ok: true; to: string; attempts: number } | { ok: false; code: string; attempts: number } {
+export function claimAsideName(workspacesRoot: string, id: WorkspaceId, stamp: string, kind: 'displaced' | 'obstruction', from: string, tries: number = ASIDE_TRIES): { ok: true; to: string; attempts: number } | { ok: false; code: string; attempts: number } {
   let lastCode = 'ENAMETAKEN';
   for (let i = 0; i < tries; i++) {
     const to = asideName(workspacesRoot, id, kind, stamp, i);
@@ -154,6 +174,16 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
   const target = storeDir(workspacesRoot, id);
   const dbFile = storeFile(workspacesRoot, id);
   const ackBound = opts.ackBoundMs ?? ACK_BOUND_MS;
+
+  // 0 — D11: a restore whose staging store or kept store the engine could not open is refused before anything is
+  // asked of anyone. The rename that would put the kept store there always succeeds; only the next open fails.
+  const tooLong = restorePathTooLong(workspacesRoot, id, {
+    limit: opts.storePathLimit === undefined ? storePathLimit() : opts.storePathLimit,
+    stampLength: (opts.stamp ?? fileStamp(ctx.wall.instant())).length,
+    stagingN: opts.stagingN ?? 1,
+    targetExists: existsSync(target),
+  });
+  if (tooLong) return { ok: false, abandoned: true, error: pathTooLongDetail(tooLong), leftovers, steps: ['0-path-too-long'] };
 
   // The target may not exist yet: a restore into an artifact's own store on a machine that never held it
   // (ADR-0058 case (c) outcome 2, case (b)). Then there are no locks to judge and nothing to displace.

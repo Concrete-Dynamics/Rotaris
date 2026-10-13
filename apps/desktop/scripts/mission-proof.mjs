@@ -319,8 +319,8 @@ const s1e = scenario('todo-item');
   const delegates = db.prepare("SELECT status, entry FROM tool_calls WHERE session_id = ? AND agent_name = 'orchestrator' AND tool_name = 'delegate' ORDER BY ordinal").all(row.session_id)
     .map((c) => ({ status: c.status, result: String(JSON.parse(c.entry).result ?? '') }));
   const stored = JSON.parse(db.prepare('SELECT todo FROM sessions WHERE session_id = ?').get(row.session_id).todo);
-  const todoCalls = db.prepare("SELECT status, entry FROM tool_calls WHERE session_id = ? AND agent_name = 'orchestrator' AND tool_name = 'todo' ORDER BY ordinal").all(row.session_id)
-    .map((c) => ({ status: c.status, op: JSON.parse(c.entry).args?.operation, result: String(JSON.parse(c.entry).result ?? '') }));
+  const todoCalls = db.prepare("SELECT status, started_at, entry FROM tool_calls WHERE session_id = ? AND agent_name = 'orchestrator' AND tool_name = 'todo' ORDER BY ordinal").all(row.session_id)
+    .map((c) => ({ status: c.status, startedAt: c.started_at, op: JSON.parse(c.entry).args?.operation, result: String(JSON.parse(c.entry).result ?? '') }));
   const ended = db.prepare('SELECT canonical_name, completed_at FROM children WHERE session_id = ? AND completed_at IS NOT NULL').all(row.session_id);
   const iterations = db.prepare('SELECT COUNT(*) AS n FROM iterations WHERE session_id = ?').get(row.session_id).n;
   db.close();
@@ -340,7 +340,10 @@ const s1e = scenario('todo-item');
   expect(alpha.result.includes(`Todo item Scripted item 1 (${items[0]}) is now IN_PROGRESS.`) && delta.result.includes(`Todo item Scripted item 2 (${items[1]}) is now IN_PROGRESS.`), `the marks: ${alpha.result.slice(0, 200)} / ${delta.result.slice(0, 200)}`);
   expect(/\[IN_PROGRESS\] Scripted item 1 .*\n {2}\[IN_PROGRESS\] Scripted item 2 /s.test(delta.result), `delta's Todo state shows both items active: ${delta.result}`);
   expect(todoCalls.length === 2 && todoCalls.every((c) => c.status === 'ok' && c.op === 'replace'), `the coordinator's todo calls: ${JSON.stringify(todoCalls.map((c) => ({ status: c.status, op: c.op })))}`);
-  expect(ended.length === 2, `the children ended before the close: ${JSON.stringify(ended)}`);
+  // fin37's review: the count alone is read after the run ended; each child's completion stamped no later than the closing
+  // `replace` started says directly that both had ended before the close (instants compared as times, not as text).
+  const closeAt = Date.parse(todoCalls[1]?.startedAt ?? '');
+  expect(ended.length === 2 && Number.isFinite(closeAt) && ended.every((c) => Date.parse(c.completed_at) <= closeAt), `the children ended before the close at ${todoCalls[1]?.startedAt}: ${JSON.stringify(ended)}`);
   const close = todoCalls[1]?.result ?? '';
   expect(/^Replaced the todo list: 1 phase, 2 tasks\.\n/.test(close) && !close.includes('Kept as they were') && /\[COMPLETED\] Scripted item 1 .*\n {2}\[COMPLETED\] Scripted item 2 /s.test(close), `the closing replace answered: ${close}`);
   expect((stored.agent?.phases ?? []).every((p) => p.tasks.every((t) => t.state === 'COMPLETED')), `the stored plan ends ${JSON.stringify(stored.agent)}`);

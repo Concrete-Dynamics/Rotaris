@@ -784,7 +784,7 @@ describe('PD-TOOLS-016: a window-match write_file edit keeps the file\'s line en
     const haet = await haetEditTool(state, fence).execute({ path: 'he.txt', content_hash: hash, old_string: 'one\ntwo', new_string: 'ONE\ntwo', replace_all: false }, ctx());
     expect(haet.isError).toBe(true);
     expect(read('he.txt')).toBe('one\r\ntwo\r\n');
-    expect(writeFileTool(state, fence).description).toContain("An edit keeps a CRLF file's line endings");
+    expect(writeFileTool(state, fence).description).toContain("An edit or an insert keeps a CRLF file's line endings");
   });
 });
 
@@ -923,9 +923,152 @@ describe('PD-TOOLS-017: an exact or replace-all edit keeps a CRLF file\'s line e
   });
 
   it('both descriptions say an edit keeps a CRLF file\'s line endings', () => {
-    expect(writeFileTool(state, fence).description).toContain("An edit keeps a CRLF file's line endings");
+    // PD-TOOLS-018 (OQ-259) adds the insert to write_file's sentence; haet_edit, which has no insert, keeps it as it was.
+    expect(writeFileTool(state, fence).description).toContain("An edit or an insert keeps a CRLF file's line endings");
     expect(writeFileTool(state, fence).description).not.toContain('A window match keeps');
     expect(haetEditTool(state, fence).description).toContain("An edit keeps a CRLF file's line endings.");
+  });
+});
+
+describe('PD-TOOLS-016 revision 3: a window edit whose carried result equals the file is refused', () => {
+  // OQ-260 (R-072, 2026-10-13). A window edit at level 2, 3 or 4 that PD-TOOLS-016 carried onto the window's own bytes rewrote
+  // the file unchanged beside a success ("+0 -0", and on a CRLF file "new_string was written with the file's CRLF line
+  // endings."), with an undo entry that restored the same content
+  // (docs/defects/fixed/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
+  const prepare = async (rel: string, text: string) => {
+    writeFileSync(join(root, rel), text);
+    await readFileTool(state, fence).execute({ path: rel, offset: 1, limit: 2000, grep_context: 3 }, ctx());
+  };
+  const edit = (path: string, old_string: string, new_string: string) =>
+    writeFileTool(state, fence).execute({ operation: 'edit', path, old_string, new_string, replace_all: false }, ctx());
+  const undo = (path: string) => writeFileTool(state, fence).execute({ operation: 'undo', path, replace_all: false }, ctx());
+  const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
+  const noop = (rel: string, level: number, lines: string) =>
+    `old_string matches ${rel} only at match level ${level} (${lines}), and those lines already hold new_string as this edit would write it; nothing to change. Use write_file's 'overwrite' to write a file exactly as given.`;
+  // Each case: the reply, the file's bytes, no undo entry, and the read record as it was.
+  const refused = async (rel: string, text: string, old_string: string, new_string: string, reply: string) => {
+    await prepare(rel, text);
+    const readBefore = [...state.read];
+    const r = await edit(rel, old_string, new_string);
+    expect(r.isError).toBe(true);
+    expect(r.text).toBe(reply);
+    expect(read(rel)).toBe(text);
+    expect([...state.read]).toEqual(readBefore);
+    expect((await undo(rel)).text).toBe(`No edit history for ${rel}.`);
+  };
+
+  it('the probe: a level-2 LF edit of a CRLF file that lands on the window\'s own bytes', async () => {
+    await refused('n.txt', 'one\r\ntwo\r\nthree\r\n', 'one \ntwo', 'one\ntwo', noop('n.txt', 2, 'lines 1-2'));
+  });
+
+  it('an LF file at level 2: a trailing space the file never had', async () => {
+    await refused('f.txt', 'foo\n', 'foo ', 'foo', noop('f.txt', 2, 'line 1'));
+    // A window that takes in the empty element after the final line break names only the line the file has.
+    await refused('g.txt', 'foo\n', 'foo \n', 'foo\n', noop('g.txt', 2, 'line 1'));
+  });
+
+  it('level 3: a new_string written as given that is the window', async () => {
+    await refused('s.py', '  a\n  b\n', 'a\nb', '  a\n  b', noop('s.py', 3, 'lines 1-2'));
+  });
+
+  it('level 4: a retry of an edit already applied, old_string with a typo and new_string the file\'s lines', async () => {
+    const text = 'function alpha() {\n  return 1;\n}\n';
+    await refused('r.js', text, 'function alpha() {\n  retrun 1;', 'function alpha() {\n  return 1;', noop('r.js', 4, 'lines 1-2'));
+  });
+
+  it('guards: a level-2 edit that changes one byte still applies, and PD-TOOLS-017\'s no-op keeps its text', async () => {
+    await prepare('g.txt', 'one\r\ntwo\r\nthree\r\n');
+    const r = await edit('g.txt', 'one \ntwo', 'one\nTwo');
+    expect(r.isError).toBe(false);
+    expect(read('g.txt')).toBe('one\r\nTwo\r\nthree\r\n');
+    expect(r.text).toMatch(/^Edited g\.txt: 2 lines replaced by 2 at line 1 \(\+1 -1\)\. Match level: 2\. new_string was written with the file's CRLF line endings\. \(sha256 [0-9a-f]{64}\)$/);
+    await prepare('e.txt', 'a\r\nb\r\n');
+    expect((await edit('e.txt', 'a\r\nb', 'a\nb')).text).toBe("old_string and new_string differ only in line endings, which an edit keeps as the file's; nothing to change. Use write_file's 'overwrite' to change a file's line endings.");
+  });
+});
+
+describe('PD-TOOLS-018: a write_file insert keeps a CRLF file\'s line endings', () => {
+  // OQ-259 (R-072, 2026-10-13). An insert joined the file's lines and content's lines with \n, so on a CRLF file the inserted
+  // lines were LF among CRLF ones beside a clean success
+  // (docs/defects/fixed/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md).
+  const CRLF = " content was written with the file's CRLF line endings.";
+  const prepare = async (rel: string, text: string) => {
+    writeFileSync(join(root, rel), text);
+    await readFileTool(state, fence).execute({ path: rel, offset: 1, limit: 2000, grep_context: 3 }, ctx());
+  };
+  const insert = (path: string, content: string, insert_line: number) =>
+    writeFileTool(state, fence).execute({ operation: 'insert', path, content, insert_line, replace_all: false }, ctx());
+  const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
+
+  it('the probe: one LF line inserted into a CRLF file gains the carriage return, and the success says so', async () => {
+    await prepare('p.txt', 'a\r\nb\r\n');
+    const r = await insert('p.txt', 'X', 1);
+    expect(r.isError).toBe(false);
+    expect(read('p.txt')).toBe('a\r\nX\r\nb\r\n');
+    expect(r.text).toMatch(/^Inserted 1 line into p\.txt at line 1\. content was written with the file's CRLF line endings\. \(sha256 [0-9a-f]{64}\)$/);
+  });
+
+  it('a multi-line insert gives every line break it writes the carriage return', async () => {
+    await prepare('m.txt', 'a\r\nb\r\n');
+    const r = await insert('m.txt', 'X\nY\nZ\n', 1);
+    expect(read('m.txt')).toBe('a\r\nX\r\nY\r\nZ\r\nb\r\n');
+    expect(r.text).toMatch(/^Inserted 3 lines into m\.txt at line 1\./);
+    expect(r.text).toContain(CRLF);
+  });
+
+  it('an insert at line 0 reads the file\'s first line', async () => {
+    await prepare('z.txt', 'a\r\nb\r\n');
+    const r = await insert('z.txt', 'X', 0);
+    expect(read('z.txt')).toBe('X\r\na\r\nb\r\n');
+    expect(r.text).toContain(CRLF);
+  });
+
+  it('an insert at the end of a terminated CRLF file', async () => {
+    await prepare('t.txt', 'a\r\nb\r\n');
+    const r = await insert('t.txt', 'X', 2);
+    expect(read('t.txt')).toBe('a\r\nb\r\nX\r\n');
+    expect(r.text).toContain(CRLF);
+  });
+
+  it('an insert at the end of an unterminated CRLF file: the break it adds after the old last line gains the carriage return', async () => {
+    await prepare('u.txt', 'a\r\nb');
+    const r = await insert('u.txt', 'X\n', 2);
+    expect(read('u.txt')).toBe('a\r\nb\r\nX\r\n');
+    expect(r.text).toContain(CRLF);
+    await prepare('v.txt', 'a\r\nb');
+    await insert('v.txt', 'c', 2);
+    expect(read('v.txt')).toBe('a\r\nb\r\nc');
+  });
+
+  it('guards: content already in CRLF, an LF file, an empty file and a mixed neighbourhood are written as given, with no sentence', async () => {
+    await prepare('c.txt', 'a\r\nb\r\n');
+    const crlf = await insert('c.txt', 'X\r\nY\r\n', 1);
+    expect(read('c.txt')).toBe('a\r\nX\r\nY\r\nb\r\n');
+    expect(crlf.text).not.toContain(CRLF);
+    await prepare('l.txt', 'a\nb\n');
+    const lf = await insert('l.txt', 'X', 1);
+    expect(read('l.txt')).toBe('a\nX\nb\n');
+    expect(lf.text).not.toContain(CRLF);
+    await prepare('e.txt', '');
+    const empty = await insert('e.txt', 'X\n', 0);
+    expect(read('e.txt')).toBe('X\n');
+    expect(empty.text).not.toContain(CRLF);
+    await prepare('x.txt', 'a\r\nb\nc\r\n');
+    const mixed = await insert('x.txt', 'X', 1);
+    expect(read('x.txt')).toBe('a\r\nX\nb\nc\r\n');
+    expect(mixed.text).not.toContain(CRLF);
+  });
+
+  it('undo restores the file\'s original bytes', async () => {
+    await prepare('d.txt', 'a\r\nb\r\n');
+    await insert('d.txt', 'X\nY', 1);
+    expect(read('d.txt')).toBe('a\r\nX\r\nY\r\nb\r\n');
+    await writeFileTool(state, fence).execute({ operation: 'undo', path: 'd.txt', replace_all: false }, ctx());
+    expect(read('d.txt')).toBe('a\r\nb\r\n');
+  });
+
+  it('write_file\'s description says an insert keeps a CRLF file\'s line endings too', () => {
+    expect(writeFileTool(state, fence).description).toContain("An edit or an insert keeps a CRLF file's line endings");
   });
 });
 

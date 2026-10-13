@@ -7397,6 +7397,24 @@ added to the edit's success).*
 > [`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../defects/fixed/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **Revision 3's first execution, 2026-10-13, built under [R-072](requests.md#r-072) (fin39):** clause 4 held as written.
+> `writeFileTool`'s edit branch compares the window path's result with the file right after `applyWindow` and before the undo
+> entry, the read record and the write, and refuses a result equal to the file through `windowNoOpMessage`
+> (`packages/agent-tools/src/tools/files.ts`); the level-1 and `replace_all` paths and `haetEditTool` are unchanged, and the
+> description lists no edit outcome, so it is unchanged for this clause. **What was measured.** Four cases under "PD-TOOLS-016
+> revision 3" in `packages/agent-tools/src/tools/tools.test.ts`, each red on the code before and each asserting the exact reply, the
+> file's bytes, the read record and `undo` answering "No edit history for <p>.": the probe (`one \ntwo` → `one\ntwo` on
+> `one\r\ntwo\r\nthree\r\n`, level 2, "lines 1-2"); an LF file at level 2 (`foo ` → `foo` on `foo\n`, "line 1"); a level-3
+> as-given `new_string` equal to the window (`a\nb` → `  a\n  b`); a level-4 retry of an edit already applied (an `old_string`
+> with a typo, `new_string` the file's lines). One guard group is green before and after: a level-2 edit changing one byte applies
+> with its success, and `PD-TOOLS-017`'s no-op keeps its text. **Found:** the clause's "lines <a>-<b>" needed a reading for a
+> window that takes in the empty element after the file's final line break (`foo \n` → `foo\n` on `foo\n` matches a two-element
+> window at level 2); the lines are cut at the file's last line, so it reads "line 1", stated in the clause and pinned by a case.
+> **What was not measured.** No live run: the live-run fixtures are LF files on Linux, and none of the six autopsies records a
+> window edit that lands on the file's own bytes; no proof script drives `write_file` in the built app. Repairs
+> [`a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success`](../defects/fixed/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-tools-017"></a>
@@ -7465,10 +7483,10 @@ refusal).*
 > **Found:** the probe the ruling asked for — a `PD-TOOLS-016` window edit can land on the file's own bytes beside a success:
 > `one \ntwo` → `one\ntwo` on `one\r\ntwo\r\nthree\r\n` answers "(+0 -0). Match level: 2. new_string was written with the file's
 > CRLF line endings." with the file unchanged and an undo entry pushed, recorded as
-> [`a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success`](../defects/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md)
+> [`a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success`](../defects/fixed/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md)
 > and raised as [OQ-260](../architecture/open-questions.md#oq-260); and `insert` writes LF lines into a CRLF file
 > (`a\r\nb\r\n` with `X` at line 1 gives `a\r\nX\nb\r\n`), recorded as
-> [`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](../defects/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md) and
+> [`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](../defects/fixed/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md) and
 > raised as [OQ-259](../architecture/open-questions.md#oq-259). A `replace_all` whose `old_string` is empty is outside the case
 > and keeps its build. **Found in review (fin38):** `crlfLines` walked every line of the file for each question, and a `replace_all` asks once
 > per occurrence, so carrying one grew with the square of the file's length — 2,852 ms for 50,000 CRLF lines with a token on each
@@ -7518,6 +7536,24 @@ alone writes `content` as given.
 *Ruled under the owner's delegation, 2026-10-13 ([OQ-259](../architecture/open-questions.md#oq-259)); logged as [R-072](requests.md#r-072).
 Extends REQ-TOOLS-135 (fills its silence on the line endings an insert writes, and adds one success sentence). Names
 `PD-TOOLS-016`, whose clause 2 test it reads, and `PD-TOOLS-017`, whose write rule and sentence it mirrors; neither is revised.*
+
+> **First execution, 2026-10-13, built under [R-072](requests.md#r-072) (fin39):** the rule held as written. `carryInsert`
+> (`packages/agent-tools/src/tools/files.ts`) places the inserted lines as the insert always did and, for non-empty `content`,
+> reads `crlfLines` (the test `PD-TOOLS-016` and `PD-TOOLS-017` share) on `text.split('\n')` at the line before the insertion
+> point and the line at it; on a CRLF insertion each inserted line a line break follows, and a previously unterminated last line
+> the insert extends, gains `\r` when it lacks one. `writeFileTool`'s insert branch calls it and appends clause 3's sentence; its
+> description says "An edit or an insert keeps a CRLF file's line endings" (`haet_edit`'s, which has no insert, is unchanged).
+> **What was measured.** Seven cases under "PD-TOOLS-018" in `packages/agent-tools/src/tools/tools.test.ts`, red on the code
+> before: the probe (`a\r\nb\r\n` + `X` at 1 → `a\r\nX\r\nb\r\n`, "Inserted 1 line into p.txt at line 1." and the sentence); a
+> three-line insert; line 0; the end of a terminated CRLF file (`a\r\nb\r\nX\r\n`); the end of an unterminated one (`a\r\nb` +
+> `X\n` → `a\r\nb\r\nX\r\n`, and + `c` → `a\r\nb\r\nc`); undo restoring the original bytes after a carried insert; the
+> description. One guard group is green before and after: content already in CRLF (no doubled `\r`, no sentence), an LF file, an
+> empty file, a mixed neighbourhood written as given; and the existing insert case is unchanged. **Found:** nothing beyond the
+> ruling; the empty file, line 0 and both ends come out of `crlfLines`' fallback as the ruling read them. **What was not
+> measured.** No live run: the live-run fixtures are LF files on Linux, and none of the six autopsies records an insert into a CRLF
+> file; no proof script drives `write_file` in the built app, and the executor runs unchanged inside the run host. Repairs
+> [`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](../defects/fixed/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md).
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

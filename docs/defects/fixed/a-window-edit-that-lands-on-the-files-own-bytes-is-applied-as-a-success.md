@@ -12,7 +12,18 @@ byte of the file changed. The caller meant to strip a trailing space it believed
 `haet_edit` refuses its no-op (`docs/defects/fixed/haet-edit-applies-an-edit-that-changes-nothing.md`), and `PD-TOOLS-017`
 clause 3 refuses an exact or replace-all edit whose carried result equals the file. A window edit has no such refusal, since
 `PD-TOOLS-016` does not decide it. Found by the R-072 consortium's ruling of OQ-254, which asked for this probe; raised as
-[OQ-260](../architecture/open-questions.md#oq-260). Recorded, not repaired.
+[OQ-260](../../architecture/open-questions.md#oq-260). Recorded, not repaired.
+
+**Repaired 2026-10-13 (fin39, `fin39-insert-noop-optionals`), under `PD-TOOLS-016` revision 3 clause 4**
+([OQ-260](../../architecture/open-questions.md#oq-260), ruled under R-072). `writeFileTool`'s edit branch compares the window
+path's result with the file before `commit`, and a result equal to the file is refused through `windowNoOpMessage`
+(`packages/agent-tools/src/tools/files.ts`): nothing written, no undo entry, the read record unchanged, and the reply `old_string
+matches n.txt only at match level 2 (lines 1-2), and those lines already hold new_string as this edit would write it; nothing to
+change. Use write_file's 'overwrite' to write a file exactly as given.` Pinned by the cases under "PD-TOOLS-016 revision 3" in
+`packages/agent-tools/src/tools/tools.test.ts`: the probe, an LF file at level 2 (`foo ` → `foo`, and a window taking in the
+element after the final line break, named "line 1"), a level-3 as-given `new_string` equal to the window, and a level-4 retry of an
+edit already applied — each red on the code before — and guards green before and after (a level-2 edit changing one byte, and
+`PD-TOOLS-017`'s no-op text).
 
 ## Specs
 

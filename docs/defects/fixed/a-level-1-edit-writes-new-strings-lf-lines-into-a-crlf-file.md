@@ -23,7 +23,7 @@ leaves `ONE\r\nX\r\ntwo\r\n`, the `replace_all` `X\r\nY\r\nb\r\nX\r\nY\r\n`, and
 `ONE\ntwo`) `ONE\r\ntwo\r\nthree\r\n`. Pinned by the cases under "PD-TOOLS-017" in `packages/agent-tools/src/tools/tools.test.ts`
 (eight red on the code before, the guards green before and after) and by the reversed case under "PD-TOOLS-016". The sibling
 `insert` path is recorded on its own
-([`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](../a-write-file-insert-writes-lf-lines-into-a-crlf-file.md), OQ-259).
+([`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](a-write-file-insert-writes-lf-lines-into-a-crlf-file.md), OQ-259).
 
 ## Specs
 

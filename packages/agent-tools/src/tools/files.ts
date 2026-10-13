@@ -687,7 +687,7 @@ export function carryWindow(newText: string, oldText: string, fileLines: readonl
 }
 
 /**
- * `PD-TOOLS-016` clause 2's test, which `PD-TOOLS-017` reads too: the lines `first` to `last` of `fileLines` (a `split('\n')`
+ * `PD-TOOLS-016` clause 2's test, which `PD-TOOLS-017` and `PD-TOOLS-018` read too: the lines `first` to `last` of `fileLines` (a `split('\n')`
  * of the file) are CRLF when at least one of them is followed by a line break and every such line ends in `\r`; when none of
  * them is followed by one (the span lies in the file's unterminated last element), the file's other lines are read the same way.
  *
@@ -783,6 +783,59 @@ const LINE_ENDINGS_ONLY = "old_string and new_string differ only in line endings
 /** `PD-TOOLS-017` clause 4's sentence, which `PD-TOOLS-016` clause 3 also adds. */
 const CRLF_SENTENCE = " new_string was written with the file's CRLF line endings.";
 
+/**
+ * `PD-TOOLS-016` revision 3 clause 4's refusal (OQ-260, R-072, 2026-10-13): one window matched at `level` (2, 3 or 4), and the
+ * replacement as carried is the window's own bytes. The window's lines are numbered from 1, and cut at the file's last line so
+ * a window that takes in the empty element after a final line break names only lines the file has. Until this clause the edit
+ * rewrote the file unchanged beside "(+0 -0)", with an undo entry that restored the same content
+ * (docs/defects/fixed/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
+ */
+export function windowNoOpMessage(rel: string, level: number, start: number, k: number, fileLineCount: number): string {
+  const first = start + 1;
+  const last = Math.max(first, Math.min(start + k, fileLineCount));
+  const where = first === last ? `line ${first}` : `lines ${first}-${last}`;
+  return `old_string matches ${rel} only at match level ${level} (${where}), and those lines already hold new_string as this edit would write it; nothing to change. Use write_file's 'overwrite' to write a file exactly as given.`;
+}
+
+/** `PD-TOOLS-018` clause 3's sentence. */
+const INSERT_CRLF_SENTENCE = " content was written with the file's CRLF line endings.";
+
+/**
+ * `PD-TOOLS-018` (OQ-259, R-072, 2026-10-13): what a `write_file` insert of `content` at line `at` writes into `text`. Positions
+ * count lines as `splitLines` does, so the one after a final newline is not a place to insert after, and a terminated `content`
+ * is its lines rather than its lines and a blank one; the result ends in a newline when the file did, or when the insert lands at
+ * the end and its own content does.
+ *
+ * A non-empty `content` is tested by `PD-TOOLS-016` clause 2's test (`crlfLines`) on the file's line before the insertion point
+ * and the line at it, where those exist, or, when neither is followed by a line break, on the file's other lines; an empty file
+ * is not CRLF. For a CRLF insertion every line break the insert writes — the one after each inserted line that a break
+ * follows, and the one added after a previously unterminated last line — gains `\r` when the character before it is not `\r`.
+ * No byte of the file's existing lines changes, and every other insertion is written as given.
+ *
+ * Until this directive the inserted lines were joined with `\n` alone, so `a\r\nb\r\n` with `X` at line 1 left `a\r\nX\nb\r\n`
+ * beside a clean success (docs/defects/fixed/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md).
+ */
+export function carryInsert(text: string, content: string, at: number): { after: string; inserted: number; crlfAdded: boolean } {
+  const lines = splitLines(text);
+  const ins = splitLines(content);
+  const terminated = text.endsWith('\n') || (at === lines.length && content.endsWith('\n'));
+  const crlf = content !== '' && crlfLines(text.split('\n'), Math.max(0, at - 1), at);
+  let crlfAdded = false;
+  const cr = (line: string): string => {
+    if (!crlf || line.endsWith('\r')) return line;
+    crlfAdded = true;
+    return `${line}\r`;
+  };
+  const head = lines.slice(0, at);
+  // The break joining a previously unterminated last line to the inserted lines is the insert's.
+  if (crlf && ins.length > 0 && at === lines.length && at > 0 && !text.endsWith('\n')) head[at - 1] = cr(head[at - 1] as string);
+  const tail = lines.slice(at);
+  // A line break follows each inserted line but the last of the result when the result is unterminated.
+  const body = ins.map((line, j) => (j < ins.length - 1 || tail.length > 0 || terminated ? cr(line) : line));
+  const out = [...head, ...body, ...tail];
+  return { after: `${out.join('\n')}${terminated && out.length > 0 ? '\n' : ''}`, inserted: ins.length, crlfAdded };
+}
+
 /** Apply the single window match (levels 2 to 4): it replaces whole lines. A level-1 match is `carryExact`'s (`PD-TOOLS-017`). */
 function applyWindow(lines: readonly string[], m: EditMatch, oldText: string, newText: string): string {
   const start = m.starts[0] as number;
@@ -826,7 +879,7 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
      * docs/defects/fixed/write-files-first-use-refusal-recurred-under-duress.md). The duress run after it still had 1 of 4
      * children omit the field; reading the selector from the call is the fourth repair PD-TOOLS-007 allows (`inferArguments`).
      */
-    description: 'Create, edit, overwrite, insert into, or undo the last write of a workspace file. Every call names its `operation` — one of create, edit, overwrite, insert, undo — with the fields that operation reads: create {path, content}; edit {path, old_string, new_string, replace_all?}; overwrite {path, content}; insert {path, content, insert_line} (0 = beginning); undo {path} (undoing a create removes the file it made). Example: {"operation": "create", "path": "notes.txt", "content": "hello\\n"}. Read a file before editing or overwriting it. An edit whose old_string matches only once its indentation is shifted moves new_string by the same shift when new_string shares old_string\'s indentation, writes it as given when it already has the file\'s, and otherwise is refused with the file\'s lines quoted. An edit keeps a CRLF file\'s line endings and, at match level 2, the exact bytes of every line new_string repeats unchanged from old_string.',
+    description: 'Create, edit, overwrite, insert into, or undo the last write of a workspace file. Every call names its `operation` — one of create, edit, overwrite, insert, undo — with the fields that operation reads: create {path, content}; edit {path, old_string, new_string, replace_all?}; overwrite {path, content}; insert {path, content, insert_line} (0 = beginning); undo {path} (undoing a create removes the file it made). Example: {"operation": "create", "path": "notes.txt", "content": "hello\\n"}. Read a file before editing or overwriting it. An edit whose old_string matches only once its indentation is shifted moves new_string by the same shift when new_string shares old_string\'s indentation, writes it as given when it already has the file\'s, and otherwise is refused with the file\'s lines quoted. An edit or an insert keeps a CRLF file\'s line endings, and an edit at match level 2 keeps the exact bytes of every line new_string repeats unchanged from old_string.',
     schema: writeSchema,
     /**
      * REQ-TOOLS-032's recoverable refusal, with the expected shape named: the run's first uses omitted
@@ -911,17 +964,13 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
           const gate = mustHaveRead();
           if (gate) return gate;
           if (a.insert_line === undefined) return errorObservation('insert requires insert_line (0 = beginning).');
-          // Positions count lines as `splitLines` does, so the one after a final newline is not a place to insert
-          // after, and a terminated `content` is its lines rather than its lines and a blank one. The result ends
-          // in a newline when the file did, or when the insert lands at the end and its own content does.
+          // Positions count lines as `splitLines` does; `carryInsert` places the lines and keeps a CRLF file's line endings (PD-TOOLS-018).
           const text = before ?? '';
           const lines = splitLines(text);
           if (a.insert_line > lines.length) return errorObservation(`insert_line ${a.insert_line} is beyond the end of ${rel} (${countNoun(lines.length, 'line')}).`);
           const content = a.content ?? '';
-          const ins = splitLines(content);
-          const terminated = text.endsWith('\n') || (a.insert_line === lines.length && content.endsWith('\n'));
-          lines.splice(a.insert_line, 0, ...ins);
-          return commit(`${lines.join('\n')}${terminated && lines.length > 0 ? '\n' : ''}`, `Inserted ${countNoun(ins.length, 'line')} into ${rel} at line ${a.insert_line}.`);
+          const carried = carryInsert(text, content, a.insert_line);
+          return commit(carried.after, `Inserted ${countNoun(carried.inserted, 'line')} into ${rel} at line ${a.insert_line}.${carried.crlfAdded ? INSERT_CRLF_SENTENCE : ''}`);
         }
         case 'edit': {
           if (!exists) return errorObservation(`File does not exist: ${rel}. Use 'create'.`);
@@ -974,7 +1023,11 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
             if (carried.after === before) return errorObservation(LINE_ENDINGS_ONLY);
             after = carried.after;
             if (carried.crlfAdded) said = CRLF_SENTENCE;
-          } else after = applyWindow(lines, m, a.old_string, replacement);
+          } else {
+            after = applyWindow(lines, m, a.old_string, replacement);
+            // PD-TOOLS-016 revision 3 clause 4 (OQ-260): a window carried onto its own bytes is refused, not applied.
+            if (after === before) return errorObservation(windowNoOpMessage(rel, m.level, start, a.old_string.split('\n').length, lineCount(before ?? '')));
+          }
           const note = m.level > 1 ? ` Match level: ${m.level}${m.level === 4 ? ` (similarity: ${m.similarity!.toFixed(2)}). Verify the result.` : '.'}${said}` : said;
           return commit(after, `${replacementMessage(rel, before ?? '', after, a.old_string, start)}${note}`);
         }

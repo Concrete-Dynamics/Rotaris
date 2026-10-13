@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-13**
 
+**A window edit that lands on the file's own bytes is refused, and an insert keeps a CRLF file's line endings (PD-TOOLS-016
+revision 3, OQ-260; PD-TOOLS-018, OQ-259; fin39).** `writeFileTool`'s edit branch compares the window path's result with the file
+before `commit` and refuses an equal one through `windowNoOpMessage`; its insert branch goes through `carryInsert`
+(`agent-tools/src/tools/files.ts`), which reads the shared `crlfLines`. The **runtime view**'s file-tools paragraph says so. No
+package, edge, process, channel, command or store column changed.
+
 **The Mission table's persona cell is bounded (REQ-MONITOR-274; fin38).** `.agent-table__persona` keeps one line and is cut
 at `24ch` with an ellipsis, its `title` the whole name, so a long configured persona no longer widens the table. The **seams
 view**'s timed-out-tag passage says so. Nothing else moved.

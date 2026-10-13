@@ -13238,7 +13238,7 @@ before. The note is repaired.
 `write_file`'s `insert` joins the file's lines and the content's lines with `\n`. The file's lines keep their `\r` and the
 inserted ones have none unless the caller sent it: `a\r\nb\r\n` with `content` `X` at `insert_line` 1 leaves `a\r\nX\nb\r\n`,
 beside "Inserted 1 line into … at line 1.". Recorded as
-[`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](../defects/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md).
+[`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](../defects/fixed/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md).
 No requirement's text is contradicted: REQ-TOOLS-135 names `insert_line` and its bounds and says nothing of line endings.
 
 **What the build proceeds under.** The inserted lines written as given.
@@ -13277,6 +13277,10 @@ implementation built from the specification alone writes `content` as given.
 On Windows, an agent's insert into a CRLF file leaves the file uniformly CRLF, and the success adds "content was written with the
 file's CRLF line endings.".
 
+*Built 2026-10-13 (fin39, `fin39-insert-noop-optionals`); its first execution is reported in `PD-TOOLS-018`, in place.*
+`carryInsert` (`packages/agent-tools/src/tools/files.ts`); pinned by the "PD-TOOLS-018" cases in `tools.test.ts`, red on the code
+before. The note is repaired.
+
 <a id="oq-260"></a>
 
 **OQ-260 — Is a window edit whose carried replacement leaves the file unchanged refused, or applied as a success?**
@@ -13289,7 +13293,7 @@ A window edit can land on the window's own bytes once `PD-TOOLS-016` has carried
 \ntwo` → `one\ntwo` matches at level 2, pairs `two` with the file's `two\r` and gives `one` the window's `\r`, so the file is
 rewritten unchanged beside `Edited n.txt: 2 lines replaced by 2 at line 1 (+0 -0). Match level: 2. new_string was written with
 the file's CRLF line endings.`, with an undo entry that restores the same content. Recorded as
-[`a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success`](../defects/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
+[`a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success`](../defects/fixed/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
 The strings differ, so REQ-TOOLS-135's rejection of identical strings does not reach it, and `PD-TOOLS-016` does not decide it.
 
 **What the build proceeds under.** Applied as a success, as built.
@@ -13325,3 +13329,7 @@ alone applies the no-op.
 **What a live run then shows.** Nothing: the live-run fixtures are LF files on Linux, and none of the six autopsies records a
 window edit that lands on the file's own bytes. If one occurs, the transcript shows a refused `write_file` call naming the match
 level and lines in place of a "+0 -0" write row.
+
+*Built 2026-10-13 (fin39, `fin39-insert-noop-optionals`); its first execution is reported in `PD-TOOLS-016` revision 3, in
+place.* `windowNoOpMessage` and the edit branch's comparison before `commit` (`packages/agent-tools/src/tools/files.ts`); pinned by
+the "PD-TOOLS-016 revision 3" cases in `tools.test.ts`, red on the code before. The note is repaired.

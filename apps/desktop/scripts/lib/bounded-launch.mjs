@@ -24,6 +24,7 @@
  * Nothing here is product code. It runs only from the proofs; `bounded-launch.test.ts` pins it against real children.
  */
 import { spawn, spawnSync } from 'node:child_process';
+import { readdirSync, readFileSync } from 'node:fs';
 
 const POSIX = process.platform !== 'win32';
 /**
@@ -32,6 +33,13 @@ const POSIX = process.platform !== 'win32';
  * is a process the launch left behind (finacc3 A2-19: a `git diff --numstat` the Git view started, alive after the quit).
  */
 const GROUP_GRACE_MS = 3_000;
+/**
+ * How long a process the launch started in a process group of its OWN may outlive the launch's group before it is ended
+ * (`drainGroup`'s sweep). The product starts a project-setup step leading a group of its own (`processGroup`,
+ * `packages/mcp/src/setup.ts`), so the group drain never reaches it; REQ-WORKSPACE-092 allows such a step up to 5 s after
+ * the close, and this is that bound with a second's margin.
+ */
+const OWN_GROUP_GRACE_MS = 6_000;
 /** How long SIGKILL may take to be reaped. It cannot be refused, so this is a bound on the kernel, not on the app. */
 const KILL_REAP_MS = 5_000;
 /** How long the pipes may stay open after the process exited — a helper holding them is not a reason to hang. */
@@ -58,7 +66,19 @@ function removeFatalHandlers() {
   for (const [sig, handler] of onFatal) process.off(sig, handler);
   onFatal.clear();
 }
-function track(child) {
+/**
+ * The environment entry that marks every process a launch started, its own groups included: the launch's
+ * `XDG_DATA_HOME`, which `proofIsolationEnv` makes unique to its scratch profile and which every child of the product
+ * inherits. Linux alone, where `/proc/<pid>/environ` can be read; elsewhere `null`, and only the group is drained.
+ */
+const marks = new WeakMap();
+function markOf(env) {
+  const data = env?.XDG_DATA_HOME;
+  return process.platform === 'linux' && typeof data === 'string' && data !== '' ? `XDG_DATA_HOME=${data}` : null;
+}
+function track(child, env) {
+  const mark = markOf(env);
+  if (mark !== null) marks.set(child, mark);
   live.add(child);
   if (onFatal.size > 0) return;
   for (const sig of FATAL_SIGNALS) {
@@ -75,8 +95,8 @@ function track(child) {
  * A launch the proof started some other way (`lib/driver.mjs`'s `startApp`) taken into the same care: while it is live, a
  * fatal signal to the proof, or the proof's exit, ends its whole group. It leaves the set through `drainGroup`.
  */
-export function trackLaunch(child) {
-  track(child);
+export function trackLaunch(child, env) {
+  track(child, env);
 }
 /** A launch seen to end is no longer the proof's to clean up; with none left, the proof's signals are its own again. */
 function untrack(child) {
@@ -142,6 +162,71 @@ function groupMembers(pgid) {
   }
   return members;
 }
+/** This process's own process group, which no sweep ever signals. */
+function ownGroup() {
+  try {
+    const stat = readFileSync('/proc/self/stat', 'utf8');
+    return Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[2]);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Every live process whose environment carries `mark` (`markOf`), outside the proof itself: `{ pid, pgid, line }`, a zombie
+ * not counted. Read from `/proc`; a process whose entries cannot be read (another user's, or gone mid-read) is passed over.
+ */
+export function markedProcesses(mark) {
+  let entries;
+  try { entries = readdirSync('/proc').filter((name) => /^\d+$/.test(name)); } catch { return []; }
+  const found = [];
+  for (const name of entries) {
+    const pid = Number(name);
+    if (pid === process.pid) continue;
+    try {
+      if (!readFileSync(`/proc/${name}/environ`, 'latin1').split('\0').includes(mark)) continue;
+      const stat = readFileSync(`/proc/${name}/stat`, 'utf8');
+      const [state, , pgid] = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+      if (state === 'Z' || state === 'X') continue;
+      const args = readFileSync(`/proc/${name}/cmdline`, 'utf8').split('\0').join(' ').trim();
+      found.push({ pid, pgid: Number(pgid), line: `${pid} ${args}` });
+    } catch { /* gone, or not ours to read */ }
+  }
+  return found;
+}
+
+/**
+ * The second half of a drain: what the launch started in process groups of its own — a project-setup step and what it
+ * started — given `graceMs` to end by itself after the launch's group, then ended with SIGKILL (its group when it leads
+ * one, never the proof's own) and NAMED. Skipped while another live launch carries the same mark: two launches of one
+ * profile (a hand-over's second launch beside the instance) cannot be told apart by it, so the last of them to end sweeps.
+ * `null` when nothing marked was left.
+ */
+async function sweepOwnGroups(child, graceMs) {
+  const mark = marks.get(child);
+  marks.delete(child);
+  if (mark === undefined) return null;
+  for (const other of live) if (other !== child && marks.get(other) === mark) return null;
+  const started = Date.now();
+  let left = markedProcesses(mark);
+  if (left.length === 0) return null;
+  while (left.length > 0 && Date.now() - started < graceMs) {
+    await heldSleep(100);
+    left = markedProcesses(mark);
+  }
+  if (left.length === 0) return { endedBy: null, lingered: [], afterMs: Date.now() - started };
+  const lingered = left.map((p) => p.line);
+  const mine = ownGroup();
+  for (const p of left) {
+    try { process.kill(p.pgid === p.pid && p.pgid !== mine ? -p.pgid : p.pid, 'SIGKILL'); } catch { /* ESRCH: gone between the look and the signal */ }
+  }
+  const killedAt = Date.now();
+  while (markedProcesses(mark).length > 0 && Date.now() - killedAt < KILL_REAP_MS) await heldSleep(50);
+  const endedBy = markedProcesses(mark).length > 0 ? 'nothing' : 'SIGKILL';
+  console.error(`bounded-launch: ${lingered.length} process(es) the launch started in group(s) of their own outlived its group by ${graceMs} ms and ${endedBy === 'SIGKILL' ? 'were ended with SIGKILL' : 'did not end on SIGKILL'}: ${lingered.join(' ;; ')}`);
+  return { endedBy, lingered, afterMs: Date.now() - started };
+}
+
 function groupLive(pgid) {
   const members = groupMembers(pgid);
   if (members !== null) return members.length > 0;
@@ -156,23 +241,36 @@ function groupLive(pgid) {
  * `endedBy` null when the group left by itself, `'SIGKILL'` when it had to be ended, `'nothing'` when even that was not
  * seen to take; `lingered` the members found at the grace (`pid args`). On Windows, or for a launch that leads no group,
  * there is no group to drain. The launch leaves the proof's care here.
+ *
+ * Since fin34 the drain also reaches what the launch started in process groups of its OWN, which the group's signal never
+ * reached: a project-setup step outlived `pnpm requirements-proof`'s exit on 2026-10-07, so the next proof could start
+ * beside it (`docs/defects/fixed/a-proof-can-exit-while-a-setup-step-the-app-started-in-its-own-process-group-is-still-ending.md`).
+ * Those are found by the mark the launch's environment gives them (`markOf`, Linux) and given `ownGroupGraceMs` — the
+ * product's own 5 s bound, REQ-WORKSPACE-092, and a margin — before SIGKILL; `ownGroups` reports them as `lingered` does
+ * the group's, `null` when none was left.
  */
 /** A wait that holds the event loop open: a drain must finish even when nothing else is left for the proof to wait on. */
 const heldSleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
-export async function drainGroup(child, { graceMs = GROUP_GRACE_MS } = {}) {
+export async function drainGroup(child, { graceMs = GROUP_GRACE_MS, ownGroupGraceMs = OWN_GROUP_GRACE_MS } = {}) {
   const started = Date.now();
-  if (!POSIX || !child.pid) { untrack(child); return { endedBy: null, lingered: [], afterMs: 0 }; }
+  if (!POSIX || !child.pid) { marks.delete(child); untrack(child); return { endedBy: null, lingered: [], afterMs: 0, ownGroups: null }; }
   const pgid = child.pid;
   while (groupLive(pgid) && Date.now() - started < graceMs) await heldSleep(50);
-  if (!groupLive(pgid)) { untrack(child); return { endedBy: null, lingered: [], afterMs: Date.now() - started }; }
+  if (!groupLive(pgid)) {
+    // fin34: what the launch started in groups of its own is swept before the launch leaves the proof's care.
+    const ownGroups = await sweepOwnGroups(child, ownGroupGraceMs);
+    untrack(child);
+    return { endedBy: null, lingered: [], afterMs: Date.now() - started, ownGroups };
+  }
   const lingered = groupMembers(pgid) ?? ['(members unknown: ps could not be asked)'];
   try { process.kill(-pgid, 'SIGKILL'); } catch { /* ESRCH: gone between the look and the signal */ }
   const killedAt = Date.now();
   while (groupLive(pgid) && Date.now() - killedAt < KILL_REAP_MS) await heldSleep(50);
   const endedBy = groupLive(pgid) ? 'nothing' : 'SIGKILL';
-  untrack(child);
   console.error(`bounded-launch: ${lingered.length} process(es) of the launch's group (${pgid}) outlived it by ${graceMs} ms and ${endedBy === 'SIGKILL' ? 'were ended with SIGKILL' : 'did not end on SIGKILL'}: ${lingered.join(' ;; ')}`);
-  return { endedBy, lingered, afterMs: Date.now() - started };
+  const ownGroups = await sweepOwnGroups(child, ownGroupGraceMs);
+  untrack(child);
+  return { endedBy, lingered, afterMs: Date.now() - started, ownGroups };
 }
 
 /**
@@ -187,7 +285,7 @@ export async function spawnBounded(command, args, { timeoutMs, graceMs = 10_000,
   if (!(timeoutMs > 0)) throw new Error('spawnBounded needs a positive timeoutMs');
   const started = Date.now();
   const child = spawn(command, args, { cwd, env, windowsHide, detached: POSIX, stdio: ['ignore', 'pipe', 'pipe'] });
-  track(child);
+  track(child, env);
   // A proof that has to act on the launch while it runs (fetch-proof's quit mid-fetch signals it) is handed the child.
   if (typeof onSpawn === 'function') onSpawn(child);
   let stdout = '';

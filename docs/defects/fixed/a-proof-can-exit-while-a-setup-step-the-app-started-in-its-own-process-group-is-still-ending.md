@@ -23,3 +23,23 @@ proofs' isolation from each other is the harness's own concern (finacc3 A2-19).
 - `apps/desktop/scripts/lib/bounded-launch.mjs` — `drainGroup`, which drains only the launch's own process group.
 - `packages/mcp/src/setup.ts` — the setup step spawned as a process-group leader, and its stop grace.
 - `apps/desktop/scripts/requirements-proof.mjs` — the `panes` profile whose workspace the indexing step ran on.
+
+## Outcome
+
+Repaired by fin34 (2026-10-13), in the harness; the product is unchanged. `drainGroup`
+(`apps/desktop/scripts/lib/bounded-launch.mjs`) now sweeps, after the launch's own group, what the launch started in process
+groups of its OWN: every live process whose environment carries the launch's `XDG_DATA_HOME` (`markOf`, read from
+`/proc/<pid>/environ`), which `proofIsolationEnv` makes unique to the launch's scratch profile and which every child of the
+product inherits, a setup step included. Those are given `OWN_GROUP_GRACE_MS` (6 s: REQ-WORKSPACE-092's 5 s and a second's
+margin) to end by themselves, then ended with SIGKILL — the group they lead, never the proof's own — and named on standard
+error as `bounded-launch: … in group(s) of their own outlived …`; the drain's result reports them as `ownGroups`. The sweep
+waits while another live launch carries the same mark (a hand-over's second launch beside the instance cannot be told from
+it), so the last of a profile's launches to end sweeps. `spawnBounded` marks every launch from its `env`, and the driver's
+`startApp` passes its launch's environment to `trackLaunch`.
+
+Pinned by `apps/desktop/scripts/lib/bounded-launch.test.ts`: a leader that starts a SIGTERM-ignoring child in a process group
+of its own (Node's `detached`, as `processGroup` does) and exits sees the child ended and named within the grace (red before:
+the child ran on and `ownGroups` was absent), and a child that ends inside the grace is left alone. Shown by
+`pnpm requirements-proof --skip-build` (2026-10-13, every stage passed, 153 delivery tests; load about 5 to 8): a scan straight
+after its exit found no `builtin:code-intelligence` or `serena` process left. **Owed:** macOS, where no `/proc` exists and the
+sweep finds nothing; there only the group is drained, as before.

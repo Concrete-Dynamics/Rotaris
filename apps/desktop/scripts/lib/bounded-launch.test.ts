@@ -228,6 +228,36 @@ describe('R-062: ending a proof launch within its bound', () => {
     }
   });
 
+  /*
+   * fin34 (docs/defects/fixed/a-proof-can-exit-while-a-setup-step-the-app-started-in-its-own-process-group-is-still-ending.md):
+   * the product starts a project-setup step leading a process group of its own, which the group drain never reached, so a
+   * proof could exit — and the next one start — while the step was still ending. The drain now finds what the launch
+   * started by the mark its environment carries, and ends what outlives the grace.
+   */
+  it.skipIf(!PROC)('spawnBounded ends what the launch started in a process group of its own once it outlives the grace, and names it', async () => {
+    const mark = `/tmp/bounded-launch-mark-${process.pid}-${Date.now()}`;
+    const leader = "const { spawn } = require('node:child_process'); const g = spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);\", 'own-group-step'], { stdio: 'ignore', detached: true }); g.unref(); console.log('step ' + g.pid); process.exit(0);";
+    const r = await spawnBounded(process.execPath, ['-e', leader], { timeoutMs: 10_000, groupGraceMs: 300, env: { ...process.env, XDG_DATA_HOME: mark } });
+    const step = Number(/step (\d+)/.exec(r.stdout)?.[1] ?? 0);
+    try {
+      expect(step).toBeGreaterThan(0);
+      // The launch's own group left at once: the step leads another group, which the group drain does not reach.
+      expect(r.group).toMatchObject({ endedBy: null, lingered: [] });
+      expect(r.group.ownGroups).toMatchObject({ endedBy: 'SIGKILL' });
+      expect(r.group.ownGroups.lingered.some((l: string) => l.includes('own-group-step'))).toBe(true);
+      expect(await goneWithin(step, 5_000)).toBe(true);
+    } finally {
+      try { process.kill(step, 'SIGKILL'); } catch { /* gone */ }
+    }
+  }, 30_000);
+
+  it.skipIf(!PROC)('what the launch started in a group of its own and ends within the grace is left alone', async () => {
+    const mark = `/tmp/bounded-launch-mark-${process.pid}-${Date.now()}-quick`;
+    const leader = "const { spawn } = require('node:child_process'); const g = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 400)'], { stdio: 'ignore', detached: true }); g.unref(); process.exit(0);";
+    const r = await spawnBounded(process.execPath, ['-e', leader], { timeoutMs: 10_000, groupGraceMs: 300, env: { ...process.env, XDG_DATA_HOME: mark } });
+    expect(r.group.ownGroups === null || r.group.ownGroups.endedBy === null).toBe(true);
+  }, 30_000);
+
   it.skipIf(!POSIX)('a proof with nothing else left to wait on still finishes the drain: its top-level await settles', async () => {
     // The first form waited on unreferenced timers: a scratch loop's `await spawnBounded(…)` ended its process with exit
     // 13, "unsettled top-level await", the moment the leader was gone and only the drain was left.

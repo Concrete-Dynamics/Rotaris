@@ -139,22 +139,24 @@ export async function startApp({ root, workspace, extra = {}, electronArgs = [],
   // (`trackLaunch`). Until 2026-10-07 a proof's launch shared the proof's group and a proof exited beside its zygotes
   // and a Git view's `git diff` (finacc3 A2-19, `docs/defects/fixed/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md`).
   const group = detached || POSIX;
+  const env = {
+    ...cleanEnvironment(),
+    ...proofIsolationEnv({ profileRoot: root, local, preferences }),
+    ROTARIS_MODEL_DIALECT: dialect,
+    ROTARIS_DRIVER: endpointFile,
+    ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+    ...extra,
+  };
   const child = spawn(electron, [mainEntry, ...hostSwitches, ...electronArgs, ...(workspace ? [workspace] : [])], {
     cwd: appDirectory,
     detached: group,
     windowsHide: false,
     stdio: ['ignore', out, out],
-    env: {
-      ...cleanEnvironment(),
-      ...proofIsolationEnv({ profileRoot: root, local, preferences }),
-      ROTARIS_MODEL_DIALECT: dialect,
-      ROTARIS_DRIVER: endpointFile,
-      ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
-      ...extra,
-    },
+    env,
   });
   if (detached) child.unref();
-  else trackLaunch(child);
+  // The environment marks what the launch starts in groups of its own, so its drain reaches them too (`drainGroup`).
+  else trackLaunch(child, env);
   writeFileSync(join(root, 'app.pid'), `${child.pid}\n`);
 
   const driver = await connectOrEnd(child, endpointFile, logFile, { timeoutMs, group });

@@ -272,7 +272,7 @@ this registry's normal form so that catalogue consumes this table rather than re
 (`REQ-SHELL-055`) resolves in the specified order over the slots that exist: the compact drawers register a closer, and
 the slash popup and the search panel register nothing because neither is built. *Corrected 2026-10-13:* the slash popup's slot was filled
 on 2026-09-09 (the next section); the search panel was built on 2026-09-07 and its slot is still empty — recorded as
-[`window-level-escape-does-not-close-the-transcript-search-panel`](../../defects/window-level-escape-does-not-close-the-transcript-search-panel.md),
+[`window-level-escape-skips-the-open-transcript-search-panel`](../../defects/window-level-escape-skips-the-open-transcript-search-panel.md),
 not repaired. The palette and the help are drawn in
 the main window only; an auxiliary window offers neither. `REQ-SHELL-165`'s determinable case — presenting an action
 with no chord where the product knows the host consumed it — is not built, because no host publishes its reservations;

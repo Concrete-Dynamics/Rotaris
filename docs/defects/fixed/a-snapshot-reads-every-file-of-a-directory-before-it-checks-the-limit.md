@@ -7,6 +7,13 @@ one, and every read is issued in one turn of the run host's event loop, so the w
 directory. Measured on `origin/main` `e6a04a3`: a directory of 1,000 files walked with a limit of 10 reads 1,001 statuses, all
 1,000 in flight at once. Found by fin38's review (optional finding), recorded by fin39.
 
+**Repaired 2026-10-13 (fin39, `fin39-insert-noop-optionals`).** `snapshotTree` reads a directory's files in batches of
+`SNAPSHOT_STAT_BATCH` (256) and checks the limit after each, so the same walk reads at most 257 statuses and at most 256 are in
+flight. Pinned by `packages/agent-tools/src/tools/observe-walk.test.ts`, which counts the status reads through a wrapped
+`node:fs/promises` rather than timing them, so it holds at any load: both cases are red on the code before (1,001 reads against
+a bound of 257; 1,000 in flight against 256), and the second also counts the event loop's turns between batches. Every case in
+`observe.test.ts` is unchanged.
+
 ## Specs
 
 - No requirement's text is contradicted. OQ-245's ruling bounds the walk by `SNAPSHOT_FILE_LIMIT` so that a call on an

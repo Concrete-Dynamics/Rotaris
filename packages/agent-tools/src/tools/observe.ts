@@ -28,13 +28,21 @@ export type TreeSnapshot = ReadonlyMap<string, string>;
 export const SNAPSHOT_FILE_LIMIT = 200_000;
 
 /**
+ * The most file statuses a snapshot reads at once. Until fin39 a directory's files were all read together before the limit was
+ * checked, so one directory holding far more than `SNAPSHOT_FILE_LIMIT` files was read whole where the synchronous walk had
+ * stopped at the limit, and every read was issued in one turn of the event loop
+ * (docs/defects/fixed/a-snapshot-reads-every-file-of-a-directory-before-it-checks-the-limit.md).
+ */
+export const SNAPSHOT_STAT_BATCH = 256;
+
+/**
  * The files under `base` (relative to `root`; `''` is the whole tree), as root-relative `/` paths mapped to their identity, or
  * null when the walk cannot be completed: a base outside the root, an unreadable base, or more than `limit` files. A base the
  * root-down walk would prune is pruned here too, so it holds nothing; a base that is a file is that one file.
  *
  * Asynchronous: every directory listing and every file's status is read through `node:fs/promises`, a directory's files
- * together, so the run host's event loop moves between them — other agents' model streams, tool results and the events the
- * window draws are not held behind a project-wide walk. The reason, kept beside it: until fin38 the walk read with
+ * together in batches of `SNAPSHOT_STAT_BATCH`, so the run host's event loop moves between them — other agents' model
+ * streams, tool results and the events the window draws are not held behind a project-wide walk. The reason, kept beside it: until fin38 the walk read with
  * `lstatSync` and `readdirSync`, so a symbol rename or a whole-project replacement stalled everything else the run host did
  * for the length of two walks of up to `SNAPSHOT_FILE_LIMIT` files
  * (docs/defects/fixed/a-cross-file-edit-calls-tree-walk-blocks-the-run-hosts-event-loop.md).
@@ -90,13 +98,17 @@ export async function snapshotTree(root: string, base: string, limit: number = S
       }
       if (e.isFile() && !ignoredHere(rules, r, false)) files.push({ abs, rel: r });
     }
-    // A directory's files are read together; the listing's order is kept for what the snapshot holds.
-    const ids = await Promise.all(files.map((f) => identity(f.abs)));
-    for (let i = 0; i < files.length; i += 1) {
-      const id = ids[i];
-      if (id === null || id === undefined) continue;
-      out.set(files[i]!.rel, id);
-      if (out.size > limit) return false;
+    // A directory's files are read together, `SNAPSHOT_STAT_BATCH` at a time, and the limit is checked after each batch; the
+    // listing's order is kept for what the snapshot holds.
+    for (let at = 0; at < files.length; at += SNAPSHOT_STAT_BATCH) {
+      const batch = files.slice(at, at + SNAPSHOT_STAT_BATCH);
+      const ids = await Promise.all(batch.map((f) => identity(f.abs)));
+      for (let i = 0; i < batch.length; i += 1) {
+        const id = ids[i];
+        if (id === null || id === undefined) continue;
+        out.set(batch[i]!.rel, id);
+        if (out.size > limit) return false;
+      }
     }
     for (const d of dirs) if (!(await visit(d))) return false;
     return true;

@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-13**
 
+**A snapshot reads a directory's file statuses in batches (OQ-245; fin39, from fin38's review).** `snapshotTree`
+(`agent-tools/src/tools/observe.ts`) reads at most `SNAPSHOT_STAT_BATCH` (256) statuses at once and checks the file limit after
+each batch, so a directory past the limit stops within one batch of it. The **runtime view**'s cut-off passage says so. No
+package, edge, process, channel, command or store column changed.
+
 **A window edit that lands on the file's own bytes is refused, and an insert keeps a CRLF file's line endings (PD-TOOLS-016
 revision 3, OQ-260; PD-TOOLS-018, OQ-259; fin39).** `writeFileTool`'s edit branch compares the window path's result with the file
 before `commit` and refuses an equal one through `windowNoOpMessage`; its insert branch goes through `carryInsert`

@@ -1520,9 +1520,12 @@ bound, reported as a signal). And it checks each `spawnBounded` site, not each f
 Since 2026-10-07 (finacc3 A2-19) a launch ends with its whole process group: `spawnBounded` and the driver's `stopApp` and
 `endLaunch` drain the group once the main process has exited (`drainGroup`: three seconds for it to leave by itself, then
 SIGKILL, each straggler named on standard error), a driven launch leads a group of its own as a bounded one does
-(`startApp`, `trackLaunch`), and a proof that exits or is signalled ends every live group. `driver-proof`'s workspaces carry
-`GIT_CEILING_DIRECTORIES` at the evidence directory, so the app's git no longer climbs into the checkout they lie in
-([note](../defects/fixed/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md)).
+(`startApp`, `trackLaunch`), and a proof that exits or is signalled ends every live group. ~~`driver-proof`'s workspaces carry
+`GIT_CEILING_DIRECTORIES` at the evidence directory, so the app's git no longer climbs into the checkout they lie in~~
+([note](../defects/fixed/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md)) — false: the product deletes that
+variable from every git invocation (REQ-GIT-031). Since fin34 the harness writes a `.git` file naming no repository at `.proof/`
+when it is loaded (`barEnclosingRepository`), so no proof workspace below it reads the enclosing checkout, whichever proof
+made it ([note](../defects/fixed/proof-workspaces-under-the-checkouts-proof-directory-read-the-enclosing-repository.md)).
 
 **The driver.** `apps/desktop/src/main/driver.ts`, reached only when `ROTARIS_DRIVER` names an endpoint file at
 launch, opens a loopback listener and answers newline-delimited JSON: `waitFor`, `click` (by selector, optionally

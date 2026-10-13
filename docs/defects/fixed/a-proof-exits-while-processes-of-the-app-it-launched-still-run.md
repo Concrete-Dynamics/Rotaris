@@ -43,8 +43,13 @@ counts as gone. `spawnBounded` drains every launch it starts and reports the acc
 no group falls back to the process. A driven launch (`startApp`) now leads a group of its own on POSIX and is in the proof's
 care (`trackLaunch`) — ended with the proof on its exit or on SIGINT, SIGTERM or SIGHUP — and `stopApp`, `connectOrEnd` and
 the new `endLaunch` drain it; `driver-proof`, `layout-proof` and `workspace-proof` call `endLaunch` in their `finally`.
-`driver-proof`'s three workspaces carry `GIT_CEILING_DIRECTORIES` at the evidence directory, so the app's git no longer
-climbs into the enclosing checkout. The first form of the drain waited on unreferenced timers and ended a proof with
+~~`driver-proof`'s three workspaces carry `GIT_CEILING_DIRECTORIES` at the evidence directory, so the app's git no longer
+climbs into the enclosing checkout.~~ **Corrected 2026-10-13 (fin34): that claim was false.** The product deletes
+`GIT_CEILING_DIRECTORIES` from every git invocation's environment (REQ-GIT-031, `GIT_ENV_DENYLIST` in
+`packages/workspace/src/index.ts`), so the variable never reached the app's git and the workspaces still read the checkout.
+The harness now bars discovery at `.proof/` for every proof with a `.git` file naming no repository (`barEnclosingRepository`,
+`apps/desktop/scripts/lib/harness.mjs`; `docs/defects/fixed/proof-workspaces-under-the-checkouts-proof-directory-read-the-enclosing-repository.md`),
+and `driver-proof` no longer sets the variable. The first form of the drain waited on unreferenced timers and ended a proof with
 nothing else to wait on as "unsettled top-level await" (exit 13), found by a scratch loop and pinned. Whether the product
 itself should end an in-flight git child at its quit is untouched: no requirement says, and this note does not decide it.
 
@@ -55,4 +60,4 @@ is left alone, and a proof with nothing else to wait on still settles (red with 
 (27 passed, 0 failed; load 13.5 to 14.2), `pnpm layout-proof --skip-build` (28 passed; load 12.0 to 11.5) and
 `pnpm workspace-proof --skip-build` (51 passed, 2 skipped; load 11.5 to 7.9), each followed by a process listing with no
 process of its launches left and no straggler named. The same climb into the enclosing repository in other proofs is
-recorded open: [`proof-workspaces-under-the-checkouts-proof-directory-read-the-enclosing-repository.md`](../proof-workspaces-under-the-checkouts-proof-directory-read-the-enclosing-repository.md).
+recorded open: [`proof-workspaces-under-the-checkouts-proof-directory-read-the-enclosing-repository.md`](proof-workspaces-under-the-checkouts-proof-directory-read-the-enclosing-repository.md).

@@ -28,6 +28,28 @@ import { spawnSync } from 'node:child_process';
 /** The repository root, the desktop app's directory and the Electron executable, resolved the way every proof resolves them. */
 export const repo = resolve(import.meta.dirname, '..', '..', '..', '..');
 export const app = join(repo, 'apps', 'desktop');
+
+/**
+ * No proof workspace under the checkout's `.proof/` reads the enclosing repository. A proof that makes its workspace a plain
+ * directory there and gives it no repository of its own left the app's git discovery to climb into the checkout the proof
+ * runs in, so its Git view and status strip read that checkout's branches, worktrees and diffs — another plan's, on a host
+ * shared by parallel plans (`docs/defects/fixed/proof-workspaces-under-the-checkouts-proof-directory-read-the-enclosing-repository.md`).
+ *
+ * The bar is a `.git` FILE at `.proof/` naming no repository: git's discovery stops at the first `.git` it meets, and one that
+ * names nothing answers "not a git repository" (exit 128), exactly what a workspace with no repository above it answers. A
+ * workspace that holds a repository of its own, or lies in one a proof made below `.proof/`, meets that one first and is
+ * unaffected; the checkout's own git ignores `.proof/`. Not `GIT_CEILING_DIRECTORIES`: the product deletes it from every git
+ * invocation's environment (REQ-GIT-031, `GIT_ENV_DENYLIST`), so the variable `driver-proof` set from fin30 never reached the
+ * app's git. Written when this module is loaded, which every proof that launches the app does, and idempotent.
+ */
+export const PROOF_GIT_BAR = join(repo, '.proof', '.git');
+export function barEnclosingRepository(bar = PROOF_GIT_BAR) {
+  if (existsSync(bar)) return bar;
+  mkdirSync(join(bar, '..'), { recursive: true });
+  writeFileSync(bar, 'gitdir: no-repository-above-a-proof-workspace\n');
+  return bar;
+}
+barEnclosingRepository();
 export const electron = process.platform === 'win32'
   ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe')
   : join(repo, 'node_modules', 'electron', 'dist', 'electron');

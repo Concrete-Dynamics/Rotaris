@@ -12024,8 +12024,10 @@ second under any verb. Three builds met it and wrote a disposition under a verb 
 `PD-TOOLS-013` lists REQ-TOOLS-112 and REQ-SESSION-136 under **Extends** though it adds a member to a closed set and removes
 an issue (OQ-226); `PD-CONFIG-003` names REQ-CONFIG-256 and REQ-CONFIG-417 as narrowed where its ruling named them extended
 (OQ-218); `PD-SHELL-009` carries its ruling's REQ-SHELL-021 through REQ-SHELL-122 (OQ-206). `PD-WORKSPACE-002` left
-REQ-CONFIG-464 out altogether, its own text saying "no single revision could honestly hold" the two halves, and revisions of
-`PD-TOOLS-006`, `PD-ORCH-006` and `PD-MONITOR-001` hold narrowings that "land here whatever [they are] about". The generated
+REQ-CONFIG-464 out altogether, its own text saying "no single revision could honestly hold" the two halves; revisions of
+`PD-TOOLS-006` and `PD-ORCH-006` hold narrowings that "land here whatever [they are] about", and `PD-MONITOR-004` holds a
+revision minted as a directive of its own and folded into it at a landing because "the symbol generator refuses two
+directives narrowing one requirement". The generated
 artifact answers "Extended by PD-TOOLS-013 … This still governs in full" for a requirement that no longer does.
 
 **What a ruling decides.** Whether the register may hold several directives under Narrows or Extends on one requirement,
@@ -12070,7 +12072,10 @@ answer to a payload the requirement does not close), REQ-SESSION-115 (`PD-LIBRAR
 only how an edited artifact is read), REQ-SHELL-119 (`PD-SHELL-003`'s title-bar control enters the same guards),
 REQ-STARTUP-161 (`PD-SHELL-001`'s window is a window of the one instance, and the closed set there is the launch outcomes,
 untouched) and REQ-WORKSPACE-041 (`PD-LIBRARY-002`'s retrospective reads what discovery finds). Every pair of narrowings the
-register now holds names each other. Outside the bound and recorded, not corrected:
+register now holds names each other. The generator's one-per-verb reason is marked as no longer binding wherever the
+register still gave it in the present tense: beside the "lands here" sentences of `PD-TOOLS-006` and `PD-ORCH-006`, at
+`PD-MONITOR-004`'s folded revision, and at `PD-ORCH-003`'s "it would also be refused" (whose supersession half still holds).
+Outside the bound and recorded, not corrected:
 [`pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md`](../defects/pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md).
 
 <a id="oq-238"></a>

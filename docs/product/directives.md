@@ -962,7 +962,9 @@ requirements that govern it are deliberately **not** in the disposition:
 So `REQ-ORCH-152` is the identifier this displaces, and naming the other two would claim a precedence this
 directive does not need. It would also be refused: `PD-ORCH-002` already supersedes `REQ-ORCH-153` and
 narrows `REQ-ORCH-154`, and the symbol generator rejects two directives over one requirement so that
-precedence stays unambiguous.
+precedence stays unambiguous. *(Since 2026-10-13 ([OQ-237](../architecture/open-questions.md)) only the supersession half of this
+still holds: `REQ-ORCH-153`, superseded, may be neither narrowed nor extended, but a second narrowing of `REQ-ORCH-154` in a
+disjoint case that names `PD-ORCH-002` would build. The first reason, the precedence this directive does not need, stands.)*
 
 > **Narrows:** REQ-ORCH-152
 
@@ -4993,7 +4995,8 @@ else a discovered one — keep waiting acknowledges in both variants; change mod
 
 *This revision was minted on its branch as a directive of its own (`PD-MONITOR-004`, then `PD-MONITOR-007` at the landing
 rebase) and folded into this one there, since `main` had meanwhile given REQ-MONITOR-303 this directive's narrowing and the
-symbol generator refuses two directives narrowing one requirement (`README.md`, Identifiers).*
+symbol generator refuses two directives narrowing one requirement (`README.md`, Identifiers).* *(No longer binding since 2026-10-13, [OQ-237](../architecture/open-questions.md): two directives may narrow one
+requirement in disjoint cases when one names the other, so such a case need not be folded here; what was folded here stays.)*
 
 **As built.** `WaitHeader` and `waitModelOptions` (`packages/ui/src/WorkspaceView.tsx`), the annotation read from the
 record's `wait.excluded` (`excludedModelKeys`, `packages/engine/src/run/resilience.ts`).

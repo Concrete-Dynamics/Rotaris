@@ -54,7 +54,8 @@ one naming the other. Built by fin34 (`fin34-record-and-cancels`):
   marked as no longer one. The re-read the ruling asked for found two more the note did not list: `PD-ORCH-004` narrows
   REQ-TOOLS-152 (Extends in R-058 "because the symbol artifact holds one narrowing directive per requirement"), and
   `PD-LIBRARY-001` narrows REQ-LIBRARY-099 and REQ-TOOLS-148, whose closed section sets gain `commands`. The "lands here
-  whatever it is about" sentences of `PD-TOOLS-006` and `PD-ORCH-006` are marked as no longer binding.
+  whatever it is about" sentences of `PD-TOOLS-006` and `PD-ORCH-006`, the folded revision of `PD-MONITOR-004` and the
+  "it would also be refused" of `PD-ORCH-003` (its supersession half still holds) are marked as no longer binding.
 - `docs/product/README.md` is amended in place (Identifiers; "Two directives on one requirement"; "The back-pointer, in
   place") and carries the first execution; OQ-66, OQ-206, OQ-216, OQ-218 and OQ-226 carry pointer lines.
 

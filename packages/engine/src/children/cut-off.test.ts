@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { millis } from '@rotaris/kernel';
 import { CODE_INTELLIGENCE_MANIFEST } from '@rotaris/config';
 import type { ChildRow } from '@rotaris/store';
@@ -209,6 +209,18 @@ describe('PD-CONFIG-003 revision 3: the timeout error, written once and read bac
     expect(timedOutOf(stored(timeout(0.05)))).toEqual({ limitSeconds: 0.05, makingProgress: false });
     const cutOff = cutOffReport({ taskId: 'bg_00000001', limitS: 1200, stallS: 90, changedPaths: ['a'], isContinuation: false });
     expect(timedOutOf(stored({ ...timeout(1200), cut_off: cutOff }))).toEqual({ limitSeconds: 1200, makingProgress: true });
+  });
+
+  // fin33's review: `toAgentRecord` reads every child at every projection (the 80 ms publish tick), so a timed-out child's
+  // stored report was parsed again each time. One report is parsed once.
+  it('parses one stored report once, however often a projection reads it', () => {
+    const report = stored({ ...timeout(1234), summary: 'memo' });
+    const parse = vi.spyOn(JSON, 'parse');
+    try {
+      const first = timedOutOf(report);
+      for (let i = 0; i < 5; i += 1) expect(timedOutOf(report)).toEqual(first);
+      expect(parse).toHaveBeenCalledTimes(1);
+    } finally { parse.mockRestore(); }
   });
 
   it('reads nothing from a report with no timeout error, or none at all', () => {

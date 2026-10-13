@@ -48,6 +48,18 @@ export interface TimedOut {
 export function timedOutOf(report: string | null | undefined): TimedOut | null {
   // Most reports carry no timeout: skip the parse unless the form is there at all (`toAgentRecord` reads every child).
   if (typeof report !== 'string' || !report.includes('Child timed out after')) return null;
+  // A settled child's stored report does not change, and `toAgentRecord` reads it at every projection (the 80 ms publish
+  // tick), so one report is parsed once (fin33's review); a few entries cover the cut-off children of a long session.
+  const memo = TIMED_OUT_READ.get(report);
+  if (memo !== undefined) return memo;
+  const read = parseTimedOut(report);
+  if (TIMED_OUT_READ.size >= TIMED_OUT_READ_HELD) TIMED_OUT_READ.delete(TIMED_OUT_READ.keys().next().value as string);
+  TIMED_OUT_READ.set(report, read);
+  return read;
+}
+const TIMED_OUT_READ = new Map<string, TimedOut | null>();
+const TIMED_OUT_READ_HELD = 64;
+function parseTimedOut(report: string): TimedOut | null {
   let parsed: unknown;
   try { parsed = JSON.parse(report); } catch { return null; }
   if (typeof parsed !== 'object' || parsed === null) return null;

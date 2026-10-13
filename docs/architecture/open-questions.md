@@ -12395,3 +12395,24 @@ The specification fixes neither keeping the window's endings nor writing `new_st
 **What a ruling decides.** Whether a level-2 `write_file` edit carries each window line's line ending (and trailing whitespace)
 into the replacement, writes `new_string` as given, or is refused with `PD-TOOLS-014`'s level-2 near-miss facts, as `haet_edit`'s
 is.
+
+<a id="oq-240"></a>
+
+**OQ-240 — Does REQ-STARTUP-147's list of the variables the domain reads name the platform-convention ones?** *(REQ-STARTUP-147,
+"Environment variables read by this domain"; REQ-STARTUP-145, the platform-conventional per-user directories; REQ-STARTUP-161
+and -164, the instance claim and its hand-over endpoint; `packages/platform/src/dirs.ts`, `packages/platform/src/instance.ts`.
+Raised 2026-10-13 by fin34 from fin30's review of the platform paths, which left it as an optional finding. Numbered after
+OQ-235 to OQ-239, which this plan's other bundles hold.)*
+
+REQ-STARTUP-147 lists the environment variables this domain reads: `APPIMAGE`, `ROTARIS_BUNDLED`, `COMSPEC`, and the variable by
+which an artifact form names the file a launch started from. The domain also reads `XDG_CONFIG_HOME` and `XDG_DATA_HOME` (Linux)
+and `LOCALAPPDATA` (Windows) to find the per-user directories REQ-STARTUP-145 calls platform-conventional, and the instance claim
+reads `XDG_RUNTIME_DIR` for where its hand-over socket goes (since 2026-09-19; `socketDirectoryCandidates`). None of the four is
+in the list. fin30's builder justified them as platform convention under REQ-STARTUP-145; the list's own wording, "Environment
+variables read by this domain", reads as exhaustive, and its next sentence bounds what any variable it covers may decide.
+
+**What the build proceeds under.** The four are read, as REQ-STARTUP-145's platform convention: each only locates a directory,
+none selects a workspace, enables diagnostics, touches the update check or permits a second instance, so REQ-STARTUP-147's
+second sentence holds for them either way. **What a ruling decides.** Whether REQ-STARTUP-147's list is exhaustive — and then
+whether it should name the platform-convention variables, or REQ-STARTUP-145 should say the convention's variables are read —
+or whether it lists only the variables this product defines or depends on beyond the platform's own conventions.

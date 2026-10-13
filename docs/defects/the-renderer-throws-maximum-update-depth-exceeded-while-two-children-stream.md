@@ -112,3 +112,26 @@ Default update outside any commit, so it is the less likely of the two. The disc
 development build, where #185 names the update's owner, with the `pendingLanes` trap logging, per counting commit, the fibers
 holding the pending lanes — or a duress pack whose `app.log` carries the trap's lines. **What a live run should show** is
 unchanged: any "Minified React error #185" line in `duress/app.log`, its time against the children's streams.
+
+## The final duress pack at `552d346` (2026-10-13, fin38) — 0 lines; open
+
+**What the live run showed.** The final duress live run at `552d346` (pack `2026-10-13T08-12-41-551Z` of the live worktree,
+`live-run PASSED`, 30 PASS, 9 NOTE, 0 FAIL) carried **0** "Minified React error #185" or "Maximum update depth" lines: 0
+`capture: renderer console` lines of any kind in `duress/app.log`, `duress/app.filtered.log`, `sign-in/app.log` and
+`sign-in/app.filtered.log`, with the relay live (`apps/desktop/src/main/capture/index.ts:30`). It ran **525 s** of two or more
+children streaming at once — 08:14:11 to 08:16:11 (119 s; a, b and c) and 08:19:28 to 08:26:16 (407 s; d and e1), d's
+138.1 s request 80 overlapping e1's requests 78, 79 and 81 by 40.7, 49.7 and 45.5 s, the shape of the `a68f121` errors, over a
+929 kB transcript (the orchestrator's `live-552d346-duress-autopsy.md`, finding D8). The default pack of the same build
+carried 0 as well, with two children streaming at once in `edit` and `resume`. One more absence does not discharge the note:
+the seven errors of `a68f121` were never explained, only not seen again.
+
+**Read from the code again.** The renderer commits since fin35's reading (`40914f9`, the Mission table's persona cell in CSS;
+`d15086a` and `b4167e1`, the requirements review pane's owed read) set state only from a read's promise or a user's gesture,
+never in a commit a push causes, so they add no self-renewing update to the path fin35 ruled out. No path was found; nothing
+in the product was changed.
+
+**The count the note owed.** `live-run.mjs` now counts, for every launch, the relayed renderer console lines naming #185 or
+"Maximum update depth" (`apps/desktop/scripts/lib/renderer-console.mjs`, `updateDepthErrors`, pinned by
+`renderer-console.test.ts`): the count goes to `results.json` (`scenarioEvidence.<name>.reactUpdateDepthErrors`), and a launch
+with any is a NOTE naming each line. **What a live run should show** is unchanged, and is now on the console: no such NOTE, and
+`reactUpdateDepthErrors: 0` for `duress`.

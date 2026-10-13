@@ -18,7 +18,7 @@ Last reconciled with the code: **2026-10-13**
 **A run's proposed technical requirement is accepted from the review (REQ-TRACE-427..433; fin41).** `accept-proposal` is a
 record admitted in `review` (`decide`, `workspace/src/delivery/transition.ts`), its write made in the delivery service's
 `beforeCommit` (`acceptProposal`, `workspace-service/delivery.ts`) through `requirements.source.write`'s units.
-`BeforeCommitOutcome` gained `reason`, `ReviewPayload`'s proposals gained `acceptedAs`, and the review pane draws one accept
+`BeforeCommitOutcome` gained `reason`, `ReviewPayload`'s proposals gained `acceptedAs` and `origin` (the link the write makes, which the review names), and the review pane draws one accept
 control per proposal (`ProposalOffer`, `ui/src/requirements/panes/`). `accept-change-work`'s refusal names REQ-TRACE-411/412
 in place of OQ-45. The **sequences view**'s board section says so. No package, edge, process, channel, command or store
 column changed.

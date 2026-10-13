@@ -365,8 +365,10 @@ export interface ReviewPayload {
      * REQ-TRACE-427..429: each proposal as the run's file states it, with `acceptedAs` the identifier of the technical
      * requirement an acceptance already wrote (found in the requirement store: technical, the same title, derived from the
      * proposal's origin), or null while it is still only proposed. The review offers to accept only those still null.
+     * `origin` is the requirement an acceptance links as `derived-from` (REQ-TRACE-429): `derivedFrom` where the store holds
+     * it, else the reviewed requirement. The review names and confirms that one, so it never states a link the write does not make.
      */
-    readonly proposals: readonly { readonly title: string; readonly description: string; readonly derivedFrom: ReqId; readonly unit: string; readonly acceptedAs: ReqId | null }[];
+    readonly proposals: readonly { readonly title: string; readonly description: string; readonly derivedFrom: ReqId; readonly origin: ReqId; readonly unit: string; readonly acceptedAs: ReqId | null }[];
     readonly proposalsState: 'none' | 'present' | 'unreadable';
   };
 }

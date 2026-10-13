@@ -1263,8 +1263,12 @@ requirement where it was (REQ-TRACE-432). The workspace service's `acceptProposa
 refuses one that is not there, reads differently or was already accepted, and refuses a read-only store in the probe's
 words. It then writes a `type: technical` document through `requirements.source.write`'s units (`nextIdentifier`,
 `createLocation`, `composeRequirementDocument`, `writeSourceDocument`) with `derived-from` naming the proposal's origin,
-or the reviewed requirement when the proposal names none the store holds. `requirements.human_in_the_loop.confirm_source_writes`
-is not read (REQ-TRACE-431). `BeforeCommitOutcome` gained `reason`, so the history and audit entry name the identifier the
+or the reviewed requirement when the proposal names none the store holds. *Corrected at the bundle's review, 2026-10-13:
+the review first named and confirmed the run's own `derivedFrom` while the write linked the reviewed requirement whenever the
+store did not hold that id, so the confirmation stated a link the write did not make. The payload's proposals now carry
+`origin`, the link the write makes, and the review names and confirms that one, with the run's naming beside it
+(`accept-proposal.test.ts`'s and `panes.test.ts`'s REQ-TRACE-428/429 origin cases, red on the code before).*
+`requirements.human_in_the_loop.confirm_source_writes` is not read (REQ-TRACE-431). `BeforeCommitOutcome` gained `reason`, so the history and audit entry name the identifier the
 write created. The pass then re-reads the store and records a `create` on the new requirement.
 
 **Already accepted is read from the store, not from the history.** The review's payload marks each proposal `acceptedAs`

@@ -404,15 +404,14 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     if (worktree === null) return { proposals: [], proposalsState: 'none' };
     const file = join(worktree, '.rotaris', 'proposed-requirements.json');
     if (!existsSync(file)) return { proposals: [], proposalsState: 'none' };
-    const acceptedAs = (title: string, named: string): ReqId | null => {
-      const origin = originOf(named, reviewed);
-      return parse?.records.find((r) => r.kind === 'technical' && r.title.trim() === title.trim() && r.derivedFrom.includes(origin))?.id ?? null;
-    };
+    const acceptedAs = (title: string, origin: ReqId): ReqId | null =>
+      parse?.records.find((r) => r.kind === 'technical' && r.title.trim() === title.trim() && r.derivedFrom.includes(origin))?.id ?? null;
     try {
       const v = JSON.parse(readFileSync(file, 'utf8')) as unknown;
       if (!Array.isArray(v)) return { proposals: [], proposalsState: 'unreadable' };
       const list = v.filter((p): p is { title: string; description: string; derivedFrom: string; unit: string } => typeof p === 'object' && p !== null && typeof (p as { title?: unknown }).title === 'string');
-      return { proposals: list.map((p) => ({ title: p.title, description: p.description ?? '', derivedFrom: p.derivedFrom ?? '', unit: p.unit ?? '', acceptedAs: acceptedAs(p.title, p.derivedFrom ?? '') })), proposalsState: list.length === 0 ? 'none' : 'present' };
+      // REQ-TRACE-429: `origin` is the link an acceptance writes, which the review names and confirms (fin41 review).
+      return { proposals: list.map((p) => { const origin = originOf(typeof p.derivedFrom === 'string' ? p.derivedFrom : '', reviewed); return { title: p.title, description: p.description ?? '', derivedFrom: p.derivedFrom ?? '', origin, unit: p.unit ?? '', acceptedAs: acceptedAs(p.title, origin) }; }), proposalsState: list.length === 0 ? 'none' : 'present' };
     } catch { return { proposals: [], proposalsState: 'unreadable' }; }
   };
   const risksOf = (summary: string | null): string[] => (summary ?? '').split(/\r?\n/).filter((l) => /^\s*[-*]?\s*risk\b/i.test(l)).map((l) => l.replace(/^\s*[-*]?\s*/, ''));
@@ -451,7 +450,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     if (proposal.acceptedAs !== null) throw new Error(`"${proposal.title}" was already accepted as ${proposal.acceptedAs}; nothing was written.`);
     const s = source();
     if (!s.writable) throw new Error(s.reason ?? 'The requirement store is read-only here; nothing was written.');
-    const origin = originOf(proposal.derivedFrom, id);
+    const origin = proposal.origin;
     const tombstoned = new Set<number>((parse as { details?: { tombstoned?: readonly number[] } }).details?.tombstoned ?? []);
     const made = nextIdentifier(parse, tombstoned, undefined);
     if (!made.ok) throw new Error(made.error);

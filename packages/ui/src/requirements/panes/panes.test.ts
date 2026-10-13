@@ -59,8 +59,8 @@ describe('REQ-TRACE-427..430: the run\'s proposed technical requirements on the 
   // docs/defects/fixed/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md: the
   // proposals were listed as text with no way to accept one.
   const proposed = (acceptedAs: string | null = null) => payload({ work: { ...payload().work, proposalsState: 'present', proposals: [
-    { title: 'Audit log retention', description: 'Kept seven years.', derivedFrom: 'REQ-101', unit: 'u1', acceptedAs },
-    { title: 'Audit log export', description: 'CSV.', derivedFrom: '', unit: 'u1', acceptedAs: null },
+    { title: 'Audit log retention', description: 'Kept seven years.', derivedFrom: 'REQ-101', origin: 'REQ-101', unit: 'u1', acceptedAs },
+    { title: 'Audit log export', description: 'CSV.', derivedFrom: '', origin: 'REQ-101', unit: 'u1', acceptedAs: null },
   ] } });
   const element = (p: ReturnType<typeof payload>) => reviewElements(p).find((e) => e.key === 'proposals')!;
   it('REQ-TRACE-428/429: states the difference in prose, names each title and origin, and offers each proposal for acceptance on its own', () => {
@@ -76,6 +76,14 @@ describe('REQ-TRACE-427..430: the run\'s proposed technical requirements on the 
     ]);
     expect(PROPOSAL_DIFFERENCE).toMatch(/execution unit .* discarded .* technical requirement is durable/);
     expect(proposalConsequence(e.offers![0]!)).toBe(`Accepting writes "Audit log retention" into this project's own requirement store as a technical requirement derived from REQ-101. ${PROPOSAL_DIFFERENCE}`);
+  });
+  it('REQ-TRACE-428/429: the origin named and confirmed is the one the write links, and a run\'s own naming the store does not hold is said beside it', () => {
+    const e = element(payload({ work: { ...payload().work, proposalsState: 'present', proposals: [
+      { title: 'Audit log export', description: 'CSV.', derivedFrom: 'REQ-999', origin: 'REQ-101', unit: 'u1', acceptedAs: null },
+    ] } }));
+    expect(e.lines[1]).toBe('Audit log export — derived from REQ-101 (unit u1; the run named REQ-999, which this store does not hold): CSV.');
+    expect(e.offers![0]!.origin).toBe('REQ-101');
+    expect(proposalConsequence(e.offers![0]!)).toContain('a technical requirement derived from REQ-101.');
   });
   it('an accepted proposal says what it became and is offered no more; no proposals is said in words and offers nothing (REQ-TRACE-430)', () => {
     const e = element(proposed('REQ-140'));

@@ -90,10 +90,13 @@ export function reviewElements(p: ReviewPayload): readonly ReviewElement[] {
         if (p.work.proposalsState === 'unreadable') return { lines: ['The proposals file could not be read; the run is taken as having put forward no proposals.'] };
         if (p.work.proposals.length === 0) return { lines: [] };
         // REQ-TRACE-428: the title, the origin, and the difference in prose; REQ-TRACE-429: one accept control per proposal still only proposed.
-        const origin = (x: ReviewPayload['work']['proposals'][number]): string => (x.derivedFrom === '' ? p.id : x.derivedFrom);
+        // The origin named and confirmed is the payload's `origin`, the link the write makes; a run's own naming the store does
+        // not hold is said beside it rather than offered as the link (fin41 review: the confirmation named the run's id and the
+        // write linked the reviewed requirement).
+        const named = (x: ReviewPayload['work']['proposals'][number]): string => (x.derivedFrom === '' || x.derivedFrom === x.origin ? '' : `; the run named ${x.derivedFrom}, which this store does not hold`);
         return {
-          lines: [PROPOSAL_DIFFERENCE, ...p.work.proposals.map((x) => `${x.title} — derived from ${origin(x)} (unit ${x.unit})${x.acceptedAs === null ? '' : `, accepted as ${x.acceptedAs}`}: ${x.description}`)],
-          offers: p.work.proposals.flatMap((x, index) => (x.acceptedAs === null ? [{ index, title: x.title, origin: origin(x), unit: x.unit, label: `Accept "${x.title}"` }] : [])),
+          lines: [PROPOSAL_DIFFERENCE, ...p.work.proposals.map((x) => `${x.title} — derived from ${x.origin} (unit ${x.unit}${named(x)})${x.acceptedAs === null ? '' : `, accepted as ${x.acceptedAs}`}: ${x.description}`)],
+          offers: p.work.proposals.flatMap((x, index) => (x.acceptedAs === null ? [{ index, title: x.title, origin: x.origin, unit: x.unit, label: `Accept "${x.title}"` }] : [])),
         };
       }
     }

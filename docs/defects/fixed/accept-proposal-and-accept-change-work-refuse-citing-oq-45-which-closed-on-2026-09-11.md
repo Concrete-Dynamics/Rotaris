@@ -49,7 +49,8 @@ record that moves nothing. The delivery service's `beforeCommit` (`acceptProposa
 requirement with its origin link through `requirements.source.write`'s units, between the admission and the commit, so a refused
 write records nothing (REQ-TRACE-432). `confirm_source_writes` is not read (REQ-TRACE-431). The record names the identifier
 written (`BeforeCommitOutcome.reason`), and the new requirement gets its `create` record. The review payload marks each
-proposal `acceptedAs` from the requirement store, and the review pane draws one `Accept "<title>"` control per proposal still
+proposal `acceptedAs` from the requirement store and `origin`, the link the write makes (the reviewed requirement where the
+run names an id the store does not hold; corrected at the bundle's review, where the confirmation still named the run's id), and the review pane draws one `Accept "<title>"` control per proposal still
 only proposed, below REQ-TRACE-428's sentence on how the two kinds of artifact differ. `accept-change-work` stays refused,
 because REQ-TRACE-409..416's offers are not built; its refusal now names REQ-TRACE-411/412 and no longer names OQ-45. The
 `main.tsx` Library comment and ADR-0041's "no store to write into" are corrected in place, the old sentence kept beside the

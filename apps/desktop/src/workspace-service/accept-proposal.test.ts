@@ -110,6 +110,17 @@ describe('REQ-TRACE-427..433: a proposed technical requirement is accepted from 
     expect(documentOf(exported.id)).toMatch(/^derived-from: REQ-101$/m);
   });
 
+  it('REQ-TRACE-428/429: a proposal naming an origin the store does not hold is offered, confirmed and written as deriving from the reviewed requirement', async () => {
+    // The payload's `origin` is the requirement an acceptance writes as `derived-from`; the review names that one, never only
+    // the run's own naming, so the confirmation never states a link the write does not make.
+    await reviewWith([{ ...EXPORT, derivedFrom: 'REQ-999' }]);
+    expect((await review()).work.proposals.map((p) => [p.derivedFrom, p.origin])).toEqual([['REQ-999', 'REQ-101']]);
+    expect(((await accept({ proposal: '0', title: EXPORT.title })).value as { ok: boolean }).ok).toBe(true);
+    const created = ((await s.handle({ name: 'requirements.board', workspace: ws }, USER)).value as BoardProjection).cards.find((c) => c.title === EXPORT.title)!;
+    expect(documentOf(created.id)).toMatch(/^derived-from: REQ-101$/m);
+    expect((await review()).work.proposals.map((p) => [p.origin, p.acceptedAs])).toEqual([['REQ-101', created.id]]);
+  });
+
   it('REQ-TRACE-432: a proposal that is not there, or no longer reads as shown, is refused in the engine\'s words and nothing is written', async () => {
     await reviewWith([RETENTION]);
     const cards = ((await s.handle({ name: 'requirements.board', workspace: ws }, USER)).value as BoardProjection).cards.length;

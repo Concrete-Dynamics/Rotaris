@@ -361,7 +361,12 @@ export interface ReviewPayload {
     readonly units: readonly { readonly unit: string; readonly sessionId?: string; readonly status: string; readonly outcome?: string; readonly startedAt: string; readonly endedAt?: string; readonly permissions: string }[];
     readonly branch: string | null;
     readonly worktree: string | null;
-    readonly proposals: readonly { readonly title: string; readonly description: string; readonly derivedFrom: ReqId; readonly unit: string }[];
+    /**
+     * REQ-TRACE-427..429: each proposal as the run's file states it, with `acceptedAs` the identifier of the technical
+     * requirement an acceptance already wrote (found in the requirement store: technical, the same title, derived from the
+     * proposal's origin), or null while it is still only proposed. The review offers to accept only those still null.
+     */
+    readonly proposals: readonly { readonly title: string; readonly description: string; readonly derivedFrom: ReqId; readonly unit: string; readonly acceptedAs: ReqId | null }[];
     readonly proposalsState: 'none' | 'present' | 'unreadable';
   };
 }

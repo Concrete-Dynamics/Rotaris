@@ -15,6 +15,14 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-13**
 
+**A run's proposed technical requirement is accepted from the review (REQ-TRACE-427..433; fin41).** `accept-proposal` is a
+record admitted in `review` (`decide`, `workspace/src/delivery/transition.ts`), its write made in the delivery service's
+`beforeCommit` (`acceptProposal`, `workspace-service/delivery.ts`) through `requirements.source.write`'s units.
+`BeforeCommitOutcome` gained `reason`, `ReviewPayload`'s proposals gained `acceptedAs`, and the review pane draws one accept
+control per proposal (`ProposalOffer`, `ui/src/requirements/panes/`). `accept-change-work`'s refusal names REQ-TRACE-411/412
+in place of OQ-45. The **sequences view**'s board section says so. No package, edge, process, channel, command or store
+column changed.
+
 **A configured `worktree_storage_subpath` places session worktrees, and one inside the requirement checkout directory fails the
 load (REQ-GIT-073, REQ-CONFIG-068, REQ-GIT-138; fin41).** An isolated start in main asks the workspace service `config.read` and
 sends the snapshot's new `worktreeStorageSubpath` on `worktree.create`'s session target; a snapshot that did not load refuses the

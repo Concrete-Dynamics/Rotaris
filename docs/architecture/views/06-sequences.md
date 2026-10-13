@@ -317,6 +317,14 @@ sequenceDiagram
   M->>B: channel 10 — the card is done
 ```
 
+- **A proposed technical requirement is accepted from the review, one at a time** (*since 2026-10-13, fin41*;
+  REQ-TRACE-427..433). The review pane's `Accept "<title>"` control sends `requirements.act {accept-proposal, payload
+  {proposal, title}}` on the reviewed card. `decide` admits it only in `review`, as a record that moves nothing. The
+  delivery service's `beforeCommit` writes the technical requirement into the requirement source through
+  `requirements.source.write`'s units, between the admission and the commit, so a refused write records nothing. The
+  history entry names the identifier written (`BeforeCommitOutcome.reason`). The pass then re-reads the store, and the
+  new requirement gets a `create` record. `confirm_source_writes` is not read. `accept-change-work` is still refused, now
+  naming REQ-TRACE-411/412's offer, which no pass makes.
 - **A renderer never sends an actor.** The command schema has no field for one; the relay stamps it from where
   the command arrived — a window's `webContents` is a person under the account main runs as, anything else is
   the system. The workspace is likewise replaced with the one this instance has open, so a board cannot act on

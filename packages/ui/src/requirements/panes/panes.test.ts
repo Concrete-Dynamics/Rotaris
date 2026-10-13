@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BlockerPayload, LaunchPreview, ReviewPayload } from '@rotaris/contracts';
 import { PANE_KEYS, REVIEW_ELEMENTS } from '@rotaris/contracts';
 import { createPaneRegistry } from './registry.js';
-import { blockerPresentation, clampConcurrency, disclosureFor, disclosureLines, nothingHolds, queueRows, reviewDecisions, reviewElementDescription, reviewElements, waitingStatement, approvalWaitSentence } from './presentation.js';
+import { PROPOSAL_DIFFERENCE, blockerPresentation, clampConcurrency, disclosureFor, disclosureLines, nothingHolds, proposalConsequence, queueRows, reviewDecisions, reviewElementDescription, reviewElements, waitingStatement, approvalWaitSentence } from './presentation.js';
 
 /** Part AP — the panes' pure halves (REQ-TRACE-369/375, 419..422, 447..452, 466, 468, 472/474, 478..482). */
 describe('REQ-TRACE-369/375: the pane registry', () => {
@@ -52,6 +52,41 @@ describe('REQ-TRACE-419..422: the review', () => {
     expect(reviewDecisions()).toEqual([
       { action: 'accept', label: 'Accept' }, { action: 'rerun', label: 'Rerun' }, { action: 'send-back', label: 'Send back' }, { action: 'edit', label: 'Edit' }, { action: 'reject', label: 'Reject' }, { action: 'keep-worktree', label: 'Keep worktree' },
     ]);
+  });
+});
+
+describe('REQ-TRACE-427..430: the run\'s proposed technical requirements on the review', () => {
+  // docs/defects/fixed/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md: the
+  // proposals were listed as text with no way to accept one.
+  const proposed = (acceptedAs: string | null = null) => payload({ work: { ...payload().work, proposalsState: 'present', proposals: [
+    { title: 'Audit log retention', description: 'Kept seven years.', derivedFrom: 'REQ-101', unit: 'u1', acceptedAs },
+    { title: 'Audit log export', description: 'CSV.', derivedFrom: '', unit: 'u1', acceptedAs: null },
+  ] } });
+  const element = (p: ReturnType<typeof payload>) => reviewElements(p).find((e) => e.key === 'proposals')!;
+  it('REQ-TRACE-428/429: states the difference in prose, names each title and origin, and offers each proposal for acceptance on its own', () => {
+    const e = element(proposed());
+    expect(e.lines).toEqual([
+      PROPOSAL_DIFFERENCE,
+      'Audit log retention — derived from REQ-101 (unit u1): Kept seven years.',
+      'Audit log export — derived from REQ-101 (unit u1): CSV.',
+    ]);
+    expect(e.offers).toEqual([
+      { index: 0, title: 'Audit log retention', origin: 'REQ-101', unit: 'u1', label: 'Accept "Audit log retention"' },
+      { index: 1, title: 'Audit log export', origin: 'REQ-101', unit: 'u1', label: 'Accept "Audit log export"' },
+    ]);
+    expect(PROPOSAL_DIFFERENCE).toMatch(/execution unit .* discarded .* technical requirement is durable/);
+    expect(proposalConsequence(e.offers![0]!)).toBe(`Accepting writes "Audit log retention" into this project's own requirement store as a technical requirement derived from REQ-101. ${PROPOSAL_DIFFERENCE}`);
+  });
+  it('an accepted proposal says what it became and is offered no more; no proposals is said in words and offers nothing (REQ-TRACE-430)', () => {
+    const e = element(proposed('REQ-140'));
+    expect(e.lines[1]).toBe('Audit log retention — derived from REQ-101 (unit u1), accepted as REQ-140: Kept seven years.');
+    expect(e.offers!.map((o) => o.index)).toEqual([1]);
+    const none = element(payload());
+    expect(none.lines).toEqual([]);
+    expect(none.offers).toBeUndefined();
+    expect(reviewElementDescription(none)).toBe('The run put forward no proposals.');
+    const unreadable = element(payload({ work: { ...payload().work, proposalsState: 'unreadable' } }));
+    expect(unreadable.offers).toBeUndefined();
   });
 });
 

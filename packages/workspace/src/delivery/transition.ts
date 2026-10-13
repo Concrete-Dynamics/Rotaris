@@ -56,7 +56,14 @@ export interface TransitionOptions {
  * Part AP — what `beforeCommit` hands back: the worktree a run-starting action provisioned (REQ-TRACE-464 "the run
  * SHALL take over the worktree already provisioned for it"), written as its row the way `recordRunStarted` writes one.
  */
-export interface BeforeCommitOutcome { readonly worktree?: { readonly ref: string; readonly unit: string; readonly path: string; readonly branch: string } }
+export interface BeforeCommitOutcome {
+  readonly worktree?: { readonly ref: string; readonly unit: string; readonly path: string; readonly branch: string };
+  /**
+   * REQ-TRACE-429/405: the history and audit reason as the entailed work wrote it, in place of the decision's. An accepted
+   * proposal's write learns the identifier it created only once it has written, and the record names it.
+   */
+  readonly reason?: string;
+}
 
 /** REQ-TRACE-383's four classifications, as data so a completeness sweep is over the closed set. */
 export const ACTION_CLASS: Readonly<Record<BoardAction, { readonly changesState: boolean; readonly transition: boolean; readonly startsRun: boolean; readonly confirm: boolean }>> = Object.freeze({
@@ -195,10 +202,23 @@ export function decide(state: DeliveryState, now: RequirementNow, action: BoardA
       if (summary === '') return refuse(`${action === 'edit' ? 'Editing' : 'Creating'} ${id} records a summary of what was written into the source; none was given, so nothing was recorded.`);
       return move(from, {}, { reason: summary });
     }
-    case 'accept-proposal':
+    case 'accept-proposal': {
+      // REQ-TRACE-427/429/383: a record, not a transition — the requirement stays where it is. A run's proposals are put to
+      // the reviewer on the review of the requirement whose run produced them, so they are accepted there and nowhere else.
+      // The write into the requirement source is the service's (`beforeCommit`, `requirements.source.write`'s units), made
+      // between this admission and the commit, so a refused write records nothing (REQ-TRACE-432). Until 2026-10-13 this
+      // arm refused, naming OQ-45's improvement store — a question closed on 2026-09-11 and a store this write never needed
+      // (docs/defects/fixed/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md).
+      if (from !== 'review') return refuse(`${id} is not awaiting a review decision: it is in ${from}, and a proposed technical requirement is accepted on the review of the run that put it forward.`);
+      const proposal = (opts.payload?.['proposal'] ?? '').trim();
+      if (proposal === '') return refuse(`Accepting a proposed technical requirement on ${id} needs the proposal to accept; none was named, so nothing was written.`);
+      return move(from, {}, { reason: `accepted proposal ${proposal}` });
+    }
     case 'accept-change-work':
-      // Stated refusal: OQ-45 — no decision owns the improvement store's write path; the plan lists both as refusals.
-      return refuse(`${action === 'accept-proposal' ? 'Accepting a proposed technical requirement' : 'Accepting change-work'} needs the improvement store, which has no owning decision yet (OQ-45); nothing was written.`);
+      // REQ-TRACE-411..413: what change-work acceptance carries out is the analyst's offer, behind a staleness guard; this
+      // build analyses no change and makes no offer, so there is nothing to accept. (Until 2026-10-13 the refusal named
+      // OQ-45's improvement store: that question closed on 2026-09-11, and that store is not this action's dependency.)
+      return refuse(`Accepting change-work on ${id} needs the change-analysis offer of REQ-TRACE-411, with its staleness guard (REQ-TRACE-412), and this build analyses no change and makes no such offer; nothing was written.`);
     case 'keep-worktree':
       // REQ-TRACE-383: explicitly does nothing and reports as much.
       return { ok: true, value: { from, to: from, startsRun: false, writes: false, next: state, reason: null, answersBlockers: false } };
@@ -357,6 +377,7 @@ export function createTransitions(db: StoreHandle, deps: { readonly wall: WallCl
           try { entailed = await opts.beforeCommit({ from: d.value.from, to: d.value.to, startsRun: d.value.startsRun }); } catch (e) { return { ok: false, error: { reason: e instanceof Error ? e.message : String(e) } }; }
           // Part AP: the provisioned worktree's row, written the way `recordRunStarted` writes its own (beside the transaction, keyed by ref).
           if (entailed?.worktree) dal.upsertWorktree({ ref: entailed.worktree.ref, id, unit: entailed.worktree.unit, path: entailed.worktree.path, branch: entailed.worktree.branch, createdAt: stamp, kept: false });
+          if (entailed?.reason !== undefined) return { ok: true, value: commit(id, { ...d.value, reason: entailed.reason }, action, actor, ctx.now.canonicalHash, stamp) };
         }
         return { ok: true, value: commit(id, d.value, action, actor, ctx.now.canonicalHash, stamp) };
       } finally {

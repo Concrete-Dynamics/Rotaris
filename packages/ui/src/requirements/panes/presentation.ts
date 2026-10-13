@@ -28,6 +28,26 @@ export interface ReviewElement {
   readonly empty: string;
   /** REQ-TRACE-417: a modified file opens as a difference view; the branch and the worktree navigate to the version-control view. */
   readonly links?: readonly { readonly label: string; readonly target: ReviewLink }[];
+  /** REQ-TRACE-429: the proposals element's accept controls, one per proposal not yet accepted, in the file's order. */
+  readonly offers?: readonly ProposalOffer[];
+}
+/** REQ-TRACE-428/429: one proposed technical requirement offered for acceptance — its position in the run's file, its title, its origin. */
+export interface ProposalOffer {
+  readonly index: number;
+  readonly title: string;
+  readonly origin: string;
+  readonly unit: string;
+  /** The control's text and accessible name. */
+  readonly label: string;
+}
+/**
+ * REQ-TRACE-428: the offer spells out, in prose, how the two kinds of artifact differ. Stated once on the proposals
+ * element, above the proposals, and again in each acceptance's confirmation.
+ */
+export const PROPOSAL_DIFFERENCE = "An execution unit exists only to divide up the work and is discarded once it is done; a technical requirement is durable and becomes part of this project's own requirement store.";
+/** REQ-TRACE-428/429: what accepting one proposal does, stated before it is taken — its title, its origin, the difference. */
+export function proposalConsequence(offer: Pick<ProposalOffer, 'title' | 'origin'>): string {
+  return `Accepting writes "${offer.title}" into this project's own requirement store as a technical requirement derived from ${offer.origin}. ${PROPOSAL_DIFFERENCE}`;
 }
 export type ReviewLink = { readonly kind: 'diff'; readonly path: string } | { readonly kind: 'git'; readonly sessionId?: string } | { readonly kind: 'session'; readonly sessionId: string };
 
@@ -50,7 +70,7 @@ const short = (hash: string | null): string => (hash === null ? '—' : hash.sli
 
 /** REQ-TRACE-420: the twelve elements in their fixed order, each carrying its own empty message; the three "always states something" elements always carry a line. */
 export function reviewElements(p: ReviewPayload): readonly ReviewElement[] {
-  const lines = (key: ReviewElementKey): { lines: string[]; links?: ReviewElement['links'] } => {
+  const lines = (key: ReviewElementKey): { lines: string[]; links?: ReviewElement['links']; offers?: ReviewElement['offers'] } => {
     switch (key) {
       case 'agent-summary': return { lines: p.claim.summary === null || p.claim.summary.trim() === '' ? [] : p.claim.summary.split(/\r?\n/) };
       case 'reported-risks': return { lines: [...p.claim.risks] };
@@ -66,13 +86,22 @@ export function reviewElements(p: ReviewPayload): readonly ReviewElement[] {
       }
       case 'execution-units': return { lines: p.work.units.map((u) => `${u.unit}: ${u.status}${u.outcome ? ` — ${u.outcome}` : ''}${u.sessionId ? ` (session ${u.sessionId})` : ''}`), links: p.work.units.filter((u) => u.sessionId !== undefined).map((u) => ({ label: `Open the session of ${u.unit}`, target: { kind: 'session' as const, sessionId: u.sessionId! } })) };
       case 'branch-and-worktree': return { lines: [...(p.work.branch === null ? [] : [`Branch ${p.work.branch}`]), ...(p.work.worktree === null ? [] : [`Worktree ${p.work.worktree}`])], links: p.work.branch === null && p.work.worktree === null ? [] : [{ label: 'Open in the version-control view', target: { kind: 'git' as const } }] };
-      case 'proposals': return { lines: p.work.proposalsState === 'unreadable' ? ['The proposals file could not be read; the run is taken as having put forward no proposals.'] : p.work.proposals.map((x) => `${x.title} — derived from ${x.derivedFrom} (unit ${x.unit}): ${x.description}`) };
+      case 'proposals': {
+        if (p.work.proposalsState === 'unreadable') return { lines: ['The proposals file could not be read; the run is taken as having put forward no proposals.'] };
+        if (p.work.proposals.length === 0) return { lines: [] };
+        // REQ-TRACE-428: the title, the origin, and the difference in prose; REQ-TRACE-429: one accept control per proposal still only proposed.
+        const origin = (x: ReviewPayload['work']['proposals'][number]): string => (x.derivedFrom === '' ? p.id : x.derivedFrom);
+        return {
+          lines: [PROPOSAL_DIFFERENCE, ...p.work.proposals.map((x) => `${x.title} — derived from ${origin(x)} (unit ${x.unit})${x.acceptedAs === null ? '' : `, accepted as ${x.acceptedAs}`}: ${x.description}`)],
+          offers: p.work.proposals.flatMap((x, index) => (x.acceptedAs === null ? [{ index, title: x.title, origin: origin(x), unit: x.unit, label: `Accept "${x.title}"` }] : [])),
+        };
+      }
     }
   };
   return REVIEW_ELEMENTS.map((key) => {
     const [side, label, empty] = LABELS[key];
     const l = lines(key);
-    return { key, side, label, lines: l.lines, empty, ...(l.links === undefined || l.links.length === 0 ? {} : { links: l.links }) };
+    return { key, side, label, lines: l.lines, empty, ...(l.links === undefined || l.links.length === 0 ? {} : { links: l.links }), ...(l.offers === undefined || l.offers.length === 0 ? {} : { offers: l.offers }) };
   });
 }
 /** REQ-TRACE-421: what is read out equals what is on screen — the element's lines, or its empty message. */

@@ -452,9 +452,11 @@ function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, 
  * Prompts tab is built here from the state `usePrompts` holds above every view.
  *
  * The Artifacts tab is Part Y's, built against `LibraryTabProps` and mounted here since the merge, along with the
- * inspectors it opens. The PROPOSALS body is still a placeholder, and it says why it is empty rather than showing an
- * empty table that would read as "there is nothing", which is a different claim: no ADR owns the improvement artifact
- * store's write path (OQ-45), so the tab behind it is a part of its own and has not been authorised.
+ * inspectors it opens. The PROPOSALS tab is `ProposalsTab` over the improvement artifact store ADR-0061 owns (OQ-45,
+ * closed 2026-09-11; the store built 2026-09-14 and its review lifecycle 2026-09-15): its review, edit and delete reach
+ * the workspace service through the `improvements` command below. Until 2026-10-13 this comment still called that body a
+ * placeholder awaiting OQ-45
+ * (docs/defects/fixed/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md).
  */
 function Library({ prompts, layout, onLayout }: { prompts: PromptsApi; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void }) {
   // REQ-LIBRARY-105: the query lives above the tabs, so a refresh replaces the lists and never the typed text.

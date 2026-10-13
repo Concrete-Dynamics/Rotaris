@@ -107,12 +107,25 @@ describe('decide — the pure decision (REQ-TRACE-384/385/386)', () => {
     expect(k.ok && k.value.writes).toBe(false);
     expect(k.ok && k.value.to).toBe('review');
   });
-  it('accept-proposal and accept-change-work are stated refusals in this build (REQ-TRACE-498); edit and create record a summary and move nothing (Part AP)', () => {
-    for (const a of ['accept-proposal', 'accept-change-work'] as const) {
-      const r = decide(state('backlog'), now(), a, USER, { at });
+  it('accept-proposal records on the review and moves nothing; accept-change-work is refused naming the offer it needs, not OQ-45 (REQ-TRACE-427..433, 411..413); edit and create record a summary and move nothing (Part AP)', () => {
+    // docs/defects/fixed/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md: both
+    // refused naming OQ-45's improvement store, a question closed on 2026-09-11 and a store neither action needs.
+    const accepted = decide(state('review'), now(), 'accept-proposal', USER, { at, payload: { proposal: '0' } });
+    expect(accepted.ok && accepted.value.writes).toBe(true);
+    expect(accepted.ok && accepted.value.to).toBe('review');
+    expect(accepted.ok && accepted.value.startsRun).toBe(false);
+    expect(accepted.ok && accepted.value.reason).toBe('accepted proposal 0');
+    const elsewhere = decide(state('backlog'), now(), 'accept-proposal', USER, { at, payload: { proposal: '0' } });
+    expect(elsewhere.ok).toBe(false);
+    if (!elsewhere.ok) expect(elsewhere.error.reason).toBe('REQ-101 is not awaiting a review decision: it is in backlog, and a proposed technical requirement is accepted on the review of the run that put it forward.');
+    const unnamed = decide(state('review'), now(), 'accept-proposal', USER, { at });
+    expect(unnamed.ok).toBe(false);
+    if (!unnamed.ok) expect(unnamed.error.reason).toMatch(/needs the proposal to accept; none was named, so nothing was written\.$/);
+    for (const column of ['backlog', 'review'] as const) {
+      const r = decide(state(column), now(), 'accept-change-work', USER, { at });
       expect(r.ok).toBe(false);
-      if (!r.ok) expect(r.error.reason).toMatch(/nothing was written/);
-      if (!r.ok) expect(r.error.reason).toMatch(/OQ-45/);
+      if (!r.ok) expect(r.error.reason).toMatch(/needs the change-analysis offer of REQ-TRACE-411, with its staleness guard \(REQ-TRACE-412\).*nothing was written\.$/);
+      if (!r.ok) expect(r.error.reason).not.toMatch(/OQ-45|improvement store/);
     }
     // Part AP retired the wave-1 pin ("… requirements.source.write, which Part AP builds …"): REQ-TRACE-383's two
     // source-writing actions write a record without a transition; an empty summary is refused.
@@ -205,6 +218,22 @@ describe('the bound transition (REQ-TRACE-388/399/405; ADR-0041 one transaction)
     expect(dal.read('REQ-101')).toBeUndefined();
     expect(dal.countAudit()).toBe(0);
     expect(t.inFlight.size).toBe(0);
+  });
+  it('REQ-TRACE-429/405: an accepted proposal is recorded with the reason the write handed back, the column unmoved; a refused write records nothing (REQ-TRACE-432)', async () => {
+    const dal = new DeliveryDal(r.db);
+    await t.transition('REQ-101', 'release', USER, { now: now() });
+    t.recordRunStarted('REQ-101', 'u1', 's-1', null, 'ask', { now: now() });
+    t.recordRunEnded('REQ-101', 'u1', 'completed', 'done', { now: now() });
+    const refused = await t.transition('REQ-101', 'accept-proposal', USER, { now: now() }, { payload: { proposal: '0' }, beforeCommit: () => Promise.reject(new Error('The requirement store is read-only here; nothing was written.')) });
+    expect(refused).toEqual({ ok: false, error: { reason: 'The requirement store is read-only here; nothing was written.' } });
+    expect(dal.historyOf('REQ-101').map((h) => h.action)).toEqual(['release', 'run-started', 'run-ended']);
+    const out = await t.transition('REQ-101', 'accept-proposal', USER, { now: now() }, { payload: { proposal: '0' }, beforeCommit: async () => ({ reason: 'accepted proposal 0 "Audit log retention" as REQ-140 at requirements/REQ-140-audit-log-retention.md' }) });
+    expect(out.ok && out.value).toMatchObject({ from: 'review', to: 'review', startsRun: false });
+    const last = dal.historyOf('REQ-101').at(-1)!;
+    expect(last).toMatchObject({ action: 'accept-proposal', actor: 'user:owner', reason: 'accepted proposal 0 "Audit log retention" as REQ-140 at requirements/REQ-140-audit-log-retention.md' });
+    expect(dal.auditOf('REQ-101').at(-1)).toMatchObject({ action: 'accept-proposal', reason: last.reason });
+    const row = dal.read('REQ-101');
+    expect(row?.kind === 'record' && row.record.state).toBe('review');
   });
   it('hold then resume round-trips to the origin column, raising and answering the blocker in the same transactions', async () => {
     const dal = new DeliveryDal(r.db);

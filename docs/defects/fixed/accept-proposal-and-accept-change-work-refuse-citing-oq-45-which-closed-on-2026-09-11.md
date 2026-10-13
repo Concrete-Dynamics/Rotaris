@@ -41,3 +41,24 @@ Recorded 2026-10-13 by fin41 (task N83 of the 2026-10-13 survey, confirmed on ma
 - `packages/ui/src/requirements/panes/presentation.ts`, `ReviewPane.tsx` — the proposals shown with no accept control.
 - `apps/desktop/src/renderer/main.tsx` — the stale Library comment.
 - `docs/architecture/adr/0041-the-delivery-store.md` — the stale "no store to write into".
+
+## Outcome
+
+**Repaired 2026-10-13 (fin41, `fin41-config-and-proposals`).** `accept-proposal` is built. `decide` admits it in `review` as a
+record that moves nothing. The delivery service's `beforeCommit` (`acceptProposal`) writes the proposal as a `type: technical`
+requirement with its origin link through `requirements.source.write`'s units, between the admission and the commit, so a refused
+write records nothing (REQ-TRACE-432). `confirm_source_writes` is not read (REQ-TRACE-431). The record names the identifier
+written (`BeforeCommitOutcome.reason`), and the new requirement gets its `create` record. The review payload marks each
+proposal `acceptedAs` from the requirement store, and the review pane draws one `Accept "<title>"` control per proposal still
+only proposed, below REQ-TRACE-428's sentence on how the two kinds of artifact differ. `accept-change-work` stays refused,
+because REQ-TRACE-409..416's offers are not built; its refusal now names REQ-TRACE-411/412 and no longer names OQ-45. The
+`main.tsx` Library comment and ADR-0041's "no store to write into" are corrected in place, the old sentence kept beside the
+correction in the ADR, and ADR-0041 carries the report-back ("Execution — 2026-10-13").
+
+Pinned by `packages/workspace/src/delivery/transition.test.ts` (the decision and the bound record),
+`apps/desktop/src/workspace-service/accept-proposal.test.ts` (the real service, store and traceability engine over the fixture
+store: the write, the origin link, the two records, the review's `acceptedAs`, the second acceptance refused, the refusals
+that write nothing, and `accept-change-work`'s new reason) and `packages/ui/src/requirements/panes/panes.test.ts` (the offers and
+the prose). All five new cases were red on the code before. No built-app proof drives the review pane's proposals:
+`requirements-proof`'s review stage runs a scripted unit that writes no `proposed-requirements.json`, so the control is not shown
+there. A live run scenario is written up in the bundle's report.

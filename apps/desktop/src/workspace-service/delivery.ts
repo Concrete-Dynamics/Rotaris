@@ -234,6 +234,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
   };
   /** REQ-TRACE-464's provisioning, inside the writer's `beforeCommit` slot: a refusal here writes nothing (REQ-TRACE-472's declined disclosure, REQ-TRACE-498's repository rows); a resume's failure never stops the blocker clearing (REQ-TRACE-463). */
   const beforeCommit = async (id: ReqId, action: BoardAction, decision: { readonly startsRun: boolean }, payload: Readonly<Record<string, string>> | undefined) => {
+    if (action === 'accept-proposal') return acceptProposal(id, payload);
     if (!decision.startsRun) return undefined;
     const record = recordOf(id);
     const card = current?.cards.find((c) => c.id === id);
@@ -363,7 +364,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     if (n !== undefined) { const r = reader.reachable(id, 'review', 'done', n, { kind: 'system' }, now()); if (!r.reachable && r.reason !== undefined) unmet.push(r.reason); }
     const contradicted = claimed && (measured === 'failed' || unmet.length > 0);
     const changedFiles = await changedFilesOf(finished.worktreePath, launches.get(id)?.worktree?.baseRevision ?? null);
-    const proposals = readProposals(finished.worktreePath);
+    const proposals = readProposals(finished.worktreePath, id);
     const units = runs.map((r) => ({ unit: r.unit, ...(r.sessionId === null ? {} : { sessionId: r.sessionId }), status: r.status, ...(r.outcome === null ? {} : { outcome: r.outcome }), startedAt: r.startedAt, ...(r.endedAt === null ? {} : { endedAt: r.endedAt }), permissions: r.permissions }));
     const st = reader.state(id);
     const snapshot = { snapshotHash: st.snapshotHash, snapshotAt: st.snapshotAt };
@@ -392,15 +393,26 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     for (const l of (await run(['ls-files', '--others', '--exclude-standard'])).split(/\r?\n/)) if (l.trim() !== '' && !byPath.has(l)) byPath.set(l, { path: l, added: null, removed: null });
     return [...byPath.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   };
-  const readProposals = (worktree: string | null): Pick<ReviewPayload['work'], 'proposals' | 'proposalsState'> => {
+  /** REQ-TRACE-429: the requirement an accepted proposal derives from — the one the proposal names where the store holds it, else the requirement whose run put it forward. */
+  const originOf = (named: string, reviewed: ReqId): ReqId => (named !== '' && recordOf(named) !== undefined ? named : reviewed);
+  /**
+   * REQ-TRACE-427: the run's `proposed-requirements.json`, read and never written. `acceptedAs` is found in the requirement
+   * store rather than in the delivery history, which retention prunes: a technical requirement with the proposal's title
+   * that derives from its origin is the one an acceptance wrote, so the review never offers the same proposal twice.
+   */
+  const readProposals = (worktree: string | null, reviewed: ReqId): Pick<ReviewPayload['work'], 'proposals' | 'proposalsState'> => {
     if (worktree === null) return { proposals: [], proposalsState: 'none' };
     const file = join(worktree, '.rotaris', 'proposed-requirements.json');
     if (!existsSync(file)) return { proposals: [], proposalsState: 'none' };
+    const acceptedAs = (title: string, named: string): ReqId | null => {
+      const origin = originOf(named, reviewed);
+      return parse?.records.find((r) => r.kind === 'technical' && r.title.trim() === title.trim() && r.derivedFrom.includes(origin))?.id ?? null;
+    };
     try {
       const v = JSON.parse(readFileSync(file, 'utf8')) as unknown;
       if (!Array.isArray(v)) return { proposals: [], proposalsState: 'unreadable' };
       const list = v.filter((p): p is { title: string; description: string; derivedFrom: string; unit: string } => typeof p === 'object' && p !== null && typeof (p as { title?: unknown }).title === 'string');
-      return { proposals: list.map((p) => ({ title: p.title, description: p.description ?? '', derivedFrom: p.derivedFrom ?? '', unit: p.unit ?? '' })), proposalsState: list.length === 0 ? 'none' : 'present' };
+      return { proposals: list.map((p) => ({ title: p.title, description: p.description ?? '', derivedFrom: p.derivedFrom ?? '', unit: p.unit ?? '', acceptedAs: acceptedAs(p.title, p.derivedFrom ?? '') })), proposalsState: list.length === 0 ? 'none' : 'present' };
     } catch { return { proposals: [], proposalsState: 'unreadable' }; }
   };
   const risksOf = (summary: string | null): string[] => (summary ?? '').split(/\r?\n/).filter((l) => /^\s*[-*]?\s*risk\b/i.test(l)).map((l) => l.replace(/^\s*[-*]?\s*/, ''));
@@ -415,6 +427,42 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
       blocker: open === undefined ? null : { kind: open.kind, reason: open.reason, options: open.options, blockingIds: open.blockingIds, runUnit: open.runUnit, runSessionId: run?.sessionId ?? null, raisedAt: open.raisedAt },
       answerPaths: open === undefined ? ['resume'] : paths(open),
     };
+  };
+  /** The technical requirements an accepted proposal wrote, keyed by the reviewed requirement, for the act's follow-up `create` record. */
+  const acceptedProposals = new Map<ReqId, { readonly id: ReqId; readonly location: string }>();
+  /**
+   * REQ-TRACE-427..433: accepting ONE of a run's proposed technical requirements, as the act's `beforeCommit` — between the
+   * engine's admission (the requirement is in review, a proposal was named) and the commit of the `accept-proposal` record,
+   * so the act of acceptance is what causes the write (REQ-TRACE-429) and a refused write records nothing and leaves the
+   * requirement where it was (REQ-TRACE-432). The write is `requirements.source.write`'s create: the next identifier, the
+   * store's location rule, a technical document whose `derived-from` names the origin. `confirm_source_writes` is not read
+   * (REQ-TRACE-431). The refusal is thrown in the words the units supplied, which the transition returns as the act's.
+   */
+  const acceptProposal = async (id: ReqId, payload: Readonly<Record<string, string>> | undefined): Promise<{ readonly reason: string }> => {
+    if (parse === undefined) throw new Error('No requirement store is open, so nothing can be written.');
+    const index = Number(payload?.['proposal']);
+    const finished = [...reader.runs(id)].reverse().find((r) => r.status !== 'running');
+    const { proposals, proposalsState } = readProposals(finished?.worktreePath ?? null, id);
+    if (proposalsState === 'unreadable') throw new Error(`The proposals file of ${id}'s run could not be read, so there is no proposal to accept; nothing was written.`);
+    const proposal = Number.isInteger(index) && index >= 0 ? proposals[index] : undefined;
+    if (proposal === undefined) throw new Error(`${id}'s run put forward no proposal ${payload?.['proposal'] ?? ''}; reload the review. Nothing was written.`);
+    const shown = payload?.['title'];
+    if (shown !== undefined && shown !== proposal.title) throw new Error(`Proposal ${index} of ${id}'s run no longer reads "${shown}"; reload the review. Nothing was written.`);
+    if (proposal.acceptedAs !== null) throw new Error(`"${proposal.title}" was already accepted as ${proposal.acceptedAs}; nothing was written.`);
+    const s = source();
+    if (!s.writable) throw new Error(s.reason ?? 'The requirement store is read-only here; nothing was written.');
+    const origin = originOf(proposal.derivedFrom, id);
+    const tombstoned = new Set<number>((parse as { details?: { tombstoned?: readonly number[] } }).details?.tombstoned ?? []);
+    const made = nextIdentifier(parse, tombstoned, undefined);
+    if (!made.ok) throw new Error(made.error);
+    const location = createLocation(parse, made.value, proposal.title, undefined);
+    if (!location.ok) throw new Error(location.error);
+    const text = composeRequirementDocument({ id: made.value, title: proposal.title, prose: proposal.description, kind: 'technical', derivedFrom: [origin], date: now().slice(0, 10) });
+    const w = await writeSourceDocument(workspaceRoot, location.value, text, { clocks });
+    if (!w.ok) throw new Error(w.error);
+    acceptedProposals.set(id, { id: made.value, location: location.value });
+    log(`requirements: proposal ${index} of ${id}'s run ("${proposal.title}", unit ${proposal.unit}) accepted as ${made.value} at ${location.value}, derived from ${origin}`);
+    return { reason: `accepted proposal ${index} "${proposal.title}" (unit ${proposal.unit}) as ${made.value} at ${location.value}, derived from ${origin}` };
   };
   const decodeDraft = <T,>(document: string): T | undefined => { try { const v = JSON.parse(document) as unknown; return typeof v === 'object' && v !== null ? (v as T) : undefined; } catch { return undefined; } };
   // ---- end of the Part AP block ----
@@ -552,12 +600,21 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
             inFlight.delete(command.id);
             if (!r.ok) return { value: r };
             if (r.value.historyEntry === 0) return { value: r };
+            // REQ-TRACE-429: an accepted proposal wrote a new document, so the pass reads the store again, and the new
+            // requirement's own record says how it came into being, as `requirements.source.write`'s create records one.
+            const made = command.action === 'accept-proposal' ? acceptedProposals.get(command.id) : undefined;
+            acceptedProposals.delete(command.id);
+            if (made !== undefined) {
+              await refresh();
+              const created = nowOf(made.id);
+              if (created !== undefined) await writer.transition(made.id, 'create', actor, { now: created }, { payload: { summary: `created at ${made.location} by accepting a proposal on the review of ${command.id}` } });
+            }
             // Persist before publish: the commit is behind us; the generation moves now and main publishes after this reply.
             const g = rebuild();
             log(`requirements: ${command.id} ${command.action} ${r.value.from} → ${r.value.to} by ${actor.kind === 'user' ? `user ${actor.person}` : 'system'} (entry ${r.value.historyEntry}, generation ${g})`);
             // Part AP — REQ-TRACE-463: the reason nothing started rides on the action's result rather than being dropped.
             const stall = stalled.get(command.id);
-            return { value: stall === undefined ? r : { ...r, value: { ...r.value, dispatch: stall } }, changed: { generation: g, affected: [command.id] } };
+            return { value: stall === undefined ? r : { ...r, value: { ...r.value, dispatch: stall } }, changed: { generation: g, affected: made === undefined ? [command.id] : null } };
           } finally {
             inFlight.delete(command.id);
           }

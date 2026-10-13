@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import type { BoardAction, ReviewPayload } from '@rotaris/contracts';
 import { ConfirmDialog } from '../../ConfirmDialog.js';
-import { CLAIM_ATTRIBUTION, CLAIM_HEADING, MEASUREMENT_ATTRIBUTION, MEASUREMENT_HEADING, RELOAD_REVIEW, REVIEW_BUSY, REVIEW_READING, WORK_HEADING, decidedNotice, followDecision, reviewDecisions, type DecisionResult, reviewElementDescription, reviewElements, type ReviewElement, type ReviewLink } from './presentation.js';
+import { CLAIM_ATTRIBUTION, CLAIM_HEADING, MEASUREMENT_ATTRIBUTION, MEASUREMENT_HEADING, RELOAD_REVIEW, REVIEW_BUSY, REVIEW_READING, WORK_HEADING, actionLabel, decidedNotice, followDecision, proposalConsequence, reviewDecisions, type DecisionResult, type ProposalOffer, reviewElementDescription, reviewElements, type ReviewElement, type ReviewLink } from './presentation.js';
 import { Button as DesignButton, Tag as DesignTag, TextArea as DesignTextArea } from '../../design-system/index.js';
 import { decidedNoticeShown, type DecidedNotice } from './review-reads.js';
 
@@ -41,6 +41,8 @@ export interface ReviewPaneProps {
 export function ReviewPane(p: ReviewPaneProps) {
   const titleId = useId();
   const [pending, setPending] = useState<BoardAction | null>(null);
+  /** REQ-TRACE-429: the one proposal whose acceptance is being confirmed — accepted individually, one at a time. */
+  const [offer, setOffer] = useState<ProposalOffer | null>(null);
   const [instructions, setInstructions] = useState('');
   const [refusal, setRefusal] = useState<string | null>(null);
   const [decidedOn, setDecidedOn] = useState<DecidedNotice | null>(null);
@@ -51,12 +53,13 @@ export function ReviewPane(p: ReviewPaneProps) {
   const [inFlight, setInFlight] = useState(false);
   const payload = p.payload === 'reading' || p.payload === null ? null : p.payload;
   const elements = payload === null || payload.refusal !== undefined ? [] : reviewElements(payload);
-  const decide = async (action: BoardAction) => {
+  const decide = async (action: BoardAction, payload: Readonly<Record<string, string>> | undefined = action === 'send-back' ? { instructions } : undefined) => {
     // The read the decision is made against: the one on screen when it is taken.
     const against = readSeq;
     setInFlight(true);
-    const first = await p.onDecision(action, action === 'send-back' ? { instructions } : undefined);
+    const first = await p.onDecision(action, payload);
     setPending(null);
+    setOffer(null);
     // REQ-TRACE-472: a re-run or a send-back waits on the disclosure, and is taken or abandoned THERE; the pane follows
     // it to that outcome rather than keeping "nothing has been recorded" after the decision was taken.
     const r = await followDecision(first, (sentence) => { setRefusal(null); setWaiting(sentence); });
@@ -74,7 +77,7 @@ export function ReviewPane(p: ReviewPaneProps) {
       <section className="req-pane__side" aria-label={heading}>
         <h3 className="req-pane__kicker">{heading}</h3>
         {attribution !== null && <p className="req-pane__attribution">{attribution}</p>}
-        {own.map((e) => <Element key={e.key} element={e} heading={heading} onNavigate={p.onNavigate} />)}
+        {own.map((e) => <Element key={e.key} element={e} heading={heading} onNavigate={p.onNavigate} onOffer={setOffer} offersDisabled={inFlight || decided !== null} />)}
       </section>
     );
   };
@@ -117,6 +120,11 @@ export function ReviewPane(p: ReviewPaneProps) {
       {pending !== null && pending !== 'send-back' && (
         <ConfirmDialog title={`${labelOf(pending)} ${p.id}`} body={p.consequenceOf(pending)} confirmLabel={labelOf(pending)} destructive={pending === 'reject'} busy={inFlight} onConfirm={() => { void decide(pending); }} onCancel={() => setPending(null)} testId="req-pane-review-confirm" />
       )}
+      {offer !== null && (
+        // REQ-TRACE-429/431: the acceptance is the write, confirmed like the review's other decisions and never by the
+        // source-write confirmation (`confirm_source_writes` is not consulted); a refusal comes back in the engine's words.
+        <ConfirmDialog title={`Accept the proposed technical requirement for ${p.id}`} body={proposalConsequence(offer)} confirmLabel="Accept proposal" busy={inFlight} onConfirm={() => { void decide('accept-proposal', { proposal: String(offer.index), title: offer.title }); }} onCancel={() => setOffer(null)} testId="req-pane-review-proposal-confirm" />
+      )}
       {pending === 'send-back' && (
         <div className="dialog-backdrop" role="presentation">
           <div className="dialog req-pane__dialog" role="dialog" aria-modal="true" aria-label={`Send ${p.id} back with instructions`}>
@@ -136,11 +144,11 @@ export function ReviewPane(p: ReviewPaneProps) {
 }
 
 function labelOf(action: BoardAction): string {
-  return reviewDecisions().find((d) => d.action === action)?.label ?? action;
+  return reviewDecisions().find((d) => d.action === action)?.label ?? actionLabel(action);
 }
 
 /** One element: its label, its lines or its own empty message, and an accessible description equal to what is shown (REQ-TRACE-421); every row's accessible name carries its heading (REQ-TRACE-419). */
-function Element({ element, heading, onNavigate }: { element: ReviewElement; heading: string; onNavigate: ReviewNavigate }) {
+function Element({ element, heading, onNavigate, onOffer, offersDisabled }: { element: ReviewElement; heading: string; onNavigate: ReviewNavigate; onOffer: (offer: ProposalOffer) => void; offersDisabled: boolean }) {
   const description = reviewElementDescription(element);
   const descId = useId();
   return (
@@ -150,6 +158,8 @@ function Element({ element, heading, onNavigate }: { element: ReviewElement; hea
         {element.lines.length === 0 ? element.empty : element.lines.map((line, i) => <span key={i} className={element.key === 'changed-files' || element.key === 'branch-and-worktree' || element.key === 'specification-version' ? 'req-pane__line req-pane__mono' : 'req-pane__line'}>{line}</span>)}
       </div>
       {element.links !== undefined && <div className="req-pane__links">{element.links.map((l) => <DesignButton key={l.label} type="button" className="btn btn-link" onClick={() => onNavigate(l.target)}>{l.label}</DesignButton>)}</div>}
+      {/* REQ-TRACE-429: one accept control per proposal still only proposed — the mockup's evidence rows end in a link-styled action. */}
+      {element.offers !== undefined && <div className="req-pane__links" data-testid="req-pane-review-proposal-offers">{element.offers.map((o) => <DesignButton key={o.index} type="button" className="btn btn-link" disabled={offersDisabled} onClick={() => onOffer(o)} data-testid={`req-pane-review-accept-proposal-${o.index}`}>{o.label}</DesignButton>)}</div>}
     </div>
   );
 }

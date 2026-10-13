@@ -423,6 +423,36 @@ export function clampForDisplay(value: number, min: number, max: number): number
   return Math.min(max, Math.max(min, value));
 }
 
+/** The inclusive whole-number range a Settings number field is clamped to at the widget (REQ-CONFIG-322, REQ-CONFIG-325). */
+export interface NumberRange { readonly min: number; readonly max: number }
+
+/** REQ-CONFIG-322: the delegation limits' widget clamps. */
+export const DEPTH_CAP_RANGE: NumberRange = { min: 1, max: 12 };
+export const FAN_OUT_RANGE: NumberRange = { min: 1, max: 64 };
+/** REQ-CONFIG-325: the two numeric policy limits' widget clamps. */
+export const COMPRESSION_THRESHOLD_RANGE: NumberRange = { min: 50, max: 95 };
+export const ITERATION_CAP_RANGE: NumberRange = { min: 1, max: 500 };
+
+/**
+ * What one keystroke in a clamped Settings number field does — every one of them, since fin34. A whole number within the
+ * range is committed as typed, so the field still writes through on value change (REQ-CONFIG-325); any other text — empty,
+ * a partial value below the minimum, one past the maximum, a fraction — is held as the field's draft and never committed,
+ * so an out-of-range value stays unreachable (REQ-CONFIG-322, REQ-CONFIG-325), until the field loses focus, when
+ * `clampedNumberCommit` clamps it. Until fin34 only the improvement analysis timeout held a draft; the other fields clamped
+ * every keystroke, so a value whose first digit lies below the minimum could not be typed — "70" into Compression threshold
+ * became 50, then 95 (`docs/defects/fixed/a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md`).
+ */
+export function clampedNumberEdit(raw: string, range: NumberRange): { readonly commit: number } | { readonly draft: string } {
+  const n = Number(raw);
+  return raw.trim() !== '' && Number.isInteger(n) && n >= range.min && n <= range.max ? { commit: n } : { draft: raw };
+}
+
+/** The value a held draft commits when its field loses focus: rounded to a whole number and clamped; empty or not a number → the minimum. */
+export function clampedNumberCommit(draft: string, range: NumberRange): number {
+  const n = draft.trim() === '' ? Number.NaN : Number(draft);
+  return clampForDisplay(Number.isFinite(n) ? Math.round(n) : range.min, range.min, range.max);
+}
+
 /**
  * The labels Settings renders for the Runtime category and its per-agent timeout control. They are named here, not
  * written inline, because PD-CONFIG-003 revision 3 has the agent surfaces name the control by its path, and "one wording"
@@ -485,8 +515,7 @@ export function improvementTimeoutFromInput(value: number): number {
  * found by driving the built app.
  */
 export function improvementTimeoutEdit(raw: string): { readonly commit: number } | { readonly draft: string } {
-  const n = Number(raw);
-  return raw.trim() !== '' && Number.isInteger(n) && n >= IMPROVEMENT_TIMEOUT_SECONDS.min && n <= IMPROVEMENT_TIMEOUT_SECONDS.max ? { commit: n } : { draft: raw };
+  return clampedNumberEdit(raw, IMPROVEMENT_TIMEOUT_SECONDS);
 }
 
 /** PD-CONFIG-003 revision 2: the line beneath the control when the stored seconds lie outside 10–600; `null` when it shows them. */

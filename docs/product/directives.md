@@ -4323,8 +4323,9 @@ REQ-NOTIFY-100, REQ-NOTIFY-261, OQ-217 and revision 2's notice detail.*
 > written, and its widget clamp needed one more rule. **Found:** the control as first built took every keystroke through
 > the clamp, so `120` typed into a cleared field became `10`, then `102`, then `600`; it now holds the text as a draft until it
 > is a whole number within 10–600 or the field loses focus (`improvementTimeoutEdit`). The same fault in the category's other
-> number fields is recorded, not repaired
-> ([`a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md`](../defects/a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md)).
+> number fields was recorded, not repaired, then; since fin34 (2026-10-13) every Runtime number field, the per-agent timeout
+> included, holds the same draft (`ClampedNumberField`, `clampedNumberEdit`)
+> ([`a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md`](../defects/fixed/a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md)).
 > **As built.** `DESKTOP_SAVE_RUNTIME_KEYS` and the closed `DesktopSaveSchema.runtime` (`packages/contracts/src/config.ts`),
 > `DesktopSave.runtime` typed from it (`packages/config/src/writers.ts`), `improvement_collector_timeout` in
 > `TIER_B_RUNTIME_KEYS` (`packages/config/src/tiers.ts`), the helpers in `packages/ui/src/settings/config-state.ts`, the

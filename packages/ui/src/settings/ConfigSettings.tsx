@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, REASONING_LEVEL_NAMES, ROLE_REASONING_NAMES, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
-import { CHILD_TIMEOUT_MINUTES, clampForDisplay, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutEdit, improvementTimeoutForDisplay, improvementTimeoutFromInput, scopeCellOf, storedImprovementTimeoutNote, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
+import { CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, clampForDisplay, COMPRESSION_THRESHOLD_RANGE, DEPTH_CAP_RANGE, FAN_OUT_RANGE, ITERATION_CAP_RANGE, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutForDisplay, scopeCellOf, type NumberRange, storedImprovementTimeoutNote, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
 import { SecurityPolicy } from './SecurityPolicy.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
 
@@ -237,14 +237,32 @@ export function Confirm({ title, body, onYes, onCancel }: { title: string; body:
   );
 }
 
+/**
+ * A Settings number field clamped at the widget (REQ-CONFIG-322, REQ-CONFIG-325, PD-CONFIG-003 and its revision 2). It shows
+ * `shown` — the stored value clamped for display (REQ-CONFIG-446) — until a keystroke makes text that is not a whole number
+ * within the range; that text is held as the field's draft, never committed, and clamped into the range when the field loses
+ * focus (`clampedNumberEdit`, `clampedNumberCommit`). Every in-range value can be typed and no out-of-range one can be saved.
+ * The improvement analysis timeout's draft-until-blur pattern, shared by every number field since fin34
+ * (`docs/defects/fixed/a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md`).
+ */
+function ClampedNumberField(props: { readonly id: string; readonly range: NumberRange; readonly shown: number; readonly onCommit: (value: number) => void; readonly description?: string }) {
+  const { id, range, shown, onCommit } = props;
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <DesignInput id={id} className="input settings__number" type="number" min={range.min} max={range.max} step={1} data-clamped-number=""
+      {...(props.description === undefined ? {} : { 'aria-description': props.description })}
+      value={draft ?? shown}
+      onChange={(e) => { const edit = clampedNumberEdit(e.currentTarget.value, range); if ('commit' in edit) { setDraft(null); onCommit(edit.commit); } else setDraft(edit.draft); }}
+      onBlur={() => { if (draft === null) return; setDraft(null); onCommit(clampedNumberCommit(draft, range)); }} />
+  );
+}
+
 /** REQ-CONFIG-320..328 and 471, in the order the requirement fixes. The security policy card is not built: no confinement backend exists (ADR-0022). */
 export function RuntimeSettings(props: ConfigSettingsProps) {
   const { snapshot, pending, onChange, onSetField } = props;
   const [confirm, setConfirm] = useState<'outside' | 'autonomous' | null>(null);
   const [advancedScope, setAdvancedScope] = useState<'workspace' | 'global'>('workspace');
   const [advancedMessage, setAdvancedMessage] = useState<string | null>(null);
-  // PD-CONFIG-003 revision 2: the improvement analysis timeout's text while it is typed and not yet a value within 10–600.
-  const [improvementDraft, setImprovementDraft] = useState<string | null>(null);
   if (!snapshot || !pending) return <p className="text-secondary">{props.loading ? 'Reading the configuration…' : props.error ?? 'No configuration service.'}</p>;
   if (!snapshot.loadOk) return <Fatal snapshot={snapshot} />;
   const rt = pending.runtime;
@@ -273,16 +291,16 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
       <h2 className="settings__heading">Delegation limits</h2>
       <div className="settings__action">
         <label htmlFor="max-depth">Depth cap</label>
-        <DesignInput id="max-depth" className="input settings__number" type="number" min={1} max={12} value={clampForDisplay(rt.max_depth, 1, 12)} onChange={(e) => onChange({ kind: 'runtime', key: 'max_depth', value: clampForDisplay(Number(e.currentTarget.value) || 1, 1, 12) })} />
+        <ClampedNumberField id="max-depth" range={DEPTH_CAP_RANGE} shown={clampForDisplay(rt.max_depth, DEPTH_CAP_RANGE.min, DEPTH_CAP_RANGE.max)} onCommit={(value) => onChange({ kind: 'runtime', key: 'max_depth', value })} />
         <label htmlFor="max-active">Fan-out limit</label>
-        <DesignInput id="max-active" className="input settings__number" type="number" min={1} max={64} value={clampForDisplay(rt.max_active_children, 1, 64)} onChange={(e) => onChange({ kind: 'runtime', key: 'max_active_children', value: clampForDisplay(Number(e.currentTarget.value) || 1, 1, 64) })} />
+        <ClampedNumberField id="max-active" range={FAN_OUT_RANGE} shown={clampForDisplay(rt.max_active_children, FAN_OUT_RANGE.min, FAN_OUT_RANGE.max)} onCommit={(value) => onChange({ kind: 'runtime', key: 'max_active_children', value })} />
       </div>
       {/* PD-CONFIG-003 / REQ-MONITOR-286: the per-agent timeout, the third delegation limit, in whole minutes (1–240) over
           `runtime.child_timeout`'s seconds. A stored value it cannot show is shown clamped and stated beneath, never
           rewritten until the field is changed (REQ-CONFIG-446, REQ-CONFIG-419). */}
       <div className="settings__action">
         <label htmlFor="child-timeout">{PER_AGENT_TIMEOUT_LABEL}</label>
-        <DesignInput id="child-timeout" className="input settings__number" type="number" min={CHILD_TIMEOUT_MINUTES.min} max={CHILD_TIMEOUT_MINUTES.max} step={1} aria-description={`Stored as ${rt.child_timeout} seconds.`} value={timeoutMinutesForDisplay(rt.child_timeout)} onChange={(e) => onChange({ kind: 'runtime', key: 'child_timeout', value: timeoutSecondsFromInput(Number(e.currentTarget.value) || CHILD_TIMEOUT_MINUTES.min) })} /><span className="text-secondary">minutes</span>
+        <ClampedNumberField id="child-timeout" range={CHILD_TIMEOUT_MINUTES} description={`Stored as ${rt.child_timeout} seconds.`} shown={timeoutMinutesForDisplay(rt.child_timeout)} onCommit={(minutes) => onChange({ kind: 'runtime', key: 'child_timeout', value: timeoutSecondsFromInput(minutes) })} /><span className="text-secondary">minutes</span>
         <span className="text-secondary settings__hint" data-testid="child-timeout-hint">Each delegated agent is stopped this long after it starts; the step in flight gets up to 30 s more, and an agent still making progress hands its work back to its parent. Applies to runs started from now.</span>
         {storedTimeoutNote(rt.child_timeout) !== null && <span className="text-secondary settings__hint" data-testid="child-timeout-stored">{storedTimeoutNote(rt.child_timeout)}</span>}
       </div>
@@ -297,7 +315,7 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
             REQ-CONFIG-419). */}
         <div className="settings__action">
           <label htmlFor="improvement-timeout">Improvement analysis timeout</label>
-          <DesignInput id="improvement-timeout" className="input settings__number" type="number" min={IMPROVEMENT_TIMEOUT_SECONDS.min} max={IMPROVEMENT_TIMEOUT_SECONDS.max} step={1} aria-description={`Stored as ${rt.improvement_collector_timeout} seconds.`} value={improvementDraft ?? improvementTimeoutForDisplay(rt.improvement_collector_timeout)} onChange={(e) => { const edit = improvementTimeoutEdit(e.currentTarget.value); if ('commit' in edit) { setImprovementDraft(null); onChange({ kind: 'runtime', key: 'improvement_collector_timeout', value: edit.commit }); } else setImprovementDraft(edit.draft); }} onBlur={() => { if (improvementDraft === null) return; setImprovementDraft(null); onChange({ kind: 'runtime', key: 'improvement_collector_timeout', value: improvementTimeoutFromInput(improvementDraft.trim() === '' ? Number.NaN : Number(improvementDraft)) }); }} /><span className="text-secondary">seconds</span>
+          <ClampedNumberField id="improvement-timeout" range={IMPROVEMENT_TIMEOUT_SECONDS} description={`Stored as ${rt.improvement_collector_timeout} seconds.`} shown={improvementTimeoutForDisplay(rt.improvement_collector_timeout)} onCommit={(value) => onChange({ kind: 'runtime', key: 'improvement_collector_timeout', value })} /><span className="text-secondary">seconds</span>
           <span className="text-secondary settings__hint" data-testid="improvement-timeout-hint">How long the background review of a finished run may take while the improvement loop is on; a review that runs longer ends with no proposals. It never holds up your work, and applies to runs started from now.</span>
           {storedImprovementTimeoutNote(rt.improvement_collector_timeout) !== null && <span className="text-secondary settings__hint" data-testid="improvement-timeout-stored">{storedImprovementTimeoutNote(rt.improvement_collector_timeout)}</span>}
         </div>
@@ -313,9 +331,9 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
         </div>
         <div className="settings__action">
           <label htmlFor="threshold">Compression threshold</label>
-          <DesignInput id="threshold" className="input settings__number" type="number" min={50} max={95} value={clampForDisplay(pending.compressorThresholdPercentage, 50, 95)} onChange={(e) => onChange({ kind: 'compressorThreshold', value: clampForDisplay(Number(e.currentTarget.value) || 50, 50, 95) })} /><span className="text-secondary">%</span>
+          <ClampedNumberField id="threshold" range={COMPRESSION_THRESHOLD_RANGE} shown={clampForDisplay(pending.compressorThresholdPercentage, COMPRESSION_THRESHOLD_RANGE.min, COMPRESSION_THRESHOLD_RANGE.max)} onCommit={(value) => onChange({ kind: 'compressorThreshold', value })} /><span className="text-secondary">%</span>
           <label htmlFor="iterations">Iteration cap</label>
-          <DesignInput id="iterations" className="input settings__number" type="number" min={1} max={500} value={clampForDisplay(rt.max_iterations, 1, 500)} onChange={(e) => onChange({ kind: 'runtime', key: 'max_iterations', value: clampForDisplay(Number(e.currentTarget.value) || 1, 1, 500) })} /><span className="text-secondary">iterations</span>
+          <ClampedNumberField id="iterations" range={ITERATION_CAP_RANGE} shown={clampForDisplay(rt.max_iterations, ITERATION_CAP_RANGE.min, ITERATION_CAP_RANGE.max)} onCommit={(value) => onChange({ kind: 'runtime', key: 'max_iterations', value })} /><span className="text-secondary">iterations</span>
         </div>
         <p className="text-tertiary settings__hint">Secret redaction is always active; there is no way to disable it from this screen.</p>
       </DesignCard>

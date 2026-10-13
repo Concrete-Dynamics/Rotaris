@@ -43,4 +43,4 @@ directly after the toggle, the field 66 px wide like the per-agent timeout's; 12
 s`; a workspace stating 900 read 600 with "Stored as 900 seconds; kept until you change this field." and "All changes saved".
 Driving also found the keystroke clamp that made `120` untypable (it became `600`); this control holds a draft until the value
 is in range or the field loses focus, and the same fault in the other Runtime number fields is recorded open:
-[`a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md`](../a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md).
+[`a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md`](a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md).

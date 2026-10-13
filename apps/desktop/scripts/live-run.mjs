@@ -792,12 +792,12 @@ async function launch(name, extra, timeoutMs = 180_000) {
   const restated = restatedFacts(log);
   check(restated.length === 0, `${name}: none of the ${KNOWN_RESTATEMENTS} known restatements reaches the application log`, restated.map((r) => `app.log line ${r.line}, ${r.fact} restated (its owner is the ${r.owner}): ${r.text}`).join(' | ') || undefined);
   // Live-run finding D8 (docs/defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md): the
-  // relayed renderer console lines naming React's update-depth error (#185) are counted for every launch (`results.json`
+  // relayed renderer console lines naming React's update-depth error (React error 185) are counted for every launch (`results.json`
   // `scenarioEvidence.<name>.reactUpdateDepthErrors`), and a launch with any is a NOTE naming each line, its time beside the
   // children's streams to be read in the autopsy. The cause is not identified, so it is not yet a failure.
   const updateDepth = updateDepthErrors(log);
   scenarioEvidence[name].reactUpdateDepthErrors = updateDepth.length;
-  if (updateDepth.length > 0) noted(`${name}: ${updateDepth.length} renderer console line${updateDepth.length === 1 ? '' : 's'} naming React's update-depth error (#185, D8)`, updateDepth.map((e) => `app.log line ${e.line}: ${e.text}`).join(' | '));
+  if (updateDepth.length > 0) noted(`${name}: ${updateDepth.length} renderer console line${updateDepth.length === 1 ? '' : 's'} naming React's update-depth error (React error 185, D8)`, updateDepth.map((e) => `app.log line ${e.line}: ${e.text}`).join(' | '));
   // Finding U5: whether code intelligence ran in this launch is stated, so a pass can never hide that it did not. A launch
   // that starts no run discovers nothing — a NOTE, unless a setup step failed; a discovery that failed, or that listed no
   // tool, is a FAILURE (`codeIntelligenceStatement`).

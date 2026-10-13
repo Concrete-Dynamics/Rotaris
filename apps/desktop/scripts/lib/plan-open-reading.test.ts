@@ -73,6 +73,21 @@ describe('answer reading (live-run `empty-answer`, PD-ORCH-009 revision 2)', () 
     expect(r).toMatchObject({ fired: 2, rootRequests: 2, reprompts: 1, logged: 1, unanswered: [expect.stringMatching(/^The run ended without an answer/)], incomplete: [{ severity: 'warning', metadata: { reprompted: true, run_ended: true } }] });
   });
 
+  /*
+   * A re-prompt or a correction is counted by the request it LEADS TO, the one whose final message it is: the requests after it
+   * repeat it as their last user message behind the model's tool calls and their results, and are not re-prompts again. Read
+   * by the last user message, `empty-once`'s model reading README.md after the re-prompt counted two re-prompts and failed.
+   */
+  it('a re-prompt or a correction is counted once, not again in the requests the model\'s tool calls make after it', () => {
+    const toolTurn = [{ role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'read_file', arguments: '{"path":"README.md"}' } }] }, { role: 'tool', tool_call_id: 'c1', content: '# todo app' }];
+    const asked = [{ role: 'user', content: 'say one word' }, { role: 'assistant', content: '' }, { role: 'user', content: productReprompt }];
+    const r = answerReading({ log: '', bodies: [body([{ role: 'user', content: 'say one word' }]), body(asked), body([...asked, ...toolTurn])], systemRows: [], issues: [], fired: 1 });
+    expect(r).toMatchObject({ rootRequests: 3, reprompts: 1 });
+    const corrected = [{ role: 'user', content: TASK }, { role: 'assistant', content: ANSWER }, { role: 'user', content: planCorrectionText(OPEN, true) }];
+    const p = planReading({ log: 'a correction is sent into its conversation (1 of 1, REQ-ORCH-078, PD-ORCH-015)', bodies: [body([{ role: 'user', content: TASK }]), body(corrected), body([...corrected, ...toolTurn])], systemRows: [], iterations: [{ iteration: 1, outcome: 'succeeded' }], answers: [ANSWER] });
+    expect(p).toMatchObject({ corrections: 1, shownSaid: true, reprompts: 0 });
+  });
+
   it('reads a request\'s content given as parts as well as a string', () => {
     const r = requestOf(JSON.stringify({ messages: [{ role: 'system', content: [{ type: 'text', text: ROOT_MARK }] }, { role: 'user', content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }] }] }));
     expect(r).toMatchObject({ root: true, lastUser: 'ab', firstUser: 'ab' });

@@ -41,8 +41,10 @@ function textOf(content) {
 }
 
 /**
- * One recorded request body, read: whether it is the coordinating root's, its messages' roles and texts, and the text of its
- * last user message — where a correction, a re-prompt or a continuation is sent. A body that will not parse reads as no messages.
+ * One recorded request body, read: whether it is the coordinating root's, its messages' roles and texts, the text of its
+ * last user message, and `sent` — the text of its FINAL message when that is a user message, else null. A correction or a
+ * re-prompt is counted by `sent`, the request it leads to: every later request of the same conversation repeats it as its last
+ * user message behind the model's tool calls and their results. A body that will not parse reads as no messages.
  */
 export function requestOf(body) {
   let parsed = {};
@@ -50,7 +52,8 @@ export function requestOf(body) {
   const messages = Array.isArray(parsed.messages) ? parsed.messages.map((m) => ({ role: String(m?.role ?? ''), text: textOf(m?.content) })) : [];
   const system = messages.filter((m) => m.role === 'system').map((m) => m.text).join('\n');
   const users = messages.filter((m) => m.role === 'user');
-  return { root: system.includes(ROOT_MARK), system, messages, lastUser: users.at(-1)?.text ?? '', firstUser: users[0]?.text ?? '' };
+  const final = messages.at(-1);
+  return { root: system.includes(ROOT_MARK), system, messages, lastUser: users.at(-1)?.text ?? '', firstUser: users[0]?.text ?? '', sent: final?.role === 'user' ? final.text : null };
 }
 
 /** The answer a continuation carries after `HELD_LABEL`, or null when it carries none. */
@@ -71,16 +74,16 @@ export function heldAnswerOf(text) {
 export function planReading({ log, bodies, systemRows, iterations, answers = [] }) {
   const warnings = [...String(log).matchAll(CORRECTION_WARNING)].map((m) => ({ n: Number(m[1]), of: Number(m[2]) }));
   const roots = bodies.map(requestOf).filter((r) => r.root);
-  // A correction is the last user message of the request it leads to; a continuation's marker is in a fresh root's FIRST user
+  // A correction is the final message of the request it leads to (`sent`); a continuation's marker is in a fresh root's FIRST user
   // message, which every later request of that root repeats, so it is read in the root's first request alone (nothing but its
   // instructions and that message).
-  const corrections = roots.filter((r) => r.lastUser.includes(NOT_COMPLETE) && !r.lastUser.includes(CARRY_HEAD) && r.lastUser !== r.firstUser);
+  const corrections = roots.filter((r) => r.sent !== null && r.sent.includes(NOT_COMPLETE) && !r.sent.includes(CARRY_HEAD) && r.sent !== r.firstUser);
   const carries = roots.filter((r) => r.messages.filter((m) => m.role !== 'system').length === 1 && r.firstUser.includes(CARRY_HEAD));
   const heldRows = systemRows.filter((row) => HELD_ROW.test(row));
   const held = carries.map((r) => heldAnswerOf(r.firstUser)).filter((a) => a !== null);
-  const reprompts = roots.filter((r) => r.lastUser === ANSWER_REPROMPT).length;
+  const reprompts = roots.filter((r) => r.sent === ANSWER_REPROMPT).length;
   return {
-    warnings, corrections: corrections.length, shownSaid: corrections.some((r) => r.lastUser.startsWith(SHOWN)),
+    warnings, corrections: corrections.length, shownSaid: corrections.some((r) => r.sent.startsWith(SHOWN)),
     heldRows, carries: carries.length, heldAnswers: held,
     // The held answer is one the person was shown: an answer of the session, or the start of one cut at 6,000 characters.
     heldIsAnAnswer: held.length > 0 && held.every((a) => a.trim() !== '' && answers.some((x) => x.trim() === a.trim() || x.trim().startsWith(a.trim()))),
@@ -103,7 +106,7 @@ export function answerReading({ log, bodies, systemRows, issues, fired }) {
   const incomplete = issues.filter((i) => i.kind === 'incomplete_execution').map((i) => { let metadata = {}; try { metadata = JSON.parse(i.metadata); } catch { metadata = {}; } return { severity: i.severity, metadata }; });
   return {
     fired, rootRequests: roots.length,
-    reprompts: roots.filter((r) => r.lastUser === ANSWER_REPROMPT).length,
+    reprompts: roots.filter((r) => r.sent === ANSWER_REPROMPT).length,
     logged: [...String(log).matchAll(REPROMPT_WARNING)].length,
     unanswered, incomplete,
   };

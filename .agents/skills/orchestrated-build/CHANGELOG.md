@@ -3,6 +3,24 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-13 — the skill-review of fin41's three entries, by its bundle's reviewer
+
+**Prompted by** the three entries below, each "Not run: the skill-review step, which is the bundle's reviewer's", and by
+N97's finding that a review done and not written here reads as never done. **Changed:** nothing in the skill. **The
+review**, `references/skill-review.md` applied by fin41's reviewer, which built none of it: (1) `git diff
+origin/main...HEAD` read in full; the evidence checked: the orchestrator's session transcript holds ENOSPC results at
+09:39:23 and 09:44:26 UTC on 2026-10-07 and the detached `LIVE_RUN_DURESS_MS=7800000 setsid nohup timeout 9600 xvfb-run`
+launch at 08:12:40 UTC on 2026-10-13; `faf9525`'s author time is 04:21:19 UTC; run `wf_6808e87e-364`'s agent `a46bb849`
+holds the "Skill-review checklist" for `c735074`. (2) `node scripts/orchestration.mjs self-test`: all checks passed;
+`pnpm check` ran on the landed head. (3) No change to `scripts/`. (4) The protected invariants: none edited. SKILL.md
+§1.2's consortium step has the orchestrator rule open questions, which the owner granted in so many words (R-072), and it
+keeps escalations and the owner's own clauses the owner's (OQ-214), so "nothing … rules an owner's decision" still holds;
+rewording that invariant stays a proposal to the owner. (5) `references/repository.md` against its authorities: the
+owner's-alone bullet matches R-072 and OQ-214's re-ruling, keeps "Raise; never decide" for workflow agents and drops
+nothing; the Records bullet matches the views README's maintenance rule. (6) No template prompt changed. (7) Each is the
+smallest change for its friction; SKILL.md is 234 lines. **PASS** for all three entries. **Verified** by the self-test and
+`pnpm vitest run tools/orchestrated-build-skill.test.ts`.
+
 ## 2026-10-13 — a view's reconciliation entry goes to the log, not the views README
 
 **Prompted by** the 2026-10-13 survey at `6de2a67` (item N96, plan fin41): since 2026-09-16 every change had written its

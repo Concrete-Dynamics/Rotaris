@@ -856,7 +856,10 @@
    70 px so the card scrolled 14 px sideways. So it takes a line of its own under the state, right-aligned in the row's meta
    label and left-aligned in the table's state cell: the persona keeps 112 px (row 50 px) and the card fits (state cell 78 px). */
 .agent-row__meta--stacked { display: inline-flex; flex-direction: column; align-items: flex-end; gap: var(--rt-space-1); }
-.agent-table__state .agent-row__timed-out { display: flex; width: fit-content; margin-top: var(--rt-space-1); }
+/* The stalled tag takes the same line of its own (fin35): beside the state it squeezed the sidebar row's persona column from
+   112 to 41 px (two lines, row 61 px) and widened the Mission table's state cell so the card scrolled 32 px sideways, measured
+   in the built app at 1440 × 900 with a child stalled past a 3 s threshold (`pnpm mission-proof` item 1f). */
+.agent-table__state .agent-row__timed-out, .agent-table__state .agent-row__stalled { display: flex; width: fit-content; margin-top: var(--rt-space-1); }
 @media (prefers-reduced-motion: reduce) { .agent-row__dot--running { animation: none; } }
 
 /* Part AD — REQ-CHAT-085..091: the editable task-plan strip in the workspace sidebar. */

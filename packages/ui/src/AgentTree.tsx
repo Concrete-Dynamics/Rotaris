@@ -134,8 +134,10 @@ export function AgentTree({ agents, selected, onSelect, nowIso = null }: AgentTr
               <span className="agent-row__task">{a.givenName}</span>
             </span>
             {/* REQ-ORCH-089's badge: the stall watch's figure closes the meta label, as the mockup's agents panel closes a waiting row with a `tag-wait` qualifier.
-                PD-CONFIG-003 revision 3: a failed agent its per-agent timeout stopped closes it with a `tag-fail` "timed out" in the same slot (a terminal agent is never stalled). */}
-            <span className={`agent-row__meta mono${a.timedOut !== null ? ' agent-row__meta--stacked' : ''}`}>{a.presentationState}{elapsedShown(a) ? ` · ${elapsedLabel(a, nowIso)}` : ''}{a.stalledSeconds !== null && <>{' '}<DesignTag kind="wait" className="agent-row__stalled" data-testid="agent-stalled">{stalledText(a.stalledSeconds)}</DesignTag></>}{a.timedOut !== null && <>{' '}<DesignTag kind="fail" className="agent-row__timed-out" data-testid="agent-timed-out" title={timeoutLine(a.timedOut)} aria-description={timeoutLine(a.timedOut)}>{TIMED_OUT_TAG}</DesignTag></>}</span>
+                PD-CONFIG-003 revision 3: a failed agent its per-agent timeout stopped closes it with a `tag-fail` "timed out" in the same slot (a terminal agent is never stalled).
+                Either tag takes a line of its own under the state (`--stacked`): beside it, the stalled tag squeezed the persona onto two lines
+                as the timed-out tag did (docs/defects/fixed/the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md). */}
+            <span className={`agent-row__meta mono${a.timedOut !== null || a.stalledSeconds !== null ? ' agent-row__meta--stacked' : ''}`}>{a.presentationState}{elapsedShown(a) ? ` · ${elapsedLabel(a, nowIso)}` : ''}{a.stalledSeconds !== null && <>{' '}<DesignTag kind="wait" className="agent-row__stalled" data-testid="agent-stalled">{stalledText(a.stalledSeconds)}</DesignTag></>}{a.timedOut !== null && <>{' '}<DesignTag kind="fail" className="agent-row__timed-out" data-testid="agent-timed-out" title={timeoutLine(a.timedOut)} aria-description={timeoutLine(a.timedOut)}>{TIMED_OUT_TAG}</DesignTag></>}</span>
           </div>
         );
       })}

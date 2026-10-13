@@ -88,6 +88,12 @@ store column changed.
 `LOOP_ACTIVATION_BUDGET_MS` (2,000 ms), and the run host hands the classifier's model request the same figure; the runtime
 view's §3 says so. Pinned by `supervisor.test.ts` and `pnpm part-h-proof`'s `raw-count-long-bound` launch.
 
+**REQ-ORCH-089's stalled tag takes a line of its own in the narrow rows (fin35).** A tree row's meta label is
+`.agent-row__meta--stacked` while the agent is stalled as well as when it timed out, and the Mission table's state cell puts
+the stalled tag under the state as it does the timed-out tag; beside the state the tag squeezed the 235 px sidebar row's
+persona to 41 px and two lines and scrolled the Mission card 32 px sideways. The seams view §8 says so; `agent-clock.test.ts`
+and `pnpm mission-proof` item 1f pin it.
+
 **A delegated agent cut off at its per-agent timeout says so where its failure shows, and names the control (PD-CONFIG-003
 revision 3, REQ-MONITOR-040, REQ-MONITOR-044, REQ-MONITOR-052, REQ-MONITOR-069; OQ-234 ruled under R-072, fin33).**
 `AgentRecord` gains `timedOut` (`{ limitSeconds, makingProgress } | null`), which `toAgentRecord` derives from the stored

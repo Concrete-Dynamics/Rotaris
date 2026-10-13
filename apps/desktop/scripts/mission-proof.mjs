@@ -20,6 +20,8 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *                    inspector's and the persona window's line, and their geometry (PD-CONFIG-003 revision 3, OQ-234).
  *   1e. todo item  — PD-TOOLS-006 revision 6 (OQ-220): a held item and an unnamed delegation after the list are refused;
  *                    named ones run, and each child's record holds its item.
+ *   1f. stalled    — a child silent past a 3 s stall threshold: REQ-ORCH-089's `stalled Ns` tag in the Workspace sidebar's
+ *                    row and the Mission table's state cell, and their geometry (the persona on one line, the card unscrolled).
  *   2. parity      — the Mission tree, the Overview card and the Workspace sidebar probed in one run: identical ids and
  *                    states; then a 23-agent record (20 seeded) refreshed with Mission visible, the apply-to-paint time.
  *   3. pause       — a child selected → Pause refused with the explanation, no control sent; the run selected → accepted,
@@ -326,6 +328,33 @@ const s1e = scenario('todo-item');
   const warned029 = /was refused for its todo item \(REQ-ORCH-029\)/.test(r.log);
   expect(warned028 && warned029, `the refusals were not logged as warnings citing REQ-ORCH-028 and REQ-ORCH-029 (see todo-item.log): ${warned028} ${warned029}`);
   results.todoItem = { items, children: kids, refusals: { beta: beta.result.slice(0, 240), gamma: gamma.result.slice(0, 240) }, warnings: { 'REQ-ORCH-028': warned028, 'REQ-ORCH-029': warned029 } };
+}
+
+// 1f. REQ-ORCH-089's stalled tag in the narrow rows (the repair of
+// docs/defects/fixed/the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md, fin35): the
+// timed-out tag of 1d took its own line because beside the state it squeezed the sidebar row's persona onto two lines and
+// scrolled the Mission card sideways; the stalled tag sat in the same nowrap label and the same cell. A child that reads
+// once and then holds its next call silent for 25 s with `child_stall_timeout: 3` is stalled for about 20 s: its sidebar row
+// is read while the tag shows, then Mission's table row.
+const s1f = scenario('stalled', ['  child_stall_timeout: 3']);
+{
+  const box = 'const box = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), bottom: Math.round(r.bottom) }; };';
+  const sidebar = `(() => { ${box} const tag = document.querySelector('.agent-row [data-testid="agent-stalled"]'); const row = tag?.closest('.agent-row'); const persona = row?.querySelector('.agent-row__persona'); return { kind: 'stalled-sidebar', window: [innerWidth, innerHeight], tagText: tag?.textContent ?? null, tagClass: tag?.className ?? null, treeRow: box(row), treeMain: box(row?.querySelector('.agent-row__main')), treePersona: box(persona), personaLineHeight: persona ? parseFloat(getComputedStyle(persona).lineHeight) || 0 : 0, treeMeta: box(row?.querySelector('.agent-row__meta')), treeMetaClass: row?.querySelector('.agent-row__meta')?.className ?? null, tag: box(tag) }; })()`;
+  const table = `(() => { ${box} const row = [...document.querySelectorAll('.agent-table__row')].find((r) => r.querySelector('[data-testid="agent-stalled"]')); if (!row) return { kind: 'stalled-mission', row: null }; const card = row.closest('.agent-table').parentElement; const tag = row.querySelector('[data-testid="agent-stalled"]'); const state = row.querySelector('.agent-table__state-text'); return { kind: 'stalled-mission', tagText: tag.textContent, cells: [...row.children].map((c) => Math.round(c.getBoundingClientRect().width)), rowHeight: Math.round(row.getBoundingClientRect().height), cardScroll: [card.scrollWidth, card.clientWidth], tag: box(tag), state: box(state), tagOwnLine: tag.getBoundingClientRect().top >= state.getBoundingClientRect().bottom - 1 }; })()`;
+  const r = await launch('stalled', s1f, {
+    ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'read,wait:25000,answer', ROTARIS_CAPTURE_PROMPT: 'delegate one quiet job',
+    ROTARIS_CAPTURE_EVAL_AT: `${sidebar}>>.agent-row [data-testid="agent-stalled"]@~20000;;${table}>>.agent-table__row [data-testid="agent-stalled"]@~30000`,
+    ROTARIS_CAPTURE_PNG_WHEN: '.agent-row [data-testid="agent-stalled"]', ROTARIS_CAPTURE_PNG_AT: `${join(output, 'stalled-workspace.png')}@~20000;;${join(output, 'stalled-mission.png')}@19000`,
+    ROTARIS_CAPTURE_VIEWS: '3@17000',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500',
+  });
+  const g = evalsOf(r.log).find((e) => e.kind === 'stalled-sidebar');
+  expect(g && /^stalled\u00a0\d+s$/.test(g.tagText ?? '') && /\btag-wait\b/.test(g.tagClass ?? ''), `no stalled tag read in the Workspace sidebar: ${JSON.stringify(g)} (see stalled.log)`);
+  expect(g.treePersona && g.treePersona.h <= Math.ceil(g.personaLineHeight) + 1, `the sidebar row: persona ${JSON.stringify(g.treePersona)} at line height ${g.personaLineHeight}, main ${JSON.stringify(g.treeMain)}, meta ${JSON.stringify(g.treeMeta)} ${g.treeMetaClass} (the stalled tag squeezed the persona onto two lines)`);
+  const t = evalsOf(r.log).find((e) => e.kind === 'stalled-mission');
+  expect(t && t.tagText && t.cardScroll[0] <= t.cardScroll[1] && t.tagOwnLine, `the Mission table with the stalled tag: ${JSON.stringify(t)} (the card scrolled sideways, or the tag sat beside the state)`);
+  expect(unexpected(r.errors).length === 0, `renderer errors: ${unexpected(r.errors).join(' | ')}`);
+  results.stalled = { sidebar: g, mission: t, png: [join(output, 'stalled-workspace.png'), join(output, 'stalled-mission.png'), r.png] };
 }
 
 // 2. Parity across the three trees, then the 23-agent refresh with Mission visible.

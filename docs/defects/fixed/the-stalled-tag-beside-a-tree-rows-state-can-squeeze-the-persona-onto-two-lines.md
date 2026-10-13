@@ -26,3 +26,24 @@ with the qualifier tag at its end.
 - `packages/ui/src/AgentTable.tsx` — the Mission table's state cell, where the badge sits beside the state text.
 - `packages/ui/src/shell.css` — `.agent-row__meta` (`white-space: nowrap`), `.agent-row__stalled`, and the
   `.agent-row__meta--stacked` rule the timed-out tag uses.
+
+## Outcome
+
+Driven and repaired 2026-10-13 (fin35, branch `fin35-notes-and-optionals`). **Measured first**, in the built app at
+1440 × 900 with a child that read once and then held its next call silent past `child_stall_timeout: 3` (the launch that is
+now `pnpm mission-proof` item 1f — built as 1e and renumbered at the landing, origin/main's 1e being PD-TOOLS-006
+revision 6's todo-item launch; load about 7 on 4 CPUs): beside `running · 3s` the 78 px `stalled 3s` tag cut the Workspace
+sidebar row's main column to 41 px, broke "coding-agent" over two lines (persona 41 × 36 px at a 17.8 px line height) and
+grew the row to 61 px; in the Mission table the tag sat beside the state, the state cell was 142 px and the card scrolled
+32 px sideways (942 of 910 px). The mechanism this note named held as written.
+
+**Repair.** The same as the timed-out tag's: `AgentTree.tsx` gives the meta label `agent-row__meta--stacked` while the agent
+is stalled, and `shell.css` puts `.agent-table__state .agent-row__stalled` on a line of its own under the state, beside the
+timed-out rule. **After** (same launch, load about 7 to 8): the row 50 px, the main column 119 px, the persona 119 × 18 px
+(one line), the tag right-aligned under `running · 3s`; the Mission state cell 84 px with the tag under the state, the card
+910 of 910 px. Pinned by `packages/ui/src/agent-clock.test.ts` (the stalled row's meta label is `--stacked`, a recovered
+row's is not; red before) and `pnpm mission-proof` item 1f (red on the build before: "the sidebar row: persona
+{"w":41,"h":36,…}"). The persona window draws the tag in its context line, which is not narrow, and is unchanged.
+
+Seen beside it and recorded, not repaired: the Mission table's persona cell breaks "coding-agent" at its hyphen with or
+without any tag ([`the-mission-tables-persona-cell-breaks-a-hyphenated-persona-over-two-lines.md`](../the-mission-tables-persona-cell-breaks-a-hyphenated-persona-over-two-lines.md)).

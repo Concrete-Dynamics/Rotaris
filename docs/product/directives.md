@@ -4357,7 +4357,8 @@ REQ-NOTIFY-100, REQ-NOTIFY-261, OQ-217 and revision 2's notice detail.*
 > hyphen. The tag now takes a line of its own under the state (row 50 px, the persona 112 px and one line; the state cell
 > 78 px, the card 910 of 910 px) and the control's path is kept on one line (213 px). The same squeeze under the stalled badge,
 > which shares the slot, is recorded, not repaired
-> ([`the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md`](../defects/the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md)).
+> ([`the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md`](../defects/fixed/the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md));
+> repaired 2026-10-13 (fin35) the same way, the stalled tag on a line of its own.
 > The limit is written "<N> seconds" except that one second reads "1 second", the way "1 minute" does. **As built.**
 > `childTimedOutMessage` and `timedOutOf` (`packages/engine/src/children/cut-off.ts`), `AgentRecord.timedOut`
 > (`packages/contracts/src/children.ts`) filled by `toAgentRecord` (`packages/engine/src/sessions.ts`), `TIMED_OUT_TAG`,

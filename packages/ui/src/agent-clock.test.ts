@@ -100,7 +100,10 @@ describe('REQ-ORCH-089 / REQ-MONITOR-119/120, the repair of a-stalled-child-is-n
 
   it('the tree, the Mission table and the persona window draw the badge with the figure the record carries, and it advances with the record, not the clock', () => {
     expect(badge(tree(stalled(95), NOW))).toBe('stalled\u00a095s');
-    expect(text(tree(stalled(95), NOW))).toMatch(/class="agent-row__meta mono">running · 1m 3s <span class="[^"]*\btag-wait\b[^"]*"[^>]*data-testid="agent-stalled">stalled\u00a095s<\/span><\/span>/);
+    // On a line of its own under the state (`--stacked`), as the timed-out tag: beside it the tag squeezed the sidebar row's
+    // persona onto two lines (docs/defects/fixed/the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md).
+    expect(text(tree(stalled(95), NOW))).toMatch(/class="agent-row__meta mono agent-row__meta--stacked">running · 1m 3s <span class="[^"]*\btag-wait\b[^"]*"[^>]*data-testid="agent-stalled">stalled\u00a095s<\/span><\/span>/);
+    expect(text(tree(running, NOW))).toMatch(/class="agent-row__meta mono">running · 1m 3s<\/span>/);
     expect(badge(tree(stalled(95), LATER))).toBe('stalled\u00a095s');
     expect(badge(tree(stalled(100), LATER))).toBe('stalled\u00a0100s');
     expect(badge(table(stalled(90), NOW))).toBe('stalled\u00a090s');

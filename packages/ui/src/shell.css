@@ -1705,7 +1705,9 @@
 .agent-table__name { display: flex; flex-direction: column; gap: 1px; }
 .agent-table__canonical { font-size: var(--rt-text-2xs, 10px); }
 /* A persona is one identifier: the table's automatic layout broke "coding-agent" at its hyphen (fin36). */
-.agent-table__persona { white-space: nowrap; }
+/* …and is bounded, so a long configured persona is cut with an ellipsis (its title carries it) rather than widening the
+   table past its card; 24ch clears every built-in persona (fin38). */
+.agent-table__persona { white-space: nowrap; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; }
 .agent-table__activity { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-table th, .agent-table td { padding-left: 6px; padding-right: 6px; }
 .agent-table__context { white-space: nowrap; }

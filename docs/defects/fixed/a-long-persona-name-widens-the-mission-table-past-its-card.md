@@ -18,3 +18,12 @@ fin36's review (`review:last-notes-and-optionals#1`), passed to fin38 as an opti
 - `packages/ui/src/shell.css` — `.agent-table__persona`, beside `.agent-table__activity`'s bounded cell.
 - `packages/ui/src/AgentTable.tsx` — the persona cell.
 - `packages/ui/src/layout-regression.test.ts`, `packages/ui/src/agent-table.test.ts` — the cell's rule and markup.
+
+## Outcome (fin38, 2026-10-13) — repaired
+
+`.agent-table__persona` keeps its one line and is bounded: `max-width: 24ch; overflow: hidden; text-overflow: ellipsis`, the
+same cut its activity neighbour makes, and `AgentTable.tsx` titles the cell with the whole name. 24ch clears every built-in
+persona (the longest, "requirements-engineer", is 21 characters), so the measured "coding-agent" reading is unchanged. Pinned by
+`layout-regression.test.ts` ("bounds the persona cell…") and `agent-table.test.ts` ("titles the persona cell with the
+persona"), each red without the change; `pnpm mission-proof` item 1f still reads "coding-agent" on one line in the built app.
+No proof configures a persona longer than the bound.

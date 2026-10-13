@@ -183,4 +183,15 @@ describe('minimum-window layout regressions', () => {
     // identifier, and the design material draws it on one line wherever it draws one.
     expect(rule('.agent-table__persona')).toContain('white-space: nowrap');
   });
+
+  it('bounds the persona cell, so a long configured persona is cut with an ellipsis rather than widening the table (REQ-MONITOR-274)', () => {
+    // fin36's review: with no bound the cell's min-content width is the whole name, which the table's automatic layout never
+    // narrows, so a long `personas:` name scrolled the card sideways
+    // (docs/defects/fixed/a-long-persona-name-widens-the-mission-table-past-its-card.md). The bound clears every built-in
+    // persona ("requirements-engineer", 21 characters, the longest) and matches the activity cell's ellipsis beside it.
+    const persona = rule('.agent-table__persona');
+    expect(persona).toContain('max-width: 24ch');
+    expect(persona).toContain('overflow: hidden');
+    expect(persona).toContain('text-overflow: ellipsis');
+  });
 });

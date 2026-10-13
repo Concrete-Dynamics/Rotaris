@@ -364,7 +364,9 @@ tag uses (`AgentTree.tsx`, `AgentTable.tsx`) — on a line of its own under the 
 from the persona column (112 → 35 px in the 235 px sidebar) and scrolled the Mission card sideways; the stalled tag takes the
 same line of its own since fin35, for the same measured reason (`pnpm mission-proof` item 1f), and since fin36 the table's
 persona cell does not wrap (`.agent-table__persona`, `white-space: nowrap`), since the table's automatic layout broke
-"coding-agent" at its hyphen in a 71 px column with or without a tag — and the inspector and a
+"coding-agent" at its hyphen in a 71 px column with or without a tag, and since fin38 it is bounded (`max-width: 24ch`,
+cut with an ellipsis, the whole name its `title`) so a long configured persona cannot widen the table past its card — and the
+inspector and a
 persona window's instance tab a sentence of their own under the line the specification fixes (`TimeoutLine.tsx` in
 `Inspector.tsx` and `PersonaWindow.tsx`), so REQ-MONITOR-052's meta-line form is kept. `agent-timeout.test.ts` renders all
 four; `pnpm mission-proof` item 1d reads them and their geometry in the built app.

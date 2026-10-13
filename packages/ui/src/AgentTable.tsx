@@ -32,7 +32,7 @@ const Row = memo(function Row({ a, selected, elapsed, onSelect, onOpen, onPopOut
     <tr className={`agent-table__row${selected ? ' is-selected' : ''}`} data-agent-id={a.id} data-state={a.presentationState} aria-selected={selected} onClick={() => onSelect(a.id)}>
       <td className="agent-table__state"><span ref={(element) => { if (element && a.live) markMotionStart(element); }} className={`agent-row__dot agent-row__dot--${a.presentationState}`} aria-hidden="true" /><span className="agent-table__state-text">{a.presentationState}</span>{a.stalledSeconds !== null && <>{' '}<DesignTag kind="wait" className="agent-row__stalled" data-testid="agent-stalled">{stalledText(a.stalledSeconds)}</DesignTag></>}{a.timedOut !== null && <>{' '}<DesignTag kind="fail" className="agent-row__timed-out" data-testid="agent-timed-out" title={timeoutLine(a.timedOut)} aria-description={timeoutLine(a.timedOut)}>{TIMED_OUT_TAG}</DesignTag></>}</td>
       <td className="agent-table__name"><span className="agent-table__given">{a.givenName}</span><span className="agent-table__canonical mono text-secondary">{a.name}</span></td>
-      <td className="agent-table__persona">{a.persona}</td>
+      <td className="agent-table__persona" title={a.persona}>{a.persona}</td>
       <td className="agent-table__activity" title={a.delegationTask || a.activity}>{a.activity || '—'}</td>
       <td className="agent-table__calls mono">{a.toolCalls}</td>
       <td className="agent-table__elapsed mono" data-testid="agent-elapsed">{elapsed}</td>

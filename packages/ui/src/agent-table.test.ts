@@ -30,3 +30,12 @@ describe('REQ-MONITOR-281: the Mission table conveys each agent\'s compression c
     expect(html).not.toContain('carries no compression count');
   });
 });
+
+describe('REQ-MONITOR-274: the persona cell carries the whole name as its title', () => {
+  // The cell is cut with an ellipsis past its bound (docs/defects/fixed/a-long-persona-name-widens-the-mission-table-past-its-card.md),
+  // so the full name stays readable on hover.
+  it('titles the persona cell with the persona', () => {
+    const html = table([agent({ persona: 'a-very-long-configured-persona-name' })]);
+    expect(html).toContain('<td class="agent-table__persona" title="a-very-long-configured-persona-name">a-very-long-configured-persona-name</td>');
+  });
+});

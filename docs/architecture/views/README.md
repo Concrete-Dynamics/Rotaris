@@ -45,6 +45,10 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-13**
 
+**The Mission table's persona cell is bounded (REQ-MONITOR-274; fin38).** `.agent-table__persona` keeps one line and is cut
+at `24ch` with an ellipsis, its `title` the whole name, so a long configured persona no longer widens the table. The **seams
+view**'s timed-out-tag passage says so. Nothing else moved.
+
 **A window that opens a workspace is told the improvement activity at once (PD-LIBRARY-002 revision 2 (e), OQ-236; fin38).**
 `MainWindows.open` calls a new `workspaceOpened` dependency once the window's workspace id is set, and main sends that window
 `ImprovementCoordinator.current()` with its own workspace's `retrospective_pending` (`sendImprovementActivity`,

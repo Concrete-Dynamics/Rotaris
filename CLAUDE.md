@@ -61,6 +61,9 @@ rather than deleting it.
 2026-08-31 (`docs/clean-room/specification-gate.md`); the Architecture Gate closed 2026-09-03
 (`docs/clean-room/architecture-gate.md`). What is authorized is **the mechanism** — process topology,
 the store, the run flow, the event stream, settings, permissions, the backup and the restore.
+**On 2026-10-06 the owner counted the work as finished** without the release pipeline and its inputs (signing,
+the licence inputs, the icon), continuous integration, the Linux and macOS builds and the owner's hardware checks
+([R-071](docs/product/requests.md#r-071)): each stays owed where it is recorded, and none is an agent's to start.
 
 **Design material, and how to use it.** `docs/design/` holds the **approved design language** —
 adopted and authoritative: cite the token by name, never a literal colour or pixel value. Its
@@ -68,14 +71,17 @@ adopted and authoritative: cite the token by name, never a literal colour or pix
 (`REQ-SHELL-023` is canonical). `docs/design/mockup/` is read **for craft, never for structure**;
 where the two disagree the specification governs. `docs/design/README.md` §2 is the adoption rule.
 
-**Two bounds are not waived and no agent may treat them as advice:**
+**One bound is not waived and no agent may treat it as advice:**
 
-- **`REQ-SHELL-128`'s three built-in themes cannot yet be met** (**IC-2**): `nocturne` and
-  `high-contrast` have no palette, and the token set declares no theme metadata or native-surface
-  mapping. Screens are **not** blocked — build against `rotaris-dim` and the adopted language.
 - **No Linux or macOS release artifact may be produced** until the build hosts exist (**IC-3**).
 
-`docs/architecture/implementation-conditions.md` holds **IC-1 to IC-7**. A condition binds the work it
+*Corrected 2026-10-13: this read "Two bounds", the other being "`REQ-SHELL-128`'s three built-in themes cannot
+yet be met (IC-2): `nocturne` and `high-contrast` have no palette, and the token set declares no theme metadata or
+native-surface mapping". IC-2 was discharged on 2026-09-04 by `pnpm theme-proof` and OQ-30 closed with it: all
+three themes carry a palette, a label, a description and a dark flag (`packages/contracts/src/theme/themes.ts`);
+only the different-scale multi-monitor drag remains, the owner's measurement.*
+
+`docs/architecture/implementation-conditions.md` holds **IC-1 to IC-8** *(this read "IC-1 to IC-7")*. A condition binds the work it
 names: that work may not be reported complete until the condition is discharged, discharging means
 recording the result in the record whether or not it passed, and **no condition may be downgraded by
 the person doing the work**.

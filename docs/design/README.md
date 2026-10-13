@@ -407,6 +407,15 @@ groups and hard accessibility floors (`REQ-SHELL-129`), each rendering all seven
 imported design language is **one palette**. `nocturne` and `high-contrast` are undesigned, and the
 token set has no light/dark flag and no declared theme metadata.
 
+*Settled 2026-09-04, recorded here 2026-10-13: the paragraph above describes the imported material as it arrived and
+no longer the product. IC-2's build gave `nocturne` and `high-contrast` palettes of their own — `nocturne` lowers every
+ground stop in the adopted hue system, `high-contrast` takes near-black grounds, near-white text and strengthened
+boundaries — and every theme its label, description and light/dark flag, as data in
+`packages/contracts/src/theme/themes.ts` (ADR-0050). `pnpm theme-proof` passed all three from rendered pixels at five
+scale factors (`../architecture/spikes/theme-proof.md`), IC-2 was discharged and OQ-30 closed the same day. The material
+in this directory still draws one palette; the two authored palettes remain owner-replaceable through the same
+mechanism.*
+
 ### 3.3 Design screens with no specified counterpart
 
 Each of these was drawn against the other structure. None of them is adopted as structure; each is
@@ -592,18 +601,32 @@ display**, not from token arithmetic.
 2. **Native surfaces.** `REQ-SHELL-130` and `REQ-SHELL-160(b)`: native dialogs, menus, text caret and
    disabled text must follow the theme on every supported platform. The token set has no native-
    surface mapping.
+   *Settled from rendered pixels 2026-09-04 on Windows (`pnpm theme-proof`, all three themes at five scale factors):
+   the build carries the application-owned mapping the sentence above says the token set lacked, and it held —
+   Electron's theme source follows the theme's dark flag, and window grounds, carets, form controls and disabled text
+   follow the active palette; the operating system's folder chooser stays host-owned (ADR-0048). macOS and Linux remain
+   IC-3's.*
 3. **Focus indication.** `REQ-SHELL-148` and `REQ-SHELL-160(c)`: ring wholly within the control's own
    bounds, at the theme width and colour, clearing 3:1. See the `outline-offset` note in §1.8.
+   *Settled from rendered pixels 2026-09-04 (`pnpm theme-proof`): the inset ring held in all three themes at five
+   scale factors.*
 4. **Icon scaling.** `REQ-SHELL-030` and `REQ-SHELL-160(d)`: an icon declared at L logical pixels
    covers L logical pixels within one device pixel at 100 %, 125 %, 150 %, 175 % and 200 % OS
    scaling, and after being dragged between monitors at different scale factors, and is never drawn
    from artwork smaller than the required raster.
+   *Settled from rendered pixels 2026-09-04 (`pnpm theme-proof`) at every listed scale on one display; **the drag
+   between monitors at different scale factors is not settled**: one display was attached, so it remains the owner's
+   measurement under IC-2.*
 5. **Rail label fit.** `REQ-SHELL-029`: every rail item shows its complete label at 9 px with no
    ellipsis and no clipped glyph, in every built-in theme, with the width re-derived after each theme
    change. "Requirements" is the binding case.
+   *Settled from rendered pixels 2026-09-04 (`pnpm theme-proof`): "Requirements" fits at 9 px in all three themes.*
 6. **Theme completeness.** `REQ-SHELL-128`, `REQ-SHELL-132`: three themes, each rendering all seven
    views without error, each preserving unsent composer text, the active view and every divider size
    across a switch, with no widget retaining a colour from the previous palette.
+   *Settled from rendered pixels 2026-09-04 (`pnpm theme-proof`) for what that proof names: three themes, all seven
+   views without a renderer error, and a live switch preserving the composer value and the active view
+   (`../architecture/spikes/theme-proof.md`).*
 
 ---
 

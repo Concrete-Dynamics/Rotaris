@@ -155,7 +155,10 @@ message, so `reactUpdateDepthErrors` counts what it counted before. Two places u
   prompt, and reads it every two minutes. A NOTE gives what the trap saw.
 - **`pnpm update-depth-proof`** (new; scripted provider, free). It drives a coordinator that delegates two children, each
   streaming 2,000 reasoning deltas, one every 10 ms, at the same time on the Workspace view. The trap is installed at 1.5 s and
-  read every 3 s.
+  read every 3 s. The proof asserts that the two streams ran at once: each child's timeline `child_start` falls before the
+  other's `child_end`, overlapping for at least half a deliberation (10 s; 23.7 s read at load 1.5). With the second child
+  made to wait on the first (`delegate:…:after`) it reads −10 ms and goes red, where the other assertions still passed
+  (added at review, 2026-10-13).
 
 **What the built app showed.** The proof ran under Xvfb on Linux, at load 1.5 to 1.7 beside a sibling plan. The trap
 installed and counted 1,904 commits, 491 of them leaving counting lanes pending. The run's high was 2, with the window's first

@@ -15,7 +15,8 @@
  *                    launch installs the same trap (`live-run.mjs`).
  *
  * What it asserts: the trap installed and saw the commits of both streams (an instrument that saw nothing measures
- * nothing); both children streamed and the run completed; and no relayed renderer console line names React's
+ * nothing); both children streamed, their spans (`child_start` to `child_end`) overlapping for at least half a deliberation,
+ * and the run completed; and no relayed renderer console line names React's
  * update-depth error (`renderer-console.mjs`), nor did the trap see one. React's own threshold is 50 such commits in a
  * row; the proof records the run's high, its holders and the longest synchronous burst, and does not bound them below
  * React's limit, because the note's question is what reaches 50, not what a quiet run stays under.
@@ -88,7 +89,15 @@ if (result.status !== 0) fail(`${name} exited ${result.status ?? result.signal ?
 
 const db = new Database(oneDatabase(local), { readonly: true });
 const session = db.prepare('SELECT session_id, execution_status FROM sessions ORDER BY created_at DESC LIMIT 1').get();
-const kids = session ? db.prepare('SELECT canonical_name, state, spawned_at FROM children WHERE session_id = ? ORDER BY spawned_at').all(session.session_id) : [];
+const kids = session ? db.prepare('SELECT task_id, canonical_name, state, spawned_at FROM children WHERE session_id = ? ORDER BY spawned_at').all(session.session_id) : [];
+// When each child actually ran: its timeline's `child_start` and `child_end`. A child held behind a dependency or a slot has
+// its `spawned_at` at the delegation, so only these say whether the two streams ran at once.
+const spans = session ? db.prepare("SELECT name, at, metadata FROM timeline WHERE session_id = ? AND name IN ('child_start', 'child_end') ORDER BY ordinal").all(session.session_id) : [];
+for (const k of kids) {
+  const of = (name) => spans.find((t) => t.name === name && JSON.parse(t.metadata ?? '{}').task_id === k.task_id)?.at ?? null;
+  k.started = of('child_start');
+  k.ended = of('child_end');
+}
 db.close();
 const trap = lanesTrapReading(log);
 const depth = updateDepthErrors(log);
@@ -106,6 +115,15 @@ expect(trap.installed, `the pendingLanes trap did not install: ${trap.reason}; s
 expect(trap.last !== null && trap.last.commits > 100 && trap.last.evaluations > 0, `the trap saw ${trap.last?.commits ?? 0} commits: an instrument that saw nothing measures nothing; see ${name}.log`);
 expect(session?.execution_status === 'completed', `the run ended ${session?.execution_status ?? 'nowhere'}, not completed; see ${name}.log`);
 expect(kids.length === 2 && kids.every((k) => k.state === 'succeeded'), `the two deliberating children did not both run to completion: ${JSON.stringify(kids)}`);
+// The note's shape is two children streaming AT ONCE: each child must have started before the other ended, so the two
+// deliberations overlapped. A run that serialized them (a delegation that waits on the first, `delegate:…:after`) passes
+// every other assertion here while driving one stream at a time.
+const overlapMs = kids.length === 2 && kids.every((k) => k.started && k.ended)
+  ? Math.min(Date.parse(kids[0].ended), Date.parse(kids[1].ended)) - Math.max(Date.parse(kids[0].started), Date.parse(kids[1].started))
+  : -1;
+results.twoStreams.overlapMs = overlapMs;
+writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
+expect(overlapMs >= DELTAS * DELTA_MS / 2, `the two children's streams did not overlap for half a deliberation (${DELTAS * DELTA_MS / 2} ms): ${overlapMs} ms; ${JSON.stringify(kids)}`);
 expect(depth.length === 0 && (trap.last?.updateDepthErrors ?? 0) === 0, `the renderer threw React's update-depth error ${depth.length} time(s) while two children streamed — D8 reproduced: ${JSON.stringify(depth.map((e) => e.text))} | the trap's lines: ${JSON.stringify(trap.lines)}`);
 const errors = log.split('\n').filter((l) => /capture: renderer console:/.test(l) && !l.includes('rotaris-lanes-trap:'));
 expect(errors.length === 0, `renderer console warnings or errors: ${errors.join(' | ')}`);

@@ -13336,6 +13336,14 @@ a category named and then lost, and 1 cut in 10, not 3. faults-args did run dire
 itself in 183.5 s against 338.8 s. Duress was not run at this head, so "duress classifies `whole_project` in time" is still
 unmeasured. Evidence: [`live-0bc3eee-default-autopsy.md`](live-runs/live-0bc3eee-default-autopsy.md). The row is in [`first-executions.md`](first-executions.md).
 
+*Since 2026-10-13 (fin41, item N67) the live run prints this measure itself:* a NOTE over every launch it kept, each launch's
+category, confidence and rung or its fallback and reason (the launch audit's `run_intent`), the seconds from the session's start
+to its `intent:` line, and each cut's bytes received from the recorded traffic, counting the fallbacks and naming the count limb
+where 3 cuts in 10 launches received bytes (`apps/desktop/scripts/lib/intent-reading.mjs`). Read over the `0bc3eee` pack it gives
+the figures above without an autopsy: 10 launches, 1 fell back, the requirements cut at 12.0 s after 91,112 bytes, the other nine
+2.4 to 9.8 s via `json_schema` (measured from the session's start line, so 0.1 s above the autopsy's 2.3 for the fastest). The
+other limb — a cut after the reasoning named its category — still needs the reasoning read, which the NOTE does not do.
+
 <a id="oq-259"></a>
 
 **OQ-259 — Does a `write_file` insert into a CRLF file carry the file's line endings into the inserted lines?**

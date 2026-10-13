@@ -209,6 +209,7 @@ import { preserveSummary, summaryReading } from './lib/summary-sections.mjs';
 import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
 import { routingMissReading } from './lib/routing-misses.mjs';
 import { handOffCutReading } from './lib/hand-off-cuts.mjs';
+import { classifierNote, classifierReading } from './lib/intent-reading.mjs';
 import { agentPlanTaskCount, coordinatorTodoReading, heldItemReading, launchRunOverride, planItemIds, rootAgentPlan, todoItemReading } from './lib/coordinator-todo.mjs';
 import { PAUSE, pauseEvalSteps, pauseReading } from './lib/resume-pause.mjs';
 import { typingAllowanceMs } from './lib/prompt-typing.mjs';
@@ -1124,6 +1125,39 @@ function checkCoordinatorTodo() {
 }
 
 /**
+ * OQ-258 and PD-ORCH-011 revision 2's live measure, over every preserved session (`lib/intent-reading.mjs`, item N67): each
+ * launch's classification as its launch audit recorded it (category, confidence, rung, or the fallback and its reason), how long
+ * the run waited on it (from its `session … started` line to its `intent:` line in the launch's own log, since `run_intent`
+ * carries no elapsed field), and the count that fell back, with each cut's bytes received from the recorded traffic. A NOTE,
+ * never a FAIL: a fallback is REQ-ORCH-007 working, and whether the endpoint queued is the endpoint's. Until it existed the count
+ * took one `autopsy.mjs` per session.
+ */
+function checkIntentClassification() {
+  if (preservedSessions.length === 0) return;
+  let reading;
+  try {
+    const Database = require('better-sqlite3');
+    const db = new Database(oneDatabase(), { readonly: true });
+    try {
+      reading = classifierReading(preservedSessions.map(({ scenario, sessionId }) => {
+        const appLog = join(output, scenario, 'app.log');
+        return {
+          scenario, sessionId,
+          payload: db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(sessionId)?.payload ?? null,
+          log: existsSync(appLog) ? readFileSync(appLog, 'utf8') : '',
+          traffic: readTraffic(scenario),
+        };
+      }));
+    } finally { db.close(); }
+  } catch (cause) {
+    noted('the launch audits\' intents could not be read (OQ-258)', cause instanceof Error ? cause.message : String(cause));
+    return;
+  }
+  const note = classifierNote(reading);
+  noted(note.title, note.detail);
+}
+
+/**
  * PD-TOOLS-006 revision 8 (OQ-250, R-072) over every preserved session (`lib/routing-misses.mjs`): OQ-216's two counts —
  * `delegate` refused for a `write_scope` given to a persona that cannot write files, and a child's call of a tool it does not hold
  * refused at the gate (target 0). NOTEs: the enforced bounds answered each; the duress run at a68f121 had one of each. Since
@@ -1318,6 +1352,7 @@ function finish(code) {
   // Every session's tool-call record, read while the sandbox still holds the store (`checkToolRecord`).
   checkToolRecord();
   checkCoordinatorTodo();
+  checkIntentClassification();
   checkRoutingMisses();
   checkHandOffCuts();
   checkNearMissEdits();

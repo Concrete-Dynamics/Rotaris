@@ -363,6 +363,12 @@ revision 9, OQ-257) the write-scope refusals are read against a bound — at mos
 `delegate`, the seconds to it printed — and a scenario over it is a NOTE of its own; and (OQ-256) a NOTE counts each hand-off answer
 a child received cut, by the block's marker in its recorded messages (`lib/hand-off-cuts.mjs`; target 0 for answers of 100,000
 characters or fewer; the duress run at `552d346` had two, under the 4,000-character block revision 9 replaced).
+Since fin41 (item N67; OQ-258, `PD-ORCH-011` revision 2) a NOTE gives the intent classification per launch — category,
+confidence and rung, or the fallback and its reason, from each session's launch audit; the seconds from the session's start to
+its `intent:` line (`run_intent` has no elapsed field); each cut's bytes received from the recorded traffic, 0 being a queueing
+endpoint's — and counts the fallbacks and cuts, naming OQ-258's reopening limb where 3 in 10 launches were cut after bytes
+arrived (`lib/intent-reading.mjs`). Read over the `0bc3eee` pack it gives what that pack's autopsy found by hand: 10 launches,
+1 fell back, the requirements cut at 12.0 s after 91,112 bytes, the other nine 2.4 to 9.8 s on the strict rung.
 
 An endpoint that discovers no model catalogue is not a dead end. The sign-in takes the dialog's own "Continue
 anyway" (the zero-model recovery), the catalogue check is recorded as a **NOTE** rather than a silent pass, and

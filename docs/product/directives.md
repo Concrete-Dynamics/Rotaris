@@ -5855,6 +5855,9 @@ advocate's first execution against the registered self-hosted endpoint.
 > wants was taken and the label it defines was not. Whether the sentence lengthens classification is still not separable from
 > the endpoint; with the keys named it no longer shows as cuts.
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+> *Since 2026-10-13 (fin41, item N67) the next default pack is read by the live run itself: a NOTE gives each launch's
+> classification, its seconds and each cut's bytes received, and counts the fallbacks (`lib/intent-reading.mjs`); over the
+> `0bc3eee` pack it reproduces the figures above, faults-args `explicit_trivial` 0.78 in 9.2 s.*
 
 ---
 

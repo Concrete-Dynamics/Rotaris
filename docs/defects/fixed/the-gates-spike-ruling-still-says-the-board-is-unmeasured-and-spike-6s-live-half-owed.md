@@ -21,3 +21,11 @@ Found by the 2026-10-13 survey at `6de2a67` (item N11).
 - `docs/architecture/codebase.md` — "The board that shipped was chosen on measurement" and "REQ-TRACE-239 is met" (wave 2,
   2026-09-10).
 - `docs/architecture/spikes/responses-dialect.md` — the two live-half sections.
+
+## Repaired — 2026-10-13 (fin41)
+
+Two dated report-back notes stand beside the two sentences in `docs/architecture/implementation-conditions.md`, each
+keeping the sentence it answers: the board measured in wave 2 (2026-09-10, `7c8260c`), with the falsified 103–112 ms
+reading named; spike 6's live half taken on 2026-09-05 (OpenRouter, four of four) and on 2026-10-02 (the self-hosted
+endpoint). The paragraph's opening, which describes the state before spike 8 was taken, stays as history. No test:
+record only; each figure was read from `codebase.md` and `spikes/responses-dialect.md` at `6de2a67`.

@@ -299,6 +299,11 @@ them is not promoting them to conditions:
   **Taken 2026-09-03 with the session writer** — `spikes/store-schema-and-open-path.md`. It found a
   declared index the planner never used, and it settled the integrity check *off* the startup path.
   `REQ-TRACE-239`'s board remains unmeasured: no board table exists yet.
+  *Updated 2026-10-13: the sentence above held on 2026-09-03 and no longer does. The board was built and measured in
+  wave 2 of the three-lane build (2026-09-10, merged main `7c8260c`): `REQ-TRACE-239` is met, the requirements proof
+  passing six times of six on idle main, the board drawing in 38–43 ms on the fixture and 54–59 ms on 1,500
+  requirements. The 103–112 ms misses measured on the branch while the machine was short of memory are kept there as a
+  falsified reading (`codebase.md`, "REQ-TRACE-239 is met").*
 - **Spike 18** — two run hosts on one store, which `REQ-TOOLS-089` and `REQ-SANDBOX-038` permit and which no
   spike has measured; spike 21 measured only run-host-against-workspace-service.
   **Taken 2026-09-03** — `spikes/two-writers-one-store.md`. Nothing lost, +12 % at p50, one 258 ms sample.
@@ -307,6 +312,10 @@ them is not promoting them to conditions:
   `spikes/responses-dialect.md`: both dialects under one base URL, the credential per request, headers,
   errors and abort all held against a fake `fetch`. **The live half is owed**: no endpoint exists on the build
   machine; the harness is gated on one the owner supplies.
+  *Updated 2026-10-13: the live half has been taken twice since. On 2026-09-05 against OpenRouter
+  (`anthropic/claude-haiku-4.5`) through the slice proof with the owner's own key, four of four assertions held and
+  ADR-0027's fallback is no longer priced; on 2026-10-02 against a second endpoint, the owner's self-hosted vLLM
+  (`spikes/responses-dialect.md`, "Status: TAKEN, both halves", and its two live-half sections).*
 - **The power-loss test** — OQ-12's outstanding half, and now the **sole** stated ground for forcing the
   stronger durability setting on a terminal save. No spike has performed one, and it is the only route to an
   absent store directory that the restore's corrections do not close.

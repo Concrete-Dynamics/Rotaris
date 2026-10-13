@@ -26,6 +26,10 @@
  *                   single-file content replacement → the call `ok`, the file changed on disk, and the path in the child's
  *                   stored report's `edited_files` and its child-report artifact's: the duress live run at `a68f121`
  *                   reported such a child as having changed nothing (finding D1).
+ *   9. child across — (fin35, OQ-245, PD-ORCH-004, REQ-ORCH-109) a delegated tester runs the EDIT tier's cross-file
+ *                   replacement across the whole project (no path argument) → both files it changed on disk in the child's
+ *                   stored report's `edited_files` and its child-report artifact's, observed by the run host around the
+ *                   call; until the ruling such a call was listed by its argument path, here none. No language server.
  *
  * Evidence under `.proof/code-intel-proof/`: one log and PNG per launch, `results.json`. `--skip-build` skips the build.
  */
@@ -52,7 +56,7 @@ if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === 
 const TOKEN = 'builtin:code-intelligence';
 // `--steps=1,2` runs a subset (the launches are long); `--keep` leaves the previous evidence and merges results.json.
 const stepsArg = process.argv.find((a) => a.startsWith('--steps='));
-const wanted = new Set((stepsArg ? stepsArg.slice('--steps='.length) : '1,2,3,4,5,6,7,8').split(',').map((s) => s.trim()));
+const wanted = new Set((stepsArg ? stepsArg.slice('--steps='.length) : '1,2,3,4,5,6,7,8,9').split(',').map((s) => s.trim()));
 const want = (n) => wanted.has(String(n));
 const keepOutput = process.argv.includes('--keep');
 
@@ -492,6 +496,46 @@ if (want(8)) {
   if (artifactFiles.length !== 1 || !artifactFiles[0].some((f) => (typeof f === 'string' ? f : f?.path) === 'src/edit.ts')) throw new Error(`child-edit: the child-report artifact does not list src/edit.ts: ${JSON.stringify(artifactFiles)} (REQ-LIBRARY-088)`);
   results.childEdit = { call: calls[0].status, child: children[0].canonical_name, persona: children[0].persona, state: children[0].state, reportEditedFiles: report.edited_files, artifactEditedFiles: artifactFiles[0], elapsedMs: r.elapsedMs };
   console.log(`[code-intel-proof] 8 child edit: ${children[0].persona} ${children[0].state}, report edited_files ${JSON.stringify(report.edited_files)}, artifact ${JSON.stringify(artifactFiles[0])} (${r.elapsedMs} ms)`);
+}
+
+// ---- 9. a child's cross-file EDIT call lists every file it changed ---------------------------------------------------
+// fin35 (OQ-245, XE1, ruled 2026-10-13 under R-072): a cross-file replacement with no path argument reaches the whole
+// project, and until the ruling its report listed nothing — the arguments name no file, and the server's result is its own
+// prose (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md). The run host now
+// observes the files it can reach before and after the call. A delegated tester whose one call is that replacement across two
+// files, then its stored report and its child-report artifact read for both. The replacement needs no language server.
+if (want(9)) {
+  const first = join(workspace, 'src', 'across-a.ts');
+  const second = join(workspace, 'docs', 'across-b.md');
+  mkdirSync(join(workspace, 'docs'), { recursive: true });
+  writeFileSync(first, "export const label = 'crossFileToken';\n");
+  writeFileSync(second, '# crossFileToken\n');
+  const delegating = WORKSPACE.replace('rotaris:\n  delegation_strategy: single\n', '');
+  if (delegating === WORKSPACE) throw new Error('child-across: the workspace configuration could not be made delegating');
+  const r = await launch('child-across', {
+    ROTARIS_CAPTURE_PROMPT: 'delegate one tester that renames a token across the project', ROTARIS_INTENT_SCRIPT: 'moderate_feature',
+    ROTARIS_SCRIPT: 'delegate:tester:replace-across-the-project,wait:20000,answer',
+    ROTARIS_CHILD_SCRIPT: 'mcp:code_intelligence.replace_in_files,answer',
+    ROTARIS_SCRIPT_MCP_ARGS: JSON.stringify({ replace_in_files: { needle: 'crossFileToken', repl: 'renamedToken', mode: 'literal' } }),
+    ROTARIS_CAPTURE_AFTER_MS: '60000',
+  }, { workspaceConfig: delegating, timeout: 240_000 });
+  const { db, session: s } = sessionFrom(r);
+  const calls = toolRows(db, s.session_id, 'replace_in_files');
+  const children = db.prepare('SELECT canonical_name, persona, state, report FROM children WHERE session_id = ?').all(s.session_id);
+  const artifacts = db.prepare("SELECT edited_files FROM artifacts WHERE session_id = ? AND kind = 'child_report'").all(s.session_id);
+  db.close();
+  if (calls.length !== 1 || calls[0].status !== 'ok') throw new Error(`child-across: the replacement did not succeed: ${JSON.stringify(calls).slice(0, 800)}\n${lines(r.log, /code_intelligence|scripted:/).slice(-10).join('\n')}`);
+  for (const f of [first, second]) if (!readFileSync(f, 'utf8').includes('renamedToken')) throw new Error(`child-across: ${f} was not changed on disk`);
+  if (children.length !== 1) throw new Error(`child-across: expected one child, found ${children.length}: ${JSON.stringify(children)}`);
+  const report = JSON.parse(children[0].report ?? 'null');
+  const want2 = ['docs/across-b.md', 'src/across-a.ts'];
+  const listed = Array.isArray(report?.edited_files) ? report.edited_files : [];
+  if (!want2.every((p) => listed.includes(p))) throw new Error(`child-across: the child's report does not list both files it changed: ${JSON.stringify(listed)} (OQ-245, PD-ORCH-004, REQ-ORCH-109)`);
+  if (listed.some((p) => p === '' || p === '.' || p === 'src' || p === 'docs')) throw new Error(`child-across: the report lists a directory as an edited file: ${JSON.stringify(listed)} (REQ-ORCH-108)`);
+  const artifactFiles = artifacts.map((a) => JSON.parse(a.edited_files ?? '[]').map((f) => (typeof f === 'string' ? f : f?.path)));
+  if (artifactFiles.length !== 1 || !want2.every((p) => artifactFiles[0].includes(p))) throw new Error(`child-across: the child-report artifact does not list both files: ${JSON.stringify(artifactFiles)} (REQ-LIBRARY-088)`);
+  results.childAcross = { call: calls[0].status, child: children[0].canonical_name, persona: children[0].persona, state: children[0].state, reportEditedFiles: listed, artifactEditedFiles: artifactFiles[0], elapsedMs: r.elapsedMs };
+  console.log(`[code-intel-proof] 9 child across: ${children[0].persona} ${children[0].state}, report edited_files ${JSON.stringify(listed)}, artifact ${JSON.stringify(artifactFiles[0])} (${r.elapsedMs} ms)`);
 }
 
 // ---- 7. self-containment (packaged only) ---------------------------------------------------------------------------

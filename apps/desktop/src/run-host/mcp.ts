@@ -5,11 +5,11 @@ import type { McpHealth, McpListing, McpProvisioning, McpSecretRow, McpSecretsVi
 import { resolveUserDirs, WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
 import {
   AGENTS_FILE_NAME, classifyWorkspaceRoot, CODE_INTELLIGENCE_LANGUAGE_SERVERS, CODE_INTELLIGENCE_MARKER_SEGMENTS, CODE_INTELLIGENCE_MEMORY_LISTING_TOOL, CODE_INTELLIGENCE_SERVER_NAME,
-  CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceLanguageServerStore,
+  CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceEdit, codeIntelligenceLanguageServerStore,
   deriveSetupInvocation, DiagnosticSink, launchedProjectOf, mcpConfigurationForExecutionRoot, narrowAfterUpdate, renderMcpSection, resolvePersonaMcp,
   type Diagnostic, type DropReason, type LoadedConfiguration, type McpResolvedServer, type PersonaMcpSurface,
 } from '@rotaris/config';
-import { advertisedSchemaCheck, errorObservation, INTERRUPTED_FAILURE_KIND, observation, type AdvertisedSchemaCheck, type ToolExecutor } from '@rotaris/agent-tools';
+import { advertisedSchemaCheck, errorObservation, INTERRUPTED_FAILURE_KIND, observation, observeReach, WriteJournal, type AdvertisedSchemaCheck, type ToolExecutor } from '@rotaris/agent-tools';
 import type { McpGrantEvidence, SessionWriter } from '@rotaris/engine';
 import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, runSetupSteps, SETUP_SHUTDOWN_GRACE_MS, SessionConnections, ToolDiscovery, type Connected, type McpLog, type ServerDescription } from '@rotaris/mcp';
 
@@ -141,6 +141,11 @@ export class McpHost {
   private readonly schemaChecks = new WeakMap<object, AdvertisedSchemaCheck>();
   private readonly preparing = new Map<string, Promise<void>>();
   private readonly mcpLog: McpLog;
+  /**
+   * OQ-245: the files the product's own file tools wrote, by agent, for every port of the process (`tools.ts` notes each
+   * native write that returned `ok`), so an observed cross-file EDIT call leaves out what another agent wrote meanwhile.
+   */
+  readonly writes = new WriteJournal();
 
   constructor(private readonly deps: McpHostDeps) {
     // `debug` reached the log as `info` here, so a child's stderr burst was indistinguishable from the product's
@@ -349,7 +354,14 @@ export class McpHost {
           schema: check.schema,
           parameters: { ...tool.inputSchema },
           label: (a) => `${tool.callable} ${Object.keys(a as Record<string, unknown>).sort(compareCodePoints).join(' ')}`.trim(),
-          execute: async (a, tctx) => {
+          /*
+           * OQ-245 (XE1, ruled 2026-10-13 under R-072): a cross-file code-intelligence EDIT call — a symbol rename, a
+           * cross-file replacement — changes files its arguments do not name, so the files it can reach are observed before
+           * and after it, whatever it returned, and the observation rides on its result for the child's report
+           * (`observeReach`, `codeIntelligenceEdit`). Until the ruling such a call was listed by its argument path alone
+           * (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+           */
+          execute: async (a, tctx) => observeReach({ root: workspaceRoot, reach: codeIntelligenceEdit(tool.callable, a as Record<string, unknown>)?.reach ?? null, journal: this.writes, agent: tctx.agentName }, async () => {
             const started = this.deps.clocks.monotonic.now();
             try {
               // PD-MCP-002: REQ-MCP-070's `lsp_init` names the root this port's run executes in.
@@ -371,7 +383,7 @@ export class McpHost {
               if (tctx.signal.aborted) return errorObservation(`The call to '${tool.callable}' on MCP server '${server.name}' was cancelled by the run before it completed; it was not retried.`, { failureKind: INTERRUPTED_FAILURE_KIND });
               return errorObservation(`The call to '${tool.callable}' on MCP server '${server.name}' failed: ${redact(text)}`, { failureKind: 'execution_error' });
             }
-          },
+          }),
         } as ToolExecutor);
       }
     }

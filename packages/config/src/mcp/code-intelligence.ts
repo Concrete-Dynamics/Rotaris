@@ -35,29 +35,50 @@ export function neverGrantNames(): string[] {
 }
 
 /**
- * PD-ORCH-004 / REQ-ORCH-109 (fin32; the a68f121 duress run's finding D1): the workspace paths a call of the EDIT tier
- * writes, read from its arguments as the manifest names them (`editArguments`), or null when `callable` is no tool of
- * that tier. The tool is matched by the name the model called — the runtime's own, or that name under the `<server>_`
- * prefix a collision gives it (`persona.ts`, `reservedNames`) — in lower case, as the native file tools are. A call
- * whose preview argument is `true` changes nothing and names no path; a call whose path argument is absent or not a
- * string names none either.
+ * PD-ORCH-004 / REQ-ORCH-109 (fin32; the a68f121 duress run's finding D1), and OQ-245 (XE1, ruled 2026-10-13 under R-072):
+ * what a call of the EDIT tier writes, or null when `callable` is no tool of that tier. The tool is matched by the name the
+ * model called — the runtime's own, or that name under the `<server>_` prefix a collision gives it (`persona.ts`,
+ * `reservedNames`) — in lower case, as the native file tools are.
  *
- * The bound, stated rather than hidden: a cross-file capability is listed by the one file or directory its arguments
- * confine it to, so a symbol rename lists the file that declares the symbol and not the files whose references it
- * rewrote, and a replacement across the whole project (no path argument) lists nothing. The arguments name no more
- * than that; the result's text is the server's and is not read.
+ * - `paths`: the files its arguments name as the manifest's `editArguments` defines them. For a tool of `argument` scope that
+ *   is everything it writes. For a tool of `reach` scope it is only what is known without looking: a rename's declaring
+ *   file; never a cross-file replacement's path, which may be a directory. A call whose preview argument is `true` changes
+ *   nothing and names no path; a path argument absent or not a string names none either.
+ * - `reach`: for a `reach` tool that is not a preview, where its changes can land, relative to the root the call runs in —
+ *   `''` for the whole project. The run host observes the files there before and after the call (`apps/desktop/src/run-host/mcp.ts`),
+ *   and the report lists what it observed; where nothing was observed, `paths` and a statement that the call may have
+ *   changed files the record cannot name (`engine`'s `writeReadingOf`).
+ *
+ * The reading it replaces, kept beside it: until OQ-245 a cross-file capability was listed by the one file or directory its
+ * arguments confine it to — a symbol rename by the file that declares the symbol and not the files whose references it
+ * rewrote, a replacement across the whole project (no path argument) by nothing, a directory-scoped one by the directory —
+ * because the arguments name no more than that and the result's text is the server's
+ * (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
  */
-const EDIT_TOOLS: ReadonlyMap<string, { readonly path: string; readonly preview?: string }> = new Map(
-  Object.entries(CODE_INTELLIGENCE_MANIFEST.tiers.edit).map(([capability, name]) => [name.toLowerCase(), (CODE_INTELLIGENCE_MANIFEST.editArguments as Record<string, { readonly path: string; readonly preview?: string }>)[capability]!] as const),
+export interface CodeIntelligenceEdit {
+  readonly paths: readonly string[];
+  readonly reach: { readonly base: string } | null;
+}
+type EditSpec = { readonly path: string; readonly preview?: string; readonly scope: 'argument' | 'reach'; readonly reach?: 'project' | 'path' };
+const EDIT_TOOLS: ReadonlyMap<string, EditSpec> = new Map(
+  Object.entries(CODE_INTELLIGENCE_MANIFEST.tiers.edit).map(([capability, name]) => [name.toLowerCase(), (CODE_INTELLIGENCE_MANIFEST.editArguments as Record<string, EditSpec>)[capability]!] as const),
 );
-export function codeIntelligenceEditPaths(callable: string, args: Readonly<Record<string, unknown>> | null): readonly string[] | null {
+export function codeIntelligenceEdit(callable: string, args: Readonly<Record<string, unknown>> | null): CodeIntelligenceEdit | null {
   const lower = callable.toLowerCase();
   const prefix = `${CODE_INTELLIGENCE_SERVER_NAME}_`;
   const spec = EDIT_TOOLS.get(lower) ?? (lower.startsWith(prefix) ? EDIT_TOOLS.get(lower.slice(prefix.length)) : undefined);
   if (spec === undefined) return null;
-  if (spec.preview !== undefined && args?.[spec.preview] === true) return [];
-  const path = args?.[spec.path];
-  return typeof path === 'string' && path !== '' ? [path] : [];
+  if (spec.preview !== undefined && args?.[spec.preview] === true) return { paths: [], reach: null };
+  const raw = args?.[spec.path];
+  const path = typeof raw === 'string' ? raw : '';
+  if (spec.scope === 'argument') return { paths: path === '' ? [] : [path], reach: null };
+  if (spec.reach === 'project') return { paths: path === '' ? [] : [path], reach: { base: '' } };
+  return { paths: [], reach: { base: path } };
+}
+
+/** The files a call of the EDIT tier names in its arguments (`codeIntelligenceEdit`'s `paths`), or null outside the tier. */
+export function codeIntelligenceEditPaths(callable: string, args: Readonly<Record<string, unknown>> | null): readonly string[] | null {
+  return codeIntelligenceEdit(callable, args)?.paths ?? null;
 }
 
 /** REQ-MCP-034/036: the launch subcommand and the two project-selection options, as command resolution binds on them. */

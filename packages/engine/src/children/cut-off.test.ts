@@ -100,6 +100,45 @@ describe('PD-ORCH-004: the paths a child\'s own file-writing calls changed', () 
       .toBe('Workspace paths its file-writing calls changed, in the order first changed: docs/verification.md, src/a.ts, src/c.ts.');
   });
 
+  /**
+   * OQ-245 (XE1, 2026-10-13, R-072): a cross-file EDIT call changed the files the run host observed it change, whatever it
+   * returned; with no observation it is said, and the report never reads "changed no workspace paths" over it.
+   */
+  it('OQ-245: a rename and a whole-project replacement list what they were observed to change, a directory never, a partial failure what it wrote', () => {
+    const edit = CODE_INTELLIGENCE_MANIFEST.tiers.edit;
+    const at = CODE_INTELLIGENCE_MANIFEST.editArguments;
+    const log = new ProgressLog(ROOT);
+    log.completed(millis(1), edit.renameSymbol, { name_path: 'total', [at.renameSymbol.path]: 'src/total.ts', new_name: 'sum' }, true, { observedPaths: ['src/a.ts', 'src/b.ts', 'src/total.ts'] });
+    log.completed(millis(2), edit.replaceAcrossFiles, { needle: 'a', repl: 'b', mode: 'literal' }, true, { observedPaths: ['docs/api.md'] });
+    log.completed(millis(3), edit.replaceAcrossFiles, { needle: 'c', repl: 'd', mode: 'literal', [at.replaceAcrossFiles.path]: 'lib' }, true, { observedPaths: ['lib/x.ts'] });
+    log.completed(millis(4), edit.replaceAcrossFiles, { needle: 'e', repl: 'f', mode: 'literal' }, false, { observedPaths: ['lib/y.ts'] });
+    log.completed(millis(5), edit.replaceAcrossFiles, { needle: 'g', repl: 'h', mode: 'literal', [at.replaceAcrossFiles.path]: 'lib', [at.replaceAcrossFiles.preview]: true }, true);
+    expect(log.changedPaths()).toEqual(['src/a.ts', 'src/b.ts', 'src/total.ts', 'docs/api.md', 'lib/x.ts', 'lib/y.ts']);
+    expect(log.changedPaths()).not.toContain('lib');
+    expect(log.unnamedBy()).toEqual([]);
+  });
+
+  it('OQ-245: a cross-file call with no observation is said; "changed no workspace paths" is never written over it', () => {
+    const edit = CODE_INTELLIGENCE_MANIFEST.tiers.edit;
+    const at = CODE_INTELLIGENCE_MANIFEST.editArguments;
+    const only = new ProgressLog(ROOT);
+    only.completed(millis(1), edit.replaceAcrossFiles, { needle: 'a', repl: 'b', mode: 'literal' }, true);
+    expect(only.changedPaths()).toEqual([]);
+    expect(only.unnamedBy()).toEqual([edit.replaceAcrossFiles]);
+    const alone = cutOffReport({ taskId: 'bg_0000000d', limitS: 1200, stallS: 90, changedPaths: only.changedPaths(), unnamedBy: only.unnamedBy(), isContinuation: true }).changes;
+    expect(alone).toBe(`The record names no workspace path its file-writing calls changed, but a ${edit.replaceAcrossFiles} call may have changed files the record cannot name.`);
+    expect(alone).not.toContain('changed no workspace paths');
+    const mixed = new ProgressLog(ROOT);
+    mixed.completed(millis(1), 'write_file', { operation: 'edit', path: 'README.md' }, true);
+    // Cut off while under way, before the after-look: it ran, so it is said too, with its declaring file.
+    mixed.completed(millis(2), edit.renameSymbol, { name_path: 'f', [at.renameSymbol.path]: 'src/f.ts', new_name: 'g' }, false, { ran: true });
+    // Refused, never run: neither listed nor said.
+    mixed.completed(millis(3), edit.replaceAcrossFiles, { needle: 'x', repl: 'y', mode: 'literal' }, false);
+    expect(mixed.changedPaths()).toEqual(['README.md', 'src/f.ts']);
+    expect(cutOffReport({ taskId: 'bg_0000000e', limitS: 1200, stallS: 90, changedPaths: mixed.changedPaths(), unnamedBy: mixed.unnamedBy(), isContinuation: true }).changes)
+      .toBe(`Workspace paths its file-writing calls changed, in the order first changed: README.md, src/f.ts. Beyond these, a ${edit.renameSymbol} call may have changed files the record cannot name.`);
+  });
+
   it('workspacePath resolves lexically against the root', () => {
     expect(workspacePath(ROOT, 'a/b.ts')).toBe('a/b.ts');
     expect(workspacePath(ROOT, '/ws/a/b.ts')).toBe('a/b.ts');

@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
-import type { LoadedConfiguration } from '@rotaris/config';
+import { CODE_INTELLIGENCE_MANIFEST, type LoadedConfiguration } from '@rotaris/config';
 import { nodeClocks } from '@rotaris/platform';
 import { buildPolicy, Gate, PendingApprovals, PolicyContext } from '@rotaris/agent-tools';
 import { sessionMetrics } from '@rotaris/engine';
@@ -547,5 +547,65 @@ describe('an MCP call checked against the input schema the model was given (REQ-
     expect(said).toHaveLength(1);
     expect(said[0]).toMatchObject({ level: 'info' });
     expect(said[0]!.message).toContain("'amend_note' on MCP server 'notes'");
+  });
+});
+
+/**
+ * OQ-245 (XE1, ruled 2026-10-13 under R-072): a cross-file code-intelligence EDIT call changes files its arguments do not
+ * name, so the run host observes what it can reach before and after it, whatever it returned
+ * (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+ */
+describe('a cross-file EDIT call is observed by the files it changed (OQ-245)', () => {
+  // The bundled runtime's names come from the manifest alone (REQ-MCP-116).
+  const ACROSS = CODE_INTELLIGENCE_MANIFEST.tiers.edit.replaceAcrossFiles;
+  const SCHEMA = { type: 'object', properties: { needle: { type: 'string' }, repl: { type: 'string' }, mode: { type: 'string' }, relative_path: { type: 'string' }, dry_run: { type: 'boolean' } }, required: ['needle', 'repl', 'mode'] };
+  const roots: string[] = [];
+  afterEach(() => { for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true }); });
+  function rig(answer: (root: string) => { isError: boolean; text: string }) {
+    const root = mkdtempSync(join(tmpdir(), 'rotaris-oq245-'));
+    roots.push(root);
+    mkdirSync(join(root, 'src'));
+    writeFileSync(join(root, 'src', 'a.ts'), 'export const total = 1;\n');
+    writeFileSync(join(root, 'src', 'b.ts'), 'import { total } from "./a";\n');
+    writeFileSync(join(root, 'README.md'), 'total\n');
+    const mcp = new McpHost({ clocks: new FakeClock(), log: () => undefined, acknowledge: () => undefined, parentEnv: {}, productVersion: '0.0.0' });
+    vi.spyOn(mcp.discovery, 'peek').mockReturnValue({ tools: [{ name: ACROSS, description: 'Replace across files.', inputSchema: SCHEMA }], failed: false } as unknown as ReturnType<typeof mcp.discovery.peek>);
+    vi.spyOn(mcp, 'connectionsFor').mockReturnValue({
+      connect: async () => ({ onToolsChanged: () => undefined }),
+      call: async () => answer(root),
+    } as unknown as ReturnType<typeof mcp.connectionsFor>);
+    const entry = { type: 'stdio', enabled: true, disabled_tools: [], tool_name_map: {}, command: 'ci' };
+    const cfg = {
+      personas: { refactorer: { mcp_servers: ['code_intelligence'], tools: [] } },
+      mcp: { servers: { code_intelligence: { name: 'code_intelligence', entry, origin: 'workspace', availability: { available: true }, description: {}, resolved: { command: 'ci', args: [] } } }, origins: { code_intelligence: 'workspace' }, diagnostics: [] },
+    } as unknown as LoadedConfiguration;
+    const surface = mcp.surfaceFor(cfg, root, 'refactorer', null);
+    const executors = mcp.executorsFor({ cfg, workspaceRoot: root, role: 'refactorer', surface, ctx: { sessionId: 'S1', writer: null }, remove: () => undefined, log: () => undefined });
+    const executor = executors.find((e) => e.name === ACROSS)!;
+    const ctx = { workspaceRoot: root, sessionId: 'S1', agentName: 'refactorer', persona: 'refactorer', monotonic: new FakeClock(), wall: new FakeClock(), signal: new AbortController().signal, warn: () => undefined };
+    return { mcp, root, run: (args: Record<string, unknown>) => executor.execute(args, ctx) };
+  }
+
+  it('a whole-project replacement that writes two files and then errs carries both, with its error, on its observation', async () => {
+    const r = rig((root) => {
+      writeFileSync(join(root, 'src', 'a.ts'), 'export const sum = 1;\n');
+      writeFileSync(join(root, 'src', 'b.ts'), 'import { sum } from "./a";\n');
+      return { isError: true, text: 'Error: README.md could not be written' };
+    });
+    const obs = await r.run({ needle: 'total', repl: 'sum', mode: 'literal' });
+    expect(obs).toMatchObject({ isError: true, failureKind: 'tool_error', observedPaths: ['src/a.ts', 'src/b.ts'] });
+  });
+
+  it('what another agent\'s file tools noted meanwhile is left out, and a preview observes nothing', async () => {
+    let journal: { note: (agent: string, paths: string[]) => void } | null = null;
+    const r = rig((root) => {
+      writeFileSync(join(root, 'src', 'a.ts'), 'export const sum = 1;\n');
+      writeFileSync(join(root, 'README.md'), 'a sibling wrote this\n');
+      journal!.note('docs-writer', [join(root, 'README.md')]);
+      return { isError: false, text: 'Replaced 1 occurrence(s) in 1 file(s)' };
+    });
+    journal = r.mcp.writes;
+    expect((await r.run({ needle: 'total', repl: 'sum', mode: 'literal', relative_path: '' })).observedPaths).toEqual(['src/a.ts']);
+    expect((await r.run({ needle: 'total', repl: 'sum', mode: 'literal', dry_run: true })).observedPaths).toBeUndefined();
   });
 });

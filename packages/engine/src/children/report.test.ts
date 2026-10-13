@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
 import type { ChatMessage } from '@rotaris/model';
 import { CODE_INTELLIGENCE_MANIFEST } from '@rotaris/config';
-import { commandsFrom, deterministicTesterReport, editedFilesFrom, fallbackReport, isFileWritingTool, produceReport, reportFacts, reportTranscript, TRANSCRIPT_CAP, writtenPathsOf, type ReportInput, type SummariserDeps } from './report.js';
+import { commandsFrom, deterministicTesterReport, editedFilesFrom, fallbackReport, isFileWritingTool, produceReport, reportFacts, reportTranscript, TRANSCRIPT_CAP, unnamedChangesFrom, writeReadingOf, writtenPathsOf, type ReportInput, type SummariserDeps } from './report.js';
 import { commandsForArtifact } from './ledger.js';
 import { childPayload } from './notify.js';
 import { interruptedResult, ranBeforeItWasCut } from '../run/interruption.js';
@@ -158,6 +158,81 @@ describe('engine/children/report — a code-intelligence EDIT-tier write is an e
     expect(writtenPathsOf(CODE_INTELLIGENCE_MANIFEST.tiers.memoryWrite.memoryWriting, { memory_file_name: 'm' })).toBeNull();
     for (const name of Object.values(edit)) expect(isFileWritingTool(name)).toBe(true);
     expect(isFileWritingTool('read_file')).toBe(false);
+  });
+});
+
+/**
+ * OQ-245 (XE1, ruled 2026-10-13 under R-072): a cross-file EDIT call — a symbol rename, a cross-file replacement — changes
+ * files its arguments do not name. The run host observes what it can reach before and after it and puts what changed on its
+ * result part (`observedPaths`); the report lists that, and where nothing was observed it says the call may have changed files
+ * the record cannot name, never "(none)" (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+ */
+describe('engine/children/report — a cross-file EDIT call lists every file it changed (OQ-245, PD-ORCH-004, REQ-ORCH-108, REQ-ORCH-109)', () => {
+  const edit = CODE_INTELLIGENCE_MANIFEST.tiers.edit;
+  const at = CODE_INTELLIGENCE_MANIFEST.editArguments;
+  const seen = (callId: string, name: string, text: string, observedPaths: readonly string[] | undefined, isError = false): ChatMessage =>
+    ({ role: 'tool', content: [{ kind: 'tool-result', callId, name, result: text, isError, ...(observedPaths === undefined ? {} : { observedPaths }) }] });
+  const rename = (callId: string) => call(callId, edit.renameSymbol, { name_path: 'total', [at.renameSymbol.path]: 'src/total.ts', new_name: 'sum' });
+  const replace = (callId: string, path?: string, preview = false) =>
+    call(callId, edit.replaceAcrossFiles, { needle: 'total', repl: 'sum', mode: 'literal', ...(path === undefined ? {} : { [at.replaceAcrossFiles.path]: path }), ...(preview ? { [at.replaceAcrossFiles.preview]: true } : {}) });
+
+  it('a rename lists the three files it was observed to change, not only its declaring file', () => {
+    const messages = [say('user', 'TASK: rename total'), rename('r1'), seen('r1', edit.renameSymbol, "Successfully renamed 'total' to 'sum' (5 changes applied)", ['src/a.ts', 'src/b.ts', 'src/total.ts'])];
+    expect(editedFilesFrom(messages)).toEqual(['src/a.ts', 'src/b.ts', 'src/total.ts']);
+    expect(reportFacts(messages)).toBe('Edited files: src/a.ts, src/b.ts, src/total.ts\nCommands run: (none)');
+  });
+
+  it('a whole-project replacement lists its files; a directory-scoped one lists files and never the directory', () => {
+    const whole = [replace('p1'), seen('p1', edit.replaceAcrossFiles, 'Replaced 3 occurrence(s) in 2 file(s)', ['docs/api.md', 'src/x.ts'])];
+    expect(editedFilesFrom(whole)).toEqual(['docs/api.md', 'src/x.ts']);
+    const scoped = [replace('d1', 'src'), seen('d1', edit.replaceAcrossFiles, 'Replaced 2 occurrence(s) in 2 file(s)', ['src/a.ts', 'src/b.ts'])];
+    expect(editedFilesFrom(scoped)).toEqual(['src/a.ts', 'src/b.ts']);
+    expect(editedFilesFrom(scoped)).not.toContain('src');
+  });
+
+  it('a replacement that failed part-way lists the files it was observed to write before the failure', () => {
+    const messages = [replace('f1'), seen('f1', edit.replaceAcrossFiles, 'Error: could not write src/c.ts', ['src/a.ts', 'src/b.ts'], true)];
+    expect(editedFilesFrom(messages)).toEqual(['src/a.ts', 'src/b.ts']);
+    expect(reportFacts(messages)).toContain('Edited files: src/a.ts, src/b.ts\n');
+  });
+
+  it('a preview changes nothing and says nothing', () => {
+    const messages = [replace('v1', 'src', true), seen('v1', edit.replaceAcrossFiles, 'diffs', undefined)];
+    expect(editedFilesFrom(messages)).toEqual([]);
+    expect(unnamedChangesFrom(messages)).toEqual([]);
+    expect(reportFacts(messages)).toBe('Edited files: (none)\nCommands run: (none)');
+  });
+
+  it('a call that ran with no observation is said, never "(none)": a rename keeps its declaring file, a replacement names none', () => {
+    const replaced = [replace('u1'), seen('u1', edit.replaceAcrossFiles, 'Replaced 3 occurrence(s) in 2 file(s)', undefined)];
+    expect(editedFilesFrom(replaced)).toEqual([]);
+    expect(unnamedChangesFrom(replaced)).toEqual([edit.replaceAcrossFiles]);
+    expect(reportFacts(replaced)).toBe(`Edited files: a ${edit.replaceAcrossFiles} call may have changed files the record cannot name\nCommands run: (none)`);
+    expect(reportFacts(replaced)).not.toContain('(none)\nCommands');
+    expect(fallbackReport(input({ messages: replaced, toolCallCount: 1, lastText: '' }), 'no summariser is configured').summary)
+      .toContain(`A ${edit.replaceAcrossFiles} call may have changed files the record cannot name.`);
+    const renamed = [rename('u2'), seen('u2', edit.renameSymbol, 'Successfully renamed', undefined)];
+    expect(editedFilesFrom(renamed)).toEqual(['src/total.ts']);
+    expect(reportFacts(renamed)).toBe(`Edited files: src/total.ts; and a ${edit.renameSymbol} call may have changed files the record cannot name\nCommands run: (none)`);
+    // Cut off while under way, with no after-look (a crash, the landing bound): it may have written.
+    const cut = [replace('u3'), seen('u3', edit.replaceAcrossFiles, interruptedResult(null, true, ''), undefined, true)];
+    expect(ranBeforeItWasCut(interruptedResult(null, true, ''))).toBe(true);
+    expect(unnamedChangesFrom(cut)).toEqual([edit.replaceAcrossFiles]);
+  });
+
+  it('a call the record answers as refused, with no observation, never ran: nothing is listed and nothing is said', () => {
+    const messages = [rename('x1'), seen('x1', edit.renameSymbol, 'Permission denied', undefined, true)];
+    expect(editedFilesFrom(messages)).toEqual([]);
+    expect(unnamedChangesFrom(messages)).toEqual([]);
+    expect(reportFacts(messages)).toBe('Edited files: (none)\nCommands run: (none)');
+  });
+
+  it('writeReadingOf: the observation decides a reach call; an argument-scope call and the native tools read their path', () => {
+    expect(writeReadingOf(edit.renameSymbol, { [at.renameSymbol.path]: 'src/f.ts' }, ['src/f.ts', 'src/g.ts'])).toEqual({ paths: ['src/f.ts', 'src/g.ts'], unnamed: false });
+    expect(writeReadingOf(edit.renameSymbol, { [at.renameSymbol.path]: 'src/f.ts' }, undefined)).toEqual({ paths: ['src/f.ts'], unnamed: true });
+    expect(writeReadingOf(edit.replaceInFile, { [at.replaceInFile.path]: 'a.md' }, undefined)).toEqual({ paths: ['a.md'], unnamed: false });
+    expect(writeReadingOf('write_file', { path: 'a.md' }, undefined)).toEqual({ paths: ['a.md'], unnamed: false });
+    expect(writeReadingOf('terminal', { command: 'ls' }, undefined)).toBeNull();
   });
 });
 

@@ -5,8 +5,8 @@
  * language servers index); `pnpm package` regenerates it and refuses on a diff; `pnpm check` tests it against
  * `apps/desktop/scripts/code-intelligence/pins.json` and REQ-MCP-015's counts. Not a configuration surface: never read
  * from disk at run time, never user-editable, never varying by workspace.
- * Generated 2026-10-07 from serena-agent 1.7.0 on Python 3.13.15: 24 tools listed by the server
- * under the shipped arguments (4051 ms to tools/list on the build machine), 52 names in the runtime's vocabulary.
+ * Generated 2026-10-13 from serena-agent 1.7.0 on Python 3.13.15: 24 tools listed by the server
+ * under the shipped arguments (2299 ms to tools/list on the build machine), 52 names in the runtime's vocabulary.
  */
 export const CODE_INTELLIGENCE_MANIFEST = {
   distribution: 'serena-agent',
@@ -38,8 +38,8 @@ export const CODE_INTELLIGENCE_MANIFEST = {
     memoryWrite: { memoryWriting: 'write_memory', memoryEditing: 'edit_memory' },
     onboard: { projectOnboarding: 'onboarding' },
   },
-  /** PD-ORCH-004 / REQ-ORCH-109: by edit capability, the argument naming the file its tool writes (for a cross-file one, the file or directory it is confined to), and the one asking for a preview that changes nothing. */
-  editArguments: { replaceSymbolBody: { path: 'relative_path' }, insertBeforeSymbol: { path: 'relative_path' }, insertAfterSymbol: { path: 'relative_path' }, renameSymbol: { path: 'relative_path' }, safeDeleteSymbol: { path: 'relative_path' }, replaceInFile: { path: 'relative_path' }, replaceAcrossFiles: { path: 'relative_path', preview: 'dry_run' } },
+  /** PD-ORCH-004 / REQ-ORCH-109: by edit capability, the argument naming the file its tool writes (for a cross-file one, the file or directory it is confined to), the one asking for a preview that changes nothing, and (OQ-245) where the files it changed are read from — the argument, or the files it can reach, observed. */
+  editArguments: { replaceSymbolBody: { path: 'relative_path', scope: 'argument' }, insertBeforeSymbol: { path: 'relative_path', scope: 'argument' }, insertAfterSymbol: { path: 'relative_path', scope: 'argument' }, renameSymbol: { path: 'relative_path', scope: 'reach', reach: 'project' }, safeDeleteSymbol: { path: 'relative_path', scope: 'argument' }, replaceInFile: { path: 'relative_path', scope: 'argument' }, replaceAcrossFiles: { path: 'relative_path', preview: 'dry_run', scope: 'reach', reach: 'path' } },
   /** REQ-MCP-015: never in a built-in grant. */
   neverGrant: { memoryDeletion: 'delete_memory', memoryRename: 'rename_memory', dashboardOpening: 'open_dashboard' },
   /** PD-MCP-001: descriptions written by the product, not reported by the runtime, by capability — each replaces the runtime's own description of the tool it names. */

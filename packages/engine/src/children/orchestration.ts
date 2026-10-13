@@ -1362,7 +1362,7 @@ export class IterationChildren implements DelegationOps {
         ...(resilience ? { resilience } : {}),
         ...(compression ? { compression } : {}),
         ...(deps.onRequestUsage ? { onRequestUsage: deps.onRequestUsage } : {}),
-        onToolCompleted: (call, result) => { stallWatch.toolCompleted(call.callId); progress.completed(deps.clocks.monotonic.now(), call.name, result.args, result.status === 'ok' && !result.isError); countCall(); },
+        onToolCompleted: (call, result) => { stallWatch.toolCompleted(call.callId); progress.completed(deps.clocks.monotonic.now(), call.name, result.args, result.status === 'ok' && !result.isError, { observedPaths: result.observedPaths, ran: result.interrupted === true && result.status !== 'blocked' }); countCall(); },
         onToolStarted: (call) => stallWatch.toolStarted(call.callId, call.name),
         onToolCounted: () => { attemptCounted += 1; },
         onModelEvent: (kind) => stallWatch.modelEvent(kind),
@@ -1539,7 +1539,7 @@ export class IterationChildren implements DelegationOps {
      * is itself a continuation, the offer. A child that was not making progress gets exactly REQ-ORCH-088's report.
      */
     const cutOff: CutOff | null = timedOut && !cancelled && progressing
-      ? cutOffReport({ taskId: row.task_id, limitS: childTimeoutMs / 1000, stallS: stallMs / 1000, changedPaths: progress.changedPaths(), isContinuation: row.continuation_of !== null })
+      ? cutOffReport({ taskId: row.task_id, limitS: childTimeoutMs / 1000, stallS: stallMs / 1000, changedPaths: progress.changedPaths(), unnamedBy: progress.unnamedBy(), isContinuation: row.continuation_of !== null })
       : null;
     /*
      * REQ-ORCH-133 (the repair of `cancelling-one-child-does-not-stop-it.md`): the summarising pass runs under this

@@ -1,7 +1,7 @@
 import { countNoun, millis, type Millis, type Timers } from '@rotaris/kernel';
 import { normaliseReportStatus, type ReportStatus } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
-import { codeIntelligenceEditPaths } from '@rotaris/config';
+import { codeIntelligenceEdit } from '@rotaris/config';
 import type { CutOff } from './cut-off.js';
 import { ranBeforeItWasCut } from '../run/interruption.js';
 
@@ -202,12 +202,17 @@ export function outcomeLine(outcome: Pick<ReportInput, 'status' | 'errors' | 'cu
  * the 5 timed-out children of the duress runs at c2fdd6a and c2a9444 got summaries that read as success.
  */
 export function reportFacts(messages: readonly ChatMessage[], outcome?: Pick<ReportInput, 'status' | 'errors' | 'cutOffStatement'>): string {
-  const edited = editedFilesFrom(messages);
+  const { edited, unnamedBy } = writesFrom(messages, []);
   const ran = commandsFrom(messages);
   const head = outcomeLine(outcome);
+  // OQ-245: a cross-file call the record holds no observation of is said, so the pass is never told "(none)" over it.
+  const unnamed = unnamedChangesSentence(unnamedBy);
+  const editedLine = unnamed === ''
+    ? `Edited files: ${edited.length > 0 ? edited.join(', ') : '(none)'}`
+    : `Edited files: ${edited.length > 0 ? `${edited.join(', ')}; and ` : ''}${unnamed}`;
   const lines = [
     ...(head === null ? [] : [head]),
-    `Edited files: ${edited.length > 0 ? edited.join(', ') : '(none)'}`,
+    editedLine,
     `Commands run: ${ran.length > 0 ? '' : '(none)'}`.trimEnd(),
     ...ran.map((c) => `- ${cut(c.command, EVENT_CAP)} → ${c.exit_code === null ? 'no exit code' : `exit code ${c.exit_code}`}`),
   ];
@@ -257,11 +262,41 @@ export function isNativeFileWritingTool(toolName: string): boolean {
  * (`docs/defects/fixed/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md`).
  */
 export function writtenPathsOf(toolName: string, args: Readonly<Record<string, unknown>> | null): readonly string[] | null {
+  return writeReadingOf(toolName, args, undefined)?.paths ?? null;
+}
+
+/**
+ * OQ-245 (XE1, ruled 2026-10-13 under R-072): what one call wrote, given what the run host observed it change. A native file
+ * tool and an EDIT-tier tool of `argument` scope wrote the path their arguments name. A cross-file EDIT call (a symbol
+ * rename, a cross-file replacement) wrote the files observed (`observed`, the result part's `observedPaths`); with no
+ * observation — the walk could not be completed, the call was cut off before the after-look, the run crashed, or the
+ * conversation predates the ruling — it wrote what its arguments name as a file (a rename's declaring file, never a
+ * directory) and possibly more: `unnamed` is set, and the report says the call may have changed files the record cannot name,
+ * never that it changed none. Null for a tool that writes no file.
+ *
+ * The reading it replaces, kept beside it: until the ruling a cross-file call was listed by its argument path alone, so a
+ * rename listed one file of thirty and a whole-project replacement none, and a child whose only writes were such calls read
+ * "Its file-writing calls changed no workspace paths."
+ * (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+ */
+export interface WriteReading {
+  readonly paths: readonly string[];
+  readonly unnamed: boolean;
+}
+export function writeReadingOf(toolName: string, args: Readonly<Record<string, unknown>> | null, observed: readonly string[] | undefined): WriteReading | null {
   if (isNativeFileWritingTool(toolName)) {
     const target = asText(args?.['path']) || asText(args?.['file_path']);
-    return target === '' ? [] : [target];
+    return { paths: target === '' ? [] : [target], unnamed: false };
   }
-  return codeIntelligenceEditPaths(toolName, args);
+  const edit = codeIntelligenceEdit(toolName, args);
+  if (edit === null) return null;
+  if (edit.reach === null) return { paths: edit.paths, unnamed: false };
+  return observed === undefined ? { paths: edit.paths, unnamed: true } : { paths: observed, unnamed: false };
+}
+
+/** OQ-245: the statement a report makes for the cross-file calls whose changes the record cannot name, by the names they were called. */
+export function unnamedChangesSentence(tools: readonly string[]): string {
+  return tools.length === 0 ? '' : `${tools.map((t) => `a ${t} call`).join(' and ')} may have changed files the record cannot name`;
 }
 
 /** Whether a call of `toolName` writes a file at a path its arguments name (`writtenPathsOf`). */
@@ -359,26 +394,55 @@ export function commandsFrom(messages: readonly ChatMessage[]): readonly { comma
  * too (`docs/../docs/a.md` stays its own spelling); and letter case, which a Windows workspace does not distinguish.
  */
 export function editedFilesFrom(messages: readonly ChatMessage[], reported: readonly string[] = []): readonly string[] {
+  return writesFrom(messages, reported).edited;
+}
+
+/**
+ * OQ-245: the tools, by the names they were called, whose cross-file calls the record answers as having run but holds no
+ * observation of — each may have changed files the record cannot name (`writeReadingOf`). A call answered as refused is not
+ * one: it never ran.
+ */
+export function unnamedChangesFrom(messages: readonly ChatMessage[]): readonly string[] {
+  return writesFrom(messages, []).unnamedBy;
+}
+
+/**
+ * `editedFilesFrom` and `unnamedChangesFrom` in one pass. OQ-245: a cross-file EDIT call's files are those its result part
+ * says the run host observed it change, listed whatever the call returned — a replacement that failed part-way had still
+ * written the files before the failure; a call answered as refused and observed to change nothing lists nothing.
+ */
+function writesFrom(messages: readonly ChatMessage[], reported: readonly string[]): { readonly edited: readonly string[]; readonly unnamedBy: readonly string[] } {
   const erred = new Set<string>();
-  for (const m of messages) if (m.role === 'tool') for (const p of m.content) if (p.kind === 'tool-result' && p.isError && !ranBeforeItWasCut(p.result)) erred.add(p.callId);
+  const observedOf = new Map<string, readonly string[]>();
+  for (const m of messages) {
+    if (m.role !== 'tool') continue;
+    for (const p of m.content) {
+      if (p.kind !== 'tool-result') continue;
+      if (p.isError && !ranBeforeItWasCut(p.result)) erred.add(p.callId);
+      if (p.observedPaths !== undefined) observedOf.set(p.callId, p.observedPaths);
+    }
+  }
   const out: string[] = [];
   const listed = new Set<string>();
   const refused = new Set<string>();
+  const unnamedBy: string[] = [];
   const add = (v: string): void => { const k = pathKey(v); if (k !== '' && !listed.has(k)) { listed.add(k); out.push(v); } };
   for (const m of messages) {
     if (m.role !== 'assistant') continue;
     for (const p of m.content) {
       if (p.kind !== 'tool-call') continue;
-      const paths = writtenPathsOf(p.name, jsonObject(p.args));
-      if (paths === null) continue;
-      for (const path of paths) {
-        if (erred.has(p.callId)) refused.add(pathKey(path));
-        else add(path);
-      }
+      const observed = observedOf.get(p.callId);
+      const reading = writeReadingOf(p.name, jsonObject(p.args), observed);
+      if (reading === null) continue;
+      // What was observed is what the call changed, whatever it returned (OQ-245).
+      if (observed !== undefined) { for (const path of reading.paths) add(path); continue; }
+      if (erred.has(p.callId)) { for (const path of reading.paths) refused.add(pathKey(path)); continue; }
+      for (const path of reading.paths) add(path);
+      if (reading.unnamed && !unnamedBy.includes(p.name)) unnamedBy.push(p.name);
     }
   }
   for (const r of reported) if (!refused.has(pathKey(r)) || listed.has(pathKey(r))) add(r);
-  return out;
+  return { edited: out, unnamedBy };
 }
 
 /** `editedFilesFrom`'s comparison key for a path: backslashes as `/`, runs of `/` as one, `./` segments dropped. */
@@ -396,13 +460,16 @@ function pathKey(v: string): string {
  * fields it fills are REQ-ORCH-108's, and it fills them from evidence rather than leaving them blank.
  */
 export function fallbackReport(input: ReportInput, why: string): ChildReport {
-  const edited = editedFilesFrom(input.messages);
+  const { edited, unnamedBy } = writesFrom(input.messages, []);
   const ran = commandsFrom(input.messages);
   const ended = (input.errors ?? []).map((e) => e.message).join('; ');
+  const unnamed = unnamedChangesSentence(unnamedBy);
   const derived = [
     ended ? `Ended: ${ended}.` : '',
     `${countNoun(input.toolCallCount, 'tool call')}; tools used: ${input.toolsUsed.join(', ') || '(none)'}.`,
     edited.length > 0 ? `Files touched: ${edited.join(', ')}.` : '',
+    // OQ-245: said, never left out, when a cross-file call's changes went unobserved.
+    unnamed === '' ? '' : `${unnamed.charAt(0).toUpperCase()}${unnamed.slice(1)}.`,
     ran.length > 0 ? `Commands run: ${ran.length}.` : '',
     `No summary was produced (${why}).`,
   ].filter((s) => s !== '').join(' ');

@@ -6,7 +6,8 @@ import { BUILT_IN_ROLE_NAMES } from '@rotaris/contracts';
 import { builtInDefaults } from '../defaults.js';
 import {
   CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS, CODE_INTELLIGENCE_HOME_SEGMENT, CODE_INTELLIGENCE_LANGUAGE_SERVER_STORE, CODE_INTELLIGENCE_LANGUAGE_SERVERS,
-  CODE_INTELLIGENCE_MANIFEST, CODE_INTELLIGENCE_MEMORY_GATE, CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceEditPaths, codeIntelligenceLanguageServerStore,
+  CODE_INTELLIGENCE_MANIFEST, CODE_INTELLIGENCE_MEMORY_GATE, CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceEdit,
+  codeIntelligenceEditPaths, codeIntelligenceLanguageServerStore,
   deriveSetupInvocation, grantForTiers, hasIndexableExtension, memoriesBlockApplies, neverGrantNames, PROJECT_MEMORIES_BLOCK, tierNames,
 } from './code-intelligence.js';
 import { CODE_INTELLIGENCE_TOKEN, resolveCommand } from './commands.js';
@@ -125,11 +126,32 @@ describe('the paths an EDIT-tier call writes (PD-ORCH-004, REQ-MCP-015, REQ-ORCH
 
   it('reads each edit tool\'s path from the argument the manifest names, under its own name, the collision prefix or another casing', () => {
     for (const [capability, name] of Object.entries(edit)) {
+      if (capability === 'replaceAcrossFiles') continue; // its path may be a directory: never listed (OQ-245, below)
       const at = (args as Record<string, { path: string }>)[capability]!.path;
       expect(codeIntelligenceEditPaths(name, { [at]: 'docs/verification.md' })).toEqual(['docs/verification.md']);
       expect(codeIntelligenceEditPaths(`code_intelligence_${name}`, { [at]: 'src/a.ts' })).toEqual(['src/a.ts']);
       expect(codeIntelligenceEditPaths(name.toUpperCase(), { [at]: 'src/b.ts' })).toEqual(['src/b.ts']);
     }
+  });
+
+  it('OQ-245: every capability names its scope; the rename and the cross-file replacement reach beyond their path argument, the rest write it', () => {
+    const scopes = Object.fromEntries(Object.entries(args).map(([cap, a]) => [cap, (a as { scope: string; reach?: string }).scope + ((a as { reach?: string }).reach ? `:${(a as { reach: string }).reach}` : '')]));
+    expect(scopes).toEqual({
+      replaceSymbolBody: 'argument', insertBeforeSymbol: 'argument', insertAfterSymbol: 'argument', safeDeleteSymbol: 'argument', replaceInFile: 'argument',
+      renameSymbol: 'reach:project', replaceAcrossFiles: 'reach:path',
+    });
+    // An argument-scope call reaches nothing beyond its file.
+    expect(codeIntelligenceEdit(edit.replaceInFile, { relative_path: 'src/a.ts' })).toEqual({ paths: ['src/a.ts'], reach: null });
+    expect(codeIntelligenceEdit(edit.safeDeleteSymbol, { relative_path: 'src/a.ts' })).toEqual({ paths: ['src/a.ts'], reach: null });
+    // A rename reaches the whole project; what it names without looking is the declaring file.
+    expect(codeIntelligenceEdit(edit.renameSymbol, { relative_path: 'src/a.ts', name_path: 'f', new_name: 'g' })).toEqual({ paths: ['src/a.ts'], reach: { base: '' } });
+    expect(codeIntelligenceEdit(`code_intelligence_${edit.renameSymbol}`, { relative_path: 'src/a.ts' })?.reach).toEqual({ base: '' });
+    // A cross-file replacement reaches its path, a file or a directory, or the whole project; it names no file without looking.
+    expect(codeIntelligenceEdit(edit.replaceAcrossFiles, { relative_path: 'src', needle: 'a', repl: 'b' })).toEqual({ paths: [], reach: { base: 'src' } });
+    expect(codeIntelligenceEdit(edit.replaceAcrossFiles, { needle: 'a', repl: 'b' })).toEqual({ paths: [], reach: { base: '' } });
+    // A preview reaches nothing and names nothing.
+    expect(codeIntelligenceEdit(edit.replaceAcrossFiles, { relative_path: 'src', [args.replaceAcrossFiles.preview]: true })).toEqual({ paths: [], reach: null });
+    expect(codeIntelligenceEdit('write_file', { path: 'a' })).toBeNull();
   });
 
   it('is null for every tool outside the edit tier, the native file tools among them', () => {
@@ -141,7 +163,8 @@ describe('the paths an EDIT-tier call writes (PD-ORCH-004, REQ-MCP-015, REQ-ORCH
   it('a preview changes nothing, and a call naming no path lists none', () => {
     const across = edit.replaceAcrossFiles;
     expect(codeIntelligenceEditPaths(across, { relative_path: 'src', [args.replaceAcrossFiles.preview]: true })).toEqual([]);
-    expect(codeIntelligenceEditPaths(across, { relative_path: 'src', [args.replaceAcrossFiles.preview]: false })).toEqual(['src']);
+    // OQ-245: a cross-file replacement's path may be a directory, so it is never listed as an edited file (it was until 2026-10-13).
+    expect(codeIntelligenceEditPaths(across, { relative_path: 'src', [args.replaceAcrossFiles.preview]: false })).toEqual([]);
     expect(codeIntelligenceEditPaths(across, { needle: 'a', repl: 'b' })).toEqual([]);
     expect(codeIntelligenceEditPaths(edit.replaceInFile, { relative_path: 7 })).toEqual([]);
     expect(codeIntelligenceEditPaths(edit.replaceInFile, null)).toEqual([]);

@@ -234,7 +234,11 @@ generator also writes the product's own descriptions for named capabilities (`pr
 `manifest.mjs` and checked only to name a capability of the tiers. Since fin32 (PD-ORCH-004, the a68f121 duress run's D1)
 it also writes `editArguments`: for each EDIT-tier capability, the argument naming the file its tool writes and, where it
 has one, the preview argument, checked against the input schema the server lists; `codeIntelligenceEditPaths` reads it,
-and `engine`'s child report and cut-off (an edge `engine → config` it already had) read the paths through it. `config/src/mcp/code-intelligence.ts`
+and `engine`'s child report and cut-off (an edge `engine → config` it already had) read the paths through it. Since fin35
+(OQ-245) each entry carries a `scope` — `argument`, or `reach` with what it reaches (`project` for a rename, `path` for a
+cross-file replacement), validated by generation — and `codeIntelligenceEdit` returns the reach the run host observes:
+`agent-tools`' `observe.ts` (`snapshotTree`, `snapshotChanges`, `WriteJournal`, `observeReach`, over `config`'s gitignore
+reader, an edge it already had) and the run host's `mcp.ts` executor around a reach call. `config/src/mcp/code-intelligence.ts`
 is the typed reader every consumer goes through (a test greps the tree for a runtime tool name anywhere else).
 **Edges unchanged**: `config` still imports nothing new; `mcp` gains `setup.ts` (REQ-MCP-099's step runner over
 `platform`'s spawn helper and the clock ports); the run host's `mcp.ts` reads `agent-tools`' gitignore reader for the

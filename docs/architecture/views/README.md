@@ -45,6 +45,17 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-13**
 
+**A cross-file code-intelligence EDIT call lists every file it changed (OQ-245, XE1 ruled under R-072; PD-ORCH-004,
+REQ-ORCH-108, REQ-ORCH-109; fin35).** The manifest's `editArguments` carry a `scope` (`argument`, or `reach` with `project` or
+`path`); `codeIntelligenceEdit` (`config/src/mcp/code-intelligence.ts`) returns a reach call's base; the run host's MCP
+executor runs such a call inside `observeReach` (`agent-tools/src/tools/observe.ts`), which snapshots what it can reach before
+and after and leaves out what the `McpHost.writes` journal says other agents' native writes touched meanwhile (`tools.ts`
+notes each); the result carries `observedPaths` through `Observation`, `PortToolResult` and the tool-result part, which the
+model client never sends; `writeReadingOf` (`engine/src/children/report.ts`) and `ProgressLog` read it, and a call with none
+is said ("may have changed files the record cannot name"). The **component view**'s manifest paragraph, the **runtime
+view**'s cut-off and report-facts passages and the **state ownership view**'s progress-log row say so. No package, edge,
+process, channel, command or store column changed; a tool-result part gained an optional field.
+
 **Every call its run cancels reads `interrupted` and files no issue (PD-TOOLS-013 revision 2; OQ-238, GC1, fin34).** The
 gate's catch, fetch's `transportFailure` and the MCP executor's catch record a call the run's signal cut off with failure kind
 `interrupted`, each after its own deadline or allowance test, and REQ-SESSION-139's histogram derives such a record with no

@@ -12338,7 +12338,7 @@ fin32 made the EDIT tier's calls file-writing calls and reads the path each chan
 listed by the declaring file alone, a whole-project cross-file replacement by nothing, and a directory-scoped one by the
 directory. A child whose only writes are such calls is told to its parent as having changed no workspace paths, and the pass's
 facts read "Edited files: (none)" — D1's falsehood for the two tools a refactorer exists to use. Recorded as
-[`a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md`](../defects/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+[`a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md`](../defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
 
 **What the build proceeds under.** fin32's literal reading: the argument path, none for a whole-project replacement.
 
@@ -12368,6 +12368,11 @@ is stated: a sibling's terminal write in the window can still be listed under th
 policy prefer overstating to concealing. **Rejected:** confirming the literal reading (a known false "changed no workspace
 paths" and a directory listed as a file); parsing the server's text (cannot name a rename's files, hides a partial failure,
 couples the product to unpinned prose); deferral (a refactorer's rename is ordinary first-release use).
+**Built 2026-10-13 (fin35):** the manifest's `scope`, `codeIntelligenceEdit`, `observeReach` and `WriteJournal`
+(`packages/agent-tools/src/tools/observe.ts`) around the MCP executor, and `writeReadingOf` in the report and the cut-off;
+pinned by cases in five test files, red on the code before, and `pnpm code-intel-proof`'s ninth launch (`child-across`, red on
+the unrepaired build with `[]`, green with both files). The report-back is in `PD-ORCH-004`; the note is
+[fixed](../defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
 
 <a id="oq-246"></a>
 

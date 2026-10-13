@@ -1,7 +1,7 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { millis, type Millis } from '@rotaris/kernel';
 import type { ChildRow } from '@rotaris/store';
-import { writtenPathsOf } from './report.js';
+import { unnamedChangesSentence, writeReadingOf } from './report.js';
 
 /**
  * PD-ORCH-004 — a child cut off while making progress hands its work back to the parent. REQ-ORCH-088's expiry path
@@ -93,6 +93,7 @@ export function workspacePath(root: string, raw: string): string | null {
 export class ProgressLog {
   private lastCompletedAt: Millis | null = null;
   private readonly changed: string[] = [];
+  private readonly unnamed: string[] = [];
 
   constructor(private readonly workspaceRoot: string) {}
 
@@ -107,14 +108,25 @@ export class ProgressLog {
    * The reason the EDIT tier was not read, kept beside its replacement: the three native tools were the whole list,
    * and the a68f121 duress run's tester continuation, which edited one document 11 times through the tier, was
    * reported as having changed no workspace paths (finding D1).
+   *
+   * OQ-245 (XE1, ruled 2026-10-13 under R-072): a cross-file EDIT call (a symbol rename, a cross-file replacement) changed
+   * the files the run host observed it change (`seen.observedPaths`), listed whether it returned `ok` or not, since a
+   * replacement that failed part-way had written what it wrote. With no observation, a call that ran — returned `ok`, or was
+   * cut off while under way (`seen.ran`) — lists what its arguments name as a file and is remembered by name
+   * (`unnamedBy`), so the report says it may have changed files the record cannot name and never that the child changed
+   * none. The reason, kept beside it: until the ruling such a call listed its argument path alone, and a whole-project
+   * replacement nothing (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
    */
-  completed(at: Millis, toolName: string, args: Readonly<Record<string, unknown>>, ok: boolean): void {
+  completed(at: Millis, toolName: string, args: Readonly<Record<string, unknown>>, ok: boolean, seen: { readonly observedPaths?: readonly string[] | undefined; readonly ran?: boolean | undefined } = {}): void {
     this.lastCompletedAt = at;
-    if (!ok) return;
-    for (const target of writtenPathsOf(toolName, args) ?? []) {
+    const reading = writeReadingOf(toolName, args, seen.observedPaths);
+    if (reading === null) return;
+    if (seen.observedPaths === undefined && !ok && seen.ran !== true) return;
+    for (const target of reading.paths) {
       const path = workspacePath(this.workspaceRoot, target);
       if (path !== null && !this.changed.includes(path)) this.changed.push(path);
     }
+    if (reading.unnamed && !this.unnamed.includes(toolName)) this.unnamed.push(toolName);
   }
 
   /**
@@ -130,6 +142,11 @@ export class ProgressLog {
   changedPaths(): readonly string[] {
     return [...this.changed];
   }
+
+  /** OQ-245: the tools, by the names called, whose cross-file calls ran with no observation of what they changed. */
+  unnamedBy(): readonly string[] {
+    return [...this.unnamed];
+  }
 }
 
 /** The three additions, as the failed record's report carries them (the `cut_off` field). */
@@ -144,14 +161,17 @@ export interface CutOff {
   readonly continuation_offer: string | null;
 }
 
-export function cutOffReport(input: { readonly taskId: string; readonly limitS: number; readonly stallS: number; readonly changedPaths: readonly string[]; readonly isContinuation: boolean }): CutOff {
+export function cutOffReport(input: { readonly taskId: string; readonly limitS: number; readonly stallS: number; readonly changedPaths: readonly string[]; readonly isContinuation: boolean; readonly unnamedBy?: readonly string[] }): CutOff {
   const { taskId, limitS, stallS, changedPaths, isContinuation } = input;
+  // OQ-245: a cross-file call whose changes went unobserved is said, and the "changed no workspace paths" sentence is then never written.
+  const unnamed = unnamedChangesSentence(input.unnamedBy ?? []);
+  const listed = `Workspace paths its file-writing calls changed, in the order first changed: ${changedPaths.join(', ')}.`;
   return {
     statement: `Cut off while making progress: this child completed a tool call within the final ${stallS}s before its ${limitS}s limit expired.`,
     changed_paths: [...changedPaths],
-    changes: changedPaths.length > 0
-      ? `Workspace paths its file-writing calls changed, in the order first changed: ${changedPaths.join(', ')}.`
-      : 'Its file-writing calls changed no workspace paths.',
+    changes: unnamed !== ''
+      ? (changedPaths.length > 0 ? `${listed} Beyond these, ${unnamed}.` : `The record names no workspace path its file-writing calls changed, but ${unnamed}.`)
+      : changedPaths.length > 0 ? listed : 'Its file-writing calls changed no workspace paths.',
     continuation_offer: isContinuation
       ? null
       // OQ-114 as ruled (R-071, PD-ORCH-004 revision 5): the parent is told the continuation starts with no memory, since

@@ -52,6 +52,11 @@ export interface PortToolResult {
    * reported the rest interrupted it. The turn records it as interrupted and never re-run.
    */
   readonly interrupted?: boolean;
+  /**
+   * OQ-245: the files the run host observed a cross-file code-intelligence EDIT call change, whatever it returned — carried
+   * onto the call's tool-result part for the report's edited files, never to the model. Absent when nothing was observed.
+   */
+  readonly observedPaths?: readonly string[];
 }
 export interface ModeChange {
   readonly requested: PermissionPreset;
@@ -211,7 +216,7 @@ export interface TurnDeps {
   readonly runOverrideLayer?: string | undefined;
 }
 
-type ToolResultPart = { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean };
+type ToolResultPart = { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean; observedPaths?: readonly string[] };
 
 export interface SteeringPrompt {
   readonly id: string;
@@ -463,12 +468,15 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
         // REQ-CHAT-050: the user-only edit-diff row directly beneath the tool row that produced it.
         if (r.diff !== undefined && r.status === 'ok') writer.appendRow('diff', r.diff, true, { persona: deps.persona, name: deps.agentName, callKey: c.callId, diff: r.diff });
       }
+      // OQ-245: what the run host observed the call change rides on its result part, persisted with the conversation and
+      // read by the report; the model client sends a part's result alone (`ai-sdk-client.ts`), so the model never sees it.
+      const observed = r.observedPaths === undefined ? {} : { observedPaths: r.observedPaths };
       if (interrupted) {
         cut = true;
         // Clause 3: "recorded as interrupted, with whatever output it had produced"; a withdrawn call (`blocked`) never ran.
-        results.push({ kind: 'tool-result', callId: c.callId, name: c.name, result: interruptedResult(cause(), r.status !== 'blocked', r.text), isError: true });
+        results.push({ kind: 'tool-result', callId: c.callId, name: c.name, result: interruptedResult(cause(), r.status !== 'blocked', r.text), isError: true, ...observed });
       } else {
-        results.push({ kind: 'tool-result', callId: c.callId, name: c.name, result: r.text, isError: r.isError });
+        results.push({ kind: 'tool-result', callId: c.callId, name: c.name, result: r.text, isError: r.isError, ...observed });
       }
       if (r.followUp !== undefined && r.followUp !== '') followUps.push(r.followUp);
     }

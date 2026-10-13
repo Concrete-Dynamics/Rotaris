@@ -2306,6 +2306,36 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > **Not measured:** a live run since the repair. The note is
 > [`fixed/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md`](../defects/fixed/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md);
 > the row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **The literal reading for cross-file EDIT calls falsified, 2026-10-13, and its replacement, built by fin35 (ruled as
+> [OQ-245](../architecture/open-questions.md#oq-245) under [R-072](requests.md#r-072), XE1):** the reading taken above, "a
+> cross-file EDIT capability is listed by the one file or directory its arguments confine it to", is kept as written. It is
+> false against this directive's own words — the paths the calls "changed" — and against REQ-ORCH-109: a rename lists one
+> file of the many it rewrites, a whole-project replacement none, a directory-scoped one the directory, so a child whose only
+> writes are such calls is told to its parent as having "changed no workspace paths" and the pass's facts read "Edited files:
+> (none)". The pinned runtime's results cannot fill it: a rename returns a count and no file, and a cross-file replacement
+> names its files only when it succeeds, writing them one at a time, so a failure part-way leaves files written under an
+> error result. **The replacement:** each EDIT capability's manifest entry carries a `scope` — `argument` for the five
+> single-file tools and the safe delete (which refuses while references exist), `reach` for the rename (the project) and the
+> cross-file replacement (its path, or the project) — checked by generation; the run host observes the files a `reach` call
+> that is not a preview can reach, before and after it, whatever it returned, leaving out what another agent's native file
+> writes touched meanwhile, and carries what changed on the call's result for the report alone (`observeReach`,
+> `packages/agent-tools/src/tools/observe.ts`; the MCP executor in `apps/desktop/src/run-host/mcp.ts`); `writeReadingOf`
+> (`packages/engine/src/children/report.ts`) lists it — an erred call observed to write included — for the changed paths,
+> `edited_files`, the facts and the fallback; and where no observation was completed it lists the argument's file (a
+> rename's declaring file, never a directory) and says "a <tool> call may have changed files the record cannot name", never
+> "changed no workspace paths". **The bound, stated:** a sibling's terminal write landing inside the window is listed under
+> the observing child, since the terminal is outside every count (PD-TOOLS-006); REQ-ORCH-109 prefers overstating to
+> concealing. The observation's cost is a walk of the reachable tree, twice per call. **What was measured:**
+> `config`'s `code-intelligence.test.ts` (the scopes), `agent-tools`' `observe.test.ts` (a change, a creation, a removal, an
+> unchanged size and modification time, the ignored directories, a partial failure, a sibling's write subtracted, an
+> unobservable tree), `report.test.ts` and `cut-off.test.ts` (a rename across three files, a whole-project and a
+> directory-scoped replacement, a partial failure, a preview, an unobserved call, a refused one) and the run host's
+> `mcp.test.ts` (a fake server whose replacement writes two files and then errs), each red on the code before;
+> `pnpm code-intel-proof`'s ninth launch (`child-across`) — see the row. **Not measured:** a rename through the built app,
+> which needs the TypeScript language server provisioned (IC-7); a live run. The note is
+> [`fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md`](../defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md);
+> the row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 ---
 
 <a id="pd-monitor-002"></a>

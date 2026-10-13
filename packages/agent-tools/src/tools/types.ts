@@ -21,6 +21,12 @@ export interface Observation {
   /** A one-line rendering of the call for the tool row's header (`▸ toolname args`). */
   readonly label?: string;
   /**
+   * OQ-245: for a cross-file code-intelligence EDIT call, the root-relative files the run host observed it change (`observe.ts`),
+   * whatever the call returned — for the report's edited files only, never for the model. Absent when the call reaches no
+   * further than its arguments, or when the observation could not be completed.
+   */
+  readonly observedPaths?: readonly string[];
+  /**
    * PD-ORCH-005 clause 9: the call waited on a person and the run's rest withdrew it (`ask_questions`), naming the
    * interruption. The gate records the withdrawal and settles the call as never run.
    */

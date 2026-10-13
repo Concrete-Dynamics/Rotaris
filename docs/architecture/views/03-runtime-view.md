@@ -790,7 +790,13 @@ the workspace paths its own file-writing calls changed with `ok` — `write_file
 code-intelligence EDIT tier of REQ-MCP-015, each call's path read by the one `writtenPathsOf` (`children/report.ts`) the
 report's edited files share, an EDIT-tier tool's from the argument the binding manifest's `editArguments` names (the name
 matched in lower case, as the gate's fallback dispatches it; resolved lexically against the root; both attempts, in the
-order first changed, each once; the terminal outside, as PD-TOOLS-006 has it), and — unless the child is itself a continuation — the offer naming `continuation_of`, which since 2026-10-06 also tells
+order first changed, each once; the terminal outside, as PD-TOOLS-006 has it) — and, since fin35 (OQ-245), a cross-file
+EDIT call (a rename, a cross-file replacement: `scope: 'reach'`) by the files the run host observed it change, whatever it
+returned (`observeReach` around the MCP executor in `run-host/mcp.ts`: a snapshot of what the call can reach before and
+after, less what another agent's native writes noted in the run host's `WriteJournal` meanwhile, carried as `observedPaths`
+on the `PortToolResult` and the tool-result part, persisted with the conversation and never sent to a model); with no
+observation, its argument file and "a <tool> call may have changed files the record cannot name", never "changed no
+workspace paths", and — unless the child is itself a continuation — the offer naming `continuation_of`, which since 2026-10-06 also tells
 the parent that a continuation starts with no memory, so it writes a complete brief (`PD-ORCH-004` revision 5, OQ-114; and
 `delegate`'s description says the same). The report block and
 `background_output` render it after the result text; nothing resumes the child. See §4 for the continuation.
@@ -1020,7 +1026,9 @@ which reads the task as given (the ledger row's, the payload's blocks ahead of i
 part of the transcript within 12,000 characters, the omission marked between them, beside the report's deterministic
 facts — edited files (a write the record answers as refused, or cut before it started, is not one; a write cut off
 while under way is; since fin32 a code-intelligence EDIT-tier call is a write, its path read from the argument the binding
-manifest's `editArguments` names — `writtenPathsOf`, PD-ORCH-004), commands and exit codes (OQ-111; OQ-120 asks the facts' bound). The task is kept whole within the
+manifest's `editArguments` names — `writtenPathsOf`, PD-ORCH-004; since fin35 a cross-file one's files are those its result
+part's `observedPaths` names, listed whatever it returned, and one with none is said in the Edited files line rather than
+"(none)" — `writeReadingOf`, OQ-245), commands and exit codes (OQ-111; OQ-120 asks the facts' bound). The task is kept whole within the
 12,000, exempt from the 2,000 per event every other event keeps (OQ-119 as ruled, `PD-ORCH-007`). For a child the runner
 settled other than `succeeded`, the facts open with an **Outcome line** — "Outcome of this agent, not of the session:" (since
 fin32, the a68f121 duress run's D9), the status, the end reasons the run recorded and, for a child cut off while making

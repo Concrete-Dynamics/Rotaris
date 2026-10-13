@@ -76,16 +76,29 @@ const NEVER_GRANT = { memoryDeletion: 'delete_memory', memoryRename: 'rename_mem
  * confined to — and, where the tool has one, the argument that asks for a preview and changes nothing (`preview`). The
  * run reads them to list the workspace paths a child's edit-tier calls changed. Checked against the input schema the
  * server lists for the tool, so a renamed argument fails generation rather than a report.
+ *
+ * OQ-245 (XE1, ruled 2026-10-13 under R-072): each capability's `scope` says where the files it changed are read from.
+ * `argument` — the file its path argument names, which is all it writes: the five single-file tools, and the safe delete,
+ * which refuses while references exist and so only ever touches its declaring file. `reach` — the files the call can
+ * reach, observed by the run host before and after the call, because its arguments name fewer than it changes: `reach`
+ * says what it can reach — `project`, the whole project (a symbol rename rewrites every reference; its path argument names
+ * the declaring file, a file), or `path`, the file or directory its path argument names and the whole project when that is
+ * empty (a cross-file replacement; its path argument may be a directory, so it is never listed as an edited file). The
+ * reading it replaces, kept beside it: until the ruling every capability was listed by its path argument alone, so a
+ * rename listed its declaring file and a whole-project replacement nothing
+ * (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
  */
 const EDIT_ARGUMENTS = {
-  replaceSymbolBody: { path: 'relative_path' },
-  insertBeforeSymbol: { path: 'relative_path' },
-  insertAfterSymbol: { path: 'relative_path' },
-  renameSymbol: { path: 'relative_path' },
-  safeDeleteSymbol: { path: 'relative_path' },
-  replaceInFile: { path: 'relative_path' },
-  replaceAcrossFiles: { path: 'relative_path', preview: 'dry_run' },
+  replaceSymbolBody: { path: 'relative_path', scope: 'argument' },
+  insertBeforeSymbol: { path: 'relative_path', scope: 'argument' },
+  insertAfterSymbol: { path: 'relative_path', scope: 'argument' },
+  renameSymbol: { path: 'relative_path', scope: 'reach', reach: 'project' },
+  safeDeleteSymbol: { path: 'relative_path', scope: 'argument' },
+  replaceInFile: { path: 'relative_path', scope: 'argument' },
+  replaceAcrossFiles: { path: 'relative_path', preview: 'dry_run', scope: 'reach', reach: 'path' },
 };
+/** The roles of an `EDIT_ARGUMENTS` entry that name an argument of the tool's input schema; `scope` and `reach` do not. */
+const ARGUMENT_ROLES = ['path', 'preview'];
 /**
  * PD-MCP-001 (OQ-115, ruled by the owner under R-071): descriptions WRITTEN BY THE PRODUCT, by capability, that replace
  * the runtime's own for the tool the capability names wherever the product hands that description to a model. Not the
@@ -244,7 +257,15 @@ for (const [cap, args] of Object.entries(EDIT_ARGUMENTS)) {
   const name = CAPABILITIES.edit[cap];
   if (name === undefined) fail(`an edit argument names '${cap}', which is no capability of the edit tier`);
   const properties = server.schemas[name]?.properties ?? {};
-  for (const [role, arg] of Object.entries(args)) if (!Object.prototype.hasOwnProperty.call(properties, arg)) fail(`edit tier: '${name}' (${cap}) lists no '${arg}' argument for its ${role} — an upstream rename? (PD-ORCH-004)`);
+  for (const role of ARGUMENT_ROLES) {
+    const arg = args[role];
+    if (arg !== undefined && !Object.prototype.hasOwnProperty.call(properties, arg)) fail(`edit tier: '${name}' (${cap}) lists no '${arg}' argument for its ${role} — an upstream rename? (PD-ORCH-004)`);
+  }
+  // OQ-245: every capability says where its changed files are read from, and a reach says what it reaches.
+  for (const key of Object.keys(args)) if (![...ARGUMENT_ROLES, 'scope', 'reach'].includes(key)) fail(`edit tier: '${cap}' carries an unknown key '${key}' (OQ-245)`);
+  if (args.scope !== 'argument' && args.scope !== 'reach') fail(`edit tier: '${cap}' has scope '${args.scope}', not 'argument' or 'reach' (OQ-245)`);
+  if (args.scope === 'reach' && args.reach !== 'project' && args.reach !== 'path') fail(`edit tier: '${cap}' has reach scope and reaches '${args.reach}', not 'project' or 'path' (OQ-245)`);
+  if (args.scope === 'argument' && args.reach !== undefined) fail(`edit tier: '${cap}' has argument scope and names a reach (OQ-245)`);
 }
 for (const [cap, text] of Object.entries(PRODUCT_DESCRIPTIONS)) {
   if (!Object.values(CAPABILITIES).some((map) => Object.prototype.hasOwnProperty.call(map, cap))) fail(`a product description names '${cap}', which is no capability of the tiers (PD-MCP-001)`);
@@ -291,7 +312,7 @@ const lines = [
   '  tiers: {',
   ...Object.entries(CAPABILITIES).map(([tier, map]) => `    ${tier}: { ${Object.entries(map).map(([cap, name]) => `${cap}: ${q(name)}`).join(', ')} },`),
   '  },',
-  '  /** PD-ORCH-004 / REQ-ORCH-109: by edit capability, the argument naming the file its tool writes (for a cross-file one, the file or directory it is confined to), and the one asking for a preview that changes nothing. */',
+  '  /** PD-ORCH-004 / REQ-ORCH-109: by edit capability, the argument naming the file its tool writes (for a cross-file one, the file or directory it is confined to), the one asking for a preview that changes nothing, and (OQ-245) where the files it changed are read from — the argument, or the files it can reach, observed. */',
   `  editArguments: { ${Object.entries(EDIT_ARGUMENTS).map(([cap, a]) => `${cap}: { ${Object.entries(a).map(([k, v]) => `${k}: ${q(v)}`).join(', ')} }`).join(', ')} },`,
   '  /** REQ-MCP-015: never in a built-in grant. */',
   `  neverGrant: { ${Object.entries(NEVER_GRANT).map(([cap, name]) => `${cap}: ${q(name)}`).join(', ')} },`,

@@ -1,12 +1,12 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { toIsoUtc, type Clocks } from '@rotaris/kernel';
 import { presetRank, resolvePreset, restrictionsAllow, TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
   askQuestionsTool, buildPolicy, directWorkBundle, grantsOn, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
   resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type DelegateCatalogue, type GateSink, type PolicyRead, type Prerequisites, type PresenterPort, type ResolvedToolSet, type ToolExecutor,
 } from '@rotaris/agent-tools';
-import { BUILT_IN_PERSONAS, EMPTY_MCP_EVIDENCE, ROLE_ALIASES, toolRestrictionsFor, type AgentGrant, type ModeChange, type Persona, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
+import { BUILT_IN_PERSONAS, EMPTY_MCP_EVIDENCE, isNativeFileWritingTool, ROLE_ALIASES, toolRestrictionsFor, type AgentGrant, type ModeChange, type Persona, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import { CODE_INTELLIGENCE_MEMORY_GATE } from '@rotaris/config';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
 import { configurationForExecutionRoot, grantEvidence, type McpHost } from './mcp.js';
@@ -583,8 +583,14 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     dispatch: async (call: PortToolCall, signal): Promise<PortToolResult> => {
       const r = await gate.dispatch({ callId: call.callId, name: call.name, rawArgs: call.rawArgs, persona: call.persona, agentId: call.agentId, agentName: call.agentName }, signal);
       const status: Exclude<ToolStatus, 'running'> = r.status;
+      // OQ-245: a native write that landed is noted, so a cross-file EDIT call observed meanwhile by another agent leaves it out.
+      if (status === 'ok' && isNativeFileWritingTool(call.name)) {
+        const target = r.args['path'] ?? r.args['file_path'];
+        if (typeof target === 'string' && target !== '') deps.mcp?.writes?.note(call.agentName, [resolve(root, target)]);
+      }
       return {
         text: r.text, isError: r.isError, status, durationMs: r.durationMs, label: r.label, args: r.args,
+        ...(r.observation?.observedPaths === undefined ? {} : { observedPaths: r.observation.observedPaths }),
         ...(r.interrupted === true ? { interrupted: true } : {}),
         ...(r.observation?.diff === undefined ? {} : { diff: r.observation.diff }),
         ...(r.status === 'blocked' ? { blockedReason: r.blockedReason ?? r.decision?.reason ?? '' } : {}),

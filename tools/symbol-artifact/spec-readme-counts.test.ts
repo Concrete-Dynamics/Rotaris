@@ -15,10 +15,10 @@ const readme = readFileSync(join(import.meta.dirname, '..', '..', 'docs', 'spec'
 interface Row { readonly prefix: string; readonly reqs: number; readonly withdrawn: number; readonly retired: boolean }
 
 const rows: Row[] = [...readme.matchAll(/^\| \d\d \| \[[^\]]+\]\([^)]+\) \| `REQ-([A-Z]+)` \| (\d+) \| (\d+) \| ([^|]+)\|$/gm)].map((m) => ({
-  prefix: m[1],
+  prefix: m[1] ?? '',
   reqs: Number(m[2]),
   withdrawn: Number(m[3]),
-  retired: m[4].includes('retired'),
+  retired: (m[4] ?? '').includes('retired'),
 }));
 
 const corpus = new Map<string, { reqs: number; withdrawn: number }>();
@@ -32,8 +32,8 @@ for (const sym of Object.values(REQ)) {
 const sum = (xs: readonly Row[], key: 'reqs' | 'withdrawn'): number => xs.reduce((n, r) => n + r[key], 0);
 const figures = (): number[] => {
   const line = /^- Requirements: ([\s\S]*?)\n {2}Every figure here counts identifiers/m.exec(readme);
-  if (!line) throw new Error('docs/spec/README.md has no "- Requirements:" status line');
-  return [...line[1].matchAll(/\*\*([\d,]+)\*\*/g)].map((m) => Number(m[1].replace(/,/g, '')));
+  if (!line?.[1]) throw new Error('docs/spec/README.md has no "- Requirements:" status line');
+  return [...line[1].matchAll(/\*\*([\d,]+)\*\*/g)].map((m) => Number((m[1] ?? '').replace(/,/g, '')));
 };
 
 describe('docs/spec/README.md counts what the corpus defines', () => {

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
 import { checkFence, realPathOf, type FenceConfig } from './fence.js';
 import { diffChanges as lineChangesOf, renderDiff, shortestEdit } from './diff.js';
-import { FileToolState, haetEditTool, haetReadTool, matchEdit, readFileTool, sha256, writeFileTool } from './files.js';
+import { crlfLines, FileToolState, haetEditTool, haetReadTool, matchEdit, readFileTool, sha256, writeFileTool } from './files.js';
 import { CODE_INTELLIGENCE_MARKER_SEGMENTS } from '@rotaris/config';
 import { globToRegExp, globTool, grepTool, IGNORE_COMPONENTS, parseGitignore, ignoredBy } from './search.js';
 import { TodoList, todoTool } from './todo.js';
@@ -897,6 +897,29 @@ describe('PD-TOOLS-017: an exact or replace-all edit keeps a CRLF file\'s line e
     await prepare('v.txt', 'a\nb');
     expect((await edit('v.txt', 'b', 'B\nC')).text).not.toContain(CRLF);
     expect(read('v.txt')).toBe('a\nB\nC');
+  });
+
+  it('the test reads only the lines it is asked about, so a replace_all over a long file stays linear', async () => {
+    // Review of fin38: crlfLines walked every line of the file for each occurrence, so carrying a replace_all grew with the square
+    // of the file's length (about 3 s for 50,000 lines with a token on each). The array's property reads, its length's
+    // included (the old walk read it once a line), are the deterministic measure.
+    const lines = Array.from({ length: 10_000 }, (_, i) => `line ${i}\r`).concat(['tail']);
+    let reads = 0;
+    const counted = new Proxy(lines, { get: (t, k, r) => { reads += 1; return Reflect.get(t, k, r); } });
+    expect(crlfLines(counted, 5_000, 5_001)).toBe(true);
+    expect(reads).toBeLessThanOrEqual(4);
+    // The unterminated last element reads the file's other lines, once for every occurrence that shares a memo.
+    reads = 0;
+    const memo = {};
+    expect(crlfLines(counted, 10_000, 10_000, memo)).toBe(true);
+    expect(crlfLines(counted, 10_000, 10_000, memo)).toBe(true);
+    expect(reads).toBeLessThanOrEqual(10_004);
+    // And the carried result is unchanged: every occurrence on a long CRLF file, and several on its unterminated last line.
+    await prepare('long.txt', `${Array.from({ length: 3_000 }, (_, i) => `a ${i}`).join('\r\n')}\r\na a`);
+    await edit('long.txt', 'a', 'X\nY', true);
+    const text = read('long.txt');
+    expect(text.split('X\r\nY').length - 1).toBe(3_002);
+    expect(text).not.toMatch(/[^\r]\n/);
   });
 
   it('both descriptions say an edit keeps a CRLF file\'s line endings', () => {

@@ -690,19 +690,28 @@ export function carryWindow(newText: string, oldText: string, fileLines: readonl
  * `PD-TOOLS-016` clause 2's test, which `PD-TOOLS-017` reads too: the lines `first` to `last` of `fileLines` (a `split('\n')`
  * of the file) are CRLF when at least one of them is followed by a line break and every such line ends in `\r`; when none of
  * them is followed by one (the span lies in the file's unterminated last element), the file's other lines are read the same way.
+ *
+ * It reads only the lines it tests: `first` to `last`, or, for the last element, every other line once per `memo`. A
+ * `replace_all` asks once per occurrence, and until the review of fin38 each question walked the whole file, so a 50,000-line
+ * file with a token on every line took about 3 s to carry and the cost grew with the square of its length (`replace_all` had been
+ * a linear split and join).
  */
-function crlfLines(fileLines: readonly string[], first: number, last: number): boolean {
-  const allCr = (counted: (at: number) => boolean): boolean => {
+export function crlfLines(fileLines: readonly string[], first: number, last: number, memo?: { otherLines?: boolean }): boolean {
+  // A line break follows every element of the split but the last.
+  const followed = fileLines.length - 1;
+  const allCr = (from: number, to: number): boolean => {
     let any = false;
-    for (let at = 0; at < fileLines.length - 1; at += 1) {
-      if (!counted(at)) continue;
+    for (let at = Math.max(0, from); at <= Math.min(to, followed - 1); at += 1) {
       if (!(fileLines[at] as string).endsWith('\r')) return false;
       any = true;
     }
     return any;
   };
-  const inside = (at: number) => at >= first && at <= last;
-  return first < fileLines.length - 1 ? allCr(inside) : allCr((at) => !inside(at));
+  if (first < followed) return allCr(first, last);
+  if (memo?.otherLines !== undefined) return memo.otherLines;
+  const others = allCr(0, followed - 1);
+  if (memo) memo.otherLines = others;
+  return others;
 }
 
 /**
@@ -738,12 +747,13 @@ export function carryExact(before: string, offsets: readonly number[], oldText: 
   let cursor = 0;
   let crlfAdded = false;
   const replacements: string[] = [];
+  const memo: { otherLines?: boolean } = {};
   for (let i = 0; i < offsets.length; i += 1) {
     const at = offsets[i] as number;
     const end = at + oldText.length;
     out += before.slice(cursor, at);
     let text = newText;
-    if (oldText.length > 0 && crlfLines(fileLines, lineOf(at), lineOf(end - 1))) {
+    if (oldText.length > 0 && crlfLines(fileLines, lineOf(at), lineOf(end - 1), memo)) {
       text = '';
       const prev = () => (text.length > 0 ? text[text.length - 1] : out[out.length - 1]);
       for (const ch of newText) {

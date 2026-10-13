@@ -7449,7 +7449,12 @@ refusal).*
 > (`a\r\nb\r\n` with `X` at line 1 gives `a\r\nX\nb\r\n`), recorded as
 > [`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](../defects/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md) and
 > raised as [OQ-259](../architecture/open-questions.md#oq-259). A `replace_all` whose `old_string` is empty is outside the case
-> and keeps its build. **What was not measured.** No live run: the live-run fixtures are LF files on Linux, and none of the six
+> and keeps its build. **Found in review (fin38):** `crlfLines` walked every line of the file for each question, and a `replace_all` asks once
+> per occurrence, so carrying one grew with the square of the file's length — 2,852 ms for 50,000 CRLF lines with a token on each
+> (load 1.8 on 4 CPUs), where the split and join it replaced was linear. It now reads only the lines it tests, and the unterminated
+> last element's other lines once per call; the same file carries in 27 ms and 200,000 lines in 141 ms (load 0.8), and a case
+> under "PD-TOOLS-017" counts the test's reads (at most 4 for two lines of 10,000; 10,004 before the repair).
+> **What was not measured.** No live run: the live-run fixtures are LF files on Linux, and none of the six
 > autopsies records an edit on a CRLF file; no proof script drives `write_file` or `haet_edit` in the built app, and the
 > executors run unchanged inside the run host. Repairs
 > [`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../defects/fixed/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md).

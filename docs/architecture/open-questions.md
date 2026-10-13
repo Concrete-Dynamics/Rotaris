@@ -8801,6 +8801,11 @@ saved `cancelling` reads `running` again at the run's next save
 ([`a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md`](../defects/fixed/a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md)),
 recorded and not repaired; repaired 2026-10-06 by fin22 on this ruling's reading: the stop's `cancelling` is saved through
 the run (`Run.stopAccepted`) and held by its later saves until it rests, as the explicit cancel's is.
+*In the built app, 2026-10-13 (fin42, whats-next N61):* `composer-proof`'s launch 4b presses the composer's own "Stop run"
+during a 20 s scripted model call, changes the permission mode through its chip while the graceful stop waits, and reads
+the run-state label "Cancelling…" (the control "Force stop") before and after the mode change; the run ended `user_cancelled`
+and rested `paused`. With `Run.stopAccepted`'s hold replaced by the old unheld save, the same launch read "Run active" after
+the mode change and went red. Read from the window's label, not from the session row mid-stop.
 
 The requirement sets an optimistic status and its rollback. It does not say what overwrites it, and the engine gives it
 nothing to be overwritten by: the explicit cancel (the reserved run id's `cancelAgent`, `Run.cancelAgent`) raises the final
@@ -13750,3 +13755,27 @@ reach observation lists the one file it changed. A model that searched for refer
 which of the three files still name `remaining` and which were written by another tool after the rename, and whether
 `node --test` passes; a cold rename whose importing files were left behind, or were mended by hand afterwards, is a NOTE naming
 this question.
+
+<a id="oq-279"></a>
+
+**OQ-279 — When the global configuration cannot be loaded, does a workspace open?** *(REQ-CONFIG-478, "Where the rejected key
+or value sits in the **global** scope, no workspace opens until it is corrected", and its "Opening a workspace is a workflow a
+user starts, so this failure MUST present as REQ-NOTIFY-001's *failed with one concrete next step named*"; REQ-CONFIG-233;
+REQ-HOOKS-012. Raised 2026-10-13 by fin42 (`fin42-coverage-and-react`, whats-next item N61), found by building `notice-proof`'s
+section 1b; numbered from the top of the plan's range, OQ-271 to OQ-280, below OQ-280, to keep clear of its sibling bundles.)*
+
+Driven on the built app: a global `agents.yaml` whose one hook entry has `timeout_seconds: 0` (an invalid entry,
+REQ-HOOKS-012). The window opened the workspace as usual — main window loaded, the store opened, the Git and prompt reads ran —
+with the configuration unloaded, and the first warning or error notice main logged was raised when a prompt was submitted: "The
+run was refused before it started", whose detail is REQ-CONFIG-478's report (file, global scope,
+`hooks.entries.0.timeout_seconds`, the remedy). Before it the log holds `warning` lines and one earlier notice of a lower
+severity, which the log does not name (`notices.ts` logs only warnings and errors), so what the window showed at the open was
+not read. REQ-CONFIG-478 says no workspace opens, and that the failure presents as the opening workflow's failure.
+
+**What the build proceeds under.** As built: the workspace opens with its configuration unloaded, every run is refused with
+the report, and the notice is raised at the refused run. Nothing was changed; `notice-proof` section 1b asserts the refusal and
+its report and asserts nothing about when the notice first shows.
+
+**What a ruling decides.** Whether "no workspace opens" means the window refuses to open any workspace while the global file
+is invalid (a blocking failure screen naming the file and the step), or that every workspace opens unconfigured — and, either
+way, whether REQ-CONFIG-478's notice must be raised when the workspace is opened rather than at the first refused run.

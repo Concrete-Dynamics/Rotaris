@@ -60,7 +60,9 @@ source), `tools/notices/` (the generator behind
 `pnpm notices` — `THIRD-PARTY-LICENSES.txt` and its validation, open
 `notices.mjs`; the three tables beside it are the reviewed exceptions, the release inputs and the bundled fonts;
 tests in `notices.test.ts`), `tools/build-id/` (the writer behind `pnpm build-id` — `build-id.txt`, REQ-SHELL-140's
-build identifier, open `build-id.mjs`; tests in `build-id.test.ts`), and the standalone checks `pnpm lint` runs
+build identifier, open `build-id.mjs`; tests in `build-id.test.ts`), `tools/requirement-coverage/` (the report behind
+`pnpm req-coverage` — every live shipping requirement's implementation, test and proof citations, report-only; open
+`coverage.mjs`, tests in `coverage.test.ts`), and the standalone checks `pnpm lint` runs
 before ESLint. `pnpm package` (`apps/desktop/scripts/package.mjs`) runs the notices and build-id steps before freezing;
 what the artifact must then carry is checked by `scripts/lib/about-assets.mjs`, which `afterPack` loads, and what it
 says when it ends is `scripts/lib/package-verdict.mjs`'s.

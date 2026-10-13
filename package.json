@@ -84,6 +84,7 @@
     "release:guard": "node tools/release-guard/cli.mjs",
     "notices": "node tools/notices/generate.mjs",
     "build-id": "node tools/build-id/write.mjs",
+    "req-coverage": "node tools/requirement-coverage/coverage.mjs",
     "check": "pnpm symbols && pnpm typecheck && pnpm lint && pnpm test"
   },
   "devDependencies": {

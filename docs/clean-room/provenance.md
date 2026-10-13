@@ -1357,6 +1357,12 @@ applies to every session opened here.
 Implementation commits should cite the requirement IDs they satisfy, so the chain from requirement
 to code to test stays checkable.
 
+> **Measured, 2026-10-13 (fin42).** `pnpm req-coverage` (`tools/requirement-coverage/coverage.mjs`) lists, for every
+> live shipping requirement, the files under `packages/`, `apps/` and `tools/` that cite it as implementation, test or
+> proof. Its first reading, at `4755631`: of 3,691 live shipping requirements, 1,131 are cited nowhere and 484 by the
+> implementation alone. It is report-only, and an uncited requirement is not by that alone unbuilt; the row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ## Design material — how it entered the clean side
 
 The approved visual design is an approved GREEN input under `zone-policy.md`. This section records

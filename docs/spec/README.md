@@ -17,10 +17,13 @@ how any other implementation achieves it.
 - Behavioral target: `ROTARIS-CRW-001` (see [`../clean-room/reference-record.md`](../clean-room/reference-record.md))
 - Status: **draft — gate decisions recorded, awaiting the sufficiency statement**
 - Open questions: resolved per domain; decisions recorded in [`resolutions/`](resolutions/)
-- Requirements: **3,954** identifiers across the 19 shipping domains, of which **258** are withdrawn
-  in place, leaving **3,696** that carry live behavior. The two retired domains (17 and 18) hold a
+- Requirements: **3,956** identifiers across the 19 shipping domains, of which **258** are withdrawn
+  in place, leaving **3,698** that carry live behavior. The two retired domains (17 and 18) hold a
   further **444** identifiers, **10** of them withdrawn in place; those are counted separately and
-  are not part of the shipping total — **4,398** identifiers in all, **268** of them withdrawn.
+  are not part of the shipping total — **4,400** identifiers in all, **268** of them withdrawn.
+  *(Corrected 2026-10-13: this read 3,954, 3,696 and 4,398, with REQ-TOOLS at 192 and REQ-MCP at 117 below. REQ-MCP-118
+  of the code-intelligence round and REQ-TOOLS-193 of the OQ-61 round were minted and never counted;
+  `tools/symbol-artifact/spec-readme-counts.test.ts` now holds every figure here to the generated artifact.)*
   Every figure here counts identifiers, not behaviors: an identifier is never removed, so a
   withdrawn requirement keeps its number and keeps being counted. A total that rose while behavior
   was being removed rose because resolution minted new identifiers to carry rescued capabilities,
@@ -113,6 +116,10 @@ how any other implementation achieves it.
     inferred from a field the projection already carried (`parseErrors`) and was stated nowhere, which is
     why the build satisfied it in one branch and not the other. The round is recorded in
     [`resolutions/08-requirements-traceability.md`](resolutions/08-requirements-traceability.md).
+  - The **`git_read` round** (2026-09-18) answered OQ-61 — may an isolated run read the repository metadata of the worktree it
+    is working in, raised by what an isolated plan-mode run hit. It **withdrew no identifier and minted one** — `REQ-TOOLS-193`,
+    `git_read`'s two operations, `head` and `read_ref` — so live behavior grew by 1. *(Recorded here 2026-10-13; the
+    table and totals above had not counted it, nor REQ-MCP-118.)*
 - Clean-room audit: 6 domains clean, 15 with minor concerns, 0 contaminated — see
   [`../clean-room/specification-gate.md`](../clean-room/specification-gate.md)
 
@@ -127,7 +134,7 @@ never renumbered or reused. A changed requirement gets a new revision, not a new
 | 02 | [Run Monitoring and Steering](02-run-monitoring-steering.md) | `REQ-MONITOR` | 306 | 12 | core |
 | 03 | [Conversation, Composer, and Transcript](03-conversation-composer-transcript.md) | `REQ-CHAT` | 174 | 49 | core |
 | 04 | [Model Providers, Sign-In, and Model Routing](04-model-providers-auth.md) | `REQ-PROVIDER` | 152 | 18 | core |
-| 05 | [Agent Tooling, Terminal Execution, Permissions, and Approvals](05-tools-permissions-approvals.md) | `REQ-TOOLS` | 192 | 0 | core |
+| 05 | [Agent Tooling, Terminal Execution, Permissions, and Approvals](05-tools-permissions-approvals.md) | `REQ-TOOLS` | 193 | 0 | core |
 | 06 | [Git Integration, Worktrees, and Checkpoints](06-git-worktrees-checkpoints.md) | `REQ-GIT` | 161 | 8 | core |
 | 07 | [Session Persistence, Resume, and Background Sessions](07-sessions-persistence.md) | `REQ-SESSION` | 202 | 22 | core |
 | 08 | [Requirements Board and Traceability](08-requirements-traceability.md) | `REQ-TRACE` | 515 | 16 | core |
@@ -138,7 +145,7 @@ never renumbered or reused. A changed requirement gets a new revision, not a new
 | 13 | [Workspace Handling, Context Injection, and Project Onboarding](13-workspace-context-onboarding.md) | `REQ-WORKSPACE` | 153 | 17 | secondary |
 | 14 | [Library, Artifacts, and Improvement Proposals](14-library-artifacts-improvements.md) | `REQ-LIBRARY` | 176 | 14 | secondary |
 | 15 | [Settings and Configuration](15-settings-configuration.md) | `REQ-CONFIG` | 478 | 16 | secondary |
-| 16 | [MCP Server Integration](16-mcp-integration.md) | `REQ-MCP` | 117 | 11 | secondary |
+| 16 | [MCP Server Integration](16-mcp-integration.md) | `REQ-MCP` | 118 | 11 | secondary |
 | 17 | [Interactive Terminal UI](17-terminal-ui.md) | `REQ-TUI` | 207 | 1 | **retired** |
 | 18 | [Command-Line and Headless Entry Points](18-cli-headless.md) | `REQ-CLI` | 237 | 9 | **retired** |
 | 19 | [Notifications, Error Handling, and Recovery](19-notifications-errors-recovery.md) | `REQ-NOTIFY` | 268 | 4 | secondary |

@@ -19,3 +19,15 @@ Found by the 2026-10-13 survey at `6de2a67` (item N98).
 - `AGENTS.md` — "Repository UI skills".
 - `docs/architecture/codebase.md` — the "three portable skills" sentence.
 - `.agents/skills/orchestrated-build/profiles/rotaris-crw.json` — `autopsy.method`.
+
+## Repaired — 2026-10-13 (fin41)
+
+- `.claude/skills/run-autopsy/SKILL.md` — the router, in the shape of the other four: the skill's name, description and
+  argument hint copied from `.agents/skills/run-autopsy/SKILL.md`, and a body that sends the reader there.
+- `tools/skill-routers.test.ts` — for every directory under `.agents/skills/` holding a `SKILL.md`, a router exists at
+  `.claude/skills/<name>/SKILL.md`, names the skill, describes it, carries its argument hint and points at the canonical
+  file. Without the router the run-autopsy case fails ("`.claude/skills/run-autopsy/SKILL.md` is missing"; 1 failed, 5
+  passed); with it, 6 passed.
+- `AGENTS.md` — "Repository UI skills" names run-autopsy as the post-run forensic skill with its router.
+- `docs/architecture/codebase.md` — the "three portable skills" sentence keeps its count as of 2026-09-12 and gains a
+  dated note: five since.

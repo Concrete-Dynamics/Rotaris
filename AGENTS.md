@@ -117,6 +117,11 @@ multi-agent workflow: per bundle an independent reviewer that repairs in place a
 acceptance with the proof sweep and live runs, and recovery from container restarts out of the workflow journals.
 It improves itself under the guardrails its `SKILL.md` states; `pnpm check` runs its self-test.
 
+A fifth, **`run-autopsy`**, is the post-run forensic skill: it reads a live run's launch log, session store and
+transcript as evidence and writes a fixed-schema friction and defect report, and the orchestrated build's acceptance
+autopsy follows it (the profile's `autopsy.method`). Every portable skill has its thin `.claude/skills/` router, and
+`tools/skill-routers.test.ts` fails on one without (run-autopsy's was added on 2026-10-13).
+
 `build-ui` and `debug-ui` may change source within the authority of the current task. `review-ui` writes only
 evidence under `.ui-review/`. Its critique is proposed evidence and reaches implementation through a separate,
 authorized build or debug pass. A complete review loop has at most three iterations.

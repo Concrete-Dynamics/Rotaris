@@ -1936,7 +1936,9 @@ already govern rendered evidence, and REQ-WORKSPACE-051/053 already govern repos
 here changes what the product does. What it changes is **where a control is written, and what can be measured about
 one** — `packages/ui/src/design-system/` (twenty-seven briefs, twenty-nine typed exports, sixty-nine drawing files
 migrated onto it), `tools/check-ui-language.mjs` in `pnpm lint`, `pnpm ui-review`'s evidence pack, `theme-proof` moved
-onto the driver, and three portable skills under `.agents/skills/` with thin `.claude/skills/` routers.
+onto the driver, and three portable skills under `.agents/skills/` with thin `.claude/skills/` routers. *(Three then;
+five since — `orchestrated-build` and `run-autopsy` came later, and run-autopsy's router on 2026-10-13, which
+`tools/skill-routers.test.ts` now pins for every portable skill.)*
 
 **Eight defects, the ninety-first to the ninety-eighth, and six of the eight were in the measuring code.** That ratio
 is the finding, not a coincidence: this delivery is almost entirely measurement, and measurement is where this project

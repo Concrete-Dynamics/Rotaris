@@ -295,6 +295,16 @@ export function selectWait(step: CaptureStep): CaptureStep {
   return { ...step, arg: null };
 }
 
+/**
+ * The grip drag's argument, `dx,dy` in CSS pixels (either may be negative), or null for one it cannot read. The drag starts on
+ * the element's own resize grip, its bottom-right corner (PD-ORCH-002 revision 3: "a height the user gives the revision field
+ * by dragging it").
+ */
+export function gripOffset(arg: string | null): { dx: number; dy: number } | null {
+  const m = /^\s*(-?\d+)\s*,\s*(-?\d+)\s*$/.exec(arg ?? '');
+  return m ? { dx: Number(m[1]), dy: Number(m[2]) } : null;
+}
+
 /** Schedules `body` for the step's instant, or for the moment its selector matches. */
 export function onStep(host: CaptureHost, step: CaptureStep, body: () => void | Promise<void>): void {
   void (async () => {

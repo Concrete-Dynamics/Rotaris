@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the scripts that run it.
-import { approvalRequests, awayLiveVerdicts, awayReason, awayStretch, presentedDialogs, timeoutReason } from './approval-readings.mjs';
+import { approvalRequests, approvalsLiveVerdicts, awayLiveVerdicts, awayReason, awayStretch, presentedDialogs, sessionScopedWrites, timeoutReason } from './approval-readings.mjs';
 
 const T0 = Date.parse('2026-10-13T18:19:00.000Z');
 const at = (ms: number) => T0 + ms;
@@ -126,5 +126,36 @@ describe('awayLiveVerdicts (the live run\'s away scenario)', () => {
   it('a model that asked for nothing is a NOTE, not a pass or a failure', () => {
     const verdicts = awayLiveVerdicts;
     expect(verdicts(awayStretch({ audit: [], events: [], timeline: [], log: '' }), { seconds: 12 })).toEqual([{ verdict: 'note', passed: true, what: expect.stringMatching(/asked for nothing/), detail: expect.any(String) }]);
+  });
+});
+
+describe('sessionScopedWrites and approvalsLiveVerdicts (PD-TOOLS-004)', () => {
+  const grant = { tool_name: 'write_file', source: 'user-session', decision: 'allow', reason: "The user approved 'write_file' for this session (rule 'preset:ask' asked); session rule 'session:allow:1' added." };
+  const rule = { tool_name: 'write_file', source: 'session-rule', decision: 'allow', rule_id: 'session:allow:1', reason: "Rule 'session:allow:1' (Approved for this session: …) resolved 'write_file' to allow." };
+  const calls = [
+    { ordinal: 1, tool_name: 'write_file', status: 'ok', args: { operation: 'create', path: 'NOTES.md' } },
+    { ordinal: 2, tool_name: 'read_file', status: 'ok', args: { path: 'NOTES.md' } },
+    { ordinal: 3, tool_name: 'write_file', status: 'ok', args: { operation: 'edit', path: 'NOTES.md' } },
+  ];
+  const log = line(100, 'approval W presented (write_file, rule preset:ask); 0 waiting');
+  it('reads the built-app launch: one dialog, one grant, the edit allowed by the session rule', () => {
+    const w = sessionScopedWrites({ audit: [grant, rule], calls, log });
+    expect(w.shown).toHaveLength(1);
+    expect(w.grants).toHaveLength(1);
+    expect(w.unasked).toHaveLength(1);
+    expect(w.byPath['NOTES.md'].map((c: { operation: string }) => c.operation)).toEqual(['create', 'edit']);
+    const out = approvalsLiveVerdicts(w, { path: 'NOTES.md', fileText: '# Notes\nsecond line\n', wanted: ['second line'] });
+    expect(out.filter((v: { passed: boolean }) => !v.passed)).toEqual([]);
+  });
+  it('under REQ-TOOLS-024 alone the edit asks again, and the live reading fails', () => {
+    const asked = { ...grant, source: 'user-once', reason: "The user approved 'write_file' once (rule 'preset:ask' asked)." };
+    const w = sessionScopedWrites({ audit: [grant, asked], calls, log: `${log}\n${line(900, 'approval X presented (write_file, rule preset:ask); 0 waiting')}` });
+    const failed = approvalsLiveVerdicts(w, { path: 'NOTES.md' }).filter((v: { passed: boolean }) => !v.passed).map((v: { what: string }) => v.what);
+    expect(failed).toHaveLength(2);
+  });
+  it('a model that never granted, or wrote the path once, is a NOTE', () => {
+    expect(approvalsLiveVerdicts(sessionScopedWrites({ audit: [], calls: [], log: '' }), { path: 'NOTES.md' })).toEqual([expect.objectContaining({ verdict: 'note' })]);
+    const once = sessionScopedWrites({ audit: [grant], calls: calls.slice(0, 1), log });
+    expect(approvalsLiveVerdicts(once, { path: 'NOTES.md' }).map((v: { verdict: string }) => v.verdict)).toEqual(['check', 'note']);
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
 import type { CaptureHost } from './host.js';
-import { categoryProbe, chordEvent, matchProbe, parseSelectors, parseSteps, selectWait, settleAt, targetProbe } from './host.js';
+import { categoryProbe, chordEvent, gripOffset, matchProbe, parseSelectors, parseSteps, selectWait, settleAt, targetProbe } from './host.js';
 
 /**
  * The capture script's grammar, which every `*-proof` script writes and which — until this module
@@ -146,5 +146,15 @@ describe('settleAt — when the waiting form starts looking', () => {
     await flush();
     expect(probes).toHaveLength(1);
     expect(settled).toBe(true);
+  });
+});
+
+describe('gripOffset — the grip drag\'s dx,dy (fin42, PD-ORCH-002 revision 3)', () => {
+  it('reads two integers, either signed, and nothing else', () => {
+    expect(gripOffset('0,120')).toEqual({ dx: 0, dy: 120 });
+    expect(gripOffset(' -8 , -40 ')).toEqual({ dx: -8, dy: -40 });
+    expect(gripOffset('120')).toBeNull();
+    expect(gripOffset('a,b')).toBeNull();
+    expect(gripOffset(null)).toBeNull();
   });
 });

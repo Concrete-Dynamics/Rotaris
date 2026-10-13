@@ -20,7 +20,8 @@ Last reconciled with the code: **2026-10-13**
 `main/capture/approval-answers.ts` (`<tool>=<answer>[,<answer>…]`, `none` leaving a dialog to its timeout), and
 `scripts/package.mjs` refuses an artifact that keeps them
 (`docs/defects/fixed/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md`). The **process view**'s main row says
-so. No package, edge, process, channel, command or store column changed.
+so, and names the grip drag `capture/seams.ts` gained the same day (`ROTARIS_CAPTURE_GRIP_DRAG`, a real pointer drag of a
+resize grip, read by `plan-gate-proof`). No package, edge, process, channel, command or store column changed.
 
 **The artifact inspector's Preview links open (ADR-0051 decision 4; fin41).** Both `<ArtifactInspector>` mounts
 (`renderer/main.tsx`'s Library, `renderer/windows.tsx`'s persona window) pass the window's `openLink`, so a Preview link asks

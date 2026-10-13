@@ -1,13 +1,14 @@
 /**
  * The approval waits of one session as the record and main's log show them — read by `approvals-proof.mjs` (scripted model,
- * strict) and by `live-run.mjs`'s `away` scenario (a real model, a NOTE where the model never reached a
+ * strict) and by `live-run.mjs`'s `away` and `approvals` scenarios (a real model, a NOTE where the model never reached a
  * shape). Plain ESM, no product import: the store's rows and the log's lines in, facts out.
  *
  * What each reading needs:
  *   - `audit`: `permission_audit` decision rows with their `entry` merged in (`request_id`, `reason`, …) and `at` in ms;
  *   - `events`: `events` rows with `payload` parsed and `at` in ms (the `approval.requested` envelopes);
  *   - `timeline`: `timeline` rows with `metadata` parsed and `at` in ms;
- *   - `log`: main's application log (`approval <id> presented (<tool>, rule …)`, one line per dialog shown).
+ *   - `log`: main's application log (`approval <id> presented (<tool>, rule …)`, one line per dialog shown);
+ *   - `calls`: `tool_calls` rows with `args` parsed (the path a write named).
  */
 
 /** PD-TOOLS-005's reason clause, as the gate words it for an ask resolved, or a wait ended, while the user is away. */
@@ -103,5 +104,53 @@ export function awayLiveVerdicts(stretch, { seconds, sessionLog = '', answer = '
   check(stretch.claimsNoUi.length === 0, 'away: no decision claims that no approval UI is available', stretch.claimsNoUi.map((d) => d.reason).join(' | ') || undefined);
   const said = String(answer).trim();
   note('away: what the model said after its asks were refused', said === '' ? '(no answer recorded)' : `${/away|approv|unanswered|denied|refused|permission/i.test(said) ? 'names the refusal' : 'does not name the refusal'}: ${said.slice(0, 300)}`);
+  return out;
+}
+/**
+ * PD-TOOLS-004, read from one session: the dialogs shown for `tool`, the session grants the user gave it (`user-session`),
+ * the later calls a session rule allowed unasked (`session-rule`), and the calls of `tool` per path with their status.
+ */
+export function sessionScopedWrites({ audit, calls, log, tool = 'write_file' }) {
+  const shown = presentedDialogs(log).filter((p) => p.tool === tool);
+  const ofTool = audit.filter((a) => a.tool_name === tool);
+  const byPath = {};
+  for (const c of calls.filter((c) => c.tool_name === tool)) {
+    const path = typeof c.args?.path === 'string' ? c.args.path.replace(/^\.\//, '') : '(no path)';
+    (byPath[path] ??= []).push({ ordinal: c.ordinal, status: c.status, operation: c.args?.operation ?? null });
+  }
+  return {
+    shown,
+    grants: ofTool.filter((a) => a.source === 'user-session'),
+    unasked: ofTool.filter((a) => a.source === 'session-rule' && a.decision === 'allow'),
+    asked: ofTool.filter((a) => ['user-once', 'user-session', 'user-deny', 'timeout', 'headless-policy', 'cancelled'].includes(a.source)),
+    byPath,
+  };
+}
+
+/**
+ * The live run's `approvals` scenario read from one session (PD-TOOLS-004 against a real model at the asking default): the
+ * first `write_file` dialog is answered "Approve for this session", so every later `write_file` call of the same persona to
+ * the same path must pass without a dialog, allowed by the session rule. A model that never wrote the path twice is a NOTE.
+ */
+export function approvalsLiveVerdicts(writes, { path, fileText = null, wanted = [] }) {
+  const out = [];
+  const check = (passed, what, detail) => out.push({ verdict: 'check', passed: Boolean(passed), what, detail: detail ?? null });
+  const note = (what, detail) => out.push({ verdict: 'note', passed: true, what, detail });
+  const calls = writes.byPath[path] ?? [];
+  if (writes.grants.length === 0) {
+    note(`approvals: no write_file dialog was answered for the session`, `${writes.shown.length} write_file dialog(s) shown; PD-TOOLS-004 is unasked this run (the model wrote ${Object.keys(writes.byPath).join(', ') || 'nothing'} with write_file)`);
+    return out;
+  }
+  check(writes.grants.length === 1 && /session rule '[^']+' added/.test(String(writes.grants[0].reason)), 'approvals: the first write_file dialog granted a session rule (REQ-TOOLS-052)', writes.grants.map((g) => g.reason).join(' | '));
+  const later = calls.slice(1);
+  if (later.length === 0) note(`approvals: the model wrote ${path} once`, 'a later write to the approved path was not made, so PD-TOOLS-004 is unasked this run');
+  else {
+    check(writes.shown.length === 1, `approvals: no further write_file dialog was shown for the ${later.length} later write(s) of ${path} (PD-TOOLS-004)`, `${writes.shown.length} write_file dialog(s); operations ${calls.map((c) => c.operation ?? '?').join(', ')}`);
+    check(writes.unasked.length >= later.filter((c) => c.status === 'ok').length && writes.unasked.length > 0, 'approvals: the later writes were allowed by the session rule, unasked', `${writes.unasked.length} session-rule allow(s)`);
+  }
+  if (fileText !== null && wanted.length > 0) {
+    const missing = wanted.filter((w) => !fileText.includes(w));
+    check(missing.length === 0, `approvals: ${path} holds every line the prompt asked for`, missing.length === 0 ? wanted.join(' | ') : `missing ${missing.join(' | ')}`);
+  }
   return out;
 }

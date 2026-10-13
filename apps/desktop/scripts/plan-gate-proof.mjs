@@ -20,6 +20,8 @@ import { codeIntelligenceDiscovered } from './lib/code-intelligence-discovery.mj
  *  4. Revise starts a further cycle carrying the changes the user stated; at the minimum beside a notice that cycle's
  *     "You asked for" line stands capped and scrolling, the plan still the largest part, and a revision field dragged
  *     taller keeps its height (PD-ORCH-002 revision 3).
+ *     Since fin42 the capped line is also reached with Tab and scrolled with PageDown, and the revision field dragged taller
+ *     by its grip with the pointer (`revised-by-hand`), where until then the height a drag sets was set by script.
  *  5. Approve releases execution, the run carries the approved text, and `plan_released` is set.
  *  6. **Nothing wrote before approval and something wrote after it** — the file the plan names does not exist
  *     while the gate is held and does exist once the approved run has run, which is the whole of "blocks
@@ -446,6 +448,58 @@ const log3b = await launch('revised-at-minimum', {
     prior: { line: prior.prior, gateScrollWidth: prior.gateScrollWidth, gateClientWidth: prior.gateClientWidth, gateScrolls: prior.gateScrolls, reach: prior.reach, children: prior.children },
     dragged: { fieldH: dragged.fieldH, planMin: dragged.planMin, gateScrolls: dragged.gateScrolls, reach: dragged.reach, children: dragged.children },
   };
+}
+
+/*
+ * 3c. PD-ORCH-002 revision 3 by hand (fin42): what 3b set by script, done the way a person does it. The capped "You asked for"
+ * line is reached with Tab from the focusable part before it and scrolled with PageDown, and the revision field is made taller
+ * by dragging its resize grip with the pointer (`ROTARIS_CAPTURE_GRIP_DRAG`, real input events). Until fin42 the first
+ * execution of revision 3 recorded both as not measured: the proof had set `style.height` as a drag sets it, and never scrolled
+ * the line from the keyboard.
+ */
+const PRIOR = '[data-testid="plan-gate-prior"]';
+const TAB_FROM = `(() => { const prior = document.querySelector('${PRIOR}'); if (!prior) return { error: 'no prior line' }; prior.scrollTop = 0; const all = [...document.querySelectorAll('a[href], button, input, textarea, select, summary, [tabindex]')].filter((el) => !el.disabled && el.tabIndex >= 0 && el.getClientRects().length > 0); const before = all.filter((el) => el.compareDocumentPosition(prior) & Node.DOCUMENT_POSITION_FOLLOWING); const from = before.at(-1) ?? null; if (from) from.focus(); document.body.dataset.tabFrom = '1'; return { from: from ? (from.getAttribute('data-testid') || from.className || from.tagName) : null, focused: from !== null && document.activeElement === from, scrollHeight: prior.scrollHeight, clientHeight: prior.clientHeight }; })()`;
+const AFTER_TAB = `(async () => { await new Promise((r) => setTimeout(r, 600)); const prior = document.querySelector('${PRIOR}'); const active = document.activeElement; const reached = prior !== null && active === prior; if (reached) document.body.dataset.priorFocused = '1'; else document.body.dataset.priorRead = '1'; return { reached, active: active ? (active.getAttribute('data-testid') || active.className || active.tagName) : null }; })()`;
+const AFTER_KEYS = `(async () => { const prior = document.querySelector('${PRIOR}'); for (let i = 0; i < 30 && prior && prior.scrollTop === 0; i += 1) await new Promise((r) => setTimeout(r, 100)); document.body.dataset.priorRead = '1'; return { scrollTop: prior ? prior.scrollTop : null, scrollHeight: prior ? prior.scrollHeight : null, clientHeight: prior ? prior.clientHeight : null, focused: document.activeElement === prior }; })()`;
+const OPEN_FIELD = `(async () => { document.querySelector('.plan-gate__changes-summary')?.click(); for (let i = 0; i < 100 && !(document.querySelector('.plan-gate__changes-details')?.open === true && (document.querySelector('.plan-gate__changes')?.getBoundingClientRect().height ?? 0) > 0); i += 1) await new Promise((r) => setTimeout(r, 50)); const f = document.querySelector('.plan-gate__changes'); const h = f ? Math.round(f.getBoundingClientRect().height) : null; document.body.dataset.fieldBefore = String(h); document.body.dataset.fieldOpen = '1'; return { fieldH: h, resize: f ? getComputedStyle(f).resize : null }; })()`;
+const AFTER_DRAG = `(async () => { const before = Number(document.body.dataset.fieldBefore); for (let i = 0; i < 100 && (document.querySelector('.plan-gate__changes')?.getBoundingClientRect().height ?? 0) < before + 60; i += 1) await new Promise((r) => setTimeout(r, 50)); await new Promise((r) => setTimeout(r, 1500)); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); ${GATE_READ} const f = document.querySelector('.plan-gate__changes'); read.fieldInline = f ? f.style.height : null; read.fieldBefore = before; document.body.dataset.dragRead = '1'; return read; })()`;
+const log3c = await launch('revised-by-hand', {
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ROTARIS_CAPTURE_EVAL_AT: [
+    `${TAB_FROM}>>${PRIOR}@~${GATE_DEADLINE_MS}`,
+    `${AFTER_TAB}>>body[data-tab-from]@~${GATE_DEADLINE_MS}`,
+    `${AFTER_KEYS}>>body[data-prior-focused]@~${GATE_DEADLINE_MS}`,
+    `${OPEN_FIELD}>>body[data-prior-read]@~${GATE_DEADLINE_MS}`,
+    `${AFTER_DRAG}>>body[data-field-open]@~${GATE_DEADLINE_MS}`,
+  ].join(';;'),
+  // The Tab waits for the focus set by TAB_FROM; PageDown for the line holding focus; the drag for the opened field.
+  ROTARIS_CAPTURE_KEYS: `Tab>>body[data-tab-from]@~${GATE_DEADLINE_MS};;PageDown>>body[data-prior-focused]@~${GATE_DEADLINE_MS}`,
+  ROTARIS_CAPTURE_GRIP_DRAG: `body[data-field-open] .plan-gate__changes>>0,120@~${GATE_DEADLINE_MS}`,
+  ROTARIS_CAPTURE_WAIT: "js:document.body.dataset.dragRead === '1'",
+  ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
+  ROTARIS_CAPTURE_AFTER_MS: '1500',
+});
+{
+  const evals3c = parseEvals(log3c);
+  const tabFrom = readEval(evals3c, GATE_DEADLINE_MS, TAB_FROM);
+  const afterTab = readEval(evals3c, GATE_DEADLINE_MS, AFTER_TAB);
+  const afterKeys = readEval(evals3c, GATE_DEADLINE_MS, AFTER_KEYS);
+  const opened = readEval(evals3c, GATE_DEADLINE_MS, OPEN_FIELD);
+  const dragged = readEval(evals3c, GATE_DEADLINE_MS, AFTER_DRAG);
+  const grip = /capture: grip-drag .* → (\{.*\})\s*$/m.exec(log3c)?.[1];
+  results.revisedByHand = { tabFrom, afterTab, afterKeys, opened, grip: grip ? JSON.parse(grip) : null, dragged: dragged && dragged.children ? { fieldH: dragged.fieldH, fieldBefore: dragged.fieldBefore, fieldInline: dragged.fieldInline, planMin: dragged.planMin, reach: dragged.reach, children: dragged.children } : dragged };
+  writeFileSync(join(output, 'revised-by-hand.json'), `${JSON.stringify(results.revisedByHand, null, 2)}\n`);
+  if (!tabFrom || tabFrom.error || !(tabFrom.scrollHeight > tabFrom.clientHeight)) throw new Error(`the capped line was not there to reach, or did not scroll: ${JSON.stringify(tabFrom)}\n${log3c}`);
+  if (!afterTab?.reached) throw new Error(`Tab from the part before the capped "You asked for" line did not reach it (PD-ORCH-002 revision 3: it scrolls inside itself; a keyboard user must reach it): focus went to ${JSON.stringify(afterTab)} from ${JSON.stringify(tabFrom.from)}`);
+  if (!(afterKeys?.scrollTop > 0)) throw new Error(`PageDown on the focused capped line did not scroll it: ${JSON.stringify(afterKeys)}`);
+  if (!opened || !(opened.fieldH > 0)) throw new Error(`the revision field did not open: ${JSON.stringify(opened)}`);
+  if (!dragged?.children) throw new Error(`the gate was not read after the drag:\n${log3c}`);
+  if (!(dragged.fieldH >= dragged.fieldBefore + 100)) throw new Error(`dragging the revision field's grip 120 px down did not make it taller: ${dragged.fieldBefore} → ${dragged.fieldH} px (grip: ${grip ?? 'no drag logged'})`);
+  if (!/px$/.test(dragged.fieldInline ?? '')) throw new Error(`the dragged height is not the field's own (inline) height: ${JSON.stringify(dragged.fieldInline)}`);
+  const plan = dragged.children.find((c) => /plan-gate__(preview-wrap|plan)$/.test(c.c))?.c;
+  const grew = dragged.children.filter((c) => Number(c.grow) > 0 && c.h > 1).map((c) => c.c);
+  if (plan === undefined || grew.length !== 1 || grew[0] !== plan) throw new Error(`after the drag the plan is not the only element that grows: ${JSON.stringify(grew)}`);
+  if (dragged.reach !== 'plan-approve=ok|plan-revise=ok|plan-cancel=ok') throw new Error(`after the drag an answer of the gate is not reachable (REQ-SHELL-048): ${dragged.reach}`);
 }
 
 // 4. Approve: execution released, the release recorded, and the work actually done.

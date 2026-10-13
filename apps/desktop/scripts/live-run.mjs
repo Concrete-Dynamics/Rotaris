@@ -87,6 +87,12 @@
  *                 must mark its user away (`user_away`, the session log's WARNING line), no further dialog may be shown,
  *                 and every later ask must be denied at once with PD-TOOLS-005's reason; what the model then says is a
  *                 NOTE (`lib/approval-scenarios.mjs`, read by `lib/approval-readings.mjs`).
+ *   8c. approvals — the asking default (`ask`, the registered timeout): the first `write_file` dialog answered "Approve for
+ *                 this session", every other "Approve once", three writes of one file asked for. The later writes of that path
+ *                 must pass with no dialog, allowed by the session rule (PD-TOOLS-004); a model that wrote it once is a NOTE.
+ *   8d. plan-gate — `run_start_mode: plan`, three launches: the prompt held at the gate with a real plan drawn as Markdown,
+ *                 nothing written and no loop supervision while held (PD-ORCH-001/002); approved through the gate's button
+ *                 and the work done; a second prompt in the released session not held (PD-ORCH-003).
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -159,7 +165,7 @@ import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mj
 import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, toolIntervals, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
 import { withRuntimeKey } from './lib/runtime-key.mjs';
-import { runAwayScenario } from './lib/approval-scenarios.mjs';
+import { runApprovalsScenario, runAwayScenario, runPlanGateScenario } from './lib/approval-scenarios.mjs';
 import { LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, attemptCount, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
@@ -255,7 +261,7 @@ const RUN_WAIT_MS = Number(process.env['LIVE_RUN_WAIT_MS'] ?? 420_000);
  * work, and the prompt closes the detour.
  */
 const EDIT_WAIT_MS = Number(process.env['LIVE_RUN_EDIT_WAIT_MS'] ?? RUN_WAIT_MS * 2);
-const OPTIONAL = ['ask', 'edit', 'resume', 'requirements', 'shell', 'frictions', 'faults', 'terminal', 'away'];
+const OPTIONAL = ['ask', 'edit', 'resume', 'requirements', 'shell', 'frictions', 'faults', 'terminal', 'away', 'approvals', 'plan-gate'];
 /**
  * Scenarios that `--only` accepts and the default set never contains.
  *
@@ -2487,6 +2493,8 @@ if (wanted.includes('terminal')) {
 // `lib/approval-scenarios.mjs` holds each scenario; the script hands it what it owns.
 const approvalContext = () => ({ launch, check, noted, readSession, readSessionLog, oneDatabase, preserveRun, budgetGate, withRuntimeKey, agentsFile, workspace, scenarioDir, results, RUN_WAIT_MS });
 if (wanted.includes('away')) await runAwayScenario(approvalContext());
+if (wanted.includes('approvals')) await runApprovalsScenario(approvalContext());
+if (wanted.includes('plan-gate')) await runPlanGateScenario(approvalContext());
 
 // ── 9. The long run ──────────────────────────────────────────────────────────────────────────────────────
 /**

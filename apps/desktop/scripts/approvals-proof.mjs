@@ -16,6 +16,11 @@
  *          4. answering that approval is the user's next input: `user_returned` is written, and the root's last todo call asks
  *             again with a dialog — the run no longer treats the user as away.
  *
+ *   session — PD-TOOLS-004 and the away mark read in the audit. `approval_timeout_seconds: 8`. The root creates `NOTES.md` and
+ *          the dialog is answered "Approve for this session"; it reads the file and edits it, and the edit — another operation
+ *          on the same path by the same persona — passes with no dialog, allowed by the session rule (`session-rule`); its
+ *          terminal call's dialog is then left, ends by timeout, and the run writes `user_away`.
+ *
  * Every assertion reads the store (`permission_audit`, `events`, `timeline`), the session log or the application log.
  * Evidence under `.proof/approvals-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */
@@ -25,7 +30,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
-import { awayStretch, timeoutReason } from './lib/approval-readings.mjs';
+import { awayStretch, sessionScopedWrites, timeoutReason } from './lib/approval-readings.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -34,7 +39,7 @@ const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
 const output = resolve(repo, '.proof', 'approvals-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
-const LAUNCHES = ['away'];
+const LAUNCHES = ['away', 'session'];
 const onlyArg = process.argv.find((a) => a.startsWith('--only='));
 const wanted = onlyArg === undefined ? LAUNCHES : onlyArg.slice('--only='.length).split(',').map((s) => s.trim()).filter((s) => s !== '');
 for (const name of wanted) if (!LAUNCHES.includes(name)) throw new Error(`--only takes ${LAUNCHES.join(', ')}; got ${name}`);
@@ -51,7 +56,7 @@ if (!process.argv.includes('--skip-build')) {
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
 
 /** One scratch profile per launch: its own workspace, configuration and store, so no launch reads another's record. */
-function profile(name, runtime) {
+function profile(name, runtime, extra = []) {
   const root = join(output, name);
   const workspace = join(root, 'workspace');
   const local = join(root, 'local');
@@ -70,6 +75,7 @@ function profile(name, runtime) {
     // Code intelligence costs seconds of every run start and is not what this proof measures (plan-gate-proof's note).
     'mcp_servers:',
     '  code_intelligence: { enabled: false }',
+    ...extra,
     '',
   ].join('\n'));
   const git = (...args) => execFileSync('git', args, { cwd: workspace, stdio: 'ignore', env: { ...process.env, GIT_AUTHOR_NAME: 'proof', GIT_AUTHOR_EMAIL: 'proof@rotaris.local', GIT_COMMITTER_NAME: 'proof', GIT_COMMITTER_EMAIL: 'proof@rotaris.local' } });
@@ -112,7 +118,7 @@ function readRecord(local) {
     const timeline = db.prepare('SELECT ordinal, at, name, actor, message, metadata FROM timeline WHERE session_id = ? ORDER BY ordinal').all(session.session_id)
       .map((t) => ({ ...t, at: Date.parse(t.at), metadata: parse(t.metadata) }));
     const calls = db.prepare('SELECT ordinal, call_id, agent_name, tool_name, status, elapsed_ms, entry FROM tool_calls WHERE session_id = ? ORDER BY ordinal').all(session.session_id)
-      .map((c) => ({ ...c, result: String(parse(c.entry).result ?? '') }));
+      .map((c) => { const e = parse(c.entry); return { ...c, args: e.args ?? {}, result: String(e.result ?? '') }; });
     const logFile = join(dirname(file), 'sessions', session.session_id, 'session.log');
     const sessionLog = existsSync(logFile) ? readFileSync(logFile, 'utf8') : '';
     return { session, audit, events, timeline, calls, sessionLog };
@@ -122,6 +128,43 @@ function readRecord(local) {
 const results = {};
 /** Throws; an expression, so a lookup reads `find(…) ?? fail(…)`. */
 const fail = (message) => { throw new Error(message); };
+
+// ── session ─────────────────────────────────────────────────────────────────────────────────────────────────────
+if (wanted.includes('session')) {
+  const TIMEOUT_S = 8;
+  // REQ-ORCH-025: `single` grants the entry role the direct-work bundle, so its scripted writes have a tool to call.
+  const where = profile('session', ['permission_mode: ask', `approval_timeout_seconds: ${TIMEOUT_S}`, 'headless_approval_policy: deny', 'max_iterations: 2'], ['rotaris:', '  delegation_strategy: single']);
+  const log = await launch('session', where, {
+    // Create NOTES.md (asks), read it (the read-only class is allowed), edit it (the session approval covers it), then a
+    // terminal call whose dialog nobody answers.
+    ROTARIS_SCRIPT: 'write,readnotes,edit,git,answer',
+    ROTARIS_CAPTURE_APPROVAL: 'write_file=session;;terminal=none',
+    ROTARIS_CAPTURE_PROMPT: 'Write the notes, then edit them.',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '2000',
+  });
+  const record = readRecord(where.local);
+  writeFileSync(join(output, 'session.record.json'), `${JSON.stringify(record, null, 2)}\n`);
+  if (record.session.execution_status !== 'completed') fail(`the run ended ${record.session.execution_status} (${record.session.stop_reason})`);
+  const w = sessionScopedWrites({ audit: record.audit, calls: record.calls, log });
+  if (w.shown.length !== 1) fail(`${w.shown.length} write_file dialogs were shown, not one: ${JSON.stringify(w.shown)}`);
+  if (!/capture: approval dialog \(write_file\) → clicked "Approve for this session"/.test(log)) fail('the write\'s dialog was not answered "Approve for this session"');
+  if (w.grants.length !== 1 || !/session rule '[^']+' added/.test(w.grants[0].reason)) fail(`the session grant reads ${JSON.stringify(w.grants)}`);
+  if (w.unasked.length !== 1) fail(`${w.unasked.length} write_file calls passed on the session rule, not one: ${JSON.stringify(record.audit.filter((a) => a.tool_name === 'write_file').map((a) => a.source))}`);
+  const notes = w.byPath['NOTES.md'] ?? [];
+  if (notes.length !== 2 || notes.some((c) => c.status !== 'ok') || notes.map((c) => c.operation).join(',') !== 'create,edit') fail(`the two writes of NOTES.md read ${JSON.stringify(notes)}`);
+  const writeRequests = record.events.filter((e) => e.kind === 'approval.requested' && (e.payload?.tool_name ?? e.payload?.data?.tool_name) === 'write_file');
+  if (writeRequests.length !== 1) fail(`${writeRequests.length} approval requests for write_file, not one: the edit asked`);
+  const onDisk = readFileSync(join(where.workspace, 'NOTES.md'), 'utf8');
+  if (!onDisk.includes('scripted agent (edited)')) fail(`the edit did not reach the disk: ${JSON.stringify(onDisk)}`);
+  // The away mark in the audit: the terminal call's dialog, left, ends by timeout and the run writes user_away.
+  const r = awayStretch({ audit: record.audit, events: record.events, timeline: record.timeline, log });
+  if (r.first === null || r.first.request.tool_name !== 'terminal' || !String(r.first.decision.reason).endsWith(timeoutReason(TIMEOUT_S))) fail(`the terminal call's wait did not end by timeout: ${JSON.stringify(r.first?.decision ?? null)}`);
+  if (r.awayCount !== 1 || r.seconds !== TIMEOUT_S) fail(`user_away reads ${JSON.stringify(record.timeline.filter((t) => t.name === 'user_away'))}`);
+  results.session = {
+    dialogsShown: r.shown.map((p) => p.tool), grant: w.grants[0].reason, unasked: w.unasked.map((a) => `${a.tool_name} ${a.rule_id}`),
+    notes, terminalWaitMs: r.first.waitedMs, userAway: r.away.metadata,
+  };
+}
 
 // ── away ────────────────────────────────────────────────────────────────────────────────────────────────────────
 if (wanted.includes('away')) {

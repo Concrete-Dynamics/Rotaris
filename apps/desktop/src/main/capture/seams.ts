@@ -4,7 +4,7 @@ import { type BrowserWindow, screen } from 'electron';
 import { millis } from '@rotaris/kernel';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION, type NoticeAction, type NoticeSeverity } from '@rotaris/contracts';
 import { inputEvent, submitEvents, textEvents } from './probe.js';
-import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, centreWhen, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, pressCategory, releaseProbe, selectWait, settleAt, targetProbe } from './host.js';
+import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, centreWhen, chordEvent, clickAt, doubleClickAt, gripOffset, onStep, parseSelectors, parseSteps, pause, pressCategory, releaseProbe, selectWait, settleAt, targetProbe } from './host.js';
 
 /**
  * THE SCRIPTABLE SEAMS — clicks, typed text, chords, renderer `eval`, notices, prompts, drags, OS input,
@@ -395,6 +395,33 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       const selected = await win.webContents.executeJavaScript('String(document.getSelection() ?? "")') as string;
       log(`capture: drag-at ${step.at} ${step.selector} → ${JSON.stringify(selected)}`);
     });
+  }
+
+  // ROTARIS_CAPTURE_GRIP_DRAG="selector>>dx,dy@ms;;…" (fin42): a REAL pointer drag of the matched element's resize grip — press
+  // just inside its bottom-right corner, move by (dx, dy) in six steps, release — then the box before and after logged.
+  // PD-ORCH-002 revision 3 lets a user drag the gate's revision field taller; `plan-gate-proof` had set the height a drag sets
+  // by script, which proves the layout and not the pointer. `@~ms` waits for the selector (the offset is not matched as text).
+  for (const step of steps(process.env['ROTARIS_CAPTURE_GRIP_DRAG'])) {
+    void (async () => {
+      await settleAt(host, { ...step, arg: null });
+      const by = gripOffset(step.arg);
+      if (!by) { log(`capture: grip-drag ${step.selector} → the offset "${step.arg ?? ''}" is not dx,dy`); return; }
+      const read = `(() => { const el = document.querySelector(${JSON.stringify(step.selector)}); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`;
+      await win.webContents.executeJavaScript(`document.querySelector(${JSON.stringify(step.selector)})?.scrollIntoView({ block: 'nearest' })`);
+      const before = await win.webContents.executeJavaScript(read) as { x: number; y: number; width: number; height: number } | null;
+      if (!before) { log(`capture: grip-drag ${step.selector} → no such element`); return; }
+      const from = { x: Math.round(before.x + before.width - 3), y: Math.round(before.y + before.height - 3) };
+      win.webContents.sendInputEvent({ type: 'mouseMove', x: from.x, y: from.y });
+      win.webContents.sendInputEvent({ type: 'mouseDown', x: from.x, y: from.y, button: 'left', clickCount: 1 });
+      for (let i = 1; i <= 6; i += 1) {
+        await pause(host, 16);
+        win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(from.x + (by.dx * i) / 6), y: Math.round(from.y + (by.dy * i) / 6), button: 'left' });
+      }
+      win.webContents.sendInputEvent({ type: 'mouseUp', x: from.x + by.dx, y: from.y + by.dy, button: 'left', clickCount: 1 });
+      await pause(host, 150);
+      const after = await win.webContents.executeJavaScript(read) as { width: number; height: number } | null;
+      log(`capture: grip-drag ${step.selector} → ${JSON.stringify({ before: { width: Math.round(before.width), height: Math.round(before.height) }, after: after === null ? null : { width: Math.round(after.width), height: Math.round(after.height) } })}`);
+    })();
   }
 
   // ROTARIS_CAPTURE_SHOT="path@ms;;…": a PNG of the main window at that time, so a proof can keep a dialog mid-flow (the

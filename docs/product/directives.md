@@ -875,6 +875,17 @@ requirement a mechanism contradicts is named by the directive or it is an ungove
 > builders. **What was not measured.** A drag with the pointer (the proof sets the height a drag sets) and the keyboard
 > scroll of the capped line. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **The two readings left unmeasured, measured 2026-10-13, plan fin42:** `pnpm plan-gate-proof`'s `revised-by-hand` launch, at
+> cycle 2 with the 1,029-character stated change, at the product's default window. **The keyboard:** with focus on the part
+> before the capped "You asked for" line (the edit toggle), a real Tab moved focus onto the line itself, whose content is
+> 160 px in a 64 px box, and a real PageDown scrolled it by 42 px; the line takes focus as a scroll container, with no
+> `tabindex` of its own. **The pointer:** a real drag of the revision field's resize grip 120 px down (`ROTARIS_CAPTURE_GRIP_DRAG`,
+> a new verification seam pressing just inside the element's bottom-right corner) took the field from 80 to 200 px, the
+> height held as its own inline `200px`; the plan, at its 112 px floor, was still the only part that grows, and the three
+> answers were hit. The field then stood taller than the plan, the exception the paragraph grants. The paragraph held as
+> written. Taken at a load average of about 2.7 on four CPUs. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 <a id="pd-orch-003"></a>
 
 ### PD-ORCH-003 — an approval releases the plan gate for the session, not only for the run
@@ -1019,6 +1030,12 @@ and deliberately not repaired here. The row is in
 > and the gate held before the next one.
 >
 > **What was not measured.** No live run was made. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> *2026-10-13, plan fin42:* the live run's new `plan-gate` scenario (`apps/desktop/scripts/lib/approval-scenarios.mjs`) is
+> the first to meet the gate with a real model: held at `run_start_mode: plan` with the plan drawn as Markdown, nothing
+> written and no `loop_supervisor_activation` while held (PD-ORCH-001, PD-ORCH-002), approved through the gate's own button,
+> and a second prompt in the released session not held (this directive). It is written and not yet run; the run is the
+> orchestrator's, and its result reports here.
 
 <a id="pd-monitor-001"></a>
 
@@ -1835,6 +1852,19 @@ declare no path the policy can read, so for them a path-scoped match could only 
 > the policy's class rules and by the plan gate's two enforcement points, so an MCP tool offered under a public name
 > is neither allowed by `ask:read-only-tool` or the fetch pair nor let through the hold. ADR-0016 carries the
 > execution note; nothing in this directive's own rule changed.
+
+> **Built-app execution, 2026-10-13, plan fin42:** the first execution said "the built app was not driven";
+> `pnpm approvals-proof`'s `session` launch now drives the rule through real dialogs, under `ask` with
+> `delegation_strategy: single` so the entry role writes. The root creates `NOTES.md` and the dialog is answered
+> "Approve for this session" (`session rule 'session:allow:1' added`); it reads the file and edits it, and the edit —
+> another operation on the same path by the same persona — is allowed by `session:allow:1` (`session-rule`) with no
+> approval request and no dialog, and reaches the disk. One `write_file` dialog was shown in the launch. With the
+> path-scoped arm of `approvalMatches` (`packages/agent-tools/src/policy.ts`) taken out, the edit asks again and the proof
+> fails on a second `write_file` dialog. The launch then leaves its terminal call's dialog to the 8 s timeout and reads the
+> away mark in the audit (a `timeout` decision and one `user_away` entry, `after_seconds: 8`). The rule held as written.
+> **Still not measured:** run `1ddeb71b`'s loop against a real model; `live-run.mjs`'s new `approvals` scenario asks a
+> real model for three writes of one file at the asking default and is the orchestrator's to run. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

@@ -1735,6 +1735,13 @@ banner containing `failed` in any casing still warns through the banner check.
 > docker line is replayed. And the guard has not run against a real endpoint; the next live run of `terminal` is its
 > first. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **Reported back 2026-10-13:** the sentence "the guard has not run against a real endpoint" no longer holds. The live
+> run's `terminal` scenario has run the guard against the owner's self-hosted endpoint since 2026-09-29 (its earliest
+> recorded pack, `2026-09-29T02-41-56-779Z`, `live-run PASSED`), and every default live run since has passed its three
+> checks, the last at `552d346` and `0bc3eee` on 2026-10-13: "the docker line was printed and exited 0", "a lower-case
+> failed at exit 0 was not classified suspicious_success" and "no failure-marker warning on the lower-case line". Run
+> `2e21e324`'s git line is still not replayed. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-tools-004"></a>
@@ -2803,6 +2810,16 @@ revision 9 from OQ-256 and OQ-257 (the consortium's questions V1 and V2, the dur
 > - two children accepted in one millisecond re-claim in acceptance order.
 >
 > **What was not measured.** No built-app run declared a scope. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **Reported back 2026-10-13:** "No built-app run declared a scope" no longer holds. Since `d8ede92` (2026-09-25) the live
+> run's `edit` scenario delegates two write-scoped children and checks that they were live together and told of each
+> other's scopes; at `552d346` and `0bc3eee` it passed ("two children were delegated with a write scope each", "two scoped
+> children were live at the same time"). This revision's own mechanism, a resumed child's re-claim, ran live in the
+> `resume` scenario: at both heads its two children carried `children.write_scope` (`docs/notes-functions.md`,
+> `docs/notes-tests.md`), were paused while running, resumed under their own task ids after the Continue, and each wrote
+> its file inside its scope with no refusal. No sibling tried to write into a resumed child's scope, so the refusal the
+> re-claim exists for has still been shown only by `children.test.ts`. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 > **First execution of revision 3's scope refusal, 2026-09-29, built under [R-067](requests.md#r-067):** the refusal
@@ -3913,6 +3930,15 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > an unusable classification. Both ran at a load average of 5 to 9 beside another plan's agents.
 > **What was not measured.** No live run: the orchestrator's default run's `resume` scenario is the evidence still owed.
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **Reported back 2026-10-13:** the `resume` scenario of the orchestrator's default live run has since carried the intent
+> across a pause and the Continue action against the owner's self-hosted endpoint. At `552d346` (pack
+> `2026-10-13T07-25-27-766Z`) the launch's classification timed out at 12 s and fell back to `moderate_feature`, and the
+> Continue logged "intent: moderate_feature" and "Intent classified: moderate_feature (continued from previous run)": the
+> intent carried was the fallback's. At `0bc3eee` (pack `2026-10-13T12-18-40-282Z`) the launch classified `small_feature`
+> (0.72) through `json_schema`, and the Continue carried `small_feature` "(continued from previous run)". In both, the
+> paused iteration resumed (clause 4) and closed `succeeded`. The fingerprint's "no warning" half was not separately read
+> from the live packs. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -6579,6 +6605,12 @@ session's `context_selection` entries.
 > distinct agent-and-artifact pairs whose body did not fit that section after the attachments carried before it; for every
 > child whose payload was assembled, those are exactly the ids its delegate observation named as left out for size. The note
 > found on the way above is repaired by that revision.
+
+> **Reported back 2026-10-13:** "a non-zero line has been seen in unit tests only" no longer holds for the built app.
+> `pnpm artifacts-proof` launch 7 (`attached`, PD-TOOLS-006 revision 5's first execution, 2026-10-07) attached three artifacts
+> and a reference, one of them left out for size, and the session's `summary.md` read "Mostly-elided artifacts: 1"
+> ([`PD-TOOLS-006`](#pd-tools-006)). The live half stays open: no live run has yet attached artifacts to a delegation. The
+> row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

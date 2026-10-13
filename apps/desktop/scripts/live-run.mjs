@@ -110,8 +110,8 @@
  *                 with the tool named — a two-line `haet_edit` (an LF `old_string` meets them at level 2: the near miss and its
  *                 retry), a three-line `write_file` window edit, a `write_file` insert and a multi-line `replace_all`
  *                 (`lib/crlf-scenario.mjs`). No line of a file only edits and inserts touched may lose its `\r`, and an insert
- *                 or multi-line replace-all that landed must say it kept the CRLF endings; which shapes the model chose, the
- *                 near-miss reading and the window edit's level (OQ-280's level-4 case) are NOTEs.
+ *                 or multi-line replace-all that landed must say it kept the CRLF endings where it had a `\r` to add; which
+ *                 shapes the model chose, the near-miss reading and the window edit's level (OQ-280's level-4 case) are NOTEs.
  *   8e. cutoff   — OPT-IN (`--only=cutoff`), a few minutes: Settings › Runtime › Per-agent timeout set to
  *                 `LIVE_RUN_CUTOFF_MIN` (default 1) minute(s) through the control and Save, then one delegated child given
  *                 more work than that: the cut-off child's report, the timed-out tag's line in the minutes form

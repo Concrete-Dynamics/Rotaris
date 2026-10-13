@@ -72,6 +72,19 @@ describe('the crlf scenario (PD-TOOLS-014 to PD-TOOLS-018 live)', () => {
     ]);
   });
 
+  it('asks for the CRLF sentence only where the edit had to add a carriage return (PD-TOOLS-017 clause 4, PD-TOOLS-018 clause 3)', () => {
+    // A model that copied the near-miss quote's `\r`s into its `new_string`, and wrote CRLF itself elsewhere: the tool added no
+    // `\r`, so it rightly says nothing, and the bytes are still CRLF throughout.
+    const run = wholeRun();
+    run.calls[2] = { ...run.calls[2]!, args: { ...run.calls[2]!.args, new_string: "\tconst greeting = 'Hi';\r\n\tif (name) {\r" }, result: `Edited ${G}: 2 lines replaced by 2 at line 2 (+1 -1). content_hash: …` };
+    run.calls[6] = { ...run.calls[6]!, args: { ...run.calls[6]!.args, content: '// edited by the live run\r\n' }, result: `Inserted 1 line into ${G} at line 0.` };
+    run.calls[8] = { ...run.calls[8]!, args: { ...run.calls[8]!.args, new_string: 'alpha-1\r\nalpha-2' }, result: `Replaced 2 occurrences in ${L}.` };
+    expect(failed(crlfVerdicts(run))).toEqual([]);
+    // One LF break left for the tool to carry is enough to owe the sentence.
+    run.calls[8] = { ...run.calls[8]!, args: { ...run.calls[8]!.args, new_string: 'alpha-1\r\nalpha-2\nalpha-3' } };
+    expect(failed(crlfVerdicts(run))).toEqual(["crlf: each multi-line replace_all says it wrote the file's CRLF endings (PD-TOOLS-017)"]);
+  });
+
   it('notes, rather than fails, a file the model overwrote, and a shape it never sent', () => {
     const run = wholeRun();
     run.calls.push(call('write_file', { operation: 'overwrite', path: L, content: 'x\n' }, `Overwrote ${L}.`));

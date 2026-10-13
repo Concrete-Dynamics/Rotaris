@@ -12,8 +12,9 @@
  *
  * What a pass shows, read from the bytes on disk and the stored results, never from the model's prose: no line of a file that
  * only `write_file` edits and inserts and `haet_edit` touched lost its `\r`; an insert and a multi-line replace-all that
- * succeeded on a CRLF file say they wrote the file's CRLF endings. Which shapes the model chose is NOTED: a near miss asked
- * (with `lib/near-miss-edits.mjs`'s reading: retried, probed, ambiguous), the match level the window edit reached, and whether
+ * succeeded on a CRLF file say they wrote the file's CRLF endings wherever the tool had a `\r` to add (`lfBreak`,
+ * `insertOwesCr`). Which shapes the model chose is NOTED: a near miss asked (with `lib/near-miss-edits.mjs`'s reading: retried,
+ * probed, ambiguous), the match level the window edit reached, and whether
  * a level-4 window edit landed at the file's depth or as given — the case
  * `docs/defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md` records (OQ-280).
  *
@@ -44,6 +45,14 @@ const CRLF_INSERT = "content was written with the file's CRLF line endings.";
 const EDIT_TOOLS = new Set(['write_file', 'haet_edit', 'haet']);
 const pathOf = (call) => (typeof call.args?.path === 'string' ? call.args.path : typeof call.args?.file_path === 'string' ? call.args.file_path : null);
 const norm = (path) => String(path ?? '').replace(/\\/g, '/').replace(/^\.\//, '');
+/**
+ * Whether the tool had a `\r` to add, so that PD-TOOLS-017 clause 4 or PD-TOOLS-018 clause 3 owes its sentence: an edit's
+ * `new_string` holding a line break with no `\r` before it, or an insert's `content` holding a line that does not end in one.
+ * A model that writes the file's CRLF itself — the near-miss quote's `\r`s copied into `new_string` — leaves the tool nothing to
+ * carry, and the tool rightly says nothing (`carryExact`, `carryInsert` report only a `\r` they added).
+ */
+export const lfBreak = (text) => /(^|[^\r])\n/.test(String(text ?? ''));
+export const insertOwesCr = (content) => { const lines = String(content ?? '').split('\n'); if (lines.at(-1) === '') lines.pop(); return lines.some((line) => !line.endsWith('\r')); };
 
 /**
  * `[{ verdict: 'check'|'note', passed?, what, detail? }]` for one run: `calls` are the session's tool calls in order (`{
@@ -62,19 +71,19 @@ export function crlfVerdicts({ calls, files }) {
     if (others.length > 0) { verdicts.push({ verdict: 'note', what: `crlf: ${path} was also written by overwrite, create or the terminal, so its endings are not the edits' alone`, detail: `LF-only lines ${endings.lfOnlyLines.join(', ') || 'none'}` }); continue; }
     verdicts.push({ verdict: 'check', passed: endings.lfOnly === 0, what: `crlf: every line of ${path} keeps its CRLF ending after ${writes.length} edit(s) (PD-TOOLS-016, PD-TOOLS-017, PD-TOOLS-018)`, detail: endings.lfOnly === 0 ? undefined : `LF-only lines ${endings.lfOnlyLines.join(', ')}` });
   }
-  // PD-TOOLS-018: an insert that landed on the CRLF greet.js says so.
+  // PD-TOOLS-018: an insert that landed on the CRLF greet.js says so, where it had a `\r` to add.
   const inserts = calls.filter((c) => c.tool_name === 'write_file' && c.args?.operation === 'insert' && c.status === 'ok' && norm(pathOf(c)).startsWith(`${CRLF_DIR}/`));
   if (inserts.length === 0) verdicts.push({ verdict: 'note', what: 'crlf: no write_file insert landed (PD-TOOLS-018 not reached)' });
-  else verdicts.push({ verdict: 'check', passed: inserts.every((c) => c.result.includes(CRLF_INSERT)), what: "crlf: each insert into a CRLF file says it wrote the file's CRLF endings (PD-TOOLS-018)", detail: inserts.map((c) => `#${c.ordinal} ${c.result.split('\n')[0].slice(0, 160)}`).join(' | ') });
-  // PD-TOOLS-017: a replace-all whose new_string holds a line break says so.
+  else verdicts.push({ verdict: 'check', passed: inserts.every((c) => c.result.includes(CRLF_INSERT) || !insertOwesCr(c.args?.content)), what: "crlf: each insert into a CRLF file says it wrote the file's CRLF endings (PD-TOOLS-018)", detail: inserts.map((c) => `#${c.ordinal} ${c.result.split('\n')[0].slice(0, 160)}`).join(' | ') });
+  // PD-TOOLS-017: a replace-all whose new_string holds a line break says so, where it had a `\r` to add.
   const replaceAll = calls.filter((c) => c.tool_name === 'write_file' && c.args?.replace_all === true && c.status === 'ok' && String(c.args?.new_string ?? '').includes('\n'));
   if (replaceAll.length === 0) verdicts.push({ verdict: 'note', what: 'crlf: no replace_all with a multi-line new_string landed (PD-TOOLS-017 replace_all not reached)' });
-  else verdicts.push({ verdict: 'check', passed: replaceAll.every((c) => c.result.includes(CRLF_EDIT)), what: "crlf: each multi-line replace_all says it wrote the file's CRLF endings (PD-TOOLS-017)", detail: replaceAll.map((c) => `#${c.ordinal} ${c.result.split('\n')[0].slice(0, 160)}`).join(' | ') });
+  else verdicts.push({ verdict: 'check', passed: replaceAll.every((c) => c.result.includes(CRLF_EDIT) || !lfBreak(c.args?.new_string)), what: "crlf: each multi-line replace_all says it wrote the file's CRLF endings (PD-TOOLS-017)", detail: replaceAll.map((c) => `#${c.ordinal} ${c.result.split('\n')[0].slice(0, 160)}`).join(' | ') });
   // PD-TOOLS-014: the near miss, as the live run's own reading counts it.
   const reading = nearMissReading([{ scenario: 'crlf', calls }]);
   verdicts.push({ verdict: 'note', what: `crlf: haet_edit near misses ${reading.misses.length} (levels ${reading.misses.map((m) => m.level).join(', ') || 'none'}), retried ${reading.retried.length}, probed ${reading.probed.length} (target 0), ambiguous ${reading.ambiguous.length} (target 0) (PD-TOOLS-014)` });
   const retries = calls.filter((c) => EDIT_TOOLS.has(c.tool_name) && c.tool_name !== 'write_file' && c.status === 'ok' && norm(pathOf(c)) === `${CRLF_DIR}/greet.js`);
-  if (retries.length > 0) verdicts.push({ verdict: 'check', passed: retries.every((c) => c.result.includes(CRLF_EDIT) || !/\n/.test(String(c.args?.new_string ?? ''))), what: "crlf: a haet_edit that landed a multi-line new_string on greet.js says it wrote the file's CRLF endings (PD-TOOLS-017)", detail: retries.map((c) => `#${c.ordinal} ${c.result.split('\n')[0].slice(0, 160)}`).join(' | ') });
+  if (retries.length > 0) verdicts.push({ verdict: 'check', passed: retries.every((c) => c.result.includes(CRLF_EDIT) || !lfBreak(c.args?.new_string)), what: "crlf: a haet_edit that landed a multi-line new_string on greet.js says it wrote the file's CRLF endings (PD-TOOLS-017)", detail: retries.map((c) => `#${c.ordinal} ${c.result.split('\n')[0].slice(0, 160)}`).join(' | ') });
   // The render.js window edit: which level it reached, and where a level-4 apply put the block (OQ-280).
   const window = calls.filter((c) => c.tool_name === 'write_file' && c.args?.operation === 'edit' && norm(pathOf(c)) === `${CRLF_DIR}/render.js`);
   const landed = window.find((c) => c.status === 'ok');

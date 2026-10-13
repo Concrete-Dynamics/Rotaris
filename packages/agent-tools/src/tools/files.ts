@@ -786,12 +786,14 @@ const CRLF_SENTENCE = " new_string was written with the file's CRLF line endings
 /**
  * `PD-TOOLS-016` revision 3 clause 4's refusal (OQ-260, R-072, 2026-10-13): one window matched at `level` (2, 3 or 4), and the
  * replacement as carried is the window's own bytes. The window's lines are numbered from 1, and cut at the file's last line so
- * a window that takes in the empty element after a final line break names only lines the file has. Until this clause the edit
+ * a window that takes in the empty element after a final line break names only lines the file has; the cut reaches the first
+ * line too, so a window wholly in that element names the last line, never the one after it (`' '` → `''` on `foo\n` read
+ * "(line 2)" until fin40, docs/defects/fixed/a-window-no-op-refusal-names-a-line-after-the-files-last-line.md). Until this clause the edit
  * rewrote the file unchanged beside "(+0 -0)", with an undo entry that restored the same content
  * (docs/defects/fixed/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
  */
 export function windowNoOpMessage(rel: string, level: number, start: number, k: number, fileLineCount: number): string {
-  const first = start + 1;
+  const first = Math.min(start + 1, Math.max(1, fileLineCount));
   const last = Math.max(first, Math.min(start + k, fileLineCount));
   const where = first === last ? `line ${first}` : `lines ${first}-${last}`;
   return `old_string matches ${rel} only at match level ${level} (${where}), and those lines already hold new_string as this edit would write it; nothing to change. Use write_file's 'overwrite' to write a file exactly as given.`;

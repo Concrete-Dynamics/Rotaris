@@ -7410,6 +7410,10 @@ added to the edit's success).*
 > with its success, and `PD-TOOLS-017`'s no-op keeps its text. **Found:** the clause's "lines <a>-<b>" needed a reading for a
 > window that takes in the empty element after the file's final line break (`foo \n` → `foo\n` on `foo\n` matches a two-element
 > window at level 2); the lines are cut at the file's last line, so it reads "line 1", stated in the clause and pinned by a case.
+> *Corrected 2026-10-13 (fin40):* the build cut only the window's last line, so a window wholly in that empty element (`' '` →
+> `''` on `foo\n`, level 2 at element 1) still named "(line 2)" for a one-line file (fin39's reviewer); `windowNoOpMessage` now
+> cuts the first line too and it reads "line 1", pinned beside the case above
+> ([`a-window-no-op-refusal-names-a-line-after-the-files-last-line`](../defects/fixed/a-window-no-op-refusal-names-a-line-after-the-files-last-line.md)).
 > **What was not measured.** No live run: the live-run fixtures are LF files on Linux, and none of the six autopsies records a
 > window edit that lands on the file's own bytes; no proof script drives `write_file` in the built app. Repairs
 > [`a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success`](../defects/fixed/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).

@@ -965,6 +965,9 @@ describe('PD-TOOLS-016 revision 3: a window edit whose carried result equals the
     await refused('f.txt', 'foo\n', 'foo ', 'foo', noop('f.txt', 2, 'line 1'));
     // A window that takes in the empty element after the final line break names only the line the file has.
     await refused('g.txt', 'foo\n', 'foo \n', 'foo\n', noop('g.txt', 2, 'line 1'));
+    // A window wholly in that empty element is cut at the last line too: it read "(line 2)" for a one-line file
+    // (docs/defects/fixed/a-window-no-op-refusal-names-a-line-after-the-files-last-line.md).
+    await refused('h.txt', 'foo\n', ' ', '', noop('h.txt', 2, 'line 1'));
   });
 
   it('level 3: a new_string written as given that is the window', async () => {

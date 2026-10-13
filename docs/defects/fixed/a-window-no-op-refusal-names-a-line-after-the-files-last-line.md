@@ -18,3 +18,11 @@ Found by fin39's reviewer (`review:insert-noop-optionals#1`, optional finding, 2
 - `packages/agent-tools/src/tools/files.ts` — `windowNoOpMessage` (`first = start + 1` is never cut).
 - `packages/agent-tools/src/tools/tools.test.ts` — "PD-TOOLS-016 revision 3: a window edit whose carried result equals the
   file is refused", which pins the two-element window `foo \n` → `foo\n` ("line 1") but no window wholly past the last line.
+
+## Repaired — 2026-10-13
+
+Repaired by fin40. `windowNoOpMessage` cuts the window's first line at the file's last line as well as its last
+(`first = min(start + 1, max(1, fileLineCount))`), so `' '` → `''` on `foo\n` is refused naming "(line 1)". The refusal and
+its other readings are unchanged. Pinned by the third refusal in "an LF file at level 2: a trailing space the file never had"
+under "PD-TOOLS-016 revision 3" in `packages/agent-tools/src/tools/tools.test.ts`, red before (received "(line 2)"). The
+correction is reported beside revision 3's first execution in `docs/product/directives.md`.

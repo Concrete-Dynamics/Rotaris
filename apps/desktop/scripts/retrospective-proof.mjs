@@ -14,7 +14,9 @@
  *      `considered_session_ids` naming every session the capture read. The proposals reach the Library's
  *      Proposals tab AND the Overview card, and an approval on one of them still writes through.
  *      Evidence attribution is measured in both directions: an entry citing a session the pass read keeps it,
- *      and an entry citing a session it never read is stripped to null rather than carried.
+ *      and an entry citing a session it never read is stripped to null rather than carried. With an `AGENTS.md`
+ *      under a scratch `~/.agents` and a scratch machine-wide base, both enabled for injection, the capture is
+ *      handed the workspace root's file alone (PD-LIBRARY-002 revision 2, OQ-235).
  *   2. INDICATORS — REQ-LIBRARY-125/126, built here for both passes: while the pass runs, the title-bar and
  *      the run-header indicators are on screen, labelled in words and marked with the pass they describe; when
  *      no pass runs, neither exists. Both halves are measured in launch 1, which is the only way to tell an
@@ -299,10 +301,22 @@ check('the seeded record holds the sessions the pass will read', planted.length 
 // The pass launch reuses the seeded profile, so it opens the store the sessions were planted into.
 const passRoot = join(output, 'seed', 'app');
 
+/*
+ * PD-LIBRARY-002 revision 2 (OQ-235): instruction files at two bases beyond the workspace root — `~/.agents` under a
+ * scratch home and the machine-wide base under a scratch directory, through the seams the inventory proof uses — both
+ * enabled for injection by default. The retrospective must read the workspace's own `AGENTS.md` and neither of these.
+ */
+const beyondRoot = join(output, 'pass', 'beyond');
+mkdirSync(join(beyondRoot, 'home', '.agents'), { recursive: true });
+mkdirSync(join(beyondRoot, 'machine'), { recursive: true });
+writeFileSync(join(beyondRoot, 'home', '.agents', 'AGENTS.md'), '# A user-global rule the retrospective must not read\n');
+writeFileSync(join(beyondRoot, 'machine', 'AGENTS.md'), '# A machine-wide rule the retrospective must not read\n');
+const beyondTheRoot = { ROTARIS_CAPTURE_INSTRUCTIONS_HOME: join(beyondRoot, 'home'), ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE: join(beyondRoot, 'machine') };
+
 // ── 2. The pass itself, held open for ten seconds so the indicators can be READ — and measured at two window
 //    sizes (L10, below) — while it runs. Six seconds held the reads alone; two resizes and two shots are added.
 await (async () => {
-  const started = await startApp({ root: passRoot, workspace: passWorkspace, extra: { ROTARIS_IMPROVEMENT_SCRIPT: 'wait:10000' }, timeoutMs: 90_000 });
+  const started = await startApp({ root: passRoot, workspace: passWorkspace, extra: { ROTARIS_IMPROVEMENT_SCRIPT: 'wait:10000', ...beyondTheRoot }, timeoutMs: 90_000 });
   const d = started.driver;
   try {
     await d.waitFor('.app-shell', { timeoutMs: 60_000 });
@@ -424,6 +438,17 @@ await (async () => {
     launches.push({ name: 'pass', log: 'pass.log' });
   }
 })();
+
+// ── 2b. PD-LIBRARY-002 revision 2 (OQ-235): the capture was handed the workspace root's files and no other base's.
+{
+  const log = readFileSync(join(output, 'pass.log'), 'utf8');
+  const read = log.split('\n').find((line) => /retrospective: \d+ of \d+ enabled instruction file\(s\) at the workspace root/.test(line)) ?? null;
+  const offered = log.split('\n').find((line) => /retrospective: \d+ of \d+ instruction file\(s\) enabled for /.test(line)) ?? null;
+  check('the retrospective reads the workspace root\'s instruction files and none from the user-global or machine-wide bases (PD-LIBRARY-002 revision 2, OQ-235)',
+    read !== null && /: 1 of 3 enabled instruction file\(s\) at the workspace root \(workspace:AGENTS\.md\) for /.test(read)
+      && offered !== null && /user-agents:AGENTS\.md/.test(offered) && /machine-codex:AGENTS\.md/.test(offered),
+    `enabled: ${offered === null ? 'no line' : offered.replace(/^.*?retrospective: /, '')} | read: ${read === null ? 'no line' : read.replace(/^.*?retrospective: /, '')}`);
+}
 
 // ── 3. What the store actually holds, read after the process that owned it has gone.
 {

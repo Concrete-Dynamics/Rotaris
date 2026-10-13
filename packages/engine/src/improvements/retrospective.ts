@@ -44,7 +44,12 @@ const PERSONA_MEMORY_DIR = join(".rotaris", "persona_memory");
  * The set is no longer decided here. It arrives on the input, computed by the run host, which owns the
  * configuration and the policy; the engine may not depend on `@rotaris/config` and should not be the place
  * a policy is restated. Which switches reach an analysis rather than an agent was **OQ-65**, ruled 2026-10-06 (R-071) as
- * built: the retrospective consumes exactly the set injection consumes.
+ * built: every switch injection honours binds this read too.
+ *
+ * FALSIFIED 2026-10-13, kept beside its replacement: "the retrospective consumes exactly the set injection consumes".
+ * That set holds the global, home-relative and machine-wide bases, which `PD-LIBRARY-002`'s reach clause keeps out
+ * ("no user-global location"). The retrospective consumes the WORKSPACE-ROOT part of the set injection consumes
+ * (PD-LIBRARY-002 revision 2, OQ-235, ruled under R-072); the run host's `retrospectiveInstructionFiles` decides it.
  */
 export interface RetrospectiveInstructionFile {
   /** The stable identity the per-file switch keys on, e.g. `workspace:AGENTS.md`. */
@@ -272,8 +277,8 @@ export interface CaptureRetrospectiveInput {
   readonly priorArtifacts: readonly ImprovementArtifact[];
   /**
    * The instruction files this pass may read, already discovered and already filtered by the per-file and
-   * master switches (`PD-WORKSPACE-002`, REQ-WORKSPACE-048) by the caller that owns the configuration.
-   * Omitted means none — an absent policy is read as "nothing to offer", never as "read the root and hope".
+   * master switches (`PD-WORKSPACE-002`, REQ-WORKSPACE-048) by the caller that owns the configuration, and limited
+   * to the files discovered at the workspace root (PD-LIBRARY-002 revision 2, OQ-235). Omitted means none — an absent policy is read as "nothing to offer", never as "read the root and hope".
    */
   readonly instructionFiles?: readonly RetrospectiveInstructionFile[];
 }

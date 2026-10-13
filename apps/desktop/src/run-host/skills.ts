@@ -211,13 +211,33 @@ export class SkillHost {
    * files and they had drifted apart: the retrospective held its own copy of the rule — two names at the
    * workspace root, no policy at all — so a file the user had switched off was still read into an analysis
    * and could still be proposed as an edit, while injection honoured every switch
-   * (`docs/defects/fixed/the-retrospective-reads-instruction-files-the-user-switched-off.md`). One
-   * computation, both callers. Whether an ANALYSIS is bound by a switch stated over what agents are GIVEN
-   * was **OQ-65**, ruled 2026-10-06 (R-071) as built: it is.
+   * (`docs/defects/fixed/the-retrospective-reads-instruction-files-the-user-switched-off.md`). Whether an ANALYSIS
+   * is bound by a switch stated over what agents are GIVEN was **OQ-65**, ruled 2026-10-06 (R-071) as built: it is.
+   *
+   * FALSIFIED 2026-10-13, kept beside its replacement: "One computation, both callers." The retrospective was handed
+   * this whole set, and since `PD-WORKSPACE-002` it holds the global, home-relative and machine-wide bases, which
+   * `PD-LIBRARY-002`'s reach clause ("no user-global location") keeps out of the analysis. One computation still
+   * decides the switches for both readers; the retrospective reads the workspace-root part of it, through
+   * `retrospectiveInstructionFiles` below (PD-LIBRARY-002 revision 2, OQ-235, ruled under R-072).
    */
   instructionFiles(workspaceRoot: string, executionRoot?: string, forLog = 'instruction files'): readonly InstructionFileEntry[] {
     const readRoot = executionRoot === undefined || executionRoot === '' ? workspaceRoot : executionRoot;
     return this.enabledUnder(this.deps.instructions?.(workspaceRoot), workspaceRoot, readRoot, forLog);
+  }
+
+  /**
+   * PD-LIBRARY-002 revision 2 (OQ-235): what a retrospective may read — the files of the enabled set above that were
+   * discovered at the WORKSPACE ROOT (the four root names, REQ-WORKSPACE-048's master switch and the per-file switches
+   * all applied by the one computation), and none under the global, home-relative or machine-wide bases. The filter
+   * keys on the stable id's `workspace:` prefix, not on `source`, which is a display label. Injection is untouched:
+   * an agent is still given every enabled base, and the analysis sees those files' effects in the session history
+   * without citing them or proposing an edit to a file that governs every other workspace too.
+   */
+  retrospectiveInstructionFiles(workspaceRoot: string): readonly InstructionFileEntry[] {
+    const enabled = this.instructionFiles(workspaceRoot, undefined, 'retrospective');
+    const atRoot = enabled.filter((file) => file.id.startsWith('workspace:'));
+    this.deps.log(`retrospective: ${atRoot.length} of ${enabled.length} enabled instruction file(s) at the workspace root${atRoot.length === 0 ? '' : ` (${atRoot.map((f) => f.id).join(', ')})`} for ${workspaceRoot}`);
+    return atRoot;
   }
 
   /** The discovery and the decision under a policy already read — split out so `workspaceContext` can time the read apart. */

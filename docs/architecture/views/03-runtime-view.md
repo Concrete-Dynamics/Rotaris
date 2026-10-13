@@ -132,7 +132,10 @@ step inside the context because the retrospective consumes the same list (`PD-LI
 REQ-WORKSPACE-041). It used to hold its own copy of the rule — two names at the workspace root, no policy —
 so it read files the user had switched off and could propose edits to them; the run host now computes the
 set once and hands it to the engine, which owns no policy of its own. Whether a switch stated over what
-agents are *given* binds an *analysis* is **OQ-65**, and what the build proceeds under is that it does. **`REQ-WORKSPACE-050` is met on both halves:** the instruction files
+agents are *given* binds an *analysis* is **OQ-65**, ruled that it does. Of that one set the retrospective is handed only
+the files discovered at the workspace root (`retrospectiveInstructionFiles`, keyed on the `workspace:` id prefix):
+`PD-LIBRARY-002` revision 2 keeps the global, home-relative and machine-wide bases out of the analysis while injection
+still gives them to every agent (OQ-235). **`REQ-WORKSPACE-050` is met on both halves:** the instruction files
 are read from the root the run **executes** in — the worktree of an isolated session — while the skill catalog
 and the policy stay with the **base** workspace, so persistent workspace metadata stays with the base. The
 execution root reaches the run host through `configure`'s context (`Sessions.setupFor`, from the start

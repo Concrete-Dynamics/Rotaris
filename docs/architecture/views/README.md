@@ -43,7 +43,13 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-10-07**
+## Last reconciled with the code: **2026-10-13**
+
+**The retrospective reads the workspace root's instruction files only (PD-LIBRARY-002 revision 2; OQ-235, fin34).**
+`SkillHost.retrospectiveInstructionFiles` (`run-host/skills.ts`) keeps the `workspace:` entries of the enabled set the one
+computation decides, and `dispatch`'s `retrospective.capture` passes it where it passed `instructionFiles` whole. The
+**process view**'s retrospective paragraph and the **runtime view**'s context-unit paragraph say so. No package, edge,
+process, channel, command or store column changed.
 
 **A delegated agent cut off at its per-agent timeout says so where its failure shows, and names the control (PD-CONFIG-003
 revision 3, REQ-MONITOR-040, REQ-MONITOR-044, REQ-MONITOR-052, REQ-MONITOR-069; OQ-234 ruled under R-072, fin33).**
@@ -2354,6 +2360,10 @@ of its own and reads nothing when handed nothing. `02-process-view.md`'s retrosp
 `03-runtime-view.md`'s context-unit paragraph both move. Whether a switch stated over what agents are
 *given* binds an *analysis* is **OQ-65**; the build proceeds under "it does". The defect note moves to
 `docs/defects/fixed/`.
+*Added 2026-10-13 (`PD-LIBRARY-002` revision 2, OQ-235):* the one computation still decides the switches for both
+readers, but the retrospective reads only its workspace-root part — `SkillHost.retrospectiveInstructionFiles`, which
+`dispatch` now passes — so a file under the global, home-relative or machine-wide bases reaches agents and not the
+analysis. `02-process-view.md`'s retrospective paragraph and `03-runtime-view.md`'s context-unit paragraph move.
 
 **Workspace-context injection fills the first context-unit slot (PD-WORKSPACE-002).** The slot
 `03-runtime-view.md` carried as "not built" since ADR-0063 now holds the merged instruction context:

@@ -473,6 +473,78 @@ describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)'
 });
 
 /**
+ * PD-LIBRARY-002 revision 2 (OQ-235, ruled under R-072): the retrospective reads the part of injection's enabled set
+ * discovered at the WORKSPACE ROOT, and no file under the global, home-relative or machine-wide bases. Before the
+ * revision the capture was handed `instructionFiles` whole — the set injection reads — so a user-global or machine-wide
+ * file reached an analysis the directive's reach clause keeps inside the workspace
+ * (`docs/defects/fixed/pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md`).
+ */
+describe("the retrospective's instruction files (PD-LIBRARY-002 revision 2, OQ-235)", () => {
+  /** An `AGENTS.md` at every base beyond the root — the global directory, the three home-relative ones, the machine-wide one — and, unless told not to, the root pair. */
+  const everyBase = (t: { root: string; home: string }, atRoot = true): string => {
+    const globalDir = join(t.home, 'cfg');
+    for (const dir of [globalDir, join(t.home, '.agents'), join(t.home, '.config', 'opencode'), join(t.home, '.openhands'), join(t.home, 'machine')]) {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'AGENTS.md'), `AGENTS AT ${dir}\n`);
+    }
+    if (atRoot) {
+      writeFileSync(join(t.root, 'AGENTS.md'), 'WORKSPACE AGENTS\n');
+      writeFileSync(join(t.root, 'CLAUDE.md'), 'WORKSPACE CLAUDE\n');
+    }
+    return globalDir;
+  };
+
+  it('holds only the workspace-root files, while injection is still given every enabled base', () => {
+    const t = tree();
+    try {
+      const lines: string[] = [];
+      const h = contextHost(t.home, everyBase(t), {}, true, { platform: 'linux', log: (m) => { lines.push(m); } });
+      // Injection's set is unchanged: all seven files, every base.
+      expect(h.instructionFiles(t.root).map((f) => f.id)).toEqual([
+        'workspace:AGENTS.md', 'workspace:CLAUDE.md', 'global:AGENTS.md', 'user-agents:AGENTS.md', 'user-opencode:AGENTS.md', 'user-openhands:AGENTS.md', 'machine-codex:AGENTS.md',
+      ]);
+      const read = h.retrospectiveInstructionFiles(t.root);
+      expect(read.map((f) => f.id)).toEqual(['workspace:AGENTS.md', 'workspace:CLAUDE.md']);
+      expect(read.every((f) => f.path.startsWith(t.root))).toBe(true);
+      // One line names what the analysis was given, so the run host's log says it in words.
+      expect(lines).toContain(`retrospective: 2 of 7 enabled instruction file(s) at the workspace root (workspace:AGENTS.md, workspace:CLAUDE.md) for ${t.root}`);
+    } finally { t.cleanup(); }
+  });
+
+  it('a workspace file switched off is not read, and a global one switched off changes nothing', () => {
+    const t = tree();
+    try {
+      const h = contextHost(t.home, everyBase(t), { 'workspace:CLAUDE.md': 'off', 'global:AGENTS.md': 'off' }, true, { platform: 'linux' });
+      expect(h.retrospectiveInstructionFiles(t.root).map((f) => f.id)).toEqual(['workspace:AGENTS.md']);
+    } finally { t.cleanup(); }
+  });
+
+  it("with REQ-WORKSPACE-048's master switch off the set is empty", () => {
+    const t = tree();
+    try {
+      const h = contextHost(t.home, everyBase(t), {}, false, { platform: 'linux' });
+      expect(h.retrospectiveInstructionFiles(t.root)).toEqual([]);
+    } finally { t.cleanup(); }
+  });
+
+  it('an override at the root still suppresses its base, and a root holding no file reads nothing from the other bases', () => {
+    const t = tree();
+    try {
+      const globalDir = everyBase(t);
+      writeFileSync(join(t.root, 'AGENTS.override.md'), 'WORKSPACE OVERRIDE\n');
+      expect(contextHost(t.home, globalDir, {}, true, { platform: 'linux' }).retrospectiveInstructionFiles(t.root).map((f) => f.id))
+        .toEqual(['workspace:AGENTS.override.md', 'workspace:CLAUDE.md']);
+    } finally { t.cleanup(); }
+    const bare = tree();
+    try {
+      const h = contextHost(bare.home, everyBase(bare, false), {}, true, { platform: 'linux' });
+      expect(h.instructionFiles(bare.root)).toHaveLength(5);
+      expect(h.retrospectiveInstructionFiles(bare.root)).toEqual([]);
+    } finally { bare.cleanup(); }
+  });
+});
+
+/**
  * REQ-CHAT-162 — `/skills`, against a real store. What the requirement and the plan ask of the row is what the
  * session's own writer guarantees, so this drives that writer rather than a stand-in: a loaded idle session, the
  * listing written through it, then a SECOND process's resume of the same session reading it back, and the

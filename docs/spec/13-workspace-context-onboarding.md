@@ -176,6 +176,11 @@ The product operates on a user-selected workspace folder: the desktop app resolv
   > [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002) narrowed this requirement, the retrospective
   > reads the set injection reads, the per-file switches and REQ-WORKSPACE-048's master switch included (OQ-65,
   > ruled under [R-071](../product/requests.md#r-071)), so the sentence above no longer states that set.
+  > *Amended 2026-10-13 ([OQ-235](../architecture/open-questions.md#oq-235), ruled under
+  > [R-072](../product/requests.md#r-072); `PD-LIBRARY-002` revision 2):* the retrospective reads the workspace-root
+  > part of the set injection reads — the files discovered at the workspace root, the per-file switches and
+  > REQ-WORKSPACE-048's master switch applied — and no file under the global, home-relative or machine-wide bases,
+  > which reach agents through injection alone.
 
   > **Narrowed by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The
   > discovery rule above no longer states what this product does: the workspace root holds the

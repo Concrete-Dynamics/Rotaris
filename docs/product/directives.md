@@ -1208,17 +1208,31 @@ for a shell that never died.
 
 ### PD-LIBRARY-002 — a retrospective pass reads the workspace's own session history and proposes what a user would otherwise have to teach the product by hand
 
+*Revision 2 (2026-10-13, [R-072](requests.md#r-072), ruling [OQ-235](../architecture/open-questions.md#oq-235)) —
+**which instruction files the retrospective reads**: the rule paragraph's instruction-file clause is replaced, and
+revision 1's is quoted beneath it. The reach clause is unchanged word for word.*
+
 **The rule.** Beside the per-run analyst of section 3, the improvement domain SHALL carry a second
 kind of analysis pass, the **retrospective**. A retrospective SHALL read only material this product
 already keeps for the workspace it runs in — session records, improvement artifacts and their
-recorded versions, saved prompts, persona memory, and the workspace's own `AGENTS.md` or
-`AGENTS.override.md` as REQ-WORKSPACE-041 fixes discovery — and SHALL author, per REQ-LIBRARY-003,
+recorded versions, saved prompts, persona memory, and the instruction files `PD-WORKSPACE-002` discovers at the
+workspace root, of those enabled under REQ-WORKSPACE-048's master switch and the per-file switches (revision 2, OQ-235)
+— and SHALL author, per REQ-LIBRARY-003,
 evidence-backed proposals of the closed vocabulary of REQ-LIBRARY-006 about **how the workspace is
 worked in across runs**, not about how one run went. A retrospective proposal's evidence entries
 MUST be attributable to material the workspace's own record holds, in the way REQ-LIBRARY-017
 attributes a per-run proposal's evidence to its source run: each entry names the record that holds
 what it cites, and a proposal whose evidence cannot be so attributed MUST NOT reach a review
 surface.
+
+> **Revision 1 said, and no longer governs** (OQ-235): "and the workspace's own `AGENTS.md` or `AGENTS.override.md` as
+> REQ-WORKSPACE-041 fixes discovery". `PD-WORKSPACE-002` has since widened that discovery to four names at the root and
+> two at each of five further bases, and OQ-65 (R-071) read the clause as pointing at the rule by name, so the read
+> widened with it into the global, home-relative and machine-wide bases this directive's reach clause rules out. Revision
+> 2 names the set: the root's files, with every switch injection honours. Files at the other bases still reach every
+> agent through injection; the retrospective neither cites them nor proposes an edit to one, which would change every
+> other workspace on one workspace's history and lie outside the rollback point REQ-LIBRARY-116's undo takes from the
+> workspace's own tree.
 
 **What the retrospective looks for is stated as the fields its proposals serve, not as a model
 promise.** Its proposals are ordinary proposals in every mechanical respect — REQ-LIBRARY-006's
@@ -1311,6 +1325,20 @@ analyst. No rule text changed ([OQ-222](../architecture/open-questions.md), rule
 [`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement`](../defects/fixed/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md)).*
 
 *Raised by the owner, 2026-09-17; logged as [R-033](requests.md#r-033).*
+Revision 2 logged as [R-072](requests.md#r-072) (OQ-235), ruled by the consortium under the owner's delegation, the
+system-lens advocate's recommendation followed in substance and a revision taken in place of an italic note.
+
+> **First execution of revision 2, 2026-10-13, ruled by [R-072](requests.md#r-072) (OQ-235) and built in plan fin34:** the
+> clause held as written. The run host's `SkillHost.retrospectiveInstructionFiles` keeps the `workspace:` entries of the
+> enabled set and `dispatch`'s `retrospective.capture` passes it; injection is unchanged. **What was measured.** Four cases
+> in `apps/desktop/src/run-host/skills.test.ts` (the root's files only while injection keeps all seven bases' files, a
+> switched-off root file, the master switch, a root override and a root with no file), red before the change. And
+> `pnpm retrospective-proof`'s pass launch, with an `AGENTS.md` under a scratch `~/.agents` and a scratch machine-wide
+> base beside the workspace's own: the run host logged "3 of 3 instruction file(s) enabled (workspace:AGENTS.md,
+> user-agents:AGENTS.md, machine-codex:AGENTS.md)" and "1 of 3 enabled instruction file(s) at the workspace root
+> (workspace:AGENTS.md)"; 37 of 37 checks at a load average of about 3 on four CPUs. **What was not measured.** A live
+> retrospective against a real model (a live run starts none by itself). Recorded in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

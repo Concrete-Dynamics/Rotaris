@@ -281,9 +281,11 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
         priorArtifactsAvailable: historyReply?.kind === 'improvements.result', priorArtifacts: prior,
         // PD-LIBRARY-002 pointed this read at REQ-WORKSPACE-041's discovery BY NAME, and `PD-WORKSPACE-002`
         // has since widened that rule and put a switch on every file. The run host owns the policy, so it
-        // decides the set here and the engine reads what it is handed — one computation shared with the
-        // injection, which is what the two readers had stopped being (OQ-65).
-        instructionFiles: skills.instructionFiles(s.root, undefined, 'retrospective'),
+        // decides the set here and the engine reads what it is handed — the switches decided by the one
+        // computation injection uses (OQ-65), and of that set only the files at the workspace root:
+        // PD-LIBRARY-002 revision 2 keeps the global, home-relative and machine-wide bases out of the analysis
+        // (OQ-235, ruled under R-072). Until 2026-10-13 this passed `skills.instructionFiles` whole.
+        instructionFiles: skills.retrospectiveInstructionFiles(s.root),
       });
       if (job === null) return { kind: 'refused', code: 'retrospective.no-evidence', headline: 'This workspace has no history to look back over yet' };
       log(`retrospective: captured ${job.artifact_id} over ${job.considered_session_ids.length} session(s) for ${s.root}`);

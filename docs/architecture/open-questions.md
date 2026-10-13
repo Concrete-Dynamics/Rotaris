@@ -2951,6 +2951,11 @@ third row state — *suppressed* — so that the screen stops disagreeing with t
 
 **Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: the instruction-file switches reach the retrospective as well as the agents, which reads exactly the set injection reads, master switch and per-file switches included. The retrospective does not state that a file was present and withheld.
 
+*Added 2026-10-13 ([OQ-235](#oq-235), ruled under [R-072](../product/requests.md#r-072)):* this ruling governs the
+switches; reach is the workspace root, per `PD-LIBRARY-002`'s reach clause and its revision 2. "Exactly the set injection
+reads" now reads "the workspace-root part of the set injection reads": no file under the global, home-relative or
+machine-wide bases reaches the retrospective.
+
 `PD-LIBRARY-002` let the retrospective read the instruction files a workspace holds, and pointed it at one
 rule for finding them: REQ-WORKSPACE-041's discovery, "the two names, the workspace root, nothing else —
 governs that read unchanged". `PD-WORKSPACE-002` has since narrowed that requirement, so the rule the
@@ -11497,7 +11502,7 @@ ruling followed both**: A's note amendments, B's entry, converse check and gener
 REQ-TOOLS-072, which the rule names and narrows the same way as REQ-SANDBOX-104. `PD-LIBRARY-002`'s other candidate
 reaches have arguable verbs and go to a note of their own, with two further questions the advocates raised:
 [`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../defects/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
-[`pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md`](../defects/pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md)
+[`pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md`](../defects/fixed/pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md)
 and
 [`the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md`](../defects/the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md),
 recorded and not repaired.
@@ -11852,3 +11857,50 @@ of revision 3. Pinned by `cut-off.test.ts`, `activity.test.ts`, `children.test.t
 **For the live run:** at D2's 45-minute duress launch, a child cut off reads "Cut off at its per-agent timeout of 45 minutes
 while making progress. …" in the inspector and its persona window, and its rows carry the tag; the record carries
 `timedOut: { limitSeconds: 2700, makingProgress: true }`. Not reached until a live run cuts a child off.
+
+<a id="oq-235"></a>
+
+**OQ-235 — Does the retrospective read user-global and machine-wide instruction files, or only the workspace's own?**
+*(`PD-LIBRARY-002`, "Reach, and the boundary it holds": "SHALL NOT read outside the workspace: no other workspace's
+record, no user-global location", and its rule's "the workspace's own `AGENTS.md` or `AGENTS.override.md` as
+REQ-WORKSPACE-041 fixes discovery"; OQ-65's ruling under [R-071](../product/requests.md#r-071), "reads exactly the set
+injection reads"; `PD-WORKSPACE-002`'s discovery bases; REQ-WORKSPACE-048. Raised 2026-10-13 from
+[`pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md`](../defects/fixed/pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md),
+the R-072 consortium's question LG1, and ruled the same day.)*
+
+The run host served both readers of the instruction files from one computation (`SkillHost.instructionFiles`), and
+since `PD-WORKSPACE-002` that computation discovers under the workspace root, the Rotaris global configuration directory,
+`~/.agents`, `~/.config/opencode`, `~/.openhands` and `/etc/codex`. So the built retrospective read user-global and
+machine-wide files the directive's reach clause rules out, while OQ-65's ruling said it reads exactly the set injection
+reads. Two owner decisions (R-033's directive and R-071's ruling) disagreed on the record.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** the two owner decisions are
+reconciled by holding each to the question it answered. `PD-LIBRARY-002`'s reach clause (R-033) governs reach and
+OQ-65's ruling (R-071) governs the switches. The retrospective reads the enabled instruction-file set injection computes,
+restricted to the files discovered at the workspace root (the four root names, the per-file switches and
+REQ-WORKSPACE-048's master switch all applied), and reads no file under the global, home-relative or machine-wide bases.
+[`PD-LIBRARY-002`](../product/directives.md#pd-library-002) takes revision 2, which states that set in the rule paragraph
+and keeps the reach clause word for word. Injection is unchanged: agents are still given every enabled base.
+
+The two recommendations weighed, and the ruling followed **B**:
+- **Advocate A (the user's lens)** recommended keeping the wide read — the retrospective reads exactly the enabled set
+  injection reads, user-global and machine-wide files included — with a revision 2 rewriting the reach clause to say so,
+  and each instruction-file evidence entry labelled with its inventory source and absolute path so a global `AGENTS.md`
+  cannot be mistaken for the workspace's own: the analysis would otherwise not know what agents were already told and
+  would propose rules the user already keeps globally.
+- **Advocate B (the system's lens)** recommended restricting the read to the workspace root with the reach clause left
+  whole: OQ-65 said "The discovery half is not the question. The switch half is the question", so R-071 never weighed
+  reach, and the wide read produces evidence attributed only by file name, an `agents_md_update` carried out in the
+  workspace against a file elsewhere, and one workspace's history proposing edits that govern every other workspace.
+
+The ruling took B's substance. The executor takes its rollback point from the workspace's Git tree, so an approved
+proposal to change `~/.agents/AGENTS.md` would have no undo under REQ-LIBRARY-116 and would change every other workspace
+on the strength of this one's history; A's labelling fixes how such a proposal is cited and does nothing for either. A's
+cost to the user is real but small: the analysis may miss a rule kept globally and propose a duplicate, which the human
+gate catches, and global files still reach every agent through injection, whose effects the analysis sees in the session
+history. From A it kept the form: a directive revision rather than an italic note, so the directive itself names the set.
+
+*Built 2026-10-13 (fin34, `fin34-library-and-intent`); its first execution is reported in `PD-LIBRARY-002`'s entry.*
+`SkillHost.retrospectiveInstructionFiles` keeps the `workspace:` entries of the enabled set and logs "retrospective: N of
+M enabled instruction file(s) at the workspace root (ids)"; `dispatch`'s `retrospective.capture` passes it. Pinned by
+four cases in `apps/desktop/src/run-host/skills.test.ts`, red before the change.

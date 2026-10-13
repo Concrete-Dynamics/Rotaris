@@ -21,3 +21,14 @@ repaired, since which decision governs is the owner's (or the delegated round's)
 
 - `apps/desktop/src/run-host/skills.ts` — `instructionFiles`, the one discovery both readers use.
 - `docs/spec/13-workspace-context-onboarding.md` — REQ-WORKSPACE-041 and its two notes.
+
+## Outcome
+
+Settled 2026-10-13 by [OQ-235](../../architecture/open-questions.md#oq-235), ruled under the owner's delegation
+([R-072](../../product/requests.md#r-072)): the reach clause governs reach and OQ-65's ruling governs the switches.
+`PD-LIBRARY-002` revision 2 names the set — the instruction files discovered at the workspace root, of those enabled under
+REQ-WORKSPACE-048's master switch and the per-file switches — and keeps the reach clause word for word. Repaired in plan
+fin34: `SkillHost.retrospectiveInstructionFiles` (`apps/desktop/src/run-host/skills.ts`) keeps the `workspace:` entries of
+the one computation's enabled set, and `dispatch`'s `retrospective.capture` passes it where it passed `instructionFiles`
+whole; injection is unchanged. Pinned by four cases in `apps/desktop/src/run-host/skills.test.ts`, red before, and by
+`pnpm retrospective-proof`'s OQ-235 check (37 of 37).

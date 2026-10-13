@@ -121,7 +121,8 @@ unchanged: any "Minified React error #185" line in `duress/app.log`, its time ag
 `sign-in/app.filtered.log`, with the relay live (`apps/desktop/src/main/capture/index.ts:30`). It ran **525 s** of two or more
 children streaming at once — 08:14:11 to 08:16:11 (119 s; a, b and c) and 08:19:28 to 08:26:16 (407 s; d and e1), d's
 138.1 s request 80 overlapping e1's requests 78, 79 and 81 by 40.7, 49.7 and 45.5 s, the shape of the `a68f121` errors, over a
-929 kB transcript (the orchestrator's `live-552d346-duress-autopsy.md`, finding D8). The default pack of the same build
+929 kB transcript ([`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md), finding D8;
+the orchestrator's scratchpad copy until 2026-10-13). The default pack of the same build
 carried 0 as well, with two children streaming at once in `edit` and `resume`. One more absence does not discharge the note:
 the seven errors of `a68f121` were never explained, only not seen again.
 

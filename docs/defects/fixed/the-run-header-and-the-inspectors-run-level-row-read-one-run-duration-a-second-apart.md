@@ -5,7 +5,8 @@ elapsed time, and both read the same interval, `session.runStartedAt` to `sessio
 seconds by two rules: the header's `formatDuration` floors it, the row's `elapsedLabel` rounds it to the nearest second.
 Whenever the interval's fraction is half a second or more, the two read a second apart, side by side, for one run.
 
-Found by the default live run at `c2fdd6a` (autopsy K1, the orchestrator's `live-c2fdd6a-default-autopsy.md`) and seen
+Found by the default live run at `c2fdd6a` (autopsy K1, [`live-c2fdd6a-default-autopsy.md`](../../architecture/live-runs/live-c2fdd6a-default-autopsy.md), the orchestrator's
+scratchpad copy until 2026-10-13) and seen
 again at `c2a9444`: `edit` read "Completed 2:13" in the header against "orchestrator done · 2m 14s" in the inspector
 (133.67 s); `terminal` "3:33" against "3m 34s" (213.79 s); `frictions` "0:20" against "21s" (20.74 s); `resume` agreed
 at "1:08" and "1m 8s" (68.22 s). The session list floors too, as the header does.

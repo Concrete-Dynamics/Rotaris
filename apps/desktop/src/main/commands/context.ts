@@ -109,7 +109,8 @@ export interface CommandContext {
   readonly authRecoveryPayloads: Map<number, AuthRecoveryPayload>;
   /** REQ-NOTIFY-030/032: a failed run's class publication held until its session is followed (`run-failure-notice.ts`). */
   readonly runFailures: RunFailurePublisher;
-  readonly reviewPayloads: Map<number, { workspace: string; entries: HooksSummary['review']; decided: boolean; win: BrowserWindow }>;
+  /** REQ-HOOKS-106/107: each review dialog's payload, keyed by the dialog — `workspaceId` is the workspace it was opened for, which its decision is stored against (ESC-34). */
+  readonly reviewPayloads: Map<number, { workspace: string; workspaceId: string; entries: HooksSummary['review']; decided: boolean; win: BrowserWindow }>;
   readonly measurePersonaPaint: (persona: string, dlg: BrowserWindow, shownAt: number) => void;
   readonly terminalWindowCommand: (req: TerminalWindowCommand, senderId: number) => Promise<CommandOutcome>;
   readonly surface: ((h: HandOver) => void) | undefined;
@@ -179,7 +180,8 @@ export interface CommandContext {
   readonly chooseSkillFile: (parent: BrowserWindow, startAt: string) => Promise<string | null>;
 
   // The two flows that are longer than a handler and are raised from more than one place.
-  readonly openHookReview: () => Promise<CommandOutcome>;
+  /** REQ-HOOKS-106: `workspace` is a notice action's named workspace (ESC-34), reached first; without it, `w`'s own. */
+  readonly openHookReview: (w: MainWindowState | undefined, workspace?: string) => Promise<CommandOutcome>;
   readonly restoreFlow: (w: MainWindowState) => Promise<CommandOutcome>;
 
   /**

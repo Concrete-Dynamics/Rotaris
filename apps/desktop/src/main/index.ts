@@ -931,21 +931,34 @@ async function main(): Promise<void> {
    * at least 620×440 logical pixels, opened only when the user asks (REQ-HOOKS-104, REQ-SHELL-016). Leaving it
    * without choosing is a rejection, reported once: the first exit path taken reports.
    */
-  const reviewPayloads = new Map<number, { workspace: string; entries: HooksSummary['review']; decided: boolean; win: BrowserWindow }>();
-  const openHookReview = async (): Promise<CommandOutcome> => {
-    const workspaceId = activeWindow()?.workspaceId;
-    if (!workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reviewing its hooks' };
+  const reviewPayloads = new Map<number, { workspace: string; workspaceId: string; entries: HooksSummary['review']; decided: boolean; win: BrowserWindow }>();
+  /**
+   * ESC-34 / REQ-NOTIFY-044: with `workspace` (a notice action's named workspace) the review is for THAT workspace,
+   * whichever window the action was activated in: `MainWindows.reach` surfaces the window holding it, else adds one for it
+   * without asking anything (OQ-267), and the dialog is parented to that window and decides for that workspace. Until
+   * 2026-10-13 a notice naming another workspace opened nothing
+   * (docs/defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md). Without it, the asking window's own.
+   */
+  const openHookReview = async (asking: MainWindowState | undefined, workspace?: string): Promise<CommandOutcome> => {
+    let target = asking;
+    if (workspace !== undefined) {
+      const reached = await mainWindows.reach(workspace);
+      if (!reached.ok) return reached.outcome;
+      target = reached.window;
+    }
+    const workspaceId = target?.workspaceId;
+    if (!target || !workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reviewing its hooks' };
     const r = await runHost.request({ kind: 'hooks.summary', workspaceId }, millis(10_000));
     if (r.kind !== 'hooks.summary') return refusal(r, 'The hooks could not be read');
     if (r.summary.declaredCount === 0) return { ok: false, code: 'hooks.none', headline: 'This workspace declares no hooks' };
-    const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !dialogs.has(w.webContents.id) && !reviewPayloads.has(w.webContents.id));
+    const parent = target.win.isDestroyed() ? undefined : target.win;
     const dlg = new BrowserWindow({
       ...(parent ? { parent, modal: true } : {}), width: 720, height: 520, minWidth: 620, minHeight: 440, show: false, title: "Review this workspace's hooks", backgroundColor: themeBackground(),
       resizable: true, minimizable: false, maximizable: false,
       webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
     });
     const wc = dlg.webContents.id;
-    const entry = { workspace: r.summary.workspace, entries: r.summary.review, decided: false, win: dlg };
+    const entry = { workspace: r.summary.workspace, workspaceId, entries: r.summary.review, decided: false, win: dlg };
     reviewPayloads.set(wc, entry);
     dlg.setMenuBarVisibility(false);
     dlg.on('closed', () => {

@@ -16,8 +16,12 @@ export function hooksCommands(
       const r = await runHost.request({ kind: 'hooks.summary', workspaceId: w.workspaceId, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) }, millis(10_000));
       return r.kind === 'hooks.summary' ? { ok: true, value: r.summary } : refusal(r, 'The hooks could not be read');
     },
-    'hooks.review': () => {
-      return openHookReview();
+    /**
+     * REQ-HOOKS-106: the review for the asking window's workspace (the Hooks tab's control), or — ESC-34, REQ-NOTIFY-044 —
+     * for the workspace a notice action names, whichever window it was activated in (`openHookReview` reaches it first).
+     */
+    'hooks.review': (req, { w }) => {
+      return openHookReview(w, req.workspace);
     },
     'playbooks.catalogue': async () => {
       const r = await runHost.request({ kind: 'playbooks.catalogue' }, millis(10_000));
@@ -27,14 +31,15 @@ export function hooksCommands(
       const p = reviewPayloads.get(senderId);
       return p ? { ok: true, value: { workspace: p.workspace, entries: p.entries } } : { ok: false, code: 'hooks.review.none', headline: 'This window was not opened for a hook review' };
     },
-    'hooks.reviewDecide': async (req, { w, senderId }) => {
+    'hooks.reviewDecide': async (req, { senderId }) => {
       const p = reviewPayloads.get(senderId);
       if (!p || p.decided) return { ok: false, code: 'hooks.review.none', headline: 'No review is open for this window' };
-      if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'The workspace is no longer open' };
-      const r = await runHost.request({ kind: 'hooks.decide', workspaceId: w.workspaceId, trusted: req.trusted }, millis(10_000));
+      // The decision belongs to the workspace the dialog was opened for, not to whichever main window is active when it is
+      // taken (a dialog's command resolves to the active window), which ESC-34's cross-workspace review makes differ.
+      const r = await runHost.request({ kind: 'hooks.decide', workspaceId: p.workspaceId, trusted: req.trusted }, millis(10_000));
       if (r.kind !== 'ack') return refusal(r, 'The decision could not be saved');
       p.decided = true;
-      log(`hook review → ${req.trusted ? 'allowed' : 'refused'}`);
+      log(`hook review → ${req.trusted ? 'allowed' : 'refused'} for ${p.workspace}`);
       clocks.timers.after(millis(50), () => { if (!p.win.isDestroyed()) p.win.close(); });
       return { ok: true };
     },

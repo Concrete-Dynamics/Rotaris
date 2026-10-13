@@ -19,6 +19,14 @@ Last reconciled with the code: **2026-10-13**
 every live shipping requirement's implementation, test and proof citations. The **component view** gains its section beside
 the notices generator and the build-identifier writer. No package, edge, process, channel, command or store column changed.
 
+**A hook-review notice reaches the workspace it names; `shell.switchView` is gone (ESC-34, REQ-NOTIFY-044; fin41, N86).**
+`hooks.review` carries an optional `workspace`; the renderer's `open-hook-review` case sends the action's workspace instead of
+comparing it with its own and opening nothing, and main's `openHookReview` reaches it through `MainWindows.reach` (the
+holder surfaced, else a window added with no gate and no close, OQ-267) and parents the dialog to that window;
+`hooks.reviewDecide` stores the decision against the dialog's own workspace id rather than the active window's. The
+contract's dead `shell.switchView` member and main's `command.unimplemented` stub are deleted. The **process view**'s
+command list says both. No package, edge, process, channel or store column changed.
+
 **The scripted client calls any tool by key (fin42, N52).** The step `tool:<key>` takes `{ name, args }` from
 `ROTARIS_SCRIPT_TOOL_ARGS`, an argument `@content_hash` filled from the newest hash a tool result carried
 (`run-host/scripted-client.ts`, `withLatestHash`), which `edits-proof` drives `write_file`'s edit and insert and `haet_edit`

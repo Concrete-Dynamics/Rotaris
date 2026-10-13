@@ -1224,6 +1224,15 @@ a surface in each case and erases a distinction one of them draws on purpose.
 - Activating a hook-review action whose workspace is not the open one is not built. The product logs it
   and opens nothing; navigating between workspaces from a notice is owed, and is recorded in the map
   rather than silently ignored.
+  *Built 2026-10-13 (fin41, item N86): the owed navigation's first execution.* The case is reachable because notices are
+  application-wide: a second main window (PD-SHELL-001) or a switch since the notice was raised puts the action in a
+  window holding another workspace. The renderer now hands the action's workspace to main (`hooks.review {workspace}`),
+  and main reaches it — the window holding it surfaced (REQ-STARTUP-163), else one added for it with no gate and no close
+  — then opens that workspace's review in that window and stores the decision against it. Where no window holds the
+  workspace, adding one is the build's reading and not a ruling: [OQ-267](open-questions.md#oq-267). `pnpm notice-proof`'s
+  `review-other` launch drives it; before the repair it logged "… which is not the open workspace" and opened nothing
+  ([`../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md`](../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md)).
+  The provider-named sign-in branch stays a logged no-op: no notice names a provider, so nothing reaches it.
 - The count is unchanged: no identifier was minted or withdrawn.
 
 ### ESC-35 — the intent-classification bound was set against a hosted provider's latency

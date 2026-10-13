@@ -16,3 +16,10 @@ Recorded 2026-10-13 by fin41 (item N86, part b). No user lacks anything because 
 - `packages/contracts/src/commands.ts` — the `shell.switchView` member of the command union.
 - `apps/desktop/src/main/commands/shell.ts` — the stub answering it.
 - `docs/architecture/views/02-process-view.md` — names it among main's commands.
+
+## Outcome
+
+Repaired 2026-10-13 by fin41 (item N86, part b): the `shell.switchView` member is deleted from the command contract and
+its `command.unimplemented` stub from `apps/desktop/src/main/commands/shell.ts`; the process view no longer lists it.
+`pnpm typecheck` holds the handler table total over the contract's kinds, so a sender or a handler left behind would not
+compile. View switching stays the renderer's (`useShellState`'s `switchView`), unchanged.

@@ -14,7 +14,7 @@ import { type CommandContext, type CommandHandlers } from './context.js';
  */
 export function shellCommands(
   ctx: Pick<CommandContext, 'capturing' | 'currentTheme' | 'log' | 'notices' | 'preferences' | 'processes' | 'requirementsPreferenceKey' | 'runHost' | 'services' | 'setTheme' | 'themeBackground' | 'updater'>,
-): Pick<CommandHandlers, 'shell.hello' | 'shell.openExternal' | 'shell.openThirdPartyLicenses' | 'theme.get' | 'theme.set' | 'prefs.get' | 'prefs.set' | 'composer.readDraft' | 'composer.writeDraft' | 'notice.acknowledge' | 'notice.report' | 'shell.switchView'> {
+): Pick<CommandHandlers, 'shell.hello' | 'shell.openExternal' | 'shell.openThirdPartyLicenses' | 'theme.get' | 'theme.set' | 'prefs.get' | 'prefs.set' | 'composer.readDraft' | 'composer.writeDraft' | 'notice.acknowledge' | 'notice.report'> {
   const { capturing, currentTheme, log, notices, preferences, processes, requirementsPreferenceKey, runHost, services, setTheme, themeBackground, updater } = ctx;
   return {
     'shell.hello': async (_req, { w }) => {
@@ -99,12 +99,6 @@ export function shellCommands(
       log(`theme applied ${theme.name} to every live window`);
       return { ok: true, value: { name: theme.name } };
     },
-    /**
-     * Declared by the contract and answered by nobody: the view switch is the renderer's own business and main
-     * has never had a part in it. It is named here rather than left to fall through, so that the table stays
-     * total over the contract's kinds and this gap is a line of code rather than an absence.
-     */
-    'shell.switchView': () => ({ ok: false, code: 'command.unimplemented', headline: 'shell.switchView is not built yet' }),
     'prefs.get': (req) => {
       return { ok: true, value: { value: preferences.read(requirementsPreferenceKey(req.key)) } };
     },

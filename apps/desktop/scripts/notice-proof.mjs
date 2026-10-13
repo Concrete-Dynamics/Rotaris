@@ -26,8 +26,10 @@ import { startApp, stopApp, until } from './lib/driver.mjs';
  *     the accessible name; the four severities and the four kinds drawing one glyph set.
  *  6. The action carries its object, and the object is the one on screen (REQ-NOTIFY-044 as amended under ESC-34,
  *     REQ-NOTIFY-224): the unreviewed-hooks notice offers `open-hook-review` naming its workspace, and activating it
- *     opens REQ-HOOKS-106's review for THAT workspace. The identity main writes and the identity the renderer checks
- *     it against come from two different processes, so only the built application proves they are the same string.
+ *     opens REQ-HOOKS-106's review for THAT workspace. The identity main writes and the identity main reaches with it
+ *     travel through the renderer, so only the built application proves they are the same string.
+ *     6b. And when the object is NOT the one on screen (ESC-34's owed half, OQ-267): a notice naming a workspace no
+ *     window holds adds a window for it, asking nothing and closing nothing, and opens its review there.
  *  7. The retry action reaches its target (REQ-NOTIFY-045, REQ-NOTIFY-030, OQ-178): activated on a failed session, it
  *     resubmits that session's last submitted prompt as a second run of that session.
  *     And it resubmits the prompt the session sent, wherever its row is (REQ-SESSION-192) and with the image it carried
@@ -343,12 +345,15 @@ const s4 = scenario('review-action', { workspaceHook: true });
   const actions = inspectAt(r.log, 2500, '.notice__action')?.matches ?? [];
   expect(actions.length === 1 && actions[0].text === 'Review hooks', `the notice offers ${JSON.stringify(actions.map((a) => a.text))} (REQ-NOTIFY-224)`);
   expect(actions[0].attrs['data-action'] === 'open-hook-review', `the action is ${actions[0].attrs['data-action']}, not the member REQ-NOTIFY-044 gained under ESC-34`);
-  // The whole point of the parameter: main writes the workspace into the action, the renderer compares it with the
-  // workspace it has open, and the review opens for THAT workspace. A mismatch in the form of the string — a slash, a
-  // drive letter's case — would silently open nothing, and no unit test spans the two processes to catch it.
+  // The whole point of the parameter: main writes the workspace into the action, the renderer hands it back, main reaches
+  // the window holding it (here the one on screen) and the review opens for THAT workspace. A mismatch in the form of the
+  // string — a slash, a drive letter's case — would add a second window on the same folder, which the assertion below
+  // that the reach `surfaced` catches; no unit test spans the processes to catch it.
   const opened = r.log.match(/hook review opened for (.+) \((\d+) hook\(s\)\)/);
   expect(opened !== null, `the action was activated and no review opened — see review-action.log`);
   expect(!/is not the open workspace/.test(r.log), `the renderer refused the action's workspace: ${(r.log.match(/names .+ which is not the open workspace/) ?? [''])[0]}`);
+  const surfaced = r.log.match(/notice action reached (.+): (added|surfaced) window (\d+)/);
+  expect(surfaced?.[2] === 'surfaced', `the action named the window's own workspace and main ${surfaced?.[2] ?? 'reached nothing'} (a second window on one folder is REQ-STARTUP-163's breach)`);
   const sameRoot = opened[1].replace(/\\/g, '/').toLowerCase() === s4.workspace.replace(/\\/g, '/').toLowerCase();
   expect(sameRoot, `the review opened for ${opened[1]}, not for ${s4.workspace}`);
   results.reviewAction = {
@@ -356,6 +361,54 @@ const s4 = scenario('review-action', { workspaceHook: true });
     actionLabel: actions[0].text, member: actions[0].attrs['data-action'],
     reviewOpenedFor: opened[1], hooks: Number(opened[2]), workspaceMatched: sameRoot,
     png: join(output, 'review-action.png'), elapsedMs: r.elapsedMs,
+  };
+  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6b. ESC-34's owed half: the action names ANOTHER workspace than the window it is activated in. Notices are
+// application-wide, so this is a second window's notice, or one that outlived a workspace switch. The window holds a
+// workspace with no hooks; the notice names a second workspace declaring one, which no window holds. Activating it
+// reaches that workspace — a window added for it, nothing asked, nothing closed (OQ-267) — and opens ITS review there.
+// Before the repair of docs/defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md the renderer logged
+// "… which is not the open workspace" and opened nothing.
+const s4b = scenario('review-other');
+const s4bTarget = scenario('review-other-target', { workspaceHook: true });
+{
+  const step = (at, obj) => `${JSON.stringify(obj)}@${at}`;
+  const r = await launch('review-other', s4b, {
+    ROTARIS_CAPTURE_AFTER_MS: '11000',
+    ROTARIS_CAPTURE_NOTICES: step(2000, {
+      op: 'report', severity: 'warning', title: 'Workspace hooks need review', message: 'Another workspace declares a hook.', persistent: true,
+      action: { label: 'Review hooks', action: { kind: 'open-hook-review', workspace: s4bTarget.workspace } },
+    }),
+    ROTARIS_CAPTURE_INSPECT_AT: '.notice__action@2600',
+    ROTARIS_CAPTURE_CLICKS: '.notice__action>>Review hooks@3200',
+    ROTARIS_CAPTURE_HOOK_REVIEW: 'refuse', ROTARIS_CAPTURE_HOOK_REVIEW_MS: '900',
+  });
+  const actions = inspectAt(r.log, 2600, '.notice__action')?.matches ?? [];
+  expect(actions.length === 1 && actions[0].attrs['data-action'] === 'open-hook-review', `the notice offers ${JSON.stringify(actions.map((a) => a.attrs['data-action']))}`);
+  expect(!/is not the open workspace/.test(r.log), `the renderer refused the action as naming another workspace: ${(r.log.match(/names .+ which is not the open workspace/) ?? [''])[0]}`);
+  const reached = r.log.match(/notice action reached (.+): (added|surfaced) window (\d+)/);
+  expect(reached !== null, `the action was activated and no window reached the named workspace — see review-other.log`);
+  const same = (a, b) => a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
+  expect(same(reached[1], s4bTarget.workspace), `the action reached ${reached[1]}, not ${s4bTarget.workspace}`);
+  expect(reached[2] === 'added', `no window held ${s4bTarget.workspace}, yet the action ${reached[2]} window ${reached[3]}`);
+  const opened = r.log.match(/hook review opened for (.+) \((\d+) hook\(s\)\)/);
+  expect(opened !== null, `the named workspace was reached and no review opened — see review-other.log`);
+  expect(same(opened[1], s4bTarget.workspace), `the review opened for ${opened[1]}, not for ${s4bTarget.workspace}`);
+  // Nothing the user had open was closed, and nothing asked: the first window kept its workspace and no chooser opened.
+  expect(!/workspace switched to/.test(r.log), 'the activating window was replaced; the action must add or surface, never close (OQ-267)');
+  expect(!/workspace open declined|ended by the unsaved-settings guard/.test(r.log), 'a REQ-SHELL-021 gate ran on a notice action');
+  // The decision was stored against the named workspace (the dialog's own payload), not the window it was activated in.
+  const decided = r.log.match(/hook review → (allowed|refused) for (.+)/);
+  expect(decided !== null && decided[1] === 'refused', `the scripted choice was not recorded: ${decided?.[0] ?? 'no decision line'}`);
+  expect(same(decided[2].trim(), s4bTarget.workspace), `the decision was stored for ${decided[2]}, not for ${s4bTarget.workspace}`);
+  results.reviewOther = {
+    actionWorkspace: s4bTarget.workspace, windowWorkspace: s4b.workspace,
+    reached: { workspace: reached[1], how: reached[2], window: Number(reached[3]) },
+    reviewOpenedFor: opened[1], hooks: Number(opened[2]), decision: decided[1], decidedFor: decided[2].trim(),
+    png: join(output, 'review-other.png'), elapsedMs: r.elapsedMs,
   };
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
 }

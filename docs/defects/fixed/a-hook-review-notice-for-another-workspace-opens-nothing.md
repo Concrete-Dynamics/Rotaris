@@ -43,3 +43,21 @@ from Settings. It is a dormant branch, kept as it is.
   holding a workspace or add one for it without asking anything.
 - `packages/contracts/src/commands.ts` — `hooks.review` carries no workspace.
 - `apps/desktop/scripts/notice-proof.mjs` — section 6 drives the action only in the window that raised it.
+
+## Outcome
+
+Repaired 2026-10-13 by fin41 (item N86). The renderer's `open-hook-review` case no longer compares the action's workspace
+with its own: it sends `hooks.review { workspace }`, and main's `openHookReview` reaches that workspace through
+`MainWindows.reach` — the window holding it surfaced (REQ-STARTUP-163), else a window added for it on PD-SHELL-001's
+route, with no REQ-SHELL-021 gate and no window closed, so nothing is asked — and parents the review to that window. The
+review payload keeps the workspace id it was opened for, and `hooks.reviewDecide` stores the decision against it rather
+than against the active window. Adding a window where none holds the workspace is the build's reading, raised as
+[OQ-267](../../architecture/open-questions.md#oq-267) for the consortium. The provider-named sign-in branch is unchanged
+(dormant: nothing names a provider).
+
+Pinned by `apps/desktop/src/main/main-windows.test.ts` ("reaches a named workspace …", and the refusal with no main window)
+and by `pnpm notice-proof`'s section 6b, `review-other`: a window on a workspace with no hooks activates a notice naming
+another workspace that declares one; main adds window 2 for it, opens its review (1 hook), and records the scripted
+refusal for that workspace. Run against the base build (the repair's source reverted, the proof kept) the same section
+failed with the renderer's "… which is not the open workspace" and no review; with the repair the whole proof passed.
+Section 6 now also asserts that a notice naming the window's own workspace surfaces that window and builds none.

@@ -153,13 +153,17 @@ opens the folder of the window that asked with `shell.openPath`, bounded at 5 s 
 may never answer (`main/open-folder.ts`), and answers a failure as a refusal naming the path, which the renderer raises on
 the transient error surface; OQ-191), **`workspace.usage`** (fin10, REQ-SHELL-044/045: the strip's tokens and cost, relayed
 as the run host's `workspace.usage {workspaceId}`, answered `{tokens, cost}` by `workspaceUsage` over the workspace's stored
-sessions; OQ-190), `shell.switchView`, **`window.state` / `window.minimize` / `window.toggleMaximize` / `window.close`**
+sessions; OQ-190), **`window.state` / `window.minimize` / `window.toggleMaximize` / `window.close`**
 (PD-SHELL-003: the frameless main window's renderer asks main to operate the BrowserWindow that sent the command;
 close calls `BrowserWindow.close()` so the existing guarded close event remains the only decision point),
 `window.modality {active}` (Part W: the main window's application-modal surface — the command
 palette, the keyboard help — registering itself open or closed; main's registry disables input in every persona window
 of that family for the duration, ADR-0048; a persona window sending it is refused `window.notMain`),
-`hooks.summary/review/reviewPayload/reviewDecide/clearDecision/setToggle`,
+`hooks.summary/review/reviewPayload/reviewDecide/clearDecision/setToggle` (**`hooks.review {workspace?}`**, ESC-34: the
+unreviewed-hooks notice's `open-hook-review` hands its named workspace back, and main reaches it — `MainWindows.reach`
+surfaces the window holding it, else adds one for it on PD-SHELL-001's route with no gate and no close (OQ-267) — then
+parents the review to that window; the dialog's payload keeps the workspace id its decision is stored against; without
+`workspace`, the asking window's own),
 `playbooks.catalogue`, `config.read/save/setField/liveState`, `providers.list/health/open/save/validate/signOut/
 delete/refresh`, `provider.payload/signIn`. Main relays a session or hook command to the run host, a workspace or
 config command to the workspace service, and answers preference, theme and **provider** commands itself (the

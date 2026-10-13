@@ -298,6 +298,52 @@ describe('MainWindows', () => {
     expect(empty.actions).toContain('build:C:/startup:hand-over');
   });
 
+  // ESC-34 / REQ-NOTIFY-044 (docs/defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md): a notice action
+  // naming a workspace reaches that workspace, from whichever window it was activated in, without asking anything.
+  it('reaches a named workspace: surfaces the window holding it, else adds one for it with no gate, and closes nothing', async () => {
+    const h = harness({ runsIn: () => 1 });
+    const first = await h.mainWindows.launch('C:/a');
+    h.folders.push('C:/b');
+    await h.mainWindows.choose(first.wcId, { newWindow: true });
+    expect(h.mainWindows.active()?.workspace).toBe('C:/b');
+
+    // Held by another window: that window is surfaced and returned, and nothing is built.
+    h.actions.length = 0;
+    const held = await h.mainWindows.reach('c:/a');
+    expect(held.ok && held.window.wcId).toBe(first.wcId);
+    expect(held.ok && held.window.workspaceId).toBe('id:C:/a');
+    expect(held.ok && held.added).toBe(false);
+    expect(h.actions.filter((action) => !action.startsWith('log:'))).toEqual(['show:C:/a', 'focus:C:/a']);
+    expect(h.mainWindows.active()?.wcId).toBe(first.wcId);
+
+    // Held by nobody: a window is added on PD-SHELL-001's route and opened, though a run is active (no REQ-SHELL-021 gate),
+    // and no window is closed and no chooser asked.
+    h.actions.length = 0;
+    const reached = await h.mainWindows.reach('C:/c');
+    expect(reached.ok && reached.added).toBe(true);
+    expect(reached.ok && reached.window.workspace).toBe('C:/c');
+    expect(reached.ok && reached.window.workspaceId).toBe('id:C:/c');
+    expect(h.actions.filter((action) => action.startsWith('close:') || action.startsWith('destroy:'))).toEqual([]);
+    expect(h.actions).toContain('open:C:/c');
+    expect(h.notices).toEqual([]);
+    expect(h.mainWindows.ordered().map((window) => window.workspace).sort()).toEqual(['C:/a', 'C:/b', 'C:/c']);
+    expect(h.mainWindows.active()?.workspace).toBe('C:/c');
+
+    // A folder that cannot be opened is answered as a refusal, and the window built for it does not survive.
+    h.openFailures.add('C:/d');
+    const failed = await h.mainWindows.reach('C:/d');
+    expect(failed.ok).toBe(false);
+    expect(!failed.ok && failed.outcome.ok).toBe(false);
+    expect(h.mainWindows.ordered().map((window) => window.workspace).sort()).toEqual(['C:/a', 'C:/b', 'C:/c']);
+  });
+
+  it('answers a reach with no main window open as a refusal and builds nothing', async () => {
+    const empty = harness({ cwd: 'C:/startup' });
+    const reached = await empty.mainWindows.reach('C:/a');
+    expect(reached.ok).toBe(false);
+    expect(empty.actions.filter((action) => action.startsWith('build:'))).toEqual([]);
+  });
+
   it('cancels only the answered window deferred offer', async () => {
     const h = harness();
     const first = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });

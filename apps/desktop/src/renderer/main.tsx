@@ -43,14 +43,6 @@ import { bootApproval, bootAuthRecovery, bootHookReview, bootPause, bootPersona,
  * before any view has mounted. Null until the window has booted, and the action is then not dispatched.
  */
 let focusSession: ((sessionId: string) => void) | null = null;
-/**
- * The workspace this window has open, for the one notice action that names one (ESC-34). Set once at bootstrap from
- * the same value the tree is given, so the dispatcher — which is not a component — can compare without a lookup.
- */
-let openWorkspace = '(no workspace)';
-/** REQ-GIT-082's comparison, the idiom this renderer already uses for "does this still name the open workspace". */
-const sameWorkspace = (a: string, b: string): boolean =>
-  a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
 
 /**
  * Part X — the workspace's saved prompts (REQ-LIBRARY-137/138/139), held ABOVE the views. That placement is
@@ -990,14 +982,14 @@ function dispatchNoticeAction(action: NoticeAction): void {
       shell.openSettings(action.category);
       return;
     case 'open-hook-review':
-      // ESC-34: the action names the workspace whose hooks it concerns. Reviewing a different workspace's hooks than
-      // the one on screen would show the wrong set (the decision is per fingerprint, REQ-HOOKS-095), so a notice that
-      // outlived a workspace change opens nothing: navigating between workspaces from a notice is NOT built.
-      if (!sameWorkspace(action.workspace, openWorkspace)) {
-        console.warn(`notice action "open-hook-review" names ${action.workspace}, which is not the open workspace`);
-        return;
-      }
-      void bridge.command({ kind: 'hooks.review' });
+      // ESC-34: the action names the workspace whose hooks it concerns, and the review is for THAT workspace. Notices are
+      // application-wide, so this window may hold another one (a second window, or a switch since the notice was raised):
+      // main reaches the named workspace — the window holding it surfaced, else one added for it, asking nothing (OQ-267)
+      // — and opens its review there. Until 2026-10-13 this case compared the name with this window's workspace and
+      // opened nothing on a mismatch (docs/defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md).
+      void bridge.command({ kind: 'hooks.review', workspace: action.workspace }).then((outcome) => {
+        if (!outcome.ok) console.warn(`notice action "open-hook-review" for ${action.workspace} was refused: ${outcome.headline}`);
+      });
       return;
     case 'open-provider-sign-in':
       // REQ-WORKSPACE-152: clause (3)'s notice starts the flow at the catalog step, which is `add`. Clause (1)'s
@@ -1566,8 +1558,6 @@ async function boot(): Promise<void> {
   // sandboxed renderer has no `node:os` (ADR-0051). It is optional on the way in: a reply from an
   // older main, or the fallback below, simply collapses nothing and draws the absolute path.
   const info = hello.ok ? (hello.value as { version: string; workspace: string; home: string | undefined; processes: string[]; circuitBreakerArmed: boolean; circuitBreakerHostOff: boolean }) : { version: '?', workspace: '(no workspace)', home: undefined, processes: [], circuitBreakerArmed: false, circuitBreakerHostOff: false };
-  // ESC-34: the dispatcher is not a component, and one action names a workspace it must be checked against.
-  openWorkspace = info.workspace;
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App version={info.version} workspace={info.workspace} home={info.home} initialTheme={bootTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerAtBoot={info.circuitBreakerArmed} circuitBreakerHostOff={info.circuitBreakerHostOff} initialPopOut={initialPopOut} />

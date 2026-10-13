@@ -232,7 +232,6 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.openFolder') }),
   /** REQ-SHELL-044/045: the status strip's tokens and cost — this workspace's runs so far (OQ-190's build reading, confirmed 2026-10-06 by R-071). */
   z.object({ kind: z.literal('workspace.usage') }),
-  z.object({ kind: z.literal('shell.switchView'), view: z.string() }),
   /**
    * Part AA — REQ-CHAT-076: an `http(s)` link in transcript text opens in the SYSTEM BROWSER. The renderer is
    * sandboxed and must never navigate (ADR-0051), so a link is an element that asks for this command; main is
@@ -260,7 +259,12 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('approval.raise'), requestId: z.string().min(1) }),
   /** ADR-0015: the Hooks tab (REQ-HOOKS-103..105/109/136/137) and the review dialog (REQ-HOOKS-106/107). Every read re-reads the sources (REQ-CONFIG-014). */
   z.object({ kind: z.literal('hooks.summary'), sessionId: z.string().optional() }),
-  z.object({ kind: z.literal('hooks.review') }),
+  /**
+   * ESC-34 / REQ-NOTIFY-044: `workspace` is the notice action's named workspace. Main reaches it first — the window
+   * holding it surfaced, else one added for it (OQ-267) — and reviews THAT workspace's hooks; with none, the window that
+   * asked (the Hooks tab's own Review control).
+   */
+  z.object({ kind: z.literal('hooks.review'), workspace: z.string().min(1).optional() }),
   z.object({ kind: z.literal('hooks.reviewPayload') }),
   z.object({ kind: z.literal('hooks.reviewDecide'), trusted: z.boolean() }),
   z.object({ kind: z.literal('hooks.clearDecision') }),

@@ -471,6 +471,36 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     await this.launch(undefined, 'hand-over');
   }
 
+  /**
+   * ESC-34 / REQ-NOTIFY-044: a notice action naming a workspace reaches THAT workspace "without asking the user anything
+   * further". Notices are application-wide (every main window shows the one slot), so the action may be activated in a
+   * window holding another workspace, or after the window that raised it switched away. The window holding the workspace
+   * is surfaced (REQ-STARTUP-163's rule, as the chooser and the hand-over take it); where none holds it, a window is added
+   * for it on PD-SHELL-001's add route — no gate evaluated and no window closed, so nothing is asked and nothing the user
+   * has open is lost. Replacing the activating window instead would run REQ-SHELL-021's gates, whose unsaved-settings
+   * guard asks. That reading is OQ-267's, built provisionally until the consortium rules.
+   */
+  async reach(workspace: string): Promise<
+    | { readonly ok: true; readonly window: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>; readonly added: boolean }
+    | { readonly ok: false; readonly outcome: CommandOutcome }
+  > {
+    const target = this.dependencies.canonicalPath(workspace);
+    const holder = this.#windowHolding(target);
+    if (holder) {
+      this.#surface(holder);
+      this.dependencies.log(`notice action reached ${target}: surfaced window ${holder.wcId} (ESC-34, REQ-STARTUP-163)`);
+      return { ok: true, window: this.#view(holder), added: false };
+    }
+    const requester = this.#activeRecord();
+    if (!requester) return { ok: false, outcome: { ok: false, code: 'window.notMain', headline: 'No main window is open' } };
+    const outcome = await this.#addWindow(requester, target, 'open-request');
+    const wcId = outcome.ok ? (outcome.value as { wcId?: number } | undefined)?.wcId : undefined;
+    const added = wcId === undefined ? undefined : this.#liveRecord(wcId);
+    if (!added) return { ok: false, outcome };
+    this.dependencies.log(`notice action reached ${target}: added window ${added.wcId} for it (ESC-34, PD-SHELL-001)`);
+    return { ok: true, window: this.#view(added), added: true };
+  }
+
   dispose(): void {
     for (const record of [...this.#records.values()]) {
       record.deferredOffer?.cancel();

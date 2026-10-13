@@ -13654,6 +13654,34 @@ REQ-SESSION-201 keeps.
 
 **What a live run then shows.** Nothing: no live scenario restores a store. `pnpm restore-kill-proof` is the measurement.
 
+<a id="oq-267"></a>
+
+**OQ-267 — When a notice's action names a workspace no window holds, does activating it add a window for that workspace?**
+*(REQ-NOTIFY-044 as amended under ESC-34 — "open the hook review for a named workspace", acting "on that object without
+asking the user anything further"; REQ-NOTIFY-224; ESC-34's consequences, "navigating between workspaces from a notice is
+owed"; PD-SHELL-001's add route; REQ-STARTUP-163; REQ-SHELL-017/021. Raised 2026-10-13 by fin41 (item N86) while repairing
+[`../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md`](../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md);
+the plan's range began at OQ-261, and origin/main already held OQ-261 to OQ-266.)*
+
+**What is open.** Notices are application-wide, so the unreviewed-hooks notice of workspace A can be activated in a window
+holding workspace B: a second window (PD-SHELL-001), or the window that raised it after a switch. ESC-34 says the navigation
+is owed and not how it navigates. Where a window holds A the answer is REQ-STARTUP-163's, as the chooser and the hand-over
+take it: surface that window. Where none does, three routes exist and the record chooses none: **add** a window for A
+(PD-SHELL-001's add route: no gate, no window closed, nothing asked); **replace** the activating window with A
+(REQ-SHELL-017's switch, whose REQ-SHELL-021 gates may ask — the unsaved-settings guard — or decline on an active run);
+or **review without a window**, opening A's review parented to the window on screen while no window holds A.
+
+**What the build proceeds under.** Add. Of the three it is the only one that asks nothing (REQ-NOTIFY-044's "without asking
+the user anything further") and closes nothing the user has open; it is the hand-over's own rule for a workspace no window
+holds. `MainWindows.reach` (`apps/desktop/src/main/main-windows.ts`) does it, `main-windows.test.ts` pins it (a run active in
+the activating window gates nothing), and `pnpm notice-proof`'s `review-other` launch drives it in the built app. Like the
+add route, the added workspace becomes the remembered one.
+
+**What a ruling decides.** Add, replace (and then what a declined gate does to the action), or review without a window; and
+whether the same reading binds the other members that name a workspace (the project-initialization action, OQ-262).
+
+**What a live run then shows.** Nothing: no live scenario opens two workspaces.
+
 <a id="oq-272"></a>
 
 **OQ-272 — Is a person's edit inside an artifact document's frontmatter kept, or rewritten away at the next re-render?**

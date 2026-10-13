@@ -215,9 +215,13 @@ where this vocabulary was corrected to match a behavioural requirement rather th
 did change the code:** `REQ-NOTIFY-044` requires an action concerning an object to carry that object's identity, and
 the two members shipped here carried none — `open-hook-review` now names the workspace whose hooks it concerns
 (`REQ-NOTIFY-224` publishes per workspace and hook set, so an unparameterised action reviews whichever workspace
-happens to be open), and `open-provider-sign-in` names a provider where one is named. A review action naming a
+happens to be open), and `open-provider-sign-in` names a provider where one is named. ~~A review action naming a
 workspace other than the open one opens nothing and is logged; navigating between workspaces from a notice is not
-built. The ruling is `owner-decisions.md` ESC-34 and the amendment is recorded in
+built.~~ *Built 2026-10-13 (fin41, N86): a review action naming another workspace reaches it — the window holding it
+surfaced, else one added for it, asking nothing and closing nothing ([OQ-267](../open-questions.md#oq-267)) — and opens
+that workspace's review there; `pnpm notice-proof`'s `review-other` launch measures it
+([`../../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md`](../../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md)).
+The provider-named branch still only logs: no notice in the build names a provider.* The ruling is `owner-decisions.md` ESC-34 and the amendment is recorded in
 `../../spec/resolutions/19-notifications-errors-recovery.md`.
 
 **The changed path was measured, and it found nothing (GD-10).** `pnpm notice-proof` gained a sixth launch, because

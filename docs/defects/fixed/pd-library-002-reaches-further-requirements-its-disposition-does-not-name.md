@@ -37,3 +37,15 @@ disposition line and a back-pointer per requirement, never an edit of a requirem
   requirements.
 - `packages/ui/src/OverviewView.tsx`, `packages/ui/src/ImprovementActivity.tsx`,
   `packages/contracts/src/improvements.ts` — what the build shows and stores.
+
+## Outcome
+
+Settled 2026-10-13 by [OQ-236](../../architecture/open-questions.md#oq-236), ruled under the owner's delegation
+([R-072](../../product/requests.md#r-072)). `PD-LIBRARY-002` revision 2 Narrows REQ-LIBRARY-011, REQ-LIBRARY-020,
+REQ-LIBRARY-109, REQ-LIBRARY-124, REQ-LIBRARY-125, REQ-LIBRARY-130 and REQ-NOTIFY-250, each case stated in its clauses (a)
+to (g), and adds REQ-LIBRARY-126 and REQ-LIBRARY-128 to its Extends line; each requirement carries its labelled
+back-pointer, which `tools/symbol-artifact/back-pointers.test.ts` reads both ways. The palette command, REQ-LIBRARY-127 and
+REQ-LIBRARY-174 take no disposition. The built hint of REQ-LIBRARY-130 is ratified as the directive's clause (f). The two
+behaviour repairs the ruling made are the notes beside this one in `fixed/`:
+[`the-retrospective-start-gesture-is-disabled-while-any-analysis-runs.md`](the-retrospective-start-gesture-is-disabled-while-any-analysis-runs.md)
+and [`the-library-proposals-texts-name-only-the-per-run-collector.md`](the-library-proposals-texts-name-only-the-per-run-collector.md).

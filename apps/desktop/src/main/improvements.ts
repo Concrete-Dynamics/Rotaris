@@ -34,6 +34,11 @@ export interface ImprovementCoordinator {
   cancelWorkspace(workspaceRoot: string): void;
   shutdown(): void;
   pending(): number;
+  /**
+   * PD-LIBRARY-002 revision 2, clause (e) (OQ-236): whether a retrospective is queued or running for this workspace.
+   * A post-run job never counts: the retrospective's gesture queues behind one rather than resting while it runs.
+   */
+  retrospectivePending(workspaceId: string): boolean;
 }
 
 /** REQ-LIBRARY-024/035/125/127: one application-wide FIFO, detached from every run. */
@@ -74,15 +79,30 @@ export function createImprovementCoordinator(
     deps.failed(job, reason);
   };
 
+  /** PD-LIBRARY-002 revision 2 (e): a retrospective of this workspace waiting in the FIFO or being analysed. */
+  const retrospectivePending = (workspaceId: string): boolean =>
+    (active !== null &&
+      !active.cancelled &&
+      active.job.pass === "retrospective" &&
+      active.job.workspace_id === workspaceId) ||
+    queue.some(
+      (queued) =>
+        queued.pass === "retrospective" && queued.workspace_id === workspaceId,
+    );
+
   const publish = (job: ImprovementAnalysisJob | null): void => {
+    const workspaceId = job?.workspace_id ?? active?.job.workspace_id ?? "";
     deps.activity({
-      workspace_id: job?.workspace_id ?? active?.job.workspace_id ?? "",
+      workspace_id: workspaceId,
       active: active !== null,
       queued: queue.length,
       source_session_id: active?.job.source_session_id ?? null,
       // REQ-LIBRARY-125 with PD-LIBRARY-002: the indicator says WHICH pass is running, so the two are told
       // apart while one FIFO orders both.
       pass: active?.job.pass ?? job?.pass ?? "post_run",
+      // PD-LIBRARY-002 revision 2 (e), for the workspace this publication names; main re-reads it per window
+      // through `retrospectivePending`, since a window of another workspace is told about its own.
+      retrospective_pending: workspaceId !== "" && retrospectivePending(workspaceId),
     });
   };
 
@@ -214,5 +234,6 @@ export function createImprovementCoordinator(
       publish(active?.job ?? null);
     },
     pending: () => queue.length + (active === null ? 0 : 1),
+    retrospectivePending,
   } satisfies ImprovementCoordinator);
 }

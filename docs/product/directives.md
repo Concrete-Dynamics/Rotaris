@@ -1369,7 +1369,7 @@ analyst. No rule text changed ([OQ-222](../architecture/open-questions.md), rule
 *Revision 2, 2026-10-13 ([OQ-236](../architecture/open-questions.md#oq-236), ruled under [R-072](requests.md#r-072)): the
 Narrows line is added and REQ-LIBRARY-126 and REQ-LIBRARY-128 join the Extends line, each requirement with its back-pointer;
 the cases are the revision-2 paragraph's (a) to (g)
-([`pd-library-002-reaches-further-requirements-its-disposition-does-not-name`](../defects/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md)).*
+([`pd-library-002-reaches-further-requirements-its-disposition-does-not-name`](../defects/fixed/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md)).*
 
 *Raised by the owner, 2026-09-17; logged as [R-033](requests.md#r-033).*
 Revision 2 logged as [R-072](requests.md#r-072) (OQ-235 and OQ-236), ruled by the consortium under the owner's
@@ -1386,6 +1386,18 @@ italic note; on OQ-236 both advocates' recommendations followed in part.
 > user-agents:AGENTS.md, machine-codex:AGENTS.md)" and "1 of 3 enabled instruction file(s) at the workspace root
 > (workspace:AGENTS.md)"; 37 of 37 checks at a load average of about 3 on four CPUs. **What was not measured.** A live
 > retrospective against a real model (a live run starts none by itself). Recorded in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 2's OQ-236 paragraph, 2026-10-13, built in plan fin34:** clauses (a) to (d) and (f) held as
+> the build already stood (the paragraph ratifies them); (e) and (g) were built. **What was measured.** `pnpm symbols`
+> registers seven more narrowed and two more extended requirements (195 and 62 as built) and `back-pointers.test.ts` reads
+> every note both ways; the coordinator's three `retrospectivePending` cases, red before; the handler's three refusal cases;
+> `retrospective-gesture.test.ts`'s gesture and text cases; and `pnpm retrospective-proof`, 42 of 42 at a load average of
+> about 5 on four CPUs — the Overview hint (f) and the Library note (g) word for word, the Library gesture unavailable with
+> "A retrospective is already queued or running." while the pass ran and available after it, and the palette's entry
+> answered with one info notice while one artifact stayed in the store. **What was not measured.** A press made while a
+> post-run analysis runs, in the built app (the proof drives no run; the unit cases carry it), and the Library's empty label
+> (g), which shows only when artifacts exist and no proposal matches. Recorded in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---

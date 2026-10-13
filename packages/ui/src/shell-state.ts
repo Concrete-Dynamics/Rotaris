@@ -97,6 +97,12 @@ export interface ShellState {
 export interface ImprovementAnalysisActivity {
   readonly active: boolean;
   readonly pass: AnalysisPass;
+  /**
+   * PD-LIBRARY-002 revision 2, clause (e) (OQ-236): a retrospective is queued or running in THIS window's workspace — the
+   * one state that makes the retrospective's start gesture unavailable. `active` alone never does: a press made while a
+   * post-run analysis runs queues behind it. Absent is false.
+   */
+  readonly retrospectivePending?: boolean;
 }
 
 export interface ComposerRegistration {

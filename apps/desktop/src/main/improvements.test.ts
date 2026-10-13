@@ -296,3 +296,79 @@ describe("REQ-LIBRARY-124/127 a worker failure is not silent", () => {
     expect(logged).toEqual([]);
   });
 });
+
+/**
+ * PD-LIBRARY-002 revision 2, clause (e) (OQ-236): the coordinator says, per workspace, whether a retrospective is queued
+ * or running — the one state that makes the retrospective's start gesture unavailable. A post-run job never does.
+ */
+describe("PD-LIBRARY-002 revision 2 (e): a pending retrospective, per workspace", () => {
+  const retrospective = (id: string, workspaceId: string): ImprovementAnalysisJob =>
+    ({ ...job(id, "unused", `C:\\${workspaceId}`), workspace_id: workspaceId, source_session_id: null, pass: "retrospective" });
+  const harness = () => {
+    const waiting: { id: string; resolve: (reply: ProcessReply) => void; reject: (cause: Error) => void }[] = [];
+    const published: { workspace_id: string; retrospective_pending: boolean; active: boolean }[] = [];
+    const coordinator = createImprovementCoordinator({
+      analyze: (request) => {
+        if (request.kind !== "improvement.analyze") throw new Error("wrong request");
+        const id = request.job.artifact_id;
+        return new Promise((resolve, reject) => waiting.push({ id, resolve, reject }));
+      },
+      cancel: () => undefined,
+      service: async () => ({ kind: "refused", code: "x", headline: "no store here" }),
+      activity: (activity) => published.push(activity),
+      stored: () => undefined,
+      failed: () => undefined,
+      log: () => undefined,
+    });
+    return { coordinator, waiting, published };
+  };
+
+  it("a post-run job, queued or running, is never a pending retrospective", () => {
+    const { coordinator, published } = harness();
+    coordinator.enqueue({ ...job("impart_00000001", "session-1"), workspace_id: "ws-a" });
+    coordinator.enqueue({ ...job("impart_00000002", "session-2"), workspace_id: "ws-a" });
+    expect(coordinator.retrospectivePending("ws-a")).toBe(false);
+    expect(published.at(-1)).toMatchObject({ active: true, retrospective_pending: false });
+  });
+
+  it("is set while a retrospective waits behind a post-run job and while it runs, for its own workspace only", async () => {
+    const { coordinator, waiting, published } = harness();
+    coordinator.enqueue({ ...job("impart_00000001", "session-1"), workspace_id: "ws-a" });
+    coordinator.enqueue(retrospective("impart_00000002", "ws-a"));
+    // Queued behind the post-run job: pending, and the publication of the enqueue says so.
+    expect(coordinator.retrospectivePending("ws-a")).toBe(true);
+    expect(coordinator.retrospectivePending("ws-b")).toBe(false);
+    expect(published.at(-1)).toMatchObject({ workspace_id: "ws-a", retrospective_pending: true });
+    // The post-run job ends; the retrospective runs and is still pending.
+    waiting.shift()!.resolve({ kind: "refused", code: "x", headline: "nothing" });
+    await vi.waitFor(() => expect(waiting.map((w) => w.id)).toEqual(["impart_00000002"]));
+    expect(coordinator.retrospectivePending("ws-a")).toBe(true);
+    // Its failure clears it, and the last publication carries the cleared state.
+    waiting.shift()!.reject(new Error("the analyst crashed"));
+    await vi.waitFor(() => expect(coordinator.pending()).toBe(0));
+    expect(coordinator.retrospectivePending("ws-a")).toBe(false);
+    expect(published.at(-1)).toMatchObject({ active: false, retrospective_pending: false });
+  });
+
+  it("is cleared by a completion, by the workspace closing and by shutdown", async () => {
+    const done = harness();
+    done.coordinator.enqueue(retrospective("impart_00000001", "ws-a"));
+    done.waiting.shift()!.resolve({ kind: "refused", code: "x", headline: "nothing" });
+    await vi.waitFor(() => expect(done.coordinator.pending()).toBe(0));
+    expect(done.coordinator.retrospectivePending("ws-a")).toBe(false);
+
+    const closed = harness();
+    closed.coordinator.enqueue(retrospective("impart_00000001", "ws-a"));
+    closed.coordinator.enqueue(retrospective("impart_00000002", "ws-b"));
+    closed.coordinator.cancelWorkspace("C:\\ws-a");
+    expect(closed.coordinator.retrospectivePending("ws-a")).toBe(false);
+    expect(closed.coordinator.retrospectivePending("ws-b")).toBe(true);
+
+    const shut = harness();
+    shut.coordinator.enqueue(retrospective("impart_00000001", "ws-a"));
+    shut.coordinator.enqueue(retrospective("impart_00000002", "ws-a"));
+    shut.coordinator.shutdown();
+    expect(shut.coordinator.retrospectivePending("ws-a")).toBe(false);
+    expect(shut.published.at(-1)).toMatchObject({ retrospective_pending: false });
+  });
+});

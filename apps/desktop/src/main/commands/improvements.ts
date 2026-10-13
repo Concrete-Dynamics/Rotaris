@@ -5,15 +5,20 @@ import { millis, toIsoUtc } from '@rotaris/kernel';
 import { randomUUID } from 'node:crypto';
 import { refusal, type CommandContext, type CommandHandlers } from './context.js';
 
+/** PD-LIBRARY-002 revision 2, clause (e): the reason a further retrospective gesture is refused, on every surface. */
+export const RETROSPECTIVE_PENDING_REASON = 'A retrospective is already queued or running.';
+
 /**
  * IMPROVEMENTS — the proposal run, its review, the rollback and the export (ADR-0052, REQ-IMPROVE-*). The
  * coordinator main holds does the work; these handlers start it, read it back, and keep the undo that lets a
  * decision be taken back before the artifact is closed.
  */
 export function improvementsCommands(
-  ctx: Pick<CommandContext, 'chooseExportPath' | 'clocks' | 'enqueueImprovement' | 'improvementRuns' | 'improvementUndo' | 'libraryRevision' | 'log' | 'notices' | 'raiseNotice' | 'runHost' | 'services'>,
+  ctx: Pick<CommandContext, 'chooseExportPath' | 'clocks' | 'enqueueImprovement' | 'improvementRuns' | 'improvementUndo' | 'libraryRevision' | 'log' | 'notices' | 'raiseNotice' | 'retrospectivePending' | 'runHost' | 'services'>,
 ): Pick<CommandHandlers, 'improvements.start' | 'improvements.retrospective' | 'improvements.rollbackPreview' | 'improvements.rollback' | 'improvements' | 'improvements.undoReview' | 'improvements.export'> {
-  const { chooseExportPath, clocks, enqueueImprovement, improvementRuns, improvementUndo, libraryRevision, log, notices, raiseNotice, runHost, services } = ctx;
+  const { chooseExportPath, clocks, enqueueImprovement, improvementRuns, improvementUndo, libraryRevision, log, notices, raiseNotice, retrospectivePending, runHost, services } = ctx;
+  /** PD-LIBRARY-002 revision 2 (e): the workspaces whose retrospective is being captured, before the FIFO holds it. */
+  const capturing = new Set<string>();
   return {
     /**
      * PD-LIBRARY-002: the second analysis pass, and the ONLY way it ever starts — a person raised this command
@@ -24,9 +29,24 @@ export function improvementsCommands(
     'improvements.retrospective': async (_req, { w, awaitWorkspace }) => {
       await awaitWorkspace();
       if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before looking back over its history' };
+      const workspaceId = w.workspaceId;
+      /*
+       * PD-LIBRARY-002 revision 2, clause (e) (OQ-236): a retrospective already queued or running in this workspace —
+       * or being captured for it, which the FIFO does not hold yet — refuses a further gesture with ONE info notice and
+       * queues nothing: a second pass over an unchanged record reads the same evidence, and duplicate suppression would
+       * discard its proposals after the owner had paid for them. This is the palette's refusal; the two buttons are
+       * already unavailable in that state. A post-run analysis refuses nothing: the press queues behind it.
+       */
+      if (retrospectivePending(workspaceId) || capturing.has(workspaceId)) {
+        raiseNotice('info', RETROSPECTIVE_PENDING_REASON, 'It will finish on its own; its proposals arrive in the Library when it does.');
+        return { ok: false, code: 'retrospective.pending', headline: RETROSPECTIVE_PENDING_REASON };
+      }
+      capturing.add(workspaceId);
       const captured = await runHost
-        .request({ kind: 'retrospective.capture', workspaceId: w.workspaceId, workspaceRoot: canonicalPath(w.workspace) }, millis(30_000))
+        .request({ kind: 'retrospective.capture', workspaceId, workspaceRoot: canonicalPath(w.workspace) }, millis(30_000))
         .catch((cause: Error) => ({ kind: 'refused' as const, code: 'retrospective.capture', headline: 'The retrospective could not be started', detail: cause.message }));
+      // Released in the same turn as the enqueue below, so no gesture can fall between the capture and the FIFO.
+      capturing.delete(workspaceId);
       if (captured.kind !== 'retrospective.captured') {
         const detail = captured.kind === 'refused' ? [captured.headline, captured.detail].filter(Boolean).join(': ') : `unexpected reply ${captured.kind}`;
         /*

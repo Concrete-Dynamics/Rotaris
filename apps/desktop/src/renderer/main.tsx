@@ -1220,8 +1220,9 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
    * REQ-LIBRARY-127's "the indicators MUST end hidden" comes to here.
    */
   useEffect(() => bridge.onImprovementActivity((p) => {
-    const payload = p as { active?: boolean; pass?: AnalysisPass };
-    useShellState.getState().setImprovementAnalysis({ active: payload.active === true, pass: payload.pass ?? 'post_run' });
+    // PD-LIBRARY-002 revision 2 (e): `retrospective_pending` is this window's own workspace's, which main sends per window.
+    const payload = p as { active?: boolean; pass?: AnalysisPass; retrospective_pending?: boolean };
+    useShellState.getState().setImprovementAnalysis({ active: payload.active === true, pass: payload.pass ?? 'post_run', retrospectivePending: payload.retrospective_pending === true });
   }), []);
 
   /*

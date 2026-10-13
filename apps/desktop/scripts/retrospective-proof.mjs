@@ -21,7 +21,10 @@
  *      the run-header indicators are on screen, labelled in words and marked with the pass they describe; when
  *      no pass runs, neither exists. Both halves are measured in launch 1, which is the only way to tell an
  *      indicator that appears from one that is always there.
- *   3. PALETTE — the third surface the gesture lives on is in the palette's list under its own label.
+ *   3. PALETTE — the third surface the gesture lives on is in the palette's list under its own label. While the
+ *      retrospective runs, the Library gesture rests with "A retrospective is already queued or running." and the
+ *      palette's entry answers with one info notice and queues nothing (PD-LIBRARY-002 revision 2 (e)); the store
+ *      still holds exactly one artifact afterwards. The Overview hint and the Library note name both sources ((f), (g)).
  *   4. NO MODEL — a workspace whose model slot names nothing configured: each gesture answers with its own
  *      informational notice carrying the Settings action, the second gesture raises a SECOND notice rather
  *      than being suppressed (REQ-LIBRARY-037 per gesture, not per workspace), the action opens Settings at
@@ -313,10 +316,11 @@ writeFileSync(join(beyondRoot, 'home', '.agents', 'AGENTS.md'), '# A user-global
 writeFileSync(join(beyondRoot, 'machine', 'AGENTS.md'), '# A machine-wide rule the retrospective must not read\n');
 const beyondTheRoot = { ROTARIS_CAPTURE_INSTRUCTIONS_HOME: join(beyondRoot, 'home'), ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE: join(beyondRoot, 'machine') };
 
-// ── 2. The pass itself, held open for ten seconds so the indicators can be READ — and measured at two window
-//    sizes (L10, below) — while it runs. Six seconds held the reads alone; two resizes and two shots are added.
+// ── 2. The pass itself, held open for fourteen seconds so the indicators can be READ — and measured at two window
+//    sizes (L10, below) — while it runs. Six seconds held the reads alone; two resizes and two shots are added, and
+//    four for the pending-retrospective gesture and the palette's refusal (PD-LIBRARY-002 revision 2 (e)).
 await (async () => {
-  const started = await startApp({ root: passRoot, workspace: passWorkspace, extra: { ROTARIS_IMPROVEMENT_SCRIPT: 'wait:10000', ...beyondTheRoot }, timeoutMs: 90_000 });
+  const started = await startApp({ root: passRoot, workspace: passWorkspace, extra: { ROTARIS_IMPROVEMENT_SCRIPT: 'wait:14000', ...beyondTheRoot }, timeoutMs: 90_000 });
   const d = started.driver;
   try {
     await d.waitFor('.app-shell', { timeoutMs: 60_000 });
@@ -335,6 +339,14 @@ await (async () => {
     await d.chord('Escape');
     await sleep(400);
 
+    // PD-LIBRARY-002 revision 2, clause (f): the Overview card's empty hint, word for word, before any proposal exists.
+    // The card is drawn once the record holds a session (the seed launch, with none, shows the Overview's own empty state).
+    await d.click('.nav-item', { text: 'Overview', timeoutMs: 20_000 });
+    const hint = await until(d, '.ov-card--proposals .empty-state-hint', (m) => m.length === 1, 20_000) ? await one(d, '.ov-card--proposals .empty-state-hint') : null;
+    check('the Overview card\'s empty hint names both sources (PD-LIBRARY-002 revision 2 (f), REQ-LIBRARY-130)',
+      hint !== null && hint.text.trim() === "Run improvement analysis, or a retrospective over this workspace's history, to produce reviewable suggestions.",
+      hint === null ? 'no empty hint on the card' : `"${hint.text.trim()}"`);
+
     await openProposals(d);
     const empty = await probe(d, '[data-testid="library-improvements-empty"]');
     check('the Proposals tab starts empty in a workspace that has never been looked back over', empty.length === 1, `${empty.length} empty state(s)`);
@@ -343,6 +355,21 @@ await (async () => {
     // ── The indicators, WHILE the pass runs. The title bar is always on screen; the run header is the
     //    Workspace view's, so the proof goes there and comes back rather than assuming one stands for both.
     await d.waitFor('[data-testid="improvement-activity-title-bar"]', { timeoutMs: 30_000 });
+
+    // ── PD-LIBRARY-002 revision 2, clause (e): while THIS workspace's retrospective is queued or running, the gesture
+    //    rests with its reason, and the palette — listed always — answers with one info notice and queues nothing.
+    const resting = (await d.inspect('[data-testid="library-retrospective"]')).matches[0] ?? null;
+    check('while a retrospective runs, the Library gesture is unavailable and says why (PD-LIBRARY-002 revision 2 (e))',
+      resting !== null && resting.attrs['aria-disabled'] === 'true' && resting.attrs['title'] === 'A retrospective is already queued or running.',
+      resting === null ? 'no gesture on the tab' : `aria-disabled=${resting.attrs['aria-disabled']} title="${resting.attrs['title']}"`);
+    await d.chord('Ctrl+K');
+    await d.waitFor('[data-testid="command-palette"]', { timeoutMs: 15_000 });
+    await d.click('.cmdk-item[data-command="improvements.retrospective"]', { timeoutMs: 15_000 });
+    const refused = await noticeMatching(d, /A retrospective is already queued or running/, 15_000);
+    check('the palette\'s retrospective, raised while one runs, posts one info notice and starts nothing (PD-LIBRARY-002 revision 2 (e))',
+      refused !== null && refused.data['data-severity'] === 'info',
+      refused === null ? `no such notice; the current one reads "${(await probe(d, '[data-testid="notice-title"]')).map((n) => n.text).join(' | ')}"` : `severity=${refused.data['data-severity']} — "${refused.text.slice(0, 80)}"`);
+    await d.screenshot(join(output, 'pending-refused.png'));
     // `inspect` rather than `probe`: `role` is neither a data- nor an aria- attribute, and the accessible
     // role is half of what REQ-LIBRARY-125 fixes.
     const titleProbe = (await d.inspect('[data-testid="improvement-activity-title-bar"]')).matches[0] ?? null;
@@ -399,6 +426,13 @@ await (async () => {
     const rowsAppeared = await until(d, '.library-proposals__proposals tbody tr', (m) => m.some((r) => /Name the build gate/.test(r.text)), 30_000);
     const summaries = (await probe(d, '.library-proposals__proposals tbody tr')).map((r) => r.text);
     check('the proposals reach the Library’s Proposals tab', rowsAppeared, `rows: ${JSON.stringify(summaries).slice(0, 300)}`);
+    const note = await one(d, '.library-proposals__note');
+    check('the Library card\'s note names both sources (PD-LIBRARY-002 revision 2 (g), REQ-LIBRARY-109)',
+      note !== null && note.text.trim() === "Evidence-backed suggestions from the improvement collector after each run, and from retrospectives over this workspace's history.",
+      note === null ? 'no note on the card' : `"${note.text.trim()}"`);
+    const free = (await d.inspect('[data-testid="library-retrospective"]')).matches[0] ?? null;
+    check('once the retrospective has ended, the gesture is available again (PD-LIBRARY-002 revision 2 (e))',
+      free !== null && free.attrs['aria-disabled'] === 'false', free === null ? 'no gesture on the tab' : `aria-disabled=${free.attrs['aria-disabled']} title="${free.attrs['title']}"`);
     const libraryTags = await d.eval(TAG_TONES);
     check('every design Tag on the Proposals tab carries its foundation and one tone the loaded stylesheet defines (A40)', tagsWellFormed(libraryTags), tagsDetail(libraryTags));
     // The artifact row, selected, so the detail card names what a retrospective belongs to instead of a blank.

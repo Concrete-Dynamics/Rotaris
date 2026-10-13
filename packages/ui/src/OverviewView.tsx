@@ -1,9 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { PROPOSAL_STATUSES, isBusy, presentationChildState, presentationStatus, STATUS_LABELS, type AgentRecord, type ImprovementArtifactRecord, type ImprovementProposal, type PaneLayout, type ProposalStatus, type RepositoryState, type SessionListItemPayload, type SessionRecord } from '@rotaris/contracts';
 import { AgentTree } from './AgentTree.js';
-import { categoryLabel, ProposalDecisionDialog, RETROSPECTIVE_BUSY_REASON, RETROSPECTIVE_DESCRIPTION, RETROSPECTIVE_LABEL, statusLabel } from './library/ProposalsTab.js';
-import { startRetrospective } from './workspace-host.js';
-import { useShellState } from './shell-state.js';
+import { categoryLabel, ProposalDecisionDialog, RetrospectiveGesture, statusLabel } from './library/ProposalsTab.js';
 import { Button as DesignButton, EmptyState as DesignEmptyState, PageHeader as DesignPageHeader, Tag as DesignTag } from './design-system/index.js';
 
 /**
@@ -19,6 +17,11 @@ export const OVERVIEW_RIGHT_DEFAULT = 340;
 export const OVERVIEW_RIGHT_MIN = 260;
 export const OVERVIEW_RIGHT_MAX = 560;
 export const OVERVIEW_LEFT_MIN = 320;
+/**
+ * PD-LIBRARY-002 revision 2, clause (f) (OQ-236), narrowing REQ-LIBRARY-130: the proposals card's empty hint names both
+ * ways a proposal is produced.
+ */
+export const OVERVIEW_PROPOSALS_HINT = "Run improvement analysis, or a retrospective over this workspace's history, to produce reviewable suggestions.";
 
 export interface OverviewProps {
   readonly session: SessionRecord | null;
@@ -130,8 +133,6 @@ export function OverviewView(props: OverviewProps) {
   const { session, sessions, sessionsState, sessionsError = null, repository, caps, layout, onLayout, nowIso = null, reducedMotion = false } = props;
   const now = nowIso ?? new Date().toISOString();
   const bodyRef = useRef<HTMLDivElement | null>(null);
-  // REQ-LIBRARY-123: one analysis at a time, so the gesture rests while one runs and says why.
-  const analysisRunning = useShellState((state) => state.improvementAnalysis.active);
   const [right, setRight] = useState<number>(() => layout?.sizes[1] ?? OVERVIEW_RIGHT_DEFAULT);
   // A layout arriving from the preference store (REQ-SHELL-069) replaces the split: derived during render, not in an effect.
   const [seenLayout, setSeenLayout] = useState(layout);
@@ -273,10 +274,10 @@ export function OverviewView(props: OverviewProps) {
             </Card>
             <Card kicker="Improvement proposals" className="ov-card--proposals" actions={<><DesignTag kind="accent">{pendingProposals} new</DesignTag>
               {/* PD-LIBRARY-002's gesture, on the second of its three surfaces — the same opener the Library tab and the palette raise. */}
-              <DesignButton type="button" className="btn btn-link" data-testid="overview-retrospective" disabled={analysisRunning} aria-disabled={analysisRunning}
-                title={analysisRunning ? RETROSPECTIVE_BUSY_REASON : RETROSPECTIVE_DESCRIPTION} onClick={() => { startRetrospective(); }}>{RETROSPECTIVE_LABEL}</DesignButton>
+              {/* PD-LIBRARY-002 revision 2 (e): unavailable only while a retrospective is queued or running here. */}
+              <RetrospectiveGesture className="btn btn-link" testId="overview-retrospective" />
               <DesignButton type="button" className="btn btn-link" onClick={() => props.onOpenProposal()}>Open in Library →</DesignButton></>}>
-              {proposalRows.length === 0 ? <DesignEmptyState className="empty-state library__empty"><span className="empty-state-title">No proposals</span><span className="empty-state-hint">Run improvement analysis, or a retrospective over this workspace&rsquo;s history, to produce reviewable suggestions.</span></DesignEmptyState>
+              {proposalRows.length === 0 ? <DesignEmptyState className="empty-state library__empty"><span className="empty-state-title">No proposals</span><span className="empty-state-hint">{OVERVIEW_PROPOSALS_HINT}</span></DesignEmptyState>
                 : <ul className="ov-proposals">{proposalRows.slice(0, 4).map((row) => <li key={`${row.artifactId}:${row.proposal.id}`} className="ov-proposal">
                   <DesignButton type="button" className="btn btn-link ov-proposal__summary" title="Open in Library → Improvement proposals" onClick={() => props.onOpenProposal(row.proposal.id)}>{row.proposal.summary}</DesignButton>
                   <DesignTag kind={row.proposal.status === 'approved' ? 'accent' : row.proposal.status === 'pending_review' ? 'outline' : 'neutral'}>{statusLabel(row.proposal.status)}</DesignTag>

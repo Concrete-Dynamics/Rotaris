@@ -25,10 +25,16 @@ import { useShellState } from '../shell-state.js';
 import { startRetrospective } from '../workspace-host.js';
 
 /**
- * PD-LIBRARY-002's gesture, on the first of its three surfaces. It is disabled only while an analysis is
- * already running — one FIFO orders both passes (REQ-LIBRARY-123), so a second gesture would queue rather
- * than start — and states that as its reason. Everything the gesture can be refused for afterwards (no model
- * configured, nothing in the workspace to read) arrives as the notice REQ-LIBRARY-037's shape fixes.
+ * PD-LIBRARY-002's gesture, on the first of its three surfaces. Revision 2, clause (e) (OQ-236): it is unavailable only
+ * while a retrospective is already queued or running in this workspace, and says so; a post-run analysis never rests
+ * it, because a press then queues behind that analysis on REQ-LIBRARY-123's FIFO, as the palette's always did.
+ * Everything the gesture can be refused for afterwards (no model configured, nothing in the workspace to read, a
+ * retrospective that became pending since the button was drawn) arrives as a notice.
+ *
+ * FALSIFIED 2026-10-13, kept beside its replacement: "It is disabled only while an analysis is already running — one
+ * FIFO orders both passes (REQ-LIBRARY-123), so a second gesture would queue rather than start". Queueing was the reason
+ * NOT to disable it: REQ-LIBRARY-125 lets no control be disabled while analysis runs, and the palette queued anyway
+ * (`docs/defects/fixed/the-retrospective-start-gesture-is-disabled-while-any-analysis-runs.md`).
  */
 export const RETROSPECTIVE_LABEL = 'Run retrospective';
 
@@ -38,7 +44,36 @@ export const PROPOSALS_LAYOUT: UiLayoutContract = {
   relations: [{ kind: 'containment' }, { kind: 'viewport-scroll', axis: 'both', expected: false }],
 };
 export const RETROSPECTIVE_DESCRIPTION = "Look back over this workspace's own history and propose improvements.";
-export const RETROSPECTIVE_BUSY_REASON = 'An improvement analysis is already running.';
+/** PD-LIBRARY-002 revision 2 (e): the reason the gesture states while a retrospective is queued or running. */
+export const RETROSPECTIVE_BUSY_REASON = 'A retrospective is already queued or running.';
+
+/**
+ * The retrospective's start gesture, as the Library tab and the Overview card both draw it: one component, so the two
+ * surfaces cannot disagree about when it rests (PD-LIBRARY-002 revision 2, clause (e)).
+ */
+export function RetrospectiveGesture({ className, testId }: { readonly className: string; readonly testId: string }) {
+  const pending = useShellState(retrospectivePendingOf);
+  return <RetrospectiveGestureButton className={className} testId={testId} pending={pending} />;
+}
+
+/** What rests the gesture: a pending retrospective in this window's workspace, and never `active` alone. */
+export const retrospectivePendingOf = (state: { readonly improvementAnalysis: { readonly retrospectivePending?: boolean } }): boolean =>
+  state.improvementAnalysis.retrospectivePending === true;
+
+/** The gesture as drawn for a given state — split out so the rule is readable without a store. */
+export function RetrospectiveGestureButton({ className, testId, pending }: { readonly className: string; readonly testId: string; readonly pending: boolean }) {
+  return (
+    <DesignButton type="button" className={className} data-testid={testId} disabled={pending} aria-disabled={pending}
+      title={pending ? RETROSPECTIVE_BUSY_REASON : RETROSPECTIVE_DESCRIPTION} onClick={() => { startRetrospective(); }}>{RETROSPECTIVE_LABEL}</DesignButton>
+  );
+}
+
+/**
+ * PD-LIBRARY-002 revision 2, clause (g) (OQ-236), narrowing REQ-LIBRARY-109: the proposals card's note and empty label
+ * name both sources, since the card lists retrospective proposals beside the per-run collector's.
+ */
+export const PROPOSALS_NOTE = "Evidence-backed suggestions from the improvement collector after each run, and from retrospectives over this workspace's history.";
+export const PROPOSALS_EMPTY_LABEL = "No proposals yet. They appear here after a run's improvement collector finds signals, or after a retrospective over this workspace's history.";
 
 export interface ImprovementHistoryPayload {
   readonly versions: readonly RecordedImprovementVersion[];
@@ -204,7 +239,6 @@ export function ProposalsTab(props: ProposalsTabProps) {
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const analysisRunning = useShellState((state) => state.improvementAnalysis.active);
   const [decision, setDecision] = useState<ProposalStatus | null>(null);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -285,9 +319,7 @@ export function ProposalsTab(props: ProposalsTabProps) {
     <section className="library-proposals" aria-label="Improvement proposals" data-testid="library-proposals" {...layoutContractAttributes(PROPOSALS_LAYOUT)}>
       <div className="library-proposals__toolbar">
         <span className="card-meta">Workspace-scoped review records stay available across sessions.</span>
-        <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="library-retrospective"
-          disabled={analysisRunning} aria-disabled={analysisRunning} title={analysisRunning ? RETROSPECTIVE_BUSY_REASON : RETROSPECTIVE_DESCRIPTION}
-          onClick={() => { startRetrospective(); }}>{RETROSPECTIVE_LABEL}</DesignButton>
+        <RetrospectiveGesture className="btn btn-secondary btn-compact" testId="library-retrospective" />
         <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={busy} onClick={() => { void props.onExport(); }}>Export all</DesignButton>
       </div>
       {error && <div className="composer__error" role="alert" data-testid="library-proposals-error">{error}</div>}
@@ -314,8 +346,8 @@ export function ProposalsTab(props: ProposalsTabProps) {
           </section>
 
           <section className="card card--accent library-proposals__proposals" aria-label="Improvement proposals" data-ui="library-proposal-table">
-            <div className="ov-card__head"><span><span className="card-kicker">Improvement proposals</span><span className="card-meta library-proposals__note">Evidence-backed suggestions from the improvement collector after each run.</span></span><span className="card-meta">{visibleRows.length} shown</span></div>
-            {visibleRows.length === 0 ? <DesignEmptyState className="empty-state library__empty"><span className="empty-state-title">No proposals yet. They appear here after a run's improvement collector finds signals.</span></DesignEmptyState> : (
+            <div className="ov-card__head"><span><span className="card-kicker">Improvement proposals</span><span className="card-meta library-proposals__note">{PROPOSALS_NOTE}</span></span><span className="card-meta">{visibleRows.length} shown</span></div>
+            {visibleRows.length === 0 ? <DesignEmptyState className="empty-state library__empty"><span className="empty-state-title">{PROPOSALS_EMPTY_LABEL}</span></DesignEmptyState> : (
               <div className="library-proposals__table-wrap">
                 <DesignTable className="table library-proposals__table" aria-label="Improvement proposals">
                   <thead><tr><th>Summary</th><th>Category</th><th>Risk</th><th>Status</th><th>Created</th></tr></thead>

@@ -13,7 +13,9 @@ import { markMotionStart } from './motion.js';
  *
  * The labels differ per pass because the two passes are looking at different things: the sibling reviews the
  * run that just finished, and the retrospective reviews the workspace's own history. The directive requires
- * the second to be signalled by this pattern "with its own label", which is what this table is.
+ * the second to be signalled by this pattern "with its own label", which is what this table is. The retrospective's
+ * label and descriptions are `PD-LIBRARY-002` revision 2's clause (d) (OQ-236), which narrows REQ-LIBRARY-125 and
+ * REQ-NOTIFY-250 for that pass; the post-run ones are REQ-LIBRARY-125's, unchanged.
  */
 export const IMPROVEMENT_ACTIVITY_LABELS: Readonly<Record<AnalysisPass, string>> = Object.freeze({
   post_run: 'Reviewing run for improvements…',

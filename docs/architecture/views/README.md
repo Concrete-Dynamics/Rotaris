@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-13**
 
+**The retrospective's start gesture rests only while a retrospective is pending in its workspace (PD-LIBRARY-002
+revision 2 (e); OQ-236, fin34).** `ImprovementActivitySchema` gains `retrospective_pending`; the coordinator
+(`main/improvements.ts`) answers `retrospectivePending(workspaceId)` from its queue and active job, and main's broadcast
+sends each main window its own workspace's answer; `improvements.retrospective` refuses with one info notice while it holds
+or while a capture is in flight; the Library tab and the Overview card draw one `RetrospectiveGesture` that reads it in place
+of `active`. The **process view**'s retrospective paragraph and the **state-ownership view**'s queue row say so. No package,
+edge, process, channel or store column changed; the channel's payload gained a field with a default.
+
 **The retrospective reads the workspace root's instruction files only (PD-LIBRARY-002 revision 2; OQ-235, fin34).**
 `SkillHost.retrospectiveInstructionFiles` (`run-host/skills.ts`) keeps the `workspace:` entries of the enabled set the one
 computation decides, and `dispatch`'s `retrospective.capture` passes it where it passed `instructionFiles` whole. The

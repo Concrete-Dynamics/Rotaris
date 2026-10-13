@@ -25,3 +25,15 @@ bundle that builds that ruling.
 - `packages/ui/src/OverviewView.tsx` — the Overview button's `disabled`.
 - `apps/desktop/src/main/commands/improvements.ts` — the `improvements.retrospective` handler, which refuses nothing.
 - `apps/desktop/src/main/improvements.ts` — the coordinator, which publishes no per-workspace retrospective state.
+
+## Outcome
+
+Repaired 2026-10-13 (plan fin34) under `PD-LIBRARY-002` revision 2's clause (e), ruled as
+[OQ-236](../../architecture/open-questions.md#oq-236). `improvement:activity` carries `retrospective_pending`, which the
+coordinator answers per workspace from its queue and active job (`retrospectivePending`) and main sends to each main window
+for its own workspace. The Library tab and the Overview card draw one `RetrospectiveGesture`, unavailable only on that flag,
+with the reason "A retrospective is already queued or running."; the `improvements.retrospective` handler refuses a press
+while it holds, or while a capture for the workspace is still in flight, with one info notice and no capture, which is the
+palette's refusal. Pinned by `apps/desktop/src/main/improvements.test.ts` (three cases, red before),
+`apps/desktop/src/main/commands/improvements.test.ts` (three) and `packages/ui/src/library/retrospective-gesture.test.ts`,
+and by `pnpm retrospective-proof`'s clause (e) checks in the built app (42 of 42).

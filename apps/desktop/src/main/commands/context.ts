@@ -160,6 +160,11 @@ export interface CommandContext {
    * from the run host's own event; a retrospective reaches it from the command a person raised.
    */
   readonly enqueueImprovement: (job: ImprovementAnalysisJob) => void;
+  /**
+   * PD-LIBRARY-002 revision 2, clause (e) (OQ-236): whether a retrospective is queued or running for this workspace —
+   * the one state in which a further retrospective gesture is refused rather than queued.
+   */
+  readonly retrospectivePending: (workspaceId: string) => boolean;
 
   // The native choosers, each of which a capture script may answer instead (verification only).
   readonly chooseSave: (parent: BrowserWindow, opts: Electron.SaveDialogOptions) => Promise<string | null>;

@@ -218,6 +218,13 @@ export const ImprovementActivitySchema = z.object({
   source_session_id: z.string().nullable(),
   /** REQ-LIBRARY-125 with PD-LIBRARY-002: which pass the indicators are labelling. */
   pass: AnalysisPassSchema.default('post_run'),
+  /**
+   * PD-LIBRARY-002 revision 2, clause (e) (OQ-236): whether a retrospective is queued or running in the RECEIVING
+   * window's workspace. It is the one thing that makes the retrospective's start gesture unavailable; a post-run
+   * analysis never does, since a press queues behind it on REQ-LIBRARY-123's FIFO. Main sends it per window, because
+   * the rest of this payload is application-wide.
+   */
+  retrospective_pending: z.boolean().default(false),
 });
 export type ImprovementActivity = z.infer<typeof ImprovementActivitySchema>;
 

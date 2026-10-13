@@ -974,7 +974,18 @@ async function main(): Promise<void> {
     cancel: (artifactId) => { void runHost.request({ kind: 'improvement.cancel', artifactId }, millis(1_000)).catch(() => undefined); },
     service: (workspaceRoot, request, bound) => services.get(canonicalPath(workspaceRoot))?.link.request(request, bound),
     activity: (activity) => {
-      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.improvementActivity, { v: CONTRACT_SCHEMA_VERSION, ...activity });
+      /*
+       * PD-LIBRARY-002 revision 2, clause (e) (OQ-236): the rest of the publication is application-wide, but whether a
+       * retrospective is pending is a fact about ONE workspace, so each main window is told about its own; any other
+       * window (a persona or terminal window) has no gesture to rest and is told none is pending.
+       */
+      const mains = new Map(orderedMainWindows().map((main) => [main.win, main] as const));
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (window.isDestroyed()) continue;
+        const workspaceId = mains.get(window)?.workspaceId;
+        const pending = workspaceId === undefined ? false : improvementCoordinator.retrospectivePending(workspaceId);
+        window.webContents.send(CHANNEL.improvementActivity, { v: CONTRACT_SCHEMA_VERSION, ...activity, retrospective_pending: pending });
+      }
     },
     stored: (record) => {
       libraryRevision.bump('improvement-artifacts');
@@ -995,7 +1006,8 @@ async function main(): Promise<void> {
       raiseNotice(
         'success',
         // REQ-LIBRARY-124 fixes the sibling's wording exactly; the retrospective says which pass proposed, per
-        // PD-LIBRARY-002's "its own label", and both open the Library where the proposals landed.
+        // PD-LIBRARY-002's "its own label", and both open the Library where the proposals landed. The retrospective's
+        // three notices are PD-LIBRARY-002 revision 2's clause (c) (OQ-236), which narrows REQ-LIBRARY-124 for that pass.
         retrospective ? `${count} retrospective proposal${count === 1 ? '' : 's'} ready` : `${count} improvement proposal${count === 1 ? '' : 's'} ready`,
         retrospective ? `Collected in ${record.artifact.artifact_id} from this workspace's own history.` : `Collected in ${record.artifact.artifact_id}.`,
         [{ label: 'Review proposals', action: { kind: 'open-library', tab: 'proposals' } }],
@@ -1675,6 +1687,7 @@ async function main(): Promise<void> {
     preferences, currentTheme: () => currentTheme, setTheme: (name) => (currentTheme = resolveTheme(name)), themeBackground, requirementsPreferenceKey,
     initialization, libraryRevision, requirementsRuns, improvementUndo, improvementRuns,
     enqueueImprovement: (job) => improvementCoordinator.enqueue(job),
+    retrospectivePending: (workspaceId) => improvementCoordinator.retrospectivePending(workspaceId),
     chooseSave, chooseExportPath, chooseDirectory, chooseSkillFile,
     openHookReview, restoreFlow, checkpointOp, quitting, authFallback,
     withdrawnByClose: (sessionId) => quit.withdrawnByClose(sessionId),

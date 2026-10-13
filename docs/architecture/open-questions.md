@@ -11501,7 +11501,7 @@ of a `New:` line naming an identifier or standing beside another verb, and REQ-T
 ruling followed both**: A's note amendments, B's entry, converse check and generator refusal, and REQ-TOOLS-071 and
 REQ-TOOLS-072, which the rule names and narrows the same way as REQ-SANDBOX-104. `PD-LIBRARY-002`'s other candidate
 reaches have arguable verbs and go to a note of their own, with two further questions the advocates raised:
-[`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../defects/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
+[`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../defects/fixed/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
 [`pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md`](../defects/fixed/pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md)
 and
 [`the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md`](../defects/the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md),
@@ -11915,7 +11915,7 @@ four cases in `apps/desktop/src/run-host/skills.test.ts`, red before the change.
 while an analysis runs?** *(`PD-LIBRARY-002`'s disposition block; REQ-LIBRARY-011, REQ-LIBRARY-020, REQ-LIBRARY-109,
 REQ-LIBRARY-124, REQ-LIBRARY-125, REQ-LIBRARY-126, REQ-LIBRARY-128, REQ-LIBRARY-130, REQ-NOTIFY-250; REQ-LIBRARY-123's FIFO;
 ADR-0065 consequence 2 and decision 7; `docs/product/README.md`'s three verbs. Raised 2026-10-13 from
-[`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../defects/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
+[`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../defects/fixed/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
 the note OQ-222's ruling left for these reaches, as the R-072 consortium's question LR1, and ruled the same day.)*
 
 OQ-222 entered the four reaches the back-pointers already marked into `PD-LIBRARY-002`'s Extends line and left the rest:
@@ -11954,3 +11954,12 @@ and ratified the built hint, which has the same shape as the two REQ-LIBRARY-109
 retrospective rows beneath them. On the gesture it followed A's narrower refusal: a second retrospective over an unchanged
 workspace reads the same evidence and duplicate suppression discards its proposals, so B's "always enabled" spends the
 owner's tokens for nothing. Revision 2 rests on the R-072 precedents B cited.
+
+*Built 2026-10-13 (fin34, `fin34-library-and-intent`); its first execution is reported in `PD-LIBRARY-002`'s entry and in
+ADR-0065.* The record half — the paragraph, the Narrows line, the two Extends entries and nine back-pointers — is pinned by
+`back-pointers.test.ts`. The two behaviour repairs: `retrospective_pending` on `improvement:activity`, sent per main window
+from the coordinator's `retrospectivePending`, one `RetrospectiveGesture` on both surfaces, the handler's refusal with one
+info notice, and the Library's two texts. Notes moved to `docs/defects/fixed/`:
+[`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../defects/fixed/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
+[`the-retrospective-start-gesture-is-disabled-while-any-analysis-runs.md`](../defects/fixed/the-retrospective-start-gesture-is-disabled-while-any-analysis-runs.md)
+and [`the-library-proposals-texts-name-only-the-per-run-collector.md`](../defects/fixed/the-library-proposals-texts-name-only-the-per-run-collector.md).

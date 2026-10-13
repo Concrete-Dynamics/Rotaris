@@ -365,7 +365,12 @@ From there the path is the post-run one, unchanged: the same application-wide FI
 things differ at the ends. The artifact carries `source_kind: 'retrospective'` and a NULL `source_session_id`, naming
 what it read in `considered_session_ids` and attributing each evidence entry to its own record. And
 `improvement:activity` gains `pass`, which is what lets the two indicators (REQ-LIBRARY-125/126, built in this part and
-not before) say WHICH analysis is running. `improvement.cancel`, the queue's ordering and shutdown's discard are
+not before) say WHICH analysis is running, and — since `PD-LIBRARY-002` revision 2 (OQ-236) — `retrospective_pending`,
+which main computes **per main window** from the coordinator's `retrospectivePending(workspaceId)`, because the rest of
+the publication is application-wide and this one fact is a workspace's. It is the only thing that rests the gesture's two
+buttons; a post-run analysis never does. `improvements.retrospective` itself refuses while that workspace's retrospective
+is queued, running or still being captured, with one info notice ("A retrospective is already queued or running.") and no
+`retrospective.capture`, which is the palette's refusal. `improvement.cancel`, the queue's ordering and shutdown's discard are
 untouched: a retrospective is an ordinary job on the ordinary queue.
 
 **The session artifact store (Part Y; REQ-LIBRARY-087..101, REQ-ORCH-149).** Renderer → main: `artifacts.list` (the

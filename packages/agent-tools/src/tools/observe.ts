@@ -1,4 +1,4 @@
-import { lstatSync, readdirSync, type Dirent } from 'node:fs';
+import { lstatSync, readdirSync, realpathSync, type Dirent } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { ignoredHere, loadRules, type IgnoreRule } from '@rotaris/config';
 import { IGNORE_COMPONENTS, scanExcludes } from './search.js';
@@ -143,15 +143,29 @@ export class WriteJournal {
  */
 export async function observeReach(o: { readonly root: string; readonly reach: { readonly base: string } | null; readonly journal: WriteJournal; readonly agent: string; readonly limit?: number }, call: () => Promise<Observation>): Promise<Observation> {
   if (o.reach === null) return call();
+  // The root as the native tools note their writes against it (`realPathOf` in the run host's `tools.ts`), and as the walk can
+  // enter it: a workspace reached through a symbolic link was walked as the link, which `lstat` does not follow, so nothing was
+  // observed, and a sibling's noted write never matched (fin36,
+  // docs/defects/fixed/a-siblings-native-write-is-not-subtracted-from-an-observation-taken-through-a-symlinked-workspace.md).
+  const root = realRootOf(o.root);
   const mark = o.journal.mark();
-  const before = snapshotTree(o.root, o.reach.base, o.limit);
+  const before = snapshotTree(root, o.reach.base, o.limit);
   const obs = await call();
   // The ruling's `unobserved` mark: the call ran and nothing names what it changed, so an erred one is not read as refused.
   if (before === null) return { ...obs, unobserved: true };
-  const after = snapshotTree(o.root, o.reach.base, o.limit);
+  const after = snapshotTree(root, o.reach.base, o.limit);
   if (after === null) return { ...obs, unobserved: true };
   const others = o.journal.since(mark, o.agent);
-  const rootAbs = resolve(o.root);
+  const rootAbs = resolve(root);
   const observedPaths = snapshotChanges(before, after).filter((p) => !others.has(resolve(rootAbs, p)));
   return { ...obs, observedPaths };
+}
+
+/** `root` with every symbolic link resolved, or as given when it cannot be (absent, unreadable). */
+function realRootOf(root: string): string {
+  try {
+    return realpathSync(root);
+  } catch {
+    return root;
+  }
 }

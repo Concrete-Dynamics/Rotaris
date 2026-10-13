@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CODE_INTELLIGENCE_MARKER_SEGMENTS } from '@rotaris/config';
@@ -83,6 +83,25 @@ describe('observeReach (OQ-245)', () => {
       return observation("Successfully renamed 'total' to 'sum' (2 changes applied)");
     });
     expect(obs.observedPaths).toEqual(['docs/api.md', 'src/a.ts']);
+  });
+
+  it('a sibling\'s write noted against the real path is left out when the root is given through a symbolic link (fin36)', async () => {
+    // docs/defects/fixed/a-siblings-native-write-is-not-subtracted-from-an-observation-taken-through-a-symlinked-workspace.md:
+    // the native tools note against `realPathOf(root)`, the MCP executor passed the root unresolved.
+    const link = `${root}-link`;
+    symlinkSync(root, link, 'dir');
+    try {
+      const journal = new WriteJournal();
+      const obs = await observeReach({ root: link, reach: { base: '' }, journal, agent: 'refactorer' }, async () => {
+        writeFileSync(join(root, 'src', 'a.ts'), 'export const sum = 1;\n');
+        writeFileSync(join(root, 'docs', 'notes.md'), 'sibling\n');
+        journal.note('sibling', [join(realpathSync(root), 'docs', 'notes.md')]);
+        return observation('ok');
+      });
+      expect(obs.observedPaths).toEqual(['src/a.ts']);
+    } finally {
+      rmSync(link, { force: true });
+    }
   });
 
   it('a reach of null observes nothing; a walk that cannot be completed marks the observation unobserved, whatever the call returned', async () => {

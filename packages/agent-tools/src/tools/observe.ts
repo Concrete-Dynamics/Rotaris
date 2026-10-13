@@ -1,6 +1,7 @@
-import { lstatSync, readdirSync, realpathSync, type Dirent } from 'node:fs';
+import { lstatSync, readdirSync, type Dirent } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { ignoredHere, loadRules, type IgnoreRule } from '@rotaris/config';
+import { realPathOf } from './fence.js';
 import { IGNORE_COMPONENTS, scanExcludes } from './search.js';
 import type { Observation } from './types.js';
 
@@ -150,7 +151,10 @@ export async function observeReach(o: { readonly root: string; readonly reach: {
   // enter it: a workspace reached through a symbolic link was walked as the link, which `lstat` does not follow, so nothing was
   // observed, and a sibling's noted write never matched (fin36,
   // docs/defects/fixed/a-siblings-native-write-is-not-subtracted-from-an-observation-taken-through-a-symlinked-workspace.md).
-  const root = realRootOf(o.root);
+  // It is that very function, the native resolution: fin36 first resolved the root with the JavaScript `realpathSync`, which on
+  // Windows leaves a substituted drive, an 8.3 short name or a drive letter's case as given where the native one canonicalises
+  // them, so the spellings could still differ there (fin36's review).
+  const root = realPathOf(o.root);
   const mark = o.journal.mark();
   const before = snapshotTree(root, o.reach.base, o.limit);
   const obs = await call();
@@ -162,13 +166,4 @@ export async function observeReach(o: { readonly root: string; readonly reach: {
   const rootAbs = resolve(root);
   const observedPaths = snapshotChanges(before, after).filter((p) => !others.has(resolve(rootAbs, p)));
   return { ...obs, observedPaths };
-}
-
-/** `root` with every symbolic link resolved, or as given when it cannot be (absent, unreadable). */
-function realRootOf(root: string): string {
-  try {
-    return realpathSync(root);
-  } catch {
-    return root;
-  }
 }

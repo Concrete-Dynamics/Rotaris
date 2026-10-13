@@ -20,6 +20,16 @@ export interface ScriptedCallRecord {
   readonly images: readonly string[];
   /** The names of the tools the call offered, in listing order — what a proof reads to see a grant reach the model port. */
   readonly tools: readonly string[];
+  /**
+   * The `delegate` tool's description as the call offered it, or null where it was not offered — what a proof reads to see
+   * the delegation catalogue the agent was told, a `delegates_to` narrowing included (OQ-229).
+   */
+  readonly delegateDescription: string | null;
+  /**
+   * The text of the call's first user message — for a continued session's fresh root, the continuation payload with its
+   * artifact handoff (REQ-SESSION-115, PD-LIBRARY-003 (e)).
+   */
+  readonly firstUser: string;
 }
 
 /**
@@ -344,7 +354,8 @@ export function scriptedClient(c: Clocks,log: (message: string) => void, record?
       calls[counterKey] = (calls[counterKey] ?? 0) + 1;
       // Verification only: the model each call went to, so a proof can read a fallback or an override from the log (Part Q).
       log(`scripted model call: ${req.model.providerId}/${req.model.modelId} (${who})`);
-      record?.({ call, who, model: `${req.model.providerId}/${req.model.modelId}`, system, images: req.messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'image' ? [createHash('sha256').update(Buffer.from(p.base64, 'base64')).digest('hex')] : []))), tools: (req.tools ?? []).map((t) => t.name) });
+      const firstUserText = req.messages.find((m) => m.role === 'user')?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '';
+      record?.({ call, who, model: `${req.model.providerId}/${req.model.modelId}`, system, images: req.messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'image' ? [createHash('sha256').update(Buffer.from(p.base64, 'base64')).digest('hex')] : []))), tools: (req.tools ?? []).map((t) => t.name), delegateDescription: (req.tools ?? []).find((t) => t.name === 'delegate')?.description ?? null, firstUser: firstUserText });
       if (who === 'classifier') {
         // ROTARIS_INTENT_SCRIPT: <category> | garbage | timeout | reject (the two JSON rungs refused, then text) — verification only.
         const want = (process.env['ROTARIS_INTENT_SCRIPT'] ?? 'moderate_feature').trim();
@@ -526,10 +537,12 @@ export function scriptedClient(c: Clocks,log: (message: string) => void, record?
         yield { ok: false as const, error: { code: 'aborted' as const, headline: 'aborted', transient: false } };
         return;
       }
-      // delegate:<persona>:<name>[:after] — `after` depends on the last task id a tool result reported. Further arguments for a
+      // delegate:<persona>:<name>[:after|:followup] — `after` depends on the last task id a tool result reported; `followup`
+      // follows that child up (PD-TOOLS-006 revision 3's `session_id`, PD-ORCH-005 clause 22) with a task of its own,
+      // `FOLLOW-UP: <name>`, and no `depends_on`. Further arguments for a
       // named delegation come from ROTARIS_SCRIPT_DELEGATE_ARGS by task name (a JSON map), in the shape of the artifact map
       // below: PD-TOOLS-006 revision 5's proof attaches artifacts (`attach_artifacts`). Verification only.
-      const delegate = /^delegate:([a-z-]+):([^:]+)(:after)?$/.exec(step);
+      const delegate = /^delegate:([a-z-]+):([^:]+)(:after|:followup)?$/.exec(step);
       if (delegate && (req.tools ?? []).some((t) => t.name === 'delegate')) {
         const lastId = delegate[3] ? [...req.messages].reverse().flatMap((m) => [...m.content] as { kind: string; result?: string }[]).map((p) => (p.kind === 'tool-result' && p.result ? /task_id: (bg_[0-9a-f]{8})/.exec(p.result)?.[1] : undefined)).find((x) => x !== undefined) : undefined;
         let extra: Record<string, unknown> = {};
@@ -542,6 +555,13 @@ export function scriptedClient(c: Clocks,log: (message: string) => void, record?
         // of a coordinator that keeps a list (`scriptedTodoItem`); an entry's `todo_item` overrides it.
         const { todo_item: explicitItem, ...rest } = extra;
         const item = scriptedTodoItem(latestScriptedPlan(req.messages), 'todo_item' in extra ? explicitItem : undefined);
+        if (delegate[3] === ':followup') {
+          yield ok<StreamPart>({ kind: 'text', delta: `Following up ${delegate[2]}. ` });
+          yield ok<StreamPart>({ kind: 'tool-call', callId, name: 'delegate', argsDelta: JSON.stringify({ persona: delegate[1], task_name: delegate[2], task: `FOLLOW-UP: ${delegate[2]}\nOne more question about the work you reported.`, ...(lastId ? { session_id: lastId } : {}) }) });
+          yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
+          yield finished('other');
+          return;
+        }
         yield ok<StreamPart>({ kind: 'text', delta: `Delegating to ${delegate[1]}. ` });
         yield ok<StreamPart>({ kind: 'tool-call', callId, name: 'delegate', argsDelta: JSON.stringify({ persona: delegate[1], task_name: delegate[2], task: `TASK: ${delegate[2]}\nEXPECTED OUTCOME: done\nMUST DO: use your tools\nMUST NOT DO: nothing else\nCONTEXT: scripted`, ...(lastId ? { depends_on: [lastId] } : {}), ...rest, ...(item === undefined ? {} : { todo_item: item }) }) });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });

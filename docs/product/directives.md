@@ -2971,6 +2971,14 @@ revision 9 from OQ-256 and OQ-257 (the consortium's questions V1 and V2, the dur
 > **What was measured.** Scripted end-to-end cases in `children.test.ts`, each red on the code before the repair, where
 > the id was dropped and a fresh child spawned. **What was not measured.** No built-app or live run set `session_id`. The
 > row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Reported back 2026-10-13 (fin42, item N57):** "No built-app … run set `session_id`" no longer holds for the built app.
+> `pnpm delegation-proof`'s `follow-up` launch (scripted) delegates a `codebase-analyst`, waits for it to end, and calls
+> `delegate` with `session_id` naming its task id: the observation read "Following up probe (codebase-analyst): it resumes from
+> its record under its own task id", the session held one child row, the child's record held the follow-up's task once, a
+> `child_resumed` entry said it was followed up from `succeeded`, and the child answered one more model call and ended
+> `succeeded` again. Still not measured live: the default live run's `delegation` scenario asks for the follow-up, and is the
+> orchestrator's to run. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 > **First execution of revision 4, 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-216](../architecture/open-questions.md)):**
 > built as written, and the text met the code in three places.
@@ -3028,6 +3036,12 @@ revision 9 from OQ-256 and OQ-257 (the consortium's questions V1 and V2, the dur
 > question DT1):** for a caller whose `delegates_to` names any persona, "every persona that agent can delegate to" means the
 > delegation targets that list names (REQ-CONFIG-101); an empty list narrows nothing. Built 2026-10-13 by fin33
 > (`Persona.delegatesTo`, `DelegateCatalogue.narrowedBy`); the evidence is scripted only, since no live run sets the key.
+> *Reported back 2026-10-13 (fin42, item N57):* the built app now sets it. `pnpm delegation-proof`'s `delegates-to` launch
+> gives the orchestrator `delegates_to: [codebase-analyst]` in the workspace's configuration: the `delegate` tool the model port
+> was offered said "Your delegates_to (codebase-analyst) narrows this list: a delegation to any other persona is refused." and
+> named no other persona, a delegation to `codebase-analyst` was admitted, and one to `docs-writer` was refused, "'docs-writer'
+> is not a persona orchestrator may delegate to: its delegates_to lists codebase-analyst. Known personas: codebase-analyst.". The
+> live run's `delegation` scenario sets the key (`codebase-analyst`, `docs-writer`); its run is the orchestrator's.
 >
 > **Measured 2026-10-07 (the duress live run at `a68f121`, pack `2026-10-07T07-09-30-708Z`, session `e6747bd0`; recorded
 > 2026-10-13 under [OQ-250](../architecture/open-questions.md#oq-250)):** the "What was not measured" above, now measured. The catalogue
@@ -3087,6 +3101,12 @@ revision 9 from OQ-256 and OQ-257 (the consortium's questions V1 and V2, the dur
 > 55,000-character body (left out under 48,000) and the short one after the elided one, a section of 56,099 characters; and
 > `summary.md` read "Mostly-elided artifacts: 1". **What was not measured.** No live run attached artifacts; none of the four
 > autopsied live runs did. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Reported back 2026-10-13 (fin42, item N57):** a live scenario now asks for an attachment. The default live run's
+> `delegation` launch has the orchestrator find a child's report artifact with `artifact_list` and attach it to a second child
+> through `attach_artifacts`; the scenario checks that the observation's count given whole agrees with the child's
+> `context_selection` entry, and notes a run whose model attached nothing or named an unresolved id. Its run is the
+> orchestrator's; no live run has attached an artifact yet.
 
 > **First execution of revision 6, 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-220](../architecture/open-questions.md)),
 > built by fin29:** built as written, and the text met the code in four places.
@@ -3986,6 +4006,11 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > since, had not been written. **What was not
 > measured.** No built-app or live run followed a child up. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Reported back 2026-10-13 (fin42, item N57):** the built app has followed a child up: `pnpm delegation-proof`'s `follow-up`
+> launch, as `PD-TOOLS-006` revision 3's report-back gives it (one child row, the follow-up's task in its record once, a
+> `child_resumed` entry, ended `succeeded` again). A live follow-up is asked by the default live run's `delegation` scenario,
+> and is the orchestrator's to run.
 
 > **The quit's gap, repaired 2026-09-29 under [R-067](requests.md#r-067):** clause 9's withdrawal by a quit was built for
 > what is pending when the run host's `shutdown` arrives, and main sends it only after `window-all-closed` has waited on
@@ -4193,6 +4218,13 @@ under the owner's delegation, 2026-10-07, ruling OQ-205; logged as [R-072](reque
 > heading, and offers 17 tools, `write_file`, `terminal` and `delegate` among them (the scripted client's capture
 > now records the tool names it was offered). **What was not measured.** No live run: no live scenario takes a strategy, so
 > the built-app launch stands in. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Reported back 2026-10-13 (fin42, item N57):** the other half in the built app, and a live scenario. `pnpm delegation-proof`'s
+> `swarm` launch saves `delegation_strategy: swarm` on a run the mapping does not grant (the scripted classifier's
+> `moderate_feature`): the coordinator's first request carried ``## Run override: `swarm` ``, not the direct-work statement,
+> and was offered `delegate` with none of `write_file`, `terminal`, `haet_edit`, `haet` — REQ-ORCH-025 as written, as this
+> revision leaves it for such a run. The default live run's `delegation-swarm` launch sets the strategy and checks whichever half
+> the mapping reaches; its run is the orchestrator's.
 
 > **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: revision 1's live measure,
 > the `frictions` scenario. Its coordinator's first request after an `explicit_trivial` classification went straight to the
@@ -4712,6 +4744,13 @@ work in different trees the first to connect decides the root.
 > fixture servers a user might add and reads the root each was handed. **What was not measured.** A session whose agents work
 > in different trees, where the first `lsp` connection decides the root for all. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Reported back 2026-10-13 (fin42, item N57): not drivable as built.** Every run of a session, and every agent of each run,
+> works in the session's one recorded execution root: a session's first run fixes it (`sessions.start`, the worktree it is
+> given), and every later run reads it back (`effectiveRootOf`, `packages/engine/src/sessions.ts`, at each `setupFor`). No child
+> is given a tree of its own (`delegate` takes no worktree). So no session's agents work in different trees, and the case this
+> paragraph names cannot be built by a proof or a live run until something gives one session two trees. It is recorded as not
+> measurable, not as measured.
 
 ---
 
@@ -6781,6 +6820,19 @@ advocate A's change of behaviour and advocate B's confirmation as built and foll
 > frontmatter, title, Summary, Key Findings and Commands. Found nothing against the directive. **Not reached:** an edited
 > artifact (clauses (c) to (e)) and the Key Findings section's indentation case; no person edited an artifact in the pack.
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Clauses (c) to (e) in the built app, 2026-10-13 (fin42, item N57).** "No built-app launch edits an artifact and then
+> supersedes or re-reports it" no longer holds. `pnpm artifacts-proof`'s launch 8 (`edited`) publishes `travel-plan` and a person
+> edits and saves it in the Markdown tab: `edited_at` was stamped and `key_findings` kept the published body (c). Launch 9
+> (`re-reported`) continues that session: the fresh root's first message carried `Artifact: <id> — Travel plan (agent_published,
+> published, edited)` with the person's text and no frontmatter line (e), and its publish of `travel-plan-2` with `supersedes:
+> travel-plan` rewrote the older document's frontmatter (`superseded_by`) and kept the person's text below it (d). **Found by
+> building:** the first build of launch 8 typed where its click put the caret, the editor's centre, which is inside the
+> frontmatter; the save stamped `edited_at` and the table showed ` · edited`, and launch 9's re-render rewrote the block, so the
+> edit was gone while the handoff still named the artifact `edited`. That is clause (d) as written, and a cost the paragraph
+> above does not name; raised as [OQ-272](../architecture/open-questions.md#oq-272), not decided. The proofs now take the caret
+> below the frontmatter first. A person's edit live is asked by the default live run's `delegation-edit` launch, the
+> orchestrator's to run. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

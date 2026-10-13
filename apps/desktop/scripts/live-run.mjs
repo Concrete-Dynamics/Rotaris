@@ -104,6 +104,10 @@
  *                 more work than that: the cut-off child's report, the timed-out tag's line in the minutes form
  *                 (PD-CONFIG-003 revisions 3 and 4), OQ-217's facts head and summary opening and no "The run failed" relayed
  *                 (D9), then a follow-up run asked to take the continuation offer up (PD-ORCH-004 revisions 3 and 4).
+ *   8f. delegation — (since 2026-10-13, N57) three launches: a run whose orchestrator's `delegates_to` names two personas,
+ *                 asked to delegate a child, hand its report artifact to a second through `attach_artifacts`, and follow the
+ *                 first up by `session_id`; that session reopened, its latest artifact edited and saved in the Library's
+ *                 inspector, and continued, whose handoff must carry the edit; and a `rotaris.delegation_strategy: swarm` run.
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -175,11 +179,13 @@ import { DURATION_PROBES, runDurationReading } from './lib/run-duration-agreemen
 import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
 import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, toolIntervals, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
-import { withRuntimeKey } from './lib/runtime-key.mjs';
+import { withPersonaKey, withRuntimeKey, withSectionKey } from './lib/runtime-key.mjs';
 import { runApprovalsScenario, runAwayScenario, runPlanGateScenario } from './lib/approval-scenarios.mjs';
 import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-field.mjs';
 import { passOutcome, postRunVerdict, retrospectiveInstructionFiles, settledAfterMs, settledWait } from './lib/analysis-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
+import { ARTIFACTS_TAB } from './lib/library-refresh.mjs';
+import { attachReading, delegatesToReading, followUpReading, handoffReading, requestOf, swarmReading } from './lib/delegation-readings.mjs';
 import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, STEADY_INTERVAL_MS, STEADY_TICKS, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
@@ -284,7 +290,7 @@ const ANALYST_TIMEOUT_S = Number(process.env['LIVE_RUN_ANALYST_TIMEOUT_S'] ?? 30
 if (!(Number.isInteger(ANALYST_TIMEOUT_S) && ANALYST_TIMEOUT_S >= 10 && ANALYST_TIMEOUT_S <= 600)) {
   throw new Error(`LIVE_RUN_ANALYST_TIMEOUT_S must be whole seconds from 10 to 600, the Improvement analysis timeout control's range (PD-CONFIG-003 revision 2); got ${JSON.stringify(process.env['LIVE_RUN_ANALYST_TIMEOUT_S'])}`);
 }
-const OPTIONAL = ['ask', 'edit', 'resume', 'requirements', 'shell', 'frictions', 'faults', 'terminal', 'away', 'approvals', 'plan-gate'];
+const OPTIONAL = ['ask', 'edit', 'resume', 'requirements', 'shell', 'frictions', 'faults', 'terminal', 'away', 'approvals', 'plan-gate', 'delegation'];
 /**
  * Scenarios that `--only` accepts and the default set never contains.
  *
@@ -2740,6 +2746,160 @@ if (wanted.includes('cutoff')) {
     writeFileSync(agentsFile, agentsBeforeCutoff);
   }
   results.scenarios.cutoff = cutoffRecord;
+  await budgetGate();
+}
+
+// ── 8f. Delegation: a follow-up, attachments, delegates_to, swarm, and an edited artifact handed on ──────────
+/**
+ * Five delegation features the 2026-10-13 survey (item N57) found built and scripted-tested, with no live scenario asking any
+ * of them; `pnpm delegation-proof` and `pnpm artifacts-proof` launches 8 and 9 take the same paths with the scripted client.
+ * Three launches:
+ *
+ *   delegation       — the orchestrator's `delegates_to` narrowed to `codebase-analyst` and `docs-writer` (OQ-229), and a
+ *                      prompt that asks for a `codebase-analyst` child, then a `docs-writer` child given that child's report
+ *                      artifact through `attach_artifacts` (PD-TOOLS-006 revision 5), then a follow-up of the first child by
+ *                      its `session_id` (PD-TOOLS-006 revision 3, PD-ORCH-005 clause 22). Read from the store and the traffic:
+ *                      the catalogue the root was offered, each delegation's observation, the children, the timeline.
+ *   delegation-edit  — the same session reopened; a person edits the session's latest artifact in the Library's inspector and
+ *                      saves (PD-LIBRARY-003 (c)), then continues the session. The fresh root's first request must carry the
+ *                      edited document as REQ-SESSION-115's handoff, marked `edited`, frontmatter removed (PD-LIBRARY-003 (e)).
+ *   delegation-swarm — `rotaris.delegation_strategy: swarm` (PD-ORCH-006 revision 3, REQ-ORCH-025): whichever way the intent
+ *                      mapping goes, what the root is told and offered must match — the swarm layer and the coordination-only
+ *                      set on a run it does not grant, the direct-work statement and the writing tools on one it does.
+ *
+ * What a model chose not to ask is a NOTE; what the product got wrong is a FAIL. Not asked by any launch: PD-MCP-002's
+ * "session whose agents work in different trees" — every agent of a session works in the session's one recorded tree
+ * (`effectiveRootOf`, packages/engine/src/sessions.ts), so no session can hold agents in two trees as the product is built.
+ */
+if (wanted.includes('delegation')) {
+  const DELEGATES_TO = ['codebase-analyst', 'docs-writer'];
+  const KNOWN_TARGETS = ['requirements-engineer', 'codebase-analyst', 'librarian', 'architect', 'planner', 'coding-agent', 'tester', 'docs-writer', 'refactorer', 'verifier', 'ui-verifier'];
+  const agentsBefore = readFileSync(agentsFile, 'utf8');
+  const PROMPT = [
+    'Work in three steps, each through the delegate tool, waiting for each child to end (wait_for_tasks) before the next step.',
+    '1. Delegate to codebase-analyst, with task_name exports, the task of reading src/todos.js and reporting every function it exports.',
+    "2. When it has ended, find that child's report artifact with artifact_list, and delegate to docs-writer, with task_name exports-doc,",
+    '   the task of writing docs/exports.md listing those functions; pass the report artifact\'s id in attach_artifacts so the child starts from it.',
+    '3. Then ask the first child one more question by calling delegate with session_id set to its task_id (do not delegate a new child for',
+    '   this): which exported function has the most lines.',
+    'Reply with one sentence naming that function.',
+  ].join('\n');
+  let log = '';
+  try {
+    writeFileSync(agentsFile, withPersonaKey(agentsBefore, 'orchestrator', 'delegates_to', `[${DELEGATES_TO.join(', ')}]`));
+    cpSync(agentsFile, join(scenarioDir('delegation'), 'agents.yaml'));
+    log = await launch('delegation', {
+      ROTARIS_CAPTURE_PROMPT: PROMPT,
+      ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
+    }, EDIT_WAIT_MS + 120_000);
+  } finally {
+    writeFileSync(agentsFile, agentsBefore);
+  }
+  check(!/capture: wait for result timed out/.test(log), 'the delegation run reached its result inside the wait');
+  const read = readSession();
+  checkPricing('delegation', read?.session);
+  const sid = read?.session.session_id ?? null;
+  const calls = sid === null ? [] : readToolCalls(sid);
+  const delegates = calls.filter((c) => c.tool_name === 'delegate');
+  const Database = require('better-sqlite3');
+  let children = [];
+  let timeline = [];
+  let latest = null;
+  if (sid !== null) {
+    const db = new Database(oneDatabase(), { readonly: true });
+    try {
+      children = db.prepare('SELECT task_id, canonical_name, persona, state FROM children WHERE session_id = ? ORDER BY spawned_at, rowid').all(sid);
+      timeline = db.prepare("SELECT name, metadata FROM timeline WHERE session_id = ? AND name IN ('child_resumed', 'context_selection') ORDER BY ordinal").all(sid).map((t) => ({ name: t.name, metadata: (() => { try { return JSON.parse(t.metadata); } catch { return {}; } })() }));
+      // The artifact the next run's handoff names: the latest the session holds that nothing superseded (`latestArtifactText`).
+      latest = db.prepare('SELECT id, key_findings, edited_at FROM artifacts WHERE session_id = ? AND superseded_by IS NULL ORDER BY created_at DESC, rowid DESC LIMIT 1').get(sid) ?? null;
+    } finally { db.close(); }
+  }
+  const rootRequests = readTraffic('delegation').filter((r) => String(r.path ?? '').includes('/chat/completions')).map(requestOf).filter((r) => r !== null && /^You are the orchestrator/.test(r.system));
+  // OQ-229: the catalogue says the list narrows it and names no persona outside it; a delegation outside it is refused.
+  const narrowing = delegatesToReading(rootRequests, DELEGATES_TO, delegates, KNOWN_TARGETS);
+  if (narrowing.kind === 'not-offered') noted('no root request was offered delegate', 'the delegates_to catalogue is unasked');
+  else {
+    check(narrowing.kind === 'narrowed', `the root's delegate catalogue was narrowed to its delegates_to (${DELEGATES_TO.join(', ')}) (OQ-229)`, narrowing.kind === 'narrowed' ? 'the description says so and names no other persona' : `says ${narrowing.says}; names ${narrowing.named.join(', ') || 'none'} outside the list`);
+    if (narrowing.outside > 0) check(narrowing.admittedOutside === 0, 'every delegation to a persona outside delegates_to was refused naming the list (OQ-229)', `${narrowing.outside} outside, ${narrowing.admittedOutside} admitted`);
+    else noted('no delegation named a persona outside delegates_to', 'the refusal is unasked live; delegation-proof measures it');
+  }
+  // PD-TOOLS-006 revision 5: the report artifact attached to the docs-writer.
+  const attached = attachReading(delegates, timeline.filter((t) => t.name === 'context_selection').map((t) => t.metadata), children);
+  if (attached.kind === 'not-asked') noted('no delegation attached an artifact', 'attach_artifacts is unasked this run');
+  else if (attached.kind !== 'attached') noted('a delegation named attachments, and none was given whole', `${attached.kind}: ${delegates.filter((d) => Array.isArray(d.args.attach_artifacts) && d.args.attach_artifacts.length > 0).map((d) => `#${d.ordinal} ${JSON.stringify(d.args.attach_artifacts)}`).join(', ')}`);
+  else check(attached.faults.length === 0, "an attached artifact was given to the child whole, the observation and the child's context_selection entry agreeing (PD-TOOLS-006 revision 5)", attached.faults.length === 0 ? `${attached.given} given whole over ${attached.asked} delegation(s)` : attached.faults.join('; '));
+  // PD-TOOLS-006 revision 3 / PD-ORCH-005 clause 22: the first child followed up under its own task id.
+  const followed = followUpReading(delegates, children, timeline.filter((t) => t.name === 'child_resumed'));
+  if (followed.kind === 'not-asked') noted('no delegation carried a session_id', 'the follow-up of a settled child is unasked this run');
+  else if (followed.kind === 'refused') {
+    const named = followed.refused.every((r) => /names no settled child of yours|has not ended|cut off by its child_timeout/.test(r.reason));
+    if (named) noted('every follow-up was refused for a reason PD-TOOLS-006 revision 3 lists', followed.refused.map((r) => `#${r.ordinal}: ${r.reason}`).join('; '));
+    else check(false, 'a follow-up by session_id was accepted or refused for a listed reason', followed.refused.map((r) => `#${r.ordinal}: ${r.reason}`).join('; '));
+  } else check(followed.faults.length === 0, 'a settled child followed up by session_id resumed under its own task id, with its child_resumed entry (PD-TOOLS-006 revision 3, PD-ORCH-005 clause 22)', followed.faults.length === 0 ? `ordinal(s) ${followed.accepted.join(', ')}` : followed.faults.join('; '));
+  results.scenarios.delegation = { status: read?.session.execution_status, delegations: delegates.length, children: children.map((c) => `${c.canonical_name}:${c.persona}:${c.state}`), narrowing: narrowing.kind, attached: attached.kind, followUp: followed.kind, latestArtifact: latest?.id ?? null };
+  if (sid !== null) preserveRun('delegation', sid);
+  await budgetGate();
+
+  // ── delegation-edit: a person's edit of the latest artifact, handed to the next run (PD-LIBRARY-003 (c), (e)) ──
+  if (sid === null || latest === null) noted('the delegation session left no artifact to edit', 'PD-LIBRARY-003 (c) and (e) are unasked this run');
+  else {
+    const MARKER = 'LIVE-EDIT-MARKER';
+    const editLog = await launch('delegation-edit', {
+      ROTARIS_CAPTURE_RESUME: sid,
+      ROTARIS_CAPTURE_RESIZE: '1360x980@500',
+      ROTARIS_CAPTURE_VIEWS: '6@4000',
+      ROTARIS_CAPTURE_CLICKS: [`${ARTIFACTS_TAB}@4600`, `tr[data-artifact-id="${latest.id}"]@5400`, '[data-testid="library-artifacts-inspect"]@6200', '[data-testid="artifact-tab-markdown"]@7400', 'textarea[data-testid="artifact-editor"]@8000', '[data-testid="artifact-save"]@10200'].join(';;'),
+      // The click lands in the editor's centre, inside the frontmatter a re-render rewrites; the caret goes to the end first.
+      ROTARIS_CAPTURE_CHORDS: 'Ctrl+End@8500',
+      ROTARIS_CAPTURE_TYPE_AT: ` ${MARKER}@9000`,
+      ROTARIS_CAPTURE_PROBE_AT: '[data-testid="artifact-inspector-status"]@11000',
+      ROTARIS_CAPTURE_PROMPT: 'In one sentence: what does the latest artifact handed to you end with?',
+      ROTARIS_CAPTURE_PROMPT_MS: '12500',
+      ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
+    }, RUN_WAIT_MS + 120_000);
+    const db = new Database(oneDatabase(), { readonly: true });
+    let after = null;
+    try { after = db.prepare('SELECT id, key_findings, edited_at FROM artifacts WHERE session_id = ? AND id = ?').get(sid, latest.id) ?? null; } finally { db.close(); }
+    const saved = /capture: probe-at 11000 \[data-testid="artifact-inspector-status"\] → (\[.*\])/.exec(editLog)?.[1] ?? '[]';
+    const status = (() => { try { return JSON.parse(saved)[0]?.text ?? ''; } catch { return ''; } })();
+    if (after?.edited_at === null || after === null) noted('the person\'s edit was not saved, so the handoff of an edited artifact is unasked', `inspector status ${JSON.stringify(status)}; the Library is driven at fixed times and the reopened session may not have been ready`);
+    else {
+      check(after.key_findings === latest.key_findings, "the edit stamped edited_at and left key_findings as published (PD-LIBRARY-003 (c))", `edited_at ${after.edited_at}`);
+      const first = readTraffic('delegation-edit').filter((r) => String(r.path ?? '').includes('/chat/completions')).map(requestOf).find((r) => r !== null && /^You are the orchestrator/.test(r.system)) ?? null;
+      const handoff = handoffReading(first?.firstUser ?? null, latest.id, MARKER);
+      if (handoff.kind === 'absent' || handoff.kind === 'other-artifact') noted('the continued run\'s first root request did not name the edited artifact', `${handoff.kind}: ${handoff.header ?? 'no artifact line'}`);
+      else check(handoff.kind === 'carried' && handoff.carriesMarker && !handoff.frontmatter, "the continued run's handoff carried the edited document, marked edited, the person's text in it and no frontmatter (PD-LIBRARY-003 (e), REQ-SESSION-115)", `${handoff.header}; marker ${handoff.carriesMarker ? 'present' : 'absent'}; frontmatter ${handoff.frontmatter ? 'present' : 'absent'}`);
+    }
+    const editRead = readSession();
+    checkPricing('delegation-edit', editRead?.session);
+    results.scenarios['delegation-edit'] = { artifact: latest.id, saved: after?.edited_at !== null && after !== null, status };
+    await budgetGate();
+  }
+
+  // ── delegation-swarm: the strategy, as the mapping in force reads it (PD-ORCH-006 revision 3, REQ-ORCH-025) ──
+  const SWARM_PROMPT = 'Make addTodo in src/todos.js refuse an empty or blank title, add a test for it beside the existing ones, and mention the rule in README.md. Run the tests when done. Reply with one sentence.';
+  let swarmLog = '';
+  try {
+    writeFileSync(agentsFile, withSectionKey(agentsBefore, 'rotaris', 'delegation_strategy', 'swarm'));
+    cpSync(agentsFile, join(scenarioDir('delegation-swarm'), 'agents.yaml'));
+    swarmLog = await launch('delegation-swarm', {
+      ROTARIS_CAPTURE_PROMPT: SWARM_PROMPT,
+      ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
+    }, EDIT_WAIT_MS + 120_000);
+  } finally {
+    writeFileSync(agentsFile, agentsBefore);
+  }
+  check(!/capture: wait for result timed out/.test(swarmLog), 'the swarm run reached its result inside the wait');
+  const swarmRead = readSession();
+  checkPricing('delegation-swarm', swarmRead?.session);
+  const firstRoot = readTraffic('delegation-swarm').filter((r) => String(r.path ?? '').includes('/chat/completions')).map(requestOf).find((r) => r !== null && /^You are the orchestrator/.test(r.system)) ?? null;
+  const swarm = swarmReading(firstRoot);
+  if (swarm.kind === 'absent') noted('no root request of the swarm run was recorded', RECORD_TRAFFIC ? 'the strategy is unasked' : 'traffic not recorded (--no-record-traffic)');
+  else check(swarm.faults.length === 0, swarm.kind === 'granted' ? 'a swarm run the mapping granted was told the direct-work statement, no swarm layer, and offered the writing tools beside delegate (PD-ORCH-006 revision 3)' : "a swarm run the mapping did not grant carried REQ-ORCH-025's swarm layer and its coordination-only tool set", swarm.faults.length === 0 ? `${swarm.kind}; offered ${swarm.offered.join(', ')}` : swarm.faults.join('; '));
+  const swarmChildren = swarmRead === null ? 0 : readToolCalls(swarmRead.session.session_id).filter((c) => c.tool_name === 'delegate' && c.status === 'ok').length;
+  if (swarm.kind === 'coordinating') noted('what the swarm coordinator delegated', `${swarmChildren} admitted delegation(s); how widely it divided the work is the model's, and is recorded rather than asserted`);
+  results.scenarios['delegation-swarm'] = { status: swarmRead?.session.execution_status, kind: swarm.kind, offered: swarm.offered, delegations: swarmChildren };
+  if (swarmRead) preserveRun('delegation-swarm', swarmRead.session.session_id);
   await budgetGate();
 }
 

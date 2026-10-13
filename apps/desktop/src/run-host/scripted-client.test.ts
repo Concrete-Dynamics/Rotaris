@@ -142,6 +142,44 @@ describe('scriptedClient — the step a call takes', () => {
   });
 
   /*
+   * PD-TOOLS-006 revision 3's `session_id` and PD-ORCH-005 clause 22 (`delegation-proof`'s follow-up launch): a
+   * `delegate:<persona>:<name>:followup` step follows up the child the last tool result named, with a task of its own.
+   */
+  it('`delegate:<persona>:<name>:followup` follows up the last task id with a FOLLOW-UP task and no depends_on', async () => {
+    // The record below holds one step of the root's, so the step this call takes is the script's second.
+    vi.stubEnv('ROTARIS_SCRIPT', 'delegate:codebase-analyst:probe,delegate:codebase-analyst:probe:followup');
+    const client = scriptedClient(clock, () => {});
+    const delegating = [...TOOLS, { name: 'delegate', description: 'delegate', parameters: {} }];
+    const reported: ChatMessage[] = [
+      { role: 'assistant', content: [{ kind: 'text', text: 'Delegating. ' }, { kind: 'tool-call', callId: 'd1', name: 'delegate', args: '{}' }] },
+      { role: 'tool', content: [{ kind: 'tool-result', callId: 'd1', name: 'delegate', result: 'Delegated. task_id: bg_0123abcd', isError: false }] },
+    ];
+    const parts = client.stream({ ...request([text('system', ORCHESTRATOR_SYSTEM), text('user', 'probe it'), ...reported]), tools: delegating })[Symbol.asyncIterator]();
+    let call: { name: string; argsDelta: string } | null = null;
+    for (let r = await parts.next(); r.done !== true; r = await parts.next()) if (r.value.ok && r.value.value.kind === 'tool-call') call = r.value.value;
+    const args = JSON.parse(call!.argsDelta) as Record<string, unknown>;
+    expect(args).toMatchObject({ persona: 'codebase-analyst', task_name: 'probe', session_id: 'bg_0123abcd' });
+    expect(String(args['task'])).toMatch(/^FOLLOW-UP: probe\n/);
+    expect(args['depends_on']).toBeUndefined();
+  });
+
+  /*
+   * The capture a proof reads (`ROTARIS_CAPTURE_MODEL_REQUESTS`): the delegate tool's description, which carries a
+   * `delegates_to` narrowing (OQ-229), and the call's first user message, which carries a continuation's handoff.
+   */
+  it('records the delegate tool\'s description and the first user message of each call', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'glob,glob');
+    const seen: { delegateDescription: string | null; firstUser: string }[] = [];
+    const client = scriptedClient(clock, () => {}, (r) => { seen.push({ delegateDescription: r.delegateDescription, firstUser: r.firstUser }); });
+    await taken(clock, client, [text('system', ORCHESTRATOR_SYSTEM), text('user', 'Artifact: art_x — edited')]);
+    expect(seen[0]).toEqual({ delegateDescription: null, firstUser: 'Artifact: art_x — edited' });
+    const parts = client.stream({ ...request([text('system', ORCHESTRATOR_SYSTEM), text('user', 'go')]), tools: [...TOOLS, { name: 'delegate', description: 'Your delegates_to (codebase-analyst) narrows this list', parameters: {} }] })[Symbol.asyncIterator]();
+    await parts.next();
+    await parts.return?.();
+    expect(seen[1]?.delegateDescription).toBe('Your delegates_to (codebase-analyst) narrows this list');
+  });
+
+  /*
    * PD-TOOLS-006 revision 5 (OQ-221): the artifacts proof attaches artifacts to a scripted delegation, so a named
    * `delegate:<persona>:<name>` step merges ROTARIS_SCRIPT_DELEGATE_ARGS' entry for that name into its arguments.
    */

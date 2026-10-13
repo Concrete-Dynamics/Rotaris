@@ -72,6 +72,14 @@ that asks for it. No package, edge, process, channel, command or store column ch
 statements held as constants in the renderer bundle, so it draws with no fact from main and no network. The **process view**'s
 About paragraph says it crosses no boundary. No package, edge, process, channel, command or store column changed.
 
+**The scripted client's capture records the delegate catalogue and the first user message (fin42, N57).** The **process
+view**'s row for the file `ROTARIS_CAPTURE_MODEL_REQUESTS` names now lists every field a line carries — `images` and `tools`
+were already written and unlisted — and the two added: `delegateDescription` (the `delegate` tool's description as offered,
+read by `delegation-proof` for OQ-229's narrowing) and `firstUser` (the call's first user message, read by `artifacts-proof`
+launch 9 for PD-LIBRARY-003 (e)'s handoff), with the proofs that read it. The scripted client also gains the steps
+`writeinfer` (PD-TOOLS-007) and `delegate:<persona>:<name>:followup` (a `session_id` follow-up). Verification only; no package,
+edge, process, channel, command or store column changed.
+
 **Windows-owed checks no longer cite IC-3 as their reason (fin41, record only).** The **process view**'s portable
 update row and the **sequences view**'s update sequence said a real-artifact run was owed to the next Windows package
 "(IC-3)"; IC-3 binds Linux and macOS artifacts, and what holds these back is a Windows x64 host and the pipeline R-071

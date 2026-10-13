@@ -42,6 +42,14 @@
  *                  out for size with the budget, the reference unresolved. The child's `context_selection` entry and its
  *                  first message carry the same selection, and `summary.md` counts the one left out (PD-SESSION-002).
  *
+ *   8. edited    — PD-LIBRARY-003 (c), since 2026-10-13 (fin42, N57): a fresh session publishes `travel-plan` and a person edits
+ *                  and saves it in the inspector's Markdown tab: `edited_at` is stamped, the document carries the edit, and
+ *                  `key_findings` keeps the published body.
+ *   9. re-reported — PD-LIBRARY-003 (d) and (e): that session continued. The fresh root's first message carries the edited
+ *                  document as REQ-SESSION-115's handoff, its header marked `edited` and its frontmatter removed; the root then
+ *                  publishes `travel-plan-2` superseding it (REQ-LIBRARY-095), and the superseded document's re-render rewrites
+ *                  its frontmatter (`superseded_by`) and keeps the person's text after it.
+ *
  * Evidence under `.proof/artifacts-proof/`: one log and PNG per launch, `results.json`. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -655,6 +663,78 @@ let edited = null;
     childState: child.state, observation: observed.slice(0, 600), contextSelection: entry,
     sectionCharacters: blockSections.length, payloadCarries: ['long-one', 'short-one'], leftOut: { slug: 'long-two', id: leftOut }, summaryLine: elidedLine,
   };
+}
+
+// ---- 8 and 9. PD-LIBRARY-003 (c) to (e): a person's edit survives a supersession and travels to the next run ----------
+let travel = null;
+{
+  // 8. A fresh session publishes `travel-plan`; a person edits it in the inspector's Markdown tab and saves, as launch 4 does.
+  const TRAVEL = { travel: { slug: 'travel-plan', title: 'Travel plan', body: 'The submitted travel body.\n\nA second paragraph.', tags: ['research'] } };
+  const r = await launch('edited', {
+    ROTARIS_CAPTURE_PROMPT: 'publish the travel plan', ROTARIS_CAPTURE_PROMPT_MS: '1200',
+    ROTARIS_SCRIPT: 'artifact:artifact_write:travel,answer',
+    ROTARIS_SCRIPT_ARTIFACT_ARGS: JSON.stringify(TRAVEL),
+    ROTARIS_CAPTURE_RESIZE: '1360x980@500',
+    ROTARIS_CAPTURE_VIEWS: '6@11000',
+    ROTARIS_CAPTURE_CLICKS: [`${ARTIFACTS_TAB}@11400`, `${PROBE_ROWS}@12000`, '[data-testid="library-artifacts-inspect"]@13000', '[data-testid="artifact-tab-markdown"]@14500', 'textarea[data-testid="artifact-editor"]@15200', '[data-testid="artifact-save"]@17000'].join(';;'),
+    // The click focuses the editor at its centre, which is inside the document's frontmatter, and PD-LIBRARY-003 (d) rewrites
+    // that block at a re-render: the caret is taken to the end first, so the edit is in the text a re-render keeps.
+    ROTARIS_CAPTURE_CHORDS: 'Ctrl+End@15600',
+    ROTARIS_CAPTURE_TYPE_AT: 'EDITED-BY-A-PERSON@16000',
+    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="artifact-inspector-status"]@17800',
+    ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
+    ROTARIS_CAPTURE_AFTER_MS: '19000',
+  });
+  const status = probe(r.log, '[data-testid="artifact-inspector-status"]', 17800)[0]?.text ?? '';
+  if (status !== 'Saved.') throw new Error(`edited: the footer did not read "Saved.": ${status}`);
+  const db = new Database(oneDatabase(), { readonly: true });
+  const s = latestSession(db);
+  const record = artifacts(db, s.session_id).find((x) => x.slug === 'travel-plan');
+  db.close();
+  if (!record || record.edited_at === null) throw new Error(`edited: the record did not record the edit: ${JSON.stringify(record)}`);
+  // (c): the edit replaces the document and stamps edited_at; key_findings keeps the published value.
+  if (record.key_findings !== TRAVEL.travel.body) throw new Error(`edited: key_findings changed with the edit (PD-LIBRARY-003 (c)): ${JSON.stringify(record.key_findings)}`);
+  const document = readFileSync(join(filesDir(s.session_id), record.body_file), 'utf8');
+  const below = document.replace(/^---\n[\s\S]*?\n---\n/, '');
+  if (below === document || !below.includes('EDITED-BY-A-PERSON')) throw new Error(`edited: the typed characters did not reach the document below its frontmatter:\n${document.slice(0, 1200)}`);
+  travel = { sessionId: s.session_id, id: record.id, bodyFile: record.body_file, editedAt: record.edited_at };
+  results.edited = { id: record.id, editedAt: record.edited_at, keyFindingsKept: true, png: r.png };
+}
+{
+  // 9. The session continued: the fresh root's first message carries the edited document as the handoff (e), marked
+  // `edited`, frontmatter removed; then it publishes `travel-plan-2` superseding `travel-plan`, whose re-render keeps the
+  // person's text after a rewritten frontmatter (d).
+  const requests = join(output, 're-reported.model-requests.jsonl');
+  writeFileSync(requests, '');
+  await launch('re-reported', {
+    ROTARIS_CAPTURE_RESUME: travel.sessionId,
+    ROTARIS_CAPTURE_PROMPT: 'supersede the travel plan',
+    ROTARIS_CAPTURE_MODEL_REQUESTS: requests,
+    ROTARIS_SCRIPT: 'artifact:artifact_write:travel2,answer',
+    ROTARIS_SCRIPT_ARTIFACT_ARGS: JSON.stringify({ travel2: { slug: 'travel-plan-2', title: 'Travel plan, second', body: 'The second travel body.', tags: ['research'], supersedes: 'travel-plan' } }),
+    ROTARIS_CAPTURE_AFTER_MS: '9000',
+  });
+  const calls = readFileSync(requests, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l));
+  const root = calls.find((c) => c.who === 'orchestrator');
+  if (!root) throw new Error('re-reported: the model port recorded no orchestrator call');
+  const handoff = root.firstUser;
+  const header = `Artifact: ${travel.id} — Travel plan (agent_published, published, edited)`;
+  if (!handoff.includes(header)) throw new Error(`re-reported: the continuation's handoff does not carry the edited artifact marked edited (PD-LIBRARY-003 (e)):\n${handoff.slice(0, 2000)}`);
+  const carried = handoff.slice(handoff.indexOf(header));
+  if (!carried.includes('EDITED-BY-A-PERSON')) throw new Error(`re-reported: the handoff does not carry the person's edit:\n${carried.slice(0, 1500)}`);
+  if (/^(?:id|slug|created_at): "/m.test(carried.slice(0, 1200))) throw new Error(`re-reported: the handoff carries the document's frontmatter:\n${carried.slice(0, 600)}`);
+  const db = new Database(oneDatabase(), { readonly: true });
+  const rows = artifacts(db, travel.sessionId);
+  db.close();
+  const older = rows.find((x) => x.id === travel.id);
+  const newer = rows.find((x) => x.slug === 'travel-plan-2');
+  if (!newer) throw new Error(`re-reported: the superseding publish stored no artifact: ${JSON.stringify(rows.map((x) => x.slug))}`);
+  if (older?.superseded_by !== newer.id) throw new Error(`re-reported: travel-plan is not superseded by travel-plan-2: ${JSON.stringify(older)}`);
+  const document = readFileSync(join(filesDir(travel.sessionId), travel.bodyFile), 'utf8');
+  const front = /^---\n([\s\S]*?)\n---\n/.exec(document);
+  if (!front || !front[1].includes(`superseded_by: "${newer.id}"`)) throw new Error(`re-reported: the superseded document's frontmatter was not rewritten from the record (PD-LIBRARY-003 (d)):\n${document.slice(0, 800)}`);
+  if (!document.slice(front[0].length).includes('EDITED-BY-A-PERSON')) throw new Error(`re-reported: the re-render wrote over the person's edit (PD-LIBRARY-003 (d)):\n${document.slice(0, 1200)}`);
+  results.reReported = { handoffHeader: header, handoffCarriesEdit: true, supersededBy: newer.id, frontmatterRewritten: true, editKept: true };
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

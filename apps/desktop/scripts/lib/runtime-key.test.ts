@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the helper is plain ESM beside the script that runs it.
-import { withRuntimeKey } from './runtime-key.mjs';
+import { withPersonaKey, withRuntimeKey, withSectionKey } from './runtime-key.mjs';
 
 const BASE = ['# workspace', 'runtime:', '  permission_mode: autonomous', '  child_stall_timeout: 90', 'circuit_breaker:', '  child_timeout: 5', 'rotaris:', '  delegation_strategy: single', ''].join('\n');
 
@@ -31,5 +31,21 @@ describe('withRuntimeKey (live-run harness)', () => {
     const twice = withRuntimeKey(once, 'child_timeout', 1200);
     expect(twice).toBe(BASE.replace('runtime:\n', 'runtime:\n  child_timeout: 1200\n'));
     expect(twice.split('\n').filter((l) => !/child_timeout: 1200/.test(l))).toEqual(BASE.split('\n'));
+  });
+});
+
+describe('withSectionKey and withPersonaKey (the live run\'s delegation scenario, fin42)', () => {
+  it('writes rotaris.delegation_strategy over the value there, or appends the section', () => {
+    expect(withSectionKey(BASE, 'rotaris', 'delegation_strategy', 'swarm')).toBe(BASE.replace('  delegation_strategy: single', '  delegation_strategy: swarm'));
+    expect(withSectionKey('runtime:\n  x: 1\n', 'rotaris', 'delegation_strategy', 'swarm')).toBe('runtime:\n  x: 1\nrotaris:\n  delegation_strategy: swarm\n');
+  });
+
+  it('gives one persona one key: a new block, a new entry, a new key in an entry, or the key replaced', () => {
+    expect(withPersonaKey(BASE, 'orchestrator', 'delegates_to', '[codebase-analyst]')).toBe(`${BASE}personas:\n  orchestrator:\n    delegates_to: [codebase-analyst]\n`);
+    const withEntry = 'personas:\n  tester:\n    model: m\nruntime:\n  a: 1\n';
+    expect(withPersonaKey(withEntry, 'orchestrator', 'delegates_to', '[x]')).toBe('personas:\n  orchestrator:\n    delegates_to: [x]\n  tester:\n    model: m\nruntime:\n  a: 1\n');
+    expect(withPersonaKey(withEntry, 'tester', 'delegates_to', '[x]')).toBe('personas:\n  tester:\n    delegates_to: [x]\n    model: m\nruntime:\n  a: 1\n');
+    expect(withPersonaKey(withPersonaKey(withEntry, 'tester', 'delegates_to', '[x]'), 'tester', 'delegates_to', '[y]')).toBe('personas:\n  tester:\n    delegates_to: [y]\n    model: m\nruntime:\n  a: 1\n');
+    expect(() => withPersonaKey('personas:\n  orchestrator: { model: m }\n', 'orchestrator', 'delegates_to', '[x]')).toThrow(/flow style/);
   });
 });

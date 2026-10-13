@@ -1675,13 +1675,22 @@ absorbed, because a sub-case folded into a discharged spike is a gap nobody can 
   condition and this record does not invent one.
 - **The kill-in-the-gap case.** What a restore interrupted between the two renames leaves behind, with no
   process left to reverse anything. No power-loss or kill test was performed by any spike. It is now the
-  only route to an absent store directory that the corrections do **not** close.
+  only route to an absent store directory that the corrections do **not** close. ***Measured 2026-10-13
+  (fin41), `pnpm restore-kill-proof`:*** killed 10 of 10 times between the renames, the disk was always the
+  model's (target empty, displaced and staging stores whole), and the next open always created an empty store
+  there and listed no session — finish, reverse or report is [OQ-266](open-questions.md#oq-266)'s (ADR-0058,
+  the restore section's report). A power loss in the gap is still unmeasured.
 - **`REQ-STARTUP-165`(c)'s "no usable preparation at all" branch and its notice**, not attempted by spike
   20. It is the only part of that requirement left untouched, ADR-0054 wrote it from scratch against the
   amended text, and its failure mode is a **missing warning** — the artifact is permanently slow and nothing
   says why — which is the outcome the clause exists to prevent.
 - **ESC-21's second premise** — whether two machines signed into one synchronisation account can each
-  succeed at exclusive create on the same lock name. Spike 19 measured the first premise (2,500 races,
+  succeed at exclusive create on the same lock name. *(2026-10-13, fin41: not owed while worktree integration
+  is unbuilt — the lock it is about guards REQ-GIT-124/128's integration, which no code implements, whose
+  "Merge selected" is disabled (`GitView.tsx`, "REQ-GIT-083: integration is owed") and which
+  `first-release-plan.md` lists under "Deferred by 'thats it'"; and the specification already takes the safe
+  strength, REQ-GIT-128's refusal, which the measurement could only relax. It un-defers with integration, and
+  then needs the owner's two machines on one synchronisation account, about an afternoon.)* Spike 19 measured the first premise (2,500 races,
   exactly one winner in 2,500), stated the closing experiment precisely, called it one afternoon's work and
   **refused to invent the result**. Until it is taken, ESC-21's refusal-versus-warning **strength** rests on
   reasoning. What the spike can contribute is that the failure, if it occurs, is **undetectable after the

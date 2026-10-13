@@ -7588,10 +7588,13 @@ attempted by spike 20 — it is the only part of that requirement left untouched
 scratch on 2026-09-02 against the amended text, and its failure mode is a **missing warning**, which is the
 outcome the clause exists to prevent. **ESC-21's second premise** — whether two machines on one synchronised
 folder can each succeed at exclusive create on the same lock name — which spike 19 stated precisely,
-called one afternoon's work, and refused to fake. And two from spike 22: ***the re-run of the corrected
+called one afternoon's work, and refused to fake *(2026-10-13: not owed while worktree integration, the lock's
+only user, is unbuilt and deferred; it then needs the owner's two machines — README B2)*. And two from spike 22: ***the re-run of the corrected
 restore***, which is owed because all three corrections are at this moment exactly the paper reasoning that
 the three-for-three finding says is not evidence; and ***the kill-in-the-gap case***, which is now the only
-route to an absent store directory that those corrections do not close. **The re-run is the one of the four
+route to an absent store directory that those corrections do not close *(measured 2026-10-13 by
+`pnpm restore-kill-proof`, ten kills of ten: the disk is the model's, and the next open creates an empty store —
+[OQ-266](#oq-266))*. **The re-run is the one of the four
 that a product owner should weigh at the gate**, because it is a re-measurement of a mechanism already known
 to have been wrong three times, and it is bounded: race a launch into the refusal window, and force the
 install rename to fail on an occupied name.
@@ -7667,7 +7670,7 @@ force the install rename to fail with the target name occupied and confirm the d
 reversal leaves the store byte-identical. **(2) The kill-in-the-gap case.** What a restore interrupted
 between the two renames leaves behind, with no process left to reverse anything. It is now the only route
 to an absent store directory that the corrections do not close, and no power-loss or kill test was
-performed. *A third, adjacent and not owed by the spike:* a restore of an artifact read from a network
+performed. *(The kill test was performed on 2026-10-13: [OQ-266](#oq-266). The power-loss test is R-071's O-8.)* *A third, adjacent and not owed by the spike:* a restore of an artifact read from a network
 destination, and two concurrent restores of one identifier, neither of which the instance claim was
 modelled against.
 
@@ -13612,6 +13615,39 @@ whether a failure to delete it is reported or only logged), or D5 waits whole fo
 is outside it either way.
 
 **What a live run then shows.** Nothing: no live scenario restores a store.
+
+<a id="oq-266"></a>
+
+**OQ-266 — What does the product do with a restore that was cut between its two renames?** *(REQ-SESSION-201, "a restore that
+fails for any reason MUST leave the store exactly as it was … no reader may observe" a partly restored store;
+REQ-SESSION-202's last paragraph, under which an absent place is "an absence and not this condition, including while a restore
+is under way"; REQ-SESSION-043; REQ-SESSION-200; ADR-0058's restore, steps 8 and 9, and README B2; OQ-48, deferred under
+[R-071](../product/requests.md#r-071). Raised 2026-10-13 by fin41, task N42, as OQ-265, after measuring the case (renumbered OQ-266 at landing, origin/main holding OQ-264):
+[`../defects/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md`](../defects/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md).)*
+
+**What is open.** `pnpm restore-kill-proof` killed a real `restoreStore` process between step 8 (the target displaced) and step
+9 (the staging copy installed) ten times. Every time the target name held nothing, the previous store sat whole at
+`<identifier>.displaced-<stamp>` and the restored copy whole at `<identifier>.restoring-1`; and every time the workspace
+service's next open created a fresh store at the target name and the workspace listed no session, saying nothing. The
+specification's two relevant sentences pull apart here: REQ-SESSION-201 forbids a reader observing anything but the store as
+it was, and REQ-SESSION-202 declines to treat an absent place as the "store could not be opened" condition, so the creating
+open is what REQ-SESSION-043 permits. The product can tell this case from a workspace never run here: `.restoring-<n>` is
+the restore's own name and nothing else makes it (a `.displaced-*` may also be the corruption ladder's, ADR-0058 consequence
+5). Which of three things it should then do is not decided
+anywhere: **finish** the restore (install `.restoring-1`, which passed `quick_check` and carries `origin.txt`, so the user
+gets what they confirmed); **reverse** it (rename the displaced store back, so the user gets what they had, as the R1/R2
+reversal does in-process); or **report** it (refuse to create a store there, REQ-SESSION-202's way, and say what was found,
+leaving the choice to the user) — and whether that happens at the workspace service's open, before it creates anything, or
+only on the user's action.
+
+**What the build proceeds under.** As built: nothing looks for the leftovers, the open creates an empty store, and both
+copies stay where they are. `store.test.ts` pins that state (the kill-in-the-gap case), so a ruling turns it red.
+
+**What a ruling decides.** Finish, reverse or report, and where (the open, or a user's action); and whether a `.displaced-*`
+left beside a store that is present (the normal successful restore) is ever touched — it must not be, since it is the store
+REQ-SESSION-201 keeps.
+
+**What a live run then shows.** Nothing: no live scenario restores a store. `pnpm restore-kill-proof` is the measurement.
 
 <a id="oq-272"></a>
 

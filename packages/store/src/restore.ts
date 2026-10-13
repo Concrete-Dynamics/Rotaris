@@ -94,6 +94,12 @@ export interface RestoreOptions {
   readonly singleLiveness?: boolean;
   readonly oldReversal?: boolean;
   readonly stamp?: string;
+  /**
+   * The kill-in-the-gap measurement (ADR-0058, README B2): awaited after step 8 has displaced the target and before step 9
+   * installs the staging copy — the one window in which the target name holds nothing. `restore-kill-proof` kills the
+   * process here; `store.test.ts` throws here. Never set by the product.
+   */
+  readonly betweenRenames?: () => Promise<void>;
   /** D11: the engine's database-path limit to hold the restore to; `null` for none (D11 as it was). Defaults to this platform's. */
   readonly storePathLimit?: number | null;
 }
@@ -279,6 +285,8 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
   } else {
     steps.push('8-displace(skipped)');
   }
+
+  if (opts.betweenRenames) await opts.betweenRenames();
 
   if (opts.forceInstallFail === 'target-exists') { mkdirSync(target, { recursive: true }); writeFileSync(join(target, 'squatter.txt'), 'x'); }
 

@@ -60,6 +60,7 @@
     "traceability-proof": "node apps/desktop/scripts/traceability-proof.mjs",
     "terminal-stream-proof": "node apps/desktop/scripts/terminal-stream-proof.mjs",
     "terminal-proof": "node apps/desktop/scripts/terminal-proof.mjs",
+    "restore-kill-proof": "node apps/desktop/scripts/restore-kill-proof.mjs",
     "slash-proof": "node apps/desktop/scripts/slash-proof.mjs",
     "requirements-runs-proof": "node apps/desktop/scripts/requirements-runs-proof.mjs",
     "chat-controls-proof": "node apps/desktop/scripts/chat-controls-proof.mjs",

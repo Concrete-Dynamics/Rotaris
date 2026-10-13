@@ -321,6 +321,32 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
     for (const d of displaced) expect(existsSync(join(root, d, 'workspace.db'))).toBe(true);
   });
 
+  it('the kill-in-the-gap state (README B2; docs/defects/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md): cut after the displacement and before the install, the target name holds nothing, both stores are whole beside it, and the next open makes an empty store there — as built, pending OQ-266', async () => {
+    seed(root, id, [{ sid: 'S-1', rows: 3 }, { sid: 'S-2', rows: 2 }]);
+    const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 4 }]);
+    const cut = restoreStore(ctx(fakeRunHost(root, id, { raceAtStep: 'none', closeAnswers: true }), artifact), { betweenRenames: async () => { throw new Error('cut'); } });
+    await expect(cut).rejects.toThrow('cut');
+    expect(existsSync(storeDir(root, id))).toBe(false);
+    const aside = readdirSync(root).filter((n) => n.startsWith(`${id}.`)).sort();
+    expect(aside.map((n) => n.replace(/displaced-.*$/, 'displaced-<stamp>'))).toEqual([`${id}.displaced-<stamp>`, `${id}.restoring-1`]);
+    const sessionsIn = (dir: string): string[] => {
+      const db = openStore(join(root, dir, 'workspace.db'), { readonly: true, mustExist: true });
+      const s = new StoreDal(db).listSessions().map((r) => r.session_id).sort();
+      expect(db.pragma('quick_check', { simple: true })).toBe('ok');
+      db.close();
+      return s;
+    };
+    expect(sessionsIn(aside[0]!)).toEqual(['S-1', 'S-2']);
+    expect(sessionsIn(aside[1]!)).toEqual(['S-from-backup']);
+    // What the workspace service's open does next (`openOwn` → `openWorkspaceStore`): a fresh store, no session, nothing said.
+    const reopened = openWorkspaceStore(root, id, 'C:/ws');
+    expect(reopened.migration).toEqual({ kind: 'migrated', from: 0, to: CURRENT_SCHEMA_VERSION });
+    expect(new StoreDal(reopened.db).listSessions()).toEqual([]);
+    reopened.db.close();
+    forgetSpelling(reopened.dir);
+    expect(sessionsIn(aside[0]!)).toEqual(['S-1', 'S-2']);
+  });
+
   it('D8 (ADR-0058 consequence 18): an inspection of a cleanly closed store leaves its directory holding what it found; the read-only open (counterfactual, D8 as it was) leaves -wal and -shm', () => {
     seed(root, id, [{ sid: 'S-1', rows: 1 }]);
     const dir = storeDir(root, id);

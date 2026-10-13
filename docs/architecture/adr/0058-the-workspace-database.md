@@ -2088,6 +2088,22 @@ project; the counterfactual (`skipArrange`, D7 as it was) opens, works, and is m
 restore from a network destination; D5's staging leftover (observed again: every successful restore
 leaves none, every reversal leaves `.restoring-1`).
 
+> **The kill-in-the-gap case, measured 2026-10-13 (fin41); "not exercised" above is kept as what stood until then.**
+> `pnpm restore-kill-proof` runs `restoreStore` in a real child process (`packages/store/src/restore-kill.child.ts`, bundled
+> from these sources) and kills it with SIGKILL between step 8 and step 9, at the `betweenRenames` hook, ten times (load
+> average about 4 on 4 CPUs; killed 98 to 162 ms after launch). **Ten of ten** left the same disk: the target name empty, the
+> displaced store whole beside it (its two sessions, `quick_check` ok), the staging copy whole (the artifact's session,
+> `quick_check` ok). Nothing is half-renamed and no connection was open — steps 5 and 7 closed both — so the corrections hold
+> at the one point no process is left to reverse anything. **What follows them does not:** in ten of ten the workspace
+> service's next open (`openWorkspaceStore`, from `openOwn`) created a fresh store at the target name, migrated it from 0,
+> and the workspace listed no session, saying nothing — REQ-SESSION-201's "no reader may observe" a partly restored store,
+> met by a reader observing a third, empty one. REQ-SESSION-202 declines this case by name (an absent place "is an absence
+> and not this condition, including while a restore is under way"), so finishing, reversing or reporting it is a question:
+> [OQ-266](../open-questions.md#oq-266), with the defect note
+> [`../../defects/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md`](../../defects/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md).
+> `store.test.ts` pins the gap state in-process, as built. Not measured: a power loss in the gap (R-071's O-8 is the
+> power-loss test, a different fault), and the run host's side (its refusal lease expires by itself, 3b, untouched here).
+
 **Consequence 1 confirmed under the loader, 2026-09-04** (`../spikes/native-load-proof.md`): the packaged
 Electron opened `app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node` — compiled
 by that build, no prebuild in the artifact — and read `journal_mode` back as `wal`; the packaged application

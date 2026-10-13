@@ -31,4 +31,11 @@ describe('nearMissReading (PD-TOOLS-014)', () => {
     expect(r.misses.map((m: { ordinal: number }) => m.ordinal)).toEqual([2, 4]);
     expect(r.retried).toEqual([]);
   });
+
+  it('with no later edit, only the next few calls of the agent can be its probe, not a terminal call late in its life (fin32\'s review)', () => {
+    const late = [call(1, 'haet_edit', true, NEAR), call(2, 'haet_read'), call(3, 'grep'), call(4, 'write_file'), call(5, 'terminal')];
+    expect(nearMissReading([{ scenario: 'duress', calls: late }]).probed).toEqual([]);
+    const early = [call(1, 'haet_edit', true, NEAR), call(2, 'haet_read'), call(3, 'terminal'), call(4, 'write_file')];
+    expect(nearMissReading([{ scenario: 'duress', calls: early }]).probed.map((m: { ordinal: number }) => m.ordinal)).toEqual([1]);
+  });
 });

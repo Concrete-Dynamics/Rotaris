@@ -1007,7 +1007,8 @@ function checkCoordinatorTodo() {
 
 /**
  * PD-TOOLS-014 (OQ-231, R-072) over every preserved session (`lib/near-miss-edits.mjs`): each `haet_edit`/`haet` refusal
- * that named a match level, whether the same agent probed the file through its terminal before its next edit (finding D5 of
+ * that named a match level, whether the same agent probed the file through its terminal before its next edit, or within its
+ * next three calls where it never edits again (finding D5 of
  * the final duress run at `a68f121`: every near miss was followed by a `cat -A` or `awk` probe; the directive's target is
  * 0), and whether that next edit succeeded on the same path. Its NOTEs are the directive's first-execution count; a run
  * with no near miss says so.
@@ -1023,7 +1024,7 @@ function checkNearMissEdits() {
   }
   const at = (m) => `${m.scenario} #${m.ordinal} (${m.agent}, level ${m.level})`;
   if (r.misses.length === 0) { noted('no haet_edit miss matched at match level 2 or 3', 'PD-TOOLS-014\'s near-miss reply was not asked'); return; }
-  noted('haet_edit misses that matched but for whitespace (PD-TOOLS-014)', `${r.misses.length}: ${r.misses.map(at).join(', ')}; followed by a terminal call of the same agent before its next edit: ${r.probed.length}${r.probed.length === 0 ? '' : ` (${r.probed.map(at).join(', ')})`}; next edit on the same path succeeded: ${r.retried.length}`);
+  noted('haet_edit misses that matched but for whitespace (PD-TOOLS-014)', `${r.misses.length}: ${r.misses.map(at).join(', ')}; followed by a terminal call of the same agent before its next edit (or within its next three calls where it never edits again): ${r.probed.length}${r.probed.length === 0 ? '' : ` (${r.probed.map(at).join(', ')})`}; next edit on the same path succeeded: ${r.retried.length}`);
 }
 
 /**

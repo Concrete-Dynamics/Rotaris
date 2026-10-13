@@ -6,11 +6,17 @@
  *
  * `sessions`: `{ scenario, calls: { ordinal, tool_name, agent_name, args, result, isError }[] }[]`, the calls in ordinal
  * order. Returns, over every session: `misses` — each near miss (`{ scenario, ordinal, agent, path, level }`); `probed` —
- * those followed by a `terminal` call of the same agent before its next `haet_edit`/`haet` call (target 0); `retried` —
+ * those followed by a `terminal` call of the same agent before its next `haet_edit`/`haet` call, or, where the agent never
+ * edits again, within its next `PROBE_WINDOW` calls (target 0); `retried` —
  * those whose same agent's next `haet_edit`/`haet` call edited the same path and succeeded.
  */
 const EDIT_TOOLS = new Set(['haet_edit', 'haet']);
 const LEVEL = /\bat match level ([23]) \(/;
+/**
+ * Where the agent never edits again, how many of its next calls can be the probe. Before fin35 every later call could, so a
+ * terminal call late in the agent's life counted the miss as probed (fin32's review); D5's probes came at the next call.
+ */
+const PROBE_WINDOW = 3;
 
 const pathOf = (call) => {
   const args = call.args ?? {};
@@ -30,7 +36,7 @@ export function nearMissReading(sessions) {
       misses.push(miss);
       const later = calls.slice(i + 1).filter((c) => c.agent_name === call.agent_name);
       const next = later.findIndex((c) => EDIT_TOOLS.has(c.tool_name));
-      const between = next === -1 ? later : later.slice(0, next);
+      const between = next === -1 ? later.slice(0, PROBE_WINDOW) : later.slice(0, next);
       if (between.some((c) => c.tool_name === 'terminal')) probed.push(miss);
       if (next !== -1 && later[next].isError !== true && pathOf(later[next]) === miss.path) retried.push(miss);
     });

@@ -18,3 +18,13 @@ refused listing only the verification item `a3`; the model added an item (`#40`,
 
 - `packages/engine/src/children/todo-item.ts` — `openItemsSentence`, used by the unknown-id, terminal-item and no-item refusals.
 - `packages/engine/src/children/todo-item.test.ts`, `packages/engine/src/children/children.test.ts` — the refusal texts.
+
+## Outcome (fin38, 2026-10-13) — repaired
+
+`openItemsSentence` now follows the listed open items with "If none of them is this work, add one with the todo tool
+(add_task) and name its id.", so each refusal that lists items (an unknown id, a COMPLETED or ABANDONED item, an implementation
+delegation naming none) names both ways forward; the sentence for a plan with no open item is unchanged. Pinned by
+`todo-item.test.ts` ("a plan with open items lists them and says to add one when none of them is the work"), red without the
+change, and the refusal texts in `todo-item.test.ts` and `children.test.ts`; `mission-proof` item 1e now reads the sentence in
+gamma's refusal. **What a live run should show**: a no-item refusal in the `requirements` scenario (if the model meets one)
+ending with that sentence, followed by an `add_task` and a delegation naming the new item.

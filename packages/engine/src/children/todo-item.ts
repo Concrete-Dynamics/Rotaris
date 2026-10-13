@@ -39,11 +39,16 @@ function tasksOf(document: AgentTodoDocument | null): readonly AgentTodoTask[] {
   return document === null ? [] : document.phases.flatMap((phase) => phase.tasks);
 }
 
-/** The open items of a plan, as "name (id)", or a sentence saying there are none and how to add one. */
+/**
+ * The open items of a plan, as "name (id)", and how to add one when none of them is the delegation's work; or a sentence
+ * saying there are none and how to add one. PD-TOOLS-006 revision 6's "way forward": until fin38 the add was named only when
+ * the plan held no open item, so a delegation whose work matched none of the listed items was offered only those
+ * (docs/defects/fixed/the-no-todo-item-refusal-names-add-task-only-when-the-plan-holds-no-open-item.md).
+ */
 export function openItemsSentence(document: AgentTodoDocument | null): string {
   const open = tasksOf(document).filter((t) => !TERMINAL_ITEM.has(t.state));
   return open.length > 0
-    ? `Its open items: ${open.map((t) => `${t.name} (${t.id})`).join(', ')}.`
+    ? `Its open items: ${open.map((t) => `${t.name} (${t.id})`).join(', ')}. If none of them is this work, add one with the todo tool (add_task) and name its id.`
     : 'It holds no open item: add one with the todo tool (add_task) and name its id.';
 }
 

@@ -17,7 +17,7 @@ const none = () => undefined;
 describe('admitTodoItem (PD-TOOLS-006 revision 6)', () => {
   it('(a) an id the plan does not hold is refused for a read-only delegation too, and the open items are named', () => {
     const r = admitTodoItem({ named: 'ffffffff', inherited: null, plan: plan(['PENDING', 'COMPLETED']), implementation: false, persona: 'codebase-analyst', holderOf: none });
-    expect(r).toEqual({ ok: false, requirement: 'REQ-ORCH-028', reason: "todo_item 'ffffffff' names no item of your todo list. Name an id your todo tool's last result shows. Its open items: Item 0 (00000000)." });
+    expect(r).toEqual({ ok: false, requirement: 'REQ-ORCH-028', reason: "todo_item 'ffffffff' names no item of your todo list. Name an id your todo tool's last result shows. Its open items: Item 0 (00000000). If none of them is this work, add one with the todo tool (add_task) and name its id." });
   });
 
   it('(b) a finished item is refused to an implementation delegation only', () => {
@@ -49,5 +49,12 @@ describe('admitTodoItem (PD-TOOLS-006 revision 6)', () => {
 
   it('a plan with no open item says to add one', () => {
     expect(openItemsSentence(plan(['COMPLETED']).document)).toBe('It holds no open item: add one with the todo tool (add_task) and name its id.');
+  });
+
+  // Live-run finding Q3 (552d346): a docs delegation naming no item was refused listing only the verification item, and the
+  // refusal did not say that work no listed item serves gets an item of its own
+  // (docs/defects/fixed/the-no-todo-item-refusal-names-add-task-only-when-the-plan-holds-no-open-item.md).
+  it('a plan with open items lists them and says to add one when none of them is the work (PD-TOOLS-006 revision 6, Q3)', () => {
+    expect(openItemsSentence(plan(['COMPLETED', 'PENDING']).document)).toBe('Its open items: Item 1 (00000001). If none of them is this work, add one with the todo tool (add_task) and name its id.');
   });
 });

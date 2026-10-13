@@ -332,7 +332,8 @@ const s1e = scenario('todo-item');
   expect(delegates.length === 4, `the coordinator made ${delegates.length} delegate calls`);
   expect(/^Task 'alpha': queued/.test(alpha.result) && /^Task 'delta': queued/.test(delta.result), `the named delegations: ${alpha.result.slice(0, 80)} / ${delta.result.slice(0, 80)}`);
   expect(new RegExp(`^Task 'beta': rejected — todo_item '${items[0]}' \\('Scripted item 1'\\) is held by alpha \\(coding-agent, task_id bg_[0-9a-f]{8}, state \\w+\\)`).test(beta.result), `beta's refusal: ${beta.result}`);
-  expect(gamma.result.startsWith("Task 'gamma': rejected — This delegation names no todo item") && gamma.result.includes(`Scripted item 1 (${items[0]}), Scripted item 2 (${items[1]})`), `gamma's refusal: ${gamma.result}`);
+  // Since fin38 (live-run finding Q3) the refusal also names the add beside the listed items, for work none of them is.
+  expect(gamma.result.startsWith("Task 'gamma': rejected — This delegation names no todo item") && gamma.result.includes(`Scripted item 1 (${items[0]}), Scripted item 2 (${items[1]}). If none of them is this work, add one with the todo tool (add_task) and name its id.`), `gamma's refusal: ${gamma.result}`);
   // PD-TOOLS-006 revision 7 and PD-TOOLS-008 revision 2 (OQ-249): each admitted delegation marked its PENDING item IN_PROGRESS,
   // alpha's and delta's side by side while both ran. PD-TOOLS-008 revision 3 (OQ-255): once both children had ended, one
   // `replace` sending every item COMPLETED closed both, named nothing kept, and the run took no plan correction.

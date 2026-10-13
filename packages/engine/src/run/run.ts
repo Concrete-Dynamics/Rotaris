@@ -1330,15 +1330,15 @@ export class Run {
     else if (outcome !== 'cancelled' && !leftPlanOpen) { delete task.planLeftOpen; delete task.heldAnswer; }
     // PD-ORCH-005 clause 1: `iteration.end` and the iteration's record closing with its outcome, in one transaction — with
     // the todo its task and held messages were just closed in, so no death before the save below strands them in progress.
-    writer.endIteration(iteration, { task: task.text, outcome, summary }, outcome, this.todoJson());
     /*
      * REQ-ORCH-139's `iteration_end` timeline entry, carrying REQ-ORCH-067's iteration number, task, outcome and summary: the
      * record REQ-SESSION-115's follow-up payload reads for "the last 5 outer-loop iterations" (`buildContinuationPayload`).
      * Nothing wrote it before, and that block always read "(none recorded)" (live-run finding P4). An iteration a rest leaves
-     * open has not ended and writes none (`leaveIterationOpen`).
+     * open has not ended and writes none (`leaveIterationOpen`). Since fin34 it commits in the transaction that closes the
+     * iteration, so no death between two writes leaves a closed iteration without it.
      */
     const title = cut(taskTitle(task), 80);
-    writer.appendTimeline('iteration_end', 'rotaris', `Iteration ${iteration} (${title}): ${outcome}${summary.trim() === '' ? '' : ` — ${summary.trim()}`}`, { iteration, task_id: task.id, task: title, outcome, summary });
+    writer.endIteration(iteration, { task: task.text, outcome, summary }, outcome, this.todoJson(), { name: 'iteration_end', actor: 'rotaris', message: `Iteration ${iteration} (${title}): ${outcome}${summary.trim() === '' ? '' : ` — ${summary.trim()}`}`, metadata: { iteration, task_id: task.id, task: title, outcome, summary } });
     this.iterationTask = null;
     // ADR-0039 / REQ-GIT-051: exactly one capture per iteration that closes, at the moment it closes — after
     // `iteration.end` is recorded and BEFORE the hooks' `iteration_end`: the checkpoint records the iteration's work as

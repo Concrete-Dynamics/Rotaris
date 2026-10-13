@@ -262,7 +262,7 @@ flowchart TB
   L0 -. "a continue: the open iteration first" .-> RES["iterate(open row): the same number, root and task;<br/>resumePaused() · the root from its record;<br/>iteration_resumed (PD-ORCH-005 clause 4)"]
   RES --> TURN
   OUT -- "the explicit cancel, an abort, or a rest<br/>that found nothing unfinished" --> PEND["task back to pending"]
-  C & RQ & AB & PEND --> E["endIteration(): iteration.end event · the row closed · the todo stored (ONE transaction) ·<br/>iteration_end timeline entry (REQ-ORCH-139; read by REQ-SESSION-115's Recent iterations) ·<br/>CHECKPOINT capture (ADR-0039, awaited) · iteration_end hooks ·<br/>iterationsCompleted += 1 · save running (aggregates, todo, progress — published)"]
+  C & RQ & AB & PEND --> E["endIteration(): iteration.end event · the row closed · the todo stored ·<br/>iteration_end timeline entry (REQ-ORCH-139; read by REQ-SESSION-115's Recent iterations) — ONE transaction since fin34 ·<br/>CHECKPOINT capture (ADR-0039, awaited) · iteration_end hooks ·<br/>iterationsCompleted += 1 · save running (aggregates, todo, progress — published)"]
   E --> ML{"message limit in force<br/>and count ≥ limit?"}
   ML -- yes --> PL["pauseAtLimit(): status paused_message_limit + count + limit (durable),<br/>run.paused event to main, no terminal pair; the Run ends"]
   ML -- no --> L0

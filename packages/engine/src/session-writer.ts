@@ -718,8 +718,12 @@ export class SessionWriter {
    * with the iteration's task already closed (REQ-ORCH-072/073/074/135), stored in the same transaction, so a death
    * after the close cannot leave that task in progress with nothing open to hold it (the repair of
    * `an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`). Published with the next save.
+   *
+   * `timeline`, when given, is REQ-ORCH-139's `iteration_end` entry, inserted in the same transaction (fin34): until then the
+   * run appended it after this commit in a write of its own, so a death between the two left a closed iteration with no
+   * entry, missing from REQ-SESSION-115's "the last 5 outer-loop iterations".
    */
-  endIteration(iteration: number, payload: Record<string, unknown>, outcome: string, todo?: string): Result<boolean, WriteFailure> {
+  endIteration(iteration: number, payload: Record<string, unknown>, outcome: string, todo?: string, timeline?: { readonly name: string; readonly actor: string; readonly message: string; readonly metadata: Record<string, unknown> }): Result<boolean, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
     const { dal, sessionId, wall } = this.deps;
     const at = toIsoUtc(wall.instant());
@@ -733,6 +737,7 @@ export class SessionWriter {
         if (line.ok) dal.insertEvent(sessionId, ordinal, 'iteration.end', at, EVENT_SCHEMA_VERSION, iteration, line.value);
         closed = dal.closeIteration(sessionId, iteration, outcome, at);
         if (todo !== undefined) dal.updateSessionRun(sessionId, { todo });
+        if (timeline !== undefined) dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, timeline.name, timeline.actor, timeline.message, JSON.stringify(timeline.metadata), timelineId(), 'info');
       });
     } catch (cause) {
       return this.fail(cause);

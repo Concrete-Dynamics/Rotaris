@@ -3,6 +3,19 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-13 — the profile's duress launch is detached, at the window AGENTS.md names
+
+**Prompted by** fin32's review (`review:child-reports-and-limits#1`, an optional finding handed to fin35): AGENTS.md's duress
+recipe since OQ-214's re-ruling is `LIVE_RUN_DURESS_MS=7800000`, and with the launch's own 180 s that needs a bound of about
+7,980 s, above the Bash tool's 7,200,000 ms background cap and above the profile's `LIVE_RUN_DURESS_MS=5400000 timeout 7200`,
+so a run whose children use their 45 minutes would overrun into a NOTE. **Changed:** `profiles/rotaris-crw.json`'s duress
+command is the detached form `references/environment.md` gives (`setsid nohup bash -c '…; echo "exit=$?" >> <log>' … &
+disown`) at `LIVE_RUN_DURESS_MS=7800000 timeout 8100`, its log `.live-run/duress-launch.log` in the judged tree, and its
+`what` tells the sender to wait with the Monitor tool for the log's `exit=` line; `references/live-runs.md` says the same and
+that the detached form matches no allow rule. **Verified** by the self-test (`tools/orchestrated-build-skill.test.ts`, green:
+the command names its tree absolutely, resolves every token, holds no `&&` or `cd`, and is handed back exactly on a refusal).
+Not run: a duress launch in this form (the orchestrator's).
+
 ## 2026-10-07 — one reviewer per bundle reviews, repairs in place and lands; the full gate runs once per landing
 
 **Prompted by** the owner, in the session's own conversation on 2026-10-07 (relayed verbatim to this change's builder

@@ -64,7 +64,7 @@ works for a user, and it can spend money. Proofs pass on a product a live run st
   at planning time (SKILL.md §1) with the exact text, and edit the file only on the owner's explicit instruction
   (`references/environment.md`, Long jobs). A settings file created mid-session may take effect only after the session
   reloads. A detached launch (`references/environment.md`, Long jobs) is not one of these forms; the classifier judges
-  it.
+  it, and the profile's duress launch is one (Running, below), so the second rule no longer matches what it sends.
 - Until a rule holds, the orchestrator runs the live runs from the hand-off and gives the packs to an autopsy agent.
 
 ## Running
@@ -77,8 +77,16 @@ works for a user, and it can spend money. Proofs pass on a product a live run st
   tool's `timeout` (`references/environment.md`, Long jobs). The default run takes about sixteen minutes: at `1763f7f`,
   `timeout 5400 xvfb-run -a -s "-screen 0 1600x1000x24" /opt/node24/bin/node /home/user/Rotaris-crw-wt-accept/apps/desktop/scripts/live-run.mjs --confirm --skip-build`
   ran from 05:56 to 06:15 UTC on 2026-10-03 and passed.
-- Duress needs a window the endpoint can fill (`LIVE_RUN_DURESS_MS=5400000` under `timeout 7200` here; one took 85
-  minutes, the one at `1763f7f` 77): give it the Bash tool's largest `timeout`, 7,200,000 ms. When you run it while a
+- Duress needs a window the endpoint can fill. AGENTS.md sets it at `LIVE_RUN_DURESS_MS=7800000` (130 minutes) since the
+  Per-agent timeout of a duress launch was raised to 45 minutes (OQ-214, 2026-10-07), and the launch's own bound is the wait
+  plus 180 s, so its `timeout` sits above 7,980 s (`timeout 8100`). That is past the Bash tool's 7,200,000 ms background cap,
+  so the profile launches duress **detached** (`setsid nohup bash -c '…; echo "exit=$?" >> <log>' > /dev/null 2>&1 < /dev/null
+  & disown`, the shape `references/environment.md` gives under Long jobs), writing `.live-run/duress-launch.log` in the tree it
+  judges, and the sender waits with the Monitor tool until that log holds a line starting `exit=`, re-arming it each time it
+  stops (a Monitor is capped at thirty minutes). Before fin35 the profile ran it in the foreground at
+  `LIVE_RUN_DURESS_MS=5400000` under `timeout 7200` (one took 85 minutes, the one at `1763f7f` 77), which a run whose children
+  use their 45 minutes overruns into a NOTE (fin32's review). A detached launch matches none of the allow rules above: the
+  classifier judges it, and a refusal hands it to the orchestrator like any other. When you run it while a
   workflow goes on, run it in a dedicated tree (`<repo>-wt-live`: set up, built and bundled at the head you judge, its
   path in place of the acceptance tree's), because the next round's sweep checks the acceptance tree out at a new head
   and rebuilds it under a running launch.

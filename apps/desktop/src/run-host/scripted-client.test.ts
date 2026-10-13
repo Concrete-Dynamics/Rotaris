@@ -180,6 +180,25 @@ describe('scriptedClient — the step a call takes', () => {
   });
 
   /*
+   * PD-ORCH-009 revisions 1 and 2 (fin42): `part-h-proof`'s `answerless` launches script a root that ends its turn with neither
+   * text nor a tool call, which the run asks once more for an answer, and `silent,report` one that answers when asked.
+   */
+  it('`silent` ends the call `stop` with neither text nor a tool call, and the next step answers', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'silent,report');
+    const client = scriptedClient(clock, () => {});
+    const kinds: string[] = [];
+    let reason: string | null = null;
+    for await (const part of client.stream(request([text('system', ORCHESTRATOR_SYSTEM), text('user', 'say nothing')]))) {
+      if (!part.ok) throw new Error(part.error.headline);
+      kinds.push(part.value.kind);
+      if (part.value.kind === 'finish') reason = part.value.reason;
+    }
+    expect(kinds).toEqual(['usage', 'finish']);
+    expect(reason).toBe('stop');
+    expect(await taken(clock, client, [text('system', ORCHESTRATOR_SYSTEM), text('user', 'say nothing'), { role: 'assistant', content: [] }, text('user', 'answer now')])).toBe('answer');
+  });
+
+  /*
    * PD-TOOLS-006 revision 5 (OQ-221): the artifacts proof attaches artifacts to a scripted delegation, so a named
    * `delegate:<persona>:<name>` step merges ROTARIS_SCRIPT_DELEGATE_ARGS' entry for that name into its arguments.
    */

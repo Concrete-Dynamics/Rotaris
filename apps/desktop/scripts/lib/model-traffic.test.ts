@@ -17,8 +17,10 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 // @ts-expect-error — the proxy is plain ESM beside the scripts that run it.
-import { startRecordingProxy } from './model-traffic.mjs';
+import { emptyCompletion, startRecordingProxy } from './model-traffic.mjs';
 import { usageOf } from './duress-checks.mjs';
+import { AiSdkModelClient, type StreamPart } from '@rotaris/model';
+import { millis } from '@rotaris/kernel';
 
 interface Proxy {
   readonly url: string;
@@ -411,6 +413,66 @@ describe('the live run\'s recording proxy', () => {
       expect(Date.now() - started).toBeLessThan(2_000);
       expect(records(sink)[0]['paced']).toEqual({ events: 0, firstAt: null, lastAt: null });
       expect(proxy.stats().faultsFired).toEqual([]);
+    });
+
+    /*
+     * fin42 (N56, PD-ORCH-009 revision 2): the root's empty answer, chosen by what the request carries. The calls whose body
+     * holds `when` and not `unless` are answered with a completion that has no content and no tool call, finished `stop`, up
+     * to `times` of them; every other call, before and after, reaches the endpoint unchanged.
+     */
+    it('`empty` answers the calls whose body it names with an empty `stop` completion, up to `times`, and forwards the rest', async () => {
+      const bodies: string[] = [];
+      const target = await upstream((req, res) => {
+        let body = '';
+        req.on('data', (c) => { body += c; });
+        req.on('end', () => { bodies.push(body); res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"ok":true}'); });
+      });
+      const { proxy, sink } = await proxyTo(target, [{ kind: 'empty', when: 'ROOT-MARK', unless: 'classify', times: 2 }]);
+      const call = (body: unknown) => fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: JSON.stringify(body) }).then(async (r) => ({ status: r.status, type: r.headers.get('content-type'), text: await r.text() }));
+
+      const classifier = await call({ model: 'm', stream: false, messages: [{ role: 'system', content: 'classify ROOT-MARK' }] });
+      const first = await call({ model: 'm', stream: true, messages: [{ role: 'system', content: 'ROOT-MARK' }] });
+      const other = await call({ model: 'm', stream: true, messages: [{ role: 'system', content: 'a child' }] });
+      const second = await call({ model: 'm', stream: false, messages: [{ role: 'system', content: 'ROOT-MARK again' }] });
+      const third = await call({ model: 'm', stream: true, messages: [{ role: 'system', content: 'ROOT-MARK once more' }] });
+
+      // Forwarded unchanged: the classifier (`unless`), the child (no `when`) and the root's third call (`times` spent).
+      expect([classifier.text, other.text, third.text]).toEqual(['{"ok":true}', '{"ok":true}', '{"ok":true}']);
+      expect(bodies.map((b) => JSON.parse(b).messages[0].content)).toEqual(['classify ROOT-MARK', 'a child', 'ROOT-MARK once more']);
+      // The streamed empty answer: well-formed events, no content, no tool call, `stop`, then [DONE].
+      expect(first.type).toBe('text/event-stream');
+      const events = first.text.split('\n\n').filter((e) => e.startsWith('data: ')).map((e) => e.slice('data: '.length));
+      expect(events.at(-1)).toBe('[DONE]');
+      const chunks = events.slice(0, -1).map((e) => JSON.parse(e) as { choices: { delta: { content?: string; tool_calls?: unknown }; finish_reason: string | null }[] });
+      expect(chunks.flatMap((c) => c.choices.map((x) => x.delta.content ?? '')).join('')).toBe('');
+      expect(chunks.some((c) => c.choices.some((x) => x.delta.tool_calls !== undefined))).toBe(false);
+      expect(chunks.flatMap((c) => c.choices.map((x) => x.finish_reason)).filter((r) => r !== null)).toEqual(['stop']);
+      // The unstreamed one: one JSON body, empty content, `stop`.
+      expect(second.type).toBe('application/json');
+      expect(JSON.parse(second.text).choices[0]).toEqual({ index: 0, message: { role: 'assistant', content: '' }, finish_reason: 'stop' });
+
+      const all = records(sink);
+      expect(all.map((r) => (r['fault'] as { kind?: string } | undefined)?.kind ?? null)).toEqual([null, 'empty', null, 'empty', null]);
+      expect(all[1]).toMatchObject({ status: 200, outcome: 'complete', fault: { kind: 'empty', at: 1, when: 'ROOT-MARK' } });
+      expect(String(all[1]['requestBody'])).toContain('ROOT-MARK');
+      expect(proxy.stats().faultsFired).toEqual([{ kind: 'empty', at: 1, path: '/chat/completions' }, { kind: 'empty', at: 2, path: '/chat/completions' }]);
+    });
+
+    it('the product\'s model client reads the `empty` answer as a turn that finished `stop` with no text and no tool call', async () => {
+      const answer = emptyCompletion(JSON.stringify({ model: 'acme-1', stream: true }));
+      const client = new AiSdkModelClient({
+        timers: { after: (d: number, fn: () => void) => { const h = setTimeout(fn, d); return { cancel: () => clearTimeout(h) }; }, every: (p: number, fn: () => void) => { const h = setInterval(fn, p); return { cancel: () => clearInterval(h) }; } },
+        monotonic: { now: () => millis(performance.now()) },
+        baseUrl: 'https://acme.example/v1',
+        fetch: async () => new Response(answer.body, { status: 200, headers: { 'content-type': answer.contentType } }),
+      });
+      const parts: StreamPart[] = [];
+      for await (const r of client.stream({ model: { providerId: 'acme', modelId: 'acme-1', dialect: 'chat' }, messages: [{ role: 'user', content: [{ kind: 'text', text: 'hi' }] }], thinking: 'unset', signal: new AbortController().signal, timeoutMs: 5_000, retries: 0, resolveCredential: async () => 'k' })) {
+        if (!r.ok) throw new Error(r.error.headline);
+        parts.push(r.value);
+      }
+      expect(parts.filter((p) => p.kind === 'text' || p.kind === 'tool-call')).toEqual([]);
+      expect(parts.at(-1)).toEqual({ kind: 'finish', reason: 'stop' });
     });
 
     it('leaves every other call untouched when no rule matches', async () => {

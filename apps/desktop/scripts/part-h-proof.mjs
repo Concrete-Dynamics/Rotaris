@@ -237,7 +237,92 @@ if (heldRows.length !== 0) throw new Error(`plan-correction wrote a held-answer 
 if (todoCalls.length !== 2 || todoCalls.some((call) => call.status === 'failed' || call.status === 'blocked')) throw new Error(`plan-correction todo calls: ${JSON.stringify(todoCalls)}`);
 if (agentStates.length < 2 || agentStates.some((state) => state !== 'COMPLETED')) throw new Error(`plan-correction agent plan: ${JSON.stringify(agentStates)}`);
 
+/*
+ * PD-ORCH-015's held answer (fin42, the survey's N56): a coordinating root that ignores its one correction — it answers again
+ * and leaves the report item PENDING — has its task re-queued with the answer it wrote. One `system` row says the coordinator
+ * answered with an item of its plan not done and the task was returned to the queue; the same task's next fresh root receives,
+ * in its first message, the continuation marker and that answer labelled as the one the person was shown; it records the item
+ * done and its iteration closes `succeeded`. Only `coordinator-plan.test.ts` had measured this.
+ */
+const heldRoot = join(output, 'plan-held');
+const heldWorkspace = join(heldRoot, 'workspace');
+const heldLocal = join(heldRoot, 'local');
+mkdirSync(heldWorkspace, { recursive: true });
+mkdirSync(heldLocal, { recursive: true });
+writeFileSync(join(heldWorkspace, 'README.md'), '# held answer proof\n');
+scratchAgentsYaml(heldWorkspace, null);
+const { log: heldLog } = await launch('plan-held', heldWorkspace, heldLocal, join(heldRoot, 'preferences'), {
+  // Root 1: the plan with its report item open, an answer, and an answer again to the correction. Root 2 (iteration 2, the
+  // re-queued task): the plan recorded done, then the answer.
+  ROTARIS_SCRIPT: 'planopen,report,report,plandone,report',
+  ROTARIS_CAPTURE_PROMPT: 'do the scripted work and report it',
+  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '2000',
+});
+const heldDb = new Database(oneDatabase(heldLocal), { readonly: true });
+const heldSession = heldDb.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed FROM sessions').get();
+const heldIterations = heldDb.prepare('SELECT iteration, root_task_id, outcome FROM iterations ORDER BY iteration').all();
+const heldSystemRows = heldDb.prepare("SELECT row_index, body FROM transcript_rows WHERE kind = 'system' AND body LIKE 'Iteration %' ORDER BY row_index").all();
+const secondRoot = heldIterations.find((row) => row.iteration === 2)?.root_task_id ?? null;
+// Each stored message is the message as JSON (`{ role, content: [{ kind, text }] }`); its texts are read joined.
+const messageText = (body) => { try { const m = JSON.parse(body); return (Array.isArray(m.content) ? m.content : []).map((p) => (typeof p?.text === 'string' ? p.text : '')).join('\n'); } catch { return String(body); } };
+const secondMessages = secondRoot === null ? [] : heldDb.prepare('SELECT seq, body FROM agent_messages WHERE task_id = ? AND iteration = 2 ORDER BY seq').all(secondRoot).map((row) => messageText(row.body));
+heldDb.close();
+const corrections = (heldLog.match(/a correction is sent into its conversation \(\d+ of \d+, REQ-ORCH-078, PD-ORCH-015\)/g) ?? []).length;
+const carried = secondMessages.find((body) => body.includes('The previous iteration on this task declared success with 1 item of your plan not complete')) ?? null;
+writeFileSync(join(output, 'plan-held-observed.json'), `${JSON.stringify({ session: heldSession, iterations: heldIterations, heldSystemRows, corrections, carried: carried?.slice(0, 2_000) ?? null }, null, 2)}\n`);
+if (corrections !== 1) throw new Error(`plan-held: expected one correction warning, found ${corrections} (see plan-held.log)`);
+if (heldIterations.map((row) => row.outcome).join(',') !== 'partial,succeeded') throw new Error(`plan-held iterations: ${JSON.stringify(heldIterations)} (expected partial, then succeeded: the ignored correction re-queues the task, PD-ORCH-015)`);
+if (heldSystemRows.length !== 1 || heldSystemRows[0].body !== 'Iteration 1: the coordinator answered with 1 item of its plan not done: Report the scripted work. The task was not marked complete and was returned to the queue.') throw new Error(`plan-held: the held row is not PD-ORCH-015's: ${JSON.stringify(heldSystemRows)}`);
+if (carried === null) throw new Error(`plan-held: iteration 2's root was not handed the continuation marker: ${JSON.stringify(secondMessages.map((b) => b.slice(0, 200)))}`);
+if (!carried.includes('Your previous iteration answered as follows, and the person was shown it:\n') || !/this is the scripted reply from the run loop/.test(carried.slice(carried.indexOf('answered as follows')))) throw new Error(`plan-held: iteration 2's first message does not carry the held answer: ${carried.slice(0, 1_200)}`);
+if (heldSession?.execution_status !== 'completed' || heldSession?.stop_reason !== 'tasks_complete') throw new Error(`plan-held session ended ${heldSession?.execution_status ?? 'absent'} / ${heldSession?.stop_reason ?? 'absent'}`);
+
+/*
+ * PD-ORCH-009 revisions 1 and 2 (fin42, N56): a root that ends its turn with neither text nor a tool call is asked once more in
+ * its own conversation (`ANSWER_REPROMPT`); one still silent closes its iteration and the person is told once — a `system` row
+ * "The run ended without an answer: …" and a warning `incomplete_execution` issue; one that answers when asked writes no row.
+ * No built-app run had met a silent root (the scripted client's `silent` step).
+ */
+const REPROMPT = 'You ended your turn without writing an answer. Write your answer to the user now, in plain text: what you did, what you found, and anything left open.';
+const answerless = {};
+for (const c of [{ name: 'answerless', script: 'silent,silent', told: true }, { name: 'answer-when-asked', script: 'silent,report', told: false }]) {
+  const root = join(output, c.name);
+  const ws = join(root, 'workspace');
+  const local = join(root, 'local');
+  mkdirSync(ws, { recursive: true });
+  mkdirSync(local, { recursive: true });
+  writeFileSync(join(ws, 'README.md'), '# answerless proof\n');
+  scratchAgentsYaml(ws);
+  const { log } = await launch(c.name, ws, local, join(root, 'preferences'), {
+    ROTARIS_SCRIPT: c.script,
+    ROTARIS_CAPTURE_PROMPT: 'say what the readme says',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '60000', ROTARIS_CAPTURE_AFTER_MS: '2000',
+  });
+  const db = new Database(oneDatabase(local), { readonly: true });
+  const session = db.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed FROM sessions').get();
+  const rows = db.prepare("SELECT body FROM transcript_rows WHERE kind = 'system' AND body LIKE '% ended without an answer:%' ORDER BY row_index").all().map((r) => r.body);
+  const issues = db.prepare("SELECT severity, actor, message, metadata FROM issues WHERE kind = 'incomplete_execution' ORDER BY ordinal").all();
+  const reprompts = db.prepare('SELECT body FROM agent_messages ORDER BY task_id, seq').all().filter((r) => r.body.includes(REPROMPT)).length;
+  const answer = db.prepare("SELECT body FROM transcript_rows WHERE kind = 'agent' ORDER BY row_index").all().map((r) => r.body).filter((b) => b.trim() !== '');
+  db.close();
+  const asked = (log.match(/ended its turn without writing an answer; it is asked once more \(PD-ORCH-009, OQ-199\)/g) ?? []).length;
+  answerless[c.name] = { session, asked, reprompts, rows, issues: issues.map((i) => ({ ...i, metadata: JSON.parse(i.metadata) })), answers: answer.length };
+  if (asked !== 1 || reprompts !== 1) throw new Error(`${c.name}: the root was asked ${asked} time(s) in the log and ${reprompts} in its conversation, not once (PD-ORCH-009)`);
+  if (session?.execution_status !== 'completed') throw new Error(`${c.name}: the session ended ${session?.execution_status} / ${session?.stop_reason}`);
+  if (c.told) {
+    if (rows.length !== 1 || !/^The run ended without an answer: .+ ended its turn without writing one, even when asked once more\.$/.test(rows[0])) throw new Error(`${c.name}: the person was not told once that the run ended without an answer: ${JSON.stringify(rows)}`);
+    const meta = issues.length === 1 ? JSON.parse(issues[0].metadata) : {};
+    if (issues.length !== 1 || issues[0].severity !== 'warning' || meta.reprompted !== true || meta.run_ended !== true) throw new Error(`${c.name}: expected one warning incomplete_execution issue, reprompted and run_ended: ${JSON.stringify(issues)}`);
+  } else {
+    if (rows.length !== 0 || issues.length !== 0) throw new Error(`${c.name}: a root that answered when asked was reported answerless: ${JSON.stringify({ rows, issues })}`);
+    if (answer.length < 1) throw new Error(`${c.name}: the answer written when asked is not in the transcript`);
+  }
+}
+writeFileSync(join(output, 'answerless-observed.json'), `${JSON.stringify(answerless, null, 2)}\n`);
+
 const result = {
+  planHeld: { session: heldSession, iterations: heldIterations, heldSystemRows: heldSystemRows.map((row) => row.body), corrections, heldAnswerCarried: carried !== null, screenshot: 'plan-held.png' },
+  answerless: Object.fromEntries(Object.entries(answerless).map(([k, v]) => [k, { status: v.session?.execution_status, asked: v.asked, reprompts: v.reprompts, rows: v.rows, issues: v.issues.length }])),
   planCorrection: { session: correctionSessionShown, iterations: correctionIterations, heldRows: heldRows.length, todoCalls: todoCalls.length, agentStates, screenshot: 'plan-correction.png' },
   loop: { session: loopSession, activations: loopActivations.length, issues: loopIssues, toolCalls: loopCalls.length, screenshot: 'loop-supervisor.png' },
   rawCountFallback: Object.fromEntries(Object.entries(rawObserved).map(([k, v]) => [k, { status: v.session?.execution_status, activations: v.activations.length }])),

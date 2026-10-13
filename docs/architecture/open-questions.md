@@ -11587,6 +11587,10 @@ its plan open (0 of 174 requests carry the correction; terminal session `8cf9983
 and no re-queue (0 requests carry "previous iteration on this task"), and no root answered empty (0 re-prompts). The terminal
 outcome held by the model's behaviour, not by the correction. The live measure stays owed and a default run does not reliably
 owe it, so fin42 wrote the opt-in `plan-open` and `empty-answer` scenarios; the report is in `PD-ORCH-015` and `PD-ORCH-009`.
+*Built-app evidence added 2026-10-13 (fin42):* `pnpm part-h-proof`'s `plan-held` launch measures the held answer — the ignored
+correction, the `system` row and the answer carried to iteration 2's root — and its `answerless` and `answer-when-asked` launches
+the re-prompt; the live measure is the two scenarios' first run, the orchestrator's. No ruling under R-072 has said the scripted
+evidence is enough, and none is asked: the scenarios exist to take the measure.
 
 **OQ-222 — Do six back-pointers that name a directive whose disposition block omits their requirement mark reaches the
 register left out, or are they cross-references written in a back-pointer's shape?** *(`docs/product/README.md`, "The

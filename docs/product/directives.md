@@ -5636,6 +5636,20 @@ that fails; a root that wrote nothing on purpose is asked anyway.
 > *fin42, the same day:* a default run cannot be relied on to produce a silent root, so the live measure stays owed; fin42
 > adds the opt-in `empty-answer` scenario, in which the recording proxy gives the coordinating root an empty completion.
 
+> **The silent root in the built app, and the live scenario written, 2026-10-13 (fin42, the survey's N56).** The scripted client
+> gains a `silent` step (a call that ends `stop` with neither text nor a tool call; `scripted-client.test.ts`), and `pnpm
+> part-h-proof` two launches: `answerless` (`silent,silent`) — the root asked once, logged once and once in its conversation,
+> then "The run ended without an answer: orchestrator ended its turn without writing one, even when asked once more." and one
+> warning `incomplete_execution` issue with `reprompted` and `run_ended`, the session `completed`; `answer-when-asked`
+> (`silent,report`) — asked once, its answer in the transcript, and neither row nor issue. **Found nothing against the text**, of
+> revision 1 or 2: the first built-app run to meet a silent root. The live half is written, not run: the recording proxy's new
+> `empty` rule (`lib/model-traffic.mjs`, pinned by `model-traffic.test.ts`, including that the product's own model client reads
+> its answer as a `stop` with no text and no tool call) answers the coordinating root's completions — the requests whose
+> instructions open "You are the orchestrator.", the classifier's excluded — with an empty completion, and the opt-in
+> `empty-answer` scenario should show, with both of the root's calls emptied, exactly one re-prompt sent and logged, the row and
+> the issue; with the first only (`empty-once`), one re-prompt, the model's own answer, and neither. The run is the
+> orchestrator's. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-hooks-001"></a>
@@ -7321,6 +7335,23 @@ logged as [R-072](requests.md#r-072).*
 > *fin42, the same day:* the terminal outcome the measure above names held at `552d346` — one iteration, `completed` /
 > `tasks_complete` inside the wait — by the model's own behaviour, not through the correction, so the live measure stays owed
 > and a default run cannot be relied on to owe it; fin42 adds the opt-in `plan-open` scenario, which asks for it.
+
+> **The held answer in the built app, and the live scenario written, 2026-10-13 (fin42, the survey's N56).** `pnpm
+> part-h-proof`'s new `plan-held` launch (scripted provider, free) drives the path the `plan-correction` launch above does not:
+> a coordinating root that answers with its report item `PENDING` and answers its one correction with text again
+> (`planopen,report,report,plandone,report`). The iterations read `partial` then `succeeded`; one correction warning; one `system`
+> row, "Iteration 1: the coordinator answered with 1 item of its plan not done: Report the scripted work. The task was not marked
+> complete and was returned to the queue."; and iteration 2's fresh root, read from its stored conversation (`agent_messages`),
+> was handed the marker and "Your previous iteration answered as follows, and the person was shown it:" with iteration 1's answer
+> in its first message; it recorded the item and the session ended `completed` / `tasks_complete` (the whole proof 2 min 39 s at
+> a load of 6 to 7 on four CPUs beside the sibling plan). **Found nothing against the text.** The live half is written, not run:
+> the opt-in `plan-open` scenario (`live-run.mjs --only=plan-open`, `lib/plan-open-reading.mjs`) asks a real model for a
+> three-item plan answered with the third item `PENDING`. Its `plan-open` launch should show one "a correction is sent" warning,
+> the correction in the root's own conversation saying the answer was shown, no answer re-prompt, no held row, one iteration
+> `succeeded` and `completed` / `tasks_complete`; its `plan-held` launch, told to answer a correction with one word, should show
+> the held row, the next root's first request carrying the marker and an answer of the session, and its outcome. A model that
+> closes its plan before answering makes either launch a NOTE, "not reached". The run is the orchestrator's. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

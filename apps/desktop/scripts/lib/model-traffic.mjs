@@ -62,6 +62,30 @@ export function usageIn(text) {
 }
 
 /**
+ * The answer an `empty` rule gives (fin42, PD-ORCH-009 revision 2): an OpenAI-shaped chat completion with no content and no
+ * tool call, finished `stop`, and zero usage — streamed as server-sent events when the request asked for a stream, one JSON
+ * body otherwise. `requestBody` is the call's request, read for its `model` and `stream` fields; one that will not parse is
+ * answered as a stream, the product's own way of calling.
+ */
+export function emptyCompletion(requestBody) {
+  let request = {};
+  try { request = JSON.parse(String(requestBody)); } catch { request = { stream: true }; }
+  const model = typeof request.model === 'string' ? request.model : 'injected';
+  const id = 'chatcmpl-injected-empty';
+  const created = 0;
+  const usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+  if (request.stream === false) {
+    return { contentType: 'application/json', body: JSON.stringify({ id, object: 'chat.completion', created, model, choices: [{ index: 0, message: { role: 'assistant', content: '' }, finish_reason: 'stop' }], usage }) };
+  }
+  const event = (data) => `data: ${JSON.stringify(data)}\n\n`;
+  const chunk = (choices, extra = {}) => ({ id, object: 'chat.completion.chunk', created, model, choices, ...extra });
+  return {
+    contentType: 'text/event-stream',
+    body: `${event(chunk([{ index: 0, delta: { role: 'assistant', content: '' }, finish_reason: null }]))}${event(chunk([{ index: 0, delta: {}, finish_reason: 'stop' }]))}${event(chunk([], { usage }))}data: [DONE]\n\n`,
+  };
+}
+
+/**
  * Start the listener. Resolves with the base URL to hand the product, a `sink` setter so each scenario's traffic
  * lands in its own file, and a `close`.
  *
@@ -137,7 +161,7 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
     const backChunks = [];
     const headers = { ...clientReq.headers, host: upstream.host };
     const { rule, key: ruleKey } = ruleFor(path);
-    const note = rule === null ? {} : { fault: { kind: rule.kind, at: rule.at ?? 'every', ...(rule.status ? { status: rule.status } : {}), ...(rule.afterChunks === undefined ? {} : { afterChunks: rule.afterChunks }), ...(rule.delayMs === undefined ? {} : { delayMs: rule.delayMs }) } };
+    let note = rule === null ? {} : { fault: { kind: rule.kind, at: rule.at ?? 'every', ...(rule.status ? { status: rule.status } : {}), ...(rule.afterChunks === undefined ? {} : { afterChunks: rule.afterChunks }), ...(rule.delayMs === undefined ? {} : { delayMs: rule.delayMs }) } };
 
     /** The endpoint's answer once its headers arrive; null while it is still thinking. */
     let upstreamRes = null;
@@ -213,6 +237,7 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
       return;
     }
 
+    const forward = () => {
     upstreamReq = transport(
       { protocol: upstream.protocol, hostname: upstream.hostname, port: upstream.port || (upstream.protocol === 'https:' ? 443 : 80), method: clientReq.method, path, headers },
       (answer) => {
@@ -328,6 +353,42 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
       clientRes.end('the live run\'s recording proxy could not reach the endpoint');
     });
 
+    };
+
+    /*
+     * `empty` (fin42, PD-ORCH-009 revision 2): a well-formed completion with no content and no tool call, `finish_reason`
+     * `stop` — the answer of a root that ended its turn with nothing for the person — given to the calls whose REQUEST BODY
+     * holds `when` (and not `unless`), up to `times` of them, the endpoint never contacted for them. Chosen by what the call
+     * carries rather than by its index, since "the root's final completion" is a call no index names in advance: the body is
+     * read whole before the call is forwarded or answered, which a completion's request body is anyway before the endpoint
+     * answers. A streamed request (`"stream": true`) is answered as server-sent events, any other as one JSON body.
+     */
+    const emptyRules = rule === null ? faults.filter((f) => f.kind === 'empty' && (f.fired ?? 0) < (f.times ?? 1) && path.includes(f.path ?? '/chat/completions')) : [];
+    if (emptyRules.length > 0) {
+      clientReq.on('data', (chunk) => { sentChunks.push(chunk); });
+      clientReq.on('end', () => {
+        const body = Buffer.concat(sentChunks).toString('utf8');
+        const hit = emptyRules.find((f) => (f.when === undefined || body.includes(f.when)) && (f.unless === undefined || !body.includes(f.unless))) ?? null;
+        if (hit === null) {
+          forward();
+          for (const chunk of sentChunks) upstreamReq.write(chunk);
+          upstreamReq.end();
+          return;
+        }
+        hit.fired = (hit.fired ?? 0) + 1;
+        fired.push({ kind: 'empty', at: hit.fired, path: hit.path ?? '/chat/completions' });
+        everFired.push({ kind: 'empty', at: hit.fired, path: hit.path ?? '/chat/completions' });
+        note = { fault: { kind: 'empty', at: hit.fired, ...(hit.when === undefined ? {} : { when: hit.when }) } };
+        const answer = emptyCompletion(body);
+        clientRes.writeHead(200, { 'content-type': answer.contentType });
+        clientRes.end(answer.body);
+        backChunks.push(Buffer.from(answer.body));
+        settle('complete', { status: 200 });
+      });
+      clientReq.on('error', () => { release(); });
+      return;
+    }
+    forward();
     clientReq.on('data', (chunk) => { sentChunks.push(chunk); upstreamReq.write(chunk); });
     clientReq.on('end', () => { upstreamReq.end(); });
     clientReq.on('error', () => { release(); });

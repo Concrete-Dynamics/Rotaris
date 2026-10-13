@@ -39,7 +39,7 @@ export interface ScriptedCallRecord {
  * It answers the shape a real client answers (`ModelClient`) from a STEP LIST read out of the environment:
  * `ROTARIS_SCRIPT` names the orchestrator's steps, comma-separated, one per model call, and
  * `ROTARIS_CHILD_SCRIPT` every child's. `glob`, `read`, `write`, `writeinfer`, `rm`, `git`, `push`, `edit`, `todo`, `plan`, `planopen`, `plandone`, `plan:<n>`, `done`, `donereplace` request a tool
- * call; `fetch:<url>` a fetch of that URL; `continue:<persona>:<name>` a delegation taking up the newest continuation offer
+ * call; `silent` ends the call with neither text nor a tool call (PD-ORCH-009's silent root); `fetch:<url>` a fetch of that URL; `continue:<persona>:<name>` a delegation taking up the newest continuation offer
  * the conversation was told (`offeredTaskId`, PD-ORCH-004 revisions 3 and 4); `wait:<ms>` holds the call that long ON THE CLOCK PORT and then
  * answers (the Overview proof needs a run longer than one token-sample period); anything else, or the end of
  * the list, answers with a short streamed reply, one delta per 120 ms so the growth tick is visible.
@@ -548,6 +548,14 @@ export function scriptedClient(c: Clocks,log: (message: string) => void, record?
         }
         yield ok<StreamPart>({ kind: 'text', delta: marked('The scripted answer, after a long deliberation.') });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 18, output: Number(longThink[1]) } });
+        yield finished('stop');
+        return;
+      }
+      // `silent` (fin42, PD-ORCH-009 revisions 1 and 2): the call ends `stop` with neither text nor a tool call — the root of
+      // OQ-199 that read and then wrote nothing, which the run asks once more for an answer. Its step pushes an empty assistant
+      // message (`turn.ts`), so it is not one of `LEAVES_NO_MESSAGE`; the message carries no mark. Verification only.
+      if (step === 'silent') {
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 12, output: 0 } });
         yield finished('stop');
         return;
       }

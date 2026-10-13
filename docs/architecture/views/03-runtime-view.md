@@ -280,7 +280,9 @@ is still silent, and the root's turn returns so, the iteration closes as it woul
 is known — "Iteration <n> ended without an answer: …" before the loop takes up another iteration, parks at the plan gate or
 pauses at the message limit, and at the teardown either "The run ended without an answer: …" or, for a run only paused or
 cancelled (`interrupted`), the iteration's row. A plan cycle's root is not asked. With no children (no tool port's delegation) the same loop runs
-around `firstTurn`.
+around `firstTurn`. The scripted client's verification-only step `silent` (since fin42) is such a turn —
+a call ending `stop` with neither text nor a tool call — which `part-h-proof`'s `answerless` and `answer-when-asked` launches
+take.
 
 **The coordinator's own plan and the task's completion (REQ-ORCH-029, REQ-ORCH-075, REQ-ORCH-078; since 2026-10-06,
 live-run finding G5).** A root that answers `succeeded` while its own plan (`Run.agentTodo`, REQ-TOOLS-144's states) holds an

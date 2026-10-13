@@ -27,6 +27,11 @@ native executors and where an MCP executor joins the callable map): a named tool
 aborts, so `mcp-proof`'s `cancel-throw` launch reaches the gate's catch through the run host; `scripts/package.mjs`'s seam check
 names it. The **process view**'s main row says so. No package, edge, process, channel, command or store column changed.
 
+**A scripted root can end its turn with nothing (PD-ORCH-009; fin42).** The scripted client gains the verification-only step
+`silent`, a call that ends `stop` with neither text nor a tool call (`run-host/scripted-client.ts`), which `part-h-proof`'s
+`answerless` and `answer-when-asked` launches take to meet the answer re-prompt in the built app. The **runtime view**'s
+re-prompt paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **A run's proposed technical requirement is accepted from the review (REQ-TRACE-427..433; fin41).** `accept-proposal` is a
 record admitted in `review` (`decide`, `workspace/src/delivery/transition.ts`), its write made in the delivery service's
 `beforeCommit` (`acceptProposal`, `workspace-service/delivery.ts`) through `requirements.source.write`'s units.

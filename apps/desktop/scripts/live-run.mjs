@@ -130,6 +130,19 @@
  *                 choose another tool. Whether the child searched for references first, and whether a cold rename left the
  *                 importing files behind or had them mended by hand, is named beside OQ-272
  *                 (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ *   8g. plan-open — OPT-IN (`--only=plan-open`), a few minutes (fin42, N56): `PD-ORCH-015` against a real model, two launches
+ *                 whose prompt has the coordinator write a three-item plan and answer with the last item left PENDING:
+ *                 `plan-open`, where it is free to record the item when corrected (one "a correction is sent" warning, the
+ *                 correction in the root's own conversation saying the answer was shown, iteration 1 `succeeded`, the session
+ *                 `completed` / `tasks_complete`, no held row and no answer re-prompt), and `plan-held`, where it is told to
+ *                 ignore a correction (the held `system` row, the next fresh root's first request carrying the marker and the
+ *                 answer the person was shown, and the outcome). A root that closed its plan before answering is a NOTE, "not
+ *                 reached" (`lib/plan-open-reading.mjs`).
+ *   8h. empty-answer — OPT-IN (`--only=empty-answer`), a few minutes (fin42, N56): `PD-ORCH-009` revision 2 through the proxy's
+ *                 `empty` rule, which answers the coordinating root's completions with no content and no tool call, `stop`:
+ *                 `empty-answer` (both of the root's calls empty) — exactly one re-prompt sent and logged, then "The run ended
+ *                 without an answer: …" and one warning `incomplete_execution` issue; `empty-once` (the first call only) — one
+ *                 re-prompt, the model's answer to it, and no such row or issue.
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -208,6 +221,7 @@ import { runCrlfScenario } from './lib/crlf-scenario.mjs';
 import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-field.mjs';
 import { passOutcome, postRunVerdict, retrospectiveInstructionFiles, settledAfterMs, settledWait } from './lib/analysis-reading.mjs';
 import { RENAME_FILES, RENAME_FROM, RENAME_TO, renameReading } from './lib/rename-reading.mjs';
+import { CLASSIFIER_MARK, ROOT_MARK, answerReading, planReading } from './lib/plan-open-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
 import { ARTIFACTS_TAB } from './lib/library-refresh.mjs';
 import { attachReading, delegatesToReading, followUpReading, handoffReading, requestOf, swarmReading } from './lib/delegation-readings.mjs';
@@ -324,7 +338,7 @@ const OPTIONAL = ['ask', 'edit', 'resume', 'requirements', 'shell', 'frictions',
  * that trebles its wall clock does not belong in it by default, and a scenario nobody can leave out is a
  * scenario people stop running. Naming it is the consent.
  */
-const OPT_IN = ['duress', 'cutoff', 'rename'];
+const OPT_IN = ['duress', 'cutoff', 'rename', 'plan-open', 'empty-answer'];
 const SCENARIOS = [...OPTIONAL, ...OPT_IN];
 const only = value('only', null);
 const wanted = only === null ? OPTIONAL : only.split(',').map((s) => s.trim()).filter((s) => s !== '');
@@ -3014,6 +3028,140 @@ if (wanted.includes('rename')) {
     for (const [f, text] of Object.entries(before)) writeFileSync(join(workspace, f), text);
   }
   results.scenarios.rename = renameRecord;
+  await budgetGate();
+}
+
+// ── 8g. A plan left open at the answer (PD-ORCH-015) ─────────────────────────────────────────────────────────
+/**
+ * OPT-IN (`--only=plan-open`), a few minutes (fin42, the survey's N56). `PD-ORCH-015` had been measured only by
+ * `coordinator-plan.test.ts` and `part-h-proof`'s scripted `plan-correction` and `plan-held` launches: the default and duress
+ * live runs at 552d346 never reached it, every coordinator closing its plan before it answered (0 of 174 requests carried the
+ * correction). So the prompt asks for the shape: a plan of three items, the first two done by the coordinator itself, and an
+ * answer given with the third still PENDING.
+ *
+ *   1. `plan-open` — nothing more is asked; a model that records the item when corrected closes the iteration `succeeded`.
+ *      Asserted: one correction warning, the correction sent in the root's own conversation and saying the answer was shown, no
+ *      answer re-prompt (PD-ORCH-009 revision 2), no held row, one iteration `succeeded`, `completed` / `tasks_complete`.
+ *   2. `plan-held` — the prompt also tells it to answer a correction with one word and leave its plan alone, so the correction
+ *      is spent and the task re-queued. Asserted: the held `system` row in `planHeldRowText`'s words, and the next fresh root's
+ *      first request carrying the continuation marker and an answer of this session labelled as the one the person was shown.
+ *      Its outcome — a later root that records the item, or the task given up on at the retry limit — is recorded.
+ *
+ * A coordinator that closed its plan before answering, in either launch, is a NOTE: "not reached". Read from the log, the
+ * recorded traffic, the transcript's `system` rows and the iterations, never from the model's prose (`lib/plan-open-reading.mjs`).
+ * Without the recording proxy the traffic half is unasked and said so.
+ */
+const PLAN_OPEN_PROMPT = [
+  'Before anything else, write your todo list with the todo tool, with exactly these three items: "Read src/todos.js",',
+  '"Read src/App.jsx" and "Name the function that counts the remaining todos". Do the first two items yourself with read_file',
+  'and mark each COMPLETED as you finish it. Delegate nothing. Then answer in one sentence naming the function that counts the',
+  'remaining todos, and give that answer WITHOUT touching the todo list again: the third item must still be PENDING when you answer.',
+].join('\n');
+const PLAN_HELD_TAIL = '\nIf you are then told that an item of your plan is not complete, reply with the single word "Noted." and do not use the todo tool again in this conversation.';
+function planLaunchReading(name, log) {
+  const read = readSession();
+  if (read === null) { check(false, `${name}: the run left a session row`, 'no session was recorded'); return null; }
+  preserveRun(name, read.session.session_id);
+  const Database = require('better-sqlite3');
+  const db = new Database(oneDatabase(), { readonly: true });
+  let iterations;
+  try { iterations = db.prepare('SELECT iteration, outcome FROM iterations WHERE session_id = ? ORDER BY iteration').all(read.session.session_id); } finally { db.close(); }
+  const systemRows = read.rows.filter((r) => r.kind === 'system').map((r) => String(r.body ?? ''));
+  const answers = read.rows.filter((r) => r.kind === 'agent').map((r) => String(r.body ?? '')).filter((b) => b.trim() !== '');
+  const bodies = proxy === null ? [] : readTraffic(name).map((r) => String(r.requestBody ?? ''));
+  return { read, r: planReading({ log, bodies, systemRows, iterations, answers }) };
+}
+if (wanted.includes('plan-open')) {
+  const record = {};
+  {
+    const log = await launch('plan-open', { ROTARIS_CAPTURE_PROMPT: PLAN_OPEN_PROMPT, ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000' }, RUN_WAIT_MS + 90_000);
+    check(!/capture: wait for result timed out/.test(log), 'plan-open: the run reached its result inside the wait');
+    const got = planLaunchReading('plan-open', log);
+    if (got !== null) {
+      const { read, r } = got;
+      checkPricing('plan-open', read.session);
+      record['plan-open'] = { status: read.session.execution_status, stopReason: read.session.stop_reason, ...r };
+      if (!r.reached) noted('plan-open: the coordinator closed its plan before answering, so PD-ORCH-015\'s correction was NOT REACHED', `iterations ${JSON.stringify(r.outcomes)}; ${r.corrections} correction(s) in the traffic`);
+      else {
+        check(r.warnings.length === 1 && r.warnings[0].n === 1, 'plan-open: one correction was sent into the root\'s conversation (REQ-ORCH-078 under PD-ORCH-015)', JSON.stringify(r.warnings));
+        if (proxy === null) noted('plan-open: the correction\'s text was not read', 'traffic not recorded (--no-record-traffic)');
+        else check(r.corrections >= 1 && r.shownSaid, 'plan-open: the correction reached the model in the root\'s own conversation, saying the answer had been shown (PD-ORCH-015)', `${r.corrections} correction request(s); "has been shown" ${r.shownSaid ? 'said' : 'not said'}`);
+        check(r.reprompts === 0, 'plan-open: a root that answered was not asked for its answer again (PD-ORCH-009 revision 2)', `${r.reprompts} re-prompt(s)`);
+        if (r.requeued) noted('plan-open: the coordinator did not record the item when corrected, and its task was re-queued', `${r.heldRows.join(' | ')} — the held path, which plan-held asks for`);
+        else check(r.outcomes.length === 1 && r.outcomes[0] === 'succeeded' && read.session.execution_status === 'completed' && read.session.stop_reason === 'tasks_complete', 'plan-open: the corrected iteration closed succeeded, one iteration, completed / tasks_complete', `${JSON.stringify(r.outcomes)}; ${read.session.execution_status} / ${read.session.stop_reason}`);
+      }
+    }
+  }
+  await budgetGate();
+  {
+    const log = await launch('plan-held', { ROTARIS_CAPTURE_PROMPT: `${PLAN_OPEN_PROMPT}${PLAN_HELD_TAIL}`, ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000' }, RUN_WAIT_MS + 90_000);
+    check(!/capture: wait for result timed out/.test(log), 'plan-held: the run reached its result inside the wait');
+    const got = planLaunchReading('plan-held', log);
+    if (got !== null) {
+      const { read, r } = got;
+      checkPricing('plan-held', read.session);
+      record['plan-held'] = { status: read.session.execution_status, stopReason: read.session.stop_reason, ...r };
+      if (!r.reached) noted('plan-held: the coordinator closed its plan before answering, so PD-ORCH-015 was NOT REACHED', `iterations ${JSON.stringify(r.outcomes)}`);
+      else if (!r.requeued) noted('plan-held: the coordinator recorded the item when corrected despite the prompt, so the held answer was NOT REACHED', `iterations ${JSON.stringify(r.outcomes)}; ${r.warnings.length} correction warning(s)`);
+      else {
+        check(r.heldRows.length >= 1, 'plan-held: the held system row names the open item and says the task was returned to the queue or given up on (PD-ORCH-015)', r.heldRows.join(' | '));
+        if (proxy === null) noted('plan-held: the held answer\'s carriage was not read', 'traffic not recorded (--no-record-traffic)');
+        else {
+          check(r.carries >= 1, 'plan-held: the next fresh root\'s first request carried the continuation marker (REQ-ORCH-075)', `${r.carries} carrying request(s)`);
+          check(r.heldIsAnAnswer, 'plan-held: it carried an answer of this session, labelled as the one the person was shown (PD-ORCH-015)', r.heldAnswers.map((a) => JSON.stringify(a.slice(0, 160))).join(' | ') || 'none');
+        }
+        noted('plan-held: how the re-queued task ended', `iterations ${JSON.stringify(r.outcomes)}; ${read.session.execution_status} / ${read.session.stop_reason}`);
+      }
+    }
+  }
+  results.scenarios['plan-open'] = record;
+  await budgetGate();
+}
+
+// ── 8h. A root that answers with nothing (PD-ORCH-009 revision 2) ──────────────────────────────────────────────
+/**
+ * OPT-IN (`--only=empty-answer`), a few minutes (fin42, the survey's N56). No live run had met a silent root: at 552d346 every
+ * root's last request ended `stop` with text. The recording proxy's `empty` rule (`lib/model-traffic.mjs`) answers the
+ * coordinating root's completions — the requests whose instructions open "You are the orchestrator.", the intent classifier's
+ * excluded — with a well-formed completion that has no content and no tool call, finished `stop`, and never contacts the
+ * endpoint for them.
+ *
+ *   1. `empty-answer` — both of the root's calls answered empty: exactly one re-prompt sent and logged, then "The run ended
+ *      without an answer: …" in a `system` row and one warning `incomplete_execution` issue (`reprompted`, `run_ended`).
+ *   2. `empty-once` — the first call alone: one re-prompt, the model's own answer to it, and neither the row nor the issue.
+ *
+ * It needs the proxy; without it the scenario is a NOTE.
+ */
+if (wanted.includes('empty-answer')) {
+  const record = {};
+  if (proxy === null) noted('the empty-answer scenario did not run', 'it needs the recording proxy, and it is not in the path (--no-record-traffic, or it could not start)');
+  else {
+    const PROMPT = 'Read README.md and reply with one sentence naming the application it describes.';
+    for (const c of [{ name: 'empty-answer', times: 2, told: true }, { name: 'empty-once', times: 1, told: false }]) {
+      proxy.setFaults([{ kind: 'empty', when: ROOT_MARK, unless: CLASSIFIER_MARK, times: c.times }]);
+      const log = await launch(c.name, { ROTARIS_CAPTURE_PROMPT: PROMPT, ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000' }, RUN_WAIT_MS + 90_000);
+      const fired = proxy.stats().faultsFired.filter((f) => f.kind === 'empty').length;
+      proxy.setFaults([]);
+      check(!/capture: wait for result timed out/.test(log), `${c.name}: the run reached its result inside the wait`);
+      const read = readSession();
+      if (read === null) { check(false, `${c.name}: the run left a session row`, 'no session was recorded'); continue; }
+      preserveRun(c.name, read.session.session_id);
+      checkPricing(c.name, read.session);
+      const r = answerReading({ log, bodies: readTraffic(c.name).map((x) => String(x.requestBody ?? '')), systemRows: read.rows.filter((x) => x.kind === 'system').map((x) => String(x.body ?? '')), issues: readIssues(read.session.session_id), fired });
+      record[c.name] = { status: read.session.execution_status, stopReason: read.session.stop_reason, ...r };
+      check(r.fired === c.times, `${c.name}: the proxy answered ${c.times} of the root's completion(s) empty`, `${r.fired} empty answer(s) over ${r.rootRequests} root request(s)`);
+      check(r.reprompts === 1 && r.logged === 1, `${c.name}: the root was asked for its answer exactly once, in its own conversation (PD-ORCH-009)`, `${r.reprompts} re-prompt request(s), ${r.logged} log line(s)`);
+      if (c.told) {
+        check(r.unanswered.length === 1 && /^The run ended without an answer: /.test(r.unanswered[0]), `${c.name}: the person was told once that the run ended without an answer (PD-ORCH-009)`, r.unanswered.join(' | ') || 'no such row');
+        check(r.incomplete.length === 1 && r.incomplete[0].severity === 'warning' && r.incomplete[0].metadata.reprompted === true && r.incomplete[0].metadata.run_ended === true, `${c.name}: one warning incomplete_execution issue, reprompted and run_ended`, JSON.stringify(r.incomplete));
+      } else {
+        check(r.unanswered.length === 0 && r.incomplete.length === 0, `${c.name}: a root that answered when asked is not reported answerless (PD-ORCH-009)`, `${r.unanswered.length} row(s), ${r.incomplete.length} issue(s)`);
+        const answered = read.rows.some((x) => x.kind === 'agent' && String(x.body ?? '').trim() !== '');
+        if (!answered) noted(`${c.name}: the model wrote no answer when asked either`, 'the re-prompt reached it; its reply was empty');
+      }
+    }
+  }
+  results.scenarios['empty-answer'] = record;
   await budgetGate();
 }
 

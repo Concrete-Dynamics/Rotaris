@@ -22,8 +22,9 @@ import { join } from 'node:path';
  * all when the writer does not declare the specification-hash comparison. That check runs at construction — the
  * first `requirements.*` command of a workspace open — and its failure is the named message, not a silent absence.
  *
- * The engine is INJECTED. Until Part AJ merges, `ENGINE_NOT_MERGED` answers every pass with a stated failure and the
- * board reports `source: none` with the cause in `parseErrors`; the merge replaces one line in `index.ts`'s case.
+ * The engine is INJECTED: `index.ts`'s `requirements.command` case passes `traceability.ts`'s engine (Part AJ, merged
+ * 2026-09-09). `ENGINE_NOT_MERGED` below is the stand-in that served until then and is now a test fixture only
+ * (`delivery.test.ts`). (Until 2026-10-13 this described it as serving "until Part AJ merges".)
  */
 export interface DeliveryAnswer {
   readonly value: unknown;
@@ -57,7 +58,10 @@ export interface RunGitPort {
 }
 
 const NOT_MERGED = Object.freeze({ kind: 'failed', what: 'the traceability engine', cause: 'Part AJ is not merged into this build' } as const);
-/** The stand-in until Part AJ's `createTraceabilityEngine` is wired at the merge: every pass fails with the reason stated. */
+/**
+ * A test fixture: every pass fails with the reason stated, the shape of an engine that cannot serve. It was the stand-in
+ * until Part AJ's engine was wired (2026-09-09); no production path uses it since, only `delivery.test.ts`.
+ */
 export const ENGINE_NOT_MERGED: TraceabilityEngine = {
   parseStore: async () => err(NOT_MERGED),
   sweep: async () => err(NOT_MERGED),

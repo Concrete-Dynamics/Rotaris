@@ -12,7 +12,7 @@ window-level Escape finds the slot empty, skips it and closes the compact drawer
 the step REQ-SHELL-055 places after it runs.
 
 Noticed 2026-10-13 by fin41 while correcting the comment in `useCommandShortcuts.ts` that called the search panel
-unbuilt (`code-comments-call-built-mechanisms-unbuilt-or-owed.md`). Read from the code only; not driven in the built
+unbuilt (`docs/defects/fixed/code-comments-call-built-mechanisms-unbuilt-or-owed.md`). Read from the code only; not driven in the built
 app, and not repaired here.
 
 ## Specs

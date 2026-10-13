@@ -1,5 +1,6 @@
 /**
- * @rotaris/mcp — the MCP client (ADR-0033, ADR-0034; ADR-0035 owed).
+ * @rotaris/mcp — the MCP client (ADR-0033, ADR-0034, ADR-0035; ADR-0035, the bundled code-intelligence runtime, was
+ * written here as owed until 2026-10-13 and has been built since 2026-09-06, Part T: `setup.ts` and the probe).
  *
  * Protocol behaviour — handshake, negotiation, request correlation, notification dispatch, schema
  * validation — is the official SDK's 2.x line (`@modelcontextprotocol/client` 2.0.0, pinned). Process

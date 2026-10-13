@@ -3239,7 +3239,9 @@ export class Run {
 
     step('run_end', () => { writer.appendTimeline('run_end', 'rotaris', `The run ended ${status}.`, { execution_status: status, stop_reason: stopReason }); });
     step('flush-publications', () => owner.flushPending());
-    // (logging cleanup: the session log is not built — REQ-SESSION-142 lands with its own mechanism.)
+    // (logging cleanup: none here. The session log (REQ-SESSION-142, `session-log.ts`) is the session's, not the run's: the
+    // registry closes it when the run's `start()` settles (`Sessions`, `log?.close()`). Until 2026-10-13 this said the log
+    // was not built.)
     step('terminal-transaction', () => {
       // REQ-SESSION-093's row, session.end then result (REQ-SESSION-095), and the terminal save under the held lock.
       // REQ-MONITOR-166: once more at the terminal state, then the sampler goes.
@@ -3354,9 +3356,10 @@ export function withPlaybook(systemPrompt: string, playbook: string): string {
  * skill catalog → force-loaded skill bodies → persona memory**, and the caller is the one place that knows
  * all four; this composes what it is given and adds nothing.
  *
- * It is deliberately a **list** rather than four parameters: two of the four units are not built in this
- * release (workspace-context injection, REQ-WORKSPACE-041..050, and persona memory), and a signature naming
- * them would have to change when they arrive. An empty unit contributes nothing, so a slot that is not
+ * It is deliberately a **list** rather than four parameters: one of the four units is not built in this release
+ * (persona memory), and a signature naming it would have to change when it arrives. Workspace-context injection
+ * (REQ-WORKSPACE-041..050) is built and arrives first in the list (`apps/desktop/src/run-host/skills.ts`); until
+ * 2026-10-13 this comment listed it as not built too. An empty unit contributes nothing, so a slot that is not
  * filled costs no separator.
  *
  * Applied at the two places a role's prompt becomes an agent's — the entry turn and a child's construction —

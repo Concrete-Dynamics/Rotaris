@@ -208,7 +208,7 @@ export interface SlashHost {
   /** REQ-CHAT-159 `/logout`: the configured provider ids, in the catalog's order, and the provider domain's sign-out. */
   readonly providers?: readonly string[] | undefined;
   readonly logout?: ((provider: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
-  /** REQ-CHAT-029/030 `/compress` and `/clear`: the two control ops with no arm in the run host until Part AO. */
+  /** REQ-CHAT-029/030 `/compress` and `/clear`: the two control ops the run host arms (Part AO). (Until 2026-10-13: "with no arm until Part AO".) */
   readonly control?: ((op: 'forceCompression' | 'clearTranscript') => Promise<{ ok: true; value?: string } | { ok: false; reason: string }>) | undefined;
   /** REQ-CHAT-031 `/new`: the launch dialog (REQ-SHELL-125), refused with its own sentence while a run is active. */
   readonly newSession?: (() => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;

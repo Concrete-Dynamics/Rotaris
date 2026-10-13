@@ -4,7 +4,9 @@
 - **Date:** 2026-08-31
 - **Origin:** MODEL (ADR-MODEL-10)
 - **Depends on:** ADR-0002, ADR-0033, ADR-0054
-- **Blocked by an open question (OQ-23) about what the sentinel branch must do.**
+- ~~**Blocked by an open question (OQ-23) about what the sentinel branch must do.**~~ *OQ-23 resolved 2026-09-06 with
+  the recommended reading; built and first executed the same day (Part T), see "First execution" below (corrected
+  2026-10-13, fin41).*
 
 ## Context
 

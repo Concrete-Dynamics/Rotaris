@@ -143,10 +143,11 @@ export function builtInCommands(options: CatalogueOptions): readonly SlashComman
     { name: 'stop', description: 'Stop the active run', kind: 'action', availability: whileRunning, run: (_a, ctx) => controlOutcome(ctx, 'cancel') },
     // REQ-CHAT-029 fixes `/pause`'s gating and no description; this wording is the composer's, matching REQ-MONITOR-123's control.
     { name: 'pause', description: 'Pause the active run', kind: 'action', availability: whileRunning, run: (_a, ctx) => controlOutcome(ctx, 'pause') },
-    // REQ-CHAT-029: `forceCompression` is a control op with no arm in the run host until Part AO; until then the
-    // dispatch answers a refusal and the command reports `failed` with it — stated, not hidden (see WorkspaceView's control).
+    // REQ-CHAT-029: `forceCompression` is the run host's control op (Part AO, `Sessions.forceCompression`); a refusal it
+    // answers is reported as the command's `failed`, stated, not hidden. (Until 2026-10-13 this said the op had no arm.)
     { name: 'compress', description: 'Compress agent context', kind: 'action', availability: (ctx) => reach('compress', 'compress', whileRunning(ctx)), run: (_a, ctx) => controlOutcome(ctx, 'forceCompression') },
-    // REQ-CHAT-030: `clearTranscript` likewise has no arm until Part AO; the toolbar Clear and its confirmation (REQ-CHAT-073/082/083) are AO's too.
+    // REQ-CHAT-030: `clearTranscript` is armed likewise (Part AO, `Sessions.clearTranscript`), as are the toolbar Clear and its
+    // confirmation (REQ-CHAT-073/082/083, `controls.tsx`). (Until 2026-10-13 this said none of the three was armed.)
     { name: 'clear', description: 'Clear the transcript', kind: 'action', availability: (ctx) => reach('clear', 'clear', whileRows(ctx)), run: (_a, ctx) => controlOutcome(ctx, 'clearTranscript') },
     // REQ-CHAT-030 fixes `/search`'s gating and no description; it opens REQ-CHAT-074's panel, the same surface Ctrl+F opens.
     { name: 'search', description: 'Search the transcript', kind: 'action', availability: (ctx) => reach('search', 'search', whileRows(ctx)), run: (_a, ctx) => attempt(async () => ctx.open('search')) },

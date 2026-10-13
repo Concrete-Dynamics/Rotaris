@@ -86,7 +86,8 @@ export const RuntimeViewSchema = z.object({
  * REQ-CHAT-166's four display caps as the transcript reads them — workspace configuration, written to and read back
  * from the `display` section of the workspace `agents.yaml` (REQ-CONFIG-172/175). A line cap of `null` is
  * "unlimited", the last of the offered values 1, 2, 5, 10, 20, 50, unlimited. The Display settings CATEGORY that
- * offers the four controls is REQ-CONFIG-472 and is not built: this is the read path and the cap behaviour only.
+ * offers the four controls is REQ-CONFIG-472's, built in Part AG (`packages/ui/src/settings/DisplaySettings.tsx`); this
+ * schema is the shape both it and the transcript read. (Until 2026-10-13 this said the category was not built.)
  */
 export const DisplayViewSchema = z.object({
   show_tool_results: z.boolean(),

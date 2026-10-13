@@ -3,8 +3,9 @@ import { FieldReader, sectionMap, type ProblemSink } from './field.js';
 /**
  * `compressor:` (REQ-CONFIG-132..134): the model (a tier alias by default, substituted like every other
  * reference), the budget figures and the threshold — accepted from a file over 1–100 while every editing
- * surface offers 50–95 (REQ-CONFIG-446). Compression itself is not built; the section loads, validates
- * and round-trips so a file authored for it is honoured when it is.
+ * surface offers 50–95 (REQ-CONFIG-446). Compression itself is ADR-0060's (`packages/engine/src/run/compression.ts`,
+ * driven by `turn.ts` at the threshold and by `ladder.ts` at a context-window rejection), which reads these values.
+ * (Until 2026-10-13 this said compression was not built and the section only round-tripped; it has been built since 2026-09-08, Part AH.)
  */
 export interface CompressorSection {
   readonly model: string;

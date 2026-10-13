@@ -13411,7 +13411,7 @@ workspace this window does not hold?** *(REQ-NOTIFY-044, the action vocabulary; 
 the project; REQ-SHELL-115, "start project initialization; resolve project initialization"; REQ-CONFIG-404; ADR-0064, the
 initialization registry and its surface. Raised 2026-10-13 by fin41 while correcting the stale comment on the renderer's
 notice-action switch, recorded in
-[`code-comments-call-built-mechanisms-unbuilt-or-owed`](../defects/code-comments-call-built-mechanisms-unbuilt-or-owed.md).
+[`code-comments-call-built-mechanisms-unbuilt-or-owed`](../defects/fixed/code-comments-call-built-mechanisms-unbuilt-or-owed.md).
 Open.)*
 
 REQ-NOTIFY-044 lists "open the project-initialization surface for a named workspace" among the actions a notice may carry,

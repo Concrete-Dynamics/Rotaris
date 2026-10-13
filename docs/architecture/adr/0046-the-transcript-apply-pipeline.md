@@ -342,9 +342,13 @@ application scrolls" and "the reader scrolls" is where they meet.
 
 ### The reading-question limbs, stated rather than reported as met
 
-- **REQ-CHAT-073 is met in one clause of two.** Its second clause — "and the Clear action MUST be disabled" — names
+- ~~**REQ-CHAT-073 is met in one clause of two.** Its second clause — "and the Clear action MUST be disabled" — names
   an action section 14 would have built. `clearTranscript` answers `false` and no Clear action exists anywhere in
-  this build, so the clause has nothing to be true of. It is not a defect and not a waiver.
+  this build, so the clause has nothing to be true of. It is not a defect and not a waiver.~~ **Corrected 2026-10-13
+  (fin41): met whole.** Part AO built the toolbar's "Clear transcript" (`packages/ui/src/slash/controls.tsx`), disabled
+  while the transcript holds no row, and armed `clearTranscript` in the run host (`Sessions.clearTranscript`). The
+  struck reading was true when written and stopped being true with Part AO; the code comment that repeated it
+  (`TranscriptPane.tsx`) is corrected in the same commit.
 - **Three live-terminal clauses are implemented and left unexercised.** `CHANNEL.terminalFrames` exists in the
   contract, the relay and the preload, and **nothing publishes a frame**: ADR-0021 has no first execution.
   REQ-CHAT-063's 250 ms cadence "while a terminal stream is live" and REQ-CHAT-066's "an unsettled live terminal row

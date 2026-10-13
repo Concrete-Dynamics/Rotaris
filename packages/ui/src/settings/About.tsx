@@ -13,12 +13,13 @@ import { Button as DesignButton } from '../design-system/index.js';
  * document paths — are held here as constants because the requirement fixes them literally; nothing composes
  * them from configuration.
  *
- * **Two values this build cannot supply, on the branch each requirement defines.** The build identifier is read
- * from a bundled text asset and is "treated as absent when missing or unreadable" (REQ-SHELL-140) — no build
- * asset carries one yet, so the row shows the em dash. The third-party notices bundle is not produced by
- * `pnpm package` either, so REQ-SHELL-142's caption states that this build does not carry one. Both are the
- * requirements' own branches rather than gaps in this surface; producing the two assets is owed to the
- * packaging part (ADR-0054).
+ * **Two values read from bundled assets, each with the absent branch its requirement defines.** The build identifier is
+ * read from `build-id.txt` and is "treated as absent when missing or unreadable" (REQ-SHELL-140); the third-party notices
+ * bundle is `THIRD-PARTY-LICENSES.txt` (REQ-SHELL-142). `pnpm package` writes both (`pnpm build-id`, `pnpm notices`) and
+ * `electron-builder.yml` carries both (first-release-plan.md §4.4, 2026-09-27; main's reader is `apps/desktop/src/main/about.ts`).
+ * The em dash and the absent caption therefore appear only where a file is missing: a development package made without
+ * notices, or a source tree nobody has written them into. (Until 2026-10-13 this said no build carried either asset and that
+ * producing them was owed to the packaging part, ADR-0054; that stopped being true on 2026-09-27.)
  */
 
 /** REQ-SHELL-140: fixed values, stated by the requirement rather than configured. */

@@ -257,7 +257,11 @@ function ClampedNumberField(props: { readonly id: string; readonly range: Number
   );
 }
 
-/** REQ-CONFIG-320..328 and 471, in the order the requirement fixes. The security policy card is not built: no confinement backend exists (ADR-0022). */
+/**
+ * REQ-CONFIG-320..328 and 471, in the order the requirement fixes, and the Security policy card (`SecurityPolicy.tsx`,
+ * ADR-0022/0023, Part AR; REQ-SANDBOX-113). (Until 2026-10-13 this said the card was not built for want of a confinement
+ * backend; both have existed since Part AR.)
+ */
 export function RuntimeSettings(props: ConfigSettingsProps) {
   const { snapshot, pending, onChange, onSetField } = props;
   const [confirm, setConfirm] = useState<'outside' | 'autonomous' | null>(null);

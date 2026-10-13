@@ -5,9 +5,9 @@ import { openProjectFolderInNewWindow, startRetrospective } from '../workspace-h
 
 /**
  * REQ-SHELL-048 — the window's ONE vocabulary of named actions, presented three ways: the command palette
- * (REQ-SHELL-051..053), the keyboard-help dialog (REQ-SHELL-054) and, later, the composer's slash catalogue
- * (REQ-SHELL-056, REQ-CHAT-028 — not built; `slashName` is its normal form so that catalogue consumes THIS table and
- * not the reverse). The table is REQ-SHELL-049's, minus what this window cannot yet carry out (REQ-SHELL-048's last
+ * (REQ-SHELL-051..053), the keyboard-help dialog (REQ-SHELL-054) and the composer's slash catalogue (REQ-SHELL-056,
+ * REQ-CHAT-028; `../slash/catalogue.ts`, Part AN), which mirrors THIS table under `slashName`, its normal form, and not
+ * the reverse. (Until 2026-10-13 this called the catalogue "later" and "not built".) The table is REQ-SHELL-049's, minus what this window cannot yet carry out (REQ-SHELL-048's last
  * sentence); every omission is recorded in `OMITTED_COMMANDS` with its reason, so nothing is dropped quietly.
  *
  * Escape is NOT a command (REQ-SHELL-048): it is a contextual dismissal with the scope of REQ-SHELL-055, handled by
@@ -149,7 +149,8 @@ export function activateCommand(command: Command, ctx: CommandContext, close: ()
 /**
  * REQ-CHAT-028's normal form for the slash catalogue's mirror of a palette entry: the label lower-cased, each run of
  * characters outside `[a-z0-9:_.-]` collapsed to one `-`. (REQ-SHELL-056's skill-name reduction is a different rule for
- * generated entries and is not this function.) Not consumed yet — the catalogue is the CHAT domain's, not built.
+ * generated entries and is not this function.) Consumed by the slash catalogue's palette mirror (`../slash/catalogue.ts`);
+ * until 2026-10-13 this said it was not consumed yet.
  */
 export function slashName(label: string): string {
   return label.toLowerCase().replace(/[^a-z0-9:_.-]+/g, '-');

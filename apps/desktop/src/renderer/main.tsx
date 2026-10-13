@@ -1036,9 +1036,11 @@ function dispatchNoticeAction(action: NoticeAction): void {
     case 'open-cloud-account':
     case 'open-project-init':
     case 'save-settings':
-      // Each is a member REQ-NOTIFY-044 fixes whose target does not exist in this build (no hosted cloud, no
-      // project-initialization surface, no proposal store). Nothing is dispatched and the attempt is recorded.
-      // (`retry-run` was among them until 2026-10-02; its target is `retryRun` above.)
+      // Members REQ-NOTIFY-044 fixes that this arm does not dispatch; the attempt is recorded. `open-cloud-account` and
+      // `save-settings` have no target in this build (no hosted cloud, no proposal store). `open-project-init` has one,
+      // Settings › Project (ADR-0064, `ProjectSettings.tsx`), but nothing in the build raises it, and which notice offers
+      // it and what it opens for another window's workspace is OQ-262. (Until 2026-10-13 this said there was no
+      // project-initialization surface; `retry-run` was among them until 2026-10-02, its target `retryRun` above.)
       console.warn(`notice action "${action.kind}" has no target in this build`);
       return;
   }

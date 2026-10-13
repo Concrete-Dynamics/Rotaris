@@ -15,8 +15,10 @@ import { commandForEvent, detectPlatform, type CommandContext, type KeyboardPlat
  *    confirmations, the session browser, the launch dialog, the palette and the help themselves) counts without
  *    registering, and a chord pressed over a dialog is neither run nor swallowed: it falls through to the dialog.
  *  - Window-level Escape is live ONLY on the Workspace view and resolves in REQ-SHELL-055's order over the closers the
- *    surfaces registered in `shell-state` (the slash popup and the search panel are not built and register nothing; the
- *    compact drawers register theirs). On the other six views Escape does nothing. Escape is not a command.
+ *    surfaces registered in `shell-state` (the slash popup and the compact drawers register theirs, `WorkspaceView.tsx`;
+ *    the transcript search panel registers nothing and closes on Escape only from its own field, recorded in
+ *    `docs/defects/window-level-escape-skips-the-open-transcript-search-panel.md`. Until 2026-10-13 this said the slash
+ *    popup and the search panel were not built). On the other six views Escape does nothing. Escape is not a command.
  */
 export function useCommandShortcuts(ctx: CommandContext, platform: KeyboardPlatform = detectPlatform()): void {
   useEffect(() => {

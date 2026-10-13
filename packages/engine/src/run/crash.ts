@@ -262,10 +262,12 @@ export function recordCutChild(dal: StoreDal, writer: SessionWriter, sessionId: 
  * has two records, its transcript row and its row in the `tool_calls` ring. An orderly end settles every ring row still open
  * when the run's tool ports close (the run host's gate sink); a crash closes none of them. A ring row still `running` when a
  * crash is recorded is a dead run's when no run of this process may still hold it: a repair runs only when no process holds
- * the session, and a continue's own run is not built yet. A run of this process closes its ports only at its teardown
- * (`Run.closedItsPorts`); one that parked — the message-limit pause, the plan gate — closed none, and a call of its that
- * ignored its abort may still be under way, its real settle still to come, so the caller passes `ownCallsMayRun` and the
- * ring is left as it is (corrected 2026-10-01: this read "a run of this process closed its ports when it ended", which
+ * the session, and a continue records the crash (`launchContinuation`) before it constructs its own run, so the continue's
+ * run has made no call yet. (Corrected 2026-10-13: this read "a continue's own run is not built yet", which stopped being
+ * true with PD-ORCH-005's continue; the order of the two steps is what keeps the settle safe.) A run of this process
+ * closes its ports only at its teardown (`Run.closedItsPorts`); one that parked — the message-limit pause, the plan
+ * gate — closed none, and a call of its that ignored its abort may still be under way, its real settle still to come, so
+ * the caller passes `ownCallsMayRun` and the ring is left as it is (corrected 2026-10-01: this read "a run of this process closed its ports when it ended", which
  * holds only for a teardown). The caller reads every run of this process on the session that parked so, not only the last
  * (`Live.portsOpen`; repaired 2026-10-01: a later run's teardown re-armed the settle over an earlier parked run's rows).
  * Every row this settles settles `failed` with the statement

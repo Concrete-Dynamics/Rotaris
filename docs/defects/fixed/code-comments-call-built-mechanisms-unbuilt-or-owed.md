@@ -34,7 +34,7 @@ that is now possible. Verified on `main` at `6de2a67` (2026-10-13) and again on 
 - `packages/ui/src/commands/useCommandShortcuts.ts:18` and `packages/ui/src/shell-state.ts:71`: "the slash popup and the
   search panel are not built", "an unregistered slot is a surface that is not built". The slash popup is built and
   registers; the search panel is built and registers nothing, which is a separate defect
-  ([`window-level-escape-skips-the-open-transcript-search-panel.md`](window-level-escape-skips-the-open-transcript-search-panel.md)).
+  ([`window-level-escape-skips-the-open-transcript-search-panel.md`](../window-level-escape-skips-the-open-transcript-search-panel.md)).
 - `apps/desktop/src/renderer/main.tsx:1039-1040`: "no project-initialization surface". The ADR-0064 surface exists
   (`packages/ui/src/settings/ProjectSettings.tsx`, `project-init.ts`); the hosted-cloud and proposal-store halves still hold.
   Nothing raises `open-project-init` either.
@@ -54,3 +54,26 @@ requirement whose recorded state changes: from "met in one clause of two" to met
 - The files listed above, at the lines named.
 - `docs/architecture/adr/0046-the-transcript-apply-pipeline.md` — the "REQ-CHAT-073 is met in one clause of two" limb.
 - `docs/architecture/adr/0035-the-bundled-code-intelligence-runtime.md` — the header's "Blocked by" line.
+
+## Outcome — repaired 2026-10-13 (fin41, `fin41-comments-and-evidence`)
+
+Every comment listed above now describes the code as it stands, and each keeps its falsified reading beside the
+replacement ("Until 2026-10-13 this said …"). No code changed, so no test can fail without the repair and none was
+added: the evidence is the comments themselves, against the files each now names. `pnpm typecheck` and `pnpm lint` are green
+over the change. The record's own copies were corrected in place in the same commit: ADR-0046's REQ-CHAT-073 limb (struck,
+met whole), and ADR-0035's "Blocked by OQ-23" header line (struck, resolved 2026-09-06).
+
+Two adjacent questions were checked, not reworded:
+
+- **ADR-0035's "Status: proposed".** Not stale in a way peculiar to ADR-0035. Every ADR written before the Architecture
+  Gate still reads "proposed" (53 of them), and the gate record (`docs/clean-room/architecture-gate.md`) is where their
+  approval is recorded; the ADRs accepted one by one after the gate (ADR-0022, ADR-0059 to ADR-0065) say "accepted". The
+  header was left as it is: changing one of 53 would make the other 52 read as less approved. Only the "Blocked by" line,
+  which was false, was corrected.
+- **The dead `open-project-init` action.** Nothing raises it, so routing the arm would add a path no notice reaches. Which
+  notice should offer it, and what it opens for a workspace another window holds, is raised as
+  [OQ-262](../../architecture/open-questions.md#oq-262). The renderer's comment now says the surface exists and nothing
+  raises the action.
+
+Noticed while doing this and recorded, not repaired:
+[`window-level-escape-skips-the-open-transcript-search-panel.md`](../window-level-escape-skips-the-open-transcript-search-panel.md).

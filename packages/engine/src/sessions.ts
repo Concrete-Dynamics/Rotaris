@@ -347,9 +347,10 @@ export interface RunSetup {
    * memory. A **getter**: it is called at each agent construction, so a skill loaded mid-session reaches the
    * next agent built and never retracts one already running (REQ-CONFIG-166).
    *
-   * Two of the four are not built in this release (workspace context, REQ-WORKSPACE-041..050, and persona
-   * memory), so the list a host supplies today holds the middle two and the ordering is the seam where the
-   * others will sit.
+   * One of the four is not built in this release: persona memory. The run host supplies the other three in that
+   * order (`apps/desktop/src/run-host/skills.ts`, `contextUnits`; workspace context is REQ-WORKSPACE-041..050 under
+   * PD-WORKSPACE-002), and the ordering is the seam where persona memory will sit. (Until 2026-10-13 this also listed
+   * workspace context as not built and said the list held only the middle two.)
    */
   readonly contextUnits?: (() => readonly string[]) | undefined;
 }
@@ -3204,7 +3205,10 @@ export class Sessions {
    * connection that enforces them (store `open.ts`), every row keyed by it — then the per-session files of
    * REQ-SESSION-002, errors ignored, so no listed session is left without a record and no files without a session. A
    * session loaded here but idle (its writer and projection held in this registry) is evicted first; its lock row goes
-   * with the cascade. The improvement library is not touched — it does not exist in this build (REQ-SESSION-007).
+   * with the cascade. The improvement library is not touched, on purpose: a session's delete removes its own reference
+   * and never reduces the workspace-scoped library (REQ-SESSION-007, REQ-SESSION-166), so nothing here reaches
+   * `packages/store/src/improvements/` (built 2026-09-14/15; until 2026-10-13 this said the library did not exist in
+   * this build).
    */
   completeDelete(dal: StoreDal, sessionId: SessionId): { existed: boolean; filesRemoved: boolean; filesDetail: string | null } {
     const loaded = this.live.get(sessionId);

@@ -81,10 +81,10 @@ export interface TranscriptCounts {
   readonly measurement: TranscriptCacheStats;
 }
 
-/** REQ-CHAT-073's empty state. Its second clause — "and the Clear action MUST be disabled" — has nothing to be
- * true of in this build: section 14, transcript clearing, is out of the plan, `clearTranscript` answers false and
- * no Clear action exists anywhere in the product. The requirement is therefore met in one clause of two, and this
- * is recorded rather than reported as met whole (ADR-0046's first-execution note carries it). */
+/** REQ-CHAT-073's empty state. Its second clause — "and the Clear action MUST be disabled" — is met by the toolbar's
+ * "Clear transcript" (`../slash/controls.tsx`, Part AO), disabled while the transcript holds no row. (Until 2026-10-13 this
+ * said no Clear action existed and the requirement was met in one clause of two; ADR-0046's first-execution note carries
+ * the correction.) */
 const EMPTY_TITLE = 'No transcript yet';
 const EMPTY_BODY = 'Describe the outcome you want. Rotaris will show agent activity and results here.';
 

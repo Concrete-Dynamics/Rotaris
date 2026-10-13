@@ -3,6 +3,26 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-13 — open questions go to the consortium (R-072), and plans hold their own number ranges
+
+**Prompted by** the 2026-10-13 survey at `6de2a67` (item N94, plan fin41): `references/repository.md` still listed "ruling an
+open question" as the owner's alone, and SKILL.md §1.2 and §5 sent every ruling to "needs the owner", although since
+2026-10-07 the owner's standing delegation (`docs/product/requests.md` R-072) has the orchestrator's consortium rule them,
+and `docs/architecture/open-questions.md` applies it throughout (the 2026-10-07 paragraph near the top; dozens of entries
+"Ruled … under the owner's delegation"). `grep -rniE "consortium|R-072|advocate"` over `.agents/`, `.claude/`, `CLAUDE.md`
+and `docs/clean-room/` returned nothing. The parallel plans' number collisions (OQ-240/241 landed as OQ-247 to OQ-250,
+OQ-254 as OQ-255) were in `references/environment.md` only. **Changed:** `references/repository.md`'s owner's-alone bullet
+is corrected toward R-072 and its scope (OQ-214's re-ruling: R-072 "delegates open questions and does not reach a clause the
+owner has already decided"), the old wording quoted beside it; SKILL.md §1.2 gains the consortium step, §2 the number ranges,
+§5 the consortium before the next round. Workflow agents still raise and never rule; the template's prompts already say so
+and are unchanged. **Not changed, and proposed to the owner:** SKILL.md's protected invariant "nothing … rules an owner's
+decision" (Improving this skill). It reads consistently with R-072, since a delegated open question is no longer an owner's
+decision, but rewording it to name R-072 edits a protected invariant, which `references/skill-review.md` step 4 makes the
+owner's to approve. The consortium's workflow script stays session-local (`consortium-rulings-wf_fccb0fa3-466.js` in the
+orchestrator's session); moving it into `scripts/` would make it a mechanism owing a self-test assertion, and is left.
+**Verified** by `node scripts/orchestration.mjs self-test` (all checks passed) and `node tools/check-record-links.mjs`. Not
+run: the skill-review step, which is the bundle's reviewer's.
+
 ## 2026-10-13 — the host notes carry what the 2026-10-06 to 13 rounds showed
 
 **Prompted by** the orchestrator's fin38 brief (Task 3 of `fin38-notes-optionals-skill`), from the rounds' own record: reviews

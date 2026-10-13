@@ -42,6 +42,14 @@ back-pointer to the directive in the same commit (`pnpm symbols` enforces the id
 A request contradicting a faithful requirement is a **directive**, not an escalation. When in doubt,
 log the request and classify it in writing.
 
+**An open question does not wait on the owner** since 2026-10-07 ([R-072](docs/product/requests.md#r-072)): the
+orchestrator's consortium rules it under the owner's standing delegation — two independent advocates argue and
+recommend, a ruling agent rules, and the ruling is written into the entry and minted as a directive where it departs
+from a requirement. An escalation, and a clause the owner ruled personally, stay the owner's. An agent that is not the
+orchestrator raises a question and never rules it. Plans running in parallel raise open questions from the ranges
+their briefs assign; one that lands on a number `main` already holds takes the next free one, says so in its entry and
+renumbers its citations (`.agents/skills/orchestrated-build/references/repository.md`, "Merge conflicts").
+
 ## Defects noticed along the way
 
 A defect an agent notices **while doing other work** is written to `docs/defects/` **without asking the

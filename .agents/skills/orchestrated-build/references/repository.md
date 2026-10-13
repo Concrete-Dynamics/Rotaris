@@ -10,7 +10,12 @@ touches. Where this page and an authority disagree, the authority governs and th
 - **Never edited in place:** `docs/spec/` (a directive governs over a requirement it names, and the requirement
   gains a back-pointer in the same commit; `pnpm symbols` enforces the identifiers); a shipped store migration;
   anything under `packages/kernel/src/generated/`.
-- **The owner's alone:** ruling an open question or an escalation. **Not for workflow agents:** editing
+- **The owner's alone:** ruling an escalation, or reversing a clause the owner ruled personally (R-048's and R-071's
+  child ceiling, for one). **An open question** that would wait on the owner is ruled, since 2026-10-07, by the orchestrator's
+  consortium under the owner's standing delegation (`docs/product/requests.md` R-072; SKILL.md §1.2): never by a
+  workflow's builder or reviewer, which raise it at the number the brief assigns and leave it open. *(This read "ruling
+  an open question or an escalation"; R-072 delegates open questions only, `docs/architecture/open-questions.md`
+  OQ-214.)* **Not for workflow agents:** editing
   `docs/product/requests.md` (the orchestrator logs the owner's requests there, before a run) unless the
   orchestrator's notes authorize one named row. Also the owner's: downgrading or removing an implementation condition
   (`docs/architecture/implementation-conditions.md`: discharging one means recording its result where its entry

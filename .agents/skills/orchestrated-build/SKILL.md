@@ -33,6 +33,13 @@ as a rebase and a fast-forward push, never a merge commit (`references/repositor
    work, and what the owner excluded. Fan a wide survey out to read-only agents; keep their conclusions.
 2. Classify every item: **repairable by an agent**, **needs the owner** (a ruling, a permission, a platform this
    host lacks), or **excluded**. Only the first kind becomes a task; the others go in the report.
+   **An open question is no longer the owner's** (R-072, 2026-10-07; `references/repository.md`): rule it with the
+   consortium before planning — two independent advocate agents, one arguing from the user's view and one from the
+   system's, each read the entry and the requirements it names and recommend, and a ruling agent weighs both and rules,
+   all as one dynamic workflow. Each ruling goes into its entry ("Ruled <date> under the owner's delegation (R-072)",
+   naming both recommendations) and becomes a directive where it departs from a requirement, on a docs-only branch
+   landed before the plan that builds it. An escalation, or reversing a clause the owner ruled personally, stays the
+   owner's; the consortium's own recommendation goes with it.
 3. Ask the owner, in ONE message, everything that would stop the run later: may live runs happen, against which
    endpoint, and may you add the permission rules for agents (`references/live-runs.md`); model and effort (default:
    Opus, `high`); what is excluded. Settle from the code, the record or a default anything that can be settled so.
@@ -72,6 +79,9 @@ Write `plan.json` in the scratchpad:
   end of its lane, and balances lanes. A `pins` set (bundles editing the same file) must sit in one lane. A run
   executes at most min(16, CPUs − 2) agents at a time (two on four CPUs), so lanes past that queue; to go faster,
   split the bundles over two plans (`references/workflow-tool.md`, Concurrency).
+- **Number ranges.** The brief gives each plan its own range of open-question numbers (and directive or request
+  numbers where it may need them), so parallel plans do not collide; one that lands on a number main already holds
+  takes the next free one (`references/environment.md`, Parallel plans; `references/repository.md`, Merge conflicts).
 - **A task body is self-contained**: the note or requirement to read, the evidence (file:line, proof output, pack),
   the proof or live scenario that shows the repair, and the rulings that apply. A task only the owner can close is
   no task: record it and report it. A builder that meets one inside a bundle lists it in `ownerBlocked` with the
@@ -171,7 +181,8 @@ nothing but its own repairs merged after it; `"acceptance": { "fresh": true }` f
   bundled, duress in a dedicated tree), have an agent autopsy the packs beside the round's autopsy report, and feed its
   findings in as a new plan. The Done criteria count them.
 - **Record every finding left unrepaired** when the rounds end: a defect note, or an open question for one that needs
-  a ruling. While actionable findings remain, plan another round.
+  a ruling, which the consortium then rules (§1.2) before the next round plans it. While actionable findings remain,
+  plan another round.
 - **Done** means: an acceptance round with the gate green, every proof passing or stated not-applicable with its
   reason, the authorized live runs passing, and nothing open that an agent could repair. The rest is the owner's.
 

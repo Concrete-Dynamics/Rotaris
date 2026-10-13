@@ -11749,7 +11749,8 @@ to the third activation's escalation, the stall watch or the ceiling.
 `raw-count-varied` and `raw-count-same` launches pin it. Beside the ruling, recorded and not repaired: the classification timer
 is armed from `runtime.loop_classification_timeout` uncapped by REQ-NOTIFY-106's remaining budget
 ([`the-loop-classification-timer-is-not-capped-at-the-activation-budget.md`](../defects/fixed/the-loop-classification-timer-is-not-capped-at-the-activation-budget.md));
-repaired 2026-10-13 (fin35): the bound is the smaller of the key and the 2 s budget.
+repaired 2026-10-13 (fin35): the bound is the smaller of the key and what remains of the 2 s budget, counted from the
+activity that satisfied the trigger.
 **Not yet measured:** a live run; the next should show no `loop_supervisor_activation` with `trigger: raw-count` unless the
 agent's last three messages with text were normalised-equal or its last four tool calls were identical in name and whole
 arguments.

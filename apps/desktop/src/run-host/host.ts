@@ -459,7 +459,8 @@ export function createRunHost() {
       const cb = run.cfg.circuitBreaker;
       if (!cb.enabled || process.env['ROTARIS_CIRCUIT_BREAKER'] === 'off') return null;
       // REQ-CONFIG-467: the configured value is an upper bound only, never more than REQ-NOTIFY-106's activation budget — the
-      // supervisor's timer caps the call there, and the model request's own timeout is given the same figure.
+      // model request's own timeout is given that ceiling, and the supervisor's timer cuts the call at what remains of the
+      // budget when it is dispatched.
       const timeoutMs = Math.min(Math.round(run.runtime.loopClassificationTimeoutS * 1_000), LOOP_ACTIVATION_BUDGET_MS);
       const classifier = createLoopClassifier({
         // REQ-EVENTS-053: each classification is a request of the run, counted against it.

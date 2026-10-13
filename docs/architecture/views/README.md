@@ -84,9 +84,11 @@ replies are unchanged). The **runtime view**'s file-tools paragraph says so. No 
 store column changed.
 
 **The loop-classification call is capped at the activation budget (REQ-CONFIG-467, REQ-NOTIFY-100, REQ-NOTIFY-106; fin35).**
-`LoopSupervisor.classifyWithinBound` arms its timer at the smaller of `runtime.loop_classification_timeout` and
-`LOOP_ACTIVATION_BUDGET_MS` (2,000 ms), and the run host hands the classifier's model request the same figure; the runtime
-view's §3 says so. Pinned by `supervisor.test.ts` and `pnpm part-h-proof`'s `raw-count-long-bound` launch.
+`LoopSupervisor.classifyWithinBound` arms its timer at the smaller of `runtime.loop_classification_timeout` and what remains of
+`LOOP_ACTIVATION_BUDGET_MS` (2,000 ms) counted from the `observe` that armed the trigger (the supervisor now takes the monotonic
+clock beside the timers, `SupervisorRegistry(…, clocks)`); with nothing left it dispatches no call and the fallback decides.
+The run host hands the classifier's model request the 2 s ceiling; the runtime view's §3 says so. Pinned by
+`supervisor.test.ts` and `pnpm part-h-proof`'s `raw-count-long-bound` launch.
 
 **REQ-ORCH-089's stalled tag takes a line of its own in the narrow rows (fin35).** A tree row's meta label is
 `.agent-row__meta--stacked` while the agent is stalled as well as when it timed out, and the Mission table's state cell puts

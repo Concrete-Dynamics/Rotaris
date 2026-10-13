@@ -1543,7 +1543,7 @@ export class Sessions {
     const helperModel: HelperModel = (choice) => runRef.run?.helperModel(choice) ?? { ok: true, model: choice.model, thinking: choice.thinking };
     const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId, countUsage, helperModel) ?? null;
     const supervisors = supervisorSetup
-      ? new SupervisorRegistry(sessionId, supervisorSetup.config, supervisorSetup.classifier, this.deps.clocks.timers)
+      ? new SupervisorRegistry(sessionId, supervisorSetup.config, supervisorSetup.classifier, this.deps.clocks)
       : null;
     // ADR-0015: the hook set is resolved once here, before the run exists, and is fixed for the run (REQ-HOOKS-131).
     // REQ-HOOKS-138 / PD-MONITOR-002: the port's `log` is the application log, not the session's own.
@@ -1846,7 +1846,7 @@ export class Sessions {
     // OQ-189's ruling (R-071, PD-MONITOR-007): the helper calls' model, read from the run's memory at each call.
     const helperModel: HelperModel = (choice) => runRef.run?.helperModel(choice) ?? { ok: true, model: choice.model, thinking: choice.thinking };
     const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId, countUsage, helperModel) ?? null;
-    const supervisors = supervisorSetup ? new SupervisorRegistry(sessionId, supervisorSetup.config, supervisorSetup.classifier, this.deps.clocks.timers) : null;
+    const supervisors = supervisorSetup ? new SupervisorRegistry(sessionId, supervisorSetup.config, supervisorSetup.classifier, this.deps.clocks) : null;
     const budget = runtime?.childBudget ?? DEFAULT_BUDGET;
     const cap = runtime?.modelConcurrencyCap ?? null;
     const capFor = runtime?.modelCapFor ?? (() => cap);

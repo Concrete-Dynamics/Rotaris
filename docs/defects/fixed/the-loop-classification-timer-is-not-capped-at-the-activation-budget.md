@@ -41,3 +41,17 @@ classifier never aborted) and "keeps a configured bound below the budget as the 
 activation inside the 12 s capture window. On the build before the change the proof failed with "raw-count-long-bound:
 expected 1 loop_supervisor_activation entries, found 0"; after it, green (load 3.2 to 3.4 on 4 CPUs for the green run, up to 8.4 for the red one; neither
 reading turns on timing, since the uncapped bound is 30 s against a 12 s window).
+
+**Corrected 2026-10-13 by fin35's review, the first repair's reason kept above.** The paragraph above read the budget from the
+activation `check()` takes and concluded that the whole of it remains at dispatch. That is false of the code: REQ-NOTIFY-106
+counts the budget from "a session's recent activity satisfying the criteria", and the turn (`run/turn.ts`) observes a tool call
+**before** it dispatches it, so the triggering call itself and the rest of its step run inside the budget before the next
+`check()`; a 30 s terminal call that armed the trigger left nothing of it, yet the classifier was still given 2 s. The supervisor
+now notes, on the monotonic clock, when `observe` or `observeStuck` armed the pending trigger (`LoopSupervisor` and
+`SupervisorRegistry` take `Pick<Clocks, 'timers' | 'monotonic'>`, `sessions.ts` passes the run's clocks), and
+`classifyWithinBound` bounds the call by the smaller of the key and what remains; with nothing left it dispatches no call — a
+failed classification (REQ-NOTIFY-106's "rather than a missed budget", REQ-NOTIFY-109) — and the fallback decides, so no metered
+request is sent only to be cut. The run host still hands the model request the 2 s ceiling. Pinned by three further cases in
+`supervisor.test.ts` — "allows the classification only what remains of the budget after the triggering step ran" (1.5 s spent,
+cut 0.5 s after dispatch), "dispatches no classification once the budget is spent before the step boundary" and "counts a later
+activation from its own trigger, not the first one" — all three red on the first repair.

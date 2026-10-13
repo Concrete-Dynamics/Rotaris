@@ -173,3 +173,13 @@ the step boundary, as consequence 1 already reads the pause; the call is dispatc
 whole budget remains at dispatch. Pinned by `supervisor.test.ts` and `pnpm part-h-proof`'s `raw-count-long-bound` launch
 (red on the build before, green after). **Not measured:** a live run; with the default 2.0 s nothing a live run shows
 changes, and one with the key raised should show every classification cut at about 2 s.
+
+*Corrected the same day by fin35's review, the reason above kept beside its replacement.* "The budget is read from the
+activation `check()` takes … so the whole budget remains at dispatch" is false: REQ-NOTIFY-106 counts it from the activity
+satisfying the criteria, and decision 2's turn observes a call before dispatching it, so the triggering call and the rest of its
+step are spent from the budget before `check()`. Consequence 1 accepts that the *pause* waits for the step boundary; it does not
+move the budget's start. The supervisor now records, on the monotonic clock, when `observe` or `observeStuck` armed the trigger
+(it takes the run's `Clocks`' `timers` and `monotonic`), and the call is bounded by the smaller of the key and what remains; with
+nothing left no call is dispatched and decision 5's fallback decides (a failed classification, REQ-NOTIFY-109). Pinned by
+three further `supervisor.test.ts` cases, red on the first form. **What a live run should show:** classifications after a long
+tool call cut short or not sent (the fallback deciding), and after a quick one cut at about 2 s as before.

@@ -1,4 +1,4 @@
-import { millis, type SessionId, type Timers } from '@rotaris/kernel';
+import { millis, type Clocks, type SessionId } from '@rotaris/kernel';
 
 export type ActivationMode = 'independent' | 'weighted';
 
@@ -33,9 +33,10 @@ export const SUPERVISOR_DEFAULTS: SupervisorConfig = {
 };
 
 /**
- * REQ-NOTIFY-106's activation budget: at most 2 seconds from an activation to its corrective message, binding every step
- * inside it, the classification call included. REQ-CONFIG-467 and REQ-NOTIFY-100: `runtime.loop_classification_timeout` is an
- * upper bound only, and a call is allowed no more than what remains of this budget when it is dispatched.
+ * REQ-NOTIFY-106's activation budget: at most 2 seconds from the activity satisfying the criteria to the corrective message,
+ * binding every step inside it, the classification call included. REQ-CONFIG-467 and REQ-NOTIFY-100:
+ * `runtime.loop_classification_timeout` is an upper bound only, and a call is allowed no more than what remains of this budget
+ * when it is dispatched.
  */
 export const LOOP_ACTIVATION_BUDGET_MS = 2_000;
 
@@ -101,12 +102,18 @@ export class LoopSupervisor {
   private messageCount = 0;
   private consecutiveActivations = 0;
   private pending: Trigger | null = null;
+  /**
+   * REQ-NOTIFY-106: when the pending trigger's criteria were satisfied, on the monotonic clock — the budget's start. The turn
+   * observes a call before it dispatches it, so the call itself and the rest of its step run inside the budget before the
+   * next `check()` takes the activation.
+   */
+  private pendingSince = 0;
 
   constructor(
     readonly sessionId: SessionId,
     private readonly config: SupervisorConfig,
     private readonly classifier: LoopClassifier,
-    private readonly timers: Timers,
+    private readonly clocks: Pick<Clocks, 'timers' | 'monotonic'>,
   ) {}
 
   observe(event: SupervisorEvent): void {
@@ -114,12 +121,18 @@ export class LoopSupervisor {
     if (this.events.length > this.config.eventWindow) this.events.shift();
     if (event.kind === 'tool') this.toolCount += 1;
     else this.messageCount += 1;
-    this.pending ??= this.trigger();
+    if (this.pending === null) this.arm(this.trigger());
   }
 
   /** REQ-ORCH-096: the runtime's stuck report enters the same activation counter. */
   observeStuck(reason = 'the agent reported that it cannot make progress'): void {
-    this.pending ??= { trigger: 'stuck', reason };
+    if (this.pending === null) this.arm({ trigger: 'stuck', reason });
+  }
+
+  private arm(trigger: Trigger | null): void {
+    if (trigger === null) return;
+    this.pending = trigger;
+    this.pendingSince = this.clocks.monotonic.now();
   }
 
   /** A real prompt, steering instruction or todo correction starts a fresh consecutive series. */
@@ -130,6 +143,7 @@ export class LoopSupervisor {
   async check(): Promise<SupervisorDecision> {
     const trigger = this.pending;
     if (!trigger) return { kind: 'continue' };
+    const since = this.pendingSince;
 
     this.consecutiveActivations += 1;
     const activation: LoopActivation = {
@@ -144,7 +158,7 @@ export class LoopSupervisor {
       return { kind: 'escalate', activation, signal: { sessionId: this.sessionId, activationCount: this.consecutiveActivations, reason: 'repeated-loop' } };
     }
 
-    const classified = await this.classifyWithinBound(activation);
+    const classified = await this.classifyWithinBound(activation, since);
     if (trigger.trigger === 'stuck') {
       return { kind: 'inject', activation, message: classified?.corrective_message.trim() ? atMostNinetyWords(classified.corrective_message) : deterministicMessage(activation) };
     }
@@ -224,14 +238,19 @@ export class LoopSupervisor {
   }
 
   /**
-   * REQ-CONFIG-467: the configured bound, capped at what remains of REQ-NOTIFY-106's budget at dispatch. The activation is
-   * taken in `check()` at the turn's step boundary (ADR-0059 decision 4 and consequence 1: a tool already running when the
-   * trigger fired is not interrupted), and the call is dispatched in the same synchronous stretch, so what remains at
-   * dispatch is the whole budget and the bound is the smaller of the two. Before this cap a key set to 30 held the agent for
-   * 30 s on one classification (`docs/defects/fixed/the-loop-classification-timer-is-not-capped-at-the-activation-budget.md`).
+   * REQ-CONFIG-467: the configured bound, capped at what remains of REQ-NOTIFY-106's budget at dispatch — the budget counted
+   * from `since`, when the activity satisfied the criteria. Nothing left is a failed classification (REQ-NOTIFY-106's "rather
+   * than a missed budget", REQ-NOTIFY-109): no call is dispatched only to be cut, and the fallback decides. Before this cap a
+   * key set to 30 held the agent for 30 s on one classification
+   * (`docs/defects/fixed/the-loop-classification-timer-is-not-capped-at-the-activation-budget.md`). The reason the first repair
+   * gave, kept beside its replacement: the budget was read from the activation `check()` takes, so the whole of it was taken
+   * to remain at dispatch — but the turn observes a call before it runs it, and the step's calls run before `check()` (fin35's
+   * review).
    */
-  private classifyWithinBound(activation: LoopActivation): Promise<LoopClassification | null> {
-    const bound = Math.min(this.config.classificationTimeoutMs, LOOP_ACTIVATION_BUDGET_MS);
+  private classifyWithinBound(activation: LoopActivation, since: number): Promise<LoopClassification | null> {
+    const remaining = LOOP_ACTIVATION_BUDGET_MS - (this.clocks.monotonic.now() - since);
+    const bound = Math.min(this.config.classificationTimeoutMs, remaining);
+    if (bound <= 0) return Promise.resolve(null);
     const controller = new AbortController();
     return new Promise((resolve) => {
       let settled = false;
@@ -241,7 +260,7 @@ export class LoopSupervisor {
         timer.cancel();
         resolve(value);
       };
-      const timer = this.timers.after(millis(bound), () => {
+      const timer = this.clocks.timers.after(millis(bound), () => {
         controller.abort();
         finish(null);
       });
@@ -258,13 +277,13 @@ export class SupervisorRegistry {
     readonly sessionId: SessionId,
     private readonly config: SupervisorConfig,
     private readonly classifier: LoopClassifier,
-    private readonly timers: Timers,
+    private readonly clocks: Pick<Clocks, 'timers' | 'monotonic'>,
   ) {}
 
   forConversation(id: string): LoopSupervisor {
     let supervisor = this.conversations.get(id);
     if (!supervisor) {
-      supervisor = new LoopSupervisor(this.sessionId, this.config, this.classifier, this.timers);
+      supervisor = new LoopSupervisor(this.sessionId, this.config, this.classifier, this.clocks);
       this.conversations.set(id, supervisor);
     }
     return supervisor;

@@ -216,6 +216,51 @@ describe('loop supervisor (REQ-ORCH-099..107)', () => {
     expect(aborted).toHaveBeenCalledOnce();
   });
 
+  // REQ-NOTIFY-106 counts the budget from the activity satisfying the criteria — the observed call, which the turn reports
+  // before it dispatches it — not from `check()` at the next step boundary, so the time that call (and the rest of its step)
+  // took is spent from the budget before the classification is dispatched (fin35's review).
+  it('allows the classification only what remains of the budget after the triggering step ran', async () => {
+    const clock = new FakeClock();
+    const aborted = vi.fn();
+    const s = new LoopSupervisor(sessionId, config({ classificationTimeoutMs: 2_000 }), classifier(async (_a, signal) => {
+      signal.addEventListener('abort', aborted, { once: true });
+      return await new Promise<LoopClassification>(() => undefined);
+    }), clock);
+    for (let i = 0; i < 4; i += 1) tool(s, 'read_file', '{"path":"src/stuck.ts"}');
+    clock.advance(1_500); // the fourth call runs for 1.5 s before the step boundary
+    const pending = s.check();
+    clock.advance(499);
+    expect(aborted).not.toHaveBeenCalled();
+    clock.advance(1);
+    expect(await pending).toMatchObject({ kind: 'inject' });
+    expect(aborted).toHaveBeenCalledOnce();
+  });
+
+  it('dispatches no classification once the budget is spent before the step boundary: a failed classification (REQ-NOTIFY-109)', async () => {
+    const clock = new FakeClock();
+    const classify = vi.fn(async () => classification());
+    const s = new LoopSupervisor(sessionId, config({ classificationTimeoutMs: 30_000 }), { classify }, clock);
+    for (let i = 0; i < 4; i += 1) tool(s, 'read_file', '{"path":"src/stuck.ts"}');
+    clock.advance(2_000);
+    const decision = await s.check();
+    expect(classify).not.toHaveBeenCalled();
+    expect(decision).toMatchObject({ kind: 'inject', activation: { trigger: 'repetition' } });
+    if (decision.kind === 'inject') expect(decision.message).toContain('read_file around src/stuck.ts');
+  });
+
+  it('counts a later activation from its own trigger, not the first one', async () => {
+    const clock = new FakeClock();
+    const classify = vi.fn(async () => classification());
+    const s = new LoopSupervisor(sessionId, config(), { classify }, clock);
+    for (let i = 0; i < 4; i += 1) tool(s, 'read_file', '{"path":"src/stuck.ts"}');
+    clock.advance(5_000);
+    await s.check();
+    clock.advance(5_000);
+    for (let i = 0; i < 4; i += 1) tool(s, 'read_file', '{"path":"src/stuck.ts"}');
+    await s.check();
+    expect(classify).toHaveBeenCalledOnce();
+  });
+
   it('keeps separate state for separate supervisor instances', async () => {
     const a = new LoopSupervisor(sessionId, config(), classifier(), new FakeClock());
     const b = new LoopSupervisor(asSessionId('01JOTHERSUPERVISOR0000000000'), config(), classifier(), new FakeClock());

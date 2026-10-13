@@ -578,8 +578,10 @@ fails with `circuit_breaker_escalation`; no supervisor is attached at all for th
 `PD-ORCH-001`; when the classification fails or is cut on a raw-count trigger, the fallback's evidence is the last three
 messages with text normalised-equal or, since `PD-ORCH-016` (OQ-232, fin32), the last four tool calls identical in name
 and whole arguments — four calls of one tool with differing arguments are counts alone; the classification call is bounded
-by `runtime.loop_classification_timeout` capped at REQ-NOTIFY-106's 2 s activation budget, `LOOP_ACTIVATION_BUDGET_MS`,
-since fin35 — REQ-CONFIG-467's upper bound only) → the 100-step belt → **context compression when the agent has reached
+by `runtime.loop_classification_timeout` capped at what remains of REQ-NOTIFY-106's 2 s activation budget,
+`LOOP_ACTIVATION_BUDGET_MS`, since fin35 — REQ-CONFIG-467's upper bound only; the budget runs from the `observe` that armed the
+trigger, on the monotonic clock, so the triggering call and the rest of its step are spent from it, and with nothing left no
+call is dispatched and the fallback decides) → the 100-step belt → **context compression when the agent has reached
 its threshold** (Part AH, below) → the model step (streamed into its own `agent`
 row, and — from Part Z — into a **`thinking` row** for anything the provider marks as deliberation; the sink
 discarded every reasoning delta before that, so no streamed-reasoning row had ever existed, REQ-CHAT-163).

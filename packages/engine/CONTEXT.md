@@ -136,6 +136,20 @@ child's own descendants is refused a `write_file` or `haet_edit` write into a cl
 first holds a path two scopes share. A scope never limits the child that declared it. — `PD-TOOLS-006`
 _Avoid_: lease, lock, partition, ownership (ownership is per todo item, `REQ-ORCH-028`)
 
+**Hand-off block**:
+Either of the two blocks of a delegated child's payload that carry another task's answer: the inherited-context block
+(`inherited_context`, REQ-TOOLS-154 item 5) and the prior-agent-context block (`depends_on`, REQ-ORCH-047). Each renders every
+named task's result text under a heading of its canonical name, role and status. — `PD-TOOLS-006` revision 9, `REQ-TOOLS-154`,
+`REQ-ORCH-047`
+_Avoid_: report block (REQ-ORCH-060's 4,000-character block of the resume message and the wait results, which no hand-off block
+is)
+
+**Hand-off budget**:
+The 100,000 characters of result text one hand-off block carries, each block on its own. A text that does not fit is cut to the
+larger of the budget's remainder and 4,000 characters and ends in a marker naming what was given and omitted; the `delegate`
+observation names each cut. — `PD-TOOLS-006` revision 9
+_Avoid_: hand-off cap, context limit
+
 **Implementation delegation**:
 A delegation whose target role holds a tool the public tool-name registry declares as writing
 workspace files. Exclusive ownership is measured per todo item and at no other granularity: the

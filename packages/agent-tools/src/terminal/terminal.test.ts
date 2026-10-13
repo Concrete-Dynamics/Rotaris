@@ -2276,6 +2276,17 @@ describe('terminal — availability (REQ-TOOLS-104)', () => {
     } finally { rmSync(base, { recursive: true, force: true }); }
   });
 
+  // Live-run finding Q1 (552d346): a `send_signal` sent with `background: true` was read as a new spawn and refused as a missing
+  // command, twice, because the description named only `query` / `kill` and never said how a session action is sent
+  // (docs/defects/fixed/a-session-action-sent-with-background-true-is-refused-as-a-missing-command.md).
+  it('REQ-TOOLS-110 (live-run Q1): the description says a session action is sent with session_id and background false or absent', () => {
+    for (const d of [terminalDescription({ kind: 'posix', file: '/bin/sh' }), terminalDescription({ kind: 'powershell', file: 'pwsh.exe' })]) {
+      for (const action of ['`query`', '`kill`', '`send_input`', '`send_signal`', '`list`']) expect(d).toContain(action);
+      expect(d).toContain('with `background` false or absent');
+      expect(d).toContain('`background=true` always starts a new command');
+    }
+  });
+
   it('REQ-TOOLS-104 (live-run L1): the description names the shell the host runs — PowerShell on Windows, the POSIX shell elsewhere', () => {
     const posix = terminalDescription({ kind: 'posix', file: '/bin/sh' });
     expect(posix).toContain('The shell is `/bin/sh`, a POSIX shell that may not be bash');

@@ -22,3 +22,13 @@ issues, about 3.8 s, in any run that signals a background session.
 - `packages/agent-tools/src/terminal/index.ts` — `TERMINAL_USE` and `terminalDescription` (the description), `execute`'s
   validation (the refusal) and dispatch (`background` first).
 - `packages/agent-tools/src/terminal/terminal.test.ts` — the description's tests.
+
+## Outcome (fin38, 2026-10-13) — repaired
+
+`terminal`'s description (`TERMINAL_USE`, every backend) now says, beside the background sentence: "A session action
+(`session_action`: `query`, `kill`, `send_input`, `send_signal`, or `list`, which needs no id) is sent with `session_id` and with
+`background` false or absent: `background=true` always starts a new command, so it needs one." The refusal's text
+(REQ-TOOLS-101) and the dispatch order (REQ-TOOLS-120) are unchanged. Pinned by `terminal.test.ts` ("REQ-TOOLS-110 (live-run
+Q1): the description says a session action is sent with session_id and background false or absent"), red without the change.
+No proof reads the description; **what a live run should show**: in the `frictions` scenario, the signal to the background
+session sent with `background` false or absent on the first try, and no "A command is required when background=True." issue.

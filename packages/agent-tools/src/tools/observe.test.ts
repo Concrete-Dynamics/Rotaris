@@ -85,10 +85,18 @@ describe('observeReach (OQ-245)', () => {
     expect(obs.observedPaths).toEqual(['docs/api.md', 'src/a.ts']);
   });
 
-  it('a reach of null observes nothing; a walk that cannot be completed leaves the observation unmarked', async () => {
+  it('a reach of null observes nothing; a walk that cannot be completed marks the observation unobserved, whatever the call returned', async () => {
     const plain = await observeReach({ root, reach: null, journal: new WriteJournal(), agent: 'a' }, async () => observation('ok'));
     expect(plain).toEqual(observation('ok'));
     const unbounded = await observeReach({ root, reach: { base: '' }, journal: new WriteJournal(), agent: 'a', limit: 1 }, async () => observation('Replaced 1 occurrence(s) in 1 file(s)'));
     expect(unbounded.observedPaths).toBeUndefined();
+    expect(unbounded.unobserved).toBe(true);
+    // The fin35 review: an erred call the walk could not observe had written files part-way, and read as refused.
+    const erred = await observeReach({ root, reach: { base: '' }, journal: new WriteJournal(), agent: 'a', limit: 1 }, async () => errorObservation('Error: could not write docs/api.md', { failureKind: 'tool_error' }));
+    expect(erred).toMatchObject({ isError: true, unobserved: true });
+    expect(erred.observedPaths).toBeUndefined();
+    // Observed, the mark is absent.
+    const seen = await observeReach({ root, reach: { base: '' }, journal: new WriteJournal(), agent: 'a' }, async () => observation('ok'));
+    expect(seen.unobserved).toBeUndefined();
   });
 });

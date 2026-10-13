@@ -795,7 +795,8 @@ EDIT call (a rename, a cross-file replacement: `scope: 'reach'`) by the files th
 returned (`observeReach` around the MCP executor in `run-host/mcp.ts`: a snapshot of what the call can reach before and
 after, less what another agent's native writes noted in the run host's `WriteJournal` meanwhile, carried as `observedPaths`
 on the `PortToolResult` and the tool-result part, persisted with the conversation and never sent to a model); with no
-observation, its argument file and "a <tool> call may have changed files the record cannot name", never "changed no
+observation (a walk the run host could not complete marks the call `unobserved`, which counts as having run even when it
+erred), its argument file and "a <tool> call may have changed files the record cannot name", never "changed no
 workspace paths", and — unless the child is itself a continuation — the offer naming `continuation_of`, which since 2026-10-06 also tells
 the parent that a continuation starts with no memory, so it writes a complete brief (`PD-ORCH-004` revision 5, OQ-114; and
 `delegate`'s description says the same). The report block and

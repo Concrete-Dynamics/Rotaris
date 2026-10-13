@@ -220,6 +220,16 @@ describe('engine/children/report — a cross-file EDIT call lists every file it 
     expect(unnamedChangesFrom(cut)).toEqual([edit.replaceAcrossFiles]);
   });
 
+  it('an erred call the run host could not observe (its unobserved mark) ran: it is said, never "(none)" (the fin35 review)', () => {
+    const marked: ChatMessage = { role: 'tool', content: [{ kind: 'tool-result', callId: 'm1', name: edit.replaceAcrossFiles, result: 'Error: could not write src/c.ts', isError: true, unobserved: true }] };
+    const messages = [replace('m1'), marked];
+    expect(unnamedChangesFrom(messages)).toEqual([edit.replaceAcrossFiles]);
+    expect(reportFacts(messages)).toBe(`Edited files: a ${edit.replaceAcrossFiles} call may have changed files the record cannot name\nCommands run: (none)`);
+    const renamed: ChatMessage = { role: 'tool', content: [{ kind: 'tool-result', callId: 'm2', name: edit.renameSymbol, result: 'Error: language server crashed', isError: true, unobserved: true }] };
+    expect(editedFilesFrom([rename('m2'), renamed])).toEqual(['src/total.ts']);
+    expect(unnamedChangesFrom([rename('m2'), renamed])).toEqual([edit.renameSymbol]);
+  });
+
   it('a call the record answers as refused, with no observation, never ran: nothing is listed and nothing is said', () => {
     const messages = [rename('x1'), seen('x1', edit.renameSymbol, 'Permission denied', undefined, true)];
     expect(editedFilesFrom(messages)).toEqual([]);

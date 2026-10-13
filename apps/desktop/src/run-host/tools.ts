@@ -591,6 +591,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       return {
         text: r.text, isError: r.isError, status, durationMs: r.durationMs, label: r.label, args: r.args,
         ...(r.observation?.observedPaths === undefined ? {} : { observedPaths: r.observation.observedPaths }),
+        ...(r.observation?.unobserved === true ? { unobserved: true as const } : {}),
         ...(r.interrupted === true ? { interrupted: true } : {}),
         ...(r.observation?.diff === undefined ? {} : { diff: r.observation.diff }),
         ...(r.status === 'blocked' ? { blockedReason: r.blockedReason ?? r.decision?.reason ?? '' } : {}),

@@ -1362,7 +1362,7 @@ export class IterationChildren implements DelegationOps {
         ...(resilience ? { resilience } : {}),
         ...(compression ? { compression } : {}),
         ...(deps.onRequestUsage ? { onRequestUsage: deps.onRequestUsage } : {}),
-        onToolCompleted: (call, result) => { stallWatch.toolCompleted(call.callId); progress.completed(deps.clocks.monotonic.now(), call.name, result.args, result.status === 'ok' && !result.isError, { observedPaths: result.observedPaths, ran: result.interrupted === true && result.status !== 'blocked' }); countCall(); },
+        onToolCompleted: (call, result) => { stallWatch.toolCompleted(call.callId); progress.completed(deps.clocks.monotonic.now(), call.name, result.args, result.status === 'ok' && !result.isError, { observedPaths: result.observedPaths, ran: (result.interrupted === true && result.status !== 'blocked') || result.unobserved === true }); countCall(); },
         onToolStarted: (call) => stallWatch.toolStarted(call.callId, call.name),
         onToolCounted: () => { attemptCounted += 1; },
         onModelEvent: (kind) => stallWatch.modelEvent(kind),

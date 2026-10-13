@@ -52,7 +52,8 @@ executor runs such a call inside `observeReach` (`agent-tools/src/tools/observe.
 and after and leaves out what the `McpHost.writes` journal says other agents' native writes touched meanwhile (`tools.ts`
 notes each); the result carries `observedPaths` through `Observation`, `PortToolResult` and the tool-result part, which the
 model client never sends; `writeReadingOf` (`engine/src/children/report.ts`) and `ProgressLog` read it, and a call with none
-is said ("may have changed files the record cannot name"). The **component view**'s manifest paragraph, the **runtime
+is said ("may have changed files the record cannot name"). A walk that cannot be completed marks the result `unobserved`
+(the same three carriers), so a call that erred unobserved is said too, never read as refused (the fin35 review). The **component view**'s manifest paragraph, the **runtime
 view**'s cut-off and report-facts passages and the **state ownership view**'s progress-log row say so. No package, edge,
 process, channel, command or store column changed; a tool-result part gained an optional field.
 

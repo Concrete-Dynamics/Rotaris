@@ -58,9 +58,10 @@ export type AssistantPart =
 
 /**
  * `observedPaths` (OQ-245) is the product's own: the files the run host observed a cross-file code-intelligence EDIT call change.
- * It is persisted with the conversation and read by the child's report; a client never sends it to a model.
+ * It is persisted with the conversation and read by the child's report; a client never sends it to a model. `unobserved`
+ * (OQ-245) marks such a call the run host could not observe: it ran, and what it changed is unknown.
  */
-export type ToolResultPart = { readonly kind: 'tool-result'; readonly callId: string; readonly name: string; readonly result: string; readonly isError: boolean; readonly observedPaths?: readonly string[] };
+export type ToolResultPart = { readonly kind: 'tool-result'; readonly callId: string; readonly name: string; readonly result: string; readonly isError: boolean; readonly observedPaths?: readonly string[]; readonly unobserved?: true };
 
 export type ChatMessage =
   | { readonly role: 'system' | 'user'; readonly content: readonly ContentPart[] }

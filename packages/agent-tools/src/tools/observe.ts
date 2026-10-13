@@ -135,18 +135,21 @@ export class WriteJournal {
 /**
  * OQ-245: run `call` — a cross-file EDIT call reaching `reach.base` under `root` — between two snapshots, and give its
  * observation the files it changed (`observedPaths`), whatever it returned, less those another agent's file tools wrote
- * meanwhile (`journal`). When either snapshot could not be taken the observation is returned as it is, with no
- * `observedPaths`: the report then says the call may have changed files the record cannot name. A `reach` of null observes
- * nothing.
+ * meanwhile (`journal`). When either snapshot could not be taken the observation is returned with no `observedPaths` and the
+ * ruling's `unobserved` mark: the report then says the call may have changed files the record cannot name, whatever it
+ * returned. A `reach` of null observes nothing. The reading it replaces, kept beside it: until the fin35 review the observation
+ * was returned unmarked, so a call that erred part-way on a tree the walk could not complete read as refused and never run,
+ * and its child was reported as having changed no workspace paths.
  */
 export async function observeReach(o: { readonly root: string; readonly reach: { readonly base: string } | null; readonly journal: WriteJournal; readonly agent: string; readonly limit?: number }, call: () => Promise<Observation>): Promise<Observation> {
   if (o.reach === null) return call();
   const mark = o.journal.mark();
   const before = snapshotTree(o.root, o.reach.base, o.limit);
   const obs = await call();
-  if (before === null) return obs;
+  // The ruling's `unobserved` mark: the call ran and nothing names what it changed, so an erred one is not read as refused.
+  if (before === null) return { ...obs, unobserved: true };
   const after = snapshotTree(o.root, o.reach.base, o.limit);
-  if (after === null) return obs;
+  if (after === null) return { ...obs, unobserved: true };
   const others = o.journal.since(mark, o.agent);
   const rootAbs = resolve(o.root);
   const observedPaths = snapshotChanges(before, after).filter((p) => !others.has(resolve(rootAbs, p)));

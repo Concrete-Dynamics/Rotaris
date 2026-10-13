@@ -111,8 +111,8 @@ export class ProgressLog {
    *
    * OQ-245 (XE1, ruled 2026-10-13 under R-072): a cross-file EDIT call (a symbol rename, a cross-file replacement) changed
    * the files the run host observed it change (`seen.observedPaths`), listed whether it returned `ok` or not, since a
-   * replacement that failed part-way had written what it wrote. With no observation, a call that ran — returned `ok`, or was
-   * cut off while under way (`seen.ran`) — lists what its arguments name as a file and is remembered by name
+   * replacement that failed part-way had written what it wrote. With no observation, a call that ran — returned `ok`, was
+   * cut off while under way, or carries the run host's `unobserved` mark whatever it returned (`seen.ran`) — lists what its arguments name as a file and is remembered by name
    * (`unnamedBy`), so the report says it may have changed files the record cannot name and never that the child changed
    * none. The reason, kept beside it: until the ruling such a call listed its argument path alone, and a whole-project
    * replacement nothing (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).

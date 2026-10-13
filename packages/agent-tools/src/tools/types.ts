@@ -27,6 +27,13 @@ export interface Observation {
    */
   readonly observedPaths?: readonly string[];
   /**
+   * OQ-245: the run host meant to observe this cross-file code-intelligence EDIT call and could not complete the walk (a base
+   * outside the root, an unreadable one, a tree past the limit), so the call ran — whatever it returned — and what it changed is
+   * unknown. The report then says it may have changed files the record cannot name, even when the call erred, and never reads
+   * it as a call that was refused and never ran. Never sent to the model.
+   */
+  readonly unobserved?: true;
+  /**
    * PD-ORCH-005 clause 9: the call waited on a person and the run's rest withdrew it (`ask_questions`), naming the
    * interruption. The gate records the withdrawal and settles the call as never run.
    */

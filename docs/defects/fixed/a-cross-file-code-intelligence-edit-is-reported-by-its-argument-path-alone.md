@@ -70,6 +70,13 @@ The repair:
   reach call, listed whatever it returned; with no observation the argument's file and `unnamed`, which `reportFacts`,
   `fallbackReport` and `cutOffReport` turn into "a <tool> call may have changed files the record cannot name", never "(none)"
   or "changed no workspace paths". `ProgressLog.completed` takes the observation and whether a cut call ran.
+- **A walk that cannot be completed is marked** (added by the fin35 review, 2026-10-13). The ruling's `unobserved` mark: when
+  `observeReach` cannot take either snapshot (a base outside the root, an unreadable one, a tree past 200,000 files) the result
+  carries `unobserved: true` through the same three carriers, and `writeReadingOf`'s caller and `ProgressLog` count such a call
+  as having run whatever it returned. As first built the result came back unmarked, so a whole-project replacement that erred
+  part-way on such a tree read as refused and its child as having changed nothing — the falsehood this note records. Pinned by
+  `observe.test.ts`'s walk-limit case, `report.test.ts`'s "an erred call the run host could not observe" and `mcp.test.ts`'s
+  "a call whose reach cannot be walked", each red on the build before the review's repair.
 
 Shown in the built app by `pnpm code-intel-proof`'s ninth launch: a delegated tester's `replace_in_files` across the whole
 project, both files changed on disk, and `docs/across-b.md` and `src/across-a.ts` in the child's stored report's

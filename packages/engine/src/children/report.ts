@@ -418,7 +418,8 @@ function writesFrom(messages: readonly ChatMessage[], reported: readonly string[
     if (m.role !== 'tool') continue;
     for (const p of m.content) {
       if (p.kind !== 'tool-result') continue;
-      if (p.isError && !ranBeforeItWasCut(p.result)) erred.add(p.callId);
+      // OQ-245: a call the run host could not observe (`unobserved`) ran, whatever it returned: it is said, never read as refused.
+      if (p.isError && !ranBeforeItWasCut(p.result) && p.unobserved !== true) erred.add(p.callId);
       if (p.observedPaths !== undefined) observedOf.set(p.callId, p.observedPaths);
     }
   }

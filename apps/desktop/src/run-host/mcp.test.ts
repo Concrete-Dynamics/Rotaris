@@ -608,4 +608,13 @@ describe('a cross-file EDIT call is observed by the files it changed (OQ-245)', 
     expect((await r.run({ needle: 'total', repl: 'sum', mode: 'literal', relative_path: '' })).observedPaths).toEqual(['src/a.ts']);
     expect((await r.run({ needle: 'total', repl: 'sum', mode: 'literal', dry_run: true })).observedPaths).toBeUndefined();
   });
+
+  it('a call whose reach cannot be walked is marked unobserved, also when it errs (the fin35 review)', async () => {
+    const r = rig(() => ({ isError: true, text: 'Error: the path is outside the project' }));
+    const obs = await r.run({ needle: 'total', repl: 'sum', mode: 'literal', relative_path: '../elsewhere' });
+    expect(obs).toMatchObject({ isError: true, unobserved: true });
+    expect(obs.observedPaths).toBeUndefined();
+    const fine = await r.run({ needle: 'total', repl: 'sum', mode: 'literal' });
+    expect(fine.unobserved).toBeUndefined();
+  });
 });

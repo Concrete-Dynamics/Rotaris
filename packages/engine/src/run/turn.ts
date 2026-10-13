@@ -57,6 +57,11 @@ export interface PortToolResult {
    * onto the call's tool-result part for the report's edited files, never to the model. Absent when nothing was observed.
    */
   readonly observedPaths?: readonly string[];
+  /**
+   * OQ-245: the run host meant to observe such a call and could not complete the walk, so it ran and what it changed is
+   * unknown — carried onto the tool-result part so the report says so, even for a call that erred. Never to the model.
+   */
+  readonly unobserved?: true;
 }
 export interface ModeChange {
   readonly requested: PermissionPreset;
@@ -216,7 +221,7 @@ export interface TurnDeps {
   readonly runOverrideLayer?: string | undefined;
 }
 
-type ToolResultPart = { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean; observedPaths?: readonly string[] };
+type ToolResultPart = { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean; observedPaths?: readonly string[]; unobserved?: true };
 
 export interface SteeringPrompt {
   readonly id: string;
@@ -470,7 +475,7 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
       }
       // OQ-245: what the run host observed the call change rides on its result part, persisted with the conversation and
       // read by the report; the model client sends a part's result alone (`ai-sdk-client.ts`), so the model never sees it.
-      const observed = r.observedPaths === undefined ? {} : { observedPaths: r.observedPaths };
+      const observed = { ...(r.observedPaths === undefined ? {} : { observedPaths: r.observedPaths }), ...(r.unobserved === true ? { unobserved: true as const } : {}) };
       if (interrupted) {
         cut = true;
         // Clause 3: "recorded as interrupted, with whatever output it had produced"; a withdrawn call (`blocked`) never ran.

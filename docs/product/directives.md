@@ -2324,14 +2324,17 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > (`packages/engine/src/children/report.ts`) lists it — an erred call observed to write included — for the changed paths,
 > `edited_files`, the facts and the fallback; and where no observation was completed it lists the argument's file (a
 > rename's declaring file, never a directory) and says "a <tool> call may have changed files the record cannot name", never
-> "changed no workspace paths". **The bound, stated:** a sibling's terminal write landing inside the window is listed under
+> "changed no workspace paths" — a walk the run host could not complete marks the result `unobserved`, so a call that erred
+> unobserved is said too rather than read as refused (added by the fin35 review: the build first returned such a result
+> unmarked, and an erred whole-project replacement on a tree past the walk's limit read "Edited files: (none)"). **The bound, stated:** a sibling's terminal write landing inside the window is listed under
 > the observing child, since the terminal is outside every count (PD-TOOLS-006); REQ-ORCH-109 prefers overstating to
 > concealing. The observation's cost is a walk of the reachable tree, twice per call. **What was measured:**
 > `config`'s `code-intelligence.test.ts` (the scopes), `agent-tools`' `observe.test.ts` (a change, a creation, a removal, an
 > unchanged size and modification time, the ignored directories, a partial failure, a sibling's write subtracted, an
 > unobservable tree), `report.test.ts` and `cut-off.test.ts` (a rename across three files, a whole-project and a
-> directory-scoped replacement, a partial failure, a preview, an unobserved call, a refused one) and the run host's
-> `mcp.test.ts` (a fake server whose replacement writes two files and then errs), each red on the code before;
+> directory-scoped replacement, a partial failure, a preview, an unobserved call, an erred call carrying the `unobserved`
+> mark, a refused one) and the run host's `mcp.test.ts` (a fake server whose replacement writes two files and then errs; one
+> whose reach cannot be walked, marked `unobserved` though it erred), each red on the code before;
 > `pnpm code-intel-proof`'s ninth launch (`child-across`) — see the row. **Not measured:** a rename through the built app,
 > which needs the TypeScript language server provisioned (IC-7); a live run. The note is
 > [`fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md`](../defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md);

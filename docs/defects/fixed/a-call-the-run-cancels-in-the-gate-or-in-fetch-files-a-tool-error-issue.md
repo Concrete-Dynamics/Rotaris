@@ -38,3 +38,23 @@ which records this and does not repair it. Recorded by fin31, not repaired.
 - `packages/agent-tools/src/tools/fetch.ts`: `transportFailure`, the `ctx.signal.aborted` branch.
 - `apps/desktop/src/run-host/mcp.ts`: the `catch` in each MCP tool executor's `execute`.
 - `packages/engine/src/export.ts`: `outcomeOf`, which derives such a record (no `outcome_kind`) into `tool_error`.
+
+## Repaired — 2026-10-13
+
+Ruled as [OQ-238](../../architecture/open-questions.md) (GC1, under the owner's delegation, R-072) and built as
+[`PD-TOOLS-013`](../../product/directives.md#pd-tools-013) revision 2 by fin34 (`fin34-record-and-cancels`): every call its
+run cancels reads `interrupted` and files no issue.
+
+- `packages/agent-tools/src/gate.ts`: the catch records a throw under an aborted signal as failure kind `interrupted`, "The
+  '<tool>' call was cancelled by the run before it completed.", so the existing branches mark it interrupted and file no
+  issue. A throw with no cancel still reads `execution_error` and files `tool_error`.
+- `packages/agent-tools/src/tools/fetch.ts`: `transportFailure`'s abort branch returns `interrupted` / `InterruptedError`
+  after the deadline test; `FETCH_FAILURE_KINDS` holds the ninth kind.
+- `apps/desktop/src/run-host/mcp.ts`: after the allowance-timeout test, an aborted signal returns `interrupted`, "The call to
+  '<tool>' on MCP server '<server>' was cancelled by the run before it completed; it was not retried."
+- `packages/engine/src/export.ts`: `outcomeOf` derives a record with no `outcome_kind` and failure kind `interrupted` to the
+  bucket `interrupted`, a released delegation wait included.
+
+Pinned by `gate.test.ts`, `fetch.test.ts`, `mcp.test.ts` and `summary.test.ts` (each new case red on the old code), and by
+`pnpm fetch-proof`'s ninth launch, `cancelled`: red on the old gate and fetch (`failed / network_error`), green after
+(`interrupted`, `InterruptedError`, no issue).

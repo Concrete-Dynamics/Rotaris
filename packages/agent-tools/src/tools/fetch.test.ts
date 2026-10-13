@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { FakeClock } from '@rotaris/kernel';
 import { PERMISSIVE_EGRESS, type EgressPolicy } from '../egress.js';
-import { diagnosticOf, fetchTool, FETCH_HOP_BUDGET, permissivePolicyRead, renderFetch, settleTimeout, shapeBody, validateFetchRequest, type FetchArgs, type FetchResult, type PolicyRead } from './fetch.js';
+import { diagnosticOf, fetchTool, FETCH_FAILURE_KINDS, FETCH_HOP_BUDGET, permissivePolicyRead, renderFetch, settleTimeout, shapeBody, validateFetchRequest, type FetchArgs, type FetchResult, type PolicyRead } from './fetch.js';
 import type { ToolContext } from './types.js';
 
 /**
@@ -267,7 +267,7 @@ describe('transport outcomes (REQ-SANDBOX-033, REQ-TOOLS-092)', () => {
     expect(String(diag(o)['detail'])).toBe('The direct connection to down.example failed before a response was received: fetch failed: connect ECONNREFUSED 10.0.0.9:80. This fetch tool uses direct connections; proxy environment variables and system proxy settings have no effect.');
     expect('final_url' in diag(o)).toBe(false);
   });
-  it('the run\'s own abort is not a timeout', async () => {
+  it('the run\'s own abort is not a timeout, and not a network fault: `interrupted`, `InterruptedError` (PD-TOOLS-013 revision 2, OQ-238)', async () => {
     const outer = new AbortController();
     const impl = (async (_i: string | URL | Request, init?: RequestInit) => new Promise<Response>((_r, reject) => { init?.signal?.addEventListener('abort', () => reject(new Error('This operation was aborted'))); })) as typeof fetch;
     const tool = fetchTool({ policy: policyOf(PERMISSIVE_EGRESS), timers: clock, fetchImpl: impl });
@@ -275,8 +275,24 @@ describe('transport outcomes (REQ-SANDBOX-033, REQ-TOOLS-092)', () => {
     await new Promise((r) => setImmediate(r));
     outer.abort();
     const o = await p;
-    expect(o.failureKind).toBe('network_error');
-    expect(String(diag(o)['detail'])).toContain('cancelled by the run');
+    // Until revision 2 this read `network_error` / `NetworkError`, the kind of a real transport fault, and filed a `tool_error`.
+    expect(o.failureKind).toBe('interrupted');
+    expect(o.isError).toBe(true);
+    expect(diag(o)).toMatchObject({ failure_kind: 'interrupted', error_class: 'InterruptedError' });
+    expect(String(diag(o)['detail'])).toBe('The fetch of http://a.example/ was cancelled by the run before it completed.');
+    expect(FETCH_FAILURE_KINDS).toContain('interrupted');
+  });
+  it('a deadline that expired before the run\'s abort still reads `timeout` (PD-TOOLS-013 revision 2)', async () => {
+    const outer = new AbortController();
+    const impl = (async (_i: string | URL | Request, init?: RequestInit) => new Promise<Response>((_r, reject) => { init?.signal?.addEventListener('abort', () => { outer.abort(); reject(new DOMException('aborted', 'AbortError')); }); })) as typeof fetch;
+    const tool = fetchTool({ policy: policyOf(ASK_DEFAULT, 1), timers: clock, fetchImpl: impl });
+    const p = tool.execute(args({ url: 'http://a.example/slow' }), ctx(outer.signal));
+    await new Promise((r) => setImmediate(r));
+    clock.advance(1_000);
+    const o = await p;
+    expect(outer.signal.aborted).toBe(true);
+    expect(o.failureKind).toBe('timeout');
+    expect(diag(o)).toMatchObject({ error_class: 'FetchTimeout' });
   });
 });
 

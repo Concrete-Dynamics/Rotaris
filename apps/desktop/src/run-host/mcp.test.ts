@@ -362,15 +362,16 @@ describe('an MCP call checked against the input schema the model was given (REQ-
   };
 
   /** What the stubbed server does with a call that reaches it: answer (normally or `isError`), or throw. */
-  type Answer = () => { isError: boolean; text: string };
+  type Answer = (signal: AbortSignal, hostClock: FakeClock) => { isError: boolean; text: string } | Promise<{ isError: boolean; text: string }>;
   function rig(inputSchema: Record<string, unknown>, answer: Answer = () => ({ isError: false, text: 'edited' })) {
     const lines: { message: string; level: string }[] = [];
-    const mcp = new McpHost({ clocks: new FakeClock(), log: (message, level = 'info') => { lines.push({ message, level }); }, acknowledge: () => undefined, parentEnv: {}, productVersion: '0.0.0' });
+    const hostClock = new FakeClock();
+    const mcp = new McpHost({ clocks: hostClock, log: (message, level = 'info') => { lines.push({ message, level }); }, acknowledge: () => undefined, parentEnv: {}, productVersion: '0.0.0' });
     vi.spyOn(mcp.discovery, 'peek').mockReturnValue({ tools: [{ name: 'amend_note', description: 'Replace content in a memory.', inputSchema }], failed: false } as unknown as ReturnType<typeof mcp.discovery.peek>);
     const sent: { tool: string; args: Record<string, unknown> }[] = [];
     vi.spyOn(mcp, 'connectionsFor').mockReturnValue({
       connect: async () => ({ onToolsChanged: () => undefined }),
-      call: async (_server: string, _d: unknown, tool: string, args: Record<string, unknown>) => { sent.push({ tool, args }); return answer(); },
+      call: async (_server: string, _d: unknown, tool: string, args: Record<string, unknown>, _timeoutMs: number, signal: AbortSignal) => { sent.push({ tool, args }); return answer(signal, hostClock); },
     } as unknown as ReturnType<typeof mcp.connectionsFor>);
     const entry = { type: 'stdio', enabled: true, disabled_tools: [], tool_name_map: {}, command: 'ci' };
     const cfg = {
@@ -393,7 +394,7 @@ describe('an MCP call checked against the input schema the model was given (REQ-
         timeline: () => undefined, toolOpen: () => ++seq, toolSettle: (_o, _open, s) => { settles.push(s as Record<string, unknown>); }, warn: () => undefined,
       },
     });
-    const dispatch = (args: Record<string, unknown>) => gate.dispatch({ callId: 'c1', name: 'amend_note', rawArgs: args, persona: 'verifier', agentId: 'verifier', agentName: 'verifier' }, new AbortController().signal);
+    const dispatch = (args: Record<string, unknown>, signal: AbortSignal = new AbortController().signal) => gate.dispatch({ callId: 'c1', name: 'amend_note', rawArgs: args, persona: 'verifier', agentId: 'verifier', agentName: 'verifier' }, signal);
     return { executors, dispatch, sent, issues, settles, lines };
   }
 
@@ -455,6 +456,38 @@ describe('an MCP call checked against the input schema the model was given (REQ-
     const histogram = sessionMetrics(row, [record(ok.settles[0]!, 1), record(refused.settles[0]!, 2)], [], [], 0, 0, 0).tool_outcomes;
     expect(histogram).toMatchObject({ success: 1, tool_error: 1 });
     expect(histogram).not.toHaveProperty('mcp');
+  });
+
+  /*
+   * PD-TOOLS-013 revision 2 (OQ-238, GC1, ruled 2026-10-13 under R-072): a call its run cancels reads `interrupted` and files
+   * no issue, whatever the tool. The MCP SDK call receives the run's signal (packages/mcp/src/client.ts), and its throw on
+   * the abort was recorded `execution_error` with a `tool_error` warning. The allowance-timeout reading is tested first, as
+   * fetch tests its deadline before the abort.
+   */
+  it('a call the run cancels reads interrupted and files no issue; an exhausted allowance still reads timeout; a fault with no cancel still reads execution_error', async () => {
+    const run = new AbortController();
+    const cut = rig(EDIT_MEMORY, (signal) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('This operation was aborted')), { once: true });
+      queueMicrotask(() => run.abort());
+    }));
+    const r = await cut.dispatch({ memory_name: 'm', needle: 'a', repl: 'b', mode: 'literal' }, run.signal);
+    expect(r).toMatchObject({ status: 'failed', isError: true, interrupted: true });
+    expect(r.text).toBe("The call to 'amend_note' on MCP server 'notes' was cancelled by the run before it completed; it was not retried.");
+    expect(cut.settles[0]).toMatchObject({ failure_kind: 'interrupted' });
+    expect(cut.settles[0]).not.toHaveProperty('outcome_kind');
+    expect(cut.issues).toEqual([]);
+
+    const exhausted = rig(EDIT_MEMORY, (_signal, hostClock) => { hostClock.advance(300_000); throw new Error('MCP error -32001: Request timed out'); });
+    const t = await exhausted.dispatch({ memory_name: 'm', needle: 'a', repl: 'b', mode: 'literal' });
+    expect(t.interrupted).toBeUndefined();
+    expect(exhausted.settles[0]).toMatchObject({ failure_kind: 'timeout' });
+    expect(exhausted.issues).toEqual([expect.objectContaining({ kind: 'terminal_timeout', severity: 'error' })]);
+
+    const fault = rig(EDIT_MEMORY, () => { throw new Error('the server went away'); });
+    const f = await fault.dispatch({ memory_name: 'm', needle: 'a', repl: 'b', mode: 'literal' });
+    expect(f.interrupted).toBeUndefined();
+    expect(fault.settles[0]).toMatchObject({ failure_kind: 'execution_error' });
+    expect(fault.issues).toEqual([expect.objectContaining({ kind: 'tool_error', severity: 'warning' })]);
   });
 
   it('the model is still handed the server\'s own input schema', () => {

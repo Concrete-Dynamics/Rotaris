@@ -472,8 +472,12 @@ export class Gate {
         monotonic: deps.monotonic, wall: deps.wall, signal, warn: (m) => deps.sink.warn(m),
       });
     } catch (cause) {
-      const aborted = signal.aborted;
-      obs = { text: aborted ? `The '${call.name}' call was cancelled before it completed.` : `The '${call.name}' call failed: ${String(cause instanceof Error ? cause.message : cause)}`, isError: true, failureKind: aborted ? 'cancelled' : 'execution_error' };
+      // PD-TOOLS-013 revision 2 (a), OQ-238: a throw once the run's signal is aborted is the run's cancel, not the call's
+      // failure. It reads `interrupted`, so the branches below mark the call interrupted and file no issue. Until revision 2
+      // it read `cancelled`, a kind no vocabulary holds, and filed a `tool_error` warning for every quit that cut it.
+      obs = signal.aborted
+        ? { text: `The '${call.name}' call was cancelled by the run before it completed.`, isError: true, failureKind: INTERRUPTED_FAILURE_KIND }
+        : { text: `The '${call.name}' call failed: ${String(cause instanceof Error ? cause.message : cause)}`, isError: true, failureKind: 'execution_error' };
     }
     // (4) post-execution hooks: for a call that ran, errors included (REQ-HOOKS-005); feedback rides in the same result
     // message, or follows as a user message when the call produced no observation (REQ-HOOKS-074).

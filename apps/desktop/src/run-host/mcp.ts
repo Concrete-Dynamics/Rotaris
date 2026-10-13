@@ -9,7 +9,7 @@ import {
   deriveSetupInvocation, DiagnosticSink, launchedProjectOf, mcpConfigurationForExecutionRoot, narrowAfterUpdate, renderMcpSection, resolvePersonaMcp,
   type Diagnostic, type DropReason, type LoadedConfiguration, type McpResolvedServer, type PersonaMcpSurface,
 } from '@rotaris/config';
-import { advertisedSchemaCheck, errorObservation, observation, type AdvertisedSchemaCheck, type ToolExecutor } from '@rotaris/agent-tools';
+import { advertisedSchemaCheck, errorObservation, INTERRUPTED_FAILURE_KIND, observation, type AdvertisedSchemaCheck, type ToolExecutor } from '@rotaris/agent-tools';
 import type { McpGrantEvidence, SessionWriter } from '@rotaris/engine';
 import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, runSetupSteps, SETUP_SHUTDOWN_GRACE_MS, SessionConnections, ToolDiscovery, type Connected, type McpLog, type ServerDescription } from '@rotaris/mcp';
 
@@ -365,6 +365,10 @@ export class McpHost {
               const text = String(cause instanceof Error ? cause.message : cause);
               const elapsed = this.deps.clocks.monotonic.now() - started;
               if (/timeout|timed out/i.test(text) && elapsed >= timeoutMs * 0.9) return errorObservation(`MCP server '${server.name}' did not answer '${tool.callable}' within its allowance of ${timeoutMs / 1_000} s; the call failed and was not retried (REQ-MCP-003).`, { failureKind: 'timeout' });
+              // PD-TOOLS-013 revision 2 (c), OQ-238: the SDK call receives the run's signal, so its throw on the abort is the
+              // run's cancel. After the allowance test, as fetch reads its deadline first. Until revision 2 it read
+              // `execution_error` and filed a `tool_error` warning.
+              if (tctx.signal.aborted) return errorObservation(`The call to '${tool.callable}' on MCP server '${server.name}' was cancelled by the run before it completed; it was not retried.`, { failureKind: INTERRUPTED_FAILURE_KIND });
               return errorObservation(`The call to '${tool.callable}' on MCP server '${server.name}' failed: ${redact(text)}`, { failureKind: 'execution_error' });
             }
           },

@@ -10,7 +10,8 @@ import type { Observation, ToolContext, ToolExecutor } from './types.js';
  * chain (REQ-SANDBOX-021), the hand-driven redirect loop that classifies every host before a connection is
  * opened (REQ-SANDBOX-022..024, -027..032, REQ-TOOLS-090/091), the transport outcomes (REQ-SANDBOX-033), the
  * shaping (REQ-SANDBOX-034) and the rendering (REQ-SANDBOX-036). The failure-kind vocabulary is REQ-TOOLS-092's
- * eight spellings and nothing else.
+ * eight spellings and, since PD-TOOLS-013 revision 2 (OQ-238), a ninth, `interrupted`, for a fetch the run's signal ended:
+ * the run's rest, outside the three groups of policy refusal, transient fault and call fault.
  *
  * OQ-37: a dedicated direct dispatcher is supplied on every production request,
  * including redirect hops. Environment and process-global proxy settings have no effect.
@@ -19,7 +20,7 @@ import type { Observation, ToolContext, ToolExecutor } from './types.js';
  * and is seeded into the request's permitted set; a hop onto a NEW host classifying `ask` is refused, because
  * nothing can prompt mid-request. Time comes from the caller's timer port, never a bare timer.
  */
-export const FETCH_FAILURE_KINDS = ['egress_denied', 'egress_redirect_denied', 'egress_policy_error', 'too_many_redirects', 'invalid_request', 'timeout', 'network_error', 'http_error'] as const;
+export const FETCH_FAILURE_KINDS = ['egress_denied', 'egress_redirect_denied', 'egress_policy_error', 'too_many_redirects', 'invalid_request', 'timeout', 'network_error', 'http_error', 'interrupted'] as const;
 export type FetchFailureKind = (typeof FETCH_FAILURE_KINDS)[number];
 
 /** REQ-SANDBOX-021: reachable only where there is no owning run. */
@@ -183,7 +184,9 @@ export function fetchTool(deps: FetchDeps): ToolExecutor<FetchArgs> {
     if (ctx.signal.aborted) controller.abort(); else ctx.signal.addEventListener('abort', onOuterAbort, { once: true });
     const transportFailure = (cause: unknown, hopUrl: string, hopHost: string, received: Partial<FetchResult>): FetchResult => {
       if (expired) return refusedTimed('timeout', 'FetchTimeout', `The fetch of ${hopUrl} did not complete within ${t.seconds} s, the deadline supplied by ${LEVEL_TEXT[t.level]}.`, received);
-      if (ctx.signal.aborted) return refusedTimed('network_error', 'NetworkError', `The fetch of ${hopUrl} was cancelled by the run before it completed.`, received);
+      // PD-TOOLS-013 revision 2 (b): the deadline is read first, so a fetch whose deadline expired before the run's abort
+      // still reads `timeout`. Until revision 2 the abort read `network_error`, a transport fault's kind.
+      if (ctx.signal.aborted) return refusedTimed('interrupted', 'InterruptedError', `The fetch of ${hopUrl} was cancelled by the run before it completed.`, received);
       return refusedTimed('network_error', 'NetworkError', `The direct connection to ${hopHost} failed before a response was received: ${platformMessage(cause)}. This fetch tool uses direct connections; proxy environment variables and system proxy settings have no effect.`, received);
     };
 

@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-13**
 
+**Every call its run cancels reads `interrupted` and files no issue (PD-TOOLS-013 revision 2; OQ-238, GC1, fin34).** The
+gate's catch, fetch's `transportFailure` and the MCP executor's catch record a call the run's signal cut off with failure kind
+`interrupted`, each after its own deadline or allowance test, and REQ-SESSION-139's histogram derives such a record with no
+`outcome_kind` to `interrupted` (`outcomeOf`). The runtime view's run-flow and `summary.md` passages carry it.
+
 **The retrospective's start gesture rests only while a retrospective is pending in its workspace (PD-LIBRARY-002
 revision 2 (e); OQ-236, fin34).** `ImprovementActivitySchema` gains `retrospective_pending`; the coordinator
 (`main/improvements.ts`) answers `retrospectivePending(workspaceId)` from its queue and active job, and main's broadcast

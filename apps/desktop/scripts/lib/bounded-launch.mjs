@@ -183,11 +183,13 @@ export async function drainGroup(child, { graceMs = GROUP_GRACE_MS } = {}) {
  * On POSIX the launch leads its own process group, so the SIGKILL reaches every helper it started. SIGTERM goes to the
  * process alone: that is what a person's `kill` does, and what the product's own quit path is expected to answer.
  */
-export async function spawnBounded(command, args, { timeoutMs, graceMs = 10_000, groupGraceMs = GROUP_GRACE_MS, cwd, env, windowsHide = true } = {}) {
+export async function spawnBounded(command, args, { timeoutMs, graceMs = 10_000, groupGraceMs = GROUP_GRACE_MS, cwd, env, windowsHide = true, onSpawn = null } = {}) {
   if (!(timeoutMs > 0)) throw new Error('spawnBounded needs a positive timeoutMs');
   const started = Date.now();
   const child = spawn(command, args, { cwd, env, windowsHide, detached: POSIX, stdio: ['ignore', 'pipe', 'pipe'] });
   track(child);
+  // A proof that has to act on the launch while it runs (fetch-proof's quit mid-fetch signals it) is handed the child.
+  if (typeof onSpawn === 'function') onSpawn(child);
   let stdout = '';
   let stderr = '';
   child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });

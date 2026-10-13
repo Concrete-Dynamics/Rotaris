@@ -16,6 +16,10 @@
  *   7. timeout     — `/slow` (never answers) with `tool_call_timeout: 1` → `timeout`, `timeout_seconds` 1 from the
  *                    run level (REQ-SANDBOX-021); its `terminal_timeout` issue names the fetch, never a terminal command
  *                    (REQ-SESSION-136, finacc3 A2-08).
+ *   9. cancelled   — `/cut` (never answers) under a 60 s deadline; once the server holds the request the application is
+ *                    quit by SIGTERM, a quit outside any window: the fetch is recorded `interrupted`, `InterruptedError`,
+ *                    "cancelled by the run", and files neither `tool_error` nor `terminal_timeout` (PD-TOOLS-013
+ *                    revision 2, OQ-238). Until revision 2 it read `network_error` and filed a `tool_error` warning.
  *
  * Launch 1 also reads the instructions the model port received (`ROTARIS_CAPTURE_MODEL_REQUESTS`): the run is
  * `explicit_trivial`, so the coordinator is told to do the work itself (OQ-202 as ruled, PD-ORCH-006), and its playbook's
@@ -59,6 +63,8 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
 // The server: every request path recorded; `/slow` is held open until the proof ends.
 const seen = [];
 const held = [];
+/** Scenario 9's hook: called when the server holds `/cut`, so the quit lands while the fetch is in flight. */
+let onCut = null;
 let port = 0;
 const server = createServer((req, res) => {
   seen.push(req.url ?? '');
@@ -66,6 +72,7 @@ const server = createServer((req, res) => {
   if (req.url === '/redirect') { res.writeHead(302, { location: `http://localhost:${port}/ok` }); res.end(); return; }
   if (req.url === '/404') { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('no such page\n'); return; }
   if (req.url === '/slow') { held.push(res); return; }
+  if (req.url === '/cut') { held.push(res); onCut?.(); return; }
   res.writeHead(500); res.end();
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -98,8 +105,8 @@ function saveConfiguration(runtime, strategy = null) {
  * 0`, so an overrun passed `launch`'s status check as a clean exit and failed later, misattributed, at the store
  * (`docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`).
  */
-function spawnElectron(env) {
-  return spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], { timeoutMs: 150_000, cwd: app, env });
+function spawnElectron(env, onSpawn = null) {
+  return spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], { timeoutMs: 150_000, cwd: app, env, onSpawn });
 }
 
 async function launch(name, url, runtime, extra = {}, strategy = null) {
@@ -221,7 +228,48 @@ try {
   for (const tool of ['write_file', 'terminal', 'delegate']) if (!offered.includes(tool)) throw new Error(`swarm-granted: the granted run was not offered ${tool}: ${offered.join(', ')}`);
   results.swarmGranted = { directWorkInstructions: true, swarmLayer: false, offered: offered.length, loadMs: swarmGranted.loadMs };
 
-  const loads = Object.values(results).map((r) => r.loadMs);
+  // 9. PD-TOOLS-013 revision 2 (OQ-238): a fetch the run cancels — here the application's quit by SIGTERM while the server
+  // holds the request — reads `interrupted`, `InterruptedError`, and files no issue. A quit leaves the session at rest, not
+  // `completed`, so this scenario reads the store itself rather than through `launch`.
+  {
+    saveConfiguration({ permission_mode: 'autonomous', tool_call_timeout: 60 });
+    seen.length = 0;
+    let app = null;
+    let quitAt = null;
+    onCut = () => { setTimeout(() => { quitAt = Date.now(); try { if (app?.pid) process.kill(app.pid, 'SIGTERM'); } catch { /* already gone */ } }, 300); };
+    const result = await spawnElectron({
+      ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
+      ROTARIS_MODEL_DIALECT: 'scripted', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+      ROTARIS_INTENT_SCRIPT: 'explicit_trivial',
+      ROTARIS_SCRIPT: `fetch:${origin}/cut,answer`,
+      ROTARIS_CAPTURE_PROMPT: `Fetch ${origin}/cut`, ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500',
+      // The capture mode is what types the prompt; the quit lands before its wait is satisfied, so no picture is taken.
+      ROTARIS_CAPTURE_PNG: join(output, 'cancelled.png'),
+    }, (child) => { app = child; });
+    onCut = null;
+    const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+    writeFileSync(join(output, 'cancelled.log'), log);
+    if (result.overran) throw new Error(overrunMessage('cancelled', result, log));
+    if (quitAt === null) throw new Error(`cancelled: the server never held /cut, so no quit was sent (saw ${JSON.stringify(seen)})`);
+    if (result.status !== 0) throw new Error(`cancelled: the quit by SIGTERM exited ${result.status ?? result.signal ?? 'unknown'}`);
+    const db = new Database(oneDatabase(local), { readonly: true });
+    const session = db.prepare('SELECT session_id, execution_status FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
+    const rows = db.prepare("SELECT status, is_error, elapsed_ms, entry FROM tool_calls WHERE session_id = ? AND tool_name = 'fetch' ORDER BY ordinal").all(session.session_id);
+    const issues = db.prepare('SELECT kind, evidence_ref FROM issues WHERE session_id = ? ORDER BY ordinal').all(session.session_id);
+    db.close();
+    if (rows.length !== 1) throw new Error(`cancelled: expected one fetch tool row; found ${rows.length}`);
+    const entry = JSON.parse(rows[0].entry);
+    const diagnostic = (() => { const m = /\[fetch_diagnostic\]\n(\{.*\})/.exec(entry.result ?? ''); return m ? JSON.parse(m[1]) : null; })();
+    if (rows[0].status !== 'failed' || entry.failure_kind !== 'interrupted') throw new Error(`cancelled: the cut fetch reads ${rows[0].status} / ${entry.failure_kind}, not failed / interrupted:\n${entry.result}`);
+    if (diagnostic?.error_class !== 'InterruptedError' || diagnostic?.detail !== `The fetch of ${origin}/cut was cancelled by the run before it completed.`) throw new Error(`cancelled: the diagnostic is ${JSON.stringify(diagnostic)}`);
+    if ('outcome_kind' in entry) throw new Error(`cancelled: the record carries outcome_kind ${entry.outcome_kind} (OQ-208: a fetch carries none)`);
+    const own = issues.filter((i) => i.evidence_ref === `tool_call_evidence#${entry.call_id}`);
+    if (own.length !== 0) throw new Error(`cancelled: the cut fetch filed ${JSON.stringify(own)}`);
+    if (seen.join(',') !== '/cut') throw new Error(`cancelled: the server saw ${JSON.stringify(seen)}`);
+    results.cancelled = { failureKind: entry.failure_kind, errorClass: diagnostic.error_class, elapsedMs: Math.round(rows[0].elapsed_ms ?? 0), sessionStatus: session.execution_status, issues: own.length, seen: [...seen] };
+  }
+
+  const loads = Object.values(results).map((r) => r.loadMs).filter((ms) => typeof ms === 'number');
   results.policyRead = { perCallMs: loads, medianMs: [...loads].sort((a, b) => a - b)[Math.floor(loads.length / 2)], maxMs: Math.max(...loads) };
 } finally {
   await stopServer();

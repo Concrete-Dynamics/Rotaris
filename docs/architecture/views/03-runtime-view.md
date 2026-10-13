@@ -376,7 +376,12 @@ that step that completed keeps what it returned, read back from its settled row.
 lands in reports the cancel itself (PD-TOOLS-013, OQ-226; 2026-10-07): `ForegroundSession.run` ends the tree, restarts the
 session with PD-TOOLS-001's snapshot and returns `cancelled` with no exit code, and `terminal/index.ts` records it
 `interrupted` / `warning`, `InterruptedError`, a detail that the run cancelled it, so the gate marks it interrupted and
-files no issue — until then it read as REQ-TOOLS-099's hard timeout (124, `terminal_timeout`). A child the stop's grace gave up on
+files no issue — until then it read as REQ-TOOLS-099's hard timeout (124, `terminal_timeout`). Every other call the cut
+lands in reads the same since PD-TOOLS-013 revision 2 (OQ-238; 2026-10-13): the gate's catch records an executor's throw
+under an aborted signal as `interrupted` ("The '<tool>' call was cancelled by the run before it completed."), where it wrote
+`cancelled`; fetch's `transportFailure` records the abort as `interrupted` / `InterruptedError` after its deadline test,
+where it wrote `network_error`; and the MCP executor's catch records it as `interrupted` after its allowance test, where it
+wrote `execution_error` — each then marked interrupted by the gate's existing branch, with no `tool_error` issue. A child the stop's grace gave up on
 (`IterationChildren.outlast` keeps which, `givenUpOn`) returns without its count, so once its calls are answered the rest
 counts the calls its record shows beyond its `children.tool_calls` into the session's total, with that count, in one
 transaction (`countGivenUpOn` → `SessionWriter.countToolCalls`, REQ-MONITOR-102), as the root given up on is counted — so
@@ -1686,7 +1691,9 @@ of §5 and none a channel: each is a request answered once.
   (REQ-SESSION-136's "any other failure"), as its Issues line does, never the histogram's `tool_error` bucket, which a
   record carrying an `outcome_kind` never reaches (fin23). An MCP call's record and a fetch call's carry no `outcome_kind`
   since OQ-208's ruling (2026-10-07, R-072; fin28), so the histogram derives their bucket, `success` or `tool_error`, from
-  `status` and `is_error`, and keeps no `mcp` or `fetch` bucket. A count over the
+  `status` and `is_error`, and keeps no `mcp` or `fetch` bucket; a record with no `outcome_kind` whose failure kind is
+  `interrupted` (a call its run cancelled, a released delegation wait) derives to `interrupted` since PD-TOOLS-013
+  revision 2 (`outcomeOf`, `engine/src/export.ts`; OQ-238), where it derived to `tool_error`. A count over the
   permission audit or the issues record — Permission denials, Tool errors, and the Metrics lines printing the same figures —
   reads `at least N` with how many rows the cap dropped once REQ-SESSION-133's cap has dropped rows of its ring (`atLeast`;
   finacc3 F10). Terminal failures, suspicious successes and Timeouts, each the larger of a count over the tool-call record

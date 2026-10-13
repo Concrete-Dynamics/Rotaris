@@ -6425,6 +6425,25 @@ live run at `a68f121`); logged as [R-072](requests.md#r-072).*
 > **What was not measured.** No live run: the next default live run's quit is the measurement.
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **Revision 2's first execution, 2026-10-13, built under [R-072](requests.md#r-072) (fin34):** the revision held as
+> written. **(a)** The gate's catch (`packages/agent-tools/src/gate.ts`) records a throw under an aborted signal as
+> `interrupted`, "The '<tool>' call was cancelled by the run before it completed.", where it wrote `cancelled`; the gate's
+> existing `interrupted` branch then marks the call interrupted and files no issue, unchanged. **(b)** Fetch's
+> `transportFailure` (`packages/agent-tools/src/tools/fetch.ts`) returns `interrupted` / `InterruptedError` after its deadline
+> test, and `FETCH_FAILURE_KINDS` holds the ninth kind. **(c)** The MCP executor's catch (`apps/desktop/src/run-host/mcp.ts`)
+> tests the allowance first, then the abort. **(d)** `outcomeOf` (`packages/engine/src/export.ts`) derives a record with no
+> `outcome_kind` and failure kind `interrupted` to `interrupted`. **Found nothing else**: the turn already answered each such
+> call as interrupted, and no reader of the histogram assumed four buckets (`summary.md` prints the buckets it is given).
+> **What was measured.** `gate.test.ts`'s revision 2 case, `fetch.test.ts`'s cancel case, `mcp.test.ts`'s cancel case and
+> `summary.test.ts`'s `interrupted` bucket case, each red before the code and green after, beside guards that a throw with
+> no cancel still reads `execution_error` / `tool_error`, a fetch deadline that expired first still reads `timeout`, and an
+> exhausted MCP allowance still reads `timeout` / `terminal_timeout`; `pnpm fetch-proof`'s ninth launch, `cancelled`, a
+> SIGTERM quit while the loopback server holds the request, red with (a) and (b) reverted (`failed / network_error`) and
+> green after (`interrupted`, `InterruptedError`, 360 ms, the session `paused`, no issue for the call). **What was not
+> measured.** No proof drives a cancelled MCP call or a throwing executor in the built app, and no live run: the first live
+> quit that cuts a fetch or an MCP call is the measurement. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-orch-016"></a>

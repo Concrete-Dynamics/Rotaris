@@ -297,6 +297,23 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     expect(timedOut.rec.issues[0]).toMatchObject({ kind: 'terminal_timeout', severity: 'error' });
   });
 
+  it('PD-TOOLS-013 revision 2 (OQ-238, GC1): an executor that throws once its run cancelled the call settles failed and interrupted, failure kind `interrupted`, and files no issue', async () => {
+    const run = new AbortController();
+    const cut = simpleExecutor('todo', 'todo', z.object({ operation: z.string() }), async () => { run.abort(); throw new Error('This operation was aborted'); });
+    const h = harness({ preset: 'autonomous', extraExecutors: [['todo', cut]] });
+    const r = await h.gate.dispatch(h.call('todo', { operation: 'list' }), run.signal);
+    expect(r).toMatchObject({ status: 'failed', isError: true, interrupted: true, text: "The 'todo' call was cancelled by the run before it completed." });
+    expect(h.rec.settles.at(-1)).toMatchObject({ failure_kind: 'interrupted' });
+    expect(h.rec.settles.at(-1)).not.toHaveProperty('outcome_kind');
+    expect(h.rec.issues).toEqual([]);
+    // A throw with no cancel is still a failure of the call: `execution_error`, and REQ-SESSION-136's `tool_error`.
+    const plain = harness({ preset: 'autonomous', extraExecutors: [['todo', simpleExecutor('todo', 'todo', z.object({ operation: z.string() }), async () => { throw new Error('disk on fire'); })]] });
+    const p = await plain.gate.dispatch(plain.call('todo', { operation: 'list' }), new AbortController().signal);
+    expect(p.interrupted).toBeUndefined();
+    expect(plain.rec.settles.at(-1)).toMatchObject({ failure_kind: 'execution_error' });
+    expect(plain.rec.issues).toEqual([expect.objectContaining({ kind: 'tool_error', severity: 'warning' })]);
+  });
+
   it('REQ-TOOLS-055: a timeout of 0 registers no deadline; only an answer or a cancellation releases the wait', async () => {
     const h = harness({ timeoutMs: 0 });
     const p = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);

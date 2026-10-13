@@ -48,7 +48,8 @@ not the executor — by execution time the named host is already approved and pr
 for that request; a hop onto a **new** host classifying `ask` is refused with `egress_redirect_denied`;
 a hop onto an already-permitted host is not re-gated.
 
-`REQ-TOOLS-092` and `REQ-SANDBOX-025` close the failure-kind vocabulary at eight spellings, with
+`REQ-TOOLS-092` and `REQ-SANDBOX-025` close the failure-kind vocabulary at eight spellings (nine since `PD-TOOLS-013`
+revision 2 narrowed both, 2026-10-13: `interrupted` for a fetch its run cancels; see the readings below), with
 `invalid_request` spelled identically to the terminal observation's member of the same name, and each
 kind carrying a fixed `error_class`. `REQ-SANDBOX-020` refuses a malformed request **before any
 connection** on six enumerated conditions, and carries `timeout: 0` through as given meaning *no time

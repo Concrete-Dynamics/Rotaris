@@ -11585,7 +11585,7 @@ reading 0). OQ-144's handshake parenthetical is revised in place beside the stru
 replaced and ended shells stands. The ruling's directive number was written as `PD-TOOLS-011` by advocate B, taken; it is
 `PD-TOOLS-013`. Noticed while ruling and recorded, not repaired: the gate's catch and fetch still file a `tool_error` for
 a call the run cancels
-([`a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md`](../defects/a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md)).
+([`a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md`](../defects/fixed/a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md)).
 **Built 2026-10-07 (fin31):** `ForegroundResult.cancelled` and both abort branches of `ForegroundSession.run` (no exit code,
 `timedOut: false`), the `interrupted` kind, `InterruptedError` and the cancel's detail in `terminal/index.ts`, and the kind in
 both vocabularies of `classify.ts`; `gate.ts` and `export.ts` unchanged. The ruling's dispositions could not stand as
@@ -12080,7 +12080,7 @@ rest cut off "is recorded as interrupted"; `PD-TOOLS-013`, the terminal's cancel
 issues; REQ-TOOLS-092 and REQ-SANDBOX-025, fetch's closed vocabulary; REQ-SESSION-139, the histogram's four derived
 buckets; ADR-0023's reading of the run's abort mid-fetch as `network_error`; OQ-208, no `outcome_kind` on an MCP or fetch
 record. Raised 2026-10-13 from
-[`a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md`](../defects/a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md),
+[`a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md`](../defects/fixed/a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md),
 noticed by the consortium while ruling OQ-226 and recorded by fin31, and ruled the same day under the owner's delegation;
 the consortium's question GC1.)*
 

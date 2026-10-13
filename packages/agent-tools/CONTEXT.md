@@ -109,8 +109,11 @@ cancelled the call before the command completed, never a timeout. — `REQ-TOOLS
 **Failure kind**:
 Why a call failed, drawn from a per-tool vocabulary — `timeout`, `invalid_request`,
 `execution_error`, `sandbox_unavailable` and `interrupted` for the terminal; `interrupted` is also the
-question and delegation tools' word for a call the run's rest cut short. — `REQ-SANDBOX` terminal
-observation additions, `REQ-TOOLS-100`, `PD-TOOLS-013`, `PD-ORCH-005`
+question and delegation tools' word for a call the run's rest cut short, and since `PD-TOOLS-013` revision 2 the word for
+any call its run cancels: an executor that throws once the signal is aborted, a fetch (`InterruptedError`, beside
+`REQ-TOOLS-092`'s eight) and an MCP call. Such a call files no issue and, with no outcome kind, is counted under the
+histogram's `interrupted` bucket. — `REQ-SANDBOX` terminal observation additions, `REQ-TOOLS-100`, `REQ-TOOLS-092`,
+`PD-TOOLS-013`, `PD-ORCH-005`
 
 **Path fence**:
 The boundary confining the file and search tools to the workspace. Reaching outside it is a

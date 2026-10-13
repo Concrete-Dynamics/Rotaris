@@ -120,9 +120,14 @@ export function toolCallFactsOf(t: ToolCallRow): ToolCallFacts {
   return { call_id: t.call_id, agent_name: t.agent_name, tool_name: t.tool_name, status: t.status, elapsed_ms: t.elapsed_ms, is_error: t.is_error, outcome_kind: field(entry?.outcome_kind), failure_kind: field(entry?.failure_kind) };
 }
 
-/** REQ-SESSION-139: `outcome_kind` when the record carries one, else derived from `status` and `is_error` into the four buckets. */
+/**
+ * REQ-SESSION-139: `outcome_kind` when the record carries one, else derived from `status` and `is_error` into the four
+ * buckets, and (PD-TOOLS-013 revision 2, OQ-238) into a fifth, `interrupted`, for a call its run cancelled: a fetch, an MCP
+ * call, an executor that threw on the cancel, a released delegation wait. Until revision 2 those derived to `tool_error`.
+ */
 function outcomeOf(t: ToolCallFacts): string {
   if (t.outcome_kind !== null && t.outcome_kind !== '') return t.outcome_kind;
+  if (t.failure_kind === 'interrupted') return 'interrupted';
   if (t.status === 'blocked' || t.status === 'denied' || t.status === 'rejected') return 'rejected';
   if (t.is_error === 1 || t.status === 'error' || t.status === 'failed') return 'tool_error';
   if (t.status === 'completed' || t.status === 'ok' || t.status === 'success') return 'success';

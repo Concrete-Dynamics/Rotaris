@@ -181,6 +181,23 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
     expect(section(renderSummary(factsOf(row, { metrics: alone })), 'Warnings')).toContain('- Timeouts: 0 (tool calls that timed out, a terminal\'s among them)');
   });
 
+  // PD-TOOLS-013 revision 2 (OQ-238, GC1, R-072): a call its run cancels, of any tool, carries failure kind `interrupted`, and
+  // one with no `outcome_kind` (a fetch, an MCP call, a call whose executor threw on the cancel, a released delegation
+  // wait) is counted under the histogram's `interrupted` bucket, where it was derived to `tool_error`; it files no issue,
+  // so Tool errors does not count it. The bucket totals still sum to the record count (REQ-SESSION-139).
+  it('a cancelled call with no outcome_kind is counted under interrupted, not tool_error, and Tool errors reads 0', () => {
+    const row = rowOf();
+    const cut = (n: number, tool: string) => ({ call_id: `c${n}`, agent_name: 'Ada', tool_name: tool, status: 'failed', elapsed_ms: n, is_error: 1, outcome_kind: null, failure_kind: 'interrupted' });
+    const records = [cut(1, 'fetch'), cut(2, 'mcp__notes__amend_note'), cut(3, 'todo'), cut(4, 'wait_for_delegations'), { call_id: 'c5', agent_name: 'Ada', tool_name: 'fetch', status: 'failed', elapsed_ms: 5, is_error: 1, outcome_kind: null, failure_kind: 'network_error' }];
+    const metrics = sessionMetrics(row, records, [], [{ kind: 'tool_error' }], 0, 0, 0);
+    expect(metrics.tool_outcomes).toEqual({ success: 0, tool_error: 1, rejected: 0, unknown: 0, interrupted: 4 });
+    expect(Object.values(metrics.tool_outcomes).reduce((a, b) => a + b, 0)).toBe(records.length);
+    const alone = sessionMetrics(row, records.slice(0, 4), [], [], 0, 0, 0);
+    const md = renderSummary(factsOf(row, { metrics: alone }));
+    expect(section(md, 'Warnings')).toContain('- Tool errors: 0 (counted from the issues record, where each tool_error issue is an entry)');
+    expect(md).toContain('interrupted 4');
+  });
+
   /*
    * REQ-SESSION-133: a count over a capped ring describes what is stored. Until finacc3 (F10) Permission denials and Tool
    * errors — and the Metrics lines that print the same figures — read as whole after the cap had dropped rows

@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Eighty-four.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Eighty-five.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -6721,6 +6721,64 @@ carries up to the window's size.
 > empty or whitespace-only `old_string` keeps REQ-TOOLS-189's plain reply; with a visible character every matching window holds
 > it, so the quote is non-empty text of the file and clause 5 holds. Pinned by a seventh case under "PD-TOOLS-014", red on the
 > code before ([`haet-edit-quotes-an-empty-window-for-a-blank-old-string`](../defects/fixed/haet-edit-quotes-an-empty-window-for-a-blank-old-string.md)).
+
+---
+
+<a id="pd-tools-015"></a>
+
+### PD-TOOLS-015 — a level-3 `write_file` edit carries the window's shift into `new_string` when `new_string` shares `old_string`'s indentation, and refuses when it cannot tell
+
+**The case, stated exhaustively.** `write_file` is called with `operation: edit`, `replace_all` false, `old_string` and
+`new_string` different, and `old_string` holding a visible (non-whitespace) character; `old_string` matches nowhere at
+REQ-TOOLS-136 levels 1 and 2, and it matches exactly one window at level 3 with the leading prefix P (added to `old_string`'s
+lines when the file's are deeper, removed from them when the file's are shallower). Let O be the leading whitespace of
+`old_string`'s first line that holds a visible character, W the leading whitespace of the window's corresponding line, and N
+the leading whitespace of `new_string`'s first line that holds a visible character. Level 3 requires O and W to differ, so the
+clauses below are disjoint. Everything outside this case — several level-3 windows, levels 1, 2 and 4, `replace_all`, an
+`old_string` with no visible character, and `haet_edit` and its alias `haet` ([`PD-TOOLS-014`](#pd-tools-014)) — is
+REQ-TOOLS-135's and REQ-TOOLS-136's, exactly as written.
+
+1. **No visible character.** When `new_string` holds no visible character (a deletion), it SHALL be written as given and the
+   reply SHALL be REQ-TOOLS-136's, unchanged.
+2. **N equals O: the shift.** `new_string` SHALL take the window's shift. In the deeper direction P is prepended to every line
+   of `new_string` that holds a visible character. In the shallower direction every such line must begin with P, and P is
+   removed from each. Lines with no visible character are written as given. The success SHALL keep REQ-TOOLS-135's message and
+   "Match level: 3." and add: `new_string was shifted by the same leading prefix <P as JSON> (<n> character(s) added|removed)
+   to the file's indentation.`
+3. **N equals W: as given.** `new_string` SHALL be written as given, and the success SHALL add after "Match level: 3.":
+   `new_string already carries the file's indentation and was written as given.`
+4. **Otherwise: refused.** In every other case — N equal to neither, or a shallower shift that a line of `new_string` holding a
+   visible character cannot take because it does not begin with P — the edit SHALL NOT be applied, the file SHALL NOT be
+   written, no undo entry SHALL be pushed, and the read record SHALL NOT change; the call fails. The reply SHALL open
+   `old_string matches <path> only at match level 3 (indentation shift), and new_string's indentation matches neither
+   old_string's nor the file's, so nothing was written.` — or, when a line lacks P, name that line of `new_string` and the
+   prefix in place of the second clause — and then give `PD-TOOLS-014`'s clauses 1, 2, 5 and 6 with these differences: there
+   is no hash, so its clause 3 is the opening's "nothing was written"; its clause 4 asks that both `old_string` and
+   `new_string` carry the file's indentation; the quote, sent back as `old_string`, needs no hash; and every pointer names
+   `read_file`. The window is quoted as one JSON string of at most 30,000 characters; a longer window is not quoted and the
+   reply gives `read_file`'s offset and limit instead. The facts SHALL come before the quote, so that REQ-SESSION-136's
+   2,000-character error record keeps them.
+
+**Why, and what it costs.** REQ-TOOLS-136 says a level-3 window "still matches" and that "a window match replaces whole
+lines", and is silent on whether the replacement takes the shift that let `old_string` match; the build wrote `new_string`
+unshifted (OQ-233). The only measurement points one way: in OQ-231's replay of the final duress pack at `a68f121`, all six
+level-3 misses (#292, #297, #304, #315, #321, #382) carried the same extra space in `new_string` as in `old_string`, so through
+`write_file` each would have landed one space off beside a success — a Markdown list item or code block changed, a Python or
+YAML meaning changed. Shifting unconditionally breaks the opposite case, a `new_string` already at the file's depth, which as
+built writes correctly. The indentation of `new_string`'s first visible line separates the two readable cases, and the tool
+already holds the prefix (`EditMatch.shifts`); where the line matches neither, the tool cannot tell what the caller meant, and
+a refusal costs one call where a wrong success costs a corrupted file the user may never notice. What it costs: one failed call
+and one REQ-SESSION-136 `tool_error` issue per ambiguous level-3 edit; `write_file` and `haet_edit` differ at level 3 (the one
+refuses every level-3 match, the other applies two of its cases); an implementation built from the specification alone writes
+unshifted; and a caller that deliberately indents a block by exactly P while sharing `old_string`'s wrong indentation is shifted
+twice, which takes a coincidence.
+
+> **Narrows:** REQ-TOOLS-136
+> **Extends:** REQ-TOOLS-135
+
+*Ruled under the owner's delegation, 2026-10-13 ([OQ-233](../architecture/open-questions.md#oq-233)); logged as [R-072](requests.md#r-072).
+Narrows REQ-TOOLS-136 (a level-3 match the case names is refused rather than applied, and one is applied with a shifted
+`new_string`); extends REQ-TOOLS-135 (one sentence added to the edit's success).*
 
 ---
 

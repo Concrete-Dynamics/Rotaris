@@ -11878,12 +11878,14 @@ review, 2026-10-07:* it left out point (b)'s last words, that elsewhere version 
 untracked; with them it is 662 characters, nearer 165 tokens). Finding D4 closes with it;
 the next default and duress live runs are the measurement.
 
+<a id="oq-233"></a>
+
 **OQ-233 — When `write_file`'s edit matches at REQ-TOOLS-136 level 3, is `new_string` shifted by the same prefix?**
 *(REQ-TOOLS-136, the four match levels and "a window match replaces whole lines", silent on whether the replacement takes
 the shift that let `old_string` match; REQ-TOOLS-135, the edit's report, which names the level. Raised 2026-10-07 by the
 R-072 consortium while ruling OQ-231 (finding D5 of the final duress live run at `a68f121`), which does not decide it, and
 recorded by fin32. The number lies in the range the round assigned fin33 (OQ-233 onward); whichever of the two lands second
-takes the next free number. Open.)*
+takes the next free number. Ruled 2026-10-13 under R-072.)*
 
 `applyMatch` (`packages/agent-tools/src/tools/files.ts`) writes `new_string` over a level-3 window exactly as given, unshifted,
 and reports "Match level: 3." beside the success; the case "level 3" in `packages/agent-tools/src/tools/tools.test.ts` pins it
@@ -11898,6 +11900,34 @@ file's depth. The specification fixes neither reading.
 
 **What a ruling decides.** Whether a level-3 `write_file` edit shifts `new_string` by the window's prefix, writes it as given
 (the build), or is refused with OQ-231's near-miss facts, as `haet_edit`'s now is.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** when `write_file`'s edit matches one
+window only at REQ-TOOLS-136 level 3, the indentation of `new_string`'s first visible line decides the outcome. If it equals
+`old_string`'s, `new_string` takes the window's shift. If it equals the file's, `new_string` is written as given. If `new_string`
+holds no visible character, it is written as given (a deletion). Every other case is refused and nothing is written, with the
+near-miss facts of `PD-TOOLS-014`. The success reply says which of the two applies. Recorded as
+[`PD-TOOLS-015`](../product/directives.md#pd-tools-015), which narrows REQ-TOOLS-136 and extends REQ-TOOLS-135 for `write_file`
+only; `haet_edit` and `PD-TOOLS-014` are unchanged, and no earlier ruling is revised (`PD-TOOLS-014` left `write_file` to this
+question).
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: shift `new_string` when its first non-blank line carries
+`old_string`'s first-line indentation, say so after "Match level: 3.", and refuse every other level-3 case with OQ-231's
+near-miss facts — `PD-TOOLS-015` narrowing REQ-TOOLS-136. *Advocate B (the system's lens)*: shift `new_string` under the same
+test, and otherwise write it as given with a reply saying "written as given; verify its indentation" — `PD-TOOLS-015` extending
+REQ-TOOLS-136, which is silent on `new_string`. **The ruling followed both**: the shift both proposed, which repairs the measured
+case (6 of 6 level-3 misses in the `a68f121` pack carried the same extra space in both strings); from B the as-given write for a
+`new_string` at the file's depth or with no visible character, which reads unambiguously and as built writes correctly (A would
+have refused the case the "level 3" test pins); from A the refusal, but only where the tool cannot tell what the caller meant (a
+`new_string` at a depth equal to neither string's, a shallower shift a visible line cannot take), where B's "written as given"
+would be the same silent wrong result this question exists to remove. The three conditions are disjoint because level 3 requires
+the two first-line indentations to differ. **Rejected:** confirming the build (a known silent mis-indentation beside a success);
+shifting unconditionally (breaks the as-given case); refusing every level-3 match as `haet_edit` does (wastes a call in the
+common case, and PD-TOOLS-014's first execution found the retry with the quote and the model's own deeper `new_string` would
+still land one space deep). **Costs kept on record:** one failed call and one REQ-SESSION-136 `tool_error` per ambiguous level-3
+edit; `write_file` and `haet_edit` differ at level 3; an implementation built from the specification alone writes unshifted; a
+rare double shift when a caller deliberately indents by exactly the prefix. **Set aside, raised as its own question:** both
+advocates read from the code that a CRLF file meets `write_file`'s level-2 apply with mixed line endings; this ruling does not
+decide it ([OQ-246](#oq-246)).
 
 <a id="oq-234"></a>
 
@@ -12288,3 +12318,25 @@ built app by `pnpm artifacts-proof` launch 7. **What a live run then shows:** on
 how many; over it, the observation names the id left out for size with the budget, a later attachment that fits is still carried,
 the child's block names the same id, the `context_selection` entry's `attached_elided` lists it and `summary.md`'s Mostly-elided
 line counts it.
+
+<a id="oq-246"></a>
+
+**OQ-246 — When `write_file`'s edit matches at REQ-TOOLS-136 level 2, does the replacement keep the window's line endings
+and trailing whitespace?** *(REQ-TOOLS-136, level 2 "exact after trailing whitespace is stripped from every line on both sides"
+and "a window match replaces whole lines"; REQ-TOOLS-135, the success that reports the lines changed; `PD-STARTUP-001`, Windows
+the only platform shipped; `PD-TOOLS-014`, `haet_edit`'s near miss, which quotes the `\r`. Raised 2026-10-13 by fin35 from the
+case both advocates of OQ-233's ruling read from the code, which that ruling set aside. The number is the next after the round's
+assigned OQ-245, taken by this plan; if another plan lands it first, this one takes the next free number. Open.)*
+
+On a CRLF file a multi-line `old_string` written with `\n` alone matches only at level 2, and `applyMatch`
+(`packages/agent-tools/src/tools/files.ts`) writes `new_string`'s `\n`-only lines over the window's `\r\n` lines: the file is
+left with mixed line endings, and the success counts an unchanged line as changed because it lost its `\r`. The same apply drops
+a replaced line's trailing spaces that `new_string` does not repeat (a Markdown hard break). Probed and recorded as
+[`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md`](../defects/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md).
+The specification fixes neither keeping the window's endings nor writing `new_string`'s.
+
+**What the build proceeds under.** The apply as built: `new_string`'s lines written as given.
+
+**What a ruling decides.** Whether a level-2 `write_file` edit carries each window line's line ending (and trailing whitespace)
+into the replacement, writes `new_string` as given, or is refused with `PD-TOOLS-014`'s level-2 near-miss facts, as `haet_edit`'s
+is.

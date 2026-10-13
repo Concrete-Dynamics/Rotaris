@@ -12470,6 +12470,31 @@ second sentence holds for them either way. **What a ruling decides.** Whether RE
 whether it should name the platform-convention variables, or REQ-STARTUP-145 should say the convention's variables are read —
 or whether it lists only the variables this product defines or depends on beyond the platform's own conventions.
 
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** the four reads stay exactly as
+built, and REQ-STARTUP-147 is amended in place, with no directive, so that its list names a class of **platform-convention
+directory variables**: `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_RUNTIME_DIR` on Linux, and `LOCALAPPDATA` on Windows. Each
+locates a directory and does nothing else; a value is used only when it names an absolute directory (fully qualified on
+Windows), and otherwise the convention's default is taken; the list's second sentence binds every member. The home and
+temporary directories the operating system reports are read through the platform's own interfaces, and the variables those
+interfaces consult are outside the list. The amendment and its reason are recorded in
+`docs/spec/resolutions/11-startup-distribution-updates.md`. Nothing a user meets changes.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: keep the reads and amend REQ-STARTUP-147 in place so its
+list names the four as a class that locates a directory and decides nothing, which makes the list truly exhaustive for
+REQ-STARTUP-111's acceptance. *Advocate B (the system's lens)*: keep the reads and record them in a new directive,
+`PD-STARTUP-006`, extending REQ-STARTUP-145 and -147, which also accounts for the home and temporary-directory variables the
+platform's own lookups consult. **The ruling followed both**: A's form, an amendment in place, because the corpus already depends
+on these reads — REQ-CONFIG-001 spells the Windows path as `%LOCALAPPDATA%\rotaris\rotaris\` and REQ-UIBENCH-039 requires
+`XDG_CONFIG_HOME` to be honoured — so an exhaustive REQ-STARTUP-147 disagreed with two live requirements, and a disagreement
+within the corpus is an amendment (OQ-21's and OQ-227's precedent), not a directive, which records the owner wanting something
+other than what the corpus states; and B's content, the stated class with the home and temporary lookups assigned explicitly,
+since naming only the four would leave `HOME`/`USERPROFILE` and `TMPDIR`/`TEMP` unaccounted for (A's own first risk).
+**Rejected:** B's directive (it would record behaviour nobody is changing as a departure); confirming without amending (a list
+REQ-STARTUP-111's acceptance reads as closed that is not). Checked against the code: `dirs.ts`'s `xdgBaseDirectory` and
+`localAppDataDirectory`, `preferences.ts`'s `resolvePreferenceRoot` and `instance.ts`'s `socketDirectoryFor` each take a value
+only when it is absolute and otherwise the default, and none selects a workspace, touches the update check or permits a second
+instance.
+
 <a id="oq-248"></a>
 
 **OQ-248 — Is the hand-over endpoint a launch opens before it loses the claim a write REQ-STARTUP-164 forbids?** *(REQ-STARTUP-164,
@@ -12496,6 +12521,36 @@ resolution, is "a write" in REQ-STARTUP-164's sense — and if it is, which of A
 opened only after the record is won (the order fin30 had, with the double-instance window the repaired note describes), or a
 form of endpoint that is no file (Linux's abstract socket namespace; nothing equivalent on macOS), or the record's own write
 taken to include the endpoint it names.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** the record is the file and the
+endpoint it names, together with anything a claim attempt creates to hold that endpoint; all of these are "the record itself" in
+REQ-STARTUP-164, because REQ-STARTUP-161 makes "how a launch reaches it" part of what the record is and leaves its form to the
+implementation. ADR-0055's order stands: the endpoint listens first, then the record is written. A launch that is handed over
+**leaves nothing behind**: whatever its attempt created for the endpoint — on the temporary-directory fallback a per-attempt
+private directory, which replaces the shared `rotaris-<uid>` one — is removed before it ends. A reclaim removes the stale
+endpoint of a dead recorded process along with the record file. No directive: no requirement is contradicted, so the
+specification keeps its text; the ruling is recorded here and in ADR-0055. On Windows (the released platform, `PD-STARTUP-001`)
+the endpoint is a named pipe and nothing touches disk.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: confirm as built, reading the endpoint as the record's own
+write; record it in ADR-0055 and the sequence view; repair the open denial note with a per-attempt `mkdtemp` directory removed
+with the socket, which this reading covers. *Advocate B (the system's lens)*: confirm and amend the record only, restating
+ADR-0055's second decision as "a launch that is handed over leaves nothing behind"; treat `rotaris-<uid>` as a standing runtime
+location; flag that crash-orphaned sockets build up. **The ruling followed both**: from both the reading anchored in
+REQ-STARTUP-161 and ADR-0055's order (reversing it reopens the double-instance window fin34 repaired; Linux's abstract namespace
+gives every local user an unguarded hand-over channel and has no macOS equivalent); B's "leaves nothing behind"; from A the
+per-attempt directory, since `socketDirectoryFor` creates `rotaris-<uid>` before the claim, so a handed-over launch could leave
+it behind — B's "standing runtime location" is the weaker reading, and the per-attempt directory makes the rule literally true
+and closes the denial note; and B's risk 2 followed to its end: if the endpoint belongs to the record, reclaiming the record
+removes the endpoint too. **Rejected:** the endpoint opened after the record is won; the abstract socket namespace; deferring.
+**Costs kept on record:** the reading takes "the record itself" broadly, anchored in REQ-STARTUP-161's own words; a launch
+killed between its `listen` and its `closeEndpoint`, or an instance that crashes, still leaves its endpoint until the next
+reclaim removes it; a reclaim leaves the endpoint of a recorded process that is running but unresponsive, whose own closer
+removes it. Settles
+[`another-local-user-can-deny-the-instance-sockets-temporary-fallback`](../defects/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md),
+[`a-handed-over-launch-can-leave-the-private-socket-directory-behind`](../defects/a-handed-over-launch-can-leave-the-private-socket-directory-behind.md)
+and [`a-reclaim-leaves-the-dead-instances-socket-behind`](../defects/a-reclaim-leaves-the-dead-instances-socket-behind.md)
+once built.
 
 **OQ-249 — Does REQ-TOOLS-145's single active task bound a coordinator's parallel delegations?** *(REQ-TOOLS-145, "at most one
 task may be `IN_PROGRESS` at a time"; REQ-TOOLS-146, `replace`'s protection of the active task; `PD-TOOLS-008` revision 1,

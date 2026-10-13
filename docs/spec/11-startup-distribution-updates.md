@@ -515,6 +515,16 @@ Per-workspace state is not per-user state and nothing in this clause reaches it.
 > packaged Windows build outside `InstallDir` decides that no check happens. Main removes both variables from its
 > own environment before it starts any child, so no child inherits them.
 
+> *Amended 2026-10-13 ([OQ-247](../architecture/open-questions.md#oq-247), ruled under
+> [R-072](../product/requests.md#r-072)):* the list further names the **platform-convention directory variables**:
+> `XDG_CONFIG_HOME` and `XDG_DATA_HOME` (Linux, the per-user configuration and data homes of REQ-STARTUP-145),
+> `XDG_RUNTIME_DIR` (Linux, the first directory the instance claim's hand-over socket is placed in, REQ-STARTUP-161 and
+> REQ-STARTUP-164) and `LOCALAPPDATA` (Windows, the machine-local per-user root of REQ-STARTUP-145 and REQ-CONFIG-001). Each
+> locates a directory and decides nothing else; a value is used only when it names an absolute directory (fully qualified
+> on Windows), and otherwise the convention's default is taken; the second sentence above binds each of them. The home and
+> temporary directories the operating system reports are taken through the platform's own interfaces, and the variables
+> those interfaces consult are outside this list.
+
 **REQ-STARTUP-148** — On Windows, every setup child process (probe or warm-up) SHALL run with no visible console window (no window flashes during a quiet startup), and `.bat`/`.cmd` launchers SHALL be executed through the command interpreter with the pinned package arguments preserved verbatim in the child's command line.
 
 **REQ-STARTUP-149** — Exit codes belong to the maintainer-side build and release pipeline only (REQ-STARTUP-008), which is where one program reports to another; the desktop application defines none, having no invocation a user or a script can make (REQ-STARTUP-039). Pipeline exit codes: build/release commands → 0 success, 1 handled error (with `error: …` on stderr), 2 usage error; version-guard and package-pin mismatch → 1, stopping the release (REQ-STARTUP-028); notices validation failure → 1, failing that platform's job (REQ-STARTUP-143).

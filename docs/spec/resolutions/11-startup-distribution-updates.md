@@ -8,6 +8,23 @@ status: resolved
 # Resolution Record — Domain 11, Application Startup, Distribution, and Updates
 
 
+> ## Amendment, 2026-10-13 — the platform-convention directory variables (OQ-247)
+>
+> `REQ-STARTUP-147`'s list of the environment variables this domain reads gains a class: the platform-convention directory
+> variables `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_RUNTIME_DIR` (Linux) and `LOCALAPPDATA` (Windows), each locating a
+> directory and deciding nothing else, used only when its value names an absolute directory and otherwise replaced by the
+> convention's default, and bound by the list's second sentence. The home and temporary directories the operating system
+> reports are taken through the platform's own interfaces, outside the list. The requirement's earlier text is kept; the
+> amendment is written beneath it.
+>
+> **Why this is an amendment and not a directive.** Read as exhaustive — and `REQ-STARTUP-111`'s acceptance reads it as a
+> closed enumeration — the list omitted reads two live requirements depend on: `REQ-CONFIG-001` spells the Windows root as
+> `%LOCALAPPDATA%\rotaris\rotaris\`, and `REQ-UIBENCH-039` requires `XDG_CONFIG_HOME` to be honoured. Live requirements
+> disagreed, and nothing the product does changes. Ruled under the owner's delegation
+> ([R-072](../../product/requests.md#r-072)); the ruling is in
+> [`open-questions.md`](../../architecture/open-questions.md#oq-247).
+
+
 > ## Superseded by the storage rulings (2026-09-01)
 >
 > The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and

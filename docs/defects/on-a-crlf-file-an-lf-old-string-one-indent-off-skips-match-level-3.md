@@ -7,15 +7,17 @@ a model writes in JSON never does, so an LF `old_string` whose only difference i
 level 3. It falls to level 4 or to no match, both outside `PD-TOOLS-014` and `PD-TOOLS-015`.
 
 Measured with the built tools, one tab shallow, the same three-line block (`\tif (item.visible) {` … `\t}` against the file's
-`\t\tif …`), LF file beside CRLF file:
+`\t\tif …`), LF file beside CRLF file; the CRLF `write_file` cell is also what `edits-proof`'s `shift-lf` step reads through the
+run host (`results.json`, `observed.shiftLf`):
 
 | | LF file | CRLF file |
 | --- | --- | --- |
 | `write_file` edit | level 3, `new_string was shifted by the same leading prefix "\t"` (PD-TOOLS-015 clause 2), block at the file's depth | **level 4 (similarity 0.91), "Verify the result.", `new_string` written as given: the block lands one tab too shallow beside a success** (`+3 -3`) |
 | `haet_edit` | near miss at match level 3, the window quoted (PD-TOOLS-014) | the plain miss, "old_string was not found exactly … Read it again with haet_read." |
 
-A shorter window (`edits-proof`'s `shift-lf` step, three short lines) scores under 0.85 and reads "not found at any of the four
-match levels": no write, but no near-miss guidance either. Windows is the only platform shipped (`PD-STARTUP-001`), where CRLF
+A shorter window scores under 0.85 and reads "not found at any of the four match levels": no write, but no near-miss guidance
+either — `check`'s `if (name) {` … `}` sent LF one tab shallow, `matchEdit` returns no match (the shape `edits-proof`'s `shift`
+step sends WITH the file's `\r`s, and so reaches level 3). Windows is the only platform shipped (`PD-STARTUP-001`), where CRLF
 files are ordinary, so the guarantee `PD-TOOLS-015` was ruled for — a mis-indented block never lands beside a success — does not
 hold where it matters most, and `PD-TOOLS-014`'s reply is not given.
 
@@ -37,3 +39,6 @@ success) is what the CRLF case still does, one level down.
   write.
 - `apps/desktop/scripts/edits-proof.mjs` — `shift` (level 3 reached with a `\r`-carrying `old_string`) and `shift-lf` (the LF
   shape, recorded in `results.json`, not asserted).
+
+*Corrected 2026-10-13 by the bundle's review, before it landed: the shorter window was first attributed to `edits-proof`'s
+`shift-lf` step, which is the three-line `render` block of the table and applies at level 4 (similarity 0.91) in every run.*

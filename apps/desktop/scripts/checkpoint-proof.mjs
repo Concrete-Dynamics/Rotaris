@@ -35,7 +35,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { describeLingeringHolder, lockHolderAfterExit } from './lib/lock-holder.mjs';
 
@@ -505,12 +505,13 @@ const disabled = await launch('disabled', workspace, local, preferences, {
   writeFileSync(join(hws, 'README.md'), '# Checkpoint proof workspace (hooked)\n');
   git(hws, 'add', 'README.md', '.gitignore');
   git(hws, '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'first');
-  // The global scope: `<XDG_CONFIG_HOME>/rotaris/agents.yaml` (`resolveUserDirs`); proofIsolationEnv points XDG_CONFIG_HOME
-  // at `<local>/rotaris/config`. Windows reads `%LOCALAPPDATA%\\rotaris\\rotaris\\`; the command is POSIX shell, so this launch
-  // speaks for POSIX hosts only and says so on Windows.
+  // The global scope: `agents.yaml` in the product's configuration directory (`resolveUserDirs().config`), which the
+  // harness's `configDirFor` answers for the launch isolated at `hlocal` on the running platform — the one place a proof
+  // may spell it (R-062, `lib/launch-sites.test.ts`). The command is POSIX shell, so this launch speaks for POSIX hosts
+  // only and says so on Windows.
   if (process.platform === 'win32') results.hookCapture = { skipped: 'the hook command is POSIX shell; not run on Windows' };
   else {
-    const globalDir = join(hlocal, 'rotaris', 'config', 'rotaris');
+    const globalDir = configDirFor(hlocal);
     mkdirSync(globalDir, { recursive: true });
     writeFileSync(join(globalDir, 'agents.yaml'), ['hooks:', '  entries:', '    - event: iteration_end', '      command: "printf \'formatted by the iteration_end hook\\n\' > HOOK.txt"', ''].join('\n'));
     const hooked = await launch('hook-capture', hws, hlocal, hprefs, {

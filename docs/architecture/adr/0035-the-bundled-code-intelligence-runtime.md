@@ -407,7 +407,7 @@ passed (238 to 242 s). All 20 setup launches pressed Start 31 to 123 ms after th
 launches pressed Cancel while `create` ran and read `Cancelled`. Then three whole runs in a row passed (529 s, 528 s, 524 s), with another agent's proofs on the host for parts of
 all three: Start 41 to 128 ms after the notice in all 15 setup launches, Cancel pressed and `Cancelled` read in each
 `setup-cancel`, the window check recorded not measured on linux, and the drift refused. **What it could not show:** anything on
-Windows; the packaged branch and section 7 (IC-3), as before.
+Windows; the packaged branch and section 7 (IC-3 — *corrected 2026-10-13: a Windows x64 host, deferred with the pipeline under R-071; IC-3 binds Linux and macOS artifacts*), as before.
 
 **The setup at the run host's shutdown, and what a step started (2026-10-01).** REQ-MCP-099's termination (ask, 5 s
 grace, force-kill) reached only the step itself on POSIX. `child.kill` signals one process, and the step was spawned

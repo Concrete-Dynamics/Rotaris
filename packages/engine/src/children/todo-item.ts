@@ -80,7 +80,10 @@ export function admitTodoItem(req: TodoItemRequest): TodoItemAdmission {
     if (req.implementation) {
       // (b) An implementation delegation serves an open item, so the plan never shows COMPLETED work still under way.
       if (TERMINAL_ITEM.has(task.state)) {
-        return { ok: false, requirement: 'REQ-ORCH-028', reason: `todo_item '${task.id}' names '${task.name}', which is ${task.state}, and a delegation to '${req.persona}', which writes workspace files, serves an open item. Reopen it with todo update, or name or add an open item. ${openItemsSentence(req.plan.document)}` };
+        // The add is `openItemsSentence`'s to offer, once; until fin39 this sentence offered it too, and offered to name an open
+        // item when the plan held none (docs/defects/fixed/the-terminal-item-refusal-offers-the-add-twice.md).
+        const reopen = tasks.some((t) => !TERMINAL_ITEM.has(t.state)) ? 'Reopen it with todo update, or name an open item.' : 'Reopen it with todo update.';
+        return { ok: false, requirement: 'REQ-ORCH-028', reason: `todo_item '${task.id}' names '${task.name}', which is ${task.state}, and a delegation to '${req.persona}', which writes workspace files, serves an open item. ${reopen} ${openItemsSentence(req.plan.document)}` };
       }
       const held = heldRefusal(task.id, task.name, req.holderOf);
       if (held !== null) return held;

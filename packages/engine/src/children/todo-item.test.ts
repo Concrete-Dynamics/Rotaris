@@ -25,6 +25,15 @@ describe('admitTodoItem (PD-TOOLS-006 revision 6)', () => {
     expect(admitTodoItem({ named: '00000001', inherited: null, plan: plan(['PENDING', 'ABANDONED']), implementation: false, persona: 'verifier', holderOf: none })).toEqual({ ok: true, item: '00000001' });
   });
 
+  // fin38's review: the refusal said "or name or add an open item" and openItemsSentence then offered the add again, and with
+  // no open item it offered to name one (docs/defects/fixed/the-terminal-item-refusal-offers-the-add-twice.md).
+  it('(b) the refusal offers the add once: through the open items it lists, or alone when there are none', () => {
+    const listed = admitTodoItem({ named: '00000001', inherited: null, plan: plan(['PENDING', 'COMPLETED']), implementation: true, persona: 'coding-agent', holderOf: none });
+    expect(listed).toEqual({ ok: false, requirement: 'REQ-ORCH-028', reason: "todo_item '00000001' names 'Item 1', which is COMPLETED, and a delegation to 'coding-agent', which writes workspace files, serves an open item. Reopen it with todo update, or name an open item. Its open items: Item 0 (00000000). If none of them is this work, add one with the todo tool (add_task) and name its id." });
+    const empty = admitTodoItem({ named: '00000000', inherited: null, plan: plan(['ABANDONED']), implementation: true, persona: 'coding-agent', holderOf: none });
+    expect(empty).toEqual({ ok: false, requirement: 'REQ-ORCH-028', reason: "todo_item '00000000' names 'Item 0', which is ABANDONED, and a delegation to 'coding-agent', which writes workspace files, serves an open item. Reopen it with todo update. It holds no open item: add one with the todo tool (add_task) and name its id." });
+  });
+
   it('(c) a paused holder holds — paused is no terminal state — and is named with its task id', () => {
     expect(isTerminalChildState('paused')).toBe(false);
     const r = admitTodoItem({ named: '00000000', inherited: null, plan: plan(['IN_PROGRESS']), implementation: true, persona: 'coding-agent', holderOf: (item) => (item === '00000000' ? holder : undefined) });

@@ -7,6 +7,12 @@ once in `openItemsSentence`, which fin38 made name the add whatever the plan hol
 add an open item. It holds no open item: add one …", offering to name an item that does not exist. Harmless but noisy in a
 reply a model acts on. Found by fin38's review (optional finding), recorded by fin39 on `origin/main` `e6a04a3`.
 
+**Repaired 2026-10-13 (fin39, `fin39-insert-noop-optionals`).** The refusal's own sentence no longer offers the add, which is
+`openItemsSentence`'s: "Reopen it with todo update, or name an open item." when the plan holds one, and "Reopen it with todo
+update." when it holds none (`admitTodoItem`, `packages/engine/src/children/todo-item.ts`). Pinned by the "(b) the refusal offers
+the add once" case in `packages/engine/src/children/todo-item.test.ts`, red on the code before, and by the updated "(b)" case in
+`children.test.ts`.
+
 ## Specs
 
 - No requirement's text is contradicted: REQ-ORCH-028 and `PD-TOOLS-006` revision 6 fix the refusal and its way forward, not

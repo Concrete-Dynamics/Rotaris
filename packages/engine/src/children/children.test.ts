@@ -2457,7 +2457,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         toolCalls([todoCall('t1', ['COMPLETED', 'ABANDONED', 'PENDING'])]),
         toolCalls([del('d1', 'coding-agent', 'redo', { todo_item: '0000000a' }), del('d2', 'tester', 'retest', { todo_item: '0000000b' }), del('d3', 'codebase-analyst', 'review', { todo_item: '0000000a' })]),
       ]);
-      expect(observed[0]).toBe("Task 'redo': rejected — todo_item '0000000a' names 'Implement it', which is COMPLETED, and a delegation to 'coding-agent', which writes workspace files, serves an open item. Reopen it with todo update, or name or add an open item. Its open items: Document it (0000000c). If none of them is this work, add one with the todo tool (add_task) and name its id.");
+      expect(observed[0]).toBe("Task 'redo': rejected — todo_item '0000000a' names 'Implement it', which is COMPLETED, and a delegation to 'coding-agent', which writes workspace files, serves an open item. Reopen it with todo update, or name an open item. Its open items: Document it (0000000c). If none of them is this work, add one with the todo tool (add_task) and name its id.");
       expect(observed[1]).toMatch(/^Task 'retest': rejected — todo_item '0000000b' names 'Test it', which is ABANDONED/);
       expect(observed[2]).toMatch(/^Task 'review': queued/);
       expect(rows.map((c) => [c.canonical_name, c.todo_item])).toEqual([['review', '0000000a']]);

@@ -7,7 +7,7 @@ CRLF ones, and the success ("Inserted 1 line into … at line 1.") says nothing 
 Windows is the only platform shipped (`PD-STARTUP-001`), where CRLF files are ordinary; `PD-TOOLS-016` and `PD-TOOLS-017` keep a
 CRLF file's line endings for every `edit` and not for `insert`, so the one write path left mixes endings. Found by the R-072
 consortium's ruling of OQ-254, which asked that it be recorded as its own note and question; raised as
-[OQ-259](../../architecture/open-questions.md#oq-259). Recorded, not repaired.
+[OQ-259](../../architecture/open-questions.md#oq-259). Recorded by fin38 (`b6d85c9`), not repaired then.
 
 **Repaired 2026-10-13 (fin39, `fin39-insert-noop-optionals`), under `PD-TOOLS-018`** ([OQ-259](../../architecture/open-questions.md#oq-259),
 ruled under R-072). `write_file`'s insert goes through `carryInsert` (`packages/agent-tools/src/tools/files.ts`), which reads

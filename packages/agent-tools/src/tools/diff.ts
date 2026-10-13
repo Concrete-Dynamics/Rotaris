@@ -86,6 +86,45 @@ function changesOf(ops: readonly Op[], before: readonly string[], after: readonl
   return out;
 }
 
+/** The number of lines the two sides share at the start, and at the end without overlapping the start. */
+function commonEnds(before: readonly string[], after: readonly string[]): { head: number; tail: number } {
+  let head = 0;
+  while (head < before.length && head < after.length && before[head] === after[head]) head += 1;
+  let tail = 0;
+  while (tail < before.length - head && tail < after.length - head && before[before.length - 1 - tail] === after[after.length - 1 - tail]) tail += 1;
+  return { head, tail };
+}
+
+/**
+ * The LCS table's walk over a region, in walk order: from the front, the two current lines are kept when equal; otherwise
+ * the `before` line is removed when that leaves the remaining common subsequence no shorter, and the `after` line is added
+ * otherwise; what is left on either side is removed, then added. Null past the table's bound. One walk serves the diff row's
+ * count (`lcsChanges`) and `PD-TOOLS-016`'s pairing (`linePairs`), which writes this walk out as its clause 1.
+ */
+function tableWalk(b: readonly string[], a: readonly string[]): Op[] | null {
+  const n = b.length;
+  const m = a.length;
+  if (n * m > LCS_CELLS) return null;
+  const dp: Uint32Array[] = [];
+  for (let i = 0; i <= n; i += 1) dp.push(new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i -= 1) {
+    for (let j = m - 1; j >= 0; j -= 1) {
+      dp[i]![j] = b[i] === a[j] ? (dp[i + 1]![j + 1] ?? 0) + 1 : Math.max(dp[i + 1]![j] ?? 0, dp[i]![j + 1] ?? 0);
+    }
+  }
+  const ops: Op[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (b[i] === a[j]) { ops.push('='); i += 1; j += 1; }
+    else if ((dp[i + 1]![j] ?? 0) >= (dp[i]![j + 1] ?? 0)) { ops.push('-'); i += 1; }
+    else { ops.push('+'); j += 1; }
+  }
+  while (i < n) { ops.push('-'); i += 1; }
+  while (j < m) { ops.push('+'); j += 1; }
+  return ops;
+}
+
 /**
  * The changed lines, numbered in the file they belong to (`-` in the before, `+` in the after). The lines the two sides
  * share at the start and at the end are taken off first, so the table spans the changed region alone and a one-line edit
@@ -98,39 +137,52 @@ function changesOf(ops: readonly Op[], before: readonly string[], after: readonl
  * added, never the file's.
  */
 function lcsChanges(before: readonly string[], after: readonly string[]): Change[] {
-  let head = 0;
-  while (head < before.length && head < after.length && before[head] === after[head]) head += 1;
-  let tail = 0;
-  while (tail < before.length - head && tail < after.length - head && before[before.length - 1 - tail] === after[after.length - 1 - tail]) tail += 1;
+  const { head, tail } = commonEnds(before, after);
   const b = before.slice(head, before.length - tail);
   const a = after.slice(head, after.length - tail);
   const n = b.length;
   const m = a.length;
-  if (n * m > LCS_CELLS) {
+  const walk = tableWalk(b, a);
+  if (walk === null) {
     // The search may compare as many lines as the table may hold cells, and one more pass over the region, so a long run
     // the two sides share between two changes is never what sends it to the fallback.
     const ops = shortestEdit(b, a, EDIT_DISTANCE_BOUND, LCS_CELLS + n + m);
     if (ops !== null) return changesOf(ops, b, a, head);
     return [...b.map((t, i) => ({ line: head + i + 1, sign: '-' as const, text: t })), ...a.map((t, i) => ({ line: head + i + 1, sign: '+' as const, text: t }))];
   }
-  const dp: Uint32Array[] = [];
-  for (let i = 0; i <= n; i += 1) dp.push(new Uint32Array(m + 1));
-  for (let i = n - 1; i >= 0; i -= 1) {
-    for (let j = m - 1; j >= 0; j -= 1) {
-      dp[i]![j] = b[i] === a[j] ? (dp[i + 1]![j + 1] ?? 0) + 1 : Math.max(dp[i + 1]![j] ?? 0, dp[i]![j + 1] ?? 0);
-    }
-  }
+  // In walk order, as the table's walk has always drawn them.
   const out: Change[] = [];
   let i = 0;
   let j = 0;
-  while (i < n && j < m) {
-    if (b[i] === a[j]) { i += 1; j += 1; }
-    else if ((dp[i + 1]![j] ?? 0) >= (dp[i]![j + 1] ?? 0)) { out.push({ line: head + i + 1, sign: '-', text: b[i] as string }); i += 1; }
+  for (const op of walk) {
+    if (op === '=') { i += 1; j += 1; }
+    else if (op === '-') { out.push({ line: head + i + 1, sign: '-', text: b[i] as string }); i += 1; }
     else { out.push({ line: head + j + 1, sign: '+', text: a[j] as string }); j += 1; }
   }
-  while (i < n) { out.push({ line: head + i + 1, sign: '-', text: b[i] as string }); i += 1; }
-  while (j < m) { out.push({ line: head + j + 1, sign: '+', text: a[j] as string }); j += 1; }
   return out;
+}
+
+/**
+ * `PD-TOOLS-016` clause 1: which line of `after` pairs with which line of `before`, as `[beforeIndex, afterIndex]` in order —
+ * the equal leading run, then the table walk's kept lines over the region between, then the equal trailing run. Past the
+ * table's bound (more than 4,000,000 line pairs between the runs) only the two runs pair.
+ */
+export function linePairs(before: readonly string[], after: readonly string[]): [number, number][] {
+  const { head, tail } = commonEnds(before, after);
+  const pairs: [number, number][] = [];
+  for (let k = 0; k < head; k += 1) pairs.push([k, k]);
+  const walk = tableWalk(before.slice(head, before.length - tail), after.slice(head, after.length - tail));
+  if (walk !== null) {
+    let i = head;
+    let j = head;
+    for (const op of walk) {
+      if (op === '=') { pairs.push([i, j]); i += 1; j += 1; }
+      else if (op === '-') i += 1;
+      else j += 1;
+    }
+  }
+  for (let t = tail; t > 0; t -= 1) pairs.push([before.length - t, after.length - t]);
+  return pairs;
 }
 
 /**

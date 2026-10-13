@@ -329,7 +329,8 @@ root ran two or more stores an agent plan (`lib/coordinator-todo.mjs`); each cal
 NOTE. By the K2 finding, the edit, resume and frictions sessions of the packs at `c2fdd6a` and `c2a9444` would have failed both.
 Since fin32 (PD-TOOLS-014, OQ-231, live-run finding D5) a NOTE counts the `haet_edit`/`haet` misses that named a match level,
 those followed by a terminal call of the same agent before its next edit (the directive's target is 0) and those whose next
-edit succeeded on the same path (`lib/near-miss-edits.mjs`); a run with none says so.
+edit succeeded on the same path (`lib/near-miss-edits.mjs`); a run with none says so. Since fin36 (PD-TOOLS-014 revision 2,
+OQ-252) it also counts those whose next edit on the same path was refused "Found N occurrences" (target 0).
 Since fin33 (`PD-TOOLS-008` revision 2, `PD-TOOLS-006` revision 7, OQ-249) no coordinator's plan records a running child's item
 `PENDING` and none closes an item an implementation child still holds (`heldItemReading`, `lib/coordinator-todo.mjs`), with
 single-active refusals in coordinating sessions a NOTE; and (`PD-TOOLS-006` revision 8, OQ-250) a NOTE counts `delegate` calls

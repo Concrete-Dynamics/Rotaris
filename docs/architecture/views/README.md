@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-13**
 
+**A window-match `write_file` edit keeps the file's line endings and unchanged lines (PD-TOOLS-016, OQ-246); a near-miss quote
+whose text recurs is flagged (PD-TOOLS-014 revision 2, OQ-252; fin36).** `carryWindow` (`agent-tools/src/tools/files.ts`) runs
+after `shiftNewString` for every single-window match above level 1, pairing at level 2 through `linePairs`, which
+`diff.ts` now shares with `lcsChanges` (`commonEnds`, `tableWalk`); `nearMissMessage` counts each quoted window's level-1
+occurrences (`levelOneLines`). `live-run.mjs`'s near-miss NOTE counts retries refused "Found N occurrences"
+(`lib/near-miss-edits.mjs`). The **runtime view**'s file-tools paragraph says so. No package, edge, process, channel, command or
+store column changed.
+
 **A cross-file code-intelligence EDIT call lists every file it changed (OQ-245, XE1 ruled under R-072; PD-ORCH-004,
 REQ-ORCH-108, REQ-ORCH-109; fin35).** The manifest's `editArguments` carry a `scope` (`argument`, or `reach` with `project` or
 `path`); `codeIntelligenceEdit` (`config/src/mcp/code-intelligence.ts`) returns a reach call's base; the run host's MCP

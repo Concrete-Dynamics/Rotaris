@@ -13,11 +13,22 @@ affected: it applies level 1 only, and `PD-TOOLS-014`'s near-miss quote carries 
 Read from the code by both advocates of OQ-233's ruling (R-072, 2026-10-13) and confirmed by the probe; that ruling does not
 decide it. Recorded, not repaired.
 
+**Repaired 2026-10-13 (fin36), under [`PD-TOOLS-016`](../../product/directives.md#pd-tools-016)
+([OQ-246](../../architecture/open-questions.md#oq-246), ruled under R-072).** `carryWindow`
+(`packages/agent-tools/src/tools/files.ts`) runs for every single-window match above level 1: at level 2 each line of
+`new_string` paired with an identical line of `old_string` by `linePairs` (`diff.ts`, the diff row's own walk) is written as the
+window's own line, and on a CRLF window each replacement line a line break follows gains `\r`, the success adding "new_string
+was written with the file's CRLF line endings.". The probe now leaves `ONE\r\ntwo\r\nthree\r\n` and reports "2 lines replaced by
+2 at line 1 (+1 -1)", and an unchanged interior hard break keeps its spaces. Pinned by twelve cases under "PD-TOOLS-016" in
+`packages/agent-tools/src/tools/tools.test.ts` (ten red on the code before, one of them on the description sentence alone) and `diff.test.ts`'s `linePairs` cases. The level-1
+sibling (an exact match writing `new_string`'s LF lines) is not decided by the directive and is recorded on its own as
+[`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md).
+
 ## Specs
 
 - No requirement's text is contradicted. REQ-TOOLS-136 makes level 2 a match ("exact after trailing whitespace is stripped
   from every line on both sides") and says "a window match replaces whole lines", silent on the line endings and trailing
-  whitespace the replacement then carries. Raised as [OQ-246](../architecture/open-questions.md#oq-246).
+  whitespace the replacement then carries. Raised as [OQ-246](../../architecture/open-questions.md#oq-246).
 - REQ-TOOLS-135's success message reports a line as changed that the caller did not change.
 
 ## Relevant files

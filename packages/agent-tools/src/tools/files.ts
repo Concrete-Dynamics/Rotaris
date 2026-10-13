@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { z } from 'zod';
 import { countNoun, similarity } from '@rotaris/kernel';
-import { lineChanges, renderDiff } from './diff.js';
+import { lineChanges, linePairs, renderDiff } from './diff.js';
 import { lineCount, splitLines } from './lines.js';
 import { checkFence, relPosix, realPathOf, type FenceConfig } from './fence.js';
 import { errorObservation, observation, type Observation, type ToolExecutor } from './types.js';
@@ -447,6 +447,25 @@ function replaceAllMessage(rel: string, before: string, oldText: string, newText
 const NEAR_MISS_QUOTE_CAP = 30_000;
 
 /**
+ * REQ-TOOLS-136 level 1 over `text`: the 0-based line on which each occurrence of `needle` starts, found exactly as
+ * `matchEdit` finds them (plain text, each search resuming after the last occurrence), so they are the lines a retry with
+ * `needle` as `old_string` would be refused naming. Counted line by line as the search moves, never by re-splitting the text.
+ */
+function levelOneLines(text: string, needle: string): number[] {
+  const out: number[] = [];
+  if (needle.length === 0) return out;
+  let line = 0;
+  let scanned = 0;
+  for (let i = text.indexOf(needle); i !== -1; i = text.indexOf(needle, i + needle.length)) {
+    for (let nl = text.indexOf('\n', scanned); nl !== -1 && nl < i; nl = text.indexOf('\n', nl + 1)) line += 1;
+    scanned = i;
+    out.push(line);
+    // The occurrence's own newlines are counted by the next step, from where it starts.
+  }
+  return out;
+}
+
+/**
  * `PD-TOOLS-014`: the reply of a `haet_edit` miss whose `old_string` matches at REQ-TOOLS-136 level 2 or 3. The edit stays
  * refused (REQ-TOOLS-189 matches at level 1 only); what changes is that the fact `matchEdit` already computed reaches the
  * caller — which lines, which level, what differs — and, for one window, the window's own text, so a retry needs neither a
@@ -463,9 +482,50 @@ function nearMissMessage(rel: string, lines: readonly string[], m: EditMatch, ol
   const { head, reader } = voice;
   const kind = m.level === 2 ? 'match level 2 (trailing whitespace)' : 'match level 3 (indentation shift)';
   const range = (start: number) => (k === 1 ? `line ${start + 1}` : `lines ${start + 1}-${start + k}`);
+  /*
+   * Revision 2 (OQ-252, R-072, 2026-10-13): the window is whole lines but level 1 is a substring search, so a window's text
+   * can occur again inside a longer line or across a line boundary, and sent back alone it would be refused "Found <n>
+   * occurrences" (docs/defects/fixed/a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly.md). Such a
+   * reply names the occurrences and asks for one neighbouring line, unchanged, in both strings; the quote is never widened,
+   * because a widened `old_string` would no longer line up with the `new_string` the caller wrote. A unique quote's reply is
+   * revision 1's, word for word.
+   */
+  const text = lines.join('\n');
+  const fileLines = lines[lines.length - 1] === '' ? lines.length - 1 : lines.length;
+  const repeats = new Map<string, number[]>();
+  const occurrences = (start: number): number[] => {
+    const q = lines.slice(start, start + k).join('\n');
+    let at = repeats.get(q);
+    if (at === undefined) { at = levelOneLines(text, q); repeats.set(q, at); }
+    return at;
+  };
+  const listed = (xs: readonly number[]) => `${xs.slice(0, 10).map((x) => x + 1).join(', ')}${xs.length > 10 ? ` and ${xs.length - 10} more` : ''}`;
+  // The window and one line on each side, clamped to the file's lines as the readers count them.
+  const around = (start: number) => {
+    const from = Math.max(1, start);
+    const to = Math.max(from, Math.min(fileLines, start + k + 1));
+    return { from, to, read: `offset ${from} limit ${to - from + 1}` };
+  };
+  const neighbour = 'add a neighbouring line, unchanged, to both old_string and new_string so that the text occurs once.';
   if (m.starts.length > 1) {
     const reads = m.starts.map((s) => `offset ${s + 1} limit ${k}`).join('; ');
-    return `${head} It matches at ${kind} in ${m.starts.length} places, starting at lines ${m.starts.map((s) => s + 1).join(', ')}; nothing was written. Read the one you mean with ${reader} (${reads}) and send its exact text as old_string.`;
+    const base = `${head} It matches at ${kind} in ${m.starts.length} places, starting at lines ${m.starts.map((s) => s + 1).join(', ')}; nothing was written. Read the one you mean with ${reader} (${reads}) and send its exact text as old_string.`;
+    const groups = new Map<string, { windows: number[]; at: number[] }>();
+    for (const s of m.starts) {
+      const at = occurrences(s);
+      if (at.length < 2) continue;
+      const q = lines.slice(s, s + k).join('\n');
+      const g = groups.get(q);
+      if (g === undefined) groups.set(q, { windows: [s], at });
+      else g.windows.push(s);
+    }
+    if (groups.size === 0) return base;
+    const all = [...groups.values()];
+    const parts = all.slice(0, 10).map(({ windows, at }) => `the text of the window${windows.length === 1 ? '' : 's'} at line${windows.length === 1 ? '' : 's'} ${windows.map((s) => s + 1).join(', ')} occurs ${at.length} times in the file, starting at lines ${listed(at)}`);
+    const more = all.length > 10 ? `; and ${countNoun(all.length - 10, 'more window text')}` : '';
+    const readsAround = [...new Set(all.flatMap(({ windows }) => windows.map((s) => around(s).read)))].join('; ');
+    const said = parts.join('; ');
+    return `${base} ${said.charAt(0).toUpperCase()}${said.slice(1)}${more}, so sent back alone as old_string it would be refused as ambiguous. Read it with one line on each side (${readsAround}) and ${neighbour}`;
   }
   const start = m.starts[0] as number;
   const window = lines.slice(start, start + k);
@@ -483,12 +543,20 @@ function nearMissMessage(rel: string, lines: readonly string[], m: EditMatch, ol
       ? `Every line of the file carries the leading prefix ${what} in addition to old_string's indentation.`
       : `Every line of old_string carries the leading prefix ${what} that the file's lines do not.`;
   }
-  const facts = `${head} It matches ${range(start)} at ${kind}. ${differs}${voice.current} ${voice.ask}`;
+  const at = occurrences(start);
+  let flag = '';
+  if (at.length > 1) {
+    const { from, to, read } = around(start);
+    flag = ` This text occurs ${at.length} times in the file, starting at lines ${listed(at)}, so sent back alone as old_string it would be refused as ambiguous. Read ${from === to ? `line ${from}` : `lines ${from}-${to}`} with ${reader} (${read}) and ${neighbour}`;
+  }
+  const facts = `${head} It matches ${range(start)} at ${kind}. ${differs}${voice.current} ${voice.ask}${flag}`;
   const fallback = `If these are not the lines you meant, read the file again with ${reader}.`;
   const quote = JSON.stringify(window.join('\n'));
   if (quote.length > NEAR_MISS_QUOTE_CAP) {
+    if (flag !== '') return `${facts} The window is too long to quote here (${quote.length} characters as JSON). ${fallback}`;
     return `${facts} The window is too long to quote here (${quote.length} characters as JSON); read it with ${reader} (offset ${start + 1} limit ${k}) and send its exact text as old_string${voice.sameHash}. ${fallback}`;
   }
+  if (flag !== '') return `${facts} The file's text over ${range(start)}, as this JSON string: ${quote} ${fallback}`;
   return `${facts} Sent back as old_string${voice.sameHash}, the file's text over ${range(start)} matches exactly, as this JSON string: ${quote} ${fallback}`;
 }
 
@@ -566,6 +634,52 @@ export function shiftNewString(newText: string, oldText: string, window: readonl
   return { kind: 'refuse' };
 }
 
+/**
+ * `PD-TOOLS-016` (OQ-246, R-072, 2026-10-13): what a `write_file` edit that matched one window at REQ-TOOLS-136 level 2, 3 or
+ * 4 writes as its replacement lines. At level 2 every line of `new_string` paired with an identical line of `old_string`
+ * (`linePairs`, the diff row's own walk) is the window's own line, byte for byte, its trailing whitespace and `\r` included.
+ * At every window level, a CRLF window — at least one of its lines followed by a line break in the file and every such line
+ * ending in `\r`, or, with none, the file's other lines read the same way — gives `\r` to each replacement line a line
+ * break follows that lacks one. Any other window's unpaired lines are written as given.
+ *
+ * Until this directive the replacement was `new_string`'s lines as given: on a CRLF file an LF `old_string` matches only at
+ * level 2, so the file was left with LF lines among CRLF ones and an unchanged line counted as changed, and a hard break the
+ * caller repeated without its spaces was dropped
+ * (docs/defects/fixed/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md).
+ */
+export function carryWindow(newText: string, oldText: string, fileLines: readonly string[], start: number, level: 2 | 3 | 4): { text: string; crlfAdded: boolean } {
+  const oldLines = oldText.split('\n');
+  const k = oldLines.length;
+  const out = newText.split('\n');
+  if (level === 2) {
+    const given = [...out];
+    for (const [i, j] of linePairs(oldLines, given)) out[j] = fileLines[start + i] as string;
+  }
+  // A line break follows every line of the split but its last element, the text after the final break. A window has such a
+  // line unless it is that last element alone; then the file's other lines are read instead.
+  const windowEnd = Math.min(fileLines.length, start + k);
+  const inWindow = (at: number) => at >= start && at < windowEnd;
+  const allCr = (counted: (at: number) => boolean): boolean => {
+    let any = false;
+    for (let at = 0; at < fileLines.length - 1; at += 1) {
+      if (!counted(at)) continue;
+      if (!(fileLines[at] as string).endsWith('\r')) return false;
+      any = true;
+    }
+    return any;
+  };
+  const crlf = start < fileLines.length - 1 ? allCr(inWindow) : allCr((at) => !inWindow(at));
+  let crlfAdded = false;
+  if (crlf) {
+    const lastFollowed = windowEnd - 1 < fileLines.length - 1;
+    for (let j = 0; j < out.length; j += 1) {
+      const line = out[j] as string;
+      if ((j < out.length - 1 || lastFollowed) && !line.endsWith('\r')) { out[j] = `${line}\r`; crlfAdded = true; }
+    }
+  }
+  return { text: out.join('\n'), crlfAdded };
+}
+
 /** Apply the single match: a level-1 match replaces the exact span; a window match replaces whole lines. */
 function applyMatch(text: string, lines: readonly string[], m: EditMatch, oldText: string, newText: string): string {
   if (m.level === 1 && m.offsets) {
@@ -613,7 +727,7 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
      * docs/defects/fixed/write-files-first-use-refusal-recurred-under-duress.md). The duress run after it still had 1 of 4
      * children omit the field; reading the selector from the call is the fourth repair PD-TOOLS-007 allows (`inferArguments`).
      */
-    description: 'Create, edit, overwrite, insert into, or undo the last write of a workspace file. Every call names its `operation` — one of create, edit, overwrite, insert, undo — with the fields that operation reads: create {path, content}; edit {path, old_string, new_string, replace_all?}; overwrite {path, content}; insert {path, content, insert_line} (0 = beginning); undo {path} (undoing a create removes the file it made). Example: {"operation": "create", "path": "notes.txt", "content": "hello\\n"}. Read a file before editing or overwriting it. An edit whose old_string matches only once its indentation is shifted moves new_string by the same shift when new_string shares old_string\'s indentation, writes it as given when it already has the file\'s, and otherwise is refused with the file\'s lines quoted.',
+    description: 'Create, edit, overwrite, insert into, or undo the last write of a workspace file. Every call names its `operation` — one of create, edit, overwrite, insert, undo — with the fields that operation reads: create {path, content}; edit {path, old_string, new_string, replace_all?}; overwrite {path, content}; insert {path, content, insert_line} (0 = beginning); undo {path} (undoing a create removes the file it made). Example: {"operation": "create", "path": "notes.txt", "content": "hello\\n"}. Read a file before editing or overwriting it. An edit whose old_string matches only once its indentation is shifted moves new_string by the same shift when new_string shares old_string\'s indentation, writes it as given when it already has the file\'s, and otherwise is refused with the file\'s lines quoted. A window match keeps the file\'s line endings and, at match level 2, the exact bytes of every line new_string repeats unchanged from old_string.',
     schema: writeSchema,
     /**
      * REQ-TOOLS-032's recoverable refusal, with the expected shape named: the run's first uses omitted
@@ -743,6 +857,12 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
             replacement = decided.text;
             if (decided.kind === 'shifted') said = ` new_string was shifted by the same leading prefix ${JSON.stringify(shift.prefix)} (${countNoun(shift.prefix.length, 'character')} ${shift.deeper ? 'added' : 'removed'}) to the file's indentation.`;
             if (decided.kind === 'as-given') said = " new_string already carries the file's indentation and was written as given.";
+          }
+          // PD-TOOLS-016: a window match keeps the file's line endings, and at level 2 the bytes of the lines it leaves unchanged.
+          if (m.level > 1) {
+            const carried = carryWindow(replacement, a.old_string, lines, start, m.level as 2 | 3 | 4);
+            replacement = carried.text;
+            if (carried.crlfAdded) said += " new_string was written with the file's CRLF line endings.";
           }
           const after = applyMatch(before ?? '', lines, m, a.old_string, replacement);
           const note = m.level > 1 ? ` Match level: ${m.level}${m.level === 4 ? ` (similarity: ${m.similarity!.toFixed(2)}). Verify the result.` : '.'}${said}` : '';

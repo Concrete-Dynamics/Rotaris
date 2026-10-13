@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Eighty-five.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Eighty-six.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -6948,6 +6948,23 @@ carries up to the window's size.
 > empty or whitespace-only `old_string` keeps REQ-TOOLS-189's plain reply; with a visible character every matching window holds
 > it, so the quote is non-empty text of the file and clause 5 holds. Pinned by a seventh case under "PD-TOOLS-014", red on the
 > code before ([`haet-edit-quotes-an-empty-window-for-a-blank-old-string`](../defects/fixed/haet-edit-quotes-an-empty-window-for-a-blank-old-string.md)).
+>
+> **Revision 2's first execution, 2026-10-13, built under [R-072](requests.md#r-072) (fin36):** the rule held as written.
+> `nearMissMessage` (`packages/agent-tools/src/tools/files.ts`) counts each quoted window's occurrences with `levelOneLines`,
+> the search `matchEdit`'s level 1 runs, and adds the flag only when the text occurs more than once; both voices (this
+> directive's and `PD-TOOLS-015`'s) take it through the one function. **What was measured.** Four cases under "PD-TOOLS-014"
+> and one under "PD-TOOLS-015" in `packages/agent-tools/src/tools/tools.test.ts`, each red on the code before: `x = 1` /
+> `max = 1` with `old_string` `x = 1 ` (the flag before the quote, no "matches exactly", the bare retry refused "Found 2
+> occurrences of old_str at lines 1, 2", the retry with line 2 in both strings applied); twelve occurrences listed as ten "and 2
+> more"; a window over 30,000 characters that recurs; identical several windows flagged, distinct ones word for word; and
+> `write_file`'s level-3 refusal in `read_file`'s voice, its retry the same. **Found:** the several-windows case pinned since
+> revision 1 (`x \ny\nx \ny\n`, `old_string` `x\ny`) has two identical windows, so its reply now carries the flag — the
+> ruling's reading that identical windows are the several-windows reply's common case, met by the very case that pinned it;
+> its expectation was updated, and a distinct-windows case keeps revision 1's words. **What was not measured.** No live run: the
+> next default and duress runs are the measurement, read by `live-run.mjs`'s NOTE (`lib/near-miss-edits.mjs` now counts
+> retries refused "Found N occurrences", target 0). Repairs
+> [`a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly`](../defects/fixed/a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly.md).
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -7033,7 +7050,7 @@ Narrows REQ-TOOLS-136 (a level-3 match the case names is refused rather than app
 > in the built app, and the executor runs unchanged inside the run host. **Found:** the level-2 apply beside it writes
 > `new_string`'s LF lines into a CRLF file, which this directive does not decide (raised as
 > [OQ-246](../architecture/open-questions.md#oq-246),
-> [`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../defects/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md)).
+> [`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../defects/fixed/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md)).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
@@ -7086,6 +7103,28 @@ quote); and an implementation built from the specification alone writes `new_str
 *Ruled under the owner's delegation, 2026-10-13 ([OQ-246](../architecture/open-questions.md#oq-246)); logged as [R-072](requests.md#r-072).
 Extends REQ-TOOLS-136 (fills its silence on what a window match's replacement lines carry) and REQ-TOOLS-135 (one sentence
 added to the edit's success).*
+
+> **First execution, 2026-10-13, built under [R-072](requests.md#r-072) (fin36):** the rule held as written. `carryWindow`
+> (`packages/agent-tools/src/tools/files.ts`) returns the replacement and whether it added a `\r`; `writeFileTool`'s edit branch
+> calls it for every single-window match above level 1, after `shiftNewString` at level 3, and appends clause 3's sentence;
+> clause 1's pairing is `linePairs` in `diff.ts`, which shares the head-and-tail trim and the table walk (`commonEnds`,
+> `tableWalk`) with `lcsChanges`, so the pairing and the diff row's count come from one walk and the row's drawing is unchanged;
+> `write_file`'s description gains one sentence. **What was measured.** Twelve cases under "PD-TOOLS-016" in
+> `packages/agent-tools/src/tools/tools.test.ts`, ten red on the code before (the probe, now `ONE\r\ntwo\r\nthree\r\n` with
+> "(+1 -1)" and the sentence; an added line; an interior hard break between two changed lines; a changed line's own trailing
+> spaces; a window ending at the unterminated last line; a one-line window read from the file, and an LF file beside it; a level-4
+> LF `old_string`; a level-3 shift; the walk's choice between repeated lines; and the guard, red on the description sentence
+> alone), two guards green before and after (a `new_string` already in CRLF, no doubled `\r`, no sentence; a mixed window), and
+> four `linePairs` cases in `diff.test.ts`, one checking that every unpaired line is one the diff row counts. Every earlier
+> `write_file`, `haet_edit` and diff case is unchanged. **Found:** the walk's tie rule chooses a later copy of a repeated
+> line (`p q q r` → `P q R` pairs the second `q`), as the directive states; and level 1 is not covered: an exact match writes
+> `new_string`'s LF lines into a CRLF file through both tools and `replace_all`, recorded as
+> [`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md)
+> and left for a ruling. **What was not measured.** No live run: the live-run fixtures are LF files on Linux, and none of the six
+> autopsies records a level-2 `write_file` edit; no proof script drives `write_file` in the built app, and the executor runs
+> unchanged inside the run host. Repairs
+> [`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../defects/fixed/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md).
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

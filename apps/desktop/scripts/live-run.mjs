@@ -1041,8 +1041,9 @@ function checkRoutingMisses() {
  * that named a match level, whether the same agent probed the file through its terminal before its next edit, or within its
  * next three calls where it never edits again (finding D5 of
  * the final duress run at `a68f121`: every near miss was followed by a `cat -A` or `awk` probe; the directive's target is
- * 0), and whether that next edit succeeded on the same path. Its NOTEs are the directive's first-execution count; a run
- * with no near miss says so.
+ * 0), and whether that next edit succeeded on the same path or was refused "Found N occurrences" (revision 2, OQ-252: a
+ * quote whose text recurs is flagged, target 0). Its NOTEs are the directive's first-execution count; a run with no near
+ * miss says so.
  */
 function checkNearMissEdits() {
   if (preservedSessions.length === 0) return;
@@ -1055,7 +1056,7 @@ function checkNearMissEdits() {
   }
   const at = (m) => `${m.scenario} #${m.ordinal} (${m.agent}, level ${m.level})`;
   if (r.misses.length === 0) { noted('no haet_edit miss matched at match level 2 or 3', 'PD-TOOLS-014\'s near-miss reply was not asked'); return; }
-  noted('haet_edit misses that matched but for whitespace (PD-TOOLS-014)', `${r.misses.length}: ${r.misses.map(at).join(', ')}; followed by a terminal call of the same agent before its next edit (or within its next three calls where it never edits again): ${r.probed.length}${r.probed.length === 0 ? '' : ` (${r.probed.map(at).join(', ')})`}; next edit on the same path succeeded: ${r.retried.length}`);
+  noted('haet_edit misses that matched but for whitespace (PD-TOOLS-014)', `${r.misses.length}: ${r.misses.map(at).join(', ')}; followed by a terminal call of the same agent before its next edit (or within its next three calls where it never edits again): ${r.probed.length}${r.probed.length === 0 ? '' : ` (${r.probed.map(at).join(', ')})`}; next edit on the same path succeeded: ${r.retried.length}; next edit on the same path refused "Found N occurrences" (PD-TOOLS-014 revision 2, target 0): ${r.ambiguous.length}${r.ambiguous.length === 0 ? '' : ` (${r.ambiguous.map(at).join(', ')})`}`);
 }
 
 /**

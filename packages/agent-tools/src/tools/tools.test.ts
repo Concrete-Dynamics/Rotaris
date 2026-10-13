@@ -450,7 +450,8 @@ describe('PD-TOOLS-014: a haet_edit miss that matches but for whitespace names t
   it('several windows: the level and each window\'s starting line are named, nothing is quoted, haet_read is directed with offset and limit', async () => {
     const hash = write('w.txt', 'x \ny\nx \ny\n');
     const miss = await edit('w.txt', hash, 'x\ny', 'X\ny');
-    expect(miss.text).toBe('old_string was not found exactly in w.txt. It matches at match level 2 (trailing whitespace) in 2 places, starting at lines 1, 3; nothing was written. Read the one you mean with haet_read (offset 1 limit 2; offset 3 limit 2) and send its exact text as old_string.');
+    // Revision 2: the two windows' text is identical, so either one sent back alone would be ambiguous, and the reply says so.
+    expect(miss.text).toBe('old_string was not found exactly in w.txt. It matches at match level 2 (trailing whitespace) in 2 places, starting at lines 1, 3; nothing was written. Read the one you mean with haet_read (offset 1 limit 2; offset 3 limit 2) and send its exact text as old_string. The text of the windows at lines 1, 3 occurs 2 times in the file, starting at lines 1, 3, so sent back alone as old_string it would be refused as ambiguous. Read it with one line on each side (offset 1 limit 3; offset 2 limit 3) and add a neighbouring line, unchanged, to both old_string and new_string so that the text occurs once.');
     expect(miss.text).not.toContain('JSON string');
   });
 
@@ -490,9 +491,57 @@ describe('PD-TOOLS-014: a haet_edit miss that matches but for whitespace names t
     expect(stale.text).not.toMatch(/match level|[0-9a-f]{64}/);
     await noHistory('k.ts');
   });
+
+  // PD-TOOLS-014 revision 2 (OQ-252, R-072, 2026-10-13): level 1 is a substring search, the window is whole lines, so the
+  // quoted text can occur again inside a longer line; the reply promised it would match exactly and the retry was refused.
+  it('revision 2: a quote whose text occurs more than once is flagged before the quote, with no "matches exactly"; the bare retry is ambiguous, one neighbouring line in both strings applies', async () => {
+    const before = 'x = 1\nmax = 1\n';
+    const hash = write('n.py', before);
+    const miss = await edit('n.py', hash, 'x = 1 ', 'x = 2');
+    expect(miss.isError).toBe(true);
+    const flag = 'This text occurs 2 times in the file, starting at lines 1, 2, so sent back alone as old_string it would be refused as ambiguous. Read lines 1-2 with haet_read (offset 1 limit 2) and add a neighbouring line, unchanged, to both old_string and new_string so that the text occurs once.';
+    expect(miss.text).toContain(`Give new_string the file's indentation and line endings. ${flag} The file's text over line 1, as this JSON string: "x = 1" If these are not the lines you meant, read the file again with haet_read.`);
+    expect(miss.text.indexOf(flag)).toBeLessThan(miss.text.indexOf('JSON string'));
+    expect(miss.text).not.toContain('matches exactly');
+    expect(quoteOf(miss.text)).toBe('x = 1');
+    expect(await edit('n.py', hash, quoteOf(miss.text), 'x = 2')).toMatchObject({ isError: true, text: 'Found 2 occurrences of old_str at lines 1, 2. Add surrounding context to make the match unique, or set replace_all.' });
+    expect(readFileSync(join(root, 'n.py'), 'utf8')).toBe(before);
+    const extended = await edit('n.py', hash, 'x = 1\nmax = 1', 'x = 2\nmax = 1');
+    expect(extended.isError).toBe(false);
+    expect(readFileSync(join(root, 'n.py'), 'utf8')).toBe('x = 2\nmax = 1\n');
+  });
+
+  it('revision 2: at most ten occurrence lines are listed, then "and N more"; the read window is clamped to the file', async () => {
+    const hash = write('many.txt', `x = 1\n${Array.from({ length: 11 }, (_, i) => `v${i}x = 1`).join('\n')}\n`);
+    const miss = await edit('many.txt', hash, 'x = 1 ', 'x = 2');
+    expect(miss.text).toContain('This text occurs 12 times in the file, starting at lines 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 and 2 more, so sent back alone as old_string it would be refused as ambiguous. Read lines 1-2 with haet_read (offset 1 limit 2)');
+  });
+
+  it('revision 2: a window over 30,000 characters whose text recurs carries the same flag and no promise', async () => {
+    const long = 'a'.repeat(30_001);
+    const hash = write('long2.txt', `head\n${long}\nb${long}\n`);
+    const miss = await edit('long2.txt', hash, `${long} `, 'b');
+    expect(miss.text).toContain('It matches line 2 at match level 2 (trailing whitespace).');
+    expect(miss.text).toContain('This text occurs 2 times in the file, starting at lines 2, 3, so sent back alone as old_string it would be refused as ambiguous. Read lines 1-3 with haet_read (offset 1 limit 3)');
+    expect(miss.text).toContain('The window is too long to quote here (30003 characters as JSON). If these are not the lines you meant');
+    expect(miss.text).not.toContain('send its exact text');
+    expect(miss.text.length).toBeLessThan(1_500);
+  });
+
+  it('revision 2: several windows whose text is identical carry the flag; distinct windows stay word for word', async () => {
+    const hash = write('two.py', 'x = 1\nx = 1\n');
+    const miss = await edit('two.py', hash, 'x = 1 ', 'x = 2');
+    expect(miss.text).toBe('old_string was not found exactly in two.py. It matches at match level 2 (trailing whitespace) in 2 places, starting at lines 1, 2; nothing was written. Read the one you mean with haet_read (offset 1 limit 1; offset 2 limit 1) and send its exact text as old_string. The text of the windows at lines 1, 2 occurs 2 times in the file, starting at lines 1, 2, so sent back alone as old_string it would be refused as ambiguous. Read it with one line on each side (offset 1 limit 2) and add a neighbouring line, unchanged, to both old_string and new_string so that the text occurs once.');
+    // The pinned several-windows case: "x \ny" and "x \ny" are identical too, at lines 1 and 3 …
+    const same = write('w2.txt', 'x \ny\nx \ny\n');
+    expect((await edit('w2.txt', same, 'x\ny', 'X\ny')).text).toContain('The text of the windows at lines 1, 3 occurs 2 times in the file, starting at lines 1, 3');
+    // … while windows that differ in their trailing whitespace each occur once, and the reply is revision 1's.
+    const distinct = write('w3.txt', 'x \ny\nx  \ny\n');
+    expect((await edit('w3.txt', distinct, 'x\ny', 'X\ny')).text).toBe('old_string was not found exactly in w3.txt. It matches at match level 2 (trailing whitespace) in 2 places, starting at lines 1, 3; nothing was written. Read the one you mean with haet_read (offset 1 limit 2; offset 3 limit 2) and send its exact text as old_string.');
+  });
 });
 
-describe('PD-TOOLS-015: a level-3 write_file edit shifts new_string when it shares old_string\'s indentation, writes it as given when it has the file\'s, and refuses otherwise', () => {
+describe('PD-TOOLS-015:a level-3 write_file edit shifts new_string when it shares old_string\'s indentation, writes it as given when it has the file\'s, and refuses otherwise', () => {
   // OQ-233 (R-072, 2026-10-13). The six level-3 misses of the a68f121 duress pack carried the same extra space in new_string as
   // in old_string; written unshifted, each would have landed one space off beside a success.
   const quoteOf = (text: string): string => JSON.parse(/as this JSON string: ("(?:[^"\\]|\\.)*") If these are not/.exec(text)![1]!) as string;
@@ -588,6 +637,21 @@ describe('PD-TOOLS-015: a level-3 write_file edit shifts new_string when it shar
     expect(r.text.length).toBeLessThan(1_000);
   });
 
+  it('PD-TOOLS-014 revision 2 through clause 4: a refusal whose quote recurs inside a longer line is flagged in read_file\'s voice, and one neighbouring line in both strings applies', async () => {
+    const before = 'a\n  x = 1\nfoo(  x = 1)\n';
+    await prepare('r.py', before);
+    const r = await edit('r.py', '   x = 1', '    x = 2');
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("Give old_string and new_string the file's indentation. This text occurs 2 times in the file, starting at lines 2, 3, so sent back alone as old_string it would be refused as ambiguous. Read lines 1-3 with read_file (offset 1 limit 3) and add a neighbouring line, unchanged, to both old_string and new_string so that the text occurs once. The file's text over line 2, as this JSON string: \"  x = 1\" If these are not the lines you meant, read the file again with read_file.");
+    expect(r.text).not.toContain('matches exactly');
+    expect(r.text).not.toContain('content_hash');
+    expect(await edit('r.py', quoteOf(r.text), '  x = 2')).toMatchObject({ isError: true, text: 'Found 2 occurrences of old_str at lines 2, 3. Add surrounding context to make the match unique, or set replace_all.' });
+    expect(readFileSync(join(root, 'r.py'), 'utf8')).toBe(before);
+    const extended = await edit('r.py', '  x = 1\nfoo(  x = 1)', '  x = 2\nfoo(  x = 1)');
+    expect(extended.isError).toBe(false);
+    expect(readFileSync(join(root, 'r.py'), 'utf8')).toBe('a\n  x = 2\nfoo(  x = 1)\n');
+  });
+
   it('levels 2 and 4, several level-3 windows and replace_all keep their replies; haet_edit keeps PD-TOOLS-014\'s', async () => {
     await prepare('k.ts', 'const alpha = 1;\nconst beta = 2;\n');
     const l2 = await edit('k.ts', 'const beta = 2;  ', 'const beta = 3;');
@@ -604,6 +668,122 @@ describe('PD-TOOLS-015: a level-3 write_file edit shifts new_string when it shar
     const hash = sha256(readFileSync(join(root, 'h.ts')));
     const haet = await haetEditTool(state, fence).execute({ path: 'h.ts', content_hash: hash, old_string: ' y\n w', new_string: '   z\n   w', replace_all: false }, ctx());
     expect(haet.text).toBe('old_string was not found exactly in h.ts. It matches lines 2-3 at match level 3 (indentation shift). Every line of the file carries the leading prefix " " (1 character) in addition to old_string\'s indentation. Your content_hash is still current and nothing was written. Give new_string the file\'s indentation and line endings. Sent back as old_string with the same content_hash, the file\'s text over lines 2-3 matches exactly, as this JSON string: "  y\\n  w" If these are not the lines you meant, read the file again with haet_read.');
+  });
+});
+
+describe('PD-TOOLS-016: a window-match write_file edit keeps the file\'s line endings and the bytes of the lines it leaves unchanged', () => {
+  // OQ-246 (R-072, 2026-10-13). On a CRLF file a multi-line old_string written with \n matches only at level 2, and the build
+  // wrote new_string's LF lines over the window: mixed line endings, and an untouched line counted as changed.
+  const CRLF = " new_string was written with the file's CRLF line endings.";
+  const prepare = async (rel: string, text: string) => {
+    writeFileSync(join(root, rel), text);
+    await readFileTool(state, fence).execute({ path: rel, offset: 1, limit: 2000, grep_context: 3 }, ctx());
+  };
+  const edit = (path: string, old_string: string, new_string: string, replace_all = false) =>
+    writeFileTool(state, fence).execute({ operation: 'edit', path, old_string, new_string, replace_all }, ctx());
+  const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
+  const noLfOnly = (text: string) => expect(/(^|[^\r])\n/.test(text)).toBe(false);
+
+  it('the probe: an LF edit of a CRLF file leaves it wholly CRLF, counts only the changed line, and says so', async () => {
+    await prepare('c.txt', 'one\r\ntwo\r\nthree\r\n');
+    const r = await edit('c.txt', 'one\ntwo', 'ONE\ntwo');
+    expect(r.isError).toBe(false);
+    expect(read('c.txt')).toBe('ONE\r\ntwo\r\nthree\r\n');
+    expect(r.text).toMatch(/^Edited c\.txt: 2 lines replaced by 2 at line 1 \(\+1 -1\)\. Match level: 2\. new_string was written with the file's CRLF line endings\. \(sha256 [0-9a-f]{64}\)$/);
+    expect(r.diff?.startsWith('c.txt +1 -1\n')).toBe(true);
+  });
+
+  it('an added line in a CRLF window gains the carriage return', async () => {
+    await prepare('a.txt', 'a\r\nb\r\nc\r\n');
+    const r = await edit('a.txt', 'a\nb', 'a\nX\nb');
+    expect(read('a.txt')).toBe('a\r\nX\r\nb\r\nc\r\n');
+    expect(r.text).toContain('(+1 -0). Match level: 2.' + CRLF);
+  });
+
+  it('an interior unchanged line keeps its two-space hard break between two changed lines (LF file, no sentence)', async () => {
+    await prepare('h.md', 'one\ntwo  \nthree\nfour\n');
+    const r = await edit('h.md', 'one\ntwo\nthree', 'ONE\ntwo\nTHREE');
+    expect(read('h.md')).toBe('ONE\ntwo  \nTHREE\nfour\n');
+    expect(r.text).toMatch(/\(\+2 -2\)\. Match level: 2\. \(sha256 [0-9a-f]{64}\)$/);
+  });
+
+  it('a changed line keeps the caller\'s trailing whitespace and gains the carriage return', async () => {
+    await prepare('t.txt', 'a\r\nb\r\n');
+    await edit('t.txt', 'a\nb', 'A  \nb');
+    expect(read('t.txt')).toBe('A  \r\nb\r\n');
+  });
+
+  it('a new_string already in CRLF gets no doubled carriage return and no sentence', async () => {
+    await prepare('d.txt', 'one\r\ntwo\r\nthree\r\n');
+    const r = await edit('d.txt', 'one\ntwo', 'ONE\r\ntwo\r');
+    expect(read('d.txt')).toBe('ONE\r\ntwo\r\nthree\r\n');
+    expect(r.text).toMatch(/ Match level: 2\. \(sha256 [0-9a-f]{64}\)$/);
+  });
+
+  it('a window ending at the file\'s unterminated last line leaves that line without a carriage return', async () => {
+    await prepare('u.txt', 'a\r\nb');
+    const r = await edit('u.txt', 'a\nb', 'A\nB');
+    expect(read('u.txt')).toBe('A\r\nB');
+    expect(r.text).toContain(CRLF);
+  });
+
+  it('a one-line window with no terminated line takes its reading from the file\'s other lines', async () => {
+    await prepare('o.txt', 'a\r\nb');
+    const r = await edit('o.txt', 'b ', 'B\nC');
+    expect(read('o.txt')).toBe('a\r\nB\r\nC');
+    expect(r.text).toContain(CRLF);
+    await prepare('l.txt', 'a\nb');
+    expect((await edit('l.txt', 'b ', 'B\nC')).text).not.toContain(CRLF);
+    expect(read('l.txt')).toBe('a\nB\nC');
+  });
+
+  it('a window whose lines mix endings writes its unpaired lines as given', async () => {
+    await prepare('m.txt', 'a\r\nb\nc\r\n');
+    const r = await edit('m.txt', 'a\nb', 'A\nb');
+    expect(read('m.txt')).toBe('A\nb\nc\r\n');
+    expect(r.text).not.toContain(CRLF);
+  });
+
+  it('a level-4 LF old_string on a CRLF file leaves no LF-only line, the sentence after "Verify the result."', async () => {
+    await prepare('f.js', 'function alpha() {\r\n  return 1;\r\n}\r\n');
+    const r = await edit('f.js', 'function alpha() {\n  return 2;', 'function alpha() {\n  return 3;');
+    expect(r.text).toMatch(/Match level: 4 \(similarity: 0\.\d\d\)\. Verify the result\. new_string was written with the file's CRLF line endings\. \(sha256/);
+    expect(read('f.js')).toBe('function alpha() {\r\n  return 3;\r\n}\r\n');
+    noLfOnly(read('f.js'));
+  });
+
+  it('a level-3 shifted edit on a CRLF file carries the endings after PD-TOOLS-015\'s sentence', async () => {
+    await prepare('s.py', 'a\r\n  x\r\n  y\r\n');
+    const r = await edit('s.py', ' x\r\n y\r', ' X\n y');
+    expect(read('s.py')).toBe('a\r\n  X\r\n  y\r\n');
+    expect(r.text).toContain(`Match level: 3. new_string was shifted by the same leading prefix " " (1 character added) to the file's indentation.${CRLF}`);
+  });
+
+  it('repeated identical lines pair by the stated walk: the trailing run first, then the table walk skipping old_string\'s line on a tie', async () => {
+    await prepare('r.txt', 'a  \n}  \n}\n');
+    await edit('r.txt', 'a\n}\n}', 'A\n}');
+    expect(read('r.txt')).toBe('A\n}\n');
+    await prepare('q.txt', 'p\nq \nq  \nr\n');
+    await edit('q.txt', 'p\nq\nq\nr', 'P\nq\nR');
+    expect(read('q.txt')).toBe('P\nq  \nR\n');
+  });
+
+  it('level 1, replace_all and haet_edit are unchanged on a CRLF file', async () => {
+    // Level 1 writes new_string verbatim (REQ-TOOLS-136's "exact"); its LF lines in a CRLF file are recorded separately
+    // (docs/defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md), not decided by PD-TOOLS-016.
+    await prepare('e.txt', 'one\r\ntwo\r\n');
+    const exact = await edit('e.txt', 'one', 'ONE\nX');
+    expect(read('e.txt')).toBe('ONE\nX\r\ntwo\r\n');
+    expect(exact.text).not.toMatch(/Match level/);
+    await prepare('all.txt', 'a\r\nb\r\na\r\n');
+    await edit('all.txt', 'a', 'X\nY', true);
+    expect(read('all.txt')).toBe('X\nY\r\nb\r\nX\nY\r\n');
+    writeFileSync(join(root, 'he.txt'), 'one\r\ntwo\r\n');
+    const hash = sha256(readFileSync(join(root, 'he.txt')));
+    const haet = await haetEditTool(state, fence).execute({ path: 'he.txt', content_hash: hash, old_string: 'one\ntwo', new_string: 'ONE\ntwo', replace_all: false }, ctx());
+    expect(haet.isError).toBe(true);
+    expect(read('he.txt')).toBe('one\r\ntwo\r\n');
+    expect(writeFileTool(state, fence).description).toContain("A window match keeps the file's line endings");
   });
 });
 

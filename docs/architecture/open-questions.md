@@ -12405,7 +12405,7 @@ On a CRLF file a multi-line `old_string` written with `\n` alone matches only at
 (`packages/agent-tools/src/tools/files.ts`) writes `new_string`'s `\n`-only lines over the window's `\r\n` lines: the file is
 left with mixed line endings, and the success counts an unchanged line as changed because it lost its `\r`. The same apply drops
 a replaced line's trailing spaces that `new_string` does not repeat (a Markdown hard break). Probed and recorded as
-[`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md`](../defects/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md).
+[`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md`](../defects/fixed/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md).
 The specification fixes neither keeping the window's endings nor writing `new_string`'s.
 
 **What the build proceeds under.** The apply as built: `new_string`'s lines written as given.
@@ -12440,8 +12440,13 @@ and a success that counts an untouched line as changed, on the only platform shi
 to LF nor strip an unchanged line's trailing whitespace (`overwrite` or an exact level-1 `old_string` still can); where
 `old_string` repeats a line, the walk fixes which copy's bytes a paired line takes; `write_file` and `haet_edit` still differ at
 level 2; an implementation built from the specification alone writes `new_string` as given. Closes
-[`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../defects/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md)
+[`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../defects/fixed/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md)
 once built.
+**Built 2026-10-13 (fin36):** `carryWindow` in `writeFileTool`'s edit branch and `linePairs` in `diff.ts`; pinned by twelve
+cases under "PD-TOOLS-016" in `packages/agent-tools/src/tools/tools.test.ts` (ten red on the code before) and `diff.test.ts`. The
+level-1 sibling the ruling asked to probe writes `new_string`'s LF lines into a CRLF file through both tools; recorded as
+[`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md),
+not decided here. The first execution is in place under the directive.
 
 <a id="oq-247"></a>
 
@@ -12766,7 +12771,7 @@ or across a line boundary. A file `x = 1\nmax = 1\n` with `old_string` `x = 1 ` 
 refused "Found 2 occurrences of old_str at lines 1, 2" and writes nothing. The several-windows reply ("send its exact text as
 old_string") fails the same way whenever the windows' text is identical (two lines `x = 1`, `old_string` `x = 1 `). Clause 5's
 promise of a level-1 match holds; it is silent on whether that match is unique. Recorded as
-[`a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly`](../defects/a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly.md).
+[`a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly`](../defects/fixed/a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly.md).
 
 **What the build proceeds under.** The quote and its promise as built, whatever the text's occurrences.
 
@@ -12798,3 +12803,7 @@ user's task receives the reply). **Costs kept on record:** in the non-unique cas
 have taken one retry; a caller that adds the neighbouring line to `old_string` only would delete it with a success, which the
 wording's "to both" is the only guard against; a second implementation built from the specification alone keeps the unflagged
 quote.
+**Built 2026-10-13 (fin36):** `nearMissMessage` and `levelOneLines` (`packages/agent-tools/src/tools/files.ts`); pinned by four
+cases under "PD-TOOLS-014" and one under "PD-TOOLS-015" in `packages/agent-tools/src/tools/tools.test.ts`, each red on the code
+before; `lib/near-miss-edits.mjs` counts retries refused "Found N occurrences". The first execution is in place under the
+directive.

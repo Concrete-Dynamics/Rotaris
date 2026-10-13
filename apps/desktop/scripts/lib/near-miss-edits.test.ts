@@ -32,6 +32,13 @@ describe('nearMissReading (PD-TOOLS-014)', () => {
     expect(r.retried).toEqual([]);
   });
 
+  it('PD-TOOLS-014 revision 2: a retry on the same path refused "Found N occurrences" is counted as ambiguous (target 0); a success or another path is not', () => {
+    const found = 'Found 2 occurrences of old_str at lines 1, 2. Add surrounding context to make the match unique, or set replace_all.';
+    const r = nearMissReading([{ scenario: 'edit', calls: [call(1, 'haet_edit', true, NEAR), call(2, 'haet_edit', true, found), call(3, 'haet_edit', true, NEAR), call(4, 'haet_edit'), call(5, 'haet_edit', true, NEAR), call(6, 'haet_edit', true, found, 'wave3', 'other.md')] }]);
+    expect(r.ambiguous.map((m: { ordinal: number }) => m.ordinal)).toEqual([1]);
+    expect(r.retried.map((m: { ordinal: number }) => m.ordinal)).toEqual([3]);
+  });
+
   it('with no later edit, only the next few calls of the agent can be its probe, not a terminal call late in its life (fin32\'s review)', () => {
     const late = [call(1, 'haet_edit', true, NEAR), call(2, 'haet_read'), call(3, 'grep'), call(4, 'write_file'), call(5, 'terminal')];
     expect(nearMissReading([{ scenario: 'duress', calls: late }]).probed).toEqual([]);

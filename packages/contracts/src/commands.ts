@@ -209,6 +209,12 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   /** REQ-NOTIFY-026: compare-and-clear with an id; no id clears whatever notice is current (Part V). */
   z.object({ kind: z.literal('notice.acknowledge'), noticeId: z.number().int().optional() }),
   /**
+   * ADR-0049 / PD-WORKSPACE-005: the notice current in main's one store, answered in channel 4's shape (`{v, current}`) once
+   * every publication accepted before the question is applied. A window asks it once, at boot, after registering for channel 4,
+   * so a window opened after a publication shows the notice every older window shows (2026-10-14).
+   */
+  z.object({ kind: z.literal('notice.current') }),
+  /**
    * The updater (first-release-plan.md §4.6, 2026-09-28) — the two notice actions REQ-NOTIFY-044 named with no target
    * until now. `update.install` is `Update now` on the offer notice and `Try again` on the failure notice
    * (REQ-STARTUP-116, REQ-STARTUP-120): main holds the offer, runs REQ-STARTUP-122's sequence and reports through the

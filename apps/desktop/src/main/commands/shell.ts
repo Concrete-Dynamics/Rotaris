@@ -33,7 +33,7 @@ export function announceDisplayPreference(key: DisplayPreferenceKey, value: bool
 
 export function shellCommands(
   ctx: Pick<CommandContext, 'capturing' | 'currentTheme' | 'log' | 'notices' | 'preferences' | 'processes' | 'requirementsPreferenceKey' | 'runHost' | 'services' | 'setTheme' | 'themeBackground' | 'updater'>,
-): Pick<CommandHandlers, 'shell.hello' | 'shell.openExternal' | 'shell.openThirdPartyLicenses' | 'theme.get' | 'theme.set' | 'prefs.get' | 'prefs.set' | 'composer.readDraft' | 'composer.writeDraft' | 'notice.acknowledge' | 'notice.report'> {
+): Pick<CommandHandlers, 'shell.hello' | 'shell.openExternal' | 'shell.openThirdPartyLicenses' | 'theme.get' | 'theme.set' | 'prefs.get' | 'prefs.set' | 'composer.readDraft' | 'composer.writeDraft' | 'notice.acknowledge' | 'notice.current' | 'notice.report'> {
   const { capturing, currentTheme, log, notices, preferences, processes, requirementsPreferenceKey, runHost, services, setTheme, themeBackground, updater } = ctx;
   return {
     'shell.hello': async (_req, { w }) => {
@@ -174,6 +174,17 @@ export function shellCommands(
     // Part AO — `notice.report`: a renderer surface raising a persistent notice through the ONE store (ADR-0049 decision B's
     // missing entry for a renderer, defect fifty-seven); the record of REQ-NOTIFY-268 and the scoping of REQ-NOTIFY-028 apply
     // as to every other publication. And `prompts.roots.read`: REQ-CHAT-160's three roots, read by the workspace service.
+    /**
+     * ADR-0049 / PD-WORKSPACE-005 ("shown in every open main window"): the notice current in the one store, for a window that
+     * did not exist when it was published — channel 4 reaches only the windows attached at publication. Answered after the
+     * store's chain has applied every publication accepted before the question, in channel 4's own shape, so the renderer
+     * seeds its store with it (`NoticeState.seed`). Until 2026-10-14 a main window added after a publication showed no notice
+     * (docs/defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).
+     */
+    'notice.current': async () => {
+      await notices.settled();
+      return { ok: true, value: { v: CONTRACT_SCHEMA_VERSION, current: notices.current() } };
+    },
     'notice.report': async (req) => {
       const r = await notices.report({ severity: req.severity, title: req.title, ...(req.message === undefined ? {} : { message: req.message }), ...(req.detail === undefined ? {} : { detail: req.detail }), persistent: req.persistent, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) });
       log(`notice from the renderer: ${req.severity} "${req.title}" → #${r.id}`);

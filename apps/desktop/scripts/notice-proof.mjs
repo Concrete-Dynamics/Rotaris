@@ -40,7 +40,8 @@ import { startApp, stopApp, until } from './lib/driver.mjs';
  *     "Open the session" for a run of the holding window, pressed in the other one (PD-SHELL-001 revision 3, OQ-292): the
  *     holding window is brought forward and follows the session, and no "could not be loaded" error is raised.
  *     6d. The same press after the session's own window switched to another project (PD-SHELL-001 revision 3): no window
- *     holds the session's workspace, so one is added for it, asking nothing, and the added window follows the session.
+ *     holds the session's workspace, so one is added for it, asking nothing, and the added window follows the session. On
+ *     the way, the window the switch built after the notice was published shows that notice (ADR-0049, `notice.current`).
  *  7. The retry action reaches its target (REQ-NOTIFY-045, REQ-NOTIFY-030, OQ-178): activated on a failed session, it
  *     resubmits that session's last submitted prompt as a second run of that session.
  *     And it resubmits the prompt the session sent, wherever its row is (REQ-SESSION-192) and with the image it carried
@@ -489,7 +490,8 @@ if (want('6b')) {
 // added on `atlas-billing`, which owes one failing background task (`ROTARIS_INIT_TEST_TASK`, the ordinary registry), so its
 // open raises "Project setup did not finish: atlas-billing" with "Try again" — a real banner, not a publication of the
 // proof's — once both windows exist, and the banner, an application notice, stands in both. (A window added AFTER a notice
-// was published does not show it: docs/defects/a-main-window-added-after-a-notice-was-published-does-not-show-it.md.) With
+// was published did not show it until 2026-10-14: docs/defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md;
+// the order is kept, and section 6d reads the repair.) With
 // an unsaved edit standing in the holding window's Settings › Instructions, "Try again" is pressed in the FIRST window, which
 // does not hold the project: the holding window is surfaced and shows Settings › Project, its edit still pending.
 // Then a banner naming a project folder no window holds is pressed: PD-WORKSPACE-005 revision 3 (OQ-294, ruled 2026-10-14
@@ -696,13 +698,16 @@ if (want('6d')) {
     await d.useWindow('reach-alpha');
     await step('A switches to gamma', d.command({ kind: 'workspace.choose', newWindow: false }));
     const switched = await step('no window holds alpha', until(() => d.windows(), (w) => w.windows.length === 2 && w.windows.every((x) => !String(x.workspace).endsWith('reach-alpha')) && w.windows.some((x) => String(x.workspace).endsWith('reach-gamma')), { timeoutMs: 30_000, what: 'A replaced by gamma' }));
+    // The gamma window was built after the notice was published, and shows it all the same: it asked main for the current
+    // notice at boot (`notice.current`; docs/defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).
+    const lateNotice = await step('the notice in the window built after it', until(() => noticeIn('reach-gamma'), (n) => n !== null && n.title === ending.title, { timeoutMs: 15_000, what: 'the current notice in the window built after its publication' }));
     await d.useWindow('reach-beta');
     await step('Open the session, in B', d.click('.notice__action', { text: 'Open the session' }));
     const added = await step('a window added for alpha', until(() => d.windows(), (w) => w.windows.length === 3 && w.windows.some((x) => String(x.workspace).endsWith('reach-alpha')), { timeoutMs: 30_000, what: 'a window added for alpha' }));
     const followed = await step('the added window follows the session', until(() => onScreenIn('reach-alpha', PROMPT), (v) => v === true, { timeoutMs: 30_000, what: 'the session on screen in the added window' }));
     const bStill = await onScreenIn('reach-beta', PROMPT);
     const gammaStill = await onScreenIn('reach-gamma', PROMPT);
-    value = { ending, switched: switched.windows.map((w) => w.workspace), added: added.windows.map((w) => w.workspace), followed, bStill, gammaStill };
+    value = { ending, lateNotice, switched: switched.windows.map((w) => w.workspace), added: added.windows.map((w) => w.workspace), followed, bStill, gammaStill };
   } catch (cause) {
     failure = cause;
   }
@@ -713,6 +718,7 @@ if (want('6d')) {
   if (failure) throw new Error(`focus-reach: ${failure.message} (see focus-reach.log, focus-reach.steps.json)`);
   expect(!stopped.overran, 'focus-reach: the app did not stop within its bound');
   expect(value.ending.member === 'focus-session' && value.ending.action === 'Open the session', `the ending notice offers ${JSON.stringify(value.ending)}`);
+  expect(value.lateNotice.title === value.ending.title && value.lateNotice.member === 'focus-session', `the window built after the publication shows ${JSON.stringify(value.lateNotice)}`);
   const endedId = (value.ending.title.match(/^Session (\S+) completed$/) ?? [])[1];
   expect(new RegExp(`notice action "focus-session" for ${endedId}: added window \\d+ for .*reach-alpha; the focus was (sent|held)`).test(log), 'main did not log the press adding a window for the session\'s workspace');
   expect(/notice action reached .*reach-alpha: added window \d+ for it/.test(log), 'the reach did not add a window for alpha');

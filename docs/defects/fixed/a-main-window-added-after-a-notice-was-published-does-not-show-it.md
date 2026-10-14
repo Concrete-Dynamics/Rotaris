@@ -27,3 +27,24 @@ notice as owed to every main window open while it is current.
 - `apps/desktop/src/main/index.ts` — `relay.broadcast(CHANNEL.noticeCurrent, …)`, the store's `broadcast` dependency.
 - `apps/desktop/src/renderer/shell.ts` — `bridge.onNotice`, the only way a window learns the current notice.
 - `apps/desktop/scripts/notice-proof.mjs` — section 6c, whose header records why its windows open in the order they do.
+
+## Outcome
+
+*Repaired 2026-10-14 by fin44 (`fin44-notice-reach`).* A window now asks for the notice that was current before it existed.
+After it registers for channel 4, every renderer sends the new command `notice.current` once (`apps/desktop/src/renderer/shell.ts`).
+Main answers after the store's chain has applied every publication accepted before the question (`notices.settled()`), in
+channel 4's own shape (`apps/desktop/src/main/commands/shell.ts`). The renderer seeds its store with the answer
+(`NoticeState.seed`, `packages/ui-core/src/notice.ts`) only while no channel-4 publication has reached it: any change after
+the answer is published on the channel, so a publication that arrived first is never older than what it would overwrite.
+
+Confirmed first by tests that failed without the repair: `packages/ui-core/src/notice.test.ts` (a store seeded from the answer
+holds the current notice; a publication that arrived first wins; an answer that does not parse seeds nothing), and
+`apps/desktop/src/main/commands/shell.test.ts` (`notice.current` waits for the chain, then answers the current notice).
+
+`pnpm notice-proof` section 6d shows it in the built app. REQ-NOTIFY-031's notice is published while windows A and B exist. A
+then switches to a third project, and the replacement window, built after the publication, shows that notice with its "Open the
+session" action. With the renderer's request taken out and the app rebuilt, the same step failed as this note recorded:
+"the current notice in the window built after its publication did not hold within 15000 ms; last seen null". With the
+request back, it passed. Section 6c keeps its window order, which this defect had forced, and its header points here. The cost
+PD-WORKSPACE-005 revision 3 named for this defect, "the added window does not show the banner", is marked lapsed in that
+directive.

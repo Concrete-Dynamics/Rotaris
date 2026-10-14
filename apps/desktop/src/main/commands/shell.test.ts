@@ -66,3 +66,23 @@ describe('prefs.set announces a stored display preference to every window — RE
     expect(live.sent).toEqual([{ channel: CHANNEL.displayChanged, payload: { v: CONTRACT_SCHEMA_VERSION, preference: 'display/showReasoning', value: false } }]);
   });
 });
+
+/**
+ * ADR-0049 / PD-WORKSPACE-005: `notice.current` answers the notice current in main's one store once every publication accepted
+ * before it has been applied, so a window opened after a publication can show it
+ * (docs/defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).
+ */
+describe('notice.current answers the notice a window opened after its publication should show', () => {
+  it('waits for the store\'s chain, then answers its current notice in channel 4\'s shape', async () => {
+    const steps: string[] = [];
+    const current = { id: 3, severity: 'error', title: 'Project setup did not finish: atlas-billing', message: '', detail: '', persistent: true, sessionId: '' };
+    const notices = { settled: async () => { steps.push('settled'); }, current: () => { steps.push('current'); return current; } };
+    const withStore = shellCommands({
+      capturing: false, currentTheme: () => ({ name: 'rotaris-dim' }) as never, log: () => undefined, notices: notices as never, preferences, processes: [],
+      requirementsPreferenceKey: (k: string) => k, runHost: {} as never, services: new Map() as never, setTheme: (() => ({})) as never,
+      themeBackground: () => '#000', updater: {} as never,
+    } as unknown as Parameters<typeof shellCommands>[0]);
+    expect(await withStore['notice.current']({ kind: 'notice.current' }, at)).toEqual({ ok: true, value: { v: CONTRACT_SCHEMA_VERSION, current } });
+    expect(steps).toEqual(['settled', 'current']);
+  });
+});

@@ -156,6 +156,10 @@ Object.assign(window as unknown as Record<string, unknown>, {
   __rotarisRow: (index: number) => replica.getState().rows.find((r) => r.index === index) ?? null,
 });
 bridge.onNotice((p) => notices.getState().apply(p));
+// ADR-0049 / PD-WORKSPACE-005: the notice current before this window existed, which channel 4 will not repeat — asked once,
+// after the listener above, and applied only if no publication arrived first (`seed`). A window added after a publication
+// used to show none (docs/defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).
+void bridge.command({ kind: 'notice.current' }).then((outcome) => { if (outcome.ok) notices.getState().seed(outcome.value); }, () => undefined);
 bridge.onAcknowledgement((p) => acknowledgements.getState().apply(p));
 /**
  * Part AL2 — the terminal in THIS window (REQ-SHELL-079..111; ADR-0021 first executed through a window, ADR-0047's

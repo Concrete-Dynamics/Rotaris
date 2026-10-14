@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A window built after a notice's publication shows it (fin44, `fin44-notice-reach`;
+`../../defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md`).** A new renderer → main command,
+`notice.current`, asked once at boot; the renderer's notice store gains `seed`. `02-process-view.md` (the command, channel 4)
+and `05-state-ownership.md` (each renderer's copy of the notice).
+
 **A project-setup banner for a project no window holds adds its window (PD-WORKSPACE-005 revision 3, OQ-294; fin44,
 `fin44-notice-reach`).** `projectInit.open` reaches the workspace (`MainWindows.reach`) and asks for Settings › Project through
 `MainWindows.openProjectInit`, held until the window's new `projectInit.ready`; `surfaceHolding` and `PROJECT_NOT_OPEN` are

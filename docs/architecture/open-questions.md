@@ -131,7 +131,7 @@ restore cut between its renames is reversed at the next open; no directive); [OQ
 (`PD-TOOLS-019`). Written 2026-10-14 by fin45 (`fin45-retro-and-record`): [OQ-299](#oq-299), the search's failure confirmed as
 built and the answered search's check reordered to match (a ruling note under `PD-MCP-004` clause 4, no directive);
 [OQ-300](#oq-300), changed (`PD-LIBRARY-002` revision 5); [OQ-301](#oq-301), confirmed as built (a ruling note under
-`PD-CONFIG-003`, no directive).
+`PD-CONFIG-003`, no directive); [OQ-302](#oq-302), confirmed as built, no directive.
 
 ***Three of those counts changed on 2026-09-02 and the direction is not the usual one, so a reader should
 not skim them.*** The seven escalations this register carried as open were **all ruled on that date** and
@@ -14810,6 +14810,20 @@ specification for the amendment round, and the key stands as REQ-SHELL-006 regis
 itself owns, in which case nothing is owed.
 
 **What a live run then shows.** Nothing: a live run reads no Display preference.
+
+**Ruled 2026-10-14 under the owner's delegation ([R-072](../product/requests.md#r-072)), both recommendations followed:**
+confirmed as built, with no directive, no amendment and no code change. REQ-CONFIG-405's list names the desktop preference keys
+whose meaning and default REQ-CONFIG-405 itself owns; REQ-SHELL-006's per-user preference store table is the store's one
+complete registry (its ownership clause, `docs/spec/12-desktop-shell-windows.md` line 27, and the table that clause makes closed,
+from line 402: "every key the product may store is listed here, whatever document owns the behavior behind it").
+`display/showReasoning` stands as that table registers it (line 413) and REQ-CHAT-167 owns it: default off, written user-wide under
+REQ-CONFIG-405's write policy. REQ-CONFIG-405's list equals the set the table leaves to it — the three `requirements/` elevation
+keys its row assigns to REQ-CONFIG-405 by name (line 415), and the `interface/` and `display/` rows that name no other owner;
+`display/showReasoning`'s row names REQ-CHAT-167 — so the specification has no defect here. `packages/platform/src/preferences.ts`
+is confirmed as built (`display/showReasoning`, boolean, default `false`, owner REQ-CHAT-167). **The two recommendations
+weighed:** advocate A's and advocate B's, both confirm-as-built; the ruling follows both. The open note
+[`../defects/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md`](../defects/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md)
+is not decided by this ruling. Written 2026-10-14 by fin45 (`fin45-retro-and-record`).
 
 <a id="oq-311"></a>
 

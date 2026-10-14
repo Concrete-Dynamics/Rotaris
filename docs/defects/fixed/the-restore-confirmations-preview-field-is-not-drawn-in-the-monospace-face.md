@@ -32,7 +32,7 @@ read `Manrope, system-ui, sans-serif` — the dialog's `--rt-font-body` — and 
 **What changed.** `packages/ui/src/shell.css`: the rule is `.checkpoint-dialog .checkpoint-dialog__preview` (0,2,0), which
 outranks the adopted `textarea.input` (0,1,1), and it names the face itself, `var(--rt-font-mono)`, rather than leaning on `.mono`
 — the shape the artifact inspector's editor took. Size (`--rt-text-sm`), leading, `white-space: pre` and the vertical grip are as
-they were. The cascade reading the inspector's test made is now one module, `packages/ui/src/css-cascade.ts` (pure, handed the
+they were. The cascade reading the inspector's test made is now one module, `packages/ui/src/css-cascade.ts` (since renamed `packages/ui/src/css-cascade.test-support.ts`; pure, handed the
 sheets), which both tests read.
 
 **Pinned** by `packages/ui/src/checkpoint-dialogs-css.test.ts`: the dialog's own markup (a read-only `textarea.input` carrying

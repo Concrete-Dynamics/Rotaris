@@ -4,11 +4,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { CheckpointPreviewPayload } from '@rotaris/contracts';
 import { RestoreConfirmDialog } from './CheckpointDialogs.js';
-import { cascadeOf, classesOf, type CascadeElement } from './css-cascade.js';
+import { cascadeOf, classesOf, type CascadeElement } from './css-cascade.test-support.js';
 
 /*
  * What the renderer's stylesheets give the restore confirmation's preview field, read the way the cascade reads them
- * (`css-cascade.ts`, the reading the artifact inspector's editor test made): every sheet `apps/desktop/src/renderer/design.css`
+ * (`css-cascade.test-support.ts`, the reading the artifact inspector's editor test made): every sheet `apps/desktop/src/renderer/design.css`
  * imports, in its order, each rule matched against the dialog's own markup.
  *
  * docs/defects/fixed/the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md: the field is a

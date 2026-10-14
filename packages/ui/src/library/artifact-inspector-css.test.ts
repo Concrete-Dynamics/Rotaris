@@ -2,13 +2,13 @@ import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { cascadeOf, classesOf, type CascadeElement } from '../css-cascade.js';
+import { cascadeOf, classesOf, type CascadeElement } from '../css-cascade.test-support.js';
 import { ArtifactInspector, type ArtifactLoaded } from './ArtifactInspector.js';
 
 /*
  * What the renderer's stylesheets give the artifact inspector, read the way the cascade reads them: every sheet
  * `apps/desktop/src/renderer/design.css` imports, in its order, each rule's selector matched against the inspector's own
- * markup and ranked by specificity, then by order (`../css-cascade.ts`, shared with the restore confirmation's test since
+ * markup and ranked by specificity, then by order (`../css-cascade.test-support.ts`, shared with the restore confirmation's test since
  * 2026-10-14). A class written on the element is no promise that it wins.
  */
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf8');

@@ -490,6 +490,35 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
       expect(existsSync(journal())).toBe(false);
     });
 
+    it('a journal that cannot be written is a returned failure that leaves the store as it was and deletes the staging copy (OQ-265 over OQ-266\'s step)', async () => {
+      seed(root, id, [{ sid: 'S-1', rows: 2 }]);
+      const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 3 }]);
+      // Something other than a file at the journal's name: the write fails (EISDIR) as a full disk or a refused create would.
+      mkdirSync(journal());
+      const before = treeHash(storeDir(root, id));
+      const r = await restoreStore(ctx(rh(), artifact));
+      expect(r.ok).toBe(false);
+      expect(r.abandoned).toBe(false);
+      expect(r.error).toMatch(/^the restore's journal could not be written: /);
+      expect(r.steps).not.toContain('8-journal');
+      expect(treeHash(storeDir(root, id))).toBe(before);
+      expect(readdirSync(root).filter((n) => n.includes('.restoring-') || n.includes('.displaced-'))).toEqual([]);
+      expect(r.leftovers).toEqual([]);
+    });
+
+    it('a journal that cannot be removed does not turn an open into a throw', () => {
+      seed(root, id, [{ sid: 'S-1', rows: 1 }]);
+      // A journal the remove cannot take (a non-empty directory in its place): the open still opens, reversing nothing.
+      mkdirSync(journal());
+      writeFileSync(join(journal(), 'x'), 'x');
+      expect(() => recoverCutRestore(root, id)).not.toThrow();
+      const r = openWorkspaceStore(root, id, 'C:/ws');
+      expect(r.cutRestore).toBeUndefined();
+      expect(new StoreDal(r.db).listSessions().map((x) => x.session_id)).toEqual(['S-1']);
+      r.db.close();
+      forgetSpelling(r.dir);
+    });
+
     it('a stale journal beside a present store acts on nothing and is removed; a .displaced-* beside it is never touched', () => {
       const stamp = '2026-10-13T00-00-00-000Z';
       seed(root, id, [{ sid: 'S-1', rows: 1 }]);

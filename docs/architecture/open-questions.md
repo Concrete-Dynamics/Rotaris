@@ -13711,7 +13711,10 @@ recommendations are in the orchestrator's ruling record, not copied here.
 ***Built 2026-10-14 (fin43, `fin43-restore-recovery`).*** `restoreStore` writes the journal (`{stamp, stagingN,
 targetExisted}`, replaced where a stale one is there, then the file and its directory flushed) after step 9a and before step 8
 (step `8-journal`), removes it when step 9 succeeds (before the run host is told to reopen) and when the R1/R2 reversal
-succeeds, and keeps it when R2 fails, whose error then says the next open will try the rename again.
+succeeds, and keeps it when R2 fails, whose error then says the next open will try the rename again. A journal that cannot be
+written is a returned failure before step 8, through OQ-265's discard, and a removal that fails is left for the next open
+rather than thrown *(added by fin43's review, 2026-10-14: both escaped `restoreStore` as rejections, the first after the run
+host had closed its connection and with the staging copy left; pinned by the OQ-266 block's two "journal that cannot" cases)*.
 `recoverCutRestore` (`packages/store/src/recover.ts`) acts on the journal alone: none, nothing; a journal beside a present
 target (a restore that finished, or a stale journal), the journal removed and nothing else; an absent target with a store
 before, the highest `<identifier>.displaced-<journal stamp>[.n]` renamed back and the journal removed; an absent target with

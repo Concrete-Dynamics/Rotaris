@@ -1418,7 +1418,10 @@ ruled 2026-10-13 under R-072; the paragraph above holds for a restore that reach
 process that dies in it: the next open met an empty target name and created a fresh store there, 10 of 10. So the restore
 writes **`<identifier>.restore-pending`** after 9a and before step 8 — `{stamp, stagingN, targetExisted}`, replaced where a
 stale one is there, the file and its directory flushed — and removes it once step 9 has succeeded (before the run host is told
-to reopen) or the R1/R2 reversal has; a failed R2 keeps it. **The workspace service's next open acts on it before anything is
+to reopen) or the R1/R2 reversal has; a failed R2 keeps it. A journal that cannot be written fails the restore before step 8 as any failure that leaves the store as it was
+(the staging copy discarded, OQ-265), and one that cannot be removed is left, harmless beside a present store, for the next
+open to remove *(both added 2026-10-14 by fin43's review, which found the write and the removal escaping `restoreStore` as
+rejections)*. **The workspace service's next open acts on it before anything is
 created** (`recoverCutRestore`, `packages/store/src/recover.ts`, from `openWorkspaceStore`): a journal beside a present store
 is a restore that finished, or a stale journal, and is removed with nothing touched; a journal beside an absent store puts back
 the highest `<identifier>.displaced-<journal stamp>[.n]` where there was a store before, and otherwise lets the ordinary

@@ -69,9 +69,15 @@ export function writeRestoreJournal(workspacesRoot: string, id: WorkspaceId, jou
   fsyncDirectory(dirname(file));
 }
 
-/** Removed once step 9 or the reversal has succeeded; best effort, since a journal beside a present store is harmless. */
+/**
+ * Removed once step 9 or the reversal has succeeded; best effort, since a journal beside a present store is harmless and the
+ * next open removes it. A remove that fails (a held handle, something other than a file at the name) never throws: it would
+ * otherwise reject a restore that installed, or an open, over a file whose only job is already done.
+ */
 export function removeRestoreJournal(workspacesRoot: string, id: WorkspaceId): void {
-  rmSync(restoreJournal(workspacesRoot, id), { force: true });
+  try {
+    rmSync(restoreJournal(workspacesRoot, id), { force: true });
+  } catch { /* best effort, above */ }
 }
 
 /** The journal, `null` where there is none, or `'unreadable'` where a write was cut before its flush. */

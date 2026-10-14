@@ -330,7 +330,14 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
   const stamp = opts.stamp ?? fileStamp(ctx.wall.instant());
   const targetExisted = existsSync(target);
   if (!opts.skipJournal) {
-    writeRestoreJournal(workspacesRoot, id, { stamp, stagingN: opts.stagingN ?? 1, targetExisted });
+    // A journal that cannot be written (a full disk, a refused create) is a failure that leaves the store as it was: nothing
+    // has been displaced yet, so it returns through OQ-265's discard rather than rejecting with the copy left behind.
+    try {
+      writeRestoreJournal(workspacesRoot, id, { stamp, stagingN: opts.stagingN ?? 1, targetExisted });
+    } catch (e) {
+      removeRestoreJournal(workspacesRoot, id);
+      return failSafely(`the restore's journal could not be written: ${String(e)}`, { stamp });
+    }
     journalWritten = true;
     steps.push('8-journal');
   }

@@ -223,6 +223,9 @@ export const REQUIREMENT_CHECKOUT_SUBPATH = 'requirements/worktrees';
  */
 export function worktreeStorageCollision(subpath: string, platform: NodeJS.Platform = process.platform): string | null {
   const trimmed = subpath.trim() === '' ? 'worktrees' : subpath.trim();
+  // An absolute value leaves `.rotaris` as surely as a climbing one: REQ-GIT-005's to refuse, not this check's to report as
+  // inside (`docs/defects/fixed/an-absolute-worktree-storage-subpath-is-reported-as-resolving-inside-rotaris.md`).
+  if (/^[\\/]/.test(trimmed) || /^[A-Za-z]:/.test(trimmed)) return null;
   const segments: string[] = [];
   for (const part of trimmed.replace(/\\/g, '/').split('/')) {
     if (part === '' || part === '.') continue;

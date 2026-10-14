@@ -80,6 +80,14 @@ describe('REQ-GIT-138: the session checkout directory stays out of the requireme
     for (const bad of ['requirements/worktrees', ' requirements/worktrees ', 'requirements\\worktrees\\x', './requirements/./worktrees', 'a/../requirements/worktrees/b']) expect(worktreeStorageCollision(bad, 'linux'), bad).toMatch(/requirement checkout directory .rotaris\/requirements\/worktrees.*REQ-GIT-138/);
     for (const good of ['worktrees', '', '  ', '.', 'requirements', 'requirements/worktrees2', 'x/requirements/worktrees', '../requirements/worktrees']) expect(worktreeStorageCollision(good, 'linux'), good).toBeNull();
   });
+  // `docs/defects/fixed/an-absolute-worktree-storage-subpath-is-reported-as-resolving-inside-rotaris.md`: an absolute value
+  // leaves `.rotaris`, which REQ-GIT-005 refuses where the worktree is placed; the load does not report it as inside.
+  it('leaves an absolute value to REQ-GIT-005, as it leaves one that climbs out of .rotaris', () => {
+    for (const abs of ['/requirements/worktrees', '\\requirements\\worktrees', 'C:/requirements/worktrees', 'c:\\requirements\\worktrees\\x']) {
+      expect(worktreeStorageCollision(abs, 'linux'), abs).toBeNull();
+      expect(worktreeStorageCollision(abs, 'win32'), abs).toBeNull();
+    }
+  });
   it('folds case where the file system does: Windows only', () => {
     expect(worktreeStorageCollision('Requirements/Worktrees', 'win32')).not.toBeNull();
     expect(worktreeStorageCollision('Requirements/Worktrees', 'linux')).toBeNull();

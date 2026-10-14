@@ -18,3 +18,12 @@ A fin41 review finding (`fin41/config-and-proposals`, Task 1), carried by fin43 
 - `packages/config/src/sections/requirements.ts` — `worktreeStorageCollision`.
 - `packages/workspace/src/git/worktrees.ts` — `sessionWorktreePath`, which refuses an absolute value.
 - `packages/config/src/requirements-section.test.ts` — the `REQ-GIT-138` cases.
+
+## Repaired — 2026-10-14 (fin43, `fin43-optional-findings`)
+
+`worktreeStorageCollision` returns null for a value that begins with a separator or a drive letter, as it already did for
+one that climbs out of `.rotaris` with `..`: either leaves `.rotaris`, and `sessionWorktreePath` refuses it under
+`REQ-GIT-005` where the worktree is placed. Pinned by `requirements-section.test.ts`, "leaves an absolute value to
+REQ-GIT-005, as it leaves one that climbs out of .rotaris" (POSIX and Windows spellings, on both platforms), which failed
+without the change. `worktree-storage.test.ts`'s agreement between the load and the placement still holds. No open
+question was raised.

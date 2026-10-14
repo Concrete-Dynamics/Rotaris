@@ -68,12 +68,40 @@ describe('analysis reading (live-run `ask`, REQ-LIBRARY-123..127, PD-LIBRARY-002
    * retrospective's outcome owes" over an artifact whose notes read "collector crashed: Unauthorized" and the notice "The
    * retrospective found nothing to propose". A crashed collector is no outcome a pass owes: it never reached the model.
    */
-  it('a crashed collector is its own outcome: no notice matches it, and the post-run verdict fails on it', () => {
-    const crashed = passOutcome({ proposals: [], notes: 'collector crashed: Unauthorized' }, [{ text: 'iThe retrospective found nothing to proposeDetailsNothing was proposed in impart_dL3YK5Xd.CopyDismiss' }], { retrospective: true });
+  it('a crashed collector is its own outcome: the zero-proposal notice no longer matches it, and the post-run verdict fails on it', () => {
+    const crashed = passOutcome({ artifact_id: 'impart_dL3YK5Xd', proposals: [], notes: 'collector crashed: Unauthorized' }, [{ text: 'iThe retrospective found nothing to proposeDetailsNothing was proposed in impart_dL3YK5Xd.CopyDismiss' }], { retrospective: true });
     expect(crashed).toMatchObject({ outcome: 'crashed', crashed: true, noticeMatches: false });
-    expect(postRunVerdict(1, passOutcome({ proposals: [], notes: 'collector crashed: Unauthorized' }, [{ text: 'Improvement analysis complete — no proposalsDetailsNothing was proposed in impart_x.' }]))).toBe('fail');
+    expect(postRunVerdict(1, passOutcome({ artifact_id: 'impart_x', proposals: [], notes: 'collector crashed: Unauthorized' }, [{ text: 'Improvement analysis complete — no proposalsDetailsNothing was proposed in impart_x.' }]))).toBe('fail');
     // Not a crash: the timed-out, the suppressed-duplicates and the null notes keep their outcomes.
     expect(passOutcome({ proposals: [], notes: 'Suppressed duplicate proposals already covered by: impart_a.' }, [], { retrospective: true }).outcome).toBe('empty');
+  });
+
+  /*
+   * PD-LIBRARY-005 (OQ-285): a crashed or unparseable collector owes its pass's failure warning — the title, and the artifact's
+   * id in the detail saying it holds no proposals — and a timed-out retrospective's info notice states its limit.
+   */
+  it('a failed collector matches only its pass\'s failure warning naming the artifact (PD-LIBRARY-005)', () => {
+    const retroWarning = [{ text: "wThe retrospective could not be completedDetailsThis workspace's own history was not reviewed: the analysis call failed (Unauthorized). impart_dL3YK5Xd holds no proposals.CopyDismiss" }];
+    expect(passOutcome({ artifact_id: 'impart_dL3YK5Xd', proposals: [], notes: 'collector crashed: Unauthorized' }, retroWarning, { retrospective: true })).toMatchObject({ outcome: 'crashed', crashed: true, noticeMatches: true });
+    // Another artifact's id, or the post-run pass's title, is not this warning.
+    expect(passOutcome({ artifact_id: 'impart_00000000', proposals: [], notes: 'collector crashed: Unauthorized' }, retroWarning, { retrospective: true }).noticeMatches).toBe(false);
+    expect(passOutcome({ artifact_id: 'impart_dL3YK5Xd', proposals: [], notes: 'collector crashed: Unauthorized' }, retroWarning).noticeMatches).toBe(false);
+
+    const postWarning = [{ text: "wThe completed run could not be reviewed for improvementsDetailsSession s-1 was not reviewed for improvements: the model's answer could not be read (collector output is invalid JSON). impart_x holds no proposals." }];
+    const unreadable = passOutcome({ artifact_id: 'impart_x', proposals: [], notes: 'collector parse failed: collector output is invalid JSON' }, postWarning);
+    expect(unreadable).toMatchObject({ outcome: 'parse-failed', noticeMatches: true });
+    expect(unreadable).not.toHaveProperty('crashed');
+    // The model's answer, not the product's failure: a NOTE, as a pass that proposed nothing is; a crash stays a FAIL.
+    expect(postRunVerdict(1, unreadable)).toBe('note');
+    expect(postRunVerdict(1, passOutcome({ artifact_id: 'impart_x', proposals: [], notes: 'collector crashed: Unauthorized' }, postWarning))).toBe('fail');
+    expect(passOutcome({ artifact_id: 'impart_x', proposals: [], notes: 'collector parse failed: x' }, [{ text: 'Improvement analysis complete — no proposalsDetailsNothing was proposed in impart_x.' }]).noticeMatches).toBe(false);
+  });
+
+  it('a timed-out retrospective matches only the info notice stating its limit (PD-LIBRARY-005)', () => {
+    const artifact = { artifact_id: 'impart_r', proposals: [], notes: 'collector timed out after 120 seconds' };
+    expect(passOutcome(artifact, [{ text: 'iThe retrospective found nothing to proposeDetailsThe retrospective reached its 120-second limit before it proposed anything.' }], { retrospective: true }))
+      .toMatchObject({ outcome: 'timed-out', limitS: 120, noticeMatches: true });
+    expect(passOutcome(artifact, [{ text: 'iThe retrospective found nothing to proposeDetailsNothing was proposed in impart_r.' }], { retrospective: true }).noticeMatches).toBe(false);
   });
 
   it('reads the run host\'s unauthenticated model requests and the runs a launch started (F2\'s shape: no run before the retrospective)', () => {

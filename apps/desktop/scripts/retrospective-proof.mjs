@@ -41,6 +41,10 @@
  *      same capture seams against the scripted provider: the Improvement analysis timeout set through Settings and saved,
  *      a run whose capture holds until its post-run analysis has ended, and the Library's gesture pressed and waited for;
  *      then the limit set to 10 s and an analyst that never answers: the empty artifact and the notice naming the limit.
+ *   9. A FAILED COLLECTOR (since fin44, PD-LIBRARY-005, OQ-285) — a provider refusing the credential (`crash`) and an answer
+ *      that is no JSON twice (`garbage`): each stores its empty artifact and posts the retrospective's failure warning, its
+ *      reason and the artifact holding no proposals in the detail, never "found nothing to propose"; the log carries a warning.
+ *      Launch 5 also reads the timed-out retrospective's detail stating its limit.
  *
  * Evidence under `.proof/retrospective-proof/`: a PNG per scenario, each launch's `app.log`, `results.json`.
  * `--skip-build` skips the build.
@@ -583,6 +587,10 @@ await (async () => {
     check('the timeout takes the zero-proposal outcome, said in an informational notice (REQ-LIBRARY-124)',
       notice !== null && notice.data['data-severity'] === 'info',
       notice === null ? (await probe(d, '[data-testid="notice-title"]')).map((n) => n.text).join(' | ') : `severity=${notice.data['data-severity']} — "${notice.text.slice(0, 80)}"`);
+    // PD-LIBRARY-005 (OQ-285): the timed-out retrospective's detail states its limit and names no control (it has none).
+    check('the timed-out retrospective\'s notice states its limit and names no control (PD-LIBRARY-005)',
+      notice !== null && notice.text.includes('The retrospective reached its 5-second limit before it proposed anything.') && !/Settings ›/.test(notice.text) && !/Nothing was proposed/.test(notice.text),
+      notice === null ? 'no notice' : `"${notice.text.slice(0, 200)}"`);
 
     // REQ-LIBRARY-130: the application stays usable throughout — the composer still takes what is typed into it.
     await d.click('.nav-item', { text: 'Workspace', timeoutMs: 15_000 });
@@ -760,6 +768,42 @@ await (async () => {
   check('an analysis past its 10 s limit stores the empty artifact, and its notice names the limit and the control (REQ-LIBRARY-023/124, REQ-NOTIFY-100, PD-CONFIG-003 revision 2)',
     /improvement_collector_timeout=10 s/.test(slowLog) && settledAfterMs(slowLog) !== null && slow.outcome === 'timed-out' && slow.limitS === 10 && slow.noticeMatches === true,
     `${/improvement_collector_timeout=\d+ s/.exec(slowLog)?.[0] ?? 'no improvement_collector_timeout line'}; ${slow.outcome}, notes ${JSON.stringify(slow.notes)}; notice ${slow.noticeMatches} (${slowNotices.map((n) => n.text.slice(0, 200)).join(' | ')})`);
+}
+
+// ── 9. A collector that failed (PD-LIBRARY-005, OQ-285): the provider refusing the credential (`crash`, REQ-LIBRARY-023's
+//    "collector crashed: <exc>") and an answer that is no JSON on the first call and the retry (`garbage`, REQ-LIBRARY-022's
+//    "collector parse failed: <err>"). Each stores its empty artifact and is told as the retrospective's failure warning, with no
+//    action, its detail carrying the reason and naming that artifact as holding no proposals — never "found nothing to propose".
+for (const [script, notesPrefix, reasonText] of [['crash', 'collector crashed: ', 'the analysis call failed ('], ['garbage', 'collector parse failed: ', "the model's answer could not be read ("]]) {
+  const name = `failed-${script}`;
+  const workspace = workspaceAt(name);
+  let seen = null;
+  let actions = -1;
+  await launch(name, workspace, { ROTARIS_IMPROVEMENT_SCRIPT: script }, async (d, root) => {
+    await openProposals(d);
+    await d.click('[data-testid="library-retrospective"]', { timeoutMs: 15_000 });
+    seen = await noticeMatching(d, /The retrospective could not be completed|The retrospective found nothing to propose/, 60_000);
+    actions = (await probe(d, '.notice__action')).length;
+    await until(d, '[data-testid="improvement-activity-title-bar"]', (m) => m.length === 0, 30_000);
+    await d.screenshot(join(output, `${name}.png`));
+    return root;
+  });
+  const stored = artifactsIn(join(output, name, 'app'));
+  const artifact = stored[0]?.artifact ?? null;
+  check(`${script}: the failed collector's empty artifact is stored with its notes (REQ-LIBRARY-022/023)`,
+    stored.length === 1 && artifact.proposals.length === 0 && String(artifact.notes ?? '').startsWith(notesPrefix) && stored[0].source_session_id === null,
+    stored.length === 0 ? 'nothing was stored' : `${stored[0].artifact_id}: ${artifact.proposals.length} proposal(s), notes ${JSON.stringify(artifact.notes)}`);
+  const id = stored[0]?.artifact_id ?? '(none)';
+  const outcome = passOutcome(artifact, seen === null ? [] : [seen], { retrospective: true });
+  check(`${script}: the retrospective's failure warning, with no action, its reason and the artifact holding no proposals (PD-LIBRARY-005)`,
+    seen !== null && seen.data['data-severity'] === 'warning' && seen.text.includes('The retrospective could not be completed') && actions === 0
+      && seen.text.includes(reasonText) && seen.text.includes(`${id} holds no proposals.`) && !/found nothing to propose/.test(seen.text)
+      && outcome.outcome === (script === 'crash' ? 'crashed' : 'parse-failed') && outcome.noticeMatches === true,
+    seen === null ? 'no retrospective notice' : `severity=${seen.data['data-severity']}, ${actions} action(s) — "${seen.text.slice(0, 260)}"; reading ${outcome.outcome}, matches ${outcome.noticeMatches}`);
+  const log = readFileSync(join(output, `${name}.log`), 'utf8');
+  check(`${script}: the failure is written to the application log as a warning (REQ-LIBRARY-035(b), PD-LIBRARY-005)`,
+    new RegExp(`warn.*improvement analysis ${id} \\(retrospective\\) stored no proposals because its collector failed: ${notesPrefix}`).test(log),
+    log.split('\n').find((line) => /collector failed/.test(line))?.trim().slice(0, 240) ?? 'no such line');
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures, launches }, null, 2)}\n`);

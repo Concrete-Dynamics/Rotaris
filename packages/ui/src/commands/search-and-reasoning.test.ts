@@ -103,6 +103,23 @@ describe('"Toggle reasoning bodies" — REQ-CHAT-167, the one writer of display/
     ]);
   });
 
+  // `docs/defects/fixed/two-reasoning-toggles-inside-one-write-both-write-the-same-value.md`: the second activation reads the
+  // state the first one wrote, so two activations flip twice and acknowledge two states.
+  it('two activations inside one write\'s round trip flip twice, each reading the state the other left', async () => {
+    // The window's store changes only once main has answered `prefs.set`, as `writeDisplayPref` does.
+    const written: boolean[] = [];
+    bindReasoningPreference({
+      current: () => stored,
+      write: async (value) => { written.push(value); await new Promise((r) => setTimeout(r, 5)); stored = value; return { ok: true }; },
+      acknowledge: (kind, title) => { acks.push({ kind, title }); },
+    });
+    const [first, second] = await Promise.all([toggleReasoningBodies(), toggleReasoningBodies()]);
+    expect([first, second]).toEqual([true, false]);
+    expect(written).toEqual([true, false]);
+    expect(stored).toBe(false);
+    expect(acks.map((a) => a.title)).toEqual([REASONING_SHOWN_TITLE, REASONING_HIDDEN_TITLE]);
+  });
+
   it('reports a refused write with main\'s reason and claims no new state', async () => {
     refuse = 'The preference store is read-only.';
     expect(await toggleReasoningBodies()).toBeNull();

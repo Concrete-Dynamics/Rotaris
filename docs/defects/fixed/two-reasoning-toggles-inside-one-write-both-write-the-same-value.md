@@ -16,3 +16,11 @@ it. A fin41 review finding (`fin41/palette-and-hooks`, Task 1), carried by fin43
 
 - `packages/ui/src/display-host.ts` — `toggleReasoningBodies`, which reads the state before an asynchronous write.
 - `packages/ui/src/commands/search-and-reasoning.test.ts` — the toggle's cases.
+
+## Repaired — 2026-10-14 (fin43, `fin43-optional-findings`)
+
+`toggleReasoningBodies` now queues each activation behind the one before it (a promise chain in `display-host.ts`, the
+flip itself in `flipReasoningBodies`), so each reads `current()` after the previous write has landed and two activations
+flip twice. Pinned by `search-and-reasoning.test.ts`, "two activations inside one write's round trip flip twice, each
+reading the state the other left", which failed without the queue (`[true, true]`). No view names the function; none
+changed. No open question was raised.

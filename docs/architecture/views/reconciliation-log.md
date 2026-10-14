@@ -16,6 +16,14 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**`focus-session` reaches the session where it lives (PD-SHELL-001 revision 3, OQ-292; fin44, `fin44-notice-reach`).** The
+member carries `{sessionId, workspace}`; the run host stamps `run.result` and `notice.publish` with the session's recorded root
+(`withSessionRoot`); main's `session.focusFromNotice` reaches the workspace and sends the reached window channel 16
+(`session:focus`), held on a window still loading until its renderer's `session.focusReady`; `session.resume`'s `fromNotice`
+is gone. `02-process-view.md` (the renderer → main list, the run host's events, channel 16), `03-runtime-view.md` (the
+unfocused notices' action), `04-seams.md` §2 (sixteen channels, the hold-until-listening hand-off), `05-state-ownership.md`
+(the per-window requests, `sessionRoots`), `06-sequences.md` (a notice action that names a workspace, with its sequence).
+
 **A notice action's reach waits for a window still opening its workspace (fin44, `fin44-notice-reach`;
 `../../defects/fixed/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md`).** A main window's
 readiness (`workspaceReady`) is pending from `MainWindows.build` until its first open settles, and `MainWindows.reach` waits on

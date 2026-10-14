@@ -39,6 +39,7 @@ function harness(options: {
 } = {}) {
   const actions: string[] = [];
   const workspacesOpened: string[] = [];
+  const delivered: string[] = [];
   const notices: { windowId: number; title: string; action?: string }[] = [];
   const folders: (string | null)[] = [];
   const timers: PendingTimer[] = [];
@@ -125,12 +126,13 @@ function harness(options: {
     unshownApprovals: (approvals) => { actions.push(`unshown:${approvals.join(',')}`); },
     workspaceClosed: (workspace) => { actions.push(`workspace-closed:${workspace}`); },
     workspaceOpened: (window) => { workspacesOpened.push(`${window.workspace}:${window.workspaceId ?? 'none'}:after-${actions.length}`); },
+    deliver: (window, request) => { delivered.push(`${window.wcId}:${request.kind}${request.kind === 'session-focus' ? `:${request.sessionId}` : ''}`); },
     ...(options.postShowActivation === undefined ? {} : { postShowActivation: (window) => { actions.push(`activate:${window.workspace}`); options.postShowActivation!(window.wcId); } }),
   };
 
   const mainWindows = new MainWindows<MemoryWindow, string, string, string, string>(dependencies);
   return {
-    mainWindows, actions, workspacesOpened, notices, folders, windows, openFailures,
+    mainWindows, actions, workspacesOpened, delivered, notices, folders, windows, openFailures,
     deferOpens: () => { deferOpens = true; },
     resolveOpen: (workspace: string, opened = true) => openResolvers.get(workspace)?.(opened ? { workspaceId: `id:${workspace}`, storeFile: `${workspace}/store.db` } : undefined),
     advanceTimers: () => { for (const timer of timers.splice(0)) if (!timer.cancelled) timer.callback(); },
@@ -400,6 +402,49 @@ describe('MainWindows', () => {
     expect(answered.ok).toBe(false);
     expect(h.actions.filter((action) => action.startsWith('build:'))).toEqual(['build:C:/a:launch', 'build:C:/c:open-request']);
     expect(h.mainWindows.ordered().map((window) => window.workspace)).toEqual(['C:/a']);
+  });
+
+  // PD-SHELL-001 revision 3 (OQ-292, ruled 2026-10-14 under R-072): a `focus-session` notice reaches the window holding the
+  // session's workspace and asks THAT window to focus the session; a window the reach added holds the request until its renderer
+  // is ready for it, and is given it once.
+  describe('a notice\'s session focus reaches the window holding its workspace (PD-SHELL-001 revision 3)', () => {
+    it('held elsewhere: the holder is surfaced and, listening, is sent the focus at once', async () => {
+      const h = harness();
+      const a = await h.mainWindows.launch('C:/a');
+      h.folders.push('C:/b');
+      await h.mainWindows.choose(a.wcId, { newWindow: true });
+      expect(h.mainWindows.sessionFocusReady(a.wcId)).toBeNull();
+      const reached = await h.mainWindows.reach('c:/a');
+      expect(reached.ok && reached.window.wcId).toBe(a.wcId);
+      expect(h.mainWindows.active()?.wcId).toBe(a.wcId);
+      expect(h.mainWindows.focusSession(a.wcId, 'S-A')).toBe('sent');
+      expect(h.delivered).toEqual([`${a.wcId}:session-focus:S-A`]);
+      expect(h.mainWindows.sessionFocusReady(a.wcId)).toBeNull();
+    });
+
+    it('held nowhere: the window the reach added is not listening yet, holds the focus, and is given it once when ready', async () => {
+      const h = harness();
+      await h.mainWindows.launch('C:/b');
+      const reached = await h.mainWindows.reach('C:/a');
+      expect(reached.ok && reached.added).toBe(true);
+      const added = reached.ok ? reached.window.wcId : -1;
+      expect(h.mainWindows.focusSession(added, 'S-A')).toBe('held');
+      expect(h.delivered).toEqual([]);
+      expect(h.mainWindows.sessionFocusReady(added)).toBe('S-A');
+      expect(h.mainWindows.sessionFocusReady(added)).toBeNull();
+      // Listening from then on: the next request is sent, not held.
+      expect(h.mainWindows.focusSession(added, 'S-A2')).toBe('sent');
+      expect(h.delivered).toEqual([`${added}:session-focus:S-A2`]);
+    });
+
+    it('a second request while one is held replaces it, and a window gone answers so', async () => {
+      const h = harness();
+      const b = await h.mainWindows.launch('C:/b');
+      expect(h.mainWindows.focusSession(b.wcId, 'S-1')).toBe('held');
+      expect(h.mainWindows.focusSession(b.wcId, 'S-2')).toBe('held');
+      expect(h.mainWindows.sessionFocusReady(b.wcId)).toBe('S-2');
+      expect(h.mainWindows.focusSession(999, 'S-3')).toBe('gone');
+    });
   });
 
   it('answers a reach with no main window open as a refusal and builds nothing', async () => {

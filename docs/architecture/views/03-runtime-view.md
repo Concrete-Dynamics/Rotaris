@@ -1637,7 +1637,9 @@ limit's notice or its own summary. *Since repair round 1 (2026-10-02):* every no
 `main/run-failure-notice.ts` (`runEndingPublication`, a failed run with no failure text taking the generic class too), and a
 failed run's class publication passes the **focus gate** (`RunFailurePublisher`, REQ-NOTIFY-030/032): a session a main
 window follows (`MainWindows.followerOfSession`, no fallback to the active window) publishes at once; any other raises
-REQ-NOTIFY-032's warning — naming the session, the failure text as detail, `focus-session` — and holds the class notice, and
+REQ-NOTIFY-032's warning — naming the session, the failure text as detail, `focus-session` naming the session and the
+workspace the run host recorded it under (`run.result`'s `workspaceRoot`; no action where none is recorded, PD-SHELL-001
+revision 3) — and holds the class notice, and
 for an authentication failure the automatic fallback's restart and the recovery dialog (OQ-182's reading, confirmed 2026-10-06 by R-071), until a main
 window's `session.subscribe` follows that session; a later
 ending of the session supersedes what was held. Main also keeps, by session, every provider/model pair that failed
@@ -1648,7 +1650,10 @@ releases that provider's pairs. ~~REQ-NOTIFY-031 (a background run's non-failure
 `docs/defects/fixed/a-background-runs-non-failure-ending-raises-its-summary-not-a-notice-naming-the-session.md`):* a non-failure ending passes the same focus test
 (`RunFailurePublisher.endedOtherwise`): a session a main window follows raises the notice `runEndingPublication` decided; any
 other raises REQ-NOTIFY-031's in its place (`unfocusedEndingNotice`: persistent, `success` for `completed` and `info`
-otherwise, naming the session and its normalised state, saying the session on screen is unaffected, `focus-session`).
+otherwise, naming the session and its normalised state, saying the session on screen is unaffected, `focus-session` with the
+session's recorded workspace as above). *Since 2026-10-14 (PD-SHELL-001 revision 3, OQ-292):* pressed in any window, the
+action reaches the window holding that workspace, or adds one, and that window focuses the session (`session.focusFromNotice`,
+channel 16).
 "New session" sends `session.release` for the session it releases, so main no longer counts that session as followed.
 *Since 2026-10-02 (fin10, `docs/defects/fixed/a-background-run-ended-on-a-provider-limit-loses-its-quota-notice.md`):* a
 run that ended otherwise on a provider limit (a cancelled quota wait) carries the limit's text with its notice

@@ -182,7 +182,7 @@ describe('the two entry points — REQ-NOTIFY-003, ADR-0049 decision 5', () => {
 describe('the action vocabulary — REQ-NOTIFY-044, REQ-SHELL-115', () => {
   it('accepts each member with its parameter and refuses a member outside the union', () => {
     for (const action of [
-      { kind: 'focus-session', sessionId: 's1' }, { kind: 'open-view', view: 'git' }, { kind: 'open-settings', category: 'models' },
+      { kind: 'focus-session', sessionId: 's1', workspace: 'C:/w' }, { kind: 'open-view', view: 'git' }, { kind: 'open-settings', category: 'models' },
       { kind: 'open-library', tab: 'artifacts' }, { kind: 'install-update' }, { kind: 'restart' }, { kind: 'retry-run' },
       { kind: 'save-settings' }, { kind: 'open-cloud-account' }, { kind: 'open-project-init', workspace: 'C:/w' },
       { kind: 'revert-proposal-review', id: 'p1' }, { kind: 'open-hook-review', workspace: 'C:/w' },
@@ -199,6 +199,9 @@ describe('the action vocabulary — REQ-NOTIFY-044, REQ-SHELL-115', () => {
     // its own (`AcknowledgementActionSchema`), and a later part reaching for the easy widening fails here.
     expect(NoticeActionSchema.safeParse({ kind: 'start-session' }).success).toBe(false);
     expect(NoticeActionSchema.safeParse({ kind: 'focus-session' }).success).toBe(false);
+    // PD-SHELL-001 revision 3 (OQ-292): the session's workspace is required beside it, so the press can reach where it lives.
+    expect(NoticeActionSchema.safeParse({ kind: 'focus-session', sessionId: 's1' }).success).toBe(false);
+    expect(NoticeActionSchema.safeParse({ kind: 'focus-session', sessionId: 's1', workspace: '' }).success).toBe(false);
     // ESC-34: both members added on 2026-09-06 carry their object — the review always, the setup where one is named.
     expect(NoticeActionSchema.safeParse({ kind: 'open-hook-review' }).success).toBe(false);
     expect(NoticeActionSchema.safeParse({ kind: 'open-hook-review', workspace: '' }).success).toBe(false);

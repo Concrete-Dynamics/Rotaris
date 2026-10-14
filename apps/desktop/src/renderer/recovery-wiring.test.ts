@@ -132,16 +132,22 @@ describe('PD-WORKSPACE-005 revision 2: the project-setup action reaches its targ
 });
 
 /*
- * REQ-NOTIFY-044 with PD-SHELL-001 (docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md):
- * the `focus-session` arm marks its load as a notice action's, which main answers by not dispatching a press for a session
- * this window's workspace does not hold, rather than replacing the pressed notice with an error.
+ * PD-SHELL-001 revision 3 (OQ-292, ruled 2026-10-14 under R-072): the `focus-session` arm hands the session and its workspace to
+ * main (`session.focusFromNotice`), which reaches the window holding that workspace; that window focuses the session through its
+ * own load on channel 16, and, once listening, asks main for a focus held while it loaded. The `fromNotice` silence is gone.
  */
-describe('REQ-NOTIFY-044: a focus-session press is marked as a notice action\'s', () => {
+describe('PD-SHELL-001 revision 3: a focus-session press reaches the window holding the session\'s workspace', () => {
   const text = readFileSync(new URL('./main.tsx', import.meta.url), 'utf8');
-  it('main.tsx passes fromNotice from the focus-session arm to session.resume', () => {
+  it('main.tsx sends the session and its workspace from the focus-session arm to session.focusFromNotice', () => {
     const start = text.indexOf("case 'focus-session':");
-    const arm = text.slice(start, text.indexOf('return;', text.indexOf('focusSession(action.sessionId', start)));
-    expect(arm).toContain("focusSession(action.sessionId, { fromNotice: true });");
-    expect(text).toContain("bridge.command({ kind: 'session.resume', sessionId, ...(options.fromNotice === true ? { fromNotice: true as const } : {}) })");
+    const arm = text.slice(start, text.indexOf("case 'open-library':", start));
+    expect(arm).toContain("bridge.command({ kind: 'session.focusFromNotice', sessionId: action.sessionId, workspace: action.workspace })");
+    expect(arm).not.toContain('session.resume');
+    expect(text).not.toContain('fromNotice');
+  });
+  it('the reached window focuses the session on channel 16 through its own load, and asks for a held focus once listening', () => {
+    expect(text).toMatch(/const off = bridge\.onSessionFocus\(\(p\) => \{[\s\S]*?focus\(sessionId\);[\s\S]*?\}\);\s*void bridge\.command\(\{ kind: 'session\.focusReady' \}\)\.then\(\(outcome\) => \{[\s\S]*?focus\(held\);/);
+    expect(text).toContain("const focus = (sessionId: string) => { void openSession(sessionId)");
+    expect(text).toContain("bridge.command({ kind: 'session.resume', sessionId })");
   });
 });

@@ -624,7 +624,11 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('publish.increment'), payload: TranscriptIncrementSchema }),
   z.object({ kind: z.literal('publish.snapshot'), payload: SessionSnapshotSchema }),
   /** REQ-SESSION-186: the terminal result, presented once. Carried from the bus's in-process consumer (REQ-EVENTS-178). */
-  z.object({ kind: z.literal('run.result'), sessionId: z.string(), result: RunResultSchema }),
+  /**
+   * `workspaceRoot` (PD-SHELL-001 revision 3, OQ-292): the root the run host recorded the session under (`sessionRoots`), never
+   * a window's, so the notice main raises about the ending can name where the session lives; absent where none is recorded.
+   */
+  z.object({ kind: z.literal('run.result'), sessionId: z.string(), result: RunResultSchema, workspaceRoot: z.string().min(1).optional() }),
   /** REQ-ORCH-137: emitted after run.result, already detached from the terminal path. */
   z.object({ kind: z.literal('improvement.job'), job: ImprovementAnalysisJobSchema }),
   /** REQ-ORCH-085: the host told the run paused at the message limit, with the count and the limit in force. */
@@ -644,7 +648,8 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
    * REQ-NOTIFY-011's single lifetime — was ruled on 2026-09-06 as ESC-33: REQ-MCP-044 was amended to cite the
    * lifetime rather than restate it, so what the build already did is now what the corpus says.
    */
-  z.object({ kind: z.literal('notice.publish'), severity: NoticeSeveritySchema, title: z.string(), message: z.string(), detail: z.string(), action: z.string().optional(), key: z.string().optional(), sessionId: z.string(), persistent: z.boolean() }),
+  /** `workspaceRoot` (PD-SHELL-001 revision 3, OQ-292): the root the run host recorded `sessionId` under, as on `run.result`. */
+  z.object({ kind: z.literal('notice.publish'), severity: NoticeSeveritySchema, title: z.string(), message: z.string(), detail: z.string(), action: z.string().optional(), key: z.string().optional(), sessionId: z.string(), persistent: z.boolean(), workspaceRoot: z.string().min(1).optional() }),
   /** Part V / REQ-NOTIFY-003: a transient the run host raises on its own — main pushes it to the main window's stack. */
   z.object({ kind: z.literal('acknowledgement.publish'), kindOf: AcknowledgementKindSchema, title: z.string().min(1), body: z.string().optional() }),
   /**

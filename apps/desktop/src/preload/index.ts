@@ -36,6 +36,8 @@ const bridge: RendererBridge = Object.freeze({
   onDisplayChanged: subscribe(CHANNEL.displayChanged),
   // Channel 15 — open Settings › Project in the window holding a banner's project (PD-WORKSPACE-005 revision 2, OQ-262).
   onProjectInitOpen: subscribe(CHANNEL.projectInitOpen),
+  // Channel 16 — focus a notice's session in the window holding its workspace (PD-SHELL-001 revision 3, OQ-292).
+  onSessionFocus: subscribe(CHANNEL.sessionFocus),
 });
 
 contextBridge.exposeInMainWorld(BRIDGE_KEY, bridge);

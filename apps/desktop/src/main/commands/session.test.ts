@@ -580,26 +580,68 @@ describe('session.release: the window stops following the session, and keeps its
 });
 
 /*
- * REQ-NOTIFY-044 with PD-SHELL-001 (`docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md`):
- * a `focus-session` notice pressed in a window holding another workspace names a session this window's store does not hold.
- * The press is not dispatched: no error notice replaces the one pressed, and the refusal is logged. A load the session browser
- * asks for keeps raising its refusal as before.
+ * PD-SHELL-001 revision 3 (OQ-292, ruled 2026-10-14 under R-072): a `focus-session` press reaches the window holding the
+ * session's workspace (`MainWindows.reach`) and asks THAT window to focus the session; a window the reach added holds the
+ * request until its renderer is ready. The silence of 2026-10-14 (`fromNotice`) is withdrawn: a load's refusal is raised as the
+ * ordinary error, whoever asked for the load
+ * (docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
  */
-describe('session.resume for a notice action, in a window that does not hold the session (REQ-NOTIFY-044)', () => {
-  const foreign = (req: RunHostRequest): ProcessReply => (req.kind === 'session.resume'
-    ? { kind: 'refused', code: 'session.no-session', headline: 'The session could not be loaded', detail: 'No session exists under id S-A.' }
-    : { kind: 'ack' });
+describe('session.focusFromNotice reaches the session where it lives (PD-SHELL-001 revision 3, REQ-NOTIFY-044)', () => {
+  type Reach = Awaited<ReturnType<CommandContext['mainWindows']['reach']>>;
+  function reaching(reach: (workspace: string) => Reach, focus: 'sent' | 'held' | 'gone' = 'sent') {
+    const h = harness(() => ({ kind: 'ack' }), () => ({ kind: 'ack' }));
+    const reached: string[] = [];
+    const focused: { wcId: number; sessionId: string }[] = [];
+    const ready: number[] = [];
+    (h.ctx as { mainWindows: unknown }).mainWindows = {
+      reach: async (workspace: string) => { reached.push(workspace); return reach(workspace); },
+      focusSession: (wcId: number, sessionId: string) => { focused.push({ wcId, sessionId }); return focus; },
+      forSender: (senderId: number) => (senderId === 7 ? { wcId: 7 } : undefined),
+      sessionFocusReady: (wcId: number) => { ready.push(wcId); return 'S-A'; },
+    };
+    return { h, reached, focused, ready };
+  }
+  const window = (wcId: number) => ({ wcId } as unknown as MainWindowState);
 
-  it('raises no notice and logs the press when the load is a notice action\'s', async () => {
-    const h = harness(() => ({ kind: 'ack' }), foreign);
-    const out = await sessionCommands(h.ctx)['session.resume']({ kind: 'session.resume', sessionId: 'S-A', fromNotice: true }, windowOn('ws-1'));
-    expect(out.ok).toBe(false);
-    expect(h.raised).toEqual([]);
-    expect(h.logs.some((l) => l.includes('notice action "focus-session" for S-A not dispatched'))).toBe(true);
+  it('held elsewhere: reaches the holding window and asks it to focus the session there', async () => {
+    const r = reaching(() => ({ ok: true, window: window(3), added: false }));
+    const out = await sessionCommands(r.h.ctx)['session.focusFromNotice']({ kind: 'session.focusFromNotice', sessionId: 'S-A', workspace: '/work/atlas' }, windowOn('ws-b'));
+    expect(r.reached).toEqual(['/work/atlas']);
+    expect(r.focused).toEqual([{ wcId: 3, sessionId: 'S-A' }]);
+    expect(out).toEqual({ ok: true, value: { window: 3, added: false, delivered: 'sent' } });
+    expect(r.h.raised).toEqual([]);
+    expect(r.h.hostAsked).toEqual([]);
   });
 
-  it('still raises the refusal for a load the session browser asked for', async () => {
-    const h = harness(() => ({ kind: 'ack' }), foreign);
+  it('held nowhere: the window the reach added holds the focus for its renderer', async () => {
+    const r = reaching(() => ({ ok: true, window: window(9), added: true }), 'held');
+    const out = await sessionCommands(r.h.ctx)['session.focusFromNotice']({ kind: 'session.focusFromNotice', sessionId: 'S-A', workspace: '/work/atlas' }, windowOn('ws-b'));
+    expect(r.focused).toEqual([{ wcId: 9, sessionId: 'S-A' }]);
+    expect(out).toEqual({ ok: true, value: { window: 9, added: true, delivered: 'held' } });
+    expect(r.h.logs.some((l) => l.includes('added window 9 for /work/atlas; the focus was held (PD-SHELL-001 revision 3, OQ-292)'))).toBe(true);
+  });
+
+  it('a reach that failed answers its outcome and focuses nothing', async () => {
+    const refused = { ok: false as const, code: 'workspace.openFailed', headline: 'Could not open the selected project: /work/gone could not be opened as a workspace.' };
+    const r = reaching(() => ({ ok: false, outcome: refused }));
+    const out = await sessionCommands(r.h.ctx)['session.focusFromNotice']({ kind: 'session.focusFromNotice', sessionId: 'S-A', workspace: '/work/gone' }, windowOn('ws-b'));
+    expect(out).toEqual(refused);
+    expect(r.focused).toEqual([]);
+  });
+
+  it('session.focusReady answers the asking main window\'s held focus, and refuses any other sender', async () => {
+    const r = reaching(() => ({ ok: true, window: window(7), added: false }));
+    expect(await sessionCommands(r.h.ctx)['session.focusReady']({ kind: 'session.focusReady' }, windowOn('ws-1'))).toEqual({ ok: true, value: { sessionId: 'S-A' } });
+    expect(r.ready).toEqual([7]);
+    const other = { ...windowOn('ws-1'), senderId: 207 };
+    expect((await sessionCommands(r.h.ctx)['session.focusReady']({ kind: 'session.focusReady' }, other)).ok).toBe(false);
+  });
+
+  it('a load refused in the session\'s own workspace (a deleted session) is raised as the ordinary error', async () => {
+    const gone = (req: RunHostRequest): ProcessReply => (req.kind === 'session.resume'
+      ? { kind: 'refused', code: 'session.no-session', headline: 'The session could not be loaded', detail: 'No session exists under id S-A.' }
+      : { kind: 'ack' });
+    const h = harness(() => ({ kind: 'ack' }), gone);
     await sessionCommands(h.ctx)['session.resume']({ kind: 'session.resume', sessionId: 'S-A' }, windowOn('ws-1'));
     expect(h.raised).toEqual([{ severity: 'error', headline: 'The session could not be loaded', detail: 'No session exists under id S-A.' }]);
   });

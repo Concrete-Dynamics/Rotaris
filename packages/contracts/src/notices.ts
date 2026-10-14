@@ -59,7 +59,11 @@ export type NoticeLibraryTab = (typeof NOTICE_LIBRARY_TABS)[number];
 const viewIds = PRIMARY_VIEWS.map((v) => v.id) as [ViewId, ...ViewId[]];
 
 export const NoticeActionSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('focus-session'), sessionId: z.string().min(1) }),
+  /**
+   * PD-SHELL-001 revision 3 (OQ-292, ruled 2026-10-14 under R-072): the session AND the workspace it lives in, as the run host
+   * recorded that session's root. A press reaches that workspace (`session.focusFromNotice`) and focuses the session there.
+   */
+  z.object({ kind: z.literal('focus-session'), sessionId: z.string().min(1), workspace: z.string().min(1) }),
   z.object({ kind: z.literal('open-project-init'), workspace: z.string().min(1) }),
   z.object({ kind: z.literal('install-update') }),
   z.object({ kind: z.literal('open-view'), view: z.enum(viewIds) }),

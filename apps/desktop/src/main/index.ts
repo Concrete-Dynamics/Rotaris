@@ -591,9 +591,12 @@ async function main(): Promise<void> {
              * run to settle, probes the store with a rolled-back write and rebuilds the session's writer and
              * projection (`Sessions.resume`) — so the action focuses the session the notice names, through
              * REQ-NOTIFY-044's existing `focus-session` member. A notice with no session to name carries no
-             * action rather than one pointing nowhere, on the same terms as the hook review above.
+             * action rather than one pointing nowhere, on the same terms as the hook review above. Since PD-SHELL-001
+             * revision 3 (OQ-292) the member names the session's workspace too — `workspace` is then the root the run host
+             * recorded the session under (`notice.publish`'s `workspaceRoot`), never a window's — and with none known the
+             * notice carries no action.
              */
-            : action === 'session.reopen' ? (sessionId === undefined || sessionId === '' ? [] : [{ label: 'Reopen the session', action: { kind: 'focus-session', sessionId } }])
+            : action === 'session.reopen' ? (sessionId === undefined || sessionId === '' || workspace === undefined || workspace === '' ? [] : [{ label: 'Reopen the session', action: { kind: 'focus-session', sessionId, workspace } }])
               : [];
   /**
    * OQ-279 (ruled 2026-10-13 under R-072): a workspace whose configuration fails to load opens, and the report is raised as
@@ -1174,7 +1177,10 @@ async function main(): Promise<void> {
       // REQ-NOTIFY-028: the run host names the session its notice concerns, so a notice about one run survives the
       // start of another (REQ-NOTIFY-029). No timer clears anything here any more: REQ-NOTIFY-040 allows a notice to
       // leave only by replacement, a run-start clear, or the user's dismissal.
-      const recovery = recoveryFor(e.action, activeWindow()?.workspace, e.sessionId);
+      // PD-SHELL-001 revision 3 (OQ-292): the session's own action names the root the run host recorded it under. The hook
+      // review's still names the focused window's workspace, which is wrong for a run of another window's workspace
+      // (docs/defects/a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md).
+      const recovery = recoveryFor(e.action, e.action === 'session.reopen' ? e.workspaceRoot : activeWindow()?.workspace, e.sessionId);
       void notices.report({
         severity: e.severity, title: e.title, message: e.message, detail: e.detail, persistent: e.persistent, sessionId: e.sessionId,
         ...(e.key === undefined ? {} : { key: e.key }),
@@ -1240,11 +1246,12 @@ async function main(): Promise<void> {
       } else if (publication.kind === 'reported') {
         log(`run ${e.sessionId}: completion unconfirmed, last durable event ordinal ${e.result.persistence?.last_event_ordinal} — the recording-failure notice already carries it (REQ-EVENTS-088)`);
       } else if (publication.kind === 'failure') {
-        void runFailures.failed(e.sessionId, publication.failureClass, publication.failure);
+        // PD-SHELL-001 revision 3 (OQ-292): the root the run host recorded the session under names "Open the session"'s workspace.
+        void runFailures.failed(e.sessionId, publication.failureClass, publication.failure, e.workspaceRoot);
       } else {
         // REQ-NOTIFY-031: through the same focus test — a session not on screen raises the notice naming it instead, and
         // one that ended on a provider limit holds REQ-NOTIFY-063's notice for its focus (REQ-NOTIFY-093/030).
-        runFailures.endedOtherwise(e.sessionId, publication.notice, e.result.execution_status, publication.quota);
+        runFailures.endedOtherwise(e.sessionId, publication.notice, e.result.execution_status, publication.quota, e.workspaceRoot);
       }
       resultSeen = true;
       log(`run ${e.sessionId} ended ${e.result.status} (${e.result.stop_reason}) → ${e.result.execution_status}`);
@@ -1499,6 +1506,19 @@ async function main(): Promise<void> {
     // PD-LIBRARY-002 revision 2 (e): a window that opens a workspace is told the activity as it stands, its own pending
     // retrospective among it, rather than waiting for the next publication.
     workspaceOpened: (window) => { sendImprovementActivity(window.win, window.workspaceId, improvementCoordinator.current()); },
+    // A request main asks ONE main window's renderer, once it listens for it (`MainWindows.focusSession`/`openProjectInit`):
+    // channel 16 focuses a notice's session there (PD-SHELL-001 revision 3, OQ-292), channel 15 opens Settings › Project
+    // (PD-WORKSPACE-005).
+    deliver: (window, request) => {
+      if (window.win.isDestroyed()) return;
+      if (request.kind === 'session-focus') {
+        relay.count(CHANNEL.sessionFocus);
+        window.win.webContents.send(CHANNEL.sessionFocus, { v: CONTRACT_SCHEMA_VERSION, sessionId: request.sessionId });
+      } else {
+        relay.count(CHANNEL.projectInitOpen);
+        window.win.webContents.send(CHANNEL.projectInitOpen, { v: CONTRACT_SCHEMA_VERSION, workspace: window.workspace });
+      }
+    },
   });
   /**
    * REQ-SHELL-109: "when a stream changes while the window is closed, the preference is on, and that stream is running,

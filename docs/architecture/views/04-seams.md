@@ -82,7 +82,15 @@ Update the process view's **renderer → main** list.
 
 ## 2. A main → renderer channel
 
-Fifteen exist. A sixteenth is a real decision — ask whether an existing one carries it first. The fifteenth,
+Sixteen exist. A seventeenth is a real decision — ask whether an existing one carries it first. The sixteenth,
+`session:focus` (2026-10-14, PD-SHELL-001 revision 3, OQ-292), was taken for the same reason as the fifteenth: a
+`focus-session` notice is pressed in any window and the session must be focused in the window holding its workspace, whose
+renderer alone owns the replica that follows a session. A request to ONE window that may still be loading — a window the
+reach has just added — is held on its `MainWindows` record until its renderer, having registered its listener, says so by a
+command (`session.focusReady`), and is then answered with what was held, once; a window already listening is sent it at
+once through `MainWindows`' `deliver` dependency, which counts it on the relay and calls `webContents.send`. Copy that
+hand-off for the next main-to-one-window request: a `webContents.send` to a window that has not registered its listener is
+lost without an error. The fifteenth,
 `project-init:open` (2026-10-14, PD-WORKSPACE-005 revision 2, OQ-262), was taken because no channel asks ONE window to open
 a Settings category on main's account: a project-setup banner's action is pressed in any window and must open Settings ›
 Project in the window holding the project, which main finds (`MainWindows.surfaceHolding`) and the renderer alone can

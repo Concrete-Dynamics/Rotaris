@@ -113,9 +113,14 @@ to carry the Settings surface's live values.
 `session.start/newId/list/resume/prompt/continue/subscribe/unsubscribe/reconcile/pageOlder/control` (`pageOlder`
 is wired end to end and, from Part Z, is CALLED: the transcript asks for the next older span when the reader scrolls
 toward the top, and the replica's `prependOlder` places it above — REQ-CHAT-165, REQ-SESSION-192; `resume` carries
-`{sessionId, fromNotice?}` since 2026-10-14: a `focus-session` notice's load, refused `session.no-session` because the asking
-window's workspace does not hold the session, is logged and raises no notice, and the run host records a session's
-workspace only once the engine has loaded it (REQ-NOTIFY-044, OQ-292); `continue`
+`{sessionId}` and raises every refusal (the run host records a session's workspace only once the engine has loaded it, so a
+refused resume moves nothing); *from 2026-10-14 until PD-SHELL-001 revision 3 the same day it also carried `fromNotice?`,
+which logged a `focus-session` press refused `session.no-session` and raised nothing — withdrawn with the case it answered*;
+**`session.focusFromNotice {sessionId, workspace}`** (PD-SHELL-001 revision 3, OQ-292): a `focus-session` notice action,
+pressed in any window — main reaches `workspace` (`MainWindows.reach`: the holder surfaced, else a window added) and asks THAT
+window, on channel 16, to focus the session through its own `resume` (`MainWindows.focusSession`); a window still loading
+holds the request on its record, and **`session.focusReady`** — sent by the renderer once it listens on channel 16 — marks it
+listening and answers `{sessionId}`, the held focus delivered once, or null; `continue`
 carries `{action, withoutPaused?}` since PD-ORCH-005's phase 5, the option clause 6's "continue without them",
 relayed as it is to the run host's `session.continue`, which since clause 18 also continues a session a crash left),
 **`session.retry {sessionId}`** (REQ-NOTIFY-045 / REQ-CHAT-173, OQ-178; 2026-10-02: a notice's retry with a blank composer draft, relayed to the run host as itself after the continuation lease a `session.prompt` takes; `Sessions.retry` resubmits the session's last submitted prompt — read over every row, released ones included (`lastSubmittedPrompt`) — with its images read back from the session's directory and verified by digest (`readBackAttachments`), so no prompt text or image bytes cross from the renderer again; answered `ack`, or refused `session.no-prompt`, `session.attachment-unavailable` naming the image, or any refusal a `session.prompt` meets), **`authRecovery.payload` / `authRecovery.retry {modelKey}` / `authRecovery.reauthenticate {apiKey}` / `authRecovery.cancel`** (REQ-NOTIFY-072..077/080, 2026-10-02: the recovery window's payload and answers, keyed by the SENDER as a pause window's are, so the window acts on the session it was opened for and names none; `retry` is relayed to the run host as `session.authRestart {sessionId, modelKey}` — refused for a key the dialog did not list; `reauthenticate` carries a pasted key INWARD to main's provider key store (`ProviderService.reauthenticateWithKey`, validated by discovery before it is saved, never logged) and then relays `session.authRestart {sessionId, modelKey: null}`; each answered `{ok}` or the sentence the dialog shows), **`session.planEdit {text}` / `session.planDecision {decision, changes?}` / `session.planRearm {sessionId}`**
@@ -635,7 +640,10 @@ live window (`announceDisplayPreference`, `main/commands/shell.ts`), the writer 
 `displayPrefs` store (`displayPreferencePatch`), so a persona window already open redraws its rows under the new value
 (REQ-CHAT-167, REQ-CONFIG-403; until then only the writing window's store changed); `project-init:open` (channel 15,
 2026-10-14, PD-WORKSPACE-005 revision 2) is `{workspace}`, to ONE main window, the one holding the workspace a
-project-setup banner names, which opens Settings › Project (`shell.openSettings('project')`); `config:changed` repopulates every main window **and its family** — its persona windows and its terminal
+project-setup banner names, which opens Settings › Project (`shell.openSettings('project')`); `session:focus` (channel 16,
+2026-10-14, PD-SHELL-001 revision 3) is `{sessionId}`, to ONE main window, the one holding the workspace a `focus-session`
+notice names, which focuses the session through its own load (`session.resume`, as its session browser would) — sent by
+`MainWindows`' `deliver` once the window's renderer has said it listens (`session.focusReady`), held on its record until then; `config:changed` repopulates every main window **and its family** — its persona windows and its terminal
 window (`configFamily`) — from **its own** workspace's snapshot (`announceConfig`, `main/config-broadcast.ts`): the families
 of the windows holding the written workspace take the reloaded snapshot, every other family its own workspace's, read again
 from its service. *Corrected 2026-10-03 (fin10's repair round): every window was sent the written workspace's snapshot, so a
@@ -666,8 +674,11 @@ cost over the workspace's stored sessions, answered `workspace.usage {tokens, co
 that records it and never travels on the wire), `shutdown`. Events back: `publish.increment`, `publish.snapshot`,
 `run.result` (since 2026-09-13 it may carry `persistence: {confirmed: false, last_event_ordinal}` — present only when
 terminal persistence could not be confirmed, and what main reads to suppress its own terminal notice, `REQ-EVENTS-088`
-allowing exactly one failure notification per affected run), `run.paused`, `approval.present/close`, `presenter.poll`, `notice.publish` (Part V: the fields
-REQ-NOTIFY-023 lists, `sessionId` and `persistent` among them; the `ttlMs` Part S added is gone — REQ-NOTIFY-040
+allowing exactly one failure notification per affected run; since 2026-10-14 it carries `workspaceRoot`, the root the run host
+recorded the session under in `sessionRoots`, absent where none is recorded — PD-SHELL-001 revision 3, the workspace a
+`focus-session` action names), `run.paused`, `approval.present/close`, `presenter.poll`, `notice.publish` (Part V: the fields
+REQ-NOTIFY-023 lists, `sessionId` and `persistent` among them, and since 2026-10-14 `workspaceRoot` as on `run.result`,
+stamped by `withSessionRoot`, `run-host/session-roots.ts`; the `ttlMs` Part S added is gone — REQ-NOTIFY-040
 forbids a notice leaving on a timer), `acknowledgement.publish` (REQ-MCP-044's warning, now a transient),
 `log {level, message}` (a line for the application log, below), `ready`. **The run host's
 asks back to main** (on the `ServiceAsk` envelope): `credentials.lease {providerIds}` (ADR-0030), answered

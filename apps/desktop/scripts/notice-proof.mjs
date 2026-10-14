@@ -35,7 +35,11 @@ import { startApp, stopApp, until } from './lib/driver.mjs';
  *     window holds adds a window for it, asking nothing and closing nothing, and opens its review there.
  *     6c. A project-setup banner's action (PD-WORKSPACE-005 revision 2, OQ-262), pressed in the window that does not hold
  *     its project: the holder is surfaced on Settings › Project, an unsaved edit in another category kept; one naming a
- *     project no window holds raises "Project <name> is not open in any window." and opens nothing.
+ *     project no window holds raises "Project <name> is not open in any window." and opens nothing. Then REQ-NOTIFY-031's
+ *     "Open the session" for a run of the holding window, pressed in the other one (PD-SHELL-001 revision 3, OQ-292): the
+ *     holding window is brought forward and follows the session, and no "could not be loaded" error is raised.
+ *     6d. The same press after the session's own window switched to another project (PD-SHELL-001 revision 3): no window
+ *     holds the session's workspace, so one is added for it, asking nothing, and the added window follows the session.
  *  7. The retry action reaches its target (REQ-NOTIFY-045, REQ-NOTIFY-030, OQ-178): activated on a failed session, it
  *     resubmits that session's last submitted prompt as a second run of that session.
  *     And it resubmits the prompt the session sent, wherever its row is (REQ-SESSION-192) and with the image it carried
@@ -72,7 +76,7 @@ if (!process.argv.includes('--skip-build')) {
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
-// `--only=<sections>` (comma-separated: 1, 1b, 1c, 2, 4, 6, 6b, 6c, 7, 7b, 8, 9) runs those sections alone; the default is all.
+// `--only=<sections>` (comma-separated: 1, 1b, 1c, 2, 4, 6, 6b, 6c, 6d, 7, 7b, 8, 9) runs those sections alone; the default is all.
 const onlyArg = process.argv.find((a) => a.startsWith('--only='));
 const only = onlyArg === undefined ? null : onlyArg.slice('--only='.length).split(',').map((x) => x.trim()).filter((x) => x !== '');
 const want = (id) => only === null || only.includes(id);
@@ -489,6 +493,11 @@ if (want('6b')) {
 // does not hold the project: the holding window is surfaced and shows Settings › Project, its edit still pending.
 // Then a banner naming a folder no window holds is pressed: the pressing window says "Project <name> is not open in any
 // window." and nothing else happens. Before this, the arm logged "has no target in this build" and no banner carried it.
+// Last, PD-SHELL-001 revision 3 (OQ-292, ruled 2026-10-14 under R-072): a run in the holding window, released there by "New
+// session", ends while no window shows it, and REQ-NOTIFY-031's notice — "Open the session", naming the session and its
+// workspace — is pressed in the FIRST window. The holding window is brought forward and follows the session; no "could not be
+// loaded" error is raised. (From 2026-10-14 until the revision the press was not dispatched; before that it raised that error
+// in the pressing window, docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md.)
 if (want('6c')) {
   const base = join(output, 'project-init');
   const folder = (name, skipped) => {
@@ -501,11 +510,13 @@ if (want('6c')) {
       'models:', '  scripted: { provider: scripted, model_id: scripted }',
       'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
       'mcp_servers:', '  code_intelligence: { enabled: false }',
-      'runtime:', '  permission_mode: autonomous',
+      // The improvement collector off: its notice follows a completed run and would replace REQ-NOTIFY-031's in the one slot.
+      'runtime:', '  permission_mode: autonomous', '  improvement_collector_enabled: false',
       'initialization:', '  completed: []', `  skipped: [${skipped.join(', ')}]`, "  last_run: '2026-09-29T00:00:00.000Z'", '',
     ].join('\n'));
     return root;
   };
+  const PROMPT = 'a run that ends while its window shows another session';
   const holder = folder('atlas-billing', ['code-intelligence-setup']);
   const other = folder('other-project', ['code-intelligence-setup', 'verification-fail']);
   const closed = join(base, 'closed-project');
@@ -515,18 +526,18 @@ if (want('6c')) {
     extra: {
       // The capture seams are installed only while capturing; the capture's own end is put past the proof's, which quits first.
       ROTARIS_INIT_TEST_TASK: 'fail', ROTARIS_CAPTURE_PROJECT_FOLDER: holder, ROTARIS_CAPTURE_PNG: join(output, 'project-init.png'), ROTARIS_CAPTURE_AFTER_MS: '170000',
+      // The focus leg's run holds its one model call 6 s, long enough to release it from its window before it ends.
+      ROTARIS_SCRIPT: 'wait:6000,answer',
       // The second banner, naming a folder no window holds: published through the REAL store once the first press is done.
       ROTARIS_CAPTURE_NOTICES: [
         `${JSON.stringify({ op: 'report', severity: 'error', title: 'Project setup did not finish: closed-project', message: 'Rotaris could not finish setting this workspace up for code search.', persistent: true, action: { label: 'Try again', action: { kind: 'open-project-init', workspace: closed } } })}@15000`,
-        // A `focus-session` notice naming a session the pressing window's store does not hold (REQ-NOTIFY-044; the repair of
-        // docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
-        `${JSON.stringify({ op: 'report', severity: 'warning', title: 'Session S-elsewhere-0001 failed', message: 'The session on screen is unaffected. Open the failed session to see its recovery.', persistent: true, sessionId: 'S-elsewhere-0001', action: { label: 'Open the session', action: { kind: 'focus-session', sessionId: 'S-elsewhere-0001' } } })}@24000`,
       ].join(';;'),
     },
   });
   const d = launched.driver;
   const trail = [];
   const step = async (what, promise) => { const t0 = Date.now(); try { const v = await promise; trail.push({ what, ms: Date.now() - t0 }); return v; } catch (cause) { trail.push({ what, ms: Date.now() - t0, error: String(cause) }); throw cause; } };
+  const onScreenIn = async (which, text) => { await d.useWindow(which); return await d.eval(`document.querySelector('.app-shell main, .app-shell')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`); };
   const noticeIn = async (which) => { await d.useWindow(which); return await d.eval(`(() => { const n = document.querySelector('[data-testid="notice"]'); if (!n) return null; const a = n.querySelector('.notice__action'); return { title: n.querySelector('[data-testid="notice-title"]')?.textContent ?? null, action: a?.textContent ?? null, member: a?.getAttribute('data-action') ?? null }; })()`); };
   let value = null;
   let failure = null;
@@ -555,19 +566,30 @@ if (want('6c')) {
     await d.useWindow('other-project');
     await step('Try again for the closed project', d.click('.notice__action', { text: 'Try again' }));
     const told = await step('the info notice', until(() => d.eval(`[...document.querySelectorAll('[data-testid="acknowledgement-title"]')].map((n) => n.textContent)`), (v) => Array.isArray(v) && v.includes('Project closed-project is not open in any window.'), { timeoutMs: 10_000, what: 'the info acknowledgement' }));
-    // The focus-session notice for a session this window's store does not hold: pressed, it is not dispatched, so the pressed
-    // notice still stands (no "could not be loaded" error replaces it) and the window follows nothing new.
-    const foreignBanner = await step('the foreign session\'s notice', until(() => noticeIn('other-project'), (n) => n !== null && n.title === 'Session S-elsewhere-0001 failed', { timeoutMs: 30_000, what: 'the foreign session\'s notice' }));
-    await d.useWindow('other-project');
-    await step('Open the session, in a window that does not hold it', d.click('.notice__action', { text: 'Open the session' }));
-    await new Promise((r) => setTimeout(r, 1500));
-    const stillPressed = await noticeIn('other-project');
     const after = await d.windows();
     // The edit was the proof's, and an unsaved one would hold the quit at the unsaved-settings guard: it is discarded.
     await d.useWindow('atlas-billing');
     await step('Discard the edit', d.click('.save-bar .btn-secondary', { text: 'Discard' }));
     await step('the form clean again', until(() => d.eval(`document.querySelector('.save-bar__status')?.textContent ?? null`), (v) => v === 'All changes saved', { timeoutMs: 10_000, what: 'the save bar clean' }));
-    value = { foreignBanner, stillPressed, banner, dirty, there, surfaced: surfaced.windows.map((w) => w.workspace), project, stayed, closedBanner, told, windowsAfter: after.windows.map((w) => w.workspace) };
+    // PD-SHELL-001 revision 3: a run of the holding window, released there, ends while no window shows it.
+    await step('Workspace in the holding window', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus' }));
+    await step('the prompt', d.type(PROMPT, { enter: true }));
+    await step('the run on screen', until(() => onScreenIn('atlas-billing', PROMPT), (v) => v === true, { timeoutMs: 20_000, what: 'the prompt on screen' }));
+    await d.useWindow('atlas-billing');
+    await step('Ctrl+1', d.chord('Ctrl+1'));
+    await step('New session', d.click('button', { text: 'New session' }));
+    await step('Start session', d.click('[data-testid="start-session-accept"]'));
+    await step('the holding window released it', until(() => onScreenIn('atlas-billing', PROMPT), (v) => v === false, { timeoutMs: 10_000, what: 'the released run off screen' }));
+    const ending = await step('the ending notice in the first window', until(() => noticeIn('other-project'), (n) => n !== null && /^Session \S+ completed$/.test(n.title ?? ''), { timeoutMs: 60_000, what: "REQ-NOTIFY-031's notice in the first window" }));
+    await d.useWindow('other-project');
+    await step('Open the session, in the window that does not hold it', d.click('.notice__action', { text: 'Open the session' }));
+    const followed = await step('the holding window follows the session', until(() => onScreenIn('atlas-billing', PROMPT), (v) => v === true, { timeoutMs: 20_000, what: 'the session on screen in the holding window' }));
+    const firstStill = await onScreenIn('other-project', PROMPT);
+    const windowsAtEnd = await d.windows();
+    value = { ending, followed, firstStill, windowsAtEnd: windowsAtEnd.windows.map((w) => w.workspace), banner, dirty, there, surfaced: surfaced.windows.map((w) => w.workspace), project, stayed, closedBanner, told, windowsAfter: after.windows.map((w) => w.workspace) };
   } catch (cause) {
     failure = cause;
   }
@@ -590,11 +612,104 @@ if (want('6c')) {
   expect(!/notice action "open-project-init" has no target/.test(log), 'the renderer still reports the action without a target');
   expect(value.windowsAfter.length === 2, `a window was added or closed for the closed project: ${JSON.stringify(value.windowsAfter)}`);
   expect(/project-setup action for .*closed-project: no window holds it, so nothing was opened/.test(log), 'main did not log the closed project\'s press');
-  expect(value.foreignBanner.member === 'focus-session', `the foreign session's notice offers ${JSON.stringify(value.foreignBanner)}`);
-  expect(value.stillPressed?.title === 'Session S-elsewhere-0001 failed', `pressing "Open the session" for a session this window does not hold replaced the notice: ${JSON.stringify(value.stillPressed)}`);
-  expect(/notice action "focus-session" for S-elsewhere-0001 not dispatched in window \d+/.test(log), 'main did not log the undispatched focus-session press');
-  expect(!/diagnostics: notice #\d+ error "The session could not be loaded"/.test(log), 'the focus-session press raised "The session could not be loaded"');
+  // PD-SHELL-001 revision 3 (OQ-292): the press reached the holding window, which follows the session; nothing was refused.
+  expect(value.ending.member === 'focus-session' && value.ending.action === 'Open the session', `the ending notice offers ${JSON.stringify(value.ending)}`);
+  const endedId = (value.ending.title.match(/^Session (\S+) completed$/) ?? [])[1];
+  expect(new RegExp(`notice action "focus-session" for ${endedId}: surfaced window ${holderId} for .*atlas-billing; the focus was sent`).test(log), `main did not log the press reaching the holding window ${holderId}`);
+  expect(value.followed === true, 'the holding window does not show the session after the press');
+  expect(value.firstStill === false, 'the pressing window loaded the session itself; the holding window should');
+  expect(value.windowsAtEnd.length === value.windowsAfter.length, `the press added or closed a window: ${JSON.stringify([value.windowsAfter, value.windowsAtEnd])}`);
+  expect(!/notice #\d+ error "The session could not be loaded"/.test(log), 'the focus-session press raised "The session could not be loaded"');
+  expect(!/not dispatched in window/.test(log), 'the withdrawn silence still logged a press as not dispatched');
   results.projectInit = value;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6d. PD-SHELL-001 revision 3 (OQ-292) after a switch: the session's workspace is held by no window when its notice is
+// pressed. Window A runs a session and releases it with "New session"; window B is added on another project before the run
+// ends, so REQ-NOTIFY-031's notice stands in both; A then switches to a third project (REQ-SHELL-017's replacement: no run is
+// active by then). "Open the session" pressed in B reaches A's project, which no window holds: a window is added for it on
+// PD-SHELL-001's add terms — nothing asked, nothing closed — and the added window, given the focus once its renderer listens
+// (`session.focusReady`), follows the session.
+if (want('6d')) {
+  const base = join(output, 'focus-reach');
+  const folder = (name) => {
+    const root = join(base, name);
+    mkdirSync(join(root, '.rotaris'), { recursive: true });
+    writeFileSync(join(root, 'README.md'), `# notice proof, ${name}\n`);
+    writeFileSync(join(root, '.rotaris', 'agents.yaml'), [
+      '# scratch configuration written by the proof script',
+      'models:', '  scripted: { provider: scripted, model_id: scripted }',
+      'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
+      'mcp_servers:', '  code_intelligence: { enabled: false }',
+      'runtime:', '  permission_mode: autonomous', '  improvement_collector_enabled: false',
+      ...SETUP_ANSWERED, '',
+    ].join('\n'));
+    return root;
+  };
+  const alpha = folder('reach-alpha');
+  const beta = folder('reach-beta');
+  const gamma = folder('reach-gamma');
+  const PROMPT = 'a run whose window switched away before its notice was pressed';
+  const launched = await startApp({
+    root: join(base, 'app'), workspace: alpha, timeoutMs: 90_000,
+    extra: { ROTARIS_SCRIPT: 'wait:6000,answer', ROTARIS_CAPTURE_PROJECT_FOLDER: `${beta};;${gamma}`, ROTARIS_CAPTURE_PNG: join(output, 'focus-reach.png'), ROTARIS_CAPTURE_AFTER_MS: '170000' },
+  });
+  const d = launched.driver;
+  const trail = [];
+  const step = async (what, promise) => { const t0 = Date.now(); try { const v = await promise; trail.push({ what, ms: Date.now() - t0 }); return v; } catch (cause) { trail.push({ what, ms: Date.now() - t0, error: String(cause) }); throw cause; } };
+  const onScreenIn = async (which, text) => { await d.useWindow(which); return await d.eval(`document.querySelector('.app-shell main, .app-shell')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`); };
+  const noticeIn = async (which) => { await d.useWindow(which); return await d.eval(`(() => { const n = document.querySelector('[data-testid="notice"]'); if (!n) return null; const a = n.querySelector('.notice__action'); return { title: n.querySelector('[data-testid="notice-title"]')?.textContent ?? null, action: a?.textContent ?? null, member: a?.getAttribute('data-action') ?? null }; })()`); };
+  let value = null;
+  let failure = null;
+  try {
+    await step('the first window', d.waitFor('.nav-item', { timeoutMs: 30_000 }));
+    // B, added before the run ends, so the notice is published while it exists.
+    await step('window B', d.command({ kind: 'workspace.choose', newWindow: true }));
+    await step('two main windows', until(() => d.windows(), (w) => w.windows.length === 2, { timeoutMs: 30_000, what: 'window B added' }));
+    // The run in A, released there by "New session" while its scripted call waits.
+    await d.useWindow('reach-alpha');
+    await step('Workspace in A', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus' }));
+    await step('the prompt', d.type(PROMPT, { enter: true }));
+    await step('the run on screen', until(() => onScreenIn('reach-alpha', PROMPT), (v) => v === true, { timeoutMs: 20_000, what: 'the prompt on screen' }));
+    await d.useWindow('reach-alpha');
+    await step('Ctrl+1', d.chord('Ctrl+1'));
+    await step('New session', d.click('button', { text: 'New session' }));
+    await step('Start session', d.click('[data-testid="start-session-accept"]'));
+    await step('A released it', until(() => onScreenIn('reach-alpha', PROMPT), (v) => v === false, { timeoutMs: 10_000, what: 'the released run off screen' }));
+    const ending = await step('the ending notice in B', until(() => noticeIn('reach-beta'), (n) => n !== null && /^Session \S+ completed$/.test(n.title ?? ''), { timeoutMs: 60_000, what: "REQ-NOTIFY-031's notice in window B" }));
+    // A switches to the third project: the replacement route, no run active any more.
+    await d.useWindow('reach-alpha');
+    await step('A switches to gamma', d.command({ kind: 'workspace.choose', newWindow: false }));
+    const switched = await step('no window holds alpha', until(() => d.windows(), (w) => w.windows.length === 2 && w.windows.every((x) => !String(x.workspace).endsWith('reach-alpha')) && w.windows.some((x) => String(x.workspace).endsWith('reach-gamma')), { timeoutMs: 30_000, what: 'A replaced by gamma' }));
+    await d.useWindow('reach-beta');
+    await step('Open the session, in B', d.click('.notice__action', { text: 'Open the session' }));
+    const added = await step('a window added for alpha', until(() => d.windows(), (w) => w.windows.length === 3 && w.windows.some((x) => String(x.workspace).endsWith('reach-alpha')), { timeoutMs: 30_000, what: 'a window added for alpha' }));
+    const followed = await step('the added window follows the session', until(() => onScreenIn('reach-alpha', PROMPT), (v) => v === true, { timeoutMs: 30_000, what: 'the session on screen in the added window' }));
+    const bStill = await onScreenIn('reach-beta', PROMPT);
+    const gammaStill = await onScreenIn('reach-gamma', PROMPT);
+    value = { ending, switched: switched.windows.map((w) => w.workspace), added: added.windows.map((w) => w.workspace), followed, bStill, gammaStill };
+  } catch (cause) {
+    failure = cause;
+  }
+  const stopped = await stopApp(launched, { screenshot: join(output, 'focus-reach.closing.png') });
+  const log = existsSync(launched.logFile) ? readFileSync(launched.logFile, 'utf8') : '';
+  writeFileSync(join(output, 'focus-reach.log'), log);
+  writeFileSync(join(output, 'focus-reach.steps.json'), `${JSON.stringify(trail, null, 2)}\n`);
+  if (failure) throw new Error(`focus-reach: ${failure.message} (see focus-reach.log, focus-reach.steps.json)`);
+  expect(!stopped.overran, 'focus-reach: the app did not stop within its bound');
+  expect(value.ending.member === 'focus-session' && value.ending.action === 'Open the session', `the ending notice offers ${JSON.stringify(value.ending)}`);
+  const endedId = (value.ending.title.match(/^Session (\S+) completed$/) ?? [])[1];
+  expect(new RegExp(`notice action "focus-session" for ${endedId}: added window \\d+ for .*reach-alpha; the focus was (sent|held)`).test(log), 'main did not log the press adding a window for the session\'s workspace');
+  expect(/notice action reached .*reach-alpha: added window \d+ for it/.test(log), 'the reach did not add a window for alpha');
+  expect(value.followed === true, 'the added window does not show the session');
+  expect(value.bStill === false && value.gammaStill === false, `a window other than the added one loaded the session: ${JSON.stringify([value.bStill, value.gammaStill])}`);
+  expect(!/workspace open declined|ended by the unsaved-settings guard/.test(log.slice(log.lastIndexOf('notice action "focus-session"'))), 'a REQ-SHELL-021 gate ran on the notice action');
+  expect(!/notice #\d+ error "The session could not be loaded"/.test(log), 'the focus-session press raised "The session could not be loaded"');
+  results.focusReach = value;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

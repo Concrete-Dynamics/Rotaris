@@ -124,6 +124,26 @@ one advocate's user-facing costs and the other's directive revision. The new cas
 press reaches the session where it lives; REQ-NOTIFY-044 (with its Data & Formats parameterisation, which becomes "parameterised
 by session identifier and its workspace"), REQ-NOTIFY-031 and REQ-NOTIFY-032 are extended and carry the back-pointer.*
 
+> **First execution of revision 3, 2026-10-14 (fin44, `fin44-notice-reach`).** Built the day it was ruled: `focus-session`
+> carries `{sessionId, workspace}` (`packages/contracts/src/notices.ts`); the run host stamps `run.result` and `notice.publish`
+> with the root it recorded the session under (`withSessionRoot`, `apps/desktop/src/run-host/session-roots.ts`); main builds
+> REQ-NOTIFY-031's and REQ-NOTIFY-032's notices and the recording failure's "Reopen the session" from it, with no action where
+> none is recorded (`run-failure-notice.ts`, `recoveryFor` in `index.ts`); the renderer's arm sends `session.focusFromNotice`,
+> main reaches the workspace (`MainWindows.reach`) and sends the reached window channel 16 (`session:focus`), which a window
+> still loading holds on its record until its renderer's `session.focusReady` (`MainWindows.focusSession` /
+> `sessionFocusReady`); the reached window focuses the session through its own `session.resume`. The `fromNotice` silence is
+> gone. **What was measured.** `session-roots.test.ts` (the root stamped, and nothing where none is recorded),
+> `run-failure-notice.test.ts` (the workspace carried, the action absent without one), `main-windows.test.ts` (held elsewhere,
+> held nowhere, a request held until ready), `commands/session.test.ts` and `recovery-wiring.test.ts`, each red on the code
+> before; `notice-proof` section 6c — a run of the holding window, released there, ends; its "Open the session" pressed in the
+> other window surfaced the holder (`surfaced window 2 …; the focus was sent`), which followed the session, the pressing window
+> loading nothing and no "could not be loaded" error raised — and section 6d, the same press after the session's window
+> switched to another project: a window was added for the session's workspace, the focus **held** on its record and delivered
+> 20 ms later at its renderer's `session.focusReady`, and the added window followed the session (load average 5.9 to 6.6 on
+> four CPUs). **Found beside it:** the unreviewed-hooks notice a run publishes still names the focused window's workspace
+> ([`a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md`](../defects/a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md)),
+> not repaired. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 > **First execution of revision 2.** Built before it was ruled, as the reading OQ-267 recorded: `MainWindows.reach`
 > (`apps/desktop/src/main/main-windows.ts`) for the hook review, the 2026-10-13 row of
 > [`../architecture/first-executions.md`](../architecture/first-executions.md) (fin41, N86), and `pnpm notice-proof` sections 6

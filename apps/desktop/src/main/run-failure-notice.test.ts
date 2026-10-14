@@ -30,24 +30,34 @@ describe('main/run-failure-notice — REQ-NOTIFY-064\'s generic notice and the o
   });
 
   it('REQ-NOTIFY-032: the unfocused failure is a persistent warning naming the session, the failure text exactly as detail, focusing the session', () => {
-    expect(unfocusedFailureNotice('S2', '  HTTP 401\n  Incorrect API key  ')).toEqual({
+    expect(unfocusedFailureNotice('S2', '  HTTP 401\n  Incorrect API key  ', '/work/atlas')).toEqual({
       severity: 'warning', title: 'Session S2 failed', message: 'The session on screen is unaffected. Open the failed session to see its recovery.',
-      detail: '  HTTP 401\n  Incorrect API key  ', persistent: true, action: { label: 'Open the session', action: { kind: 'focus-session', sessionId: 'S2' } }, sessionId: 'S2',
+      detail: '  HTTP 401\n  Incorrect API key  ', persistent: true, action: { label: 'Open the session', action: { kind: 'focus-session', sessionId: 'S2', workspace: '/work/atlas' } }, sessionId: 'S2',
     });
+  });
+
+  // PD-SHELL-001 revision 3 (OQ-292): the action carries the workspace the run host recorded the session under; with none
+  // recorded the notice carries no action rather than one that guesses a window.
+  it('PD-SHELL-001 revision 3: "Open the session" carries the session\'s workspace, and is absent where none is known', () => {
+    expect(unfocusedFailureNotice('S2', 'HTTP 500', '/work/atlas').action?.action).toEqual({ kind: 'focus-session', sessionId: 'S2', workspace: '/work/atlas' });
+    expect(unfocusedEndingNotice('S2', 'completed', '/work/atlas').action?.action).toEqual({ kind: 'focus-session', sessionId: 'S2', workspace: '/work/atlas' });
+    expect('action' in unfocusedFailureNotice('S2', 'HTTP 500', undefined)).toBe(false);
+    expect('action' in unfocusedEndingNotice('S2', 'completed', undefined)).toBe(false);
+    expect(unfocusedFailureNotice('S2', 'HTTP 500', undefined)).toMatchObject({ severity: 'warning', title: 'Session S2 failed', persistent: true, sessionId: 'S2' });
   });
 });
 
 describe('main/run-failure-notice — REQ-NOTIFY-031: a run other than the focused one ends otherwise than failed', () => {
   it('a persistent notice naming the session and the state it reached, `success` for completed and `info` otherwise, focusing the session', () => {
-    expect(unfocusedEndingNotice('S2', 'completed')).toEqual({
+    expect(unfocusedEndingNotice('S2', 'completed', '/work/atlas')).toEqual({
       severity: 'success', title: 'Session S2 completed', message: 'The session on screen is unaffected. Open the finished session to review it.',
-      persistent: true, action: { label: 'Open the session', action: { kind: 'focus-session', sessionId: 'S2' } }, sessionId: 'S2',
+      persistent: true, action: { label: 'Open the session', action: { kind: 'focus-session', sessionId: 'S2', workspace: '/work/atlas' } }, sessionId: 'S2',
     });
-    expect(unfocusedEndingNotice('S3', 'stopped')).toMatchObject({ severity: 'info', title: 'Session S3 stopped', persistent: true, sessionId: 'S3' });
+    expect(unfocusedEndingNotice('S3', 'stopped', '/work/atlas')).toMatchObject({ severity: 'info', title: 'Session S3 stopped', persistent: true, sessionId: 'S3' });
     // The state is the normalised vocabulary (REQ-NOTIFY-048/049): a raw persisted status is never rendered.
-    expect(unfocusedEndingNotice('S4', 'paused_message_limit')).toMatchObject({ severity: 'info', title: 'Session S4 paused' });
-    expect(unfocusedEndingNotice('S5', 'awaiting_plan_decision')).toMatchObject({ severity: 'info', title: 'Session S5 paused' });
-    expect(unfocusedEndingNotice('S6', 'interrupted')).toMatchObject({ severity: 'info', title: 'Session S6 idle' });
+    expect(unfocusedEndingNotice('S4', 'paused_message_limit', '/work/atlas')).toMatchObject({ severity: 'info', title: 'Session S4 paused' });
+    expect(unfocusedEndingNotice('S5', 'awaiting_plan_decision', '/work/atlas')).toMatchObject({ severity: 'info', title: 'Session S5 paused' });
+    expect(unfocusedEndingNotice('S6', 'interrupted', '/work/atlas')).toMatchObject({ severity: 'info', title: 'Session S6 idle' });
   });
 });
 
@@ -149,7 +159,7 @@ describe('main/run-failure-notice — RunFailurePublisher: the class publication
     const focused = new Set(['S1']);
     const h = harness(focused);
     await h.publisher.failed('S2', 'authentication', 'HTTP 401');
-    expect(h.reported).toEqual([unfocusedFailureNotice('S2', 'HTTP 401')]);
+    expect(h.reported).toEqual([unfocusedFailureNotice('S2', 'HTTP 401', undefined)]);
     expect(h.recovered).toEqual([]);
     expect(h.publisher.holds('S2')).toBe(true);
     // Focusing another session publishes nothing of S2's.
@@ -158,11 +168,23 @@ describe('main/run-failure-notice — RunFailurePublisher: the class publication
     focused.add('S2');
     await h.publisher.focused('S2');
     expect(h.recovered).toEqual(['S2']);
-    expect(h.reported).toEqual([unfocusedFailureNotice('S2', 'HTTP 401'), authenticationFailureNotice('S2', 'HTTP 401')]);
+    expect(h.reported).toEqual([unfocusedFailureNotice('S2', 'HTTP 401', undefined), authenticationFailureNotice('S2', 'HTTP 401')]);
     // Once only.
     await h.publisher.focused('S2');
     expect(h.recovered).toEqual(['S2']);
     expect(h.reported).toHaveLength(2);
+  });
+
+  // PD-SHELL-001 revision 3 (OQ-292): the run's result names the root the run host recorded the session under, and the publisher
+  // passes it into the action of the notice it raises for a session not on screen.
+  it('PD-SHELL-001 revision 3: the publisher carries the run\'s recorded workspace into "Open the session"', async () => {
+    const h = harness(new Set());
+    await h.publisher.failed('S2', 'generic', 'HTTP 500', '/work/atlas');
+    h.publisher.endedOtherwise('S3', { severity: 'info', title: 'The run completed.' }, 'completed', undefined, '/work/billing');
+    expect(h.reported.map((n) => n.action?.action)).toEqual([
+      { kind: 'focus-session', sessionId: 'S2', workspace: '/work/atlas' },
+      { kind: 'focus-session', sessionId: 'S3', workspace: '/work/billing' },
+    ]);
   });
 
   it('REQ-NOTIFY-031: a focused session\'s non-failure ending publishes its own notice; an unfocused one\'s raises the notice naming the session in its place', async () => {
@@ -171,7 +193,7 @@ describe('main/run-failure-notice — RunFailurePublisher: the class publication
     h.publisher.endedOtherwise('S1', own, 'completed');
     h.publisher.endedOtherwise('S2', own, 'completed');
     h.publisher.endedOtherwise('S3', { severity: 'warning', title: 'Completed with a task abandoned', detail: 'a task was abandoned' }, 'stopped');
-    expect(h.reported).toEqual([own, unfocusedEndingNotice('S2', 'completed'), unfocusedEndingNotice('S3', 'stopped')]);
+    expect(h.reported).toEqual([own, unfocusedEndingNotice('S2', 'completed', undefined), unfocusedEndingNotice('S3', 'stopped', undefined)]);
     expect(h.recovered).toEqual([]);
   });
 
@@ -183,7 +205,7 @@ describe('main/run-failure-notice — RunFailurePublisher: the class publication
     if (publication.kind !== 'notice') throw new Error('expected a notice');
     h.publisher.endedOtherwise('S2', publication.notice, 'stopped', publication.quota);
     // While S2 is not on screen: REQ-NOTIFY-031's info notice naming it, and nothing else.
-    expect(h.reported).toEqual([unfocusedEndingNotice('S2', 'stopped')]);
+    expect(h.reported).toEqual([unfocusedEndingNotice('S2', 'stopped', undefined)]);
     expect(h.reported[0]?.severity).toBe('info');
     expect(h.publisher.holds('S2')).toBe(true);
     // Focusing another session publishes nothing of S2's.
@@ -192,7 +214,7 @@ describe('main/run-failure-notice — RunFailurePublisher: the class publication
     // Focusing S2 brings REQ-NOTIFY-063's notice and its model-settings action, once.
     focused.add('S2');
     await h.publisher.focused('S2');
-    expect(h.reported).toEqual([unfocusedEndingNotice('S2', 'stopped'), quotaFailureNotice('S2', failure)]);
+    expect(h.reported).toEqual([unfocusedEndingNotice('S2', 'stopped', undefined), quotaFailureNotice('S2', failure)]);
     await h.publisher.focused('S2');
     expect(h.reported).toHaveLength(2);
     expect(h.recovered).toEqual([]);
@@ -208,14 +230,14 @@ describe('main/run-failure-notice — RunFailurePublisher: the class publication
     expect(h.publisher.holds('S3')).toBe(false);
     focused.add('S3');
     await h.publisher.focused('S3');
-    expect(h.reported.filter((n) => n.sessionId === 'S3')).toEqual([unfocusedEndingNotice('S3', 'stopped'), unfocusedEndingNotice('S3', 'completed')]);
+    expect(h.reported.filter((n) => n.sessionId === 'S3')).toEqual([unfocusedEndingNotice('S3', 'stopped', undefined), unfocusedEndingNotice('S3', 'completed', undefined)]);
   });
 
   it('every class waits for the focus, and a later ending of the session supersedes what was held', async () => {
     const h = harness(new Set());
     await h.publisher.failed('S2', 'generic', 'HTTP 400');
     await h.publisher.focused('S2');
-    expect(h.reported).toEqual([unfocusedFailureNotice('S2', 'HTTP 400'), genericFailureNotice('S2', 'HTTP 400')]);
+    expect(h.reported).toEqual([unfocusedFailureNotice('S2', 'HTTP 400', undefined), genericFailureNotice('S2', 'HTTP 400')]);
     await h.publisher.failed('S3', 'authentication', 'HTTP 401');
     h.publisher.ended('S3');
     expect(h.publisher.holds('S3')).toBe(false);

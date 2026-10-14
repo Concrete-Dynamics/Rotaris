@@ -24,7 +24,7 @@ export function confinementRefusalNotice(r: { readonly headline: string; readonl
  */
 export function sessionCommands(
   ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'configFatal' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'storeRefusal' | 'withdrawnByClose'>,
-): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.chooseNextModel' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.retry' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.release' | 'session.reconcile' | 'session.pageOlder'> {
+): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.chooseNextModel' | 'session.start' | 'session.newId' | 'session.resume' | 'session.focusFromNotice' | 'session.focusReady' | 'session.control' | 'session.prompt' | 'session.retry' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.release' | 'session.reconcile' | 'session.pageOlder'> {
   const { capturing, clocks, configFatal, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runFailures, runHost, services, withdrawnByClose } = ctx;
   /** PD-GIT-001: the runs a launch in the workspace would share a tree with, or null when the run host's count cannot be read. */
   const sharingRunCount = async (workspaceId: string): Promise<number | null> => {
@@ -216,14 +216,11 @@ export function sessionCommands(
       // load would collide (REQ-MONITOR-256); the renderer treats that answer as a focus switch.
       const r = await runHost.request({ kind: 'session.resume', workspaceId: w.workspaceId, sessionId: req.sessionId }, millis(10_000));
       if (r.kind !== 'session.resumed') {
-        // REQ-NOTIFY-044 with PD-SHELL-001: a `focus-session` notice is every window's, and pressed in a window holding another
-        // workspace it names a session this window's store does not hold. That press is not dispatched: the refusal is logged,
-        // and no error notice replaces the one the user pressed (REQ-NOTIFY-024). Until 2026-10-14 it raised "The session could
-        // not be loaded" there (docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
-        if (r.kind === 'refused' && req.fromNotice === true && r.code === 'session.no-session') {
-          log(`notice action "focus-session" for ${req.sessionId} not dispatched in window ${w.wcId}: its workspace ${w.workspace} does not hold the session (REQ-NOTIFY-044)`);
-          return refusal(r, 'The session could not be loaded');
-        }
+        // Every refusal is raised, a notice's load included: since PD-SHELL-001 revision 3 (OQ-292) a `focus-session` press
+        // reaches the window holding the session's workspace first (`session.focusFromNotice`), so a refusal here is one in the
+        // session's own workspace — a deleted session — and is the ordinary error there. The silence of 2026-10-14 for a press in
+        // a window holding another workspace (`fromNotice`) is withdrawn with the case it answered
+        // (docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
         if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail);
         return refusal(r, 'The session could not be loaded');
       }
@@ -231,6 +228,31 @@ export function sessionCommands(
       // REQ-SHELL-078 read for a loaded session too: the windows were opened onto the previous session's agents and would otherwise show them (Part R's reading, ADR-0048 note).
       if (w.followedSessionId !== null && w.followedSessionId !== r.sessionId) w.personaWindows.destroyAll('a different session was loaded');
       return { ok: true, value: { sessionId: r.sessionId } };
+    },
+    /**
+     * PD-SHELL-001 revision 3 (OQ-292, ruled 2026-10-14 under R-072): a `focus-session` notice action, pressed in any window.
+     * The action names the session and the workspace the run host recorded it under, so main reaches that workspace —
+     * `MainWindows.reach`: the window holding it surfaced, else one added for it on PD-SHELL-001's add terms, asking nothing —
+     * and asks THAT window, on channel 16, to focus the session through its own load (`session.resume`). A window the reach
+     * added holds the request until its renderer reports `session.focusReady`. A reach that failed has already reported the
+     * failure under REQ-SHELL-019 (`#addWindow`); its outcome is the answer.
+     */
+    'session.focusFromNotice': async (req) => {
+      const reached = await mainWindows.reach(req.workspace);
+      if (!reached.ok) {
+        log(`notice action "focus-session" for ${req.sessionId}: ${req.workspace} could not be reached (${reached.outcome.ok ? 'no window' : reached.outcome.headline}) (PD-SHELL-001 revision 3)`);
+        return reached.outcome;
+      }
+      const delivered = mainWindows.focusSession(reached.window.wcId, req.sessionId);
+      log(`notice action "focus-session" for ${req.sessionId}: ${reached.added ? 'added' : 'surfaced'} window ${reached.window.wcId} for ${req.workspace}; the focus was ${delivered} (PD-SHELL-001 revision 3, OQ-292)`);
+      if (delivered === 'gone') return { ok: false, code: 'window.gone', headline: 'The window holding the session closed before it could focus it' };
+      return { ok: true, value: { window: reached.window.wcId, added: reached.added, delivered } };
+    },
+    /** The asking main window's renderer listens on channel 16 from now on; the focus held for it while it loaded, or null. */
+    'session.focusReady': (_req, { senderId }) => {
+      const own = mainWindows.forSender(senderId);
+      if (!own) return { ok: false, code: 'window.notMain', headline: 'Only a main window focuses a session' };
+      return { ok: true, value: { sessionId: mainWindows.sessionFocusReady(own.wcId) } };
     },
     'session.control': async (req, { senderId }) => {
       // PD-CHAT-002 revision 2 with PD-ORCH-005 clause 9: the question dock cancels its prompt as its window unloads

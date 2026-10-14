@@ -49,6 +49,9 @@ export type TimelineSeverity = z.infer<typeof TimelineSeveritySchema>;
  *     2026-10-14, `docs/defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`)
  * 15. project-init:open     — main → ONE main window, the one holding the named workspace: open Settings › Project there
  *     (PD-WORKSPACE-005 revision 2, OQ-262 — a project-setup banner's `open-project-init`, activated in any window)
+ * 16. session:focus         — main → ONE main window, the one holding a session's workspace: focus that session there
+ *     (PD-SHELL-001 revision 3, OQ-292 — a `focus-session` notice action, activated in any window; held for an added window
+ *     until its renderer reports `session.focusReady`)
  *
  * Channels 1 and 2 share ONE per-session counter (REQ-MONITOR-214), stamped in
  * the run host by the projection owner at publication. Main relays it
@@ -75,6 +78,7 @@ export const CHANNEL = {
   reauthPrompt: 'reauth:prompt', // the 401 note's part B (REQ-NOTIFY-071, ADR-0048)
   displayChanged: 'display:changed', // REQ-CHAT-167 / REQ-CONFIG-403: a stored display preference, to every window
   projectInitOpen: 'project-init:open', // PD-WORKSPACE-005 revision 2 (OQ-262): open Settings › Project in the holding window
+  sessionFocus: 'session:focus', // PD-SHELL-001 revision 3 (OQ-292): focus a notice's session in the window holding its workspace
   command: 'command',
 } as const;
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -544,6 +548,13 @@ export type ImprovementActivityPublish = z.infer<typeof ImprovementActivityPubli
 export const ProjectInitOpenSchema = z.object({ v: schemaVersion, workspace: z.string().min(1) });
 export type ProjectInitOpen = z.infer<typeof ProjectInitOpenSchema>;
 
+/**
+ * Channel 16 — PD-SHELL-001 revision 3 (OQ-292): main has reached the window holding a `focus-session` notice's workspace, and
+ * that window focuses the session through its own load (`session.resume`), as its session browser would.
+ */
+export const SessionFocusSchema = z.object({ v: schemaVersion, sessionId });
+export type SessionFocus = z.infer<typeof SessionFocusSchema>;
+
 /** Channel 12 (Part AS, ADR-0064): the whole initialization state, whichever view a window is showing. */
 export const InitializationStatePublishSchema = InitializationStateSchema.extend({ v: schemaVersion });
 export type InitializationStatePublish = z.infer<typeof InitializationStatePublishSchema>;
@@ -563,6 +574,7 @@ export const CHANNEL_SCHEMAS = {
   [CHANNEL.reauthPrompt]: ReauthPromptPublishSchema, // REQ-NOTIFY-071
   [CHANNEL.displayChanged]: DisplayChangedSchema, // REQ-CHAT-167, REQ-CONFIG-403
   [CHANNEL.projectInitOpen]: ProjectInitOpenSchema, // PD-WORKSPACE-005 revision 2 (OQ-262)
+  [CHANNEL.sessionFocus]: SessionFocusSchema, // PD-SHELL-001 revision 3 (OQ-292)
 } as const;
 
 /** The two channels that share one per-session counter. Order across BOTH must be preserved by the relay. */

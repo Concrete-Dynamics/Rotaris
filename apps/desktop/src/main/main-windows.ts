@@ -44,6 +44,19 @@ export interface MainWindowView<TWindow, TPersonaWindows, TTerminalWindows> {
   readonly terminalWindows: TTerminalWindows;
 }
 
+/**
+ * A request main sends ONE main window's renderer on its own account, after a notice action reached that window: focus a
+ * session (channel 16, PD-SHELL-001 revision 3, OQ-292) or open Settings › Project (channel 15, PD-WORKSPACE-005). A window
+ * the reach has just added may not have registered its listener yet, so the request is held on the window's record until its
+ * renderer says it listens (`sessionFocusReady`, `projectInitReady`), and is then delivered once.
+ */
+export type WindowRequest =
+  | { readonly kind: 'session-focus'; readonly sessionId: string }
+  | { readonly kind: 'project-init' };
+type WindowRequestKind = WindowRequest['kind'];
+/** What became of a window request: sent to a listening renderer, held for one still loading, or no such window. */
+export type WindowRequestOutcome = 'sent' | 'held' | 'gone';
+
 type WorkspaceGate =
   | { readonly ok: true }
   | { readonly ok: false; readonly outcome: CommandOutcome };
@@ -96,6 +109,8 @@ export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWind
    * the next publication — the improvement activity, its own workspace's pending retrospective among it.
    */
   readonly workspaceOpened?: (window: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>) => void;
+  /** Sends a window request to the window's renderer on its channel (`WindowRequest`); called only once it listens. */
+  readonly deliver?: (window: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>, request: WindowRequest) => void;
 }
 
 interface WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TDialog> {
@@ -121,6 +136,10 @@ interface WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TD
   settleReady: () => void;
   questionAnswered: boolean;
   deferredOffer: MainWindowTimer | null;
+  /** The window requests its renderer has registered for; none at `build`, so a request to a loading window is held. */
+  readonly listening: Set<WindowRequestKind>;
+  /** At most one request of each kind held for a renderer not yet listening; the later of two replaces the earlier. */
+  readonly pending: Map<WindowRequestKind, WindowRequest>;
 }
 
 export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval = never, TDialog = never> {
@@ -149,6 +168,8 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
       settleReady,
       questionAnswered: false,
       deferredOffer: null,
+      listening: new Set(),
+      pending: new Map(),
     };
     this.#records.set(record.wcId, record);
     this.#rememberFocus(record.wcId);
@@ -548,6 +569,33 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     return this.#view(holder);
   }
 
+  /**
+   * PD-SHELL-001 revision 3 (OQ-292): ask the main window `wcId` to focus `sessionId` through its own load (channel 16). Sent
+   * at once to a renderer listening for it; held for one still loading — a window the reach added — until `sessionFocusReady`.
+   */
+  focusSession(wcId: number, sessionId: string): WindowRequestOutcome {
+    return this.#request(wcId, { kind: 'session-focus', sessionId });
+  }
+
+  /** The main window `wcId`'s renderer listens on channel 16 from now on: the session focus held for it, delivered once, or null. */
+  sessionFocusReady(wcId: number): string | null {
+    const held = this.#ready(wcId, 'session-focus');
+    return held?.kind === 'session-focus' ? held.sessionId : null;
+  }
+
+  /**
+   * PD-WORKSPACE-005 revision 3 (OQ-294): ask the main window `wcId` to open Settings › Project (channel 15). Sent at once to a
+   * renderer listening for it; held for one still loading until `projectInitReady`. A second press while held sets nothing new.
+   */
+  openProjectInit(wcId: number): WindowRequestOutcome {
+    return this.#request(wcId, { kind: 'project-init' });
+  }
+
+  /** The main window `wcId`'s renderer listens on channel 15 from now on; true when an open was held for it (delivered once). */
+  projectInitReady(wcId: number): boolean {
+    return this.#ready(wcId, 'project-init') !== undefined;
+  }
+
   dispose(): void {
     for (const record of [...this.#records.values()]) {
       record.deferredOffer?.cancel();
@@ -650,6 +698,28 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
       }
     }
     return { ok: true };
+  }
+
+  #request(wcId: number, request: WindowRequest): WindowRequestOutcome {
+    const record = this.#liveRecord(wcId);
+    if (!record) return 'gone';
+    if (record.listening.has(request.kind) && this.dependencies.deliver) {
+      this.dependencies.deliver(this.#view(record), request);
+      return 'sent';
+    }
+    record.pending.set(request.kind, request);
+    this.dependencies.log(`window ${wcId} is not listening for ${request.kind} yet; the request is held until its renderer is ready`);
+    return 'held';
+  }
+
+  #ready(wcId: number, kind: WindowRequestKind): WindowRequest | undefined {
+    const record = this.#liveRecord(wcId);
+    if (!record) return undefined;
+    record.listening.add(kind);
+    const held = record.pending.get(kind);
+    record.pending.delete(kind);
+    if (held) this.dependencies.log(`window ${wcId} is ready for ${kind}; the held request is delivered`);
+    return held;
   }
 
   #windowHolding(workspace: string): WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TDialog> | undefined {

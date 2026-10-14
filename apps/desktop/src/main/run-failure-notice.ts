@@ -47,16 +47,25 @@ export function quotaFailureNotice(sessionId: string, failure: string): ReportIn
 }
 
 /**
+ * PD-SHELL-001 revision 3 (OQ-292, ruled 2026-10-14 under R-072): "Open the session" names the session AND the workspace the
+ * run host recorded it under, so a press in any window reaches that workspace and focuses the session there. With no recorded
+ * workspace the notice carries no action, rather than one that guesses a window.
+ */
+function openTheSession(sessionId: string, workspace: string | undefined): Pick<ReportInput, 'action'> {
+  return workspace === undefined || workspace === '' ? {} : { action: { label: 'Open the session', action: { kind: 'focus-session', sessionId, workspace } } };
+}
+
+/**
  * REQ-NOTIFY-032: a run other than the focused one failed. Severity `warning` (REQ-NOTIFY-065 does not reach it), persistent,
  * naming the session, the failure text exactly as the run reported it as copyable detail, and the action focusing that
- * session. It is the only notice the failure raises while the session is not focused; the class's own notice, and its
- * recovery, arrive when the session is focused (REQ-NOTIFY-030).
+ * session in its own workspace (`workspace`, PD-SHELL-001 revision 3). It is the only notice the failure raises while the
+ * session is not focused; the class's own notice, and its recovery, arrive when the session is focused (REQ-NOTIFY-030).
  */
-export function unfocusedFailureNotice(sessionId: string, failure: string): ReportInput {
+export function unfocusedFailureNotice(sessionId: string, failure: string, workspace: string | undefined): ReportInput {
   return {
     severity: 'warning', title: `Session ${sessionId} failed`,
     message: 'The session on screen is unaffected. Open the failed session to see its recovery.',
-    detail: failure, persistent: true, action: { label: 'Open the session', action: { kind: 'focus-session', sessionId } }, sessionId,
+    detail: failure, persistent: true, ...openTheSession(sessionId, workspace), sessionId,
   };
 }
 
@@ -67,12 +76,12 @@ export function unfocusedFailureNotice(sessionId: string, failure: string): Repo
  * unaffected and that the finished one can be opened for review, and focusing it. Scoped to the session, so it survives
  * an unrelated run's start (REQ-NOTIFY-029) and reads as unread (REQ-NOTIFY-028).
  */
-export function unfocusedEndingNotice(sessionId: string, executionStatus: string): ReportInput {
+export function unfocusedEndingNotice(sessionId: string, executionStatus: string, workspace: string | undefined): ReportInput {
   const state = presentationStatus(executionStatus);
   return {
     severity: state === 'completed' ? 'success' : 'info', title: `Session ${sessionId} ${state}`,
     message: 'The session on screen is unaffected. Open the finished session to review it.',
-    persistent: true, action: { label: 'Open the session', action: { kind: 'focus-session', sessionId } }, sessionId,
+    persistent: true, ...openTheSession(sessionId, workspace), sessionId,
   };
 }
 
@@ -169,12 +178,15 @@ export class RunFailurePublisher {
     if (this.held.delete(sessionId)) this.deps.log(`run failure: the held recovery for session ${sessionId} is superseded by a later ending`);
   }
 
-  /** A FAILED run of `sessionId`, its class fixed now (REQ-NOTIFY-032: the classification still runs while unfocused). */
-  async failed(sessionId: string, failureClass: RunFailureClass, failure: string): Promise<void> {
+  /**
+   * A FAILED run of `sessionId`, its class fixed now (REQ-NOTIFY-032: the classification still runs while unfocused).
+   * `workspace` is the root the run host recorded the session under (`run.result`'s `workspaceRoot`, PD-SHELL-001 revision 3).
+   */
+  async failed(sessionId: string, failureClass: RunFailureClass, failure: string, workspace?: string): Promise<void> {
     this.held.delete(sessionId);
     if (!this.deps.isFocused(sessionId)) {
       this.held.set(sessionId, { failureClass, failure });
-      this.deps.report(unfocusedFailureNotice(sessionId, failure));
+      this.deps.report(unfocusedFailureNotice(sessionId, failure, workspace));
       this.deps.log(`run failure: session ${sessionId} is not focused; REQ-NOTIFY-032's notice is raised and the ${failureClass} recovery waits for the focus`);
       return;
     }
@@ -202,11 +214,11 @@ export class RunFailurePublisher {
    * 2026-10-02 nothing was held, and the limit reached the user only as a plain ending
    * (docs/defects/fixed/a-background-run-ended-on-a-provider-limit-loses-its-quota-notice.md).
    */
-  endedOtherwise(sessionId: string, notice: ReportInput, executionStatus: string, quota?: string): void {
+  endedOtherwise(sessionId: string, notice: ReportInput, executionStatus: string, quota?: string, workspace?: string): void {
     if (this.deps.isFocused(sessionId)) { this.deps.report(notice); return; }
     this.deps.log(`run ending: session ${sessionId} is not focused; REQ-NOTIFY-031's notice is raised in place of its own${quota === undefined ? '' : ', and REQ-NOTIFY-063\'s waits for the focus'}`);
     if (quota !== undefined) this.held.set(sessionId, { failureClass: 'quota', failure: quota });
-    this.deps.report(unfocusedEndingNotice(sessionId, executionStatus));
+    this.deps.report(unfocusedEndingNotice(sessionId, executionStatus, workspace));
   }
 
   /** Whether a class publication is held for the session (verification and logs). */

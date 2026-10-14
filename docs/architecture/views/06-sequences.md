@@ -183,6 +183,39 @@ changes nothing.
 Before a replacement is even attempted, `#workspaceOpenGates` runs two gates: the unsaved-settings close guard,
 then the active-run count. A gate that declines answers `{cancelled: true}` — not a failure.
 
+### A notice action that names a workspace (PD-SHELL-001 revisions 2 and 3)
+
+`MainWindows.reach(workspace)` is the chooser's third ending without a chooser: the window holding the workspace is surfaced
+and returned (waiting, bounded, for its open if it is still opening it), else a window is added for it by `#addWindow` — no
+gate, nothing closed, the workspace persisted as last opened, a failure reported under REQ-SHELL-019. The action's surface
+then opens in the reached window. For the hook review main parents the dialog to it. For `focus-session` (revision 3, OQ-292)
+main asks it to focus the session on channel 16:
+
+```mermaid
+sequenceDiagram
+  participant P as pressing window (renderer)
+  participant M as main (session.focusFromNotice)
+  participant W as MainWindows
+  participant R as reached window (renderer)
+  P->>M: session.focusFromNotice {sessionId, workspace}
+  M->>W: reach(workspace)
+  alt a window holds it
+    W-->>M: surfaced holder
+  else none does
+    W->>R: build, load, open the workspace
+    W-->>M: added window
+  end
+  M->>W: focusSession(wcId, sessionId)
+  alt R listens on channel 16
+    W->>R: session:focus {sessionId}
+  else R still loading
+    Note over W: held on R's record
+    R->>M: session.focusReady (after registering its listener)
+    M-->>R: {sessionId} — the held focus, once
+  end
+  R->>M: session.resume {sessionId} (its own load), session.subscribe
+```
+
 ---
 
 ## 2. A permission approval, end to end

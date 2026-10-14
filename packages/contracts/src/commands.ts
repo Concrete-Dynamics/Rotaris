@@ -142,12 +142,18 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('checkpoints.list'), sessionId: z.string().min(1) }),
   z.object({ kind: z.literal('checkpoints.preview'), sessionId: z.string().min(1), sequence: z.number().int().nonnegative() }),
   z.object({ kind: z.literal('checkpoints.restore'), sessionId: z.string().min(1), sequence: z.number().int().nonnegative(), force: z.boolean() }),
+  z.object({ kind: z.literal('session.resume'), sessionId: z.string().min(1) }),
   /**
-   * `fromNotice` (2026-10-14): the load is a `focus-session` notice action's. Notices reach every main window, so the
-   * session may belong to another window's workspace; such a press is not dispatched — no notice replaces the one pressed
-   * (REQ-NOTIFY-044, PD-SHELL-001; docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
+   * PD-SHELL-001 revision 3 (OQ-292, ruled 2026-10-14 under R-072): a `focus-session` notice action, pressed in any window.
+   * Main reaches `workspace` — the window holding it surfaced, else one added for it — and asks THAT window, on channel 16, to
+   * focus the session through its own load. An added window holds the request until its renderer reports `session.focusReady`.
    */
-  z.object({ kind: z.literal('session.resume'), sessionId: z.string().min(1), fromNotice: z.literal(true).optional() }),
+  z.object({ kind: z.literal('session.focusFromNotice'), sessionId: z.string().min(1), workspace: z.string().min(1) }),
+  /**
+   * The asking main window's renderer listens on channel 16 from now on; answered `{ sessionId }`, the focus request held for
+   * it while it could not take one (a window the reach added, still loading), or null. A request is delivered once.
+   */
+  z.object({ kind: z.literal('session.focusReady') }),
   /** REQ-CHAT-011 again for a loaded session with no active run: append the user row. */
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   /** REQ-CHAT-173: thumbnail bytes are fetched on demand and never join a transcript snapshot. */
@@ -431,6 +437,8 @@ export interface RendererBridge {
   readonly onDisplayChanged: (fn: (p: unknown) => void) => () => void;
   /** Channel 15 (PD-WORKSPACE-005 revision 2, OQ-262): main asks THIS window, which holds the named workspace, to open Settings › Project. */
   readonly onProjectInitOpen: (fn: (p: unknown) => void) => () => void;
+  /** Channel 16 (PD-SHELL-001 revision 3, OQ-292): main asks THIS window, which holds a session's workspace, to focus that session. */
+  readonly onSessionFocus: (fn: (p: unknown) => void) => () => void;
 }
 export const BRIDGE_KEY = 'rotaris' as const;
 

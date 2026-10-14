@@ -174,10 +174,14 @@ revision 2, OQ-267 ruled 2026-10-13), and where the holder is a window still ope
 the load of the window the first press added) waits for its open before acting, since 2026-10-14 — then
 parents the review to that window; the dialog's payload keeps the workspace id its decision is stored against; without
 `workspace`, the asking window's own), **`projectInit.open {workspace}`** (2026-10-14, [`PD-WORKSPACE-005`](../../product/directives.md#pd-workspace-005)
-revision 2, OQ-262: a project-setup banner's `open-project-init`, activated in any window; main's `MainWindows.surfaceHolding`
-surfaces the main window holding that workspace on REQ-SHELL-161's terms and sends it channel 15, or, where none holds it,
-raises the info acknowledgement "Project <name> is not open in any window." in the asking window and does nothing else —
-no window is added, unlike the hook review's `reach`),
+revisions 2 and 3, OQ-262, OQ-294: a project-setup banner's `open-project-init`, activated in any window; main reaches the
+workspace as the hook review does — `MainWindows.reach`, the holder surfaced on REQ-SHELL-161's terms, else a window added on
+PD-SHELL-001's add terms — and asks the reached window for Settings › Project through `MainWindows.openProjectInit`: channel
+15 at once to a renderer listening, held on the record of one still loading; a failed reach answers its outcome, the add
+route having reported it. *Under revision 2 (fin43, until the same day) main surfaced a holder through `surfaceHolding` and,
+with none, raised "Project <name> is not open in any window." in the asking window and added nothing*), **`projectInit.ready`**
+(PD-WORKSPACE-005 revision 3: sent by a main window's renderer right after it registers for channel 15; marks the window
+listening and answers `{owed}`, whether an open was held for it, once),
 `playbooks.catalogue`, `config.read/save/setField/liveState`, `providers.list/health/open/save/validate/signOut/
 delete/refresh`, `provider.payload/signIn`. Main relays a session or hook command to the run host, a workspace or
 config command to the workspace service, and answers preference, theme and **provider** commands itself (the
@@ -639,8 +643,10 @@ preferences (`display/showReasoning`, `display/autoCollapseTools`, `display/grou
 live window (`announceDisplayPreference`, `main/commands/shell.ts`), the writer included; each renderer folds it into its
 `displayPrefs` store (`displayPreferencePatch`), so a persona window already open redraws its rows under the new value
 (REQ-CHAT-167, REQ-CONFIG-403; until then only the writing window's store changed); `project-init:open` (channel 15,
-2026-10-14, PD-WORKSPACE-005 revision 2) is `{workspace}`, to ONE main window, the one holding the workspace a
-project-setup banner names, which opens Settings › Project (`shell.openSettings('project')`); `session:focus` (channel 16,
+2026-10-14, PD-WORKSPACE-005 revisions 2 and 3) is `{workspace}`, to ONE main window, the one holding the workspace a
+project-setup banner names — surfaced, or since revision 3 added for it — which opens Settings › Project
+(`shell.openSettings('project')`); sent by `MainWindows`' `deliver` once the window's renderer has said it listens
+(`projectInit.ready`), held on its record until then; `session:focus` (channel 16,
 2026-10-14, PD-SHELL-001 revision 3) is `{sessionId}`, to ONE main window, the one holding the workspace a `focus-session`
 notice names, which focuses the session through its own load (`session.resume`, as its session browser would) — sent by
 `MainWindows`' `deliver` once the window's renderer has said it listens (`session.focusReady`), held on its record until then; `config:changed` repopulates every main window **and its family** — its persona windows and its terminal

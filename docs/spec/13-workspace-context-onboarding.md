@@ -379,6 +379,9 @@ The product operates on a user-selected workspace folder: the desktop app resolv
   > *Amended in place 2026-10-13 (revision 2, [OQ-262](../architecture/open-questions.md#oq-262)):* the banner carries
   > `open-project-init` naming the project's folder, labelled "Open Project settings"; it opens Settings › Project in the
   > window holding the project, or says the project is not open in any window.
+  > *Amended in place 2026-10-14 (revision 3, [OQ-294](../architecture/open-questions.md#oq-294)):* where no window holds the
+  > project, a main window is added for it on PD-SHELL-001's add terms and Settings › Project opens there; the "not open in any
+  > window" notice is gone.
 
 - **REQ-WORKSPACE-103** — Background tasks SHALL start immediately, without any dialog and without blocking the interface; nothing renders their progress live; the recorded outcome is visible in Settings Project. Success is silent. No estimate of how long such a task will take, no completion percentage, no progress bar, and no elapsed-time reading SHALL be presented for a background task while it runs: a task the user did not ask for and cannot be blocked by has nothing to report until it has a result. Its only timing contract is the per-stage wall-clock budgets of REQ-WORKSPACE-091, a stage exceeding its budget being a retryable failure. A failed background run SHALL reach an error banner "Project setup did not finish" carrying the task's own summary (fallback "Rotaris could not finish setting this workspace up for code search.") and a "Try again" action; a run that broke down entirely additionally states "Runs are not blocked; you can try again."
   > **Narrowed by [`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005), 2026-10-06.** The banner stays an
@@ -387,6 +390,9 @@ The product operates on a user-selected workspace folder: the desktop app resolv
   > *Amended in place 2026-10-13 (revision 2, [OQ-262](../architecture/open-questions.md#oq-262)):* its "Try again" is
   > `open-project-init` naming the project's folder; it opens Settings › Project in the window holding the project, or
   > says the project is not open in any window.
+  > *Amended in place 2026-10-14 (revision 3, [OQ-294](../architecture/open-questions.md#oq-294)):* where no window holds the
+  > project, a main window is added for it on PD-SHELL-001's add terms and Settings › Project opens there; the "not open in any
+  > window" notice is gone.
 
 - **REQ-WORKSPACE-104** — With the current default task set, a fresh workspace SHALL open without any prompt and without gating runs. The consent dialog and the composer gate SHALL appear only once some pending task requires consent, and SHALL then behave exactly as specified above without further configuration.
 

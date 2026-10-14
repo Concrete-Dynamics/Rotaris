@@ -1065,12 +1065,12 @@ function dispatchNoticeAction(action: NoticeAction): void {
       })();
       return;
     case 'open-project-init':
-      // PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): both project-setup banners carry this action,
-      // naming their project's folder. Notices are application-wide, so this window may hold another workspace: main
-      // surfaces the window holding the named one and opens Settings › Project there (channel 15), or, where no window
-      // holds it, says so in THIS window and does nothing else. Its window rule is ruled; PD-SHELL-001 revision 2 (OQ-267)
-      // would add a window for a workspace no window holds, and which governs this member there is OQ-294. Until 2026-10-14
-      // this arm dispatched nothing, and no notice raised the action.
+      // PD-WORKSPACE-005 revision 3 (OQ-294, ruled 2026-10-14 under R-072): both project-setup banners carry this action,
+      // naming their project's folder. Notices are application-wide, so this window may hold another workspace: main reaches
+      // the named one by PD-SHELL-001 revision 2's reach — the window holding it surfaced, else one added for it, asking
+      // nothing — and opens Settings › Project there (channel 15). Revision 2 (OQ-262) had a press for a project no window
+      // held say "Project <name> is not open in any window." here and do nothing else. Until 2026-10-14 this arm dispatched
+      // nothing, and no notice raised the action.
       void bridge.command({ kind: 'projectInit.open', workspace: action.workspace }).then((outcome) => {
         if (!outcome.ok) console.warn(`notice action "open-project-init" for ${action.workspace} was refused: ${outcome.headline}`);
       });
@@ -1119,14 +1119,23 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
   // Part X: the saved prompts, above every view (REQ-LIBRARY-105), and the stash dialog they open (REQ-LIBRARY-141).
   const prompts = usePrompts(workspace);
   /*
-   * Channel 15 — PD-WORKSPACE-005 revision 2 (OQ-262): main surfaced THIS window because it holds the workspace a project-setup
-   * banner named, and this window opens Settings › Project, where REQ-WORKSPACE-103 puts the recorded outcome and its retry.
-   * A Settings-to-Settings move is free (REQ-CONFIG-287), so an unsaved edit in another category stays pending.
+   * Channel 15 — PD-WORKSPACE-005 revision 3 (OQ-294): main reached THIS window — surfaced it, or added it — because it holds the
+   * workspace a project-setup banner named, and this window opens Settings › Project, where REQ-WORKSPACE-103 puts the
+   * recorded outcome and its retry. A Settings-to-Settings move is free (REQ-CONFIG-287), so an unsaved edit in another
+   * category stays pending. Once listening, the window tells main so (`projectInit.ready`), and an open main held for it
+   * while it loaded — a window the press added, or a second press during that load — arrives as the answer, once.
    */
-  useEffect(() => bridge.onProjectInitOpen((p) => {
-    console.info(`project-setup action: opening Settings › Project for ${(p as { workspace?: string }).workspace ?? 'this workspace'}`);
-    useShellState.getState().openSettings('project');
-  }), []);
+  useEffect(() => {
+    const open = (workspace: string | undefined) => {
+      console.info(`project-setup action: opening Settings › Project for ${workspace ?? 'this workspace'}`);
+      useShellState.getState().openSettings('project');
+    };
+    const off = bridge.onProjectInitOpen((p) => { open((p as { workspace?: string }).workspace); });
+    void bridge.command({ kind: 'projectInit.ready' }).then((outcome) => {
+      if (outcome.ok && (outcome.value as { owed?: boolean } | undefined)?.owed === true) open(undefined);
+    });
+    return off;
+  }, []);
   const [stashOpen, setStashOpen] = useState(false);
   const git = useGitState(workspace);
   /**

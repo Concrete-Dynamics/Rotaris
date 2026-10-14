@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A project-setup banner for a project no window holds adds its window (PD-WORKSPACE-005 revision 3, OQ-294; fin44,
+`fin44-notice-reach`).** `projectInit.open` reaches the workspace (`MainWindows.reach`) and asks for Settings › Project through
+`MainWindows.openProjectInit`, held until the window's new `projectInit.ready`; `surfaceHolding` and `PROJECT_NOT_OPEN` are
+gone. `02-process-view.md` (the renderer → main list, channel 15) and `04-seams.md` §2 (the fifteenth channel's paragraph).
+
 **`focus-session` reaches the session where it lives (PD-SHELL-001 revision 3, OQ-292; fin44, `fin44-notice-reach`).** The
 member carries `{sessionId, workspace}`; the run host stamps `run.result` and `notice.publish` with the session's recorded root
 (`withSessionRoot`); main's `session.focusFromNotice` reaches the workspace and sends the reached window channel 16

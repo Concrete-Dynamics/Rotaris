@@ -93,9 +93,11 @@ hand-off for the next main-to-one-window request: a `webContents.send` to a wind
 lost without an error. The fifteenth,
 `project-init:open` (2026-10-14, PD-WORKSPACE-005 revision 2, OQ-262), was taken because no channel asks ONE window to open
 a Settings category on main's account: a project-setup banner's action is pressed in any window and must open Settings ›
-Project in the window holding the project, which main finds (`MainWindows.surfaceHolding`) and the renderer alone can
-navigate; `notice:current` is every window's and `initialization:state` carries state, not a request. It is sent by
-`webContents.send` to that one window, with its own `projectInit.open` command inward. The fourteenth,
+Project in the window holding the project, which main finds and the renderer alone can navigate; `notice:current` is every
+window's and `initialization:state` carries state, not a request. Since revision 3 (OQ-294) main finds it by
+`MainWindows.reach`, which adds a window where none holds the project (revision 2's `surfaceHolding` answered with a notice
+there), and the request takes the sixteenth's hand-off: `MainWindows.openProjectInit` sends it through `deliver` to a renderer
+listening, else holds it until the renderer's `projectInit.ready`, its command inward beside `projectInit.open`. The fourteenth,
 `display:changed` (2026-10-14, REQ-CHAT-167 / REQ-CONFIG-403), was taken because no channel carried a preference:
 `theme:changed` names a theme and `config:changed` a workspace's configuration snapshot, while the three transcript display
 preferences are application-wide preference-store keys every window draws its rows from; it is sent like the theme, by

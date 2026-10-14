@@ -337,11 +337,14 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('initialization.skip'), ids: z.array(z.string()) }),
   z.object({ kind: z.literal('initialization.cancel') }),
   /**
-   * PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): a project-setup banner's `open-project-init` action,
-   * activated in any window. Main surfaces the main window holding `workspace` (REQ-SHELL-161's terms) and tells it, on
-   * channel 15, to open Settings › Project; where no window holds it, the activating window says so and nothing else happens.
+   * PD-WORKSPACE-005 revision 3 (OQ-294, ruled 2026-10-14 under R-072): a project-setup banner's `open-project-init` action,
+   * activated in any window. Main reaches `workspace` — the main window holding it surfaced (REQ-SHELL-161's terms), else one
+   * added for it on PD-SHELL-001's add terms — and asks that window, on channel 15, to open Settings › Project; a window still
+   * loading holds the request until its renderer reports `projectInit.ready`.
    */
   z.object({ kind: z.literal('projectInit.open'), workspace: z.string().min(1) }),
+  /** The asking main window's renderer listens on channel 15 from now on; answered `{ owed }`, whether an open was held for it. */
+  z.object({ kind: z.literal('projectInit.ready') }),
   /**
    * ADR-0048's window registry, first executed (Part R; REQ-SHELL-072/073/076/078, REQ-MONITOR-072/073): open or raise the
    * persona window for an agent — reuse per persona, the instance's tab selected, a raise as a request (REQ-SHELL-161);
@@ -435,7 +438,7 @@ export interface RendererBridge {
   readonly onReauthPrompt: (fn: (p: unknown) => void) => () => void;
   /** Channel 14 (REQ-CHAT-167, REQ-CONFIG-403): a transcript display preference main has just stored, from whichever window wrote it. */
   readonly onDisplayChanged: (fn: (p: unknown) => void) => () => void;
-  /** Channel 15 (PD-WORKSPACE-005 revision 2, OQ-262): main asks THIS window, which holds the named workspace, to open Settings › Project. */
+  /** Channel 15 (PD-WORKSPACE-005 revisions 2 and 3, OQ-262, OQ-294): main asks THIS window, which holds or was added for the named workspace, to open Settings › Project. */
   readonly onProjectInitOpen: (fn: (p: unknown) => void) => () => void;
   /** Channel 16 (PD-SHELL-001 revision 3, OQ-292): main asks THIS window, which holds a session's workspace, to focus that session. */
   readonly onSessionFocus: (fn: (p: unknown) => void) => () => void;

@@ -47,8 +47,9 @@ export type TimelineSeverity = z.infer<typeof TimelineSeveritySchema>;
  * 14. display:changed      — main → every window: one transcript display preference main has just stored, so a window
  *     that did not write it (a persona window, a second main window) redraws its rows too (REQ-CHAT-167, REQ-CONFIG-403;
  *     2026-10-14, `docs/defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`)
- * 15. project-init:open     — main → ONE main window, the one holding the named workspace: open Settings › Project there
- *     (PD-WORKSPACE-005 revision 2, OQ-262 — a project-setup banner's `open-project-init`, activated in any window)
+ * 15. project-init:open     — main → ONE main window, the one holding the named workspace or added for it: open Settings ›
+ *     Project there (PD-WORKSPACE-005 revisions 2 and 3, OQ-262, OQ-294 — a project-setup banner's `open-project-init`,
+ *     activated in any window; held for an added window until its renderer reports `projectInit.ready`)
  * 16. session:focus         — main → ONE main window, the one holding a session's workspace: focus that session there
  *     (PD-SHELL-001 revision 3, OQ-292 — a `focus-session` notice action, activated in any window; held for an added window
  *     until its renderer reports `session.focusReady`)
@@ -77,7 +78,7 @@ export const CHANNEL = {
   initializationState: 'initialization:state', // Part AS (ADR-0064)
   reauthPrompt: 'reauth:prompt', // the 401 note's part B (REQ-NOTIFY-071, ADR-0048)
   displayChanged: 'display:changed', // REQ-CHAT-167 / REQ-CONFIG-403: a stored display preference, to every window
-  projectInitOpen: 'project-init:open', // PD-WORKSPACE-005 revision 2 (OQ-262): open Settings › Project in the holding window
+  projectInitOpen: 'project-init:open', // PD-WORKSPACE-005 revision 3 (OQ-294): open Settings › Project in the window reached for it
   sessionFocus: 'session:focus', // PD-SHELL-001 revision 3 (OQ-292): focus a notice's session in the window holding its workspace
   command: 'command',
 } as const;
@@ -541,8 +542,8 @@ export const ImprovementActivityPublishSchema = ImprovementActivitySchema.extend
 export type ImprovementActivityPublish = z.infer<typeof ImprovementActivityPublishSchema>;
 
 /**
- * Channel 15 — PD-WORKSPACE-005 revision 2 (OQ-262): main has surfaced the window holding `workspace` for a project-setup
- * banner's action, and that window opens Settings › Project, which shows the window's own workspace (REQ-WORKSPACE-103's
+ * Channel 15 — PD-WORKSPACE-005 revisions 2 and 3 (OQ-262, OQ-294): main has reached the window holding `workspace` for a
+ * project-setup banner's action — surfaced it, or added it — and that window opens Settings › Project, which shows the window's own workspace (REQ-WORKSPACE-103's
  * recorded outcome and "Retry initialization"). The workspace is the holder's own, carried so the window's log names it.
  */
 export const ProjectInitOpenSchema = z.object({ v: schemaVersion, workspace: z.string().min(1) });

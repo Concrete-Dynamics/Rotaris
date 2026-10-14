@@ -33,9 +33,10 @@ import { startApp, stopApp, until } from './lib/driver.mjs';
  *     travel through the renderer, so only the built application proves they are the same string.
  *     6b. And when the object is NOT the one on screen (ESC-34's owed half, OQ-267): a notice naming a workspace no
  *     window holds adds a window for it, asking nothing and closing nothing, and opens its review there.
- *     6c. A project-setup banner's action (PD-WORKSPACE-005 revision 2, OQ-262), pressed in the window that does not hold
- *     its project: the holder is surfaced on Settings › Project, an unsaved edit in another category kept; one naming a
- *     project no window holds raises "Project <name> is not open in any window." and opens nothing. Then REQ-NOTIFY-031's
+ *     6c. A project-setup banner's action (PD-WORKSPACE-005 revisions 2 and 3, OQ-262, OQ-294), pressed in the window that
+ *     does not hold its project: the holder is surfaced on Settings › Project, an unsaved edit in another category kept; one
+ *     naming a project no window holds adds a main window for it, asking nothing, which shows Settings › Project with
+ *     "Retry initialization" — no "not open in any window" acknowledgement (revision 2's answer). Then REQ-NOTIFY-031's
  *     "Open the session" for a run of the holding window, pressed in the other one (PD-SHELL-001 revision 3, OQ-292): the
  *     holding window is brought forward and follows the session, and no "could not be loaded" error is raised.
  *     6d. The same press after the session's own window switched to another project (PD-SHELL-001 revision 3): no window
@@ -491,8 +492,11 @@ if (want('6b')) {
 // was published does not show it: docs/defects/a-main-window-added-after-a-notice-was-published-does-not-show-it.md.) With
 // an unsaved edit standing in the holding window's Settings › Instructions, "Try again" is pressed in the FIRST window, which
 // does not hold the project: the holding window is surfaced and shows Settings › Project, its edit still pending.
-// Then a banner naming a folder no window holds is pressed: the pressing window says "Project <name> is not open in any
-// window." and nothing else happens. Before this, the arm logged "has no target in this build" and no banner carried it.
+// Then a banner naming a project folder no window holds is pressed: PD-WORKSPACE-005 revision 3 (OQ-294, ruled 2026-10-14
+// under R-072) adds a third main window for that project on PD-SHELL-001's add terms, and Settings › Project opens there,
+// held by the window until its renderer registers for channel 15 (`projectInit.ready`); the project owes the same failing
+// task, so its card reaches "Retry initialization". Under revision 2 the pressing window said "Project <name> is not open in
+// any window." and nothing else happened. Before revision 2 the arm logged "has no target in this build".
 // Last, PD-SHELL-001 revision 3 (OQ-292, ruled 2026-10-14 under R-072): a run in the holding window, released there by "New
 // session", ends while no window shows it, and REQ-NOTIFY-031's notice — "Open the session", naming the session and its
 // workspace — is pressed in the FIRST window. The holding window is brought forward and follows the session; no "could not be
@@ -519,8 +523,8 @@ if (want('6c')) {
   const PROMPT = 'a run that ends while its window shows another session';
   const holder = folder('atlas-billing', ['code-intelligence-setup']);
   const other = folder('other-project', ['code-intelligence-setup', 'verification-fail']);
-  const closed = join(base, 'closed-project');
-  mkdirSync(closed, { recursive: true });
+  // A real project folder now (PD-WORKSPACE-005 revision 3): the press opens it in an added window. It owes the failing task too.
+  const closed = folder('closed-project', ['code-intelligence-setup']);
   const launched = await startApp({
     root: join(base, 'app'), workspace: other, timeoutMs: 90_000,
     extra: {
@@ -565,8 +569,11 @@ if (want('6c')) {
     const closedBanner = await step('the closed project\'s banner', until(() => noticeIn('other-project'), (n) => n !== null && n.title === 'Project setup did not finish: closed-project', { timeoutMs: 60_000, what: 'the closed project\'s banner' }));
     await d.useWindow('other-project');
     await step('Try again for the closed project', d.click('.notice__action', { text: 'Try again' }));
-    const told = await step('the info notice', until(() => d.eval(`[...document.querySelectorAll('[data-testid="acknowledgement-title"]')].map((n) => n.textContent)`), (v) => Array.isArray(v) && v.includes('Project closed-project is not open in any window.'), { timeoutMs: 10_000, what: 'the info acknowledgement' }));
-    const after = await d.windows();
+    // PD-WORKSPACE-005 revision 3: a third main window, added for the closed project, shows its Settings › Project.
+    const after = await step('a third window, on the closed project', until(() => d.windows(), (w) => w.windows.length === 3 && w.windows.some((x) => String(x.workspace).endsWith('closed-project')), { timeoutMs: 30_000, what: 'a window added for the closed project' }));
+    const told = await d.useWindow('other-project').then(() => d.eval(`[...document.querySelectorAll('[data-testid="acknowledgement-title"]')].map((n) => n.textContent)`));
+    await d.useWindow('closed-project');
+    const addedProject = await step('Settings › Project in the added window', until(() => d.eval(`({ view: document.querySelector('main.view')?.getAttribute('aria-label') ?? null, category: document.querySelector('.settings__body')?.getAttribute('aria-label') ?? null, card: document.querySelector('[data-project-init]')?.getAttribute('data-init-state') ?? null, retry: [...document.querySelectorAll('button')].some((b) => b.textContent.trim() === 'Retry initialization') })`), (v) => v?.view === 'Settings' && v?.category === 'Project' && v?.retry === true, { timeoutMs: 45_000, what: 'Settings › Project with "Retry initialization" in the added window' }));
     // The edit was the proof's, and an unsaved one would hold the quit at the unsaved-settings guard: it is discarded.
     await d.useWindow('atlas-billing');
     await step('Discard the edit', d.click('.save-bar .btn-secondary', { text: 'Discard' }));
@@ -589,7 +596,7 @@ if (want('6c')) {
     const followed = await step('the holding window follows the session', until(() => onScreenIn('atlas-billing', PROMPT), (v) => v === true, { timeoutMs: 20_000, what: 'the session on screen in the holding window' }));
     const firstStill = await onScreenIn('other-project', PROMPT);
     const windowsAtEnd = await d.windows();
-    value = { ending, followed, firstStill, windowsAtEnd: windowsAtEnd.windows.map((w) => w.workspace), banner, dirty, there, surfaced: surfaced.windows.map((w) => w.workspace), project, stayed, closedBanner, told, windowsAfter: after.windows.map((w) => w.workspace) };
+    value = { ending, followed, firstStill, windowsAtEnd: windowsAtEnd.windows.map((w) => w.workspace), banner, dirty, there, surfaced: surfaced.windows.map((w) => w.workspace), project, stayed, closedBanner, told, addedProject, windowsAfter: after.windows.map((w) => w.workspace) };
   } catch (cause) {
     failure = cause;
   }
@@ -610,8 +617,12 @@ if (want('6c')) {
   expect(value.surfaced[0]?.endsWith('atlas-billing'), `the holding window is not the focused one after the press: ${JSON.stringify(value.surfaced)}`);
   expect(/project-setup action for .*atlas-billing: surfaced window \d+ and opened Settings › Project there/.test(log), 'main did not log the surfacing');
   expect(!/notice action "open-project-init" has no target/.test(log), 'the renderer still reports the action without a target');
-  expect(value.windowsAfter.length === 2, `a window was added or closed for the closed project: ${JSON.stringify(value.windowsAfter)}`);
-  expect(/project-setup action for .*closed-project: no window holds it, so nothing was opened/.test(log), 'main did not log the closed project\'s press');
+  // PD-WORKSPACE-005 revision 3 (OQ-294): the closed project's press added a window for it, which shows Settings › Project.
+  expect(value.windowsAfter.length === 3 && value.windowsAfter.some((w) => w.endsWith('closed-project')), `no window was added for the closed project: ${JSON.stringify(value.windowsAfter)}`);
+  expect(value.addedProject.view === 'Settings' && value.addedProject.category === 'Project' && value.addedProject.retry === true, `the added window shows ${JSON.stringify(value.addedProject)}, not Settings › Project with "Retry initialization"`);
+  expect(!value.told.some((t) => /not open in any window/.test(t)), `revision 2's acknowledgement appeared: ${JSON.stringify(value.told)}`);
+  expect(/notice action reached .*closed-project: added window \d+ for it/.test(log), 'main did not log the reach adding a window for the closed project');
+  expect(/project-setup action for .*closed-project: added window \d+ and opened Settings › Project there \((sent|held); PD-WORKSPACE-005 revision 3, OQ-294\)/.test(log), 'main did not log the closed project\'s press opening Settings › Project in the added window');
   // PD-SHELL-001 revision 3 (OQ-292): the press reached the holding window, which follows the session; nothing was refused.
   expect(value.ending.member === 'focus-session' && value.ending.action === 'Open the session', `the ending notice offers ${JSON.stringify(value.ending)}`);
   const endedId = (value.ending.title.match(/^Session (\S+) completed$/) ?? [])[1];

@@ -342,28 +342,55 @@ describe('MainWindows', () => {
     expect(h.mainWindows.ordered().map((window) => window.workspace).sort()).toEqual(['C:/a', 'C:/b', 'C:/c']);
   });
 
-  // PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): a project-setup banner's action surfaces the window
-  // holding its project and builds nothing; with no holder it surfaces nothing and adds nothing.
-  it('surfaces the window holding a named workspace for a project-setup banner, and adds none where no window holds it', async () => {
-    const h = harness();
-    const first = await h.mainWindows.launch('C:/a');
-    h.folders.push('C:/b');
-    await h.mainWindows.choose(first.wcId, { newWindow: true });
-    expect(h.mainWindows.active()?.workspace).toBe('C:/b');
-    h.windows.get(first.wcId)!.minimized = true;
+  // PD-WORKSPACE-005 revision 3 (OQ-294, ruled 2026-10-14 under R-072): a project-setup banner's action takes the reach, and
+  // Settings › Project opens in the reached window — sent to a renderer listening on channel 15, held for one still loading
+  // until its `projectInit.ready`. (Revision 2's `surfaceHolding`, which added nothing for a project no window held, is gone.)
+  describe('a project-setup banner\'s Settings › Project reaches its window (PD-WORKSPACE-005 revision 3)', () => {
+    it('an added window that is not yet listening holds the request, and its ready call returns it once', async () => {
+      const h = harness();
+      await h.mainWindows.launch('C:/b');
+      const reached = await h.mainWindows.reach('C:/closed');
+      expect(reached.ok && reached.added).toBe(true);
+      const added = reached.ok ? reached.window.wcId : -1;
+      expect(h.mainWindows.openProjectInit(added)).toBe('held');
+      expect(h.delivered).toEqual([]);
+      expect(h.mainWindows.projectInitReady(added)).toBe(true);
+      expect(h.mainWindows.projectInitReady(added)).toBe(false);
+    });
 
-    h.actions.length = 0;
-    const holder = h.mainWindows.surfaceHolding('c:/a');
-    expect(holder?.wcId).toBe(first.wcId);
-    expect(holder?.workspace).toBe('C:/a');
-    // REQ-SHELL-161's terms: restored from the minimised state, shown and focused; nothing built, opened or closed.
-    expect(h.actions).toEqual(['restore:C:/a', 'show:C:/a', 'focus:C:/a']);
-    expect(h.mainWindows.active()?.wcId).toBe(first.wcId);
+    it('a listening holder is sent channel 15 directly, surfaced on REQ-SHELL-161\'s terms', async () => {
+      const h = harness();
+      const first = await h.mainWindows.launch('C:/a');
+      expect(h.mainWindows.projectInitReady(first.wcId)).toBe(false);
+      h.folders.push('C:/b');
+      await h.mainWindows.choose(first.wcId, { newWindow: true });
+      h.windows.get(first.wcId)!.minimized = true;
+      h.actions.length = 0;
+      const reached = await h.mainWindows.reach('c:/a');
+      expect(reached.ok && reached.window.wcId).toBe(first.wcId);
+      expect(h.actions.filter((action) => !action.startsWith('log:'))).toEqual(['restore:C:/a', 'show:C:/a', 'focus:C:/a']);
+      expect(h.mainWindows.openProjectInit(first.wcId)).toBe('sent');
+      expect(h.delivered).toEqual([`${first.wcId}:project-init`]);
+    });
 
-    h.actions.length = 0;
-    expect(h.mainWindows.surfaceHolding('C:/c')).toBeUndefined();
-    expect(h.actions).toEqual([]);
-    expect(h.mainWindows.ordered().map((window) => window.workspace).sort()).toEqual(['C:/a', 'C:/b']);
+    it('a second press during a deferred open sets the request once and does not refuse', async () => {
+      const h = harness();
+      await h.mainWindows.launch('C:/b');
+      h.deferOpens();
+      const first = h.mainWindows.reach('C:/closed');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const second = h.mainWindows.reach('C:/closed');
+      h.resolveOpen('C:/closed');
+      const [a, b] = await Promise.all([first, second]);
+      expect(a.ok && b.ok).toBe(true);
+      const wcId = a.ok ? a.window.wcId : -1;
+      expect(b.ok && b.window.wcId).toBe(wcId);
+      expect(h.mainWindows.openProjectInit(wcId)).toBe('held');
+      expect(h.mainWindows.openProjectInit(wcId)).toBe('held');
+      expect(h.mainWindows.projectInitReady(wcId)).toBe(true);
+      expect(h.mainWindows.projectInitReady(wcId)).toBe(false);
+      expect(h.actions.filter((action) => action.startsWith('build:'))).toEqual(['build:C:/b:launch', 'build:C:/closed:open-request']);
+    });
   });
 
   // docs/defects/fixed/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md: a second press while the window

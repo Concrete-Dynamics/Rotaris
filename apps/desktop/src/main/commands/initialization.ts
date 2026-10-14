@@ -1,6 +1,5 @@
-import { CHANNEL, CONTRACT_SCHEMA_VERSION, PROJECT_NOT_OPEN, SKIP_WRITE_FAILED } from '@rotaris/contracts';
+import { SKIP_WRITE_FAILED } from '@rotaris/contracts';
 import { canonicalPath } from '@rotaris/platform';
-import { projectNameOf } from '../initialization.js';
 import { type CommandContext, type CommandHandlers, type MainWindowState } from './context.js';
 
 /**
@@ -47,30 +46,36 @@ export function initializationCommands(
 }
 
 /**
- * PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072) — a project-setup banner's `open-project-init` action.
+ * PD-WORKSPACE-005 revision 3 (OQ-294, ruled 2026-10-14 under R-072) — a project-setup banner's `open-project-init` action.
  * Notices are application-wide, so the press may come from a window holding another workspace (PD-SHELL-001's second window,
- * or a switch since the banner was raised). The window holding the named workspace is surfaced on REQ-SHELL-161's terms and
- * told, on channel 15, to open Settings › Project, where REQ-WORKSPACE-103 puts the recorded outcome and its retry. Where no
- * window holds it, the window the press came from shows the info notice "Project <name> is not open in any window." and
- * nothing else happens: no window is added, replaced or asked about.
+ * or a switch since the banner was raised). The action takes PD-SHELL-001 revision 2's reach (`MainWindows.reach`): the window
+ * holding the named workspace is surfaced on REQ-SHELL-161's terms, else a main window is added for it on the add terms — no
+ * REQ-SHELL-021 gate, nothing closed, nothing asked, the workspace persisted as last opened, a failure reported under
+ * REQ-SHELL-019 by the add route itself — and Settings › Project opens in the reached window, where REQ-WORKSPACE-103 puts the
+ * recorded outcome and its retry. The window holds the request until its renderer can take it (`projectInit.ready`), so a
+ * press during an added window's load still lands. Revision 2's "Project <name> is not open in any window." (OQ-262) is gone.
  */
 export function projectInitCommands(
-  ctx: Pick<CommandContext, 'log' | 'mainWindows' | 'raiseTransient' | 'relay'>,
-): Pick<CommandHandlers, 'projectInit.open'> {
-  const { log, mainWindows, raiseTransient, relay } = ctx;
+  ctx: Pick<CommandContext, 'log' | 'mainWindows'>,
+): Pick<CommandHandlers, 'projectInit.open' | 'projectInit.ready'> {
+  const { log, mainWindows } = ctx;
   return {
-    'projectInit.open': (req, { w }) => {
-      const holder = mainWindows.surfaceHolding(req.workspace);
-      if (holder === undefined || holder.win.isDestroyed()) {
-        const text = PROJECT_NOT_OPEN(projectNameOf(req.workspace));
-        raiseTransient(w, 'info', text);
-        log(`project-setup action for ${req.workspace}: no window holds it, so nothing was opened (PD-WORKSPACE-005 revision 2) — ${text}`);
-        return { ok: true, value: { opened: false } };
+    'projectInit.open': async (req) => {
+      const reached = await mainWindows.reach(req.workspace);
+      if (!reached.ok) {
+        log(`project-setup action for ${req.workspace}: the workspace could not be reached (${reached.outcome.ok ? 'no window' : reached.outcome.headline}) (PD-WORKSPACE-005 revision 3, OQ-294)`);
+        return reached.outcome;
       }
-      relay.count(CHANNEL.projectInitOpen);
-      holder.win.webContents.send(CHANNEL.projectInitOpen, { v: CONTRACT_SCHEMA_VERSION, workspace: holder.workspace });
-      log(`project-setup action for ${req.workspace}: surfaced window ${holder.wcId} and opened Settings › Project there (PD-WORKSPACE-005 revision 2)`);
-      return { ok: true, value: { opened: true, window: holder.wcId } };
+      const delivered = mainWindows.openProjectInit(reached.window.wcId);
+      log(`project-setup action for ${req.workspace}: ${reached.added ? 'added' : 'surfaced'} window ${reached.window.wcId} and opened Settings › Project there (${delivered}; PD-WORKSPACE-005 revision 3, OQ-294)`);
+      if (delivered === 'gone') return { ok: false, code: 'window.gone', headline: 'The window holding the project closed before Settings › Project could open' };
+      return { ok: true, value: { opened: true, window: reached.window.wcId, added: reached.added, delivered } };
+    },
+    /** The asking main window's renderer listens on channel 15 from now on; answers whether an open was held for it (once). */
+    'projectInit.ready': (_req, { senderId }) => {
+      const own = mainWindows.forSender(senderId);
+      if (!own) return { ok: false, code: 'window.notMain', headline: 'Only a main window opens Settings › Project' };
+      return { ok: true, value: { owed: mainWindows.projectInitReady(own.wcId) } };
     },
   };
 }

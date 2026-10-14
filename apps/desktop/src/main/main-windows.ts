@@ -516,8 +516,9 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
    * for it on PD-SHELL-001's add route — no gate evaluated and no window closed, so nothing is asked and nothing the user
    * has open is lost. Replacing the activating window instead would run REQ-SHELL-021's gates, whose unsaved-settings
    * guard asks. That is PD-SHELL-001 revision 2's reach (OQ-267, ruled 2026-10-13 under R-072), which binds every
-   * REQ-NOTIFY-044 member naming a workspace; the project-setup action takes `surfaceHolding` instead (PD-WORKSPACE-005
-   * revision 2, OQ-262), and which of the two governs that member for a workspace no window holds is OQ-294.
+   * REQ-NOTIFY-044 member naming a workspace: the hook review, the project-setup action (PD-WORKSPACE-005 revision 3, OQ-294,
+   * which replaced revision 2's `surfaceHolding` and its "not open in any window" notice) and `focus-session` (PD-SHELL-001
+   * revision 3, OQ-292). The caller then opens the action's surface in the reached window.
    */
   async reach(workspace: string): Promise<
     | { readonly ok: true; readonly window: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>; readonly added: boolean }
@@ -553,20 +554,6 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     if (!added) return { ok: false, outcome };
     this.dependencies.log(`notice action reached ${target}: added window ${added.wcId} for it (ESC-34, PD-SHELL-001)`);
     return { ok: true, window: this.#view(added), added: true };
-  }
-
-  /**
-   * PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): a project-setup banner's `open-project-init` action
-   * surfaces the main window holding the named workspace — REQ-STARTUP-163's rule for which window that is, surfaced on
-   * REQ-SHELL-161's terms (restored if minimised, shown, focused) — and hands back its view. Where no window holds it, nothing
-   * is surfaced and nothing is built: the ruling has the activating window say so instead (`projectInit.open`). Unlike `reach`,
-   * this never adds a window.
-   */
-  surfaceHolding(workspace: string): MainWindowView<TWindow, TPersonaWindows, TTerminalWindows> | undefined {
-    const holder = this.#windowHolding(this.dependencies.canonicalPath(workspace));
-    if (!holder) return undefined;
-    this.#surface(holder);
-    return this.#view(holder);
   }
 
   /**

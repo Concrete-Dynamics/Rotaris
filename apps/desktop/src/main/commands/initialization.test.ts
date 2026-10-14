@@ -95,48 +95,63 @@ describe('the initialization commands, answered for the asking window\'s workspa
 });
 
 /**
- * PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): `projectInit.open`, a project-setup banner's action
- * activated in any window. The window holding the named workspace is surfaced and told on channel 15 to open Settings ›
- * Project; with no holder, the asking window shows "Project <name> is not open in any window." and nothing else happens.
- * Driven with plain objects where the window registry, the relay and the windows were.
+ * PD-WORKSPACE-005 revision 3 (OQ-294, ruled 2026-10-14 under R-072): `projectInit.open`, a project-setup banner's action
+ * activated in any window, takes PD-SHELL-001 revision 2's reach. The window holding the named workspace is surfaced, else one
+ * is added for it, and Settings › Project is opened there through `MainWindows.openProjectInit` — sent at once to a renderer
+ * listening on channel 15, held for one still loading. A failed reach answers its outcome (the failure is reported by the add
+ * route under REQ-SHELL-019), and the facet can raise no transient of its own (it is not given one). Revision 2's "Project <name> is not open in any window." is gone.
+ * Driven with plain objects where the window registry was.
  */
-describe('projectInit.open — a project-setup banner\'s action (PD-WORKSPACE-005 revision 2, OQ-262)', () => {
-  function facet(holder: { workspace: string; wcId: number } | undefined) {
-    const sent: { channel: string; payload: unknown }[] = [];
-    const surfaced: string[] = [];
-    const transients: { wcId: number; kind: string; title: string }[] = [];
-    const counted: string[] = [];
+describe('projectInit.open — a project-setup banner\'s action (PD-WORKSPACE-005 revision 3, OQ-294)', () => {
+  type Reach = Awaited<ReturnType<CommandContext['mainWindows']['reach']>>;
+  function facet(reach: (workspace: string) => Reach, delivered: 'sent' | 'held' | 'gone' = 'sent') {
+    const reached: string[] = [];
+    const opened: number[] = [];
     const logged: string[] = [];
+    const ready: number[] = [];
     const commands = projectInitCommands({
       log: (m) => { logged.push(m); },
       mainWindows: {
-        surfaceHolding: (workspace: string) => {
-          surfaced.push(workspace);
-          return holder === undefined ? undefined : { ...holder, win: { isDestroyed: () => false, webContents: { send: (channel: string, payload: unknown) => { sent.push({ channel, payload }); } } } };
-        },
+        reach: async (workspace: string) => { reached.push(workspace); return reach(workspace); },
+        openProjectInit: (wcId: number) => { opened.push(wcId); return delivered; },
+        forSender: (senderId: number) => (senderId === 2 ? { wcId: 2 } : undefined),
+        projectInitReady: (wcId: number) => { ready.push(wcId); return true; },
       } as unknown as CommandContext['mainWindows'],
-      raiseTransient: (w, kind, title) => { transients.push({ wcId: (w as unknown as { wcId: number }).wcId, kind, title }); },
-      relay: { count: (channel: string) => { counted.push(channel); } } as unknown as CommandContext['relay'],
     });
-    return { commands, sent, surfaced, transients, counted, logged };
+    return { commands, reached, opened, logged, ready };
   }
+  const window = (wcId: number, workspace: string) => ({ wcId, workspace } as unknown as MainWindowState);
 
-  it('surfaces the window holding the named workspace and asks it, on channel 15, to open Settings › Project', async () => {
-    const f = facet({ workspace: '/work/atlas-billing', wcId: 1 });
+  it('reaches the window holding the named workspace and opens Settings › Project there', async () => {
+    const f = facet(() => ({ ok: true, window: window(1, '/work/atlas-billing'), added: false }));
     const out = await f.commands['projectInit.open']({ kind: 'projectInit.open', workspace: '/work/atlas-billing' }, windowOn('/work/other', 2));
-    expect(out).toEqual({ ok: true, value: { opened: true, window: 1 } });
-    expect(f.surfaced).toEqual(['/work/atlas-billing']);
-    expect(f.sent).toEqual([{ channel: 'project-init:open', payload: { v: 1, workspace: '/work/atlas-billing' } }]);
-    expect(f.counted).toEqual(['project-init:open']);
-    expect(f.transients).toEqual([]);
+    expect(out).toEqual({ ok: true, value: { opened: true, window: 1, added: false, delivered: 'sent' } });
+    expect(f.reached).toEqual(['/work/atlas-billing']);
+    expect(f.opened).toEqual([1]);
   });
 
-  it('shows the asking window the info notice and opens nothing when no window holds the workspace', async () => {
-    const f = facet(undefined);
-    const out = await f.commands['projectInit.open']({ kind: 'projectInit.open', workspace: '/work/atlas-billing' }, windowOn('/work/other', 2));
-    expect(out).toEqual({ ok: true, value: { opened: false } });
-    expect(f.sent).toEqual([]);
-    expect(f.transients).toEqual([{ wcId: 2, kind: 'info', title: 'Project atlas-billing is not open in any window.' }]);
-    expect(f.logged.some((line) => line.includes('no window holds it'))).toBe(true);
+  it('adds a window for a project no window holds and opens Settings › Project there, held until its renderer is ready; no transient', async () => {
+    const f = facet(() => ({ ok: true, window: window(3, '/work/closed-project'), added: true }), 'held');
+    const out = await f.commands['projectInit.open']({ kind: 'projectInit.open', workspace: '/work/closed-project' }, windowOn('/work/other', 2));
+    expect(out).toEqual({ ok: true, value: { opened: true, window: 3, added: true, delivered: 'held' } });
+    expect(f.opened).toEqual([3]);
+    expect(f.logged.some((line) => line.includes('added window 3') && line.includes('PD-WORKSPACE-005 revision 3') && line.includes('OQ-294'))).toBe(true);
+    expect(f.logged.some((line) => line.includes('not open in any window'))).toBe(false);
+  });
+
+  it('answers a failed reach with its outcome, opens nothing and raises no transient', async () => {
+    const refused = { ok: false as const, code: 'workspace.openFailed', headline: 'Could not open the selected project: /work/gone could not be opened as a workspace.' };
+    const f = facet(() => ({ ok: false, outcome: refused }));
+    const out = await f.commands['projectInit.open']({ kind: 'projectInit.open', workspace: '/work/gone' }, windowOn('/work/other', 2));
+    expect(out).toEqual(refused);
+    expect(f.opened).toEqual([]);
+  });
+
+  it('projectInit.ready marks the asking main window listening and answers whether an open was owed; any other sender is refused', async () => {
+    const f = facet(() => ({ ok: true, window: window(1, '/work/a'), added: false }));
+    expect(await f.commands['projectInit.ready']({ kind: 'projectInit.ready' }, windowOn('/work/other', 2))).toEqual({ ok: true, value: { owed: true } });
+    expect(f.ready).toEqual([2]);
+    const other = { ...windowOn('/work/other', 2), senderId: 202 };
+    expect((await f.commands['projectInit.ready']({ kind: 'projectInit.ready' }, other)).ok).toBe(false);
   });
 });

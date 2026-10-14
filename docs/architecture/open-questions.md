@@ -13617,6 +13617,12 @@ the workspace (it is surfaced and the surface opens there) and disagree where no
 else; OQ-267's: a window added). The build follows this entry's ruling for the project-setup action; the disagreement is
 [OQ-294](#oq-294).
 
+*Added 2026-10-14 ([OQ-294](#oq-294), ruled 2026-10-14 under R-072):* this entry's no-holder clause — "the activating window
+shows the info notice 'Project <name> is not open in any window.', and nothing else happens" — is revised by OQ-294: a window
+is added for the project on PD-SHELL-001 revision 2's add terms and Settings › Project opens there
+([`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005) revision 3, built by fin44). The rest of this ruling — which
+notices carry the action, their labels, the holder surfaced — stands.
+
 <a id="oq-263"></a>
 
 **OQ-263 — Is a `worktree_storage_subpath` that contains the requirement checkout directory rejected at load?**
@@ -13875,6 +13881,11 @@ REQ-SHELL-017 and REQ-STARTUP-161 stand), disjoint from PD-SHELL-009's narrowing
 **Raised beside it, not ruled:** OQ-262's ruling of the same day has a project-setup banner whose project no window holds show
 "Project <name> is not open in any window." and add nothing, where this rule would add a window; the build follows OQ-262's
 ruling for that member, and the disagreement is [OQ-294](#oq-294).
+
+*Added 2026-10-14 ([OQ-294](#oq-294), ruled 2026-10-14 under R-072):* this rule now governs the project-setup member as built —
+a press for a project no window holds adds a window for it and opens Settings › Project there
+([`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005) revision 3, fin44) — and, by
+[`PD-SHELL-001`](../product/directives.md#pd-shell-001) revision 3 ([OQ-292](#oq-292)), `focus-session` as well.
 
 <a id="oq-272"></a>
 
@@ -14285,7 +14296,7 @@ folder heading the detail area, as PD-WORKSPACE-005 does for the project-setup b
 **OQ-294 — A project-setup banner pressed for a project no window holds: a notice (OQ-262) or an added window (OQ-267)?**
 *([`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005) revision 2 (OQ-262); [`PD-SHELL-001`](../product/directives.md#pd-shell-001)
 revision 2 (OQ-267); REQ-NOTIFY-044. Raised 2026-10-14 by fin43 (`fin43-notices-and-config`) while writing both revisions into
-the record; numbered from the top of the plan's range. Open.)*
+the record; numbered from the top of the plan's range. Ruled 2026-10-14 under R-072, below.)*
 
 Both rulings were made on 2026-10-13 under R-072. OQ-262's: from any window, a project-setup banner's `open-project-init`
 surfaces the main window holding the project and opens Settings › Project there; when no window holds it, the activating window
@@ -14294,13 +14305,27 @@ holds adds a main window for it and opens the action's surface there, and the ru
 a workspace … the project-initialization action of OQ-262 once a notice carries it". A notice has carried it since 2026-10-14,
 so the two rules now speak to the same press and answer it differently.
 
-**What the build proceeds under.** OQ-262's ruling, the specific one for this member: the press for a project no window holds
-shows the info notice and adds nothing (`projectInit.open`, `notice-proof` section 6c). The hook review follows OQ-267's.
+**What the build proceeded under** *(kept as the falsified reading)*. OQ-262's ruling, the specific one for this member: the
+press for a project no window holds showed the info notice and added nothing (`projectInit.open`, `notice-proof` section 6c).
+The hook review followed OQ-267's.
 
 **What a ruling decides.** Which of the two governs the project-setup action for a project no window holds, and the matching
 correction of the other directive's text.
 
 **What a live run then shows.** Nothing: no live scenario opens two workspaces.
+
+**Ruled 2026-10-14 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)):** OQ-267's reach
+governs the project-setup action. Pressing a project-setup banner's `open-project-init` for a project no window holds adds a
+main window for that project on [`PD-SHELL-001`](../product/directives.md#pd-shell-001) revision 2's add terms, and Settings ›
+Project opens in the added window. The request is held by that window until its renderer has registered for it, so a press
+during the window's load still lands. Recorded as [`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005) revision 3,
+which replaces revision 2's "Project <name> is not open in any window." clause and its cost line, revision 2's text quoted
+beside the new one as the falsified reading; the disposition "Narrows REQ-WORKSPACE-102, REQ-WORKSPACE-103" stands and their
+back-pointers name revision 3. PD-SHELL-001 keeps revision 2's text; its "Noted 2026-10-14 by fin43, not ruled" block is now a
+one-line pointer here. **Built 2026-10-14 (fin44, `fin44-notice-reach`):** `projectInit.open` reaches the workspace
+(`MainWindows.reach`) and opens Settings › Project through `MainWindows.openProjectInit`, held until the window's
+`projectInit.ready`; `notice-proof` section 6c presses it for a project no window holds and reads a third window on Settings ›
+Project with "Retry initialization".
 
 <a id="oq-282"></a>
 

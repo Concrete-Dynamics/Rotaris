@@ -42,7 +42,7 @@ and by one reach that opens no chooser: **activating a notice action of REQ-NOTI
 workspace.** Where a main window holds that workspace under REQ-STARTUP-163's rule, it is surfaced, no
 window is built, and the action's surface opens there. Otherwise a main window is added for it on this
 directive's add terms below, and the action's surface opens in the added window. The reach binds every
-vocabulary member that names a workspace: the hook review, project initialization (OQ-262), and
+vocabulary member that names a workspace: the hook review, project initialization (OQ-262, OQ-294), and
 **`focus-session`, which SHALL carry the workspace of the session it names**, taken from the run host's record
 of the root that session was started or resumed under and never from a window. Its surface is the session
 itself: the session SHALL be focused in the window surfaced or added, through that window's own session load.
@@ -59,11 +59,8 @@ the replacement route, on which REQ-SHELL-021 governs in full.
 > composer's slash catalogue on the terms of REQ-SHELL-048 and REQ-SHELL-056; and activating the title-bar workspace chip of
 > REQ-SHELL-035 with the platform's secondary-activation modifier held."
 >
-> *Noted 2026-10-14 by fin43, not ruled:* project initialization's notice action is carried since 2026-10-14 by the
-> project-setup banners under [`PD-WORKSPACE-005`](#pd-workspace-005) revision 2 (OQ-262, ruled the same day as this
-> revision), whose clause has a press for a project no window holds show "Project <name> is not open in any window." and
-> add nothing. The two rulings disagree for that one case; the build follows PD-WORKSPACE-005 revision 2 there, and the
-> disagreement is raised as [OQ-294](../architecture/open-questions.md#oq-294).
+> *Pointer, 2026-10-14:* [OQ-294](../architecture/open-questions.md#oq-294) ruled the project-setup banner's press for a project
+> no window holds under revision 2's reach (a window is added), recorded as [`PD-WORKSPACE-005`](#pd-workspace-005) revision 3.
 
 On the add route the product SHALL build a main window on the chosen folder, show it, surface it on
 the terms REQ-SHELL-161 fixes for every window this product owns, and leave every window already open
@@ -5705,6 +5702,8 @@ and a reader comparing it with REQ-STARTUP-160's words finds two moments missing
 
 ### PD-WORKSPACE-005 — a project-setup banner names the project it is about
 
+*Revision 3 (2026-10-14, [R-072](requests.md#r-072), ruling [OQ-294](../architecture/open-questions.md#oq-294)) — **the banners'
+action reaches a project no window holds**, below: revision 2's no-holder sentence replaced, and quoted beside the new text.*
 *Revision 2 (2026-10-13, [R-072](requests.md#r-072), ruling [OQ-262](../architecture/open-questions.md#oq-262)) — **the
 banners' action**, below: a clause added, the revision-1 sentence it falsifies and the "every other surface" clause it
 amends quoted beside it.*
@@ -5721,13 +5720,20 @@ up. Runs are not blocked; you can check again." The banner's detail area (REQ-NO
 `Project folder: <the folder's full path>`, followed by a blank line and the technical text the requirement's surface
 already carried, so two projects whose folders share a name are told apart there.
 
-**The banners' action — revision 2.** Both banners SHALL carry REQ-NOTIFY-044's `open-project-init` action naming the
+**The banners' action — revision 3.** Both banners SHALL carry REQ-NOTIFY-044's `open-project-init` action naming the
 project's folder. The failed background run's banner labels it **"Try again"**, the label REQ-WORKSPACE-103 fixes; the failed
-resolution's banner labels it **"Open Project settings"** (REQ-WORKSPACE-102). From any window, activating either one SHALL
-surface the main window holding that workspace on REQ-SHELL-161's terms and open Settings › Project there, where
-REQ-WORKSPACE-103 puts the recorded outcome and its retry. When no window holds the workspace, the activating window SHALL
-show the info notice **"Project <name> is not open in any window."**, `<name>` the project's name as above, and nothing else
-happens: no window is added, replaced or asked about.
+resolution's banner labels it **"Open Project settings"** (REQ-WORKSPACE-102). From any window, activating either banner SHALL
+reach the named workspace by [`PD-SHELL-001`](#pd-shell-001) revision 2's reach. Where a main window holds the workspace, that
+window is surfaced on REQ-SHELL-161's terms. Where none does, a main window is added for it on PD-SHELL-001's add terms: no
+REQ-SHELL-021 gate is evaluated, no window is closed, nothing is asked, the workspace is persisted as the last-opened one, and a
+failure is reported under REQ-SHELL-019. Settings › Project, where REQ-WORKSPACE-103 puts the recorded outcome and its retry,
+SHALL then open in the reached window, and the window SHALL hold the request until its renderer can take it, so a press
+during an added window's load still lands.
+
+> **Revision 2 said, and no longer governs:** "When no window holds the workspace, the activating window SHALL show the info
+> notice **"Project <name> is not open in any window."**, `<name>` the project's name as above, and nothing else happens: no
+> window is added, replaced or asked about." — the falsified reading (OQ-262's ruling of the case, answered differently the
+> same day by OQ-267's reach; OQ-294).
 
 > **Revision 1 said, and no longer governs:** "the retry itself is made in that project's Settings › Project, since the
 > banner's own 'Try again' action has no target in this build" (in "Why, and what it costs" below), and "**What is
@@ -5758,10 +5764,34 @@ member that names a workspace's initialization surface, yet the banner carried n
 project's window and its Settings › Project themselves. Opening the surface rather than re-running the setup from the
 banner keeps REQ-NOTIFY-047 (an action writes nothing into the project) and shows the recorded outcome before the retry.
 What it costs: "Try again" opens a surface rather than retrying in one press; the resolution banner's label departs from
-REQ-WORKSPACE-102's in-window "Check again", which stays the window's own; and a banner for a project whose window was
-closed answers with a notice and opens nothing.
+REQ-WORKSPACE-102's in-window "Check again", which stays the window's own; and ~~a banner for a project whose window was
+closed answers with a notice and opens nothing~~ *(struck by revision 3)*. Revision 3's three costs in its place: the press
+reopens a project the user closed, and that project becomes the remembered workspace; the reopened project runs its automatic
+resolution (REQ-WORKSPACE-102), and its pending setup may start again before the user reaches the retry; and, until the
+defect "a main window added after a notice was published does not show it" is repaired, the added window does not show the
+banner.
 
 *Revised by [R-072](requests.md#r-072), 2026-10-13, ruling [OQ-262](../architecture/open-questions.md#oq-262) (revision 2).*
+*Revised by [R-072](requests.md#r-072), 2026-10-14, ruling [OQ-294](../architecture/open-questions.md#oq-294) (revision 3): the
+disposition "Narrows REQ-WORKSPACE-102, REQ-WORKSPACE-103" stands, and their back-pointers name revision 3.*
+
+> **First execution of revision 3, 2026-10-14 (fin44, `fin44-notice-reach`).** Built the day it was ruled: `projectInit.open`
+> (`apps/desktop/src/main/commands/initialization.ts`) awaits `MainWindows.reach` in place of revision 2's `surfaceHolding`,
+> answers a failed reach with its outcome (the add route reported it under REQ-SHELL-019) and raises no transient, and asks the
+> reached window for Settings › Project through `MainWindows.openProjectInit`: sent on channel 15 to a renderer listening,
+> held on the window's record for one still loading until its renderer, having registered for channel 15, sends
+> `projectInit.ready` and is answered `{owed: true}` once (`apps/desktop/src/renderer/main.tsx`). `PROJECT_NOT_OPEN` and
+> `surfaceHolding` are gone. **What was measured.** `commands/initialization.test.ts` (a holder reached and opened; a project no
+> window holds reached by an added window, the open held, no transient; a failed reach answered with its outcome;
+> `projectInit.ready`), each red on the code before; `main-windows.test.ts` (an added window not yet listening holds the
+> request and its ready call returns it once; a listening holder is sent channel 15 directly; a second press during a deferred
+> open sets the request once and is not refused); `recovery-wiring.test.ts` (the ready call right after registering);
+> `notice-proof` section 6c: the banner for `closed-project`, a project no window held, pressed in the first window, added a
+> third main window on it (`added window 3 and opened Settings › Project there`), which showed Settings › Project with
+> "Retry initialization" (its owed task failed again, the second cost above), and no "not open in any window" acknowledgement
+> appeared (load average 7.4 on four CPUs). The added window's renderer had registered before the open was asked, so the
+> built app took the `sent` branch; the held branch is measured by the unit cases and, for channel 16's identical hand-off, by
+> `notice-proof` 6d. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 > **First execution of revision 2, 2026-10-14 (fin43, `fin43-notices-and-config`).** Built the day after it was ruled:
 > `InitializationCoordinator.banner` passes `{ label, action: { kind: 'open-project-init', workspace } }` from all three sites;

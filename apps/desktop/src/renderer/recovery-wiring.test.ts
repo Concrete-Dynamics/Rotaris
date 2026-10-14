@@ -111,11 +111,11 @@ describe('REQ-NOTIFY-045: the retry action reaches its target', () => {
 });
 
 /*
- * PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): the project-setup banners' `open-project-init` action
- * reaches main's `projectInit.open`, which surfaces the window holding the named workspace, and that window opens
+ * PD-WORKSPACE-005 revisions 2 and 3 (OQ-262, OQ-294): the project-setup banners' `open-project-init` action reaches main's
+ * `projectInit.open`, which reaches the window holding the named workspace (or adds one), and that window opens
  * Settings › Project on channel 15. Until 2026-10-14 the arm sat among the members with no target and dispatched nothing.
  */
-describe('PD-WORKSPACE-005 revision 2: the project-setup action reaches its target', () => {
+describe('PD-WORKSPACE-005 revision 3: the project-setup action reaches its target', () => {
   const text = readFileSync(new URL('./main.tsx', import.meta.url), 'utf8');
   it('main.tsx sends open-project-init to projectInit.open with the named workspace, and no longer lists it without a target', () => {
     const start = text.indexOf("case 'open-project-init':");
@@ -127,7 +127,13 @@ describe('PD-WORKSPACE-005 revision 2: the project-setup action reaches its targ
   });
 
   it('main.tsx opens Settings › Project when main asks this window on channel 15', () => {
-    expect(text).toMatch(/bridge\.onProjectInitOpen\(\(p\) => \{[\s\S]*?useShellState\.getState\(\)\.openSettings\('project'\);/);
+    expect(text).toMatch(/const open = \(workspace: string \| undefined\) => \{[\s\S]*?useShellState\.getState\(\)\.openSettings\('project'\);[\s\S]*?const off = bridge\.onProjectInitOpen\(\(p\) => \{ open\(/);
+  });
+
+  // PD-WORKSPACE-005 revision 3 (OQ-294): a window the press added, or one met during its load, may not listen yet; once it
+  // registers its listener it asks main for an open held for it, and opens Settings › Project when one was owed.
+  it('main.tsx reports projectInit.ready right after registering for channel 15, and opens Settings › Project when one is owed', () => {
+    expect(text).toMatch(/const off = bridge\.onProjectInitOpen\([\s\S]*?\);\s*void bridge\.command\(\{ kind: 'projectInit\.ready' \}\)\.then\(\(outcome\) => \{\s*if \(outcome\.ok && \(outcome\.value as \{ owed\?: boolean \} \| undefined\)\?\.owed === true\) open\(undefined\);/);
   });
 });
 

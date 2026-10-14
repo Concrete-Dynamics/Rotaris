@@ -130,12 +130,12 @@ export const BACKGROUND_BROKE_DOWN = 'Runs are not blocked; you can try again.';
  * PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): both project-setup banners carry the
  * `open-project-init` action naming their project's folder. The failed background run's banner labels it "Try again",
  * the label REQ-WORKSPACE-103 fixes; the failed resolution's labels it "Open Project settings". Activated from any window,
- * it surfaces the main window holding that workspace (REQ-SHELL-161's terms) and opens Settings › Project there; where no
- * window holds it, the activating window says so and nothing else happens.
+ * it reaches the main window holding that workspace (REQ-SHELL-161's terms), or adds one for it (PD-WORKSPACE-005 revision
+ * 3, OQ-294: PD-SHELL-001 revision 2's reach), and opens Settings › Project there. Revision 2's info notice for a project no
+ * window held, "Project <name> is not open in any window.", is gone with the case it answered.
  */
 export const BACKGROUND_FAILED_ACTION_LABEL = 'Try again';
 export const RESOLUTION_FAILED_ACTION_LABEL = 'Open Project settings';
-export const PROJECT_NOT_OPEN = (name: string): string => `Project ${name} is not open in any window.`;
 
 /**
  * REQ-WORKSPACE-112: the composer gate's two texts. The Send control's reason is stated here rather

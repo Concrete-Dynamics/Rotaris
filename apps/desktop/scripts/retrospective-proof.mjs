@@ -44,7 +44,12 @@
  *   9. A FAILED COLLECTOR (since fin44, PD-LIBRARY-005, OQ-285) — a provider refusing the credential (`crash`) and an answer
  *      that is no JSON twice (`garbage`): each stores its empty artifact and posts the retrospective's failure warning, its
  *      reason and the artifact holding no proposals in the detail, never "found nothing to propose"; the log carries a warning.
- *      Launch 5 also reads the timed-out retrospective's detail stating its limit.
+ *      Launch 5 also reads the timed-out retrospective's detail stating its limit. Once the pass has ended, no notice on
+ *      screen says "found nothing to propose" (since fin45: the wait accepts either title, so it alone could read only one).
+ *  10. A FAILED POST-RUN ANALYST (since fin45, PD-LIBRARY-005) — a scripted run completes and its post-run analyst's provider
+ *      refuses the credential (`crash`): the run's empty artifact is stored with REQ-LIBRARY-023's notes, and the completed
+ *      run's failure warning names the session, the reason and the artifact holding no proposals, with no action and no
+ *      "Improvement analysis complete — no proposals" notice beside it; the log carries the warning line.
  *
  * Evidence under `.proof/retrospective-proof/`: a PNG per scenario, each launch's `app.log`, `results.json`.
  * `--skip-build` skips the build.
@@ -779,12 +784,17 @@ for (const [script, notesPrefix, reasonText] of [['crash', 'collector crashed: '
   const workspace = workspaceAt(name);
   let seen = null;
   let actions = -1;
+  let zeroAfter = null;
   await launch(name, workspace, { ROTARIS_IMPROVEMENT_SCRIPT: script }, async (d, root) => {
     await openProposals(d);
     await d.click('[data-testid="library-retrospective"]', { timeoutMs: 15_000 });
     seen = await noticeMatching(d, /The retrospective could not be completed|The retrospective found nothing to propose/, 60_000);
     actions = (await probe(d, '.notice__action')).length;
     await until(d, '[data-testid="improvement-activity-title-bar"]', (m) => m.length === 0, 30_000);
+    // The wait above accepts either title and returns the first it meets; once the pass has ended, every notice on screen is
+    // read, so a zero-proposal notice raised beside the warning (after it, replacing it) fails here (fin44's review).
+    await sleep(500);
+    zeroAfter = (await probe(d, '[data-testid="notice"]')).filter((notice) => /found nothing to propose/.test(notice.text)).map((notice) => notice.text.slice(0, 120));
     await d.screenshot(join(output, `${name}.png`));
     return root;
   });
@@ -800,9 +810,56 @@ for (const [script, notesPrefix, reasonText] of [['crash', 'collector crashed: '
       && seen.text.includes(reasonText) && seen.text.includes(`${id} holds no proposals.`) && !/found nothing to propose/.test(seen.text)
       && outcome.outcome === (script === 'crash' ? 'crashed' : 'parse-failed') && outcome.noticeMatches === true,
     seen === null ? 'no retrospective notice' : `severity=${seen.data['data-severity']}, ${actions} action(s) — "${seen.text.slice(0, 260)}"; reading ${outcome.outcome}, matches ${outcome.noticeMatches}`);
+  check(`${script}: once the pass has ended, no notice on screen says "found nothing to propose" (PD-LIBRARY-005)`,
+    Array.isArray(zeroAfter) && zeroAfter.length === 0, zeroAfter === null ? 'not read' : zeroAfter.length === 0 ? 'none' : zeroAfter.join(' | '));
   const log = readFileSync(join(output, `${name}.log`), 'utf8');
   check(`${script}: the failure is written to the application log as a warning (REQ-LIBRARY-035(b), PD-LIBRARY-005)`,
     new RegExp(`warn.*improvement analysis ${id} \\(retrospective\\) stored no proposals because its collector failed: ${notesPrefix}`).test(log),
+    log.split('\n').find((line) => /collector failed/.test(line))?.trim().slice(0, 240) ?? 'no such line');
+}
+
+// ── 10. A post-run analyst that failed (PD-LIBRARY-005, OQ-285): a scripted run completes and the provider refuses its post-run
+//    analyst's credential (`crash`, REQ-LIBRARY-023's "collector crashed: <exc>"). The run's empty artifact is stored, and the
+//    completed run's failure warning names the session, the reason and that artifact, with no action — never REQ-LIBRARY-124's
+//    "Improvement analysis complete — no proposals". Until fin45 the post-run warning was pinned by unit cases alone.
+{
+  const name = 'failed-post-run-crash';
+  const workspace = workspaceAt(name);
+  let seen = null;
+  let actions = -1;
+  let zeroAfter = null;
+  await launch(name, workspace, { ROTARIS_IMPROVEMENT_SCRIPT: 'crash' }, async (d, root) => {
+    await d.click('.nav-item', { text: 'Workspace', timeoutMs: 15_000 });
+    await d.click('.composer__input', { timeoutMs: 20_000 });
+    await d.type('tidy the workspace and say so', { enter: true });
+    seen = await noticeMatching(d, /The completed run could not be reviewed for improvements|Improvement analysis complete — no proposals/, 90_000);
+    actions = (await probe(d, '.notice__action')).length;
+    await until(d, '[data-testid="improvement-activity-title-bar"]', (m) => m.length === 0, 30_000);
+    await sleep(500);
+    zeroAfter = (await probe(d, '[data-testid="notice"]')).filter((notice) => /Improvement analysis complete — no proposals/.test(notice.text)).map((notice) => notice.text.slice(0, 120));
+    await d.screenshot(join(output, `${name}.png`));
+    return root;
+  }, 150_000);
+  const stored = artifactsIn(join(output, name, 'app'));
+  const row = stored.find((a) => a.source_kind === 'post_run') ?? null;
+  const artifact = row?.artifact ?? null;
+  check('post-run crash: the run\'s empty artifact is stored with REQ-LIBRARY-023\'s notes and the session it reviewed',
+    stored.length === 1 && row !== null && row.source_session_id !== null && artifact.proposals.length === 0 && String(artifact.notes ?? '').startsWith('collector crashed: '),
+    stored.length === 0 ? 'nothing was stored' : stored.map((a) => `${a.source_kind} ${a.artifact_id}: ${a.artifact.proposals.length} proposal(s), session ${a.source_session_id}, notes ${JSON.stringify(a.artifact.notes)}`).join(' | '));
+  const id = row?.artifact_id ?? '(none)';
+  const outcome = passOutcome(artifact, seen === null ? [] : [seen]);
+  check('post-run crash: the completed run\'s failure warning, with no action, naming the session, the reason and the artifact holding no proposals (PD-LIBRARY-005)',
+    seen !== null && row !== null && seen.data['data-severity'] === 'warning' && actions === 0
+      && seen.text.includes('The completed run could not be reviewed for improvements')
+      && seen.text.includes(`Session ${row.source_session_id} was not reviewed for improvements: the analysis call failed (`)
+      && seen.text.includes(`${id} holds no proposals.`) && !/Improvement analysis complete — no proposals/.test(seen.text)
+      && outcome.outcome === 'crashed' && outcome.noticeMatches === true,
+    seen === null ? 'no post-run notice' : `severity=${seen.data['data-severity']}, ${actions} action(s) — "${seen.text.slice(0, 280)}"; reading ${outcome.outcome}, matches ${outcome.noticeMatches}`);
+  check('post-run crash: once the pass has ended, no notice on screen says "Improvement analysis complete — no proposals"',
+    Array.isArray(zeroAfter) && zeroAfter.length === 0, zeroAfter === null ? 'not read' : zeroAfter.length === 0 ? 'none' : zeroAfter.join(' | '));
+  const log = readFileSync(join(output, `${name}.log`), 'utf8');
+  check('post-run crash: the failure is written to the application log as a warning (REQ-LIBRARY-035(b), PD-LIBRARY-005)',
+    new RegExp(`warn.*improvement analysis ${id} \\(post_run\\) stored no proposals because its collector failed: collector crashed: `).test(log),
     log.split('\n').find((line) => /collector failed/.test(line))?.trim().slice(0, 240) ?? 'no such line');
 }
 

@@ -849,14 +849,18 @@ describe('a main window whose renderer is gone cannot hold its close or the appl
    * `executeJavaScript` on a renderer that is gone neither resolves nor rejects, so the guard asked through it never
    * answered and the quit waited on it with no bound. The fake keeps that shape: its `executeJavaScript` never settles.
    */
-  function contents(state: { crashed: boolean; destroyed?: boolean; answer?: Promise<unknown>; probe?: 'answer' | 'silent' }) {
+  function contents(state: { crashed: boolean; destroyed?: boolean; answer?: Promise<unknown>; probe?: 'answer' | 'silent' | 'reject' }) {
     const listeners = new Map<string, Set<() => void>>();
     const asked: string[] = [];
     const probes: string[] = [];
     const wc: GuardedContents & { go(event: 'render-process-gone' | 'destroyed' | 'unresponsive'): void; listening(): number; asked: string[]; probes: string[] } = {
       executeJavaScript: (code) => {
         // PD-SHELL-010: main's liveness probe is a question of its own, answered by a live renderer and by no hung one.
-        if (code === RENDERER_LIVENESS_PROBE) { probes.push(code); return state.probe === 'silent' ? new Promise<unknown>(() => undefined) : Promise.resolve(true); }
+        if (code === RENDERER_LIVENESS_PROBE) {
+          probes.push(code);
+          if (state.probe === 'reject') return Promise.reject(new Error('Script failed to execute: the frame navigated'));
+          return state.probe === 'silent' ? new Promise<unknown>(() => undefined) : Promise.resolve(true);
+        }
         asked.push(code);
         return state.answer ?? new Promise<unknown>(() => undefined);
       },
@@ -1024,6 +1028,28 @@ describe('a main window whose renderer is gone cannot hold its close or the appl
     expect(closeLog).toEqual(['held', 'confirmed', 'close', 'passed']);
     expect(closeWc.listening()).toBe(0);
     expect(closeTimers.pending()).toBe(0);
+  });
+
+  /*
+   * PD-SHELL-010 counts a probe that gets no answer at its bound. A probe whose `executeJavaScript` REJECTS (the frame navigating
+   * away under it, say) is no answer either: it is never counted as answered, so at the bound the renderer cannot answer and its
+   * guard allows, as for a silent probe. fin44's review found this reading unpinned.
+   */
+  it('a liveness probe that rejects is no answer: at its bound the guard cannot answer, so it allows', async () => {
+    const timers = clock();
+    const warned: string[] = [];
+    const wc = contents({ crashed: false, probe: 'reject' });
+    const asking = askRendererGuard(wc, { timers, warn: (m) => warned.push(m) }).then(() => 'answered', (e: unknown) => String(e));
+    await settle();
+    expect(wc.probes).toHaveLength(1);
+    timers.advance(RENDERER_LIVENESS_BOUND_MS - 1);
+    expect(await within(asking, 20)).toBe('held');
+    timers.advance(1);
+    expect(await within(asking)).toMatch(/cannot answer: unresponsive \(no answer to the liveness probe within 5000 ms\)/);
+    expect(warned).toEqual([expect.stringMatching(/cannot answer: unresponsive/)]);
+    expect(wc.probes).toHaveLength(1);
+    expect(wc.listening()).toBe(0);
+    expect(timers.pending()).toBe(0);
   });
 
   it('a renderer that answers its probes while its guard stays pending is held past many bounds: a person is deciding', async () => {

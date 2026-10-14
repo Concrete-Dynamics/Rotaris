@@ -383,7 +383,7 @@ if (/tool_result_lines:/.test(savedYaml)) throw new Error(`Part Z's falsified ke
 // REQ-CONFIG-403: the two preferences were written the moment they moved, before any Save.
 const prefs = JSON.parse(readFileSync(join(preferences, 'preferences.json'), 'utf8'));
 if (prefs['display/autoCollapseTools'] !== true) throw new Error(`the auto-collapse preference is ${JSON.stringify(prefs['display/autoCollapseTools'])}`);
-if (prefs['display/groupTools'] !== false) throw new Error(`the grouping preference is ${JSON.stringify(prefs['display/groupTools'])}`);
+if (prefs['display/groupToolCalls'] !== false) throw new Error(`the grouping preference is ${JSON.stringify(prefs['display/groupToolCalls'])}`);
 // REQ-CHAT-167 (N71): the reasoning switch writes `display/showReasoning`, which nothing wrote before 2026-10-13.
 if (prefs['display/showReasoning'] !== true) throw new Error(`the reasoning preference is ${JSON.stringify(prefs['display/showReasoning'])}`);
 results.display = { dirtyThenSaved: true, file: { tool_result_max_lines: 20, tool_input_max_lines: 0, show_tool_results: false, foreignKeyKept: true }, preferences: { autoCollapseTools: true, groupTools: false, showReasoning: true } };

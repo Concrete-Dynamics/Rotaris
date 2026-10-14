@@ -966,7 +966,7 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
         autoCollapseTools: display.autoCollapseTools,
         groupTools: display.groupTools,
         onAutoCollapseTools: (v) => writeDisplayPref('display/autoCollapseTools', v),
-        onGroupTools: (v) => writeDisplayPref('display/groupTools', v),
+        onGroupTools: (v) => writeDisplayPref('display/groupToolCalls', v),
         showReasoning: display.showReasoning,
         onShowReasoning: (v) => writeDisplayPref('display/showReasoning', v),
       }}

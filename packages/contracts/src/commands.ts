@@ -25,7 +25,7 @@ import { NoticeSeveritySchema } from './notices.js'; // Part AO
  * one independent multi-pane arrangement", which the Library does not — the Prompts tab's one split is the whole
  * of it (REQ-LIBRARY-106), and the other two tabs declare no divider.
  *
- * `display/groupTools` is REQ-CHAT-067's tool-grouping switch, default ON — a desktop preference in the preference
+ * `display/groupToolCalls` is REQ-CHAT-067's tool-grouping switch, default ON — a desktop preference in the preference
  * store (REQ-CONFIG-405), explicitly NOT part of the YAML configuration surface, unlike REQ-CHAT-166's four caps.
  * Part AA registers the transcript's two display preferences, both **user-wide desktop preferences**
  * (REQ-CONFIG-405) and neither part of the YAML configuration surface: **`display/showReasoning`**, the key
@@ -52,7 +52,7 @@ import { NoticeSeveritySchema } from './notices.js'; // Part AO
  */
 export const REQUIREMENT_FOLDS_PREFERENCE_KEY = 'workspaces/{workspace}/requirementColumnFolds';
 export const REQUIREMENTS_PREFERENCE_KEYS = ['requirements/filter/text', 'requirements/filter/epic', 'requirements/filter/source', 'requirements/filter/lifecycle', 'requirements/filter/health', 'requirements/filter/priority', 'requirements/sort', 'requirements/blocked_column', 'requirements/axis', 'requirements/fullPermissionRuns', 'requirements/fullPermissionNoticeSuppressed', 'requirements/answerWaitSeconds', REQUIREMENT_FOLDS_PREFERENCE_KEY] as const;
-const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git', 'panels/library', 'panels/workspace', 'interface/agentPopOut', 'display/groupTools', 'display/showReasoning', 'display/autoCollapseTools', ...REQUIREMENTS_PREFERENCE_KEYS] as const;
+const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git', 'panels/library', 'panels/workspace', 'interface/agentPopOut', 'display/groupToolCalls', 'display/showReasoning', 'display/autoCollapseTools', ...REQUIREMENTS_PREFERENCE_KEYS] as const;
 
 /**
  * Channel 5: request/response. Every command returns an explicit outcome

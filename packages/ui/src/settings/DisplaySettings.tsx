@@ -28,7 +28,7 @@ export interface DisplaySettingsProps {
   readonly config?: ConfigSettingsProps | undefined;
   /** REQ-CHAT-067 (`display/autoCollapseTools`), default off. */
   readonly autoCollapseTools: boolean;
-  /** REQ-CHAT-067 (`display/groupTools`), default **on**. */
+  /** REQ-CHAT-067 (`display/groupToolCalls`), default **on**. */
   readonly groupTools: boolean;
   /** REQ-CHAT-167 (`display/showReasoning`), default off. */
   readonly showReasoning: boolean;

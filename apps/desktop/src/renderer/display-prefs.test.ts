@@ -28,7 +28,7 @@ describe('the display preferences\' boot read (REQ-CHAT-167, REQ-CONFIG-403)', (
     const booting = d.read();
     b.answer('display/showReasoning', true);
     b.answer('display/autoCollapseTools', undefined);
-    b.answer('display/groupTools', undefined);
+    b.answer('display/groupToolCalls', undefined);
     await booting;
     expect(d.store.getState()).toEqual({ showReasoning: true, autoCollapseTools: false, groupTools: true });
   });
@@ -38,7 +38,7 @@ describe('the display preferences\' boot read (REQ-CHAT-167, REQ-CONFIG-403)', (
     const d = createDisplayPrefs(b.bridge);
     const booting = d.read();
     // Main answered the first get with the old value; another window then changed it, and main announced the change.
-    b.answer('display/groupTools', true);
+    b.answer('display/groupToolCalls', true);
     d.fold({ groupTools: false });
     b.answer('display/showReasoning', false);
     b.answer('display/autoCollapseTools', true);
@@ -53,7 +53,7 @@ describe('the display preferences\' boot read (REQ-CHAT-167, REQ-CONFIG-403)', (
     b.answer('display/showReasoning', false);
     expect(await d.write('display/showReasoning', true)).toEqual({ ok: true });
     b.answer('display/autoCollapseTools', false);
-    b.answer('display/groupTools', true);
+    b.answer('display/groupToolCalls', true);
     await booting;
     expect(d.store.getState().showReasoning).toBe(true);
     d.fold({ showReasoning: false });

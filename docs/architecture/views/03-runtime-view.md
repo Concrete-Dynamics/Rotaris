@@ -1971,7 +1971,7 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   is Tier C: it is read by `loadConfiguration`, carried on the configuration snapshot, and reaches every window over
   `config:changed`, where a change re-projects the resident window once (which is a settings change, not transcript
   update content, so it sits outside what REQ-MONITOR-223 measures). REQ-CHAT-067's grouping switch is **not** here:
-  it is a desktop preference (`display/groupTools`, REQ-CONFIG-405), which is why the two live in different stores.
+  it is a desktop preference (`display/groupToolCalls`, REQ-CONFIG-405), which is why the two live in different stores.
   **Part AG added the surface over it** (REQ-CONFIG-472): the four fields join destination 1's pending state and are
   committed by Save through Tier A, spelled in the file as REQ-CONFIG-172 fixes them (`tool_result_max_lines`,
   `tool_input_max_lines`, unlimited written as `0`) and read back into the same view field names. They are **not** in

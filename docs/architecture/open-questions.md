@@ -14685,3 +14685,28 @@ then.
 
 **What a ruling decides.** Whether that reading stands (an entry is an entry), or a value equal to the one shown leaves the stored
 value as it was (the field never changed what it reads).
+
+<a id="oq-302"></a>
+
+**OQ-302 — Does REQ-CONFIG-405's list of desktop preference keys omit `display/showReasoning` by intent?** *(REQ-CONFIG-405,
+"Desktop preference keys and their defaults when absent", which lists `display/autoCollapseTools` and `display/groupToolCalls`
+and not `display/showReasoning`; REQ-SHELL-006, whose key table registers all three; REQ-CHAT-167, which stores
+`display/showReasoning` "under the registered key … written user-wide like every desktop preference (REQ-CONFIG-405)". Raised
+2026-10-14 by fin44 (`fin44-hooks-and-config`) while repairing
+[`the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md`](../defects/fixed/the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md),
+which noticed it; the plan's range OQ-296 to OQ-310, raised as OQ-297 and renumbered OQ-302 at landing, where fin44's sibling bundles had taken OQ-297
+to OQ-301 first.)*
+
+**What is open.** The two requirements that enumerate the desktop preference store's keys disagree: REQ-SHELL-006's table, which
+REQ-CONFIG-405 names as the owner of the store, and REQ-CHAT-167 register `display/showReasoning` (default false); REQ-CONFIG-405's
+own list of "desktop preference keys and their defaults when absent" does not name it, while REQ-CHAT-167 cites REQ-CONFIG-405 for
+how it is written.
+
+**What the build proceeds under.** REQ-SHELL-006's table and REQ-CHAT-167: `display/showReasoning` is a registered key, default
+off, written user-wide (`packages/platform/src/preferences.ts`). Nothing changed.
+
+**What a ruling decides.** Whether REQ-CONFIG-405's list is meant to be complete — in which case the omission is a defect of the
+specification for the amendment round, and the key stands as REQ-SHELL-006 registers it — or names only the keys REQ-CONFIG-405
+itself owns, in which case nothing is owed.
+
+**What a live run then shows.** Nothing: a live run reads no Display preference.

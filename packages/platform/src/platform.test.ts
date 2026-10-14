@@ -416,6 +416,37 @@ describe('platform — desktop preferences (ADR-0042)', () => {
     expect(readFileSync(root, 'utf8')).toBe('a file\n');
   });
 
+  /**
+   * REQ-CONFIG-405 / REQ-SHELL-006 register the tool-grouping switch as `display/groupToolCalls` (default true); the build
+   * stored it as `display/groupTools`, a key neither registers
+   * (docs/defects/fixed/the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md).
+   */
+  it('stores the tool-grouping switch under the registered `display/groupToolCalls`, default on, and no longer knows `display/groupTools`', async () => {
+    const store = new PreferenceStore(join(dir, 'preferences'));
+    expect(store.read('display/groupToolCalls')).toBe(true);
+    await store.write('display/groupToolCalls', false);
+    expect(store.read('display/groupToolCalls')).toBe(false);
+    expect(JSON.parse(readFileSync(store.file, 'utf8'))).toEqual({ 'display/groupToolCalls': false });
+    expect(() => store.read('display/groupTools' as never)).toThrow(/not registered \(REQ-SHELL-006\)/);
+  });
+
+  it('reads a value stored under the old `display/groupTools` once and carries it over to the registered key', async () => {
+    const root = join(dir, 'preferences');
+    const store = new PreferenceStore(root);
+    mkdirSync(root, { recursive: true });
+    writeFileSync(store.file, '{"display/groupTools":false,"ui/reduced_motion":true}\n');
+    expect(store.read('display/groupToolCalls')).toBe(false);
+    expect(JSON.parse(readFileSync(store.file, 'utf8'))).toEqual({ 'display/groupToolCalls': false, 'ui/reduced_motion': true });
+    // A value already under the registered key wins; the old one is dropped, never read again.
+    writeFileSync(store.file, '{"display/groupToolCalls":true,"display/groupTools":false}\n');
+    expect(store.read('display/groupToolCalls')).toBe(true);
+    expect(JSON.parse(readFileSync(store.file, 'utf8'))).toEqual({ 'display/groupToolCalls': true });
+    // An ordinary write carries it over too, so the old key never outlives the first touch of the file.
+    writeFileSync(store.file, '{"display/groupTools":false}\n');
+    await store.write('ui/reduced_motion', true);
+    expect(JSON.parse(readFileSync(store.file, 'utf8'))).toEqual({ 'display/groupToolCalls': false, 'ui/reduced_motion': true });
+  });
+
   it('coerces the registered values and round-trips ordinary writes atomically', async () => {
     const store = new PreferenceStore(join(dir, 'preferences'));
     await store.write('interface/settingsTab', 'interface');

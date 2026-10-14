@@ -33,18 +33,18 @@ describe('prefs.set announces a stored display preference to every window — RE
     windows.length = 0; written.length = 0;
     const main = fakeWindow();
     const persona = fakeWindow();
-    for (const [key, value] of [['display/showReasoning', true], ['display/autoCollapseTools', true], ['display/groupTools', false]] as const) {
+    for (const [key, value] of [['display/showReasoning', true], ['display/autoCollapseTools', true], ['display/groupToolCalls', false]] as const) {
       const out = await facet['prefs.set']({ kind: 'prefs.set', key, value }, at);
       expect(out).toEqual({ ok: true });
     }
     const expected = [
       { channel: CHANNEL.displayChanged, payload: { v: CONTRACT_SCHEMA_VERSION, preference: 'display/showReasoning', value: true } },
       { channel: CHANNEL.displayChanged, payload: { v: CONTRACT_SCHEMA_VERSION, preference: 'display/autoCollapseTools', value: true } },
-      { channel: CHANNEL.displayChanged, payload: { v: CONTRACT_SCHEMA_VERSION, preference: 'display/groupTools', value: false } },
+      { channel: CHANNEL.displayChanged, payload: { v: CONTRACT_SCHEMA_VERSION, preference: 'display/groupToolCalls', value: false } },
     ];
     expect(main.sent).toEqual(expected);
     expect(persona.sent).toEqual(expected);
-    expect(written).toEqual([['display/showReasoning', true], ['display/autoCollapseTools', true], ['display/groupTools', false]]);
+    expect(written).toEqual([['display/showReasoning', true], ['display/autoCollapseTools', true], ['display/groupToolCalls', false]]);
   });
 
   it('announces nothing for a refused value or a key that is not a display preference', async () => {

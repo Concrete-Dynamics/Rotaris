@@ -2,7 +2,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { CommandOutcome, CommandRequest } from '@rotaris/contracts';
 
 /**
- * REQ-CHAT-167 (`display/showReasoning`) and REQ-CHAT-067 (`display/autoCollapseTools` and `display/groupTools`), with
+ * REQ-CHAT-167 (`display/showReasoning`) and REQ-CHAT-067 (`display/autoCollapseTools` and `display/groupToolCalls`), with
  * REQ-CONFIG-403 and PD-CONFIG-004: the window's three display preferences, as one store with its three writers — the boot
  * read, main's announcement (channel 14) and this window's own write. A factory over the bridge so a test can script the
  * bridge's answers; `shell.ts` makes the window's one instance.
@@ -12,13 +12,13 @@ import type { CommandOutcome, CommandRequest } from '@rotaris/contracts';
  * so applying the stale answer over it would keep the value the person just changed away from
  * (`docs/defects/fixed/a-windows-boot-read-of-the-display-preferences-can-overwrite-a-newer-announcement.md`).
  */
-export type DisplayPrefKey = 'display/autoCollapseTools' | 'display/groupTools' | 'display/showReasoning';
+export type DisplayPrefKey = 'display/autoCollapseTools' | 'display/groupToolCalls' | 'display/showReasoning';
 export interface DisplayPrefsState { readonly showReasoning: boolean; readonly autoCollapseTools: boolean; readonly groupTools: boolean }
 type Field = keyof DisplayPrefsState;
 
 const DISPLAY_FIELD: Record<DisplayPrefKey, Field> = {
   'display/autoCollapseTools': 'autoCollapseTools',
-  'display/groupTools': 'groupTools',
+  'display/groupToolCalls': 'groupTools',
   'display/showReasoning': 'showReasoning',
 };
 
@@ -48,7 +48,7 @@ export function createDisplayPrefs(bridge: { readonly command: (req: CommandRequ
       const [reasoning, collapse, group] = await Promise.all([
         bridge.command({ kind: 'prefs.get', key: 'display/showReasoning' }),
         bridge.command({ kind: 'prefs.get', key: 'display/autoCollapseTools' }),
-        bridge.command({ kind: 'prefs.get', key: 'display/groupTools' }),
+        bridge.command({ kind: 'prefs.get', key: 'display/groupToolCalls' }),
       ]);
       const booted: DisplayPrefsState = {
         showReasoning: reasoning.ok && (reasoning.value as { value?: boolean }).value === true,

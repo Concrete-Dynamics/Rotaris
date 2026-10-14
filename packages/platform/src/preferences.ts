@@ -26,8 +26,10 @@ export const PREFERENCE_KEYS = {
    * pair whose default is on. A desktop preference written user-wide (REQ-CONFIG-405) and explicitly NOT part of
    * the YAML configuration surface, unlike REQ-CHAT-166's four caps, which are workspace configuration.
    * An absent or unusable value reads as ON, which is the declared default rather than a coercion accident.
+   * The key is the one REQ-CONFIG-405 and REQ-SHELL-006's table register; until 2026-10-14 it was stored as
+   * `display/groupTools`, which neither registers, and a value stored there is carried over once (`RENAMED_KEYS`).
    */
-  'display/groupTools': { type: 'boolean', default: true, owner: 'REQ-CHAT-067', coerce: (value: unknown) => value !== false && value !== 'false' },
+  'display/groupToolCalls': { type: 'boolean', default: true, owner: 'REQ-CHAT-067', coerce: (value: unknown) => value !== false && value !== 'false' },
   /**
    * Part AA — REQ-CHAT-167 registers this key BY NAME ("stored in the desktop preference store under the
    * registered key `display/showReasoning`"), REQ-SHELL-006 being the registration this list is. Default **off**,
@@ -202,6 +204,31 @@ type DocumentShape = Partial<Record<PreferenceKey, unknown>>;
 // as `{}` and read back as nothing stored — found on ADR-0042's second execution.
 const serialise = (document: DocumentShape): string => `${JSON.stringify(Object.fromEntries(Object.entries(document).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))), null, 2)}\n`;
 
+/**
+ * Keys this build once stored under a name the specification does not register, by the registered key that replaced each.
+ * The old name is never a key of the table above, so nothing can read or write it; a value found under it in the file is
+ * carried over to the registered key the first time the file is read or written (a value already stored under the
+ * registered key wins) and the old name is removed, so it is read once. REQ-SHELL-006: "a key that does not appear in that
+ * table does not exist" — the carry-over is the one place the old name is spelled.
+ */
+export const RENAMED_KEYS: Readonly<Record<string, PreferenceKey>> = {
+  // docs/defects/fixed/the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md
+  'display/groupTools': 'display/groupToolCalls',
+};
+
+/** The document with every renamed key carried over to its registered name; `moved` is whether anything changed. */
+function carryOverRenamedKeys(document: DocumentShape): { readonly document: DocumentShape; readonly moved: boolean } {
+  let moved = false;
+  const next: Record<string, unknown> = { ...document };
+  for (const [old, registered] of Object.entries(RENAMED_KEYS)) {
+    if (!(old in next)) continue;
+    if (!(registered in next)) next[registered] = next[old];
+    delete next[old];
+    moved = true;
+  }
+  return { document: next as DocumentShape, moved };
+}
+
 export class PreferenceStore {
   readonly file: string;
   /**
@@ -215,7 +242,14 @@ export class PreferenceStore {
 
   private document(): DocumentShape {
     const read = guardedRead<DocumentShape>(this.file, (raw) => JSON.parse(raw) as DocumentShape);
-    return read.state === 'readable' && read.value && typeof read.value === 'object' ? read.value : {};
+    const stored = read.state === 'readable' && read.value && typeof read.value === 'object' ? read.value : {};
+    const carried = carryOverRenamedKeys(stored);
+    if (carried.moved) {
+      // Written back at once, so the old name is read this one time. A file that cannot be written keeps it, and the next
+      // read carries it over again: the value is never lost, only not yet moved.
+      replaceDocumentSync(this.file, serialise(carried.document), { createParent: true });
+    }
+    return carried.document;
   }
 
   read<K extends PreferenceKey>(key: K): PreferenceValue<K> {

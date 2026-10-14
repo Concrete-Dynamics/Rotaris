@@ -517,7 +517,7 @@ export type ThemeChanged = z.infer<typeof ThemeChangedSchema>;
  * is the preference's own key (`PREFERENCE_KEYS`) — not named `key`, which ADR-0030's credential-name check refuses on any
  * payload that reaches a renderer — and the value is what main stored.
  */
-export const DISPLAY_PREFERENCE_KEYS = ['display/showReasoning', 'display/autoCollapseTools', 'display/groupTools'] as const;
+export const DISPLAY_PREFERENCE_KEYS = ['display/showReasoning', 'display/autoCollapseTools', 'display/groupToolCalls'] as const;
 export type DisplayPreferenceKey = (typeof DISPLAY_PREFERENCE_KEYS)[number];
 export const DisplayChangedSchema = z.object({ v: schemaVersion, preference: z.enum(DISPLAY_PREFERENCE_KEYS), value: z.boolean() });
 export type DisplayChanged = z.infer<typeof DisplayChangedSchema>;

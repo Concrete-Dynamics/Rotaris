@@ -134,7 +134,7 @@ export function shellCommands(
         if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'This display preference requires a boolean value' };
         await preferences.write(req.key, req.value);
         if (req.key !== 'interface/agentPopOut') announceDisplayPreference(req.key, req.value);
-      } else if (req.key === 'display/groupTools') {
+      } else if (req.key === 'display/groupToolCalls') {
         // REQ-CHAT-067 (Part Z): the tool-grouping switch, default on.
         if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'Tool grouping requires a boolean value' };
         await preferences.write(req.key, req.value);

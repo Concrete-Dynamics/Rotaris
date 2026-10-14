@@ -166,7 +166,7 @@ describe('a display:changed announcement folded into a window\'s display store â
   it('sets the one field the stored key names to the stored value', () => {
     expect(displayPreferencePatch({ v: CONTRACT_SCHEMA_VERSION, preference: 'display/showReasoning', value: true })).toEqual({ showReasoning: true });
     expect(displayPreferencePatch({ v: CONTRACT_SCHEMA_VERSION, preference: 'display/autoCollapseTools', value: false })).toEqual({ autoCollapseTools: false });
-    expect(displayPreferencePatch({ v: CONTRACT_SCHEMA_VERSION, preference: 'display/groupTools', value: false })).toEqual({ groupTools: false });
+    expect(displayPreferencePatch({ v: CONTRACT_SCHEMA_VERSION, preference: 'display/groupToolCalls', value: false })).toEqual({ groupTools: false });
   });
 
   it('ignores a payload that is not an announcement: another key, a non-boolean, another contract version', () => {

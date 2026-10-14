@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**The tool-grouping preference is stored under its registered key (fin44, `fin44-hooks-and-config`;
+`../../defects/fixed/the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md`).**
+`display/groupTools` became `display/groupToolCalls` (REQ-CONFIG-405, REQ-SHELL-006) in the preference table, the command
+contract, channel 4's display preferences and the renderer; `PreferenceStore` carries a value stored under the old name over
+once. `02-process-view.md` (the renderer's preference keys, the display-preference broadcast) and `03-runtime-view.md` §8.
+
 **The readers outside a run's load follow OQ-279 (fin44, `fin44-hooks-and-config`;
 `../../defects/fixed/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md`).** The run host's
 `skills:` and instruction readers answer the fatal report, never the shipped defaults; the five `skills.*` requests refuse with

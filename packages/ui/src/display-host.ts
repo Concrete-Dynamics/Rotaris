@@ -74,7 +74,7 @@ export type DisplayPreferencePatch = Partial<{ showReasoning: boolean; autoColla
 const DISPLAY_FIELDS: Readonly<Record<DisplayPreferenceKey, keyof DisplayPreferencePatch>> = {
   'display/showReasoning': 'showReasoning',
   'display/autoCollapseTools': 'autoCollapseTools',
-  'display/groupTools': 'groupTools',
+  'display/groupToolCalls': 'groupTools',
 };
 export function displayPreferencePatch(payload: unknown): DisplayPreferencePatch | null {
   const parsed = DisplayChangedSchema.safeParse(payload);

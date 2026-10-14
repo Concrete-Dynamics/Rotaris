@@ -235,11 +235,11 @@ export const openLink = (href: string): void => {
   });
 };
 /**
- * REQ-CHAT-167 (`display/showReasoning`) and REQ-CHAT-067 (`display/autoCollapseTools` and `display/groupTools`) —
+ * REQ-CHAT-167 (`display/showReasoning`) and REQ-CHAT-067 (`display/autoCollapseTools` and `display/groupToolCalls`) —
  * global to the transcript, taking effect immediately on the rows already on screen. Module-scoped because every
  * transcript surface in the window reads the same values, the persona window included.
  *
- * Part AG moved `display/groupTools` in here from App's own state: REQ-CONFIG-403 gives the Display settings
+ * Part AG moved `display/groupToolCalls` in here from App's own state: REQ-CONFIG-403 gives the Display settings
  * category a control over it, and a preference two components can set is a preference that must have one home.
  * The first two default **off**, `groupTools` defaults **on** (REQ-CHAT-067), so an unset preference reads as on.
  */

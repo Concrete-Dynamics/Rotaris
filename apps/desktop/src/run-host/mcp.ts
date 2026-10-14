@@ -393,15 +393,17 @@ export class McpHost {
                 } catch (cause) {
                   const text = String(cause instanceof Error ? cause.message : cause);
                   const elapsed = this.deps.clocks.monotonic.now() - started;
-                  // The allowance before the abort, as the rename's own catch reads them (PD-TOOLS-013 revision 2); which governs when
-                  // both hold at once is raised as OQ-299.
+                  // The allowance before the abort, as the rename's own catch reads them (PD-TOOLS-013 revision 2): when both hold at
+                  // once the allowance governs (OQ-299, ruled under R-072; PD-MCP-004 clause 4).
                   if (elapsed >= timeoutMs || (/timeout|timed out/i.test(text) && elapsed >= timeoutMs * 0.9)) return timedOut();
                   if (tctx.signal.aborted) return cancelled();
                   this.deps.log(`mcp: the reference search sent before '${tool.callable}' on MCP server '${server.name}' failed (${redact(text)}); the rename is sent anyway (PD-MCP-004)`, 'warn');
                 }
-                if (tctx.signal.aborted) return cancelled();
+                // An answered search reads the two exits in the same order (OQ-299, ruled under R-072; PD-MCP-004 clause 4): the
+                // allowance first, then the run's cancel. Until the ruling the cancel was read first here.
                 allowance = millis(timeoutMs - (this.deps.clocks.monotonic.now() - started));
                 if (allowance <= 0) return timedOut();
+                if (tctx.signal.aborted) return cancelled();
               }
               const r = await connections.call(server.name, description, tool.reported, a as Record<string, unknown>, allowance, tctx.signal);
               // REQ-SESSION-136 / REQ-SESSION-139, OQ-208 as ruled (2026-10-07, R-072): an MCP call's record carries no

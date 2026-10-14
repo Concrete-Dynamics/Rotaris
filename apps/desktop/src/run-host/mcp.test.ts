@@ -763,6 +763,40 @@ describe('a symbol rename is preceded by the referencing-symbol search of the sa
     expect(r.settles[0]).toMatchObject({ failure_kind: 'interrupted' });
   });
 
+  /*
+   * OQ-299 (ruled 2026-10-13 under R-072; PD-MCP-004 clause 4): a search that ends after the rename's whole allowance while the
+   * run's cancel also holds is the allowance's — REQ-MCP-003's failed call, `timeout`, unsent — whether the search failed or
+   * answered, in the order PD-TOOLS-013 revision 2 (c) gives the rename's own catch. Until the ruling the answered search read
+   * the cancel first.
+   */
+  it('a search that fails with the allowance spent and the run cancelled reads timeout, unsent (OQ-299)', async () => {
+    const run = new AbortController();
+    const r = rig((tool, _signal, hostClock) => {
+      if (tool !== read.referencingSymbols) return { isError: false, text: 'Successfully renamed' };
+      hostClock.advance(300_001);
+      run.abort();
+      throw new Error('This operation was aborted');
+    });
+    const result = await r.dispatch(edit.renameSymbol, RENAME, run.signal);
+    expect(r.sent.map((s) => s.tool)).toEqual([read.referencingSymbols]);
+    expect(result).toMatchObject({ status: 'failed', isError: true });
+    expect(r.settles[0]).toMatchObject({ failure_kind: 'timeout' });
+  });
+
+  it('a search that answers with the allowance spent and the run cancelled reads timeout, unsent (OQ-299)', async () => {
+    const run = new AbortController();
+    const r = rig((tool, _signal, hostClock) => {
+      if (tool !== read.referencingSymbols) return { isError: false, text: 'Successfully renamed' };
+      hostClock.advance(300_001);
+      run.abort();
+      return { isError: false, text: '[{"refs": 2}]' };
+    });
+    const result = await r.dispatch(edit.renameSymbol, RENAME, run.signal);
+    expect(r.sent.map((s) => s.tool)).toEqual([read.referencingSymbols]);
+    expect(result).toMatchObject({ status: 'failed', isError: true });
+    expect(r.settles[0]).toMatchObject({ failure_kind: 'timeout' });
+  });
+
   it('the pair shares one allowance: the rename gets what the search left, and a search that spends it all is the timeout, unsent', async () => {
     const slow = rig((tool, _signal, hostClock) => { if (tool === read.referencingSymbols) hostClock.advance(120_000); return { isError: false, text: 'Successfully renamed' }; });
     await slow.dispatch(edit.renameSymbol, RENAME);

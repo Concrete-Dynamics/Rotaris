@@ -128,8 +128,9 @@ REQ-GIT-138, no directive); [OQ-264](#oq-264), confirmed as built and carried by
 restore deletes its own staging copy on a failure that leaves the store as it was; no directive); [OQ-266](#oq-266), changed (a
 restore cut between its renames is reversed at the next open; no directive); [OQ-273](#oq-273), changed (`PD-MCP-004`);
 [OQ-278](#oq-278), changed (a note closes unreproduced only under a guard, `docs/defects/README.md`); [OQ-280](#oq-280), changed
-(`PD-TOOLS-019`). Written 2026-10-14 by fin45 (`fin45-retro-and-record`): [OQ-300](#oq-300), changed (`PD-LIBRARY-002`
-revision 5).
+(`PD-TOOLS-019`). Written 2026-10-14 by fin45 (`fin45-retro-and-record`): [OQ-299](#oq-299), the search's failure confirmed as
+built and the answered search's check reordered to match (a ruling note under `PD-MCP-004` clause 4, no directive);
+[OQ-300](#oq-300), changed (`PD-LIBRARY-002` revision 5).
 
 ***Three of those counts changed on 2026-09-02 and the direction is not the usual one, so a reader should
 not skim them.*** The seven escalations this register carried as open were **all ruled on that date** and
@@ -14683,7 +14684,10 @@ range OQ-296 to OQ-310, its first free number on this branch — renumbered at l
 **What is open.** Clause 4 gives the search two exits that stop the rename unsent: a search that exhausts the rename's allowance
 ends it as REQ-MCP-003's failed call (`failure_kind: timeout`), and a cancel by the run during the search stops it
 (`interrupted`). It does not say which governs when both hold at once — the search's failure arrives after the whole allowance
-and after the run's cancel. [OQ-273](#oq-273)'s ruling paragraph names the cancel's exit before the allowance's.
+and after the run's cancel. ~~[OQ-273](#oq-273)'s ruling paragraph names the cancel's exit before the allowance's.~~ *Corrected
+2026-10-14 by fin45 (`fin45-retro-and-record`), with the ruling below: OQ-273's ruling paragraph names no cancel at all; it says
+only that both requests are held within the rename's one allowance. The order in which clause 4 lists its exits (the allowance's,
+then the cancel's) was the only text near one, and it states no precedence.*
 
 **What the build proceeds under.** The allowance first, then the abort (`apps/desktop/src/run-host/mcp.ts`, the warm-up's catch),
 the order the rename's own catch already has under PD-TOOLS-013 revision 2, which reads a deadline before the abort as `fetch`
@@ -14691,6 +14695,26 @@ does. The two readings differ only in that coincidence: one row's `failure_kind`
 
 **What a ruling decides.** Which exit names the call when both hold, so clause 4 states the order: the allowance first (one
 order for the search and the rename it precedes), or the cancel first (the run's intent over a deadline that also passed).
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)), written 2026-10-14 by fin45
+(`fin45-retro-and-record`).** When the rename's warm-up search ends, whether it fails or answers, after the rename's whole
+REQ-MCP-003 allowance is spent and while the run's cancel also holds, **the allowance governs**: the rename ends as REQ-MCP-003's
+failed call (`failure_kind: timeout`, `terminal_timeout` filed) and is not sent — the order `PD-TOOLS-013` revision 2 (c) gives the
+rename's own catch. Recorded as a ruling note under [`PD-MCP-004`](../product/directives.md#pd-mcp-004) clause 4, with no new
+directive and no change to its Extends line. **The two advocates' recommendations were weighed** over the two readings this
+entry states, the allowance first or the cancel first; the ruling took the allowance first, so that every exit of the search and
+of the rename reads in one order, the one the rename's own catch already had. (The advocates' texts are the consortium's; this
+entry records the outcome as the brief that carried the ruling states it.) **What the build proceeds under** above
+is the confirmed reading for a search that fails. **Changed by the ruling:** a search that **answers** read the cancel first
+(`if (tctx.signal.aborted)` before the allowance test, `apps/desktop/src/run-host/mcp.ts`); the executor now tests the remaining
+allowance (`<= 0`, timeout) before the cancel. Pinned by two cases under "PD-MCP-004" in `apps/desktop/src/run-host/mcp.test.ts`,
+each with the clock past the allowance and the run's signal aborted during the search — a search that rejects ("This operation was
+aborted") and one that resolves both settle `failure_kind: timeout` with no rename sent, the second red before the reorder — while
+"a cancel during the search reads interrupted" stays green. **Kept on record as intended:** the two catches test a spent allowance
+differently — the search's catch reads the clock alone (`elapsed >= timeoutMs`) or a timeout text at 90 % of the allowance, the
+rename's own catch a timeout text at 90 % alone — so a failure arriving within the same tick as the allowance's end can read
+differently in the two; the ruling does not align them. No proof re-run: `code-intel-proof` launch 11 does not reach the
+coincidence. **What a live run then shows.** Nothing.
 
 <a id="oq-300"></a>
 

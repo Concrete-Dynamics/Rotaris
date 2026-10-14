@@ -9097,6 +9097,11 @@ EDIT tier, is not this case.
    connection) still lets the rename go ahead, the failure written to the application log. A cancel by the run during the search
    stops it, and the rename is not sent (`PD-TOOLS-013`'s `interrupted`).
 
+   *Ruling note, 2026-10-14 ([OQ-299](../architecture/open-questions.md#oq-299), ruled under [R-072](requests.md#r-072)): when
+   the search ends with the rename's allowance spent and the run's cancel also holds, the allowance governs: the rename ends as
+   REQ-MCP-003's failed call (timeout), unsent, as `PD-TOOLS-013` revision 2 (c) reads the rename's own catch. This holds whether
+   the search failed or answered. The Extends line is unchanged.*
+
 Everything else stands: the rename's arguments, result and reach observation (OQ-245) are the runtime's and the run host's as
 before, and the search changes nothing in the workspace.
 

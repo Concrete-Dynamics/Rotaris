@@ -12,7 +12,7 @@ import { Select as DesignSelect } from '../design-system/index.js';
  *   show reasoning bodies (`display/showReasoning`, default off; N71, 2026-10-13). All three are read at startup by
  *   the renderer root, which re-renders the transcript when any changes. REQ-CHAT-167 requires the reasoning switch to
  *   be reachable from the settings surface; REQ-CONFIG-403 says the category "holds two transcript toggles". The switch
- *   is placed here, after those two, as the reading taken: OQ-264 asks whether that stands.
+ *   is placed here, after those two, as PD-CONFIG-004 directs (the ruling of OQ-264, 2026-10-13, under R-072).
  * - **Four workspace-configuration fields** (REQ-CONFIG-472, REQ-CHAT-166): whether tool results and inputs
  *   are shown and a rendered-line cap for each. These are destination 1, committed by Save (REQ-CONFIG-417),
  *   written to the `display:` section of the workspace `agents.yaml` (REQ-CONFIG-256) — and they nevertheless

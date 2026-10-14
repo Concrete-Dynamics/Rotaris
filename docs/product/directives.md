@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Ninety.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Ninety-one.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -5132,6 +5132,34 @@ them: REQ-ORCH-088, REQ-CONFIG-113 and REQ-MONITOR-286.*
 > [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),
 > [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
 > The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-config-004"></a>
+
+### PD-CONFIG-004 — the Display category's Transcript heading holds three desktop-preference switches
+
+Settings › Display › Transcript SHALL hold three switches. The first two are REQ-CONFIG-403's, in its order: **Auto-collapse
+older tool outputs**, then **Group consecutive tool calls**. The third is REQ-CHAT-167's **Show reasoning bodies**
+(`display/showReasoning`, default off), whose hint says that reasoning rows open to show their text, that off each shows only
+its summary line, and that a row the user opened or closed keeps that choice (REQ-CHAT-059). The third is wired like the first
+two, to the stored preference and to the live re-render notification. It commits like them: it is written user-wide the moment
+it moves (REQ-CONFIG-405), needs no Save, and Discard does not undo it. The heading's sentence states that policy for all three.
+REQ-CONFIG-472's four tool-row controls and their Save policy are unchanged.
+
+**Why, and what it costs.** REQ-CHAT-167 requires the switch to be reachable from the settings surface and names no category;
+Display is where its namespace (`display/`), its commit policy and the rows it governs already are. What it costs:
+REQ-CONFIG-403's count of two now reads as three on screen.
+
+**As built.** `packages/ui/src/settings/DisplaySettings.tsx` (the `show-reasoning` Toggle, third under the Transcript heading,
+whose sentence reads "These three are yours, not this workspace's"); `packages/ui/src/commands/search-and-reasoning.test.ts`;
+`pnpm settings-proof`. Built 2026-10-13 by fin41 (N71) before the ruling, under the reading OQ-264 recorded; the ruling
+confirmed it, so no code changed with this directive.
+
+> **Extends:** REQ-CONFIG-403, REQ-CHAT-167
+
+*Raised 2026-10-13 by the ruling of [OQ-264](../architecture/open-questions.md#oq-264) under the owner's delegation
+([R-072](requests.md#r-072)).*
 
 ---
 

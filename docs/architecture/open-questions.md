@@ -12837,6 +12837,8 @@ alone declares `delegate`, and REQ-ORCH-002, -028 and -029 require it to delegat
 populated default would instead hide each persona a user adds (REQ-CONFIG-045) and reverse OQ-228. REQ-CONFIG-102, -103 and
 REQ-TOOLS-006's run allow-list each read an absent narrowing as no narrowing. If a later round reads the empty case as departing
 from REQ-CONFIG-101, it lands as `PD-CONFIG-004`, narrowing REQ-CONFIG-101 for the empty case alone, and the build stays as ruled.
+*Added 2026-10-13 ([OQ-264](#oq-264), ruled under [R-072](../product/requests.md#r-072)):* `PD-CONFIG-004` went to OQ-264's
+ruling (the Display category's three transcript switches); such a departure takes the next free CONFIG number.
 
 **What it costs.** REQ-ORCH-028's routing table still names roles a narrowed coordinator may not reach (each such delegation is
 refused once, 17.7 to 19.6 s a refused step); REQ-ORCH-030's diagnosis route is refused when the list leaves out
@@ -13609,7 +13611,8 @@ Display category "holds two transcript toggles"?** *(REQ-CHAT-167 with REQ-CONFI
 2026-10-13 by fin41, building the repair the note
 [`search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true`](../defects/fixed/search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true.md)
 records, as OQ-263; renumbered OQ-264 at landing, because origin/main had given OQ-263 to
-REQ-GIT-138's question. Open.)*
+REQ-GIT-138's question. Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):
+confirmed as built and carried by [`PD-CONFIG-004`](../product/directives.md#pd-config-004).)*
 
 REQ-CHAT-167 requires `display/showReasoning` to be "reachable both from the settings surface and from the command
 palette". It names no category. REQ-CONFIG-403 says "The Display category holds two transcript toggles", names them —
@@ -13626,6 +13629,21 @@ looking for a transcript display preference looks, and it keeps REQ-CONFIG-403's
 **What a ruling decides.** Whether REQ-CONFIG-403's "two" is an enumeration a third preference may join (extending it
 by a directive), or whether the switch belongs in another category (Interface holds the other desktop-preference
 toggles), or whether it stands as built.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)): confirmed as built and carried by
+[`PD-CONFIG-004`](../product/directives.md#pd-config-004).** "Show reasoning bodies" (`display/showReasoning`, REQ-CHAT-167)
+is the third control under Settings › Display › Transcript, after REQ-CONFIG-403's two in their stated order, and it commits as
+they do: a desktop preference written the moment it moves, wired to the stored preference and the live re-render notification,
+and not undone by Discard. The directive extends REQ-CONFIG-403 and REQ-CHAT-167; both keep their text and gain a back-pointer.
+REQ-CONFIG-472's four tool-row controls and their Save policy are unchanged. No code changes.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: confirm as built with a directive — a reader looking for
+a transcript display preference looks under Display's Transcript heading, beside the two switches that already shape the same
+rows, and the heading's sentence already says all three are the user's and take effect at once. *Advocate B (the system's
+lens)*: confirm as built with a directive — REQ-CHAT-167 names no category, the key lives in the `display/` namespace and
+commits under the same policy as REQ-CONFIG-403's two, so Display is where its namespace, its commit policy and the rows it
+governs already are; REQ-CONFIG-403's "two" is an enumeration a directive may extend. **The ruling followed both.** What it
+costs: REQ-CONFIG-403's count of two now reads as three on screen.
 
 <a id="oq-265"></a>
 

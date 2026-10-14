@@ -14256,7 +14256,7 @@ declares hooks the user has not reviewed"; REQ-HOOKS-101, whose fixed text reads
 revision 2. Raised 2026-10-14 by fin43 (`fin43-notices-and-config`) from the consortium's ruling of OQ-267 (step 8 (b)),
 recorded in
 [`the-unreviewed-hooks-notice-does-not-name-its-project.md`](../defects/the-unreviewed-hooks-notice-does-not-name-its-project.md);
-numbered from the top of the plan's range. Open.)*
+numbered from the top of the plan's range. Ruled 2026-10-14 under R-072, below.)*
 
 The notice is an application notice, shown in every main window, and its words — the title "Workspace hooks need review" and
 REQ-HOOKS-101's message, "declared by this workspace's .rotaris/agents.yaml" — say "this workspace". In a window holding another
@@ -14271,6 +14271,19 @@ folder heading the detail area, as PD-WORKSPACE-005 does for the project-setup b
 "this workspace's" is narrowed by a directive or the name is carried by the title and detail alone.
 
 **What a live run then shows.** Nothing: no live scenario opens two workspaces.
+
+**Ruled 2026-10-14 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)):** the notice names
+its project, on [`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005)'s pattern and by its naming rule. Its title reads
+"Workspace hooks need review: <name>", the name being the project folder's last segment (the root itself for a drive or
+filesystem root); its message row carries REQ-HOOKS-101's text unchanged; its detail area holds "Project folder: <full path>".
+Both raise sites — main's at the workspace's open and the run's through `notice.publish` — build it identically, and its
+"Review hooks" action names the workspace whose hooks it counts (on the run path, the run's own workspace, never the focused
+window's). Covered by REQ-NOTIFY-224, REQ-NOTIFY-005, REQ-HOOKS-101 and REQ-HOOKS-102: no directive is minted, and
+REQ-HOOKS-101 keeps its text, since the name is carried by the title and the detail alone. Two defects found while writing it
+up: [`the-unreviewed-hooks-notice-folds-its-sentence-under-details-at-open.md`](../defects/the-unreviewed-hooks-notice-folds-its-sentence-under-details-at-open.md)
+(the open path put REQ-HOOKS-101's sentence in the folded detail) and
+[`a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md`](../defects/a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md)
+(the run path's action named the focused window's workspace).
 
 <a id="oq-294"></a>
 

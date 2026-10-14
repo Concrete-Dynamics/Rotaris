@@ -27,7 +27,8 @@ in a row under four busy loops beside it (load average 4.7 on four CPUs at the e
 proof drives a soft-paused command that ends the shell; the live run's `ends-shell` shape (an `exit 3` the model runs) now
 reads a detail saying the shell was REPLACED as its own kind, `replaced`, and fails on it
 (`apps/desktop/scripts/lib/terminal-shapes.mjs`, `endedShellReading`; the live run's check "a command that ended the shell
-did not read as replacing it"), where it was a NOTE ("met neither a respawn nor a pause").
+did not read as replacing it"), where it was a NOTE ("met neither a respawn nor a pause"). ADR-0020's report-back of 2026-09-30, which read any identity other than the shell's as a different
+process, carries the falsified reading beside its replacement since 2026-10-14 (the fin45 reviewer).
 
 A terminal call made while a soft-paused command is still running waits behind it (OQ-164). When that command ends the
 session's shell, the waiting call never ran — the shell that would have read it is gone — and the tool reports it so: "the

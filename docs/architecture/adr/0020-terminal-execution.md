@@ -560,6 +560,17 @@ macOS, where `/proc` does not exist. Pinned by "REQ-TOOLS-097/098/103/104 (OQ-14
 call's cancel and reports a kill from the terminal window: the first form lost both (acceptance round 1's verifier),
 and the call now ends on either before its command is written.*
 
+*Reported back 2026-10-14 (fin45, `fin45-config-and-terminal`; a falsified reading kept beside its replacement): **the
+reading above, that an identity other than the shell's is "a different process", was false for one process — the shell
+itself while it exits.** Between the kernel releasing an exiting process's memory and its reaping, `/proc/<pid>/exe` can
+still be read while `/proc/<pid>/cmdline` reads empty, and the pair read as another program; a watch reading inside that
+window ended the call as `replaced` before the shell's exit reached it, so an `exit 4` a soft-paused command ran told the
+call waiting behind it that it had replaced the shell (measured on Linux: in 122 of 300 exits read in a tight loop, the
+first reading not the process's own was that pair). An empty argument vector now reads as no identity, as a process that
+has gone does, so the watch keeps waiting and the exit reaches the call as OQ-144's shell-exit case
+([`a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load`](../../defects/fixed/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md);
+`terminal.test.ts`, "OQ-144 / OQ-164: a process on its way out reads no identity, never another program's").*
+
 **Found — defect C: the agent's capture was VT-STRIPPED where every other surface was EMULATED.** Deleting a
 control sequence is not applying it. Measured against the real shell at the session's own 240×50: ConPTY
 expresses a tab stop as `ESC[7C`, and `Write-Host ('a' + [char]9 + 'b')` reached the agent as **`ab`** where

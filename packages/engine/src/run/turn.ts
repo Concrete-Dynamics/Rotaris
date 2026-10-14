@@ -2,7 +2,7 @@ import { millis, toIsoUtc, type Clocks, type TimerHandle } from '@rotaris/kernel
 
 /** REQ-CHAT-164: ten seconds of provider silence on a call in flight. */
 const STALL_AFTER = millis(10_000);
-import { terminalRowStreamId, type ApprovalOption, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
+import { terminalRowStreamId, type ApprovalOption, type ApprovalPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, DispatchRetry, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
@@ -121,6 +121,11 @@ export interface ToolPort {
   cancelQuestions?(requestId: string): boolean;
   /** REQ-CHAT-097: what the whole-session update publishes for this port's conversation. */
   pendingQuestions?(): readonly QuestionPrompt[];
+  /**
+   * PD-ORCH-005 clause 9 / REQ-SESSION-031: the approvals this port's agent is waiting on, which `Run.pendingApprovals`
+   * gathers over every port, so the session's one `pending_approvals` column holds every agent's and not the last writer's.
+   */
+  pendingApprovals?(): readonly ApprovalPayload[];
   /**
    * REQ-SESSION-094: the run has ended. Every call this port still has open is settled at once, as failed with
    * `cutOff`, and from here nothing the port's gate would write for any call reaches the session — no settle, no

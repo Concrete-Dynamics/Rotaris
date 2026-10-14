@@ -32,7 +32,7 @@ be decided by the gesture that starts the flow rather than by a question asked a
 **replacement** of REQ-SHELL-017, or the **addition** of a main window on the chosen folder with the
 window that issued the request left open and unchanged.
 
-The add route SHALL be reachable by exactly two gestures, and by no other: a shortcut-less command
+**The gestures — revision 2.** The add route SHALL be reachable by two gestures — a shortcut-less command
 palette entry labelled "Open project folder in a new window", present in every window and in the
 composer's slash catalogue on the terms of REQ-SHELL-048 and REQ-SHELL-056; and activating the
 title-bar workspace chip of REQ-SHELL-035 with the platform's secondary-activation modifier held —
@@ -4222,6 +4222,13 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > `sessions.test.ts`, the run host's `tools.test.ts` (each red before) and `store.test.ts`'s v34 → v35 migration.
 > **What was not measured:** no built-app proof or live run kills a run host while a question waits; the live scenario
 > that would show it is written in the row in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Reported in place 2026-10-14 (fin43, `fin43-notices-and-config`):** the approvals half now has the same shape. Each port
+> wrote its own registry's list to `pending_approvals`, so two agents waiting at once overwrote each other and a crash then
+> withdrew only the last writer's
+> ([`../defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md`](../defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md));
+> the gate now writes the run's list over every port (`Run.pendingApprovals`). Measured by the run host's `tools.test.ts`
+> with two real ports, red before; not driven in the built app.
 
 ---
 

@@ -16,6 +16,13 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A notice's reach ruled; a `focus-session` press for another workspace's session not dispatched; one approvals list per
+session (fin43, `fin43-notices-and-config`; OQ-267 ruled 2026-10-13 under R-072).** The **process view**'s hook-review
+paragraph cites `PD-SHELL-001` revision 2 (OQ-267, ruled 2026-10-13 under R-072) where it called the add provisional. `session.resume` gains
+`fromNotice`: main answers a notice's load of a session the window's store does not hold by logging it and raising no notice,
+and the run host records a session's workspace only after the engine has loaded it. The approvals column is written from the
+run's list over every port (`Run.pendingApprovals`). No package, edge, process, channel or store column changed.
+
 **Project-setup banners act; a fatal configuration load is said at the open; the setup statement names what the build carries
 (fin43, `fin43-notices-and-config`; OQ-262, OQ-279, OQ-261 ruled 2026-10-13 under R-072).** The **process view** gains the
 `projectInit.open {workspace}` command, channel 15 `project-init:open` in its diagram and its main → renderer paragraph

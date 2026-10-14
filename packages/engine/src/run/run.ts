@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { IterationRow, SessionRow } from '@rotaris/store';
-import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type ApprovalPayload, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -2993,6 +2993,18 @@ export class Run {
   cancelQuestions(requestId: string): boolean {
     for (const p of this.ports) if (p.cancelQuestions?.(requestId) === true) return true;
     return this.deps.tools?.cancelQuestions?.(requestId) ?? false;
+  }
+  /**
+   * PD-ORCH-005 clause 9 / REQ-SESSION-031: every agent's pending approval — each port holds its own — for the session's one
+   * `pending_approvals` column, which a port rewrites whole each time one of its approvals is put or ends. Until 2026-10-14
+   * each port wrote its own list there, so two agents waiting at once overwrote each other
+   * (`docs/defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md`).
+   */
+  pendingApprovals(): ApprovalPayload[] {
+    const out: ApprovalPayload[] = [];
+    for (const p of this.ports) out.push(...(p.pendingApprovals?.() ?? []));
+    if (this.deps.tools && !this.ports.has(this.deps.tools)) out.push(...(this.deps.tools.pendingApprovals?.() ?? []));
+    return out;
   }
   /** REQ-CHAT-097: every conversation's pending prompt, for the whole-session update. */
   pendingQuestions(): QuestionPrompt[] {

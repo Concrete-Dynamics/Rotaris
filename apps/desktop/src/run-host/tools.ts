@@ -417,8 +417,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const conversationId = ctx.parentId ?? 'root';
   /*
    * PD-ORCH-005 clause 9 after a crash, and REQ-SESSION-031: the session's whole list of pending prompts — the run's, every
-   * port's, so two agents asking at once do not overwrite each other (the overwrite `pending_approvals` suffers,
-   * docs/defects/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md) — mirrored to
+   * port's, so two agents asking at once do not overwrite each other (the overwrite `pending_approvals` suffered until 2026-10-14,
+   * docs/defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md) — mirrored to
    * `pending_questions` each time one of this port's prompts is put or ends. A crash's record withdraws what it lists; the
    * listing flags the session as awaiting input. Never read back as pending (PD-ORCH-005 revision 3). Like the approvals
    * sink, it writes nothing once the run's end has closed this port (REQ-SESSION-094): a question a stop's grace detached
@@ -514,7 +514,10 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     // set lacks one) is a different object, and its session approval keeps REQ-TOOLS-024's exact match.
     publicTool: (name) => { const e = callable.get(name) ?? callable.get(name.toLowerCase()); return e !== undefined && executors.get(e.name) === e; },
     monotonic: deps.clocks.monotonic, wall: deps.clocks.wall, timers: deps.clocks.timers,
-    sink: writes.sink, nextSequence: deps.nextSequence,
+    // PD-ORCH-005 clause 9 / REQ-SESSION-031: the gate hands its own registry's list; the column takes the session's whole
+    // list (`ctx.pendingApprovalsOfSession`, every port's), so a second agent's approval no longer overwrites the first's
+    // (docs/defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md).
+    sink: { ...writes.sink, pendingChanged: (pending) => writes.sink.pendingChanged(ctx.pendingApprovalsOfSession?.() ?? pending) }, nextSequence: deps.nextSequence,
     // REQ-SESSION-094: a call that returns after its run ended fires no `post_tool` hook — the run's hooks write into its
     // session, and the run has removed its own attachment (REQ-HOOKS-087).
     hooks: toolHooks ? { preTool: (c) => toolHooks.preTool(c), postTool: (c) => (writes.closed() ? Promise.resolve({ feedback: '' }) : toolHooks.postTool(c)) } : null,
@@ -673,6 +676,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     answerQuestions: (requestId, answers) => questions.resolve(requestId, answers),
     cancelQuestions: (requestId) => questions.cancel(requestId),
     pendingQuestions: () => questions.pending(),
+    pendingApprovals: () => approvals.pending(),
     // REQ-SESSION-094: the run has ended; what this port's gate still has open settles now, and nothing more is written.
     close: (cutOff) => writes.close(cutOff),
   };

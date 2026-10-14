@@ -21,3 +21,16 @@ while any approval is pending).
 - `apps/desktop/src/run-host/tools.ts` — one `PendingApprovals` per port; `writerSink`'s `pendingChanged`.
 - `packages/agent-tools/src/gate.ts` — `pendingChanged(deps.approvals.pending())`.
 - `packages/engine/src/run/crash.ts` — `withdrawStoredApprovals`, which reads the column.
+
+## Outcome
+
+*Repaired 2026-10-14 by fin43 (`fin43-notices-and-config`).* Reproduced first with two real tool ports on one session
+(`apps/desktop/src/run-host/tools.test.ts`, "through two ports"): two agents asking for a `write_file` approval at once left one
+request id in `pending_approvals`, red on the code before. The column now holds the session's whole list: each port exposes
+its registry (`pendingApprovals`), the run gathers them over every port (`Run.pendingApprovals`,
+`packages/engine/src/run/run.ts`), the session hands that to each port it builds (`ToolPortContext.pendingApprovalsOfSession`,
+`packages/engine/src/sessions.ts`), and the gate's `pendingChanged` writes it in place of the port's own list (`createToolPort`,
+`apps/desktop/src/run-host/tools.ts`) — the shape the question mirror took on 2026-10-13. With the repair both requests stand in
+the column, the first's answer leaves the second's, and the second's empties it. Not driven in the built app or a live run: no
+proof makes two agents wait on an approval at once; a run killed while two delegated children each wait on an approval would
+show it, the crash's record then withdrawing both (PD-ORCH-005 clause 9).

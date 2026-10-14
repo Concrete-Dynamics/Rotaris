@@ -119,7 +119,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
   let portClock = new FakeClock();
   /** PD-ORCH-005 clause 9: the presenter fact as the quit leaves it — no window, the quit under way. */
   const presence = { attended: true, quitting: false };
-  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor' | 'planGateHeld' | 'presence' | 'hooks' | 'pendingQuestionsOfSession'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}) {
+  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor' | 'planGateHeld' | 'presence' | 'hooks' | 'pendingQuestionsOfSession' | 'pendingApprovalsOfSession'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}) {
     mkdirSync(join(dir, '.rotaris'), { recursive: true });
     writeFileSync(join(dir, '.rotaris', 'agents.yaml'), yaml(pin, surface.tools ?? null));
     const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
@@ -338,6 +338,36 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     expect(port.answerQuestions?.(asked.request_id, { a: { selected_option: null, freeform_text: 'Late.' } })).toBe(true);
     await pending;
     expect(stored()).toBe(before);
+  });
+
+  /*
+   * PD-ORCH-005 clause 9 and REQ-SESSION-031 (`docs/defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md`):
+   * each agent's port holds its own approvals, and the session has ONE `pending_approvals` column. Two agents of one run
+   * waiting at once — two delegated children, each asking — must leave both in the column, and the one still waiting
+   * after the other is answered. Before the repair each port wrote its own list: the second overwrote the first, and the
+   * first's answer wrote `[]` while the second still waited, so a crash then withdrew nothing.
+   */
+  it('PD-ORCH-005 clause 9 / REQ-SESSION-031 through two ports: pending_approvals holds the session\'s whole list while two agents wait', async () => {
+    const ports: ReturnType<typeof portFor>[] = [];
+    const session = () => ports.flatMap((p) => p.pendingApprovals?.() ?? []);
+    const first = portFor(null, null, { pendingApprovalsOfSession: session });
+    const second = portFor(null, null, { pendingApprovalsOfSession: session });
+    ports.push(first, second);
+    const stored = (): string[] => (JSON.parse(dal.getSession(asSessionId('S1'))?.pending_approvals ?? '[]') as { request_id: string }[]).map((a) => a.request_id);
+    const write = (callId: string, path: string) => ({ callId, name: 'write_file', rawArgs: JSON.stringify({ operation: 'create', path, content: 'x' }), persona: 'coding-agent', agentId: callId, agentName: 'coding-agent' });
+    const a = first.dispatch(write('a1', 'a.txt'), new AbortController().signal);
+    await vi.waitFor(() => expect(presented).toHaveLength(1));
+    const b = second.dispatch(write('b1', 'b.txt'), new AbortController().signal);
+    await vi.waitFor(() => expect(presented).toHaveLength(2));
+    const [askedA, askedB] = [presented[0]!.request_id, presented[1]!.request_id];
+    expect(stored().sort()).toEqual([askedA, askedB].sort());
+    // The first agent's answer leaves the second's request standing in the column.
+    expect(first.answerApproval(askedA, 'once')).toBe(true);
+    await a;
+    expect(stored()).toEqual([askedB]);
+    expect(second.answerApproval(askedB, 'once')).toBe(true);
+    await b;
+    expect(stored()).toEqual([]);
   });
 
   /*

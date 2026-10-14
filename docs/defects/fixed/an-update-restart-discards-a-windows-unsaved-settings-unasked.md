@@ -51,4 +51,4 @@ asking nothing, holds either way), `main-windows.test.ts` (`askUnsavedInTurn`'s 
 guard's terms) and `renderer/guard-question.test.ts` (two overlapping askings settle with one answer; the hook's source asks
 through the join, red against the unrepaired hook). No built-app proof: a development host's build is classified not
 updatable, so `update.restart` answers `update.notApplied` before any guard; `AGENTS.md`'s `updater-proof` line records the
-case as unit-tested, its run owed to the Windows package (IC-3).
+case as unit-tested, its run owed to the Windows package (a Windows x64 host, deferred with the release pipeline under R-071; IC-3 binds Linux and macOS artifacts).

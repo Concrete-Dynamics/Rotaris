@@ -322,8 +322,17 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
     return failSafely(prepared ? `staging store did not open: ${String(e)}` : `staging store could not be prepared: ${String(e)}`);
   }
 
-  // 9a — origin.txt before the install (D7). The counterfactual leaves the container's layout as it was.
-  if (!opts.skipArrange) { writeFileSync(join(stage, ORIGIN_FILE), `${ctx.originLabel}\n`); steps.push('9a-origin'); }
+  // 9a — origin.txt before the install (D7). The counterfactual leaves the container's layout as it was. A write that
+  // fails (a full disk, a refused create) is a failure that leaves the store as it was, as the journal's below is: nothing
+  // has been displaced yet, so it returns through OQ-265's discard rather than rejecting with the copy left behind.
+  if (!opts.skipArrange) {
+    try {
+      writeFileSync(join(stage, ORIGIN_FILE), `${ctx.originLabel}\n`);
+    } catch (e) {
+      return failSafely(`the restored store's origin could not be written: ${String(e)}`);
+    }
+    steps.push('9a-origin');
+  }
 
   // OQ-266 — the journal, durable before step 8, so a process cut between the two renames leaves a restore the next open
   // can name and reverse (`recoverCutRestore`, recover.ts). The counterfactual (`skipJournal`) is the cut as it was.

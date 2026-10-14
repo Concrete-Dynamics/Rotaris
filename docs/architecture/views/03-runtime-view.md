@@ -1856,7 +1856,8 @@ of §5 and none a channel: each is a request answered once.
 **The whole-store restore around it (ADR-0058, REQ-SESSION-201).** The workspace service runs `restoreStore` with the run
 host's connection closed: the artifact staged as `<identifier>.restoring-<n>` (step 6), the store displaced (step 8), the
 staging copy installed (step 9), and on a failed install the R1/R2 reversal. Every failure that returns with the store as it
-was deletes the staging copy before it returns (OQ-265, `discardStaging`); a delete that fails is listed in the report's
+was deletes the staging copy before it returns (OQ-265, `discardStaging`), a failed step-9a write of `origin.txt` among them
+(fin44); a delete that fails is listed in the report's
 `leftovers`, named in its error and logged; a reversal that failed keeps and lists the copy beside the displaced store.
 Before step 8 it writes the journal `<identifier>.restore-pending`, removed once step 9 or the reversal succeeds (OQ-266).
 

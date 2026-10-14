@@ -13760,6 +13760,11 @@ reversal that keeps and lists the copy, and a delete that fails); all six and E2
 and the kill-in-the-gap case are unchanged. The two advocates' recommendations are in the orchestrator's ruling record, not
 copied here.
 
+***Extended 2026-10-14 (fin44, `fin44-optional-findings`).*** Step 9a's write of `origin.txt` was the one failure before step 8
+left outside the guard: a throw there rejected the restore after the run host had closed its store, with the copy left
+behind. It now returns through the same discard, as "the restored store's origin could not be written: …"; pinned by
+`store.test.ts` ([the note](../defects/fixed/a-restores-origin-write-that-fails-rejects-with-the-staging-copy-left-behind.md)).
+
 <a id="oq-266"></a>
 
 **OQ-266 — What does the product do with a restore that was cut between its two renames?** *(REQ-SESSION-201, "a restore that

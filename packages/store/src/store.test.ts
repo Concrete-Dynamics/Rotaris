@@ -649,6 +649,34 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
       expect(r.leftovers).toEqual([]);
     });
 
+    it('an origin.txt that cannot be written (step 9a) is a returned failure that leaves the store as it was and deletes the staging copy (OQ-265)', async () => {
+      seed(root, id, [{ sid: 'S-1', rows: 2 }]);
+      const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 3 }]);
+      // An artifact whose container also carries a directory at origin.txt's name: step 9a's write fails (EISDIR) after the
+      // run host has closed its store, as a full disk or a refused create would. Before the guard it rejected the restore.
+      const unpacked = mkdtempSync(join(tmpdir(), 'rotaris-origin-dir-'));
+      try {
+        expandArtifactInto(artifact, unpacked);
+        mkdirSync(join(unpacked, 'origin.txt'));
+        writeFileSync(join(unpacked, 'origin.txt', 'x'), 'x');
+        rmSync(artifact);
+        expect(spawnSync('tar', ['-cf', artifact, '-C', unpacked, '.']).status).toBe(0);
+      } finally {
+        rmSync(unpacked, { recursive: true, force: true });
+      }
+      const before = treeHash(storeDir(root, id));
+      const r = await restoreStore(ctx(rh(), artifact));
+      expect(r.ok).toBe(false);
+      expect(r.abandoned).toBe(false);
+      expect(r.error).toMatch(/^the restored store's origin could not be written: /);
+      expect(r.steps).not.toContain('9a-origin');
+      expect(r.steps).not.toContain('8-journal');
+      expect(treeHash(storeDir(root, id))).toBe(before);
+      expect(existsSync(journal())).toBe(false);
+      expect(readdirSync(root).filter((n) => n.includes('.restoring-') || n.includes('.displaced-'))).toEqual([]);
+      expect(r.leftovers).toEqual([]);
+    });
+
     it('a journal that cannot be removed does not turn an open into a throw', () => {
       seed(root, id, [{ sid: 'S-1', rows: 1 }]);
       // A journal the remove cannot take (a non-empty directory in its place): the open still opens, reversing nothing.

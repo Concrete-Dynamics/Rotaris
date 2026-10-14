@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A restore's step-9a origin write that fails returns through OQ-265's discard (fin44, `fin44-optional-findings`;
+`../../defects/fixed/a-restores-origin-write-that-fails-rejects-with-the-staging-copy-left-behind.md`).** No command,
+channel or store column changed. `03-runtime-view.md` §7's restore paragraph names the failed `origin.txt` write among the
+failures that leave the store as it was and delete the staging copy.
+
 **A packaged build answers the probe's three capture variables alone (ADR-0056's seam check; fin44).** `capture/probe.ts` reads
 `_WAIT`, `_WAIT_MS`, `_END_VIEW`, `_END_VIEW_MS`, `_PROBE` and `_PROMPT_MS` behind `__ROTARIS_SEAMS__`, and the run host and the
 workspace service read `_SKILLS_HOME` and `_INSTRUCTIONS_HOME` behind it; `scripts/lib/seam-check.mjs` names all eight. The

@@ -67,19 +67,15 @@ export interface ScriptedCallRecord {
  * It sits in the scripted client and nowhere else, so it can only ever see a call no provider was going to answer:
  * there is no path by which it records traffic bound for a real endpoint.
  *
- * IN A PACKAGED BUILD (`__ROTARIS_SEAMS__` false) it reads no variable at all: every read of its script variables sits behind
- * the flag on its own line and is compiled out with its name, the run host's dialect switch with it (`configuration.ts`), so
- * it answers a model only where a configuration file names the `scripted` provider, and then with `PACKAGED_SCRIPT`. Until
- * 2026-10-14 a packaged build read them all, and a variable chose which tools it called and with which arguments
- * (docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md).
+ * IT DOES NOT SHIP. `host.ts` builds it only behind `__ROTARIS_SEAMS__`, and with the flag false nothing references this module,
+ * so rollup leaves it out of a packaged build's `run-host.js`: no configuration reaches it there, an entry naming the `scripted`
+ * provider included (OQ-312, ruled 2026-10-14 under R-072: such an entry is then refused as a provider the build knows no
+ * endpoint for). Its script reads still sit behind the flag on their own lines, as the seam check holds every verification read.
+ * Until 2026-10-14 a packaged build read its variables, and a variable chose which tools it called and with which arguments
+ * (docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md); after that repair it still
+ * answered a `scripted` entry with a fixed one-step script until OQ-312's build removed it
+ * (docs/defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
  */
-/**
- * The orchestrator's steps in a packaged build: the one terminal call (`git status`) that `scripts/package.mjs`'s launch of the
- * packaged application reads back from its store (ADR-0056 rule 4 (b)), then a streamed answer; a child takes none. Fixed in
- * the bundle, so nothing outside the configuration changes what a packaged build's scripted model does. Whether a person's own
- * configuration may name the `scripted` provider in a shipped build at all is OQ-312.
- */
-export const PACKAGED_SCRIPT = 'git';
 
 /** A step that answers with no assistant message, so an agent's record never shows it: a failure, a hang, a wait prefix. */
 const LEAVES_NO_MESSAGE = /^(fail(:.*)?|hang|wait:\d+)$/;
@@ -327,9 +323,8 @@ export function withLatestHash(args: unknown, messages: readonly ChatMessage[]):
 export function scriptedClient(c: Clocks, log: (message: string) => void, record?: (call: ScriptedCallRecord) => void, ledger?: StandingLedger): ModelClient {
   const parse = (v: string | undefined) => (v ?? '').split(',').map((x) => x.trim()).filter((x) => x.length > 0);
   // ROTARIS_SCRIPT drives the orchestrator; ROTARIS_CHILD_SCRIPT every child (a `delegate:<persona>:<name>` step delegates).
-  // Both are read behind the build-time flag on the read's own line, so a packaged build carries neither name: there the
-  // orchestrator takes the packaged probe's one step and a child none (`PACKAGED_SCRIPT`).
-  const orchestratorScript = __ROTARIS_SEAMS__ ? process.env['ROTARIS_SCRIPT'] : PACKAGED_SCRIPT;
+  // Both are read behind the build-time flag on the read's own line, as every verification read is (the seam check's rule).
+  const orchestratorScript = __ROTARIS_SEAMS__ ? process.env['ROTARIS_SCRIPT'] : undefined;
   const childScript = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CHILD_SCRIPT'] : undefined;
   const loopScript = /^loop:([^:]+):(\d+)$/.exec(orchestratorScript ?? '');
   const scripts: Record<string, string[]> = { orchestrator: loopScript ? Array.from({ length: Number(loopScript[2]) }, () => loopScript[1]!) : parse(orchestratorScript), child: parse(childScript) };

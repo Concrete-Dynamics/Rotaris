@@ -190,6 +190,23 @@ describe('launch configuration ownership (REQ-TRACE-470/471, REQ-SESSION-138)', 
     expect(live).toEqual({ runtime: { permission_mode: 'ask', max_iterations: 17 } });
   });
 
+  /*
+   * OQ-312 (ruled 2026-10-14 under R-072): in a packaged build (`__ROTARIS_SEAMS__` false) a `provider: scripted` entry with no
+   * `base_url` is a provider the build knows no endpoint for, refused before any lease or session (REQ-EVENTS-021/019).
+   */
+  it('a packaged build refuses a scripted entry as no model before a lease, and starts no session (OQ-312)', async () => {
+    vi.stubGlobal('__ROTARIS_SEAMS__', false);
+    try {
+      writeFileSync(file(dir), 'models:\n  scripted: { provider: scripted, model_id: scripted }\nsmall_model: scripted\nmedium_model: scripted\nlarge_model: scripted\n');
+      const lease = vi.fn(async () => ({}));
+      expect(await launch('scripted', lease)).toEqual({ kind: 'refused', code: 'session.no-model', headline: 'No model configured', detail: 'Choose a model in Settings before starting a run.' });
+      expect(lease).not.toHaveBeenCalled();
+      expect(setups.size).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('the grant crosses the main-to-host contract and is stripped from a renderer start', () => {
     const request = { kind: 'session.start', workspaceId: dir, prompt: 'answer', boardPermissions: 'permissive' };
     expect(RunHostRequestSchema.parse(request)).toHaveProperty('boardPermissions', 'permissive');

@@ -538,3 +538,28 @@ must come before the next proof. *Since 2026-09-27 it says so only when the buil
 > packaged build's client answers with one fixed `git status` call (`PACKAGED_SCRIPT`). Whether a person's configuration may
 > select that client in a shipped build is OQ-312. The first seam-free build taught the JSDoc lesson's sibling: a string literal
 > in a log line survives too, so the tool step's log no longer spells its variable.
+>
+> **2026-10-14, plan fin46 — rule 4 (b) proves the shipped model client (OQ-312, ruled the same day under R-072 with no
+> directive).** The consortium ruled that a packaged build answers no `provider: scripted` entry: the scripted client is
+> compiled out with the other verification seams, and a `scripted` entry with no `base_url` gets the refusal any provider the
+> build knows no endpoint for gets (REQ-EVENTS-021/019). `host.ts` now builds the client only behind the flag, so rollup leaves
+> `scripted-client.ts` out of the packaged `run-host.js`; `configuration.ts`'s `isScriptedProvider` answers the provider with it
+> only where the seams are compiled in; `PACKAGED_SCRIPT` is gone; and the seam check names the client's own log line
+> (`scripted model call:`). Rule 4 (b)'s launch is re-based on a loopback OpenAI-compatible stub `package.mjs` starts itself
+> (`scripts/lib/stub-model-endpoint.mjs`, 127.0.0.1, a port the system picks), configured as `provider: openai` at the stub's
+> `base_url` with a placeholder key, which the packaged application reaches through `AiSdkModelClient` exactly as it reaches a
+> person's provider. The step keeps its store assertions and adds one: the stub served at least one tools request and sent its
+> `git status` call. **The reason it ran on the scripted client, kept beside its replacement:** rule 4 (b) needed "a model that
+> makes one terminal call without a provider, a key or a network", and the stand-in was the one at hand; that reason held, but it
+> made the packaged build ship the stand-in and answer a person's `provider: scripted` entry with it
+> ([`../../defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md`](../../defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md)).
+> A loopback stub needs no provider, key or external network either, and it measures the client that ships. **First execution
+> (Linux, load 3 to 5):** a `ROTARIS_BUILD=package` build's `out/main` carries no `scripted model call:` and the seam check reads
+> PASS (the same build of the unrepaired source reads FAIL, `scripted model call: (run-host.js)`); rule 4 (b)'s launch shape run
+> against that `out/main` under `xvfb-run` — `package.mjs` itself is Windows-only — recorded one session `completed` and one
+> `terminal` call settled `ok`, the window photographed, with the stub serving five requests (three classifications, two tools
+> requests, one terminal call) and no scripted model call in the log; the old configuration (`provider: scripted`, no
+> `base_url`) against the same build started no session and logged "No usable model is configured for the entry role … (provider
+> scripted) has no base_url and this build knows no endpoint for that provider". `pnpm package`'s own run of the re-based step is
+> owed to the next Windows package (a Windows x64 host, deferred with the release pipeline under R-071; IC-3 binds Linux and macOS
+> artifacts).

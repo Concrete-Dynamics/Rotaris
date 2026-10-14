@@ -230,6 +230,15 @@ returns before another configuration load. Launch audits record effective permis
 effective configuration snapshot: slots, redacted models, personas with prompt files resolved inline,
 runtime and every other typed section, plus redacted MCP server declarations.
 
+**The model client a run is handed (OQ-312, ruled 2026-10-14 under R-072, built by fin46).** `prepareRun` hands the run the
+product's `AiSdkModelClient` for every `models:` entry, authenticated as configured, unless the entry is the scripted client's:
+under the verification-only dialect switch (`scriptedDialect`), or for an entry naming the `scripted` provider — and both only
+where the seams are compiled in (`isScriptedProvider`, `run-host/configuration.ts`). A packaged build carries no scripted client
+(`host.ts` builds it behind `__ROTARIS_SEAMS__`), and a `scripted` entry there with no `base_url` refuses the start before any lease,
+"No usable model is configured for the entry role" (REQ-EVENTS-021/019, `session.no-model`); with a `base_url` it is an
+OpenAI-compatible provider name. ADR-0056 rule 4 (b)'s packaged launch runs against a loopback stub reached through that client.
+*(Until then a packaged build answered a `scripted` entry with the stand-in and a fixed one-step script.)*
+
 **The continuation lease (2026-09-14, REQ-PROVIDER-066).** The run-launching continuation commands —
 `session.continue`, `session.prompt`, `session.planDecision`, and since 2026-10-02 `session.retry` (REQ-NOTIFY-045) — re-ask main for the credential lease
 (`leaseForContinuation`) before the engine resolves the run's setup, and publish the fresh bearers under

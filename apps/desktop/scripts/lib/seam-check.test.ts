@@ -191,11 +191,41 @@ describe('a packaged build answers none of the scripted model client\'s variable
     expect(seamCheck(dir).present).toEqual(['ROTARIS_MODEL_DIALECT (run-host.js)', 'ROTARIS_SCRIPT (run-host.js)']);
   });
 
-  it('the packaged launch of package.mjs sets none of them: its configuration names the scripted model', () => {
+  it('the packaged launch of package.mjs sets none of them', () => {
     const text = readFileSync(join(import.meta.dirname, '..', 'package.mjs'), 'utf8');
     const launch = text.slice(text.indexOf('Rule 4 (b)'));
-    expect(launch).toMatch(/provider: scripted/);
     for (const name of SCRIPTED) expect(launch, name).not.toMatch(new RegExp(`\\b${name}\\b`));
+  });
+});
+
+/*
+ * OQ-312 (ruled 2026-10-14 under R-072, no directive): a packaged build answers no `provider: scripted` entry, so the scripted
+ * client itself does not ship and rule 4 (b) runs against a loopback stub reached through the product's own model client. Until
+ * the ruling's build `package.mjs`'s launch configured `provider: scripted`, and the seam check named nothing of the client, so a
+ * packaged `run-host.js` carrying it passed
+ * (docs/defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
+ */
+describe('a packaged build carries no scripted model client (OQ-312, ADR-0056)', () => {
+  let dir: string | undefined;
+  afterEach(() => { if (dir !== undefined) rmSync(dir, { recursive: true, force: true }); dir = undefined; });
+
+  it('the seam check refuses a packaged run host that carries the scripted client', () => {
+    expect(FORBIDDEN as string[]).toContain('scripted model call:');
+    // The client's own log line, which only the client writes (`scripted-client.ts`): if it moves, this list must follow it.
+    expect(readFileSync(join(SRC, 'run-host', 'scripted-client.ts'), 'utf8')).toContain('log(`scripted model call: ');
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-seam-check-'));
+    writeFileSync(join(dir, 'index.js'), 'env.ROTARIS_CAPTURE_PNG; env.ROTARIS_CAPTURE_PROMPT; env.ROTARIS_CAPTURE_AFTER_MS;');
+    writeFileSync(join(dir, 'run-host.js'), 'log(`scripted model call: ${req.model.providerId}/${req.model.modelId} (${who})`);');
+    expect(seamCheck(dir).present).toEqual(['scripted model call: (run-host.js)']);
+  });
+
+  it('package.mjs\'s rule 4 (b) launch names no provider: scripted, and runs against the stub it starts', () => {
+    const text = readFileSync(join(import.meta.dirname, '..', 'package.mjs'), 'utf8');
+    const launch = text.slice(text.indexOf('Rule 4 (b)'));
+    expect(launch).not.toMatch(/provider:\s*scripted/);
+    expect(launch).toMatch(/startStubModelEndpoint\(\)/);
+    expect(launch).toMatch(/provider: openai, model_id: rule-4b-stub, base_url: "\$\{stub\.baseUrl\}"/);
+    expect(launch).toMatch(/stub\.counts\.toolsRequests < 1 \|\| stub\.counts\.terminalCalls < 1/);
   });
 });
 

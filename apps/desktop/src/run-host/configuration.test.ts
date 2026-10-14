@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
-import { authProvidersOf, classifierSlotsOf, configureRun, postRunAnalystOf, restingCatalogueOf, contextLimitsOf, credentialResolver, egressReader, entryTierOf, personaResolverFor, runtimeFromConfiguration } from './configuration.js';
+import { authProvidersOf, classifierSlotsOf, configureRun, credentialFactory, modelRefOf, postRunAnalystOf, prepareRun, restingCatalogueOf, contextLimitsOf, credentialResolver, egressReader, entryTierOf, personaResolverFor, runtimeFromConfiguration } from './configuration.js';
 import { childModelKey } from '@rotaris/engine';
 import { nodeClocks } from '@rotaris/platform';
 import { loadConfiguration, type ModelEntry } from '@rotaris/config';
@@ -524,5 +524,98 @@ personas:
     expect(personas.delegationTargets()).not.toContain('intent-classifier');
     expect(personas.delegationTargets()).not.toContain('gatekeeper');
     expect(personas.delegationTargets()).toContain('lead');
+  });
+});
+
+/*
+ * OQ-312 (ruled 2026-10-14 under R-072, no directive): a packaged build answers no `provider: scripted` entry. The provider is
+ * the scripted client's only behind the build-time flag (`isScriptedProvider`), so with `__ROTARIS_SEAMS__` false a `scripted`
+ * entry with no `base_url` is a provider this build knows no endpoint for (REQ-EVENTS-021/019), and one with a `base_url` is an
+ * OpenAI-compatible provider name authenticated as configured. Until the repair the provider was tested bare, and a shipped build
+ * answered it with the scripted client's fixed script and no credential
+ * (docs/defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
+ */
+describe('a packaged build answers no provider: scripted entry (OQ-312, REQ-EVENTS-021, REQ-CONFIG-478)', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+  const packaged = () => { vi.stubGlobal('__ROTARIS_SEAMS__', false); };
+  // `scripts/package.mjs`'s rule 4 (b) configuration until OQ-312: every slot the scripted model.
+  const SCRIPTED_ONLY = 'models:\n  scripted: { provider: scripted, model_id: scripted }\nsmall_model: scripted\nmedium_model: scripted\nlarge_model: scripted\nruntime:\n  permission_mode: autonomous\nrotaris:\n  delegation_strategy: single\n';
+  const write = (text: string) => {
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), text);
+  };
+  const scriptedClientCalls = () => {
+    const calls = { n: 0 };
+    return { calls, d: { ...deps({}), scriptedClient: () => { calls.n += 1; throw new Error('the scripted client was asked for'); } } };
+  };
+
+  it('a scripted entry with no base_url is refused with the no-endpoint reason, and the scripted client is never asked for', () => {
+    packaged();
+    write(SCRIPTED_ONLY);
+    const { calls, d } = scriptedClientCalls();
+    const r = prepareRun(join(dir, 'ws'), true, d);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.code).toBe('no-model');
+    expect(r.error.reason).toBe("No usable model is configured for the entry role, so the run was refused before it started: model 'scripted' (provider scripted) has no base_url and this build knows no endpoint for that provider.");
+    expect(calls.n).toBe(0);
+  });
+
+  it('a scripted entry with a base_url is an OpenAI-compatible provider name, authenticated with its configured key', async () => {
+    packaged();
+    write('models:\n  scripted: { provider: scripted, model_id: stub, base_url: "http://127.0.0.1:9/v1", api_key: configured-key }\nsmall_model: scripted\nmedium_model: scripted\nlarge_model: scripted\n');
+    const { calls, d } = scriptedClientCalls();
+    const r = configureRun(join(dir, 'ws'), true, d);
+    if (!r.ok) throw new Error(r.error.reason);
+    expect(calls.n).toBe(0);
+    expect(r.value.scripted).toBe(false);
+    expect(r.value.model.config.model).toMatchObject({ providerId: 'scripted', modelId: 'stub', baseUrl: 'http://127.0.0.1:9/v1' });
+    expect(await r.value.model.config.credentialFor(r.value.model.config.model)()).toBe('configured-key');
+  });
+
+  it('a scripted slot or child under a real entry yields no reference and no empty-key credential', async () => {
+    packaged();
+    write(`default_persona: orchestrator
+models:
+  real: { provider: openai, model_id: gpt-x, api_key: real-key }
+  scripted: { provider: scripted, model_id: scripted }
+large_model: real
+medium_model: real
+small_model: scripted
+personas:
+  orchestrator:
+    name: Orchestrator
+    model: real
+  coding-agent:
+    name: Coding agent
+    model: scripted
+`);
+    const { calls, d } = scriptedClientCalls();
+    const r = configureRun(join(dir, 'ws'), true, d);
+    if (!r.ok) throw new Error(r.error.reason);
+    expect(calls.n).toBe(0);
+    expect(modelRefOf(r.value.cfg, 'scripted', false)).toBeNull();
+    expect(classifierSlotsOf(r.value.cfg, false).small).toBeNull();
+    expect(r.value.personas!.resolve('coding-agent')!.persona.modelRef).toBeUndefined();
+    // A reference naming the provider is no entry's: the entry model's credential answers it, never an empty key.
+    const warned: string[] = [];
+    const f = credentialFactory(r.value.cfg, false, {}, () => ({}), async () => 'real-key', (m) => warned.push(m));
+    expect(await f({ providerId: 'scripted', modelId: 'scripted', dialect: 'chat' })()).toBe('real-key');
+    expect(warned).toEqual(['credentials: no models: entry produced scripted/scripted; the entry model\'s credential is used for it']);
+  });
+
+  it('in a build with the seams, the same entry is still the scripted client\'s, with no credential (every proof\'s path)', async () => {
+    write(SCRIPTED_ONLY);
+    const { calls, d } = scriptedClientCalls();
+    const prepared = prepareRun(join(dir, 'ws'), true, d);
+    if (!prepared.ok) throw new Error(prepared.error.reason);
+    expect(prepared.value.entryAuthProvider).toBeNull();
+    expect(() => prepared.value.complete({})).toThrow('the scripted client was asked for');
+    expect(calls.n).toBe(1);
+    const loaded = loadConfiguration({ globalDir: join(dir, 'config'), workspaceRoot: join(dir, 'ws') });
+    if (!loaded.ok) throw new Error('configuration');
+    expect(modelRefOf(loaded.value, 'scripted', false)).toMatchObject({ providerId: 'scripted', modelId: 'scripted' });
+    const f = credentialFactory(loaded.value, false, {}, () => ({}), async () => 'entry', () => {});
+    expect(await f({ providerId: 'scripted', modelId: 'scripted', dialect: 'chat' })()).toBe('');
   });
 });

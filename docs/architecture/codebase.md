@@ -260,8 +260,10 @@ authenticates with the bearer **main leases the run host** at run start (`creden
 uses its `api_key` or `api_key_env`, read per request. `ROTARIS_MODEL_DIALECT=scripted` selects the scripted client
 for every model (verification only) and is **the last environment stopgap** — since 2026-10-14 read behind `__ROTARIS_SEAMS__`
 (`scriptedDialect`), so a packaged build has no such switch; a `models:` entry with provider
-`scripted` does the same per entry, in every build (in a packaged one with the fixed `PACKAGED_SCRIPT`; OQ-312 asks whether a
-shipped build should answer it at all). A fatal file, no model at all ("No model configured") or an unauthenticated
+`scripted` does the same per entry, only where the seams are compiled in (`isScriptedProvider`, OQ-312 ruled 2026-10-14 under
+R-072, no directive): a packaged build carries no scripted client at all, and there a `scripted` entry with no `base_url` is a
+provider the build knows no endpoint for, refused as any other, and one with a `base_url` an OpenAI-compatible provider name.
+*(It read "in every build (in a packaged one with the fixed `PACKAGED_SCRIPT`)" until fin46 built the ruling.)* A fatal file, no model at all ("No model configured") or an unauthenticated
 entry provider ("Provider authentication required", REQ-WORKSPACE-137) refuses the run before it starts
 (REQ-EVENTS-021, REQ-CONFIG-478). Since Part L every call resolves **the credential of the model it goes to**
 (`credentialFor`; ADR-0030 second execution): the classifier's slot, the loop classifier's model, the summariser on
@@ -1646,8 +1648,14 @@ workspace service is named by the list). `vitest.config.ts` defines the flag `tr
 (`docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`). *Repaired by fin45 the same day:* the
 scripted model client's variables — the dialect switch and the twelve script variables, read in the run host with no flag —
 are behind it too, the list names them, and `seam-check.test.ts` fails any `ROTARIS_*` read off the flag in a module a packaged
-build keeps unless it is a product variable or one of the probe's three; a packaged build's scripted provider (rule 4 (b)'s launch)
-answers with the fixed `PACKAGED_SCRIPT` (`docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md`).
+build keeps unless it is a product variable or one of the probe's three (`docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md`).
+*Built by fin46 the same day (OQ-312, ruled under R-072 with no directive):* the scripted client itself does not ship. `host.ts`
+builds it only behind the flag, so rollup leaves `scripted-client.ts` out of the packaged `run-host.js`; `isScriptedProvider` answers
+a `provider: scripted` entry with it only where the seams are compiled in; the list names the client's own log line
+(`scripted model call:`); and rule 4 (b)'s launch runs against a loopback OpenAI-compatible stub `package.mjs` starts itself
+(`scripts/lib/stub-model-endpoint.mjs`), reached through the shipped `AiSdkModelClient`. *(Until then a packaged build's scripted
+provider — rule 4 (b)'s launch — answered with a fixed `PACKAGED_SCRIPT`;
+`docs/defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md`.)*
 
 **A trap closed on the way:** `pnpm package` leaves `out/` holding the seam-free build, and every `*-proof` script
 launches `out/main/index.js` and drives those seams — so the next proof run after a package would have failed for a

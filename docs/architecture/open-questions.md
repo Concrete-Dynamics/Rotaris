@@ -14925,6 +14925,29 @@ needs another model that answers without a network).
 
 **What a live run then shows.** Nothing: a live run configures a real provider and never the `scripted` one.
 
+**Ruled 2026-10-14 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)), kind change-behaviour,
+with no directive:** a packaged build answers no `provider: scripted` entry. The scripted client is compiled out of the packaged
+bundle with the other verification seams, and a `scripted` entry with no `base_url` gets the same refusal as any provider the build
+knows no endpoint for (REQ-EVENTS-021/019, "No usable model is configured for the entry role"). ADR-0056 rule 4 (b) is re-based on
+a loopback OpenAI-compatible stub that `scripts/package.mjs` starts itself, which the packaged launch reaches through the product's
+own model client. REQ-CONFIG-082, REQ-EVENTS-021/019, REQ-CONFIG-478 and ADR-0029/0030 govern as written, so the ruling alone
+settles it. *The as-built reading kept above — an entry naming the `scripted` provider answered by the scripted client in every
+build, in a packaged one with the fixed script alone — is the falsified one.* **The two recommendations weighed:** the advocates'
+recommendations were not handed to the building bundle, and the orchestrator's ruling record holds them. **Built 2026-10-14 by
+fin46 (`fin46-accept1-11`):** `isScriptedProvider` (`__ROTARIS_SEAMS__ && provider === 'scripted'`) in place of every bare test in
+`apps/desktop/src/run-host/configuration.ts` (`modelRefOf`, both empty-key branches of `credentialFactory`, `prepareRun`'s
+`isScripted`); `host.ts` building the scripted client only behind the flag (off it, a function that throws, unreachable), so rollup
+leaves `scripted-client.ts` out of the packaged `run-host.js`; `PACKAGED_SCRIPT` and its packaged branch removed;
+`apps/desktop/scripts/lib/stub-model-endpoint.mjs` and `package.mjs`'s rule 4 (b) step on it, with the added assertion that the stub
+served a tools request and sent its `git status` call; `scripted model call:` in the seam check's forbidden list. Pinned by
+`configuration.test.ts` and `launch.test.ts` (the flag stubbed false), `seam-check.test.ts` and `stub-model-endpoint.test.ts`; shown
+by a `ROTARIS_BUILD=package` build and rule 4 (b)'s launch shape against it under `xvfb-run` on Linux (ADR-0056's report-back); the
+Windows `pnpm package` run of the re-based step is owed to the next Windows package (a Windows x64 host, deferred with the release
+pipeline under R-071; IC-3 binds Linux and macOS artifacts)
+([`../defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md`](../defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md)).
+Recorded beside it, outside the ruling's repair:
+[`../defects/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md`](../defects/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md).
+
 <a id="oq-400"></a>
 
 **OQ-400 — What a Windows ARM64 host's readings discharge** *(REQ-STARTUP-026, which presents a Windows-ARM64 visitor the

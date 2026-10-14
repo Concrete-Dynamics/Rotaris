@@ -31,6 +31,18 @@ export const PROVIDER_BASE_URLS: Readonly<Record<string, string>> = Object.freez
 });
 export const SCRIPTED_PROVIDER = 'scripted';
 
+/**
+ * OQ-312 (ruled 2026-10-14 under R-072, no directive): whether a `models:` entry's provider is answered by the scripted client.
+ * Only in a build with the verification seams: with `__ROTARIS_SEAMS__` false (a packaged build) a `scripted` entry with no
+ * `base_url` is a provider this build knows no endpoint for, refused as any other (REQ-EVENTS-021/019), and one with a
+ * `base_url` is an OpenAI-compatible provider name authenticated as configured (REQ-CONFIG-082, ADR-0029/0030). Until the
+ * ruling's build the provider was tested bare, and a shipped build answered it with the scripted client and no credential
+ * (docs/defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
+ */
+export function isScriptedProvider(provider: string): boolean {
+  return __ROTARIS_SEAMS__ && provider === SCRIPTED_PROVIDER;
+}
+
 export interface RuntimeFromConfiguration extends RuntimePosture {
   readonly approvalTimeoutMs: number;
   readonly headlessPolicy: HeadlessPolicy;
@@ -149,13 +161,14 @@ export function thinkingOf(entry: Pick<ModelEntry, 'thinking'> | null | undefine
 /**
  * A `models:` entry as the model port's reference; null when the entry is absent or has no reachable endpoint. Under
  * the scripted dialect the reference keeps the entry's own provider family (Part Q: two scripted providers must stay
- * distinct for REQ-NOTIFY-082's candidate rule); the scripted client answers for every family regardless.
+ * distinct for REQ-NOTIFY-082's candidate rule); the scripted client answers for every family regardless. An entry naming the
+ * `scripted` provider is the scripted client's only where the seams are compiled in (`isScriptedProvider`, OQ-312).
  */
 export function modelRefOf(cfg: LoadedConfiguration, name: string | null, scripted: boolean): ModelRef | null {
   if (name === null) return null;
   const entry = cfg.models[name];
   if (!entry) return null;
-  if (scripted || entry.provider === SCRIPTED_PROVIDER) return { providerId: entry.provider === '' ? SCRIPTED_PROVIDER : entry.provider, modelId: entry.model_id, dialect: 'chat', acceptsImageInput: entry.accepts_image_input };
+  if (scripted || isScriptedProvider(entry.provider)) return { providerId: entry.provider === '' ? SCRIPTED_PROVIDER : entry.provider, modelId: entry.model_id, dialect: 'chat', acceptsImageInput: entry.accepts_image_input };
   const baseUrl = entry.base_url ?? PROVIDER_BASE_URLS[entry.provider];
   if (!baseUrl) return null;
   const dialect = entry.api_mode === 'responses' && !entry.disable_responses_api ? 'responses' : 'chat';
@@ -186,13 +199,13 @@ export function credentialFactory(cfg: LoadedConfiguration, scripted: boolean, e
     const ref = modelRefOf(cfg, name, scripted);
     if (!ref) continue;
     const key = credentialKey(ref);
-    if (!byKey.has(key)) byKey.set(key, ref.providerId === SCRIPTED_PROVIDER ? async () => '' : credentialResolver(e, env, bearers));
+    if (!byKey.has(key)) byKey.set(key, isScriptedProvider(ref.providerId) ? async () => '' : credentialResolver(e, env, bearers));
   }
   const warned = new Set<string>();
   return (model) => {
     const found = byKey.get(credentialKey(model));
     if (found) return found;
-    if (model.providerId === SCRIPTED_PROVIDER) return async () => '';
+    if (isScriptedProvider(model.providerId)) return async () => '';
     if (!warned.has(credentialKey(model))) { warned.add(credentialKey(model)); warn(`credentials: no models: entry produced ${model.providerId}/${model.modelId}; the entry model's credential is used for it`); }
     return entry;
   };
@@ -475,7 +488,10 @@ export interface ConfigureDeps {
   readonly env: Readonly<Record<string, string | undefined>>;
   /** REQ-MCP-033 / ADR-0035 (Part T): what the reserved token launches — this application's own executable with the token first. */
   readonly codeIntelligenceLaunch?: BuiltinLaunch | null;
-  /** The scripted client: every model under the dialect switch (verification only), or an entry naming the `scripted` provider. */
+  /**
+   * The scripted client: every model under the dialect switch, or an entry naming the `scripted` provider — both verification
+   * only, and neither reachable in a packaged build (`isScriptedProvider`, OQ-312), where `host.ts` hands a function that throws.
+   */
   readonly scriptedClient: () => ModelClient;
   readonly onRequest: (info: { url: string; method: string; headers: Record<string, string> }) => void;
   readonly log: (m: string) => void;
@@ -543,7 +559,7 @@ export function restingCatalogueOf(workspaceRoot: string, deps: Pick<ConfigureDe
 /**
  * The dialect switch: every model of every run answered by the scripted client, with no credential asked — verification only.
  * Read behind `__ROTARIS_SEAMS__` on the read's own line, so a packaged build compiles the read and its name out and answers a
- * model with the scripted client only where a configuration entry names the `scripted` provider. Until 2026-10-14 it was read
+ * model with the scripted client nowhere (OQ-312: nor where an entry names the `scripted` provider). Until 2026-10-14 it was read
  * with no flag, and one variable replaced every model of a shipped build with the stand-in
  * (docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md).
  */
@@ -637,7 +653,7 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
   }
   const snapshotRead = readProjectSnapshot(join(deps.globalDir, PROJECT_SETTINGS_FILE), () => undefined);
   const authProviders = authProvidersOf(cfg);
-  const isScripted = scripted || model.providerId === SCRIPTED_PROVIDER;
+  const isScripted = scripted || isScriptedProvider(model.providerId);
   const entryAuthProvider = isScripted ? null : entry?.auth_provider ?? null;
   return ok({ authProviders, entryAuthProvider, complete: (bearers) => {
     const runtime = runtimeFromConfiguration(cfg, verdict, deps.sharedQuotaCaps?.() ?? {});

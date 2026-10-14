@@ -55,6 +55,10 @@ export const FORBIDDEN = [
   // `_SCRIPT_*_ARGS` and `_SCRIPT_QUESTIONS` family.
   'ROTARIS_MODEL_DIALECT', 'ROTARIS_SCRIPT', 'ROTARIS_CHILD_SCRIPT', 'ROTARIS_LOOP_SCRIPT', 'ROTARIS_INTENT_SCRIPT',
   'ROTARIS_COMPRESSOR_SCRIPT', 'ROTARIS_IMPROVEMENT_SCRIPT',
+  // fin46 (OQ-312, ruled 2026-10-14 under R-072): the scripted client itself, by the log line only it writes. A packaged build
+  // answers no `provider: scripted` entry, so the client is compiled out with the seams and its module is not emitted
+  // (docs/defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
+  'scripted model call:',
 ];
 
 /**

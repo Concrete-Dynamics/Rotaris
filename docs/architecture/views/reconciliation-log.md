@@ -16,6 +16,15 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A packaged build carries no scripted model client (fin46, `fin46-accept1-11`; OQ-312).** `02-process-view.md`'s run-host row
+says the scripted client does not ship — `host.ts` builds it behind `__ROTARIS_SEAMS__`, and a `provider: scripted` entry is the
+client's only where the seams are compiled in (`isScriptedProvider`) — with the old reading ("then with the fixed
+`PACKAGED_SCRIPT`") kept beside it; `03-runtime-view.md` §1 gains "The model client a run is handed", which states the same at
+`prepareRun` and that rule 4 (b)'s packaged launch runs against a loopback stub. No package, edge or process changed. The README's
+date stays 2026-10-15, the later.
+
+Last reconciled with the code: **2026-10-14**
+
 **A refused hook-review notice action is said on screen (2026-10-14, fin46 `fin46-accept1-10`, C22; REQ-NOTIFY-254,
 REQ-NOTIFY-003).** The process view's `hooks.review {workspace?}` entry and the sequences view's notice-action block say that the
 pressing renderer publishes main's refusal as a persistent `warning` notice (`renderer/notice-action-refusal.ts`), a refused reach

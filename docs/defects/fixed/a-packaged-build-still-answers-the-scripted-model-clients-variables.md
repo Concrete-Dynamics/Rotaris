@@ -87,3 +87,11 @@ unreachable `base_url`: no scripted model call at all, the orchestrator's reques
 (bad port)"). The seamed build still drives the variables: `pnpm edits-proof` and `pnpm questions-proof` (both scripted through
 `_SCRIPT_TOOL_ARGS` and `_SCRIPT_QUESTIONS`) exit 0. `pnpm package` itself was not run: it produces a release artifact, which this
 Linux host may not (IC-3).
+
+**Outcome addendum — 2026-10-14 (fin46, `fin46-accept1-11`; [OQ-312](../../architecture/open-questions.md#oq-312) ruled under
+R-072).** The client itself does not ship any more. The repair above left it in every build so that rule 4 (b)'s launch could reach
+it through a `provider: scripted` configuration, and a packaged build answered such an entry with the fixed `PACKAGED_SCRIPT`.
+OQ-312's ruling removed that path: `host.ts` builds the client only behind `__ROTARIS_SEAMS__`, so the packaged `run-host.js`
+carries none of it; a packaged build refuses a `scripted` entry with no `base_url` as a provider it knows no endpoint for; and rule
+4 (b) runs against a loopback OpenAI-compatible stub through the shipped model client
+([`a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md`](a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md)).

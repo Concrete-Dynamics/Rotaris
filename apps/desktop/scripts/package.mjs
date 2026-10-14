@@ -11,7 +11,9 @@
  *                                           version normalised (`0.1.0rc1` → `0.1.0-rc1`)
  *   2. electron-builder --win               rebuild → pack → hooks (rule 1a, rule 4a, the assets, the naming) → installer
  *   3. the packaged app, launched           rule 4 (b): the product's own path opens a store in a real
- *                                           utilityProcess and runs a terminal call; both settle in the store
+ *                                           utilityProcess and runs a terminal call; both settle in the store. The model
+ *                                           is a loopback OpenAI-compatible stub this script starts
+ *                                           (lib/stub-model-endpoint.mjs), reached through the shipped model client (OQ-312)
  *   4. release/load-proof.json              the merged report; a non-zero exit on any miss
  *
  * ROTARIS_PACKAGE_DIR_ONLY=1   stop at win-unpacked (no installer)
@@ -36,6 +38,7 @@ import { hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harnes
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { closingLines, reached, STEPS } from './lib/package-verdict.mjs';
 import { FORBIDDEN, KEPT, seamCheck } from './lib/seam-check.mjs';
+import { startStubModelEndpoint, STUB_TERMINAL_COMMAND } from './lib/stub-model-endpoint.mjs';
 import { ABOUT_ASSETS, flagUsage, settleNoticesStep, WITHOUT_NOTICES } from './lib/about-assets.mjs';
 import { declaredProductVersion, namedConfigurationText, packagingArtifactNames } from './lib/artifact-names.mjs';
 
@@ -135,8 +138,9 @@ try {
     report.assets.buildId = id;
     return { buildId: id };
   });
-  // ROTARIS_BUILD=package compiles the verification seams OUT (electron.vite.config.ts). A packaged binary that
-  // could still be scripted through its environment is the thing this flag exists to prevent.
+  // ROTARIS_BUILD=package compiles the verification seams OUT (electron.vite.config.ts), the scripted model client with them
+  // (OQ-312: `host.ts` references it only behind the flag, so rollup leaves `scripted-client.ts` out of `run-host.js`). A packaged
+  // binary that could still be scripted through its environment or its configuration is the thing this flag exists to prevent.
   step(`${STEPS.build} (seams compiled out)`, () => run('pnpm', ['exec', 'electron-vite', 'build'], { env: { ...process.env, ROTARIS_BUILD: 'package' } }));
   /**
    * The SEAM CHECK: the shipped bundle carries the probe's three seams and NOT the scriptable ones.
@@ -211,55 +215,71 @@ try {
 appRun = await stepAsync('the packaged app opens a store and runs a terminal call', async () => {
   const exe = join(RELEASE, 'win-unpacked', 'Rotaris.exe');
   if (!existsSync(exe)) throw new Error(`no packaged executable at ${exe}`);
-  const scratch = join(RELEASE, 'scratch');
-  rmSync(scratch, { recursive: true, force: true });
-  const ws = join(scratch, 'workspace');
-  const lad = join(scratch, 'LocalAppData');
-  mkdirSync(ws, { recursive: true });
-  mkdirSync(lad, { recursive: true });
-  writeFileSync(join(ws, 'README.md'), '# scratch\n');
-  // The run reads its files (ADR-0036): the scripted model, an autonomous mode and the single strategy. No variable selects or
-  // scripts the model: a packaged build compiles those out, and its scripted provider takes the one `git status` call this step
-  // reads back (`PACKAGED_SCRIPT`, run-host/scripted-client.ts; docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md).
-  mkdirSync(join(ws, '.rotaris'), { recursive: true });
-  writeFileSync(join(ws, '.rotaris', 'agents.yaml'), 'models:\n  scripted: { provider: scripted, model_id: scripted }\nsmall_model: scripted\nmedium_model: scripted\nlarge_model: scripted\nruntime:\n  permission_mode: autonomous\nrotaris:\n  delegation_strategy: single\n');
-  spawnSync('git', ['init', '-q'], { cwd: ws, stdio: 'ignore' });
-  const png = join(RELEASE, 'load-proof.png');
-  const env = {
-    ...process.env,
-    ...proofIsolationEnv({ profileRoot: scratch, local: lad }),
-    ROTARIS_CAPTURE_PNG: png,
-    ROTARIS_CAPTURE_PROMPT: 'show me the tree',
-    ROTARIS_CAPTURE_AFTER_MS: '9000',
-  };
-  for (const k of Object.keys(env)) if (k.startsWith('ROTARIS_CAPTURE_') && !(k in { ROTARIS_CAPTURE_PNG: 1, ROTARIS_CAPTURE_PROMPT: 1, ROTARIS_CAPTURE_AFTER_MS: 1 })) delete env[k];
-  const r = await spawnBounded(exe, [...hostSwitches, ws], { env, timeoutMs: 120_000, windowsHide: true });
-  const log = `${r.stdout || ''}\n${r.stderr || ''}`;
-  writeFileSync(join(RELEASE, 'load-proof.app.log'), log);
-  if (r.overran) throw new Error(`${overrunMessage('the packaged app', r, log)}\n(see load-proof.app.log)`);
-  const dbs = [];
-  // By the platform, never as a Windows literal: the POSIX answer has no `data` segment, so the literal
-  // found nothing off Windows while reading as though the launch had written nothing.
-  const wsRoot = workspacesRootFor(lad);
-  if (existsSync(wsRoot)) for (const d of readdirSync(wsRoot)) { const f = join(wsRoot, d, 'workspace.db'); if (existsSync(f)) dbs.push(f); }
-  if (dbs.length !== 1) throw new Error(`expected one workspace store under ${wsRoot}, found ${dbs.length} (app exit ${r.status ?? r.signal}); see load-proof.app.log`);
-  const Database = require('better-sqlite3');
-  const db = new Database(dbs[0], { readonly: true });
-  const userVersion = db.pragma('user_version', { simple: true });
-  const sessions = db.prepare('SELECT session_id, execution_status FROM sessions ORDER BY updated_at DESC').all();
-  const calls = db.prepare('SELECT tool_name, status, is_error FROM tool_calls ORDER BY ordinal').all();
-  db.close();
-  const terminal = calls.find((c) => c.tool_name === 'terminal');
-  const result = { exit: r.status, signal: r.signal, store: dbs[0], userVersion, sessions, calls, painted: existsSync(png), captured: /captured /.test(log) };
-  if (userVersion < 1) throw new Error(`the store was not migrated (user_version ${userVersion})`);
-  if (sessions.length !== 1) throw new Error(`expected one session, found ${sessions.length}`);
-  if (!terminal) throw new Error(`no terminal call was recorded; calls: ${JSON.stringify(calls)}`);
-  if (terminal.status === 'running') throw new Error(`the terminal call never settled: ${JSON.stringify(terminal)}`);
-  if (!result.painted) throw new Error('the packaged app did not paint (no capture)');
-  return result;
+  const stub = await startStubModelEndpoint();
+  try {
+    const scratch = join(RELEASE, 'scratch');
+    rmSync(scratch, { recursive: true, force: true });
+    const ws = join(scratch, 'workspace');
+    const lad = join(scratch, 'LocalAppData');
+    mkdirSync(ws, { recursive: true });
+    mkdirSync(lad, { recursive: true });
+    writeFileSync(join(ws, 'README.md'), '# scratch\n');
+    /*
+     * The run reads its files (ADR-0036): an OpenAI-compatible model at the loopback stub this step starts, an autonomous mode and
+     * the single strategy. The packaged application reaches the stub through the product's own model client, as it reaches any
+     * configured provider, and the stub answers the run's tools request with the one `git status` call this step reads back. The
+     * key is a placeholder the stub never checks; the stub is no seam and asks the packaged build for nothing but HTTP.
+     *
+     * OQ-312 (ruled 2026-10-14 under R-072, no directive): this configuration named the `scripted` provider until the ruling's
+     * build, which reached the scripted model client and its fixed one-step script in the packaged build — the reason that client
+     * shipped at all. A packaged build answers no such entry now, and this step proves the shipped model client instead
+     * (docs/defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
+     */
+    mkdirSync(join(ws, '.rotaris'), { recursive: true });
+    writeFileSync(join(ws, '.rotaris', 'agents.yaml'), `models:\n  stub: { provider: openai, model_id: rule-4b-stub, base_url: "${stub.baseUrl}", api_key: rule-4b-placeholder-key }\nsmall_model: stub\nmedium_model: stub\nlarge_model: stub\nruntime:\n  permission_mode: autonomous\nrotaris:\n  delegation_strategy: single\n`);
+    spawnSync('git', ['init', '-q'], { cwd: ws, stdio: 'ignore' });
+    const png = join(RELEASE, 'load-proof.png');
+    const env = {
+      ...process.env,
+      ...proofIsolationEnv({ profileRoot: scratch, local: lad }),
+      ROTARIS_CAPTURE_PNG: png,
+      ROTARIS_CAPTURE_PROMPT: 'show me the tree',
+      ROTARIS_CAPTURE_AFTER_MS: '9000',
+    };
+    for (const k of Object.keys(env)) if (k.startsWith('ROTARIS_CAPTURE_') && !(k in { ROTARIS_CAPTURE_PNG: 1, ROTARIS_CAPTURE_PROMPT: 1, ROTARIS_CAPTURE_AFTER_MS: 1 })) delete env[k];
+    const r = await spawnBounded(exe, [...hostSwitches, ws], { env, timeoutMs: 120_000, windowsHide: true });
+    const log = `${r.stdout || ''}\n${r.stderr || ''}`;
+    writeFileSync(join(RELEASE, 'load-proof.app.log'), log);
+    if (r.overran) throw new Error(`${overrunMessage('the packaged app', r, log)}\n(see load-proof.app.log)`);
+    const dbs = [];
+    // By the platform, never as a Windows literal: the POSIX answer has no `data` segment, so the literal
+    // found nothing off Windows while reading as though the launch had written nothing.
+    const wsRoot = workspacesRootFor(lad);
+    if (existsSync(wsRoot)) for (const d of readdirSync(wsRoot)) { const f = join(wsRoot, d, 'workspace.db'); if (existsSync(f)) dbs.push(f); }
+    if (dbs.length !== 1) throw new Error(`expected one workspace store under ${wsRoot}, found ${dbs.length} (app exit ${r.status ?? r.signal}); see load-proof.app.log`);
+    const Database = require('better-sqlite3');
+    const db = new Database(dbs[0], { readonly: true });
+    const userVersion = db.pragma('user_version', { simple: true });
+    const sessions = db.prepare('SELECT session_id, execution_status FROM sessions ORDER BY updated_at DESC').all();
+    const calls = db.prepare('SELECT tool_name, status, is_error FROM tool_calls ORDER BY ordinal').all();
+    db.close();
+    const terminal = calls.find((c) => c.tool_name === 'terminal');
+    const result = { exit: r.status, signal: r.signal, store: dbs[0], userVersion, sessions, calls, painted: existsSync(png), captured: /captured /.test(log) };
+    if (userVersion < 1) throw new Error(`the store was not migrated (user_version ${userVersion})`);
+    if (sessions.length !== 1) throw new Error(`expected one session, found ${sessions.length}`);
+    if (!terminal) throw new Error(`no terminal call was recorded; calls: ${JSON.stringify(calls)}`);
+    if (terminal.status === 'running') throw new Error(`the terminal call never settled: ${JSON.stringify(terminal)}`);
+    if (!result.painted) throw new Error('the packaged app did not paint (no capture)');
+    // OQ-312: the terminal call came from the shipped model client's request to the stub, not from a stand-in inside the build.
+    result.stub = { ...stub.counts };
+    if (stub.counts.toolsRequests < 1 || stub.counts.terminalCalls < 1) throw new Error(`the stub model served no tools request with its ${STUB_TERMINAL_COMMAND} call (${JSON.stringify(stub.counts)}): the terminal call did not come through the product's model client`);
+    return result;
+  } finally {
+    await stub.close();
+  }
 });
 } catch (e) {
   finish(false, String(e.message));
 }
-process.stdout.write(`[package] packaged app: session ${appRun.sessions[0].execution_status}, terminal call ${appRun.calls.find((c) => c.tool_name === 'terminal').status}, store v${appRun.userVersion}\n`);
+process.stdout.write(`[package] packaged app: session ${appRun.sessions[0].execution_status}, terminal call ${appRun.calls.find((c) => c.tool_name === 'terminal').status}, store v${appRun.userVersion}, stub model ${appRun.stub.requests} request(s), ${appRun.stub.terminalCalls} terminal call(s)\n`);
 finish(true);

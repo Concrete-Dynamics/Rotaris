@@ -3,7 +3,7 @@ import { millis, toIsoUtc, type Millis } from '@rotaris/kernel';
 import { dataLayout, environmentWithout, installedProductVersion, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import type { PromptLists, StoreDal, StoreHandle } from '@rotaris/store';
 import { meteredBackend, RefusalLease, LOOP_ACTIVATION_BUDGET_MS, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
-import type { ModelRef, ThinkingLevel } from '@rotaris/model';
+import type { ModelClient, ModelRef, ThinkingLevel } from '@rotaris/model';
 import { ConfinementService, PresenterRegistry, renderUnavailability, spawnTrial, type AvailabilityVerdict, STREAM_SETTINGS_DEFAULTS, withheldUnderPlanGate, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, implementationRole, RunHostPresenter, terminalManagerFromHost } from './tools.js';
 import { createTerminalHost } from './terminal.js';
@@ -21,7 +21,8 @@ import { leasedSetup, leaseForContinuation, LeaseReportLog, type LeasedSetup } f
 import { randomUUID } from 'node:crypto';
 import { appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-// The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network.
+// The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network. Reached only behind
+// `__ROTARIS_SEAMS__` below, so a packaged build's bundle carries none of it (OQ-312).
 import { fileLedger, scriptedClient, type ScriptedCallRecord } from './scripted-client.js';
 import { throwOnAbortNames } from './throw-on-abort.js';
 import { reportNoticeEvent, runNoticeEvent, runResultEvent } from './session-roots.js';
@@ -43,7 +44,8 @@ import { reportNoticeEvent, runNoticeEvent, runResultEvent } from './session-roo
  * WHERE THE MODEL AND THE RUNTIME COME FROM — the configuration files, loaded
  * per run start with the live state on top (ADR-0036/0037, `configuration.ts`).
  * The dialect switch (`scriptedDialect`, compiled out of a packaged build) selects
- * a built-in scripted client for every model (verification only). A fatal file or an unreachable entry model refuses
+ * a built-in scripted client for every model (verification only), and an entry naming the `scripted` provider selects it
+ * for that entry, only where the seams are compiled in (OQ-312). A fatal file or an unreachable entry model refuses
  * the run before it starts (REQ-EVENTS-021, REQ-CONFIG-478).
  */
 
@@ -206,8 +208,16 @@ export function createRunHost() {
    * the data directory, which a proof's root isolates; a real provider's client never reads or writes it.
    */
   const standing = __ROTARIS_SEAMS__ ? fileLedger(join(resolveUserDirs().data, 'scripted-standing.json'), (m) => log(m, 'warn')) : undefined;
+  /*
+   * OQ-312 (ruled 2026-10-14 under R-072): the scripted client exists only behind the build-time flag. Off it, no configuration
+   * reaches it (`isScriptedProvider` and `scriptedDialect` are false), so the stand-in below is unreachable and throws if that
+   * ever changes; with the client referenced nowhere else, rollup drops `scripted-client.ts` from the packaged `run-host.js`.
+   */
+  const scripted: () => ModelClient = __ROTARIS_SEAMS__
+    ? () => scriptedClient(clocks, log, recordModelCall, standing)
+    : () => { throw new Error('a packaged build carries no scripted model client (OQ-312)'); };
   const configurationDeps = {
-    clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks, log, recordModelCall, standing), codeIntelligenceLaunch,
+    clocks, globalDir: configDir, env: process.env, scriptedClient: scripted, codeIntelligenceLaunch,
     onRequest: (i: { method: string; url: string; headers: Record<string, string> }) => log(`model request ${i.method} ${i.url}${i.headers['authorization'] ? '' : ' (no authorization header)'}`),
     log: (m: string) => log(m), liveState: () => liveState, bearers: (root: string) => leased.get(root) ?? {},
     confinement: () => confinement.peek(),

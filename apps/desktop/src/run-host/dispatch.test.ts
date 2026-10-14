@@ -292,7 +292,6 @@ describe('a retrospective authenticates as a run does: leased first, its setup c
     ask: async () => ({ kind: 'improvements.result', value: [] }),
     // The workspace's cached setup, completed when no lease had been taken: its credential is the empty one.
     configuredFor: () => { seen.push('configuredFor'); return run('stale-analyst', ''); },
-    leaseForWorkspace: async () => { seen.push('leaseForWorkspace'); return null; },
     retrospectiveSetup: async (r: string) => { seen.push(`retrospectiveSetup ${r}`); return { kind: 'configured', setup: run('leased-analyst', 'leased-bearer'), bearers: { p: 'leased-bearer' } }; },
   }) as unknown as RunHost;
   const job = { artifact_id: 'impart_0000000r', pass: 'retrospective', workspace_root: root } as unknown;

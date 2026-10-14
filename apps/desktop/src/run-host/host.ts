@@ -559,7 +559,6 @@ export function createRunHost() {
     configure,
     leaseReports,
     continuationLeaseForSession,
-    leaseForWorkspace,
     retrospectiveSetup,
     configuredFor,
     sessions,

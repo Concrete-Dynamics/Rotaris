@@ -13942,6 +13942,20 @@ prefix, level 3 takes more cases level 4 took, and a whitespace-only line of the
 need a rule of its own; kept, the commonest multi-line edit shape — a block with a blank line — is outside `PD-TOOLS-015` and
 `PD-TOOLS-014`, and lands unshifted at level 4 beside a success on an LF file.
 
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** level 3 matches blank lines by having
+no visible character. Once `PD-TOOLS-019` sets one trailing `\r` aside, a line of `old_string` with no visible character matches a
+window line with no visible character at any shift, whatever whitespace either holds, and never matches a line that holds one.
+The leading prefix is measured, added and removed only on lines that hold a visible character, starting from `old_string`'s
+first such line and the window's line at the same index (`PD-TOOLS-015`'s O and W). An `old_string` with no visible character
+never matches at level 3. In a level-3 `write_file` apply, a blank line of `new_string` paired with a blank line of `old_string`
+is written as the window's own line, byte for byte. Recorded as [`PD-TOOLS-020`](../product/directives.md#pd-tools-020)
+(narrowing REQ-TOOLS-136 at level 3 only; levels 1, 2 and 4, their order and the first-matching-level rule unchanged), with
+[`PD-TOOLS-014`](../product/directives.md#pd-tools-014) revision 4 (the level-3 sentence names the lines that hold a visible
+character when the window holds a blank one) and [`PD-TOOLS-016`](../product/directives.md#pd-tools-016) revision 4 (clause 1's
+pairing also runs at level 3 for blank lines); `PD-TOOLS-015` and `PD-TOOLS-019` carry in-place notes. *The build's reading — "What
+the build proceeds under" above, a blank line taking part in the shift like any other — is kept as the falsified one.* Written
+2026-10-14 by fin44 (`fin44-supervision-and-match`).
+
 <a id="oq-280"></a>
 
 **OQ-280 — Does match level 3 compare a line without its carriage return?** *(REQ-TOOLS-136, the four match levels — level 2

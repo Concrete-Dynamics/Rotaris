@@ -500,6 +500,11 @@ Independently of exit code, a pipeline check adds the warning `Pipeline command 
 > measures, adds and removes the leading prefix on those lines, so an LF `old_string` one uniform indent off matches a CRLF file at
 > level 3.
 
+> **Narrowed by [`PD-TOOLS-020`](../product/directives.md#pd-tools-020), 2026-10-14.** Levels 1, 2 and 4 and the order of the
+> levels are unchanged; at level 3 a line with no visible character matches a line with none, at any shift and whatever
+> whitespace either holds, and never a line that holds one; the prefix is measured on `old_string`'s first line that holds a
+> visible character and added or removed on such lines only; an `old_string` with no visible character never matches at level 3.
+
 **REQ-TOOLS-137** — The hash-anchored read and edit tools (`haet_read`, `haet_edit`, and the alias `haet`) enforce the same workspace fence as REQ-TOOLS-129 and honor the same `runtime.allow_outside_workspace` opt-out. Their record of which files have been read is scoped to the workspace root and shared by every run in that workspace, so a file read during one run can be edited by a later run without being read again. Their action surface is fixed by REQ-TOOLS-189.
 
 **REQ-TOOLS-188** — One similarity function serves every threshold in this domain. For two strings *a* and *b*, similarity(*a*, *b*) = 1 − editDistance(*a*, *b*) / max(length(*a*), length(*b*)), where editDistance is the unit-cost edit distance over Unicode code points — insertion, deletion, and substitution each costing 1 — length is counted in code points, and the similarity of two empty strings is 1. The result lies in [0, 1] and is symmetric in its arguments. The 0.85 fuzzy-edit threshold of REQ-TOOLS-136 and the 0.45 filename-suggestion cutoff of REQ-TOOLS-134 are both read against this function and against no other, so two implementations of this specification return the same score for the same pair of strings and accept the same edits and suggestions.

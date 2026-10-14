@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Ninety-two.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Ninety-three.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -7993,11 +7993,21 @@ quoted beneath each.*
 set aside, and clause 2 at level 3 adds one sentence when the line endings differ too; revision 2's text is quoted beside each
 changed clause. [`PD-TOOLS-015`](#pd-tools-015) clause 4's refusal inherits the sentence through clause 2.*
 
+*Revision 4 (2026-10-14, [R-072](requests.md#r-072), ruling [OQ-295](../architecture/open-questions.md#oq-295) with
+[`PD-TOOLS-020`](#pd-tools-020)) — **blank lines at level 3**: the case's level-3 parenthetical names the lines with no visible
+character, and clause 2's level-3 sentence names the lines that hold one when the window holds a blank line; revision 3's text
+is quoted beneath each. `PD-TOOLS-015` clause 4's refusal inherits the wording through clause 2.*
+
 **The case, stated exhaustively.** `haet_edit` or its alias `haet` is called with a `content_hash` equal to the SHA-256 of the
 file's current bytes, `old_string` and `new_string` different, `replace_all` false; `old_string` matches nowhere at REQ-TOOLS-136
 level 1; and it matches at level 2 (each line equal once trailing whitespace, a carriage return included, is ignored) or level 3
 (each line equal once one uniform leading prefix is added or removed, a carriage return ending a line set aside
-(`PD-TOOLS-019`)) *(— revision 3)*. Everything outside this case is REQ-TOOLS-189's, exactly as written.
+(`PD-TOOLS-019`), and a line with no visible character matching a line with none, whatever whitespace either holds
+(`PD-TOOLS-020`)) *(— revision 4)*. Everything outside this case is REQ-TOOLS-189's, exactly as written.
+
+> Revision 3 said, and no longer governs: "… or level 3 (each line equal once one uniform leading prefix is added or removed, a
+> carriage return ending a line set aside (`PD-TOOLS-019`))" — under which a blank line took part in the shift, so a block with a
+> blank interior line never reached level 3 and its miss was the plain one.
 
 > Revision 2 said, and no longer governs: "… or level 3 (each line equal once one uniform leading prefix is added or removed)."
 > — which, as built, compared the `\r` of a CRLF line, so an LF `old_string` one indent off never reached level 3 on a CRLF file.
@@ -8011,7 +8021,13 @@ and then:
    leading prefix the file's lines carry in addition to, or instead of, `old_string`'s, quoted as JSON with its length, and,
    when any window line and its `old_string` line differ by a trailing `\r`, the sentence `The line endings differ too: CRLF in
    the file and LF in old_string. The quoted text carries the file's line endings.` (or, the other way round, `LF in the file
-   and CRLF in old_string`, read on the first such line) *(— revision 3)*;
+   and CRLF in old_string`, read on the first such line) *(— revision 3)*; when the window holds a line with no visible
+   character, the level-3 sentence reads `Every line of the file that holds a visible character carries the leading prefix …
+   in addition to old_string's indentation.` (deeper) or `Every line of old_string that holds a visible character carries the
+   leading prefix … that the file's lines do not.` (shallower), and is otherwise unchanged *(— revision 4)*;
+
+   > Revision 3 said, and no longer governs, the level-3 sentence alone: "Every line of the file carries the leading prefix …"
+   > (and "Every line of old_string carries …") — false of a blank line once `PD-TOOLS-020` leaves it out of the shift.
 
    > Revision 2 said, and no longer governs: "say in words what differs: at level 2, the lines whose trailing whitespace or
    > carriage return differs; at level 3, the leading prefix the file's lines carry in addition to, or instead of,
@@ -8145,6 +8161,11 @@ REQ-TOOLS-135's and REQ-TOOLS-136's, exactly as written.
 
 > Level 3's comparison is narrowed by [`PD-TOOLS-019`](#pd-tools-019) ([OQ-280](../architecture/open-questions.md#oq-280)).
 
+> *Since [`PD-TOOLS-020`](#pd-tools-020) (2026-10-14, [OQ-295](../architecture/open-questions.md#oq-295)):* this case now reaches
+> blocks holding blank lines — a line of `old_string` with no visible character matches a window line with none at any shift —
+> and O and W above are where level 3 measures its prefix. The clauses are unchanged; what a blank line of `new_string` paired
+> with a blank line of `old_string` writes is `PD-TOOLS-016` revision 4's.
+
 1. **No visible character.** When `new_string` holds no visible character (a deletion), it SHALL be written as given and the
    reply SHALL be REQ-TOOLS-136's, unchanged.
 2. **N equals O: the shift.** `new_string` SHALL take the window's shift. In the deeper direction P is prepended to every line
@@ -8242,6 +8263,10 @@ no longer says an exact `old_string` converts endings; revision 1's text is quot
 edit whose carried result equals the file is refused**: clause 4 is added, and the cost sentence says so; revision 2's cost
 text is quoted beneath it. The case is unchanged: it already held the edit clause 4 refuses.*
 
+*Revision 4 (2026-10-14, [R-072](requests.md#r-072), ruling [OQ-295](../architecture/open-questions.md#oq-295) with
+[`PD-TOOLS-020`](#pd-tools-020)) — **level 3's blank lines are the window's own**: clause 1's heading and scope read "at level 2,
+and at level 3 for blank lines"; revision 3's clause 1 heading is quoted beneath it.*
+
 **The case, stated exhaustively.** `write_file` is called with `operation: edit`, `replace_all` false, `old_string` and
 `new_string` different, and `old_string` matches nowhere at REQ-TOOLS-136 level 1 and exactly one window at level 2, 3 or 4. At
 level 3 this directive applies after [`PD-TOOLS-015`](#pd-tools-015) has decided the replacement, and its refusal is unchanged.
@@ -8256,13 +8281,19 @@ levels and their order are unchanged *(— revision 2)*.
 > `haet_edit` and its alias `haet` ([`PD-TOOLS-014`](#pd-tools-014)) — is REQ-TOOLS-135's and REQ-TOOLS-136's, exactly as
 > written, and REQ-TOOLS-136's levels and their order are unchanged."
 
-1. **Pairing, at level 2 only.** The lines of `new_string` SHALL be paired with the lines of `old_string` by exact text
-   equality: first the longest run of equal leading lines; then the longest run of equal trailing lines, which does not overlap
+1. **Pairing, at level 2, and at level 3 for blank lines** *(— revision 4)*. The lines of `new_string` SHALL be paired with the
+   lines of `old_string` by exact text equality: first the longest run of equal leading lines; then the longest run of equal trailing lines, which does not overlap
    the leading run; then a longest common subsequence of the lines between, chosen by this walk from the front — pair the two
    current lines when they are equal; otherwise skip the `old_string` line when that leaves the remaining common subsequence no
    shorter, and skip the `new_string` line otherwise. When the lines between are more than 4,000,000 line pairs (the product of
    their counts), only the two runs pair. Every paired line of `new_string` SHALL be written as the corresponding line of the
-   window, verbatim, including its trailing whitespace and carriage return.
+   window, verbatim, including its trailing whitespace and carriage return. At level 3 the pairing runs over `old_string` and
+   `new_string` as the caller gave them, before `PD-TOOLS-015`'s shift, and only a pair whose `old_string` line holds no visible
+   character is written as the window's line; every other line of the replacement is `PD-TOOLS-015`'s *(— revision 4)*.
+
+   > Revision 3 said, and no longer governs, the heading alone: "**Pairing, at level 2 only.**" — under which a blank line that
+   > `PD-TOOLS-020` matches without its whitespace would be written as `new_string` gave it, dropping a whitespace-only line's
+   > bytes or a CRLF window's `\r` where clause 2 does not restore it.
 2. **Line endings, at levels 2, 3 and 4.** The window is CRLF when at least one of its lines is followed by a line break in the
    file and every such line ends in `\r`; a window with no such line is CRLF when the file's lines outside it pass the same
    test. On a CRLF window, every line of the replacement that a line break follows in the result SHALL gain `\r` when it lacks
@@ -8534,6 +8565,11 @@ What a level-3 match then does stays as follows: [`PD-TOOLS-015`](#pd-tools-015)
 `PD-TOOLS-015` governs **what a level-3 apply writes**; [`PD-TOOLS-017`](#pd-tools-017) governs level 1 and `replace_all`. None
 of the three restates another.
 
+> *Since [`PD-TOOLS-020`](#pd-tools-020) (2026-10-14, [OQ-295](../architecture/open-questions.md#oq-295)):* which windows match at
+> level 3 is decided by this directive and `PD-TOOLS-020` together — this one sets one trailing `\r` aside on every line, and
+> `PD-TOOLS-020` then compares lines with no visible character by having none and measures the prefix on the first visible line.
+> The two are disjoint: neither restates the other.
+
 **Why, and what it costs.** On a CRLF file every line ends in `\r`, and an `old_string` a model writes in a JSON string almost
 never carries one. Level 2 already strips the `\r` with the trailing whitespace, but level 3 compared lines exactly, so an LF
 `old_string` one uniform indent off never matched a CRLF file at level 3 ([OQ-280](../architecture/open-questions.md#oq-280)).
@@ -8575,6 +8611,53 @@ three is otherwise revised.*
 > at the file's depth and a level-3 near miss names the endings, and is the orchestrator's to run. Repairs
 > [`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3`](../defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-tools-020"></a>
+
+### PD-TOOLS-020 — level 3 matches blank lines by having no visible character
+
+**The case, stated exhaustively.** An edit's `old_string` matches nowhere at REQ-TOOLS-136 level 1 or level 2, and level 3 is
+tried, each line read with one trailing `\r` set aside ([`PD-TOOLS-019`](#pd-tools-019)). Then:
+
+1. a line of `old_string` with no visible (non-whitespace) character SHALL match a window line with no visible character, at any
+   shift and whatever whitespace either holds, and SHALL NOT match a window line that holds one;
+2. the leading prefix SHALL be measured on `old_string`'s first line that holds a visible character and the window's line at the
+   same index (`PD-TOOLS-015`'s O and W), and SHALL be added to or removed from only the lines that hold a visible character,
+   each such pair equal once it is;
+3. an `old_string` with no visible character SHALL NOT match at level 3.
+
+Levels 1, 2 and 4, their order, and the rule that the first matching level decides are unchanged.
+
+**Disjoint from the other narrowings of REQ-TOOLS-136.** This directive and `PD-TOOLS-019` decide **which windows match** at
+level 3; [`PD-TOOLS-015`](#pd-tools-015) decides **what a level-3 apply writes** for `write_file`'s single window (it already
+writes a `new_string` line with no visible character as given); [`PD-TOOLS-016`](#pd-tools-016) decides **the bytes** — by its
+revision 4, a blank line of `new_string` paired with a blank line of `old_string` is written as the window's own line, byte for
+byte; [`PD-TOOLS-017`](#pd-tools-017) governs level 1 and `replace_all`. [`PD-TOOLS-014`](#pd-tools-014) revision 4 names the
+lines that hold a visible character in its level-3 sentence when the window holds a blank one. None restates another.
+
+**Why, and what it costs.** REQ-TOOLS-136's level 3 adds or removes "one and the same leading-whitespace prefix … to every line of
+the candidate", and is silent on a line with no visible character. As built, a blank line took the prefix like any other — the bare
+prefix in the deeper direction, a failed `startsWith` in the shallower — while the file's blank line is empty, so an indentation-
+shifted block holding a blank line never matched at level 3 ([OQ-295](../architecture/open-questions.md#oq-295)). Measured with
+`matchEdit` on `a`, `\t\tx = 1;`, an empty line, `\t\ty = 2;`, `z`: the block one tab shallow or one tab deep reached level 4 on an
+LF file (similarity 0.89 and 0.90), where `write_file` applied it unshifted beside "Verify the result.", and nothing on a CRLF file.
+A blank line inside a function body or between two statements is the commonest shape a multi-line edit carries, so the guarantee
+`PD-TOOLS-015` was ruled for — a mis-indented block never lands beside a success — did not hold for it, and `haet_edit` gave the
+plain miss. Editors do not indent blank lines consistently, so a blank line says nothing about the block's depth; reading it by
+having no visible character is the reading `PD-TOOLS-015` already gives a blank `new_string` line. What it costs: level 3 takes
+cases level 4 took, and a whitespace-only line of the file is matched by an empty one of `old_string` (and kept, byte for byte,
+by `PD-TOOLS-016` revision 4); a blank line can no longer tell two otherwise equal windows apart at level 3; and the product
+departs from an implementation built from the specification alone, which shifts every line.
+
+> **Narrows:** REQ-TOOLS-136
+
+*Ruled under the owner's delegation, 2026-10-13 ([OQ-295](../architecture/open-questions.md#oq-295)); logged as
+[R-072](requests.md#r-072). Narrows REQ-TOOLS-136 at level 3 only. Comes with `PD-TOOLS-014` revision 4 and `PD-TOOLS-016`
+revision 4, ruled with it; names `PD-TOOLS-015`, `PD-TOOLS-017` and `PD-TOOLS-019`, the other narrowings of REQ-TOOLS-136, each
+carrying an in-place note where its text meets this one. The build's reading, kept as the falsified one: a blank line takes part
+in level 3's shift like any other.*
 
 ---
 

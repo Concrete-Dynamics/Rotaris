@@ -209,8 +209,11 @@ exists. *Corrected 2026-10-14 ([OQ-262](../open-questions.md#oq-262), ruled 2026
 project initialization dispatches. Both project-setup banners carry `open-project-init` naming their project's folder
 ("Try again" on a failed background run, "Open Project settings" on a failed resolution); activated in any window, main's
 `projectInit.open` surfaces the main window holding that workspace and tells it on channel 15 (`project-init:open`) to open
-Settings › Project, and where no window holds it the activating window shows "Project <name> is not open in any window."
-and nothing else happens. `pnpm notice-proof` section 6c presses it from the window that does not hold the project.* *Corrected 2026-10-02: the retry was one of the seven as first written; since 2026-10-02 `retry-run`
+Settings › Project, ~~and where no window holds it the activating window shows "Project <name> is not open in any window."
+and nothing else happens~~ *(corrected 2026-10-14, [OQ-294](../open-questions.md#oq-294) ruled under R-072,
+[`PD-WORKSPACE-005`](../../product/directives.md#pd-workspace-005) revision 3: where no window holds it, `MainWindows.reach`
+adds a main window for it on [`PD-SHELL-001`](../../product/directives.md#pd-shell-001)'s add terms and Settings › Project
+opens there, held by the window until its renderer sends `projectInit.ready`)*. `pnpm notice-proof` section 6c presses it from the window that does not hold the project.* *Corrected 2026-10-02: the retry was one of the seven as first written; since 2026-10-02 `retry-run`
 dispatches to `retryRun` (`apps/desktop/src/renderer/session-actions.ts`, `REQ-NOTIFY-045`), which resubmits the
 composer's draft, else the followed session's last submitted prompt, and refuses with a reason when there is neither —
 [`the-retry-run-notice-action-has-no-target.md`](../../defects/fixed/the-retry-run-notice-action-has-no-target.md).

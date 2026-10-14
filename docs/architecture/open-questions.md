@@ -13725,7 +13725,10 @@ keeps the journal and refuses the open ("the store for this workspace is at X an
 while its own restore is in flight (`RestoreInFlight`, `apps/desktop/src/workspace-service/store-open.ts`), and then
 refuses rather than create beside the journal. The flag wraps `performRestore` and not the whole request: the service's own
 reopen after it runs the check, so a failed R2 with the target name free is repaired at once (and the report's error says so),
-where a flag around the whole request would have let that reopen create over the empty target; `workspace.opened` carries `cutRestore`, and main raises one info notice
+where a flag around the whole request would have had that reopen refuse (`workspace.restore-in-flight`, the journal beside
+an absent store) and left the store displaced until a later open *(this read "would have let that reopen create over the empty
+target" until fin43's review, 2026-10-14: an open with the check skipped refuses beside the journal and creates nothing,
+`store.test.ts`'s in-flight case)*; `workspace.opened` carries `cutRestore`, and main raises one info notice
 naming the stamp, whether the workspace's sessions were put back or it had none here, that nothing from the backup was
 applied, that a restore from Settings applies it, and where the prepared copy is kept. REQ-SESSION-202's check (W-31) runs
 after this one in the same open. Pinned by `store.test.ts` (the kill-in-the-gap case flipped, and its OQ-266 block: a stale

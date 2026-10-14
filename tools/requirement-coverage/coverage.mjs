@@ -58,13 +58,16 @@ const SKIPPED = [/^packages\/kernel\/src\/generated\//, /^tools\/requirement-cov
 /**
  * One citation run: an identifier, then any continuation of the forms the code uses. The continuation's numbers are
  * three digits not followed by a fourth, so `REQ-X-001, 2026-10-13` reads as one identifier; and a bare number followed by a
- * unit (`QUANTITY`) is a quantity, not a continuation, so `REQ-X-001, 200 ms` credits no REQ-X-200 and
- * `REQ-X-001 to 100 notices` expands no range.
+ * unit (`QUANTITY`, in any case) after a loose separator (a comma, `and`, `to`, `through`) is a quantity, not a
+ * continuation, so `REQ-X-001, 200 ms` credits no REQ-X-200 and `REQ-X-001 to 100 notices` expands no range. A tight
+ * separator (`..`, `–`, `/`) only ever joins identifiers, so `REQ-X-031..033 calls` is the range whatever follows it.
  */
-const QUANTITY = String.raw`(?!\s*(?:%|(?:ms|s|sec|seconds?|minutes?|min|hours?|px|[kKMG]B|bytes?|characters?|chars|lines?|tokens?|notices?|items?|calls?|files?|times|days?|rows?|entries|percent)\b))`;
-const CONTINUATION = String.raw`(?:(?:REQ|PD)-[A-Z]+-\d{3}(?!\d)|\d{3}(?!\d)${QUANTITY})`;
-const SEPARATOR = String.raw`(?:\.\.|–|\/|,\s*(?:and\s+)?|\s+(?:and|to|through)\s+)`;
-const RUN = new RegExp(String.raw`\b(REQ|PD)-([A-Z]+)-(\d{3})(?!\d)((?:\s*${SEPARATOR}\s*${CONTINUATION})*)`, 'g');
+const QUANTITY = String.raw`(?!\s*(?:%|(?i:(?:ms|s|sec|seconds?|minutes?|min|hours?|px|[kmg]b|bytes?|characters?|chars|lines?|tokens?|notices?|items?|calls?|files?|times|days?|rows?|entries|percent)\b)))`;
+const IDENTIFIER = String.raw`(?:REQ|PD)-[A-Z]+-\d{3}(?!\d)`;
+const TIGHT = String.raw`(?:\.\.|–|\/)`;
+const LOOSE = String.raw`(?:,\s*(?:and\s+)?|\s+(?:and|to|through)\s+)`;
+const STEP_IN_RUN = String.raw`(?:\s*${TIGHT}\s*(?:${IDENTIFIER}|\d{3}(?!\d))|\s*${LOOSE}\s*(?:${IDENTIFIER}|\d{3}(?!\d)${QUANTITY}))`;
+const RUN = new RegExp(String.raw`\b(REQ|PD)-([A-Z]+)-(\d{3})(?!\d)((?:${STEP_IN_RUN})*)`, 'g');
 const STEP = new RegExp(String.raw`(\.\.|–|\/|,\s*(?:and\s+)?|\s(?:and|to|through)\s)\s*(?:(REQ|PD)-([A-Z]+)-)?(\d{3})(?!\d)`, 'g');
 
 const pad = (/** @type {number} */ n) => String(n).padStart(3, '0');

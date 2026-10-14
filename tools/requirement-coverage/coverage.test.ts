@@ -49,6 +49,14 @@ describe('requirement coverage — the citation forms', () => {
     expect(ids('REQ-DEMO-001, 002 and 003 say so')).toEqual(['REQ-DEMO-001', 'REQ-DEMO-002', 'REQ-DEMO-003']);
   });
 
+  it('reads a tight continuation (`..`, `–`, `/`) as one even when a unit word follows it, and units in any case', () => {
+    expect(ids('REQ-DEMO-031..033 calls')).toEqual(['REQ-DEMO-031', 'REQ-DEMO-032', 'REQ-DEMO-033']);
+    expect(ids('REQ-DEMO-007/008 files')).toEqual(['REQ-DEMO-007', 'REQ-DEMO-008']);
+    expect(ids('REQ-DEMO-010–011 lines')).toEqual(['REQ-DEMO-010', 'REQ-DEMO-011']);
+    expect(ids('REQ-DEMO-001, 200 MS later')).toEqual(['REQ-DEMO-001']);
+    expect(ids('REQ-DEMO-001 to 100 Notices')).toEqual(['REQ-DEMO-001']);
+  });
+
   it('does not read a date or a wider span as a range', () => {
     expect(ids('REQ-DEMO-001, 2026-10-13')).toEqual(['REQ-DEMO-001']);
     expect(ids(`REQ-DEMO-001..${String(2 + MAX_RANGE).padStart(3, '0')}`)).toEqual(['REQ-DEMO-001', `REQ-DEMO-${String(2 + MAX_RANGE).padStart(3, '0')}`]);

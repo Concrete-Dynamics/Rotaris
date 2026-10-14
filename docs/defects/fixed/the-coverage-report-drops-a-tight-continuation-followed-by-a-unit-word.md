@@ -15,3 +15,10 @@ None: the report is a development tool (whats-next item N90) and no requirement 
 
 - `tools/requirement-coverage/coverage.mjs` — `QUANTITY`, `CONTINUATION`, `RUN`.
 - `tools/requirement-coverage/coverage.test.ts` — the citation forms.
+
+## Outcome
+
+Repaired 2026-10-14 (fin44, `fin44-optional-findings`): the quantity lookahead now applies only after a loose separator (a
+comma, `and`, `to`, `through`), never after `..`, `–` or `/`, and its unit words match in any case. Pinned by `coverage.test.ts`
+("reads a tight continuation … as one even when a unit word follows it, and units in any case"), red before the change; the
+existing quantity cases stay green.

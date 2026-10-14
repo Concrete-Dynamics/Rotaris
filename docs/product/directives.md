@@ -5163,6 +5163,15 @@ whose sentence reads "These three are yours, not this workspace's"); `packages/u
 `pnpm settings-proof`. Built 2026-10-13 by fin41 (N71) before the ruling, under the reading OQ-264 recorded; the ruling
 confirmed it, so no code changed with this directive.
 
+> **The live re-render notification across windows, 2026-10-14 (fin43), reported here in place:** "wired … to the live
+> re-render notification" held for the window that moved the switch only; a persona window already open kept the value it
+> booted with ([`an-open-persona-window-keeps-the-display-preferences-it-booted-with`](../defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md)).
+> Main now announces each of the three switches' preferences it stores to every live window on channel 14,
+> `display:changed`, and every window folds it into its display store. `palette-proof`'s stage 7
+> (`persona-follows-display`) read a persona window's reasoning row `aria-expanded="false"` before the main window's
+> "Toggle reasoning bodies" and `"true"` after it; against a build without the announcement it stayed `"false"`. The two
+> REQ-CONFIG-403 switches ride the same path and are unit-tested only (`apps/desktop/src/main/commands/shell.test.ts`).
+
 > **Extends:** REQ-CONFIG-403, REQ-CHAT-167
 
 *Raised 2026-10-13 by the ruling of [OQ-264](../architecture/open-questions.md#oq-264) under the owner's delegation

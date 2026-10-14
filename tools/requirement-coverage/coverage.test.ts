@@ -35,6 +35,20 @@ describe('requirement coverage — the citation forms', () => {
     ]);
   });
 
+  it('switches series and kind inside one run: a directive after a requirement takes the bare numbers after it', () => {
+    expect(ids('REQ-DEMO-001 / PD-DEMO-002, 003')).toEqual(['PD-DEMO-002', 'PD-DEMO-003', 'REQ-DEMO-001']);
+    expect(ids('PD-DEMO-004 and REQ-DEMO-010 to 012')).toEqual(['PD-DEMO-004', 'REQ-DEMO-010', 'REQ-DEMO-011', 'REQ-DEMO-012']);
+  });
+
+  it('does not read a quantity after a citation as a continuation: a number with its unit is no identifier', () => {
+    expect(ids('REQ-DEMO-001, 200 ms later')).toEqual(['REQ-DEMO-001']);
+    expect(ids('REQ-DEMO-001 to 100 notices')).toEqual(['REQ-DEMO-001']);
+    expect(ids('REQ-DEMO-001 and 300 characters')).toEqual(['REQ-DEMO-001']);
+    expect(ids('REQ-DEMO-001, 250%')).toEqual(['REQ-DEMO-001']);
+    // A list that goes on is still a list.
+    expect(ids('REQ-DEMO-001, 002 and 003 say so')).toEqual(['REQ-DEMO-001', 'REQ-DEMO-002', 'REQ-DEMO-003']);
+  });
+
   it('does not read a date or a wider span as a range', () => {
     expect(ids('REQ-DEMO-001, 2026-10-13')).toEqual(['REQ-DEMO-001']);
     expect(ids(`REQ-DEMO-001..${String(2 + MAX_RANGE).padStart(3, '0')}`)).toEqual(['REQ-DEMO-001', `REQ-DEMO-${String(2 + MAX_RANGE).padStart(3, '0')}`]);

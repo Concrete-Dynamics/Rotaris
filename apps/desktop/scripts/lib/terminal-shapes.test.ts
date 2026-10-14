@@ -319,8 +319,9 @@ describe('the shell exit the ends-shell shape replays (OQ-144\'s sibling case)',
     expect(endedShellReading(softPaused, 30_007)).toMatchObject({ kind: 'paused', exit: -1 });
     expect(endedShellReading(restarted, 30_000).kind).toBe('paused');
     expect(endedShellReading(ownExit, 12)).toMatchObject({ kind: 'other', exit: 3 });
-    // The replaced shell's words are not this shape's.
-    expect(endedShellReading(restarted.replaceAll('ended the session', 'replaced the session'), 31).kind).toBe('other');
+    // The replaced shell's words are not this shape's: an `exit 3` told it replaced the shell read the exiting shell's `/proc`
+    // entry as another program's (docs/defects/fixed/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md).
+    expect(endedShellReading(restarted.replaceAll('ended the session', 'replaced the session'), 31).kind).toBe('replaced');
   });
 });
 

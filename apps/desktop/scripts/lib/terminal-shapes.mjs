@@ -310,6 +310,9 @@ export function replacedShellReading(result, elapsedMs) {
  * - `restarted`: the call ended inside the no-output window as an `execution_error` with no exit code, and its detail
  *   says the command ended the session's shell — the product saw the shell go and respawned it.
  * - `paused`: the call soft-paused, or returned exit −1, or took the whole no-output window — the defect's signature, a FAIL.
+ * - `replaced`: it says the command REPLACED the shell, as an `exec` does — an `exit 3` read through the exiting shell's
+ *   `/proc` entry, its executable still readable and its argument vector already gone; a FAIL
+ *   (`docs/defects/fixed/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md`).
  * - `other`: none of those (an exit code of its own: the shell was not ended) — a NOTE.
  */
 export function endedShellReading(result, elapsedMs) {
@@ -317,7 +320,8 @@ export function endedShellReading(result, elapsedMs) {
   const exit = typeof d?.exit_code === 'number' ? d.exit_code : null;
   const paused = d?.outcome_kind === 'soft_pause' || exit === -1 || !(Number.isFinite(elapsedMs) && elapsedMs < 30_000);
   const restarted = !paused && exit === null && d?.failure_kind === 'execution_error' && /ended the session's shell/.test(String(d?.detail ?? ''));
-  return { kind: paused ? 'paused' : restarted ? 'restarted' : 'other', exit, killStatus: d?.kill_status ?? null };
+  const replaced = !paused && !restarted && exit === null && /replaced the session's shell/.test(String(d?.detail ?? ''));
+  return { kind: paused ? 'paused' : restarted ? 'restarted' : replaced ? 'replaced' : 'other', exit, killStatus: d?.kill_status ?? null };
 }
 
 /**

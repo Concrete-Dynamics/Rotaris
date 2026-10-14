@@ -128,11 +128,21 @@ export interface PausedEnd {
  * read from `/proc`, so an `exec` that keeps the pid and replaces the program is visible. Null where `/proc` does not
  * say: every host but Linux, or a process that has gone. The kernel marks an executable whose file was replaced on
  * disk since it started — a package upgrade of the shell — ` (deleted)`; that is the same program, so the mark is cut.
+ *
+ * A process on its way out has none either. Between the kernel releasing an exiting process's memory and its reaping,
+ * `exe` can still read while `cmdline` reads empty (the argument vector lived in that memory); read as an identity, that
+ * pair named another program, so a shell a soft-paused `exit 4` ended was taken for one an `exec` replaced, and the call
+ * waiting behind it was told it had replaced the shell
+ * (`docs/defects/fixed/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md`;
+ * in 122 of 300 exits read in a tight loop, the first reading that was not the process's own was that pair). The shell is
+ * started with an argument vector (`posixShellArgs`), so an empty one there is the exiting shell's, never another program.
  */
 export function processIdentity(pid: number): string | null {
   if (process.platform !== 'linux') return null;
   try {
-    return `${readlinkSync(`/proc/${pid}/exe`).replace(/ \(deleted\)$/, '')}\0${readFileSync(`/proc/${pid}/cmdline`, 'latin1')}`;
+    const exe = readlinkSync(`/proc/${pid}/exe`).replace(/ \(deleted\)$/, '');
+    const argv = readFileSync(`/proc/${pid}/cmdline`, 'latin1');
+    return argv === '' ? null : `${exe}\0${argv}`;
   } catch {
     return null;
   }

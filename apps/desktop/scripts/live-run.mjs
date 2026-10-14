@@ -2598,6 +2598,8 @@ if (wanted.includes('terminal')) {
       if (reading.kind === 'other') noted('`exit 3` met neither a respawn nor a pause', said);
       else {
         check(reading.kind !== 'paused', 'a command that ended the shell did not read as a soft pause', said);
+        // The exiting shell's `/proc` entry once read as another program's, and the call was told it replaced the shell.
+        check(reading.kind !== 'replaced', 'a command that ended the shell did not read as replacing it (OQ-144)', said);
         check(reading.kind === 'restarted', 'it ended at once as an execution_error that says the shell ended', said);
         if (reading.kind === 'restarted') {
           check(reading.killStatus === 'session_reset', 'the shell was respawned', `kill_status ${reading.killStatus ?? 'none'}`);

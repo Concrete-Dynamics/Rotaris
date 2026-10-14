@@ -9,7 +9,7 @@ import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './cla
 import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, POSIX_LINE_BYTES, posixShellArgs, printsMarker, processIdentity, restoreCommand, shellHoldsTerminal, snapshotCommand, stagedScript, unstartedShare, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
 import { xtermEmulatorFactory, type EmulatorFactory } from './emulator.js';
 import { endOfExit } from './background.js';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 import { findShell, INTERRUPT_UNSEEN_NOTE, nodePtyFactory, seconds, TerminalManager, terminalDescription, terminalTool, TERMINAL_DEFAULTS, type BackgroundSession } from './index.js';
 import type { ToolContext } from '../tools/types.js';
@@ -171,6 +171,41 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     // A pid past the kernel's pid_max names no process.
     expect(processIdentity(2 ** 22 + 1)).toBeNull();
   });
+  // The note `a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md`
+  // (docs/defects/fixed/): between the kernel releasing an exiting process's memory and the process's reaping, `/proc/<pid>/exe`
+  // can still read while `/proc/<pid>/cmdline` reads empty, and that pair read as another program — so a shell ended by a
+  // soft-paused `exit 4` was taken for one an `exec` replaced, and the call waiting behind it was told it had replaced the
+  // shell. Measured before the repair: in 122 of 300 exits read in a tight loop, the first reading that was not the
+  // process's own was that pair, not "gone". Each child here is read from its start to its end, and no reading may name
+  // a program other than the one it was running.
+  it.runIf(process.platform === 'linux')('OQ-144 / OQ-164: a process on its way out reads no identity, never another program\'s', async () => {
+    const program = realpathSync('/bin/sh');
+    const foreign: string[] = [];
+    let measured = 0;
+    for (let i = 0; i < 60; i += 1) {
+      const child = spawn('/bin/sh', ['-c', 'i=0; while [ $i -lt 300 ]; do i=$((i+1)); done; exit 4'], { stdio: 'ignore' });
+      const exited = new Promise((resolve) => { child.once('exit', resolve); });
+      const pid = child.pid!;
+      const began = Date.now();
+      let own: string | null = null;
+      // Its own identity, once it is running `sh` (a reading taken between the fork and the exec is node's).
+      while (Date.now() - began < 2_000) {
+        const id = processIdentity(pid);
+        if (id === null) break;
+        if (id.startsWith(`${program}\0`)) { own = id; break; }
+      }
+      // Then every reading to its end; the event loop is held, so the child stays unreaped and the end reads null.
+      while (own !== null && Date.now() - began < 4_000) {
+        const id = processIdentity(pid);
+        if (id === null) break;
+        if (id !== own) { foreign.push(JSON.stringify(id)); break; }
+      }
+      if (own !== null) measured += 1;
+      await exited;
+    }
+    expect(measured).toBeGreaterThanOrEqual(20);
+    expect(foreign).toEqual([]);
+  }, 60_000);
   it.runIf(process.platform !== 'linux')('OQ-144: off Linux there is no /proc, and no identity to watch', () => {
     expect(processIdentity(process.pid)).toBeNull();
   });

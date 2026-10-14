@@ -58,9 +58,10 @@ the replacement route, on which REQ-SHELL-021 governs in full.
 > shortcut-less command palette entry labelled "Open project folder in a new window", present in every window and in the
 > composer's slash catalogue on the terms of REQ-SHELL-048 and REQ-SHELL-056; and activating the title-bar workspace chip of
 > REQ-SHELL-035 with the platform's secondary-activation modifier held."
->
-> *Pointer, 2026-10-14:* [OQ-294](../architecture/open-questions.md#oq-294) ruled the project-setup banner's press for a project
-> no window holds under revision 2's reach (a window is added), recorded as [`PD-WORKSPACE-005`](#pd-workspace-005) revision 3.
+
+*Pointer, 2026-10-14:* [OQ-294](../architecture/open-questions.md#oq-294) ruled the project-setup banner's press for a project
+no window holds under revision 2's reach (a window is added), recorded as [`PD-WORKSPACE-005`](#pd-workspace-005) revision 3.
+*(Moved out of the quotation of revision 1 on 2026-10-14 by fin44, where it read as part of the quote.)*
 
 On the add route the product SHALL build a main window on the chosen folder, show it, surface it on
 the terms REQ-SHELL-161 fixes for every window this product owns, and leave every window already open

@@ -172,7 +172,9 @@ component. A development build remains the one step of fin32's route not taken.
 **What it does not do.** It reproduces nothing. `a68f121`'s seven errors are still unexplained, and this is one more absence.
 Closing the note unreproduced is not something the record provides for: `docs/defects/README.md` moves only a repaired note to
 `fixed/`. Whether the note may close with the trap and the per-launch count as a standing monitor is raised as
-[OQ-278](../architecture/open-questions.md#oq-278). Nothing in the product was changed.
+[OQ-278](../architecture/open-questions.md#oq-278). Nothing in the product was changed. *(Superseded 2026-10-13 by OQ-278's
+ruling, which gives `docs/defects/README.md` the rule for closing a note unreproduced under a guard; the dated section below
+records it. Kept as written.)*
 
 **What a live run should show.** In the next duress pack:
 - the NOTE "the long run's pendingLanes trap (D8)", with its commits and the run's high;

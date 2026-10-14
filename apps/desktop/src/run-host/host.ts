@@ -17,7 +17,7 @@ import { codeIntelligenceLaunchFor } from './code-intelligence-launch.js';
 import { SkillHost } from './skills.js'; // ADR-0063
 import { captureAfterRun, dalWhileOpen } from './improvement-capture.js';
 import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, postRunAnalystOf, restingCatalogueOf, type ConfiguredRun } from './configuration.js';
-import { leaseForContinuation, LeaseReportLog } from './launch.js';
+import { leasedSetup, leaseForContinuation, LeaseReportLog, type LeasedSetup } from './launch.js';
 import { randomUUID } from 'node:crypto';
 import { appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -295,20 +295,31 @@ export function createRunHost() {
    * leased through one; it is the same path `leaseForContinuation` already walks, keyed by the only thing a
    * user-started pass knows about itself (ADR-0030, ADR-0065 decision 5).
    */
+  const leaseDepsFor = (workspaceRoot: string) => ({
+    workspaceRoot, attended: presenters.attended, configuration: configurationDeps,
+    leaseCredentials: async (providers: readonly string[]) => {
+      const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credentials: main did not answer the lease (${e.message})`, 'warn'); return null; });
+      const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
+      // The re-lease itself stays: it is what fixed the continuation's 401. Only the report is quieted.
+      leaseReports.report(workspaceRoot, answer?.kind === 'credentials.leased' ? answer.report : null, (m) => log(m));
+      return bearers;
+    },
+  });
   const leaseForWorkspace = async (workspaceRoot: string): Promise<ProcessReply | null> => {
-    const r = await leaseForContinuation(workspaceRoot, {
-      workspaceRoot, attended: presenters.attended, configuration: configurationDeps,
-      leaseCredentials: async (providers) => {
-        const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credentials: main did not answer the lease (${e.message})`, 'warn'); return null; });
-        const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
-        // The re-lease itself stays: it is what fixed the continuation's 401. Only the report is quieted.
-        leaseReports.report(workspaceRoot, answer?.kind === 'credentials.leased' ? answer.report : null, (m) => log(m));
-        return bearers;
-      },
-    });
+    const r = await leaseForContinuation(workspaceRoot, leaseDepsFor(workspaceRoot));
     if (r.kind === 'refused') return r.reply;
     leased.set(workspaceRoot, r.bearers);
     return null;
+  };
+  /**
+   * PD-LIBRARY-002 with ADR-0030: the retrospective's setup, leased and completed as a run's is (`leasedSetup`), at its capture
+   * and again at its analysis — never the workspace's cached `configuredFor`, which may have been completed over no lease
+   * (the live run at `ce5f952`, F2). It is not cached: a run start's `configure` owns `configured` and the MCP reload.
+   */
+  const retrospectiveSetup = async (workspaceRoot: string): Promise<LeasedSetup> => {
+    const r = await leasedSetup(workspaceRoot, leaseDepsFor(workspaceRoot));
+    if (r.kind === 'configured') leased.set(workspaceRoot, r.bearers);
+    return r;
   };
   const continuationLeaseForSession = async (sessionId: string): Promise<ProcessReply | null> => {
     const workspaceRoot = sessionRoots.get(sessionId);
@@ -543,6 +554,7 @@ export function createRunHost() {
     leaseReports,
     continuationLeaseForSession,
     leaseForWorkspace,
+    retrospectiveSetup,
     configuredFor,
     sessions,
     sessionActions,

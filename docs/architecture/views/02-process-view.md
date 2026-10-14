@@ -374,8 +374,9 @@ analysis and discards queued jobs before any artifact or notice is written.
 
 **The retrospective pass (Part AT; `PD-LIBRARY-002`, ADR-0065).** The same analyst, reached without a run. A gesture on
 any of three surfaces sends main `improvements.retrospective {workspaceRoot}`; main asks the run host for
-`retrospective.capture {workspaceRoot}`, which resolves the workspace's configuration through `configuredFor` (no run
-context exists), leases its bearers through `leaseForContinuation`, and answers the existing `improvement.job` event —
+`retrospective.capture {workspaceRoot}`, which resolves the workspace's configuration as a run start does, leased first and
+completed over the bearers it leased (`retrospectiveSetup` → `leasedSetup`; no run context exists, and the workspace's cached
+`configuredFor` setup may have been completed over no lease — the live run at `ce5f952`, F2), and answers the existing `improvement.job` event —
 carrying `pass: 'retrospective'` and a `retrospective` sources block (session digests, prior proposals, saved prompts,
 persona memory, instruction files, each entry naming its record) — or `retrospective.no-model` when nothing resolves.
 The **instruction files are decided by the run host, not by the engine**: `dispatch` passes

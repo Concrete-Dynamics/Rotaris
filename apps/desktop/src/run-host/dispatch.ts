@@ -73,7 +73,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     configure,
     leaseReports,
     continuationLeaseForSession,
-    leaseForWorkspace,
+    retrospectiveSetup,
     configuredFor,
     sessions,
     sessionActions,
@@ -259,19 +259,23 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     /**
      * PD-LIBRARY-002 (ADR-0065 decision 5): the pass a person started. It has no run to inherit a model, a
      * credential or a store handle from, so it resolves each by the run-free paths this host already owns —
-     * `configuredFor` for the configuration, `leaseForWorkspace` for the bearers — and captures against the
+     * `retrospectiveSetup` for the configuration completed over the bearers it leased — and captures against the
      * store main already opened for the workspace. Nothing is written here: the job goes back to main, which
      * enqueues it on the one coordinator both passes share.
      */
     case 'retrospective.capture': {
       const s = stores.get(req.workspaceId);
       if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
-      const setup = configuredFor(s.root);
-      if (setup === null) return { kind: 'refused', code: 'retrospective.no-configuration', headline: 'The workspace configuration could not be loaded' };
+      // F2 (the live run at ce5f952): leased first and completed over the bearers it leased, as a run's setup is.
+      const leased = await retrospectiveSetup(s.root);
+      if (leased.kind === 'refused') return leased.reply;
+      if (leased.kind === 'unconfigured') {
+        log(leased.reason, 'warn');
+        return { kind: 'refused', code: 'retrospective.no-configuration', headline: 'The workspace configuration could not be loaded' };
+      }
+      const setup = leased.setup;
       const collector = retrospectiveOf(setup.cfg, setup.scripted);
       if (collector === null) return { kind: 'refused', code: 'retrospective.no-model', headline: 'No retrospective analyst is configured' };
-      const leaseRefusal = await leaseForWorkspace(s.root);
-      if (leaseRefusal) return leaseRefusal;
       // REQ-LIBRARY-019/030: the prior proposals are evidence, and a history that could not be read is a source
       // reported unavailable rather than one silently missing.
       const historyReply = await ask({ kind: 'improvements.command', workspaceRoot: s.root, command: { action: 'list' } }, millis(10_000)).catch((cause: Error) => {
@@ -302,7 +306,14 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
        * model comes from its own slot, never the sibling's.
        */
       const context = improvementContexts.get(req.job.artifact_id);
-      const run = context?.run ?? (req.job.pass === 'retrospective' ? configuredFor(req.job.workspace_root) : null);
+      let run = context?.run ?? null;
+      if (run === null && req.job.pass === 'retrospective') {
+        // PD-LIBRARY-002 with ADR-0030: the analysis leases again and runs on the setup completed over that lease (F2).
+        const leased = await retrospectiveSetup(req.job.workspace_root);
+        if (leased.kind === 'refused') return leased.reply;
+        if (leased.kind === 'unconfigured') log(leased.reason, 'warn');
+        else run = leased.setup;
+      }
       if (!run) return { kind: 'refused', code: 'improvement.expired', headline: 'The captured improvement job is no longer available' };
       const collector = req.job.pass === 'retrospective' ? retrospectiveOf(run.cfg, run.scripted) : improvementCollectorOf(run.cfg, run.scripted);
       if (collector === null) return { kind: 'refused', code: 'improvement.no-model', headline: 'No improvement analyst is configured' };

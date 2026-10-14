@@ -9,7 +9,7 @@ import { Sessions } from '@rotaris/engine';
 import { answer, DefaultAgentBackend, ScriptedModelClient } from '@rotaris/model';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import type { ConfiguredRun, ConfigureDeps } from './configuration.js';
-import { launchSession, leaseForContinuation, LeaseReportLog, type LaunchRequest } from './launch.js';
+import { launchSession, leasedSetup, leaseForContinuation, LeaseReportLog, type LaunchRequest } from './launch.js';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -256,6 +256,27 @@ describe('the continuation lease (REQ-PROVIDER-066; a defect note, removed once 
     // A lease main did not answer reports nothing at all, and leaves the remembered report alone.
     reports.report(dir, null, (m) => lines.push(m));
     expect(lines).toHaveLength(4);
+  });
+
+  /*
+   * PD-LIBRARY-002 with ADR-0030 (the live run at ce5f952, F2): a retrospective's setup is completed over the bearers its own
+   * lease returned, whatever the workspace's last published map holds (`configuration.bearers`, empty here, as it is in a launch
+   * no run has leased in).
+   */
+  it('leasedSetup: the setup a retrospective runs on sends the bearer it leased, not the empty map a launch with no run holds', async () => {
+    const r = await leasedSetup(dir, deps(async () => ({ 'provider-one': 'fresh-bearer' })));
+    expect(r.kind).toBe('configured');
+    if (r.kind !== 'configured') return;
+    expect(r.bearers).toEqual({ 'provider-one': 'fresh-bearer' });
+    expect(await r.setup.model.config.credentialFor(r.setup.model.config.model)()).toBe('fresh-bearer');
+  });
+
+  it('leasedSetup: an entry provider main cannot resolve refuses as a continuation does, and a configuration that will not load says why', async () => {
+    expect(await leasedSetup(dir, deps(async () => ({})))).toMatchObject({ kind: 'refused', reply: { kind: 'refused', code: 'session.provider-auth' } });
+    writeFileSync(join(dir, '.rotaris', 'agents.yaml'), 'runtime: [invalid]\n');
+    const lease = vi.fn(async () => ({ 'provider-one': 'fresh-bearer' }));
+    expect(await leasedSetup(dir, deps(lease))).toMatchObject({ kind: 'unconfigured', reason: expect.stringMatching(/^The configuration could not be loaded/) });
+    expect(lease).not.toHaveBeenCalled();
   });
 
   it('a configuration that will not load leases nothing — setupFor refuses with its real report instead', async () => {

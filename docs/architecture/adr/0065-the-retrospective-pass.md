@@ -267,3 +267,22 @@ bound of five. **Measured:** `analyst.test.ts`'s two revision-3 cases (red on th
 54 of 54 at a load average of 1.3 to 2.2 on four CPUs, launch 8 (`live-shape-timeout`) still capturing the later run's analysis
 after a retrospective with no capture failure in its log. **Not measured:** a live run after a retrospective.
 
+## Decision 5 measured live — 2026-10-14 (the live scenario run at `ce5f952`, F2; fin43)
+
+**Found by the live run:** `ask-retrospective`, in a launch that had started no run, sent the retrospective's one
+`/chat/completions` request with no `Authorization` header and got `401 Unauthorized`; the artifact's notes read "collector
+crashed: Unauthorized…". Decision 5's reading — `configuredFor` and `leaseForContinuation` "already" give a pass with no run its
+configuration and its bearers, so "the retrospective uses both" — **was false in the order the build used them**, and is kept
+here beside its replacement: the capture took `configuredFor` first, a setup completed over the bearer map of its moment (empty
+when nothing had leased), the lease then published a new map that setup never read, and the analysis reused the same cached
+setup. A run never met it, because `launchSession` leases and then completes the setup over the bearers it leased. **Now:**
+`leasedSetup` (`apps/desktop/src/run-host/launch.ts`) does exactly that for the retrospective — prepare, lease the providers the
+configuration names (refusing as a continuation does when the entry provider is unresolved), complete over those bearers — and
+the run host's `retrospectiveSetup` calls it at the capture and again at the analysis, publishing the lease and caching nothing
+(`configure` stays a run start's). Pinned by `dispatch.test.ts`'s three cases (the analysis sends the leased bearer, the capture
+reads its collector from the leased setup, a lease refusal returns before either; the first two red on the code before) and
+`launch.test.ts`'s two `leasedSetup` cases.
+([`../../defects/fixed/a-retrospective-sends-its-model-request-with-no-credential-when-no-run-has-leased-one.md`](../../defects/fixed/a-retrospective-sends-its-model-request-with-no-credential-when-no-run-has-leased-one.md).)
+**Not measured:** the live `ask-retrospective` scenario since the change — it should show the request carrying a credential and
+an artifact with no "collector crashed" note; the built app's proofs run the scripted provider, which takes no credential.
+

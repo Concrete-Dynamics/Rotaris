@@ -1,6 +1,6 @@
 import type { ProcessReply, RunHostRequest } from '@rotaris/contracts';
 import type { Sessions } from '@rotaris/engine';
-import { prepareRun, type ConfigureDeps, type ConfiguredRun } from './configuration.js';
+import { prepareRun, type ConfigureDeps, type ConfiguredRun, type PreparedRun } from './configuration.js';
 
 export type LaunchRequest = Extract<RunHostRequest, { kind: 'session.start' }>;
 
@@ -41,13 +41,40 @@ export async function leaseForContinuation(workspaceRoot: string, deps: Continua
   const prepared = prepareRun(workspaceRoot, deps.attended, deps.configuration);
   // A configuration that will not load is refused by `setupFor` with its real report; lease nothing here.
   if (!prepared.ok) return { kind: 'leased', bearers: {} };
-  const bearers = prepared.value.authProviders.length > 0
-    ? await deps.leaseCredentials(prepared.value.authProviders).catch(() => ({} as Readonly<Record<string, string>>))
+  return leaseOver(prepared.value, deps);
+}
+
+/** The lease a prepared configuration needs: the providers it names, asked of main; refused when the entry provider is not resolved. */
+async function leaseOver(prepared: PreparedRun, deps: Pick<ContinuationLeaseDeps, 'leaseCredentials'>): Promise<ContinuationLease> {
+  const bearers = prepared.authProviders.length > 0
+    ? await deps.leaseCredentials(prepared.authProviders).catch(() => ({} as Readonly<Record<string, string>>))
     : {};
-  if (prepared.value.entryAuthProvider !== null && !bearers[prepared.value.entryAuthProvider]) {
+  if (prepared.entryAuthProvider !== null && !bearers[prepared.entryAuthProvider]) {
     return { kind: 'refused', reply: { kind: 'refused', code: 'session.provider-auth', headline: 'Provider authentication required', detail: 'Authenticate at least one configured provider before continuing this run.' } };
   }
   return { kind: 'leased', bearers };
+}
+
+/** A run-free pass's setup: completed over the bearers it leased, the lease's refusal, or the configuration's own refusal. */
+export type LeasedSetup =
+  | { readonly kind: 'configured'; readonly setup: ConfiguredRun; readonly bearers: Readonly<Record<string, string>> }
+  | { readonly kind: 'refused'; readonly reply: ProcessReply }
+  | { readonly kind: 'unconfigured'; readonly reason: string };
+
+/**
+ * PD-LIBRARY-002 (ADR-0065 decision 5) with ADR-0030 and REQ-PROVIDER-066: a retrospective authenticates exactly as a run does —
+ * its configuration prepared, the providers it names leased from main, and the setup completed over THOSE bearers, in
+ * `launchSession`'s order. The live scenario run at `ce5f952` (finding F2) found the retrospective's request sent with no
+ * credential: it took the workspace's cached setup (`configuredFor`), completed before any lease over an empty bearer map, and
+ * the lease published a new map that setup never read
+ * (`docs/defects/fixed/a-retrospective-sends-its-model-request-with-no-credential-when-no-run-has-leased-one.md`).
+ */
+export async function leasedSetup(workspaceRoot: string, deps: ContinuationLeaseDeps): Promise<LeasedSetup> {
+  const prepared = prepareRun(workspaceRoot, deps.attended, deps.configuration);
+  if (!prepared.ok) return { kind: 'unconfigured', reason: prepared.error.reason };
+  const lease = await leaseOver(prepared.value, deps);
+  if (lease.kind === 'refused') return lease;
+  return { kind: 'configured', setup: prepared.value.complete(lease.bearers), bearers: lease.bearers };
 }
 
 /** What a lease answered about the providers a run names: REQ-PROVIDER-067's report, as the wire carries it. */

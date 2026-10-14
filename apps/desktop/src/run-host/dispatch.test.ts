@@ -16,6 +16,20 @@ vi.mock('./launch.js', () => ({
 }));
 let launchedSetup: unknown = null;
 
+/*
+ * The retrospective's analysis and capture are replaced by stand-ins that report what the dispatch handed them: the analysis
+ * resolves the credential it was given, as a model request would, and the capture names the collector it was handed.
+ */
+vi.mock('@rotaris/engine', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@rotaris/engine')>()),
+  analyzeImprovement: async (job: { artifact_id: string }, deps: { credentialFor: (m: unknown) => () => Promise<string>; model: unknown }) => ({ artifact_id: job.artifact_id, credential: await deps.credentialFor(deps.model)() }),
+  captureRetrospectiveJob: (_dal: unknown, input: { collectorModel: string }) => ({ artifact_id: 'impart_0000000r', collector_model: input.collectorModel, considered_session_ids: [] }),
+}));
+vi.mock('./configuration.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./configuration.js')>()),
+  retrospectiveOf: (cfg: { analyst: string }) => ({ key: cfg.analyst, model: { providerId: 'p', modelId: cfg.analyst, dialect: 'chat' }, thinking: 'unset' }),
+}));
+
 /**
  * PD-ORCH-005 clause 6: the run host's hop of "continue without them". The renderer's command and main's forwarding are
  * pinned beside their own units; this is the hop between them and the engine, where a dropped flag would turn a decline
@@ -254,6 +268,52 @@ describe('runs.active counts the workspace it names, and runs.stopWorkspace stop
     expect(await dispatch({ kind: 'runs.stopWorkspace', workspaceId: 'W1' }, host)).toEqual({ kind: 'runs.stopped', workspaceId: 'W1', sessionIds: ['S1', 'S2'] });
     expect(await dispatch({ kind: 'runs.stopWorkspace', workspaceId: 'W9' }, host)).toEqual({ kind: 'runs.stopped', workspaceId: 'W9', sessionIds: [] });
     expect(seen).toEqual([['stop', '/ws/one']]);
+  });
+});
+
+/**
+ * PD-LIBRARY-002 (ADR-0065 decision 5) with ADR-0030: a retrospective authenticates exactly as a run does — the providers its
+ * configuration names leased from main, then the setup completed over THOSE bearers. The live scenario run at `ce5f952` (F2,
+ * `docs/defects/fixed/a-retrospective-sends-its-model-request-with-no-credential-when-no-run-has-leased-one.md`) sent the
+ * retrospective's request with no credential: the capture took the workspace's cached setup (`configuredFor`), completed
+ * before any lease over an empty bearer map, and the analysis reused it, so a launch with no run before it got a 401.
+ */
+describe('a retrospective authenticates as a run does: leased first, its setup completed over the bearers it leased (PD-LIBRARY-002, F2)', () => {
+  const root = '/work/ws';
+  const run = (analyst: string, bearer: string) => ({ cfg: { analyst, runtime: { retrospective_timeout: 300 } }, scripted: false, model: { backend: {}, config: { credentialFor: () => async () => bearer } } });
+  const hostFor = (seen: string[]) => ({
+    log: () => undefined,
+    clocks: { wall: { instant: () => new Date('2026-10-14T00:00:00.000Z') }, timers: { after: () => ({ cancel: () => undefined }) } },
+    stores: new Map([['W1', { root, dal: {} }]]),
+    improvementContexts: new Map(), improvementControllers: new Map(),
+    skills: { retrospectiveInstructionFiles: () => [] },
+    ask: async () => ({ kind: 'improvements.result', value: [] }),
+    // The workspace's cached setup, completed when no lease had been taken: its credential is the empty one.
+    configuredFor: () => { seen.push('configuredFor'); return run('stale-analyst', ''); },
+    leaseForWorkspace: async () => { seen.push('leaseForWorkspace'); return null; },
+    retrospectiveSetup: async (r: string) => { seen.push(`retrospectiveSetup ${r}`); return { kind: 'configured', setup: run('leased-analyst', 'leased-bearer'), bearers: { p: 'leased-bearer' } }; },
+  }) as unknown as RunHost;
+  const job = { artifact_id: 'impart_0000000r', pass: 'retrospective', workspace_root: root } as unknown;
+
+  it('the analysis sends the bearer the retrospective leased, never the cached setup\'s', async () => {
+    const seen: string[] = [];
+    const r = await dispatch({ kind: 'improvement.analyze', job } as unknown as RunHostRequest, hostFor(seen));
+    expect(r).toMatchObject({ kind: 'improvement.analyzed', artifact: { credential: 'leased-bearer' } });
+    expect(seen).toEqual([`retrospectiveSetup ${root}`]);
+  });
+
+  it('the capture leases before it resolves the collector, and reads it from the leased setup', async () => {
+    const seen: string[] = [];
+    const r = await dispatch({ kind: 'retrospective.capture', workspaceId: 'W1', workspaceRoot: root }, hostFor(seen));
+    expect(r).toMatchObject({ kind: 'retrospective.captured', job: { collector_model: 'leased-analyst' } });
+    expect(seen).toEqual([`retrospectiveSetup ${root}`]);
+  });
+
+  it('a lease refusal comes back before anything is captured or analysed', async () => {
+    const refusal = { kind: 'refused', code: 'session.provider-auth', headline: 'Provider authentication required', detail: 'Authenticate at least one configured provider before continuing this run.' };
+    const host = { ...(hostFor([]) as unknown as Record<string, unknown>), retrospectiveSetup: async () => ({ kind: 'refused', reply: refusal }) } as unknown as RunHost;
+    expect(await dispatch({ kind: 'retrospective.capture', workspaceId: 'W1', workspaceRoot: root }, host)).toEqual(refusal);
+    expect(await dispatch({ kind: 'improvement.analyze', job } as unknown as RunHostRequest, host)).toEqual(refusal);
   });
 });
 

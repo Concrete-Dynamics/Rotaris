@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A retrospective leases and completes its setup as a run does (PD-LIBRARY-002, ADR-0065 decision 5; the live run at `ce5f952`,
+F2; fin43).** `leasedSetup` (`run-host/launch.ts`) prepares the configuration, leases the providers it names and completes the
+setup over those bearers; the run host's `retrospectiveSetup` calls it at `retrospective.capture` and again at a retrospective's
+`improvement.analyze`, where both read the cached `configuredFor` setup before. The **process view**'s retrospective paragraph
+says so. No package, edge, process, channel, command or store column changed.
+
 **The answer re-prompt is the root's only message for the turn it answers (PD-ORCH-009 revision 3, OQ-282; fin43).**
 `LoopSupervisor.withdrawStuck()` clears a pending `stuck` trigger and nothing else; `Run.turn`'s `correction()` calls it on the
 root's supervisor before it returns `ANSWER_REPROMPT`. The **runtime view**'s turn paragraph says the root's re-prompted empty turn

@@ -66,3 +66,10 @@ keys `panels/overview`, `panels/git`, `panels/library`, `interface/agentPopOut`,
 two booleans' keys and defaults; their carry-over; a layout across the three keys; REQ-SHELL-069's restore rules; and a layout
 object's carry-over. `platform.test.ts`'s layout round-trips moved to `readLayout` / `writeLayout`.
 
+Shown in the built app, 2026-10-14, each proof alone at a load average of 1.2 to 2.1 on four CPUs: `pnpm overview-proof` (the split
+written under the three keys and restored at 420 on the relaunch), `pnpm git-proof` (the divider moved by keyboard stored as
+`panels/git/state` `[.., 528]` with `panels/git/panes` 2 and `panels/version` 1, no `panels/git`, and restored on the relaunch),
+`pnpm composer-proof` (the Workspace divider stored as `panels/workspace/state` with its count and stamp), `pnpm mission-proof`
+(the pop-out toggle persisted as `interface/agentPopout`, `popOutPreference: true`) and `pnpm palette-proof`, all green. No proof
+drives the terminal window's auto-open toggle; the unit cases carry its key and carry-over.
+

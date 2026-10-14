@@ -431,6 +431,33 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
       expect(statedPrefixLength(null, 'models')).toBe(-1);
     });
   });
+  /**
+   * REQ-CONFIG-233: an unknown key inside a merged section warns "naming the key and the file", and REQ-CONFIG-183's
+   * withdrawn key names the file "by its full path and by which scope it belongs to". The section readers raise their
+   * warnings on the MERGED document, which until fin46 reached the load as `<path>: <message>` alone, naming no file
+   * (docs/defects/fixed/an-unknown-key-in-a-merged-section-is-reported-without-the-file-that-states-it.md).
+   */
+  describe('REQ-CONFIG-233: a merged-section warning names the file and scope that stated the key', () => {
+    it('an unknown compressor key in the global file, with no workspace file, is the global file\'s', () => {
+      const s = scopes('compressor:\n  bogus_key: 1\n', null);
+      const r = loadConfiguration(s);
+      if (!r.ok) throw new Error(r.error.lines.join(' | '));
+      expect(r.value.warnings).toEqual([`${join(s.globalDir, 'agents.yaml')} at compressor.bogus_key (global scope): unknown key 'bogus_key' is not recognised by this build and contributes nothing`]);
+    });
+    it('the same key in the workspace file names the workspace file, and a key in a models.yml entry names that file', () => {
+      const s = scopes('compressor:\n  enabled: true\n', 'compressor:\n  bogus_key: 1\n', { globalModels: 'models:\n  m: { provider: openai, model_id: x, mystery: 1 }\n' });
+      const r = loadConfiguration(s);
+      if (!r.ok) throw new Error(r.error.lines.join(' | '));
+      expect(r.value.warnings).toContain(`${join(s.workspaceRoot, '.rotaris', 'agents.yaml')} at compressor.bogus_key (workspace scope): unknown key 'bogus_key' is not recognised by this build and contributes nothing`);
+      expect(r.value.warnings.some((w) => w.startsWith(`${join(s.globalDir, 'models.yml')} at models.m.mystery (global scope): `))).toBe(true);
+    });
+    it('a withdrawn requirements key names its file and scope (REQ-CONFIG-183)', () => {
+      const s = scopes('requirements:\n  execution:\n    worktree_subpath: x\n', null);
+      const r = loadConfiguration(s);
+      if (!r.ok) throw new Error(r.error.lines.join(' | '));
+      expect(r.value.warnings.some((w) => w.startsWith(`${join(s.globalDir, 'agents.yaml')} at requirements.execution.worktree_subpath (global scope): `))).toBe(true);
+    });
+  });
   it('referential messages come in REQ-CONFIG-231/232\'s order and never throw', () => {
     const models = { m: readModelEntry('m', { provider: 'p', model_id: 'm' }, sink())! };
     const persona = (over: Record<string, unknown>) => ({ name: 'r', model: 'm', purpose: null, system_prompt: null, system_prompt_file: null, model_family_variants: null, tools: [], delegates_to: [], custom_tools: [], mcp_servers: [], mcp_tools: null, tool_restrictions: null, coordinator_only: false, read_only: false, can_publish_artifacts: false, skip_auto_sibling_context: false, stall_timeout: null, permission_mode: null, fallback_model: null, summary_model: null, thinking: null, ...over });

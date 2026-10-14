@@ -423,7 +423,21 @@ export function statedPrefixLength(doc: PlainMap | null, path: string): number {
  * (REQ-CONFIG-463).
  */
 export function statingFile(path: string, files: { global: ScopeFiles; workspace: ScopeFiles }, raw: ResolveContext['raw']): { file: string; scope: ConfigScope } {
-  let best: { file: string; scope: ConfigScope } = { file: files.workspace.agents, scope: 'workspace' };
+  return statingFileOf(path, files, raw) ?? { file: files.workspace.agents, scope: 'workspace' };
+}
+
+/**
+ * `statingFile`'s search, answering null where no scope file states even the path's top-level key. A warning takes this
+ * form (REQ-CONFIG-233): a fatal report must name a file to correct (REQ-CONFIG-478), while a warning on a value no file
+ * states has no file to name, and naming the workspace file there would send the user to a key it does not hold.
+ *
+ * Tier B's live overlay (`tiers.ts`) calls `resolveMerged` with the load's raw documents, so a fault or warning on a value
+ * the overlay supplied would be attributed to a scope file stating the same path rather than to the overlay (or, stated by
+ * none, reported bare). No such case is known to be reached: each overlaid value comes from a control that offers only
+ * accepted values, or is validated on assignment (REQ-CONFIG-111), before it is overlaid.
+ */
+export function statingFileOf(path: string, files: { global: ScopeFiles; workspace: ScopeFiles }, raw: ResolveContext['raw']): { file: string; scope: ConfigScope } | null {
+  let best: { file: string; scope: ConfigScope } | null = null;
   let bestLength = -1;
   for (const scope of ['global', 'workspace'] as const) {
     const agents = raw[scope].agents;
@@ -495,7 +509,12 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
 
   const warnings = [
     ...(ctx.mergeWarnings ?? []),
-    ...sink.warnings.map((w) => `${w.path}: ${w.message}`),
+    // REQ-CONFIG-233/183: a warning a section reader raised on the merged value names the file and scope that stated the
+    // key, in the fatal report's form (`renderFatal`); one on a value no scope file states keeps the bare `<path>: <message>`.
+    ...sink.warnings.map((w) => {
+      const at = statingFileOf(w.path, files, ctx.raw);
+      return at === null ? `${w.path}: ${w.message}` : `${at.file} at ${w.path} (${at.scope} scope): ${w.message}`;
+    }),
     ...resolution.warnings,
   ];
 

@@ -23,6 +23,9 @@ import { startApp, stopApp, until } from './lib/driver.mjs';
  *     no relaunch, which clears the notice (REQ-CONFIG-478's recovery).
  *  1d. A fault found on the merged document, stated in the GLOBAL file (an unknown key under `requirements:`): the open-time
  *     notice names the global file and the global scope, not the workspace file (REQ-CONFIG-478).
+ *  1e. A WARNING found on the merged document, stated in the GLOBAL file (an unknown key under `compressor:`): the run starts,
+ *     and the run host's configuration warning names the global file by full path, the key and the global scope
+ *     (REQ-CONFIG-233). Until fin46 it read `compressor.bogus_key: unknown key …`, naming no file.
  *  2. Scoping (REQ-NOTIFY-028/029/058): a notice about another session survives a run start; an unscoped one does not.
  *  3. Compare-and-clear (REQ-NOTIFY-026): dismissing a superseded identifier leaves its successor standing.
  *  4. The ONE transient surface (REQ-NOTIFY-012/013/016/017/021): four published, three visible, newest nearest the
@@ -83,7 +86,7 @@ if (!process.argv.includes('--skip-build')) {
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
-// `--only=<sections>` (comma-separated: 1, 1b, 1c, 1d, 2, 4, 6, 6b, 6e, 6c, 6d, 7, 7b, 8, 9) runs those sections alone; the default is all.
+// `--only=<sections>` (comma-separated: 1, 1b, 1c, 1d, 1e, 2, 4, 6, 6b, 6e, 6c, 6d, 7, 7b, 8, 9) runs those sections alone; the default is all.
 const onlyArg = process.argv.find((a) => a.startsWith('--only='));
 const only = onlyArg === undefined ? null : onlyArg.slice('--only='.length).split(',').map((x) => x.trim()).filter((x) => x !== '');
 const want = (id) => only === null || only.includes(id);
@@ -332,6 +335,29 @@ if (want('1d')) {
   expect((value.detail ?? '').includes(`${globalFile} at requirements.no_such_key (global scope)`), `the open-time notice does not name the global file ${globalFile}, the key and the global scope: ${JSON.stringify(value)}`);
   expect(!(value.detail ?? '').includes('workspace scope'), `the open-time notice names the workspace scope for a key the global file stated: ${JSON.stringify(value)}`);
   results.globalMergedFault = { ...value, globalFile };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1e. A WARNING found on the MERGED document, stated in the GLOBAL file (REQ-CONFIG-233, REQ-CONFIG-040): an unknown key
+// under `compressor:` in the global `agents.yaml`. The load completes and the run starts; the run host's configuration
+// warning names the global file by full path, the key's full path and the global scope, in the fatal report's form. Until
+// fin46 the section readers' warnings reached the load as `<path>: <message>` alone
+// (docs/defects/fixed/an-unknown-key-in-a-merged-section-is-reported-without-the-file-that-states-it.md).
+const s1e = scenario('global-merged-warning', { globalHooks: ['# an unknown key in a merged section (REQ-CONFIG-233)', 'compressor:', '  bogus_key: 1', ''].join('\n') });
+if (want('1e')) {
+  const globalFile = join(configDirFor(s1e.local), 'agents.yaml');
+  const r = await launch('global-merged-warning', s1e, {
+    ROTARIS_SCRIPT: 'answer',
+    ROTARIS_CAPTURE_PROMPT: 'answer once; the configuration carries an unknown compressor key',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '60000', ROTARIS_CAPTURE_AFTER_MS: '500',
+  }, { timeout: 150_000 });
+  const lines = r.log.split('\n').filter((l) => l.includes("unknown key 'bogus_key'"));
+  expect(lines.length > 0, 'no configuration warning for the unknown compressor key was logged — see global-merged-warning.log');
+  expect(lines.every((l) => l.includes(`configuration: ${globalFile} at compressor.bogus_key (global scope): unknown key 'bogus_key'`)), `the warning does not name the global file ${globalFile}, the key and the global scope: ${JSON.stringify(lines)}`);
+  expect(!/configuration: compressor\.bogus_key: /.test(r.log), 'a warning still names the key with no file (the defect)');
+  expect(/run [0-9a-f-]+ ended /.test(r.log), 'the run did not end: a warning must not stop the load (REQ-CONFIG-233) — see global-merged-warning.log');
+  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  results.globalMergedWarning = { globalFile, warning: lines[0].slice(lines[0].indexOf('configuration: ')), elapsedMs: r.elapsedMs };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

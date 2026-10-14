@@ -1958,7 +1958,12 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   prefix of its path, the later in REQ-CONFIG-031's order on a tie, each `agents.yaml` read with its legacy role names
   canonicalised and each `models.yml` for `models:` alone; a path no scope file states names the workspace `agents.yaml`.
   Until then every merged-document fault named the workspace file and scope, so a global fault named a file that need not
-  exist (REQ-CONFIG-478; `notice-proof` 1d).
+  exist (REQ-CONFIG-478; `notice-proof` 1d). **A warning the same readers raise names its file too (2026-10-14, fin46):** an
+  unknown key inside a merged section, a withdrawn `requirements:` key and the readers' other warnings reach the load's
+  `warnings` as `<file> at <path> (<scope> scope): <message>`, the fatal report's form, the file found by `statingFileOf`
+  (`statingFile`'s search, null where no scope file states the path); a warning on a value no scope file states keeps the
+  bare `<path>: <message>`. Until then every such warning was the bare form, naming no file (REQ-CONFIG-233, REQ-CONFIG-183;
+  `notice-proof` 1e).
 
 - **What no tier reaches — the update check (REQ-STARTUP-111, the updater of 2026-09-28).** Whether, when and
   where a supported standalone build checks for an update is decided by no configuration value in any tier, no

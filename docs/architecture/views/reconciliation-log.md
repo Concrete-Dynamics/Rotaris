@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A merged-section warning names the file that stated the key (fin46, `fin46-accept1-16`; REQ-CONFIG-233, acceptance finding A4).**
+`03-runtime-view.md` §8 says the typed section readers' warnings now name their file and scope in the fatal report's form
+(`statingFileOf`), a value no scope file states keeping the bare form, with the old reading ("naming no file") kept beside it.
+No package, edge or process changed. The README's date stays 2026-10-15, the later.
+
 **A retrospective's lease requires its own model's provider (fin46, `fin46-accept1-11`; PD-LIBRARY-002 revision 5).**
 `02-process-view.md`'s retrospective paragraph now says the refusal is on the sign-in provider of the retrospective's model
 (`retrospective_model`, then `medium_model`), not the entry role's, with the old wording kept beside it. No package, edge or process

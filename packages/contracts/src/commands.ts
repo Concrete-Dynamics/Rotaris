@@ -34,8 +34,10 @@ import { NoticeSeveritySchema } from './notices.js'; // Part AO
  * **off**. REQ-CHAT-166's four tool-content caps are NOT here — those are workspace configuration, written to
  * the `display` section of `agents.yaml`, and are Part Z's.
  *
- * Part AB adds `panels/workspace` — REQ-CHAT-010's transcript/composer divider, an ordinary multi-pane divider
- * under REQ-SHELL-069's key rule, keyed by the lower-cased view name for the same reason `panels/library` is.
+ * Part AB adds `panels/workspace/state` (with its `panels/workspace/panes`) — REQ-CHAT-010's transcript/composer
+ * divider, an ordinary multi-pane divider under REQ-SHELL-069's key rule, keyed by the lower-cased view name
+ * `workspace` for the same reason the Library's is keyed `library`. Until 2026-10-14 Part AB's record was named
+ * `panels/workspace`, one stored object the store's table does not list; that name is retired, never reused.
  * The **composer draft** is deliberately NOT here: REQ-SHELL-159 registers it as `workspaces/{workspace-key}/
  * composerDraft`, a key parametrised by the open workspace, and a renderer that could name the parameter could
  * name another workspace's draft — which is exactly what REQ-CHAT-015's last sentence forbids. It travels as

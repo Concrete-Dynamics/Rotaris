@@ -417,7 +417,9 @@ completed over the bearers it leased (`retrospectiveSetup` → `leasedSetup`; no
 `configuredFor` setup may have been completed over no lease — the live run at `ce5f952`, F2), and answers the existing `improvement.job` event —
 carrying `pass: 'retrospective'` and a `retrospective` sources block (session digests, prior proposals, saved prompts,
 persona memory, instruction files, each entry naming its record) — or `retrospective.no-model` when nothing resolves.
-A lease that leaves the entry provider unresolved answers `session.provider-auth` with REQ-WORKSPACE-137's headline and the
+A lease that leaves the retrospective model's sign-in provider unresolved — the model its request goes to, `retrospective_model`
+then `medium_model`, never the entry role's (*since 2026-10-14, fin46; it read "the entry provider" and checked the entry role's,
+`docs/defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`*) — answers `session.provider-auth` with REQ-WORKSPACE-137's headline and the
 retrospective's own detail ("Authenticate at least one configured provider before running a retrospective."), which main
 posts as one error notice per gesture carrying the action that opens Settings at Models; the same refusal at
 `improvement.analyze` ends the job, and its reason reaches `PD-LIBRARY-002` (c)'s warning with no action

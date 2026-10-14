@@ -8,7 +8,7 @@ import type { LiveState } from '@rotaris/config';
 import { Sessions } from '@rotaris/engine';
 import { answer, DefaultAgentBackend, ScriptedModelClient } from '@rotaris/model';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
-import type { ConfiguredRun, ConfigureDeps } from './configuration.js';
+import { retrospectiveOf, type ConfiguredRun, type ConfigureDeps } from './configuration.js';
 import { launchSession, leasedSetup, leaseForContinuation, LeaseReportLog, type LaunchRequest } from './launch.js';
 
 function deferred<T>() {
@@ -292,13 +292,75 @@ describe('the continuation lease (REQ-PROVIDER-066; a defect note, removed once 
    * PD-LIBRARY-002 revision 5 (OQ-300, ruled under R-072): the retrospective's refusal takes REQ-WORKSPACE-137's code and headline
    * with a detail naming the retrospective, which continues no run; the continuation keeps its own sentence.
    */
-  it('leasedSetup: an entry provider main cannot resolve refuses with the retrospective\'s sentence, and a configuration that will not load says why', async () => {
+  it('leasedSetup: a retrospective model\'s provider main cannot resolve refuses with the retrospective\'s sentence, and a configuration that will not load says why', async () => {
+    // The fixture's one model on the medium tier too, so the retrospective resolves to it (`retrospectiveOf`).
+    writeFileSync(join(dir, '.rotaris', 'agents.yaml'), `models:\n  selected:\n    provider: openai\n    model_id: m\n    auth_provider: provider-one\nlarge_model: selected\nmedium_model: selected\n`);
     expect(await leasedSetup(dir, deps(async () => ({})))).toEqual({ kind: 'refused', reply: { kind: 'refused', code: 'session.provider-auth', headline: 'Provider authentication required', detail: 'Authenticate at least one configured provider before running a retrospective.' } });
     expect(await leaseForContinuation(dir, deps(async () => ({})))).toEqual({ kind: 'refused', reply: { kind: 'refused', code: 'session.provider-auth', headline: 'Provider authentication required', detail: 'Authenticate at least one configured provider before continuing this run.' } });
     writeFileSync(join(dir, '.rotaris', 'agents.yaml'), 'runtime: [invalid]\n');
     const lease = vi.fn(async () => ({ 'provider-one': 'fresh-bearer' }));
     expect(await leasedSetup(dir, deps(lease))).toMatchObject({ kind: 'unconfigured', reason: expect.stringMatching(/^The configuration could not be loaded/) });
     expect(lease).not.toHaveBeenCalled();
+  });
+
+  /*
+   * PD-LIBRARY-002 with ADR-0030 and REQ-PROVIDER-066 (docs/defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md):
+   * a retrospective authenticates as a run does, and a run's lease refuses on the provider its own first request needs. The
+   * retrospective's only request goes to its own model — `retrospective_model`, then `medium_model` (`retrospectiveOf`) — so its
+   * lease refuses on that model's provider, never on the entry role's. Until the repair it checked the entry role's provider.
+   */
+  describe('leasedSetup refuses on the retrospective model\'s provider, not the entry role\'s', () => {
+    const twoProviders = (retrospective: string) => writeFileSync(join(dir, '.rotaris', 'agents.yaml'), `models:
+  entry:
+    provider: openai
+    model_id: entry-model
+    auth_provider: provider-one
+  analyst:
+    provider: openai-compatible
+    model_id: analyst-model
+    base_url: https://two.example/v1
+    auth_provider: provider-two
+large_model: entry
+medium_model: ${retrospective === 'medium' ? 'analyst' : 'entry'}
+small_model: entry
+${retrospective === 'slot' ? 'retrospective_model: analyst\n' : ''}`);
+
+    for (const shape of ['slot', 'medium'] as const) {
+      it(`its own provider signed in and the entry role's signed out: configured, on the bearer it leased (${shape === 'slot' ? 'retrospective_model' : 'medium_model'})`, async () => {
+        twoProviders(shape);
+        const seen: string[][] = [];
+        const r = await leasedSetup(dir, deps(async (providers) => { seen.push([...providers]); return { 'provider-two': 'analyst-bearer' }; }));
+        expect(seen).toEqual([['provider-one', 'provider-two']]);
+        expect(r.kind).toBe('configured');
+        if (r.kind !== 'configured') return;
+        const collector = retrospectiveOf(r.setup.cfg, r.setup.scripted);
+        expect(collector?.key).toBe('analyst');
+        expect(await r.setup.model.config.credentialFor(collector!.model)()).toBe('analyst-bearer');
+      });
+
+      it(`its own provider signed out and the entry role's signed in: refused at the gesture with the retrospective's sentence (${shape === 'slot' ? 'retrospective_model' : 'medium_model'})`, async () => {
+        twoProviders(shape);
+        expect(await leasedSetup(dir, deps(async () => ({ 'provider-one': 'entry-bearer' })))).toEqual({ kind: 'refused', reply: { kind: 'refused', code: 'session.provider-auth', headline: 'Provider authentication required', detail: 'Authenticate at least one configured provider before running a retrospective.' } });
+      });
+    }
+
+    it('a retrospective model naming no sign-in provider needs none: the lease refuses nothing although the entry role\'s is unresolved', async () => {
+      // The fixture of this block's beforeEach states no medium_model, so the retrospective resolves to the shipped medium default,
+      // a model authenticated by its key rather than a sign-in: nothing it sends needs provider-one's credential.
+      const r = await leasedSetup(dir, deps(async () => ({})));
+      expect(r.kind).toBe('configured');
+      if (r.kind !== 'configured') return;
+      const collector = retrospectiveOf(r.setup.cfg, r.setup.scripted);
+      expect(collector).not.toBeNull();
+      expect(r.setup.cfg.models[collector!.key]?.auth_provider ?? null).toBeNull();
+      expect(await leaseForContinuation(dir, deps(async () => ({})))).toMatchObject({ kind: 'refused' });
+    });
+
+    it('a continuation still refuses on the entry role\'s provider, whatever the retrospective\'s', async () => {
+      twoProviders('slot');
+      expect(await leaseForContinuation(dir, deps(async () => ({ 'provider-two': 'analyst-bearer' })))).toMatchObject({ kind: 'refused', reply: { code: 'session.provider-auth', detail: 'Authenticate at least one configured provider before continuing this run.' } });
+      expect(await leaseForContinuation(dir, deps(async () => ({ 'provider-one': 'entry-bearer' })))).toEqual({ kind: 'leased', bearers: { 'provider-one': 'entry-bearer' } });
+    });
   });
 
   it('a configuration that will not load leases nothing — setupFor refuses with its real report instead', async () => {

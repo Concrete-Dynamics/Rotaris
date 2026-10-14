@@ -286,3 +286,10 @@ reads its collector from the leased setup, a lease refusal returns before either
 **Not measured:** the live `ask-retrospective` scenario since the change — it should show the request carrying a credential and
 an artifact with no "collector crashed" note; the built app's proofs run the scripted provider, which takes no credential.
 
+> **Corrected 2026-10-14 (fin46, `fin46-accept1-11`):** "refusing as a continuation does when the entry provider is unresolved",
+> above, was the build's reading and is kept as written; it checked the **entry role's** provider, while the retrospective's one
+> request goes to its own model (`retrospective_model`, then `medium_model`), so a retrospective was refused when only the entry
+> role's provider was signed out and passed its lease when its own was, failing at its model call. `leasedSetup` now requires the
+> retrospective model's sign-in provider (`PreparedRun.retrospectiveAuthProvider`), a continuation still the entry role's
+> ([`../../defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`](../../defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md)).
+

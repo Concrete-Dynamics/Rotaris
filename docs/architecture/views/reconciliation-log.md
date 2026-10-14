@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A retrospective's lease requires its own model's provider (fin46, `fin46-accept1-11`; PD-LIBRARY-002 revision 5).**
+`02-process-view.md`'s retrospective paragraph now says the refusal is on the sign-in provider of the retrospective's model
+(`retrospective_model`, then `medium_model`), not the entry role's, with the old wording kept beside it. No package, edge or process
+changed.
+
 **A packaged build carries no scripted model client (fin46, `fin46-accept1-11`; OQ-312).** `02-process-view.md`'s run-host row
 says the scripted client does not ship — `host.ts` builds it behind `__ROTARIS_SEAMS__`, and a `provider: scripted` entry is the
 client's only where the seams are compiled in (`isScriptedProvider`) — with the old reading ("then with the fixed

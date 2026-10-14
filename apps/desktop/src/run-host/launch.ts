@@ -41,19 +41,22 @@ export async function leaseForContinuation(workspaceRoot: string, deps: Continua
   const prepared = prepareRun(workspaceRoot, deps.attended, deps.configuration);
   // A configuration that will not load is refused by `setupFor` with its real report; lease nothing here.
   if (!prepared.ok) return { kind: 'leased', bearers: {} };
-  return leaseOver(prepared.value, deps, 'Authenticate at least one configured provider before continuing this run.');
+  return leaseOver(prepared.value, prepared.value.entryAuthProvider, deps, 'Authenticate at least one configured provider before continuing this run.');
 }
 
 /**
- * The lease a prepared configuration needs: the providers it names, asked of main; refused when the entry provider is not resolved,
- * under REQ-WORKSPACE-137's code and headline with the caller's detail. A continuation says "before continuing this run"; a
- * retrospective, which continues no run, names itself (`PD-LIBRARY-002` revision 5, OQ-300 ruled under R-072).
+ * The lease a prepared configuration needs: the providers it names, asked of main; refused when `required` — the provider the
+ * caller's first request goes to — is not resolved, under REQ-WORKSPACE-137's code and headline with the caller's detail. A
+ * continuation requires the entry role's provider and says "before continuing this run"; a retrospective, which continues no run,
+ * requires its own model's provider and names itself (`PD-LIBRARY-002` revision 5, OQ-300 ruled under R-072). Until 2026-10-14
+ * both required the entry role's provider
+ * (docs/defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md).
  */
-async function leaseOver(prepared: PreparedRun, deps: Pick<ContinuationLeaseDeps, 'leaseCredentials'>, refusalDetail: string): Promise<ContinuationLease> {
+async function leaseOver(prepared: PreparedRun, required: string | null, deps: Pick<ContinuationLeaseDeps, 'leaseCredentials'>, refusalDetail: string): Promise<ContinuationLease> {
   const bearers = prepared.authProviders.length > 0
     ? await deps.leaseCredentials(prepared.authProviders).catch(() => ({} as Readonly<Record<string, string>>))
     : {};
-  if (prepared.entryAuthProvider !== null && !bearers[prepared.entryAuthProvider]) {
+  if (required !== null && !bearers[required]) {
     return { kind: 'refused', reply: { kind: 'refused', code: 'session.provider-auth', headline: 'Provider authentication required', detail: refusalDetail } };
   }
   return { kind: 'leased', bearers };
@@ -76,7 +79,8 @@ export type LeasedSetup =
 export async function leasedSetup(workspaceRoot: string, deps: ContinuationLeaseDeps): Promise<LeasedSetup> {
   const prepared = prepareRun(workspaceRoot, deps.attended, deps.configuration);
   if (!prepared.ok) return { kind: 'unconfigured', reason: prepared.error.reason };
-  const lease = await leaseOver(prepared.value, deps, 'Authenticate at least one configured provider before running a retrospective.');
+  // The retrospective's own model's provider (`retrospectiveOf`: its slot, then medium_model), never the entry role's.
+  const lease = await leaseOver(prepared.value, prepared.value.retrospectiveAuthProvider, deps, 'Authenticate at least one configured provider before running a retrospective.');
   if (lease.kind === 'refused') return lease;
   return { kind: 'configured', setup: prepared.value.complete(lease.bearers), bearers: lease.bearers };
 }

@@ -536,6 +536,14 @@ export type ConfigureRefusal = { readonly reason: string; readonly cfg?: LoadedC
 export interface PreparedRun {
   readonly authProviders: readonly string[];
   readonly entryAuthProvider: string | null;
+  /**
+   * PD-LIBRARY-002 with ADR-0030 and REQ-PROVIDER-066: the sign-in provider of the model a retrospective's request goes to —
+   * `retrospective_model`, then `medium_model` (`retrospectiveOf`) — when that model names one; null when no retrospective model
+   * resolves, or the model is the scripted client's. A retrospective's lease refuses on this provider, as a run's refuses on its
+   * entry provider. Until 2026-10-14 the retrospective's lease checked the entry role's provider
+   * (docs/defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md).
+   */
+  readonly retrospectiveAuthProvider: string | null;
   readonly complete: (bearers: Readonly<Record<string, string>>) => ConfiguredRun;
 }
 
@@ -655,7 +663,9 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
   const authProviders = authProvidersOf(cfg);
   const isScripted = scripted || isScriptedProvider(model.providerId);
   const entryAuthProvider = isScripted ? null : entry?.auth_provider ?? null;
-  return ok({ authProviders, entryAuthProvider, complete: (bearers) => {
+  const retrospective = retrospectiveOf(cfg, scripted);
+  const retrospectiveAuthProvider = retrospective === null || scripted || isScriptedProvider(retrospective.model.providerId) ? null : cfg.models[retrospective.key]?.auth_provider ?? null;
+  return ok({ authProviders, entryAuthProvider, retrospectiveAuthProvider, complete: (bearers) => {
     const runtime = runtimeFromConfiguration(cfg, verdict, deps.sharedQuotaCaps?.() ?? {});
     // The adapter's idle bound (REQ-CONFIG-115) is re-armed from the run host's own timer port, never a global.
     const client: ModelClient = isScripted ? deps.scriptedClient() : new AiSdkModelClient({ baseUrl: model.baseUrl ?? PROVIDER_BASE_URLS['openai']!, onRequest: (i) => deps.onRequest(i), timers: deps.clocks.timers, monotonic: deps.clocks.monotonic });

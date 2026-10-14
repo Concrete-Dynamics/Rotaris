@@ -14765,8 +14765,9 @@ REQ-WORKSPACE-152 to its Extends line with their back-pointers; nothing is repla
 `passFailureDetail` (`apps/desktop/src/main/improvement-notice.ts`) adds its closing period only to a reason that does not end in
 terminal punctuation. **What the ruling leaves open.** Nothing new; the lease checks the entry role's provider while the
 retrospective analyses on its own slot's, recorded apart as
-[`../defects/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`](../defects/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md),
-which this ruling does not repair.
+[`../defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`](../defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md),
+which this ruling does not repair (*repaired 2026-10-14 by fin46, `fin46-accept1-11`: the retrospective's lease requires the
+sign-in provider of its own model, `retrospective_model` then `medium_model`, and a continuation still the entry role's*).
 
 <a id="oq-301"></a>
 

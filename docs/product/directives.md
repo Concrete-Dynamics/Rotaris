@@ -1611,7 +1611,10 @@ retrospective and opens Settings at Models.
 > (`passFailureDetail`), so "… running a retrospective.." — repaired in the same change
 > ([`fixed/a-retrospectives-failure-warning-ends-in-a-doubled-period-when-its-reason-ends-in-one.md`](../defects/fixed/a-retrospectives-failure-warning-ends-in-a-doubled-period-when-its-reason-ends-in-one.md));
 > and the lease checks the entry role's provider rather than the retrospective model's, recorded and not repaired
-> ([`a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`](../defects/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md)).
+> ([`fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`](../defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md))
+> — *repaired 2026-10-14 by fin46 (`fin46-accept1-11`): "its entry provider" is read as the sign-in provider of the model the
+> retrospective's request goes to (`retrospective_model`, then `medium_model`), which `leasedSetup` now requires
+> (`PreparedRun.retrospectiveAuthProvider`); a continuation still requires the entry role's. The sentence is unchanged.*
 > **What was measured.** Three unit cases, each red before the change: `launch.test.ts` (both sentences, the retrospective's
 > and the continuation's), `commands/improvements.test.ts` (the notice's severity, title, body and action, twice for two
 > presses, nothing queued) and `improvement-notice.test.ts` (a single period after a reason ending in `.`, `!` or `?`, one

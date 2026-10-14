@@ -482,7 +482,16 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 
 - **REQ-WORKSPACE-152** — The guided provider setup flow of REQ-WORKSPACE-135 SHALL be reachable through the desktop interface and from nowhere else, from exactly these places. (1) The Settings Models category (`models`, REQ-CONFIG-269) SHALL offer an action that starts the flow with the catalog step showing, and, per already-configured provider, an action that starts it in re-authenticate mode for that provider — beginning at the authentication step for it, and replacing that provider's stored credential on success while leaving every other provider's snapshot entry untouched. (2) The refusals of REQ-WORKSPACE-137 SHALL carry an action leading to that same Settings surface. (3) On a first launch at which no authenticated provider exists, the window SHALL publish a persistent INFO notice, once the window is interactive and never as a dialog opened unbidden, conveying that no model provider is authenticated yet and that runs cannot start until one is, and carrying an action that starts the flow. That notice SHALL NOT gate any view, SHALL NOT block navigation, and SHALL be dismissible; the only run-time consequence of having no provider is the refusal REQ-WORKSPACE-137 already states. Where a provider's authentication step hands off to an external browser, the interface SHALL say so before the hand-off and SHALL remain usable while it is outstanding.
 
+  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 5, 2026-10-14** ([OQ-300](../architecture/open-questions.md#oq-300)). A
+  > retrospective's authentication refusal at its capture is one of the refusals clause (2) names: its error notice carries the
+  > action that opens Settings at Models. Clauses (1) to (3) are untouched.
+
 - **REQ-WORKSPACE-137** — Desktop equivalents: submitting a prompt with no model configured SHALL yield "No model configured" / "Choose a model in Settings before starting a run." with an "Open Settings" action; with providers configured but none connected, "Provider authentication required" / "Authenticate at least one configured provider before starting a run." Provider health and authentication management live in Settings.
+
+  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 5, 2026-10-14** ([OQ-300](../architecture/open-questions.md#oq-300)). A
+  > retrospective whose lease leaves its entry provider unresolved is refused with this requirement's headline "Provider
+  > authentication required" and the detail "Authenticate at least one configured provider before running a retrospective.".
+  > The refusal of a submitted prompt is untouched.
 
 ### Bundled-Build Machine Setup
 

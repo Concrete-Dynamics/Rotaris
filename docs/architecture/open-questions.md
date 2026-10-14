@@ -128,7 +128,8 @@ REQ-GIT-138, no directive); [OQ-264](#oq-264), confirmed as built and carried by
 restore deletes its own staging copy on a failure that leaves the store as it was; no directive); [OQ-266](#oq-266), changed (a
 restore cut between its renames is reversed at the next open; no directive); [OQ-273](#oq-273), changed (`PD-MCP-004`);
 [OQ-278](#oq-278), changed (a note closes unreproduced only under a guard, `docs/defects/README.md`); [OQ-280](#oq-280), changed
-(`PD-TOOLS-019`).
+(`PD-TOOLS-019`). Written 2026-10-14 by fin45 (`fin45-retro-and-record`): [OQ-300](#oq-300), changed (`PD-LIBRARY-002`
+revision 5).
 
 ***Three of those counts changed on 2026-09-02 and the direction is not the usual one, so a reader should
 not skim them.*** The seven escalations this register carried as open were **all ruled on that date** and
@@ -14705,10 +14706,31 @@ session at rest), so the sentence names something that is not there. REQ-WORKSPA
 ("before starting a run"), the continuation's "before continuing this run" is the build's adaptation of it, and nothing in the
 specification words the retrospective's.
 
-**What the build proceeds under.** The continuation's sentence, unchanged since before fin43.
+**What the build proceeded under, and no longer does (falsified by the ruling below).** The continuation's sentence, unchanged
+since before fin43. At capture the refusal reached main's generic branch, an error notice "The retrospective could not be
+started" with "Provider authentication required: Authenticate at least one configured provider before continuing this run." as
+its body and no action; at analysis it reached clause (c)'s warning as "… the analyst could not start — Provider authentication
+required: Authenticate at least one configured provider before continuing this run..", the reason's own period doubled by the
+warning's.
 
 **What a ruling decides.** The detail a retrospective's lease refusal carries: REQ-WORKSPACE-137's sentence as written, a sentence
 that names the analysis ("… before the session can be analysed", or the like), or the continuation's as it stands.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)), written 2026-10-14 by fin45
+(`fin45-retro-and-record`).** A retrospective whose lease leaves its entry provider unresolved is refused with REQ-WORKSPACE-137's
+headline "Provider authentication required" and the detail "Authenticate at least one configured provider before running a
+retrospective.". At capture, main posts that refusal as one error notice per gesture, titled with the headline, with the detail as
+its body and the "Open Models settings" action that REQ-WORKSPACE-152 (2) gives that requirement's refusals. At analysis, the
+same reason appears inside `PD-LIBRARY-002` clause (c)'s failure warning, which offers no action and ends in a single period.
+Recorded as [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 5, which adds REQ-WORKSPACE-137 and
+REQ-WORKSPACE-152 to its Extends line with their back-pointers; nothing is replaced. Built in the same plan: `leaseOver`
+(`apps/desktop/src/run-host/launch.ts`) takes the refusal's detail from its caller, the `improvements.retrospective` handler
+(`apps/desktop/src/main/commands/improvements.ts`) posts the refusal with its action beside `retrospective.no-model`, and
+`passFailureDetail` (`apps/desktop/src/main/improvement-notice.ts`) adds its closing period only to a reason that does not end in
+terminal punctuation. **What the ruling leaves open.** Nothing new; the lease checks the entry role's provider while the
+retrospective analyses on its own slot's, recorded apart as
+[`../defects/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`](../defects/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md),
+which this ruling does not repair.
 
 <a id="oq-301"></a>
 

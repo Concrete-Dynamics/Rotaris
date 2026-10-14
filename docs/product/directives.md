@@ -1340,6 +1340,11 @@ said nothing on the per-run history, so nothing is replaced.*
 artifact whose collector failed, and a timed-out retrospective**: one sentence is added at the end of clause (c), which points
 at [`PD-LIBRARY-005`](#pd-library-005). Revision 2's text of (c) stays otherwise word for word, so nothing is replaced.*
 
+*Revision 5 (2026-10-14, [R-072](requests.md#r-072), ruling [OQ-300](../architecture/open-questions.md#oq-300)) — **the
+retrospective's authentication refusal**: one sentence is added at the end of "The model", and REQ-WORKSPACE-137 and
+REQ-WORKSPACE-152 join the Extends line. Revision 4 said nothing on a retrospective whose entry provider has no credential, so
+nothing is replaced.*
+
 **The rule.** Beside the per-run analyst of section 3, the improvement domain SHALL carry a second
 kind of analysis pass, the **retrospective**. A retrospective SHALL read only material this product
 already keeps for the workspace it runs in — session records, improvement artifacts and their
@@ -1447,7 +1452,12 @@ pass, and the first time a retrospective gesture is made in that state the produ
 informational notice conveying that no model is configured for the retrospective and offering an
 action that opens Settings at the slot — the same refusal-shape REQ-LIBRARY-037 fixes for the
 per-run analyst, with the notice per gesture rather than once per workspace, because nothing
-happens here that a user did not just ask for by name.
+happens here that a user did not just ask for by name. A retrospective whose lease leaves its entry provider unresolved is
+refused with REQ-WORKSPACE-137's headline "Provider authentication required" and the detail "Authenticate at least one
+configured provider before running a retrospective.": at its capture, that refusal is posted as one error notice per gesture,
+titled with the headline, with the detail as its body and the action that opens Settings at Models, which REQ-WORKSPACE-152 (2)
+gives that requirement's refusals; at its analysis, the same reason is carried inside clause (c)'s failure warning, which keeps
+no action. *(Revision 5, OQ-300.)*
 
 **Why, and what it costs.** The request drew the comparison deliberately: an insights report
 (`sessions → patterns, friction, recommendations`) and a feedback loop
@@ -1485,7 +1495,7 @@ record with evidence, review, undo, history, export and an executor behind it.
   it is paid once per gesture, names the exact field to set, and stops there.
 
 > **Narrows:** REQ-LIBRARY-011, REQ-LIBRARY-020, REQ-LIBRARY-034, REQ-LIBRARY-109, REQ-LIBRARY-124, REQ-LIBRARY-125, REQ-LIBRARY-130, REQ-NOTIFY-250
-> **Extends:** REQ-LIBRARY-003, REQ-LIBRARY-006, REQ-LIBRARY-015, REQ-LIBRARY-017, REQ-LIBRARY-126, REQ-LIBRARY-128, REQ-MONITOR-173, REQ-NOTIFY-251, REQ-WORKSPACE-041
+> **Extends:** REQ-LIBRARY-003, REQ-LIBRARY-006, REQ-LIBRARY-015, REQ-LIBRARY-017, REQ-LIBRARY-126, REQ-LIBRARY-128, REQ-MONITOR-173, REQ-NOTIFY-251, REQ-WORKSPACE-041, REQ-WORKSPACE-137, REQ-WORKSPACE-152
 
 *Until 2026-10-07 this block read `> **Extends:** REQ-LIBRARY-003, REQ-LIBRARY-006, REQ-LIBRARY-015` and beneath it
 `> **New:** no live requirement covers a cross-session analysis pass; REQ-LIBRARY-017 forbids the per-run analyst exactly
@@ -1506,6 +1516,11 @@ the cases are the revision-2 paragraph's (a) to (g)
 REQ-LIBRARY-034 joins the Narrows line with its back-pointer (clause (h)). REQ-LIBRARY-017 stays on the Extends line, and
 REQ-LIBRARY-025 is untouched: with no retrospective artifact supplied as history, both read word for word for every run.*
 
+*Revision 5, 2026-10-14 ([OQ-300](../architecture/open-questions.md#oq-300), ruled under [R-072](requests.md#r-072)):
+REQ-WORKSPACE-137 and REQ-WORKSPACE-152 join the Extends line, each with its "Extended by" back-pointer. Both read word for word
+for a run: the retrospective takes REQ-WORKSPACE-137's headline with a detail naming the retrospective, and REQ-WORKSPACE-152 (2)'s
+action at its capture.*
+
 *Raised by the owner, 2026-09-17; logged as [R-033](requests.md#r-033).*
 Revision 2 logged as [R-072](requests.md#r-072) (OQ-235 and OQ-236), ruled by the consortium under the owner's
 delegation: on OQ-235 the system-lens advocate's recommendation followed in substance and a revision taken in place of an
@@ -1517,6 +1532,9 @@ Revision 4 logged as [R-072](requests.md#r-072) (OQ-285), ruled by the consortiu
 2026-10-13 and written 2026-10-14 by fin44 (`fin44-improvement-failures`): clause (c) points at `PD-LIBRARY-005` for an empty
 artifact whose collector failed and for a timed-out retrospective. The Narrows and Extends lines are unchanged; REQ-LIBRARY-124's
 case is `PD-LIBRARY-005`'s, which names this directive.
+Revision 5 logged as [R-072](requests.md#r-072) (OQ-300), ruled by the consortium under the owner's delegation on
+2026-10-13 and written 2026-10-14 by fin45 (`fin45-retro-and-record`): the retrospective's authentication refusal names the
+retrospective and opens Settings at Models.
 
 > **First execution of revision 2, 2026-10-13, ruled by [R-072](requests.md#r-072) (OQ-235) and built in plan fin34:** the
 > clause held as written. The run host's `SkillHost.retrospectiveInstructionFiles` keeps the `workspace:` entries of the

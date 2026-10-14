@@ -362,13 +362,16 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
      * carries rather than by its index, since "the root's final completion" is a call no index names in advance: the body is
      * read whole before the call is forwarded or answered, which a completion's request body is anyway before the endpoint
      * answers. A streamed request (`"stream": true`) is answered as server-sent events, any other as one JSON body.
+     * Since fin45 (PD-ORCH-009 revision 5, the `empty-wait` scenario) `when` and `unless` may each be a list: the body must hold
+     * every `when` and none of the `unless` — "the root's request right after a delegation, before any report" needs two of each.
      */
+    const listOf = (v) => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
     const emptyRules = rule === null ? faults.filter((f) => f.kind === 'empty' && (f.fired ?? 0) < (f.times ?? 1) && path.includes(f.path ?? '/chat/completions')) : [];
     if (emptyRules.length > 0) {
       clientReq.on('data', (chunk) => { sentChunks.push(chunk); });
       clientReq.on('end', () => {
         const body = Buffer.concat(sentChunks).toString('utf8');
-        const hit = emptyRules.find((f) => (f.when === undefined || body.includes(f.when)) && (f.unless === undefined || !body.includes(f.unless))) ?? null;
+        const hit = emptyRules.find((f) => listOf(f.when).every((w) => body.includes(w)) && !listOf(f.unless).some((u) => body.includes(u))) ?? null;
         if (hit === null) {
           forward();
           for (const chunk of sentChunks) upstreamReq.write(chunk);

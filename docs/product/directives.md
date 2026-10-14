@@ -6131,9 +6131,12 @@ under the owner's delegation, 2026-10-13, and written 2026-10-14; logged under [
 > classification is not what the launch's classification count discriminates — on the red build it was also 0, because the
 > activation budget (REQ-NOTIFY-106, 2 s from when the trigger was armed) is spent while the root waits on its child, so the
 > deterministic corrective is sent without a classifier call; the stuck-activation count is the discriminating check. **What was
-> not measured:** a live run, the orchestrator's: a coordinator that delegates in the background and ends its turn with no text
-> should be resumed with the report as its request's last message, with no "Pause and reassess" and no stuck activation. The row
-> is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+> not measured:** a live run, the orchestrator's. Written for it: the opt-in `empty-answer` group's third launch, `empty-wait`,
+> in which the recording proxy's `empty` rule (since fin45 its `when` and `unless` may be lists; `model-traffic.test.ts`) empties
+> the root's request right after an admitted background delegation; it should show the child's report as the final message of
+> the request that resumes the root, nothing behind it, no `Trigger: stuck` classification, no root stuck activation and no
+> `agent_session_aborted` (`waitReading`, `lib/plan-open-reading.mjs`, pinned by `plan-open-reading.test.ts`). The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

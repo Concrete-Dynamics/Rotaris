@@ -153,7 +153,10 @@
  *                 `empty-answer` (both of the root's calls empty) — exactly one re-prompt sent and logged, then "The run ended
  *                 without an answer: …" and one warning `incomplete_execution` issue; `empty-once` (the first call only) — one
  *                 re-prompt, the model's answer to it, and no such row or issue. In both (revision 3, OQ-282): no stuck
- *                 classification asked and no root stuck `loop_supervisor_activation`.
+ *                 classification asked and no root stuck `loop_supervisor_activation`. Since fin45 (revision 5, OQ-296) a third
+ *                 launch, `empty-wait`: the root's step right after a background delegation is emptied, so it waits silently;
+ *                 the child's report must be the final message of the request that resumes it, with no stuck classification,
+ *                 no root stuck activation and no `agent_session_aborted`.
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -242,7 +245,7 @@ import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-fiel
 import { passOutcome, postRunVerdict, retrospectiveArtifactVerdict, retrospectiveInstructionFiles, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './lib/analysis-reading.mjs';
 import { verdictLine } from './lib/verdict-line.mjs';
 import { RENAME_FILES, RENAME_FROM, RENAME_TO, renameReading } from './lib/rename-reading.mjs';
-import { CLASSIFIER_MARK, ROOT_MARK, answerReading, planReading } from './lib/plan-open-reading.mjs';
+import { CLASSIFIER_MARK, DELEGATED_MARK, REPORT_MARK, ROOT_MARK, answerReading, planReading, waitReading } from './lib/plan-open-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, summaryOpeningVerdicts, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
 import { ARTIFACTS_TAB } from './lib/library-refresh.mjs';
 import { HANDOFF_ARTIFACT_CAP, attachReading, delegatesToReading, followUpReading, handoffArtifact, handoffReading, requestOf, swarmReading } from './lib/delegation-readings.mjs';
@@ -3240,6 +3243,12 @@ if (wanted.includes('plan-open')) {
  * In both, since PD-ORCH-009 revision 3 (OQ-282; the live run at ce5f952, F1): the re-prompt is the request's final message, no
  * loop classification reads 'Trigger: stuck', and the session holds no root `loop_supervisor_activation` with trigger `stuck`.
  *
+ *   3. `empty-wait` (fin45, PD-ORCH-009 revision 5, OQ-296) — the root asked to delegate one background child and wait for it; the
+ *      proxy empties the root's first request that holds the delegation's `task_id: bg_` and no report, so the root's turn ends
+ *      with neither text nor a call while its child runs. The child's report must then be the final message of the request that
+ *      resumes the root (no "Pause and reassess" behind it), with no stuck classification, no root stuck activation, and the
+ *      session not `agent_session_aborted`. A root that delegated nothing is a NOTE, "not reached".
+ *
  * It needs the proxy; without it the scenario is a NOTE.
  */
 if (wanted.includes('empty-answer')) {
@@ -3273,6 +3282,32 @@ if (wanted.includes('empty-answer')) {
         check(r.unanswered.length === 0 && r.incomplete.length === 0, `${c.name}: a root that answered when asked is not reported answerless (PD-ORCH-009)`, `${r.unanswered.length} row(s), ${r.incomplete.length} issue(s)`);
         const answered = read.rows.some((x) => x.kind === 'agent' && String(x.body ?? '').trim() !== '');
         if (!answered) noted(`${c.name}: the model wrote no answer when asked either`, 'the re-prompt reached it; its reply was empty');
+      }
+    }
+    // PD-ORCH-009 revision 5 (OQ-296, ruled 2026-10-13 under R-072): a parent's silent wait on its children is no stuck report.
+    {
+      const name = 'empty-wait';
+      proxy.setFaults([{ kind: 'empty', when: [ROOT_MARK, DELEGATED_MARK], unless: [CLASSIFIER_MARK, REPORT_MARK], times: 1 }]);
+      const log = await launch(name, { ROTARIS_CAPTURE_PROMPT: 'Delegate one codebase-analyst child in the background to read README.md and report the name of the application it describes. Then wait for its report, and reply with that name in one sentence. Delegate nothing else.', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000' }, RUN_WAIT_MS + 90_000);
+      const fired = proxy.stats().faultsFired.filter((f) => f.kind === 'empty').length;
+      proxy.setFaults([]);
+      check(!/capture: wait for result timed out/.test(log), `${name}: the run reached its result inside the wait`);
+      const read = readSession();
+      if (read === null) check(false, `${name}: the run left a session row`, 'no session was recorded');
+      else {
+        preserveRun(name, read.session.session_id);
+        checkPricing(name, read.session);
+        const supervision = readSupervision(read.session.session_id);
+        const r = waitReading({ bodies: readTraffic(name).map((x) => String(x.requestBody ?? '')), fired, activations: supervision.activations, childNames: supervision.childNames });
+        record[name] = { status: read.session.execution_status, stopReason: read.session.stop_reason, ...r };
+        if (r.fired === 0) noted(`${name}: not reached`, 'the root made no request after an admitted background delegation, so no silent wait was made');
+        else {
+          check(r.resumed >= 1, `${name}: the root, silent while its child ran, was resumed with the child's report as its request's final message (PD-ORCH-009 revision 5)`, `${r.resumed} request(s) ending with a report over ${r.rootRequests} root request(s)`);
+          check(r.followed === 0, `${name}: no message followed a report in the request it resumed (PD-ORCH-009 revision 5)`, `${r.followed} request(s) with a message behind the report`);
+          check(r.stuckClassifications === 0, `${name}: no stuck classification was asked (PD-ORCH-009 revision 5)`, `${r.stuckClassifications} classifier request(s) reading 'Trigger: stuck'`);
+          check(r.stuckActivations.length === 0, `${name}: the root wrote no stuck loop_supervisor_activation (PD-ORCH-009 revision 5)`, JSON.stringify(r.stuckActivations));
+          check(read.session.stop_reason !== 'agent_session_aborted', `${name}: the run was not aborted by loop supervision`, `${read.session.execution_status} / ${read.session.stop_reason}`);
+        }
       }
     }
   }

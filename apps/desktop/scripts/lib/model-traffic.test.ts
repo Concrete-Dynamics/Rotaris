@@ -458,6 +458,22 @@ describe('the live run\'s recording proxy', () => {
       expect(proxy.stats().faultsFired).toEqual([{ kind: 'empty', at: 1, path: '/chat/completions' }, { kind: 'empty', at: 2, path: '/chat/completions' }]);
     });
 
+    /*
+     * fin45 (PD-ORCH-009 revision 5, the live `empty-wait` launch): `when` and `unless` as lists — every `when` held and no
+     * `unless` — so the rule picks the root's request right after a delegation and before any report.
+     */
+    it('`empty` with lists answers only a body that holds every `when` and none of the `unless`', async () => {
+      const target = await upstream((_req, res) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"ok":true}'); });
+      const { proxy, sink } = await proxyTo(target, [{ kind: 'empty', when: ['ROOT-MARK', 'task_id: bg_'], unless: ['classify', '[Background task completed]'], times: 1 }]);
+      const call = (content: string) => fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: JSON.stringify({ model: 'm', stream: false, messages: [{ role: 'system', content }] }) }).then((r) => r.text());
+      expect(await call('ROOT-MARK before any delegation')).toBe('{"ok":true}');
+      expect(await call('classify ROOT-MARK task_id: bg_1')).toBe('{"ok":true}');
+      expect(await call('ROOT-MARK [Background task completed] task_id: bg_1')).toBe('{"ok":true}');
+      expect(JSON.parse(await call('ROOT-MARK delegated task_id: bg_1')).choices[0].finish_reason).toBe('stop');
+      expect(await call('ROOT-MARK delegated again task_id: bg_2')).toBe('{"ok":true}');
+      expect(records(sink).map((r) => (r['fault'] as { kind?: string } | undefined)?.kind ?? null)).toEqual([null, null, null, 'empty', null]);
+    });
+
     it('the product\'s model client reads the `empty` answer as a turn that finished `stop` with no text and no tool call', async () => {
       const answer = emptyCompletion(JSON.stringify({ model: 'acme-1', stream: true }));
       const client = new AiSdkModelClient({

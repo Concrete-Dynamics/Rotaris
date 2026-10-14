@@ -3,11 +3,13 @@
  * look for are the engine's own, and each reading is taken from what the model was sent, the log and the transcript.
  */
 import { describe, expect, it } from 'vitest';
-import { ANSWER_REPROMPT as productReprompt, BUILT_IN_PERSONAS, CLASSIFIER_SYSTEM_PROMPT, entryInstructionsFor, planCarryText, planCorrectionText, planHeldRowText, RungMemory, type LoopActivation } from '@rotaris/engine';
+import { ANSWER_REPROMPT as productReprompt, BUILT_IN_PERSONAS, CLASSIFIER_SYSTEM_PROMPT, completionNotification, entryInstructionsFor, planCarryText, planCorrectionText, planHeldRowText, RungMemory, type LoopActivation } from '@rotaris/engine';
+import { renderDelegateObservation } from '@rotaris/agent-tools';
+import type { ChildRow } from '@rotaris/store';
 import type { AgentBackend, TurnInput } from '@rotaris/model';
 import { createLoopClassifier } from '../../src/run-host/loop.js';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { ANSWER_REPROMPT, CARRY_HEAD, CLASSIFIER_MARK, HELD_ROW, NOT_COMPLETE, ROOT_MARK, SHOWN, STUCK_TRIGGER, UNANSWERED_ROW, answerReading, heldAnswerOf, planReading, requestOf } from './plan-open-reading.mjs';
+import { ANSWER_REPROMPT, CARRY_HEAD, CLASSIFIER_MARK, DELEGATED_MARK, HELD_ROW, NOT_COMPLETE, REPORT_MARK, ROOT_MARK, SHOWN, STUCK_TRIGGER, UNANSWERED_ROW, answerReading, heldAnswerOf, planReading, requestOf, waitReading } from './plan-open-reading.mjs';
 
 const SYSTEM = `${ROOT_MARK} You coordinate.`;
 const body = (messages: { role: string; content: unknown }[], system = SYSTEM) => JSON.stringify({ model: 'm', stream: true, messages: [{ role: 'system', content: system }, ...messages] });
@@ -138,5 +140,31 @@ describe('the marks the readings and the `empty` traffic rule match on are the e
     expect(coordinating.startsWith(ROOT_MARK)).toBe(true);
     expect(entryInstructionsFor(coordinating, 'direct-work', { coordinatorOnly: true }).startsWith(ROOT_MARK)).toBe(true);
     expect(CLASSIFIER_SYSTEM_PROMPT.startsWith(CLASSIFIER_MARK)).toBe(true);
+  });
+
+  it('PD-ORCH-009 revision 5: DELEGATED_MARK is in an admitted delegation\'s observation, REPORT_MARK opens a completion notification', () => {
+    expect(renderDelegateObservation('survey', 'admitted', 'running in the background', 'bg_0a1b2c3d')).toContain(DELEGATED_MARK);
+    expect(renderDelegateObservation('survey', 'rejected', 'no such persona', null)).not.toContain(DELEGATED_MARK);
+    const done = { task_id: 'bg_0a1b2c3d', canonical_name: 'survey', given_name: 'survey', state: 'succeeded' } as ChildRow;
+    expect(completionNotification(done, 0, 1).startsWith(REPORT_MARK)).toBe(true);
+  });
+});
+
+describe('wait reading (live-run `empty-wait`, PD-ORCH-009 revision 5)', () => {
+  const delegated = [{ role: 'user', content: 'Delegate one child and wait.' }, { role: 'assistant', content: '' }, { role: 'tool', content: `Task 'survey': admitted — running\n${DELEGATED_MARK}0a1b2c3d` }, { role: 'assistant', content: '' }];
+  const report = { role: 'user', content: `${REPORT_MARK}\ntask_id: bg_0a1b2c3d\n…` };
+
+  it('the report ending the request that resumes the silent root is read as resumed, with nothing behind it', () => {
+    const r = waitReading({ fired: 1, bodies: [body(delegated.slice(0, 1)), body(delegated.slice(0, 3)), body([...delegated, report])] });
+    expect(r).toMatchObject({ fired: 1, rootRequests: 3, resumed: 1, followed: 0, stuckClassifications: 0, stuckActivations: [] });
+  });
+
+  it('as built before revision 5: the stuck corrective behind the report, its classification and the root\'s activation are read', () => {
+    const r = waitReading({
+      fired: 1,
+      bodies: [body([...delegated, report, { role: 'user', content: 'Pause and reassess the current task.' }]), body([{ role: 'user', content: 'Trigger: stuck (why).' }], 'You judge whether an agent is looping.')],
+      activations: [{ name: 'loop_supervisor_activation', actor: 'orchestrator', message: 'Pause and reassess the current task.', metadata: JSON.stringify({ trigger: 'stuck', activation_count: 1 }) }],
+    });
+    expect(r).toMatchObject({ resumed: 0, followed: 1, stuckClassifications: 1, stuckActivations: [{ actor: 'orchestrator' }] });
   });
 });

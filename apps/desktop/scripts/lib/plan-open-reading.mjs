@@ -38,6 +38,13 @@ export const CLASSIFIER_MARK = 'You classify a user request';
  * answer re-prompt answers.
  */
 export const STUCK_TRIGGER = 'Trigger: stuck';
+/** The completion notification's first line (`completionNotification`, REQ-ORCH-059): a background child's report resumes its parent. */
+export const REPORT_MARK = '[Background task completed]';
+/**
+ * The admitted delegation's observation names the child's id (`renderDelegateObservation`, REQ-TOOLS-153: "task_id: bg_…"), so
+ * a root request holding it and no `REPORT_MARK` is the root's step right after delegating, before any child reported.
+ */
+export const DELEGATED_MARK = 'task_id: bg_';
 
 /** The text of one OpenAI-shaped message's content, a string or a list of parts. */
 function textOf(content) {
@@ -131,4 +138,26 @@ export function answerReading({ log, bodies, systemRows, issues, fired, activati
     stuckClassifications: requests.filter((r) => !r.root && r.firstUser.startsWith(STUCK_TRIGGER)).length,
     stuckActivations,
   };
+}
+
+/**
+ * `PD-ORCH-009` revision 5's reading of one launch (fin45, OQ-296; the live `empty-wait` scenario): the proxy empties the root's
+ * step right after a background delegation, so its turn ends silent while the child runs. `resumed` counts the root requests whose
+ * final message is a child's report — the report the run resumed it with — and `followed` those whose final message is another
+ * user message right behind a report (the stuck corrective, as built before revision 5): owed none. The stuck classifications and
+ * the root's stuck activations are `answerReading`'s, owed none as well.
+ *
+ * @param {{ bodies: string[], fired: number, activations?: Array<{ name: string, actor: string, message: string, metadata: string }>,
+ *           childNames?: string[] }} input
+ */
+export function waitReading({ bodies, fired, activations = [], childNames = [] }) {
+  const base = answerReading({ log: '', bodies, systemRows: [], issues: [], fired, activations, childNames });
+  const roots = bodies.map(requestOf).filter((r) => r.root);
+  const resumed = roots.filter((r) => r.sent !== null && r.sent.includes(REPORT_MARK)).length;
+  const followed = roots.filter((r) => {
+    const final = r.messages.at(-1);
+    const before = r.messages.at(-2);
+    return final?.role === 'user' && !final.text.includes(REPORT_MARK) && before?.role === 'user' && before.text.includes(REPORT_MARK);
+  }).length;
+  return { fired, rootRequests: roots.length, resumed, followed, stuckClassifications: base.stuckClassifications, stuckActivations: base.stuckActivations };
 }

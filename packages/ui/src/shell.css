@@ -162,7 +162,7 @@
  * Part AB — REQ-CHAT-010's geometry. The four figures are SPECIFICATION values and are written as the
  * requirement writes them: the composer block defaults to 150 px and never falls below 110 px, the transcript
  * area never below 180 px, and the composer widget itself never below 48 px. `--rt-composer-height` is the
- * divider's live value, set on the element by the view and persisted per user under `panels/workspace`
+ * divider's live value, set on the element by the view and persisted per user under `panels/workspace/state`
  * (REQ-SHELL-069). `minmax(min-content, …)` rather than a fixed track, so a stored height smaller than the
  * controls can never clip the send button off the window — the stored figure is an aim, the content is a floor.
  * Four rows now: the run header (REQ-CHAT-008/158), the transcript, the queue panel (REQ-CHAT-036, "directly

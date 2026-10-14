@@ -56,6 +56,7 @@ import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
 import { anotherMainWindowStays, confirmActiveRunClose } from './close-confirmation.js';
 import { zeroProposalDetail } from './improvement-notice.js';
+import { cutRestoreNotice, storeRefusalNotice, storeRefusalOf, type StoreRefusal } from './store-notice.js'; // REQ-SESSION-202, OQ-266
 import { ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
@@ -307,9 +308,7 @@ async function main(): Promise<void> {
 
   const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest>; exit: ChildExit }>();
   /** REQ-SESSION-202 / OQ-266: each workspace whose store the last open refused rather than create over, by canonical root. */
-  const storeRefusals = new Map<string, { code: string; headline: string; detail?: string }>();
-  /** The refusals that are a lasting condition of the store's place, as against a restore merely under way. */
-  const STORE_REFUSALS: ReadonlySet<string> = new Set(['workspace.store-missing', 'workspace.store-displaced']);
+  const storeRefusals = new Map<string, StoreRefusal>();
   let cancelImprovementWorkspace = (_workspaceRoot: string): void => undefined;
   /**
    * Step A1 of the window builder (ADR-0048's registry over main windows; ADR-0055 consequences 5 and 6).
@@ -395,17 +394,19 @@ async function main(): Promise<void> {
       log(`workspace.open refused: ${JSON.stringify(opened)}`);
       // REQ-SESSION-202 / W-31, OQ-266: a store the open refused rather than create over is reported as what was found, and
       // the listing answers with the same condition instead of an empty list or "open a workspace" (`storeRefusals`).
-      if (opened.kind === 'refused' && STORE_REFUSALS.has(opened.code)) {
-        storeRefusals.set(key, { code: opened.code, headline: opened.headline, ...(opened.detail === undefined ? {} : { detail: opened.detail }) });
-        raiseNotice('error', opened.headline, opened.detail);
+      const held = storeRefusalOf(opened);
+      if (held) {
+        storeRefusals.set(key, held);
+        const n = storeRefusalNotice(held);
+        raiseNotice(n.severity, n.headline, n.detail);
       }
       return undefined;
     }
     storeRefusals.delete(key);
     // OQ-266: a restore cut between its renames was reversed by this open, before anything was created; said once.
     if (opened.cutRestore) {
-      const cut = opened.cutRestore;
-      raiseNotice('info', `The restore begun at ${cut.stamp} did not finish`, `${cut.hadStore ? 'The sessions this workspace had here were put back' : 'This workspace had no sessions here before it'}, and nothing from the backup was applied. Restore again from Settings to apply it. The prepared copy is kept at ${cut.staging}.`);
+      const n = cutRestoreNotice(opened.cutRestore);
+      raiseNotice(n.severity, n.headline, n.detail);
     }
     // W-18: the run host is HANDED the resolved path; it never reads the identifier file.
     const ack = await runHost.request({ kind: 'workspace.opened', workspaceId: opened.workspaceId, storeFile: opened.storeFile, workspaceRoot: key }, millis(5_000));

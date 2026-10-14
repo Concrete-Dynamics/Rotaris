@@ -15,6 +15,11 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-14**
 
+**The store notices' words move into `main/store-notice.ts` (OQ-266, REQ-SESSION-202; fin43's review).** The cut-restore info
+notice and the held store refusal were composed inline in `openWorkspaceInner`, untested; they are decided in a pure module
+beside main's other notice modules, with a test. The **seams** view's notice section names it. No package, edge, process,
+channel, command or store column changed.
+
 **A restore cut between its renames is reversed at the next open; a store place with no database is refused (OQ-266, ruled
 2026-10-13 under R-072; REQ-SESSION-201, REQ-SESSION-202, W-31; fin43).** The restore writes `<identifier>.restore-pending`
 before step 8; `openWorkspaceStore` reverses a cut restore from it and refuses a place that holds no store, both before

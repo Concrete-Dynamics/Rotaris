@@ -13799,7 +13799,8 @@ levels 2 and 3, [`PD-TOOLS-015`](../product/directives.md#pd-tools-015)'s level-
 [`PD-TOOLS-016`](../product/directives.md#pd-tools-016), each stating that REQ-TOOLS-136's levels are unchanged. Raised
 2026-10-13 by fin42 (N52) from
 [`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`](../defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md);
-numbered from the top of the plan's range, OQ-271 to OQ-280, to keep clear of its sibling bundles.)*
+numbered from the top of the plan's range, OQ-271 to OQ-280, to keep clear of its sibling bundles. Ruled 2026-10-13 under
+R-072, below.)*
 
 On a CRLF file every line ends in `\r`, and an `old_string` a model writes as a JSON string almost never carries one. Level 2
 strips trailing whitespace, the `\r` with it, so an LF `old_string` matches a CRLF file there (`PD-TOOLS-016` was ruled for
@@ -13825,6 +13826,18 @@ read without the `\r`, level 3 takes cases level 4 took, so an edit that applied
 the near-miss quote of such a window carries `\r`s the caller must send back; kept exact, on Windows a model's commonest
 mis-indented edit lands unshifted beside a success at level 4 — the case `PD-TOOLS-015` was ruled to prevent — and `haet_edit`
 gives no near miss for it.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** REQ-TOOLS-136's level 3 compares
+each line of the window and of `old_string` with one trailing `\r` set aside, and measures the leading prefix on those lines.
+An LF `old_string` that is one uniform indent off on a CRLF file therefore matches at level 3, where `PD-TOOLS-015`,
+`PD-TOOLS-014` (revision 3, which also names the line endings) and `PD-TOOLS-016` answer it. Recorded as
+[`PD-TOOLS-019`](../product/directives.md#pd-tools-019), which narrows REQ-TOOLS-136 and states that levels 1, 2 and 4 and the
+level order are unchanged, with [`PD-TOOLS-014`](../product/directives.md#pd-tools-014) revision 3 and in-place notes on
+`PD-TOOLS-015` and `PD-TOOLS-016`. **Costs kept on record:** some level-4 applies become shifts or refusals at level 3, the
+near-miss quote of such a window carries `\r`s, and the product departs from a specification-only build. *The build's reading
+("What the build proceeds under", above: level 3 compares lines exactly, `\r` included) is kept as the falsified reading.* A
+neighbouring gap the ruling does not decide — a block holding a blank line never matches at level 3, on LF and CRLF alike — is
+recorded separately.
 
 <a id="oq-273"></a>
 

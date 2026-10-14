@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Eighty-nine.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Ninety.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -7624,11 +7624,19 @@ PD-ORCH-015 (P1) was assigned the number before it.*
 whose text occurs more than once**: clause 5 and the "Several windows" paragraph each gain the flag, and revision 1's text is
 quoted beneath each.*
 
+*Revision 3 (2026-10-13, [R-072](requests.md#r-072), ruling [OQ-280](../architecture/open-questions.md#oq-280) with
+[`PD-TOOLS-019`](#pd-tools-019)) — **the line endings at level 3**: the case's level-3 parenthetical names the carriage return
+set aside, and clause 2 at level 3 adds one sentence when the line endings differ too; revision 2's text is quoted beside each
+changed clause. [`PD-TOOLS-015`](#pd-tools-015) clause 4's refusal inherits the sentence through clause 2.*
+
 **The case, stated exhaustively.** `haet_edit` or its alias `haet` is called with a `content_hash` equal to the SHA-256 of the
 file's current bytes, `old_string` and `new_string` different, `replace_all` false; `old_string` matches nowhere at REQ-TOOLS-136
 level 1; and it matches at level 2 (each line equal once trailing whitespace, a carriage return included, is ignored) or level 3
-(each line equal once one uniform leading prefix is added or removed). Everything outside this case is REQ-TOOLS-189's,
-exactly as written.
+(each line equal once one uniform leading prefix is added or removed, a carriage return ending a line set aside
+(`PD-TOOLS-019`)) *(— revision 3)*. Everything outside this case is REQ-TOOLS-189's, exactly as written.
+
+> Revision 2 said, and no longer governs: "… or level 3 (each line equal once one uniform leading prefix is added or removed)."
+> — which, as built, compared the `\r` of a CRLF line, so an LF `old_string` one indent off never reached level 3 on a CRLF file.
 
 **One window.** The edit SHALL NOT be applied, the file SHALL NOT be written, no undo entry SHALL be pushed, and the read
 record SHALL NOT change; the call fails. Its reply SHALL open with the sentence `old_string was not found exactly in <path>.`
@@ -7636,7 +7644,15 @@ and then:
 
 1. name the match level in the specification's words ("match level 2" or "match level 3") and the window's 1-based line range;
 2. say in words what differs: at level 2, the lines whose trailing whitespace or carriage return differs; at level 3, the
-   leading prefix the file's lines carry in addition to, or instead of, `old_string`'s, quoted as JSON with its length;
+   leading prefix the file's lines carry in addition to, or instead of, `old_string`'s, quoted as JSON with its length, and,
+   when any window line and its `old_string` line differ by a trailing `\r`, the sentence `The line endings differ too: CRLF in
+   the file and LF in old_string. The quoted text carries the file's line endings.` (or, the other way round, `LF in the file
+   and CRLF in old_string`, read on the first such line) *(— revision 3)*;
+
+   > Revision 2 said, and no longer governs: "say in words what differs: at level 2, the lines whose trailing whitespace or
+   > carriage return differs; at level 3, the leading prefix the file's lines carry in addition to, or instead of,
+   > `old_string`'s, quoted as JSON with its length;" — silent on the line endings a level-3 window and `old_string` may differ
+   > in once `PD-TOOLS-019` sets the `\r` aside.
 3. state that the caller's content_hash is still current and that nothing was written;
 4. ask that `new_string` carry the file's indentation and line endings;
 5. quote the window's exact text — the file's lines over that range joined by `\n`, so that sent back as `old_string` with the
@@ -7761,6 +7777,8 @@ clauses below are disjoint. Everything outside this case — several level-3 win
 `old_string` with no visible character, and `haet_edit` and its alias `haet` ([`PD-TOOLS-014`](#pd-tools-014)) — is
 REQ-TOOLS-135's and REQ-TOOLS-136's, exactly as written.
 
+> Level 3's comparison is narrowed by [`PD-TOOLS-019`](#pd-tools-019) ([OQ-280](../architecture/open-questions.md#oq-280)).
+
 1. **No visible character.** When `new_string` holds no visible character (a deletion), it SHALL be written as given and the
    reply SHALL be REQ-TOOLS-136's, unchanged.
 2. **N equals O: the shift.** `new_string` SHALL take the window's shift. In the deeper direction P is prepended to every line
@@ -7863,6 +7881,8 @@ Everything outside this case — several windows, and `haet_edit` and its alias 
 ([`PD-TOOLS-014`](#pd-tools-014)) — is REQ-TOOLS-135's and REQ-TOOLS-136's, exactly as written; level 1 and `replace_all`, through
 both tools, keep a CRLF file's line endings by [`PD-TOOLS-017`](#pd-tools-017), which reads clause 2's test; and REQ-TOOLS-136's
 levels and their order are unchanged *(— revision 2)*.
+
+> Level 3's comparison is narrowed by [`PD-TOOLS-019`](#pd-tools-019) ([OQ-280](../architecture/open-questions.md#oq-280)).
 
 > Revision 1 said, and no longer governs: "Everything outside this case — level 1, `replace_all`, several windows, and
 > `haet_edit` and its alias `haet` ([`PD-TOOLS-014`](#pd-tools-014)) — is REQ-TOOLS-135's and REQ-TOOLS-136's, exactly as
@@ -8124,6 +8144,46 @@ Extends REQ-TOOLS-135 (fills its silence on the line endings an insert writes, a
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 > **In the built app, 2026-10-13 (fin42, N52):** `pnpm edits-proof` drove this directive through the run host on a CRLF, tab-indented fixture it generates (`apps/desktop/scripts/lib/crlf-fixture.mjs`), the scripted coordinator's calls sent by the new step `tool:<key>`; load average 6.8 to 12.2 on four CPUs beside a sibling plan. **Held as written.** `insert`: two LF lines inserted at line 0 of a CRLF file landed CRLF with "Inserted 2 lines into crlf/exact.js at line 0." and clause 3's sentence. Red with clause 1's test forced false (the pre-directive insert): the two inserted lines LF-only and no sentence. **What was not measured.** No live run. The live run's `crlf` scenario (`apps/desktop/scripts/lib/crlf-scenario.mjs`, default set) is written and unit-tested and is the orchestrator's to run; what it reads depends on the shapes the model chooses. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+
+---
+
+<a id="pd-tools-019"></a>
+
+### PD-TOOLS-019 — a match at level 3 compares each line without its carriage return
+
+**The case, stated exhaustively.** An edit's `old_string` matches nowhere at REQ-TOOLS-136 level 1 or level 2. Level 3 SHALL
+then compare each line of every candidate window, and each line of `old_string`, with one trailing `\r` set aside. The leading
+prefix SHALL be measured, added and removed on those lines. A window equal under that reading matches at level 3. Levels 1, 2
+and 4, their order, and the rule that the first matching level decides are unchanged.
+
+What a level-3 match then does stays as follows: [`PD-TOOLS-015`](#pd-tools-015) for `write_file`'s single window,
+[`PD-TOOLS-016`](#pd-tools-016) for the bytes written (whose clause 2 carries the CRLF endings), and
+[`PD-TOOLS-014`](#pd-tools-014) for `haet_edit`'s near miss, whose revision 3 names the line endings when a window line and its
+`old_string` line differ by a trailing `\r`. The quote stays the file's exact lines joined by `\n`, `\r`s included.
+
+**Disjoint from the earlier narrowings of REQ-TOOLS-136.** This directive changes **which windows match** at level 3;
+`PD-TOOLS-015` governs **what a level-3 apply writes**; [`PD-TOOLS-017`](#pd-tools-017) governs level 1 and `replace_all`. None
+of the three restates another.
+
+**Why, and what it costs.** On a CRLF file every line ends in `\r`, and an `old_string` a model writes in a JSON string almost
+never carries one. Level 2 already strips the `\r` with the trailing whitespace, but level 3 compared lines exactly, so an LF
+`old_string` one uniform indent off never matched a CRLF file at level 3 ([OQ-280](../architecture/open-questions.md#oq-280)).
+Measured in the built app (`pnpm edits-proof`, `shift-lf`) and with the tools directly: `write_file` applied the three-line block
+at "Match level: 4 (similarity: 0.91). Verify the result." and wrote it **one tab too shallow beside a success**, and `haet_edit`
+gave the plain miss with no quote; a shorter window read "not found at any of the four match levels". That is the case
+`PD-TOOLS-015` was ruled to prevent (OQ-233's reason: a mis-indented block never lands beside a success), one level down, and
+Windows is the only platform shipped (`PD-STARTUP-001`), where CRLF files are ordinary. What it costs: some edits that applied at
+level 4 are shifted, written as given or refused at level 3 instead; the near-miss quote of such a window carries `\r`s the
+caller must send back; and the product departs from an implementation built from the specification alone, which compares level
+3 exactly.
+
+> **Narrows:** REQ-TOOLS-136
+
+*Ruled under the owner's delegation, 2026-10-13 ([OQ-280](../architecture/open-questions.md#oq-280)); logged as [R-072](requests.md#r-072).
+Narrows REQ-TOOLS-136 (level 3's comparison sets one trailing `\r` aside on both sides). Names `PD-TOOLS-015` and `PD-TOOLS-017`,
+the earlier narrowings of REQ-TOOLS-136, and `PD-TOOLS-014` (revision 3, ruled with it) and `PD-TOOLS-016`; none of the last
+three is otherwise revised.*
 
 ---
 

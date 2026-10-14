@@ -14309,6 +14309,18 @@ re-prompt alone), whether the corrective replaces the re-prompt (the corrective 
 withdrawing it makes a child's first silence cost one message instead of two and leaves REQ-ORCH-102's counter for repeated
 silences; keeping both doubles the instruction and spends a classification on an empty excerpt.
 
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a delegated child's re-prompted
+empty turn is no stuck report. When REQ-ORCH-095 re-prompts a delegated child whose turn ended with neither text nor a call,
+the empty turn that earned the re-prompt is not a stuck report to loop supervision: the run asks no classification for it,
+adds no corrective message, writes no stuck `loop_supervisor_activation`, and leaves the consecutive-activation count
+unchanged, so the re-prompt is the last message of the request it leads to. Recorded as
+[`PD-ORCH-009`](../product/directives.md#pd-orch-009) revision 4, which widens revision 3's "Narrows: REQ-ORCH-104" case from
+the entry role's re-prompted turn to this child turn too, replaces revision 3's sentence that every delegated child stays
+unchanged (quoted beside its replacement), stays disjoint from `PD-ORCH-016`'s raw-count case (only a pending stuck trigger is
+withdrawn), and cites REQ-ORCH-095 without change. REQ-ORCH-104's text is unchanged; its back-pointer names revision 4.
+*The build's reading — both messages, the re-prompt first, with one stuck activation for the child — is kept above as the
+falsified one.* Written 2026-10-14 by fin44 (`fin44-supervision-and-match`).
+
 <a id="oq-284"></a>
 
 **OQ-284 — What becomes of a stuck trigger a root's empty turn armed when the run does not follow that turn up?**
@@ -14333,6 +14345,20 @@ whatever message leads it.
 follow-up being a correction, not a recovery), whether it stands and the corrective follows the correction (two instructions),
 or whether the correction replaces it. **The costs:** withdrawing it loses a stuck report the requirement names; keeping it puts
 "Pause and reassess" after an instruction that already tells the root what to do.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a plan correction replaces the
+stuck corrective its empty turn armed. When the run sends an execution iteration's root REQ-ORCH-078's plan correction
+(`PD-ORCH-015`), the correction is the only message the run adds for the turn it follows: a stuck trigger that turn armed is
+withdrawn, so no classification is asked, no corrective message follows, and no stuck `loop_supervisor_activation` is written.
+A repetition, cycle or raw-count trigger is kept, so the case stays disjoint from `PD-ORCH-016`. The correction also counts as
+REQ-ORCH-105's todo-correction instruction and restarts the consecutive-activation series — REQ-ORCH-105 as written, which the
+build did not do (recorded as
+[`../defects/a-plan-correction-does-not-restart-the-consecutive-activation-series.md`](../defects/a-plan-correction-does-not-restart-the-consecutive-activation-series.md)).
+Recorded as [`PD-ORCH-009`](../product/directives.md#pd-orch-009) revision 4 beside [OQ-283](#oq-283)'s ruling, citing
+REQ-ORCH-078, REQ-ORCH-096, REQ-ORCH-099, REQ-ORCH-102 and REQ-ORCH-105 without change. A root resumed with a child's report
+after an empty turn is outside this ruling: measured, recorded as a defect note and raised as [OQ-296](#oq-296). *The as-built
+reading — the correction followed by the stuck corrective in one request — is kept above as the falsified one.* Written
+2026-10-14 by fin44 (`fin44-supervision-and-match`).
 
 <a id="oq-285"></a>
 
@@ -14363,3 +14389,31 @@ that reads as success.
 
 **What a live run then shows.** `ask-retrospective` with a collector that cannot authenticate (a key withheld) shows the ruled
 notice; with the credential repaired it shows neither.
+
+<a id="oq-296"></a>
+
+**OQ-296 — Is a root's empty turn, followed by a child's report rather than by a message of the run's own, still a stuck report
+whose corrective joins the report?** *(REQ-ORCH-096, "an empty reply with no call is the runtime's stuck report"; REQ-ORCH-104's
+stuck-mode clause; REQ-ORCH-055..059, the parent resumed with its children's reports;
+[`PD-ORCH-009`](../product/directives.md#pd-orch-009) revision 4, whose case names three follow-ups and leaves this one out.
+Raised 2026-10-14 by fin44 (`fin44-supervision-and-match`) from
+[`../defects/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md`](../defects/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md),
+as [OQ-284](#oq-284)'s ruling asked; the plan's range OQ-296 to OQ-310, its first free number on this branch — renumbered at
+landing if a sibling took it first.)*
+
+**What is open.** A root that delegates a background child and then ends its turn with neither text nor a call is not idle — a
+child of its is pending — so neither `PD-ORCH-009`'s answer re-prompt nor REQ-ORCH-078's plan correction follows the turn
+(`IterationChildren.runWithChildren` asks its follow-up only once no child is pending or unobserved). The stuck trigger the empty
+turn armed stays pending, and the root's next turn — the one the child's report leads — takes it at its first step: the request
+ends [… , the report, "Pause and reassess …"], after a stuck classification over the excerpt. Pinned as found by
+`children.test.ts`, "as found: a root silent while its background child runs is resumed with the report, and the stuck
+corrective follows the report".
+
+**What the build proceeds under.** As found: the report, then the stuck corrective, in one request; one stuck activation for the
+root.
+
+**What a ruling decides.** Whether a root's empty turn while its children run is a stuck report at all (a parent that delegated
+and waits has nothing to say until a report comes — REQ-ORCH-055's wait), whether the report replaces the corrective as
+revision 4's three follow-ups do, or whether both stand. **The costs:** withdrawing it makes a waiting root's silence free and
+leaves a root that is truly stuck to REQ-ORCH-102's counter on a later turn; keeping it puts "Pause and reassess" after the
+report the root was waiting for and spends a classification.

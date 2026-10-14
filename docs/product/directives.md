@@ -5795,6 +5795,13 @@ consortium's E1) — **the re-prompt is the root's only message for that turn**:
 which narrows REQ-ORCH-104's stuck-mode clause for the one turn the re-prompt answers. Revision 2's paragraph is quoted beside
 it, unchanged; everything else stands as revisions 1 and 2 wrote it.*
 
+*Revision 4 (2026-10-14, [R-072](requests.md#r-072), ruling [OQ-283](../architecture/open-questions.md#oq-283) and
+[OQ-284](../architecture/open-questions.md#oq-284), both ruled by the consortium on 2026-10-13) — **the run's own follow-up
+is the only message it adds for the turn it follows**: revision 3's last sentence is replaced and its case widened from the
+entry role's re-prompted turn to three turns — that one, a delegated child's empty turn that REQ-ORCH-095's re-prompt answers
+(OQ-283), and an execution iteration's root turn that REQ-ORCH-078's plan correction follows (OQ-284). Revision 3's replaced
+sentence and its case are quoted beside their replacements; everything else stands as revisions 1 to 3 wrote it.*
+
 When the entry role of an execution iteration ends its turn with neither text nor a tool call — its last model step wrote
 nothing for the person — and the run is not stopping, pausing or coming to rest, the run SHALL send it one further message
 in its own conversation asking it to answer, and SHALL let it take that turn as it takes any — **revision 2:** only where no
@@ -5810,8 +5817,23 @@ earlier turn of the same execution of the root wrote an answer. A turn that foll
 
 **Revision 3:** The re-prompt is the one message the run adds for that turn. The empty turn it answers is not a stuck report
 to loop supervision: no classification is asked, no corrective message joins the re-prompt, no `loop_supervisor_activation` is
-written, and the consecutive-activation count is unchanged. Every other trigger, every other empty turn and every delegated
-child stay as REQ-ORCH-096 and REQ-ORCH-099..107 say.
+written, and the consecutive-activation count is unchanged. **Revision 4:** the same holds for two more follow-ups the run
+itself sends, each the one message the run adds for the turn it follows: REQ-ORCH-095's single re-prompt of a delegated child
+whose turn ended with neither text nor a call ("Carry out the task now, …"), and REQ-ORCH-078's plan correction
+(`PD-ORCH-015`) of an execution iteration's root. In each of the three, only a pending stuck trigger the turn armed is
+withdrawn — a repetition, cycle or raw-count trigger the same turn armed is kept — and the withdrawal leaves the
+consecutive-activation count unchanged. The plan correction is also REQ-ORCH-105's todo-correction message, so, as that
+requirement already says, it restarts the consecutive-activation series. Every other trigger, every other empty turn — a root
+resumed with a child's report after an empty turn among them ([OQ-296](../architecture/open-questions.md#oq-296)) — and every
+other turn of a delegated child stay as REQ-ORCH-096 and REQ-ORCH-099..107 say.
+
+> Revision 3's last sentence said, and no longer governs: "Every other trigger, every other empty turn and every delegated
+> child stay as REQ-ORCH-096 and REQ-ORCH-099..107 say." As built under it, a delegated child's re-prompt was followed in the
+> same request by the stuck corrective — [task, empty turn, re-prompt, "Pause and reassess the current task."] — with a stuck
+> classification and activation for the child (OQ-283); and a stuck trigger a root's unanswered empty turn left pending was
+> taken by the request a later plan correction led, the corrective following the correction (OQ-284). OQ-284's ruling, made
+> beside OQ-283's, named delegated children as unchanged; OQ-283's ruling of the same day brings the child's re-prompted turn
+> in, and revision 4 carries both.
 
 > Revision 2's paragraph above stands unchanged, and revision 3 adds only the paragraph after it. Revision 2 said nothing of
 > loop supervision, and as built the empty turn the re-prompt answers was also REQ-ORCH-096's stuck report: the stuck
@@ -5838,21 +5860,32 @@ that fails; a root that wrote nothing on purpose is asked anyway.
 > **Extends:** REQ-ORCH-069
 > **Narrows:** REQ-ORCH-104
 
-*Revision 3's case, stated exhaustively:* REQ-ORCH-104's stuck-mode clause ("for stuck-mode triggers, ALWAYS recover with a
-deterministic corrective message") on the one turn of an execution iteration's entry role that this directive's re-prompt
-answers — the empty turn that earned it. There no stuck trigger stands, so the clause has nothing to recover. Outside that one
-turn REQ-ORCH-104 governs as written. [`PD-ORCH-016`](#pd-orch-016) narrows the same requirement's raw-count clause ("≥ 4
-consecutive same-tool calls"); the two cases are disjoint — a raw-count trigger the same turn armed first is kept, and
-revision 3 withdraws only a stuck one — as [README.md](README.md) ("Two directives on one requirement") requires of two
-narrowings.
+*Revision 4's case, stated exhaustively:* REQ-ORCH-104's stuck-mode clause ("for stuck-mode triggers, ALWAYS recover with a
+deterministic corrective message") on three turns, and no others: (a) the one turn of an execution iteration's entry role
+that this directive's re-prompt answers — the empty turn that earned it; (b) a delegated child's empty turn (category
+`no_activity`, neither text nor a call) that REQ-ORCH-095's single re-prompt answers; (c) the turn of an execution
+iteration's root that the run follows with REQ-ORCH-078's plan correction (`PD-ORCH-015`). On each, a stuck trigger the turn
+armed is withdrawn before the run's message is sent, so the clause has nothing to recover. Outside those three turns
+REQ-ORCH-104 governs as written — a root's empty turn the run follows with a child's report included (OQ-296).
+[`PD-ORCH-016`](#pd-orch-016) narrows the same requirement's raw-count clause ("≥ 4 consecutive same-tool calls"); the two
+cases are disjoint — a repetition, cycle or raw-count trigger the same turn armed is kept, and revision 4 withdraws only a
+stuck one — as [README.md](README.md) ("Two directives on one requirement") requires of two narrowings.
 
-*Revision 3 cites without changing:* REQ-ORCH-096 (an empty reply with no call is the runtime's stuck report — still so for
-every other turn and every delegated child), REQ-ORCH-099, REQ-ORCH-102 (the activation counter, which this turn does not
-move), REQ-NOTIFY-102 and REQ-NOTIFY-103.
+> Revision 3's case said, and is widened by revision 4: "REQ-ORCH-104's stuck-mode clause […] on the one turn of an
+> execution iteration's entry role that this directive's re-prompt answers — the empty turn that earned it. There no stuck
+> trigger stands, so the clause has nothing to recover. Outside that one turn REQ-ORCH-104 governs as written."
+
+*Revisions 3 and 4 cite without changing:* REQ-ORCH-095 (the child's single re-prompt, still sent once), REQ-ORCH-096 (an
+empty reply with no call is the runtime's stuck report — still so for every turn but the three above), REQ-ORCH-078 (the plan
+correction, sent as before), REQ-ORCH-099, REQ-ORCH-102 (the activation counter, which a withdrawal does not move),
+REQ-ORCH-105 (the plan correction is its todo-correction message, which restarts the consecutive series as written; no
+directive is needed for that), REQ-NOTIFY-102 and REQ-NOTIFY-103.
 
 *Raised by the owner, 2026-10-06, ruling OQ-199 as recommended; logged as [R-071](requests.md#r-071). Revision 3 ruled under
 the owner's delegation, 2026-10-13; logged under [R-072](requests.md#r-072), the ruling of
-[OQ-282](../architecture/open-questions.md#oq-282) (the consortium's E1).*
+[OQ-282](../architecture/open-questions.md#oq-282) (the consortium's E1). Revision 4 ruled under the owner's delegation,
+2026-10-13, and written 2026-10-14; logged under [R-072](requests.md#r-072), the rulings of
+[OQ-283](../architecture/open-questions.md#oq-283) and [OQ-284](../architecture/open-questions.md#oq-284).*
 
 *Renumbered before landing: built as `PD-ORCH-006` on its branch, it took the next free number, `PD-ORCH-009`, when
 `PD-ORCH-006` to `PD-ORCH-008` (OQ-202, OQ-119, OQ-116) landed on `main` first; its citations followed.*

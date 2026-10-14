@@ -196,14 +196,17 @@ note that cites this one.
 - **Every launch** (`live-run.mjs`, `launch`): "<name>: no relayed renderer console line names React's update-depth error (D8,
   OQ-278)". It takes `updateDepthVerdict` (`apps/desktop/scripts/lib/renderer-console.mjs`): it passes with
   `reactUpdateDepthErrors` 0 and fails naming each line (`app.log line <n>: …`) otherwise. `check` accumulates and does not
-  throw, so the duress trap's reading after the launch is still recorded. Three cases in `renderer-console.test.ts`, red before.
+  throw, so the duress trap's reading after the launch is still recorded. Three cases in `renderer-console.test.ts`, red before;
+  a fourth (added at review, 2026-10-14) reads `live-run.mjs`'s `launch` and fails if the verdict goes to `noted` instead of
+  `check`.
 - **The duress launch**: "the long run's pendingLanes trap installed and its install line reached duress/app.log through the
   console relay (D8 guard, OQ-278)", from `lanesTrapGuard` (`lib/lanes-trap.mjs`). The trap now writes one
   `rotaris-lanes-trap: installed` warning when it installs (once per window, never naming React's error, so the per-launch count
   is unchanged), and `lanesTrapReading` reads that relayed line as `relayed: true` without counting it among the trap's lines.
   Seven cases in `lanes-trap.test.ts` were red before the change: the new install-line case, the two log-reading cases
   (`relayed`), the three guard cases, and the commits case, which now expects the install line first. The NOTE "the long run's pendingLanes trap (D8)" with its
-  commits, the high against React's 50, the holders and the re-rendered components stays.
+  commits, the high against React's 50, the holders and the re-rendered components stays. A case added at review (2026-10-14)
+  reads the duress block of `live-run.mjs` and fails if `lanesTrapGuard`'s verdict goes to `noted` instead of `check`.
 
 `pnpm update-depth-proof` asserts the install line was relayed too. Run once on this build under Xvfb on Linux (load 1.9 to 3.0,
 beside sibling builders): PASSED, the line `capture: renderer console: rotaris-lanes-trap: installed (:1)` at line 64 of

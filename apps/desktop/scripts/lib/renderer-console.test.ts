@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { updateDepthErrors, updateDepthVerdict } from './renderer-console.mjs';
 
@@ -38,5 +40,20 @@ describe('updateDepthVerdict (D8 guard, OQ-278)', () => {
   it('does not count the lanes trap\'s own lines, which never repeat React\'s message', () => {
     const log = '[main t] info capture: renderer console: rotaris-lanes-trap: installed (:1)\n[main t] info capture: renderer console: rotaris-lanes-trap: {"what":"run","run":10} (:1)';
     expect(updateDepthVerdict('duress', log)).toMatchObject({ passed: true, count: 0 });
+  });
+});
+
+/**
+ * The verdict above decides nothing unless the live run takes it as a check: OQ-278's ruling is that the launch FAILS, so
+ * `launch` must hand the verdict to `check` (which accumulates), never to `noted` as it did before the ruling.
+ */
+describe('live-run\'s launch takes the update-depth verdict as a check (D8 guard, OQ-278)', () => {
+  it('checks every launch with updateDepthVerdict and notes nothing about update-depth errors', () => {
+    const text = readFileSync(resolve(import.meta.dirname, '..', 'live-run.mjs'), 'utf8');
+    const body = text.slice(text.indexOf('async function launch('), text.indexOf('/** The store as the run left it'));
+    expect(body).toMatch(/const updateDepth = updateDepthVerdict\(name, log\);/);
+    expect(body).toMatch(/scenarioEvidence\[name\]\.reactUpdateDepthErrors = updateDepth\.count;/);
+    expect(body).toMatch(/\bcheck\(updateDepth\.passed, updateDepth\.what, updateDepth\.detail\);/);
+    expect(body).not.toMatch(/noted\([^\n]*update-depth/);
   });
 });

@@ -3,6 +3,8 @@
  * by replacing `current`, pending lanes left or cleared — and the reading of a launch's log. The trap is what the duress
  * launch installs through `ROTARIS_CAPTURE_EVAL_AT`, so its source must also be a whole step of that grammar.
  */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { parseSteps } from '../../src/main/capture/host.ts';
@@ -158,5 +160,20 @@ describe('lanes trap — the duress launch\'s guard (OQ-278)', () => {
   });
   it('fails a trap that installed but whose install line never reached the log', () => {
     expect(lanesTrapGuard({ installed: true, relayed: false, reason: null })).toEqual({ passed: false, what, detail: `the trap installed, but no relayed "${LANES_TRAP_INSTALLED}" line is in the log: the console relay did not carry it` });
+  });
+});
+
+/**
+ * The guard decides nothing unless the duress launch takes it as a check: OQ-278's ruling is that a trap that did not install,
+ * or whose install line was not relayed, FAILS the launch, where it was a NOTE before the ruling.
+ */
+describe('live-run\'s duress launch takes the trap guard as a check (OQ-278)', () => {
+  it('checks lanesTrapGuard on the reading and records `relayed` in the scenario evidence', () => {
+    const text = readFileSync(resolve(import.meta.dirname, '..', 'live-run.mjs'), 'utf8');
+    const duress = text.slice(text.indexOf("if (wanted.includes('duress')) {"));
+    expect(duress).toMatch(/const lanes = lanesTrapReading\(log\);/);
+    expect(duress).toMatch(/scenarioEvidence\.duress\.lanesTrap = \{ installed: lanes\.installed, relayed: lanes\.relayed,/);
+    expect(duress).toMatch(/const lanesGuard = lanesTrapGuard\(lanes\);\s*check\(lanesGuard\.passed, lanesGuard\.what, lanesGuard\.detail\);/);
+    expect(duress).not.toMatch(/noted\([^\n]*trap did not install/);
   });
 });

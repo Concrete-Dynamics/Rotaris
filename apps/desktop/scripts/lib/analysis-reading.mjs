@@ -64,6 +64,9 @@ export function passOutcome(artifact, notices, { retrospective = false } = {}) {
   const failed = CRASHED.test(notes ?? '') ? 'crashed' : PARSE_FAILED.test(notes ?? '') ? 'parse-failed' : null;
   if (failed !== null) {
     const warning = retrospective ? /The retrospective could not be completed/ : /The completed run could not be reviewed for improvements/;
+    // The artifact is named at the END of the detail, after the reason, which can be long (a parse failure quotes the
+    // validator's issues as JSON): the capture's probe keeps a long text's tail for this reading (`PROBE_TEXT` in
+    // `src/main/capture/probe.ts`; until fin46 it cut at 400 characters, and the b9e3005 live run read "… holds no proposa").
     const named = new RegExp(`${escaped(artifact.artifact_id ?? '')} holds no proposals`);
     const noticeMatches = texts.some((t) => warning.test(t) && named.test(t)) && !has(title);
     return { outcome: failed, ...(failed === 'crashed' ? { crashed: true } : {}), proposals, notes, noticeMatches };

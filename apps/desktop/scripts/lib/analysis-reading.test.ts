@@ -97,6 +97,20 @@ describe('analysis reading (live-run `ask`, REQ-LIBRARY-123..127, PD-LIBRARY-002
     expect(passOutcome({ artifact_id: 'impart_x', proposals: [], notes: 'collector parse failed: x' }, [{ text: 'Improvement analysis complete — no proposalsDetailsNothing was proposed in impart_x.' }]).noticeMatches).toBe(false);
   });
 
+  it('a parse failure\'s long detail is read from the probe\'s head and tail, as the probe keeps it (PD-LIBRARY-005, finding L5)', () => {
+    // The default live run at b9e3005: the validator's issues quoted as JSON pushed the artifact id past the probe's old
+    // 400-character cut. What the probe logged then names no artifact; what it keeps since (`PROBE_TEXT` in
+    // `src/main/capture/probe.ts`: the whole text to 2,000 characters, past that its first 1,600 and last 400) does.
+    const artifact = { artifact_id: 'impart_47kGY2xb', proposals: [], notes: 'collector parse failed: [ unrecognized_keys … ]' };
+    const issues = JSON.stringify([{ code: 'unrecognized_keys', keys: ['when', 'check'], path: ['proposals', 0, 'proposed_verifier_section'], message: 'Unrecognized keys: "when", "check"' }], null, 2);
+    const warning = `!The retrospective could not be completedDetailsThis workspace's own history was not reviewed: the model's answer could not be read (${issues}). impart_47kGY2xb holds no proposals.`;
+    expect(passOutcome(artifact, [{ text: warning.slice(0, 400) }], { retrospective: true })).toMatchObject({ outcome: 'parse-failed', noticeMatches: false });
+    expect(passOutcome(artifact, [{ text: warning }], { retrospective: true })).toMatchObject({ outcome: 'parse-failed', noticeMatches: true });
+    const many = `!The retrospective could not be completedDetailsThis workspace's own history was not reviewed: the model's answer could not be read (${issues.repeat(12)}). impart_47kGY2xb holds no proposals.`;
+    expect(many.length).toBeGreaterThan(2_000);
+    expect(passOutcome(artifact, [{ text: `${many.slice(0, 1_600)} … ${many.slice(-400)}` }], { retrospective: true }).noticeMatches).toBe(true);
+  });
+
   it('a timed-out retrospective matches only the info notice stating its limit (PD-LIBRARY-005)', () => {
     const artifact = { artifact_id: 'impart_r', proposals: [], notes: 'collector timed out after 120 seconds' };
     expect(passOutcome(artifact, [{ text: 'iThe retrospective found nothing to proposeDetailsThe retrospective reached its 120-second limit before it proposed anything.' }], { retrospective: true }))

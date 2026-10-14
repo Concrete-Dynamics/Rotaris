@@ -147,6 +147,17 @@ const COMPOSER_TEXT = "document.querySelector('textarea.composer__input')?.value
  * ends the capture.
  * The prompt is still typed one character at a time: what a person does, and what the packaged probe exercises.
  */
+/**
+ * What a probe logs of one element's text, as the source the renderer evaluates: the whole text up to 2,000 characters, and
+ * past that its first 1,600 and its last 400 with " … " between. Until fin46 the probe kept the first 400 alone, and the end of
+ * a long text was lost where a reading needs it most: PD-LIBRARY-005's failure warning names its artifact at the end of its
+ * detail, and the default live run at b9e3005 probed a parse failure's detail (the validator's issues quoted as JSON) as
+ * "… impart_47kGY2xb holds no proposa", failing a notice the product drew correctly
+ * (`docs/defects/fixed/the-capture-probe-cuts-a-notice-before-the-artifact-its-failure-warning-names.md`). The head keeps the
+ * first 400 characters every earlier reading took, and the bound still keeps one probe line from carrying a whole transcript.
+ */
+export const PROBE_TEXT = "(t) => (t.length <= 2000 ? t : t.slice(0, 1600) + ' \\u2026 ' + t.slice(-400))";
+
 export function installFinish(host: CaptureHost, capture: string, prompt: string | undefined, typing?: PromptTyping): void {
   const after = Number(process.env['ROTARIS_CAPTURE_AFTER_MS'] ?? (prompt ? 3_000 : 1_500));
   // The wait, the last view and the probes are verification seams the packaged probe does not use (`package.mjs` sets its
@@ -166,7 +177,7 @@ export function installFinish(host: CaptureHost, capture: string, prompt: string
     for (const selector of probes) {
       // `value` rides along for a control (a select, an input), since its text is every option it offers (Part R's proof reads the strategy selector).
       // `fontSize` is the computed one, so a proof can hold two texts to one type token (the About caption, 2026-09-28) without a second seam.
-      const found = await host.win.webContents.executeJavaScript(`(() => [...document.querySelectorAll(${JSON.stringify(selector)})].map((el) => ({ text: (el.textContent || '').trim().slice(0, 400), fontSize: getComputedStyle(el).fontSize, ...('value' in el && (el.tagName === 'SELECT' || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') ? { value: String(el.value) } : {}), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-value')).map((a) => [a.name, a.value])) })))()`) as unknown;
+      const found = await host.win.webContents.executeJavaScript(`(() => [...document.querySelectorAll(${JSON.stringify(selector)})].map((el) => ({ text: (${PROBE_TEXT})((el.textContent || '').trim()), fontSize: getComputedStyle(el).fontSize, ...('value' in el && (el.tagName === 'SELECT' || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') ? { value: String(el.value) } : {}), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-value')).map((a) => [a.name, a.value])) })))()`) as unknown;
       host.log(`capture: probe ${selector} → ${JSON.stringify(found)}`);
     }
     const img = await host.win.webContents.capturePage();

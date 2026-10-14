@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { FakeClock } from '@rotaris/kernel';
 import type { CaptureHost } from './host.js';
 import { installFinish, installPromptSeam, promptEvents, submitEvents, textEvents } from './probe.js';
@@ -209,5 +210,49 @@ describe('typed text carries its line breaks as Shift+Enter at every site (REQ-C
     expect(events.filter((e) => e.keyCode === 'Return' && e.modifiers === undefined)).toHaveLength(3);
     // The prompt seam is this shape exactly.
     expect(promptEvents('x\ny')).toEqual(events);
+  });
+});
+
+/**
+ * What a probe logs of a long text (`docs/defects/fixed/the-capture-probe-cuts-a-notice-before-the-artifact-its-failure-warning-names.md`,
+ * acceptance finding L5): the default live run at b9e3005 probed PD-LIBRARY-005's failure warning, whose parse-failure detail
+ * quotes the validator's issues as JSON, and the 400-character cut ended it at "impart_47kGY2xb holds no proposa". The probe's
+ * own script is run here over a stand-in document, so what is pinned is what the renderer evaluates.
+ */
+describe('a probe keeps the end of a long text, where a notice names its artifact (probe.ts, installFinish, PD-LIBRARY-005)', () => {
+  const issues = JSON.stringify([{ code: 'unrecognized_keys', keys: ['when', 'check'], path: ['proposals', 0, 'proposed_verifier_section'], message: 'Unrecognized keys: "when", "check"' }], null, 2);
+  const warning = `!The retrospective could not be completedDetailsThis workspace's own history was not reviewed: the model's answer could not be read (${issues}). impart_47kGY2xb holds no proposals.`;
+
+  function probed(text: string): Promise<{ text: string }[]> {
+    const png = environment('');
+    delete process.env['ROTARIS_CAPTURE_WAIT'];
+    process.env['ROTARIS_CAPTURE_PROBE'] = '[data-testid="notice"]';
+    const element = { textContent: text, tagName: 'DIV', attributes: [{ name: 'data-testid', value: 'notice' }] };
+    const h = host(() => true);
+    (h.host.win.webContents as unknown as { executeJavaScript: (code: string) => Promise<unknown> }).executeJavaScript = (code: string) =>
+      Promise.resolve(runInNewContext(code, { document: { querySelectorAll: () => [element] }, getComputedStyle: () => ({ fontSize: '14px' }) }));
+    installFinish(h.host, png, undefined);
+    h.clock.advance(100);
+    return settle().then(() => {
+      const line = h.lines.find((l) => l.startsWith('capture: probe [data-testid="notice"] → '));
+      if (line === undefined) throw new Error(`no probe line: ${JSON.stringify(h.lines)}`);
+      return JSON.parse(line.slice(line.indexOf('→ ') + 2)) as { text: string }[];
+    });
+  }
+
+  it('the b9e3005 warning, past 400 characters, is logged whole and still names its artifact', async () => {
+    expect(warning.length).toBeGreaterThan(400);
+    const [row] = await probed(warning);
+    expect(row?.text).toBe(warning);
+    expect(row?.text).toMatch(/impart_47kGY2xb holds no proposals\.$/);
+  });
+
+  it('a text past the bound keeps its head and its tail with an elision between', async () => {
+    const long = `HEAD${'x'.repeat(5_000)}impart_tail holds no proposals.`;
+    const [row] = await probed(long);
+    expect(row?.text.startsWith('HEAD')).toBe(true);
+    expect(row?.text.endsWith('impart_tail holds no proposals.')).toBe(true);
+    expect(row?.text).toContain(' … ');
+    expect(row?.text.length).toBeLessThan(long.length);
   });
 });

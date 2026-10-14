@@ -45,10 +45,14 @@ describe('the run host\'s notices as main raises them (Part V, REQ-NOTIFY-028)',
     expect(plain).toEqual({ severity: 'info', persistent: true, sessionId: '', title: 't', message: '', detail: '' });
   });
 
-  it('raises a hooks notice that carries no workspace as before: the engine\'s words, the active window\'s review', () => {
+  // OQ-293: the action names the workspace whose hooks the notice counts, never the focused window's. A notice the run host could
+  // not stamp names no workspace, so it carries the engine's words and no action (until 2026-10-14 it reviewed the active window's).
+  it('raises a hooks notice that carries no workspace with the engine\'s words and no action, never the active window\'s review', () => {
     const { workspaceRoot: _dropped, ...unstamped } = hooksPublish();
     const run = runNoticeReport(unstamped, () => '/w/beta');
     expect(run.title).toBe('Workspace hooks need review');
-    expect(run.action).toEqual({ label: 'Review hooks', action: { kind: 'open-hook-review', workspace: '/w/beta' } });
+    expect(run.message).toBe(SKIPPED);
+    expect(run.action).toBeUndefined();
+    expect(run.key).toBe(`hooks.review:/w/alpha:${FP}`);
   });
 });

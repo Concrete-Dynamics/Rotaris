@@ -15,16 +15,21 @@ export type NoticePublish = Extract<ProcessEvent, { kind: 'notice.publish' }>;
  * `workspaceRoot` — is built by the same composer as the one raised at the workspace's open, so the two read alike and its
  * action names THAT workspace, never the focused window's
  * (docs/defects/fixed/a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md). Its key stays the engine's
- * `hooks.review:<workspace>:<fingerprint>`. Every other notice keeps its own words; `session.reopen` names the session's
- * recorded root (PD-SHELL-001 revision 3) and the rest the active window's workspace, read through `activeWorkspace`.
+ * `hooks.review:<workspace>:<fingerprint>`; one that carries no root names no workspace and offers no action. Every other notice
+ * keeps its own words; `session.reopen` names the session's recorded root (PD-SHELL-001 revision 3) and the rest the active
+ * window's workspace, read through `activeWorkspace`.
  */
 export function runNoticeReport(e: NoticePublish, activeWorkspace: () => string | undefined): ReportInput {
   const common = {
     severity: e.severity, persistent: e.persistent, sessionId: e.sessionId,
     ...(e.key === undefined ? {} : { key: e.key }),
   };
-  if (e.action === 'hooks.review' && e.workspaceRoot !== undefined && e.workspaceRoot !== '') {
-    return { ...common, ...hooksReviewNotice(e.workspaceRoot, e.message) };
+  if (e.action === 'hooks.review') {
+    if (e.workspaceRoot !== undefined && e.workspaceRoot !== '') return { ...common, ...hooksReviewNotice(e.workspaceRoot, e.message) };
+    // No recorded root (none reaches here today: every session's root is recorded before it starts). The workspace whose hooks
+    // it counts is then unknown, and OQ-293's action names that workspace, never the focused window's: the engine's words with
+    // no action (fin44's review of `fin44-hooks-and-config`; until 2026-10-14 the active window's workspace was named).
+    return { ...common, title: e.title, message: e.message, detail: e.detail };
   }
   const recovery = recoveryFor(e.action, e.action === 'session.reopen' ? e.workspaceRoot : activeWorkspace(), e.sessionId);
   return { ...common, title: e.title, message: e.message, detail: e.detail, ...(recovery.length === 0 ? {} : { action: recovery[0]! }) };

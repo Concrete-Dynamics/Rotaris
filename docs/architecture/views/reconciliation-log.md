@@ -16,6 +16,10 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A run's unreviewed-hooks notice with no recorded root names no workspace (fin45, `fin45-optional-findings`; OQ-293).**
+`runNoticeReport` raises a `hooks.review` notice the run host could not stamp with the engine's words and no action, where it used
+to review the active window's workspace. `04-seams.md` (a notice raised at two sites).
+
 **A skills request is refused from the read that found the file unloaded (fin45, `fin45-optional-findings`;
 `../../defects/fixed/a-skills-request-throws-when-the-configuration-stops-loading-between-its-two-reads.md`).** `SkillHost.state`
 and `forceLoad` throw `SkillsUnloaded` carrying the fault; `dispatch.ts`'s `skillsAnswer` answers each of the five `skills.*`

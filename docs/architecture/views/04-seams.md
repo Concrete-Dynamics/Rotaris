@@ -345,7 +345,8 @@ Invariants:
   shared with the project-setup banners): title `{headline}: {name}`, the requirement's sentence as the message, the folder
   opening the detail. A notice the run host publishes is mapped to the store's input in `runNoticeReport` alone, and the
   action vocabulary main raises from in `recoveryFor` (`main/notice-recovery.ts`); an action naming a workspace takes the
-  root on the event (`workspaceRoot`), never the focused window's, where the event carries one.
+  root on the event (`workspaceRoot`), never the focused window's, where the event carries one; a `hooks.review` notice that
+  carries none is raised with the engine's words and no action (2026-10-14, fin45).
 - A renderer that must raise a persistent notice sends `notice.report` — it does not draw one. That missing
   entry for a renderer was defect fifty-seven.
 - A transient acknowledgement may carry **exactly one** action, from a closed one-member type.

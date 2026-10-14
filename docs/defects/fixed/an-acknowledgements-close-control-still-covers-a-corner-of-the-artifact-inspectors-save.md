@@ -41,7 +41,12 @@ artifacts-proof` launch 4 (load average 5.0), which now fails if the close contr
 acknowledgement (824,907 520×57) overlapped nothing of Save, the press on Save reached it and the footer read "Saved."; the
 re-press of "Inspect / edit selected" at 18.6 s (right of the centred dialog, which spans about 320 to 1040; `edited.png`) re-raised the one dialog.
 Launch 4 no longer requires the acknowledgement to stand over Save, since the inspector no longer stands under the stack; the
-press through an acknowledgement's text stays pinned by `packages/ui/src/acknowledgements.test.ts`.
+press through an acknowledgement's text stays pinned by `packages/ui/src/acknowledgements.test.ts`. *Added at fin44's review:*
+with the press on Save no longer passing through the acknowledgement, launch 4 had lost its built-app reading of REQ-NOTIFY-020,
+so it now reads the window's own hit test at the same moment (16.9 s): at the centre of the acknowledgement's text
+`elementFromPoint` found the Library's `main` beneath it, not the acknowledgement, and at the close control's centre the
+control (load average about 2). Against a build whose `.ack` took the pointer (`pointer-events: auto`) the launch failed on
+exactly that reading (`{"text":{"tag":"div","inAck":true}}`).
 
 **Not measured:** a persona window's inspector beside its own acknowledgement in the built app (the unit cases compute 560
 and 820 px from the stylesheet); PD-WORKSPACE-001's action, which sits under an acknowledgement's text at its left, against a

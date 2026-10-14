@@ -601,8 +601,8 @@
 .ack { width: min(520px, calc(100vw - 2 * var(--rt-space-4, 16px))); }
 .ack--stacked { width: min(360px, calc(100vw - 2 * var(--rt-space-4, 16px))); }
 /* REQ-NOTIFY-020: only the close control (and PD-WORKSPACE-001's one action) accepts interaction, so the box takes no
-   pointer and a press on its text reaches what it is drawn over — the artifact inspector's Save, for one, which shares this
-   corner (docs/defects/fixed/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md). */
+   pointer and a press on its text reaches what it is drawn over — the artifact inspector's Save, for one, which shared this
+   corner until fin44 centred the inspector (docs/defects/fixed/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md). */
 .ack {
   pointer-events: none;
   display: flex; align-items: flex-start; gap: var(--rt-space-2, 8px);

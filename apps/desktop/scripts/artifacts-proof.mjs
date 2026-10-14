@@ -24,7 +24,8 @@
  *                  (PD-LIBRARY-003; captured as `inspector-preview.png`), a link in it is pressed and requests its
  *                  open through `shell.openExternal` (ADR-0051 decision 4), the Markdown tab is edited and saved WHILE the
  *                  acknowledgement that open raised is showing, its close control (the one part of it that takes the
- *                  pointer, REQ-NOTIFY-020) clear of Save since fin44 centred the inspector; the editor is read in the
+ *                  pointer, REQ-NOTIFY-020) clear of Save since fin44 centred the inspector, and the window's hit test at
+ *                  the acknowledgement's text finding what it is drawn over (REQ-NOTIFY-020); the editor is read in the
  *                  monospace face the read-only block above it uses, with no resize grip (REQ-LIBRARY-132); the table's
  *                  status cell gains ` · edited`, and opening the same id again RE-RAISES the one dialog
  *                  (REQ-LIBRARY-131/132/133).
@@ -182,6 +183,11 @@ const PREVIEW_LINK = 'https://example.com/reference';
 const PREVIEW_LINK_BUTTON = `[data-testid="artifact-preview"] [data-href="${PREVIEW_LINK}"]`;
 // REQ-LIBRARY-132: the editor's computed face, size and resize, and the read-only frontmatter block's face beside it.
 const EDITOR_FACE = "(() => { const e = document.querySelector('[data-testid=\"artifact-editor\"]'); const b = document.querySelector('.artifact-inspector__frontmatter'); if (!e) return { editor: null }; const c = getComputedStyle(e); return { editor: { fontFamily: c.fontFamily, fontSize: c.fontSize, resize: c.resize }, block: b ? getComputedStyle(b).fontFamily : null }; })()";
+// REQ-NOTIFY-020: what the window's own hit test finds at the centre of the acknowledgement's text and of its close control.
+// Since fin44 centred the inspector the acknowledgement no longer stands over Save, so the press on Save no longer passes
+// through its text; this reads the pass-through directly: the text's centre must hit what the acknowledgement is drawn
+// over, and the close control's centre the close control.
+const ACK_HIT = "(() => { const a = document.querySelector('[data-testid=\"acknowledgement\"]'); const t = a ? a.querySelector('.ack__text') : null; const c = a ? a.querySelector('.ack__close') : null; if (!t || !c) return { ack: null }; const at = (el) => { const r = el.getBoundingClientRect(); const h = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return h ? { tag: h.tagName.toLowerCase(), inAck: a.contains(h), isClose: c.contains(h) } : null; }; return { text: at(t), close: at(c) }; })()";
 // The Library opens on its FIRST tab (REQ-LIBRARY-103's order), so every launch below picks the Artifacts tab
 // after the view switch (`ARTIFACTS_TAB`, from `lib/library-refresh.mjs`). Before the merge this proof drove a Library
 // that held only this tab and needed no click.
@@ -445,7 +451,8 @@ let edited = null;
     // Where the acknowledgement, its close control and Save stand just before the press on Save.
     ROTARIS_CAPTURE_INSPECT_AT: ['[data-testid="acknowledgement"]@16900', '.ack__close@16900', '[data-testid="artifact-save"]@16900'].join(';;'),
     // REQ-LIBRARY-132: the face, the size and the resize the editor is drawn with, beside the read-only block's face.
-    ROTARIS_CAPTURE_EVAL_AT: `${EDITOR_FACE}@16900`,
+    // REQ-NOTIFY-020: the hit test through the acknowledgement's text and at its close control, at the same moment.
+    ROTARIS_CAPTURE_EVAL_AT: [`${EDITOR_FACE}@16900`, `${ACK_HIT}@16900`].join(';;'),
     ROTARIS_CAPTURE_TYPE_AT: 'EDITED@16000',
     // PD-LIBRARY-003 (f): the Preview as drawn, before the Markdown tab is taken at 14500 (the end-of-launch capture shows
     // the Markdown tab and the saved edit).
@@ -504,6 +511,14 @@ let edited = null;
   if (inside(saveCentre, ackCloseAt[0].rect)) throw new Error(`the acknowledgement's close control stands over Save's centre: ${JSON.stringify({ close: ackCloseAt[0].rect, save: saveAt[0].rect })}`);
   if (overlaps(ackCloseAt[0].rect, saveAt[0].rect)) throw new Error(`the acknowledgement's close control stands over part of Save, where a press closes the acknowledgement instead: ${JSON.stringify({ close: ackCloseAt[0].rect, save: saveAt[0].rect })}`);
   results.ackOverSave = { ack: ackAt[0].rect, close: ackCloseAt[0].rect, save: saveAt[0].rect, ackOverlapsSave: Boolean(overlaps(ackAt[0].rect, saveAt[0].rect)), closeOverlapsSave: false, saved: true };
+  // REQ-NOTIFY-020's "Only the close control accepts interaction", read by the window's hit test now that the press on Save
+  // no longer goes through the acknowledgement (docs/defects/fixed/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md):
+  // a press at the text's centre reaches what the acknowledgement is drawn over, a press at the close control the control.
+  const hit = readEval(parseEvals(r.log), 16900, ACK_HIT);
+  if (!hit || typeof hit !== 'object' || !hit.text || !hit.close) throw new Error(`the hit test through the acknowledgement was not read: ${JSON.stringify(hit)}`);
+  if (hit.text.inAck) throw new Error(`a press on the acknowledgement's text is taken by the acknowledgement, not by what it is drawn over (REQ-NOTIFY-020): ${JSON.stringify(hit)}`);
+  if (!hit.close.isClose) throw new Error(`a press on the acknowledgement's close control does not reach it (REQ-NOTIFY-020): ${JSON.stringify(hit)}`);
+  results.ackHitTest = hit;
   // REQ-LIBRARY-132 (docs/defects/fixed/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md): the
   // adopted `textarea.input` rule outranked the editor's own class, and the editor drew in the dialog's proportional face
   // with a vertical resize grip while the read-only block above it was mono.

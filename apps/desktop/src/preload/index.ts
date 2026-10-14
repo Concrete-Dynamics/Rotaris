@@ -32,7 +32,7 @@ const bridge: RendererBridge = Object.freeze({
   onInitializationState: subscribe(CHANNEL.initializationState),
   // Channel 13 — the non-modal re-authentication prompt (REQ-NOTIFY-071, ADR-0048).
   onReauthPrompt: subscribe(CHANNEL.reauthPrompt),
-  // Channel 14 — a stored transcript display preference, to every window (REQ-CHAT-167, REQ-CONFIG-403).
+  // Channel 14 — a stored transcript display preference, to every window (REQ-CHAT-167, REQ-CONFIG-403, PD-CONFIG-004).
   onDisplayChanged: subscribe(CHANNEL.displayChanged),
   // Channel 15 — open Settings › Project in the window holding a banner's project (PD-WORKSPACE-005 revision 2, OQ-262).
   onProjectInitOpen: subscribe(CHANNEL.projectInitOpen),

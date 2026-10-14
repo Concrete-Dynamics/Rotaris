@@ -14,7 +14,8 @@ import { type CommandContext, type CommandHandlers } from './context.js';
  */
 /**
  * Channel 14 — REQ-CHAT-167 ("global to the transcript — changing it changes every reasoning row at once") and
- * REQ-CONFIG-403 (each Display toggle wired to the stored preference and "a live re-render notification"): a transcript
+ * REQ-CONFIG-403 (each Display toggle wired to the stored preference and "a live re-render notification"), with PD-CONFIG-004,
+ * which extends both and puts the third switch (`display/showReasoning`) under that same live re-render: a transcript
  * display preference main has just stored is announced to EVERY live window, the way `theme.set` announces the theme, so
  * a persona window or a second main window already open redraws its rows under the new value rather than the one it
  * booted with. The window that wrote it receives it too and folds the same value it already holds. Until 2026-10-14 the

@@ -66,7 +66,7 @@ async function flipReasoningBodies(): Promise<boolean | null> {
 }
 
 /**
- * Channel 14 (REQ-CHAT-167, REQ-CONFIG-403): what one `display:changed` announcement changes in a window's display store —
+ * Channel 14 (REQ-CHAT-167, REQ-CONFIG-403, with PD-CONFIG-004 for the third switch): what one `display:changed` announcement changes in a window's display store —
  * the one field the stored key names, set to the stored value — or null for a payload that is not one, which the window
  * ignores. Every window folds every announcement, its own write's included, so all of them draw the stored value.
  */

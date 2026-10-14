@@ -512,7 +512,7 @@ export const ThemeChangedSchema = z.object({ v: schemaVersion, name: z.enum(['ro
 export type ThemeChanged = z.infer<typeof ThemeChangedSchema>;
 
 /**
- * Channel 14 — REQ-CHAT-167 and REQ-CHAT-067 / REQ-CONFIG-403: the three transcript display preferences are global to the
+ * Channel 14 — REQ-CHAT-167 and REQ-CHAT-067 / REQ-CONFIG-403, with PD-CONFIG-004 (the third switch's live re-render): the three transcript display preferences are global to the
  * transcript, so one stored by any window is announced to every window, and each folds it into its own store. `preference`
  * is the preference's own key (`PREFERENCE_KEYS`) — not named `key`, which ADR-0030's credential-name check refuses on any
  * payload that reaches a renderer — and the value is what main stored.

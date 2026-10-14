@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, type Clocks } from '@rotaris/kernel';
@@ -210,6 +210,33 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     expect(measured).toBeGreaterThanOrEqual(20);
     expect(foreign).toEqual([]);
   }, 60_000);
+  // `docs/defects/fixed/processidentitys-comment-does-not-say-an-exec-with-an-empty-argument-vector-goes-unwatched.md`: the
+  // empty-argument-vector rule above reads a program run with argc 0 the way it reads an exiting shell, on the kernels where
+  // its `cmdline` reads empty. `processIdentity`'s comment states the reach by kernel; this pins it on the kernel that runs
+  // the suite: before 5.18 such a program reads no identity (unwatched), from 5.18 it reads one empty argument (watched).
+  it.runIf(process.platform === 'linux')('OQ-144: a program run with an empty argument vector reads an identity only where the kernel gives it one empty argument (Linux 5.18 and later)', async () => {
+    const [major = 0, minor = 0] = execFileSync('uname', ['-r'], { encoding: 'utf8' }).trim().split(/[.-]/).map(Number);
+    const givesOneEmpty = major > 5 || (major === 5 && minor >= 18);
+    const cat = realpathSync('/bin/cat');
+    // Node execs `cat` in its own place with argc 0; `cat` then waits on its standard input, held open here.
+    const child = spawn(process.execPath, ['--no-warnings', '-e', `process.execve(${JSON.stringify(cat)}, [], {})`], { stdio: ['pipe', 'ignore', 'ignore'] });
+    const exited = new Promise((resolve) => { child.once('exit', resolve); });
+    try {
+      const pid = child.pid!;
+      const began = Date.now();
+      let exe = '';
+      while (exe !== cat && Date.now() - began < 10_000) {
+        try { exe = readlinkSync(`/proc/${pid}/exe`); } catch { exe = ''; }
+        if (exe !== cat) await new Promise((r) => setTimeout(r, 20));
+      }
+      expect(exe).toBe(cat);
+      expect(readFileSync(`/proc/${pid}/cmdline`, 'latin1')).toBe(givesOneEmpty ? '\0' : '');
+      expect(processIdentity(pid)).toBe(givesOneEmpty ? `${cat}\0\0` : null);
+    } finally {
+      child.kill();
+      await exited;
+    }
+  }, 20_000);
   it.runIf(process.platform !== 'linux')('OQ-144: off Linux there is no /proc, and no identity to watch', () => {
     expect(processIdentity(process.pid)).toBeNull();
   });

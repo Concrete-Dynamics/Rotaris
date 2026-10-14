@@ -596,7 +596,11 @@ call waiting behind it that it had replaced the shell (measured on Linux: in 122
 first reading not the process's own was that pair). An empty argument vector now reads as no identity, as a process that
 has gone does, so the watch keeps waiting and the exit reaches the call as OQ-144's shell-exit case
 ([`a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load`](../../defects/fixed/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md);
-`terminal.test.ts`, "OQ-144 / OQ-164: a process on its way out reads no identity, never another program's").*
+`terminal.test.ts`, "OQ-144 / OQ-164: a process on its way out reads no identity, never another program's"). The same
+rule reads as no identity a program in the shell's place that runs with an empty argument vector of its own (an `execve`
+with argc 0) on a Linux kernel before 5.18, which therefore goes unwatched; from 5.18 the kernel gives such an `execve` one
+empty argument, which reads as an identity (measured on 6.18; fin46, 2026-10-14,
+[`processidentitys-comment-does-not-say-an-exec-with-an-empty-argument-vector-goes-unwatched`](../../defects/fixed/processidentitys-comment-does-not-say-an-exec-with-an-empty-argument-vector-goes-unwatched.md)).*
 
 **Found — defect C: the agent's capture was VT-STRIPPED where every other surface was EMULATED.** Deleting a
 control sequence is not applying it. Measured against the real shell at the session's own 240×50: ConPTY

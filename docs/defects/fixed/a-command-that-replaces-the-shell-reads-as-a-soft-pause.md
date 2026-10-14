@@ -53,6 +53,11 @@ Recorded, not repaired.
   the host: on Linux that it fails and the shell is restarted, elsewhere that it reads as still running.
 - Not reached: macOS, which has no `/proc` (the watch is off there, IC-3), an `exec` of exactly the shell's own
   executable and arguments, and an `exec` inside a command that has already soft-paused.
+  *Added 2026-10-14 by fin46 (`fin46-accept1-15`):* also a program in the shell's place that runs with an empty argument
+  vector of its own (an `execve` with argc 0, which a program the command `exec`s may make) on a Linux kernel before 5.18,
+  where its `cmdline` reads empty and, since fin45's exiting-shell rule, reads as no identity; from 5.18 the kernel gives it
+  one empty argument and the watch sees it
+  ([`processidentitys-comment-does-not-say-an-exec-with-an-empty-argument-vector-goes-unwatched`](processidentitys-comment-does-not-say-an-exec-with-an-empty-argument-vector-goes-unwatched.md)).
 
 **Pinned by** `terminal.test.ts`, "REQ-TOOLS-097/098/103/104 (OQ-144, acceptance A9): a command that replaces the
 session's shell ends at once as an execution_error …", red before the change (the soft pause above). It now ends in

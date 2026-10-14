@@ -136,6 +136,15 @@ export interface PausedEnd {
  * (`docs/defects/fixed/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md`;
  * in 122 of 300 exits read in a tight loop, the first reading that was not the process's own was that pair). The shell is
  * started with an argument vector (`posixShellArgs`), so an empty one there is the exiting shell's, never another program.
+ *
+ * Not reached, so not watched — one more beside the cases the replaces-the-shell note lists as "Not reached"
+ * (`docs/defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`): a program in the shell's place that
+ * runs with an EMPTY argument vector of its own, one `execve`d with argc 0. No shell's `exec` makes one (`exec -a ''`
+ * passes one empty argument), but a program the command `exec`s may start one in its own place before the watch's next
+ * reading. On a Linux kernel before 5.18 its `cmdline` reads empty, so it reads as no identity, and the call goes
+ * unwatched: it soft-pauses, as a replacement did before OQ-144's watch. From 5.18 the kernel gives an argc-0 `execve` one
+ * empty argument, its `cmdline` reads one NUL byte, and that is an identity the watch tells apart (measured on 6.18;
+ * "OQ-144: a program run with an empty argument vector …" in `terminal.test.ts`).
  */
 export function processIdentity(pid: number): string | null {
   if (process.platform !== 'linux') return null;

@@ -1,5 +1,25 @@
 ## processIdentity's comment does not say an exec with an empty argument vector goes unwatched
 
+**Outcome: repaired 2026-10-14 by fin46 (`fin46-accept1-15`), a comment and a pin; no behaviour changed.** Confirmed on the
+branch first: `processIdentity`'s comment (`packages/agent-tools/src/terminal/foreground.ts`) justified the empty-argument-vector
+rule by the exiting shell alone and named no other process it reads as no identity. Measured on this host (Linux 6.18, Node 24):
+a program `execve`d with argc 0 (`process.execve('/bin/cat', [], {})`, and the same from C and Perl) has `/proc/<pid>/cmdline`
+read as one NUL byte, not empty, because Linux 5.18 and later give an argc-0 `execve` one empty argument; `processIdentity`
+then reads `/usr/bin/cat\0\0`, an identity the replacement watch tells apart from the shell's. So the unwatched case the
+finding names is reached only on a kernel before 5.18, where that `cmdline` reads empty.
+
+The comment now carries a "Not reached" paragraph naming the case, the kernel bound and what the call meets there (it goes
+unwatched and soft-pauses, as a replacement did before OQ-144's watch), and points at the replaces-the-shell note's list, which
+gains the same item (`docs/defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`, dated). ADR-0020's
+fin45 report-back states the same reach in one sentence.
+
+Pinned by `packages/agent-tools/src/terminal/terminal.test.ts`, "OQ-144: a program run with an empty argument vector reads an
+identity only where the kernel gives it one empty argument (Linux 5.18 and later)": it execs `cat` with argc 0 and asserts the
+`cmdline` and the identity the running kernel gives (one NUL byte and `<cat>\0\0` from 5.18; empty and null before). The
+change it pins is documentation, so the case passed before the comment changed too; inverted to the pre-5.18 reading it fails
+on this host (expected `''`, received `'\0'`), which shows the instrument reads the kernel's answer. No proof or live scenario
+found this note (fin45's reviewer did) and none reaches an argc-0 `exec`; none was run for it.
+
 `processIdentity` (`packages/agent-tools/src/terminal/foreground.ts`) reads an empty `/proc/<pid>/cmdline` as no identity,
 since fin45's repair of
 `docs/defects/fixed/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md`:

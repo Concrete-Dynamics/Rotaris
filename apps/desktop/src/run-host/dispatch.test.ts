@@ -347,3 +347,30 @@ describe('session.resume records the session\'s workspace only once the engine h
     expect(roots.get('S-B')).toBe('/work/b');
   });
 });
+
+/**
+ * OQ-281 (ruled 2026-10-14 under R-072): a restore admitted while the open holds `workspace.store-missing` runs before the run
+ * host was ever handed that workspace's store (`workspace.opened` never came). The restore's controls — refuse new runs,
+ * close, release, and the reopen main forwards as a release — must acknowledge such a workspace rather than refuse it, or
+ * the restore would abandon at step 1 on a bound that never expires (ADR-0058 3a). No change was needed; this pins it.
+ */
+describe('the restore\'s controls acknowledge a workspace the run host holds no store for (OQ-281)', () => {
+  it('refuseRuns, renewLease, closeStore and release each answer workspace.ack and touch no store', async () => {
+    const leased: unknown[] = [];
+    const host = {
+      log: () => undefined,
+      stores: new Map(),
+      lease: { refuse: (id: string) => leased.push(['refuse', id]), renew: (id: string) => leased.push(['renew', id]), release: (id: string) => leased.push(['release', id]) },
+    } as unknown as RunHost;
+    for (const req of [
+      { kind: 'workspace.refuseRuns', workspaceId: 'W-unknown', leaseMs: 30_000 },
+      { kind: 'workspace.renewLease', workspaceId: 'W-unknown', leaseMs: 30_000 },
+      { kind: 'workspace.closeStore', workspaceId: 'W-unknown' },
+      { kind: 'workspace.release', workspaceId: 'W-unknown' },
+    ] as RunHostRequest[]) {
+      expect(await dispatch(req, host)).toEqual({ kind: 'workspace.ack', workspaceId: 'W-unknown' });
+    }
+    expect(leased).toEqual([['refuse', 'W-unknown'], ['renew', 'W-unknown'], ['release', 'W-unknown']]);
+    expect((host as unknown as { stores: Map<string, unknown> }).stores.size).toBe(0);
+  });
+});

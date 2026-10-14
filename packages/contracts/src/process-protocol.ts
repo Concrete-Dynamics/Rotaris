@@ -311,7 +311,11 @@ export const RestoreAssessmentSchema = z.object({
   /** ADR-0058's three identifier cases, plus the unreadable one REQ-SESSION-197 reports and never repairs. */
   identifier: z.object({ case: z.enum(['same', 'absent', 'different', 'unreadable']), current: z.string().nullable() }),
   /** The store the restore would replace: what is there now, and the lock rows that gate it (D9 as one condition). */
-  target: z.object({ exists: z.boolean(), sessions: z.number().int(), foreignLocks: z.array(z.string()), liveLocks: z.array(z.string()) }),
+  /**
+   * `placeEmpty` (OQ-281, ruled 2026-10-14 under R-072): the place for the target store exists and the store is not in it
+   * (REQ-SESSION-202) — the restore moves what is in that place aside, keeps it, and puts the backup's sessions there.
+   */
+  target: z.object({ exists: z.boolean(), placeEmpty: z.boolean(), sessions: z.number().int(), foreignLocks: z.array(z.string()), liveLocks: z.array(z.string()) }),
   /** A refusal decided before any confirmation is asked (ADR-0058 gates 1 and 2, REQ-SESSION-197; `path-too-long`: consequence 18's D11, a store the restore would create at a path the engine cannot open). */
   refusal: z.object({ why: z.enum(['unreadable-artifact', 'corrupt', 'newer-schema', 'unreadable-identifier', 'path-too-long']), detail: z.string() }).nullable(),
 });
@@ -368,6 +372,14 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   /** Two phases, so every confirmation is asked before any mutation (REQ-SESSION-201 "before anything is changed"). */
   z.object({ kind: z.literal('workspace.restore.assess'), workspaceRoot: z.string(), artifact: z.string() }),
   z.object({ kind: z.literal('workspace.restore.perform'), workspaceRoot: z.string(), artifact: z.string(), decisions: RestoreDecisionsSchema }),
+  /**
+   * OQ-281 (ruled 2026-10-14 under R-072), REQ-SESSION-202: the deliberate "Start a new session store" — in two phases like the
+   * restore, so the user is told what was found and where it will be kept before anything moves. `assess` re-reads the
+   * condition and names the place and the kept path for `stamp`; `perform` re-checks it, moves the place aside under that
+   * stamp (a counter where the name is taken) and creates the store as an absent place's open does.
+   */
+  z.object({ kind: z.literal('workspace.store.establish.assess'), workspaceRoot: z.string() }),
+  z.object({ kind: z.literal('workspace.store.establish.perform'), workspaceRoot: z.string(), stamp: z.string().min(1) }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
   /** ADR-0037 Tier A: the configuration read, the desktop save, the scoped per-field write — each followed by the load again. */
   z.object({ kind: z.literal('config.read'), workspaceRoot: z.string() }),
@@ -513,6 +525,10 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.backedUp'), destination: z.string(), bytes: z.number().int(), sessions: z.number().int(), takenAtUtc: z.string() }),
   z.object({ kind: z.literal('workspace.restore.assessment'), assessment: RestoreAssessmentSchema }),
   z.object({ kind: z.literal('workspace.restored'), report: RestoreReportSchema }),
+  /** OQ-281: what a deliberate new store would do — the place found empty, and where what is in it would be kept. */
+  z.object({ kind: z.literal('workspace.store.establishable'), place: z.string(), kept: z.string(), stamp: z.string() }),
+  /** OQ-281: the new store is in place; what was in the place is kept at `kept`. */
+  z.object({ kind: z.literal('workspace.store.established'), place: z.string(), kept: z.string() }),
   z.object({ kind: z.literal('repository.state'), state: RepositoryStateSchema }),
   z.object({ kind: z.literal('git.state'), state: GitViewStateSchema }),
   /** REQ-GIT-008: the tree exists at the path on the (possibly suffixed, REQ-GIT-010) branch; the base facts feed the binding. */

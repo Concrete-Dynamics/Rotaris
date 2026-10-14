@@ -1,7 +1,7 @@
 import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, ServiceAnswerEnvelopeSchema, WorkspaceServiceRequestSchema, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope, type WorkspaceServiceRequest } from '@rotaris/contracts';
-import { millis, toIsoUtc, type Millis, type WorkspaceId } from '@rotaris/kernel';
+import { fileStamp, millis, toIsoUtc, type Millis, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
-import { establishWorkspaceId, forgetSpelling, REFUSAL_LEASE_MS, type ResolvedStore, type RunHostControl } from '@rotaris/store';
+import { establishWorkspaceId, forgetSpelling, readWorkspaceId, REFUSAL_LEASE_MS, type ResolvedStore, type RunHostControl } from '@rotaris/store';
 import { assessRestore, backupWorkspace, capture as captureCheckpoint, checkAttach, createWorktree, deleteNamespace, deleteRefs, listRefs, performRestore, preview as previewCheckpoint, readGitView, readRepository, removeWorktree, restore as restoreCheckpoint, sessionWorktreePath, validateBranchName } from '@rotaris/workspace';
 import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
 import { homedir } from 'node:os';
@@ -10,6 +10,7 @@ import { deliveryServiceFor } from './delivery.js'; // Part AK
 import { promptsRootsRead } from './prompts.js'; // Part AO
 import { improvementServiceFor } from './improvements.js';
 import { bootstrapAtOpen } from './open-bootstrap.js';
+import { assessEstablish, performEstablish } from './store-establish.js';
 import { openStoreAtOpen, RestoreInFlight } from './store-open.js';
 
 /**
@@ -172,6 +173,15 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
         report = { ...report, error: `${report.error.replace(/; the next open of this workspace will try that rename again$/, '')}. Reopening the workspace has since put the store back.` };
       }
       return { kind: 'workspace.restored', report };
+    }
+    // OQ-281 (ruled 2026-10-14 under R-072): the deliberate new store, in two phases like the restore (`store-establish.ts`).
+    case 'workspace.store.establish.assess':
+      return assessEstablish({ workspacesRoot: layout.workspaces, workspaceRoot: req.workspaceRoot, readId: readWorkspaceId, restoreInFlight: restoreInFlight.active, stamp: fileStamp(clocks.wall.instant()) });
+    case 'workspace.store.establish.perform': {
+      closeOwn();
+      const r = performEstablish({ workspacesRoot: layout.workspaces, workspaceRoot: req.workspaceRoot, readId: readWorkspaceId, restoreInFlight: restoreInFlight.active, stamp: req.stamp });
+      log(r.kind === 'workspace.store.established' ? `new session store for ${req.workspaceRoot}: what was in ${r.place} is kept at ${r.kept} (OQ-281)` : `new session store for ${req.workspaceRoot} refused: ${r.kind === 'refused' ? `${r.headline} — ${r.detail ?? ''}` : r.kind}`, r.kind === 'workspace.store.established' ? 'info' : 'warn');
+      return r;
     }
     case 'config.read':
       return { kind: 'config.snapshot', snapshot: readSnapshot(dirs.config, req.workspaceRoot, () => clocks.monotonic.now(), instructionEnv()) };

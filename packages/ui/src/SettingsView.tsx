@@ -60,6 +60,13 @@ export interface SettingsViewProps {
   readonly workspace: string | null;
   readonly onBackup: () => Promise<{ ok: true } | { ok: false; reason: string }>;
   readonly onRestore: () => Promise<{ ok: true } | { ok: false; reason: string }>;
+  /**
+   * OQ-281 (ruled 2026-10-14 under R-072), REQ-SESSION-202: this window's open holds `workspace.store-missing` — the place for
+   * the store exists and the store is not in it. The restore stays offered (and is admitted by main), and the deliberate
+   * "Start a new session store…" appears beside it, only now.
+   */
+  readonly storeMissing?: boolean | undefined;
+  readonly onEstablishStore?: (() => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /** ADR-0015: the Hooks category's data and actions, owned by the renderer root. */
   readonly hooks?: HooksSettingsProps | undefined;
   /** REQ-ORCH-026: the built-in playbook catalogue — every slot, every variant, the text — listed under Personas. */
@@ -91,24 +98,24 @@ export interface SettingsViewProps {
   readonly projectInit?: ProjectInitSettingsProps | undefined;
 }
 
-export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp, display, about, interfaceExtras, traceability /* Part AJ2 */, skills /* ADR-0063 */, instructions /* PD-WORKSPACE-002 */, projectInit /* Part AS */ }: SettingsViewProps) {
+export function SettingsView({ session, workspace, onBackup, onRestore, storeMissing = false, onEstablishStore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp, display, about, interfaceExtras, traceability /* Part AJ2 */, skills /* ADR-0063 */, instructions /* PD-WORKSPACE-002 */, projectInit /* Part AS */ }: SettingsViewProps) {
   const [chosen, setChosen] = useState<SettingsCategoryId>(initialCategory);
   // A category a notice action asked for (REQ-NOTIFY-223) selects itself until the user picks another; no effect, no cascade.
   const wanted = useShellState((s) => s.settingsCategory);
   const take = useShellState((s) => s.takeSettingsCategory);
   const category: SettingsCategoryId = wanted !== null && SETTINGS_CATEGORIES.some((c) => c.id === wanted) ? (wanted as SettingsCategoryId) : chosen;
   const setCategory = (id: SettingsCategoryId) => { take(); setChosen(id); onCategory?.(id); };
-  const [busyAction, setBusyAction] = useState<'backup' | 'restore' | null>(null);
+  const [busyAction, setBusyAction] = useState<'backup' | 'restore' | 'establish' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [selectedTheme, setSelectedTheme] = useState<ThemeName | undefined>(activeTheme);
   const runActive = session !== null && isBusy(session.executionStatus);
   const noWorkspace = workspace === null;
   const disabledReason = noWorkspace ? 'Open a workspace first.' : runActive ? 'Finish the active run first.' : null;
 
-  const act = async (which: 'backup' | 'restore') => {
+  const act = async (which: 'backup' | 'restore' | 'establish') => {
     setBusyAction(which);
     setMessage(null);
-    const r = await (which === 'backup' ? onBackup() : onRestore());
+    const r = await (which === 'backup' ? onBackup() : which === 'restore' ? onRestore() : (onEstablishStore?.() ?? Promise.resolve({ ok: true as const })));
     setBusyAction(null);
     if (!r.ok) setMessage(r.reason);
   };
@@ -199,8 +206,22 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
                 <DesignButton type="button" className="btn btn-secondary" disabled={busyAction !== null || disabledReason !== null} title={disabledReason ?? undefined} onClick={() => { void act('restore'); }}>
                   {busyAction === 'restore' ? 'Restoring…' : 'Restore session store…'}
                 </DesignButton>
-                <span className="text-secondary settings__hint">Replaces this workspace's store with a backup; the previous store is kept. Refused while a run is live.{disabledReason ? ` ${disabledReason}` : ''}</span>
+                <span className="text-secondary settings__hint">
+                  {storeMissing
+                    ? 'The store is not in its place. Restoring moves what is in that place aside, keeps it, and puts the backup\'s sessions there.'
+                    : 'Replaces this workspace\'s store with a backup; the previous store is kept. Refused while a run is live.'}
+                  {disabledReason ? ` ${disabledReason}` : ''}
+                </span>
               </div>
+              {/* OQ-281: offered only while the open holds a place with no store; main asks first, Cancel the default. */}
+              {storeMissing && onEstablishStore ? (
+                <div className="settings__action" data-ui="settings-establish-store">
+                  <DesignButton type="button" className="btn btn-secondary" disabled={busyAction !== null} onClick={() => { void act('establish'); }}>
+                    {busyAction === 'establish' ? 'Starting…' : 'Start a new session store…'}
+                  </DesignButton>
+                  <span className="text-secondary settings__hint">Starts an empty store in that place and recovers nothing that may have been there; what is in the place now is moved aside and kept.</span>
+                </div>
+              ) : null}
             </div>
             {message && <div className="composer__error" role="alert">{message}</div>}
             {/* Part AS — REQ-WORKSPACE-114's "Project initialization" card, above the traceability one: it is the

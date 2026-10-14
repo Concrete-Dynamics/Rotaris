@@ -61,7 +61,7 @@ describe('the workspace service\'s open of a store (OQ-266, REQ-SESSION-202)', (
     const r = openStoreAtOpen(root, id, '/work/a', false);
     expect(r).toEqual({ ok: false, refusal: {
       kind: 'refused', code: 'workspace.store-missing', headline: 'The session store for this workspace is not where it is kept',
-      detail: `The place for this workspace's session store exists (${storeDir(root, id)}) and the store is not in it. Nothing was created there, and no session in this workspace can start until it is resolved.`,
+      detail: `The place for this workspace's session store exists (${storeDir(root, id)}) and the store is not in it. Nothing was created there, and no session in this workspace can start until it is resolved. Restore a backup or start a new store from Settings › Project, or put the store back in that place and open the workspace again.`,
     } });
     expect(readdirSync(storeDir(root, id))).toEqual([]);
   });

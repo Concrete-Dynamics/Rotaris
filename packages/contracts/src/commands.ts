@@ -216,6 +216,12 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.backup') }),
   z.object({ kind: z.literal('workspace.restore') }),
   /**
+   * OQ-281 (ruled 2026-10-14 under R-072), REQ-SESSION-202: Settings › Project's "Start a new session store…", offered only
+   * while this window's workspace holds `workspace.store-missing`. Main asks first, Cancel the default; the work is the
+   * workspace service's. Carries nothing: the window names the workspace.
+   */
+  z.object({ kind: z.literal('workspace.establishStore') }),
+  /**
    * Stage B — REQ-SHELL-021 / REQ-WORKSPACE-009: the title-bar chip's flow, raised by the window the user is
    * looking at. It carries **no folder**: main evaluates the gates, opens the native chooser and performs the
    * replacement (REQ-SHELL-017), so a renderer can neither name a workspace it was not given nor skip a gate.

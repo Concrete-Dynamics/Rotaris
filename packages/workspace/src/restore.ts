@@ -49,7 +49,7 @@ function readManifest(dir: string): BackupManifest | null {
 
 export function assessRestore(d: AssessDeps): RestoreAssessment {
   const empty: RestoreAssessment['artifact'] = { workspaceId: '', takenAtUtc: '', sessions: 0, rows: 0, locks: 0, storeUserVersion: 0, lastSeenWorkspacePath: null };
-  const noTarget: RestoreAssessment['target'] = { exists: false, sessions: 0, foreignLocks: [], liveLocks: [] };
+  const noTarget: RestoreAssessment['target'] = { exists: false, placeEmpty: false, sessions: 0, foreignLocks: [], liveLocks: [] };
   const refuse = (why: NonNullable<RestoreAssessment['refusal']>['why'], detail: string, artifact = empty): RestoreAssessment =>
     ({ artifact, identifier: { case: 'absent', current: null }, target: noTarget, refusal: { why, detail } });
 
@@ -113,7 +113,9 @@ export function assessRestore(d: AssessDeps): RestoreAssessment {
     targetExists: existsSync(storeDir(d.workspacesRoot, targetId)),
   });
   if (tooLong) return refuse('path-too-long', pathTooLongDetail(tooLong), artifact);
-  let target: RestoreAssessment['target'] = noTarget;
+  // OQ-281 (ruled 2026-10-14 under R-072): a place that exists and holds no store (REQ-SESSION-202) is said as what was found;
+  // the restore moves it aside and keeps it (step 8 displaces whatever is at the target name), and nothing in it is a store.
+  let target: RestoreAssessment['target'] = existsSync(storeDir(d.workspacesRoot, targetId)) && !existsSync(targetFile) ? { ...noTarget, placeEmpty: true } : noTarget;
   if (existsSync(targetFile)) {
     // D8 (ADR-0058 consequence 18): an inspection that leaves the target's directory holding the files it found —
     // the read-only open this replaced left `-wal` and `-shm` in a target that had been closed cleanly.
@@ -123,7 +125,7 @@ export function assessRestore(d: AssessDeps): RestoreAssessment {
       const locks = dal.listLocks();
       const probe = d.probe ?? probePid;
       target = {
-        exists: true, sessions: dal.totals().sessions,
+        exists: true, placeEmpty: false, sessions: dal.totals().sessions,
         foreignLocks: locks.filter((l) => isLockForeign(l, d.thisMachine)).map((l) => l.session_id),
         liveLocks: locks.filter((l) => !isLockForeign(l, d.thisMachine) && isLockLive(l, d.thisMachine, probe)).map((l) => l.session_id),
       };

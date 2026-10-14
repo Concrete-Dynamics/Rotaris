@@ -681,7 +681,15 @@ without the starter: REQ-CONFIG-025/028, `workspace-service/open-bootstrap.ts`, 
 cut between its renames, OQ-266, which main raises as one info notice, and the open is **refused** — `workspace.store-missing`
 for a place holding no store (REQ-SESSION-202, W-31), `workspace.store-displaced` for a cut restore whose store could not be
 put back, `workspace.restore-in-flight` while the service's own restore runs — each creating nothing, the first two raised by
-main as an error notice and answered by `session.list` as the same refusal, `workspace-service/store-open.ts`),
+main as an error notice and answered by `session.list` as the same refusal, `workspace-service/store-open.ts`; since
+2026-10-14, OQ-281, the `store-missing` notice carries `open-settings`/`project` and is withdrawn by the next open that
+succeeds, and while it is held `workspace.restore.assess/perform` are admitted for that window — no `runs.active` asked, no
+store having been handed to the run host, whose restore controls acknowledge a workspace it holds none for — with
+`RestoreAssessment.target.placeEmpty` saying what was found), `workspace.store.establish.assess {workspaceRoot}` →
+`workspace.store.establishable {place, kept, stamp}` and `workspace.store.establish.perform {workspaceRoot, stamp}` →
+`workspace.store.established {place, kept}` (OQ-281: Settings › Project's deliberate new store, asked by main first with Cancel
+the default; the service re-checks the condition, moves the found place aside as `<identifier>.displaced-<stamp>` and keeps it,
+then opens as an absent place opens; `workspace-service/store-establish.ts`),
 `config.read/save/setField/bootstrap`, `repository.read`, `git.view`, `worktree.*`, `checkpoint.capture/refs/preview/
 restore/prune` (Part P), `shutdown`. The service's narrow asks back to main (`ServiceAskSchema`, ADR-0002 c.7) —
 `runHost.refuseRuns/renewLease/closeStore/release/reopen` — are forwarded by main to the run host; the two children never

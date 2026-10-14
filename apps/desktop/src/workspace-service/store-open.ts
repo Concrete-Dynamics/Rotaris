@@ -11,14 +11,15 @@ type Refusal = Extract<ProcessReply, { kind: 'refused' }>;
  *   anything is created, unless this service's own restore is in flight — then the restore owns the journal and the open
  *   neither reverses nor creates (`RestorePendingError`). What the reversal did travels on `workspace.opened` as `cutRestore`.
  * - REQ-SESSION-202 / W-31: a place that exists and holds no store is refused as a store that could not be opened, saying
- *   what was found; no reason is invented for it (W-31 (2)).
+ *   what was found; no reason is invented for it (W-31 (2)). OQ-281 (ruled 2026-10-14 under R-072): the detail ends with
+ *   where it is resolved — a restore or a deliberate new store in Settings › Project, or the store put back by hand.
  */
 export function openStoreAtOpen(workspacesRoot: string, id: WorkspaceId, workspaceRoot: string, restoreInFlight: boolean): { readonly ok: true; readonly store: ResolvedStore } | { readonly ok: false; readonly refusal: Refusal } {
   try {
     return { ok: true, store: openWorkspaceStore(workspacesRoot, id, workspaceRoot, { recover: !restoreInFlight }) };
   } catch (e) {
     if (e instanceof StorePlaceEmptyError) {
-      return { ok: false, refusal: { kind: 'refused', code: 'workspace.store-missing', headline: 'The session store for this workspace is not where it is kept', detail: `The place for this workspace's session store exists (${e.dir}) and the store is not in it. Nothing was created there, and no session in this workspace can start until it is resolved.` } };
+      return { ok: false, refusal: { kind: 'refused', code: 'workspace.store-missing', headline: 'The session store for this workspace is not where it is kept', detail: `The place for this workspace's session store exists (${e.dir}) and the store is not in it. Nothing was created there, and no session in this workspace can start until it is resolved. Restore a backup or start a new store from Settings › Project, or put the store back in that place and open the workspace again.` } };
     }
     if (e instanceof CutRestoreError) {
       return { ok: false, refusal: { kind: 'refused', code: 'workspace.store-displaced', headline: 'A restore of this workspace did not finish, and its store could not be put back', detail: `${e.message[0]!.toUpperCase()}${e.message.slice(1)}. Nothing was created there.` } };

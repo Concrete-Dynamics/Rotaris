@@ -5,14 +5,14 @@ import { openFolder } from '../open-folder.js';
 import { refusal, type CommandContext, type CommandHandlers } from './context.js';
 
 /**
- * THE WORKSPACE — the backup, the restore and the folder chooser (REQ-WORKSPACE-*, ADR-0043). The restore is
+ * THE WORKSPACE — the backup, the restore, the deliberate new store (OQ-281) and the folder chooser (REQ-WORKSPACE-*, ADR-0043). The restore is
  * long enough, and raised from more than one place, that it stays a flow main owns; these handlers are the
  * command surface over it.
  */
 export function workspaceCommands(
-  ctx: Pick<CommandContext, 'capturing' | 'chooseSave' | 'clocks' | 'log' | 'mainWindows' | 'raiseNotice' | 'restoreFlow' | 'runHost' | 'services'>,
-): Pick<CommandHandlers, 'workspace.backup' | 'workspace.restore' | 'workspace.choose' | 'workspace.openFolder' | 'workspace.usage'> {
-  const { capturing, chooseSave, clocks, log, mainWindows, raiseNotice, restoreFlow, runHost, services } = ctx;
+  ctx: Pick<CommandContext, 'capturing' | 'chooseSave' | 'clocks' | 'establishFlow' | 'log' | 'mainWindows' | 'raiseNotice' | 'restoreFlow' | 'runHost' | 'services'>,
+): Pick<CommandHandlers, 'workspace.backup' | 'workspace.restore' | 'workspace.establishStore' | 'workspace.choose' | 'workspace.openFolder' | 'workspace.usage'> {
+  const { capturing, chooseSave, clocks, establishFlow, log, mainWindows, raiseNotice, restoreFlow, runHost, services } = ctx;
   return {
     /**
      * REQ-SHELL-040 / REQ-WORKSPACE-019: the strip's workspace-path link — the folder of the window that asked, in the OS
@@ -57,6 +57,10 @@ export function workspaceCommands(
     },
     'workspace.restore': (_req, { w }) => {
       return restoreFlow(w);
+    },
+    /** OQ-281 / REQ-SESSION-202: the deliberate new store, beside the restore, while the window's open holds `workspace.store-missing`. */
+    'workspace.establishStore': (_req, { w }) => {
+      return establishFlow(w);
     },
     /**
      * Stage B — REQ-SHELL-021 / REQ-WORKSPACE-009/010: the title-bar chip's flow, answered for the window that

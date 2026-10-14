@@ -31,8 +31,13 @@ describe('a store the open refused (REQ-SESSION-202, W-31, OQ-266)', () => {
     for (const code of ['workspace.store-missing', 'workspace.store-displaced']) {
       const held = storeRefusalOf(refused(code, 'what was found'));
       expect(held).toEqual({ code, headline: `headline of ${code}`, detail: 'what was found' });
-      expect(storeRefusalNotice(held!)).toEqual({ severity: 'error', headline: `headline of ${code}`, detail: 'what was found' });
+      expect(storeRefusalNotice(held!)).toMatchObject({ severity: 'error', headline: `headline of ${code}`, detail: 'what was found' });
     }
+  });
+
+  it('OQ-281: the place holding no store opens Settings at Project, where it is resolved; the displaced store, resolved by a rename, carries no action', () => {
+    expect(storeRefusalNotice(storeRefusalOf(refused('workspace.store-missing', 'x'))!).action).toEqual({ label: 'Open Project settings', action: { kind: 'open-settings', category: 'project' } });
+    expect(storeRefusalNotice(storeRefusalOf(refused('workspace.store-displaced', 'x'))!).action).toBeUndefined();
   });
 
   it('a restore under way, any other refusal and an open that succeeded hold nothing', () => {

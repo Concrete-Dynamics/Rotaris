@@ -197,6 +197,8 @@ export interface CommandContext {
   /** REQ-HOOKS-106: `workspace` is a notice action's named workspace (ESC-34), reached first; without it, `w`'s own. */
   readonly openHookReview: (w: MainWindowState | undefined, workspace?: string) => Promise<CommandOutcome>;
   readonly restoreFlow: (w: MainWindowState) => Promise<CommandOutcome>;
+  /** OQ-281: Settings › Project's "Start a new session store…" while the window's open holds `workspace.store-missing`. */
+  readonly establishFlow: (w: MainWindowState) => Promise<CommandOutcome>;
 
   /**
    * REQ-GIT-101: the checkpoint operation in flight, if any. The checkpoint facet is the only writer;

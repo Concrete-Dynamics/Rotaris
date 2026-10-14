@@ -14197,6 +14197,26 @@ directory and renaming it into place.
 
 **What a live run then shows.** Nothing: no live scenario empties a store's place.
 
+**Ruled 2026-10-14 under the owner's delegation ([R-072](../product/requests.md#r-072)), with no directive.** The refusal stands,
+and **Settings › Project › Session store** becomes where the user resolves it (REQ-SHELL-023's Project category; REQ-SESSION-202,
+REQ-SESSION-201, REQ-SESSION-043, REQ-SESSION-089, REQ-EVENTS-084, REQ-NOTIFY-044). The consortium weighed two recommendations:
+**A**, the existing restore made to work there plus a deliberate establishing action beside it; and **B**, the restore alone,
+with every other resolution left to the user by hand. The ruling takes A's action and builds it under B's scoping — no new
+surface, no action on the notice or in the Sessions view that writes anything, and the action offered only while the
+condition is held. What it fixes: while `workspace.store-missing` is held for a window's workspace, the restore is admitted
+there (no store was handed to the run host, so its active-run gate is skipped; the service's liveness gates still run inside
+the swap), its first question says the place exists and the store is not in it and that what is in it is moved aside and kept,
+and its success names the kept place; a deliberate **"Start a new session store…"** appears beside it, Cancel the default and
+the cancel, stating what was found and that it recovers nothing, moving the found place aside and keeping it; the error notice
+opens Settings at Project; every workspace-scoped refusal in that window states the held condition rather than "open a
+workspace"; and a first store is created in a sibling directory and renamed into place, closing the open's own window between
+making the place and creating the file. **Built 2026-10-14 by fin44 (`fin44-store-resolution`):** the restore and the new store in
+`main/store-resolution.ts` (`restoreFlow`, `establishFlow`), the service's two phases `workspace.store.establish.assess` and
+`.perform` (`workspace-service/store-establish.ts` over `@rotaris/store`'s `establishInEmptyPlace`), `RestoreAssessment.target.placeEmpty`,
+the notice's `open-settings`/`project` action (`main/store-notice.ts`) withdrawn once an open succeeds, and Settings' action
+(`SettingsView.tsx`); pinned by `store-resolution.test.ts`, `store-establish.test.ts`, `store.test.ts` and
+`pnpm store-resolution-proof`. W-31 (3) carries the report-back.
+
 <a id="oq-292"></a>
 
 **OQ-292 — What does a `focus-session` notice action do when pressed in a window that does not hold its session?**

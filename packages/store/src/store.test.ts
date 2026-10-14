@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, fileStamp, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
+import { checkEmptyPlace, establishInEmptyPlace, plannedAsideName } from './index.js';
 import { CutRestoreError, recoverCutRestore, RestorePendingError, restoreJournal, StorePlaceEmptyError, writeRestoreJournal } from './index.js';
 import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, FILE_STAMP_LENGTH, openStore, openStoreForInspection, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, storePathLimit, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
@@ -161,6 +162,50 @@ describe('store — open (ADR-0058 rule 3, rule 6)', () => {
     expect(second.name).not.toBe(storeFile(root, id).toLowerCase());
     second.close();
     r.db.close();
+  });
+});
+
+describe('store — OQ-281 (ruled 2026-10-14 under R-072): the deliberate new store in a place that holds none (REQ-SESSION-202)', () => {
+  const id = mintWorkspaceId('00000000000000000000000000000281');
+  const stamp = '2026-10-14T05-00-00-000Z';
+  it('re-checks the condition, moves the found place aside whole and keeps it, then creates the store as an absent place\'s open does', () => {
+    const place = storeDir(root, id);
+    mkdirSync(join(place, 'sessions', 'S-gone'), { recursive: true });
+    writeFileSync(join(place, 'origin.txt'), `${ws}\n`);
+    const before = treeHash(place);
+    expect(checkEmptyPlace(root, id)).toEqual({ ok: true, place });
+    const planned = plannedAsideName(root, id, stamp);
+    expect(planned).toBe(join(root, `${id}.displaced-${stamp}`));
+    const r = establishInEmptyPlace(root, id, ws, stamp);
+    expect(r).toEqual({ ok: true, place, kept: planned, migratedTo: CURRENT_SCHEMA_VERSION });
+    // Kept exactly as found — never read, judged or deleted.
+    expect(treeHash(planned)).toBe(before);
+    // The new store opens, and lists empty: it opened (REQ-SESSION-202, "what this does not reach").
+    expect(counts(root, id).sessions).toBe(0);
+    const again = openWorkspaceStore(root, id, ws);
+    expect(again.migration).toEqual({ kind: 'unchanged', version: CURRENT_SCHEMA_VERSION });
+    again.db.close();
+    forgetSpelling(again.dir);
+  });
+  it('a taken aside name is passed over by the counter, and the kept path says which was taken', () => {
+    mkdirSync(storeDir(root, id), { recursive: true });
+    mkdirSync(join(root, `${id}.displaced-${stamp}`));
+    const planned = plannedAsideName(root, id, stamp);
+    expect(planned).toBe(join(root, `${id}.displaced-${stamp}.1`));
+    const r = establishInEmptyPlace(root, id, ws, stamp);
+    expect(r.ok && r.kept).toBe(planned);
+  });
+  it('refuses, changing nothing, where the condition no longer holds: the place gone, the store back, a restore\'s journal beside it', () => {
+    expect(establishInEmptyPlace(root, id, ws, stamp)).toMatchObject({ ok: false, why: 'place-absent' });
+    expect(existsSync(storeDir(root, id))).toBe(false);
+    seed(root, id, [{ sid: 'S-back', rows: 1 }]);
+    const present = treeHash(storeDir(root, id));
+    expect(establishInEmptyPlace(root, id, ws, stamp)).toMatchObject({ ok: false, why: 'store-present' });
+    expect(treeHash(storeDir(root, id))).toBe(present);
+    rmSync(storeFile(root, id));
+    writeRestoreJournal(root, id, { stamp, stagingN: 1, targetExisted: true });
+    expect(establishInEmptyPlace(root, id, ws, stamp)).toMatchObject({ ok: false, why: 'restore-pending' });
+    expect(readdirSync(root).filter((n) => n.includes('.displaced-'))).toEqual([]);
   });
 });
 

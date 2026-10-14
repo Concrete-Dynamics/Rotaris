@@ -23,7 +23,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, utilityProcess,
 import { join } from 'node:path';
 import { mkdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { countNoun, millis, toIsoUtc } from '@rotaris/kernel';
+import { millis, toIsoUtc } from '@rotaris/kernel';
 import { AUTH_RECOVERY_DIALOG_WIDTH, type AuthRecoveryPayload, type AcknowledgementAction, CHANNEL, CommandRequestSchema, type CommandRequest, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ImprovementActivity, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
 import { claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
@@ -58,6 +58,7 @@ import { windowCommands, windowsCommands } from './commands/windows.js';
 import { anotherMainWindowStays, confirmActiveRunClose } from './close-confirmation.js';
 import { zeroProposalDetail } from './improvement-notice.js';
 import { cutRestoreNotice, storeRefusalNotice, storeRefusalOf, type StoreRefusal } from './store-notice.js'; // REQ-SESSION-202, OQ-266
+import { establishFlow as establishStoreFlow, restoreFlow as restoreStoreFlow, type StoreFlowDeps } from './store-resolution.js'; // OQ-281
 import { ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
@@ -314,8 +315,11 @@ async function main(): Promise<void> {
   endRunHost = () => endBeforeMain(runHostEndable, runHostExit, clocks.timers, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
 
   const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest>; exit: ChildExit }>();
-  /** REQ-SESSION-202 / OQ-266: each workspace whose store the last open refused rather than create over, by canonical root. */
-  const storeRefusals = new Map<string, StoreRefusal>();
+  /**
+   * REQ-SESSION-202 / OQ-266: each workspace whose store the last open refused rather than create over, by canonical root, with
+   * the error notice it was raised as — withdrawn once an open succeeds (OQ-281: the restore or the new store resolved it).
+   */
+  const storeRefusals = new Map<string, { readonly held: StoreRefusal; noticeId: Promise<number | null> }>();
   let cancelImprovementWorkspace = (_workspaceRoot: string): void => undefined;
   /**
    * Step A1 of the window builder (ADR-0048's registry over main windows; ADR-0055 consequences 5 and 6).
@@ -403,13 +407,19 @@ async function main(): Promise<void> {
       // the listing answers with the same condition instead of an empty list or "open a workspace" (`storeRefusals`).
       const held = storeRefusalOf(opened);
       if (held) {
-        storeRefusals.set(key, held);
+        // OQ-281: the notice opens Settings at Project, where the place is resolved; its id is kept to withdraw it.
         const n = storeRefusalNotice(held);
-        raiseNotice(n.severity, n.headline, n.detail);
+        const noticeId = notices.report({ severity: n.severity, title: n.headline, ...(n.detail === undefined ? {} : { detail: n.detail }), ...(n.action === undefined ? {} : { action: n.action }) })
+          .then((r) => r.id).catch(() => null);
+        storeRefusals.set(key, { held, noticeId });
       }
       return undefined;
     }
+    // OQ-281: an open that succeeds resolves a held refusal — it is cleared, and its error notice withdrawn (compare-and-clear,
+    // REQ-NOTIFY-026: a notice raised since stays).
+    const resolved = storeRefusals.get(key);
     storeRefusals.delete(key);
+    if (resolved) void resolved.noticeId.then((id) => { if (id !== null) { log(`store: the open of ${key} succeeded; the refusal "${resolved.held.headline}" is cleared and its notice #${id} withdrawn (OQ-281)`); return notices.dismiss(id); } return undefined; }).catch(() => undefined);
     // OQ-266: a restore cut between its renames was reversed by this open, before anything was created; said once.
     if (opened.cutRestore) {
       const n = cutRestoreNotice(opened.cutRestore);
@@ -1671,83 +1681,23 @@ async function main(): Promise<void> {
   });
 
   /**
-   * REQ-SESSION-201's restore, as main conducts it: every question before anything is changed, cancel the
-   * default everywhere, and the work in the workspace service. ADR-0058's identifier cases and ESC-26's
-   * confirmation; D9's foreign rows as one condition with the risk stated.
+   * REQ-SESSION-201's restore and OQ-281's deliberate new store, as main conducts them (`store-resolution.ts`): every question
+   * before anything is changed, cancel the default everywhere, and the work in the workspace service. ADR-0058's identifier
+   * cases and ESC-26's confirmation; D9's foreign rows as one condition with the risk stated. Both are admitted while the
+   * window's open holds `workspace.store-missing` (OQ-281, ruled 2026-10-14 under R-072).
    */
-  const restoreFlow = async (w: MainWindowState): Promise<CommandOutcome> => {
-    if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before restoring its session store' };
-    const root = canonicalPath(w.workspace);
-    const svc = services.get(root);
-    if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-    // REQ-SESSION-201 / REQ-SHELL-021's gate: refused while a run is active; the service's liveness gates hold it for the whole restore.
-    const active = await runHost.request({ kind: 'runs.active', workspaceId: w.workspaceId }, millis(5_000));
-    if (active.kind === 'runs.count' && active.count > 0) return { ok: false, code: 'run.active', headline: 'Finish the active run before restoring the session store.' };
-    const artifact = await chooseOpen(w.win, { title: 'Restore a session store backup', properties: ['openFile'], filters: [{ name: 'Rotaris session store backup', extensions: ['tar'] }] });
-    if (!artifact) return { ok: true, value: { cancelled: true } };
-    const assessed = await svc.link.request({ kind: 'workspace.restore.assess', workspaceRoot: root, artifact }, millis(120_000));
-    if (assessed.kind !== 'workspace.restore.assessment') return refusal(assessed, 'The backup could not be assessed');
-    const a = assessed.assessment;
-    if (a.refusal) { raiseNotice('error', 'The restore was refused', a.refusal.detail); return { ok: false, code: `restore.${a.refusal.why}`, headline: 'The restore was refused', detail: a.refusal.detail }; }
-    const cancel = (): CommandOutcome => ({ ok: true, value: { cancelled: true } });
-
-    // 1 — which workspace, when, and what it does to the store that is there now. Cancel is the default.
-    const from = a.artifact.lastSeenWorkspacePath ?? a.artifact.workspaceId;
-    const nowText = a.target.exists
-      ? `The store this backup restores into currently holds ${countNoun(a.target.sessions, 'session')}. Restoring replaces it: those sessions are moved aside and kept (never deleted), and the backup's ${countNoun(a.artifact.sessions, 'session')} take their place. A session here and absent from the backup will no longer be listed; one in the backup and absent here will appear.`
-      : `No store exists here for this backup's workspace yet; restoring creates it with the backup's ${countNoun(a.artifact.sessions, 'session')}.`;
-    const first = await askBox(w.win, {
-      type: 'question', title: 'Restore the session store', message: `This backup was taken from ${from} on ${a.artifact.takenAtUtc}.`, detail: nowText,
-      buttons: ['Cancel', 'Restore'], defaultId: 0, cancelId: 0, noLink: true,
-    });
-    if (first !== 1) return cancel();
-
-    // 2 — the identifier (ADR-0058 case (c), ESC-26): both values named, the consequence stated, cancel the default.
-    let identifier: 'workspace' | 'artifact-store' | 'establish' = a.identifier.case === 'same' ? 'workspace' : 'establish';
-    if (a.identifier.case === 'different') {
-      const mine = a.identifier.current ?? '';
-      const theirs = a.artifact.workspaceId;
-      const second = await askBox(w.win, {
-        type: 'warning', title: 'This workspace carries a different identifier',
-        message: `This workspace's identifier is ${mine}. The backup was taken under ${theirs}.`,
-        detail: `Restore into the backup's own store: the sessions are restored under ${theirs}, this workspace keeps ${mine}, and they will not appear here until a workspace carrying ${theirs} is opened.\n\nReplace this workspace's identifier with ${theirs} and restore: this workspace's existing sessions, recorded under ${mine}, become unreachable from this workspace. The store under ${mine} is kept intact; writing ${mine} back into .rotaris/workspace-id is a complete undo.`,
-        buttons: ['Cancel', "Restore into the backup's own store", 'Replace the identifier and restore'], defaultId: 0, cancelId: 0, noLink: true,
-      });
-      if (second === 0) return cancel();
-      identifier = second === 1 ? 'artifact-store' : 'establish';
-    }
-
-    // 3 — D9 / IC-4: lock rows naming another machine, together, with the risk stated. Cancel is the default.
-    let proceedWithForeignLocks = false;
-    if (a.target.foreignLocks.length > 0) {
-      const third = await askBox(w.win, {
-        type: 'warning', title: 'Lock records name another machine',
-        message: `${countNoun(a.target.foreignLocks.length, 'session')} in the store ${a.target.foreignLocks.length === 1 ? 'carries' : 'carry'} lock records naming another machine: ${a.target.foreignLocks.join(', ')}.`,
-        detail: 'Nothing on this machine is writing under them. If this store genuinely is reachable from another machine, a run there may be writing to it now, and the restore replaces what it writes. Nothing needs to be cleared one at a time.',
-        buttons: ['Cancel', 'Restore anyway'], defaultId: 0, cancelId: 0, noLink: true,
-      });
-      if (third !== 1) return cancel();
-      proceedWithForeignLocks = true;
-    }
-
-    const done = await svc.link.request({ kind: 'workspace.restore.perform', workspaceRoot: root, artifact, decisions: { identifier, proceedWithForeignLocks } }, millis(600_000));
-    if (done.kind !== 'workspace.restored') return refusal(done, 'The restore could not be performed');
-    const rep = done.report;
-    if (rep.ok) {
-      // The workspace now resolves as the restore left it; hand the run host the store again (W-18).
-      await openWorkspace(root, w);
-      raiseNotice('info', `Restored ${countNoun(a.artifact.sessions, 'session')} from the backup taken on ${a.artifact.takenAtUtc}.${rep.identifierEstablished ? ' This workspace now carries the backup\'s identifier.' : ''}${rep.displaced ? ` The previous store was kept at ${rep.displaced}.` : ''}`);
-      return { ok: true, value: { restoredInto: rep.restoredInto, identifierEstablished: rep.identifierEstablished } };
-    }
-    const why = rep.refusal
-      ? rep.refusal.why === 'sessions-live' ? `A session became live before the restore could finish (${rep.refusal.sessions.join(', ')}); nothing was changed.`
-        : rep.refusal.why === 'ack-timeout' ? `The run host did not answer within ${rep.refusal.boundMs} ms at step ${rep.refusal.step}; nothing was changed.`
-          : `Lock records name another machine (${rep.refusal.sessions.join(', ')}); nothing was changed.`
-      : rep.error ?? 'The restore did not complete.';
-    raiseNotice('error', 'The restore was not performed', why);
-    await openWorkspace(root, w);
-    return { ok: false, code: rep.refusal ? `restore.${rep.refusal.why}` : 'restore.failed', headline: 'The restore was not performed', detail: why };
+  const storeFlowDeps: StoreFlowDeps<MainWindowState> = {
+    canonicalPath,
+    service: (root) => services.get(root)?.link,
+    runHost,
+    heldRefusal: (root) => storeRefusals.get(root)?.held,
+    chooseArtifact: (w) => chooseOpen(w.win, { title: 'Restore a session store backup', properties: ['openFile'], filters: [{ name: 'Rotaris session store backup', extensions: ['tar'] }] }),
+    ask: (w, box) => askBox(w.win, box),
+    raiseNotice: (severity, headline, detail) => raiseNotice(severity, headline, detail),
+    reopen: (root, w) => openWorkspace(root, w),
   };
+  const restoreFlow = (w: MainWindowState): Promise<CommandOutcome> => restoreStoreFlow(w, storeFlowDeps);
+  const establishFlow = (w: MainWindowState): Promise<CommandOutcome> => establishStoreFlow(w, storeFlowDeps);
 
   /**
    * ADR-0039's desktop flow (REQ-GIT-091..100), conducted here: the rows and the liveness verdict from the run host, the
@@ -1777,9 +1727,9 @@ async function main(): Promise<void> {
     retrospectivePending: (workspaceId) => improvementCoordinator.retrospectivePending(workspaceId),
     improvementActivity: () => improvementCoordinator.current(),
     chooseSave, chooseExportPath, chooseDirectory, chooseSkillFile,
-    openHookReview, restoreFlow, checkpointOp, quitting, authFallback,
+    openHookReview, restoreFlow, establishFlow, checkpointOp, quitting, authFallback,
     withdrawnByClose: (sessionId) => quit.withdrawnByClose(sessionId),
-    storeRefusal: (workspace) => storeRefusals.get(canonicalPath(workspace)),
+    storeRefusal: (workspace) => storeRefusals.get(canonicalPath(workspace))?.held,
   };
   /**
    * Every command this product answers, filed under its kind. `CommandHandlers` is total over

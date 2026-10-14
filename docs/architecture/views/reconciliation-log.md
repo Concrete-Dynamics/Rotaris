@@ -29,6 +29,13 @@ re-prompt and `Run.turn`'s `correction()` before a plan correction, which also c
 and its answer re-prompt paragraph names `part-h-proof`'s `silent-correction` and `silent-child` launches. No package, edge,
 process, channel, command or store column changed.
 
+**A store place holding no store is resolved in Settings › Project (OQ-281, ruled 2026-10-14 under R-072; fin44).** The **process
+view**'s main ↔ workspace service paragraph gains `workspace.store.establish.assess/perform` and their two answers, the restore
+admitted while `workspace.store-missing` is held (no `runs.active`; `RestoreAssessment.target.placeEmpty`), and the notice's
+`open-settings`/`project` action withdrawn by the next open that succeeds. The **runtime view**'s store-open section gains the
+resolution paragraph (`main/store-resolution.ts`, `packages/store/src/establish.ts`). New command `workspace.establishStore`; no
+package, edge, process or store column changed.
+
 **A retrospective leases and completes its setup as a run does (PD-LIBRARY-002, ADR-0065 decision 5; the live run at `ce5f952`,
 F2; fin43).** `leasedSetup` (`run-host/launch.ts`) prepares the configuration, leases the providers it names and completes the
 setup over those bearers; the run host's `retrospectiveSetup` calls it at `retrospective.capture` and again at a retrospective's

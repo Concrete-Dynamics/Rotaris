@@ -80,7 +80,7 @@ describe('workspace — the restore assessment: everything the user is told befo
     expect(a.refusal).toBeNull();
     expect(a.artifact).toMatchObject({ workspaceId: A, sessions: 2, lastSeenWorkspacePath: 'D:/origin-project', takenAtUtc: '2026-09-03T00:00:00.000Z' });
     expect(a.identifier).toEqual({ case: 'same', current: A });
-    expect(a.target).toEqual({ exists: true, sessions: 1, foreignLocks: [], liveLocks: [] });
+    expect(a.target).toEqual({ exists: true, placeEmpty: false, sessions: 1, foreignLocks: [], liveLocks: [] });
   });
   it('case absent, case different, and the unreadable identifier that is reported and never repaired', () => {
     const art = artifactOf(A, ['S']);
@@ -177,6 +177,31 @@ describe('workspace — performing the restore into the artifact\'s identifier, 
     const ok = await performRestore({ ...deps(art), decisions: { identifier: 'workspace', proceedWithForeignLocks: true }, runHost: runHost(), timers: clocks.timers, wall: clocks.wall, ackBoundMs: millis(2_000) });
     expect(ok.ok).toBe(true);
     expect(sids(A)).toEqual(['S-new']);
+  });
+});
+
+describe('workspace — OQ-281: a restore into a place that exists and holds no store (REQ-SESSION-202, REQ-SESSION-201)', () => {
+  it('the assessment says the place is empty — no store, no sessions — and the restore keeps what was in it and lists the backup\'s sessions', async () => {
+    writeId(A);
+    mkdirSync(join(root, A, 'sessions'), { recursive: true });
+    writeFileSync(join(root, A, 'origin.txt'), 'D:/somewhere-else\n');
+    const artifact = artifactOf(A, ['S-1', 'S-2']);
+    const a = assessRestore(deps(artifact));
+    expect(a.refusal).toBeNull();
+    expect(a.identifier).toEqual({ case: 'same', current: A });
+    expect(a.target).toEqual({ exists: false, placeEmpty: true, sessions: 0, foreignLocks: [], liveLocks: [] });
+    const rh = runHost();
+    const r = await performRestore({ ...deps(artifact), decisions: { identifier: 'workspace', proceedWithForeignLocks: false }, runHost: rh, timers: clocks.timers, wall: clocks.wall });
+    expect(r.ok).toBe(true);
+    expect(sids(A)).toEqual(['S-1', 'S-2']);
+    // What was found in the place is moved aside whole and kept — never deleted.
+    expect(r.displaced).toBeDefined();
+    expect(readFileSync(join(r.displaced!, 'origin.txt'), 'utf8')).toBe('D:/somewhere-else\n');
+    expect(existsSync(join(r.displaced!, 'sessions'))).toBe(true);
+  });
+  it('a place that is absent is no such condition: nothing is found there, and nothing is said to be', () => {
+    writeId(A);
+    expect(assessRestore(deps(artifactOf(A, ['S']))).target).toEqual({ exists: false, placeEmpty: false, sessions: 0, foreignLocks: [], liveLocks: [] });
   });
 });
 

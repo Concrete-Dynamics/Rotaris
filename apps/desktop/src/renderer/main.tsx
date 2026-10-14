@@ -628,8 +628,8 @@ function Git({ workspace, git, layout, onLayout }: { workspace: string; git: Ret
   />;
 }
 
-/** REQ-SESSION-201's two actions: main supplies the dialogs, the workspace service the work. */
-async function workspaceAction(kind: 'workspace.backup' | 'workspace.restore'): Promise<{ ok: true } | { ok: false; reason: string }> {
+/** REQ-SESSION-201's two actions, and OQ-281's new store beside them: main supplies the dialogs, the workspace service the work. */
+async function workspaceAction(kind: 'workspace.backup' | 'workspace.restore' | 'workspace.establishStore'): Promise<{ ok: true } | { ok: false; reason: string }> {
   const r = await bridge.command({ kind });
   return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
 }
@@ -808,6 +808,21 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
    * the machine (REQ-SHELL-139).
    */
   const [about, setAbout] = useState<AboutInfo | null>(null);
+  /**
+   * OQ-281 (ruled 2026-10-14 under R-072): whether this window's open holds `workspace.store-missing`, learnt from the
+   * listing's own refusal (REQ-SESSION-043: the condition, not an empty list) — read when Settings mounts and again after
+   * the restore or the new store, either of which resolves it. It decides whether "Start a new session store…" is offered.
+   */
+  const [storeMissing, setStoreMissing] = useState(false);
+  const readStoreMissing = useCallback(() => {
+    void bridge.command({ kind: 'session.list' }).then((r) => setStoreMissing(!r.ok && r.code === 'workspace.store-missing'));
+  }, []);
+  useEffect(() => { queueMicrotask(readStoreMissing); }, [readStoreMissing]);
+  const storeAction = useCallback(async (kind: 'workspace.restore' | 'workspace.establishStore') => {
+    const r = await workspaceAction(kind);
+    readStoreMissing();
+    return r;
+  }, [readStoreMissing]);
   useEffect(() => {
     queueMicrotask(() => {
       void bridge.command({ kind: 'shell.hello' }).then((r) => {
@@ -929,7 +944,9 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
       session={session}
       workspace={workspace}
       onBackup={() => workspaceAction('workspace.backup')}
-      onRestore={() => workspaceAction('workspace.restore')}
+      onRestore={() => storeAction('workspace.restore')}
+      storeMissing={storeMissing}
+      onEstablishStore={() => storeAction('workspace.establishStore')}
       hooks={hooks}
       playbooks={playbooks}
       themes={THEMES}

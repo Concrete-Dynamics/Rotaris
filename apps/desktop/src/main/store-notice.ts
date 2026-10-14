@@ -1,4 +1,4 @@
-import type { NoticeSeverity, ProcessReply } from '@rotaris/contracts';
+import type { NoticeAction, NoticeSeverity, ProcessReply } from '@rotaris/contracts';
 
 /**
  * What main says about a workspace's store from the workspace service's answer to `workspace.open`, decided here and nowhere
@@ -10,7 +10,17 @@ export interface StoreNotice {
   readonly severity: NoticeSeverity;
   readonly headline: string;
   readonly detail?: string;
+  /** REQ-NOTIFY-044's "open settings at a named category": where the condition is resolved (OQ-281). */
+  readonly action?: { readonly label: string; readonly action: NoticeAction };
 }
+
+/**
+ * OQ-281 (ruled 2026-10-14 under R-072): a place holding no store is resolved in Settings › Project — the restore, or the
+ * deliberate "Start a new session store…" beside it — so its notice opens Settings at that category (REQ-NOTIFY-044,
+ * REQ-SHELL-023's Project). A cut restore whose store could not be put back (OQ-266) carries none: its detail names the
+ * rename that resolves it, and neither action there is for it.
+ */
+export const OPEN_PROJECT_SETTINGS = { label: 'Open Project settings', action: { kind: 'open-settings', category: 'project' } } as const;
 
 /** The condition `session.list` answers with while the open refuses the store (REQ-SESSION-202, REQ-SESSION-043). */
 export interface StoreRefusal {
@@ -36,7 +46,10 @@ export function storeRefusalOf(reply: ProcessReply): StoreRefusal | undefined {
 
 /** REQ-SESSION-202: the error notice a held refusal is raised as — what was found, and no reason invented for it (W-31 (2)). */
 export function storeRefusalNotice(held: StoreRefusal): StoreNotice {
-  return { severity: 'error', headline: held.headline, ...(held.detail === undefined ? {} : { detail: held.detail }) };
+  return {
+    severity: 'error', headline: held.headline, ...(held.detail === undefined ? {} : { detail: held.detail }),
+    ...(held.code === 'workspace.store-missing' ? { action: OPEN_PROJECT_SETTINGS } : {}),
+  };
 }
 
 /**

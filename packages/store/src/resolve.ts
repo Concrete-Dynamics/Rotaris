@@ -1,11 +1,11 @@
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, existsSync, writeFileSync } from 'node:fs';
+import { mkdirSync, existsSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { mintWorkspaceId, parseWorkspaceId, type WorkspaceId } from '@rotaris/kernel';
 import { exclusiveCreate, guardedRead, WORKSPACE_ID_FILE, WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
-import { ORIGIN_FILE, restoreJournal, storeDir, storeFile } from './layout.js';
+import { firstStoreSibling, ORIGIN_FILE, restoreJournal, STORE_FILE, storeDir, storeFile } from './layout.js';
 import { migrateStore, type MigrateOutcome } from './migrate.js';
-import { openStore, type StoreHandle } from './open.js';
+import { forgetSpelling, openStore, type StoreHandle } from './open.js';
 import { recoverCutRestore, type CutRestore } from './recover.js';
 
 /**
@@ -105,6 +105,69 @@ export class RestorePendingError extends Error {
 export interface OpenWorkspaceStoreOptions {
   /** OQ-266: run the cut-restore check first (the default). The workspace service skips it while its own restore is in flight. */
   readonly recover?: boolean;
+  /**
+   * OQ-281 — verification only: called after a first store is whole in its sibling and before the rename puts it in place, so
+   * a test can cut the open there (a throw stands for the process killed) or make the target appear meanwhile.
+   */
+  readonly betweenCreateAndRename?: (sibling: string) => void;
+  /** OQ-281 — verification only: the rename that installs a first store (a test makes it refuse). */
+  readonly rename?: typeof renameSync;
+}
+
+/** OQ-281: how often, and how far apart, the install of a first store retries a rename the platform refused transiently. */
+const INSTALL_TRIES = 5;
+const INSTALL_RETRY_MS = 50;
+const pause = (ms: number): void => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); };
+
+/**
+ * OQ-281 (ruled 2026-10-14 under R-072): a first store is made whole beside its place and renamed into it, so the place is
+ * never present without a store in it — the open's own window between making the place and creating the file is gone, and a
+ * process cut anywhere leaves the place absent (REQ-SESSION-043's ordinary state, created at the next open), never empty
+ * (REQ-SESSION-202). The sibling is dot-prefixed and named for the identifier (`firstStoreSibling`), holds only a store that
+ * was never installed, and is removed at the identifier's next first-store attempt; every scan of the workspaces root skips
+ * dot-prefixed entries. Answers the creation's migration, or `null` where the place appeared meanwhile (the caller re-runs the
+ * open over what is there).
+ */
+function installFirstStore(workspacesRoot: string, id: WorkspaceId, workspaceRoot: string, opts: OpenWorkspaceStoreOptions): MigrateOutcome | null {
+  const sibling = firstStoreSibling(workspacesRoot, id);
+  const place = storeDir(workspacesRoot, id);
+  rmSync(sibling, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  let migration: MigrateOutcome;
+  try {
+    mkdirSync(sibling);
+    const db = openStore(join(sibling, STORE_FILE));
+    try {
+      migration = migrateStore(db);
+    } finally {
+      db.close();
+      forgetSpelling(sibling);
+    }
+    // origin.txt: the reclamation surface's only way to say which project a store belongs to (OQ-48) — in place before the rename.
+    writeFileSync(join(sibling, ORIGIN_FILE), `${workspaceRoot}\n`);
+  } catch (e) {
+    // A failed create leaves nothing: the place stays absent.
+    rmSync(sibling, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    throw e;
+  }
+  opts.betweenCreateAndRename?.(sibling);
+  const rename = opts.rename ?? renameSync;
+  for (let attempt = 1; ; attempt++) {
+    if (existsSync(place)) {
+      // The place appeared meanwhile (another open, a restore, a person): what is there is the store's, never this sibling's.
+      rmSync(sibling, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      return null;
+    }
+    try {
+      rename(sibling, place);
+      return migration;
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if ((code === 'EPERM' || code === 'EBUSY') && attempt < INSTALL_TRIES) { pause(INSTALL_RETRY_MS); continue; }
+      rmSync(sibling, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      if (existsSync(place)) return null;
+      throw e;
+    }
+  }
 }
 
 /**
@@ -113,19 +176,21 @@ export interface OpenWorkspaceStoreOptions {
  *  1. OQ-266 — a restore cut between its two renames is reversed (`recoverCutRestore`, recover.ts);
  *  2. REQ-SESSION-202 / W-31 — a place that exists and holds no `workspace.db` is refused (`StorePlaceEmptyError`), never
  *     opened by a call that creates: an empty store there would answer every later check perfectly;
- *  3. the place is created where it is absent, and only then may the open create the store in it.
+ *  3. where the place is absent, the store is made whole in a sibling and renamed into place (OQ-281, `installFirstStore`),
+ *     and the open that follows is the ordinary one, `mustExist`, over what is then there.
  */
 export function openWorkspaceStore(workspacesRoot: string, id: WorkspaceId, workspaceRoot: string, opts: OpenWorkspaceStoreOptions = {}): ResolvedStore {
   const dir = storeDir(workspacesRoot, id);
   const file = storeFile(workspacesRoot, id);
   const recover = opts.recover !== false;
   const cutRestore = recover ? recoverCutRestore(workspacesRoot, id) : null;
-  const placeExists = existsSync(dir);
-  if (!recover && !placeExists && existsSync(restoreJournal(workspacesRoot, id))) throw new RestorePendingError(dir);
-  if (placeExists && !existsSync(file)) throw new StorePlaceEmptyError(dir, file);
-  if (!placeExists) mkdirSync(dir, { recursive: true });
-  const db = openStore(file, placeExists ? { mustExist: true } : {});
-  const migration = migrateStore(db);
+  if (!recover && !existsSync(dir) && existsSync(restoreJournal(workspacesRoot, id))) throw new RestorePendingError(dir);
+  const created = existsSync(dir) ? null : installFirstStore(workspacesRoot, id, workspaceRoot, opts);
+  // Present now in every case — installed by this open, or found (before it, or appearing meanwhile): opened, never created.
+  if (!existsSync(file)) throw new StorePlaceEmptyError(dir, file);
+  const db = openStore(file, { mustExist: true });
+  const opened = migrateStore(db);
+  const migration = created !== null && opened.kind === 'unchanged' ? created : opened;
   // origin.txt: the reclamation surface's only way to say which project a store belongs to (OQ-48).
   const origin = join(dir, ORIGIN_FILE);
   if (!existsSync(origin)) writeFileSync(origin, `${workspaceRoot}\n`);

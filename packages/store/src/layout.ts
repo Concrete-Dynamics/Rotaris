@@ -19,6 +19,9 @@ import type { WorkspaceId } from '@rotaris/kernel';
  *     <identifier>.obstruction-<stamp>[.n] what the reversal moved off the target name — D5
  *     <identifier>.restore-pending     a restore's journal (OQ-266): written before step 8, removed by step 9, by the
  *                                      in-process reversal, or by the next open (`recoverCutRestore`, recover.ts)
+ *     .<identifier>.new                a first store being made whole before its rename into place (OQ-281); left only by
+ *                                      a cut open, and removed by the identifier's next first-store attempt. Every scan of
+ *                                      this root skips dot-prefixed entries (the assessment's `.assess-*` among them).
  *
  * Leftover shapes are tabulated in ADR-0058 consequence 5. D5's staging half is repaired (OQ-265, 2026-10-14);
  * its obstruction half is deferred with OQ-48's inspect-and-delete surface (R-071, "after the first release").
@@ -38,6 +41,14 @@ export function storeDir(workspacesRoot: string, id: WorkspaceId): string {
 }
 export function storeFile(workspacesRoot: string, id: WorkspaceId): string {
   return join(workspacesRoot, id, STORE_FILE);
+}
+/**
+ * OQ-281: where a first store is made whole before it is renamed into `<identifier>` — dot-prefixed, so every scan of the
+ * workspaces root passes it over, and five characters longer than the identifier's name. It holds only a store that was never
+ * installed, and is removed by the identifier's next first-store attempt.
+ */
+export function firstStoreSibling(workspacesRoot: string, id: WorkspaceId): string {
+  return join(workspacesRoot, `.${id}.new`);
 }
 export function stagingDir(workspacesRoot: string, id: WorkspaceId, n: number): string {
   return join(workspacesRoot, `${id}.restoring-${n}`);

@@ -14215,7 +14215,12 @@ making the place and creating the file. **Built 2026-10-14 by fin44 (`fin44-stor
 `.perform` (`workspace-service/store-establish.ts` over `@rotaris/store`'s `establishInEmptyPlace`), `RestoreAssessment.target.placeEmpty`,
 the notice's `open-settings`/`project` action (`main/store-notice.ts`) withdrawn once an open succeeds, and Settings' action
 (`SettingsView.tsx`); pinned by `store-resolution.test.ts`, `store-establish.test.ts`, `store.test.ts` and
-`pnpm store-resolution-proof`. W-31 (3) carries the report-back.
+`pnpm store-resolution-proof`. W-31 (3) carries the report-back. **The refusals and the first create, built the same day by
+fin44:** `session.start` in such a window says nothing was started because the store could not be opened (REQ-SESSION-089), and
+`runCommand` turns every other gate's `workspace.none` into the held refusal (`answerUnderHeldRefusal`, `main/store-notice.ts`);
+`openWorkspaceStore` makes a first store whole in `.<identifier>.new` and renames it into place (`installFirstStore`,
+`packages/store/src/resolve.ts`), so the open no longer leaves the place it made without a store — the residue this entry's
+"What the build proceeds under" named is closed. W-31 (1) and (2) carry that report-back.
 
 <a id="oq-292"></a>
 

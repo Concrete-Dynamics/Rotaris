@@ -57,7 +57,7 @@ import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
 import { anotherMainWindowStays, confirmActiveRunClose } from './close-confirmation.js';
 import { zeroProposalDetail } from './improvement-notice.js';
-import { cutRestoreNotice, storeRefusalNotice, storeRefusalOf, type StoreRefusal } from './store-notice.js'; // REQ-SESSION-202, OQ-266
+import { answerUnderHeldRefusal, cutRestoreNotice, storeRefusalNotice, storeRefusalOf, type StoreRefusal } from './store-notice.js'; // REQ-SESSION-202, OQ-266, OQ-281
 import { establishFlow as establishStoreFlow, restoreFlow as restoreStoreFlow, type StoreFlowDeps } from './store-resolution.js'; // OQ-281
 import { ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
@@ -1791,7 +1791,9 @@ async function main(): Promise<void> {
      * entry does not compile. Nothing throws out of here (ADR-0019) — a handler that does is caught below.
      */
     const handler = handlers[req.kind] as CommandHandler<CommandRequest['kind']>;
-    return handler(req, { w, senderId, awaitWorkspace });
+    const outcome = await handler(req, { w, senderId, awaitWorkspace });
+    // OQ-281 / REQ-SESSION-202: in a window whose store the open refused, "no workspace" is said as the condition held.
+    return w.workspaceId !== undefined || w.workspace === '(no workspace)' ? outcome : answerUnderHeldRefusal(outcome, w, storeRefusals.get(canonicalPath(w.workspace))?.held);
   };
   ipcMain.handle(CHANNEL.command, (e, raw) => runCommand(raw, e.sender.id));
 

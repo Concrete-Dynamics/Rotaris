@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import Database from 'better-sqlite3';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, fileStamp, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
-import { checkEmptyPlace, establishInEmptyPlace, plannedAsideName } from './index.js';
+import { checkEmptyPlace, establishInEmptyPlace, firstStoreSibling, plannedAsideName } from './index.js';
 import { CutRestoreError, recoverCutRestore, RestorePendingError, restoreJournal, StorePlaceEmptyError, writeRestoreJournal } from './index.js';
 import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, FILE_STAMP_LENGTH, openStore, openStoreForInspection, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, storePathLimit, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
@@ -162,6 +162,81 @@ describe('store — open (ADR-0058 rule 3, rule 6)', () => {
     expect(second.name).not.toBe(storeFile(root, id).toLowerCase());
     second.close();
     r.db.close();
+  });
+});
+
+describe('store — OQ-281 (ruled 2026-10-14 under R-072): a first store is made beside its place and renamed in (REQ-SESSION-202, REQ-SESSION-043)', () => {
+  const id = mintWorkspaceId('000000000000000000000000000002f2');
+  const cut = (at: string[]) => ({ betweenCreateAndRename: (sibling: string) => { at.push(sibling); throw new Error('killed between create and rename'); } });
+
+  it('a cut between create and rename leaves the place absent, never empty, and the next open installs a store', () => {
+    const seen: string[] = [];
+    let placeAtCut: boolean | undefined;
+    expect(() => openWorkspaceStore(root, id, ws, { betweenCreateAndRename: (sibling) => { seen.push(sibling); placeAtCut = existsSync(storeDir(root, id)); throw new Error('killed'); } })).toThrow('killed');
+    // At the cut the store is whole in its sibling, origin.txt beside it, and the place has never existed.
+    expect(seen).toEqual([firstStoreSibling(root, id)]);
+    expect(placeAtCut).toBe(false);
+    expect(existsSync(storeDir(root, id))).toBe(false);
+    expect(readdirSync(seen[0]!).sort()).toEqual(['origin.txt', 'workspace.db']);
+    // REQ-SESSION-043: an absent place is the ordinary first open — not REQ-SESSION-202's condition.
+    const r = openWorkspaceStore(root, id, ws);
+    expect(r.migration).toEqual({ kind: 'migrated', from: 0, to: CURRENT_SCHEMA_VERSION });
+    expect(readFileSync(join(r.dir, 'origin.txt'), 'utf8').trim()).toBe(ws);
+    r.db.close();
+    forgetSpelling(r.dir);
+    expect(existsSync(firstStoreSibling(root, id))).toBe(false);
+  });
+
+  it('a stray sibling for the identifier — a store never installed — is swept at its next open, whatever it holds', () => {
+    const sibling = firstStoreSibling(root, id);
+    expect(sibling).toBe(join(root, `.${id}.new`));
+    expect(sibling.length - join(root, id).length).toBe(5);
+    mkdirSync(join(sibling, 'sessions'), { recursive: true });
+    writeFileSync(join(sibling, 'workspace.db'), 'half a store');
+    const r = openWorkspaceStore(root, id, ws);
+    expect(counts(root, id).sessions).toBe(0);
+    r.db.close();
+    forgetSpelling(r.dir);
+    expect(existsSync(sibling)).toBe(false);
+    expect(readdirSync(root)).toEqual([id]);
+  });
+
+  it('a place that appeared meanwhile is never written over: a store there is opened, an empty one refused, and the sibling discarded', () => {
+    const other = mintWorkspaceId('000000000000000000000000000002f3');
+    seed(root, other, [{ sid: 'S-there', rows: 1 }]);
+    const r = openWorkspaceStore(root, id, ws, { betweenCreateAndRename: () => { renameSync(storeDir(root, other), storeDir(root, id)); } });
+    expect(new StoreDal(r.db).listSessions().map((x) => x.session_id)).toEqual(['S-there']);
+    r.db.close();
+    forgetSpelling(r.dir);
+    expect(existsSync(firstStoreSibling(root, id))).toBe(false);
+    const empty = mintWorkspaceId('000000000000000000000000000002f4');
+    expect(() => openWorkspaceStore(root, empty, ws, { betweenCreateAndRename: () => { mkdirSync(storeDir(root, empty)); } })).toThrow(StorePlaceEmptyError);
+    expect(readdirSync(storeDir(root, empty))).toEqual([]);
+    expect(existsSync(firstStoreSibling(root, empty))).toBe(false);
+  });
+
+  it('a rename the platform refuses transiently is retried, boundedly; one it keeps refusing leaves the place absent and no sibling', () => {
+    let refusals = 2;
+    const flaky = ((from: string, to: string) => { if (refusals-- > 0) throw Object.assign(new Error('busy'), { code: 'EBUSY' }); renameSync(from, to); }) as typeof renameSync;
+    const r = openWorkspaceStore(root, id, ws, { rename: flaky });
+    expect(refusals).toBe(-1);
+    r.db.close();
+    forgetSpelling(r.dir);
+    const stuck = mintWorkspaceId('000000000000000000000000000002f5');
+    let tries = 0;
+    const refusing = (() => { tries++; throw Object.assign(new Error('denied'), { code: 'EPERM' }); }) as typeof renameSync;
+    expect(() => openWorkspaceStore(root, stuck, ws, { rename: refusing })).toThrow('denied');
+    expect(tries).toBe(5);
+    expect(existsSync(storeDir(root, stuck))).toBe(false);
+    expect(existsSync(firstStoreSibling(root, stuck))).toBe(false);
+  });
+
+  it('a dot-prefixed entry beside the place is never taken for a store set aside', () => {
+    const at: string[] = [];
+    expect(() => openWorkspaceStore(root, id, ws, cut(at))).toThrow();
+    writeRestoreJournal(root, id, { stamp: 'S', stagingN: 1, targetExisted: true });
+    mkdirSync(join(root, `.${id}.displaced-S`));
+    expect(() => recoverCutRestore(root, id)).toThrow(CutRestoreError);
   });
 });
 

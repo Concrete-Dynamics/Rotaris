@@ -23,7 +23,7 @@ export function confinementRefusalNotice(r: { readonly headline: string; readonl
  * a refusal into a notice where the surface has nowhere to show one.
  */
 export function sessionCommands(
-  ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'configFatal' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'withdrawnByClose'>,
+  ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'configFatal' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'storeRefusal' | 'withdrawnByClose'>,
 ): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.chooseNextModel' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.retry' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.release' | 'session.reconcile' | 'session.pageOlder'> {
   const { capturing, clocks, configFatal, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runFailures, runHost, services, withdrawnByClose } = ctx;
   /** PD-GIT-001: the runs a launch in the workspace would share a tree with, or null when the run host's count cannot be read. */
@@ -76,7 +76,16 @@ export function sessionCommands(
       return r.kind === 'ack' ? { ok: true, value: null } : refusal(r, 'The model for the next run could not be applied to the session');
     },
     'session.start': async (req, { w }) => {
-      if (!w.workspaceId) { log('run refused before start: no workspace is open'); return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' }; }
+      if (!w.workspaceId) {
+        // REQ-SESSION-089 / REQ-SESSION-202, OQ-281: a store the open refused is said as the store that could not be opened,
+        // and that nothing was started — no session, no lock, nothing asked of the run host — never as "no workspace".
+        const held = w.workspace === '(no workspace)' ? undefined : ctx.storeRefusal?.(w.workspace);
+        if (held) {
+          log(`run refused before start: the session store could not be opened (${held.code}); nothing was started`);
+          return { ok: false, code: held.code, headline: 'Nothing was started: the session store for this workspace could not be opened', ...(held.detail === undefined ? {} : { detail: held.detail }) };
+        }
+        log('run refused before start: no workspace is open'); return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' };
+      }
       // REQ-GIT-021: the two conflicting choices, refused before anything is created (REQ-GIT-158 makes this unreachable from the dialog).
       if (req.isolation && req.attach) { log('run refused before start: isolation and attach together'); return { ok: false, code: 'session.worktree-options', headline: 'Choose either an isolated worktree or an existing worktree to attach, not both.' }; }
       /**

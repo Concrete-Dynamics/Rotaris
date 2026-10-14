@@ -29,6 +29,11 @@ re-prompt and `Run.turn`'s `correction()` before a plan correction, which also c
 and its answer re-prompt paragraph names `part-h-proof`'s `silent-correction` and `silent-child` launches. No package, edge,
 process, channel, command or store column changed.
 
+**A first store is made beside its place and renamed in; refusals in a refused workspace tell the truth (OQ-281, REQ-SESSION-089;
+fin44).** The **runtime view**'s store-open paragraph gains `installFirstStore` (`.<identifier>.new`, the bounded rename, the
+sweep, dot-prefixed entries skipped) and the held refusal every command answers in such a window; the **process view** says the
+other workspace-scoped commands answer it. No package, edge, process, channel, command or store column changed.
+
 **A store place holding no store is resolved in Settings › Project (OQ-281, ruled 2026-10-14 under R-072; fin44).** The **process
 view**'s main ↔ workspace service paragraph gains `workspace.store.establish.assess/perform` and their two answers, the restore
 admitted while `workspace.store-missing` is held (no `runs.active`; `RestoreAssessment.target.placeEmpty`), and the notice's

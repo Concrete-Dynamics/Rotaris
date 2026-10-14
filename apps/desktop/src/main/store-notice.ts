@@ -1,4 +1,4 @@
-import type { NoticeAction, NoticeSeverity, ProcessReply } from '@rotaris/contracts';
+import type { CommandOutcome, NoticeAction, NoticeSeverity, ProcessReply } from '@rotaris/contracts';
 
 /**
  * What main says about a workspace's store from the workspace service's answer to `workspace.open`, decided here and nowhere
@@ -64,4 +64,17 @@ export function cutRestoreNotice(cut: NonNullable<Opened['cutRestore']>): StoreN
     headline: `The restore begun at ${cut.stamp} did not finish`,
     detail: `${before}, and nothing from the backup was applied. Restore again from Settings to apply it. The prepared copy is kept at ${cut.staging}.`,
   };
+}
+
+/**
+ * OQ-281 (ruled 2026-10-14 under R-072), REQ-SESSION-202 / REQ-SESSION-089: every workspace-scoped refusal in a window whose
+ * store the open refused states the held condition. The command gates answer `workspace.none` from the window's missing
+ * workspace identifier — "Open a workspace first", false in a window that holds one — so `runCommand` (`index.ts`) passes every
+ * answer through this before it leaves main: a `workspace.none` refusal in a window with no identifier, while a refusal is
+ * held for its workspace, becomes that refusal in the workspace service's own words. Anything else passes unchanged.
+ * (`docs/defects/fixed/a-refused-store-is-reported-as-no-workspace-by-every-command-but-the-listing.md`.)
+ */
+export function answerUnderHeldRefusal(outcome: CommandOutcome, w: { readonly workspaceId: string | undefined }, held: StoreRefusal | undefined): CommandOutcome {
+  if (outcome.ok || outcome.code !== 'workspace.none' || w.workspaceId !== undefined || held === undefined) return outcome;
+  return { ok: false, code: held.code, headline: held.headline, ...(held.detail === undefined ? {} : { detail: held.detail }) };
 }

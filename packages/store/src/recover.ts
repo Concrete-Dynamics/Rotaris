@@ -98,6 +98,8 @@ export function displacedUnder(workspacesRoot: string, id: WorkspaceId, stamp: s
   const bare = `${id}.displaced-${stamp}`;
   let best: { n: number; name: string } | null = null;
   for (const name of readdirSync(workspacesRoot)) {
+    // OQ-281: a dot-prefixed entry is a store being made, never one set aside.
+    if (name.startsWith('.')) continue;
     let n: number;
     if (name === bare) n = 0;
     else if (name.startsWith(`${bare}.`) && /^\d+$/.test(name.slice(bare.length + 1))) n = Number(name.slice(bare.length + 1));

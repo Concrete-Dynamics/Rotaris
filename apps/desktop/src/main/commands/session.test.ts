@@ -604,3 +604,32 @@ describe('session.resume for a notice action, in a window that does not hold the
     expect(h.raised).toEqual([{ severity: 'error', headline: 'The session could not be loaded', detail: 'No session exists under id S-A.' }]);
   });
 });
+
+/**
+ * REQ-SESSION-089 / REQ-SESSION-202, OQ-281 (ruled 2026-10-14 under R-072): a start in a window whose store the open refused
+ * says which store could not be opened and that nothing was started — never "open a workspace", which is false there — and
+ * asks no one anything (`docs/defects/fixed/a-refused-store-is-reported-as-no-workspace-by-every-command-but-the-listing.md`).
+ */
+describe('session.start in a window holding a refused store (REQ-SESSION-089, OQ-281)', () => {
+  const held = { code: 'workspace.store-missing', headline: 'The session store for this workspace is not where it is kept', detail: 'The place for this workspace\'s session store exists (/data/workspaces/v1-x) and the store is not in it.' };
+  const facet = (storeRefusal: CommandContext['storeRefusal']) => {
+    const logs: string[] = [];
+    const asked: unknown[] = [];
+    const commands = sessionCommands({ log: (m: string) => logs.push(m), storeRefusal, runHost: { request: async (r: unknown) => { asked.push(r); return { kind: 'refused', code: 'x', headline: 'x' }; } }, services: new Map() } as unknown as Parameters<typeof sessionCommands>[0]);
+    return { commands, logs, asked };
+  };
+  const req = { kind: 'session.start', prompt: 'hello' } as unknown as Parameters<ReturnType<typeof sessionCommands>['session.start']>[0];
+
+  it('names the store whose place could not be opened and says nothing was started', async () => {
+    const f = facet((workspace) => (canonicalPath(workspace) === canonicalPath(WORKSPACE) ? held : undefined));
+    const r = await f.commands['session.start'](req, windowOn(null as unknown as string));
+    expect(r).toEqual({ ok: false, code: 'workspace.store-missing', headline: 'Nothing was started: the session store for this workspace could not be opened', detail: held.detail });
+    expect(f.asked).toEqual([]);
+    expect(f.logs.some((l) => l.includes('run refused before start') && l.includes('workspace.store-missing'))).toBe(true);
+  });
+
+  it('(as before) with no refusal held, a window with no workspace is told to open one', async () => {
+    const f = facet(() => undefined);
+    expect(await f.commands['session.start'](req, windowOn(null as unknown as string))).toEqual({ ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' });
+  });
+});

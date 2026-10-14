@@ -8,7 +8,9 @@
  *                 database leaves.
  *   B. restore  — the next open is refused: the error notice "The session store for this workspace is not where it is kept"
  *                 carries "Open Project settings" (REQ-NOTIFY-044); `session.list` answers the same refusal, not an empty
- *                 list (REQ-SESSION-043); the notice's action opens Settings at Project, where "Start a new session store…"
+ *                 list (REQ-SESSION-043), a start says nothing was started because the store could not be opened
+ *                 (REQ-SESSION-089) and another workspace-scoped refusal (`config.read`) states the same condition; the
+ *                 notice's action opens Settings at Project, where "Start a new session store…"
  *                 stands beside "Restore session store…". The restore is pressed (its first question answered Restore),
  *                 admitted though the window has no workspace identifier; the backup's session is then listed, the
  *                 refusal's notice is gone, the new-store action is withdrawn, and the found place is kept beside the store.
@@ -16,6 +18,8 @@
  *                 pressed twice: the first question is answered Cancel (its default) and nothing moves; the second is
  *                 answered "Start a new store", and the listing then answers an empty store, the kept place exists with
  *                 what was found in it, and an info notice names it.
+ *
+ * Every launch's first store is made beside its place and renamed in (OQ-281): no dot-prefixed sibling is left behind.
  *
  * Message boxes are answered by `ROTARIS_CAPTURE_ANSWERS` in order, which logs each box's title, message, detail, buttons
  * and default; the proof reads those lines to hold the dialogs to the ruling's words. Evidence under
@@ -120,6 +124,12 @@ check('A: the place is left holding no store', !firstEmptying.left.includes('wor
   const refusedList = await listing(d);
   check('B: the listing answers the condition, not an empty list (REQ-SESSION-043)', refusedList.ok === false && refusedList.code === 'workspace.store-missing', JSON.stringify(refusedList));
   check('B: "Start a new session store…" is offered beside the restore while the place is empty', followed.offered === true, 'offered');
+  // REQ-SESSION-089 / REQ-SESSION-202: a start says which store could not be opened and that nothing was started; every other
+  // workspace-scoped refusal in the window states the held condition, never "open a workspace" (OQ-281).
+  const start = await d.command({ kind: 'session.start', prompt: 'start while the store is missing' });
+  check('B: a start is refused as the store that could not be opened, nothing started', start.ok === false && start.code === 'workspace.store-missing' && start.headline === 'Nothing was started: the session store for this workspace could not be opened' && (start.detail ?? '').includes('the store is not in it'), JSON.stringify(start));
+  const config = await d.command({ kind: 'config.read' });
+  check('B: another workspace-scoped refusal states the held condition', config.ok === false && config.code === 'workspace.store-missing' && config.headline === 'The session store for this workspace is not where it is kept', JSON.stringify(config));
   await d.screenshot(join(output, 'restore.settings-project.png'));
   await d.click('.settings__action button', { text: 'Restore session store…' });
   const restored = await until(() => listing(d), (r) => r?.ok === true && r.value.sessions.length === 1, { timeoutMs: 60_000, what: 'the backup\'s session listed' });
@@ -163,6 +173,11 @@ results.secondEmptying = secondEmptying;
   check('C: the store is in its place again', existsSync(join(secondEmptying.place, 'workspace.db')), secondEmptying.place);
   results.establish = { cancelled, boxes, kept: keptNow, notice };
   await stop(launched, 'establish');
+}
+{
+  const workspacesRoot = dirname(secondEmptying.place);
+  const siblings = readdirSync(workspacesRoot).filter((n) => n.startsWith('.') && n.endsWith('.new'));
+  check('every first store was renamed into place: no sibling left beside it', siblings.length === 0, JSON.stringify(readdirSync(workspacesRoot)));
 }
 save();
 console.log(`\nstore-resolution-proof PASSED — ${results.checks.length} checks; evidence under ${output}`);

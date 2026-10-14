@@ -35,3 +35,7 @@ it: run f0d6d135-7b8f-480c-915a-6e3cd43fe21a ended interrupted (application_shut
 **What a live run should show** (the orchestrator's: `node apps/desktop/scripts/live-run.mjs --confirm --only=cut`): every cut
 check PASS, this one included, with its detail naming the run's interrupted end after the quit; a run that finished before the
 harness's quit still FAILS it.
+
+**Addendum (fin46, 2026-10-14).** The order reading above passed any result after the quit, a normal completion included, and read
+the 3c3f447 pack's logged interrupted end as "no result": it now also requires the run's first end after the quit to be the
+interrupted one ([`the-cut-checks-order-reading-passes-a-normal-completion-reached-after-the-quit.md`](the-cut-checks-order-reading-passes-a-normal-completion-reached-after-the-quit.md)).

@@ -102,8 +102,41 @@ describe('the cut scenario reads whether the quit came before the run\'s result 
     expect(r.detail).toMatch(/before the quit/);
   });
 
-  it('passes a launch that never reached a result at all, and fails one whose result came with no quit logged', () => {
+  it('passes a launch whose wait reported nothing after the quit, and fails one whose result came with no quit logged', () => {
     expect(quitLandedFirst([quit, ended].join('\n')).passed).toBe(true);
     expect(quitLandedFirst([satisfied].join('\n')).passed).toBe(false);
+  });
+
+  /*
+   * C11 of the acceptance round on merged main (fin45's optional L1): the order of two lines is not what the check's name says.
+   * A run that ended normally a moment after the harness's SIGTERM was not cut by it, and the first `ended …` line after the
+   * quit names that: the check reads it, and passes only the interrupted end the shutdown writes.
+   */
+  const completed = line('53.100', 'run f0d6d135 ended completed (end_turn) → completed');
+
+  it('fails a normal completion reached after the quit, with or without the wait reporting it', () => {
+    for (const log of [[quit, completed, satisfied], [quit, completed]]) {
+      const r = quitLandedFirst(log.join('\n'));
+      expect(r.passed, r.detail).toBe(false);
+      expect(r.detail).toMatch(/ended completed \(end_turn\)/);
+    }
+  });
+
+  it('names the interrupted end the 3c3f447 pack logged after the quit when the wait reported no result', () => {
+    const r = quitLandedFirst([quit, line('53.089', 'run 170ce19f ended interrupted (application_shutdown) → paused'), line('53.102', 'quit: requested (before-quit)')].join('\n'));
+    expect(r.passed, r.detail).toBe(true);
+    expect(r.detail).toMatch(/ended interrupted \(application_shutdown\)/);
+    expect(r.detail).not.toMatch(/reached no result/);
+  });
+
+  it('fails a run whose end was logged before the quit even when the wait never reported it', () => {
+    const r = quitLandedFirst([completed, quit].join('\n'));
+    expect(r.passed).toBe(false);
+    expect(r.detail).toMatch(/before the quit/);
+  });
+
+  it('fails a result the wait reported after the quit when no run end says which result it was', () => {
+    const r = quitLandedFirst([quit, satisfied].join('\n'));
+    expect(r.passed).toBe(false);
   });
 });

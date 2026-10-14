@@ -91,24 +91,46 @@ export function cutVerdicts({ quitSent, calls, issues, summary }) {
 }
 
 /**
- * Whether the quit landed before the run reached its result, read by the ORDER of the application log's lines: the first
- * `quit: requested` against the capture's `wait for result satisfied`. A run its quit cuts still ends with its one result —
- * the interrupted end the shutdown writes (`ended interrupted (application_shutdown)`) — and the capture's wait, still
- * installed, reports that result as satisfied after the quit; only a result reached BEFORE the quit means nothing was cut.
+ * Whether the quit landed before the run reached its result, read by the ORDER of the application log's lines and by WHICH end
+ * the run reached: the first `quit: requested` against main's `run <id> ended <status> (<stop_reason>)` lines and the capture's
+ * `wait for result satisfied`. A run its quit cuts still ends with its one result — the interrupted end the shutdown writes
+ * (`ended interrupted (application_shutdown)`) — and the capture's wait, still installed, reports that result as satisfied after
+ * the quit. So the check fails a result or a run end logged BEFORE the quit, and a first end after the quit that is anything but
+ * that interrupted one (a run that completed a moment after the SIGTERM was not cut by it); a wait reporting a result after the
+ * quit with no run end logged fails too, since nothing then says which result it was. A log with neither (the wait reported
+ * nothing and main logged no end) passes: no result was reached, so none came first.
  * Until 2026-10-14 the check read the satisfied line anywhere in the log and failed the a3be56c pack's cut, whose every other
- * check passed (live-run finding L1 of that pack; fin45).
+ * check passed (live-run finding L1 of that pack; fin45); fin45's order reading then passed any result after the quit, a normal
+ * completion included, and read the 3c3f447 pack's logged interrupted end as "no result" (acceptance finding C11; fin46,
+ * `docs/defects/fixed/the-cut-checks-order-reading-passes-a-normal-completion-reached-after-the-quit.md`).
  * @param {string} log
  * @returns {{ passed: boolean, detail: string }}
  */
 export function quitLandedFirst(log) {
   const lines = String(log ?? '').split('\n');
+  const isEnd = (l) => /\bended \w+ \([a-z_]+\)/.test(l);
+  const endText = (l) => l.replace(/^.*?\b(run \S+ ended .*)$/, '$1').trim();
   const quit = lines.findIndex((l) => /\bquit: requested\b/.test(l));
   const result = lines.findIndex((l) => /capture: wait for result satisfied/.test(l));
-  const ended = lines.find((l, i) => i > quit && quit >= 0 && /\bended \w+ \([a-z_]+\)/.test(l))?.replace(/^.*?\b(run \S+ ended .*)$/, '$1').trim();
-  if (result < 0) return { passed: true, detail: quit < 0 ? 'no quit line was logged and the run reached no result' : 'the run reached no result after the quit' };
-  if (quit < 0) return { passed: false, detail: `the run reached its result (${lines[result].trim()}) and main logged no quit` };
-  if (result < quit) return { passed: false, detail: `the run reached its result (line ${result + 1}) before the quit (line ${quit + 1})` };
-  return { passed: true, detail: `the quit (line ${quit + 1}) came first; the result the wait reported (line ${result + 1}) is the run's end after it${ended === undefined ? '' : `: ${ended}`}` };
+  const firstEnd = lines.findIndex(isEnd);
+  if (quit < 0) {
+    if (result < 0 && firstEnd < 0) return { passed: true, detail: 'no quit line was logged and the run reached no result' };
+    const reached = firstEnd >= 0 ? endText(lines[firstEnd]) : lines[result].trim();
+    return { passed: false, detail: `the run reached its result (${reached}) and main logged no quit` };
+  }
+  if (firstEnd >= 0 && firstEnd < quit) return { passed: false, detail: `the run ended (line ${firstEnd + 1}: ${endText(lines[firstEnd])}) before the quit (line ${quit + 1})` };
+  if (result >= 0 && result < quit) return { passed: false, detail: `the run reached its result (line ${result + 1}) before the quit (line ${quit + 1})` };
+  const reported = result < 0 ? 'the wait reported no result' : `the result the wait reported (line ${result + 1}) is that end`;
+  if (firstEnd < 0) {
+    return result < 0
+      ? { passed: true, detail: `the quit (line ${quit + 1}) came first, and the run logged no end and the wait reported no result after it` }
+      : { passed: false, detail: `the wait reported a result (line ${result + 1}) after the quit (line ${quit + 1}), but main logged no run end to say which` };
+  }
+  const ended = endText(lines[firstEnd]);
+  if (!/\bended interrupted \(application_shutdown\)/.test(lines[firstEnd])) {
+    return { passed: false, detail: `the first run end after the quit (line ${quit + 1}) is not the interrupted end the quit writes: line ${firstEnd + 1}, ${ended}` };
+  }
+  return { passed: true, detail: `the quit (line ${quit + 1}) came first; the run's first end after it is the interrupted one (line ${firstEnd + 1}): ${ended}; ${reported}` };
 }
 
 function readCut(dbPath, sessionId) {

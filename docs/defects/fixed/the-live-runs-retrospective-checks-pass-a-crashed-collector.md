@@ -9,6 +9,13 @@ gesture or sent any model request with no credential, and `ask` FAILs any such r
 two new cases (red before: the crashed artifact read `empty`, the readers did not exist). Not run live here: the orchestrator's
 `ask` scenario; over the `ce5f952` pack's `ask-retrospective/app.log` the readers give one unauthenticated request and no run started.
 
+*Since 2026-10-14 (fin44, `fin44-improvement-failures`), OQ-285 ruled:* the sentence above that no notice matches a crashed
+collector, so that the notice check fails on it, held only until the ruling. Under
+[`PD-LIBRARY-005`](../../product/directives.md#pd-library-005) a crashed collector owes its pass's failure warning naming the
+artifact, and `passOutcome`'s notice check passes on that warning alone (a new `parse-failed` outcome owes the same). The
+retrospective's artifact check (`retrospectiveArtifactVerdict`) and `postRunVerdict` still fail a crashed collector, as this
+repair made them.
+
 `live-run.mjs`'s `ask-retrospective` checks PASSed "one retrospective artifact, belonging to no session and having read the ask
 session" and "the notice on screen is the one the retrospective's outcome owes" over an artifact whose notes read "collector
 crashed: Unauthorized" beside the notice "The retrospective found nothing to propose" (the live scenario run at `ce5f952`, finding

@@ -120,6 +120,16 @@ was found, with what the build shipped meanwhile, so a ruling replaces an interi
 
 **On 2026-10-07 the open questions were ruled under the owner's delegation ([R-072](../product/requests.md#r-072)) by a consortium of two advocates and a ruling agent:** advocate A argued from the user's lens and advocate B from the system's, and a ruling agent weighed both and ruled; each entry carries its ruling, dated and citing R-072, with the two recommendations it weighed and which it followed. OQ-204 to OQ-212 were open; OQ-213 to OQ-219 were raised that day by the final live runs and by the rulings themselves, each opened and ruled in its own entry. OQ-204, changed; OQ-205, confirmed as built; OQ-206, changed; OQ-207, changed; OQ-208, changed; OQ-209, confirmed as built; OQ-210, changed; OQ-211, confirmed as built; OQ-212, confirmed as built; OQ-213, changed; OQ-214, confirmed as built; OQ-215, changed; OQ-216, changed; OQ-217, changed; OQ-218, changed; OQ-219, changed. Where a ruling departs from a requirement's text it is carried by a directive with its back-pointer, written by the plan that builds it.
 
+**On 2026-10-13 the consortium ruled a further round under the same delegation ([R-072](../product/requests.md#r-072)),** each
+entry carrying its ruling, dated and citing R-072, with the recommendations it weighed. This paragraph was started on 2026-10-14
+(fin44), as [OQ-264](#oq-264)'s ruling asks that its outcome be named where the round's rulings are summarised; it names the
+rulings fin43 built, and the round's others are in their own entries: [OQ-263](#oq-263), confirmed as built (a dated note under
+REQ-GIT-138, no directive); [OQ-264](#oq-264), confirmed as built and carried by `PD-CONFIG-004`; [OQ-265](#oq-265), changed (the
+restore deletes its own staging copy on a failure that leaves the store as it was; no directive); [OQ-266](#oq-266), changed (a
+restore cut between its renames is reversed at the next open; no directive); [OQ-273](#oq-273), changed (`PD-MCP-004`);
+[OQ-278](#oq-278), changed (a note closes unreproduced only under a guard, `docs/defects/README.md`); [OQ-280](#oq-280), changed
+(`PD-TOOLS-019`).
+
 ***Three of those counts changed on 2026-09-02 and the direction is not the usual one, so a reader should
 not skim them.*** The seven escalations this register carried as open were **all ruled on that date** and
 all seven have landed in requirements; OQ-14 and OQ-44 were **closed by amendment** and their entries below

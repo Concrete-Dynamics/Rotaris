@@ -28,6 +28,8 @@ describe("the empty artifact's notice (REQ-LIBRARY-124, REQ-LIBRARY-022/023, REQ
     expect(passFailureTitle('retrospective')).toBe('The retrospective could not be completed');
     expect(passFailureDetail('post_run', 'session-1', 'boom')).toBe('Session session-1 was not reviewed for improvements: boom.');
     expect(passFailureDetail('retrospective', undefined, 'boom')).toBe("This workspace's own history was not reviewed: boom.");
+    // A post-run pass handed no session never prints "Session undefined" or "Session null".
+    for (const none of [undefined, null, '']) expect(passFailureDetail('post_run', none, 'boom')).toBe('The completed run was not reviewed for improvements: boom.');
   });
 
   /*

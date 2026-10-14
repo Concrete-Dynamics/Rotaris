@@ -39,12 +39,14 @@ export function passFailureTitle(pass: AnalysisPass): string {
 /**
  * The failure warning's detail: the run it belonged to (the history, for a retrospective, which names no run) and the reason,
  * ending in a single period. A reason that is a refusal's sentence already ends in its own terminal punctuation, and gains no
- * second mark (`PD-LIBRARY-002` revision 5, OQ-300).
+ * second mark (`PD-LIBRARY-002` revision 5, OQ-300). A post-run pass always reviews a session, but one handed none says "The
+ * completed run", its title's words, rather than "Session undefined" (fin44's review of `fin44-improvement-failures`).
  */
 export function passFailureDetail(pass: AnalysisPass, sessionId: string | null | undefined, reason: string): string {
   const closed = /[.!?]$/.test(reason) ? reason : `${reason}.`;
-  return pass === 'retrospective'
-    ? `This workspace's own history was not reviewed: ${closed}`
+  if (pass === 'retrospective') return `This workspace's own history was not reviewed: ${closed}`;
+  return sessionId === undefined || sessionId === null || sessionId === ''
+    ? `The completed run was not reviewed for improvements: ${closed}`
     : `Session ${sessionId} was not reviewed for improvements: ${closed}`;
 }
 

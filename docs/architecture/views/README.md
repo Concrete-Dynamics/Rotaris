@@ -43,7 +43,8 @@ change to the code (stated in `CLAUDE.md`):
    [`reconciliation-log.md`](reconciliation-log.md), newest first, in the same commit; here only the date moves.
    A view that disagrees with the code is a defect of the change that made it so.
    *(Added 2026-10-13: from 2026-09-16 every change had written its entry here instead, about 350 of them, until
-   this file was 2,658 lines; they moved to the log verbatim.)*
+   this file was 2,658 lines; they moved to the log verbatim, less one line: the navigation pass's closing "Everything
+   reconciled before this date is in reconciliation-log.md", which inside the log would point at itself.)*
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 

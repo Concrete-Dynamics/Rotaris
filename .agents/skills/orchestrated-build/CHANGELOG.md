@@ -61,7 +61,7 @@ those entries say. **Changed:** nothing in the skill but this entry, and the sel
   orchestrator sent `cd <repo>-wt-live && LIVE_RUN_DURESS_MS=7800000 setsid nohup timeout 9600 xvfb-run … --only=duress >
   <scratchpad>/live-552d346-duress.log 2>&1 < /dev/null & disown` at 08:12:40 UTC on 2026-10-13 (its session transcript),
   with no `bash -c` wrapper and so no `exit=` line, and it passed in 55 minutes (`live-run PASSED`, 30 PASS, 9 NOTE, 0 FAIL;
-  `live-552d346-duress-autopsy.md`). So the detached shape has run and the window held; the profile's exact command, with its
+  [`live-552d346-duress-autopsy.md`](../../../docs/architecture/live-runs/live-552d346-duress-autopsy.md)). So the detached shape has run and the window held; the profile's exact command, with its
   `exit=` line in `.live-run/duress-launch.log` and the Monitor wait on it, has still not been sent by a live-runner.
 
 **Verified** by `node scripts/orchestration.mjs self-test` (all checks passed) and `pnpm vitest run

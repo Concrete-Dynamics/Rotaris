@@ -8,7 +8,8 @@ newest first. `docs/architecture/first-executions.md` and `codebase.md` hold the
 side; this one is the views' side of it.
 
 The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in `README.md` and moved here verbatim on
-2026-10-13 (fin41). Since then each change writes its entry at the top of this file and moves only the date in
+2026-10-13 (fin41), less the navigation pass's closing line ("Everything reconciled before this date is in
+reconciliation-log.md"), which here would point at itself. Since then each change writes its entry at the top of this file and moves only the date in
 `README.md` (its maintenance rule, item 2).
 
 ---

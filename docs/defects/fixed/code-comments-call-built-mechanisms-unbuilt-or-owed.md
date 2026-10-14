@@ -66,9 +66,11 @@ met whole), and ADR-0035's "Blocked by OQ-23" header line (struck, resolved 2026
 Two adjacent questions were checked, not reworded:
 
 - **ADR-0035's "Status: proposed".** Not stale in a way peculiar to ADR-0035. Every ADR written before the Architecture
-  Gate still reads "proposed" (53 of them), and the gate record (`docs/clean-room/architecture-gate.md`) is where their
+  Gate still reads "proposed" (53 of them *(corrected 2026-10-14, fin43: 55 ADR files carry "Status: proposed" at
+  `957df1f` — 53 with nothing after the word and two with a note after it, on an escalation since ruled; the count above
+  read only the first form)*), and the gate record (`docs/clean-room/architecture-gate.md`) is where their
   approval is recorded; the ADRs accepted one by one after the gate (ADR-0022, ADR-0059 to ADR-0065) say "accepted". The
-  header was left as it is: changing one of 53 would make the other 52 read as less approved. Only the "Blocked by" line,
+  header was left as it is: changing one of them would make the others read as less approved. Only the "Blocked by" line,
   which was false, was corrected.
 - **The dead `open-project-init` action.** Nothing raises it, so routing the arm would add a path no notice reaches. Which
   notice should offer it, and what it opens for a workspace another window holds, is raised as

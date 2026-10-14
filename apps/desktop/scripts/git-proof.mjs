@@ -1,7 +1,7 @@
 /**
  * The Git proof (Part O): the Git view and the worktrees, painted from what the workspace service reads and writes
  * (REQ-GIT-075..090, 102..112, 115..122, 158, 161; REQ-SHELL-125; ADR-0038's second execution). Scripted client,
- * scratch store, eleven launches against one scratch profile (7 with a store directory of its own) whose workspace is a
+ * scratch store, twelve launches against one scratch profile (7 with a store directory of its own) whose workspace is a
  * repository with three commits, a local bare "remote" one commit behind (so `ahead 1` and one local-tinted row exist)
  * and `.rotaris/` ignored:
  *
@@ -34,6 +34,10 @@
  *   4. delete    — a file dropped into `feature/proof`; Delete → Yes → Git refuses → the second confirmation → force:
  *                  the row is gone, the directory is gone, `Worktree deleted.` (REQ-GIT-111/117).
  *   5. relaunch  — the split dragged in (1) is restored (REQ-SHELL-069, `panels/git/state`).
+ *   5b. carried-layout — the store rewritten as an older build kept it (one object per view under `panels/<view>`, no
+ *                  `panels/version`), the overview's object at version 2 and the git one at version 1: the git split is
+ *                  restored at 528 and stored under the three registered keys with the stamp 1, the version-2 object dropped
+ *                  (REQ-SHELL-069, REQ-SHELL-006; `results.carriedLayout`).
  *   6. no-git    — PATH without Git: the header's empty version, `Working without Git` raised, no dialog (REQ-GIT-104).
  *   6b. not-a-repository — a plain folder that is not a repository, outside this one: no notice (REQ-GIT-104). In 6 and
  *                  6b the strip's branch item reads its state words whole and unshortened, the plain folder under a deep
@@ -417,6 +421,27 @@ const relaunch = await launch('relaunch', workspace, local, preferences, { ROTAR
   const divider = first(relaunch.probes, '[data-testid="git-divider"]');
   if (divider?.data?.['aria-valuenow'] !== '528') throw new Error(`the stored split was not restored: aria-valuenow=${divider?.data?.['aria-valuenow'] ?? 'absent'}`);
   results.relaunch = { split: 528, rows: rows(relaunch.probes).length, png: relaunch.png };
+}
+
+// 5b. Carried layout: the store as an older build wrote it, one object per view under `panels/<view>` and no `panels/version`,
+// the overview's object (migrated first) at version 2 and the git one at version 1. Only the version-1 object is carried, and
+// the stamp is 1, so the git split is restored at 528; until 2026-10-14 the overview object's 2 became the one stamp and every
+// layout fell back to its default (REQ-SHELL-069, REQ-SHELL-006;
+// docs/defects/fixed/the-pane-layout-carry-over-stamps-every-layout-with-the-first-old-objects-version.md).
+{
+  const file = join(preferences, 'preferences.json');
+  const before = JSON.parse(readFileSync(file, 'utf8'));
+  const gitState = before['panels/git/state'];
+  const old = Object.fromEntries(Object.entries(before).filter(([key]) => !key.startsWith('panels/')));
+  writeFileSync(file, `${JSON.stringify({ ...old, 'panels/overview': { version: 2, panes: 2, sizes: [111, 222] }, 'panels/git': { version: 1, panes: 2, sizes: gitState } }, null, 2)}\n`);
+  const carried = await launch('carried-layout', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' });
+  const divider = first(carried.probes, '[data-testid="git-divider"]');
+  if (divider?.data?.['aria-valuenow'] !== '528') throw new Error(`the version-1 git layout was not carried over beside an overview layout at version 2: aria-valuenow=${divider?.data?.['aria-valuenow'] ?? 'absent'}`);
+  const after = JSON.parse(readFileSync(file, 'utf8'));
+  if (after['panels/version'] !== 1 || JSON.stringify(after['panels/git/state']) !== JSON.stringify(gitState) || after['panels/git/panes'] !== 2) throw new Error(`the carried git layout was not stored under the three keys with the stamp 1: ${JSON.stringify(after)}`);
+  if ('panels/overview' in after || 'panels/git' in after) throw new Error(`an old layout object survived the carry-over: ${JSON.stringify(after)}`);
+  if (JSON.stringify(after['panels/overview/state']) === JSON.stringify([111, 222])) throw new Error(`the overview layout at version 2 was carried: ${JSON.stringify(after)}`);
+  results.carriedLayout = { split: 528, stamp: after['panels/version'], overviewCarried: false, png: carried.png };
 }
 
 // 6. PATH without Git: the header's empty version, the notice raised in main, no dialog.

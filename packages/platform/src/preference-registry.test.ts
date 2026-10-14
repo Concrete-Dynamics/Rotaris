@@ -122,4 +122,41 @@ describe('a pane layout is stored under `panels/version`, `panels/{view-key}/sta
     expect(store.readLayout('git', 2)).toEqual({ version: 1, panes: 2, sizes: [1, 2] });
     expect(JSON.parse(readFileSync(store.file, 'utf8'))).toEqual({ 'panels/version': 1, 'panels/git/panes': 2, 'panels/git/state': [1, 2] });
   });
+
+  // docs/defects/fixed/the-pane-layout-carry-over-stamps-every-layout-with-the-first-old-objects-version.md: each old object
+  // stood alone (its own version, refused unless 1), where the registered keys share one stamp. Only a version-1 object is
+  // carried, and the stamp it sets is 1, so no old object decides another view's layout.
+  it('carries only an old object at version 1 and stamps 1, so an object at another version, or none, decides no other view', () => {
+    const root = join(dir, 'preferences');
+    const store = new PreferenceStore(root);
+    mkdirSync(root, { recursive: true });
+    const git = { version: 1, panes: 2, sizes: [400, 528] };
+    for (const first of [{ version: 2, panes: 2, sizes: [1, 2] }, { panes: 2, sizes: [1, 2] }, { version: null, panes: 2, sizes: [1, 2] }]) {
+      // `panels/overview` is migrated first (PANE_LAYOUT_VIEWS' order), ahead of the version-1 `panels/git`.
+      writeFileSync(store.file, `${JSON.stringify({ 'panels/overview': first, 'panels/git': git })}\n`);
+      expect(store.readLayout('git', 2)).toEqual({ version: 1, panes: 2, sizes: [400, 528] });
+      expect(store.readLayout('overview', 2)).toBeUndefined();
+      expect(JSON.parse(readFileSync(store.file, 'utf8'))).toEqual({ 'panels/version': 1, 'panels/git/panes': 2, 'panels/git/state': [400, 528] });
+    }
+  });
+
+  it('drops an old object the old reading refused, so a later stamp of 1 for another view never brings it to life', async () => {
+    const root = join(dir, 'preferences');
+    const store = new PreferenceStore(root);
+    mkdirSync(root, { recursive: true });
+    writeFileSync(store.file, `${JSON.stringify({ 'panels/library': { version: 3, panes: 2, sizes: [300, 600] } })}\n`);
+    expect(store.readLayout('library', 2)).toBeUndefined();
+    expect(JSON.parse(readFileSync(store.file, 'utf8'))).toEqual({});
+    await store.writeLayout('overview', { version: 1, panes: 2, sizes: [700, 340] });
+    expect(store.readLayout('library', 2)).toBeUndefined();
+  });
+
+  it('reads an old object\'s version tolerantly, as REQ-SHELL-069 reads every integer, and stamps the integer 1', () => {
+    const root = join(dir, 'preferences');
+    const store = new PreferenceStore(root);
+    mkdirSync(root, { recursive: true });
+    writeFileSync(store.file, `${JSON.stringify({ 'panels/workspace': { version: '1', panes: 2, sizes: [520, 210] } })}\n`);
+    expect(store.readLayout('workspace', 2)).toEqual({ version: 1, panes: 2, sizes: [520, 210] });
+    expect(JSON.parse(readFileSync(store.file, 'utf8'))).toEqual({ 'panels/version': 1, 'panels/workspace/panes': 2, 'panels/workspace/state': [520, 210] });
+  });
 });

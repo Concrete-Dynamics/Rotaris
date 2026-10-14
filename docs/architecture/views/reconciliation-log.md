@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**The pane-layout carry-over takes only a version-1 object and stamps 1 (fin46, `fin46-accept1-20`; REQ-SHELL-069, REQ-SHELL-006,
+acceptance finding C17).** `02-process-view.md`'s `prefs.get/set` entry says an old `panels/<view>` object is carried over once
+only at version 1, the one stamp it sets being 1, where it read "carried over once" of any. No package, edge or process changed.
+The README's date stays 2026-10-15, the later.
+
 **The improvement analyst is told a proposal's shape (fin46, `fin46-accept1-19`; REQ-LIBRARY-009/016/022, acceptance finding
 L1).** `02-process-view.md`'s post-run analyst paragraph says both passes' system texts now state every proposal field's
 vocabulary or bound and the `proposed_verifier_section` keys, with an example (`PROPOSAL_SHAPE`). No package, edge or process

@@ -262,8 +262,8 @@ export const RENAMED_KEYS: Readonly<Record<string, PreferenceKey>> = {
 /**
  * The document with every renamed key carried over to its registered name; `moved` is whether anything changed. A pane layout
  * this build once stored as one object under `panels/<view>` is split into the registered `panels/<view>/state` and
- * `panels/<view>/panes`, its version becoming `panels/version` where none is stored; a layout already stored under the
- * registered keys wins, and the old name is removed either way.
+ * `panels/<view>/panes`, the stamp `panels/version` becoming 1 where none is stored; only an object at version 1 is carried,
+ * a layout already stored under the registered keys wins, and the old name is removed either way.
  */
 function carryOverRenamedKeys(document: DocumentShape): { readonly document: DocumentShape; readonly moved: boolean } {
   let moved = false;
@@ -279,10 +279,15 @@ function carryOverRenamedKeys(document: DocumentShape): { readonly document: Doc
     if (!(old in next)) continue;
     const stored = next[old] as { version?: unknown; panes?: unknown; sizes?: unknown } | null;
     const keys = paneLayoutKeys(view);
-    if (stored !== null && typeof stored === 'object' && !(keys.state in next) && !(keys.panes in next)) {
+    // Each old object carried its own version, and one at any version but 1 was never applied; the registered keys share one
+    // stamp. So only an object at version 1 (read tolerantly, REQ-SHELL-069) is carried, and the stamp it sets is the integer 1:
+    // an object at another version, or none, is dropped and decides no other view's layout. Until 2026-10-14 the first old
+    // object's version became the stamp unchecked
+    // (docs/defects/fixed/the-pane-layout-carry-over-stamps-every-layout-with-the-first-old-objects-version.md).
+    if (stored !== null && typeof stored === 'object' && tolerantInteger(stored.version) === 1 && !(keys.state in next) && !(keys.panes in next)) {
       next[keys.state] = stored.sizes;
       next[keys.panes] = stored.panes;
-      if (!(PANE_LAYOUT_VERSION_KEY in next)) next[PANE_LAYOUT_VERSION_KEY] = stored.version;
+      if (!(PANE_LAYOUT_VERSION_KEY in next)) next[PANE_LAYOUT_VERSION_KEY] = 1;
     }
     delete next[old];
     moved = true;

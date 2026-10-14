@@ -404,3 +404,11 @@ serialiser's replacer defect) still holds of the store; the keys they named are 
 table itself and fails on any literal key the registry holds that the table does not list
 (`packages/platform/src/preference-registry.test.ts`;
 `docs/defects/fixed/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md`).
+
+**Addendum, 2026-10-14 (fin46, `fin46-accept1-20`).** The carry-over above copied the first old object's `version` into the one
+`panels/version` stamp unchecked, and carried every old object whatever its own version, where each old object had stood alone
+(refused unless version 1). It now carries only an object at version 1 (read tolerantly), stamps the integer 1, and drops any
+other, so no old object decides another view's layout. The reading that the first object's version may stand for every layout is
+falsified and kept here beside its replacement
+(`docs/defects/fixed/the-pane-layout-carry-over-stamps-every-layout-with-the-first-old-objects-version.md`; pinned by three cases in
+`preference-registry.test.ts` and `git-proof`'s launch 5b, `carried-layout`).

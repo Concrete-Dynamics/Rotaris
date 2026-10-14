@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A skills request is refused from the read that found the file unloaded (fin45, `fin45-optional-findings`;
+`../../defects/fixed/a-skills-request-throws-when-the-configuration-stops-loading-between-its-two-reads.md`).** `SkillHost.state`
+and `forceLoad` throw `SkillsUnloaded` carrying the fault; `dispatch.ts`'s `skillsAnswer` answers each of the five `skills.*`
+requests with OQ-279's `config.fatal` refusal from it. `03-runtime-view.md` §8.
+
 **The run host's three session events are built beside their stamp (fin45, `fin45-optional-findings`).** `runResultEvent`,
 `runNoticeEvent` and `reportNoticeEvent` (`run-host/session-roots.ts`) build `run.result` and the two `notice.publish` shapes
 `host.ts` sends, each through `withSessionRoot`; no behaviour changed. `02-process-view.md` (`notice.publish`) and

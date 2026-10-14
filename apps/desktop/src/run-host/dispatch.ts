@@ -10,7 +10,7 @@ import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessi
 import { CHECKPOINTS_DEFAULTS, type LiveState } from '@rotaris/config';
 import { improvementCollectorOf, retrospectiveOf } from './configuration.js';
 import { launchSession } from './launch.js';
-import { SKILLS_CONFIGURATION_UNLOADED, writeSkillListing, type SkillHost } from './skills.js'; // REQ-CHAT-162, OQ-279
+import { SKILLS_CONFIGURATION_UNLOADED, SkillsUnloaded, writeSkillListing, type SkillHost } from './skills.js'; // REQ-CHAT-162, OQ-279
 import { randomUUID } from 'node:crypto';
 // The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network.
 
@@ -106,45 +106,38 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
      * was, which is why the row a surface draws keeps showing the PERSISTED policy. The fifth, `skills.list`
      * (REQ-CHAT-162), persists exactly one thing — a transcript row — and changes no policy either.
      */
-    case 'skills.read': {
-      const unloaded = skillsUnloaded(skills, req.workspaceRoot);
-      if (unloaded) return unloaded;
-      return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId) };
-    }
-    case 'skills.rescan': {
-      const unloaded = skillsUnloaded(skills, req.workspaceRoot);
-      if (unloaded) return unloaded;
-      // REQ-WORKSPACE-069: re-read from disk, re-project, change no policy, mark nothing dirty.
-      const before = skills.state(req.workspaceRoot, req.sessionId).skills.length;
-      skills.rescan(req.workspaceRoot);
-      const state = skills.state(req.workspaceRoot, req.sessionId);
-      log(`skills: rescanned ${req.workspaceRoot} — ${before} → ${state.skills.length}`);
-      return { kind: 'skills.state', state };
-    }
-    case 'skills.forceLoad': {
-      const unloaded = skillsUnloaded(skills, req.workspaceRoot);
-      if (unloaded) return unloaded;
-      const r = skills.forceLoad(req.workspaceRoot, req.sessionId, req.name);
-      if (!r.ok) return { kind: 'refused', code: r.reason === 'disabled' ? 'skills.disabled' : 'skills.unknown', headline: r.reason === 'disabled' ? SKILLS_DISABLED_MESSAGE : r.reason };
-      return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
-    }
-    case 'skills.loadFile': {
-      const unloaded = skillsUnloaded(skills, req.workspaceRoot);
-      if (unloaded) return unloaded;
-      const r = skills.loadFile(req.workspaceRoot, req.sessionId, req.path);
-      // REQ-WORKSPACE-151: a failure is reported with the reason REQ-WORKSPACE-057 gives and leaves the catalog unchanged.
-      if (!r.ok) return { kind: 'refused', code: 'skills.load-failed', headline: r.reason };
-      return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
-    }
-    case 'skills.list': {
-      const unloaded = skillsUnloaded(skills, req.workspaceRoot);
-      if (unloaded) return unloaded;
-      // REQ-CHAT-162: one saved system row, through the followed session's own writer (`writeSkillListing` says why).
-      const r = writeSkillListing(sessions.writer(asSessionId(req.sessionId)), skills.state(req.workspaceRoot, req.sessionId));
-      if (!r.ok) return { kind: 'refused', code: r.code, headline: 'The skills could not be listed in the transcript', detail: r.reason };
-      log(`skills: listed ${r.count} skill(s) into session ${req.sessionId} as transcript row ${r.index}`);
-      return { kind: 'skills.listed', count: r.count, index: r.index };
-    }
+    case 'skills.read':
+      return skillsAnswer(skills, req.workspaceRoot, () => ({ kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId) }));
+    case 'skills.rescan':
+      return skillsAnswer(skills, req.workspaceRoot, () => {
+        // REQ-WORKSPACE-069: re-read from disk, re-project, change no policy, mark nothing dirty.
+        const before = skills.state(req.workspaceRoot, req.sessionId).skills.length;
+        skills.rescan(req.workspaceRoot);
+        const state = skills.state(req.workspaceRoot, req.sessionId);
+        log(`skills: rescanned ${req.workspaceRoot} — ${before} → ${state.skills.length}`);
+        return { kind: 'skills.state', state };
+      });
+    case 'skills.forceLoad':
+      return skillsAnswer(skills, req.workspaceRoot, () => {
+        const r = skills.forceLoad(req.workspaceRoot, req.sessionId, req.name);
+        if (!r.ok) return { kind: 'refused', code: r.reason === 'disabled' ? 'skills.disabled' : 'skills.unknown', headline: r.reason === 'disabled' ? SKILLS_DISABLED_MESSAGE : r.reason };
+        return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
+      });
+    case 'skills.loadFile':
+      return skillsAnswer(skills, req.workspaceRoot, () => {
+        const r = skills.loadFile(req.workspaceRoot, req.sessionId, req.path);
+        // REQ-WORKSPACE-151: a failure is reported with the reason REQ-WORKSPACE-057 gives and leaves the catalog unchanged.
+        if (!r.ok) return { kind: 'refused', code: 'skills.load-failed', headline: r.reason };
+        return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
+      });
+    case 'skills.list':
+      return skillsAnswer(skills, req.workspaceRoot, () => {
+        // REQ-CHAT-162: one saved system row, through the followed session's own writer (`writeSkillListing` says why).
+        const r = writeSkillListing(sessions.writer(asSessionId(req.sessionId)), skills.state(req.workspaceRoot, req.sessionId));
+        if (!r.ok) return { kind: 'refused', code: r.code, headline: 'The skills could not be listed in the transcript', detail: r.reason };
+        log(`skills: listed ${r.count} skill(s) into session ${req.sessionId} as transcript row ${r.index}`);
+        return { kind: 'skills.listed', count: r.count, index: r.index };
+      });
     case 'workspace.refuseRuns':
       lease.refuse(req.workspaceId as WorkspaceId, millis(req.leaseMs));
       return { kind: 'workspace.ack', workspaceId: req.workspaceId };
@@ -765,5 +758,27 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
  */
 export function skillsUnloaded(skills: Pick<SkillHost, 'fault'>, workspaceRoot: string): Extract<ProcessReply, { kind: 'refused' }> | undefined {
   const fault = skills.fault(workspaceRoot);
-  return fault === undefined ? undefined : { kind: 'refused', code: 'config.fatal', headline: SKILLS_CONFIGURATION_UNLOADED, detail: fault };
+  return fault === undefined ? undefined : unloadedRefusal(fault);
+}
+
+function unloadedRefusal(fault: string): Extract<ProcessReply, { kind: 'refused' }> {
+  return { kind: 'refused', code: 'config.fatal', headline: SKILLS_CONFIGURATION_UNLOADED, detail: fault };
+}
+
+/**
+ * A `skills.*` request's answer: refused at once while the saved configuration does not load (`skillsUnloaded`), else `answer`
+ * — and refused the same way when a read `answer` makes finds it unloaded (`SkillsUnloaded`): the file can be saved with a fault
+ * between the first read and the next, and the request then answers OQ-279's refusal from that read rather than throwing, or
+ * answering a force-load as a skill not found
+ * (docs/defects/fixed/a-skills-request-throws-when-the-configuration-stops-loading-between-its-two-reads.md).
+ */
+export function skillsAnswer(skills: Pick<SkillHost, 'fault'>, workspaceRoot: string, answer: () => ProcessReply): ProcessReply {
+  const unloaded = skillsUnloaded(skills, workspaceRoot);
+  if (unloaded) return unloaded;
+  try {
+    return answer();
+  } catch (cause) {
+    if (cause instanceof SkillsUnloaded) return unloadedRefusal(cause.fault);
+    throw cause;
+  }
 }

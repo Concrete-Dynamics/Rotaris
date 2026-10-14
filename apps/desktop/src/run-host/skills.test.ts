@@ -8,8 +8,9 @@ import { parseSkillListing } from '@rotaris/contracts';
 import { readTrajectory, Sessions, withContextUnits, withMcpSection } from '@rotaris/engine';
 import { asSessionId, FakeClock, millis, mintMachineId, type MachineId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
-import { SKILLS_CONFIGURATION_UNLOADED, SkillHost, writeSkillListing, type RunSections, type SavedRead, type SkillHostDeps } from './skills.js';
-import { skillsUnloaded } from './dispatch.js';
+import { SKILLS_CONFIGURATION_UNLOADED, SkillHost, SkillsUnloaded, writeSkillListing, type RunSections, type SavedRead, type SkillHostDeps } from './skills.js';
+import { dispatch, skillsUnloaded } from './dispatch.js';
+import type { RunHost } from './host.js';
 
 /**
  * ADR-0063's catalog, and the fence defect its first execution found. Everything here runs against a real
@@ -654,8 +655,32 @@ describe('the skill host on a configuration that does not load (OQ-279, REQ-CONF
       const h = unloadedHost(t, saved());
       expect(h.fault(t.root)).toBe(FAULT);
       expect(skillsUnloaded(h, t.root)).toEqual({ kind: 'refused', code: 'config.fatal', headline: SKILLS_CONFIGURATION_UNLOADED, detail: FAULT });
-      expect(h.forceLoad(t.root, 's1', 'alpha')).toEqual({ ok: false, reason: `${SKILLS_CONFIGURATION_UNLOADED}: ${FAULT}` });
+      expect(() => h.forceLoad(t.root, 's1', 'alpha')).toThrow(SkillsUnloaded);
       expect(() => h.state(t.root)).toThrow(SKILLS_CONFIGURATION_UNLOADED);
+    } finally { t.cleanup(); }
+  });
+
+  /*
+   * docs/defects/fixed/a-skills-request-throws-when-the-configuration-stops-loading-between-its-two-reads.md: the file loads at
+   * the request's first read (`skillsUnloaded`) and not at the next — saved with a fault in between. The request answers OQ-279's
+   * refusal from the read that found it, never a throw, and a force-load is never answered as a skill not found.
+   */
+  it('a file that stops loading between the request\'s first read and the next is still answered with the refusal', async () => {
+    const t = tree();
+    try {
+      let reads = 0;
+      const h = new SkillHost({
+        home: t.home, machineDir: join(t.home, 'machine'), log: () => undefined,
+        section: (): SavedRead<SkillsSection> => (reads++ === 0 ? { ok: true, value: SKILLS_DEFAULTS } : { ok: false, fault: FAULT }),
+        instructions: () => ({ ok: false, fault: FAULT }),
+      });
+      const host = { log: () => undefined, skills: h, sessions: {} } as unknown as RunHost;
+      const refusal = { kind: 'refused', code: 'config.fatal', headline: SKILLS_CONFIGURATION_UNLOADED, detail: FAULT };
+      expect(await dispatch({ kind: 'skills.read', workspaceRoot: t.root }, host)).toEqual(refusal);
+      reads = 0;
+      expect(await dispatch({ kind: 'skills.forceLoad', workspaceRoot: t.root, sessionId: 's1', name: 'alpha' }, host)).toEqual(refusal);
+      reads = 0;
+      expect(await dispatch({ kind: 'skills.rescan', workspaceRoot: t.root }, host)).toEqual(refusal);
     } finally { t.cleanup(); }
   });
 

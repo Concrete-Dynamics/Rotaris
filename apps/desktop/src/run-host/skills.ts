@@ -35,6 +35,18 @@ export interface RunSections {
 export const SKILLS_CONFIGURATION_UNLOADED = 'The workspace configuration did not load, so no portable skill is offered until it is corrected';
 
 /**
+ * OQ-279: what `state` and `forceLoad` throw when the read they make of the saved `skills:` section does not load — carrying the
+ * fault, so `dispatch.ts` answers the request with the refusal from THIS read, whatever an earlier read found
+ * (docs/defects/fixed/a-skills-request-throws-when-the-configuration-stops-loading-between-its-two-reads.md).
+ */
+export class SkillsUnloaded extends Error {
+  constructor(readonly fault: string) {
+    super(`${SKILLS_CONFIGURATION_UNLOADED}: ${fault}`);
+    this.name = 'SkillsUnloaded';
+  }
+}
+
+/**
  * ADR-0063 — the portable-skill catalog, owned by the run host.
  *
  * **Why here and not in the configuration loader.** The catalog is cached per resolved workspace root and
@@ -320,7 +332,7 @@ export class SkillHost {
   state(workspaceRoot: string, sessionId?: string): SkillsState {
     // OQ-279: a projection of the policy needs the policy; the run host's `skills.*` requests refuse first (`fault`).
     const saved = this.deps.section(workspaceRoot);
-    if (!saved.ok) throw new Error(`${SKILLS_CONFIGURATION_UNLOADED}: ${saved.fault}`);
+    if (!saved.ok) throw new SkillsUnloaded(saved.fault);
     const section = saved.value;
     const discovery = this.catalog(workspaceRoot);
     const forced = this.sessionState(workspaceRoot, sessionId).forced;
@@ -353,8 +365,9 @@ export class SkillHost {
    */
   forceLoad(workspaceRoot: string, sessionId: string | undefined, name: string): { ok: true; name: string } | { ok: false; reason: string } {
     const saved = this.deps.section(workspaceRoot);
-    // OQ-279: a gesture made now reads the file now, and an unloaded one offers no skill to force.
-    if (!saved.ok) return { ok: false, reason: `${SKILLS_CONFIGURATION_UNLOADED}: ${saved.fault}` };
+    // OQ-279: a gesture made now reads the file now, and an unloaded one offers no skill to force: the request is refused with
+    // the fault (`SkillsUnloaded`), never answered as a skill not found.
+    if (!saved.ok) throw new SkillsUnloaded(saved.fault);
     if (!saved.value.enabled) return { ok: false, reason: 'disabled' };
     const known = this.resolved(workspaceRoot, sessionId).find((r) => r.skill.name === name);
     if (!known) return { ok: false, reason: `No skill named '${name}' was discovered in this workspace.` };

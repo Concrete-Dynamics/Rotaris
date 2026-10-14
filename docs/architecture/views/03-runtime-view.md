@@ -1933,7 +1933,9 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   reload is unchanged: correcting the file and starting a run is the recovery, with no relaunch (`notice-proof` 1c).
   **The readers outside the run's load follow it (2026-10-14, fin44):** none answers an unloaded configuration with defaults.
   The run host's `skills:` and instruction readers answer the report (`SavedRead`, `run-host/skills.ts`); the five `skills.*`
-  requests refuse with code `config.fatal` and the report as detail, so the Settings › Skills category draws the report
+  requests refuse with code `config.fatal` and the report as detail — also when the file stops loading between the request's
+  first read and a later one, which `SkillHost` signals with `SkillsUnloaded` and `dispatch.ts`'s `skillsAnswer` turns into the
+  same refusal (2026-10-14, fin45) — so the Settings › Skills category draws the report
   (the `Fatal` card Models, Personas and Runtime draw) and the composer registers no skill command; an agent built while the
   file does not load gets the sections its run was configured with (`configuredRuns`), or no skill and no instruction file
   where no run of that session is known, and nothing read that way is cached for the workspace. The workspace service's

@@ -878,7 +878,9 @@ requirement a mechanism contradicts is named by the directive or it is an ungove
 > **The two readings left unmeasured, measured 2026-10-13, plan fin42:** `pnpm plan-gate-proof`'s `revised-by-hand` launch, at
 > cycle 2 with the 1,029-character stated change, at the product's default window. **The keyboard:** with focus on the part
 > before the capped "You asked for" line (the edit toggle), a real Tab moved focus onto the line itself, whose content is
-> 160 px in a 64 px box, and a real PageDown scrolled it by 42 px; the line takes focus as a scroll container, with no
+> 160 px in a 64 px box, and a real PageDown scrolled it by 42 px *(2026-10-14, fin43: that figure was read the moment
+> `scrollTop` left 0, mid smooth-scroll — three fin42 runs read 25, 39 to 42 and 40; read once two frames agree, one run
+> at a load average of about 2.7 gave 56 px of the 96 the line can scroll)*; the line takes focus as a scroll container, with no
 > `tabindex` of its own. **The pointer:** a real drag of the revision field's resize grip 120 px down (`ROTARIS_CAPTURE_GRIP_DRAG`,
 > a new verification seam pressing just inside the element's bottom-right corner) took the field from 80 to 200 px, the
 > height held as its own inline `200px`; the plan, at its 112 px floor, was still the only part that grows, and the three

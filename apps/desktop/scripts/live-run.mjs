@@ -3099,7 +3099,7 @@ if (wanted.includes('delegation')) {
    * The run's length is the model's, not what this launch measures (PD-ORCH-006 revision 3 is read from the first root
    * request below). At b9e3005 the coordinator invented a README loss and then a user ask to move persistence to Dexie, and
    * ran out the 840 s wait doing that work with the product clean (acceptance finding L8,
-   * docs/defects/a-swarm-run-the-model-kept-working-past-its-wait-fails-the-live-run.md). So an overrun takes the duress
+   * docs/defects/fixed/a-swarm-run-the-model-kept-working-past-its-wait-fails-the-live-run.md). So an overrun takes the duress
    * run's reading (`overrunReading`, finding H-h): still progressing with the product holding at most a tenth of the wait is
    * the window's bound, a NOTE; a run that stopped moving, or a product that held more, still FAILS.
    */

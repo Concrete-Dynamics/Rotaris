@@ -275,7 +275,7 @@ export function deadlineReading({ timedOut, attribution: a, budgetMs, traffic, u
  * empty record from a launch it did record still means no request was made; `raise` names the variable that widens this
  * launch's wait. The duress run took this reading first (finding H-h); the `delegation-swarm` launch takes it since a swarm
  * coordinator that invented work for itself ran out its wait with the product clean (acceptance finding L8 at b9e3005,
- * `docs/defects/a-swarm-run-the-model-kept-working-past-its-wait-fails-the-live-run.md`).
+ * `docs/defects/fixed/a-swarm-run-the-model-kept-working-past-its-wait-fails-the-live-run.md`).
  */
 export function overrunReading({ log, startedAt, endedAt, records, calls, budgetMs, recorded, raise }) {
   const traffic = (Array.isArray(records) ? records : []).map(trafficCall);

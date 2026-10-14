@@ -498,7 +498,10 @@ renderer console line names React's update-depth error (React error 185), naming
 console line names React's update-depth error (D8, OQ-278)"); and the `duress` launch FAILS when its trap did not install or
 its `rotaris-lanes-trap: installed` line did not reach `duress/app.log` through the console relay. What the trap saw stays a
 NOTE. The first guarded duress pack is the D8 note's closing evidence under `docs/defects/README.md`'s rule for a note that was
-never reproduced: trap installed and relayed, and `reactUpdateDepthErrors` 0 on every launch.
+never reproduced: trap installed and relayed, and `reactUpdateDepthErrors` 0 on every launch. *That pack came on 2026-10-14 at
+`a3be56c` (duress `2026-10-14T05-15-42-589Z`: 78,343 commits, high 11 of 50, 0 errors; default `2026-10-14T04-30-51-088Z`: 0 on all
+24 launches), and the note closed under the guard (`docs/defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`);
+both checks stay, and a recurrence opens a new note.*
 
 **Its length comes from the work asked for, not from the fixture's weight** — ruled 2026-09-22, when a larger
 fixture was considered and not taken. A five-file repository and a five-hundred-file one delegate exactly as

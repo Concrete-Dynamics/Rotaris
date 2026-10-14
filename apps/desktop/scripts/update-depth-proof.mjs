@@ -1,6 +1,6 @@
 /**
  * The update-depth proof — live-run finding D8 in the built app
- * (`docs/defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`).
+ * (`docs/defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`).
  *
  * The `a68f121` duress run's renderer threw React error 185 ("Maximum update depth exceeded") seven times while two children
  * streamed reasoning at once. Nothing has reproduced it since. This proof keeps the instrument the note asked for and

@@ -1,6 +1,6 @@
 /**
  * Live-run finding D8 of the duress run at `a68f121`
- * (`docs/defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`): the renderer threw React
+ * (`docs/defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`): the renderer threw React
  * error 185 ("Maximum update depth exceeded") seven times while two children streamed, each relayed by the capture as
  * `capture: renderer console: <message> (<source>:<line>)` (`src/main/capture/index.ts`), and the harness read those lines at
  * `info` and passed. The note asked for a count of them in the live run's NOTE lines; this is the reader.

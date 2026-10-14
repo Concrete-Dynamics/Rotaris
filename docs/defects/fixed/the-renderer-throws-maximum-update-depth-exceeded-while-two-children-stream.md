@@ -1,5 +1,40 @@
 ## The renderer throws "Maximum update depth exceeded" while two children stream
 
+## Outcome: not reproduced, not repaired; closed under a guard (OQ-278)
+
+Closed 2026-10-14 by fin45 (`fin45-seams-ui-and-live`) on [OQ-278](../../architecture/open-questions.md#oq-278)'s rule
+(ruled 2026-10-13 under [R-072](../../product/requests.md#r-072); `docs/defects/README.md`, "Closing a note that was never
+reproduced"). **The cause is unidentified**: the seven React error 185 throws of `a68f121` were never reproduced and never
+explained, and nothing in the product was changed for them. This is not a repair and is not reported as one.
+
+**The guard** is the two live-run checks fin43 built, each a FAILURE on recurrence, never a NOTE:
+- every launch: "<name>: no relayed renderer console line names React's update-depth error (D8, OQ-278)"
+  (`updateDepthVerdict`, `apps/desktop/scripts/lib/renderer-console.mjs`);
+- the duress launch: "the long run's pendingLanes trap installed and its install line reached duress/app.log through the console
+  relay (D8 guard, OQ-278)" (`lanesTrapGuard`, `apps/desktop/scripts/lib/lanes-trap.mjs`), so a guard that did not run closes
+  nothing.
+
+**The rule's five conditions, as met.** (a) The investigations are the four dated sections below (fin32's drive, fin35's reading
+of the code, fin38's packs and count, fin42's trap and proof) and fin43's guard. (b) Both checks fail on recurrence and run in the
+acceptance round's live run. (c) They have executed, with the instrument shown working, in the first guarded live runs, both at
+`a3be56c` (the live worktree, the self-hosted endpoint):
+- **the guarded duress run**, pack `2026-10-14T05-15-42-589Z` (05:15:43 to 06:06:29 UTC, `passed: true`, 46 checks, 0 failed):
+  the trap check PASSED — `scenarioEvidence.duress.lanesTrap` `installed: true, relayed: true`, its install line
+  `capture: renderer console: rotaris-lanes-trap: installed (:1)` at line 28 of `duress/app.log` (05:16:02.650), 26 readings; the
+  NOTE "the long run's pendingLanes trap (D8)" read **78,343 commits**, 32,160 of them leaving counting lanes pending, the
+  nested-update run's high **11 of React's 50**, the longest synchronous burst 2, no fiber holding the lanes at the high, and
+  **0 update-depth errors**; both launches' per-launch check (`sign-in`, `duress`) PASSED with `reactUpdateDepthErrors` 0;
+- **the default run**, pack `2026-10-14T04-30-51-088Z` (04:30:52 to 05:15:12 UTC): the per-launch check PASSED on **all 24
+  launches**, `reactUpdateDepthErrors` 0 on each. The pack's one failure, "cut: the quit landed before the run reached its result",
+  is unrelated to D8 and was the harness's misreading
+  ([`the-live-cut-check-reads-the-runs-shutdown-result-as-reached-before-the-quit.md`](the-live-cut-check-reads-the-runs-shutdown-result-as-reached-before-the-quit.md)).
+
+(d) This section. (e) A recurrence — any relayed React error 185 or "Maximum update depth" line in a live launch, or a duress trap
+that does not install and relay — fails the live run, and opens a **new** note that cites this one; this note is not reopened.
+The first execution is reported in OQ-278 and in `docs/architecture/first-executions.md`.
+
+## What was seen (2026-10-07)
+
 While two children of one run streamed reasoning at the same time, the renderer threw React error #185 ("Maximum update
 depth exceeded") seven times in 46 s. Each was uncaught, raised inside the callback of a pushed IPC event — the preload's
 subscription handler `(_e, payload) => fn(payload)` — so the update that crossed React's nested-update limit was scheduled by
@@ -121,11 +156,11 @@ unchanged: any "Minified React error #185" line in `duress/app.log`, its time ag
 `sign-in/app.filtered.log`, with the relay live (`apps/desktop/src/main/capture/index.ts:30`). It ran **525 s** of two or more
 children streaming at once — 08:14:11 to 08:16:11 (119 s; a, b and c) and 08:19:28 to 08:26:16 (407 s; d and e1), d's
 138.1 s request 80 overlapping e1's requests 78, 79 and 81 by 40.7, 49.7 and 45.5 s, the shape of the `a68f121` errors, over a
-929 kB transcript ([`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md), finding D8;
+929 kB transcript ([`live-552d346-duress-autopsy.md`](../../architecture/live-runs/live-552d346-duress-autopsy.md), finding D8;
 the orchestrator's scratchpad copy until 2026-10-13). The default pack of the same build
 carried 0 as well, with two children streaming at once in `edit` and `resume`, and so did the default pack at `0bc3eee`
 (12 logs, two children streaming at once in `edit`, `resume` and `requirements`;
-[`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md), recorded 2026-10-13 by fin41). One more absence does not discharge the note:
+[`live-0bc3eee-default-autopsy.md`](../../architecture/live-runs/live-0bc3eee-default-autopsy.md), recorded 2026-10-13 by fin41). One more absence does not discharge the note:
 the seven errors of `a68f121` were never explained, only not seen again.
 
 **Read from the code again.** The renderer commits since fin35's reading (`40914f9`, the Mission table's persona cell in CSS;
@@ -172,7 +207,7 @@ component. A development build remains the one step of fin32's route not taken.
 **What it does not do.** It reproduces nothing. `a68f121`'s seven errors are still unexplained, and this is one more absence.
 Closing the note unreproduced is not something the record provides for: `docs/defects/README.md` moves only a repaired note to
 `fixed/`. Whether the note may close with the trap and the per-launch count as a standing monitor is raised as
-[OQ-278](../architecture/open-questions.md#oq-278). Nothing in the product was changed. *(Superseded 2026-10-13 by OQ-278's
+[OQ-278](../../architecture/open-questions.md#oq-278). Nothing in the product was changed. *(Superseded 2026-10-13 by OQ-278's
 ruling, which gives `docs/defects/README.md` the rule for closing a note unreproduced under a guard; the dated section below
 records it. Kept as written.)*
 
@@ -185,8 +220,8 @@ re-rendered components, at the high before the throw.
 
 ## OQ-278 ruled; the guard built, 2026-10-14 (fin43) — not yet run; open
 
-**The ruling.** [OQ-278](../architecture/open-questions.md#oq-278) was ruled 2026-10-13 under the owner's delegation
-([R-072](../product/requests.md#r-072)): a relayed React update-depth error (React error 185) in any live launch is a live-run
+**The ruling.** [OQ-278](../../architecture/open-questions.md#oq-278) was ruled 2026-10-13 under the owner's delegation
+([R-072](../../product/requests.md#r-072)): a relayed React update-depth error (React error 185) in any live launch is a live-run
 FAILURE, and so is a duress launch whose `pendingLanes` trap does not install or whose install line does not reach
 `duress/app.log` through the console relay. `docs/defects/README.md` now holds the rule for closing a note that was never
 reproduced, and this note closes on it — moved to `fixed/` under "Outcome: not reproduced, not repaired; closed under a guard

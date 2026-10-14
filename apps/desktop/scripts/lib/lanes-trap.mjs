@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * The `pendingLanes` trap for live-run finding D8
- * (`docs/defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`): React error 185
+ * (`docs/defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`): React error 185
  * ("Maximum update depth exceeded") was thrown seven times from the preload's push handler while two children streamed in
  * the `a68f121` duress run, and the production build's message names no component. fin32 drove the built app with a trap
  * on the React root's `pendingLanes` installed through the driver's `eval`, but kept none of it in the repository; fin35 and

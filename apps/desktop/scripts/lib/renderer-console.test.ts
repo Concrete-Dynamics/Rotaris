@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { updateDepthErrors, updateDepthVerdict } from './renderer-console.mjs';
 
 /**
- * Live-run finding D8 (docs/defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md): the run
+ * Live-run finding D8 (docs/defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md): the run
  * counts the relayed renderer console lines naming React's update-depth error, which it read at `info` and passed.
  */
 describe('updateDepthErrors (D8)', () => {

@@ -898,7 +898,7 @@ async function launch(name, extra, timeoutMs = 180_000) {
   // failure). A duplicate of another fact passes.
   const restated = restatedFacts(log);
   check(restated.length === 0, `${name}: none of the ${KNOWN_RESTATEMENTS} known restatements reaches the application log`, restated.map((r) => `app.log line ${r.line}, ${r.fact} restated (its owner is the ${r.owner}): ${r.text}`).join(' | ') || undefined);
-  // Live-run finding D8 (docs/defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md): the
+  // Live-run finding D8 (docs/defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md): the
   // relayed renderer console lines naming React's update-depth error (React error 185) are counted for every launch (`results.json`
   // `scenarioEvidence.<name>.reactUpdateDepthErrors`). Since OQ-278's ruling (2026-10-13, R-072) a launch with any is a FAILURE
   // naming each line, its time beside the children's streams to be read in the autopsy; until then it was a NOTE, the cause

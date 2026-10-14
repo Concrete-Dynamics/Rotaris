@@ -14107,7 +14107,7 @@ repaired 2026-10-14 by fin45, `fin45-config-and-terminal`: the report names the 
 <a id="oq-278"></a>
 
 **OQ-278 — May a defect note that cannot be reproduced be closed, with a standing monitor in place of a repair?**
-*([`the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`](../defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md),
+*([`the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`](../defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md),
 live-run finding D8; `CLAUDE.md`, "Defects noticed along the way" — "When a noted defect is repaired, move its note to
 `docs/defects/fixed/`"; `docs/defects/README.md`. Raised 2026-10-13 by fin42 (`fin42-coverage-and-react`, whats-next item
 N49); numbered from the top of the plan's range, OQ-271 to OQ-280, to keep clear of its sibling bundles.)*
@@ -14164,6 +14164,16 @@ that did not run cannot close anything.
 trap now writes one `rotaris-lanes-trap: installed` line that `lanesTrapReading` reads as `relayed`; `pnpm update-depth-proof`
 asserts that line was relayed. The rule is in `docs/defects/README.md`. The D8 note stays open until the orchestrator's first
 guarded duress pack, which reports the guard's first execution into the note and `first-executions.md`.
+
+**First execution, 2026-10-14 (both packs at `a3be56c`; recorded by fin45, `fin45-seams-ui-and-live`): the guard held, and the D8
+note closed under it.** The guarded duress pack `2026-10-14T05-15-42-589Z` PASSED "the long run's pendingLanes trap installed and
+its install line reached duress/app.log through the console relay (D8 guard, OQ-278)" (`installed: true, relayed: true`, the
+install line at line 28 of `duress/app.log`), and its NOTE read 78,343 commits, the nested-update run's high 11 of React's 50 and
+0 update-depth errors; the per-launch check PASSED on both of its launches and on all 24 of the default pack
+`2026-10-14T04-30-51-088Z`, `reactUpdateDepthErrors` 0 on every one. The note moved to
+[`../defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`](../defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md)
+under "Outcome: not reproduced, not repaired; closed under a guard (OQ-278)"; the cause stays unidentified. Nothing the ruling
+assumed was falsified: the instrument installed, relayed and counted in a real-model run as it had in `update-depth-proof`.
 
 <a id="oq-281"></a>
 

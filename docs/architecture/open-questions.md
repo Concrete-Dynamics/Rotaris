@@ -14424,7 +14424,8 @@ the failure warning "a job that ended without producing an artifact"; REQ-LIBRAR
 [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 2 (c), the retrospective's three notices;
 [`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 2 and OQ-223, the timed-out detail. Raised
 2026-10-14 by fin43 (`fin43-live-findings`) from the live scenario run at `ce5f952` (finding F3) and
-[`../defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md`](../defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md).)*
+[`../defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md`](../defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md).
+Ruled 2026-10-13 under R-072, below.)*
 
 **What is open.** A collector that crashes (a provider's 401, a refused request, any raise other than the timeout) still stores
 REQ-LIBRARY-023's empty artifact, so REQ-LIBRARY-124 reads it as "a result with zero proposals": the info notice "Improvement
@@ -14433,8 +14434,9 @@ proposed in <id>.". The failure warning is the letter's only for a job that prod
 states the retrospective's zero-proposal and failure notices as the requirement states the sibling's and does not name a crashed
 collector. A pass that never reached the model is told to the person as one that looked and found nothing.
 
-**What the build proceeds under.** The letter: a crashed collector's artifact is a zero-proposal result, its info notice and
-the detail "Nothing was proposed in <id>."; only a post-run pass's timed-out note changes the detail (`PD-CONFIG-003` revision 2).
+**What the build proceeded under** *(kept as the falsified reading)*. The letter: a crashed collector's artifact is a
+zero-proposal result, its info notice and the detail "Nothing was proposed in <id>."; only a post-run pass's timed-out note
+changes the detail (`PD-CONFIG-003` revision 2).
 
 **What a ruling decides.** For each pass, whether a crashed collector's artifact posts the failure warning ("The retrospective
 could not be completed" / "The completed run could not be reviewed for improvements", with the crash as its reason) in place of the
@@ -14445,6 +14447,23 @@ that reads as success.
 
 **What a live run then shows.** `ask-retrospective` with a collector that cannot authenticate (a key withheld) shows the ruled
 notice; with the credential repaired it shows neither.
+
+**Ruled 2026-10-13 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)):** a failed
+improvement collector posts its pass's failure warning, for both passes. When an empty improvement artifact's notes begin
+"collector crashed: " (REQ-LIBRARY-023) or "collector parse failed: " (REQ-LIBRARY-022), the pass posts its own failure warning —
+"The completed run could not be reviewed for improvements" or "The retrospective could not be completed" — with no action, in
+place of the zero-proposal info notice. The warning carries the recorded reason and says that the stored artifact, named by id,
+holds no proposals: "Session <sid> was not reviewed for improvements: <reason>. <artifact id> holds no proposals." for the
+post-run pass, "This workspace's own history was not reviewed: <reason>. <artifact id> holds no proposals." for the
+retrospective, <reason> being "the analysis call failed (<exc>)" for a crash and "the model's answer could not be read (<err>)"
+for a parse failure, each taken from the stored notes. The artifact is stored and the proposal list re-read as before. A timeout
+keeps the info notice for both passes: the post-run pass keeps `PD-CONFIG-003` revision 2's detail unchanged, and a timed-out
+retrospective's detail reads "The retrospective reached its <t>-second limit before it proposed anything." and names no control.
+Recorded as the new directive [`PD-LIBRARY-005`](../product/directives.md#pd-library-005), which narrows REQ-LIBRARY-124 for
+both passes (its back-pointer in the same commit), and as [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision
+4, one sentence added to clause (c); REQ-LIBRARY-022, REQ-LIBRARY-023, REQ-LIBRARY-024, REQ-LIBRARY-035, REQ-NOTIFY-100,
+REQ-NOTIFY-254, `PD-CONFIG-003` revision 2 and OQ-223 are cited without change. Written 2026-10-14 by fin44
+(`fin44-improvement-failures`).
 
 <a id="oq-295"></a>
 

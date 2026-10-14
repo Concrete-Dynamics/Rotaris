@@ -1336,6 +1336,10 @@ replaced.*
 per-run history**: clause (h) is added to the revision-2 paragraph and REQ-LIBRARY-034 joins the Narrows line. Revision 2
 said nothing on the per-run history, so nothing is replaced.*
 
+*Revision 4 (2026-10-13, [R-072](requests.md#r-072), ruling [OQ-285](../architecture/open-questions.md#oq-285)) — **an empty
+artifact whose collector failed, and a timed-out retrospective**: one sentence is added at the end of clause (c), which points
+at [`PD-LIBRARY-005`](#pd-library-005). Revision 2's text of (c) stays otherwise word for word, so nothing is replaced.*
+
 **The rule.** Beside the per-run analyst of section 3, the improvement domain SHALL carry a second
 kind of analysis pass, the **retrospective**. A retrospective SHALL read only material this product
 already keeps for the workspace it runs in — session records, improvement artifacts and their
@@ -1386,7 +1390,9 @@ the per-run pass unchanged. For a retrospective, and only for one, each of these
   "<N> retrospective proposal ready" or "<N> retrospective proposals ready", with "Review proposals" opening the Library on
   the proposals tab. With zero proposals it posts the info notice "The retrospective found nothing to propose", with no
   action. A failure posts the warning "The retrospective could not be completed", conveying that the workspace's own
-  history was not reviewed and the reason; it names no run and offers no action.
+  history was not reviewed and the reason; it names no run and offers no action. An empty artifact whose collector crashed or
+  whose answer could not be parsed, and a timed-out retrospective, read as [`PD-LIBRARY-005`](#pd-library-005) states.
+  *(Revision 4, OQ-285.)*
 - (d) **The indicators (REQ-LIBRARY-125, REQ-NOTIFY-250).** While a retrospective runs, both indicators carry the label
   "Reviewing workspace history for improvements…". The title-bar indicator keeps the accessible name "Improvement analysis
   status" and has the description "Reviewing this workspace's own history for improvements in the background. You can
@@ -1507,6 +1513,10 @@ italic note; on OQ-236 both advocates' recommendations followed in part.
 Revision 3 logged as [R-072](requests.md#r-072) (OQ-271), ruled by the consortium under the owner's delegation on
 2026-10-13: the per-run history holds post-run artifacts only, so REQ-LIBRARY-025 and REQ-LIBRARY-017 hold word for word for
 every run.
+Revision 4 logged as [R-072](requests.md#r-072) (OQ-285), ruled by the consortium under the owner's delegation on
+2026-10-13 and written 2026-10-14 by fin44 (`fin44-improvement-failures`): clause (c) points at `PD-LIBRARY-005` for an empty
+artifact whose collector failed and for a timed-out retrospective. The Narrows and Extends lines are unchanged; REQ-LIBRARY-124's
+case is `PD-LIBRARY-005`'s, which names this directive.
 
 > **First execution of revision 2, 2026-10-13, ruled by [R-072](requests.md#r-072) (OQ-235) and built in plan fin34:** the
 > clause held as written. The run host's `SkillHost.retrospectiveInstructionFiles` keeps the `workspace:` entries of the
@@ -7463,6 +7473,62 @@ advocate A's and advocate B's recommendations, both to confirm as built with a d
 > received link and its same-persona sibling none, and a child of the entry persona that reads does not credit the run-level
 > agent (`ui/src/inspector-links.test.ts`). No mechanism ran for the first time, so no row is owed to
 > [`../architecture/first-executions.md`](../architecture/first-executions.md), as the ruling decided.
+
+---
+
+<a id="pd-library-005"></a>
+
+### PD-LIBRARY-005 — an improvement pass whose collector failed reads as the failure it is
+
+**The case, stated exhaustively.** An improvement analysis job of either pass — the post-run analyst (REQ-LIBRARY-015) or the
+retrospective ([`PD-LIBRARY-002`](#pd-library-002)) — ends with an empty artifact stored, and that artifact's `notes`:
+
+1. begin "collector crashed: " (REQ-LIBRARY-023, a crash other than the timeout) or "collector parse failed: "
+   (REQ-LIBRARY-022, the retry failed too). The pass SHALL then post its own failure warning in place of the zero-proposal info
+   notice, with no action: "The completed run could not be reviewed for improvements" for the post-run pass, "The retrospective
+   could not be completed" for the retrospective. Its detail SHALL read, for the post-run pass,
+   "Session <sid> was not reviewed for improvements: <reason>. <artifact id> holds no proposals." and, for the retrospective,
+   "This workspace's own history was not reviewed: <reason>. <artifact id> holds no proposals.", where <reason> is "the analysis
+   call failed (<exc>)" for a crash and "the model's answer could not be read (<err>)" for a parse failure, <exc> and <err>
+   being the text the stored notes carry after their prefix;
+2. begin "collector timed out after <t> seconds" (REQ-LIBRARY-023). The pass SHALL post its zero-proposal info notice, with no
+   action, as before. The post-run pass's detail is `PD-CONFIG-003` revision 2's, unchanged. A timed-out retrospective's detail
+   SHALL read "The retrospective reached its <t>-second limit before it proposed anything." and SHALL name no control: its bound,
+   `retrospective_timeout`, has none (`PD-LIBRARY-002`).
+
+In both cases the artifact is stored and the proposal list re-read exactly as for any artifact (REQ-LIBRARY-124's first
+sentence, REQ-LIBRARY-035(e)). Every other empty artifact — notes absent, or REQ-LIBRARY-046's duplicate-suppression note — keeps
+its pass's zero-proposal info notice and its detail. A job that ended without an artifact keeps REQ-LIBRARY-124's warning
+(`PD-LIBRARY-002` (c)'s for a retrospective), with the reason the job carried.
+
+**Disjoint from the other narrowing of REQ-LIBRARY-124.** `PD-LIBRARY-002` revision 2 (c) decides **the retrospective's three
+notices** — the titles a retrospective's proposals, its zero-proposal result and its failure carry. This directive decides
+**which notice an empty artifact of a failed collector posts**, for both passes, and the timed-out retrospective's detail; its
+revision 4 adds to (c) the one sentence that hands those cases here. Neither restates the other.
+
+**Why, and what it costs.** REQ-LIBRARY-023 stores an empty artifact for a crashed collector, and REQ-LIBRARY-124 reads every
+artifact with zero proposals as "a result with zero proposals", its warning reserved for "a job that ended without producing an
+artifact". So a pass that never reached the model — the retrospective's 401 in the live run at `ce5f952`, the analyst's answer
+twice unreadable — was told to the person as one that looked and found nothing ("The retrospective found nothing to propose",
+"Nothing was proposed in impart_dL3YK5Xd."), which REQ-NOTIFY-100's truthfulness and REQ-NOTIFY-254 ("No failure is reported by
+silence") read against ([OQ-285](../architecture/open-questions.md#oq-285);
+[`a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing`](../defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md)).
+The warning tells the person the review did not happen and why, the same notice a job with no artifact already earns; naming
+the artifact says where the notes are kept. A timeout is different in kind: the pass ran and was cut at a bound the person can
+read, so it keeps the info notice, with `PD-CONFIG-003` revision 2's precedent (OQ-223) extended to the retrospective without a
+control, since none exists. What it costs: a stored artifact now reports as a failure, so the Library holds an artifact the
+notice called a failed review; the post-run warning's title is REQ-LIBRARY-124's failure wording on a result the requirement
+counts as a success; and the product departs from an implementation built from the specification alone, which posts the info
+notice for every empty artifact. REQ-LIBRARY-022, REQ-LIBRARY-023, REQ-LIBRARY-024, REQ-LIBRARY-035, REQ-NOTIFY-100,
+REQ-NOTIFY-254, `PD-CONFIG-003` revision 2 and OQ-223 are cited and not changed.
+
+> **Narrows:** REQ-LIBRARY-124
+
+*Ruled under the owner's delegation, 2026-10-13 ([OQ-285](../architecture/open-questions.md#oq-285)); logged as
+[R-072](requests.md#r-072). Narrows REQ-LIBRARY-124 for both passes. Comes with `PD-LIBRARY-002` revision 4, ruled with it, which
+names this directive in its clause (c). `PD-CONFIG-003` revision 2 is unchanged. The build's reading, kept as the falsified one:
+an empty artifact whose collector crashed or could not be parsed posts the zero-proposal info notice and "Nothing was proposed in
+<id>.".*
 
 ---
 

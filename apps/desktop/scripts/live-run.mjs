@@ -37,7 +37,9 @@
  *                 that proposed nothing is a NOTE), and the notice it owes; then `ask-retrospective` presses the Library's retrospective gesture and lets it finish:
  *                 its artifact, the sessions it read, and the workspace root's instruction files alone (PD-LIBRARY-002). Since fin43
  *                 (the live run at ce5f952, F2/F4): its launch starts no run first, every model request of either launch carries a
- *                 credential, and a "collector crashed" artifact fails the artifact and notice checks.
+ *                 credential, and a "collector crashed" artifact fails the artifact check. Since fin44 (PD-LIBRARY-005, OQ-285) the
+ *                 notice check reads the warning a crashed or unparseable collector owes ("The retrospective could not be
+ *                 completed", naming the artifact), and a verdict with no detail prints no "— undefined".
  *   3. edit     — one real run that implements REQ-103 and runs the suite in the terminal. Asserted from the
  *                 files on disk, from `git diff`, and by running `node --test` again in this script. The work is
  *                 split between two children writing IN PARALLEL, each under a declared write scope (PD-TOOLS-006):
@@ -237,7 +239,8 @@ import { runApprovalsScenario, runAwayScenario, runPlanGateScenario } from './li
 import { runCutScenario } from './lib/cut-scenario.mjs';
 import { runCrlfScenario } from './lib/crlf-scenario.mjs';
 import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-field.mjs';
-import { passOutcome, postRunVerdict, retrospectiveInstructionFiles, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './lib/analysis-reading.mjs';
+import { passOutcome, postRunVerdict, retrospectiveArtifactVerdict, retrospectiveInstructionFiles, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './lib/analysis-reading.mjs';
+import { verdictLine } from './lib/verdict-line.mjs';
 import { RENAME_FILES, RENAME_FROM, RENAME_TO, renameReading } from './lib/rename-reading.mjs';
 import { CLASSIFIER_MARK, ROOT_MARK, answerReading, planReading } from './lib/plan-open-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, summaryOpeningVerdicts, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
@@ -1370,7 +1373,7 @@ function storeTotals() {
 
 const checks = [];
 const check = (passed, what, detail) => { checks.push({ passed: Boolean(passed), what, detail: detail ?? null }); return Boolean(passed); };
-const noted = (what, detail) => { checks.push({ passed: true, noted: true, what, detail }); };
+const noted = (what, detail) => { checks.push({ passed: true, noted: true, what, detail: detail ?? null }); };
 const results = {
   startedAt: new Date().toISOString(), endpoint: { name: endpoint.name, label: endpoint.label, baseUrl: endpoint.baseUrl, model: endpoint.model, contextTokens: endpoint.contextTokens ?? null, unmetered },
   qualifiedModel: QUALIFIED, accounting: accountingKind, budgetUsd: BUDGET, maxTokens: MAX_TOKENS, keySource, sandbox, codeIntelligenceBundle, scenarios: {},
@@ -1398,7 +1401,8 @@ function finish(code) {
   results.passed = code === 0 && checks.every((c) => c.passed);
   writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
   // A red names the assertion, never the run.
-  for (const c of checks) console.log(`  ${c.noted ? 'NOTE' : c.passed ? 'PASS' : 'FAIL'}  ${c.what}${c.detail === null ? '' : `  — ${c.detail}`}`);
+  // A verdict pushed with no detail prints no dash (`lib/verdict-line.mjs`; at ce5f952 it printed "— undefined").
+  for (const c of checks) console.log(verdictLine(c));
   const tokens = results.tokens ? `${results.tokens.input} in / ${results.tokens.output} out` : 'none recorded';
   console.log(`\nspend: ${typeof results.spentUsd === 'number' ? `${results.spentUsd.toFixed(4)} USD (${accountingKind === 'provider' ? "the provider's figure" : 'estimated from the registered prices'}) of the ${BUDGET.toFixed(2)} USD ceiling` : accountingKind === 'unmetered' ? `no money figure for this endpoint; ${tokens}, no ceiling (registered unmetered)` : `no money figure for this endpoint; ${tokens} of the ${MAX_TOKENS} token ceiling`}`);
   console.log(`evidence: ${output}`);
@@ -1581,10 +1585,10 @@ if (wanted.includes('ask')) {
     // "no proposals" outcome: a NOTE, its notice still checked below (`postRunVerdict`).
     const analysisVerdict = postRunVerdict(askArtifacts.length, analysis);
     const analysisDetail = `${askArtifacts.length} artifact(s); ${analysis.outcome}, ${analysis.proposals} proposal(s), notes ${JSON.stringify(analysis.notes)}`;
-    if (analysisVerdict === 'note') noted('the post-run analysis stored one artifact for the run and proposed nothing (REQ-LIBRARY-124)', analysisDetail);
+    if (analysisVerdict === 'note') noted(analysis.outcome === 'parse-failed' ? 'the post-run analysis stored one artifact for the run; the model\'s answer could not be read twice (REQ-LIBRARY-022, PD-LIBRARY-005)' : 'the post-run analysis stored one artifact for the run and proposed nothing (REQ-LIBRARY-124)', analysisDetail);
     else check(analysisVerdict === 'pass', 'the post-run analysis stored one artifact for the run, with proposals or the timed-out notes (REQ-LIBRARY-023/123)', analysisDetail);
     if (analysis.outcome === 'timed-out') noted('the post-run analysis reached its limit before it proposed anything', `${analysis.limitS} s (LIVE_RUN_ANALYST_TIMEOUT_S ${ANALYST_TIMEOUT_S}); live-run-1 F4 measured 22 to 134 s per call`);
-    if (askArtifacts.length === 1) check(analysis.noticeMatches === true, 'the notice on screen is the one the analysis outcome owes (REQ-LIBRARY-124, REQ-NOTIFY-100)', askNotices.map((n) => n.text.slice(0, 160)).join(' | ') || 'no notice on screen');
+    if (askArtifacts.length === 1) check(analysis.noticeMatches === true, 'the notice on screen is the one the analysis outcome owes (REQ-LIBRARY-124, REQ-NOTIFY-100, PD-LIBRARY-005)', askNotices.map((n) => n.text.slice(0, 160)).join(' | ') || 'no notice on screen');
     // The summary joins the scenario's record rather than being written onto it before it exists.
     results.scenarios.ask = { ...(askTraffic === null ? {} : { traffic: askTraffic }), status: read?.session.execution_status, iterations: read?.session.iterations_completed, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: tools.map((row) => row.tool_name), answer: answer.trim().slice(0, 400), analysis: { ...analysis, settledAfterMs: analysisMs, analystTimeoutS: ANALYST_TIMEOUT_S, control: analystSaved } };
     if (read) preserveRun('ask', read.session.session_id);
@@ -1614,15 +1618,19 @@ if (wanted.includes('ask')) {
        * The live run at ce5f952 (F2, F4): the retrospective's request went out with no credential and its collector crashed on the
        * 401, and both checks below PASSed over "collector crashed: Unauthorized". The launch must start no run before the gesture
        * (the shape that exposed F2: no run has leased the bearer for it), every model request it makes must carry a credential,
-       * and a crashed collector fails the artifact check; the notice check fails on it too (`passOutcome`, OQ-285).
+       * and a crashed collector fails the artifact check (`retrospectiveArtifactVerdict`). The notice check reads the notice the
+       * outcome owes: for a crashed collector PD-LIBRARY-005's warning (OQ-285), which a repaired product shows, so that check
+       * passes while the artifact check still fails.
        */
       check(runsStarted(retroLog) === 0, 'ask-retrospective: the launch started no run before the retrospective, so it leases its own credential (F2)', `${runsStarted(retroLog)} run(s) started in the launch`);
       check(unauthorizedRequests(retroLog) === 0, 'ask-retrospective: every model request carried a credential (ADR-0030, PD-LIBRARY-002)', `${unauthorizedRequests(retroLog)} request(s) logged with no authorization header (see ask-retrospective/app.log)`);
-      check(retroArtifacts.length === 1 && retroArtifacts[0].source_session_id === null && (retroArtifacts[0].artifact.considered_session_ids ?? []).includes(read.session.session_id) && retro.outcome !== 'crashed',
-        'one retrospective artifact, belonging to no session, having read the ask session, its collector not crashed (PD-LIBRARY-002 revision 2 (a), REQ-LIBRARY-023)',
-        retroArtifacts.map((a) => `${a.artifact_id}: ${retro.outcome}, ${retro.proposals} proposal(s), considered ${JSON.stringify(a.artifact.considered_session_ids ?? [])}, notes ${JSON.stringify(a.artifact.notes ?? null)}`).join(' | ') || 'none stored');
+      const retroArtifact = retrospectiveArtifactVerdict(retroArtifacts, read.session.session_id, retro);
+      check(retroArtifact.passed, 'one retrospective artifact, belonging to no session, having read the ask session, its collector not crashed (PD-LIBRARY-002 revision 2 (a), REQ-LIBRARY-023)', retroArtifact.detail);
       check(files !== null && files.rootOnly, 'the retrospective was handed the workspace root\'s instruction files and no other base\'s (PD-LIBRARY-002 revision 2, OQ-235)', files === null ? 'no "at the workspace root" line in ask-retrospective/app.log' : `${files.handed} of ${files.enabled}: ${files.ids.join(', ') || 'none'}`);
-      if (retroArtifacts.length === 1) check(retro.noticeMatches === true, 'the notice on screen is the one the retrospective\'s outcome owes (PD-LIBRARY-002 revision 2 (c))', retroNotices.map((n) => n.text.slice(0, 160)).join(' | ') || 'no notice on screen');
+      // PD-LIBRARY-005 (OQ-285): a crashed or unparseable collector owes "The retrospective could not be completed" naming its
+      // artifact, a timed-out one the limit detail, any other outcome PD-LIBRARY-002 revision 2 (c)'s notice (`passOutcome`).
+      if (retroArtifacts.length === 1) check(retro.noticeMatches === true, 'the notice on screen is the one the retrospective\'s outcome owes (PD-LIBRARY-002 revision 2 (c), PD-LIBRARY-005)', retroNotices.map((n) => n.text.slice(0, 260)).join(' | ') || 'no notice on screen');
+      if (retro.outcome === 'parse-failed') noted('the retrospective\'s model answered twice in a shape the parser could not read (REQ-LIBRARY-022); its warning is checked above', `notes ${JSON.stringify(retro.notes)}`);
       results.scenarios['ask-retrospective'] = { ...retro, settledAfterMs: settledAfterMs(retroLog), instructionFiles: files };
     }
   } finally {

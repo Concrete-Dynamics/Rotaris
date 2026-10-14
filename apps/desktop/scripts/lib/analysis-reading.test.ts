@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { INDICATOR, passOutcome, postRunVerdict, retrospectiveInstructionFiles, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './analysis-reading.mjs';
+import { INDICATOR, passOutcome, postRunVerdict, retrospectiveArtifactVerdict, retrospectiveInstructionFiles, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './analysis-reading.mjs';
 
 describe('analysis reading (live-run `ask`, REQ-LIBRARY-123..127, PD-LIBRARY-002)', () => {
   it('the wait holds only once the named pass was seen and no indicator stands', () => {
@@ -102,6 +102,39 @@ describe('analysis reading (live-run `ask`, REQ-LIBRARY-123..127, PD-LIBRARY-002
     expect(passOutcome(artifact, [{ text: 'iThe retrospective found nothing to proposeDetailsThe retrospective reached its 120-second limit before it proposed anything.' }], { retrospective: true }))
       .toMatchObject({ outcome: 'timed-out', limitS: 120, noticeMatches: true });
     expect(passOutcome(artifact, [{ text: 'iThe retrospective found nothing to proposeDetailsNothing was proposed in impart_r.' }], { retrospective: true }).noticeMatches).toBe(false);
+  });
+
+  /*
+   * The ask-retrospective scenario as fin43 (F4) left it, held under OQ-285's wording: a crashed collector fails the artifact check
+   * whatever notice it posted, and its notice check passes only on PD-LIBRARY-005's warning; a sound pass passes both.
+   */
+  it('ask-retrospective: a crashed collector fails the artifact check and owes the ruled warning; a sound pass passes both', () => {
+    const ask = 'ask-session-1';
+    const row = (artifact: Record<string, unknown>) => ({ artifact_id: artifact['artifact_id'], source_session_id: null, artifact });
+    const crashedArtifact = { artifact_id: 'impart_dL3YK5Xd', proposals: [], considered_session_ids: [ask], notes: 'collector crashed: Unauthorized' };
+    const warning = [{ text: "!The retrospective could not be completedDetailsThis workspace's own history was not reviewed: the analysis call failed (Unauthorized). impart_dL3YK5Xd holds no proposals.CopyDismiss" }];
+    const crashed = passOutcome(crashedArtifact, warning, { retrospective: true });
+    expect(retrospectiveArtifactVerdict([row(crashedArtifact)], ask, crashed)).toMatchObject({ passed: false });
+    expect(crashed.noticeMatches).toBe(true);
+    // At ce5f952 the crashed collector showed the zero-proposal notice: under the ruling that notice is wrong for it.
+    expect(passOutcome(crashedArtifact, [{ text: 'iThe retrospective found nothing to proposeDetailsNothing was proposed in impart_dL3YK5Xd.' }], { retrospective: true }).noticeMatches).toBe(false);
+
+    const sound = { artifact_id: 'impart_s0und000', proposals: [{}], considered_session_ids: [ask], notes: null };
+    const proposed = passOutcome(sound, [{ text: 'sSuccess1 retrospective proposal readyDetailsCollected in impart_s0und000 from this workspace\'s own history.' }], { retrospective: true });
+    expect(retrospectiveArtifactVerdict([row(sound)], ask, proposed)).toMatchObject({ passed: true });
+    expect(proposed.noticeMatches).toBe(true);
+    const suppressed = { artifact_id: 'impart_empty000', proposals: [], considered_session_ids: [ask], notes: 'Suppressed duplicate proposals already covered by: impart_a.' };
+    const nothing = passOutcome(suppressed, [{ text: 'iThe retrospective found nothing to proposeDetailsNothing was proposed in impart_empty000.' }], { retrospective: true });
+    expect(retrospectiveArtifactVerdict([row(suppressed)], ask, nothing)).toMatchObject({ passed: true });
+    expect(nothing.noticeMatches).toBe(true);
+
+    // The rest of the check: one artifact, belonging to no session, having read the ask session.
+    expect(retrospectiveArtifactVerdict([], ask, passOutcome(null, [])).passed).toBe(false);
+    expect(retrospectiveArtifactVerdict([], ask, passOutcome(null, [])).detail).toBe('none stored');
+    expect(retrospectiveArtifactVerdict([row(sound), row(suppressed)], ask, proposed).passed).toBe(false);
+    expect(retrospectiveArtifactVerdict([{ ...row(sound), source_session_id: ask }], ask, proposed).passed).toBe(false);
+    expect(retrospectiveArtifactVerdict([row({ ...sound, considered_session_ids: ['another'] })], ask, proposed).passed).toBe(false);
+    expect(retrospectiveArtifactVerdict([row(crashedArtifact)], ask, crashed).detail).toContain('impart_dL3YK5Xd: crashed, 0 proposal(s)');
   });
 
   it('reads the run host\'s unauthenticated model requests and the runs a launch started (F2\'s shape: no run before the retrospective)', () => {

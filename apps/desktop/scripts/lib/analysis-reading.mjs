@@ -93,6 +93,22 @@ export function postRunVerdict(count, outcome) {
 }
 
 /**
+ * The live `ask-retrospective` scenario's artifact check (fin43's F4 repair, held under PD-LIBRARY-005): exactly one
+ * retrospective artifact, belonging to no session (PD-LIBRARY-002 revision 2 (a)), having read the `ask` session, and its
+ * collector not crashed. A crashed collector never reached the model — at ce5f952 the 401 of a request sent with no credential
+ * (F2) — so the artifact check fails on it whatever notice the pass then posted; PD-LIBRARY-005's warning is checked apart, by
+ * `passOutcome`'s `noticeMatches`. `rows` are the store's retrospective rows (`{ artifact_id, source_session_id, artifact }`),
+ * `outcome` is `passOutcome`'s reading of the first. Returns `{ passed, detail }`.
+ */
+export function retrospectiveArtifactVerdict(rows, askSessionId, outcome) {
+  const list = rows ?? [];
+  const first = list[0];
+  const passed = list.length === 1 && first.source_session_id === null && (first.artifact?.considered_session_ids ?? []).includes(askSessionId) && outcome?.outcome !== 'crashed';
+  const detail = list.map((a) => `${a.artifact_id}: ${outcome?.outcome}, ${outcome?.proposals} proposal(s), considered ${JSON.stringify(a.artifact?.considered_session_ids ?? [])}, notes ${JSON.stringify(a.artifact?.notes ?? null)}`).join(' | ') || 'none stored';
+  return { passed, detail };
+}
+
+/**
  * PD-LIBRARY-002 revision 2 (OQ-235): the run host's line naming the instruction files a retrospective was handed —
  * "retrospective: <n> of <m> enabled instruction file(s) at the workspace root (<ids>)" — and whether every id it lists is
  * a workspace-root one (`workspace:`). Null when the log holds no such line.

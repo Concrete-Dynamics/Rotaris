@@ -654,7 +654,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     });
 
     /*
-     * PD-ORCH-009 revision 4 (OQ-284, ruled 2026-10-13 under R-072), narrowing REQ-ORCH-104's stuck-mode clause: when the run
+     * PD-ORCH-009 revision 4 (OQ-284, ruled 2026-10-14 under R-072), narrowing REQ-ORCH-104's stuck-mode clause: when the run
      * follows an execution iteration's root turn with REQ-ORCH-078's plan correction (PD-ORCH-015), the correction is the only
      * message it adds for that turn. A stuck trigger the turn armed is withdrawn — no classification, no corrective, no stuck
      * `loop_supervisor_activation` — while a repetition, cycle or raw-count trigger is kept (disjoint from PD-ORCH-016). The

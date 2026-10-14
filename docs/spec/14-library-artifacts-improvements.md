@@ -416,7 +416,7 @@ Exporting MUST write nothing to the store, MUST NOT create, restore or repair a 
   > post-run pass's notices are governed by the text above unchanged.
   > *Added 2026-10-14 (revision 4, [OQ-285](../architecture/open-questions.md#oq-285)):* clause (c) hands an empty artifact whose
   > collector failed, and a timed-out retrospective, to `PD-LIBRARY-005` below.
-  > **Narrowed by [`PD-LIBRARY-005`](../product/directives.md#pd-library-005), 2026-10-13** ([OQ-285](../architecture/open-questions.md#oq-285)). For both passes, an
+  > **Narrowed by [`PD-LIBRARY-005`](../product/directives.md#pd-library-005), 2026-10-14** ([OQ-285](../architecture/open-questions.md#oq-285)). For both passes, an
   > empty artifact whose notes begin "collector crashed: " or "collector parse failed: " posts the pass's failure warning ("The
   > completed run could not be reviewed for improvements" / "The retrospective could not be completed"), with no action, its
   > detail carrying the reason and saying the named artifact holds no proposals, in place of the zero-proposal info notice. A

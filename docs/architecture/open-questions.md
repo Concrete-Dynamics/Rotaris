@@ -14412,7 +14412,7 @@ re-prompt alone), whether the corrective replaces the re-prompt (the corrective 
 withdrawing it makes a child's first silence cost one message instead of two and leaves REQ-ORCH-102's counter for repeated
 silences; keeping both doubles the instruction and spends a classification on an empty excerpt.
 
-**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a delegated child's re-prompted
+**Ruled 2026-10-14 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a delegated child's re-prompted
 empty turn is no stuck report. When REQ-ORCH-095 re-prompts a delegated child whose turn ended with neither text nor a call,
 the empty turn that earned the re-prompt is not a stuck report to loop supervision: the run asks no classification for it,
 adds no corrective message, writes no stuck `loop_supervisor_activation`, and leaves the consecutive-activation count
@@ -14423,6 +14423,8 @@ unchanged (quoted beside its replacement), stays disjoint from `PD-ORCH-016`'s r
 withdrawn), and cites REQ-ORCH-095 without change. REQ-ORCH-104's text is unchanged; its back-pointer names revision 4.
 *The build's reading — both messages, the re-prompt first, with one stuck activation for the child — is kept above as the
 falsified one.* Written 2026-10-14 by fin44 (`fin44-supervision-and-match`).
+*Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
+consortium's ruling record, whose sitting ruled it 2026-10-14 by 04:58 UTC.*
 
 <a id="oq-284"></a>
 
@@ -14449,7 +14451,7 @@ follow-up being a correction, not a recovery), whether it stands and the correct
 or whether the correction replaces it. **The costs:** withdrawing it loses a stuck report the requirement names; keeping it puts
 "Pause and reassess" after an instruction that already tells the root what to do.
 
-**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a plan correction replaces the
+**Ruled 2026-10-14 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a plan correction replaces the
 stuck corrective its empty turn armed. When the run sends an execution iteration's root REQ-ORCH-078's plan correction
 (`PD-ORCH-015`), the correction is the only message the run adds for the turn it follows: a stuck trigger that turn armed is
 withdrawn, so no classification is asked, no corrective message follows, and no stuck `loop_supervisor_activation` is written.
@@ -14462,6 +14464,8 @@ REQ-ORCH-078, REQ-ORCH-096, REQ-ORCH-099, REQ-ORCH-102 and REQ-ORCH-105 without 
 after an empty turn is outside this ruling: measured, recorded as a defect note and raised as [OQ-296](#oq-296). *The as-built
 reading — the correction followed by the stuck corrective in one request — is kept above as the falsified one.* Written
 2026-10-14 by fin44 (`fin44-supervision-and-match`).
+*Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
+consortium's ruling record, whose sitting ruled it 2026-10-14 by 04:58 UTC.*
 
 <a id="oq-285"></a>
 
@@ -14472,7 +14476,7 @@ the failure warning "a job that ended without producing an artifact"; REQ-LIBRAR
 [`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 2 and OQ-223, the timed-out detail. Raised
 2026-10-14 by fin43 (`fin43-live-findings`) from the live scenario run at `ce5f952` (finding F3) and
 [`../defects/fixed/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md`](../defects/fixed/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md).
-Ruled 2026-10-13 under R-072, below.)*
+Ruled 2026-10-14 under R-072, below.)*
 
 **What is open.** A collector that crashes (a provider's 401, a refused request, any raise other than the timeout) still stores
 REQ-LIBRARY-023's empty artifact, so REQ-LIBRARY-124 reads it as "a result with zero proposals": the info notice "Improvement
@@ -14495,7 +14499,7 @@ that reads as success.
 **What a live run then shows.** `ask-retrospective` with a collector that cannot authenticate (a key withheld) shows the ruled
 notice; with the credential repaired it shows neither.
 
-**Ruled 2026-10-13 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)):** a failed
+**Ruled 2026-10-14 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)):** a failed
 improvement collector posts its pass's failure warning, for both passes. When an empty improvement artifact's notes begin
 "collector crashed: " (REQ-LIBRARY-023) or "collector parse failed: " (REQ-LIBRARY-022), the pass posts its own failure warning —
 "The completed run could not be reviewed for improvements" or "The retrospective could not be completed" — with no action, in
@@ -14511,6 +14515,8 @@ both passes (its back-pointer in the same commit), and as [`PD-LIBRARY-002`](../
 4, one sentence added to clause (c); REQ-LIBRARY-022, REQ-LIBRARY-023, REQ-LIBRARY-024, REQ-LIBRARY-035, REQ-NOTIFY-100,
 REQ-NOTIFY-254, `PD-CONFIG-003` revision 2 and OQ-223 are cited without change. Written 2026-10-14 by fin44
 (`fin44-improvement-failures`).
+*Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
+consortium's ruling record, whose sitting ruled it 2026-10-14 by 04:58 UTC.*
 
 <a id="oq-295"></a>
 
@@ -14539,7 +14545,7 @@ prefix, level 3 takes more cases level 4 took, and a whitespace-only line of the
 need a rule of its own; kept, the commonest multi-line edit shape — a block with a blank line — is outside `PD-TOOLS-015` and
 `PD-TOOLS-014`, and lands unshifted at level 4 beside a success on an LF file.
 
-**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** level 3 matches blank lines by having
+**Ruled 2026-10-14 under the owner's delegation ([R-072](../product/requests.md#r-072)):** level 3 matches blank lines by having
 no visible character. Once `PD-TOOLS-019` sets one trailing `\r` aside, a line of `old_string` with no visible character matches a
 window line with no visible character at any shift, whatever whitespace either holds, and never matches a line that holds one.
 The leading prefix is measured, added and removed only on lines that hold a visible character, starting from `old_string`'s
@@ -14552,6 +14558,8 @@ character when the window holds a blank one) and [`PD-TOOLS-016`](../product/dir
 pairing also runs at level 3 for blank lines); `PD-TOOLS-015` and `PD-TOOLS-019` carry in-place notes. *The build's reading — "What
 the build proceeds under" above, a blank line taking part in the shift like any other — is kept as the falsified one.* Written
 2026-10-14 by fin44 (`fin44-supervision-and-match`).
+*Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
+consortium's ruling record, whose sitting ruled it 2026-10-14 by 04:58 UTC.*
 
 <a id="oq-296"></a>
 
@@ -14581,7 +14589,7 @@ revision 4's three follow-ups do, or whether both stand. **The costs:** withdraw
 leaves a root that is truly stuck to REQ-ORCH-102's counter on a later turn; keeping it puts "Pause and reassess" after the
 report the root was waiting for and spends a classification.
 
-**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a parent's silent wait on its children
+**Ruled 2026-10-14 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a parent's silent wait on its children
 is no stuck report. A parent's turn that ends with neither text nor a call while a child of its is pending, or has ended with a
 report the parent has not seen, is REQ-ORCH-055's wait. When the run takes the parent into that wait it withdraws the stuck
 trigger the turn armed, so the children's reports are the only message the run adds for that turn. This holds for an execution
@@ -14596,6 +14604,8 @@ in one request, one stuck activation per silent wait, and a root that waited sil
 (`fin45-supervision-and-quit`): `IterationChildren.runWithChildren` calls `withdrawStuck()` as the parent is taken into the wait;
 [`../defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md`](../defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md)
 moved to `fixed/`.
+*Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
+consortium's ruling record, whose sitting ruled it 2026-10-14 by 10:14 UTC.*
 
 <a id="oq-297"></a>
 
@@ -14683,6 +14693,10 @@ answer without bound while the renderer answers its probe, is the falsified one.
 (`apps/desktop/src/main/index.ts`), pinned by `exit.test.ts` and `pnpm exit-trace-proof`'s `hang`, `unsaved-quit` and
 `unsaved-sigterm` launches. *The two advocates' recommendations themselves were not handed to the building bundle; the
 orchestrator's ruling record holds them.*
+*Ruled 2026-10-14, as the consortium's ruling record dates its sitting (10:00 to 10:14 UTC); fin45's brief and
+[R-072](../product/requests.md#r-072)'s row said 2026-10-13, the row recorded apart in
+[`../defects/the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md`](../defects/the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md)
+(fin46, `fin46-accept1-12`).*
 
 <a id="oq-299"></a>
 
@@ -14708,7 +14722,7 @@ does. The two readings differ only in that coincidence: one row's `failure_kind`
 **What a ruling decides.** Which exit names the call when both hold, so clause 4 states the order: the allowance first (one
 order for the search and the rename it precedes), or the cancel first (the run's intent over a deadline that also passed).
 
-**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)), written 2026-10-14 by fin45
+**Ruled 2026-10-14 under the owner's delegation ([R-072](../product/requests.md#r-072)), written 2026-10-14 by fin45
 (`fin45-retro-and-record`).** When the rename's warm-up search ends, whether it fails or answers, after the rename's whole
 REQ-MCP-003 allowance is spent and while the run's cancel also holds, **the allowance governs**: the rename ends as REQ-MCP-003's
 failed call (`failure_kind: timeout`, `terminal_timeout` filed) and is not sent — the order `PD-TOOLS-013` revision 2 (c) gives the
@@ -14727,6 +14741,8 @@ differently — the search's catch reads the clock alone (`elapsed >= timeoutMs`
 rename's own catch a timeout text at 90 % alone — so a failure arriving within the same tick as the allowance's end can read
 differently in the two; the ruling does not align them. No proof re-run: `code-intel-proof` launch 11 does not reach the
 coincidence. **What a live run then shows.** Nothing.
+*Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
+consortium's ruling record, whose sitting ruled it 2026-10-14 by 10:14 UTC.*
 
 <a id="oq-300"></a>
 
@@ -14752,7 +14768,7 @@ warning's.
 **What a ruling decides.** The detail a retrospective's lease refusal carries: REQ-WORKSPACE-137's sentence as written, a sentence
 that names the analysis ("… before the session can be analysed", or the like), or the continuation's as it stands.
 
-**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)), written 2026-10-14 by fin45
+**Ruled 2026-10-14 under the owner's delegation ([R-072](../product/requests.md#r-072)), written 2026-10-14 by fin45
 (`fin45-retro-and-record`).** A retrospective whose lease leaves its entry provider unresolved is refused with REQ-WORKSPACE-137's
 headline "Provider authentication required" and the detail "Authenticate at least one configured provider before running a
 retrospective.". At capture, main posts that refusal as one error notice per gesture, titled with the headline, with the detail as
@@ -14768,6 +14784,8 @@ retrospective analyses on its own slot's, recorded apart as
 [`../defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`](../defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md),
 which this ruling does not repair (*repaired 2026-10-14 by fin46, `fin46-accept1-11`: the retrospective's lease requires the
 sign-in provider of its own model, `retrospective_model` then `medium_model`, and a continuation still the entry role's*).
+*Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
+consortium's ruling record, whose sitting ruled it 2026-10-14 by 10:14 UTC.*
 
 <a id="oq-301"></a>
 

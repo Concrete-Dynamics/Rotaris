@@ -31,7 +31,7 @@
  * 0.91)" and wrote the block one tab too shallow beside a success, recorded here as observed
  * (`docs/defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`). Level 3 now sets a line's
  * trailing `\r` aside, and `shift-lf`, `near-lf` and `retry-lf` are asserted: level 3, the shift sentence then the CRLF sentence,
- * the exact bytes; the near miss naming the line endings; its quote applying. Until `PD-TOOLS-020` (OQ-295, ruled 2026-10-13) a
+ * the exact bytes; the near miss naming the line endings; its quote applying. Until `PD-TOOLS-020` (OQ-295, ruled 2026-10-14) a
  * blank line took part in level 3's shift, so `blank-lf`'s block, which holds one, matched nothing on the CRLF file; it is
  * asserted at level 3 with the shift sentence, the CRLF sentence and the exact bytes, the blank line kept as the file's own.
  *

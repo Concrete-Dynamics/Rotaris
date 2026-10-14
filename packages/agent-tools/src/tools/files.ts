@@ -355,7 +355,7 @@ export function matchEdit(lines: readonly string[], oldText: string): EditMatch 
   const body = (s: string) => (s.endsWith('\r') ? s.slice(0, -1) : s);
   const oldBodies = oldLines.map(body);
   /*
-   * PD-TOOLS-020 (OQ-295, R-072, ruled 2026-10-13): a line with no visible character takes no part in the shift. A blank line
+   * PD-TOOLS-020 (OQ-295, R-072, ruled 2026-10-14): a line with no visible character takes no part in the shift. A blank line
    * of old_string matches a blank line of the window, whatever whitespace either holds, and never a line that holds a visible
    * character; the prefix is measured on old_string's first line that holds one and the window's line at the same index
    * (PD-TOOLS-015's O and W), and added or removed on the visible lines only. An old_string with no visible character never

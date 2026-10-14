@@ -1174,7 +1174,7 @@ describe('PD-TOOLS-019: a match at level 3 compares each line without its carria
 });
 
 describe('PD-TOOLS-020: level 3 matches blank lines by having no visible character', () => {
-  // OQ-295 (R-072, ruled 2026-10-13). Level 3 shifted a blank line of old_string like any other — the bare prefix in the deeper
+  // OQ-295 (R-072, ruled 2026-10-14). Level 3 shifted a blank line of old_string like any other — the bare prefix in the deeper
   // direction, a failed startsWith in the shallower — while the file's blank line is empty, so a block with a blank interior line
   // never matched at level 3: on an LF file write_file applied it at level 4 unshifted beside "Verify the result.", and on a CRLF
   // file nothing matched (docs/defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md).

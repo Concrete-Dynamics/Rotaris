@@ -764,7 +764,7 @@ describe('a symbol rename is preceded by the referencing-symbol search of the sa
   });
 
   /*
-   * OQ-299 (ruled 2026-10-13 under R-072; PD-MCP-004 clause 4): a search that ends after the rename's whole allowance while the
+   * OQ-299 (ruled 2026-10-14 under R-072; PD-MCP-004 clause 4): a search that ends after the rename's whole allowance while the
    * run's cancel also holds is the allowance's — REQ-MCP-003's failed call, `timeout`, unsent — whether the search failed or
    * answered, in the order PD-TOOLS-013 revision 2 (c) gives the rename's own catch. Until the ruling the answered search read
    * the cancel first.

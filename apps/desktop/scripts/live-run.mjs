@@ -3347,7 +3347,7 @@ if (wanted.includes('empty-answer')) {
         if (!answered) noted(`${c.name}: the model wrote no answer when asked either`, 'the re-prompt reached it; its reply was empty');
       }
     }
-    // PD-ORCH-009 revision 5 (OQ-296, ruled 2026-10-13 under R-072): a parent's silent wait on its children is no stuck report.
+    // PD-ORCH-009 revision 5 (OQ-296, ruled 2026-10-14 under R-072): a parent's silent wait on its children is no stuck report.
     {
       const name = 'empty-wait';
       proxy.setFaults([{ kind: 'empty', when: [ROOT_MARK, DELEGATED_MARK], unless: [CLASSIFIER_MARK, REPORT_MARK], times: 1 }]);

@@ -508,7 +508,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
   });
 
   /*
-   * PD-ORCH-009 revision 4 (OQ-283, ruled 2026-10-13 under R-072), narrowing REQ-ORCH-104's stuck-mode clause: a delegated
+   * PD-ORCH-009 revision 4 (OQ-283, ruled 2026-10-14 under R-072), narrowing REQ-ORCH-104's stuck-mode clause: a delegated
    * child's empty turn that REQ-ORCH-095's single re-prompt answers is no stuck report. The run withdraws the stuck trigger that
    * turn armed before it sends the re-prompt, so the re-prompt is the last message of the request it leads to: no classification
    * is asked, no corrective follows it, and no stuck `loop_supervisor_activation` is written. Until revision 4 this case pinned
@@ -565,7 +565,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     });
 
     /*
-     * PD-ORCH-009 revision 5 (OQ-296, ruled 2026-10-13 under R-072), case (d): a parent's turn that ends with neither text nor a
+     * PD-ORCH-009 revision 5 (OQ-296, ruled 2026-10-14 under R-072), case (d): a parent's turn that ends with neither text nor a
      * call while a child of its is pending, or has ended with a report the parent has not seen, is REQ-ORCH-055's wait and no
      * stuck report. The run withdraws the stuck trigger that turn armed when it takes the parent into the wait, so the children's
      * reports are the only message the run adds for that turn. As found (revision 4 named it unchanged), the resumed request

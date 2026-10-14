@@ -2035,7 +2035,7 @@ export class Run {
         corrections += 1;
         this.deps.warn(`iteration ${iteration}: ${planNotDoneSummary(open)}; a correction is sent into its conversation (${corrections} of ${correctionLimit}, REQ-ORCH-078, PD-ORCH-015)`);
         const supervisor = this.deps.supervisorFor?.(this.rootId);
-        // PD-ORCH-009 revision 4 (OQ-284, ruled 2026-10-13 under R-072): the correction is the one message the run adds for the
+        // PD-ORCH-009 revision 4 (OQ-284, ruled 2026-10-14 under R-072): the correction is the one message the run adds for the
         // turn it follows, so a stuck trigger that turn armed is withdrawn (a repetition, cycle or raw-count one is kept).
         supervisor?.withdrawStuck();
         // REQ-ORCH-105: the correction is a todo-correction message, a new instruction that restarts the consecutive series.

@@ -328,7 +328,7 @@ for (const c of [{ name: 'answerless', script: 'silent,silent', told: true }, { 
 writeFileSync(join(output, 'answerless-observed.json'), `${JSON.stringify(answerless, null, 2)}\n`);
 
 /*
- * PD-ORCH-009 revision 4 (OQ-283 and OQ-284, ruled 2026-10-13 under R-072; fin44): the run's own follow-up is the only message
+ * PD-ORCH-009 revision 4 (OQ-283 and OQ-284, ruled 2026-10-14 under R-072; fin44): the run's own follow-up is the only message
  * it adds for the turn it follows, with loop supervision on. `silent-correction`: a coordinating root writes its plan with the
  * report item open, is silent, is asked once (`ANSWER_REPROMPT`), is silent again — a stuck report under REQ-ORCH-096 — and is
  * sent REQ-ORCH-078's plan correction; the correction is the last message before the root's next step, and no loop
@@ -378,7 +378,7 @@ for (const c of [
 writeFileSync(join(output, 'follow-ups-observed.json'), `${JSON.stringify(followUps, null, 2)}\n`);
 
 /*
- * PD-ORCH-009 revision 5, case (d) (OQ-296, ruled 2026-10-13 under R-072; fin45): a parent's turn that ends with neither text nor
+ * PD-ORCH-009 revision 5, case (d) (OQ-296, ruled 2026-10-14 under R-072; fin45): a parent's turn that ends with neither text nor
  * a call while a child of its is pending is REQ-ORCH-055's wait and no stuck report, with loop supervision on. `silent-wait`: a
  * coordinating root writes a plan of three items, then three times delegates one in the background and ends its turn silent;
  * each child's report resumes it. The report is the last message before the root's next step every time, no loop

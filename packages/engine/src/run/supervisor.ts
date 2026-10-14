@@ -130,7 +130,7 @@ export class LoopSupervisor {
   }
 
   /**
-   * PD-ORCH-009 revisions 3, 4 and 5 (OQ-282, OQ-283, OQ-284 and OQ-296, ruled 2026-10-13 under R-072),
+   * PD-ORCH-009 revisions 3, 4 and 5 (OQ-282 ruled 2026-10-13, OQ-283, OQ-284 and OQ-296 ruled 2026-10-14, under R-072),
    * narrowing REQ-ORCH-104's stuck-mode clause: when the run itself follows an empty turn up, the message it sends is the only one
    * it adds for that turn, and the stuck report the turn armed is withdrawn first, so no classification is asked and no corrective
    * message follows it. Four callers, one per case: `Run.turn`'s `correction()` before the entry role's answer re-prompt

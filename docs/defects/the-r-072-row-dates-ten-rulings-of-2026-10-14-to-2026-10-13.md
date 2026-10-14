@@ -9,8 +9,8 @@ written and built 2026-10-14 by fin45 (`fin45-supervision-and-quit`)" (`PD-ORCH-
 revision 2, OQ-298); "Ruled 2026-10-13, written and built 2026-10-14 by fin45 (`fin45-retro-and-record`)" (`PD-LIBRARY-002`
 revision 5, OQ-300); "Ruled 2026-10-13 with no directive, written and built 2026-10-14 by fin45" (OQ-299); and "Ruled
 2026-10-13 with no directive, recorded 2026-10-14 by fin45" (OQ-301 and OQ-302). Every one of them was ruled 2026-10-14, as
-their entries in `docs/architecture/open-questions.md` say once
-[`consortium-rulings-of-2026-10-14-are-dated-2026-10-13-before-their-questions-were-raised.md`](consortium-rulings-of-2026-10-14-are-dated-2026-10-13-before-their-questions-were-raised.md)
+their entries in `docs/architecture/open-questions.md` say, now that
+[`fixed/consortium-rulings-of-2026-10-14-are-dated-2026-10-13-before-their-questions-were-raised.md`](fixed/consortium-rulings-of-2026-10-14-are-dated-2026-10-13-before-their-questions-were-raised.md)
 is repaired. For OQ-298 the row is now the one place left that disagrees (acceptance finding C1 of fin46).
 
 The row is the orchestrator's to edit (`.agents/skills/orchestrated-build/references/repository.md`, "Not for workflow

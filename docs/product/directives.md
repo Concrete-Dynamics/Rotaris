@@ -1336,7 +1336,7 @@ replaced.*
 per-run history**: clause (h) is added to the revision-2 paragraph and REQ-LIBRARY-034 joins the Narrows line. Revision 2
 said nothing on the per-run history, so nothing is replaced.*
 
-*Revision 4 (2026-10-13, [R-072](requests.md#r-072), ruling [OQ-285](../architecture/open-questions.md#oq-285)) — **an empty
+*Revision 4 (2026-10-14, [R-072](requests.md#r-072), ruling [OQ-285](../architecture/open-questions.md#oq-285)) — **an empty
 artifact whose collector failed, and a timed-out retrospective**: one sentence is added at the end of clause (c), which points
 at [`PD-LIBRARY-005`](#pd-library-005). Revision 2's text of (c) stays otherwise word for word, so nothing is replaced.*
 
@@ -1529,12 +1529,14 @@ Revision 3 logged as [R-072](requests.md#r-072) (OQ-271), ruled by the consortiu
 2026-10-13: the per-run history holds post-run artifacts only, so REQ-LIBRARY-025 and REQ-LIBRARY-017 hold word for word for
 every run.
 Revision 4 logged as [R-072](requests.md#r-072) (OQ-285), ruled by the consortium under the owner's delegation on
-2026-10-13 and written 2026-10-14 by fin44 (`fin44-improvement-failures`): clause (c) points at `PD-LIBRARY-005` for an empty
+2026-10-14 and written the same day by fin44 (`fin44-improvement-failures`): clause (c) points at `PD-LIBRARY-005` for an empty
 artifact whose collector failed and for a timed-out retrospective. The Narrows and Extends lines are unchanged; REQ-LIBRARY-124's
 case is `PD-LIBRARY-005`'s, which names this directive.
 Revision 5 logged as [R-072](requests.md#r-072) (OQ-300), ruled by the consortium under the owner's delegation on
-2026-10-13 and written 2026-10-14 by fin45 (`fin45-retro-and-record`): the retrospective's authentication refusal names the
+2026-10-14 and written the same day by fin45 (`fin45-retro-and-record`): the retrospective's authentication refusal names the
 retrospective and opens Settings at Models.
+Revisions 4 and 5 were dated as ruled 2026-10-13 (and revision 4's header 2026-10-13) until fin46 (`fin46-accept1-12`)
+corrected them from the consortium's ruling record, which dates both sittings 2026-10-14.
 
 > **First execution of revision 2, 2026-10-13, ruled by [R-072](requests.md#r-072) (OQ-235) and built in plan fin34:** the
 > clause held as written. The run host's `SkillHost.retrospectiveInstructionFiles` keeps the `workspace:` entries of the
@@ -5933,14 +5935,14 @@ which narrows REQ-ORCH-104's stuck-mode clause for the one turn the re-prompt an
 it, unchanged; everything else stands as revisions 1 and 2 wrote it.*
 
 *Revision 4 (2026-10-14, [R-072](requests.md#r-072), ruling [OQ-283](../architecture/open-questions.md#oq-283) and
-[OQ-284](../architecture/open-questions.md#oq-284), both ruled by the consortium on 2026-10-13) — **the run's own follow-up
+[OQ-284](../architecture/open-questions.md#oq-284), both ruled by the consortium and written on 2026-10-14) — **the run's own follow-up
 is the only message it adds for the turn it follows**: revision 3's last sentence is replaced and its case widened from the
 entry role's re-prompted turn to three turns — that one, a delegated child's empty turn that REQ-ORCH-095's re-prompt answers
 (OQ-283), and an execution iteration's root turn that REQ-ORCH-078's plan correction follows (OQ-284). Revision 3's replaced
 sentence and its case are quoted beside their replacements; everything else stands as revisions 1 to 3 wrote it.*
 
 *Revision 5 (2026-10-14, [R-072](requests.md#r-072), ruling [OQ-296](../architecture/open-questions.md#oq-296), ruled by the
-consortium on 2026-10-13) — **a parent's silent wait on its children is no stuck report**: the case is widened by a fourth turn,
+consortium and written on 2026-10-14) — **a parent's silent wait on its children is no stuck report**: the case is widened by a fourth turn,
 (d), a parent's empty turn the run follows by waiting and resuming the parent with its children's reports (REQ-ORCH-055..057).
 Revision 4's two sentences that named this turn as governed by REQ-ORCH-104 as written — "a root resumed with a child's report
 after an empty turn among them" and "a root's empty turn the run follows with a child's report included" — are replaced, and
@@ -6048,11 +6050,13 @@ so the consecutive series is not reset) and REQ-ORCH-106 (the escalation, unchan
 
 *Raised by the owner, 2026-10-06, ruling OQ-199 as recommended; logged as [R-071](requests.md#r-071). Revision 3 ruled under
 the owner's delegation, 2026-10-13; logged under [R-072](requests.md#r-072), the ruling of
-[OQ-282](../architecture/open-questions.md#oq-282) (the consortium's E1). Revision 4 ruled under the owner's delegation,
-2026-10-13, and written 2026-10-14; logged under [R-072](requests.md#r-072), the rulings of
+[OQ-282](../architecture/open-questions.md#oq-282) (the consortium's E1). Revision 4 ruled under the owner's delegation
+and written, both 2026-10-14; logged under [R-072](requests.md#r-072), the rulings of
 [OQ-283](../architecture/open-questions.md#oq-283) and [OQ-284](../architecture/open-questions.md#oq-284). Revision 5 ruled
-under the owner's delegation, 2026-10-13, and written 2026-10-14; logged under [R-072](requests.md#r-072), the ruling of
-[OQ-296](../architecture/open-questions.md#oq-296).*
+under the owner's delegation and written, both 2026-10-14; logged under [R-072](requests.md#r-072), the ruling of
+[OQ-296](../architecture/open-questions.md#oq-296). Revisions 4 and 5 read "ruled … 2026-10-13, and written 2026-10-14" until
+2026-10-14, a day before their questions were raised; corrected by fin46 (`fin46-accept1-12`) from the consortium's ruling
+record, which dates both sittings 2026-10-14 (by 04:58 and by 10:14 UTC).*
 
 *Renumbered before landing: built as `PD-ORCH-006` on its branch, it took the next free number, `PD-ORCH-009`, when
 `PD-ORCH-006` to `PD-ORCH-008` (OQ-202, OQ-119, OQ-116) landed on `main` first; its citations followed.*
@@ -7685,7 +7689,8 @@ REQ-NOTIFY-254, `PD-CONFIG-003` revision 2 and OQ-223 are cited and not changed.
 
 > **Narrows:** REQ-LIBRARY-124
 
-*Ruled under the owner's delegation, 2026-10-13 ([OQ-285](../architecture/open-questions.md#oq-285)); logged as
+*Ruled under the owner's delegation, 2026-10-14 ([OQ-285](../architecture/open-questions.md#oq-285); dated 2026-10-13 until fin46
+corrected it from the consortium's ruling record); logged as
 [R-072](requests.md#r-072). Narrows REQ-LIBRARY-124 for both passes. Comes with `PD-LIBRARY-002` revision 4, ruled with it, which
 names this directive in its clause (c). `PD-CONFIG-003` revision 2 is unchanged. The build's reading, kept as the falsified one:
 an empty artifact whose collector crashed or could not be parsed posts the zero-proposal info notice and "Nothing was proposed in
@@ -9059,7 +9064,8 @@ departs from an implementation built from the specification alone, which shifts 
 
 > **Narrows:** REQ-TOOLS-136
 
-*Ruled under the owner's delegation, 2026-10-13 ([OQ-295](../architecture/open-questions.md#oq-295)); logged as
+*Ruled under the owner's delegation, 2026-10-14 ([OQ-295](../architecture/open-questions.md#oq-295); dated 2026-10-13 until fin46
+corrected it from the consortium's ruling record); logged as
 [R-072](requests.md#r-072). Narrows REQ-TOOLS-136 at level 3 only. Comes with `PD-TOOLS-014` revision 4 and `PD-TOOLS-016`
 revision 4, ruled with it; names `PD-TOOLS-015`, `PD-TOOLS-017` and `PD-TOOLS-019`, the other narrowings of REQ-TOOLS-136, each
 carrying an in-place note where its text meets this one. The build's reading, kept as the falsified one: a blank line takes part

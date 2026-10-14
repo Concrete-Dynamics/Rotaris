@@ -1011,7 +1011,7 @@ export class IterationChildren implements DelegationOps {
         continue;
       }
       /*
-       * PD-ORCH-009 revision 5, case (d) (OQ-296, ruled 2026-10-13 under R-072), narrowing REQ-ORCH-104's stuck-mode clause: a
+       * PD-ORCH-009 revision 5, case (d) (OQ-296, ruled 2026-10-14 under R-072), narrowing REQ-ORCH-104's stuck-mode clause: a
        * parent's turn that ended with neither text nor a call while a child of its is pending, or ended unobserved, is
        * REQ-ORCH-055's wait and no stuck report. The stuck trigger that turn armed is withdrawn as the parent is taken into the
        * wait, so its children's reports are the only message the run adds for that turn. Unconditional: only a pending `stuck`
@@ -1478,7 +1478,7 @@ export class IterationChildren implements DelegationOps {
           // PD-ORCH-005 clause 2: no model call once the run is coming to rest — the re-prompt waits for the resume.
           if (this.resting) rePromptOwed = true;
           else {
-            // PD-ORCH-009 revision 4 (OQ-283, ruled 2026-10-13 under R-072), narrowing REQ-ORCH-104's stuck-mode clause: the
+            // PD-ORCH-009 revision 4 (OQ-283, ruled 2026-10-14 under R-072), narrowing REQ-ORCH-104's stuck-mode clause: the
             // empty turn this re-prompt answers is no stuck report, so the re-prompt is the one message the run adds for it —
             // no classification, corrective or stuck activation follows it. Only a pending `stuck` trigger is withdrawn; the
             // implementer's text-only turn arms none, so for it this does nothing.

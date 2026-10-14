@@ -77,6 +77,11 @@ Rotaris presents a single main desktop window containing seven primary views sel
   > runs is declined with "Finish the active run before opening another project." as before. Gates (1) and (2), their order,
   > and every other clause above still govern. Its case is disjoint from `PD-SHELL-001`'s, the add-a-window gestures, on
   > which no gate is evaluated. Written under [OQ-237](../architecture/open-questions.md), as OQ-206's ruling named it.
+  >
+  > **Narrowed by [`PD-SHELL-010`](../product/directives.md#pd-shell-010), 2026-10-14.** Gate (1) is asked of the requesting
+  > window's renderer; a renderer that cannot answer — gone, failing main's 5 s liveness probe, or reported `unresponsive` —
+  > passes gate (1), and gates (2) and (3) are evaluated as written. Its case is disjoint from `PD-SHELL-001`'s and
+  > `PD-SHELL-009`'s. Written under [OQ-297](../architecture/open-questions.md#oq-297).
 
 ### Main window structure
 
@@ -253,6 +258,11 @@ Rotaris presents a single main desktop window containing seven primary views sel
   > **Extended by [`PD-SHELL-003`](../product/directives.md#pd-shell-003), revised 2026-09-24.** The guards above and
   > their order govern in full; the close control the product draws in the main window's title bar enters this same
   > close flow. Written 2026-10-07 ([OQ-222](../architecture/open-questions.md)).
+  >
+  > **Narrowed by [`PD-SHELL-010`](../product/directives.md#pd-shell-010), 2026-10-14.** Guard (1) is asked of the window's
+  > renderer, and a renderer that cannot answer it — gone, failing main's 5 s liveness probe, or reported `unresponsive` while
+  > the question is out — allows: the close proceeds without guard (1), and a person's close still meets guard (3). A renderer
+  > that answers the probe is waited for without bound. Written under [OQ-297](../architecture/open-questions.md#oq-297).
 - **REQ-SHELL-120**: Once the guards pass, the window is committed to closing: no new background work may start on the closing window.
 - **REQ-SHELL-121**: Shutdown is clean and complete, and is checkable from outside the process. Active runs are asked to stop before the process ends, and no run keeps consuming a model provider afterwards. Once the last main window has gone, no persona window, artifact dialog or terminal window is left on screen — the one running instance may hold several main windows at once (REQ-STARTUP-161), and closing one takes only its own auxiliary windows with it (REQ-SHELL-123). A diagnostics run that was in progress leaves a complete, readable diagnostics directory rather than a truncated one. An update download that was in progress leaves behind no partially written and no locked file. The shutdown itself raises no error dialog and produces no crash report.
 - **REQ-SHELL-169**: A launch of the application that arrives while this instance is shutting down SHALL be refused rather than admitted, and SHALL be honoured once the shutdown has finished. Shutting down means the interval that begins when the ordered shutdown effects REQ-MONITOR-131 fixes begin and ends when the process ends, the force-exit allowance that requirement carries included; this document holds no copy of that allowance. Throughout that interval the instance SHALL build no window for the launch, SHALL open no workspace for it, and SHALL start and write nothing on its behalf — in particular the window REQ-STARTUP-162 would otherwise have an instance with no window open build for a launch SHALL NOT be built while this interval is running. Admitting the launch would mean two instances of the application briefly existed, which REQ-STARTUP-161 exists to prevent, at the moment the product is least able to reason about its own state; refusing is also the shape REQ-STARTUP-161 already has, since a launch never starts a rival process.
@@ -268,6 +278,10 @@ Rotaris presents a single main desktop window containing seven primary views sel
   > runs active in the window's own workspace; at the last main window's close it is the instance's.
 - **REQ-SHELL-123**: Auxiliary windows (persona, terminal) belong to their main window and are destroyed with it even if an explicit close was missed; a terminal window that outlives its stream attachment shows retained screens read-only.
 - **REQ-SHELL-124**: The unsaved-settings dialog is a warning titled "Unsaved settings" asking "Save workspace settings before leaving?" with the informative line "Discard restores the last saved values." and buttons Save (default), Discard (destructive), Cancel. Save proceeds only if saving succeeds (a failed save blocks the transition); Discard restores the saved values and proceeds; Cancel blocks. The same gate protects leaving the Settings view, opening another workspace, and closing the window.
+  > **Narrowed by [`PD-SHELL-010`](../product/directives.md#pd-shell-010), 2026-10-14.** At a window's close (and at
+  > REQ-SHELL-021's gate 1) the dialog is the renderer's: a renderer that cannot answer — gone, failing main's 5 s liveness
+  > probe, or reported `unresponsive` — raises none and blocks nothing, and the close or the quit proceeds. Leaving the
+  > Settings view is unchanged. Written under [OQ-297](../architecture/open-questions.md#oq-297).
 
 ### Sessions: new, browse, focus
 

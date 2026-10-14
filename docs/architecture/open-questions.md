@@ -14492,3 +14492,73 @@ and waits has nothing to say until a report comes — REQ-ORCH-055's wait), whet
 revision 4's three follow-ups do, or whether both stand. **The costs:** withdrawing it makes a waiting root's silence free and
 leaves a root that is truly stuck to REQ-ORCH-102's counter on a later turn; keeping it puts "Pause and reassess" after the
 report the root was waiting for and spends a classification.
+
+<a id="oq-297"></a>
+
+**OQ-297 — When can a main window's renderer that is alive not answer its close guard?** *(REQ-SHELL-119 guard (1), "with
+unsaved settings present, a user-initiated close raises the save/discard/cancel dialog of REQ-SHELL-124"; REQ-SHELL-124's close
+case; REQ-SHELL-021 gate (1); REQ-SHELL-121's quit; [`PD-SHELL-009`](../product/directives.md#pd-shell-009)'s last case, a quit
+that starts outside any window; PD-ORCH-005 clause 9, the quit that asks every main window's guard before confirming any.
+Raised by the orchestrator's consortium as HR1 from
+[`../defects/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`](../defects/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md),
+which asked that "whether Chromium's `unresponsive` judgement is that point" be raised with the repair and not decided in it;
+entered 2026-10-14 by fin44 (`fin44-hang-and-seams`) at the first free number of the plan's range, OQ-296 to OQ-310 — renumbered
+at landing if a sibling took it first.)*
+
+**What is open.** A main window's close guard is the renderer's own (`window.__rotarisCloseGuard`, asked by `executeJavaScript`
+through `askRendererGuard`, `apps/desktop/src/main/main-windows.ts`), and `guardClose` documents that a guard that cannot answer
+allows. Since 2026-10-14 a renderer that is **gone** (crashed, killed, its contents destroyed) cannot answer, so its question
+rejects at once or the moment it goes (fin43, built without a directive:
+[`../defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`](../defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md)).
+A renderer that is alive but **hung** — its main thread in an endless loop or stopped — is not gone: the question is sent and
+never answered, nothing bounds the wait, and both a person's close of that window and the application's quit
+(`closeThroughGuards`, `apps/desktop/src/main/exit.ts`), a SIGTERM's included, are held until it recovers or the process is
+killed. No time bound on the question itself is admissible: the guard may be waiting on a person's Save/Discard/Cancel
+(REQ-SHELL-124), which no bound may answer for. The question is when a renderer that is still alive "cannot answer".
+
+**What the build proceeded under.** The letter: a live renderer is waited for with no bound.
+
+**Ruled 2026-10-14 under the owner's delegation ([R-072](../product/requests.md#r-072)), the consortium's HR1** (advocate B's
+recommendation followed — main's own liveness probe, separate from the guard's question — with one point of advocate A's folded
+in: Chromium's `unresponsive` event, which A took for the point itself, is kept as a second signal). A main window's renderer
+cannot answer its close guard when it is **gone**, when it **fails main's liveness probe** — no reply within 5 s
+(`RENDERER_LIVENESS_BOUND_MS`) to a trivial question main repeats for as long as the guard's question is out — or when Chromium
+emits **`unresponsive`** for it while the question is out. A guard that cannot answer allows, so the close or the quit proceeds
+without guard (1). A person's close still meets guard (3)'s native active-run box (REQ-SHELL-119, as `PD-SHELL-009` narrows it);
+a quit that starts outside any window asks nothing more; and a renderer that answers the probe is waited for with no bound,
+because its guard is a person's Save/Discard/Cancel. Recorded as [`PD-SHELL-010`](../product/directives.md#pd-shell-010),
+narrowing REQ-SHELL-119, REQ-SHELL-124 and REQ-SHELL-021 and noted under `PD-SHELL-009`'s last case; it also gives fin43's
+gone-renderer rule its record home. It adds no dialog and no string.
+
+**What the ruling leaves open.** A live, answering renderer with unsaved settings met by a quit from outside any window (a
+signal, a logout where Electron emits `before-quit`) still waits without bound on a person's Save/Discard/Cancel under
+`PD-SHELL-009`: raised apart as [OQ-298](#oq-298).
+
+<a id="oq-298"></a>
+
+**OQ-298 — Does a quit from outside any window wait without bound on a person's answer to the unsaved-settings guard?**
+*(REQ-SHELL-119 guard (1), "a **user-initiated** close raises the save/discard/cancel dialog"; REQ-SHELL-124; REQ-SHELL-121, "Shutdown
+is clean and complete"; [`PD-SHELL-009`](../product/directives.md#pd-shell-009)'s last case, "it asks only the renderer's
+unsaved-settings guard"; [`PD-SHELL-010`](../product/directives.md#pd-shell-010); PD-ORCH-005 clause 9. Raised 2026-10-14 by fin44
+(`fin44-hang-and-seams`) as [OQ-297](#oq-297)'s ruling asked: the residual it does not decide. The plan's range OQ-296 to OQ-310,
+the next free number on this branch — renumbered at landing if a sibling took it first. Open.)*
+
+**What is open.** A quit that starts outside any window — SIGTERM, the desktop's logout where Electron emits `before-quit`, the
+driver's or the capture's quit — is turned into every main window's guarded close (`closeThroughGuards`), and asks the renderer's
+unsaved-settings guard. With settings unsaved, that guard raises REQ-SHELL-124's Save/Discard/Cancel dialog in the window and
+waits for a person. `PD-SHELL-010` releases the wait only when the renderer cannot answer; a renderer that answers its liveness
+probe is waited for without bound, so a SIGTERM sent to an unattended application with unsaved settings holds the quit, and the
+run host is never asked to `shutdown`, until someone answers the dialog or the process is killed. REQ-SHELL-119's guard (1) is
+written for a **user-initiated** close; a signal is not one, but the quit's guarded close (PD-ORCH-005 clause 9) asks it all the
+same, and PD-SHELL-009's last case states it does.
+
+**What the build proceeds under.** As built and as `PD-SHELL-009` states: the quit asks the guard and waits on the person's
+answer, with no bound, while the renderer answers its probe.
+
+**What a ruling decides.** Whether a quit that no person started asks the unsaved-settings guard at all (the settings then
+discarded, or saved, unasked), asks it with a bound past which the quit proceeds (and which answer the bound stands for), or
+keeps waiting as built. **The costs:** not asking loses or silently writes a person's unsaved edits at a signal they may not have
+sent themselves; a bound answers for a person who may be at the screen; waiting keeps an unattended application, and its runs,
+alive past a shutdown the desktop asked for.
+
+**What a live run then shows.** Nothing: the live run does not leave settings unsaved, and no scenario quits by a signal.

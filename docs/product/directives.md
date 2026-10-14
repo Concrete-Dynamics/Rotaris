@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Ninety-three.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Ninety-four.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -6747,7 +6747,11 @@ first, after REQ-SHELL-119's earlier guards. Which close asks what:
   Cancel there discards the replacement (REQ-STARTUP-047).
 - **A quit that starts outside any window** — a signal, the end of the desktop session where Electron emits `before-quit`,
   the driver's or the capture's quit — asks no active-run confirmation, as built; it asks only the renderer's
-  unsaved-settings guard, and its shutdown leaves the runs as PD-ORCH-005 clause 3 says.
+  unsaved-settings guard, and its shutdown leaves the runs as PD-ORCH-005 clause 3 says. *Since 2026-10-14
+  ([`PD-SHELL-010`](#pd-shell-010), [OQ-297](../architecture/open-questions.md#oq-297)) it asks that guard only while the
+  renderer can answer: a renderer that is gone, fails main's liveness probe or is reported `unresponsive` cannot, its guard
+  allows, and the quit goes on asking nothing more. A renderer that answers its probe is still waited for without bound
+  ([OQ-298](../architecture/open-questions.md#oq-298), open).*
 
 **As built.** `confirmActiveRunClose`, `activeRunCloseBox` and `windowCloseBox` (`apps/desktop/src/main/close-confirmation.ts`),
 wired in `confirmRunsAtClose` (`apps/desktop/src/main/index.ts`), which awaits the run host's `runs.stopWorkspace` before the
@@ -6830,6 +6834,59 @@ gestures on which no gate is evaluated.*
 > ([`a-windows-logout-skips-the-orderly-shutdown.md`](../defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md)); the
 > Windows run that shows it is owed. **Still not measured:** the unshown-approval report in the built app (no proof queues a
 > second approval behind an open dialog); a Windows host.
+
+---
+
+<a id="pd-shell-010"></a>
+
+### PD-SHELL-010 — a main window's renderer that is gone or does not answer a liveness probe cannot answer its close guard, and a guard that cannot answer allows
+
+A main window's close guard (REQ-SHELL-119 guard (1), the renderer's unsaved-settings guard, REQ-SHELL-124) is asked of the
+window's renderer. That renderer **cannot answer** the guard when any of these holds while the guard's question is out:
+
+- **it is gone** — its process crashed or was killed, or its contents were destroyed, before the question was sent or while it
+  was out;
+- **it fails main's liveness probe** — main sends the renderer a trivial question of its own when it sends the guard's question,
+  and again each time `RENDERER_LIVENESS_BOUND_MS` (5,000 ms) elapses with the previous one answered; a probe left unanswered at
+  that bound fails;
+- **Chromium emits `unresponsive`** for the renderer's contents.
+
+**A guard that cannot answer allows**: the close or the quit proceeds without guard (1). Main writes at `warn` which signal it
+was. Nothing else changes:
+
+- a **person's close** of the window still meets guard (3)'s native active-run box, as `PD-SHELL-009` narrows REQ-SHELL-119 (the
+  box is main's, not the renderer's, and is asked as before);
+- a **quit that starts outside any window** (`PD-SHELL-009`'s last case) asks nothing more;
+- a renderer that **answers the probe** is waited for **with no bound**, because its guard is a person's Save/Discard/Cancel,
+  which no time may answer for;
+- REQ-SHELL-021 gate (1) asks the same question on the same terms: a renderer that cannot answer passes gate (1), and gates (2)
+  and (3) are evaluated as written.
+
+It adds no dialog and no string. Every listener and timer the question arms is removed when the question settles, whichever way
+it settles, and a late answer is ignored.
+
+**As built.** `askRendererGuard` and `RENDERER_LIVENESS_BOUND_MS` (`apps/desktop/src/main/main-windows.ts`), over the main-window
+timers port; asked by the window's own close guard (`guardClose`, wired in `createElectronMainWindowAdapter`) and by main's
+`closeGuard` for REQ-SHELL-021's gate 1 (`apps/desktop/src/main/index.ts`). The application's quit drives the same guard through
+`closeThroughGuards` (`apps/desktop/src/main/exit.ts`), unchanged.
+
+**Why, and what it costs.** OQ-297 (the consortium's HR1), ruled 2026-10-14 under the owner's delegation (R-072). Before it, a
+renderer that was alive but hung held a person's close of its window and the application's quit — a SIGTERM's included — with no
+answer and no bound ([`a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`](../defects/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md)).
+A bound on the guard's question itself would answer for a person deciding; a bound on a question that needs no person does not.
+The gone case was built by fin43 on 2026-10-14 without a directive
+([`a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`](../defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md));
+this directive is its record home. What it costs: a renderer busy for more than 5 s on its main thread while its window is being
+closed — a long synchronous task, not a person deciding — loses its guard, so unsaved settings in it are not offered for saving;
+and an answering renderer with unsaved settings still holds a quit from outside any window on a person's answer
+([OQ-298](../architecture/open-questions.md#oq-298), raised apart, not decided here). This directive's cases are disjoint from
+`PD-SHELL-009`'s (guard (3) and gate (3)'s count) and from `PD-SHELL-001`'s (the add-a-window gestures, on which no gate is
+evaluated): it narrows only guard (1) and gate (1), when the renderer cannot answer.
+
+> **Narrows:** REQ-SHELL-119, REQ-SHELL-124, REQ-SHELL-021
+
+*Raised by the consortium under the owner's delegation, 2026-10-14; logged as [R-072](requests.md#r-072), the ruling of
+[OQ-297](../architecture/open-questions.md#oq-297) (HR1; advocate B followed, one point from advocate A folded in).*
 
 ---
 

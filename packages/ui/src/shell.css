@@ -1556,7 +1556,13 @@
 @media (prefers-reduced-motion: reduce) { .checkpoint-dialog__bar-fill { animation: none; width: 100%; } }
 .checkpoint-dialog--confirm { width: min(720px, 100%); min-width: 560px; min-height: 400px; display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); }
 .checkpoint-dialog__summary { white-space: pre-wrap; overflow-wrap: anywhere; }
-.checkpoint-dialog__preview { width: 100%; resize: vertical; white-space: pre; overflow: auto; font-size: var(--rt-text-sm, 13px); line-height: 1.5; }
+/* REQ-GIT-097 / REQ-GIT-152: REQ-GIT-064's text in a read-only MONOSPACE field, its paths aligned after a 9-character verb
+   column. The field is a `textarea.input`, and the adopted `textarea.input { font-family: inherit }`
+   (`docs/design/system/components.css`, specificity 0,1,1) outranks a single class (0,1,0): written as
+   `.checkpoint-dialog__preview` beside `.mono`, the face lost to it and the preview drew in the dialog's proportional face
+   (docs/defects/fixed/the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md). Two classes (0,2,0)
+   outrank it, the shape the artifact inspector's editor took. */
+.checkpoint-dialog .checkpoint-dialog__preview { width: 100%; resize: vertical; white-space: pre; overflow: auto; font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); font-size: var(--rt-text-sm, 13px); line-height: 1.5; }
 .checkpoint-dialog__warning { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); padding: var(--rt-space-3, 12px); border: 1px solid var(--rt-warn); border-radius: var(--rt-radius-md); }
 .checkpoint-dialog__warning-text { margin: 0; color: var(--rt-warn); overflow-wrap: anywhere; }
 .checkpoint-dialog__check { display: flex; align-items: center; gap: var(--rt-space-2, 8px); cursor: pointer; }

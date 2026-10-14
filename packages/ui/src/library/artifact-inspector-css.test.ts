@@ -2,12 +2,14 @@ import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { cascadeOf, classesOf, type CascadeElement } from '../css-cascade.js';
 import { ArtifactInspector, type ArtifactLoaded } from './ArtifactInspector.js';
 
 /*
  * What the renderer's stylesheets give the artifact inspector, read the way the cascade reads them: every sheet
  * `apps/desktop/src/renderer/design.css` imports, in its order, each rule's selector matched against the inspector's own
- * markup and ranked by specificity, then by order. A class written on the element is no promise that it wins.
+ * markup and ranked by specificity, then by order (`../css-cascade.ts`, shared with the restore confirmation's test since
+ * 2026-10-14). A class written on the element is no promise that it wins.
  */
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf8');
 const SHEETS = [
@@ -18,85 +20,8 @@ const SHEETS = [
 ];
 const SPACING = read('../../../../docs/design/system/tokens/spacing.css');
 
-interface Element { readonly tag: string; readonly classes: readonly string[] }
-interface Declaration { readonly value: string; readonly important: boolean; readonly specificity: readonly [number, number, number]; readonly order: number; readonly selector: string }
-
-/** A compound of a type and classes (`textarea.input`, `.mono`); null for anything else, which this reading does not rank. */
-const compound = (text: string): { tag: string | null; classes: string[] } | null => {
-  const m = /^([a-z][a-z0-9-]*|\*)?((?:\.[A-Za-z0-9_-]+)*)$/.exec(text);
-  if (!m || text === '') return null;
-  return { tag: m[1] === undefined || m[1] === '*' ? null : m[1], classes: (m[2] ?? '').split('.').filter(Boolean) };
-};
-
-/** Whether `selector` matches the last element of `chain` (outermost first); null when the selector is not one this reads. */
-const matches = (selector: string, chain: readonly Element[]): { specificity: [number, number, number] } | null => {
-  const parts = selector.trim().replace(/\s*>\s*/g, ' > ').split(/\s+/);
-  const compounds: { c: NonNullable<ReturnType<typeof compound>>; child: boolean }[] = [];
-  let child = false;
-  for (const part of parts) {
-    if (part === '>') { child = true; continue; }
-    const c = compound(part);
-    if (!c) return null;
-    compounds.push({ c, child });
-    child = false;
-  }
-  const fits = (c: NonNullable<ReturnType<typeof compound>>, e: Element): boolean =>
-    (c.tag === null || c.tag === e.tag) && c.classes.every((k) => e.classes.includes(k));
-  let at = chain.length - 1;
-  const last = compounds[compounds.length - 1];
-  if (!last || !fits(last.c, chain[at]!)) return null;
-  for (let i = compounds.length - 2; i >= 0; i -= 1) {
-    const next = compounds[i + 1]!;
-    const want = compounds[i]!.c;
-    if (next.child) {
-      at -= 1;
-      if (at < 0 || !fits(want, chain[at]!)) return null;
-    } else {
-      let found = -1;
-      for (let j = at - 1; j >= 0; j -= 1) if (fits(want, chain[j]!)) { found = j; break; }
-      if (found < 0) return null;
-      at = found;
-    }
-  }
-  const classes = compounds.reduce((n, { c }) => n + c.classes.length, 0);
-  const types = compounds.reduce((n, { c }) => n + (c.tag === null ? 0 : 1), 0);
-  return { specificity: [0, classes, types] };
-};
-
-/** Every declaration of `property` (or of a shorthand that sets it) that reaches the last element of `chain`. */
-const declarations = (chain: readonly Element[], property: string, shorthand?: string): Declaration[] => {
-  const found: Declaration[] = [];
-  let order = 0;
-  for (const sheet of SHEETS) {
-    const css = sheet.replace(/\/\*[\s\S]*?\*\//g, '');
-    for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      order += 1;
-      const body = m[2] ?? '';
-      const decl = new RegExp(`(?:^|;)\\s*(${property}${shorthand ? `|${shorthand}` : ''})\\s*:\\s*([^;]+)`, 'g');
-      const values = [...body.matchAll(decl)].map((d) => (d[2] ?? '').trim());
-      if (values.length === 0) continue;
-      for (const selector of (m[1] ?? '').split(',')) {
-        const hit = matches(selector, chain);
-        if (!hit) continue;
-        for (const raw of values) {
-          const important = /!important\s*$/.test(raw);
-          found.push({ value: raw.replace(/\s*!important\s*$/, ''), important, specificity: hit.specificity, order, selector: selector.trim() });
-        }
-      }
-    }
-  }
-  return found;
-};
-
-const rank = (a: Declaration, b: Declaration): number => {
-  if (a.important !== b.important) return a.important ? 1 : -1;
-  for (let i = 0; i < 3; i += 1) if (a.specificity[i] !== b.specificity[i]) return a.specificity[i]! - b.specificity[i]!;
-  return a.order - b.order;
-};
-const winner = (chain: readonly Element[], property: string, shorthand?: string): Declaration | undefined =>
-  declarations(chain, property, shorthand).sort(rank).at(-1);
-
-const classesOf = (html: string, pattern: RegExp): string[] => (pattern.exec(html)?.[1] ?? '').split(/\s+/).filter(Boolean);
+type Element = CascadeElement;
+const { declarations, winner } = cascadeOf(SHEETS);
 
 describe('REQ-LIBRARY-132: the inspector\'s Markdown editor is drawn in the measured monospace face', () => {
   // docs/defects/fixed/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md: the adopted

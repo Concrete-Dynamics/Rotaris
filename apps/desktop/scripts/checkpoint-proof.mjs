@@ -92,6 +92,9 @@ async function launch(name, workspace, local, preferences, extra, timeoutMs = 15
   return { png, log, probes, shots };
 }
 const text = (probes, selector) => (probes[selector] ?? []).map((p) => p.text);
+/** The computed font family of the restore preview field, as the eval-at seam logs it; null where the field was not up. */
+const PREVIEW_FACE = "(() => { const el = document.querySelector('[data-testid=checkpoint-preview-text]'); return el === null ? null : getComputedStyle(el).fontFamily; })()";
+const previewFace = (log) => { const m = /capture: eval-at \d+ .*checkpoint-preview-text.* → (.*)$/m.exec(log); try { return m ? JSON.parse(m[1]) : null; } catch { return null; } };
 const first = (probes, selector) => (probes[selector] ?? [])[0] ?? null;
 const ckptRows = (probes) => probes['[data-testid="git-checkpoint-row"]'] ?? [];
 const fold = (p) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
@@ -234,6 +237,9 @@ const restored = await launch('restore', workspace, local, preferences, {
   ROTARIS_CAPTURE_VIEW: '5',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="git-checkpoint-row"][data-sequence="1"]@3500;;[data-testid="git-restore"]@4200;;[data-testid="checkpoint-overwrite"]@9500;;[data-testid="checkpoint-restore-confirm"]@10200',
   ROTARIS_CAPTURE_SHOT: `${dialogPng}@9000`,
+  // REQ-GIT-097 / REQ-GIT-152: the face the preview field is drawn in, read where the cascade settles it — in the renderer, while
+  // the dialog is up (docs/defects/fixed/the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md).
+  ROTARIS_CAPTURE_EVAL_AT: `${PREVIEW_FACE}@9000`,
   ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '17000',
 });
 {
@@ -250,6 +256,9 @@ const restored = await launch('restore', workspace, local, preferences, {
   const confirmButton = first(s, '[data-testid="checkpoint-restore-confirm"]');
   if (!confirmButton || confirmButton.data['aria-disabled'] !== 'true' || confirmButton.data['title'] !== 'Confirm that the uncommitted changes above may be overwritten first.') throw new Error(`the confirm button before consent: ${JSON.stringify(confirmButton)}`);
   if (!existsSync(dialogPng)) throw new Error('the dialog PNG was not captured');
+  // The proportional face the dialog inherits names no monospace family; the token's first family is the measured mono face.
+  const face = previewFace(restored.log);
+  if (face === null || !/^"?JetBrains Mono"?\s*,/.test(face)) throw new Error(`the preview field is drawn in ${JSON.stringify(face)}, not the monospace face`);
   // After the confirm: the file, the safety checkpoint, the record, the notice.
   if (readFileSync(join(workspace, 'NOTES.md'), 'utf8') !== NOTES_ORIGINAL) throw new Error(`NOTES.md after the restore:\n${readFileSync(join(workspace, 'NOTES.md'), 'utf8')}`);
   const rows = checkpointsOf(sid);
@@ -271,7 +280,7 @@ const restored = await launch('restore', workspace, local, preferences, {
   if (!body.includes('1 file changed. Safety checkpoint 3 holds the pre-restore state.')) throw new Error(`the notice body reads "${body}"`);
   const painted = ckptRows(restored.probes);
   if (painted.length !== 3 || painted[2].data['data-kind'] !== 'pre_restore') throw new Error(`the card after the restore: ${JSON.stringify(painted.map((p) => p.text))}`);
-  results.restore = { preview: previewLine(restored.log), restore: restoreLine(restored.log), safetyCommit: rows[2].commit_id, lastRestored: 1, notice: 'Restored checkpoint 1', dialogPng, png: restored.png };
+  results.restore = { preview: previewLine(restored.log), restore: restoreLine(restored.log), safetyCommit: rows[2].commit_id, lastRestored: 1, notice: 'Restored checkpoint 1', previewFace: face, dialogPng, png: restored.png };
 }
 
 // 5. Retention: max_per_session 2; the next iteration trims rows 1 and 2 and their refs. The restored NOTES.md is committed

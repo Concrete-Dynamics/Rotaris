@@ -33,4 +33,4 @@ no grip.
 
 **Found along the way, recorded rather than repaired:** the restore confirmation's preview field carries `input mono` too and
 meets the same cascade
-([`../the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md`](../the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md)).
+([`the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md`](the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md); repaired by fin45 on 2026-10-14 over the cascade reading this repair made, now `packages/ui/src/css-cascade.ts`).

@@ -1124,8 +1124,11 @@ function checkCoordinatorTodo() {
         const todo = db.prepare('SELECT todo FROM sessions WHERE session_id = ?').get(sessionId)?.todo ?? null;
         // PD-TOOLS-006 revision 6 (OQ-220): the item each child served (`children.todo_item`, store v34).
         const children = db.prepare('SELECT task_id, canonical_name, persona, parent_id, depth, todo_item, spawned_at, completed_at, todo FROM children WHERE session_id = ? ORDER BY spawned_at, rowid').all(sessionId);
+        // Each run of a child, from its timeline (finding L2): a `session_id` follow-up clears `completed_at`, so the row alone
+        // cannot say when a followed-up child held its item (`holdingWindows`).
+        const timeline = db.prepare("SELECT ordinal, at, name, metadata FROM timeline WHERE session_id = ? AND name IN ('child_start', 'child_end', 'child_resumed') ORDER BY ordinal").all(sessionId);
         const listed = calls.find((c) => rootNames.includes(c.agent_name) && c.tool_name === 'todo' && c.status === 'ok');
-        return { scenario, rootNames, calls, agentPlanTasks: agentPlanTaskCount(todo), listedAt: listed?.endedAt ?? null, rootPlanIds: planItemIds(rootAgentPlan(todo)), children,
+        return { scenario, rootNames, calls, agentPlanTasks: agentPlanTaskCount(todo), listedAt: listed?.endedAt ?? null, rootPlanIds: planItemIds(rootAgentPlan(todo)), children, timeline,
           runOverride: launchRunOverride(db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(sessionId)?.payload ?? null),
         };
       });

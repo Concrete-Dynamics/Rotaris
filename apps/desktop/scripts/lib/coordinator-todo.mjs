@@ -165,12 +165,12 @@ export function todoStates(text) {
 /**
  * PD-TOOLS-008 revision 2 and PD-TOOLS-006 revision 7 (OQ-249, ruled 2026-10-07 under R-072): what the coordinator's plan
  * recorded of the items its running children held, read from each root `todo` or `delegate` result that carries the Todo state
- * (the plan as it stood when that call ended), against each root child's `todo_item` and its life (`spawned_at` to
- * `completed_at`, or still open).
+ * (the plan as it stood when that call ended), against each root child's `todo_item` and the windows in which it held it
+ * (`holdingWindows`: each run of it while non-terminal, from the session's timeline).
  *
- * `sessions`: `{ scenario, rootNames, calls: { ordinal, tool_name, agent_name, status, result, endedAt }[], children: { canonical_name,
- * persona, depth, todo_item, spawned_at, completed_at }[] }[]`. Returns, over every coordinating session (one whose root
- * delegated):
+ * `sessions`: `{ scenario, rootNames, calls: { ordinal, tool_name, agent_name, status, result, endedAt }[], children: { task_id,
+ * canonical_name, persona, depth, todo_item, spawned_at, completed_at }[], timeline?: { ordinal, at, name, metadata }[] }[]`.
+ * Returns, over every coordinating session (one whose root delegated):
  * - `heldPending` — each reading of a held item as PENDING (the default live run's `#14` at a68f121; target 0);
  * - `closedWhileHeld` — each reading of an item COMPLETED while an implementation child (`WRITER_ROLES`) still held it (target 0);
  * - `singleActive` — each root `todo` call refused under REQ-TOOLS-145 or PD-TOOLS-008 (a NOTE; target 0);
@@ -199,15 +199,14 @@ export function heldItemReading(sessions) {
       if (c.tool_name === 'todo' && c.status !== 'ok' && /^Only one task can be IN_PROGRESS at a time\./.test(String(c.result ?? ''))) singleActive.push({ scenario: s.scenario, ordinal: c.ordinal });
     }
     const kids = (s.children ?? []).filter((k) => k.depth === 1 && k.todo_item);
+    const windows = new Map(kids.map((k) => [k, holdingWindows(k, s.timeline)]));
     for (const c of rootCalls) {
       if (c.status !== 'ok' || c.endedAt === null || c.endedAt === undefined) continue;
       if (c.tool_name !== 'todo' && c.tool_name !== 'delegate') continue;
       const states = todoStates(c.result);
       if (states === null) continue;
       for (const k of kids) {
-        const spawned = Date.parse(k.spawned_at);
-        const ended = k.completed_at ? Date.parse(k.completed_at) : Infinity;
-        if (!(spawned <= c.endedAt && c.endedAt < ended)) continue;
+        if (!holdsAt(windows.get(k), c.endedAt)) continue;
         const state = states.get(k.todo_item);
         if (state === 'PENDING') heldPending.push({ scenario: s.scenario, ordinal: c.ordinal, child: k.canonical_name, item: k.todo_item });
         if (state === 'COMPLETED' && WRITER_ROLES.has(k.persona)) closedWhileHeld.push({ scenario: s.scenario, ordinal: c.ordinal, child: k.canonical_name, item: k.todo_item });
@@ -223,7 +222,7 @@ export function heldItemReading(sessions) {
       for (const t of (Array.isArray(args.phases) ? args.phases : []).flatMap((p) => (Array.isArray(p?.tasks) ? p.tasks : []))) {
         if (typeof t?.id !== 'string' || (t.state !== 'COMPLETED' && t.state !== 'ABANDONED')) continue;
         const servers = kids.filter((k) => k.todo_item === t.id && Date.parse(k.spawned_at) <= c.endedAt);
-        if (servers.length === 0 || servers.some((k) => !k.completed_at || Date.parse(k.completed_at) > c.endedAt)) continue;
+        if (servers.length === 0 || servers.some((k) => holdsAt(windows.get(k), c.endedAt))) continue;
         // The case revision 3 decides, asked: a `replace` closing an item every child serving it has ended.
         closes.push({ scenario: s.scenario, ordinal: c.ordinal, item: t.id, sent: t.state, stored: states.get(t.id) ?? null });
         if (states.get(t.id) === 'IN_PROGRESS') restoredOverClose.push({ scenario: s.scenario, ordinal: c.ordinal, item: t.id });
@@ -231,6 +230,47 @@ export function heldItemReading(sessions) {
     }
   }
   return { coordinating, heldPending, closedWhileHeld, singleActive, restoredOverClose, closes, namedRestores };
+}
+
+/**
+ * The windows `[from, to)` in which a root child held its todo item, in epoch milliseconds: PD-TOOLS-006 revision 7 holds it
+ * "while the child is non-terminal". The first opens at its admission (`spawned_at`; a queued child holds its item too), each
+ * later one at the `child_resumed` (or `child_start`) that follows a `child_end`, and each closes at its `child_end`; the last
+ * stays open while none has followed (a paused child is non-terminal). `timeline` is the session's timeline rows
+ * (`{ ordinal, at, name, metadata }`, metadata the stored JSON); its `child_start`, `child_end` and `child_resumed` entries are
+ * read for this child's `task_id`.
+ *
+ * Until fin46 the window was the row's `spawned_at` to `completed_at`. A `session_id` follow-up clears `completed_at`, and a
+ * quit that then pauses the child leaves it null, so the 3c3f447 terminal run read a tester as holding its item across the
+ * gap between its first `child_end` and the follow-up, and failed a close the coordinator made in that gap (finding L2,
+ * `docs/defects/fixed/the-live-runs-held-item-check-holds-a-followed-up-child-across-the-gap-between-its-runs.md`). With no
+ * timeline entry for the child the row's window stands, as before.
+ */
+export function holdingWindows(child, timeline) {
+  const spawned = Date.parse(child.spawned_at);
+  const completed = child.completed_at ? Date.parse(child.completed_at) : Infinity;
+  const mine = (timeline ?? [])
+    .filter((e) => (e.name === 'child_start' || e.name === 'child_end' || e.name === 'child_resumed') && child.task_id !== undefined && taskIdOf(e.metadata) === child.task_id)
+    .sort((a, b) => a.ordinal - b.ordinal);
+  if (mine.length === 0) return [[spawned, completed]];
+  const windows = [];
+  let open = spawned;
+  for (const e of mine) {
+    const t = Date.parse(e.at);
+    if (e.name === 'child_end') {
+      if (open !== null) windows.push([open, t]);
+      open = null;
+    } else if (open === null) open = t;
+  }
+  if (open !== null) windows.push([open, completed]);
+  return windows;
+}
+
+const holdsAt = (windows, t) => (windows ?? []).some(([from, to]) => from <= t && t < to);
+
+function taskIdOf(metadata) {
+  const m = argsOf(metadata);
+  return typeof m?.task_id === 'string' ? m.task_id : null;
 }
 
 /** A recorded call's arguments as an object: the record keeps an object, or the cut string of one a refusal stored. */

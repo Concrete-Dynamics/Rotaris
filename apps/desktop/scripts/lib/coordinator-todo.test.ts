@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { agentPlanTaskCount, coordinatorTodoReading, heldItemReading, launchRunOverride, planItemIds, rootAgentPlan, todoItemReading, todoStates, WRITER_ROLES } from './coordinator-todo.mjs';
+import { agentPlanTaskCount, coordinatorTodoReading, heldItemReading, holdingWindows, launchRunOverride, planItemIds, rootAgentPlan, todoItemReading, todoStates, WRITER_ROLES } from './coordinator-todo.mjs';
 import { BUILT_IN_ROLE_TOOLS } from '@rotaris/contracts';
 
 const call = (ordinal: number, tool_name: string, agent_name = 'orchestrator', status = 'ok', failureKind: string | null = null) => ({ ordinal, tool_name, agent_name, status, failureKind });
@@ -200,6 +200,73 @@ describe('heldItemReading (PD-TOOLS-008 revision 2, OQ-249)', () => {
       { scenario: 'edit', ordinal: 21, item: '0000000a', sent: 'COMPLETED', stored: 'COMPLETED' },
       { scenario: 'edit', ordinal: 21, item: '0000000b', sent: 'COMPLETED', stored: 'COMPLETED' },
     ]);
+  });
+
+  /*
+   * docs/defects/fixed/the-live-runs-held-item-check-holds-a-followed-up-child-across-the-gap-between-its-runs.md (finding L2):
+   * the 3c3f447 terminal session 7fce100f. The tester ended (child_end 16:17:34.521), the root closed its item (#15, 16:17:42),
+   * and a `session_id` follow-up resumed it (child_resumed 16:17:52.370); the quit then paused it, so `completed_at` is null.
+   * Its holding window is each run of it, from the timeline, not spawn to completion.
+   */
+  describe('a followed-up child holds its item only while it runs (PD-TOOLS-006 revision 7, finding L2)', () => {
+    const tester = { task_id: 'bg_32e82bf2', canonical_name: 'Run-terminal-probe-commands-1-9-verbatim', persona: 'tester', depth: 1, todo_item: '0423eeed', spawned_at: '2026-10-14T16:15:41.807Z', completed_at: null };
+    const entry = (ordinal: number, atIso: string, name: string, metadata: Record<string, unknown>) => ({ ordinal, at: atIso, name, metadata: JSON.stringify(metadata) });
+    const timeline = [
+      entry(2, '2026-10-14T16:15:41.809Z', 'child_start', { task_id: 'bg_32e82bf2' }),
+      entry(9, '2026-10-14T16:17:34.521Z', 'child_end', { task_id: 'bg_32e82bf2', state: 'succeeded' }),
+      entry(12, '2026-10-14T16:17:52.370Z', 'child_resumed', { task_id: 'bg_32e82bf2', follow_up: true, from_state: 'succeeded', resume_state: 'queued' }),
+      entry(13, '2026-10-14T16:17:52.385Z', 'child_start', { task_id: 'bg_32e82bf2' }),
+      entry(18, '2026-10-14T16:22:16.795Z', 'child_end', { task_id: 'bg_32e82bf2', state: 'succeeded' }),
+      entry(21, '2026-10-14T16:22:27.157Z', 'child_resumed', { task_id: 'bg_32e82bf2', follow_up: true, from_state: 'succeeded', resume_state: 'queued' }),
+      entry(22, '2026-10-14T16:22:27.158Z', 'child_start', { task_id: 'bg_32e82bf2' }),
+      entry(23, '2026-10-14T16:23:35.136Z', 'child_paused', { task_id: 'bg_32e82bf2', interruption: 'quit' }),
+    ];
+    const done = state([['COMPLETED', 'Run the terminal probes', '0423eeed']]);
+    const close = (ordinal: number, endedAt: string) => c(ordinal, 'todo', 'ok', done, endedAt);
+
+    it('the 3c3f447 close at #15, between the first child_end and the follow-up, is not a close while held', () => {
+      const r = heldItemReading([{ scenario: 'terminal', rootNames: ['orchestrator'], children: [tester], timeline, calls: [
+        c(3, 'delegate', 'ok', "Task 'Run-terminal-probe-commands-1-9-verbatim': queued", '2026-10-14T16:15:41.900Z'),
+        close(15, '2026-10-14T16:17:42.000Z'),
+      ] }]);
+      expect(r.closedWhileHeld).toEqual([]);
+    });
+
+    it('a close while the child runs, in its first run, its follow-up, or after the quit paused it, is still reported', () => {
+      const r = heldItemReading([{ scenario: 'terminal', rootNames: ['orchestrator'], children: [tester], timeline, calls: [
+        c(3, 'delegate', 'ok', "Task 'Run-terminal-probe-commands-1-9-verbatim': queued", '2026-10-14T16:15:41.900Z'),
+        close(5, '2026-10-14T16:16:00.000Z'),
+        close(16, '2026-10-14T16:17:52.375Z'),
+        close(17, '2026-10-14T16:20:00.000Z'),
+        close(19, '2026-10-14T16:22:20.000Z'),
+        close(24, '2026-10-14T16:24:00.000Z'),
+      ] }]);
+      expect(r.closedWhileHeld.map((h: { ordinal: number }) => h.ordinal)).toEqual([5, 16, 17, 24]);
+    });
+
+    it('a revision 3 close sent in the gap is a close every serving child has ended; a child with no timeline falls back to its row', () => {
+      const closeOne = { operation: 'replace', phases: [{ name: 'main', tasks: [{ id: '0423eeed', name: 'Run the terminal probes', state: 'COMPLETED' }] }] };
+      const r = heldItemReading([{ scenario: 'terminal', rootNames: ['orchestrator'], children: [tester], timeline, calls: [
+        c(3, 'delegate', 'ok', "Task 'Run-terminal-probe-commands-1-9-verbatim': queued", '2026-10-14T16:15:41.900Z'),
+        { ...close(15, '2026-10-14T16:17:42.000Z'), args: closeOne },
+      ] }]);
+      expect(r.closes).toEqual([{ scenario: 'terminal', ordinal: 15, item: '0423eeed', sent: 'COMPLETED', stored: 'COMPLETED' }]);
+      // No timeline entry names it (a reading of rows alone): the row's spawn-to-completion window, as before.
+      const rowOnly = heldItemReading([{ scenario: 'terminal', rootNames: ['orchestrator'], children: [tester], timeline: [], calls: [
+        c(3, 'delegate', 'ok', "Task 'x': queued", '2026-10-14T16:15:41.900Z'),
+        close(15, '2026-10-14T16:17:42.000Z'),
+      ] }]);
+      expect(rowOnly.closedWhileHeld.map((h: { ordinal: number }) => h.ordinal)).toEqual([15]);
+    });
+
+    it('holdingWindows reads each run from its admission or child_resumed to child_end, the last open while the child is non-terminal', () => {
+      expect(holdingWindows(tester, timeline)).toEqual([
+        [Date.parse(tester.spawned_at), Date.parse('2026-10-14T16:17:34.521Z')],
+        [Date.parse('2026-10-14T16:17:52.370Z'), Date.parse('2026-10-14T16:22:16.795Z')],
+        [Date.parse('2026-10-14T16:22:27.157Z'), Infinity],
+      ]);
+      expect(holdingWindows({ ...tester, completed_at: '2026-10-14T16:20:00Z' }, [])).toEqual([[Date.parse(tester.spawned_at), Date.parse('2026-10-14T16:20:00Z')]]);
+    });
   });
 
   // docs/defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md (item N65): the 0bc3eee edit

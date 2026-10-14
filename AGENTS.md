@@ -354,8 +354,9 @@ those followed by a terminal call of the same agent before its next edit (the di
 edit succeeded on the same path (`lib/near-miss-edits.mjs`); a run with none says so. Since fin36 (PD-TOOLS-014 revision 2,
 OQ-252) it also counts those whose next edit on the same path was refused "Found N occurrences" (target 0).
 Since fin33 (`PD-TOOLS-008` revision 2, `PD-TOOLS-006` revision 7, OQ-249) no coordinator's plan records a running child's item
-`PENDING` and none closes an item an implementation child still holds (`heldItemReading`, `lib/coordinator-todo.mjs`), with
-single-active refusals in coordinating sessions a NOTE; since fin37 (`PD-TOOLS-008` revision 3, OQ-255) no closing `replace` leaves an
+`PENDING` and none closes an item an implementation child still holds (`heldItemReading`, `lib/coordinator-todo.mjs`; since fin46 a
+child holds its item during each run of it the timeline records, from its admission or a follow-up's `child_resumed` to its
+`child_end`, not from spawn to `completed_at`, finding L2), with single-active refusals in coordinating sessions a NOTE; since fin37 (`PD-TOOLS-008` revision 3, OQ-255) no closing `replace` leaves an
 item IN_PROGRESS once every child serving it has ended (`restoredOverClose`, target 0; since fin41 a NOTE that the close is
 unasked when no coordinator sent one, `closes`, and the `edit` prompt asks for one closing `replace`), and a `replace` that named a task it kept
 over a different state is a NOTE (`namedRestores`); and (`PD-TOOLS-006` revision 8, OQ-250) a NOTE counts `delegate` calls

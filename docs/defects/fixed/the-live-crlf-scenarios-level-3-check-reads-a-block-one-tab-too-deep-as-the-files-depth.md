@@ -9,11 +9,20 @@ either, or carrying them in the other order, passed. Noted by fin43's reviewer o
 
 ## Specs
 
-- [`PD-TOOLS-019`](../product/directives.md#pd-tools-019) and [`PD-TOOLS-015`](../product/directives.md#pd-tools-015) clause 2:
+- [`PD-TOOLS-019`](../../product/directives.md#pd-tools-019) and [`PD-TOOLS-015`](../../product/directives.md#pd-tools-015) clause 2:
   a level-3 match lands `new_string` shifted to the file's indentation and says so.
-- [`PD-TOOLS-016`](../product/directives.md#pd-tools-016): the CRLF sentence, after the shift sentence where both apply.
+- [`PD-TOOLS-016`](../../product/directives.md#pd-tools-016): the CRLF sentence, after the shift sentence where both apply.
 
 ## Relevant files
 
 - `apps/desktop/scripts/lib/crlf-scenario.mjs` — `crlfVerdicts`, the render.js window edit's depth and level.
 - `apps/desktop/scripts/lib/crlf-scenario.test.ts` — the readings, pinned.
+
+## Outcome
+
+Repaired 2026-10-14 (fin44, `fin44-optional-findings`): the depth is read from the block's opening line whole — its leading
+whitespace against the fixture's (`\t\t`), one tab less read as "one tab shallow, as given", anything else as "neither" — and a
+level-3 landing gains a second check, that its reply carries the shift sentence and, where `new_string` had an LF break, the
+CRLF sentence after it. Pinned by `crlf-scenario.test.ts` ("a level-3 block one tab too deep is not the file's depth …"), red on
+the reader before the change; the earlier cases are unchanged. What a live run should show: on a level-3 `render.js` landing, both
+checks PASS; nothing else moves.

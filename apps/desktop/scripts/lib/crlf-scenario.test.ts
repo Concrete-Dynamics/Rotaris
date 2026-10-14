@@ -119,6 +119,21 @@ describe('the crlf scenario (PD-TOOLS-014 to PD-TOOLS-018 live)', () => {
     expect(failed(crlfVerdicts(run))).toContain("crlf: a level-3 render.js window edit lands its block at the file's depth (PD-TOOLS-019, PD-TOOLS-015)");
   });
 
+  it('a level-3 block one tab too deep is not the file\'s depth, and the reply must carry the shift sentence before the CRLF one', () => {
+    const run = wholeRun();
+    const shiftSentence = ' new_string was shifted by the same leading prefix "\\t" (1 character added) to the file\'s indentation.';
+    run.calls[4] = { ...run.calls[4]!, args: { operation: 'edit', path: R, old_string: '\tif (item.visible) {\n\t\tout.push(`<li>${item.label}</li>`);\n\t}', new_string: '\tif (item.visible) {\n\t\tout.push(`<li class="shown">${item.label}</li>`);\n\t}' }, result: `Edited ${R}: 3 lines replaced by 3 at line 4 (+1 -1). Match level: 3.${shiftSentence}${CRLF_EDIT}` };
+    expect(failed(crlfVerdicts(run))).toEqual([]);
+    const DEPTH = "crlf: a level-3 render.js window edit lands its block at the file's depth (PD-TOOLS-019, PD-TOOLS-015)";
+    const REPLY = "crlf: a level-3 render.js window edit's reply says the shift, then (where owed) the file's CRLF endings (PD-TOOLS-015, PD-TOOLS-016)";
+    const deep = { ...run, files: { ...run.files, [R]: crlf([...RENDER_LINES.slice(0, 3), '\t\t\tif (item.visible) {', '\t\t\t\tout.push(`<li class="shown">${item.label}</li>`);', '\t\t\t}', ...RENDER_LINES.slice(6)]) } };
+    expect(failed(crlfVerdicts(deep))).toEqual([DEPTH]);
+    const swapped = { ...run, calls: run.calls.map((c, i) => (i === 4 ? { ...c, result: `Edited ${R}: 3 lines replaced by 3 at line 4 (+1 -1). Match level: 3.${CRLF_EDIT}${shiftSentence}` } : c)) };
+    expect(failed(crlfVerdicts(swapped))).toEqual([REPLY]);
+    const noShift = { ...run, calls: run.calls.map((c, i) => (i === 4 ? { ...c, result: `Edited ${R}: 3 lines replaced by 3 at line 4 (+1 -1). Match level: 3.${CRLF_EDIT}` } : c)) };
+    expect(failed(crlfVerdicts(noShift))).toEqual([REPLY]);
+  });
+
   it('a level-3 haet_edit near miss with an LF old_string must name the line endings (PD-TOOLS-014 revision 3)', () => {
     const run = wholeRun();
     const near3 = `old_string was not found exactly in ${G}. It matches lines 3-5 at match level 3 (indentation shift). Every line of the file carries the leading prefix "\\t" (1 character) in addition to old_string's indentation.`;

@@ -17,7 +17,9 @@
  * probed, ambiguous), the match level the window edit reached, and whether a level-4 window edit landed at the file's depth or as
  * given. Since `PD-TOOLS-019` (OQ-280, ruled 2026-10-13) level 3 sets a line's trailing `\r` aside, so two of those readings are
  * CHECKS: a `render.js` window edit that landed at level 4 although its `old_string` differed from the fixture's window by a
- * uniform indent alone (`\r` set aside) fails, and a level-3 one must land its block at the file's depth; any other level-4
+ * uniform indent alone (`\r` set aside) fails, and a level-3 one must land its block at the file's depth (its opening line's
+ * indentation read whole, since fin44) and its reply must carry `PD-TOOLS-015`'s shift sentence, then, where `new_string` had an
+ * LF break, `PD-TOOLS-016`'s CRLF sentence; any other level-4
  * landing stays a note. A `haet_edit` near miss at level 3 whose LF `old_string` met the CRLF file must name the line endings
  * (`PD-TOOLS-014` revision 3). Until the ruling the level-4 one-tab-shallow landing was a note naming OQ-280
  * (`docs/defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`).
@@ -115,12 +117,22 @@ export function crlfVerdicts({ calls, files }) {
   const landed = window.find((c) => c.status === 'ok');
   const level = landed === undefined ? null : /Match level: (\d)/.exec(landed.result)?.[1] ?? '1';
   const render = files[`${CRLF_DIR}/render.js`] ?? '';
-  const depth = render.includes('\t\tif (item.visible) {') ? 'the file\'s depth' : render.includes('\r\n\tif (item.visible) {') ? 'one tab shallow, as given' : 'neither';
+  // The block's opening line, read whole: its indentation against the fixture's (a substring test read one tab too deep as
+  // the file's depth, since `\t\t\tif` contains `\t\tif`).
+  const opening = render.split(/\r?\n/).find((l) => l.trimStart().startsWith('if (item.visible) {'));
+  const leading = (line) => /^[ \t]*/.exec(line ?? '')?.[0] ?? '';
+  const fileIndent = leading(RENDER_LINES.find((l) => l.trimStart().startsWith('if (item.visible) {')));
+  const depth = opening === undefined ? 'neither' : leading(opening) === fileIndent ? 'the file\'s depth' : leading(opening) === fileIndent.slice(1) ? 'one tab shallow, as given' : 'neither';
   const said = `crlf: the render.js window edit ${landed === undefined ? `did not land (${window.length} attempt(s))` : `landed at match level ${level}, its block at ${depth}`}`;
   if (level === '4' && indentOnlyOff(landed.args?.old_string, RENDER_LINES)) {
     verdicts.push({ verdict: 'check', passed: false, what: 'crlf: a render.js window edit whose old_string was a uniform indent off matches at level 3, never level 4 (PD-TOOLS-019)', detail: `${said}: ${landed.result.split('\n')[0].slice(0, 200)}` });
   } else if (level === '3') {
     verdicts.push({ verdict: 'check', passed: depth === 'the file\'s depth', what: 'crlf: a level-3 render.js window edit lands its block at the file\'s depth (PD-TOOLS-019, PD-TOOLS-015)', detail: `${said}: ${landed.result.split('\n')[0].slice(0, 200)}` });
+    // The reply: PD-TOOLS-015's shift sentence, then PD-TOOLS-016's CRLF sentence where new_string had an LF break to carry.
+    const shiftAt = landed.result.indexOf('new_string was shifted by');
+    const crlfAt = landed.result.indexOf(CRLF_EDIT);
+    const crlfOwed = lfBreak(landed.args?.new_string);
+    verdicts.push({ verdict: 'check', passed: shiftAt >= 0 && (crlfOwed ? crlfAt > shiftAt : true), what: "crlf: a level-3 render.js window edit's reply says the shift, then (where owed) the file's CRLF endings (PD-TOOLS-015, PD-TOOLS-016)", detail: landed.result.split('\n')[0].slice(0, 300) });
   } else {
     verdicts.push({ verdict: 'note', what: said });
   }

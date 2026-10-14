@@ -19,6 +19,13 @@
  *                 answered "Start a new store", and the listing then answers an empty store, the kept place exists with
  *                 what was found in it, and an info notice names it.
  *
+ *   D. cut restore — OQ-266's reversal at the next open, which no other launch reaches (fin44): the proof leaves on disk what a
+ *                 restore cut between its two renames leaves — the journal `<id>.restore-pending`, the store displaced to
+ *                 `<id>.displaced-<stamp>`, the target name empty, the prepared copy at `<id>.restoring-1` — and launches. The
+ *                 open puts the store back and raises one info notice naming the stamp, the sessions put back, that nothing
+ *                 from the backup was applied, and where the prepared copy is kept; the journal is gone. Then the same cut
+ *                 again with the prepared copy deleted by hand: the notice names no kept copy.
+ *
  * Every launch's first store is made beside its place and renamed in (OQ-281): no dot-prefixed sibling is left behind.
  *
  * Message boxes are answered by `ROTARIS_CAPTURE_ANSWERS` in order, which logs each box's title, message, detail, buttons
@@ -26,7 +33,7 @@
  * `.proof/store-resolution-proof/`: `app/app.log`, the PNGs, `results.json`. `--skip-build` skips the build. Under Xvfb on
  * Linux (`xvfb-run -a -s "-screen 0 1600x1000x24"`).
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { buildDesktop, electron, evidenceDirectory, findDatabases } from './lib/harness.mjs';
 import { startApp, stopApp, until } from './lib/driver.mjs';
@@ -173,6 +180,34 @@ results.secondEmptying = secondEmptying;
   check('C: the store is in its place again', existsSync(join(secondEmptying.place, 'workspace.db')), secondEmptying.place);
   results.establish = { cancelled, boxes, kept: keptNow, notice };
   await stop(launched, 'establish');
+}
+// ── D. a restore cut between its two renames, reversed by the next open (OQ-266): with the prepared copy, then without ──
+for (const [name, withCopy] of [['cut-restore', true], ['cut-restore-no-copy', false]]) {
+  const place = secondEmptying.place;
+  const workspacesRoot = dirname(place);
+  const id = place.slice(workspacesRoot.length + 1);
+  const stamp = withCopy ? '2026-10-14T00-00-00-000Z' : '2026-10-14T00-00-01-000Z';
+  const sessionsBefore = 0; // C left the new, empty store in its place
+  for (const n of ['workspace.db-wal', 'workspace.db-shm']) rmSync(join(place, n), { force: true });
+  writeFileSync(join(workspacesRoot, `${id}.restore-pending`), `${JSON.stringify({ stamp, stagingN: 1, targetExisted: true })}\n`);
+  const displaced = join(workspacesRoot, `${id}.displaced-${stamp}`);
+  renameSync(place, displaced);
+  const staging = join(workspacesRoot, `${id}.restoring-1`);
+  rmSync(staging, { recursive: true, force: true });
+  if (withCopy) { mkdirSync(staging); writeFileSync(join(staging, 'origin.txt'), 'the prepared copy\n'); }
+  const launched = await launch(name);
+  const d = launched.driver;
+  await d.waitFor('.app-shell', { timeoutMs: 60_000 });
+  const headline = `The restore begun at ${stamp} did not finish`;
+  const notice = await until(() => noticeNow(d), (n) => n?.title === headline, { timeoutMs: 30_000, what: `the cut-restore notice (${name})` });
+  const kept = ` The prepared copy is kept at ${staging}.`;
+  const expected = `The sessions this workspace had here were put back, and nothing from the backup was applied. Restore again from Settings to apply it.${withCopy ? kept : ''}`;
+  check(`D: ${name}: one info notice says the restore did not finish, what was put back, and ${withCopy ? 'where the prepared copy is kept' : 'names no copy that is gone'}`, notice.detail === expected, JSON.stringify(notice));
+  const listed = await until(() => listing(d), (r) => r?.ok === true, { timeoutMs: 30_000, what: `the put-back store listed (${name})` });
+  check(`D: ${name}: the displaced store is back in its place and lists as it did, the journal gone`, listed.ok && listed.value.sessions.length === sessionsBefore && existsSync(join(place, 'workspace.db')) && !existsSync(displaced) && !existsSync(join(workspacesRoot, `${id}.restore-pending`)), `${listed.value?.sessions.length} session(s); displaced ${existsSync(displaced)}`);
+  results[name] = { notice, sessions: listed.value.sessions.length };
+  await stop(launched, name);
+  rmSync(staging, { recursive: true, force: true });
 }
 {
   const workspacesRoot = dirname(secondEmptying.place);

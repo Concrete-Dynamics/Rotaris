@@ -13846,7 +13846,9 @@ to the displaced one in 10 of 10, the journal gone and the staging copy kept in 
 ***Corrected 2026-10-14 (fin44, `fin44-optional-findings`).*** "Where the prepared copy is kept" was written from the journal
 alone, so a copy deleted by hand before the next open was still named. `cutRestore.staging` is now `null` when the open does
 not find the copy, and the notice then names none
-([the note](../defects/fixed/the-cut-restore-notice-says-the-prepared-copy-is-kept-without-looking.md)).
+([the note](../defects/fixed/the-cut-restore-notice-says-the-prepared-copy-is-kept-without-looking.md)). The notice is now driven in
+the built app: `store-resolution-proof` launch D leaves a cut restore on disk before a launch, once with the prepared copy and once
+without, and reads the notice's exact detail and the store put back (green 2026-10-14, load average 1.5 to 1.9).
 
 <a id="oq-267"></a>
 

@@ -16,6 +16,13 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-15**
 
+**The quit outside any window's `before-quit` handler moves into `exit.ts` (2026-10-14, fin46 `fin46-accept1-8`, C3;
+PD-SHELL-009 revision 2, PD-ORCH-005 clause 9).** The process view's quit paragraph names `QuitOutsideAnyWindow`
+(`main/exit.ts`), the handler `main/index.ts` held inline until now, and what it holds and lets go. Behaviour unchanged;
+unit cases in `exit.test.ts` pin it and its wiring
+(`docs/defects/fixed/no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md`). The README's date stays
+2026-10-15, the later one.
+
 **A pane layout is read against its own view's pane count (fin46, `fin46-accept1-7`, finding C18; REQ-SHELL-069).** The
 process view's `prefs.get` entry names `platform`'s `PANE_LAYOUT_PANES`, each view's current pane count, which main's read
 now passes to `PreferenceStore.readLayout` in place of a literal 2

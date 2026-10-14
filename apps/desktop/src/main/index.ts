@@ -59,7 +59,7 @@ import { anotherMainWindowStays, confirmActiveRunClose } from './close-confirmat
 import { emptyArtifactNotice, passFailureDetail, passFailureTitle } from './improvement-notice.js';
 import { answerUnderHeldRefusal, cutRestoreNotice, storeRefusalNotice, storeRefusalOf, type StoreRefusal } from './store-notice.js'; // REQ-SESSION-202, OQ-266, OQ-281
 import { establishFlow as establishStoreFlow, restoreFlow as restoreStoreFlow, type StoreFlowDeps } from './store-resolution.js'; // OQ-281
-import { ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, quitGuardsOutsideAnyWindow, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
+import { ChildrenEndedByMain, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitOutsideAnyWindow, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
 import { withoutRuntimeRequests } from './runtime-requests.js'; // REQ-STARTUP-160
@@ -1915,23 +1915,17 @@ async function main(): Promise<void> {
    * quits; that quit finds no main window open and goes ahead. Since OQ-298's ruling (2026-10-14, R-072) no close guard is
    * asked: such a quit is no user-initiated close (REQ-SHELL-119 guard (1), REQ-CONFIG-287), so unsaved settings stay unsaved
    * and nothing is written (`quitGuardsOutsideAnyWindow`, `exit.ts`). Until then each renderer's unsaved-settings guard was
-   * asked and its Save/Discard/Cancel waited for with no bound.
+   * asked and its Save/Discard/Cancel waited for with no bound. The handler is `QuitOutsideAnyWindow` (`exit.ts`), whose unit
+   * cases in `exit.test.ts` also pin this wiring.
    */
-  let guardsAsked = false;
-  app.on('before-quit', (event) => {
-    const open = mainWindows.ordered().filter((m) => !m.win.isDestroyed() && !quit.isClosing(m.wcId));
-    if (open.length === 0) return;
-    event.preventDefault();
-    if (guardsAsked) return;
-    guardsAsked = true;
-    log(`quit: closing ${open.length} main window(s) through their close guards first (PD-ORCH-005 clause 9)`);
-    log('quit: started outside any window; no close guard is asked, and unsaved settings, if any, stay unsaved (OQ-298)');
-    const guards = quitGuardsOutsideAnyWindow(open.map((m) => ({ wcId: m.wcId, confirm: () => quit.closeConfirmed(m.wcId), close: () => m.win.close() })), closeGuards);
-    void closeThroughGuards(guards).then((closing) => {
-      guardsAsked = false;
-      if (!closing) log('quit: a close guard refused; the application stays');
-    });
+  const quitOutsideAnyWindow = new QuitOutsideAnyWindow({
+    open: () => mainWindows.ordered()
+      .filter((m) => !m.win.isDestroyed() && !quit.isClosing(m.wcId))
+      .map((m) => ({ wcId: m.wcId, confirm: () => quit.closeConfirmed(m.wcId), close: () => m.win.close() })),
+    closeGuards,
+    log,
   });
+  app.on('before-quit', (event) => { if (quitOutsideAnyWindow.beforeQuit()) event.preventDefault(); });
 
   /*
    * ADR-0014: quit is main-driven, run-host-executed. The skeleton asks and waits, bounded. Run once, whichever starts it:

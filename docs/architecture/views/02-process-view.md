@@ -282,7 +282,10 @@ is turned into the same path. **On Windows Electron emits no `before-quit` at a 
 guard asked, and the process exits when it is done (`SessionEndShutdown`, `main/exit.ts`;
 `docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`; not yet observed on a Windows host). For the quits
 that do emit it: `before-quit` is held while any main window is open, and the main windows are closed
-all or none (`closeThroughGuards`: every guard asked, every close confirmed, then every window closed). **Since 2026-10-14
+all or none (`closeThroughGuards`: every guard asked, every close confirmed, then every window closed). The handler is
+`QuitOutsideAnyWindow` (`main/exit.ts`, since 2026-10-14 fin46; inline in `main/index.ts` before): it holds the quit while a
+main window is open and not already closing, starts the close once, holds a second `before-quit` while that close is under way,
+and lets the quit `window-all-closed` starts go ahead. **Since 2026-10-14
 (fin45; OQ-298, `PD-SHELL-009` revision 2) that quit asks no close guard**: `quitGuardsOutsideAnyWindow` (`main/exit.ts`) hands
 `closeThroughGuards` one guard per open main window whose `ask` allows at once and whose `confirm` and `close` are the window's
 own `CloseGuard`'s, so the renderer's unsaved-settings guard is never asked — a quit from outside any window is no

@@ -166,6 +166,49 @@ export function quitGuardsOutsideAnyWindow(
 }
 
 /**
+ * PD-ORCH-005 clause 9 under OQ-298 (PD-SHELL-009 revision 2): Electron's `before-quit`, as main answers it. A quit Electron
+ * starts on its own account — SIGTERM, the desktop's logout where Electron emits `before-quit`, the driver's or the capture's
+ * `app.quit()` — closes every window at once, an approval dialog before its main window's close, and the dialog's close
+ * would be sent as the person's Deny. So while any main window is open and not already closing the quit is held
+ * (`beforeQuit` answers true: `event.preventDefault()`), and it is turned, once, into the main windows' close, all or none
+ * (`closeThroughGuards` over `quitGuardsOutsideAnyWindow`'s guards, which ask no renderer). A second `before-quit` while that
+ * close is under way is held and starts nothing more. The last close reaches `window-all-closed`, which shuts the children
+ * down and quits again; that quit finds no main window open, is not held, and goes ahead.
+ *
+ * Until 2026-10-14 this was inline code in `index.ts`, reached by no unit test, only by `exit-trace-proof` after a build
+ * (`docs/defects/fixed/no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md`).
+ */
+export class QuitOutsideAnyWindow {
+  #underWay = false;
+
+  constructor(private readonly deps: {
+    /**
+     * The main windows still open and not already closing, in `mainWindows.ordered()` order, each with the confirm and close
+     * that stand in where no `CloseGuard` is registered for it.
+     */
+    readonly open: () => readonly { readonly wcId: number; readonly confirm: () => void; readonly close: () => void }[];
+    /** Each main window's own `CloseGuard`, by its `webContents` id: its `confirm` and `close` are the ones used. */
+    readonly closeGuards: { get(wcId: number): Pick<QuitGuard, 'confirm' | 'close'> | undefined };
+    readonly log: (message: string, level?: AppLogLevel) => void;
+  }) {}
+
+  /** Electron's `before-quit`. Answers whether the quit is held (the caller then calls `event.preventDefault()`). */
+  beforeQuit(): boolean {
+    const open = this.deps.open();
+    if (open.length === 0) return false;
+    if (this.#underWay) return true;
+    this.#underWay = true;
+    this.deps.log(`quit: closing ${open.length} main window(s) through their close guards first (PD-ORCH-005 clause 9)`);
+    this.deps.log('quit: started outside any window; no close guard is asked, and unsaved settings, if any, stay unsaved (OQ-298)');
+    void closeThroughGuards(quitGuardsOutsideAnyWindow(open, this.deps.closeGuards)).then((closing) => {
+      this.#underWay = false;
+      if (!closing) this.deps.log('quit: a close guard refused; the application stays');
+    });
+    return true;
+  }
+}
+
+/**
  * REQ-SHELL-121 on Windows: a logout, a restart or a shutdown of the desktop session ends the application without
  * `before-quit` or `will-quit` (Electron's typings: neither "will be emitted if the app is closed due to a
  * shutdown/restart of the system or a user logout"), so the orderly shutdown those hang on — the main windows' guarded

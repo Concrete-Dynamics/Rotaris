@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ProcessEvent, ProcessReply } from '@rotaris/contracts';
 import { FakeClock, millis } from '@rotaris/kernel';
-import { CHILD_CLOSE_BOUND_MS, ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, quitGuardsOutsideAnyWindow, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
+import { CHILD_CLOSE_BOUND_MS, ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitOutsideAnyWindow, QuitState, quitGuardsOutsideAnyWindow, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
 import { guardClose, type GuardedWindow } from './main-windows.js';
 
 /** A window whose destruction reports `closed` at once, later, or never. */
@@ -354,6 +356,68 @@ describe('OQ-298: a quit from outside any window asks no unsaved-settings guard 
     const guards = quitGuardsOutsideAnyWindow([{ wcId: 1, confirm: () => log.push('fallback confirm 1'), close: () => log.push('fallback close 1') }, { wcId: 7, confirm: () => log.push('fallback confirm 7'), close: () => log.push('fallback close 7') }], new Map([[1, a.closeGuard]]));
     expect(await closeThroughGuards(guards)).toBe(true);
     expect(log).toEqual(['confirmed A', 'fallback confirm 7', 'closed A', 'fallback close 7']);
+  });
+
+  /*
+   * `QuitOutsideAnyWindow` is `before-quit` as `index.ts` wires it: until 2026-10-14 that handler was inline in the composition
+   * root and only `exit-trace-proof` reached it (`docs/defects/fixed/no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md`).
+   */
+  function quitHandler(windows: readonly (GuardedWindow & { readonly closeGuard: ReturnType<typeof guardClose> })[], log: string[]) {
+    const closing = new Set<number>();
+    const lines: string[] = [];
+    const handler = new QuitOutsideAnyWindow({
+      open: () => windows
+        .map((w, i) => ({ w, wcId: i + 1 }))
+        .filter(({ w, wcId }) => !w.isDestroyed() && !closing.has(wcId))
+        .map(({ wcId }) => ({ wcId, confirm: () => { closing.add(wcId); log.push(`fallback confirm ${wcId}`); }, close: () => log.push(`fallback close ${wcId}`) })),
+      closeGuards: new Map(windows.map((w, i) => [i + 1, w.closeGuard] as const)),
+      log: (message) => lines.push(message),
+    });
+    return { handler, lines };
+  }
+
+  it('before-quit with main windows open is held, asks no renderer, and closes every window in the all-or-none order', async () => {
+    const log: string[] = [];
+    const { handler, lines } = quitHandler([guardedWindow('A', log), guardedWindow('B', log)], log);
+    expect(handler.beforeQuit()).toBe(true);
+    await settle();
+    expect(log).toEqual(['confirmed A', 'confirmed B', 'closed A', 'closed B']);
+    expect(log.some((l) => l.startsWith('renderer asked'))).toBe(false);
+    expect(lines[0]).toBe('quit: closing 2 main window(s) through their close guards first (PD-ORCH-005 clause 9)');
+    expect(lines).toHaveLength(2);
+    // The quit `window-all-closed` starts once the last window has closed finds none open, and goes ahead.
+    expect(handler.beforeQuit()).toBe(false);
+    expect(lines).toHaveLength(2);
+  });
+
+  it('a second before-quit while the close is under way is held and starts nothing more', async () => {
+    const log: string[] = [];
+    const { handler, lines } = quitHandler([guardedWindow('A', log)], log);
+    expect(handler.beforeQuit()).toBe(true);
+    expect(handler.beforeQuit()).toBe(true);
+    await settle();
+    expect(log).toEqual(['confirmed A', 'closed A']);
+    expect(lines).toHaveLength(2);
+  });
+
+  it('before-quit with no main window open is not held and logs nothing', () => {
+    const lines: string[] = [];
+    const handler = new QuitOutsideAnyWindow({ open: () => [], closeGuards: new Map(), log: (m) => lines.push(m) });
+    expect(handler.beforeQuit()).toBe(false);
+    expect(lines).toEqual([]);
+  });
+
+  it('index.ts wires before-quit through QuitOutsideAnyWindow over the open, not-closing main windows and their own close guards', () => {
+    const source = readFileSync(join(import.meta.dirname, 'index.ts'), 'utf8');
+    expect(source).toMatch(/app\.on\('before-quit', \(event\) => \{ if \(quitOutsideAnyWindow\.beforeQuit\(\)\) event\.preventDefault\(\); \}\);/);
+    const start = source.indexOf('new QuitOutsideAnyWindow({');
+    const wiring = source.slice(start, source.indexOf("app.on('before-quit', (event)", start));
+    expect(wiring).toContain('mainWindows.ordered()');
+    expect(wiring).toContain('.filter((m) => !m.win.isDestroyed() && !quit.isClosing(m.wcId))');
+    expect(wiring).toContain('confirm: () => quit.closeConfirmed(m.wcId), close: () => m.win.close()');
+    expect(wiring).toMatch(/^\s*closeGuards,$/m);
+    // The one before-quit handler that may hold the quit; the other (`quit: requested (before-quit)`) only logs.
+    expect(source.match(/app\.on\('before-quit', \(event\)/g)).toHaveLength(1);
   });
 });
 

@@ -434,6 +434,26 @@ describe('MainWindows', () => {
     expect(h.mainWindows.ordered().map((window) => window.workspace)).toEqual(['C:/a']);
   });
 
+  // The readiness is pending from `build`, not from `open`: every path builds a window and opens its workspace next, so a reach
+  // that meets the window in between — built and loaded, its open not yet begun — waits for that open as well. The two cases
+  // above enter after `open` has replaced the readiness; this one enters before it, and goes red if `build` sets a readiness
+  // already settled (fin44's review of `fin44-notice-reach`).
+  it('answers a reach that meets a window between its build and its open once the open has settled, with the workspace id', async () => {
+    const h = harness();
+    await h.mainWindows.launch('C:/a');
+    const built = await h.mainWindows.build({ workspace: 'C:/c', origin: 'open-request' });
+    expect(h.actions).not.toContain('open:C:/c');
+    let answer: unknown = 'pending';
+    const reaching = h.mainWindows.reach('C:/c').then((r) => { answer = r.ok ? { wcId: r.window.wcId, added: r.added, workspaceId: r.window.workspaceId } : { refused: r.outcome }; });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(answer).toBe('pending');
+
+    await h.mainWindows.open(built.wcId, 'C:/c');
+    await reaching;
+    expect(answer).toEqual({ wcId: built.wcId, added: false, workspaceId: 'id:C:/c' });
+    expect(h.actions.filter((action) => action.startsWith('build:'))).toEqual(['build:C:/a:launch', 'build:C:/c:open-request']);
+  });
+
   // PD-SHELL-001 revision 3 (OQ-292, ruled 2026-10-14 under R-072): a `focus-session` notice reaches the window holding the
   // session's workspace and asks THAT window to focus the session; a window the reach added holds the request until its renderer
   // is ready for it, and is given it once.

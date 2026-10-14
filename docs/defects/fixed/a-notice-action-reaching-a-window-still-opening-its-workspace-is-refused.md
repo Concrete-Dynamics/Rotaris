@@ -46,3 +46,10 @@ nothing in it afterwards, so they cannot be refused this way; they are unchanged
 view's start-time read that arrives between a window's load and its open wait for that open (`awaitWorkspace`), as
 `06-sequences.md` says it does, where it used to find the readiness already settled. No proof drives a double press inside a
 window's load; the unit cases above are the evidence.
+
+*Added 2026-10-14 by fin45 (`fin45-optional-findings`), from fin44's review.* The two cases above enter after `open` has
+replaced the readiness with its own promise, so they pin the wait inside `reach` and not the readiness set at `build`: with
+`build` setting an already settled readiness they stayed green. A third case reaches the window between its `build` and its
+`open` ("answers a reach that meets a window between its build and its open once the open has settled, with the workspace
+id", `main-windows.test.ts`), and goes red when `build`'s readiness is `Promise.resolve()`: the reach then answers before the
+open has begun.

@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A notice action's reach waits for a window still opening its workspace (fin44, `fin44-notice-reach`;
+`../../defects/fixed/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md`).** A main window's
+readiness (`workspaceReady`) is pending from `MainWindows.build` until its first open settles, and `MainWindows.reach` waits on
+it for a holder with no workspace id. `02-process-view.md` (`hooks.review {workspace?}`) and `06-sequences.md` (the window
+paints before the workspace opens) say so.
+
 **Level 3 reads a blank line by having no visible character (PD-TOOLS-020, PD-TOOLS-014 and PD-TOOLS-016 revision 4, OQ-295;
 fin44).** `matchEdit`'s level 3 measures the prefix on `old_string`'s first visible line and compares blank lines as blank;
 `carryWindow` gains the `new_string` as given and writes a paired blank line as the window's own at level 3; `nearMissMessage`'s

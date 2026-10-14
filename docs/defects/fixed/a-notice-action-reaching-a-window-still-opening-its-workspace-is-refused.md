@@ -25,3 +25,24 @@ a readiness signal set at `build` that the notices path, the chooser and the han
 - `apps/desktop/src/main/index.ts` — `openHookReview`, which reads `target.workspaceId`.
 - `apps/desktop/src/main/main-windows.test.ts` — the `reach` cases; the harness can defer opens (`deferOpens`).
 - `docs/architecture/open-questions.md` OQ-267 — the add route this reach takes for a workspace no window holds.
+
+## Outcome
+
+*Repaired 2026-10-14 by fin44 (`fin44-notice-reach`).* Confirmed first on the branch: a second `reach` of a workspace whose
+window the first `reach` had added, met while that window's open was still in flight, answered at once with no workspace id
+(`main-windows.test.ts`, "answers a reach of a window still opening its workspace once the open has settled, with the
+workspace id, and builds once", red before the repair: the second answer arrived before the open settled, `workspaceId`
+undefined). The readiness signal the note asked for is now set at `build`: a window record's `workspaceReady` is pending from
+the moment it is built and settles when its first workspace open settles, or when the window is forgotten
+(`MainWindows.build`, `open`, `#forget` in `apps/desktop/src/main/main-windows.ts`). `MainWindows.reach`, meeting a holder with
+no workspace id, surfaces it and waits for that open (bounded by `awaitWorkspace`'s 30 s); an open that failed has destroyed
+the window and reported the failure under REQ-SHELL-019, and the press is answered as a refusal rather than adding a second
+window ("answers a reach of a window whose open then failed as a refusal, and adds no second window for it", red before). So
+`openHookReview`, and every later caller of `reach` (`focus-session`'s and the project-setup action's, PD-SHELL-001 revision 3
+and PD-WORKSPACE-005 revision 3), meets a reached window with its workspace open.
+
+The chooser's and the hand-over's surfacing of a holder (named above as the same shape) only surface the window and act on
+nothing in it afterwards, so they cannot be refused this way; they are unchanged. The same pending readiness also makes a
+view's start-time read that arrives between a window's load and its open wait for that open (`awaitWorkspace`), as
+`06-sequences.md` says it does, where it used to find the readiness already settled. No proof drives a double press inside a
+window's load; the unit cases above are the evidence.

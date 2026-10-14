@@ -364,6 +364,44 @@ describe('MainWindows', () => {
     expect(h.mainWindows.ordered().map((window) => window.workspace).sort()).toEqual(['C:/a', 'C:/b']);
   });
 
+  // docs/defects/fixed/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md: a second press while the window
+  // the first press added is still opening its workspace reaches that window, and is answered once the workspace is open —
+  // with its workspace id — rather than at once with none, which the hook review read as "Open a workspace before reviewing
+  // its hooks".
+  it('answers a reach of a window still opening its workspace once the open has settled, with the workspace id, and builds once', async () => {
+    const h = harness();
+    await h.mainWindows.launch('C:/a');
+    h.deferOpens();
+    const settledWith = (pending: ReturnType<typeof h.mainWindows.reach>) => pending.then((r) => (r.ok ? { added: r.added, workspaceId: r.window.workspaceId } : { refused: r.outcome }));
+    const first = settledWith(h.mainWindows.reach('C:/c'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(h.actions).toContain('open:C:/c');
+    let secondAnswer: unknown = 'pending';
+    const second = settledWith(h.mainWindows.reach('c:/c')).then((answer) => { secondAnswer = answer; return answer; });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(secondAnswer).toBe('pending');
+
+    h.resolveOpen('C:/c');
+    expect(await first).toEqual({ added: true, workspaceId: 'id:C:/c' });
+    expect(await second).toEqual({ added: false, workspaceId: 'id:C:/c' });
+    expect(h.actions.filter((action) => action.startsWith('build:'))).toEqual(['build:C:/a:launch', 'build:C:/c:open-request']);
+  });
+
+  it('answers a reach of a window whose open then failed as a refusal, and adds no second window for it', async () => {
+    const h = harness();
+    await h.mainWindows.launch('C:/a');
+    h.deferOpens();
+    const first = h.mainWindows.reach('C:/c');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const second = h.mainWindows.reach('C:/c');
+    h.resolveOpen('C:/c', false);
+    expect((await first).ok).toBe(false);
+    const answered = await second;
+    expect(answered.ok).toBe(false);
+    expect(h.actions.filter((action) => action.startsWith('build:'))).toEqual(['build:C:/a:launch', 'build:C:/c:open-request']);
+    expect(h.mainWindows.ordered().map((window) => window.workspace)).toEqual(['C:/a']);
+  });
+
   it('answers a reach with no main window open as a refusal and builds nothing', async () => {
     const empty = harness({ cwd: 'C:/startup' });
     const reached = await empty.mainWindows.reach('C:/a');

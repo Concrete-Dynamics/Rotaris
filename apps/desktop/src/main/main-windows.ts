@@ -111,7 +111,14 @@ interface WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TD
   readonly approvals: TApproval[];
   openDialog: TDialog | null;
   mintedSessionId: string | null;
+  /**
+   * Settles once the window's workspace open has settled. Pending from `build` — every path that builds a window opens its
+   * workspace next or destroys it — so a reach meeting a window still opening its workspace waits for that open rather than
+   * answering with no workspace id (docs/defects/fixed/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md).
+   */
   workspaceReady: Promise<unknown>;
+  /** Settles the readiness `build` set; called when the first open settles and when the window is forgotten. */
+  settleReady: () => void;
   questionAnswered: boolean;
   deferredOffer: MainWindowTimer | null;
 }
@@ -124,6 +131,8 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
 
   async build(input: { readonly workspace: string; readonly origin: MainWindowOrigin }): Promise<MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>> {
     const built = await this.dependencies.adapter.create(input);
+    let settleReady: () => void = () => undefined;
+    const ready = new Promise<void>((resolve) => { settleReady = resolve; });
     const record: WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TDialog> = {
       win: built.win,
       wcId: built.wcId,
@@ -136,7 +145,8 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
       approvals: [],
       openDialog: null,
       mintedSessionId: null,
-      workspaceReady: Promise.resolve(),
+      workspaceReady: ready,
+      settleReady,
       questionAnswered: false,
       deferredOffer: null,
     };
@@ -358,7 +368,13 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     if (!record) return undefined;
     const opening = this.dependencies.openWorkspace(workspace, this.#view(record));
     record.workspaceReady = opening.catch(() => undefined);
-    const opened = await opening;
+    let opened: Awaited<typeof opening>;
+    try {
+      opened = await opening;
+    } finally {
+      // A waiter that read the build-time readiness (a reach, a view's start-time read) is released whatever the outcome.
+      record.settleReady();
+    }
     if (opened) {
       record.workspace = workspace;
       record.workspaceId = opened.workspaceId;
@@ -491,6 +507,21 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     if (holder) {
       this.#surface(holder);
       this.dependencies.log(`notice action reached ${target}: surfaced window ${holder.wcId} (ESC-34, REQ-STARTUP-163)`);
+      if (holder.workspaceId === undefined) {
+        /*
+         * The holder names the workspace from `build`, but its open has not settled — a second press while the window the
+         * first press added is still loading. The action acts on the workspace (REQ-NOTIFY-044), so it waits, bounded, for the
+         * open rather than answering with no workspace id; an open that failed destroyed the window, and the press is refused
+         * (the failure was already reported under REQ-SHELL-019). Until 2026-10-14 it answered at once, and the hook review
+         * said "Open a workspace before reviewing its hooks"
+         * (docs/defects/fixed/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md).
+         */
+        this.dependencies.log(`notice action reached ${target}: window ${holder.wcId} is still opening it; waiting for the open`);
+        await this.awaitWorkspace(holder.wcId);
+        if (this.#liveRecord(holder.wcId) === undefined || holder.workspaceId === undefined) {
+          return { ok: false, outcome: { ok: false, code: 'workspace.openFailed', headline: `Could not open the selected project: ${target} could not be opened as a workspace.` } };
+        }
+      }
       return { ok: true, window: this.#view(holder), added: false };
     }
     const requester = this.#activeRecord();
@@ -674,6 +705,7 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     const record = this.#records.get(id);
     if (!record) return;
     record.deferredOffer?.cancel();
+    record.settleReady();
     this.#records.delete(id);
     const index = this.#focusOrder.indexOf(id);
     if (index >= 0) this.#focusOrder.splice(index, 1);

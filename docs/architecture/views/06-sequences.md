@@ -71,7 +71,10 @@ sequenceDiagram
 **The window paints before the workspace opens.** A view's start-time read — the Overview's session list, the
 repository card — therefore arrives while no workspace exists yet. Those reads **wait, bounded**
 (`awaitWorkspace`, 30 s) rather than being refused; getting this wrong was a first-execution defect of the
-Overview.
+Overview. The readiness they wait on is pending from `MainWindows.build` and settles when the window's first open settles
+(or the window is forgotten), so the wait also covers a read that arrives between the window's load and its open; and a
+notice action's `reach` that meets a window still opening the workspace it names waits on the same readiness before acting
+on it (2026-10-14, `../../defects/fixed/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md`).
 
 **The update check rides the post-show activation, and so does every window built later.** `MainWindows` fires
 `postShowActivation` once per window on the window's own show event — the launch's window, a replacement's

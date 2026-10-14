@@ -17,9 +17,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { resolve } from 'node:path';
 // @ts-expect-error — the shapes are plain ESM beside the script that replays them.
-import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, GATE_REFUSALS, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, STEADY_INTERVAL_MS, STEADY_TICKS, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pairNotReachedNote, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
+import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, GATE_REFUSALS, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, STEADY_INTERVAL_MS, STEADY_TICKS, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pairNotReachedNote, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, terminalWaitMs, unexpandableReading } from './terminal-shapes.mjs';
 
 interface Shape { readonly id: string; readonly match: RegExp; readonly command: string; readonly prompt?: string }
 
@@ -547,5 +548,30 @@ describe('the gate refusals that leave a shape unasked, all of them (N92)', () =
     expect(pairNotReachedNote([['wedge-again', shapeSends(again, [refused])], ['behind-paused', shapeSends(behind, [behindRefused])]], 'unasked')?.title).toBe('wedge-again and behind-paused were not reached: refused at the todo gate');
     // Neither refused: not this NOTE.
     expect(pairNotReachedNote([['wedge-again', shapeSends(again, [])], ['behind-paused', shapeSends(behind, [])]], 'unasked')).toBeNull();
+  });
+});
+
+/*
+ * Acceptance finding L7 (fin46, the default run at 3c3f447): the `terminal` scenario's role is coordinator_only, so the root
+ * delegates the shapes; its tester ran the steady printer with a timeout it was told not to add, the coordinator followed it
+ * up once to run it again without, and the 550 s wait (420 s plus one steady) ran out 64.8 s into that re-run.
+ */
+describe('the terminal scenario\'s wait (L7)', () => {
+  const steadyMs = STEADY_INTERVAL_MS * STEADY_TICKS;
+  it('carries the steady shape twice and a follow-up turn on top of the common wait', () => {
+    expect(terminalWaitMs(420_000)).toBeGreaterThanOrEqual(420_000 + 2 * steadyMs + 60_000);
+    // It grows with the common wait, so LIVE_RUN_WAIT_MS still scales it.
+    expect(terminalWaitMs(600_000) - terminalWaitMs(420_000)).toBe(180_000);
+  });
+  it('covers the 3c3f447 timeline: the re-run to its default cap, the child\'s report and the coordinator\'s answer', () => {
+    const cutAt = 550_000; // the wait that ran out, 16:14:21 to 16:23:31
+    const rerunLeft = DEFAULT_SHELL_COMMAND_TIMEOUT_S * 1000 - 64_802; // the re-run, cut 64.8 s in, ends at the default cap
+    const reportAndAnswer = 60_000; // the child's report and the coordinator's closing answer
+    expect(terminalWaitMs(420_000)).toBeGreaterThan(cutAt + rerunLeft + reportAndAnswer);
+  });
+  it('is the wait the live run\'s terminal launch uses', () => {
+    const source = readFileSync(resolve(import.meta.dirname, '..', 'live-run.mjs'), 'utf8');
+    const block = source.slice(source.indexOf("if (wanted.includes('terminal'))"), source.indexOf("const log = await launch('terminal'"));
+    expect(block).toContain('const TERMINAL_WAIT_MS = terminalWaitMs(RUN_WAIT_MS);');
   });
 });

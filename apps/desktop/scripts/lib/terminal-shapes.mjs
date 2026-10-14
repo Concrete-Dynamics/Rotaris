@@ -50,6 +50,21 @@ export const DEFAULT_SHELL_COMMAND_TIMEOUT_S = 100;
 export const STEADY_INTERVAL_MS = 2_000;
 export const STEADY_TICKS = 65;
 
+/** The allowance for one follow-up turn: the coordinator's follow-up to its child, the child's report and the closing answer. */
+export const FOLLOW_UP_ALLOWANCE_MS = 120_000;
+
+/**
+ * The `terminal` scenario's wait for the run's result, given the scenarios' common `runWaitMs`. Acceptance finding L7 (fin46;
+ * the default run at `3c3f447`): the scenario's role is `coordinator_only`, so the root delegates every shape to a child
+ * (REQ-TOOLS-004/006), and a coordinator that reads the report and has the child run the longest shape once more is doing
+ * its job. The wait was `runWaitMs` plus one `steady` (550 s at the default), the budget of one agent running each shape
+ * once, and ran out 64.8 s into exactly that re-run. It now carries the `steady` shape twice and one follow-up turn on top
+ * of the common wait (800 s at the default). A run that needs more than one re-run of it still fails the wait, as it should.
+ */
+export function terminalWaitMs(runWaitMs) {
+  return runWaitMs + 2 * STEADY_INTERVAL_MS * STEADY_TICKS + FOLLOW_UP_ALLOWANCE_MS;
+}
+
 /**
  * The `steady` shape's command: one `tick-<n>` line every `STEADY_INTERVAL_MS` for `STEADY_TICKS` lines (130 s), issued with
  * no `timeout`. It never goes quiet for the no-output window, so REQ-TOOLS-098's soft pause never fires, and it runs past

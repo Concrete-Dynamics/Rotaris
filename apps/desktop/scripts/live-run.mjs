@@ -255,7 +255,7 @@ import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFa
 import { ARTIFACTS_TAB } from './lib/library-refresh.mjs';
 import { HANDOFF_ARTIFACT_CAP, attachReading, delegatesToReading, followUpReading, handoffArtifact, handoffReading, requestOf, swarmReading } from './lib/delegation-readings.mjs';
 import { frontmatterOfRow, leadingFrontmatter } from './lib/artifact-frontmatter.mjs';
-import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, STEADY_INTERVAL_MS, STEADY_TICKS, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pairNotReachedNote, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
+import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pairNotReachedNote, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, terminalWaitMs, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -2488,8 +2488,9 @@ if (wanted.includes('terminal')) {
     ...SHAPES.map((shape, i) => `${i + 1}. ${shape.prompt ?? shape.command}`),
   ].join('\n');
   // The `steady` shape runs until the default hard cap ends it, 100 s by design (REQ-CONFIG-116), so the run's wait carries
-  // the shape's own length on top of the scenarios' common one.
-  const TERMINAL_WAIT_MS = RUN_WAIT_MS + STEADY_INTERVAL_MS * STEADY_TICKS;
+  // the shape's own length on top of the scenarios' common one: twice since fin46 (L7), with one follow-up turn, because the
+  // coordinator_only root delegates the shapes and may have its child run that shape again (`terminalWaitMs`).
+  const TERMINAL_WAIT_MS = terminalWaitMs(RUN_WAIT_MS);
   const log = await launch('terminal', {
     ROTARIS_CAPTURE_PROMPT: PROMPT,
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(TERMINAL_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000', ROTARIS_CAPTURE_PROBE: DURATION_PROBES.join(';;'),

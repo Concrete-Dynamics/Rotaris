@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A window's renderer that starts a new document listens again only once it says so (fin45, `fin45-optional-findings`).**
+`MainWindowAdapter.onNavigated` (Electron: the main frame's `did-start-navigation`, not same-document) clears a window record's
+`listening`, so a session focus or Settings › Project request made while the renderer reloads is held for it, not sent to a
+document with no listener. `05-state-ownership.md` (the window-requests row).
+
 **A notice action reaches a window whose store was refused (fin45, `fin45-optional-findings`;
 `../../defects/fixed/a-notice-action-reaching-a-window-whose-store-was-refused-answers-an-unreported-failure.md`).**
 `MainWindows.reach`, after waiting on a holder's open, refuses only a window that is gone; one that stands with no workspace id

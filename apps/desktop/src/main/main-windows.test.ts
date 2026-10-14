@@ -25,6 +25,7 @@ interface MemoryWindow {
   readonly focusListeners: (() => void)[];
   readonly closedListeners: (() => void)[];
   readonly shownListeners: (() => void)[];
+  readonly navigatedListeners: (() => void)[];
 }
 
 interface PendingTimer {
@@ -56,7 +57,7 @@ function harness(options: {
     create: async ({ workspace, origin }) => {
       const win: MemoryWindow = {
         id: nextId++, workspace, destroyed: false, visible: false, minimized: false, closeAllowed: true,
-        focusListeners: [], closedListeners: [], shownListeners: [],
+        focusListeners: [], closedListeners: [], shownListeners: [], navigatedListeners: [],
       };
       windows.set(win.id, win);
       actions.push(`build:${workspace}:${origin}`);
@@ -93,6 +94,7 @@ function harness(options: {
     onFocus: (win, listener) => { win.focusListeners.push(listener); },
     onClosed: (win, listener) => { win.closedListeners.push(listener); },
     onShown: (win, listener) => { win.shownListeners.push(listener); },
+    onNavigated: (win, listener) => { win.navigatedListeners.push(listener); },
     ownsAuxiliary: (personaWindows, terminalWindows, senderId) => terminalWindows === `terminal:${senderId - 100}` || personaWindows === `personas:${senderId - 200}`,
     disposeResources: (_win, _wcId, personaWindows, terminalWindows) => actions.push(`dispose:${personaWindows}:${terminalWindows}`),
   };
@@ -501,6 +503,24 @@ describe('MainWindows', () => {
       // Listening from then on: the next request is sent, not held.
       expect(h.mainWindows.focusSession(added, 'S-A2')).toBe('sent');
       expect(h.delivered).toEqual([`${added}:session-focus:S-A2`]);
+    });
+
+    // A renderer that reloads has no listener until its new document registers again: a request in between is held for it,
+    // never sent to the reloading document and lost (fin44's review of `fin44-notice-reach`).
+    it('a window whose renderer starts a new document listens again only once it says so; a request in between is held', async () => {
+      const h = harness();
+      const a = await h.mainWindows.launch('C:/a');
+      expect(h.mainWindows.sessionFocusReady(a.wcId)).toBeNull();
+      expect(h.mainWindows.projectInitReady(a.wcId)).toBe(false);
+      expect(h.mainWindows.focusSession(a.wcId, 'S-1')).toBe('sent');
+      for (const listener of h.windows.get(a.wcId)!.navigatedListeners) listener();
+      expect(h.mainWindows.focusSession(a.wcId, 'S-2')).toBe('held');
+      expect(h.mainWindows.openProjectInit(a.wcId)).toBe('held');
+      expect(h.delivered).toEqual([`${a.wcId}:session-focus:S-1`]);
+      expect(h.mainWindows.sessionFocusReady(a.wcId)).toBe('S-2');
+      expect(h.mainWindows.projectInitReady(a.wcId)).toBe(true);
+      expect(h.mainWindows.focusSession(a.wcId, 'S-3')).toBe('sent');
+      expect(h.delivered).toEqual([`${a.wcId}:session-focus:S-1`, `${a.wcId}:session-focus:S-3`]);
     });
 
     it('a second request while one is held replaces it, and a window gone answers so', async () => {

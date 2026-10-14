@@ -30,6 +30,11 @@ export interface MainWindowAdapter<TWindow, TPersonaWindows, TTerminalWindows> {
   readonly onClosed: (win: TWindow, listener: () => void) => void;
   /** Fires once, when the window becomes visible — the moment REQ-STARTUP-043's post-show activation may begin. */
   readonly onShown: (win: TWindow, listener: () => void) => void;
+  /**
+   * Fires each time the window's main frame starts loading a new document — a reload or a navigation, never a same-document
+   * one — after which nothing its renderer registered is listening until the new document registers again.
+   */
+  readonly onNavigated: (win: TWindow, listener: () => void) => void;
   readonly ownsAuxiliary: (personaWindows: TPersonaWindows, terminalWindows: TTerminalWindows, senderId: number) => boolean;
   readonly disposeResources: (win: TWindow, wcId: number, personaWindows: TPersonaWindows, terminalWindows: TTerminalWindows) => void;
 }
@@ -175,6 +180,13 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     this.#rememberFocus(record.wcId);
     this.dependencies.adapter.onFocus(record.win, () => this.#rememberFocus(record.wcId));
     this.dependencies.adapter.onClosed(record.win, () => this.#forget(record.wcId));
+    // A renderer that reloads or navigates registers its window requests again from its new document (`sessionFocusReady`,
+    // `projectInitReady`); until it does, a request is held, not sent to a document with no listener and lost. A held request
+    // stays held across the load. Until 2026-10-14 `listening` was never cleared (fin44's review of `fin44-notice-reach`).
+    this.dependencies.adapter.onNavigated(record.win, () => {
+      if (record.listening.size > 0) this.dependencies.log(`window ${record.wcId} started a new document; its window requests are held until it listens again`);
+      record.listening.clear();
+    });
     // REQ-STARTUP-043: the update check is initiated from the post-show activation and never during construction —
     // registered here, fired by the adapter when the window is shown, once for this window.
     let activated = false;
@@ -1111,6 +1123,7 @@ export function createElectronMainWindowAdapter(
     onClosed: (win, listener) => { win.on('closed', listener); },
     // The window's own `show` event: fired by the `ready-to-show` show above and by `#replace`'s explicit show alike, once.
     onShown: (win, listener) => { win.once('show', listener); },
+    onNavigated: (win, listener) => { win.webContents.on('did-start-navigation', (details) => { if (details.isMainFrame && !details.isSameDocument) listener(); }); },
     ownsAuxiliary: (personaWindows, terminalWindows, senderId) => Boolean(
       personaWindows.bySender(senderId) ?? terminalWindows.bySender(senderId),
     ),

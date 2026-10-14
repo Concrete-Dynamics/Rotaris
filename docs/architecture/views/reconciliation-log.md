@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A fatal report spells a legacy-named role as its file does (fin46, `fin46-accept1-16`; REQ-CONFIG-478, REQ-CONFIG-062,
+acceptance finding A1).** `03-runtime-view.md` §8 says the report's key path takes the spelling the named file holds
+(`spelledAsStated`), with the old reading (the canonical name) kept beside it. No package, edge or process changed. The
+README's date stays 2026-10-15, the later.
+
 **A merged-section warning names the file that stated the key (fin46, `fin46-accept1-16`; REQ-CONFIG-233, acceptance finding A4).**
 `03-runtime-view.md` §8 says the typed section readers' warnings now name their file and scope in the fatal report's form
 (`statingFileOf`), a value no scope file states keeping the bare form, with the old reading ("naming no file") kept beside it.

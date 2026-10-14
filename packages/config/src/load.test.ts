@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { canonicaliseRoles, mergeLayers, overlaySection, PLAIN_OPS } from './merge.js';
-import { loadConfiguration, readDelegationStrategy, repositoryExcludeFile, statedPrefixLength, type LoadedConfiguration } from './load.js';
+import { loadConfiguration, readDelegationStrategy, repositoryExcludeFile, spelledAsStated, statedPrefixLength, type LoadedConfiguration } from './load.js';
 import { parseConfig } from './document.js';
 import { referentialMessages, renderFatal, renderProblems } from './validate.js';
 import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase, syntheticOriginOf } from './slots.js';
@@ -415,9 +415,45 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
       const s = scopes(null, null, { globalModels: 'models:\n  gpt-4.1: { provider: openai, model_id: m, input_cost_per_token: cheap, output_cost_per_token: 0.1 }\n' });
       expect(fault(s)).toMatchObject({ path: 'models.gpt-4.1.input_cost_per_token', file: join(s.globalDir, 'models.yml'), scope: 'global' });
     });
-    it('a role stated under its legacy name in the global file is found under its canonical name (REQ-CONFIG-062)', () => {
+    /**
+     * REQ-CONFIG-478's "full path within that file": the file is found through the canonicalised document (REQ-CONFIG-062),
+     * and the path is then spelled as that file states it. Until fin46 it carried the canonical name, which the named file
+     * does not hold (docs/defects/fixed/a-fatal-report-names-a-legacy-role-by-a-name-its-file-does-not-hold.md).
+     */
+    it('a role stated under its legacy name in the global file is found, and reported under the name the file states (REQ-CONFIG-062)', () => {
       const s = scopes('personas:\n  oracle:\n    purpose: "two\\nlines"\n', 'personas:\n  tester:\n    purpose: one line\n');
-      expect(fault(s)).toMatchObject({ path: 'personas.codebase-analyst.purpose', file: join(s.globalDir, 'agents.yaml'), scope: 'global' });
+      const e = fault(s);
+      expect(e).toMatchObject({ path: 'personas.oracle.purpose', file: join(s.globalDir, 'agents.yaml'), scope: 'global' });
+      expect(renderFatal(e)).toContain(`${join(s.globalDir, 'agents.yaml')} at personas.oracle.purpose (global scope)`);
+      expect(e.lines.some((l) => l.startsWith('personas.oracle.purpose: '))).toBe(true);
+      expect(e.lines.some((l) => l.includes('codebase-analyst'))).toBe(false);
+    });
+    it('of two spellings field-merged in one file, the path takes the one stating the field, the later on a tie (REQ-CONFIG-062)', () => {
+      // Only the canonical key states `purpose`, so the fault is reported there although a later legacy key exists.
+      const canonicalStates = scopes('personas:\n  codebase-analyst:\n    purpose: "two\\nlines"\n  oracle:\n    read_only: true\n', null);
+      expect(fault(canonicalStates)).toMatchObject({ path: 'personas.codebase-analyst.purpose', file: join(canonicalStates.globalDir, 'agents.yaml') });
+      // Both state it: the later key's value is the one the field-merge kept, so the later spelling is named.
+      const bothState = scopes(null, 'personas:\n  codebase-analyst:\n    purpose: one line\n  oracle:\n    purpose: "two\\nlines"\n');
+      expect(fault(bothState)).toMatchObject({ path: 'personas.oracle.purpose', scope: 'workspace' });
+    });
+    it('a tool_restrictions key stated under a legacy role name keeps that name in the path (REQ-CONFIG-062)', () => {
+      const s = scopes('personas:\n  tester:\n    tool_restrictions:\n      oracle: 5\n', null);
+      expect(fault(s)).toMatchObject({ path: 'personas.tester.tool_restrictions.oracle', file: join(s.globalDir, 'agents.yaml'), scope: 'global' });
+    });
+    it('spelledAsStated rewrites only the two canonicalised positions, and only to a spelling the document holds', () => {
+      const doc = { personas: { oracle: { purpose: 'x', tool_restrictions: { 'codebase-analyst': ['a'], oracle: ['b'] } }, tester: { purpose: 'y' } }, runtime: { oracle: 1 } };
+      expect(spelledAsStated(doc, 'personas.codebase-analyst.purpose')).toBe('personas.oracle.purpose');
+      expect(spelledAsStated(doc, 'personas.codebase-analyst')).toBe('personas.oracle');
+      // Two restriction keys naming one role: the later is the one the canonicalisation kept.
+      expect(spelledAsStated(doc, 'personas.codebase-analyst.tool_restrictions.codebase-analyst')).toBe('personas.oracle.tool_restrictions.oracle');
+      expect(spelledAsStated(doc, 'personas.tester.purpose')).toBe('personas.tester.purpose');
+      expect(spelledAsStated(doc, 'runtime.codebase-analyst')).toBe('runtime.codebase-analyst');
+      expect(spelledAsStated(doc, 'personas.absent.purpose')).toBe('personas.absent.purpose');
+      expect(spelledAsStated({ personas: null }, 'personas.codebase-analyst.purpose')).toBe('personas.codebase-analyst.purpose');
+    });
+    it('a legacy key the workspace file states names the workspace spelling over a global canonical one', () => {
+      const s = scopes('personas:\n  codebase-analyst:\n    purpose: one line\n', 'personas:\n  oracle:\n    purpose: "two\\nlines"\n');
+      expect(fault(s)).toMatchObject({ path: 'personas.oracle.purpose', file: join(s.workspaceRoot, '.rotaris', 'agents.yaml'), scope: 'workspace' });
     });
     it('the path walk takes the longest key at each level, steps into list items, and stops where the document stops', () => {
       const doc = { models: { 'gpt-4': { a: 1 }, 'gpt-4.1': { provider: 'x' } }, hooks: [{ event: 'x' }], top: null, runtime: { k: null } };
@@ -450,6 +486,12 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
       if (!r.ok) throw new Error(r.error.lines.join(' | '));
       expect(r.value.warnings).toContain(`${join(s.workspaceRoot, '.rotaris', 'agents.yaml')} at compressor.bogus_key (workspace scope): unknown key 'bogus_key' is not recognised by this build and contributes nothing`);
       expect(r.value.warnings.some((w) => w.startsWith(`${join(s.globalDir, 'models.yml')} at models.m.mystery (global scope): `))).toBe(true);
+    });
+    it('a warning on a role stated under its legacy name is spelled as the file states it (REQ-CONFIG-062)', () => {
+      const s = scopes('personas:\n  oracle:\n    permission_mode: sudo\n', null);
+      const r = loadConfiguration(s);
+      if (!r.ok) throw new Error(r.error.lines.join(' | '));
+      expect(r.value.warnings.some((w) => w.startsWith(`${join(s.globalDir, 'agents.yaml')} at personas.oracle.permission_mode (global scope): `))).toBe(true);
     });
     it('a withdrawn requirements key names its file and scope (REQ-CONFIG-183)', () => {
       const s = scopes('requirements:\n  execution:\n    worktree_subpath: x\n', null);

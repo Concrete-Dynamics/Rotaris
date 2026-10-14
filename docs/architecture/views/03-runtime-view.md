@@ -1957,6 +1957,9 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   section readers) is attributed by `statingFile` (`packages/config/src/load.ts`) to the scope file stating the longest
   prefix of its path, the later in REQ-CONFIG-031's order on a tie, each `agents.yaml` read with its legacy role names
   canonicalised and each `models.yml` for `models:` alone; a path no scope file states names the workspace `agents.yaml`.
+  The key is named as that file spells it (`spelledAsStated`, 2026-10-14, fin46): a role the file states under its legacy
+  name keeps that name in the path, under `personas:` and in a role's `tool_restrictions:` (REQ-CONFIG-062), where until
+  then the path carried the canonical name the file does not hold.
   Until then every merged-document fault named the workspace file and scope, so a global fault named a file that need not
   exist (REQ-CONFIG-478; `notice-proof` 1d). **A warning the same readers raise names its file too (2026-10-14, fin46):** an
   unknown key inside a merged section, a withdrawn `requirements:` key and the readers' other warnings reach the load's

@@ -26,6 +26,9 @@ import { startApp, stopApp, until } from './lib/driver.mjs';
  *  1e. A WARNING found on the merged document, stated in the GLOBAL file (an unknown key under `compressor:`): the run starts,
  *     and the run host's configuration warning names the global file by full path, the key and the global scope
  *     (REQ-CONFIG-233). Until fin46 it read `compressor.bogus_key: unknown key …`, naming no file.
+ *  1f. A fault on a role the GLOBAL file states under its legacy name (`personas: { oracle: … }`): the open-time notice names
+ *     the key as the file spells it, `personas.oracle.purpose`, not the canonical `personas.codebase-analyst.purpose` the
+ *     file does not hold (REQ-CONFIG-478, REQ-CONFIG-062).
  *  2. Scoping (REQ-NOTIFY-028/029/058): a notice about another session survives a run start; an unscoped one does not.
  *  3. Compare-and-clear (REQ-NOTIFY-026): dismissing a superseded identifier leaves its successor standing.
  *  4. The ONE transient surface (REQ-NOTIFY-012/013/016/017/021): four published, three visible, newest nearest the
@@ -86,7 +89,7 @@ if (!process.argv.includes('--skip-build')) {
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
-// `--only=<sections>` (comma-separated: 1, 1b, 1c, 1d, 1e, 2, 4, 6, 6b, 6e, 6c, 6d, 7, 7b, 8, 9) runs those sections alone; the default is all.
+// `--only=<sections>` (comma-separated: 1, 1b, 1c, 1d, 1e, 1f, 2, 4, 6, 6b, 6e, 6c, 6d, 7, 7b, 8, 9) runs those sections alone; the default is all.
 const onlyArg = process.argv.find((a) => a.startsWith('--only='));
 const only = onlyArg === undefined ? null : onlyArg.slice('--only='.length).split(',').map((x) => x.trim()).filter((x) => x !== '');
 const want = (id) => only === null || only.includes(id);
@@ -358,6 +361,36 @@ if (want('1e')) {
   expect(/run [0-9a-f-]+ ended /.test(r.log), 'the run did not end: a warning must not stop the load (REQ-CONFIG-233) — see global-merged-warning.log');
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
   results.globalMergedWarning = { globalFile, warning: lines[0].slice(lines[0].indexOf('configuration: ')), elapsedMs: r.elapsedMs };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1f. A fault on a role the GLOBAL file states under its legacy name (REQ-CONFIG-478, REQ-CONFIG-062): `oracle` is
+// canonicalised to `codebase-analyst` before the merge, and the readers raise the fault on the merged document. The
+// open-time notice names the key as the named file spells it. Until fin46 it read `personas.codebase-analyst.purpose`, a key
+// the global file does not hold (docs/defects/fixed/a-fatal-report-names-a-legacy-role-by-a-name-its-file-does-not-hold.md).
+const s1f = scenario('global-legacy-role-fault');
+if (want('1f')) {
+  const appRoot = join(output, 'global-legacy-role-fault-app');
+  const globalFile = join(configDirFor(join(appRoot, 'local')), 'agents.yaml');
+  mkdirSync(dirname(globalFile), { recursive: true });
+  writeFileSync(globalFile, ['# a role under its legacy name, with a two-line purpose (REQ-CONFIG-062)', 'personas:', '  oracle:', '    purpose: "two\\nlines"', ''].join('\n'));
+  const launched = await startApp({ root: appRoot, workspace: s1f.workspace, timeoutMs: 90_000, extra: { ROTARIS_SCRIPT: 'answer' } });
+  const d = launched.driver;
+  let value = null;
+  let failure = null;
+  try {
+    value = await until(() => d.eval(`(() => { const n = document.querySelector('[data-testid="notice"]'); return n ? { title: n.querySelector('[data-testid="notice-title"]')?.textContent ?? null, detail: n.querySelector('[data-testid="notice-detail"]')?.textContent ?? null } : null; })()`), (n) => n?.title === 'The workspace configuration did not load', { timeoutMs: 30_000, what: 'the open-time fatal-load notice' });
+  } catch (cause) {
+    failure = cause;
+  }
+  const stopped = await stopApp(launched, { screenshot: join(output, 'global-legacy-role-fault.png') });
+  const log = existsSync(launched.logFile) ? readFileSync(launched.logFile, 'utf8') : '';
+  writeFileSync(join(output, 'global-legacy-role-fault.log'), log);
+  if (failure) throw new Error(`global-legacy-role-fault: ${failure.message} (see global-legacy-role-fault.log)`);
+  expect(!stopped.overran, 'global-legacy-role-fault: the app did not stop within its bound');
+  expect((value.detail ?? '').includes(`${globalFile} at personas.oracle.purpose (global scope)`), `the open-time notice does not name the key as the global file ${globalFile} spells it: ${JSON.stringify(value)}`);
+  expect(!(value.detail ?? '').includes('codebase-analyst'), `the open-time notice names the canonical role, which the file does not hold: ${JSON.stringify(value)}`);
+  results.globalLegacyRoleFault = { ...value, globalFile };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

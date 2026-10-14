@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { LEGACY_ROLE_ALIASES } from '@rotaris/contracts';
 import { WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
 import { err, ok, type Result } from '@rotaris/kernel';
 import { parseConfig, plainOf, triOf, asMap, vocabularyText, type ParsedConfig } from './document.js';
@@ -418,12 +419,14 @@ export function statedPrefixLength(doc: PlainMap | null, path: string): number {
  * its path, the later in REQ-CONFIG-031's merge order on a tie (global `agents.yaml`, global `models.yml`, workspace
  * `agents.yaml`, workspace `models.yml`), since that is the layer whose value the merge kept there. Each `agents.yaml` is
  * read with its legacy role names canonicalised, as it was merged (REQ-CONFIG-062), and each `models.yml` for its
- * `models:` key alone (REQ-CONFIG-004). A path no scope file states (a value only a built-in default, the discovery
- * snapshot or a run's live overlay supplied) names the workspace `agents.yaml`, the file a user edits by default
- * (REQ-CONFIG-463).
+ * `models:` key alone (REQ-CONFIG-004). The answer's `path` is the fault's path spelled as that file states it
+ * (`spelledAsStated`): a role the file holds under its legacy name is named by that name, so the key the report names is
+ * one the named file holds. A path no scope file states (a value only a built-in default, the discovery snapshot or a
+ * run's live overlay supplied) names the workspace `agents.yaml`, the file a user edits by default (REQ-CONFIG-463), and
+ * keeps its path.
  */
-export function statingFile(path: string, files: { global: ScopeFiles; workspace: ScopeFiles }, raw: ResolveContext['raw']): { file: string; scope: ConfigScope } {
-  return statingFileOf(path, files, raw) ?? { file: files.workspace.agents, scope: 'workspace' };
+export function statingFile(path: string, files: { global: ScopeFiles; workspace: ScopeFiles }, raw: ResolveContext['raw']): { file: string; scope: ConfigScope; path: string } {
+  return statingFileOf(path, files, raw) ?? { file: files.workspace.agents, scope: 'workspace', path };
 }
 
 /**
@@ -436,22 +439,67 @@ export function statingFile(path: string, files: { global: ScopeFiles; workspace
  * none, reported bare). No such case is known to be reached: each overlaid value comes from a control that offers only
  * accepted values, or is validated on assignment (REQ-CONFIG-111), before it is overlaid.
  */
-export function statingFileOf(path: string, files: { global: ScopeFiles; workspace: ScopeFiles }, raw: ResolveContext['raw']): { file: string; scope: ConfigScope } | null {
-  let best: { file: string; scope: ConfigScope } | null = null;
+export function statingFileOf(path: string, files: { global: ScopeFiles; workspace: ScopeFiles }, raw: ResolveContext['raw']): { file: string; scope: ConfigScope; path: string } | null {
+  let best: { file: string; scope: ConfigScope; path: string } | null = null;
   let bestLength = -1;
   for (const scope of ['global', 'workspace'] as const) {
     const agents = raw[scope].agents;
     const models = raw[scope].models;
-    const candidates: [string, PlainMap | null][] = [
-      [files[scope].agents, agents ? canonicaliseRoles(agents) : null],
-      [files[scope].models, models && models['models'] !== undefined ? { models: models['models'] } : null],
+    const candidates: [string, PlainMap | null, PlainMap | null][] = [
+      [files[scope].agents, agents ? canonicaliseRoles(agents) : null, agents],
+      [files[scope].models, models && models['models'] !== undefined ? { models: models['models'] } : null, null],
     ];
-    for (const [file, doc] of candidates) {
+    for (const [file, doc, stated] of candidates) {
       const length = statedPrefixLength(doc, path);
-      if (length >= 0 && length >= bestLength) { best = { file, scope }; bestLength = length; }
+      if (length >= 0 && length >= bestLength) { best = { file, scope, path: stated ? spelledAsStated(stated, path) : path }; bestLength = length; }
     }
   }
   return best;
+}
+
+/**
+ * REQ-CONFIG-478 with REQ-CONFIG-062: `path`, found on the canonicalised document, spelled as `doc` (one scope's
+ * `agents.yaml`, as written) states it. Two positions are canonicalised before the merge and so may differ: a role key under
+ * `personas:` and a key of that role's `tool_restrictions:` (`canonicaliseRoles`). Of two spellings one file field-merges
+ * into one role, the one stating the longer prefix of the path is named, the later on a tie, since the merge kept the later
+ * value; of two `tool_restrictions:` keys naming one role, the later, which the canonicalisation kept. Any other path, and a
+ * path the file does not state under another spelling, is returned unchanged.
+ */
+export function spelledAsStated(doc: PlainMap, path: string, aliases: Readonly<Record<string, string>> = LEGACY_ROLE_ALIASES): string {
+  const personas = doc['personas'];
+  const head = 'personas.';
+  if (!isPlainMap(personas) || !path.startsWith(head)) return path;
+  const role = longestKeyAt(Object.keys(personas), path.slice(head.length), aliases);
+  if (role === null) return path;
+  let key: string | null = null;
+  let keyLength = -1;
+  for (const k of Object.keys(personas)) {
+    if ((aliases[k] ?? k) !== role) continue;
+    const length = statedPrefixLength(canonicaliseRoles({ personas: { [k]: personas[k] } }, aliases), path);
+    if (length >= keyLength) { key = k; keyLength = length; }
+  }
+  if (key === null) return path;
+  const tail = path.slice(head.length + role.length);
+  const spelled = `${head}${key}`;
+  const entry = personas[key];
+  const restrictionsHead = '.tool_restrictions.';
+  const restrictions = isPlainMap(entry) ? entry['tool_restrictions'] : undefined;
+  if (!tail.startsWith(restrictionsHead) || !isPlainMap(restrictions)) return `${spelled}${tail}`;
+  const rest = tail.slice(restrictionsHead.length);
+  const target = longestKeyAt(Object.keys(restrictions), rest, aliases);
+  if (target === null) return `${spelled}${tail}`;
+  const stated = Object.keys(restrictions).filter((k) => (aliases[k] ?? k) === target).at(-1)!;
+  return `${spelled}${restrictionsHead}${stated}${rest.slice(target.length)}`;
+}
+
+/** The longest canonical spelling of one of `keys` that `rest` starts with as a whole path segment, or null. */
+function longestKeyAt(keys: readonly string[], rest: string, aliases: Readonly<Record<string, string>>): string | null {
+  let found: string | null = null;
+  for (const k of keys) {
+    const c = aliases[k] ?? k;
+    if ((rest === c || rest.startsWith(`${c}.`) || rest.startsWith(`${c}[`)) && (found === null || c.length > found.length)) found = c;
+  }
+  return found;
 }
 
 /**
@@ -485,6 +533,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
   const mcpServers = readMcpServersSection(top['mcp_servers'], sink);
 
   // REQ-CONFIG-478: each fault found on the merged value names the file that stated it, by full path and scope.
+  // REQ-CONFIG-478 with REQ-CONFIG-062: and the key by its path as that file spells it (`statingFile`'s `path`).
   const fatal = [...problems, ...sink.errors.map((p) => ({ ...p, ...statingFile(p.path, files, ctx.raw) }))];
   if (fatal.length > 0) {
     const first = fatal[0]!;
@@ -513,7 +562,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
     // key, in the fatal report's form (`renderFatal`); one on a value no scope file states keeps the bare `<path>: <message>`.
     ...sink.warnings.map((w) => {
       const at = statingFileOf(w.path, files, ctx.raw);
-      return at === null ? `${w.path}: ${w.message}` : `${at.file} at ${w.path} (${at.scope} scope): ${w.message}`;
+      return at === null ? `${w.path}: ${w.message}` : `${at.file} at ${at.path} (${at.scope} scope): ${w.message}`;
     }),
     ...resolution.warnings,
   ];

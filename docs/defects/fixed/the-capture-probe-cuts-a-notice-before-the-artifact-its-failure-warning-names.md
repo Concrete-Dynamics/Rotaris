@@ -48,3 +48,9 @@ The `ask` scenario's post-run analysis was a parse failure again (REQ-LIBRARY-02
 717 characters and ended "impart_w0pBH0L6 holds no proposals.", and the check "the notice on screen is the one the analysis
 outcome owes" PASSED. The retrospective in that run proposed nothing, so its own failure warning was not asked. Its check
 PASSED on "The retrospective found nothing to propose", and the run ended "live-run PASSED".
+
+Seen again, before this repair reached it: fin46's `fin46-accept1-4`, built on a base older than the repair, met the same cut in
+its own `--only=ask` live run (pack `2026-10-14T18-49-03-495Z`; the analyst's answer failed to parse on
+`proposals[0].proposed_verifier_section`, and the probe stopped inside that error) and recorded it as
+`docs/defects/the-ask-notice-check-reads-a-probe-cut-before-a-parse-failed-warning-names-its-artifact.md`. That note described
+this defect, so its reviewer folded it into this one when the bundle was rebased onto the repair, and removed it.

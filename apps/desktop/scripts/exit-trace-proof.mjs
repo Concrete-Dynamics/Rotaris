@@ -6,7 +6,7 @@
  * `render-process-gone` for a renderer lost, `child-process-gone` for a utility child lost, and `process.on('exit')` last
  * (`docs/defects/fixed/process-exit-left-no-diagnosable-trace.md`). The orderly half was measured when it landed; the crash
  * handlers were "argued, not measured", and no proof or live launch killed a process until this one
- * (`docs/defects/fixed/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Two driven launches:
+ * (`docs/defects/fixed/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Four driven launches:
  *
  *   1. orderly — launched and quit through the driver: the log carries `quit: exiting with status 0` and
  *                `main process exiting with status 0`, and NO `error` line for a renderer or a child gone. The control for
@@ -22,6 +22,15 @@
  *                guard's question never answered and the quit was held for good
  *                (`docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`).
  *                Should the quit be held again the check fails, and the immediate exit ends the launch for its trace.
+ *
+ *   3. hang    — the main window's renderer stopped with SIGSTOP (alive, answering nothing), then the driver's quit: the
+ *                close guard's question is sent with main's liveness probe beside it, the probe goes unanswered for
+ *                `RENDERER_LIVENESS_BOUND_MS` (5 s), main writes at `warn` that the renderer cannot answer, its guard allows,
+ *                and the orderly shutdown runs to exit 0 within 15 s (PD-SHELL-010; until 2026-10-14 the quit was held
+ *                for good: `docs/defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`).
+ *   4. hang-close — the same hang, then the host's close of the window (the driver's `closeWindow`,
+ *                `BrowserWindow.close()`): a person's close, which is released the same way and ends the application
+ *                with its last window.
  *
  * What it cannot fire: `unhandledRejection` and `uncaughtException` in main. Neither can be raised in main from outside the
  * process, and adding a seam that throws inside main to prove a one-line log call is not justified (the repaired note's
@@ -151,6 +160,67 @@ const results = {};
   const lastOwn = lines.findLastIndex((l) => l.message === 'main process exiting with status 0');
   check('the log ends where the process did: main\'s exit line comes after the losses, and nothing of main\'s own work after it', lastOwn > lines.findIndex((l) => /^RENDERER GONE \(/.test(l.message)) && lines.slice(lastOwn + 1).every((l) => /^quit: exiting with status \d+$|^workspace service for .* exited \(\d+\)$/.test(l.message)), lines.slice(-3).map((l) => l.message).join(' | '));
   results.crash = { runHostPid, runHost: runHostLines.map((l) => `${l.level} ${l.message}`), renderers: renderers.map((r) => r.pid), renderer: rendererLine ? `${rendererLine.level} ${rendererLine.message}` : null, guardedQuit: guardedExit === null ? { held: true } : { held: false, exit: guardedExit }, exit: ended, last: lines.slice(-3).map((l) => `${l.level} ${l.message}`) };
+}
+
+// ── 3 and 4. hang: the main window's renderer stopped (SIGSTOP), then the application's quit, or a person's close ──────
+/*
+ * PD-SHELL-010 (OQ-297, the consortium's HR1). A renderer that is alive but hung is not gone: until 2026-10-14 its close
+ * guard's question was waited for with no bound, and it held the application's quit and a person's close of its window
+ * (docs/defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md). Main now asks a liveness probe of
+ * its own beside the guard's question; unanswered within RENDERER_LIVENESS_BOUND_MS (5 s) the renderer cannot answer, its
+ * guard allows, and main says so at `warn`. SIGSTOP is the hang: the renderer's process is alive and answers nothing.
+ *
+ *   3. hang       — the driver's quit (`app.quit()`) ends the process, exit 0, through the orderly path, within 15 s.
+ *   4. hang-close — the host's close of the window (`BrowserWindow.close()`, what Alt+F4 or the taskbar sends: the title
+ *                   bar's own close control is the hung renderer's to press) closes it as a person's close; it was the
+ *                   last window, so the application ends the same way.
+ *
+ * The stopped renderers are continued once the launch has ended (or been ended), so no stopped process outlives the proof.
+ */
+const LIVENESS_BOUND_MS = 5_000;
+const hangWarned = (lines) => lines.filter((l) => l.level === 'warning' && /^main window \d+: close guard: the renderer cannot answer: unresponsive \(no answer to the liveness probe within 5000 ms\); its guard allows \(PD-SHELL-010\)/.test(l.message));
+for (const [name, how] of [['hang', 'quit'], ['hang-close', 'close']]) {
+  const started = await startApp({ root: join(output, name), workspace, timeoutMs: 90_000 });
+  await started.driver.waitFor('.app-shell', { timeoutMs: 60_000 });
+  const renderers = renderersOf(started.child.pid);
+  check(`${name}: the launch has a renderer to hang`, renderers.length >= 1, renderers.map((r) => r.pid).join(', ') || 'none');
+  for (const r of renderers) { try { process.kill(r.pid, 'SIGSTOP'); } catch { /* gone already */ } }
+  check(`${name}: the stopped renderer answers nothing`, (await within(started.driver.eval('1 + 1').catch((e) => String(e)), 2_000)) === null);
+  const askedAt = Date.now();
+  const asked = how === 'quit' ? await within(started.driver.quit(), 10_000) : await within(started.driver.closeWindow().catch((e) => ({ error: String(e) })), 10_000);
+  const exited = await exitWithin(started.child, 15_000);
+  const tookMs = exited === null ? null : Date.now() - askedAt;
+  check(
+    how === 'quit' ? `${name}: the application's quit with its renderer hung ends the process, exit 0, within 15 s` : `${name}: a person's close of the window whose renderer hangs closes it, and the application ends, exit 0, within 15 s`,
+    exited?.code === 0,
+    exited === null ? `held (${asked === null ? 'unanswered' : `answered ${JSON.stringify(asked)}`}, no exit in 15 s)` : `${JSON.stringify(exited)} after ${tookMs} ms`,
+  );
+  let ended = exited;
+  if (ended === null) {
+    await within(started.driver.quit({ immediate: true }), 10_000);
+    ended = await exitWithin(started.child, 15_000);
+  }
+  started.driver.close();
+  for (const r of renderers) { try { process.kill(r.pid, 'SIGCONT'); } catch { /* gone with the launch */ } }
+  if (ended === null) { await endLaunch(started.child); throw new Error(`${name}: the launch did not exit on the immediate exit either:\n${logTail(logOf(started))}`); }
+  await drainGroup(started.child);
+  const leftover = renderers.filter((r) => { try { process.kill(r.pid, 0); return true; } catch { return false; } });
+  for (const r of leftover) { try { process.kill(r.pid, 'SIGKILL'); } catch { /* gone */ } }
+  const lines = mainLines(logOf(started));
+  const warned = hangWarned(lines);
+  check(`${name}: main writes at warn which signal fired — the liveness probe unanswered within ${LIVENESS_BOUND_MS} ms`, warned.length === 1, warned.map((l) => `${l.level} ${l.message}`).join(' | ') || 'no line');
+  check(
+    `${name}: the close waited for the probe's bound and no longer`,
+    tookMs !== null && tookMs >= LIVENESS_BOUND_MS - 500 && tookMs < 15_000,
+    tookMs === null ? 'no exit' : `${tookMs} ms from the ${how} to the exit`,
+  );
+  if (how === 'quit') {
+    check(`${name}: the quit took the orderly path: the guards were asked, and main wrote \`quit: exiting with status 0\``, exited !== null && lines.some((l) => /^quit: closing 1 main window\(s\) through their close guards first/.test(l.message)) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
+  } else {
+    check(`${name}: the close was a person's, not the application's quit: no guarded quit was started, and main wrote \`quit: exiting with status 0\``, exited !== null && !lines.some((l) => /^quit: closing \d+ main window\(s\) through their close guards first/.test(l.message)) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
+  }
+  check(`${name}: main's last line of its own is its exit`, lines.some((l) => l.message === 'main process exiting with status 0'), lines.slice(-3).map((l) => l.message).join(' | '));
+  results[name] = { renderers: renderers.map((r) => r.pid), asked, exit: ended, tookMs, leftoverRenderers: leftover.map((r) => r.pid), warned: warned.map((l) => `${l.level} ${l.message}`), last: lines.slice(-4).map((l) => `${l.level} ${l.message}`) };
 }
 
 results.checks = checks;

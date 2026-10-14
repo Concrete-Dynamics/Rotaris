@@ -793,6 +793,8 @@ export interface ElectronMainWindowAdapterDependencies {
   /** Each main window's close guard as it is built, and `null` once the window has closed. */
   readonly closeGuard?: ((wcId: number, guard: CloseGuard | null) => void) | undefined;
   readonly log: (message: string) => void;
+  /** Main's log at `warn`: which signal said a renderer cannot answer its close guard (PD-SHELL-010). */
+  readonly warn?: ((message: string) => void) | undefined;
 }
 
 /** PD-SHELL-003: auto-hide is not removal — null is what suppresses Electron's default app menu on every host. */
@@ -869,6 +871,16 @@ export function guardClose(win: GuardedWindow, ask: () => Promise<unknown>, conf
 /** The renderer's own guard, asked through `executeJavaScript` (the renderer's unsaved-settings guard, REQ-SHELL-119 guard 1). */
 export const RENDERER_CLOSE_GUARD_SCRIPT = 'typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true';
 
+/**
+ * PD-SHELL-010: how long main waits for its liveness probe's answer before a renderer that is alive "cannot answer" its
+ * close guard. The probe is a question of main's own, which needs no person; the guard's question gets no bound, because its
+ * answer may be a person's Save/Discard/Cancel (REQ-SHELL-124).
+ */
+export const RENDERER_LIVENESS_BOUND_MS = 5_000;
+
+/** The liveness probe: a trivial question any renderer whose main thread runs answers at once. */
+export const RENDERER_LIVENESS_PROBE = 'true';
+
 /** The part of a main window's `webContents` its close guard's question needs. */
 export interface GuardedContents {
   executeJavaScript(code: string): Promise<unknown>;
@@ -876,30 +888,79 @@ export interface GuardedContents {
   isDestroyed(): boolean;
   once(event: 'render-process-gone', listener: () => void): unknown;
   once(event: 'destroyed', listener: () => void): unknown;
+  once(event: 'unresponsive', listener: () => void): unknown;
   removeListener(event: 'render-process-gone', listener: () => void): unknown;
   removeListener(event: 'destroyed', listener: () => void): unknown;
+  removeListener(event: 'unresponsive', listener: () => void): unknown;
+}
+
+export interface RendererGuardDependencies {
+  /** The main-window timers port (`rotaris/no-bare-timers`): the liveness probe's bound. */
+  readonly timers: { readonly after: (delayMs: number, callback: () => void) => MainWindowTimer };
+  /** Where main writes, at `warn`, which signal said the renderer cannot answer. */
+  readonly warn?: ((message: string) => void) | undefined;
 }
 
 /**
- * Asks a main window's renderer its close guard. A renderer that is gone cannot answer, and a guard that cannot answer
- * allows (`guardClose`), so the question rejects: at once when the renderer has crashed or its contents are destroyed, and
- * the moment either happens while the question is out. Electron's `executeJavaScript` on a renderer that is gone neither
- * resolves nor rejects ("Render frame was disposed before WebFrameMain could be accessed"), so until 2026-10-14 the
- * question asked of a crashed renderer never answered, and a person's close of its window and the application's quit
- * (`closeThroughGuards`) waited on it with no bound
- * (`docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`). A live renderer is
- * waited for without a bound of its own: its guard may be a person's decision (REQ-SHELL-119).
+ * Asks a main window's renderer its close guard (REQ-SHELL-119 guard 1). A renderer that cannot answer allows (`guardClose`),
+ * so the question rejects, with "cannot answer: <signal>", when (PD-SHELL-010, OQ-297):
+ *
+ * - **gone** — at once when the renderer has crashed or its contents are destroyed, and the moment either happens while the
+ *   question is out. Electron's `executeJavaScript` on a renderer that is gone neither resolves nor rejects, so until
+ *   2026-10-14 the question asked of a crashed renderer never answered
+ *   (`docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`);
+ * - **unresponsive** — main's liveness probe, a trivial question sent beside the guard's and again each time
+ *   `RENDERER_LIVENESS_BOUND_MS` elapses with the last one answered, is still unanswered at its bound; or Chromium emits
+ *   `unresponsive` for the contents. A renderer that was alive but hung held its window's close and the application's quit
+ *   with no bound until 2026-10-14 (`docs/defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`).
+ *
+ * A renderer that answers its probes is waited for without a bound of its own: its guard may be a person deciding. Every
+ * listener and timer is removed once the question settles, whichever way, and an answer or a signal after that is ignored.
  */
-export function askRendererGuard(contents: GuardedContents): Promise<unknown> {
-  if (contents.isDestroyed() || contents.isCrashed()) return Promise.reject(new Error('the renderer is gone'));
+export function askRendererGuard(contents: GuardedContents, dependencies: RendererGuardDependencies): Promise<unknown> {
+  const cannotAnswer = (signal: 'gone' | 'unresponsive', why: string): Error => {
+    const reason = `cannot answer: ${signal} (${why})`;
+    dependencies.warn?.(`close guard: the renderer ${reason}; its guard allows (PD-SHELL-010)`);
+    return new Error(`the renderer ${reason}`);
+  };
+  if (contents.isDestroyed() || contents.isCrashed()) {
+    return Promise.reject(cannotAnswer('gone', contents.isDestroyed() ? 'its contents are destroyed' : 'it has crashed'));
+  }
   return new Promise<unknown>((resolve, reject) => {
-    const gone = (): void => { stop(); reject(new Error('the renderer went while its close guard was asked')); };
-    const stop = (): void => { contents.removeListener('render-process-gone', gone); contents.removeListener('destroyed', gone); };
+    let settled = false;
+    let bound: MainWindowTimer | null = null;
+    const finish = (settle: () => void): void => {
+      if (settled) return;
+      settled = true;
+      bound?.cancel();
+      bound = null;
+      contents.removeListener('render-process-gone', gone);
+      contents.removeListener('destroyed', destroyed);
+      contents.removeListener('unresponsive', unresponsive);
+      settle();
+    };
+    const gone = (): void => finish(() => reject(cannotAnswer('gone', 'its process went while the question was out')));
+    const destroyed = (): void => finish(() => reject(cannotAnswer('gone', 'its contents were destroyed while the question was out')));
+    const unresponsive = (): void => finish(() => reject(cannotAnswer('unresponsive', 'Chromium reported it unresponsive')));
+    const probe = (): void => {
+      let answered = false;
+      let sent: Promise<unknown>;
+      try { sent = contents.executeJavaScript(RENDERER_LIVENESS_PROBE); } catch (error) { sent = Promise.reject(error); }
+      sent.then(() => { answered = true; }, () => undefined);
+      bound = dependencies.timers.after(RENDERER_LIVENESS_BOUND_MS, () => {
+        bound = null;
+        if (settled) return;
+        if (answered) probe();
+        else finish(() => reject(cannotAnswer('unresponsive', `no answer to the liveness probe within ${RENDERER_LIVENESS_BOUND_MS} ms`)));
+      });
+    };
     contents.once('render-process-gone', gone);
-    contents.once('destroyed', gone);
+    contents.once('destroyed', destroyed);
+    contents.once('unresponsive', unresponsive);
     let asked: Promise<unknown>;
     try { asked = contents.executeJavaScript(RENDERER_CLOSE_GUARD_SCRIPT); } catch (error) { asked = Promise.reject(error); }
-    asked.then((answer) => { stop(); resolve(answer); }, (error: unknown) => { stop(); reject(error); });
+    asked.then((answer) => finish(() => resolve(answer)), (error: unknown) => finish(() => reject(error)));
+    probe();
   });
 }
 
@@ -989,7 +1050,7 @@ export function createElectronMainWindowAdapter(
 
       const guard = guardClose(
         win,
-        () => askRendererGuard(win.webContents),
+        () => askRendererGuard(win.webContents, { timers: dependencies.timers, warn: (m) => (dependencies.warn ?? dependencies.log)(`main window ${wcId}: ${m}`) }),
         () => dependencies.closeConfirmed?.(wcId),
         dependencies.confirmRunsAtClose === undefined ? undefined : () => dependencies.confirmRunsAtClose!(wcId, win),
       );

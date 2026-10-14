@@ -16,6 +16,14 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A renderer that is alive but does not answer cannot answer its close guard (PD-SHELL-010, OQ-297, the consortium's HR1;
+fin44).** `askRendererGuard` (`main/main-windows.ts`) takes the main-window timers port and a `warn`, sends main's liveness probe
+beside the guard's question every `RENDERER_LIVENESS_BOUND_MS` (5 000 ms), listens for `unresponsive`, and rejects "cannot
+answer: unresponsive" on a probe unanswered at its bound or on that event; both callers (`createElectronMainWindowAdapter`'s
+`guardClose` and `closeGuard` in `main/index.ts`, REQ-SHELL-021's gate 1) pass them. The driver gains `closeWindow`
+(`BrowserWindow.close()`, the host's close). The **process view**'s quit paragraph and the **runtime view**'s application's-end
+paragraph say so. No package, edge, process, channel, command or store column changed.
+
 **A window built after a notice's publication shows it (fin44, `fin44-notice-reach`;
 `../../defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md`).** A new renderer → main command,
 `notice.current`, asked once at boot; the renderer's notice store gains `seed`. `02-process-view.md` (the command, channel 4)

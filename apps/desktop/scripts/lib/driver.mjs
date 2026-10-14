@@ -107,6 +107,8 @@ export async function connect(endpointFile, { timeoutMs = 60_000 } = {}) {
     screenshot: (path) => send('screenshot', { path }),
     resize: (width, height) => send('resize', { width, height }),
     command: (request) => send('command', { request }),
+    /** The host's close of the selected window (`BrowserWindow.close()`: Alt+F4, the taskbar), guarded as a person's close. */
+    closeWindow: () => send('closeWindow'),
     /**
      * The application's quit — `app.quit()`, the run host's `shutdown` with it — or, with `{ immediate: true }`, the
      * immediate exit, which leaves a live run as a crash leaves it. Resolves with the seam's `{ quitting, how }`, or

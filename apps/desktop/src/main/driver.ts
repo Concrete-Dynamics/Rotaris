@@ -510,6 +510,18 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
         }
         return { width, height, wasMaximized };
       }
+      case 'closeWindow': {
+        /**
+         * The host's close of a window — what Alt+F4, the taskbar or the window manager sends: `BrowserWindow.close()`, which
+         * a main window's close guard holds and asks like any person's close (REQ-SHELL-119, PD-SHELL-009). The title bar's
+         * own close control is the renderer's to press, and a renderer that is hung cannot press it; this op is how
+         * `exit-trace-proof`'s `hang-close` launch closes such a window (PD-SHELL-010). The reply goes out before the close
+         * is decided: the guards may hold it, ask a box, or end the application with its last window.
+         */
+        const win = windowOrThrow(target);
+        win.close();
+        return { closing: true, windowId: win.webContents.id };
+      }
       case 'command':
         return deps.command(request.request, windowOrThrow(target));
       case 'deferProjectOffer': {

@@ -6872,7 +6872,7 @@ timers port; asked by the window's own close guard (`guardClose`, wired in `crea
 
 **Why, and what it costs.** OQ-297 (the consortium's HR1), ruled 2026-10-14 under the owner's delegation (R-072). Before it, a
 renderer that was alive but hung held a person's close of its window and the application's quit — a SIGTERM's included — with no
-answer and no bound ([`a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`](../defects/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md)).
+answer and no bound ([`a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`](../defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md)).
 A bound on the guard's question itself would answer for a person deciding; a bound on a question that needs no person does not.
 The gone case was built by fin43 on 2026-10-14 without a directive
 ([`a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`](../defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md));
@@ -6887,6 +6887,18 @@ evaluated): it narrows only guard (1) and gate (1), when the renderer cannot ans
 
 *Raised by the consortium under the owner's delegation, 2026-10-14; logged as [R-072](requests.md#r-072), the ruling of
 [OQ-297](../architecture/open-questions.md#oq-297) (HR1; advocate B followed, one point from advocate A folded in).*
+
+> **First execution, 2026-10-14, built by fin44 (`fin44-hang-and-seams`):** the directive held as written. `askRendererGuard`'s
+> probe, its bound and the `unresponsive` listener were built as stated; `main-windows.test.ts` pins seven cases, all red on the
+> source before the change. `pnpm exit-trace-proof`'s `hang` and `hang-close` launches stopped the main window's renderer with
+> SIGSTOP: the driver's quit and the host's close (`BrowserWindow.close()`, the driver's `closeWindow`) each ended the process,
+> exit 0, through the orderly path about 5.6 s after they were asked, and main wrote the `warn` line naming the probe; against
+> the build before the change both were held with no exit in 15 s. **What the ruling's implementation left to measurement:**
+> whether the allowed `win.close()` completes on a hung renderer — it does, so the close was not turned into `destroy()`. Chromium's
+> `unresponsive` did not fire in either launch (a stopped renderer with no input pending earns none): the probe alone released
+> them, and the second signal is pinned by the unit cases only. **Not measured:** a renderer hung by a busy main thread rather
+> than a stopped process (the same probe; no proof loops a renderer); a Windows or macOS host. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

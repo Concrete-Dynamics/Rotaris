@@ -14500,7 +14500,7 @@ unsaved settings present, a user-initiated close raises the save/discard/cancel 
 case; REQ-SHELL-021 gate (1); REQ-SHELL-121's quit; [`PD-SHELL-009`](../product/directives.md#pd-shell-009)'s last case, a quit
 that starts outside any window; PD-ORCH-005 clause 9, the quit that asks every main window's guard before confirming any.
 Raised by the orchestrator's consortium as HR1 from
-[`../defects/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`](../defects/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md),
+[`../defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`](../defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md),
 which asked that "whether Chromium's `unresponsive` judgement is that point" be raised with the repair and not decided in it;
 entered 2026-10-14 by fin44 (`fin44-hang-and-seams`) at the first free number of the plan's range, OQ-296 to OQ-310 — renumbered
 at landing if a sibling took it first.)*

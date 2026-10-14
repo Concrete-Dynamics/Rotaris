@@ -60,4 +60,5 @@ repair FAILS 2 of 13 (`the application's quit after a renderer crash ends the pr
 
 Not covered: a renderer that is alive but hung (an endless loop) is not gone, so its guard's question is still waited for
 without a bound — recorded apart in
-[`a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`](../a-main-window-whose-renderer-hangs-holds-the-applications-quit.md).
+[`a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`](a-main-window-whose-renderer-hangs-holds-the-applications-quit.md)
+(repaired 2026-10-14 by fin44 under `PD-SHELL-010`: a renderer that fails main's liveness probe cannot answer either).

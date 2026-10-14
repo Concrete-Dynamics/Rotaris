@@ -1459,6 +1459,7 @@ async function main(): Promise<void> {
       });
     },
     log,
+    warn: (m) => log(m, 'warn'),
   });
 
   mainWindows = new MainWindows({
@@ -1474,7 +1475,11 @@ async function main(): Promise<void> {
     samePath,
     chooseProjectFolder: (win, startAt) => chooseProjectFolder(win, startAt),
     openWorkspace: (workspace) => openWorkspaceInner(workspace),
-    closeGuard: (owner) => askRendererGuard(owner.win.webContents)
+    // REQ-SHELL-021 gate 1 through the window's own question: a renderer that cannot answer it allows (PD-SHELL-010).
+    closeGuard: (owner) => askRendererGuard(owner.win.webContents, {
+      timers: { after: (delayMs, callback) => clocks.timers.after(millis(delayMs), callback) },
+      warn: (m) => log(`main window ${owner.wcId}: ${m}`, 'warn'),
+    })
       .then((proceed: unknown) => proceed !== false)
       .catch(() => true),
     activeRunCount: async (workspaceId) => {

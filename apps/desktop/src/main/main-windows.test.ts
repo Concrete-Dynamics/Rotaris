@@ -5,6 +5,9 @@ import {
   askRendererGuard,
   guardClose,
   MainWindows,
+  RENDERER_CLOSE_GUARD_SCRIPT,
+  RENDERER_LIVENESS_BOUND_MS,
+  RENDERER_LIVENESS_PROBE,
   type GuardedContents,
   type GuardedWindow,
   type MainWindowAdapter,
@@ -792,17 +795,51 @@ describe('a main window\'s close guard, as the application\'s quit drives it (PD
   });
 });
 
+/**
+ * The main-window timers port, by hand (`rotaris/no-bare-timers`): `advance` moves its time and fires what fell due, a timer
+ * armed by a firing included; `pending` counts the timers armed and neither fired nor cancelled.
+ */
+function clock() {
+  let now = 0;
+  const armed: { due: number; callback: () => void; done: boolean }[] = [];
+  return {
+    after: (delayMs: number, callback: () => void): MainWindowTimer => {
+      const timer = { due: now + delayMs, callback, done: false };
+      armed.push(timer);
+      return { cancel: () => { timer.done = true; } };
+    },
+    advance: (ms: number): void => {
+      const until = now + ms;
+      for (;;) {
+        const next = armed.filter((t) => !t.done && t.due <= until).sort((a, b) => a.due - b.due)[0];
+        if (!next) break;
+        now = next.due;
+        next.done = true;
+        next.callback();
+      }
+      now = until;
+    },
+    pending: (): number => armed.filter((t) => !t.done).length,
+  };
+}
+
 describe('a main window whose renderer is gone cannot hold its close or the application\'s quit (REQ-SHELL-119, PD-ORCH-005 clause 9)', () => {
   /*
    * docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md: Electron's
    * `executeJavaScript` on a renderer that is gone neither resolves nor rejects, so the guard asked through it never
    * answered and the quit waited on it with no bound. The fake keeps that shape: its `executeJavaScript` never settles.
    */
-  function contents(state: { crashed: boolean; destroyed?: boolean; answer?: Promise<unknown> }) {
+  function contents(state: { crashed: boolean; destroyed?: boolean; answer?: Promise<unknown>; probe?: 'answer' | 'silent' }) {
     const listeners = new Map<string, Set<() => void>>();
     const asked: string[] = [];
-    const wc: GuardedContents & { go(event: 'render-process-gone' | 'destroyed'): void; listening(): number; asked: string[] } = {
-      executeJavaScript: (code) => { asked.push(code); return state.answer ?? new Promise<unknown>(() => undefined); },
+    const probes: string[] = [];
+    const wc: GuardedContents & { go(event: 'render-process-gone' | 'destroyed' | 'unresponsive'): void; listening(): number; asked: string[]; probes: string[] } = {
+      executeJavaScript: (code) => {
+        // PD-SHELL-010: main's liveness probe is a question of its own, answered by a live renderer and by no hung one.
+        if (code === RENDERER_LIVENESS_PROBE) { probes.push(code); return state.probe === 'silent' ? new Promise<unknown>(() => undefined) : Promise.resolve(true); }
+        asked.push(code);
+        return state.answer ?? new Promise<unknown>(() => undefined);
+      },
       isCrashed: () => state.crashed,
       isDestroyed: () => state.destroyed === true,
       once: (event: string, listener: () => void) => { const set = listeners.get(event) ?? new Set(); set.add(listener); listeners.set(event, set); return wc; },
@@ -810,6 +847,7 @@ describe('a main window whose renderer is gone cannot hold its close or the appl
       go: (event) => { for (const l of [...(listeners.get(event) ?? [])]) { listeners.get(event)?.delete(l); l(); } },
       listening: () => [...listeners.values()].reduce((n, set) => n + set.size, 0),
       asked,
+      probes,
     };
     return wc;
   }
@@ -831,7 +869,7 @@ describe('a main window whose renderer is gone cannot hold its close or the appl
     const log: string[] = [];
     const win = fakeWindow(log);
     const wc = contents({ crashed: true });
-    const guard = guardClose(win, () => askRendererGuard(wc), () => log.push('confirmed'));
+    const guard = guardClose(win, () => askRendererGuard(wc, { timers: clock() }), () => log.push('confirmed'));
     expect(await within(closeThroughGuards([guard]))).toBe(true);
     expect(log).toEqual(['confirmed', 'close', 'passed']);
     expect(wc.asked).toEqual([]);
@@ -840,7 +878,7 @@ describe('a main window whose renderer is gone cannot hold its close or the appl
   it('a person\'s close of a window whose renderer crashed passes', async () => {
     const log: string[] = [];
     const win = fakeWindow(log);
-    guardClose(win, () => askRendererGuard(contents({ crashed: true })), () => log.push('confirmed'));
+    guardClose(win, () => askRendererGuard(contents({ crashed: true }), { timers: clock() }), () => log.push('confirmed'));
     win.attempt();
     await settle();
     expect(log).toEqual(['held', 'confirmed', 'close', 'passed']);
@@ -850,7 +888,7 @@ describe('a main window whose renderer is gone cannot hold its close or the appl
     const log: string[] = [];
     const win = fakeWindow(log);
     const wc = contents({ crashed: false });
-    const guard = guardClose(win, () => askRendererGuard(wc), () => log.push('confirmed'));
+    const guard = guardClose(win, () => askRendererGuard(wc, { timers: clock() }), () => log.push('confirmed'));
     const closing = closeThroughGuards([guard]);
     await settle();
     expect(wc.asked).toHaveLength(1);
@@ -863,7 +901,7 @@ describe('a main window whose renderer is gone cannot hold its close or the appl
 
   it('a window whose contents are destroyed while its guard is asked releases the question too', async () => {
     const wc = contents({ crashed: false });
-    const asking = askRendererGuard(wc).then(() => 'answered', () => 'cannot answer');
+    const asking = askRendererGuard(wc, { timers: clock() }).then(() => 'answered', () => 'cannot answer');
     await settle();
     wc.go('destroyed');
     expect(await within(asking)).toBe('cannot answer');
@@ -872,11 +910,11 @@ describe('a main window whose renderer is gone cannot hold its close or the appl
 
   it('a live renderer\'s answer still decides, and nothing is left listening once it has', async () => {
     const refused = contents({ crashed: false, answer: Promise.resolve(false) });
-    expect(await askRendererGuard(refused)).toBe(false);
+    expect(await askRendererGuard(refused, { timers: clock() })).toBe(false);
     expect(refused.listening()).toBe(0);
     const log: string[] = [];
     const win = fakeWindow(log);
-    const guard = guardClose(win, () => askRendererGuard(contents({ crashed: false, answer: Promise.resolve(false) })), () => log.push('confirmed'));
+    const guard = guardClose(win, () => askRendererGuard(contents({ crashed: false, answer: Promise.resolve(false) }), { timers: clock() }), () => log.push('confirmed'));
     expect(await within(closeThroughGuards([guard]))).toBe(false);
     expect(log).toEqual([]);
   });
@@ -884,10 +922,167 @@ describe('a main window whose renderer is gone cannot hold its close or the appl
   it('a renderer still deciding is waited for: the guard\'s question has no time bound of its own', async () => {
     let answer!: (proceed: boolean) => void;
     const wc = contents({ crashed: false, answer: new Promise<boolean>((r) => { answer = r; }) });
-    const asking = askRendererGuard(wc);
+    const asking = askRendererGuard(wc, { timers: clock() });
     expect(await within(asking, 50)).toBe('held');
     answer(true);
     expect(await within(asking)).toBe(true);
+  });
+
+  /*
+   * PD-SHELL-010 (OQ-297, the consortium's HR1): a renderer that is alive but hung — its main thread looping or stopped — is
+   * not gone, so until 2026-10-14 its guard's question was waited for with no bound and held a person's close and the
+   * application's quit (docs/defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md). Main now
+   * asks a liveness probe of its own beside the guard's question, every RENDERER_LIVENESS_BOUND_MS while it is out; a probe
+   * unanswered at its bound, or Chromium's `unresponsive`, means the renderer cannot answer, and a guard that cannot answer
+   * allows. A renderer that answers its probes is still waited for without bound: its guard may be a person deciding.
+   */
+  it('the application\'s quit closes a window whose renderer answers no liveness probe: its guard cannot answer, so it allows', async () => {
+    const log: string[] = [];
+    const warned: string[] = [];
+    const win = fakeWindow(log);
+    const timers = clock();
+    const wc = contents({ crashed: false, probe: 'silent' });
+    const guard = guardClose(win, () => askRendererGuard(wc, { timers, warn: (m) => warned.push(m) }), () => log.push('confirmed'));
+    const closing = closeThroughGuards([guard]);
+    await settle();
+    expect(wc.asked).toEqual([RENDERER_CLOSE_GUARD_SCRIPT]);
+    expect(wc.probes).toHaveLength(1);
+    timers.advance(RENDERER_LIVENESS_BOUND_MS - 1);
+    expect(await within(closing, 20)).toBe('held');
+    timers.advance(1);
+    expect(await within(closing)).toBe(true);
+    expect(log).toEqual(['confirmed', 'close', 'passed']);
+    expect(warned).toHaveLength(1);
+    expect(warned[0]).toMatch(/cannot answer: unresponsive/);
+    expect(warned[0]).toMatch(/liveness probe/);
+    expect(wc.listening()).toBe(0);
+    expect(timers.pending()).toBe(0);
+  });
+
+  it('a person\'s close of a window whose renderer answers no liveness probe passes', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    const timers = clock();
+    const wc = contents({ crashed: false, probe: 'silent' });
+    guardClose(win, () => askRendererGuard(wc, { timers }), () => log.push('confirmed'));
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['held']);
+    timers.advance(RENDERER_LIVENESS_BOUND_MS);
+    await settle();
+    expect(log).toEqual(['held', 'confirmed', 'close', 'passed']);
+    expect(wc.listening()).toBe(0);
+    expect(timers.pending()).toBe(0);
+  });
+
+  it('Chromium\'s `unresponsive` while the question is out releases the quit and a person\'s close alike', async () => {
+    const quitLog: string[] = [];
+    const warned: string[] = [];
+    const quitWc = contents({ crashed: false });
+    const quitTimers = clock();
+    const guard = guardClose(fakeWindow(quitLog), () => askRendererGuard(quitWc, { timers: quitTimers, warn: (m) => warned.push(m) }), () => quitLog.push('confirmed'));
+    const closing = closeThroughGuards([guard]);
+    await settle();
+    expect(await within(closing, 20)).toBe('held');
+    quitWc.go('unresponsive');
+    expect(await within(closing)).toBe(true);
+    expect(quitLog).toEqual(['confirmed', 'close', 'passed']);
+    expect(warned).toEqual([expect.stringMatching(/cannot answer: unresponsive/)]);
+    expect(warned[0]).toMatch(/Chromium/);
+    expect(quitWc.listening()).toBe(0);
+    expect(quitTimers.pending()).toBe(0);
+
+    const closeLog: string[] = [];
+    const win = fakeWindow(closeLog);
+    const closeWc = contents({ crashed: false });
+    const closeTimers = clock();
+    guardClose(win, () => askRendererGuard(closeWc, { timers: closeTimers }), () => closeLog.push('confirmed'));
+    win.attempt();
+    await settle();
+    closeWc.go('unresponsive');
+    await settle();
+    expect(closeLog).toEqual(['held', 'confirmed', 'close', 'passed']);
+    expect(closeWc.listening()).toBe(0);
+    expect(closeTimers.pending()).toBe(0);
+  });
+
+  it('a renderer that answers its probes while its guard stays pending is held past many bounds: a person is deciding', async () => {
+    let answer!: (proceed: boolean) => void;
+    const timers = clock();
+    const wc = contents({ crashed: false, probe: 'answer', answer: new Promise<boolean>((r) => { answer = r; }) });
+    const log: string[] = [];
+    const guard = guardClose(fakeWindow(log), () => askRendererGuard(wc, { timers }), () => log.push('confirmed'));
+    const closing = closeThroughGuards([guard]);
+    for (let bound = 0; bound < 24; bound += 1) {
+      await settle();
+      timers.advance(RENDERER_LIVENESS_BOUND_MS);
+    }
+    await settle();
+    expect(await within(closing, 20)).toBe('held');
+    expect(wc.probes.length).toBeGreaterThanOrEqual(24);
+    expect(log).toEqual([]);
+    answer(false);
+    expect(await within(closing)).toBe(false);
+    expect(log).toEqual([]);
+    expect(wc.listening()).toBe(0);
+    expect(timers.pending()).toBe(0);
+  });
+
+  it('a person\'s close still meets guard (3) after a hung guard (1) allows', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    const timers = clock();
+    guardClose(win, () => askRendererGuard(contents({ crashed: false, probe: 'silent' }), { timers }), () => log.push('confirmed'), async () => { log.push('runs'); return false; });
+    win.attempt();
+    await settle();
+    timers.advance(RENDERER_LIVENESS_BOUND_MS);
+    await settle();
+    expect(log).toEqual(['held', 'runs']);
+  });
+
+  it('every listener and timer is removed whichever way the question settles, and a late answer is ignored', async () => {
+    type Way = 'answer' | 'refusal' | 'error' | 'gone' | 'destroyed' | 'unresponsive' | 'probe';
+    const ways: Way[] = ['answer', 'refusal', 'error', 'gone', 'destroyed', 'unresponsive', 'probe'];
+    for (const way of ways) {
+      let settleQuestion!: { resolve: (v: unknown) => void; reject: (e: unknown) => void };
+      const question = new Promise<unknown>((resolve, reject) => { settleQuestion = { resolve, reject }; });
+      const timers = clock();
+      const warned: string[] = [];
+      const wc = contents({ crashed: false, answer: question, probe: way === 'probe' ? 'silent' : 'answer' });
+      const asking = askRendererGuard(wc, { timers, warn: (m) => warned.push(m) }).then((v) => ({ v }), (e: unknown) => ({ e: String(e) }));
+      await settle();
+      expect(wc.listening(), way).toBeGreaterThan(0);
+      expect(timers.pending(), way).toBe(1);
+      if (way === 'answer') settleQuestion.resolve(true);
+      else if (way === 'refusal') settleQuestion.resolve(false);
+      else if (way === 'error') settleQuestion.reject(new Error('the script threw'));
+      else if (way === 'gone') wc.go('render-process-gone');
+      else if (way === 'destroyed') wc.go('destroyed');
+      else if (way === 'unresponsive') wc.go('unresponsive');
+      else timers.advance(RENDERER_LIVENESS_BOUND_MS);
+      const outcome = await within(asking);
+      expect(outcome, way).not.toBe('held');
+      expect(wc.listening(), way).toBe(0);
+      expect(timers.pending(), way).toBe(0);
+      // A late answer, and a later signal, change nothing: the question has settled.
+      settleQuestion.resolve(false);
+      wc.go('unresponsive');
+      timers.advance(RENDERER_LIVENESS_BOUND_MS * 3);
+      await settle();
+      expect(await asking, way).toEqual(outcome);
+      expect(warned.length, way).toBe(['gone', 'destroyed', 'unresponsive', 'probe'].includes(way) ? 1 : 0);
+    }
+  });
+
+  it('a renderer gone before the question is asked arms nothing, and says which signal it was', async () => {
+    const timers = clock();
+    const warned: string[] = [];
+    const wc = contents({ crashed: true });
+    await expect(askRendererGuard(wc, { timers, warn: (m) => warned.push(m) })).rejects.toThrow(/cannot answer: gone/);
+    expect(warned).toEqual([expect.stringMatching(/cannot answer: gone/)]);
+    expect(wc.probes).toEqual([]);
+    expect(timers.pending()).toBe(0);
+    expect(wc.listening()).toBe(0);
   });
 });
 

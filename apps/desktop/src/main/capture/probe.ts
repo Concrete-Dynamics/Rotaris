@@ -114,6 +114,17 @@ export interface PromptTyping {
 const COMPOSER_TEXT = "document.querySelector('textarea.composer__input')?.value ?? null";
 
 /**
+ * What a probe logs of one element's text, as the source the renderer evaluates: the whole text up to 2,000 characters, and
+ * past that its first 1,600 and its last 400 with " … " between. Until fin46 the probe kept the first 400 alone, and the end of
+ * a long text was lost where a reading needs it most: PD-LIBRARY-005's failure warning names its artifact at the end of its
+ * detail, and the default live run at b9e3005 probed a parse failure's detail (the validator's issues quoted as JSON) as
+ * "… impart_47kGY2xb holds no proposa", failing a notice the product drew correctly
+ * (`docs/defects/fixed/the-capture-probe-cuts-a-notice-before-the-artifact-its-failure-warning-names.md`). The head keeps the
+ * first 400 characters every earlier reading took, and the bound still keeps one probe line from carrying a whole transcript.
+ */
+export const PROBE_TEXT = "(t) => (t.length <= 2000 ? t : t.slice(0, 1600) + ' \\u2026 ' + t.slice(-400))";
+
+/**
  * The end of the launch: wait, open a last view, read the probes, photograph, exit.
  *
  * `ROTARIS_CAPTURE_AFTER_MS` lets a verification run wait for the run loop to finish before the capture.
@@ -128,7 +139,7 @@ const COMPOSER_TEXT = "document.querySelector('textarea.composer__input')?.value
  *
  * `_END_VIEW=<n>`: open view n (Ctrl+n) once the wait is over and before the capture, so a
  * proof can drive a run from the Workspace view and read the Overview afterwards.
- * `_PROBE="selector;;…"`: each selector's text and `data-*` attributes logged as JSON
+ * `_PROBE="selector;;…"`: each selector's text (as `PROBE_TEXT` keeps it) and `data-*` attributes logged as JSON
  * before the capture — what a proof asserts against.
  *
  * How the launch ends. A capture whose wait was satisfied, or that had none, ends by the immediate exit it always
@@ -147,17 +158,6 @@ const COMPOSER_TEXT = "document.querySelector('textarea.composer__input')?.value
  * ends the capture.
  * The prompt is still typed one character at a time: what a person does, and what the packaged probe exercises.
  */
-/**
- * What a probe logs of one element's text, as the source the renderer evaluates: the whole text up to 2,000 characters, and
- * past that its first 1,600 and its last 400 with " … " between. Until fin46 the probe kept the first 400 alone, and the end of
- * a long text was lost where a reading needs it most: PD-LIBRARY-005's failure warning names its artifact at the end of its
- * detail, and the default live run at b9e3005 probed a parse failure's detail (the validator's issues quoted as JSON) as
- * "… impart_47kGY2xb holds no proposa", failing a notice the product drew correctly
- * (`docs/defects/fixed/the-capture-probe-cuts-a-notice-before-the-artifact-its-failure-warning-names.md`). The head keeps the
- * first 400 characters every earlier reading took, and the bound still keeps one probe line from carrying a whole transcript.
- */
-export const PROBE_TEXT = "(t) => (t.length <= 2000 ? t : t.slice(0, 1600) + ' \\u2026 ' + t.slice(-400))";
-
 export function installFinish(host: CaptureHost, capture: string, prompt: string | undefined, typing?: PromptTyping): void {
   const after = Number(process.env['ROTARIS_CAPTURE_AFTER_MS'] ?? (prompt ? 3_000 : 1_500));
   // The wait, the last view and the probes are verification seams the packaged probe does not use (`package.mjs` sets its

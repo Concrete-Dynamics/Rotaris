@@ -198,7 +198,8 @@ const r = await launch('rows', {
   ROTARIS_CAPTURE_EVAL_AT: [
     `(() => [...document.querySelectorAll('${W} .transcript__slot[data-bound]')].map((slot) => { const style = getComputedStyle(slot); return { transform: style.transform, willChange: style.willChange }; }))()@1500`,
     // R0-4's count probes: the opened card's line count and its tail, read from the LIVE layout rather than
-    // from the end probe — whose 400-character truncation is what produced the "15 of 30" misreading when
+    // from the end probe — whose 400-character truncation (until fin46; `PROBE_TEXT` in `src/main/capture/probe.ts` keeps more
+    // since, and still elides past 2,000 characters) is what produced the "15 of 30" misreading when
     // two truncated card texts were joined. The opened member is the only 30-line body in the run; the count
     // is unambiguous however the text is joined. Single-line expressions: the log parser's `eval-at` regex
     // cannot span newlines. `@5000`, beside the `group-members` inspect at the same time: the card is open
@@ -431,7 +432,8 @@ expect(memberTimes.length === 7, `${memberTimes.length} of 7 revealed members ca
 // R0-4 (REQ-CHAT-061/166): the opened member's card carries the FULL 30-line output — the first
 // `read_file` member's every line, the only 30-line body in the run — while the other members' rows carry
 // none and the line's own summary carries none of it. Read from the LIVE layout (`eval-at`): the end probe
-// truncates every text to 400 characters, so joining the truncated card texts misreads "15 of 30" for a
+// truncated every text to 400 characters until fin46 (and still elides one past 2,000, `PROBE_TEXT`), so joining the
+// truncated card texts misread "15 of 30" for a
 // card that holds all thirty — the count below reads the card's own text, untruncated, where it stands.
 const r0count = Number((/capture: eval-at 5000 .*nth-child\(2\) \[data-testid="tool-output"[^`]*split\('line'\).*→ (\d+)\s*$/m.exec(r.log) ?? [])[1]);
 const r0tail = (/capture: eval-at 5000 .*nth-child\(2\) \[data-testid="tool-output"[^`]*slice\(-60\).*→ "(.*)"\s*$/m.exec(r.log) ?? [])[1] ?? '';

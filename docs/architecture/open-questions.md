@@ -13948,47 +13948,6 @@ proofs taking the caret below it with `Ctrl+End`) governed from fin42 until this
 `ArtifactInspector` holds the block apart (`artifact-frontmatter`) and sends it back unchanged in front of the edited text;
 `artifacts-proof` launch 8 no longer takes the caret anywhere before typing. The live run's `delegation-edit` chord may stay.
 
-<a id="oq-295"></a>
-
-**OQ-295 — Does match level 3 shift a blank line?** *(REQ-TOOLS-136 level 3, "exact after one and the same leading-whitespace
-prefix is added to or removed from every line of the candidate"; [`PD-TOOLS-015`](../product/directives.md#pd-tools-015), whose
-shift leaves a `new_string` line with no visible character as given; [`PD-TOOLS-019`](../product/directives.md#pd-tools-019),
-which sets a trailing `\r` aside at level 3 and does not decide this; [`PD-TOOLS-014`](../product/directives.md#pd-tools-014)'s
-level-3 near miss. Raised 2026-10-14 by fin43 (`fin43-rename-and-match`) from
-[`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md);
-numbered from the top of the plan's range, OQ-281 to OQ-295, to keep clear of its sibling bundles: whichever lands second takes
-the next free number.)*
-
-Level 3 as built prepends the prefix to every line of `old_string`, or requires every line to begin with it, blank lines
-included, while the window's blank line is empty. So an indentation-shifted block holding a blank line never matches at level 3:
-measured with `matchEdit`, a three-line block one tab off with an empty middle line reaches level 4 on an LF file (similarity 0.89
-and 0.90, applied unshifted by `write_file` beside "Verify the result.") and no match on a CRLF file; without the blank line it
-matches at level 3.
-
-**What the build proceeds under.** As built: a blank line takes part in level 3's shift like any other, and such a block reaches
-level 4 or no match.
-
-**What a ruling decides.** Whether level 3 compares a line with no visible character (after `PD-TOOLS-019`'s `\r` is set aside)
-without the prefix — so a blank line of `old_string` matches a blank line of the window at any shift, as `PD-TOOLS-015` already
-writes a blank `new_string` line as given — or whether the build's reading stands. **The costs either way:** read without the
-prefix, level 3 takes more cases level 4 took, and a whitespace-only line of the window that differs from `old_string`'s would
-need a rule of its own; kept, the commonest multi-line edit shape — a block with a blank line — is outside `PD-TOOLS-015` and
-`PD-TOOLS-014`, and lands unshifted at level 4 beside a success on an LF file.
-
-**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** level 3 matches blank lines by having
-no visible character. Once `PD-TOOLS-019` sets one trailing `\r` aside, a line of `old_string` with no visible character matches a
-window line with no visible character at any shift, whatever whitespace either holds, and never matches a line that holds one.
-The leading prefix is measured, added and removed only on lines that hold a visible character, starting from `old_string`'s
-first such line and the window's line at the same index (`PD-TOOLS-015`'s O and W). An `old_string` with no visible character
-never matches at level 3. In a level-3 `write_file` apply, a blank line of `new_string` paired with a blank line of `old_string`
-is written as the window's own line, byte for byte. Recorded as [`PD-TOOLS-020`](../product/directives.md#pd-tools-020)
-(narrowing REQ-TOOLS-136 at level 3 only; levels 1, 2 and 4, their order and the first-matching-level rule unchanged), with
-[`PD-TOOLS-014`](../product/directives.md#pd-tools-014) revision 4 (the level-3 sentence names the lines that hold a visible
-character when the window holds a blank one) and [`PD-TOOLS-016`](../product/directives.md#pd-tools-016) revision 4 (clause 1's
-pairing also runs at level 3 for blank lines); `PD-TOOLS-015` and `PD-TOOLS-019` carry in-place notes. *The build's reading — "What
-the build proceeds under" above, a blank line taking part in the shift like any other — is kept as the falsified one.* Written
-2026-10-14 by fin44 (`fin44-supervision-and-match`).
-
 <a id="oq-280"></a>
 
 **OQ-280 — Does match level 3 compare a line without its carriage return?** *(REQ-TOOLS-136, the four match levels — level 2
@@ -14486,6 +14445,47 @@ that reads as success.
 
 **What a live run then shows.** `ask-retrospective` with a collector that cannot authenticate (a key withheld) shows the ruled
 notice; with the credential repaired it shows neither.
+
+<a id="oq-295"></a>
+
+**OQ-295 — Does match level 3 shift a blank line?** *(REQ-TOOLS-136 level 3, "exact after one and the same leading-whitespace
+prefix is added to or removed from every line of the candidate"; [`PD-TOOLS-015`](../product/directives.md#pd-tools-015), whose
+shift leaves a `new_string` line with no visible character as given; [`PD-TOOLS-019`](../product/directives.md#pd-tools-019),
+which sets a trailing `\r` aside at level 3 and does not decide this; [`PD-TOOLS-014`](../product/directives.md#pd-tools-014)'s
+level-3 near miss. Raised 2026-10-14 by fin43 (`fin43-rename-and-match`) from
+[`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md);
+numbered from the top of the plan's range, OQ-281 to OQ-295, to keep clear of its sibling bundles: whichever lands second takes
+the next free number.)*
+
+Level 3 as built prepends the prefix to every line of `old_string`, or requires every line to begin with it, blank lines
+included, while the window's blank line is empty. So an indentation-shifted block holding a blank line never matches at level 3:
+measured with `matchEdit`, a three-line block one tab off with an empty middle line reaches level 4 on an LF file (similarity 0.89
+and 0.90, applied unshifted by `write_file` beside "Verify the result.") and no match on a CRLF file; without the blank line it
+matches at level 3.
+
+**What the build proceeds under.** As built: a blank line takes part in level 3's shift like any other, and such a block reaches
+level 4 or no match.
+
+**What a ruling decides.** Whether level 3 compares a line with no visible character (after `PD-TOOLS-019`'s `\r` is set aside)
+without the prefix — so a blank line of `old_string` matches a blank line of the window at any shift, as `PD-TOOLS-015` already
+writes a blank `new_string` line as given — or whether the build's reading stands. **The costs either way:** read without the
+prefix, level 3 takes more cases level 4 took, and a whitespace-only line of the window that differs from `old_string`'s would
+need a rule of its own; kept, the commonest multi-line edit shape — a block with a blank line — is outside `PD-TOOLS-015` and
+`PD-TOOLS-014`, and lands unshifted at level 4 beside a success on an LF file.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** level 3 matches blank lines by having
+no visible character. Once `PD-TOOLS-019` sets one trailing `\r` aside, a line of `old_string` with no visible character matches a
+window line with no visible character at any shift, whatever whitespace either holds, and never matches a line that holds one.
+The leading prefix is measured, added and removed only on lines that hold a visible character, starting from `old_string`'s
+first such line and the window's line at the same index (`PD-TOOLS-015`'s O and W). An `old_string` with no visible character
+never matches at level 3. In a level-3 `write_file` apply, a blank line of `new_string` paired with a blank line of `old_string`
+is written as the window's own line, byte for byte. Recorded as [`PD-TOOLS-020`](../product/directives.md#pd-tools-020)
+(narrowing REQ-TOOLS-136 at level 3 only; levels 1, 2 and 4, their order and the first-matching-level rule unchanged), with
+[`PD-TOOLS-014`](../product/directives.md#pd-tools-014) revision 4 (the level-3 sentence names the lines that hold a visible
+character when the window holds a blank one) and [`PD-TOOLS-016`](../product/directives.md#pd-tools-016) revision 4 (clause 1's
+pairing also runs at level 3 for blank lines); `PD-TOOLS-015` and `PD-TOOLS-019` carry in-place notes. *The build's reading — "What
+the build proceeds under" above, a blank line taking part in the shift like any other — is kept as the falsified one.* Written
+2026-10-14 by fin44 (`fin44-supervision-and-match`).
 
 <a id="oq-296"></a>
 

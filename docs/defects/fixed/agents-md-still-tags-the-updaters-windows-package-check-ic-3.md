@@ -20,3 +20,13 @@ Noticed 2026-10-14 by fin43's reviewer while checking the second repair; outside
 - `AGENTS.md` — the `updater-proof` row of the proof index: "owed to the next Windows package (IC-3)".
 - `tools/windows-ic3-citations.test.ts` — the two guards' file list (`docs/architecture/` and `docs/product/directives.md`),
   which does not include `AGENTS.md`.
+
+## Outcome
+
+Repaired 2026-10-14 by fin44 (`fin44-inspector-and-record`). The `updater-proof` row keeps its words and carries the
+correction beside the tag, in the form the two earlier repairs wrote: "(IC-3 — *corrected 2026-10-14: a Windows x64 host,
+deferred with the pipeline under R-071; IC-3 binds Linux and macOS artifacts*)". `tools/windows-ic3-citations.test.ts` now
+reads `AGENTS.md` beside `docs/architecture/` and `docs/product/directives.md`, and its file list asserts it does; with
+`AGENTS.md` added and the row uncorrected, both guards were red on exactly this row ("…owed to the next Windows package
+(IC-3)") and on nothing else in `AGENTS.md`, and both are green with the correction. No other check, test or proof changed:
+the check itself still waits on a Windows x64 host and the release pipeline, which are outside this round (R-071).

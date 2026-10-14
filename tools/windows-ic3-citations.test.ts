@@ -22,6 +22,9 @@ const markdownUnder = (dir: string): string[] =>
 const files = [
   ...markdownUnder(join(root, 'docs', 'architecture')).filter((f) => !f.endsWith(join('views', 'reconciliation-log.md'))),
   join(root, 'docs', 'product', 'directives.md'),
+  // The proof index: its `updater-proof` row tagged the check owed to the next Windows package "(IC-3)" after both repairs,
+  // which read only the two above (docs/defects/fixed/agents-md-still-tags-the-updaters-windows-package-check-ic-3.md).
+  join(root, 'AGENTS.md'),
 ];
 
 const windowsPackaging = /Windows package|`pnpm package` on Windows|Windows `pnpm package`|packaged branch|win-unpacked|Windows build|Windows artifact|packaged Windows/;
@@ -95,6 +98,7 @@ describe('a Windows check outside packaging does not name IC-3 as its reason', (
 describe('a Windows packaging check does not name IC-3 as its reason', () => {
   it('reads the record', () => {
     expect(files.length).toBeGreaterThan(50);
+    expect(files).toContain(join(root, 'AGENTS.md'));
   });
 
   it('every IC-3 tag on a check owed to a Windows package carries the correction', () => {

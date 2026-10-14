@@ -81,4 +81,4 @@ to the flag (red on those two lines before), and `seam-check.test.ts` holds ever
 Still in a packaged build, outside this note's list and recorded apart: the packaged probe's own `_WAIT` (whose `js:` form
 evaluates an expression in the renderer), `_PROBE`, `_END_VIEW` and `_PROMPT_MS`, and the children's `_SKILLS_HOME` and
 `_INSTRUCTIONS_HOME`, read with no guard at all
-([`../a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`](../a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md)).
+([`a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`](a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md); repaired 2026-10-14 by fin44).

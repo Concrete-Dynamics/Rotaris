@@ -518,4 +518,12 @@ must come before the next proof. *Since 2026-09-27 it says so only when the buil
 > (`main/capture/seam-reads.test.ts`, `scripts/lib/seam-check.test.ts`); the same build then carries none, and the check
 > passes over it. **Still owed:** the packaged probe answers more than its three variables, and the run host and the workspace
 > service read two home-directory seams with no guard
-> ([`../../defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`](../../defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md)).
+> ([`../../defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`](../../defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md)).
+>
+> **2026-10-14, plan fin44 — the owed rest.** Repaired: the packaged probe's six verification seams (`_WAIT`, `_WAIT_MS`,
+> `_END_VIEW`, `_END_VIEW_MS`, `_PROBE`, `_PROMPT_MS`) and the children's two home seams are read behind the flag, the seam check
+> names them, and `seam-check.test.ts` now holds the converse too: a capture variable read OFF the flag in any module a packaged
+> build keeps fails unless it is one of the probe's three. A `ROTARIS_BUILD=package` build then carries `_PNG`, `_PROMPT` and
+> `_AFTER_MS` alone. One thing the first such build taught: a JSDoc comment survives into the bundle, so a seam's full name
+> written in a doc comment of a module a packaged build keeps is a name the check finds; `probe.ts`'s comments name the seams
+> by their suffixes.

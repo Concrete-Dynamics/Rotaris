@@ -225,6 +225,7 @@ export function createRunHost() {
    * fails leaves the shipped defaults standing — a broken configuration must not silently switch skills off.
    */
   const machineDir = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_SKILLS_MACHINE'] ?? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE'] : undefined;
+  const captureHome = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_SKILLS_HOME'] ?? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_HOME'] : undefined;
   const skills = new SkillHost({
     log: (m, level) => log(m, level ?? 'info'),
     monotonic: clocks.monotonic,
@@ -240,10 +241,13 @@ export function createRunHost() {
      * bases, and it is read here as well as in the workspace service: one `home` serves both discoveries, and a
      * proof that isolated the inventory but not the injection would put the operator's own `~/.agents/AGENTS.md`
      * into a driven run's agent context.
+     *
+     * Both are read behind `__ROTARIS_SEAMS__` (`captureHome`, above), so a packaged build carries neither and always
+     * takes `homedir()`; until 2026-10-14 they were read with no test at all, and either one set redirected a shipped
+     * build's discovery and injected what it found into an agent's context
+     * (docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md).
      */
-    ...(process.env['ROTARIS_CAPTURE_SKILLS_HOME'] ?? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_HOME']
-      ? { home: (process.env['ROTARIS_CAPTURE_SKILLS_HOME'] ?? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_HOME'])! }
-      : {}),
+    ...(captureHome ? { home: captureHome } : {}),
     /*
      * `ROTARIS_CAPTURE_SKILLS_MACHINE` and `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE` are the same seam for the machine-wide
      * directory (`/etc/codex`): the skill search's fourth user-scope root is its `skills` child and the instruction

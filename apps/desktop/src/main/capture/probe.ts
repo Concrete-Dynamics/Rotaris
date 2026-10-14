@@ -10,8 +10,11 @@ import { type CaptureHost, parseSelectors, pause } from './host.js';
  * `ROTARIS_CAPTURE_PROMPT` (the one typed prompt) and `ROTARIS_CAPTURE_AFTER_MS` (when to photograph).
  * That is how the package proves itself: it launches its own binary, types a prompt and reads the PNG.
  *
- * Nothing here may be scripted from outside beyond those. A new variable in this file ships; put it in
- * `seams.ts` unless the packaged probe itself needs it.
+ * Nothing here may be scripted from outside beyond those. A new variable in this file ships unless it is
+ * read behind `__ROTARIS_SEAMS__` on the read's own line, as the verification-only ones below are
+ * (`_PROMPT_MS`, `_WAIT`, `_WAIT_MS`, `_END_VIEW`, `_END_VIEW_MS`, `_PROBE`; since 2026-10-14, when a packaged
+ * build was found still answering them); put it in `seams.ts` unless the packaged probe itself needs it.
+ * `scripts/lib/seam-check.test.ts` fails a capture variable read off the flag in any module a packaged build keeps.
  */
 
 /** One keyboard event as `webContents.sendInputEvent` takes it. */
@@ -78,12 +81,13 @@ export function submitEvents(text: string, per: 'char' | 'key'): TypedEvent[] {
  * focuses the composer (REQ-CHAT-002), the text is typed with its line breaks as Shift+Enter, Enter submits
  * (REQ-CHAT-001) — `promptEvents`.
  *
- * `ROTARIS_CAPTURE_PROMPT_MS` says when — the MCP proof toggles a Settings control first, and a launch
- * that resumes a stored session first needs the transcript on screen before the composer means anything.
+ * The capture's `_PROMPT_MS` seam says when (read behind the build-time flag, so a packaged build types at the default; its
+ * full name is not written in this comment, which a packaged bundle keeps) — the MCP proof toggles a Settings control first,
+ * and a launch that resumes a stored session first needs the transcript on screen before the composer means anything.
  */
 export function installPromptSeam(host: CaptureHost, prompt: string, resuming: boolean): PromptTyping {
   let sentAt: number | null = null;
-  host.clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_PROMPT_MS'] ?? (resuming ? 2_600 : 800))), () => {
+  host.clocks.timers.after(millis(Number((__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_PROMPT_MS'] : undefined) ?? (resuming ? 2_600 : 800))), () => {
     const wc = host.win.webContents;
     wc.sendInputEvent({ type: 'keyDown', keyCode: '2', modifiers: ['control'] });
     wc.sendInputEvent({ type: 'keyUp', keyCode: '2', modifiers: ['control'] });
@@ -113,16 +117,18 @@ const COMPOSER_TEXT = "document.querySelector('textarea.composer__input')?.value
  * The end of the launch: wait, open a last view, read the probes, photograph, exit.
  *
  * `ROTARIS_CAPTURE_AFTER_MS` lets a verification run wait for the run loop to finish before the capture.
- * `ROTARIS_CAPTURE_WAIT=file:<path>|result|js:<expression>`, bounded by `ROTARIS_CAPTURE_WAIT_MS`: the
+ * The seams below are verification only, read behind the build-time flag, and named here by their suffixes alone: a
+ * packaged bundle keeps this comment and must carry none of their names (`scripts/lib/seam-check.mjs`).
+ * `_WAIT=file:<path>|result|js:<expression>`, bounded by `_WAIT_MS`: the
  * AFTER timer starts only once the file exists, the first terminal result was presented, or the
  * expression answers truthy — how the slice proof waits for the credential file (the stored key it filled, or
  * one the owner pasted) and for a real run, and how the board scenario waits for the accept it pressed to
  * land rather than for a clock. Without it a scenario
  * whose work is state-driven still costs its whole deadline.
  *
- * `ROTARIS_CAPTURE_END_VIEW=<n>`: open view n (Ctrl+n) once the wait is over and before the capture, so a
+ * `_END_VIEW=<n>`: open view n (Ctrl+n) once the wait is over and before the capture, so a
  * proof can drive a run from the Workspace view and read the Overview afterwards.
- * `ROTARIS_CAPTURE_PROBE="selector;;…"`: each selector's text and `data-*` attributes logged as JSON
+ * `_PROBE="selector;;…"`: each selector's text and `data-*` attributes logged as JSON
  * before the capture — what a proof asserts against.
  *
  * How the launch ends. A capture whose wait was satisfied, or that had none, ends by the immediate exit it always
@@ -143,16 +149,19 @@ const COMPOSER_TEXT = "document.querySelector('textarea.composer__input')?.value
  */
 export function installFinish(host: CaptureHost, capture: string, prompt: string | undefined, typing?: PromptTyping): void {
   const after = Number(process.env['ROTARIS_CAPTURE_AFTER_MS'] ?? (prompt ? 3_000 : 1_500));
-  const wait = process.env['ROTARIS_CAPTURE_WAIT'];
-  const waitBound = Number(process.env['ROTARIS_CAPTURE_WAIT_MS'] ?? 600_000);
-  const endView = Number(process.env['ROTARIS_CAPTURE_END_VIEW'] ?? 0);
-  const probes = parseSelectors(process.env['ROTARIS_CAPTURE_PROBE']);
+  // The wait, the last view and the probes are verification seams the packaged probe does not use (`package.mjs` sets its
+  // three alone): each is read behind the build-time flag, so a packaged build carries none of them
+  // (docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md).
+  const wait = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_WAIT'] : undefined;
+  const waitBound = Number((__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_WAIT_MS'] : undefined) ?? 600_000);
+  const endView = Number((__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_END_VIEW'] : undefined) ?? 0);
+  const probes = parseSelectors(__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_PROBE'] : undefined);
 
   const finish = (timedOut = false) => host.clocks.timers.after(millis(after), async () => {
     if (endView > 0) {
       host.win.webContents.sendInputEvent({ type: 'keyDown', keyCode: String(endView), modifiers: ['control'] });
       host.win.webContents.sendInputEvent({ type: 'keyUp', keyCode: String(endView), modifiers: ['control'] });
-      await pause(host, Number(process.env['ROTARIS_CAPTURE_END_VIEW_MS'] ?? 2_500));
+      await pause(host, Number((__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_END_VIEW_MS'] : undefined) ?? 2_500));
     }
     for (const selector of probes) {
       // `value` rides along for a control (a select, an input), since its text is every option it offers (Part R's proof reads the strategy selector).

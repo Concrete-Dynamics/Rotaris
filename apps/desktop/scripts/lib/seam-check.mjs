@@ -41,6 +41,13 @@ export const FORBIDDEN = [
   // fin43's review: main's two seams not named `ROTARIS_CAPTURE_*`, the rows proof's renderer role and the initialization
   // proof's registered task.
   'ROTARIS_ROWS_PROOF', 'ROTARIS_INIT_TEST_TASK',
+  // fin44: the packaged probe's neighbours it does not use (`package.mjs` sets its three alone) — the wait, whose `js:` form
+  // evaluates an expression in the renderer as `_EVAL_AT` does, the last view, the probes and the prompt's delay — and the
+  // children's two home seams, which redirected a shipped build's skill and instruction discovery. Each is read behind
+  // `__ROTARIS_SEAMS__` since 2026-10-14 (docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md).
+  // `ROTARIS_CAPTURE_PROMPT_MS` is named whole: `ROTARIS_CAPTURE_PROMPT` is the probe's own and stays.
+  'ROTARIS_CAPTURE_WAIT', 'ROTARIS_CAPTURE_END_VIEW', 'ROTARIS_CAPTURE_PROBE', 'ROTARIS_CAPTURE_PROMPT_MS',
+  'ROTARIS_CAPTURE_SKILLS_HOME', 'ROTARIS_CAPTURE_INSTRUCTIONS_HOME',
 ];
 
 /**

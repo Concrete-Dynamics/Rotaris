@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A packaged build answers the probe's three capture variables alone (ADR-0056's seam check; fin44).** `capture/probe.ts` reads
+`_WAIT`, `_WAIT_MS`, `_END_VIEW`, `_END_VIEW_MS`, `_PROBE` and `_PROMPT_MS` behind `__ROTARIS_SEAMS__`, and the run host and the
+workspace service read `_SKILLS_HOME` and `_INSTRUCTIONS_HOME` behind it; `scripts/lib/seam-check.mjs` names all eight. The
+**process view**'s main row says so in place of the open note it named. No package, edge, process, channel, command or store
+column changed.
+
 **A renderer that is alive but does not answer cannot answer its close guard (PD-SHELL-010, OQ-297, the consortium's HR1;
 fin44).** `askRendererGuard` (`main/main-windows.ts`) takes the main-window timers port and a `warn`, sends main's liveness probe
 beside the guard's question every `RENDERER_LIVENESS_BOUND_MS` (5 000 ms), listens for `unresponsive`, and rejects "cannot

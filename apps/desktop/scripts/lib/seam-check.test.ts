@@ -46,6 +46,66 @@ describe('the seam check names every seam read behind __ROTARIS_SEAMS__ (ADR-005
   });
 });
 
+/**
+ * The two modules a packaged build never emits: `capture/index.ts` reaches each only by a dynamic import inside
+ * `if (__ROTARIS_SEAMS__)`, so with the flag false rollup drops the branch and the chunk is never written.
+ */
+const COMPILED_OUT = new Set([join('main', 'capture', 'seams.ts'), join('main', 'capture', 'theme-proof.ts')]);
+
+/** Every capture variable read on a line WITHOUT the build-time flag, in a module a packaged build keeps. */
+function unflaggedReads(): Map<string, string> {
+  const found = new Map<string, string>();
+  for (const root of ROOTS) {
+    for (const e of readdirSync(join(SRC, root), { recursive: true, withFileTypes: true })) {
+      if (!e.isFile() || !e.name.endsWith('.ts') || e.name.endsWith('.test.ts')) continue;
+      const file = join(e.parentPath, e.name);
+      if (COMPILED_OUT.has(file.slice(SRC.length + 1))) continue;
+      readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+        if (line.includes('__ROTARIS_SEAMS__')) return;
+        for (const m of line.matchAll(/process\.env\[['"](ROTARIS_CAPTURE_[A-Z0-9_]+)['"]\]/g)) found.set(m[1]!, `${e.name}:${i + 1}`);
+      });
+    }
+  }
+  return found;
+}
+
+describe('a packaged build answers no capture variable beyond the probe\'s three (ADR-0056)', () => {
+  /*
+   * docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md: `probe.ts` read
+   * `_WAIT` (whose `js:` form evaluates an expression the environment supplies), `_WAIT_MS`, `_END_VIEW`, `_END_VIEW_MS`,
+   * `_PROBE` and `_PROMPT_MS` with no flag, and the run host and the workspace service read `_SKILLS_HOME` and
+   * `_INSTRUCTIONS_HOME` with no test at all, so a packaged build kept all eight while the seam check passed.
+   */
+  let dir: string | undefined;
+  afterEach(() => { if (dir !== undefined) rmSync(dir, { recursive: true, force: true }); dir = undefined; });
+  function out(files: Record<string, string>): string {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-seam-check-'));
+    for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text);
+    return dir;
+  }
+
+  it('reads every other capture variable behind __ROTARIS_SEAMS__, on the read\'s own line', () => {
+    const offFlag = [...unflaggedReads()].filter(([name]) => !(KEPT as string[]).includes(name)).map(([name, at]) => `${name} (${at})`);
+    expect(offFlag).toEqual([]);
+  });
+
+  it('the dynamically imported modules stay unreachable from a static import', () => {
+    for (const e of readdirSync(join(SRC, 'main'), { recursive: true, withFileTypes: true })) {
+      if (!e.isFile() || !e.name.endsWith('.ts') || e.name.endsWith('.test.ts')) continue;
+      const text = readFileSync(join(e.parentPath, e.name), 'utf8');
+      expect(text, e.name).not.toMatch(/^import[^;]*from\s+['"][^'"]*\/(seams|theme-proof)\.js['"]/m);
+    }
+  });
+
+  it('names the eight the packaged probe does not need, so the seam check fails a build that keeps one', () => {
+    for (const name of ['ROTARIS_CAPTURE_WAIT', 'ROTARIS_CAPTURE_WAIT_MS', 'ROTARIS_CAPTURE_END_VIEW', 'ROTARIS_CAPTURE_END_VIEW_MS', 'ROTARIS_CAPTURE_PROBE', 'ROTARIS_CAPTURE_PROMPT_MS', 'ROTARIS_CAPTURE_SKILLS_HOME', 'ROTARIS_CAPTURE_INSTRUCTIONS_HOME']) {
+      expect(covered(name), name).toBe(true);
+    }
+    const r = seamCheck(out({ 'index.js': 'env.ROTARIS_CAPTURE_PNG; env.ROTARIS_CAPTURE_PROMPT; env.ROTARIS_CAPTURE_AFTER_MS; env.ROTARIS_CAPTURE_WAIT_MS', 'run-host.js': "process.env['ROTARIS_CAPTURE_SKILLS_HOME']" }));
+    expect(r.present).toEqual(['ROTARIS_CAPTURE_WAIT (index.js)', 'ROTARIS_CAPTURE_SKILLS_HOME (run-host.js)']);
+  });
+});
+
 describe('seamCheck reads every emitted file of the main section', () => {
   let dir: string | undefined;
   afterEach(() => { if (dir !== undefined) rmSync(dir, { recursive: true, force: true }); dir = undefined; });

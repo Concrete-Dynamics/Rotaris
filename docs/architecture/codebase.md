@@ -1636,8 +1636,10 @@ choosers' — which were read behind the run-time `capturing` test alone and shi
 the list together: `apps/desktop/src/main/capture/seam-reads.test.ts` (every capture read in main carries the flag on its line,
 the probe's own excepted, and so does every other `ROTARIS_*` read but ADR-0059's `ROTARIS_CIRCUIT_BREAKER`: the rows proof's
 `ROTARIS_ROWS_PROOF` and the initialization proof's `ROTARIS_INIT_TEST_TASK` were found unguarded at review) and `apps/desktop/scripts/lib/seam-check.test.ts` (every flagged read in main, the run host and the
-workspace service is named by the list). `vitest.config.ts` defines the flag `true`, as the ordinary build does. Still owed:
-`docs/defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`.
+workspace service is named by the list). `vitest.config.ts` defines the flag `true`, as the ordinary build does. *Owed until 2026-10-14, then repaired by fin44:* the packaged probe's `_WAIT`, `_WAIT_MS`, `_END_VIEW`, `_END_VIEW_MS`, `_PROBE` and
+`_PROMPT_MS` and the children's `_SKILLS_HOME` and `_INSTRUCTIONS_HOME` now sit behind the flag too, the list names them, and
+`seam-check.test.ts` fails any capture variable read off the flag in a module a packaged build keeps, the probe's three aside
+(`docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`).
 
 **A trap closed on the way:** `pnpm package` leaves `out/` holding the seam-free build, and every `*-proof` script
 launches `out/main/index.js` and drives those seams — so the next proof run after a package would have failed for a

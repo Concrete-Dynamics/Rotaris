@@ -18,12 +18,15 @@ const MAIN = join(import.meta.dirname, '..');
 
 /**
  * Files main reaches only through the dynamic import inside `if (__ROTARIS_SEAMS__)` (`capture/index.ts`), whose reads a
- * packaged build never emits, and the packaged probe, whose reads ship on purpose (`capture/probe.ts`).
+ * packaged build never emits. The packaged probe (`capture/probe.ts`) was outside the rule as well until 2026-10-14, as
+ * though every read in it shipped on purpose; six of its reads were verification seams it does not use, and a packaged build
+ * kept them (docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md). It is inside
+ * the rule now: only its three variables below are read off the flag.
  */
-const OUTSIDE_THIS_RULE = new Set(['capture/seams.ts', 'capture/theme-proof.ts', 'capture/probe.ts']);
+const OUTSIDE_THIS_RULE = new Set(['capture/seams.ts', 'capture/theme-proof.ts']);
 
-/** The packaged probe's own variable, read where the capture starts (`capturing`, `capture/index.ts`). */
-const PACKAGED = new Set(['ROTARIS_CAPTURE_PNG', 'ROTARIS_CAPTURE_PROMPT']);
+/** The packaged probe's own three, read where the capture starts (`capturing`, `capture/index.ts`) and in `capture/probe.ts`. */
+const PACKAGED = new Set(['ROTARIS_CAPTURE_PNG', 'ROTARIS_CAPTURE_PROMPT', 'ROTARIS_CAPTURE_AFTER_MS']);
 
 function sources(dir: string): string[] {
   return readdirSync(dir, { recursive: true, withFileTypes: true })
@@ -53,7 +56,10 @@ describe('main reads every scriptable capture variable behind __ROTARIS_SEAMS__ 
       'ROTARIS_CAPTURE_RESTORE_FROM', 'ROTARIS_CAPTURE_SAVE_PATH', 'ROTARIS_CAPTURE_DIRECTORY', 'ROTARIS_CAPTURE_SKILL_FILE',
       'ROTARIS_CAPTURE_PROVIDER_FILL', 'ROTARIS_CAPTURE_PROVIDER_EMPTY_OK', 'ROTARIS_CAPTURE_OPEN_EXTERNAL', 'ROTARIS_CAPTURE_QUESTION_STALE',
       'ROTARIS_CAPTURE_SUBSCRIBE_DELAY_MS', 'ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS', 'ROTARIS_CAPTURE_THEME', 'ROTARIS_CAPTURE_SCALE',
-      'ROTARIS_CAPTURE_NET', 'ROTARIS_CAPTURE_APPROVAL']) {
+      'ROTARIS_CAPTURE_NET', 'ROTARIS_CAPTURE_APPROVAL',
+      // fin44: the packaged probe's neighbours, read in `capture/probe.ts`.
+      'ROTARIS_CAPTURE_WAIT', 'ROTARIS_CAPTURE_WAIT_MS', 'ROTARIS_CAPTURE_END_VIEW', 'ROTARIS_CAPTURE_END_VIEW_MS', 'ROTARIS_CAPTURE_PROBE',
+      'ROTARIS_CAPTURE_PROMPT_MS']) {
       expect(named, name).toContain(name);
     }
   });

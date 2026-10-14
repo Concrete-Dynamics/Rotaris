@@ -10,7 +10,7 @@
  * is that no "Ruled <date>" in an entry falls before the date the entry was raised.
  *
  * A ruling under R-072 also names the two recommendations it weighed. OQ-298's said only that the orchestrator's ruling
- * record held them (acceptance finding C2 of fin46); twenty-one others name no advocate either, and are listed below as
+ * record held them (acceptance finding C2 of fin46); twenty-two others name no advocate either, and are listed below as
  * known gaps until they are written.
  */
 import { readFileSync } from 'node:fs';
@@ -83,11 +83,11 @@ function ruledUnderR072(text: string): Entry[] {
 
 /**
  * Entries ruled under R-072 that name neither advocate, recorded in
- * `docs/defects/twenty-one-r-072-rulings-do-not-name-what-the-advocates-recommended.md` and left for the orchestrator, which
+ * `docs/defects/r-072-rulings-that-do-not-name-what-the-advocates-recommended.md` and left for the orchestrator, which
  * holds the consortium's ruling record. A listed entry that comes to name them fails the test until it leaves this list.
  */
 const UNNAMED_RECOMMENDATIONS = [
-  262, 265, 266, 267, 271, 272, 279, 280, 281, 282, 283, 284, 285, 292, 293, 294, 295, 296, 299, 300, 311,
+  262, 265, 266, 267, 271, 272, 279, 280, 281, 282, 283, 284, 285, 292, 293, 294, 295, 296, 299, 300, 311, 312,
 ];
 
 const RECORD = readFileSync(join(import.meta.dirname, '..', 'docs', 'architecture', 'open-questions.md'), 'utf8');

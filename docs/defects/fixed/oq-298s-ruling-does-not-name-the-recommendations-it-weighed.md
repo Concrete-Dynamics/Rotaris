@@ -32,7 +32,7 @@ kept beside it.
 Pinned by `tools/open-question-rulings.test.ts`, "every ruling under R-072 names what its two advocates recommended, but the
 known gaps": every entry ruled under R-072 names advocate A and advocate B (or the user's and the system's lens), or records
 the two as agreeing ("both advocates followed"); "both of its recommendations", which OQ-298 used of its own two record changes,
-does not count. It was red on OQ-298 alone before the paragraph (the twenty-one other entries that name no advocate are listed
+does not count. It was red on OQ-298 alone before the paragraph (the twenty-one other entries that named no advocate then, OQ-312 a twenty-second since, are listed
 as known gaps, recorded open in
-[`../twenty-one-r-072-rulings-do-not-name-what-the-advocates-recommended.md`](../twenty-one-r-072-rulings-do-not-name-what-the-advocates-recommended.md))
+[`../r-072-rulings-that-do-not-name-what-the-advocates-recommended.md`](../r-072-rulings-that-do-not-name-what-the-advocates-recommended.md))
 and is green after.

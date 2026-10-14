@@ -55,14 +55,16 @@ export function storeRefusalNotice(held: StoreRefusal): StoreNotice {
 /**
  * OQ-266 (ruled 2026-10-13 under R-072): the one info notice for a restore cut between its renames that this open reversed —
  * the stamp it began at, the sessions put back (or none here before), nothing from the backup applied, restore again from
- * Settings to apply it, and where the prepared copy is kept.
+ * Settings to apply it, and where the prepared copy is kept — only when the open found it there (`staging` is `null` when it
+ * did not, a copy deleted by hand after the cut), so the sentence is never false.
  */
 export function cutRestoreNotice(cut: NonNullable<Opened['cutRestore']>): StoreNotice {
   const before = cut.hadStore ? 'The sessions this workspace had here were put back' : 'This workspace had no sessions here before it';
+  const kept = cut.staging === null ? '' : ` The prepared copy is kept at ${cut.staging}.`;
   return {
     severity: 'info',
     headline: `The restore begun at ${cut.stamp} did not finish`,
-    detail: `${before}, and nothing from the backup was applied. Restore again from Settings to apply it. The prepared copy is kept at ${cut.staging}.`,
+    detail: `${before}, and nothing from the backup was applied. Restore again from Settings to apply it.${kept}`,
   };
 }
 

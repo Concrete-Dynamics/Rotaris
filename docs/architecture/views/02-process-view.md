@@ -706,7 +706,8 @@ crosses a renderer boundary — and the three checkpoint asks of the paragraph a
 and before it answers, so main's initialization, opened only after that answer, never records into a file it created
 without the starter: REQ-CONFIG-025/028, `workspace-service/open-bootstrap.ts`, 2026-10-03; since 2026-10-14 its answer
 `workspace.opened` carries an optional **`cutRestore {reversed, hadStore, staging, stamp}`** when the open reversed a restore
-cut between its renames, OQ-266, which main raises as one info notice, and the open is **refused** — `workspace.store-missing`
+cut between its renames, OQ-266 (`staging` `null` when the prepared copy is not there at the open), which main raises as one
+info notice, and the open is **refused** — `workspace.store-missing`
 for a place holding no store (REQ-SESSION-202, W-31), `workspace.store-displaced` for a cut restore whose store could not be
 put back, `workspace.restore-in-flight` while the service's own restore runs — each creating nothing, the first two raised by
 main as an error notice and answered by `session.list` as the same refusal, `workspace-service/store-open.ts`; since

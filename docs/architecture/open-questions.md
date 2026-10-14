@@ -13843,6 +13843,11 @@ success and after a reversal, a rename back that fails, the in-flight open, and 
 next open puts the store back: 10 of 10 on 2026-10-14 (load average 0.6 to 1.3), the reinstated `workspace.db` byte-identical
 to the displaced one in 10 of 10, the journal gone and the staging copy kept in 10 of 10.
 
+***Corrected 2026-10-14 (fin44, `fin44-optional-findings`).*** "Where the prepared copy is kept" was written from the journal
+alone, so a copy deleted by hand before the next open was still named. `cutRestore.staging` is now `null` when the open does
+not find the copy, and the notice then names none
+([the note](../defects/fixed/the-cut-restore-notice-says-the-prepared-copy-is-kept-without-looking.md)).
+
 <a id="oq-267"></a>
 
 **OQ-267 — When a notice's action names a workspace no window holds, does activating it add a window for that workspace?**

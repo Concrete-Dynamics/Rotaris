@@ -720,6 +720,19 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
       expect(existsSync(join(c.ok ? c.to : '', 'workspace.db'))).toBe(true);
     });
 
+    it('a cut restore whose prepared copy was deleted by hand before the next open reports no kept copy (staging null)', async () => {
+      seed(root, id, [{ sid: 'S-1', rows: 1 }]);
+      const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 2 }]);
+      const cut = restoreStore(ctx(rh(), artifact), { betweenRenames: async () => { throw new Error('cut'); } });
+      await expect(cut).rejects.toThrow('cut');
+      rmSync(join(root, `${id}.restoring-1`), { recursive: true, force: true });
+      const r = openWorkspaceStore(root, id, 'C:/ws');
+      expect(r.cutRestore).toMatchObject({ hadStore: true, staging: null });
+      expect(new StoreDal(r.db).listSessions().map((x) => x.session_id)).toEqual(['S-1']);
+      r.db.close();
+      forgetSpelling(r.dir);
+    });
+
     it('a cut restore into a workspace that had no store here reinstates nothing, sets the notice field, and creates the ordinary store', async () => {
       const fresh = mintWorkspaceId('00000000000000000000000000000015');
       const artifact = makeArtifact(root, fresh, [{ sid: 'S-from-backup', rows: 2 }]);

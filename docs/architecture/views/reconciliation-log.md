@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**The cut-restore notice names a kept copy only when the open finds it (fin44, `fin44-optional-findings`;
+`../../defects/fixed/the-cut-restore-notice-says-the-prepared-copy-is-kept-without-looking.md`).** One channel field changed:
+`workspace.opened`'s `cutRestore.staging` is nullable, `null` when the prepared copy is not there at the open.
+`02-process-view.md` says so where it names the field; the notice's wording stays decided in `main/store-notice.ts`
+(`04-seams.md` §6, unchanged).
+
 **A restore's step-9a origin write that fails returns through OQ-265's discard (fin44, `fin44-optional-findings`;
 `../../defects/fixed/a-restores-origin-write-that-fails-rejects-with-the-staging-copy-left-behind.md`).** No command,
 channel or store column changed. `03-runtime-view.md` §7's restore paragraph names the failed `origin.txt` write among the

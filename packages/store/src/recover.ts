@@ -30,8 +30,11 @@ export interface CutRestore {
   readonly reversed: string | null;
   /** Whether the workspace had a store here before the restore began. */
   readonly hadStore: boolean;
-  /** The prepared copy of the backup, kept where the restore staged it. */
-  readonly staging: string;
+  /**
+   * The prepared copy of the backup, kept where the restore staged it; `null` when it is not there at this open (deleted by
+   * hand after the cut, say), so nothing that reports the reversal names a copy that is gone.
+   */
+  readonly staging: string | null;
   /** The stamp the restore began under. */
   readonly stamp: string;
 }
@@ -127,7 +130,8 @@ export function recoverCutRestore(workspacesRoot: string, id: WorkspaceId, deps:
     removeRestoreJournal(workspacesRoot, id);
     return null;
   }
-  const staging = stagingDir(workspacesRoot, id, journal.stagingN);
+  const stagedAt = stagingDir(workspacesRoot, id, journal.stagingN);
+  const staging = existsSync(stagedAt) ? stagedAt : null;
   if (!journal.targetExisted) {
     removeRestoreJournal(workspacesRoot, id);
     return { reversed: null, hadStore: false, staging, stamp: journal.stamp };

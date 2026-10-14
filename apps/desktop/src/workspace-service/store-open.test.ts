@@ -42,7 +42,8 @@ describe('the workspace service\'s open of a store (OQ-266, REQ-SESSION-202)', (
     expect(gate.active).toBe(false);
     const after = openStoreAtOpen(root, id, '/work/a', gate.active);
     if (!after.ok) throw new Error(after.refusal.headline);
-    expect(after.store.cutRestore).toEqual({ reversed: displaced, hadStore: true, staging: join(root, `${id}.restoring-1`), stamp: '2026-10-14T00-00-00-000Z' });
+    // This disk holds no `.restoring-1` (the fixture stages none), so the open names no kept copy.
+    expect(after.store.cutRestore).toEqual({ reversed: displaced, hadStore: true, staging: null, stamp: '2026-10-14T00-00-00-000Z' });
     expect(new StoreDal(after.store.db).listSessions().map((s) => s.session_id)).toEqual(['S-1']);
     after.store.db.close();
     forgetSpelling(after.store.dir);

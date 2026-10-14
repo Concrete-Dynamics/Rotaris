@@ -17,6 +17,12 @@ describe('the cut-restore notice (OQ-266, ruled 2026-10-13 under R-072)', () => 
     });
   });
 
+  it('names no kept copy when the open did not find it there (a copy deleted by hand after the cut)', () => {
+    expect(cutRestoreNotice({ ...cut, staging: null }).detail).toBe(
+      'The sessions this workspace had here were put back, and nothing from the backup was applied. Restore again from Settings to apply it.',
+    );
+  });
+
   it('says the workspace had none here where there was no store before it', () => {
     const n = cutRestoreNotice({ ...cut, reversed: null, hadStore: false });
     expect(n.detail).toMatch(/^This workspace had no sessions here before it, and nothing from the backup was applied\./);

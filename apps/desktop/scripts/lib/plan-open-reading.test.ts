@@ -3,9 +3,9 @@
  * look for are the engine's own, and each reading is taken from what the model was sent, the log and the transcript.
  */
 import { describe, expect, it } from 'vitest';
-import { ANSWER_REPROMPT as productReprompt, planCarryText, planCorrectionText, planHeldRowText } from '@rotaris/engine';
+import { ANSWER_REPROMPT as productReprompt, BUILT_IN_PERSONAS, CLASSIFIER_SYSTEM_PROMPT, entryInstructionsFor, planCarryText, planCorrectionText, planHeldRowText } from '@rotaris/engine';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { ANSWER_REPROMPT, CARRY_HEAD, HELD_ROW, NOT_COMPLETE, ROOT_MARK, SHOWN, UNANSWERED_ROW, answerReading, heldAnswerOf, planReading, requestOf } from './plan-open-reading.mjs';
+import { ANSWER_REPROMPT, CARRY_HEAD, CLASSIFIER_MARK, HELD_ROW, NOT_COMPLETE, ROOT_MARK, SHOWN, UNANSWERED_ROW, answerReading, heldAnswerOf, planReading, requestOf } from './plan-open-reading.mjs';
 
 const SYSTEM = `${ROOT_MARK} You coordinate.`;
 const body = (messages: { role: string; content: unknown }[], system = SYSTEM) => JSON.stringify({ model: 'm', stream: true, messages: [{ role: 'system', content: system }, ...messages] });
@@ -92,5 +92,14 @@ describe('answer reading (live-run `empty-answer`, PD-ORCH-009 revision 2)', () 
     const r = requestOf(JSON.stringify({ messages: [{ role: 'system', content: [{ type: 'text', text: ROOT_MARK }] }, { role: 'user', content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }] }] }));
     expect(r).toMatchObject({ root: true, lastUser: 'ab', firstUser: 'ab' });
     expect(requestOf('not json')).toMatchObject({ root: false, messages: [] });
+  });
+});
+
+describe('the marks the readings and the `empty` traffic rule match on are the engine\'s own texts', () => {
+  it('ROOT_MARK opens the orchestrator\'s prompt, coordinating and direct-work alike; CLASSIFIER_MARK opens the classifier\'s', () => {
+    const coordinating = BUILT_IN_PERSONAS.orchestrator.systemPrompt;
+    expect(coordinating.startsWith(ROOT_MARK)).toBe(true);
+    expect(entryInstructionsFor(coordinating, 'direct-work', { coordinatorOnly: true }).startsWith(ROOT_MARK)).toBe(true);
+    expect(CLASSIFIER_SYSTEM_PROMPT.startsWith(CLASSIFIER_MARK)).toBe(true);
   });
 });

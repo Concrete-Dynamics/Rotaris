@@ -272,8 +272,11 @@ this registry's normal form so that catalogue consumes this table rather than re
 (`REQ-SHELL-055`) resolves in the specified order over the slots that exist: the compact drawers register a closer, and
 the slash popup and the search panel register nothing because neither is built. *Corrected 2026-10-13:* the slash popup's slot was filled
 on 2026-09-09 (the next section); the search panel was built on 2026-09-07 and its slot is still empty — recorded as
-[`window-level-escape-skips-the-open-transcript-search-panel`](../../defects/window-level-escape-skips-the-open-transcript-search-panel.md),
-not repaired. The palette and the help are drawn in
+[`window-level-escape-skips-the-open-transcript-search-panel`](../../defects/fixed/window-level-escape-skips-the-open-transcript-search-panel.md),
+not repaired. *Repaired 2026-10-14 (fin43):* the pane holds the `searchPanel` slot while its panel is open, with the one
+close its field's Escape and its Close button run, so the window's Escape closes the panel and refocuses the composer
+before the drawers (`resolveWorkspaceEscape`, `searchPanelCloser`); `transcript-proof`'s behaviour stage presses Escape
+from the panel's Next button and reads the panel closed and the composer focused. The palette and the help are drawn in
 the main window only; an auxiliary window offers neither. `REQ-SHELL-165`'s determinable case — presenting an action
 with no chord where the product knows the host consumed it — is not built, because no host publishes its reservations;
 the chord is shown and nothing is raised, which is that requirement's ordinary branch.
@@ -458,5 +461,8 @@ switch in Display, which `REQ-CONFIG-403` says "holds two transcript toggles", i
 
 **Still not built.** "Open demo window" (`REQ-SHELL-162`, no demo mode). The search panel's Escape slot (the note linked
 above), and `REQ-CHAT-074`'s toolbar control for search
-([`the-transcript-has-no-toolbar-control-for-search`](../../defects/the-transcript-has-no-toolbar-control-for-search.md)),
-both noticed by this change and recorded, not repaired.
+([`the-transcript-has-no-toolbar-control-for-search`](../../defects/fixed/the-transcript-has-no-toolbar-control-for-search.md)),
+both noticed by this change and recorded, not repaired. *Both repaired 2026-10-14 (fin43, `fin43-transcript-and-prefs`):*
+the toolbar's search control runs this registry's `transcript.search`, so it is one more way in to the same command and
+no second binding, its tooltip carrying the chord as `REQ-SHELL-058` formats it; the slot is filled as the first execution
+above now says. "Open demo window" is the one entry still not built.

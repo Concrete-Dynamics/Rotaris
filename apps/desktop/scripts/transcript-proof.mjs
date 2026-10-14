@@ -8,7 +8,8 @@
  *                   and then walks REQ-UIBENCH-060's five window sizes. ADR-0045's element-count invariant is a
  *                   within-iteration claim, so measuring it across three processes would not be measuring it.
  *   3. behaviour  — the 1200-row transcript: the fold of four reading calls into one header, expanding it with the
- *                   header still on screen, a search that matches inside the collapsed group, paging older rows in
+ *                   header still on screen, a search that matches inside the collapsed group, the toolbar's search
+ *                   control opening the panel and window-level Escape closing it back to the composer, paging older rows in
  *                   with the reader's position undisturbed and the returned row identical to the released one, and
  *                   a burst of gapped publications producing exactly one `refused` and one `reset`.
  *   3b. geometry   — a planted run whose activity line MUST wrap and whose agent name is too long for the role
@@ -386,6 +387,14 @@ const behaviour = await launch('behaviour', {
     `(() => { const el = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound === 'tool:call-long'); if (!el) return null; el.querySelector('button').click(); return true; })()@10400`,
     `(() => { const el = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound === 'tool:call-long'); return el ? { expandedShowsAll: /output line 25/.test(el.innerText), expandedShowsMarker: /cut short/.test(el.innerText) } : null; })()@10800`,
     `(() => { document.querySelector('[data-testid="transcript-search-close"]').click(); return true; })()@11200`,
+    // REQ-CHAT-074 "opened by toolbar button": the toolbar's search control opens the panel with the caret in its field
+    // (docs/defects/fixed/the-transcript-has-no-toolbar-control-for-search.md). Then REQ-SHELL-055 step (1): Escape with
+    // focus on the panel's Next button — outside its field, so the field's own Escape is not what answers — reaches the
+    // window, closes the panel and returns focus to the composer
+    // (docs/defects/fixed/window-level-escape-skips-the-open-transcript-search-panel.md).
+    `(() => { const b = document.querySelector('[data-testid="transcript-search-open"]'); if (!b) return { control: false }; b.click(); return { control: true, label: b.getAttribute('aria-label'), title: b.getAttribute('title') }; })()@11400`,
+    `(() => { const i = document.querySelector('[data-testid="transcript-search-input"]'); const n = document.querySelector('[data-testid="transcript-search-next"]'); const open = i !== null; const caretInField = open && document.activeElement === i; if (n) { n.focus(); n.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); } return { open, caretInField, escapeFrom: n ? 'transcript-search-next' : null }; })()@11600`,
+    `(() => ({ open: document.querySelector('[data-testid="transcript-search-input"]') !== null, composerFocused: document.activeElement !== null && document.activeElement.classList.contains('composer__input') }))()@11800`,
     // REQ-CHAT-165: scrolling toward the top loads the next older span; REQ-CHAT-071 keeps the reader in place.
     // The reader scrolls toward the top; the row at the top of the viewport AT THAT MOMENT is the anchor, and it
     // must be at the same viewport offset once the older span has been placed above it (REQ-CHAT-071).
@@ -436,6 +445,15 @@ const behaviour = await launch('behaviour', {
   const untruncated = evalAt(behaviour, 10800);
   expect(untruncated && untruncated.expandedShowsAll === true && untruncated.expandedShowsMarker === false,
     `expanding the row did not show the untruncated value: ${JSON.stringify(untruncated)}`);
+  const toolbarOpen = evalAt(behaviour, 11400);
+  expect(toolbarOpen && toolbarOpen.control === true && toolbarOpen.label === 'Search transcript',
+    `the transcript toolbar has no search control: ${JSON.stringify(toolbarOpen)}`);
+  const opened = evalAt(behaviour, 11600);
+  expect(opened && opened.open === true && opened.caretInField === true,
+    `the toolbar's search control did not open the panel with the caret in its field: ${JSON.stringify(opened)}`);
+  const escaped = evalAt(behaviour, 11800);
+  expect(escaped && escaped.open === false, `window-level Escape left the search panel open: ${JSON.stringify(escaped)}`);
+  expect(escaped.composerFocused === true, `closing the panel by window-level Escape did not return focus to the composer: ${JSON.stringify(escaped)}`);
   const beforePaging = evalAt(behaviour, 12000);
   const atRequest = evalAt(behaviour, 13400);
   const afterPaging = evalAt(behaviour, 16000);
@@ -482,6 +500,7 @@ const behaviour = await launch('behaviour', {
     expanded,
     cap: { recordedLines: cap.recordedLines, beyondTheCapIsNotDisplayed: beyond.beyondTheCap, truncationMarked: cap.marker, expansionShowsUntruncated: untruncated },
     search: { count: search.count, following: search.following },
+    searchControl: { toolbar: toolbarOpen, opened, windowEscape: escaped },
     paging: { before: beforePaging, after: afterPaging, pagedRowIdenticalToReleased: true },
     anchor: { row: atRequest.anchor.key, driftPx: Math.round(Math.abs(drift) * 10) / 10, grewPx: grew, readerMovedPx: moved, grewMinusMovedPx: Math.abs(grew - moved), atRequest, afterPaging },
     burst: { refused: dRefused, reset: dReset, dropped: after.counters.dropped - before.counters.dropped, before: before.rowOps, after: after.rowOps },

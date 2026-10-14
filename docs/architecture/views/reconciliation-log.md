@@ -15,6 +15,13 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-14**
 
+**The transcript search panel holds its Escape slot, and the toolbar has a search control (fin43, REQ-SHELL-055, REQ-CHAT-074).**
+The pane registers the `searchPanel` closer in `shell-state` while its panel is open (`searchPanelCloser`, `transcript/search.ts`),
+so window-level Escape closes the panel and refocuses the composer before the drawers; the walk over the slots is
+`resolveWorkspaceEscape` (`commands/useCommandShortcuts.ts`). The transcript toolbar gains `TranscriptSearchControl`, which
+runs the registry's "Search transcript". The **state-ownership view**'s shell-state row and the **component view**'s
+`search.ts` entry say both. No package, edge, process, channel, command or store column changed.
+
 **OQ-263 ruled: a session storage directory that contains the requirement checkout container loads (fin43, R-072).** The
 **runtime view**'s `worktree_storage_subpath` sentence names the ruling (confirmed as built) where it said the question was
 open. No behaviour, package, edge, process, channel, command or store column changed.

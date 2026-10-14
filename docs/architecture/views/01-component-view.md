@@ -168,7 +168,7 @@ REQ-CHAT-046's twelve row categories map onto three display shapes), `constants.
 and owed to ADR-0053 rather than restated by it), `project.ts` (ADR-0046 step 4, pure), `pool.ts` (the offset table
 and, since 2026-09-29, the measurement ledger it is rebuilt from where it changed, the visible span, the anchor,
 REQ-CHAT-053's four update shapes, pure), `cache.ts` (REQ-CHAT-058's two bounded LRU
-caches and the four-part reuse predicate), `search.ts` (REQ-CHAT-074, incremental), `projector.ts` (2026-09-28: step 4
+caches and the four-part reuse predicate), `search.ts` (REQ-CHAT-074, incremental; since 2026-10-14 also `searchPanelCloser`, the closer the pane holds in REQ-SHELL-055's `searchPanel` Escape slot while its panel is open), `projector.ts` (2026-09-28: step 4
 run once per change of its inputs rather than once per render — the R-048 measurement round's repair, pure,
 `projector.test.ts` beside it), `TranscriptPane.tsx` (the fixed
 slot pool and step 5) and `Row.tsx` (Part AA's renderer, which the pane binds into each slot; Part Z's

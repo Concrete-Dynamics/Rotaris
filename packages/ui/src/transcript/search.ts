@@ -82,3 +82,15 @@ export function step(current: number, total: number, direction: 1 | -1): number 
   if (total === 0) return 0;
   return (current + direction + total) % total;
 }
+
+/**
+ * REQ-SHELL-055 step (1) and REQ-CHAT-074's "closing the panel refocuses the composer": the closer the pane registers in
+ * the `searchPanel` slot of `shell-state` while its panel is open, and null while it is closed so the window's Escape
+ * walks on to the drawers. `close` is the pane's one close — the same one its field's Escape and its Close button run.
+ * Until 2026-10-14 nothing registered the slot, so window-level Escape with focus outside the field skipped the open
+ * panel and closed the drawers (`docs/defects/fixed/window-level-escape-skips-the-open-transcript-search-panel.md`).
+ */
+export function searchPanelCloser(open: boolean, close: () => void): (() => boolean) | null {
+  if (!open) return null;
+  return () => { close(); return true; };
+}

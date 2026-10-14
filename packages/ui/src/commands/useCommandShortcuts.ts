@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { OVERLAY_ORDER, useShellState } from '../shell-state.js';
+import { OVERLAY_ORDER, useShellState, type OverlayCloser, type OverlayKind } from '../shell-state.js';
 import { commandForEvent, detectPlatform, type CommandContext, type KeyboardPlatform } from './registry.js';
 
 /**
@@ -15,10 +15,11 @@ import { commandForEvent, detectPlatform, type CommandContext, type KeyboardPlat
  *    confirmations, the session browser, the launch dialog, the palette and the help themselves) counts without
  *    registering, and a chord pressed over a dialog is neither run nor swallowed: it falls through to the dialog.
  *  - Window-level Escape is live ONLY on the Workspace view and resolves in REQ-SHELL-055's order over the closers the
- *    surfaces registered in `shell-state` (the slash popup and the compact drawers register theirs, `WorkspaceView.tsx`;
- *    the transcript search panel registers nothing and closes on Escape only from its own field, recorded in
- *    `docs/defects/window-level-escape-skips-the-open-transcript-search-panel.md`. Until 2026-10-13 this said the slash
- *    popup and the search panel were not built). On the other six views Escape does nothing. Escape is not a command.
+ *    surfaces registered in `shell-state` (`resolveWorkspaceEscape`): the slash popup and the compact drawers register
+ *    theirs in `WorkspaceView.tsx`, and the transcript search panel registers its own while it is open
+ *    (`TranscriptPane.tsx`, since 2026-10-14; until then it registered nothing and closed only from its own field,
+ *    `docs/defects/fixed/window-level-escape-skips-the-open-transcript-search-panel.md`). On the other six views Escape
+ *    does nothing. Escape is not a command.
  */
 export function useCommandShortcuts(ctx: CommandContext, platform: KeyboardPlatform = detectPlatform()): void {
   useEffect(() => {
@@ -27,11 +28,7 @@ export function useCommandShortcuts(ctx: CommandContext, platform: KeyboardPlatf
       if (modalSurfaceOpen()) return;
       if (e.key === 'Escape' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
         if (useShellState.getState().activeView !== 'workspace') return;
-        const overlays = useShellState.getState().overlays;
-        for (const kind of OVERLAY_ORDER) {
-          const close = overlays[kind];
-          if (close && close()) { e.preventDefault(); return; }
-        }
+        if (resolveWorkspaceEscape(useShellState.getState().overlays)) e.preventDefault();
         return;
       }
       const command = commandForEvent(e, platform);
@@ -42,6 +39,19 @@ export function useCommandShortcuts(ctx: CommandContext, platform: KeyboardPlatf
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [ctx, platform]);
+}
+
+/**
+ * REQ-SHELL-055's window-level Escape on the Workspace view: the first registered closer in `OVERLAY_ORDER` that closes
+ * something ends the walk — the slash popup, then the transcript search panel, then both compact drawers. Returns whether
+ * anything closed; an unregistered slot is skipped.
+ */
+export function resolveWorkspaceEscape(overlays: Readonly<Record<OverlayKind, OverlayCloser | null>>): boolean {
+  for (const kind of OVERLAY_ORDER) {
+    const close = overlays[kind];
+    if (close && close()) return true;
+  }
+  return false;
 }
 
 /** REQ-SHELL-055: a modal surface on screen answers keys before the window sees them. */

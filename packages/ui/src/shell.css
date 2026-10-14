@@ -1769,6 +1769,10 @@
 
 /* REQ-LIBRARY-140: the transcript toolbar — one row above the rows, holding the stash opener. */
 .transcript__toolbar { display: flex; align-items: center; gap: var(--rt-space-2, 8px); padding-bottom: var(--rt-space-1, 4px); }
+/* REQ-CHAT-074: the toolbar's search control, a bare magnifying glass as the mockup's WORKSPACE → transcript column draws it:
+   the tertiary text colour at rest, the secondary on hover, on the ghost button's own hover wash. */
+.transcript__search-open { color: var(--rt-text-tertiary); }
+.transcript__search-open:hover { color: var(--rt-text-secondary); }
 /* ---- Part Y: the Library's Artifacts tab, the artifact inspector, and ADR-0051's Markdown rendering ---- */
 /* Craft from the adopted design language (docs/design): the card and table patterns every other view draws,
    every value a token by name. Structure is docs/spec's (REQ-LIBRARY-108, REQ-LIBRARY-131..135). */

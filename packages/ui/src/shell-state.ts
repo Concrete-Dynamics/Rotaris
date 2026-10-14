@@ -76,9 +76,9 @@ export interface ShellState {
   /**
    * REQ-SHELL-055's window-level Escape on the Workspace view, in its fixed order: the slash suggestion popup
    * (REQ-CHAT-002/026), then the transcript search panel, then both compact overlay drawers. Each surface registers a
-   * closer that returns whether it closed anything; an unregistered slot is skipped. (Until 2026-10-13 this said an
-   * unregistered slot was a surface not built; the search panel is built and does not register, recorded in
-   * `docs/defects/window-level-escape-skips-the-open-transcript-search-panel.md`.)
+   * closer that returns whether it closed anything; an unregistered slot is skipped. The transcript pane registers the
+   * search panel's closer while the panel is open (since 2026-10-14; until then nothing filled the slot,
+   * `docs/defects/fixed/window-level-escape-skips-the-open-transcript-search-panel.md`).
    */
   readonly overlays: Readonly<Record<OverlayKind, OverlayCloser | null>>;
   registerOverlay(kind: OverlayKind, close: OverlayCloser | null): void;

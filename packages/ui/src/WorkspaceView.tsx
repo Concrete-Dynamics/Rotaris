@@ -12,7 +12,7 @@ import { RunHeader } from './RunHeader.js';
 import { annotatedModelOptions } from './model-options.js';
 import { NoticeBanner } from './Notice.js';
 import { useCommandContext } from './AppShell.js';
-import { commandById } from './commands/registry.js';
+import { commandById, describeWithShortcut, detectPlatform, type KeyboardPlatform } from './commands/registry.js';
 import { ClearTranscriptControl } from './slash/controls.js'; // Part AO
 import { buildCatalogue, type Reachable } from './slash/catalogue.js';
 import { slashRoleColours, slashTokenSplit, slashTokenState } from './slash/highlight.js';
@@ -245,6 +245,21 @@ export interface SlashHost {
   readonly listSkills?: (() => Promise<{ ok: true; count: number } | { ok: false; reason: string }>) | undefined;
 }
 
+/** REQ-CHAT-074 / REQ-SHELL-049: the search control's accessible name, the command's own label. */
+export const SEARCH_TRANSCRIPT_LABEL = 'Search transcript';
+/**
+ * REQ-CHAT-074: the transcript toolbar's search control — the way in to the pane's search panel for a reader who does
+ * not know the chord. The chord shown is the registry's own (REQ-SHELL-049), formatted for the host (REQ-SHELL-057/058).
+ */
+export function TranscriptSearchControl({ onOpen, platform = detectPlatform() }: { readonly onOpen: () => void; readonly platform?: KeyboardPlatform }) {
+  const description = describeWithShortcut(SEARCH_TRANSCRIPT_LABEL, commandById('transcript.search')?.shortcut, platform);
+  return (
+    <DesignButton type="button" className="btn btn-ghost btn-compact transcript__search-open" aria-label={SEARCH_TRANSCRIPT_LABEL}
+      aria-description={description} title={description} data-testid="transcript-search-open" onClick={onOpen}>
+      <i className="ph ph-magnifying-glass" aria-hidden="true" />
+    </DesignButton>
+  );
+}
 /** REQ-LIBRARY-140: the toolbar control's exact label, with its live count. */
 export function applyStashLabel(count: number): string {
   return `Apply stash (${count})`;
@@ -1442,6 +1457,13 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
             <ClearTranscriptControl runState={runState} rowCount={rows.length} control={slash?.control} onAcknowledge={onAcknowledge} registry={registry} configKey={personas} skillsRevision={slash?.skillsRevision} loadSkillFile={slash?.loadSkillFile} listSkills={slash?.listSkills} onError={setError} />
             {/* Part AA — REQ-CHAT-069: the scope toggle, naming the agent "This task" refers to and showing its state and live elapsed time. */}
             {agents.length > 0 && <ScopeToggle scope={scope} agent={selected} nowIso={nowIso} onScope={setScope} />}
+            {/* REQ-CHAT-074 "opened by toolbar button or Ctrl+F": the toolbar's search control runs the registry's "Search
+              * transcript" (`openSearch`, REQ-SHELL-048's one vocabulary), the command Ctrl+F, the palette and `/search` run.
+              * Drawn from the mockup's WORKSPACE → transcript column, where the magnifying glass sits before the terminal
+              * control as a bare icon in the tertiary text colour; its tooltip and accessible description carry the
+              * platform-formatted chord (REQ-SHELL-058). Until 2026-10-14 the toolbar had no search control
+              * (`docs/defects/fixed/the-transcript-has-no-toolbar-control-for-search.md`). */}
+            <TranscriptSearchControl onOpen={openSearch} />
             {/* Part AL2 — REQ-SHELL-080/108: the toolbar's terminal control with its counts, always enabled; the counts and the opener come from the renderer's terminal host (`terminal/host.tsx`), so this view's props do not change. The toolbar renders whenever `onOpenStash` is given, which the product always gives, so the control is reachable from a cold start; the condition above is not widened. */}
             <TerminalToolbarControl />
           </div>

@@ -12,7 +12,7 @@ import {
   observeAgain, readHeight, restoreAnchor, reuseOffsets, slotRef, updateShape, visibleRange, type Anchor,
 } from './pool.js';
 import { isOwnScroll } from './scroll.js';
-import { countLabel, indexAll, step as stepMatch, type Match } from './search.js';
+import { countLabel, indexAll, searchPanelCloser, step as stepMatch, type Match } from './search.js';
 import { Row, TranscriptSurfaceProvider, isReasoningRow, rowMenuEntries, type RowMenuRequest, type TranscriptSurface } from './Row.js';
 import { RowContextMenu, copyRowEntry, moveCurrentRow, type Acknowledger } from '../TranscriptSurface.js';
 import { useShellState } from '../shell-state.js';
@@ -541,6 +541,23 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     return () => registerTranscriptSearch(null);
   }, [registerTranscriptSearch]);
 
+  /**
+   * REQ-SHELL-055 step (1) / REQ-CHAT-074: the panel's ONE close — the field's Escape, the Close button and the window's
+   * Escape all run it — which closes the panel and returns focus to the composer. While the panel is open the pane holds
+   * the `searchPanel` slot of the window's Escape order, so Escape pressed anywhere on the Workspace (the panel's own
+   * buttons, a transcript row, the body) closes it before the drawers are considered; while it is closed the slot is
+   * empty and the walk goes on. The composer focus is read through a ref so a new `onFocusComposer` each render does
+   * not re-register the slot.
+   */
+  const focusComposer = useRef(onFocusComposer);
+  useEffect(() => { focusComposer.current = onFocusComposer; }, [onFocusComposer]);
+  const closeSearch = useCallback(() => { setSearchOpen(false); focusComposer.current?.(); }, []);
+  const registerOverlay = useShellState((st) => st.registerOverlay);
+  useEffect(() => {
+    registerOverlay('searchPanel', searchPanelCloser(searchOpen, closeSearch));
+    return () => registerOverlay('searchPanel', null);
+  }, [registerOverlay, searchOpen, closeSearch]);
+
   /** REQ-CHAT-074: showing a match disables tail-follow, selects the row and scrolls it to centre. */
   const matchAt = activeMatch?.at ?? null;
   useLayoutEffect(() => {
@@ -612,13 +629,13 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
             onChange={(e) => { setQuery(e.currentTarget.value); showMatch(0); }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') { e.preventDefault(); showMatch(stepMatch(current, matches.length, 1)); }
-              if (e.key === 'Escape') { e.preventDefault(); setSearchOpen(false); onFocusComposer?.(); }
+              if (e.key === 'Escape') { e.preventDefault(); closeSearch(); }
             }}
           />
           <span className="transcript__search-count" data-testid="transcript-search-count">{countLabel(matches.length, current)}</span>
           <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="transcript-search-prev" onClick={() => showMatch(stepMatch(current, matches.length, -1))}>Previous</DesignButton>
           <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="transcript-search-next" onClick={() => showMatch(stepMatch(current, matches.length, 1))}>Next</DesignButton>
-          <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="transcript-search-close" onClick={() => { setSearchOpen(false); onFocusComposer?.(); }}>Close</DesignButton>
+          <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="transcript-search-close" onClick={closeSearch}>Close</DesignButton>
         </div>
       )}
       {unseen > 0 && (

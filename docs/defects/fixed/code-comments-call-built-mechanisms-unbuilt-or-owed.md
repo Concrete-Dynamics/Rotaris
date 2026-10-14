@@ -34,7 +34,7 @@ that is now possible. Verified on `main` at `6de2a67` (2026-10-13) and again on 
 - `packages/ui/src/commands/useCommandShortcuts.ts:18` and `packages/ui/src/shell-state.ts:71`: "the slash popup and the
   search panel are not built", "an unregistered slot is a surface that is not built". The slash popup is built and
   registers; the search panel is built and registers nothing, which is a separate defect
-  ([`window-level-escape-skips-the-open-transcript-search-panel.md`](../window-level-escape-skips-the-open-transcript-search-panel.md)).
+  ([`window-level-escape-skips-the-open-transcript-search-panel.md`](window-level-escape-skips-the-open-transcript-search-panel.md)).
 - `apps/desktop/src/renderer/main.tsx:1039-1040`: "no project-initialization surface". The ADR-0064 surface exists
   (`packages/ui/src/settings/ProjectSettings.tsx`, `project-init.ts`); the hosted-cloud and proposal-store halves still hold.
   Nothing raises `open-project-init` either.
@@ -76,4 +76,4 @@ Two adjacent questions were checked, not reworded:
   raises the action.
 
 Noticed while doing this and recorded, not repaired:
-[`window-level-escape-skips-the-open-transcript-search-panel.md`](../window-level-escape-skips-the-open-transcript-search-panel.md).
+[`window-level-escape-skips-the-open-transcript-search-panel.md`](window-level-escape-skips-the-open-transcript-search-panel.md).

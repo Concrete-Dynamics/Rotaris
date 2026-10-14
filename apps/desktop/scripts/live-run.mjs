@@ -113,7 +113,10 @@
  *                 retry), a three-line `write_file` window edit, a `write_file` insert and a multi-line `replace_all`
  *                 (`lib/crlf-scenario.mjs`). No line of a file only edits and inserts touched may lose its `\r`, and an insert
  *                 or multi-line replace-all that landed must say it kept the CRLF endings where it had a `\r` to add; which
- *                 shapes the model chose, the near-miss reading and the window edit's level (OQ-280's level-4 case) are NOTEs.
+ *                 shapes the model chose, the near-miss reading and the window edit's level are NOTEs, except that since
+ *                 PD-TOOLS-019 (OQ-280) a window edit that landed at level 4 although its `old_string` was a uniform indent off
+ *                 FAILS, a level-3 one must land its block at the file's depth, and a level-3 `haet_edit` near miss with an LF
+ *                 `old_string` must name the line endings (PD-TOOLS-014 revision 3).
  *   8e. cutoff   — OPT-IN (`--only=cutoff`), a few minutes: Settings › Runtime › Per-agent timeout set to
  *                 `LIVE_RUN_CUTOFF_MIN` (default 1) minute(s) through the control and Save, then one delegated child given
  *                 more work than that: the cut-off child's report, the timed-out tag's line in the minutes form

@@ -15,6 +15,10 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-14**
 
+**Match level 3 compares each line without its carriage return (PD-TOOLS-019, PD-TOOLS-014 revision 3, OQ-280; fin43).**
+`matchEdit`'s level 3 sets one trailing `\r` aside on both sides, and the level-3 near miss names differing line endings. The
+**runtime view**'s file-tools paragraph says both. No package, edge, process, channel, command or store column changed.
+
 **A symbol rename is preceded by a reference search of the same symbol (PD-MCP-004, OQ-273; fin43).** The binding manifest gains
 `warmUps` (the rename warmed by the referencing-symbol search, with `name_path` and `relative_path`), refused by the generator
 unless the server lists both tools with both arguments; `codeIntelligenceWarmUp` reads it, and the run host's MCP executor sends

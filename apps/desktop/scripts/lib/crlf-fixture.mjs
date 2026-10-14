@@ -35,9 +35,9 @@ export const CHECK_LINES = [
 ];
 
 /**
- * A loop two levels deep, for the shape a model sends on Windows: an LF `old_string` one tab shallow. On an LF copy it matches at
- * level 3; on a CRLF file the lines' `\r` keeps it from level 3 and it lands at level 4
- * (`docs/defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`).
+ * A loop two levels deep, for the shape a model sends on Windows: an LF `old_string` one tab shallow. It matches at level 3 on an
+ * LF copy and, since `PD-TOOLS-019`, on a CRLF file too; until then the lines' `\r` kept it from level 3 and it landed at level 4
+ * (`docs/defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`).
  */
 export const RENDER_LINES = [
   'function render(items) {',

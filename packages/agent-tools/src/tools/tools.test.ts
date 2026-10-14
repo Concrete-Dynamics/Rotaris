@@ -1075,6 +1075,104 @@ describe('PD-TOOLS-018: a write_file insert keeps a CRLF file\'s line endings', 
   });
 });
 
+describe('PD-TOOLS-019: a match at level 3 compares each line without its carriage return', () => {
+  // OQ-280 (R-072, 2026-10-13). On a CRLF file every line ends in \r and an old_string written in JSON almost never does, so an
+  // LF old_string one uniform indent off never reached level 3: write_file applied it at level 4 one tab too shallow beside a
+  // success, and haet_edit gave the plain miss (docs/defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md).
+  const CRLF = " new_string was written with the file's CRLF line endings.";
+  const ENDINGS = "The line endings differ too: CRLF in the file and LF in old_string. The quoted text carries the file's line endings.";
+  const crlf = (lines: readonly string[]) => `${lines.join('\r\n')}\r\n`;
+  // The render loop of `apps/desktop/scripts/lib/crlf-fixture.mjs`, the shape edits-proof's `shift-lf` step sends.
+  const RENDER = ['function render(items) {', '\tconst out = [];', '\tfor (const item of items) {', '\t\tif (item.visible) {', '\t\t\tout.push(`<li>${item.label}</li>`);', '\t\t}', '\t}', "\treturn out.join('');", '}'];
+  const PUSH = '\t\t\tout.push(`<li>${item.label}</li>`);';
+  const TRIMMED = '\t\t\tout.push(`<li>${item.label.trim()}</li>`);';
+  const at = (tabs: number, line: string) => `${'\t'.repeat(tabs)}${line.replace(/^\t+/, '')}`;
+  const block = (tabs: number, push = PUSH) => [at(tabs, '\t\tif (item.visible) {'), at(tabs + 1, push), at(tabs, '\t\t}')].join('\n');
+  const prepare = async (rel: string, text: string) => {
+    writeFileSync(join(root, rel), text);
+    await readFileTool(state, fence).execute({ path: rel, offset: 1, limit: 2000, grep_context: 3 }, ctx());
+  };
+  const edit = (path: string, old_string: string, new_string: string) =>
+    writeFileTool(state, fence).execute({ operation: 'edit', path, old_string, new_string, replace_all: false }, ctx());
+  const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
+  const noLfOnly = (text: string) => expect(/(^|[^\r])\n/.test(text)).toBe(false);
+  const quoteOf = (text: string): string => JSON.parse(/as this JSON string: ("(?:[^"\\]|\\.)*") If these are not/.exec(text)![1]!) as string;
+  const noHistory = async (path: string) =>
+    expect(await writeFileTool(state, fence).execute({ operation: 'undo', path, replace_all: false }, ctx())).toMatchObject({ isError: true, text: `No edit history for ${path}.` });
+  const rendered = (push: string) => crlf(RENDER.map((l) => (l === PUSH ? push : l)));
+
+  it('write_file: an LF old_string one tab shallow on a CRLF file matches at level 3, is shifted, and lands CRLF at the file\'s depth', async () => {
+    await prepare('render.js', crlf(RENDER));
+    const r = await edit('render.js', block(1), block(1, TRIMMED));
+    expect(r.isError).toBe(false);
+    expect(r.text).toContain(`Match level: 3. new_string was shifted by the same leading prefix "\\t" (1 character added) to the file's indentation.${CRLF}`);
+    expect(read('render.js')).toBe(rendered(TRIMMED));
+    noLfOnly(read('render.js'));
+  });
+
+  it('write_file: the same one tab deep is shifted the other way', async () => {
+    await prepare('render.js', crlf(RENDER));
+    const r = await edit('render.js', block(3), block(3, TRIMMED));
+    expect(r.text).toContain(`Match level: 3. new_string was shifted by the same leading prefix "\\t" (1 character removed) to the file's indentation.${CRLF}`);
+    expect(read('render.js')).toBe(rendered(TRIMMED));
+    noLfOnly(read('render.js'));
+  });
+
+  it('write_file: a new_string already at the file\'s depth is written as given, CRLF', async () => {
+    await prepare('render.js', crlf(RENDER));
+    const r = await edit('render.js', block(1), block(2, TRIMMED));
+    expect(r.text).toContain(`Match level: 3. new_string already carries the file's indentation and was written as given.${CRLF}`);
+    expect(read('render.js')).toBe(rendered(TRIMMED));
+  });
+
+  it('write_file: a new_string at a third depth is refused, the bytes and the undo stack unchanged, the reply naming the line endings', async () => {
+    const before = crlf(RENDER);
+    await prepare('render.js', before);
+    const r = await edit('render.js', block(1), block(4, TRIMMED));
+    expect(r.isError).toBe(true);
+    expect(r.text.startsWith("old_string matches render.js only at match level 3 (indentation shift), and new_string's indentation matches neither old_string's nor the file's, so nothing was written. It matches lines 4-6 at match level 3 (indentation shift). Every line of the file carries the leading prefix \"\\t\" (1 character) in addition to old_string's indentation. " + ENDINGS)).toBe(true);
+    expect(quoteOf(r.text)).toBe(RENDER.slice(3, 6).map((l) => `${l}\r`).join('\n'));
+    expect(read('render.js')).toBe(before);
+    await noHistory('render.js');
+  });
+
+  it('haet_edit: the level-3 near miss names the line endings and quotes them; the quote sent back applies at level 1 and the file stays CRLF', async () => {
+    writeFileSync(join(root, 'render.js'), crlf(RENDER));
+    const hash = sha256(readFileSync(join(root, 'render.js')));
+    const miss = await haetEditTool(state, fence).execute({ path: 'render.js', content_hash: hash, old_string: block(1), new_string: block(1, TRIMMED), replace_all: false }, ctx());
+    expect(miss.isError).toBe(true);
+    expect(miss.text).toContain(`It matches lines 4-6 at match level 3 (indentation shift). Every line of the file carries the leading prefix "\\t" (1 character) in addition to old_string's indentation. ${ENDINGS} Your content_hash is still current and nothing was written.`);
+    const quote = quoteOf(miss.text);
+    expect(quote).toBe(RENDER.slice(3, 6).map((l) => `${l}\r`).join('\n'));
+    const retry = await haetEditTool(state, fence).execute({ path: 'render.js', content_hash: hash, old_string: quote, new_string: block(2, TRIMMED), replace_all: false }, ctx());
+    expect(retry.isError).toBe(false);
+    expect(retry.text).not.toMatch(/Match level/);
+    expect(read('render.js')).toBe(rendered(TRIMMED));
+    noLfOnly(read('render.js'));
+  });
+
+  it('the short window the note names — check\'s if (name) { … } sent LF one tab shallow — reaches level 3', () => {
+    const lines = crlf(['function check(name) {', '\tif (name) {', '\t\treturn name;', '\t}', "\treturn 'nobody';", '}']).split('\n');
+    expect(matchEdit(lines, 'if (name) {\n\treturn name;\n}')).toEqual({ level: 3, starts: [1], shifts: [{ prefix: '\t', deeper: true }] });
+  });
+
+  it('an old_string carrying \\r on an LF file, one indent off, reaches level 3, and the near miss names the endings the other way round', async () => {
+    expect(matchEdit('a\n  x\n  y\n'.split('\n'), ' x\r\n y\r')).toEqual({ level: 3, starts: [1], shifts: [{ prefix: ' ', deeper: true }] });
+    const hash = (() => { writeFileSync(join(root, 'l.py'), 'a\n  x\n  y\n'); return sha256(readFileSync(join(root, 'l.py'))); })();
+    const miss = await haetEditTool(state, fence).execute({ path: 'l.py', content_hash: hash, old_string: ' x\r\n y\r', new_string: ' X\r\n y\r', replace_all: false }, ctx());
+    expect(miss.text).toContain("The line endings differ too: LF in the file and CRLF in old_string. The quoted text carries the file's line endings.");
+    expect(quoteOf(miss.text)).toBe('  x\n  y');
+  });
+
+  it('guards: endings that agree add no sentence, and an edit that is not a uniform shift stays at level 4', async () => {
+    writeFileSync(join(root, 'h.ts'), 'a\n  y\n  w\n');
+    const hash = sha256(readFileSync(join(root, 'h.ts')));
+    const same = await haetEditTool(state, fence).execute({ path: 'h.ts', content_hash: hash, old_string: ' y\n w', new_string: ' Y\n w', replace_all: false }, ctx());
+    expect(same.text).not.toContain('The line endings differ too');
+    expect(matchEdit(crlf(['function alpha() {', '  return 1;', '}']).split('\n'), 'function alpha() {\n  return 2;')?.level).toBe(4);
+  });
+});
+
 describe('grep and glob (REQ-TOOLS-138..141)', () => {
   it('grep returns file:line:content, honours the ignore components and gitignore, skips binaries, refuses a bad regex', async () => {
     writeFileSync(join(root, '.gitignore'), 'ignored/\n*.log\n');

@@ -310,6 +310,11 @@ export function haetReadTool(state: FileToolState, fence: FenceConfig): ToolExec
  * REQ-TOOLS-136: the four-level match. Level 1 is the exact text anywhere (a substring, so a fragment of
  * a line matches); levels 2–4 are line windows of the old text's height. Returns the line indices of every
  * match at the deciding level and, at level 1, the character offsets to replace at.
+ *
+ * `PD-TOOLS-019` (OQ-280, R-072, 2026-10-13): level 3 compares each line of the window and of `old_string` with one trailing
+ * `\r` set aside, and measures the leading prefix on those lines, so an LF `old_string` one uniform indent off matches a CRLF
+ * file at level 3 (and a `\r`-carrying one an LF file). Levels 1, 2 and 4 and their order are unchanged, and what the match
+ * returns is still the window's line indices: the caller reads the window's raw lines, `\r`s included.
  */
 export interface EditMatch {
   level: 1 | 2 | 3 | 4;
@@ -320,6 +325,7 @@ export interface EditMatch {
    * Level 3 only, one per start: the leading prefix that tells the window from `old_string`, and whether the file's lines
    * carry it in addition to `old_string`'s (`deeper`) or `old_string`'s carry it and the file's do not. Read by
    * `PD-TOOLS-014`'s near-miss reply, and by `write_file`'s level-3 apply, which carries it into `new_string` (`PD-TOOLS-015`).
+   * Measured on the lines with one trailing `\r` set aside (`PD-TOOLS-019`), so it never holds a line ending.
    */
   shifts?: { prefix: string; deeper: boolean }[];
 }
@@ -343,13 +349,18 @@ export function matchEdit(lines: readonly string[], oldText: string): EditMatch 
   const l3: number[] = [];
   const shifts: { prefix: string; deeper: boolean }[] = [];
   const indent = (s: string) => /^\s*/.exec(s)?.[0] ?? '';
+  // PD-TOOLS-019: a line's trailing `\r` is its line ending, not its text. Until OQ-280's ruling level 3 compared it, so on a
+  // CRLF file an LF old_string one indent off fell to level 4 and landed unshifted beside a success
+  // (docs/defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md).
+  const body = (s: string) => (s.endsWith('\r') ? s.slice(0, -1) : s);
+  const oldBodies = oldLines.map(body);
   for (let i = 0; i < windows; i += 1) {
-    const w = at(i);
+    const w = at(i).map(body);
     const first = w[0] as string;
-    const firstOld = oldLines[0] as string;
+    const firstOld = oldBodies[0] as string;
     const shift = indent(first).length - indent(firstOld).length;
     if (shift === 0) continue;
-    const shifted = oldLines.map((l) => (shift > 0 ? `${indent(first).slice(0, shift)}${l}` : l.startsWith(indent(firstOld).slice(0, -shift)) ? l.slice(-shift) : null));
+    const shifted = oldBodies.map((l) => (shift > 0 ? `${indent(first).slice(0, shift)}${l}` : l.startsWith(indent(firstOld).slice(0, -shift)) ? l.slice(-shift) : null));
     if (shifted.every((x) => x !== null) && eq(w, shifted as string[])) {
       l3.push(i);
       shifts.push(shift > 0 ? { prefix: indent(first).slice(0, shift), deeper: true } : { prefix: indent(firstOld).slice(0, -shift), deeper: false });
@@ -558,6 +569,14 @@ function nearMissMessage(rel: string, lines: readonly string[], m: EditMatch, ol
     differs = shift.deeper
       ? `Every line of the file carries the leading prefix ${what} in addition to old_string's indentation.`
       : `Every line of old_string carries the leading prefix ${what} that the file's lines do not.`;
+    // PD-TOOLS-014 revision 3 (OQ-280, with PD-TOOLS-019): level 3 sets a trailing `\r` aside, so a window and old_string may
+    // differ in their line endings too; the first line that does says which way, and the quote keeps the file's.
+    const oldLines = oldText.split('\n');
+    const crlfDiffers = window.findIndex((line, i) => line.endsWith('\r') !== (oldLines[i] ?? '').endsWith('\r'));
+    if (crlfDiffers !== -1) {
+      const fileCrlf = (window[crlfDiffers] as string).endsWith('\r');
+      differs += ` The line endings differ too: ${fileCrlf ? 'CRLF in the file and LF in old_string' : 'LF in the file and CRLF in old_string'}. The quoted text carries the file's line endings.`;
+    }
   }
   const at = occurrences(start);
   let flag = '';

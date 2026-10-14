@@ -14,9 +14,13 @@
  * only `write_file` edits and inserts and `haet_edit` touched lost its `\r`; an insert and a multi-line replace-all that
  * succeeded on a CRLF file say they wrote the file's CRLF endings wherever the tool had a `\r` to add (`lfBreak`,
  * `insertOwesCr`). Which shapes the model chose is NOTED: a near miss asked (with `lib/near-miss-edits.mjs`'s reading: retried,
- * probed, ambiguous), the match level the window edit reached, and whether
- * a level-4 window edit landed at the file's depth or as given — the case
- * `docs/defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md` records (OQ-280).
+ * probed, ambiguous), the match level the window edit reached, and whether a level-4 window edit landed at the file's depth or as
+ * given. Since `PD-TOOLS-019` (OQ-280, ruled 2026-10-13) level 3 sets a line's trailing `\r` aside, so two of those readings are
+ * CHECKS: a `render.js` window edit that landed at level 4 although its `old_string` differed from the fixture's window by a
+ * uniform indent alone (`\r` set aside) fails, and a level-3 one must land its block at the file's depth; any other level-4
+ * landing stays a note. A `haet_edit` near miss at level 3 whose LF `old_string` met the CRLF file must name the line endings
+ * (`PD-TOOLS-014` revision 3). Until the ruling the level-4 one-tab-shallow landing was a note naming OQ-280
+ * (`docs/defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`).
  *
  * `ctx` is what `live-run.mjs` owns (`approvalContext()`); the readings below are pure and tested beside this file.
  */
@@ -52,6 +56,25 @@ const norm = (path) => String(path ?? '').replace(/\\/g, '/').replace(/^\.\//, '
  * carry, and the tool rightly says nothing (`carryExact`, `carryInsert` report only a `\r` they added).
  */
 export const lfBreak = (text) => /(^|[^\r])\n/.test(String(text ?? ''));
+/**
+ * Whether `oldString` differs from some window of `lines` (the fixture as generated) by one uniform leading prefix alone, each
+ * line read with one trailing `\r` set aside — what `PD-TOOLS-019` makes a level-3 match. Mirrors REQ-TOOLS-136 level 3 as the
+ * directive reads it; nothing here is product code.
+ */
+export function indentOnlyOff(oldString, lines) {
+  const body = (x) => (x.endsWith('\r') ? x.slice(0, -1) : x);
+  const indent = (x) => /^\s*/.exec(x)?.[0] ?? '';
+  const old = String(oldString ?? '').split('\n').map(body);
+  const file = lines.map(body);
+  for (let i = 0; i + old.length <= file.length; i += 1) {
+    const w = file.slice(i, i + old.length);
+    const shift = indent(w[0]).length - indent(old[0]).length;
+    if (shift === 0) continue;
+    const shifted = old.map((l) => (shift > 0 ? `${indent(w[0]).slice(0, shift)}${l}` : l.startsWith(indent(old[0]).slice(0, -shift)) ? l.slice(-shift) : null));
+    if (shifted.every((x, j) => x !== null && x === w[j])) return true;
+  }
+  return false;
+}
 export const insertOwesCr = (content) => { const lines = String(content ?? '').split('\n'); if (lines.at(-1) === '') lines.pop(); return lines.some((line) => !line.endsWith('\r')); };
 
 /**
@@ -82,15 +105,25 @@ export function crlfVerdicts({ calls, files }) {
   // PD-TOOLS-014: the near miss, as the live run's own reading counts it.
   const reading = nearMissReading([{ scenario: 'crlf', calls }]);
   verdicts.push({ verdict: 'note', what: `crlf: haet_edit near misses ${reading.misses.length} (levels ${reading.misses.map((m) => m.level).join(', ') || 'none'}), retried ${reading.retried.length}, probed ${reading.probed.length} (target 0), ambiguous ${reading.ambiguous.length} (target 0) (PD-TOOLS-014)` });
+  // PD-TOOLS-014 revision 3 with PD-TOOLS-019: a level-3 near miss whose LF old_string met the CRLF file names the line endings.
+  const level3Lf = calls.filter((c) => (c.tool_name === 'haet_edit' || c.tool_name === 'haet') && c.status !== 'ok' && norm(pathOf(c)).startsWith(`${CRLF_DIR}/`) && /at match level 3 \(/.test(c.result) && !String(c.args?.old_string ?? '').includes('\r'));
+  if (level3Lf.length > 0) verdicts.push({ verdict: 'check', passed: level3Lf.every((c) => c.result.includes('The line endings differ too: CRLF in the file and LF in old_string.')), what: 'crlf: each haet_edit near miss at match level 3 with an LF old_string names the line endings (PD-TOOLS-014 revision 3, PD-TOOLS-019)', detail: level3Lf.map((c) => `#${c.ordinal} ${c.result.slice(0, 240)}`).join(' | ') });
   const retries = calls.filter((c) => EDIT_TOOLS.has(c.tool_name) && c.tool_name !== 'write_file' && c.status === 'ok' && norm(pathOf(c)) === `${CRLF_DIR}/greet.js`);
   if (retries.length > 0) verdicts.push({ verdict: 'check', passed: retries.every((c) => c.result.includes(CRLF_EDIT) || !lfBreak(c.args?.new_string)), what: "crlf: a haet_edit that landed a multi-line new_string on greet.js says it wrote the file's CRLF endings (PD-TOOLS-017)", detail: retries.map((c) => `#${c.ordinal} ${c.result.split('\n')[0].slice(0, 160)}`).join(' | ') });
-  // The render.js window edit: which level it reached, and where a level-4 apply put the block (OQ-280).
+  // The render.js window edit: which level it reached, and where it put the block (PD-TOOLS-019, which ruled OQ-280).
   const window = calls.filter((c) => c.tool_name === 'write_file' && c.args?.operation === 'edit' && norm(pathOf(c)) === `${CRLF_DIR}/render.js`);
   const landed = window.find((c) => c.status === 'ok');
   const level = landed === undefined ? null : /Match level: (\d)/.exec(landed.result)?.[1] ?? '1';
   const render = files[`${CRLF_DIR}/render.js`] ?? '';
   const depth = render.includes('\t\tif (item.visible) {') ? 'the file\'s depth' : render.includes('\r\n\tif (item.visible) {') ? 'one tab shallow, as given' : 'neither';
-  verdicts.push({ verdict: 'note', what: `crlf: the render.js window edit ${landed === undefined ? `did not land (${window.length} attempt(s))` : `landed at match level ${level}, its block at ${depth}`}${level === '4' && depth !== 'the file\'s depth' ? ' — the OQ-280 case, live' : ''}` });
+  const said = `crlf: the render.js window edit ${landed === undefined ? `did not land (${window.length} attempt(s))` : `landed at match level ${level}, its block at ${depth}`}`;
+  if (level === '4' && indentOnlyOff(landed.args?.old_string, RENDER_LINES)) {
+    verdicts.push({ verdict: 'check', passed: false, what: 'crlf: a render.js window edit whose old_string was a uniform indent off matches at level 3, never level 4 (PD-TOOLS-019)', detail: `${said}: ${landed.result.split('\n')[0].slice(0, 200)}` });
+  } else if (level === '3') {
+    verdicts.push({ verdict: 'check', passed: depth === 'the file\'s depth', what: 'crlf: a level-3 render.js window edit lands its block at the file\'s depth (PD-TOOLS-019, PD-TOOLS-015)', detail: `${said}: ${landed.result.split('\n')[0].slice(0, 200)}` });
+  } else {
+    verdicts.push({ verdict: 'note', what: said });
+  }
   return verdicts;
 }
 

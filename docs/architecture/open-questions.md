@@ -13790,6 +13790,33 @@ launch does the same.
 shown), as the Preview already does (clause (f)); the tab says, when a save changes the block, that frontmatter edits are not
 kept; a re-render keeps a person's changed values; or the cost stands as built and is added to PD-LIBRARY-003's list.
 
+<a id="oq-295"></a>
+
+**OQ-295 — Does match level 3 shift a blank line?** *(REQ-TOOLS-136 level 3, "exact after one and the same leading-whitespace
+prefix is added to or removed from every line of the candidate"; [`PD-TOOLS-015`](../product/directives.md#pd-tools-015), whose
+shift leaves a `new_string` line with no visible character as given; [`PD-TOOLS-019`](../product/directives.md#pd-tools-019),
+which sets a trailing `\r` aside at level 3 and does not decide this; [`PD-TOOLS-014`](../product/directives.md#pd-tools-014)'s
+level-3 near miss. Raised 2026-10-14 by fin43 (`fin43-rename-and-match`) from
+[`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../defects/a-block-with-a-blank-interior-line-never-matches-at-level-3.md);
+numbered from the top of the plan's range, OQ-281 to OQ-295, to keep clear of its sibling bundles: whichever lands second takes
+the next free number.)*
+
+Level 3 as built prepends the prefix to every line of `old_string`, or requires every line to begin with it, blank lines
+included, while the window's blank line is empty. So an indentation-shifted block holding a blank line never matches at level 3:
+measured with `matchEdit`, a three-line block one tab off with an empty middle line reaches level 4 on an LF file (similarity 0.89
+and 0.90, applied unshifted by `write_file` beside "Verify the result.") and no match on a CRLF file; without the blank line it
+matches at level 3.
+
+**What the build proceeds under.** As built: a blank line takes part in level 3's shift like any other, and such a block reaches
+level 4 or no match.
+
+**What a ruling decides.** Whether level 3 compares a line with no visible character (after `PD-TOOLS-019`'s `\r` is set aside)
+without the prefix — so a blank line of `old_string` matches a blank line of the window at any shift, as `PD-TOOLS-015` already
+writes a blank `new_string` line as given — or whether the build's reading stands. **The costs either way:** read without the
+prefix, level 3 takes more cases level 4 took, and a whitespace-only line of the window that differs from `old_string`'s would
+need a rule of its own; kept, the commonest multi-line edit shape — a block with a blank line — is outside `PD-TOOLS-015` and
+`PD-TOOLS-014`, and lands unshifted at level 4 beside a success on an LF file.
+
 <a id="oq-280"></a>
 
 **OQ-280 — Does match level 3 compare a line without its carriage return?** *(REQ-TOOLS-136, the four match levels — level 2
@@ -13798,7 +13825,7 @@ removed"; REQ-TOOLS-189, `haet_edit`'s exact match; [`PD-TOOLS-014`](../product/
 levels 2 and 3, [`PD-TOOLS-015`](../product/directives.md#pd-tools-015)'s level-3 shift, and
 [`PD-TOOLS-016`](../product/directives.md#pd-tools-016), each stating that REQ-TOOLS-136's levels are unchanged. Raised
 2026-10-13 by fin42 (N52) from
-[`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`](../defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md);
+[`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`](../defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md);
 numbered from the top of the plan's range, OQ-271 to OQ-280, to keep clear of its sibling bundles. Ruled 2026-10-13 under
 R-072, below.)*
 

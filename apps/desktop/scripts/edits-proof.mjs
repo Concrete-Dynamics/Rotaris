@@ -18,16 +18,19 @@
  *   shift         write_file edit, a level-3 window one tab shallow, `new_string` at old's depth PD-TOOLS-015 clause 2 with 016
  *   near          haet_edit with a two-line LF `old_string` on a CRLF file: level 2           PD-TOOLS-014, nothing written
  *   retry         haet_edit with the quote the near miss gave, the same hash                    PD-TOOLS-014 clause 5 with 017
- *   shift-lf      write_file edit, a one-tab-shallow LF `old_string` on a CRLF loop             OBSERVED, not asserted (below)
+ *   shift-lf      write_file edit, a one-tab-shallow LF `old_string` on a CRLF loop: level 3      PD-TOOLS-019 with 015 and 016
+ *   near-lf       haet_edit with the same LF `old_string` on a copy of the loop: level 3          PD-TOOLS-019 with 014 revision 3
+ *   retry-lf      haet_edit with that near miss's quote, the same hash                           PD-TOOLS-014 clause 5 with 017
  *
  * Asserted from the bytes on disk (every line of every file still CRLF, each file's exact bytes), from each call's stored
  * result (the directive's sentence, the match level, a refusal's words) and from `lib/near-miss-edits.mjs`'s reading, the one
- * the live run counts near misses with. `shift-lf` is the shape a model sends on Windows: `REQ-TOOLS-136`'s level 3 compares a
- * window's lines exactly once the prefix is moved, so a file line's `\r` keeps an LF `old_string` from level 3 and the edit
- * falls to level 4, outside `PD-TOOLS-015`: on the first run it applied at "Match level: 4 (similarity 0.91)" and wrote the block
- * one tab too shallow beside a success. What it does is recorded in `results.json`, the defect noted
- * (`docs/defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`) and raised as OQ-280; it is not
- * asserted either way until the question is ruled.
+ * the live run counts near misses with. `shift-lf` is the shape a model sends on Windows. Until `PD-TOOLS-019` (OQ-280, ruled
+ * 2026-10-13) level 3 compared a window's lines exactly once the prefix was moved, so a file line's `\r` kept an LF `old_string`
+ * from level 3 and the edit fell to level 4, outside `PD-TOOLS-015`: on fin42's runs it applied at "Match level: 4 (similarity
+ * 0.91)" and wrote the block one tab too shallow beside a success, recorded here as observed
+ * (`docs/defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`). Level 3 now sets a line's
+ * trailing `\r` aside, and `shift-lf`, `near-lf` and `retry-lf` are asserted: level 3, the shift sentence then the CRLF sentence,
+ * the exact bytes; the near miss naming the line endings; its quote applying.
  *
  * Evidence under `.proof/edits-proof/`: the launch's log and picture, `results.json`, and the files as the run left them.
  * `--skip-build` skips the build.
@@ -80,7 +83,7 @@ writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
 
 const FILES = {
   'crlf/exact.js': GREET_LINES, 'crlf/list.txt': LIST_LINES, 'crlf/window.js': GREET_LINES,
-  'crlf/shift.js': CHECK_LINES, 'crlf/haet.js': GREET_LINES, 'crlf/render.js': RENDER_LINES,
+  'crlf/shift.js': CHECK_LINES, 'crlf/haet.js': GREET_LINES, 'crlf/render.js': RENDER_LINES, 'crlf/render-haet.js': RENDER_LINES,
 };
 writeCrlfFixture(workspace, FILES);
 for (const [path, lines] of Object.entries(FILES)) if (readFileSync(join(workspace, path), 'utf8') !== crlf(lines)) throw new Error(`the fixture ${path} was not written as CRLF`);
@@ -90,6 +93,12 @@ const QUOTE = "\tconst greeting = 'Hello';\r\n\tif (name) {\r";
 /** `render.js`'s lines 4-6 one tab shallow, LF, as a model writes them; and the same with one attribute added. */
 const SHALLOW_OLD = ['\tif (item.visible) {', '\t\tout.push(`<li>${item.label}</li>`);', '\t}'].join('\n');
 const SHALLOW_NEW = ['\tif (item.visible) {', '\t\tout.push(`<li class="shown">${item.label}</li>`);', '\t}'].join('\n');
+/** The quote PD-TOOLS-014 gives for `near-lf`: `render-haet.js`'s lines 4-6 joined by `\n`, each keeping its `\r`. */
+const QUOTE_LF = RENDER_LINES.slice(3, 6).map((l) => `${l}\r`).join('\n');
+/** The same edit at the file's depth, LF, as a model retrying with the quote writes it. */
+const DEEP_NEW = ['\t\tif (item.visible) {', '\t\t\tout.push(`<li class="shown">${item.label}</li>`);', '\t\t}'].join('\n');
+/** `render.js` after the edit: the push line at the file's depth with the attribute. */
+const RENDER_SHOWN = RENDER_LINES.map((l) => l.replace('out.push(`<li>', 'out.push(`<li class="shown">'));
 const write = (key, args) => [key, { name: 'write_file', args }];
 const read = (key, path) => [key, { name: 'read_file', args: { path } }];
 const STEPS = [
@@ -109,6 +118,9 @@ const STEPS = [
   ['retry', { name: 'haet_edit', args: { path: 'crlf/haet.js', content_hash: '@content_hash', old_string: QUOTE, new_string: "\tconst greeting = 'Hey';\n\tif (name) {" } }],
   read('read-render', 'crlf/render.js'),
   write('shift-lf', { operation: 'edit', path: 'crlf/render.js', old_string: SHALLOW_OLD, new_string: SHALLOW_NEW }),
+  ['haet-read-render', { name: 'haet_read', args: { path: 'crlf/render-haet.js' } }],
+  ['near-lf', { name: 'haet_edit', args: { path: 'crlf/render-haet.js', content_hash: '@content_hash', old_string: SHALLOW_OLD, new_string: SHALLOW_NEW } }],
+  ['retry-lf', { name: 'haet_edit', args: { path: 'crlf/render-haet.js', content_hash: '@content_hash', old_string: QUOTE_LF, new_string: DEEP_NEW } }],
 ];
 const toolArgs = Object.fromEntries(STEPS);
 
@@ -178,17 +190,29 @@ check(refused('near') && near.startsWith('old_string was not found exactly in cr
 check(near.indexOf(JSON.stringify(QUOTE)) > near.indexOf('match level 2'), 'near: the facts come before the quote (PD-TOOLS-014)', near);
 check(ok('retry') && text('retry').includes(`${CRLF_EDIT} content_hash: `), 'retry: the quote sent back with the same hash applied, the CRLF sentence before content_hash (PD-TOOLS-014 clause 5, PD-TOOLS-017 clause 4)', text('retry'));
 check(readFileSync(join(workspace, 'crlf/haet.js'), 'utf8') === crlf(GREET_LINES.map((l) => l.replace("'Hello'", "'Hey'"))), 'haet.js holds the retried edit alone, every line CRLF', JSON.stringify(readFileSync(join(workspace, 'crlf/haet.js'), 'utf8')));
-// The live run's own reading of a near miss: one miss, at level 2, retried on the same path and not probed.
+// PD-TOOLS-019 with PD-TOOLS-015 clause 2 and PD-TOOLS-016: the LF old_string one tab shallow on the CRLF loop matched at
+// level 3, took the shift, then the file's endings, the block landing at the file's depth. Until the ruling it landed at level 4,
+// one tab too shallow beside a success.
+const SHIFTED = 'Match level: 3. new_string was shifted by the same leading prefix "\\t" (1 character added) to the file\'s indentation.';
+check(ok('shift-lf') && text('shift-lf').includes(`${SHIFTED} ${CRLF_EDIT}`), 'shift-lf: an LF old_string one tab shallow on a CRLF file matches at level 3, the shift sentence then the CRLF sentence (PD-TOOLS-019, PD-TOOLS-015 clause 2, PD-TOOLS-016 clause 3)', text('shift-lf'));
+check(readFileSync(join(workspace, 'crlf/render.js'), 'utf8') === crlf(RENDER_SHOWN), 'render.js holds the shifted block at the file\'s depth, every line CRLF (PD-TOOLS-019)', JSON.stringify(readFileSync(join(workspace, 'crlf/render.js'), 'utf8')));
+// PD-TOOLS-019 with PD-TOOLS-014 revision 3: the same LF old_string through haet_edit is the level-3 near miss naming the line
+// endings, its quote carrying the file's `\r`s; the quote sent back with the same hash applied, the file still CRLF.
+const nearLf = text('near-lf');
+check(refused('near-lf') && nearLf.startsWith('old_string was not found exactly in crlf/render-haet.js.') && nearLf.includes('It matches lines 4-6 at match level 3 (indentation shift).') && nearLf.includes("The line endings differ too: CRLF in the file and LF in old_string. The quoted text carries the file's line endings.") && nearLf.includes(JSON.stringify(QUOTE_LF)), 'near-lf: a haet_edit near miss at match level 3 names the line endings and quotes the window with its carriage returns (PD-TOOLS-019, PD-TOOLS-014 revision 3)', nearLf);
+check(ok('retry-lf') && !/Match level/.test(text('retry-lf')) && text('retry-lf').includes(`${CRLF_EDIT} content_hash: `), 'retry-lf: the quote sent back with the same hash applied at level 1, the CRLF sentence before content_hash (PD-TOOLS-014 clause 5, PD-TOOLS-017)', text('retry-lf'));
+check(readFileSync(join(workspace, 'crlf/render-haet.js'), 'utf8') === crlf(RENDER_SHOWN), 'render-haet.js holds the retried edit at the file\'s depth, every line CRLF', JSON.stringify(readFileSync(join(workspace, 'crlf/render-haet.js'), 'utf8')));
+// The live run's own reading of a near miss: two misses, at levels 2 and 3, each retried on the same path and not probed.
 const reading = nearMissReading([{ scenario: 'edits', calls }]);
-check(reading.misses.length === 1 && reading.misses[0].level === 2 && reading.retried.length === 1 && reading.probed.length === 0 && reading.ambiguous.length === 0, 'the near-miss reading counts one level-2 miss, retried on the same path, with no probe', JSON.stringify(reading));
+check(reading.misses.length === 2 && reading.misses.map((m) => m.level).join(',') === '2,3' && reading.retried.length === 2 && reading.probed.length === 0 && reading.ambiguous.length === 0, 'the near-miss reading counts a level-2 and a level-3 miss, each retried on the same path, with no probe', JSON.stringify(reading));
 results.nearMiss = { misses: reading.misses.length, retried: reading.retried.length, probed: reading.probed.length, ambiguous: reading.ambiguous.length };
 // Every file the asserted steps touched is still CRLF throughout.
-for (const path of ['crlf/exact.js', 'crlf/list.txt', 'crlf/window.js', 'crlf/shift.js', 'crlf/haet.js']) {
+for (const path of ['crlf/exact.js', 'crlf/list.txt', 'crlf/window.js', 'crlf/shift.js', 'crlf/haet.js', 'crlf/render.js', 'crlf/render-haet.js']) {
   const endings = lineEndings(readFileSync(join(workspace, path), 'utf8'));
   results.files[path] = endings;
   check(endings.lfOnly === 0, `${path}: no line lost its carriage return`, `LF-only lines ${endings.lfOnlyLines.join(', ')}`);
 }
-// OBSERVED, not asserted: the shape a model sends on a CRLF file, an LF old_string one tab shallow (see the header).
+// What `shift-lf` did, recorded beside the assertions above (until PD-TOOLS-019 it was recorded alone, as observed).
 const render = readFileSync(join(workspace, 'crlf/render.js'), 'utf8');
 results.observed = {
   shiftLf: {
@@ -198,7 +222,7 @@ results.observed = {
     atFileDepth: render.includes('\t\tif (item.visible) {\r\n\t\t\tout.push(`<li class="shown">'), asGiven: render.includes('\r\n\tif (item.visible) {\r\n\t\tout.push(`<li class="shown">'),
   },
 };
-console.log(`[edits-proof] shift-lf (observed, not asserted): ${JSON.stringify(results.observed.shiftLf)}`);
+console.log(`[edits-proof] shift-lf: ${JSON.stringify(results.observed.shiftLf)}`);
 
 results.failures = failures;
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

@@ -96,10 +96,35 @@ describe('the crlf scenario (PD-TOOLS-014 to PD-TOOLS-018 live)', () => {
     expect(notes(vs)).toContain('crlf: no write_file insert landed (PD-TOOLS-018 not reached)');
   });
 
-  it('names the OQ-280 case when the window edit lands at level 4 one tab shallow', () => {
+  it('PD-TOOLS-019: a level-4 landing whose old_string was a uniform indent off fails, and so does the same with the old_string\'s \\r', () => {
     const run = wholeRun();
-    run.calls[4] = { ...run.calls[4]!, result: `Edited ${R}: 3 lines replaced by 3 at line 4 (+3 -3). Match level: 4 (similarity: 0.91). Verify the result.${CRLF_EDIT}` };
+    run.calls[4] = { ...run.calls[4]!, args: { operation: 'edit', path: R, old_string: '\tif (item.visible) {\n\t\tout.push(`<li>${item.label}</li>`);\n\t}', new_string: '…' }, result: `Edited ${R}: 3 lines replaced by 3 at line 4 (+3 -3). Match level: 4 (similarity: 0.91). Verify the result.${CRLF_EDIT}` };
     run.files[R] = crlf([...RENDER_LINES.slice(0, 3), '\tif (item.visible) {', '\t\tout.push(`<li class="shown">${item.label}</li>`);', '\t}', ...RENDER_LINES.slice(6)]);
-    expect(notes(crlfVerdicts(run))).toContain('crlf: the render.js window edit landed at match level 4, its block at one tab shallow, as given — the OQ-280 case, live');
+    expect(failed(crlfVerdicts(run))).toContain('crlf: a render.js window edit whose old_string was a uniform indent off matches at level 3, never level 4 (PD-TOOLS-019)');
+    run.calls[4] = { ...run.calls[4]!, args: { ...run.calls[4]!.args, old_string: '\tif (item.visible) {\r\n\t\tout.push(`<li>${item.label}</li>`);\r\n\t}\r' } };
+    expect(failed(crlfVerdicts(run))).toContain('crlf: a render.js window edit whose old_string was a uniform indent off matches at level 3, never level 4 (PD-TOOLS-019)');
+  });
+
+  it('any other level-4 landing stays a note; a level-3 one is checked at the file\'s depth', () => {
+    const run = wholeRun();
+    run.calls[4] = { ...run.calls[4]!, args: { operation: 'edit', path: R, old_string: '\t\tif (item.visible) {\n\t\t\tout.push(`<li>${item.lbl}</li>`);\n\t\t}', new_string: '…' }, result: `Edited ${R}: 3 lines replaced by 3 at line 4 (+1 -1). Match level: 4 (similarity: 0.97). Verify the result.${CRLF_EDIT}` };
+    const typo = crlfVerdicts(run);
+    expect(failed(typo)).toEqual([]);
+    expect(notes(typo)).toContain("crlf: the render.js window edit landed at match level 4, its block at the file's depth");
+    run.calls[4] = { ...run.calls[4]!, result: `Edited ${R}: 3 lines replaced by 3 at line 4 (+1 -1). Match level: 3. new_string was shifted by the same leading prefix "\\t" (1 character added) to the file's indentation.${CRLF_EDIT}` };
+    const shifted = crlfVerdicts(run);
+    expect(failed(shifted)).toEqual([]);
+    expect(shifted.filter((v: Verdict) => v.verdict === 'check').map((v: Verdict) => v.what)).toContain("crlf: a level-3 render.js window edit lands its block at the file's depth (PD-TOOLS-019, PD-TOOLS-015)");
+    run.files[R] = crlf([...RENDER_LINES.slice(0, 3), '\tif (item.visible) {', '\t\tout.push(`<li class="shown">${item.label}</li>`);', '\t}', ...RENDER_LINES.slice(6)]);
+    expect(failed(crlfVerdicts(run))).toContain("crlf: a level-3 render.js window edit lands its block at the file's depth (PD-TOOLS-019, PD-TOOLS-015)");
+  });
+
+  it('a level-3 haet_edit near miss with an LF old_string must name the line endings (PD-TOOLS-014 revision 3)', () => {
+    const run = wholeRun();
+    const near3 = `old_string was not found exactly in ${G}. It matches lines 3-5 at match level 3 (indentation shift). Every line of the file carries the leading prefix "\\t" (1 character) in addition to old_string's indentation.`;
+    run.calls[1] = { ...run.calls[1]!, result: `${near3} Your content_hash is still current and nothing was written.` };
+    expect(failed(crlfVerdicts(run))).toContain('crlf: each haet_edit near miss at match level 3 with an LF old_string names the line endings (PD-TOOLS-014 revision 3, PD-TOOLS-019)');
+    run.calls[1] = { ...run.calls[1]!, result: `${near3} The line endings differ too: CRLF in the file and LF in old_string. The quoted text carries the file's line endings. Your content_hash is still current and nothing was written.` };
+    expect(failed(crlfVerdicts(run))).toEqual([]);
   });
 });

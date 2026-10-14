@@ -227,7 +227,11 @@ to change form for a machine.
   `packages/kernel/src/generated/requirements.ts`, which carries `PD` as typed symbols beside `REQ`,
   refuses a disposition naming an identifier the specification does not define, and marks every
   superseded requirement `@deprecated` so that citing one in code warns at the editor. Prose is not
-  the enforcement; this is.
+  the enforcement; this is. A change that adds, revises or withdraws a directive also runs
+  `pnpm vitest run tools/symbol-artifact/` before it is handed over: `back-pointers.test.ts` holds every
+  back-pointer in `docs/spec/` to the register's dispositions, and the tests beside the code a change touched do not reach it
+  (fin44's builder that minted `PD-SHELL-010` ran only those, and its reviewer found the gap; noted by fin45).
+  `pnpm check` runs it with every other test.
 - **First execution still reports back.** A directive is a mechanism decided on paper like any other.
   The first time one is built, `CLAUDE.md`'s standing policy applies: report back into this record,
   in place, including when it found nothing, and append a row to

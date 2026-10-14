@@ -28,8 +28,14 @@ for a named workspace"); REQ-NOTIFY-224 (the notice is about the workspace decla
 
 - `apps/desktop/src/main/index.ts` — the `notice.publish` branch of `runHost.onEvent`: `recoveryFor(e.action, activeWindow()?.workspace, e.sessionId)`.
 - `packages/engine/src/run/run.ts` — the run's `hooks.review` notice, keyed by `trust.workspace`.
-- `apps/desktop/src/run-host/host.ts` — the `notice` port that sends `notice.publish`, now with `workspaceRoot`.
-- `packages/contracts/src/process-protocol.ts` — `notice.publish`'s optional `workspaceRoot`.
+- `apps/desktop/src/run-host/host.ts` — the `notice` port that sends `notice.publish`, carrying `workspaceRoot` since
+  PD-SHELL-001 revision 3 (`0dfa183`, fin44's `fin44-notice-reach`); since fin45 the event is built by `runNoticeEvent` in
+  `apps/desktop/src/run-host/session-roots.ts`.
+- `packages/contracts/src/process-protocol.ts` — `notice.publish`'s optional `workspaceRoot`, added by the same revision.
+
+The repair below changed neither of the last two files: the field it reads was already on the event. *(These two entries read
+"now with `workspaceRoot`" and "`notice.publish`'s optional `workspaceRoot`" until 2026-10-14, as if this repair had added the
+field; corrected by fin45, `fin45-optional-findings`, from fin44's review.)*
 
 ## Outcome — repaired 2026-10-14 (fin44, `fin44-hooks-and-config`), under OQ-293's ruling
 

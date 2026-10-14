@@ -14680,7 +14680,9 @@ orchestrator's ruling record holds them.*
 **OQ-299 — When a rename's warm-up search fails with its allowance spent and the run cancelled at once, is the rename a timeout
 or interrupted?** *([`PD-MCP-004`](../product/directives.md#pd-mcp-004) clause 4; REQ-MCP-003; [`PD-TOOLS-013`](../product/directives.md#pd-tools-013)
 revision 2 (c). Raised 2026-10-14 by fin44 (`fin44-optional-findings`) from fin43's review of `fin43-rename-and-match`; the plan's
-range OQ-296 to OQ-310, its first free number on this branch — renumbered at landing if a sibling took it first.)*
+range OQ-296 to OQ-310, the next number free of its siblings, which held OQ-297 and OQ-298 — renumbered at landing if a sibling
+took it first. This read "its first free number on this branch" until 2026-10-14, when fin44's review noted that OQ-297 and
+OQ-298 were a sibling's, not this branch's; corrected by fin45, `fin45-optional-findings`.)*
 
 **What is open.** Clause 4 gives the search two exits that stop the rename unsent: a search that exhausts the rename's allowance
 ends it as REQ-MCP-003's failed call (`failure_kind: timeout`), and a cancel by the run during the search stops it

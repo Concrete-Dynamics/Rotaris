@@ -66,3 +66,8 @@ against a build without the repair FAILS 8 of 27: both launches held, no exit in
 about 0.6 s after the bound), so `guardClose`'s close stays a close; `destroy()` for a window whose guard could not answer was
 not needed. **Not decided here:** an answering renderer with unsaved settings still holds a quit from outside any window on a
 person's answer ([OQ-298](../../architecture/open-questions.md#oq-298), open).
+*Since ruled, 2026-10-14 ([R-072](../../product/requests.md#r-072); fin45, `fin45-supervision-and-quit`): OQ-298's ruling,
+[`PD-SHELL-009`](../../product/directives.md#pd-shell-009) revision 2, has a quit from outside any window ask no close guard, so
+neither an answering nor a hung renderer holds it. `exit-trace-proof`'s `hang` launch now measures that quit exiting 0 well under
+the probe's bound (625 ms) with the OQ-298 line and no PD-SHELL-010 `warn` line; `hang-close`, a person's close, remains this
+repair's built-app measure (5,567 ms with the `warn` line). The "Shown" paragraph above is kept as it was measured on the day.*

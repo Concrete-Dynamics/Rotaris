@@ -447,8 +447,14 @@ Exporting MUST write nothing to the store, MUST NOT create, restore or repair a 
 **REQ-LIBRARY-132** — The body MUST offer two tabs — "Preview" (rendered Markdown) first and "Markdown" (plain-text editor) second — where the preview re-renders on every editor keystroke and the editor uses a measured monospace font so tables and fenced blocks stay aligned while typing.
   > **Extended by [`PD-LIBRARY-003`](../product/directives.md#pd-library-003), 2026-10-07.** The Preview renders the
   > document from below its leading frontmatter block; the Markdown tab shows and edits the whole document.
+  > *Revision 2, 2026-10-13 ([OQ-272](../architecture/open-questions.md#oq-272)):* the Markdown tab shows the whole document —
+  > its leading frontmatter block read-only, and the text below it in the editor — and Save sends the block as loaded
+  > followed by the edited text (clause (f)). The sentence before this one is revision 1's.
 
 **REQ-LIBRARY-133** — Save MUST persist only the Markdown body (metadata immutable per REQ-LIBRARY-094), after which the listing shows the ` · edited` marker. The footer status shows "Saved." on success and `Save failed: <err>` on failure.
+  > **Extended by [`PD-LIBRARY-003`](../product/directives.md#pd-library-003) revision 2, 2026-10-13** ([OQ-272](../architecture/open-questions.md#oq-272)). The
+  > body a save persists carries the record's frontmatter, with the new `edited_at`, in place of the document's leading block,
+  > or in front of the text when none is found (clause (c)); the metadata stays immutable and the rest is as stated.
 
 **REQ-LIBRARY-134** — On load failure the editor becomes read-only, Save is disabled, and the status shows `Could not load artifact: <err>`. An unknown id fails with `Unknown artifact: '<id>'`. When the stored body is empty, the displayed content falls back to the rendered sidecar form of the record.
 

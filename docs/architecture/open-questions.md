@@ -13822,7 +13822,7 @@ whether the same reading binds the other members that name a workspace (the proj
 **OQ-272 — Is a person's edit inside an artifact document's frontmatter kept, or rewritten away at the next re-render?**
 *(PD-LIBRARY-003 (d) and (f), REQ-LIBRARY-133, REQ-LIBRARY-095, REQ-LIBRARY-092; REQ-SESSION-115. Raised 2026-10-13 by fin42
 (`fin42-live-gaps`), found by building `artifacts-proof` launches 8 and 9 (item N57). Minted on its branch as OQ-271 and
-renumbered OQ-272 at its landing, `origin/main` having taken OQ-271 meanwhile.)*
+renumbered OQ-272 at its landing, `origin/main` having taken OQ-271 meanwhile. Ruled 2026-10-13 under R-072, below.)*
 
 The inspector's Markdown tab shows and edits the whole document, its leading frontmatter included (PD-LIBRARY-003 (f)), and a
 re-render of an edited document rewrites that block from the record and keeps what follows it (clause (d)). So a person's edit
@@ -13840,6 +13840,21 @@ launch does the same.
 **What a ruling decides.** One of: the Markdown tab keeps the frontmatter out of the person's reach (shown read-only, or not
 shown), as the Preview already does (clause (f)); the tab says, when a save changes the block, that frontmatter edits are not
 kept; a re-render keeps a person's changed values; or the cost stands as built and is added to PD-LIBRARY-003's list.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)): the frontmatter is shown read-only, and a
+save writes the record's frontmatter.** The inspector's Markdown tab shows the document's leading frontmatter block read-only, in
+a height-bounded region above the editor, and the editor holds and edits the text below it. The store's save applies clause
+(d)'s rule: it writes `renderFrontmatter(record)` (with the new `edited_at`) in place of the leading block it is given, or in
+front of the text when no block is found. Recorded as [`PD-LIBRARY-003`](../product/directives.md#pd-library-003) revision 2,
+which revises (c) and (f), replaces the cost of a deleted frontmatter coming back with two others (a person cannot change
+frontmatter text from the inspector; a block an earlier edit broke is shown whole, gets a fresh block in front at the next save,
+and its lines stay as text until removed), and extends REQ-LIBRARY-133; REQ-LIBRARY-132's back-pointer names revision 2 and
+REQ-LIBRARY-133 gains one. REQ-LIBRARY-094, -095, -092 and REQ-SESSION-115 keep their text. **The build's earlier reading, kept
+beside the ruling:** "What the build proceeds under" above (an edit inside the frontmatter lasting until the next re-render, the
+proofs taking the caret below it with `Ctrl+End`) governed from fin42 until this ruling and no longer does. **Built in fin43**
+(`fin43-analysis-and-artifacts`): `ArtifactStore.editBody` writes through the same `withRecordFrontmatter` as `rerender`;
+`ArtifactInspector` holds the block apart (`artifact-frontmatter`) and sends it back unchanged in front of the edited text;
+`artifacts-proof` launch 8 no longer takes the caret anywhere before typing. The live run's `delegation-edit` chord may stay.
 
 <a id="oq-295"></a>
 

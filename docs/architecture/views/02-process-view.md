@@ -399,7 +399,9 @@ untouched: a retrospective is an ordinary job on the ordinary queue.
 
 **The session artifact store (Part Y; REQ-LIBRARY-087..101, REQ-ORCH-149).** Renderer → main: `artifacts.list` (the
 Library's Artifacts tab), `artifacts.body {ref}` (the inspector's load), `artifacts.save {ref, body}` (REQ-LIBRARY-133's
-save, the body ONLY). Main relays each to the run host as `artifacts.list {workspaceId}` → `artifacts.state {state:
+save, the body ONLY; since PD-LIBRARY-003 revision 2 the inspector shows the document's frontmatter read-only and sends it back
+unchanged in front of the edited text, and the store writes the record's own frontmatter, with the new `edited_at`, in its
+place). Main relays each to the run host as `artifacts.list {workspaceId}` → `artifacts.state {state:
 {sessionId, artifacts[], warnings[]}}`, `artifacts.body {workspaceId, ref}` → `artifacts.body {id, slug, title, kind_,
 status, producer, persona, edited, body, fallback}`, `artifacts.save {workspaceId, ref, body}` → `artifacts.saved {id,
 editedAt}`. **No session id crosses**: REQ-LIBRARY-136 scopes the tab to the LOADED session, so the run host answers for

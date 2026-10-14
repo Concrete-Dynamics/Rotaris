@@ -15,6 +15,14 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-14**
 
+**The artifact inspector shows the frontmatter read-only and a save writes the record's frontmatter (PD-LIBRARY-003 revision 2,
+OQ-272; fin43).** `ArtifactInspector` holds a document's leading block apart from the editor (`artifact-frontmatter`, a bounded
+read-only region above it) and sends it back unchanged in front of the edited text; `ArtifactStore.editBody` writes the record's
+frontmatter, with the new `edited_at`, in its place, through the same `withRecordFrontmatter` as `rerender`. An acknowledgement
+takes the pointer only at its close control and its action (REQ-NOTIFY-020), so a press on its text reaches the inspector's Save
+it stands over. The **process view**'s artifact-store paragraph and the **runtime view**'s `artifacts` row say so. No package,
+edge, process, channel, command or store column changed.
+
 **A retrospective's artifact stays out of a later run's analysis history (PD-LIBRARY-002 revision 3 (h), OQ-271; fin43).**
 `captureImprovementJob` (`engine/src/improvements/capture.ts`) drops every prior artifact whose `source_kind` is `retrospective`
 before REQ-LIBRARY-034's bound of five, so every artifact supplied has a source session and `considered_session_ids` names each.

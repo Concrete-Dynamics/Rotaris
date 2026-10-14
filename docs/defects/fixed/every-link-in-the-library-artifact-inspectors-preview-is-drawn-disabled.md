@@ -52,4 +52,4 @@ line). The persona window's mount is pinned by the wiring test only: no proof op
 window and presses a link there.
 
 Met beside it: the acknowledgement the open raises stands over the inspector's footer, and so over Save, while it shows
-(`docs/defects/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md`, recorded, not repaired).
+(`docs/defects/fixed/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md`, recorded, not repaired; repaired 2026-10-14 by fin43).

@@ -273,10 +273,7 @@ export class ArtifactStore {
           return;
         }
       }
-      if (saved !== null) {
-        const split = splitFrontmatter(saved);
-        content = split.frontmatter === null ? `${renderFrontmatter(record)}\n${saved}` : `${renderFrontmatter(record)}${split.rest}`;
-      }
+      if (saved !== null) content = withRecordFrontmatter(record, saved);
     }
     try { this.writeFile(record.bodyFile, content); }
     catch (cause) { this.deps.warn(`The document of artifact ${id} could not be re-rendered: ${reason(cause)}`); }
@@ -286,6 +283,11 @@ export class ArtifactStore {
    * REQ-LIBRARY-094 / REQ-LIBRARY-133 — body editing overwrites only the Markdown document and stamps
    * `edited_at`; everything else on the record is immutable through every editing surface, which is a
    * property of the statements the DAL declares and not of this method's discipline.
+   *
+   * PD-LIBRARY-003 revision 2 (c), OQ-272 ruled 2026-10-13 under R-072: the document written is the record's frontmatter,
+   * with the new `edited_at`, in place of the leading block it was given, or in front of the text when none is found —
+   * clause (d)'s rule at a re-render (`withRecordFrontmatter`). The record owns the block; a person's change inside it was
+   * kept only until the next re-render removed it, and the saved block carried no `edited_at` until then.
    */
   editBody(ref: string, body: string): Res<{ readonly id: string; readonly editedAt: string }> {
     const record = this.lookup(ref);
@@ -294,7 +296,7 @@ export class ArtifactStore {
     try {
       this.dal.transaction(() => {
         this.dal.touchArtifactEdited(this.sessionId, record.id, editedAt);
-        this.writeFile(record.bodyFile, body);
+        this.writeFile(record.bodyFile, withRecordFrontmatter({ ...record, editedAt }, body));
       });
     } catch (cause) {
       return err('write', String(cause instanceof Error ? cause.message : cause));
@@ -437,4 +439,14 @@ function toRow(sessionId: SessionId, record: ArtifactRecord): ArtifactInsert {
     timeline_event_id: record.timelineEventId, conversation_id: record.conversationId,
     importance: record.importance, created_at: record.createdAt, edited_at: record.editedAt, body_file: record.bodyFile,
   };
+}
+
+/**
+ * PD-LIBRARY-003 (d) and revision 2 (c): the record's frontmatter in place of a document's leading block, or in front of
+ * the text when none is found (a block an edit broke is no block, so its lines stay as text below the fresh one). One rule
+ * for a re-render of an edited document and for a save.
+ */
+function withRecordFrontmatter(record: ArtifactRecord, text: string): string {
+  const split = splitFrontmatter(text);
+  return split.frontmatter === null ? `${renderFrontmatter(record)}\n${text}` : `${renderFrontmatter(record)}${split.rest}`;
 }

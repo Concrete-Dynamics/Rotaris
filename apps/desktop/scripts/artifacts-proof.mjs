@@ -22,9 +22,10 @@
  *                  removal at warning, and the scripted publish stores no artifact.
  *   4. inspector — the inspector opens on the selected row, its Preview starts below the frontmatter
  *                  (PD-LIBRARY-003; captured as `inspector-preview.png`), a link in it is pressed and requests its
- *                  open through `shell.openExternal` (ADR-0051 decision 4), the Markdown tab is edited and saved, the table's
- *                  status cell gains ` · edited`, and opening the same id again RE-RAISES the one dialog
- *                  (REQ-LIBRARY-131/132/133).
+ *                  open through `shell.openExternal` (ADR-0051 decision 4), the Markdown tab is edited and saved WHILE the
+ *                  acknowledgement that open raised stands over the footer (REQ-NOTIFY-020: it takes no pointer but at its
+ *                  close control), the table's status cell gains ` · edited`, and opening the same id again RE-RAISES the
+ *                  one dialog (REQ-LIBRARY-131/132/133).
  *   5. missing   — the body file is deleted underneath a stored session; on a relaunch that resumes it the
  *                  record is still listed and the inspector reports the failure (REQ-LIBRARY-091, 134). Before
  *                  that, the reopened session AT REST shows the run-level agent's declared tools standing in, marked
@@ -44,7 +45,10 @@
  *
  *   8. edited    — PD-LIBRARY-003 (c), since 2026-10-13 (fin42, N57): a fresh session publishes `travel-plan` and a person edits
  *                  and saves it in the inspector's Markdown tab: `edited_at` is stamped, the document carries the edit, and
- *                  `key_findings` keeps the published body.
+ *                  `key_findings` keeps the published body. Since revision 2 (fin43, OQ-272) the tab shows the frontmatter
+ *                  read-only above the editor (`artifact-frontmatter`): a press and typing there change nothing, the editor's
+ *                  centre is below it, and the saved document's block is the record's, `edited_at` included, with the typed
+ *                  text below it.
  *   9. re-reported — PD-LIBRARY-003 (d) and (e): that session continued. The fresh root's first message carries the edited
  *                  document as REQ-SESSION-115's handoff, its header marked `edited` and its frontmatter removed; the root then
  *                  publishes `travel-plan-2` superseding it (REQ-LIBRARY-095), and the superseded document's re-render rewrites
@@ -148,6 +152,17 @@ function probe(log, selector, at = null) {
   const marker = at === null ? `capture: probe ${selector} → ` : `capture: probe-at ${at} ${selector} → `;
   const line = log.split('\n').find((l) => l.includes(marker));
   return line ? JSON.parse(line.slice(line.indexOf(marker) + marker.length)) : [];
+}
+/**
+ * The inspector seam's lines: `capture: inspect-at <ms> <selector> → {viewport, active, matches}`. `whole` answers the
+ * object (its `active` names the focused element); otherwise its matches, each with `rect`, `attrs` and `text`.
+ */
+function inspectedAt(log, selector, at, whole = false) {
+  const marker = `capture: inspect-at ${at} ${selector} → `;
+  const line = log.split('\n').find((l) => l.includes(marker));
+  const found = line ? JSON.parse(line.slice(line.indexOf(marker) + marker.length)) : null;
+  const value = found && Array.isArray(found.matches) ? found : { viewport: null, active: null, matches: [] };
+  return whole ? value : value.matches;
 }
 function latestSession(db) {
   return db.prepare('SELECT session_id, execution_status FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
@@ -411,16 +426,18 @@ let edited = null;
       `${ARTIFACTS_TAB}@11400`,                            // the Library opens on Prompts; take the tab this proof is about
       `${PROBE_ROWS}@12000`,                               // select the row
       '[data-testid="library-artifacts-inspect"]@13000',   // REQ-LIBRARY-108's primary control
+      // ADR-0051 decision 4: the Preview's link opens through the command channel. Pressed BEFORE the save, so the
+      // acknowledgement it raises ("Opened in your browser", 4200 ms) stands over the inspector's footer when Save is pressed:
+      // until fin43 the press on Save met the acknowledgement's text at Save's point, and the link was pressed last instead
+      // (docs/defects/fixed/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md).
+      `${PREVIEW_LINK_BUTTON}@14200`,
       '[data-testid="artifact-tab-markdown"]@14500',       // REQ-LIBRARY-132's second tab
       'textarea[data-testid="artifact-editor"]@15200',     // focus the editor
-      '[data-testid="artifact-save"]@17000',               // REQ-LIBRARY-133's save
+      '[data-testid="artifact-save"]@17000',               // REQ-LIBRARY-133's save, under the acknowledgement
       '[data-testid="library-artifacts-inspect"]@18600',   // REQ-LIBRARY-131: the same id again
-      // ADR-0051 decision 4: back on the Preview, its link opens through the command channel. Pressed last, because the
-      // acknowledgement it raises stands over the inspector's footer while it shows, and so over Save (a press at 14300
-      // met the toast at Save's point; docs/defects/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md).
-      '[data-testid="artifact-tab-preview"]@19700',
-      `${PREVIEW_LINK_BUTTON}@20200`,
     ].join(';;'),
+    // Where the acknowledgement, its close control and Save stand just before the press on Save.
+    ROTARIS_CAPTURE_INSPECT_AT: ['[data-testid="acknowledgement"]@16900', '.ack__close@16900', '[data-testid="artifact-save"]@16900'].join(';;'),
     ROTARIS_CAPTURE_TYPE_AT: 'EDITED@16000',
     // PD-LIBRARY-003 (f): the Preview as drawn, before the Markdown tab is taken at 14500 (the end-of-launch capture shows
     // the Markdown tab and the saved edit).
@@ -457,11 +474,22 @@ let edited = null;
   // (docs/defects/fixed/every-link-in-the-library-artifact-inspectors-preview-is-drawn-disabled.md).
   const previewLinks = probe(r.log, PREVIEW_LINK_BUTTON, 14000);
   if (previewLinks.length !== 1 || previewLinks[0].data['data-href'] !== PREVIEW_LINK) throw new Error(`the Preview did not draw the body's link as one control: ${JSON.stringify(previewLinks)}`);
-  const linkMissed = unpressedClicks(r.log, ['[data-testid="artifact-tab-preview"]', PREVIEW_LINK_BUTTON]);
+  const linkMissed = unpressedClicks(r.log, [PREVIEW_LINK_BUTTON, '[data-testid="artifact-save"]']);
   if (linkMissed.length > 0) throw new Error(`the Preview link was not pressed on its own control: ${JSON.stringify(linkMissed)}`);
   if (!r.log.includes(`capture: open-external ${PREVIEW_LINK}`)) throw new Error(`pressing the Preview's link did not request ${PREVIEW_LINK} through shell.openExternal (a disabled link reaches nothing)`);
   if (dirty !== 'yes') throw new Error(`the editor did not take the typed characters (dirty=${dirty})`);
   if (status !== 'Saved.') throw new Error(`the footer did not read "Saved.": ${status}`);
+  // REQ-NOTIFY-020 (docs/defects/fixed/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md): the
+  // acknowledgement stood over the footer when Save was pressed, and the press reached Save.
+  const ackAt = inspectedAt(r.log, '[data-testid="acknowledgement"]', 16900);
+  const ackCloseAt = inspectedAt(r.log, '.ack__close', 16900);
+  const saveAt = inspectedAt(r.log, '[data-testid="artifact-save"]', 16900);
+  const overlaps = (a, b) => a && b && a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  const saveCentre = saveAt[0] ? { x: saveAt[0].rect.x + saveAt[0].rect.width / 2, y: saveAt[0].rect.y + saveAt[0].rect.height / 2 } : null;
+  const inside = (p, r0) => p && r0 && p.x >= r0.x && p.x <= r0.x + r0.width && p.y >= r0.y && p.y <= r0.y + r0.height;
+  if (ackAt.length !== 1 || !/Opened in your browser/.test(ackAt[0].text) || !overlaps(ackAt[0].rect, saveAt[0]?.rect)) throw new Error(`the acknowledgement did not stand over Save when it was pressed, so the press under it was not measured: ${JSON.stringify({ ack: ackAt.map((m) => [m.rect, m.text]), save: saveAt.map((m) => m.rect) })}`);
+  if (inside(saveCentre, ackCloseAt[0]?.rect)) throw new Error(`the acknowledgement's close control stands over Save's centre: ${JSON.stringify({ close: ackCloseAt[0]?.rect, save: saveAt[0]?.rect })}`);
+  results.ackOverSave = { ack: ackAt[0].rect, close: ackCloseAt[0]?.rect ?? null, save: saveAt[0].rect, closeOverlapsSave: Boolean(overlaps(ackCloseAt[0]?.rect, saveAt[0]?.rect)), saved: true };
   if (statusCells.length !== 1 || statusCells[0].data['data-edited'] !== 'yes' || !statusCells[0].text.endsWith(' · edited')) throw new Error(`the row's status cell did not gain " · edited": ${JSON.stringify(statusCells)}`);
   if (reopened.length !== 1) throw new Error(`opening the same id again produced ${reopened.length} dialogs; REQ-LIBRARY-131 re-raises the one`);
   if (reopened[0].data['data-raised'] !== '2') throw new Error(`the dialog was not re-raised: data-raised=${reopened[0].data['data-raised']}`);
@@ -676,17 +704,31 @@ let travel = null;
     ROTARIS_SCRIPT_ARTIFACT_ARGS: JSON.stringify(TRAVEL),
     ROTARIS_CAPTURE_RESIZE: '1360x980@500',
     ROTARIS_CAPTURE_VIEWS: '6@11000',
-    ROTARIS_CAPTURE_CLICKS: [`${ARTIFACTS_TAB}@11400`, `${PROBE_ROWS}@12000`, '[data-testid="library-artifacts-inspect"]@13000', '[data-testid="artifact-tab-markdown"]@14500', 'textarea[data-testid="artifact-editor"]@15200', '[data-testid="artifact-save"]@17000'].join(';;'),
-    // The click focuses the editor at its centre, which is inside the document's frontmatter, and PD-LIBRARY-003 (d) rewrites
-    // that block at a re-render: the caret is taken to the end first, so the edit is in the text a re-render keeps.
-    ROTARIS_CAPTURE_CHORDS: 'Ctrl+End@15600',
-    ROTARIS_CAPTURE_TYPE_AT: 'EDITED-BY-A-PERSON@16000',
-    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="artifact-inspector-status"]@17800',
+    // PD-LIBRARY-003 revision 2 (f), OQ-272: a press on the read-only frontmatter and characters typed there change nothing;
+    // then a press at the editor's centre, which is below the block now (until fin43 it lay inside the frontmatter, and the
+    // proof took the caret to the end with Ctrl+End first), and the person's text.
+    ROTARIS_CAPTURE_CLICKS: [`${ARTIFACTS_TAB}@11400`, `${PROBE_ROWS}@12000`, '[data-testid="library-artifacts-inspect"]@13000', '[data-testid="artifact-tab-markdown"]@14500', '[data-testid="artifact-frontmatter"]@14900', 'textarea[data-testid="artifact-editor"]@15600', '[data-testid="artifact-save"]@17000'].join(';;'),
+    ROTARIS_CAPTURE_TYPE_AT: 'TYPED-AT-THE-FRONTMATTER@15100;;EDITED-BY-A-PERSON@16000',
+    ROTARIS_CAPTURE_INSPECT_AT: ['[data-testid="artifact-frontmatter"]@15400', '[data-testid="artifact-editor"]@15400'].join(';;'),
+    ROTARIS_CAPTURE_PROBE_AT: ['[data-testid="artifact-inspector"]@15500', '[data-testid="artifact-inspector-status"]@17800', '[data-testid="artifact-frontmatter"]@18200'].join(';;'),
     ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
     ROTARIS_CAPTURE_AFTER_MS: '19000',
   });
   const status = probe(r.log, '[data-testid="artifact-inspector-status"]', 17800)[0]?.text ?? '';
   if (status !== 'Saved.') throw new Error(`edited: the footer did not read "Saved.": ${status}`);
+  // PD-LIBRARY-003 revision 2 (f): the block is drawn read-only — a <pre>, nothing editable — above the editor, it took the
+  // press and kept focus while characters were typed, and neither it nor the editor took them (the dialog is not dirty).
+  const front = inspectedAt(r.log, '[data-testid="artifact-frontmatter"]', 15400, true);
+  const editorBox = inspectedAt(r.log, '[data-testid="artifact-editor"]', 15400, true);
+  if (front.matches.length !== 1 || front.matches[0].attrs['aria-label'] !== 'Record fields (read-only)' || 'contenteditable' in front.matches[0].attrs) throw new Error(`edited: the frontmatter is not one read-only region: ${JSON.stringify(front.matches)}`);
+  if (front.active?.testId !== 'artifact-frontmatter' || front.active?.tag !== 'pre') throw new Error(`edited: the press on the frontmatter did not leave focus on the read-only block: ${JSON.stringify(front.active)}`);
+  if (!/^---\nid: "art_/.test(front.matches[0].text) || front.matches[0].text.includes('TYPED-AT-THE-FRONTMATTER')) throw new Error(`edited: the read-only block does not show the record's fields, or took typed characters: ${JSON.stringify(front.matches[0].text.slice(0, 300))}`);
+  if (editorBox.matches.length !== 1 || editorBox.matches[0].text.includes('id: "art_') || editorBox.matches[0].rect.y < front.matches[0].rect.y + front.matches[0].rect.height) throw new Error(`edited: the editor holds the frontmatter, or does not stand below it: ${JSON.stringify({ editor: editorBox.matches[0]?.rect, front: front.matches[0]?.rect, text: editorBox.matches[0]?.text.slice(0, 200) })}`);
+  if (editorBox.matches[0].rect.height <= front.matches[0].rect.height) throw new Error(`edited: the editor does not keep the larger share of the body: editor ${editorBox.matches[0].rect.height}px, block ${front.matches[0].rect.height}px`);
+  const dirtyBeforeTyping = probe(r.log, '[data-testid="artifact-inspector"]', 15500)[0]?.data['data-dirty'] ?? '';
+  if (dirtyBeforeTyping !== 'no') throw new Error(`edited: characters typed at the read-only frontmatter reached the document (dirty=${dirtyBeforeTyping})`);
+  const missed = unpressedClicks(r.log, ['[data-testid="artifact-frontmatter"]', 'textarea[data-testid="artifact-editor"]', '[data-testid="artifact-save"]']);
+  if (missed.length > 0) throw new Error(`edited: a press did not reach its own control: ${JSON.stringify(missed)}`);
   const db = new Database(oneDatabase(), { readonly: true });
   const s = latestSession(db);
   const record = artifacts(db, s.session_id).find((x) => x.slug === 'travel-plan');
@@ -695,10 +737,20 @@ let travel = null;
   // (c): the edit replaces the document and stamps edited_at; key_findings keeps the published value.
   if (record.key_findings !== TRAVEL.travel.body) throw new Error(`edited: key_findings changed with the edit (PD-LIBRARY-003 (c)): ${JSON.stringify(record.key_findings)}`);
   const document = readFileSync(join(filesDir(s.session_id), record.body_file), 'utf8');
-  const below = document.replace(/^---\n[\s\S]*?\n---\n/, '');
-  if (below === document || !below.includes('EDITED-BY-A-PERSON')) throw new Error(`edited: the typed characters did not reach the document below its frontmatter:\n${document.slice(0, 1200)}`);
+  const block = /^---\n[\s\S]*?\n---\n/.exec(document)?.[0] ?? '';
+  const below = document.slice(block.length);
+  if (block === '' || !below.includes('EDITED-BY-A-PERSON')) throw new Error(`edited: the typed characters did not reach the document below its frontmatter:\n${document.slice(0, 1200)}`);
+  // PD-LIBRARY-003 revision 2 (c): the saved block is the record's rendering — its fields and the save's `edited_at` — and
+  // nothing typed at the read-only block reached the document.
+  const recordLines = [`id: "${record.id}"`, `slug: "${record.slug}"`, `title: "${record.title}"`, `status: "${record.status}"`, `created_at: "${record.created_at}"`, `edited_at: "${record.edited_at}"`];
+  const missing = recordLines.filter((line) => !block.split('\n').includes(line));
+  if (missing.length > 0) throw new Error(`edited: the saved document's frontmatter is not the record's rendering with edited_at (PD-LIBRARY-003 revision 2 (c)); missing ${JSON.stringify(missing)}:\n${block}`);
+  if (document.includes('TYPED-AT-THE-FRONTMATTER')) throw new Error(`edited: characters typed at the read-only frontmatter reached the document:\n${document.slice(0, 1200)}`);
+  // After the save the shown block is refreshed from the saved document, so it carries `edited_at` too.
+  const shownAfter = probe(r.log, '[data-testid="artifact-frontmatter"]', 18200)[0]?.text ?? '';
+  if (!shownAfter.includes(`edited_at: "${record.edited_at}"`)) throw new Error(`edited: the read-only block was not refreshed from the saved document: ${JSON.stringify(shownAfter.slice(0, 400))}`);
   travel = { sessionId: s.session_id, id: record.id, bodyFile: record.body_file, editedAt: record.edited_at };
-  results.edited = { id: record.id, editedAt: record.edited_at, keyFindingsKept: true, png: r.png };
+  results.edited = { id: record.id, editedAt: record.edited_at, keyFindingsKept: true, frontmatterReadOnly: true, savedBlockIsRecords: true, frontmatterRect: front.matches[0].rect, editorRect: editorBox.matches[0].rect, png: r.png };
 }
 {
   // 9. The session continued: the fresh root's first message carries the edited document as the handoff (e), marked
@@ -734,6 +786,7 @@ let travel = null;
   const front = /^---\n([\s\S]*?)\n---\n/.exec(document);
   if (!front || !front[1].includes(`superseded_by: "${newer.id}"`)) throw new Error(`re-reported: the superseded document's frontmatter was not rewritten from the record (PD-LIBRARY-003 (d)):\n${document.slice(0, 800)}`);
   if (!document.slice(front[0].length).includes('EDITED-BY-A-PERSON')) throw new Error(`re-reported: the re-render wrote over the person's edit (PD-LIBRARY-003 (d)):\n${document.slice(0, 1200)}`);
+  if (!front[1].split('\n').includes(`edited_at: "${travel.editedAt}"`)) throw new Error(`re-reported: the rewritten frontmatter lost edited_at:\n${front[0]}`);
   results.reReported = { handoffHeader: header, handoffCarriesEdit: true, supersededBy: newer.id, frontmatterRewritten: true, editKept: true };
 }
 

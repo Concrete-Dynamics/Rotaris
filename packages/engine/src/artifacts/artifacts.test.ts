@@ -8,7 +8,7 @@ import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/stor
 import { ArtifactStore } from './store.js';
 import { artifactOps } from './port.js';
 import { deriveImportance, mintArtifactId, uniqueSlug } from './record.js';
-import { renderSidecar, SIDECAR_SECTIONS } from './sidecar.js';
+import { renderFrontmatter, renderSidecar, SIDECAR_SECTIONS } from './sidecar.js';
 import { FULL_CONTEXT_BUDGET, FULL_CONTEXT_HEADING, fullContextBlock, siblingIndexBlock, siblingIndexOrder, SIBLING_INDEX_BUDGET, type AttachedResolution } from './context.js';
 
 /**
@@ -270,7 +270,8 @@ describe('engine/artifacts — the session artifact store', () => {
     expect(after.editedAt! > after.createdAt).toBe(true);
     expect({ slug: after.slug, title: after.title, tags: after.tags, status: after.status, createdAt: after.createdAt })
       .toEqual({ slug: r.value.slug, title: r.value.title, tags: r.value.tags, status: r.value.status, createdAt: r.value.createdAt });
-    expect(store.body(r.value.id)).toEqual({ ok: true, value: { text: '# edited by hand', fallback: false } });
+    // PD-LIBRARY-003 revision 2 (c): the record's frontmatter, now carrying `edited_at`, stands in front of the text saved.
+    expect(store.body(r.value.id)).toEqual({ ok: true, value: { text: `${renderFrontmatter(after)}\n# edited by hand`, fallback: false } });
     expect(store.editBody('art_nothing', 'x')).toEqual({ ok: false, error: { code: 'not-found', reason: "Unknown artifact: 'art_nothing'" } });
   });
 
@@ -657,11 +658,12 @@ describe('engine/artifacts — the session artifact store', () => {
       const second = publish(store, { slug: 'other' });
       if (!first.ok || !second.ok) throw new Error('publish');
       expect(store.editBody(first.value.id, '# mine\n').ok).toBe(true);
+      const savedDoc = docOf(first.value.id);
       writes.length = 0;
       refuse = true;
       expect(store.supersede(second.value.id, first.value.id).ok).toBe(true);
       expect(writes).not.toContain(`artifact-${first.value.id}.md`);
-      expect(docOf(first.value.id)).toBe('# mine\n');
+      expect(docOf(first.value.id)).toBe(savedDoc);
       expect(warnings.some((w) => w.includes(first.value.id) && w.includes('permission denied'))).toBe(true);
     });
 
@@ -683,6 +685,61 @@ describe('engine/artifacts — the session artifact store', () => {
       if (!first.ok || !second.ok) throw new Error('publish');
       expect(store.supersede(second.value.id, first.value.id).ok).toBe(true);
       expect(docOf(first.value.id)).toBe(renderSidecar(store.lookup(first.value.id)!));
+    });
+
+    /*
+     * PD-LIBRARY-003 revision 2 (c), OQ-272 ruled 2026-10-13 under R-072: a save writes the record's frontmatter, with the new
+     * `edited_at`, in place of the document's leading block, or in front of the text when none is found, as clause (d) does at
+     * a re-render. Before it the save wrote the text as given, so a person's change inside the block was kept until the next
+     * re-render removed it without a word, and a saved document's block carried no `edited_at`.
+     */
+    describe('revision 2 (c): a save writes the record\'s frontmatter', () => {
+      it('a save whose block carries a changed title keeps the record\'s block, `edited_at` included, and the text below survives a supersession', () => {
+        const store = storeFor();
+        const first = publish(store);
+        const second = publish(store, { slug: 'other' });
+        if (!first.ok || !second.ok) throw new Error('publish');
+        const loaded = splitFrontmatter(docOf(first.value.id));
+        const tampered = loaded.frontmatter!.replace(/^title: .*$/m, 'title: "A title typed by hand"');
+        expect(tampered).not.toBe(loaded.frontmatter);
+        clock.advance(1000);
+        expect(store.editBody(first.value.id, `${tampered}\n# Mine below the block\n`).ok).toBe(true);
+        const record = store.lookup(first.value.id)!;
+        const saved = docOf(first.value.id);
+        expect(saved).toBe(`${renderFrontmatter(record)}\n# Mine below the block\n`);
+        expect(splitFrontmatter(saved).frontmatter).toContain(`edited_at: ${JSON.stringify(record.editedAt)}`);
+        expect(saved).not.toContain('A title typed by hand');
+        expect(store.supersede(second.value.id, first.value.id).ok).toBe(true);
+        expect(splitFrontmatter(docOf(first.value.id)).rest).toBe('\n# Mine below the block\n');
+      });
+
+      it('a save whose block an earlier edit broke gets a fresh block in front of the whole text, which a supersession keeps', () => {
+        const store = storeFor();
+        const first = publish(store);
+        const second = publish(store, { slug: 'other' });
+        if (!first.ok || !second.ok) throw new Error('publish');
+        const broken = '---\nid: "x"\nthis line is no key-value line\n---\n# Mine\n';
+        expect(splitFrontmatter(broken).frontmatter).toBeNull();
+        expect(store.editBody(first.value.id, broken).ok).toBe(true);
+        const saved = docOf(first.value.id);
+        expect(saved).toBe(`${renderFrontmatter(store.lookup(first.value.id)!)}\n${broken}`);
+        expect(store.supersede(second.value.id, first.value.id).ok).toBe(true);
+        expect(splitFrontmatter(docOf(first.value.id)).rest).toBe(`\n${broken}`);
+      });
+
+      it('a save with no block gets one in front, and the text survives a supersession', () => {
+        const store = storeFor();
+        const first = publish(store);
+        const second = publish(store, { slug: 'other' });
+        if (!first.ok || !second.ok) throw new Error('publish');
+        expect(store.editBody(first.value.id, '# only my words\n').ok).toBe(true);
+        const record = store.lookup(first.value.id)!;
+        expect(docOf(first.value.id)).toBe(`${renderFrontmatter(record)}\n# only my words\n`);
+        expect(store.supersede(second.value.id, first.value.id).ok).toBe(true);
+        const after = docOf(first.value.id);
+        expect(after.match(/^---$/gm)).toHaveLength(2);
+        expect(splitFrontmatter(after).rest).toBe('\n# only my words\n');
+      });
     });
 
     it('(b) a published body whose first line is indented is carried unchanged by the Key Findings section; only blank lines around it are dropped', () => {

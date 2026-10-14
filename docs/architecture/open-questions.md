@@ -13992,7 +13992,8 @@ live-run finding D8; `CLAUDE.md`, "Defects noticed along the way" — "When a no
 `docs/defects/fixed/`"; `docs/defects/README.md`. Raised 2026-10-13 by fin42 (`fin42-coverage-and-react`, whats-next item
 N49); numbered from the top of the plan's range, OQ-271 to OQ-280, to keep clear of its sibling bundles.)*
 
-The note is the only open one at the top of `docs/defects/`. The `a68f121` duress run's renderer threw React error 185 seven
+The note is the only open one at the top of `docs/defects/`. *(Corrected 2026-10-14: it was not — 14 notes were open at the top
+of `docs/defects/` at `ce5f952`, this one among them.)* The `a68f121` duress run's renderer threw React error 185 seven
 times in 46 s while two children streamed. Every attempt since has come up empty:
 - fin32 drove the built app with a `pendingLanes` trap;
 - fin35 read every effect against React 19.2.8;
@@ -14018,6 +14019,31 @@ count, and the trap on the duress launch, each a NOTE rather than a failure.
 - the note stays open until it is reproduced and repaired;
 - the monitor is promoted. A launch with an update-depth error becomes a live-run FAILURE rather than a NOTE, so a recurrence
   cannot pass unread, and the note closes on that guard.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)): the monitor is promoted, and a note
+may close unreproduced under a guard.** From now on a relayed React update-depth error (React error 185) in any live launch is a
+live-run FAILURE, and so is a duress launch whose `pendingLanes` trap does not install or whose install line does not reach
+`duress/app.log` through the console relay. `docs/defects/README.md` gains a rule for closing a note that was never
+reproduced: it moves to `docs/defects/fixed/` under the outcome "not reproduced, not repaired; closed under a guard", and only
+after its guard has run once in the live run and been seen working. The D8 note closes on that rule after the first live run
+whose duress launch shows the trap installed and relayed, with `reactUpdateDepthErrors` 0 on every launch. A recurrence opens a
+new note that cites the closed one. No directive: nothing the product does changes; the ruling governs the harness and the
+record.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: promote the monitor — a user who meets a frozen renderer
+cares that a recurrence cannot pass a release run unread, not whether the note's folder says "open"; an error that fails the
+run is the strongest statement the record can make about a cause it cannot name. *Advocate B (the system's lens)*: let a note
+close unreproduced only under stated conditions — its investigations recorded, a guard that fails on recurrence, that guard
+seen working once, a distinct outcome heading in `fixed/`, and a new note on recurrence — so the record keeps "repaired" and
+"closed unreproduced" apart and no future note closes on silence. **The ruling combines both**: A's promotion is the guard,
+B's conditions are the rule it closes under, and the instrument check (the trap installed and relayed) is added so a guard
+that did not run cannot close anything.
+
+**As built (fin43, `fin43-record-and-guards`, 2026-10-14).** `apps/desktop/scripts/live-run.mjs` checks every launch with
+`updateDepthVerdict` (`lib/renderer-console.mjs`) and the duress launch with `lanesTrapGuard` (`lib/lanes-trap.mjs`), whose
+trap now writes one `rotaris-lanes-trap: installed` line that `lanesTrapReading` reads as `relayed`; `pnpm update-depth-proof`
+asserts that line was relayed. The rule is in `docs/defects/README.md`. The D8 note stays open until the orchestrator's first
+guarded duress pack, which reports the guard's first execution into the note and `first-executions.md`.
 
 <a id="oq-281"></a>
 

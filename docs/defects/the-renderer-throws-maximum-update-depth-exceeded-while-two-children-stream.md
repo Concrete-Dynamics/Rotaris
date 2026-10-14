@@ -180,3 +180,43 @@ Closing the note unreproduced is not something the record provides for: `docs/de
 
 If an error comes back, the `rotaris-lanes-trap:` lines in `duress/app.log` beside it name the pending work's holders and the
 re-rendered components, at the high before the throw.
+
+## OQ-278 ruled; the guard built, 2026-10-14 (fin43) — not yet run; open
+
+**The ruling.** [OQ-278](../architecture/open-questions.md#oq-278) was ruled 2026-10-13 under the owner's delegation
+([R-072](../product/requests.md#r-072)): a relayed React update-depth error (React error 185) in any live launch is a live-run
+FAILURE, and so is a duress launch whose `pendingLanes` trap does not install or whose install line does not reach
+`duress/app.log` through the console relay. `docs/defects/README.md` now holds the rule for closing a note that was never
+reproduced, and this note closes on it — moved to `fixed/` under "Outcome: not reproduced, not repaired; closed under a guard
+(OQ-278)" — after the first live run whose duress launch shows the trap installed and relayed, with `reactUpdateDepthErrors`
+0 on every launch. The investigations the rule's condition (a) asks for are the four sections above. A recurrence opens a new
+note that cites this one.
+
+**The two checks.**
+- **Every launch** (`live-run.mjs`, `launch`): "<name>: no relayed renderer console line names React's update-depth error (D8,
+  OQ-278)". It takes `updateDepthVerdict` (`apps/desktop/scripts/lib/renderer-console.mjs`): it passes with
+  `reactUpdateDepthErrors` 0 and fails naming each line (`app.log line <n>: …`) otherwise. `check` accumulates and does not
+  throw, so the duress trap's reading after the launch is still recorded. Three cases in `renderer-console.test.ts`, red before.
+- **The duress launch**: "the long run's pendingLanes trap installed and its install line reached duress/app.log through the
+  console relay (D8 guard, OQ-278)", from `lanesTrapGuard` (`lib/lanes-trap.mjs`). The trap now writes one
+  `rotaris-lanes-trap: installed` warning when it installs (once per window, never naming React's error, so the per-launch count
+  is unchanged), and `lanesTrapReading` reads that relayed line as `relayed: true` without counting it among the trap's lines.
+  Seven cases in `lanes-trap.test.ts` were red before the change: the new install-line case, the two log-reading cases
+  (`relayed`), the three guard cases, and the commits case, which now expects the install line first. The NOTE "the long run's pendingLanes trap (D8)" with its
+  commits, the high against React's 50, the holders and the re-rendered components stays.
+
+`pnpm update-depth-proof` asserts the install line was relayed too. Nothing in the product was changed.
+
+**What the orchestrator reads in the first guarded duress pack.**
+- the check "the long run's pendingLanes trap installed and its install line reached duress/app.log through the console relay
+  (D8 guard, OQ-278)" PASSED, and `results.json` `scenarioEvidence.duress.lanesTrap` shows `installed: true, relayed: true`;
+- the check "<name>: no relayed renderer console line names React's update-depth error (D8, OQ-278)" PASSED for every launch,
+  and `scenarioEvidence.<name>.reactUpdateDepthErrors` is 0 for every launch;
+- the NOTE "the long run's pendingLanes trap (D8)", with its commits (well above 0) and the run's high.
+
+Then this note's first guarded execution is reported here and in `docs/architecture/first-executions.md` (one row, pass or
+fail); on all three, the note is `git mv`'d to `fixed/` with the outcome section at its top, and every link and code path to it
+is repointed in the same commit (`update-depth-proof.mjs`, `renderer-console.mjs`, `renderer-console.test.ts`,
+`lanes-trap.mjs`, `live-run.mjs`, `first-executions.md`, `open-questions.md`, the `552d346` duress autopsy, and this note's own
+relative links; `check-record-links` enforces it). Checks unrelated to D8 in the same pack do not hold the move. If an error
+recurs, the note stays open and the run's `rotaris-lanes-trap:` lines are appended here.

@@ -7,7 +7,7 @@ import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { parseSteps } from '../../src/main/capture/host.ts';
 // @ts-expect-error — plain ESM beside the proofs, run by node without a build step.
-import { COUNTING_LANES, LANES_TRAP_PREFIX, LANES_TRAP_READ, lanesTrapReading, lanesTrapSource, lanesTrapSteps } from './lanes-trap.mjs';
+import { COUNTING_LANES, LANES_TRAP_INSTALLED, LANES_TRAP_PREFIX, LANES_TRAP_READ, lanesTrapGuard, lanesTrapReading, lanesTrapSource, lanesTrapSteps } from './lanes-trap.mjs';
 
 interface Fiber { tag: number; type: unknown; lanes: number; childLanes: number; child: Fiber | null; sibling: Fiber | null; stateNode?: unknown; alternate?: Fiber; memoizedState?: unknown; memoizedProps?: unknown }
 
@@ -54,10 +54,20 @@ describe('lanes trap — its source in a renderer', () => {
     expect(lanesTrapSource()).not.toMatch(/Minified React error [#]185\b|Maximum update depth exceeded/);
   });
 
-  it('answers why when there is no React root to trap', () => {
+  it('answers why when there is no React root to trap, and writes no install line', () => {
     const f = fakeWindow();
     (f.context.document as { getElementById: (id: string) => unknown }).getElementById = () => ({});
     expect(runInNewContext(lanesTrapSource(), f.context)).toEqual({ installed: false, reason: 'no React root on #root' });
+    expect(f.warnings).toEqual([]);
+  });
+
+  it('writes one install line, `rotaris-lanes-trap: installed`, once per window, never naming React\'s error (OQ-278)', () => {
+    expect(LANES_TRAP_INSTALLED).toBe('rotaris-lanes-trap: installed');
+    const f = fakeWindow();
+    runInNewContext(lanesTrapSource(), f.context);
+    runInNewContext(lanesTrapSource(), f.context);
+    expect(f.warnings).toEqual([LANES_TRAP_INSTALLED]);
+    expect(LANES_TRAP_INSTALLED).not.toMatch(/[#]185\b|Maximum update depth/);
   });
 
   it('counts commits, the run of commits that leave counting lanes pending, and names the fibers holding them', () => {
@@ -72,9 +82,11 @@ describe('lanes trap — its source in a renderer', () => {
     expect(summary.maxRunHolders).toEqual([`TranscriptPane (lanes 32)`]);
     // The pane re-rendered in those commits (its state differs from its alternate's); the shell did not.
     expect(summary.maxRunRendered).toEqual(['TranscriptPane']);
-    expect(f.warnings).toHaveLength(1);
-    expect(f.warnings[0]!.startsWith(`${LANES_TRAP_PREFIX} `)).toBe(true);
-    expect(JSON.parse(f.warnings[0]!.slice(LANES_TRAP_PREFIX.length + 1))).toMatchObject({ what: 'run', run: 3, holders: ['TranscriptPane (lanes 32)'] });
+    // The install line first (OQ-278's relay check), then the run's line.
+    expect(f.warnings).toHaveLength(2);
+    expect(f.warnings[0]).toBe(LANES_TRAP_INSTALLED);
+    expect(f.warnings[1]!.startsWith(`${LANES_TRAP_PREFIX} `)).toBe(true);
+    expect(JSON.parse(f.warnings[1]!.slice(LANES_TRAP_PREFIX.length + 1))).toMatchObject({ what: 'run', run: 3, holders: ['TranscriptPane (lanes 32)'] });
     // A commit that leaves nothing counting pending resets the run, as React's count resets; idle lanes do not count.
     f.commit(COUNTING_LANES & 0); f.flush();
     f.commit(64); f.flush();
@@ -116,14 +128,35 @@ describe('lanes trap — the reading of a launch log', () => {
       `[main t] info    capture: eval-at 122500 ${LANES_TRAP_READ} → {"installed":true,"commits":4100,"maxRun":10}`,
     ].join('\n');
     expect(lanesTrapReading(log)).toEqual({
-      installed: true, reason: null, readings: 2, last: { installed: true, commits: 4100, maxRun: 10 },
+      installed: true, relayed: false, reason: null, readings: 2, last: { installed: true, commits: 4100, maxRun: 10 },
       lines: [{ what: 'run', run: 10, holders: ['TranscriptPane (lanes 32)'] }],
     });
+  });
+
+  it('reads the relayed install line as `relayed`, not as one of the trap\'s lines (OQ-278)', () => {
+    const log = [
+      `[main t] info    capture: eval-at 2500 ${lanesTrapSource()} → {"installed":true,"commits":0,"maxRun":0}`,
+      `[main t] info    capture: renderer console: ${LANES_TRAP_INSTALLED} (:1)`,
+    ].join('\n');
+    expect(lanesTrapReading(log)).toMatchObject({ installed: true, relayed: true, lines: [] });
   });
 
   it('says why when the trap never installed, and when it was never read', () => {
     expect(lanesTrapReading(`capture: eval-at 2500 ${lanesTrapSource()} → {"installed":false,"reason":"no React root on #root"}`))
       .toMatchObject({ installed: false, reason: 'no React root on #root', readings: 1, last: null });
     expect(lanesTrapReading('nothing here')).toMatchObject({ installed: false, reason: 'no reading of the trap in the log', readings: 0 });
+  });
+});
+
+describe('lanes trap — the duress launch\'s guard (OQ-278)', () => {
+  const what = "the long run's pendingLanes trap installed and its install line reached duress/app.log through the console relay (D8 guard, OQ-278)";
+  it('passes only when the trap installed and its install line was relayed', () => {
+    expect(lanesTrapGuard({ installed: true, relayed: true, reason: null })).toEqual({ passed: true, what, detail: undefined });
+  });
+  it('fails a trap that did not install, with its reason', () => {
+    expect(lanesTrapGuard({ installed: false, relayed: false, reason: 'no React root on #root' })).toEqual({ passed: false, what, detail: 'the trap did not install: no React root on #root' });
+  });
+  it('fails a trap that installed but whose install line never reached the log', () => {
+    expect(lanesTrapGuard({ installed: true, relayed: false, reason: null })).toEqual({ passed: false, what, detail: `the trap installed, but no relayed "${LANES_TRAP_INSTALLED}" line is in the log: the console relay did not carry it` });
   });
 });

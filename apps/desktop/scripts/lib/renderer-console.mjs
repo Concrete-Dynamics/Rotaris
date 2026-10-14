@@ -6,7 +6,8 @@
  * `info` and passed. The note asked for a count of them in the live run's NOTE lines; this is the reader.
  *
  * `updateDepthErrors` returns every relayed renderer console line naming React error 185 or "Maximum update depth", with its 1-based line
- * number in the log, so the run can say how many there were, and when, against the children's streams.
+ * number in the log, so the run can say how many there were, and when, against the children's streams. Since OQ-278's ruling
+ * (2026-10-13, R-072) any such line fails the launch (`updateDepthVerdict`); it was a NOTE until then.
  */
 const RELAYED = /capture: renderer console: (.*)$/;
 // React error 185 (the number written after its '#', which the colour check would read as a literal colour).
@@ -21,4 +22,20 @@ export function updateDepthErrors(log) {
     if (relayed !== null && UPDATE_DEPTH.test(relayed[1])) out.push({ line: i + 1, text: lines[i].trim() });
   }
   return out;
+}
+
+/**
+ * The verdict a live launch's check takes (OQ-278, ruled 2026-10-13 under R-072): a relayed update-depth error in any live
+ * launch is a FAILURE, naming each line; none passes. `count` is what `results.json` keeps as `reactUpdateDepthErrors`.
+ * @param {string} name the launch
+ * @param {string} log its `app.log`
+ */
+export function updateDepthVerdict(name, log) {
+  const errors = updateDepthErrors(log);
+  return {
+    passed: errors.length === 0,
+    count: errors.length,
+    what: `${name}: no relayed renderer console line names React's update-depth error (D8, OQ-278)`,
+    detail: errors.length === 0 ? undefined : errors.map((e) => `app.log line ${e.line}: ${e.text}`).join(' | '),
+  };
 }

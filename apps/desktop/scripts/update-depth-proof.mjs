@@ -14,8 +14,9 @@
  *                    Default work pending), and names the fibers that hold that work at each new high. The duress live
  *                    launch installs the same trap (`live-run.mjs`).
  *
- * What it asserts: the trap installed and saw the commits of both streams (an instrument that saw nothing measures
- * nothing); both children streamed, their spans (`child_start` to `child_end`) overlapping for at least half a deliberation,
+ * What it asserts: the trap installed, its `rotaris-lanes-trap: installed` line reached the log through the console relay
+ * (OQ-278, as the duress live launch checks), and it saw the commits of both streams (an instrument that saw nothing
+ * measures nothing); both children streamed, their spans (`child_start` to `child_end`) overlapping for at least half a deliberation,
  * and the run completed; and no relayed renderer console line names React's
  * update-depth error (`renderer-console.mjs`), nor did the trap see one. React's own threshold is 50 such commits in a
  * row; the proof records the run's high, its holders and the longest synchronous burst, and does not bound them below
@@ -105,13 +106,15 @@ results.twoStreams = {
   elapsedMs: Date.now() - started,
   session: session ?? null,
   children: kids,
-  trap: { installed: trap.installed, reason: trap.reason, readings: trap.readings, last: trap.last, lines: trap.lines },
+  trap: { installed: trap.installed, relayed: trap.relayed, reason: trap.reason, readings: trap.readings, last: trap.last, lines: trap.lines },
   updateDepthErrors: depth.map((e) => e.text),
   png,
 };
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 
 expect(trap.installed, `the pendingLanes trap did not install: ${trap.reason}; see ${name}.log`);
+// OQ-278: the instrument's install line reached the log through the console relay, as the duress live launch now checks.
+expect(trap.relayed, `the pendingLanes trap installed, but its "rotaris-lanes-trap: installed" line was not relayed into the log; see ${name}.log`);
 expect(trap.last !== null && trap.last.commits > 100 && trap.last.evaluations > 0, `the trap saw ${trap.last?.commits ?? 0} commits: an instrument that saw nothing measures nothing; see ${name}.log`);
 expect(session?.execution_status === 'completed', `the run ended ${session?.execution_status ?? 'nowhere'}, not completed; see ${name}.log`);
 expect(kids.length === 2 && kids.every((k) => k.state === 'succeeded'), `the two deliberating children did not both run to completion: ${JSON.stringify(kids)}`);

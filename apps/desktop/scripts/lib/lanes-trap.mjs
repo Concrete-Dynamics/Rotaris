@@ -24,13 +24,22 @@
  *   - each new high of the run at or past `warnAt`, and every uncaught error naming React's update-depth error, is written
  *     with `console.warn` as one `rotaris-lanes-trap: {…}` line, which the capture's console relay carries into the
  *     launch's `app.log` (`capture: renderer console: …`). The line never repeats React's own message, so the harness's
- *     count of those (`renderer-console.mjs`) is not changed by the trap.
+ *     count of those (`renderer-console.mjs`) is not changed by the trap;
+ *   - since OQ-278 (2026-10-13), the install writes one `rotaris-lanes-trap: installed` line the same way, and the duress
+ *     launch FAILS when the trap did not install or that line did not reach its log (`lanesTrapGuard`).
  *
  * It reads; it changes nothing React does — the accessor stores and returns the same value. Nothing here is product code.
  */
 
 /** The prefix every line the trap writes carries. */
 export const LANES_TRAP_PREFIX = 'rotaris-lanes-trap:';
+
+/**
+ * The one line the trap writes when it installs (OQ-278): its arrival in the launch's log, relayed as
+ * `capture: renderer console: rotaris-lanes-trap: installed (…)`, shows the console relay carries the trap's lines, so a
+ * pack with none of its other lines is read as "nothing crossed the threshold", not "nothing reached the log".
+ */
+export const LANES_TRAP_INSTALLED = `${LANES_TRAP_PREFIX} installed`;
 
 /** React 19's SyncLane | InputContinuousLane | DefaultLane — the lanes whose pending work keeps the count rising. */
 export const COUNTING_LANES = 42;
@@ -131,6 +140,7 @@ export function lanesTrapSource({ warnAt = 10 } = {}) {
   });
   const summary = () => ({ installed: true, installedAt: s.installedAt, commits: s.commits, evaluations: s.evaluations, counting: s.counting, run: s.run, maxRun: s.maxRun, maxRunAt: s.maxRunAt, maxRunHolders: s.maxRunHolders, maxRunRendered: s.maxRunRendered, maxBurst: s.maxBurst, maxBurstAt: s.maxBurstAt, warnings: s.warnings, updateDepthErrors: s.updateDepthErrors });
   w.__rotarisLanesTrap = { summary };
+  console.warn(${JSON.stringify(LANES_TRAP_INSTALLED)});
   return summary();
 })()`;
   return body.replace(/\n\s*/g, ' ').trim();
@@ -151,7 +161,8 @@ export function lanesTrapSteps({ installAtMs, readEveryMs, untilMs, warnAt }) {
 }
 
 /**
- * What a launch's log says the trap saw: whether it installed, its last summary, and the lines it wrote.
+ * What a launch's log says the trap saw: whether it installed, whether its install line reached the log through the console
+ * relay (`relayed`, OQ-278), its last summary, and the lines it wrote (the install line is not one of them).
  * @param {string} log
  */
 export function lanesTrapReading(log) {
@@ -159,6 +170,7 @@ export function lanesTrapReading(log) {
   const readings = [];
   /** @type {any[]} */
   const lines = [];
+  let relayed = false;
   for (const line of String(log).split('\n')) {
     const evaluated = /capture: eval-at (\d+) (.*) → (.*)$/.exec(line);
     if (evaluated && (evaluated[2].includes('__rotarisLanesTrap'))) {
@@ -168,6 +180,7 @@ export function lanesTrapReading(log) {
     const at = line.indexOf(`capture: renderer console: ${LANES_TRAP_PREFIX} `);
     if (at >= 0) {
       const text = line.slice(at + `capture: renderer console: ${LANES_TRAP_PREFIX} `.length).replace(/ \([^()]*:\d+\)\s*$/, '');
+      if (`${LANES_TRAP_PREFIX} ${text}` === LANES_TRAP_INSTALLED) { relayed = true; continue; }
       try { lines.push(JSON.parse(text)); } catch { lines.push({ unreadable: text }); }
     }
   }
@@ -175,9 +188,23 @@ export function lanesTrapReading(log) {
   const last = [...readings].reverse().find((r) => r.value && r.value.installed === true) ?? null;
   return {
     installed: installed !== null,
+    relayed,
     reason: installed === null ? (readings[0]?.value?.reason ?? 'no reading of the trap in the log') : null,
     readings: readings.length,
     last: last?.value ?? null,
     lines,
   };
+}
+
+/**
+ * The duress launch's check of the instrument itself (OQ-278, ruled 2026-10-13 under R-072): the trap installed, and its
+ * install line reached `duress/app.log` through the console relay. Either missing is a FAILURE, since a guard whose
+ * instrument did not run cannot close the note it guards (`docs/defects/README.md`, closing an unreproduced note).
+ * @param {{ installed: boolean, relayed: boolean, reason: string | null }} reading `lanesTrapReading`'s answer
+ */
+export function lanesTrapGuard(reading) {
+  const what = "the long run's pendingLanes trap installed and its install line reached duress/app.log through the console relay (D8 guard, OQ-278)";
+  if (!reading.installed) return { passed: false, what, detail: `the trap did not install: ${reading.reason ?? 'no reading'}` };
+  if (!reading.relayed) return { passed: false, what, detail: `the trap installed, but no relayed "${LANES_TRAP_INSTALLED}" line is in the log: the console relay did not carry it` };
+  return { passed: true, what, detail: undefined };
 }

@@ -2,7 +2,7 @@ import { BrowserWindow, app, nativeTheme, shell } from 'electron';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION, type DisplayPreferenceKey } from '@rotaris/contracts';
 import { buildIdentifier, thirdPartyLicensesPath } from '../about.js';
 import { productVersion } from '../version.js';
-import { composerDraftKey, PANE_LAYOUT_VIEWS, paneLayoutKeys, type PaneLayoutView } from '@rotaris/platform';
+import { composerDraftKey, PANE_LAYOUT_PANES, PANE_LAYOUT_VIEWS, paneLayoutKeys, type PaneLayoutView } from '@rotaris/platform';
 import { homedir } from 'node:os';
 import { millis } from '@rotaris/kernel';
 import { type CommandContext, type CommandHandlers } from './context.js';
@@ -125,9 +125,10 @@ export function shellCommands(
       return { ok: true, value: { name: theme.name } };
     },
     'prefs.get': (req) => {
-      // REQ-SHELL-069: a pane layout is read whole from the table's three keys, its view named by its state key.
+      // REQ-SHELL-069: a pane layout is read whole from the table's three keys, its view named by its state key, against
+      // THAT view's current pane count (`PANE_LAYOUT_PANES`), not one figure for every view.
       const layoutView = paneLayoutViewOf(req.key);
-      if (layoutView !== null) return { ok: true, value: { value: preferences.readLayout(layoutView, 2) } };
+      if (layoutView !== null) return { ok: true, value: { value: preferences.readLayout(layoutView, PANE_LAYOUT_PANES[layoutView]) } };
       return { ok: true, value: { value: preferences.read(requirementsPreferenceKey(req.key)) } };
     },
     'prefs.set': async (req) => {

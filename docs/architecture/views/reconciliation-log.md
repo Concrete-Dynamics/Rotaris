@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-15**
 
+**A pane layout is read against its own view's pane count (fin46, `fin46-accept1-7`, finding C18; REQ-SHELL-069).** The
+process view's `prefs.get` entry names `platform`'s `PANE_LAYOUT_PANES`, each view's current pane count, which main's read
+now passes to `PreferenceStore.readLayout` in place of a literal 2
+(`docs/defects/fixed/the-pane-layout-read-assumes-two-panes-for-every-view.md`). Every view still has two panes. The date
+above stays: this change was made on 2026-10-14 UTC, and the later date is kept.
+
 **PD-TOOLS-001's PowerShell capture run on Windows (the Windows ARM64 session's B2).** A comment in `snapshotCommand` and
 new test cases only; no view changed.
 

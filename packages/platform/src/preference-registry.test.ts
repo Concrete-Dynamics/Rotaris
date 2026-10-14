@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PANE_LAYOUT_VIEWS, PREFERENCE_KEYS, PreferenceStore, paneLayoutKeys } from './index.js';
+import { PANE_LAYOUT_PANES, PANE_LAYOUT_VIEWS, PREFERENCE_KEYS, PreferenceStore, paneLayoutKeys } from './index.js';
 
 /**
  * REQ-SHELL-006: the per-user preference store table is the store's one complete registry ("a key that does not appear in
@@ -78,6 +78,8 @@ describe('a pane layout is stored under `panels/version`, `panels/{view-key}/sta
   it('writes the three registered keys, one version stamp for every layout, and reads the layout back', async () => {
     const store = new PreferenceStore(join(dir, 'preferences'));
     expect(PANE_LAYOUT_VIEWS).toEqual(['overview', 'git', 'library', 'workspace']);
+    // Each view's current pane count, the figure its stored count is compared against: one per view, none beside them.
+    expect(PANE_LAYOUT_PANES).toEqual({ overview: 2, git: 2, library: 2, workspace: 2 });
     expect(paneLayoutKeys('git')).toEqual({ state: 'panels/git/state', panes: 'panels/git/panes' });
     expect(store.readLayout('overview', 2)).toBeUndefined();
     await store.writeLayout('overview', { version: 1, panes: 2, sizes: [700, 340] });

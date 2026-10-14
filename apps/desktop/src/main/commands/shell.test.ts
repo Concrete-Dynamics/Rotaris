@@ -1,4 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { PANE_LAYOUT_VIEWS, PreferenceStore, paneLayoutKeys } from '@rotaris/platform';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION } from '@rotaris/contracts';
 import type { CommandAt, CommandContext, MainWindowState } from './context.js';
 
@@ -16,6 +20,17 @@ const fakeWindow = (destroyed = false) => {
   windows.push(w);
   return w;
 };
+/**
+ * REQ-SHELL-069's pane count, per view: the table `prefs.get` reads against is `platform`'s own, made mutable here so a case
+ * can give one view a third pane — the change the read must follow (a layout stored for the old count refused, one for the
+ * new count applied). Every other export is the real one.
+ */
+const paneCounts = vi.hoisted(() => ({} as Record<string, number>));
+vi.mock('@rotaris/platform', async (importOriginal) => {
+  const actual = await importOriginal<{ readonly PANE_LAYOUT_PANES: Readonly<Record<string, number>> }>();
+  Object.assign(paneCounts, actual.PANE_LAYOUT_PANES);
+  return { ...actual, PANE_LAYOUT_PANES: paneCounts };
+});
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => windows }, app: { isPackaged: false, getVersion: () => '0.0.0', getAppPath: () => '.' }, nativeTheme: {}, shell: {} }));
 const { shellCommands, announceDisplayPreference } = await import('./shell.js');
 
@@ -84,5 +99,53 @@ describe('notice.current answers the notice a window opened after its publicatio
     } as unknown as Parameters<typeof shellCommands>[0]);
     expect(await withStore['notice.current']({ kind: 'notice.current' }, at)).toEqual({ ok: true, value: { v: CONTRACT_SCHEMA_VERSION, current } });
     expect(steps).toEqual(['settled', 'current']);
+  });
+});
+
+/**
+ * REQ-SHELL-069: "the stored pane count differs from the view's current pane count" restores the declared defaults. `prefs.get`
+ * reads each view's layout against THAT view's count (`PANE_LAYOUT_PANES`); until 2026-10-14 it read every view against a literal
+ * 2, so a view that gained a pane would have had every layout it wrote discarded and a two-pane layout applied to it
+ * (`docs/defects/fixed/the-pane-layout-read-assumes-two-panes-for-every-view.md`). The store is a real `PreferenceStore` on disk.
+ */
+describe('prefs.get reads a pane layout against its own view\'s pane count — REQ-SHELL-069', () => {
+  const dirs: string[] = [];
+  const declared = { ...paneCounts };
+  afterEach(() => {
+    Object.assign(paneCounts, declared);
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+  const withStore = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-shell-panes-'));
+    dirs.push(dir);
+    const store = new PreferenceStore(dir);
+    const facet = shellCommands({
+      capturing: false, currentTheme: () => ({ name: 'rotaris-dim' }) as never, log: () => undefined, notices: {} as never, preferences: store, processes: [],
+      requirementsPreferenceKey: (k: string) => k, runHost: {} as never, services: new Map() as never, setTheme: (() => ({})) as never,
+      themeBackground: () => '#000', updater: {} as never,
+    } as unknown as Parameters<typeof shellCommands>[0]);
+    const get = async (view: (typeof PANE_LAYOUT_VIEWS)[number]) => {
+      const out = await facet['prefs.get']({ kind: 'prefs.get', key: paneLayoutKeys(view).state }, at);
+      return out.ok ? (out.value as { value?: unknown }).value : 'refused';
+    };
+    return { store, get };
+  };
+
+  it('answers every view\'s stored two-pane layout today, each view declaring two panes', async () => {
+    expect(declared).toEqual({ overview: 2, git: 2, library: 2, workspace: 2 });
+    const { store, get } = withStore();
+    for (const view of PANE_LAYOUT_VIEWS) await store.writeLayout(view, { version: 1, panes: 2, sizes: [600, 300] });
+    for (const view of PANE_LAYOUT_VIEWS) expect(await get(view)).toEqual({ version: 1, panes: 2, sizes: [600, 300] });
+  });
+
+  it('a view that gains a pane applies a layout stored for its new count and restores defaults over one stored for the old', async () => {
+    paneCounts['library'] = 3;
+    const { store, get } = withStore();
+    await store.writeLayout('library', { version: 1, panes: 3, sizes: [300, 300, 300] });
+    await store.writeLayout('git', { version: 1, panes: 2, sizes: [400, 528] });
+    expect(await get('library')).toEqual({ version: 1, panes: 3, sizes: [300, 300, 300] });
+    expect(await get('git')).toEqual({ version: 1, panes: 2, sizes: [400, 528] });
+    await store.writeLayout('library', { version: 1, panes: 2, sizes: [500, 400] });
+    expect(await get('library')).toBeUndefined();
   });
 });

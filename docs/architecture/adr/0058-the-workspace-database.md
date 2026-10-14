@@ -574,10 +574,16 @@ alternative B remains a one-module swap.
             summary.md                       REQ-SESSION-140, replaced under REQ-SESSION-033
             artifacts/…                      artifact, attachment and image bodies (REQ-LIBRARY-087)
         origin.txt                           diagnostic only — see below
-    <identifier>.restoring-<n>/              a restore staging directory, transient
+    <identifier>.restoring-<n>/              a restore staging directory: consumed by the install; deleted by the
+                                             restore on every failure that leaves the store as it was (OQ-265,
+                                             2026-10-14); kept and reported after a failed reversal; left by a
+                                             killed process (OQ-266); cleared by the next restore's step 6
     <identifier>.displaced-<UTC timestamp>/  a store set aside by a restore or by the recovery ladder;
                                              never deleted by the product (see the restore, and recovery)
 ```
+
+*(The staging line read "a restore staging directory, transient" until 2026-10-14, while no step deleted it — D5,
+consequence 18; it now states when the copy is deleted.)*
 
 The three siblings are all one directory level up from the store deliberately: a displaced store is a
 whole store, it must be reclaimable by the same surface that reclaims any other, and it must not sit
@@ -1443,7 +1449,9 @@ reached a store directory holding no database in **0 of 30**. R1 cost 3.15–3.7
 6.43–7.36 ms. The counterfactual was run in the same harness: the single-rename reversal failed `EPERM` in
 10 of 10 and reached the forbidden end state in 10 of 10, with the error naming both paths each time. **Two
 leftovers, not one, were observed on every corrected run**: the `.obstruction-` aside this reversal mints,
-which is intended and kept, and the staging copy, which is defect D5 and is still open.
+which is intended and kept, and the staging copy, which is defect D5 and is still open. *(2026-10-14, [OQ-265](../open-questions.md#oq-265)
+as ruled under R-072: a reversal that puts the store back now deletes the staging copy; only the `.obstruction-` aside is left,
+and E2 asserts both. A reversal that fails keeps the copy and lists it.)*
 
 **And the end state that must not be reachable, named so that it is testable: a store directory that exists
 and holds no database.** The old reversal produced precisely that, in 20 of 20 observations, and it is not a
@@ -1706,7 +1714,7 @@ maintained, and is not consulted — so there is nothing for the store to disagr
    > | `<identifier>.displaced-<stamp>` | a restore, displacing the store it replaces | nothing — kept on purpose |
    > | `<identifier>.displaced-<stamp>` | the corruption ladder | nothing — kept on purpose |
    > | the old identifier's whole store | ESC-26's confirmed establishment | nothing — kept on purpose, and it is the undo |
-   > | `<identifier>.restoring-<n>` | **every** restore, staging the artifact | ***nothing, and nothing knows it exists*** |
+   > | `<identifier>.restoring-<n>` | **every** restore, staging the artifact | **since 2026-10-14 ([OQ-265](../open-questions.md#oq-265), ruled 2026-10-13 under R-072): deleted by the restore on every failure that leaves the store as it was; kept and reported after a failed reversal; left by a killed process ([OQ-266](../open-questions.md#oq-266)); cleared by the next restore's step 6.** *Until then: nothing, and nothing knows it exists.* |
    > | `<identifier>.obstruction-<stamp>` | the R1/R2 reversal, displacing whatever occupied the target | ***nothing, and nothing knows it exists*** |
    >
    > **The last two are defect D5 and it is open.** The staging copy was left behind in every measured
@@ -1716,6 +1724,11 @@ maintained, and is not consulted — so there is nothing for the store to disagr
    > added by the correction and IC-1 observed **both** leftovers beside the target on every reversal run.
    > The first three are kept deliberately and are the reclamation surface's business; the last two are not
    > kept deliberately by anybody, which is the difference this table exists to show.
+   >
+   > *2026-10-14: the staging copy's half of D5 is repaired ([OQ-265](../open-questions.md#oq-265)); the paragraph above is
+   > kept as what was measured. A copy is now kept only after a reversal that failed, where it sits beside the displaced store
+   > the error names, or where its delete failed, which the failure's error names in one sentence; the obstruction aside's row
+   > stands as it was, deferred with OQ-48.*
 6. **The backup is O(store), and it now has one number rather than none.** `VACUUM INTO` copies the whole
    store and pins the write-ahead log for the duration. Measured against a 41 MB store with 108,525 commits
    landing during the run, it produced **8 valid snapshots out of 8** at a **median 1,077 ms** each (min
@@ -1836,10 +1849,27 @@ maintained, and is not consulted — so there is nothing for the store to disagr
     build-wrong class. A builder is expected to meet all three.** *Since 2026-10-13 one is: D8 and D11 are
     repaired, and their bullets say how; D5 is deferred with OQ-48's surface under R-071 ("after the first
     release"), and OQ-265 asks whether the restore should delete its own staging copy without that surface.*
+    *OQ-265 was ruled later on 2026-10-13 (R-072) and, built on 2026-10-14, D5 split: its staging half is repaired, its obstruction half
+    stays deferred with OQ-48; the bullet says which is which.*
 
     - **D5 — nothing deletes a leftover staging copy or an obstruction aside, and nothing knows they
       exist.** The full table is in consequence 5 above. Each is the size of a store. What is owed is
       OQ-48's inspect-and-delete surface, which the specification still does not have.
+
+      ***The staging half, repaired 2026-10-14 (fin43; [OQ-265](../open-questions.md#oq-265) ruled under R-072); the
+      bullet above is kept as what stood.*** On every failure return that leaves the store as it was — a failed
+      expansion, a staging store that fails `quick_check` or does not open, a failed step-8 displacement, a step-9
+      failure with no previous store, and a step-9 failure whose R1/R2 reversal put the store back — `restoreStore`
+      deletes `<identifier>.restoring-<n>` before it returns (`discardStaging`, `packages/store/src/restore.ts`). A
+      delete that fails is listed in `leftovers` and named in one sentence of the failure's error, which reaches the
+      notice and the log. The copy is kept, and listed, only after a reversal that failed; a killed process deletes
+      nothing (OQ-266). Found by building: the expansion and the layout conversion sat outside step 6's guard, so an
+      artifact unreadable at step 6 rejected the whole restore, after the run host had closed its connection, with the
+      partial copy left (reachable where the file changed after its assessment, which expands and checks it first);
+      both are inside the guard now. Pinned by `store.test.ts`'s E2 and its OQ-265 block.
+
+      ***The obstruction half stays deferred with OQ-48 under R-071.*** Nothing deletes
+      `<identifier>.obstruction-<stamp>[.n]`: the product cannot know what occupied the target name.
     - **D8 — the three gates before the swap are not read-only at the filesystem level.** The liveness
       gate's read-only open of a write-ahead-logged store creates `workspace.db-shm` (32,768 B) and
       `workspace.db-wal` (0 B) **in the target store directory**, measured before and after. No row is
@@ -2086,7 +2116,8 @@ project; the counterfactual (`skipArrange`, D7 as it was) opens, works, and is m
 
 **Not exercised:** the kill-in-the-gap case (README B2); two concurrent restores of one identifier; a
 restore from a network destination; D5's staging leftover (observed again: every successful restore
-leaves none, every reversal leaves `.restoring-1`).
+leaves none, every reversal leaves `.restoring-1`). *(2026-10-14: a reversal that puts the store back leaves none since
+OQ-265's ruling, consequence 18.)*
 
 > **The kill-in-the-gap case, measured 2026-10-13 (fin41); "not exercised" above is kept as what stood until then.**
 > `pnpm restore-kill-proof` runs `restoreStore` in a real child process (`packages/store/src/restore-kill.child.ts`, bundled

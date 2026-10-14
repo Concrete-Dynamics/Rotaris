@@ -13614,7 +13614,8 @@ toggles), or whether it stands as built.
 that fails for any reason MUST leave the store exactly as it was" speaks of the store and not of what is beside it;
 ADR-0058 consequences 5 and 18, D5; OQ-48, deferred by the owner on 2026-10-06 under
 [R-071](../product/requests.md#r-071), "after the first release". Raised 2026-10-13 by fin41 while repairing D8 and D11,
-task N10, as OQ-264; renumbered OQ-265 at landing, because origin/main had given OQ-264 to REQ-CHAT-167's question.)*
+task N10, as OQ-264; renumbered OQ-265 at landing, because origin/main had given OQ-264 to REQ-CHAT-167's question.
+**Ruled 2026-10-13.**)*
 
 **What is open.** D5 is that nothing deletes `<identifier>.restoring-<n>` (the staging copy, the size of a store) or
 `<identifier>.obstruction-<stamp>[.n]` (what the reversal moved off the target name), and nothing knows they exist. The
@@ -13636,6 +13637,28 @@ whether a failure to delete it is reported or only logged), or D5 waits whole fo
 is outside it either way.
 
 **What a live run then shows.** Nothing: no live scenario restores a store.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** on every failure return that leaves
+the store as it was, the restore deletes its own staging copy `<identifier>.restoring-<n>` before it returns. Those returns
+are a failed expansion, a staging store that failed `quick_check` or did not open, a failed step-8 displacement, a step-9
+failure with no previous store, and a step-9 failure whose R1/R2 reversal put the previous store back. When the delete itself
+fails, the restore lists the path in `leftovers` and adds one sentence naming it to the failure's error, which reaches both
+the notice and the log. The copy is kept, and listed, only where the reversal failed, and a process killed mid-restore
+([OQ-266](#oq-266)) runs no deletion at all. The obstruction aside stays deferred with OQ-48 under R-071. No directive: the
+specification is silent on what lies beside the store, and the ruling builds REQ-SESSION-201 without departing from it.
+
+***Built 2026-10-14 (fin43, `fin43-restore-recovery`).*** `discardStaging` in `packages/store/src/restore.ts` deletes the copy
+(`rmSync`, recursive, three retries) and returns the path when the delete throws; each failure listed above goes through it,
+and the sentence it adds reads "A working copy of the backup could not be removed and is at <path>; it holds nothing the backup
+file does not, and it can be deleted." The expansion and the layout conversion now sit inside step 6's guarded block, so a
+throw from either is the returned failure "staging store could not be prepared: …" rather than a rejection, and the staging
+handle is closed and its spelling forgotten before the delete (an open handle on Windows makes the delete fail). The
+workspace service's restore line in the log names `leftovers=` when there are any. Pinned by `store.test.ts`: E2 (no
+`.restoring-` on disk or listed; the `.obstruction-` aside still listed) and the six cases of its OQ-265 block (a store that
+fails `quick_check`, an unreadable artifact, step 8 with every aside name taken, step 9 with no previous store, a failed
+reversal that keeps and lists the copy, and a delete that fails); all six and E2 are red on the code before the change. E3a
+and the kill-in-the-gap case are unchanged. The two advocates' recommendations are in the orchestrator's ruling record, not
+copied here.
 
 <a id="oq-266"></a>
 
@@ -13663,6 +13686,12 @@ only on the user's action.
 
 **What the build proceeds under.** As built: nothing looks for the leftovers, the open creates an empty store, and both
 copies stay where they are. `store.test.ts` pins that state (the kill-in-the-gap case), so a ruling turns it red.
+
+*Cross-reference, 2026-10-14 ([OQ-265](#oq-265) as ruled 2026-10-13): the restore now deletes its own staging copy on every failure it
+returns from with the store as it was, so a `<identifier>.restoring-<n>` on disk marks either a restore that never returned
+(this question's case) or a copy whose delete failed and was reported in that failure's error. A copy found on disk is
+therefore no evidence of a store that passed step 6, and any later "finish" option re-runs `quick_check` on it before it
+installs anything.*
 
 **What a ruling decides.** Finish, reverse or report, and where (the open, or a user's action); and whether a `.displaced-*`
 left beside a store that is present (the normal successful restore) is ever touched — it must not be, since it is the store

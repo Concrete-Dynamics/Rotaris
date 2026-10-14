@@ -44,8 +44,13 @@ import { forgetSpelling, openStore, type StoreHandle } from './open.js';
  * state the risk: if the store genuinely is reachable elsewhere, a run there
  * may be writing now.
  *
- * Open, and stated in ADR-0058 consequence 18: D5 (nothing deletes the
- * staging copy or the obstruction aside; deferred with OQ-48 under R-071).
+ * D5, ADR-0058 consequence 18, is half repaired (2026-10-14; OQ-265 ruled
+ * 2026-10-13 under R-072): every failure that leaves the store as it was deletes the
+ * restore's own staging copy before it returns (`discardStaging`), and a
+ * delete that fails is listed in `leftovers` and named in the error. The copy
+ * is kept, and listed, only after a reversal that failed; a process killed
+ * mid-restore runs no deletion (OQ-266). The obstruction aside's half stays
+ * deferred with OQ-48 under R-071: the product cannot know what it is.
  * D8 is repaired (2026-10-13): the -wal/-shm left in the target came from the
  * ASSESSMENT's read-only open, never from this gate — `svc` below is a
  * read-write connection whose close, the last one, removes the two files its
@@ -100,6 +105,8 @@ export interface RestoreOptions {
    * process here; `store.test.ts` throws here. Never set by the product.
    */
   readonly betweenRenames?: () => Promise<void>;
+  /** Test hook: the delete OQ-265's discard runs, replaced to make it fail. Never set by the product. */
+  readonly removeStaging?: typeof rmSync;
   /** D11: the engine's database-path limit to hold the restore to; `null` for none (D11 as it was). Defaults to this platform's. */
   readonly storePathLimit?: number | null;
 }
@@ -171,6 +178,24 @@ export function arrangeStagingIntoStoreLayout(stage: string): { moved: [string, 
   const manifest = join(stage, CONTAINER_MANIFEST);
   if (existsSync(manifest)) { rmSync(manifest); removed.push(CONTAINER_MANIFEST); }
   return { moved, removed };
+}
+
+/**
+ * OQ-265 (ruled 2026-10-13 under R-072): the restore's own staging copy, deleted on a failure that leaves the store as
+ * it was. It holds nothing the artifact the user chose does not. `null` when it is gone; the path when the delete threw.
+ */
+export function discardStaging(stage: string, rm: typeof rmSync = rmSync): string | null {
+  try {
+    rm(stage, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    return null;
+  } catch {
+    return stage;
+  }
+}
+
+/** The sentence a failed delete adds to the failure's error, which reaches the notice and the log alike (OQ-265). */
+export function stagingLeftDetail(path: string): string {
+  return `A working copy of the backup could not be removed and is at ${path}; it holds nothing the backup file does not, and it can be deleted.`;
 }
 
 export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {}): Promise<RestoreReport> {
@@ -251,23 +276,39 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
   svc = null; dal = null;
   steps.push('5-close-service');
 
-  // 6 — expand, arrange, drop foreign locks, open read-write.
+  // 6 — expand, arrange, drop foreign locks, open read-write. A leftover copy of an earlier restore is cleared first.
   const stage = stagingDir(workspacesRoot, id, opts.stagingN ?? 1);
+  const rm = opts.removeStaging ?? rmSync;
   rmSync(stage, { recursive: true, force: true });
-  expandArtifact(ctx.artifact, stage);
-  if (!opts.skipArrange) arrangeStagingIntoStoreLayout(stage);
-  else steps.push('6-arrange-SKIPPED(counterfactual)');
+  /** OQ-265: a failure that leaves the store as it was deletes the staging copy; a delete that fails is listed and named. */
+  const failSafely = (error: string, extra: Partial<RestoreReport> = {}): RestoreReport => {
+    const left = discardStaging(stage, rm);
+    if (left !== null) leftovers.push(left);
+    return { ok: false, abandoned: false, ...extra, error: left === null ? error : `${error}. ${stagingLeftDetail(left)}`, leftovers, steps };
+  };
+  // Held outside the try so the catch can close it: a handle still open on Windows makes the delete fail.
+  let stageDb: StoreHandle | null = null;
+  let prepared = false;
   try {
-    const stageDb = openStore(join(stage, opts.skipArrange ? CONTAINER_STORE_FILE : STORE_FILE), { mustExist: true });
+    expandArtifact(ctx.artifact, stage);
+    if (!opts.skipArrange) arrangeStagingIntoStoreLayout(stage);
+    else steps.push('6-arrange-SKIPPED(counterfactual)');
+    prepared = true;
+    stageDb = openStore(join(stage, opts.skipArrange ? CONTAINER_STORE_FILE : STORE_FILE), { mustExist: true });
     const check = stageDb.pragma('quick_check', { simple: true });
-    if (check !== 'ok') { stageDb.close(); forgetSpelling(stage); leftovers.push(stage); return { ok: false, abandoned: false, error: `staging store failed quick_check: ${String(check)}`, leftovers, steps }; }
+    if (check !== 'ok') {
+      stageDb.close(); stageDb = null; forgetSpelling(stage);
+      return failSafely(`staging store failed quick_check: ${String(check)}`);
+    }
     new StoreDal(stageDb).deleteLocksNotOnHost(thisMachine);
     stageDb.close(); // 7
+    stageDb = null;
     forgetSpelling(stage);
     steps.push('6-expand-open', '7-close-staging');
   } catch (e) {
-    leftovers.push(stage);
-    return { ok: false, abandoned: false, error: `staging store did not open: ${String(e)}`, leftovers, steps };
+    if (stageDb) { try { stageDb.close(); } catch { /* */ } stageDb = null; }
+    forgetSpelling(stage);
+    return failSafely(prepared ? `staging store did not open: ${String(e)}` : `staging store could not be prepared: ${String(e)}`);
   }
 
   // 9a — origin.txt before the install (D7). The counterfactual leaves the container's layout as it was.
@@ -279,7 +320,7 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
   let displaced: string | undefined;
   if (targetExisted) {
     const c = claimAsideName(workspacesRoot, id, stamp, 'displaced', target);
-    if (!c.ok) { leftovers.push(stage); return { ok: false, abandoned: false, error: `step 8 failed: ${c.code}`, leftovers, steps, stamp }; }
+    if (!c.ok) return failSafely(`step 8 failed: ${c.code}`, { stamp });
     displaced = c.to;
     steps.push(`8-displace(attempts=${c.attempts})`);
   } else {
@@ -303,9 +344,8 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
   }
 
   // The reversal.
-  leftovers.push(stage);
   if (!targetExisted || !displaced) {
-    return { ok: false, abandoned: false, error: `restore failed at step 9 (${installErr}); there was no previous store to put back`, leftovers, steps, stamp };
+    return failSafely(`restore failed at step 9 (${installErr}); there was no previous store to put back`, { stamp });
   }
   if (!opts.oldReversal) {
     let obstruction: string | undefined;
@@ -318,13 +358,16 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
     let r2ok = false;
     if (r1ok) { try { renameSync(displaced, target); r2ok = true; } catch { /* */ } }
     const reversal = { mode: 'displace-then-rename' as const, ok: r2ok, ...(obstruction ? { obstruction } : {}) };
+    // The store is back: the staging copy is discarded (OQ-265). Not back: it is kept and listed, beside the store to rename.
+    if (r2ok) return failSafely(`restore failed at step 9 (${installErr}); the previous store was put back`, { displaced, stamp, reversal });
+    leftovers.push(stage);
     return {
       ok: false, abandoned: false, displaced, leftovers, steps, stamp, reversal,
-      error: r2ok
-        ? `restore failed at step 9 (${installErr}); the previous store was put back`
-        : `restore failed at step 9 (${installErr}): the store for this workspace is at ${displaced} and must be renamed to ${target}`,
+      error: `restore failed at step 9 (${installErr}): the store for this workspace is at ${displaced} and must be renamed to ${target}`,
     };
   }
+  // The single-rename counterfactual (E2c) stays as it was measured.
+  leftovers.push(stage);
   let ok = false;
   try { renameSync(displaced, target); ok = true; } catch { /* */ }
   return {

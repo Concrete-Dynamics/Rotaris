@@ -12,11 +12,15 @@ import type { WorkspaceId } from '@rotaris/kernel';
  *       origin.txt                     last-seen workspace path, for the reclamation surface (OQ-48)
  *       sessions/<session-id>/         the closed set of three file kinds (D-01)
  *     <identifier>.displaced-<stamp>[.n]   a store a restore or the ladder set aside — kept
- *     <identifier>.restoring-<n>       a restore's staging copy — D5: nothing deletes it yet
+ *     <identifier>.restoring-<n>       a restore's staging copy — consumed by a restore that installs; deleted
+ *                                      by the restore on every failure that leaves the store as it was (OQ-265);
+ *                                      kept and reported after a failed reversal; left by a killed process
+ *                                      (OQ-266); cleared by the next restore's step 6
  *     <identifier>.obstruction-<stamp>[.n] what the reversal moved off the target name — D5
  *
- * Leftover shapes are tabulated in ADR-0058 consequence 5. D5 is deferred with OQ-48's
- * inspect-and-delete surface (R-071, "after the first release"). The first and second names are
+ * Leftover shapes are tabulated in ADR-0058 consequence 5. D5's staging half is repaired (OQ-265, 2026-10-14);
+ * its obstruction half is deferred with OQ-48's inspect-and-delete surface (R-071, "after the first release").
+ * The first and second names are
  * longer than `<identifier>` by 35 to 37 and by 12 characters, and a restore refuses before its
  * first step where either would cross the engine's path limit (D11, `storePathLimit`, below).
  */

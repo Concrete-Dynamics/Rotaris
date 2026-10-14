@@ -218,9 +218,108 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
     expect(treeHash(storeDir(root, id))).toBe(hashBefore);
     expect(existsSync(storeFile(root, id))).toBe(true);
     expect(counts(root, id).sids).toEqual(['S-1']);
-    // Two leftovers, both observed on every run — D5 on the corrected path (ADR-0058 consequence 5).
-    expect(r.leftovers.some((l) => l.includes('.restoring-'))).toBe(true);
+    // D5 on the corrected path (ADR-0058 consequence 5): the obstruction aside is kept and listed; since OQ-265 (ruled
+    // 2026-10-13 under R-072) the staging copy is deleted once the store is back, and is neither on disk nor listed.
+    expect(r.leftovers.some((l) => l.includes('.restoring-'))).toBe(false);
+    expect(readdirSync(root).filter((n) => n.includes('.restoring-'))).toEqual([]);
     expect(r.leftovers.some((l) => l.includes('.obstruction-'))).toBe(true);
+  });
+
+  describe('OQ-265 (ruled 2026-10-13 under R-072): a restore that fails safely deletes its own staging copy', () => {
+    const rh = () => fakeRunHost(root, id, { raceAtStep: 'none', closeAnswers: true });
+    const staged = () => readdirSync(root).filter((n) => n.includes('.restoring-'));
+    /** An artifact whose store opens and fails `quick_check`: two pages appended that the header counts and no tree uses. */
+    const corruptArtifact = (artifact: string): void => {
+      const dir = mkdtempSync(join(tmpdir(), 'rotaris-corrupt-'));
+      try {
+        expandArtifactInto(artifact, dir);
+        const file = join(dir, 'store.db');
+        const bytes = readFileSync(file);
+        const pageSize = bytes.readUInt16BE(16) === 1 ? 65_536 : bytes.readUInt16BE(16);
+        bytes.writeUInt32BE(bytes.readUInt32BE(28) + 2, 28);
+        writeFileSync(file, Buffer.concat([bytes, Buffer.alloc(pageSize * 2)]));
+        rmSync(artifact);
+        const t = spawnSync('tar', ['-cf', artifact, '-C', dir, '.']);
+        expect(t.status).toBe(0);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    };
+
+    it('a staging store that fails quick_check: the store byte-identical, no staging copy on disk or listed', async () => {
+      seed(root, id, [{ sid: 'S-1', rows: 2 }]);
+      const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 3 }]);
+      corruptArtifact(artifact);
+      const before = treeHash(storeDir(root, id));
+      const r = await restoreStore(ctx(rh(), artifact));
+      expect(r.ok).toBe(false);
+      expect(r.error).toMatch(/^staging store failed quick_check: /);
+      expect(treeHash(storeDir(root, id))).toBe(before);
+      expect(staged()).toEqual([]);
+      expect(r.leftovers).toEqual([]);
+    });
+
+    it('an expansion that fails (a truncated artifact) is a returned failure, not a throw, and leaves no staging copy', async () => {
+      seed(root, id, [{ sid: 'S-1', rows: 2 }]);
+      const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 3 }]);
+      writeFileSync(artifact, 'not an archive');
+      const before = treeHash(storeDir(root, id));
+      const r = await restoreStore(ctx(rh(), artifact));
+      expect(r.ok).toBe(false);
+      expect(r.abandoned).toBe(false);
+      expect(r.error).toMatch(/^staging store could not be prepared: /);
+      expect(treeHash(storeDir(root, id))).toBe(before);
+      expect(staged()).toEqual([]);
+      expect(r.leftovers).toEqual([]);
+    });
+
+    it('a step-8 claim that finds every aside name taken leaves no staging copy, and the store where it was', async () => {
+      const stamp = '2026-10-13T00-00-00-000Z';
+      seed(root, id, [{ sid: 'S-1', rows: 2 }]);
+      const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 3 }]);
+      for (const n of ['', '.1', '.2', '.3', '.4']) mkdirSync(join(root, `${id}.displaced-${stamp}${n}`));
+      const before = treeHash(storeDir(root, id));
+      const r = await restoreStore(ctx(rh(), artifact), { stamp });
+      expect(r.ok).toBe(false);
+      expect(r.error).toBe('step 8 failed: ENAMETAKEN');
+      expect(treeHash(storeDir(root, id))).toBe(before);
+      expect(staged()).toEqual([]);
+      expect(r.leftovers).toEqual([]);
+    });
+
+    it('a step-9 failure with no previous store leaves no staging copy', async () => {
+      const fresh = mintWorkspaceId('00000000000000000000000000000013');
+      const artifact = makeArtifact(root, fresh, [{ sid: 'S-from-backup', rows: 3 }]);
+      const r = await restoreStore({ ...ctx(fakeRunHost(root, fresh, { raceAtStep: 'none', closeAnswers: true }), artifact), id: fresh }, { forceInstallFail: 'target-exists' });
+      expect(r.ok).toBe(false);
+      expect(r.error).toMatch(/there was no previous store to put back$/);
+      expect(staged()).toEqual([]);
+      expect(r.leftovers).toEqual([]);
+    });
+
+    it('a reversal that fails keeps the staging copy and lists it, beside the displaced store the error names', async () => {
+      const stamp = '2026-10-13T00-00-00-000Z';
+      seed(root, id, [{ sid: 'S-1', rows: 2 }]);
+      const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 3 }]);
+      // R1 cannot claim an obstruction name, so R2 is not attempted: the store stays displaced.
+      for (const n of ['', '.1', '.2', '.3', '.4']) mkdirSync(join(root, `${id}.obstruction-${stamp}${n}`));
+      const r = await restoreStore(ctx(rh(), artifact), { forceInstallFail: 'target-exists', stamp });
+      expect(r.reversal).toEqual({ mode: 'displace-then-rename', ok: false });
+      expect(staged()).toEqual([`${id}.restoring-1`]);
+      expect(r.leftovers).toContain(join(root, `${id}.restoring-1`));
+      expect(r.error).toContain(r.displaced!);
+    });
+
+    it('a delete that fails is listed in leftovers and named, in one sentence, in the error', async () => {
+      seed(root, id, [{ sid: 'S-1', rows: 2 }]);
+      const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 3 }]);
+      const stage = join(root, `${id}.restoring-1`);
+      const r = await restoreStore(ctx(rh(), artifact), { forceInstallFail: 'target-exists', removeStaging: (() => { throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' }); }) as never });
+      expect(r.reversal?.ok).toBe(true);
+      expect(r.leftovers).toContain(stage);
+      expect(r.error).toBe(`restore failed at step 9 (ENOTEMPTY); the previous store was put back. A working copy of the backup could not be removed and is at ${stage}; it holds nothing the backup file does not, and it can be deleted.`);
+      expect(staged()).toEqual([`${id}.restoring-1`]);
+    });
   });
 
   it('E2c (counterfactual): the single-rename reversal reaches the forbidden empty-store-directory state and the error names both paths', async () => {

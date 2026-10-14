@@ -47,7 +47,7 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-10-13**
+## Last reconciled with the code: **2026-10-14**
 
 What each change did to the views, newest first, is in [`reconciliation-log.md`](reconciliation-log.md): every entry
 from the first change on, the ones written here between 2026-09-16 and 2026-10-13 included.

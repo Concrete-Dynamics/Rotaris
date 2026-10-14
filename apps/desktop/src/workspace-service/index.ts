@@ -154,7 +154,7 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       } finally {
         renew.cancel();
       }
-      log(`restore into ${report.restoredInto}: ok=${report.ok} abandoned=${report.abandoned} steps=${report.steps.join(',')}${report.error ? ` error=${report.error}` : ''}`);
+      log(`restore into ${report.restoredInto}: ok=${report.ok} abandoned=${report.abandoned} steps=${report.steps.join(',')}${report.leftovers.length > 0 ? ` leftovers=${report.leftovers.join(',')}` : ''}${report.error ? ` error=${report.error}` : ''}`);
       // Reopen — re-establishing the identifier, which the restore may have written — so the next open and migration are the ordinary ones.
       const reopened = openOwn(req.workspaceRoot);
       if (reopened.kind === 'refused') log(`reopen after restore refused: ${reopened.headline}`, 'warn');

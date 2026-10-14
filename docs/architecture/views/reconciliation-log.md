@@ -13,6 +13,14 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 ---
 
+Last reconciled with the code: **2026-10-14**
+
+**A restore that fails safely deletes its own staging copy (OQ-265, ruled 2026-10-13 under R-072; REQ-SESSION-201; fin43).**
+`restoreStore` deletes `<identifier>.restoring-<n>` on every failure that returns with the store as it was, and lists it in
+`leftovers` only after a failed reversal or a failed delete. The **process view**'s files-on-disk row says who deletes the
+staging copy; the **runtime view**'s §7 gains a paragraph on the whole-store restore around the store. No package, edge,
+process, channel, command or store column changed.
+
 Last reconciled with the code: **2026-10-13**
 
 **The requirement coverage report, a report-time tool (fin42, N90).** `tools/requirement-coverage/` (`pnpm req-coverage`) lists

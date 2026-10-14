@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A rename's warm-up search is sent quietly (PD-MCP-004 clause 3; fin44, `fin44-optional-findings`;
+`../../defects/fixed/a-rename-warm-up-that-loses-its-connection-raises-the-servers-unreachable-notice.md`).** No channel or
+store column changed: `SessionConnections.call` gained an optional `{ quiet }`, which the MCP executor passes for the search
+alone. `03-runtime-view.md`'s paragraph on the warm-up says a transport the search loses raises no unreachable notice.
+
 **The cut-restore notice names a kept copy only when the open finds it (fin44, `fin44-optional-findings`;
 `../../defects/fixed/the-cut-restore-notice-says-the-prepared-copy-is-kept-without-looking.md`).** One channel field changed:
 `workspace.opened`'s `cutRestore.staging` is nullable, `null` when the prepared copy is not there at the open.

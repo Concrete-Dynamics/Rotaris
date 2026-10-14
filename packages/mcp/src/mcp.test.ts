@@ -205,6 +205,20 @@ describe('SessionConnections (REQ-MCP-066/067/068/069/070)', () => {
     expect(again.text).toBe('back');
     expect(pidLines(pids)).toHaveLength(2);
   });
+  it('PD-MCP-004 clause 3: a quiet call (the run host\'s own warm-up) that loses the transport warns nothing; the next call that does warns once', async () => {
+    const pids = join(dir, 'crash-quiet.pids');
+    writeFileSync(pids, '');
+    const warned: string[] = [];
+    const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: (n, d) => warned.push(`${n}: ${d}`) });
+    registries.push(s);
+    const desc = fixture('--crash-after', '50', '--pid-file', pids);
+    await expect(s.call('alpha', desc, 'slow', { ms: 1_000 }, millis(5_000), undefined, { quiet: true })).rejects.toThrow();
+    expect(warned).toEqual([]);
+    // The rename that follows re-establishes the connection; when it too loses the transport, it is the one call that warns.
+    await expect(s.call('alpha', desc, 'slow', { ms: 1_000 }, millis(5_000))).rejects.toThrow();
+    expect(warned).toHaveLength(1);
+    expect(pidLines(pids)).toHaveLength(2);
+  });
   it('a changed list is re-read and announced (REQ-MCP-060)', async () => {
     const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined });
     registries.push(s);

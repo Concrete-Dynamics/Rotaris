@@ -8906,6 +8906,13 @@ REQ-MCP-015's EDIT-tier symbol rename reaches on the bundled server.*
 > [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **Corrected 2026-10-14 (fin44, `fin44-optional-findings`):** clause 3 was not held for one failure. The search went through
+> the same connection call as a model's, which raises REQ-MCP-069's unreachable notice when the transport closes, so a server
+> lost during the search was announced by the search even when the rename then reconnected and succeeded. The search is now
+> sent quietly (`SessionConnections.call`'s `quiet`): a lost transport is released and logged as before, and only the rename
+> may warn. Repairs
+> [`a-rename-warm-up-that-loses-its-connection-raises-the-servers-unreachable-notice`](../defects/fixed/a-rename-warm-up-that-loses-its-connection-raises-the-servers-unreachable-notice.md).
+
 ---
 
 <!--

@@ -104,9 +104,11 @@ export class SessionConnections {
   /**
    * REQ-MCP-069: one call under its allowance; a failure after connect is THIS call's failure. The connection stays
    * open for an allowance exhausted or an error result; it is dropped when the transport closed, so the next call
-   * re-establishes it. No retry here.
+   * re-establishes it. No retry here. `quiet` is a request the product makes on its own (PD-MCP-004's warm-up search, whose
+   * clause 3 says it writes no notice): a transport it loses is released the same way but warns nothing, and does not spend the
+   * server's one warning, so the call the model made next is the one that warns if it meets the same failure.
    */
-  async call(name: string, description: ServerDescription, tool: string, args: Readonly<Record<string, unknown>>, timeoutMs: Millis, signal?: AbortSignal): Promise<CallOutcome> {
+  async call(name: string, description: ServerDescription, tool: string, args: Readonly<Record<string, unknown>>, timeoutMs: Millis, signal?: AbortSignal, opts: { readonly quiet?: boolean } = {}): Promise<CallOutcome> {
     const c = await this.connect(name, description);
     try {
       return await callTool(c.opened.client, this.deps.clocks.monotonic, tool, args, timeoutMs, signal);
@@ -115,7 +117,7 @@ export class SessionConnections {
       if (c.opened.pid() === null && description.transport === 'stdio' || /not connected|closed|ECONN|EPIPE/i.test(detail)) {
         // The server went away: this call fails, the entry is released so a later call may re-establish (REQ-MCP-069).
         this.release(name, c);
-        if (!this.warnedUnreachable.has(name)) {
+        if (!opts.quiet && !this.warnedUnreachable.has(name)) {
           this.warnedUnreachable.add(name);
           this.deps.unreachable(name, `${detail}${c.opened.detail() ? ` (${c.opened.detail()})` : ''}`);
         }

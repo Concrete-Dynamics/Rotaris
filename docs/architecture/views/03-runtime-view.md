@@ -1032,7 +1032,8 @@ alone. The pairing and the shared argument names are the manifest's `warmUps`, r
 search is sent under the run's signal and the rename's one REQ-MCP-003 allowance, measured from the call's start, so the rename
 gets what the search left. A search that spends the allowance is the rename's timeout and a cancel during it is `interrupted`,
 neither sending the rename; any other failure is one `warn` line and the rename goes ahead. It is no tool call: no gate, no
-record, no total, no notice. On connection the binding probe calls the memory-listing tool once under 15 s
+record, no total, no notice — sent quietly, so a transport it loses raises no REQ-MCP-069 unreachable notice (the rename, sent
+next, is the call that may; fin44). On connection the binding probe calls the memory-listing tool once under 15 s
 (REQ-MCP-071; a failure warns through REQ-MCP-044 and withholds nothing); the prompt's `## MCP servers` entry for the
 server carries the fixed project-memories block iff both gating names are granted (REQ-MCP-102). Measured cold: the
 runtime answers `tools/list` about 4 s after launch, connect about 4.2 s; the first symbol tool on a language provisions

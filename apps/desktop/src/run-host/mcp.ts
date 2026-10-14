@@ -388,7 +388,8 @@ export class McpHost {
               const warmUp = server.name === CODE_INTELLIGENCE_SERVER_NAME ? codeIntelligenceWarmUp(tool.reported, a as Record<string, unknown>) : null;
               if (warmUp !== null) {
                 try {
-                  await connections.call(server.name, description, warmUp.tool, warmUp.args, millis(Math.max(0, timeoutMs - (this.deps.clocks.monotonic.now() - started))), tctx.signal);
+                  // Quiet (clause 3): a transport the search loses raises no unreachable notice; the rename, sent next, is the call that may.
+                  await connections.call(server.name, description, warmUp.tool, warmUp.args, millis(Math.max(0, timeoutMs - (this.deps.clocks.monotonic.now() - started))), tctx.signal, { quiet: true });
                 } catch (cause) {
                   const text = String(cause instanceof Error ? cause.message : cause);
                   const elapsed = this.deps.clocks.monotonic.now() - started;

@@ -683,7 +683,7 @@ describe('a symbol rename is preceded by the referencing-symbol search of the sa
   const [NAME_PATH, RELATIVE_PATH] = CODE_INTELLIGENCE_MANIFEST.warmUps.renameSymbol.arguments as readonly [string, string];
   const SYMBOL_SCHEMA = { type: 'object', properties: { [NAME_PATH]: { type: 'string' }, [RELATIVE_PATH]: { type: 'string' }, new_name: { type: 'string' }, body: { type: 'string' } }, required: [NAME_PATH, RELATIVE_PATH] };
   const RENAME = { [NAME_PATH]: 'remaining', [RELATIVE_PATH]: 'src/todos.js', new_name: 'countRemaining' };
-  type Sent = { tool: string; args: Record<string, unknown>; timeoutMs: number };
+  type Sent = { tool: string; args: Record<string, unknown>; timeoutMs: number; quiet: boolean };
   type Reply = { isError: boolean; text: string };
   /** The stubbed server: what it does with each request that reaches it, by the tool's reported name. */
   type Answer = (tool: string, signal: AbortSignal, hostClock: FakeClock) => Reply | Promise<Reply>;
@@ -702,7 +702,7 @@ describe('a symbol rename is preceded by the referencing-symbol search of the sa
     const sent: Sent[] = [];
     vi.spyOn(mcp, 'connectionsFor').mockReturnValue({
       connect: async () => ({ onToolsChanged: () => undefined }),
-      call: async (_server: string, _d: unknown, tool: string, args: Record<string, unknown>, timeoutMs: number, signal: AbortSignal) => { sent.push({ tool, args, timeoutMs }); return answer(tool, signal, hostClock); },
+      call: async (_server: string, _d: unknown, tool: string, args: Record<string, unknown>, timeoutMs: number, signal: AbortSignal, opts?: { quiet?: boolean }) => { sent.push({ tool, args, timeoutMs, quiet: opts?.quiet === true }); return answer(tool, signal, hostClock); },
     } as unknown as ReturnType<typeof mcp.connectionsFor>);
     const entry = { type: 'stdio', enabled: true, disabled_tools: [], tool_name_map: opts.toolNameMap ?? {}, command: 'ci' };
     const cfg = {
@@ -795,6 +795,12 @@ describe('a symbol rename is preceded by the referencing-symbol search of the sa
     const body = rig();
     await body.dispatch(edit.replaceSymbolBody, { [NAME_PATH]: 'remaining', [RELATIVE_PATH]: 'src/todos.js', body: 'export const remaining = 2;' });
     expect(body.sent.map((s) => s.tool)).toEqual([edit.replaceSymbolBody]);
+  });
+
+  it('the search is asked quietly, so a transport it loses raises no unreachable notice; the rename is asked as the model\'s call (clause 3)', async () => {
+    const r = rig();
+    await r.dispatch(edit.renameSymbol, RENAME);
+    expect(r.sent.map((s) => [s.tool, s.quiet])).toEqual([[read.referencingSymbols, true], [edit.renameSymbol, false]]);
   });
 
   it('the search writes no tool-call record, total or issue: the session sees the rename\'s one row', async () => {

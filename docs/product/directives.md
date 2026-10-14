@@ -7512,7 +7512,7 @@ artifact". So a pass that never reached the model — the retrospective's 401 in
 twice unreadable — was told to the person as one that looked and found nothing ("The retrospective found nothing to propose",
 "Nothing was proposed in impart_dL3YK5Xd."), which REQ-NOTIFY-100's truthfulness and REQ-NOTIFY-254 ("No failure is reported by
 silence") read against ([OQ-285](../architecture/open-questions.md#oq-285);
-[`a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing`](../defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md)).
+[`a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing`](../defects/fixed/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md)).
 The warning tells the person the review did not happen and why, the same notice a job with no artifact already earns; naming
 the artifact says where the notes are kept. A timeout is different in kind: the pass ran and was cut at a bound the person can
 read, so it keeps the info notice, with `PD-CONFIG-003` revision 2's precedent (OQ-223) extended to the retrospective without a
@@ -7529,6 +7529,29 @@ REQ-NOTIFY-254, `PD-CONFIG-003` revision 2 and OQ-223 are cited and not changed.
 names this directive in its clause (c). `PD-CONFIG-003` revision 2 is unchanged. The build's reading, kept as the falsified one:
 an empty artifact whose collector crashed or could not be parsed posts the zero-proposal info notice and "Nothing was proposed in
 <id>.".*
+
+> **First execution, 2026-10-14, built under [R-072](requests.md#r-072) (fin44, `fin44-improvement-failures`), with
+> `PD-LIBRARY-002` revision 4:** the rule held as written. `@rotaris/contracts` exports `COLLECTOR_CRASHED_PREFIX`,
+> `COLLECTOR_PARSE_FAILED_PREFIX` and `COLLECTOR_TIMED_OUT_PREFIX`, and `analyzeImprovement`
+> (`packages/engine/src/improvements/analyst.ts`) writes its three notes with them. `emptyArtifactNotice`
+> (`apps/desktop/src/main/improvement-notice.ts`) replaces `zeroProposalDetail`: it returns the level, title and detail for every
+> empty artifact. The coordinator's `stored` in `apps/desktop/src/main/index.ts` raises that notice with no action and, for a
+> failed collector, writes a warning line to the application log. `failed` shares `passFailureTitle` and `passFailureDetail`.
+> **What was measured.** `improvement-notice.test.ts` covers crash, parse failure, timeout and a clean empty result for each
+> pass (red before the change: the old module gave "Nothing was proposed in <id>." for all but the post-run timeout).
+> `analyst.test.ts` pins the prefixes the notes begin with, and `scripted-client.test.ts` pins the proof's new `crash` (an HTTP
+> 401) and `garbage` (no JSON, twice) analyst scripts. In the built app, `pnpm retrospective-proof` read 61 of 61 in each of two
+> runs, at a load average of 1.0 to 2.1 on four CPUs. Its launch 9 stored "collector crashed: Unauthorized" and showed the
+> warning "The retrospective could not be completed", with "This workspace's own history was not reviewed: the analysis call
+> failed (Unauthorized). impart_… holds no proposals.", no action and a `warning` log line. The parse-failure launch did the same
+> with "the model's answer could not be read (collector output is invalid JSON: …)". Launch 5 read "The retrospective reached its
+> 5-second limit before it proposed anything." On a build with the old `index.ts` and `improvement-notice.ts` the same proof read
+> 56 of 61: both launches showed "The retrospective found nothing to propose" at `info` with "Nothing was proposed in <id>.", and
+> no log line was written. **Found:** nothing beyond the defect the ruling repaired. **What was not measured.** The post-run
+> pass's warning in the built app (no proof drives a run whose analyst fails; the unit cases carry it), and a live run: the
+> orchestrator's `ask-retrospective` with the analyst's key withheld. Repairs
+> [`a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing`](../defects/fixed/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md).
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

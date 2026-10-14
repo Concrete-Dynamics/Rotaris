@@ -14424,7 +14424,7 @@ the failure warning "a job that ended without producing an artifact"; REQ-LIBRAR
 [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 2 (c), the retrospective's three notices;
 [`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 2 and OQ-223, the timed-out detail. Raised
 2026-10-14 by fin43 (`fin43-live-findings`) from the live scenario run at `ce5f952` (finding F3) and
-[`../defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md`](../defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md).
+[`../defects/fixed/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md`](../defects/fixed/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md).
 Ruled 2026-10-13 under R-072, below.)*
 
 **What is open.** A collector that crashes (a provider's 401, a refused request, any raise other than the timeout) still stores

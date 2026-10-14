@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A pass whose improvement collector failed reads as a failure (PD-LIBRARY-005, OQ-285; fin44, `fin44-improvement-failures`;
+`../../defects/fixed/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md`).** Main's `stored` chooses an
+empty artifact's notice through `emptyArtifactNotice`, which replaces `zeroProposalDetail`. A crashed or unparseable collector is
+the pass's failure warning, and a timed-out retrospective's detail states its limit; the note prefixes are exported by
+`@rotaris/contracts`. `03-runtime-view.md` (the post-run improvement state, a new paragraph on the notices).
+
 **A window's boot read of the display preferences leaves alone what an announcement set meanwhile (REQ-CHAT-167,
 REQ-CONFIG-403, PD-CONFIG-004; fin44, `fin44-optional-findings`;
 `../../defects/fixed/a-windows-boot-read-of-the-display-preferences-can-overwrite-a-newer-announcement.md`).** No channel,

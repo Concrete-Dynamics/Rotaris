@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
 import {
+  COLLECTOR_CRASHED_PREFIX,
+  COLLECTOR_PARSE_FAILED_PREFIX,
+  COLLECTOR_TIMED_OUT_PREFIX,
   IMPROVEMENT_CATEGORIES,
   ImprovementArtifactSchema,
   type ImprovementAnalysisJob,
@@ -388,7 +391,10 @@ function retrospectivePrompt(job: ImprovementAnalysisJob): string {
   )}`;
 }
 
-/** REQ-LIBRARY-015/022..024: two parse attempts inside one hard wall-clock bound. */
+/**
+ * REQ-LIBRARY-015/022..024: two parse attempts inside one hard wall-clock bound. Each empty artifact's notes begin with the
+ * prefix `@rotaris/contracts` exports for its case, which main reads to choose the pass's notice (PD-LIBRARY-005).
+ */
 export async function analyzeImprovement(
   job: ImprovementAnalysisJob,
   deps: ImprovementAnalystDeps,
@@ -445,7 +451,7 @@ export async function analyzeImprovement(
         parseError = cause instanceof Error ? cause.message : String(cause);
       }
     }
-    return recovery(job, `collector parse failed: ${parseError}`);
+    return recovery(job, `${COLLECTOR_PARSE_FAILED_PREFIX}${parseError}`);
   };
 
   try {
@@ -453,18 +459,18 @@ export async function analyzeImprovement(
     return outcome === "timeout"
       ? recovery(
           job,
-          `collector timed out after ${job.timeout_seconds} seconds`,
+          `${COLLECTOR_TIMED_OUT_PREFIX}${job.timeout_seconds} seconds`,
         )
       : outcome;
   } catch (cause) {
     if (controller.signal.aborted && !signal.aborted)
       return recovery(
         job,
-        `collector timed out after ${job.timeout_seconds} seconds`,
+        `${COLLECTOR_TIMED_OUT_PREFIX}${job.timeout_seconds} seconds`,
       );
     return recovery(
       job,
-      `collector crashed: ${
+      `${COLLECTOR_CRASHED_PREFIX}${
         cause instanceof Error ? cause.message : String(cause)
       }`,
     );

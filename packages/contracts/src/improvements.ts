@@ -14,6 +14,17 @@ export const ANALYSIS_PASSES = ['post_run', 'retrospective'] as const;
 export const AnalysisPassSchema = z.enum(ANALYSIS_PASSES);
 export type AnalysisPass = z.infer<typeof AnalysisPassSchema>;
 
+/**
+ * REQ-LIBRARY-022/023: the notes an analyst writes on the empty artifact of a pass that proposed nothing because it could not.
+ * Each begins with one of these prefixes, which the engine writes and main reads: `PD-LIBRARY-005` (OQ-285) turns a crashed or
+ * unparseable collector's artifact into its pass's failure warning, and a timed-out one keeps the info notice with its limit
+ * (`PD-CONFIG-003` revision 2 for the post-run pass). The texts are the requirements', word for word: `collector crashed: <exc>`,
+ * `collector parse failed: <err>`, `collector timed out after <t> seconds`.
+ */
+export const COLLECTOR_CRASHED_PREFIX = 'collector crashed: ';
+export const COLLECTOR_PARSE_FAILED_PREFIX = 'collector parse failed: ';
+export const COLLECTOR_TIMED_OUT_PREFIX = 'collector timed out after ';
+
 /** REQ-LIBRARY-006: one closed proposal-category vocabulary. */
 export const IMPROVEMENT_CATEGORIES = [
   'documentation_update',

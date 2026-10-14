@@ -428,9 +428,12 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
        * rather than by a role, because `analystSystem` is the only thing that tells them apart on the wire.
        *
        * `ROTARIS_IMPROVEMENT_SCRIPT` is what a proof drives it with — `propose` (anything else, once set),
-       * `empty`, `timeout` (never answers, so the analyst's own wall-clock bound is what ends the pass) and
-       * `wait:<ms>[:<step>]` (the pass held open long enough for a surface to be read WHILE it runs). Unset
-       * means this branch does not exist: every proof written before it sees the answer it always saw.
+       * `empty`, `timeout` (never answers, so the analyst's own wall-clock bound is what ends the pass),
+       * `crash` (the provider refuses the credential, HTTP 401, so the collector crashes: REQ-LIBRARY-023),
+       * `garbage` (text that is no JSON, on the first call and on the retry: REQ-LIBRARY-022's parse failure) —
+       * the two PD-LIBRARY-005 turns into the pass's failure warning — and `wait:<ms>[:<step>]` (the pass held
+       * open long enough for a surface to be read WHILE it runs). Unset means this branch does not exist: every
+       * proof written before it sees the answer it always saw.
        *
        * A proposal's evidence cites a session id taken out of the request's own `considered_session_ids`,
        * and the second proposal cites one that is not there — so the attribution the analyst enforces has
@@ -447,6 +450,13 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
           want = held[2] ?? 'propose';
         }
         if (want === 'timeout') { await new Promise<void>((resolve) => req.signal.addEventListener('abort', () => resolve(), { once: true })); yield { ok: false as const, error: { code: 'aborted' as const, headline: 'aborted', transient: false } }; return; }
+        if (want === 'crash') { yield { ok: false as const, error: { code: 'http' as const, headline: 'Unauthorized', status: 401, transient: false } }; return; }
+        if (want === 'garbage') {
+          yield ok<StreamPart>({ kind: 'text', delta: 'I looked at the history and have some thoughts, but not in JSON.' });
+          yield ok<StreamPart>({ kind: 'usage', usage: { input: 64, output: 16 } });
+          yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
+          return;
+        }
         const prompt = req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
         let considered: string[] = [];
         try { considered = JSON.parse(/"considered_session_ids":(\[[^\]]*\])/.exec(prompt)?.[1] ?? '[]') as string[]; } catch { considered = []; }

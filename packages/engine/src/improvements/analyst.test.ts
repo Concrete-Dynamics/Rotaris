@@ -3,6 +3,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  COLLECTOR_CRASHED_PREFIX,
+  COLLECTOR_PARSE_FAILED_PREFIX,
+  COLLECTOR_TIMED_OUT_PREFIX,
   ImprovementAnalysisJobSchema,
   ImprovementArtifactSchema,
   type ImprovementAnalysisJob,
@@ -235,6 +238,65 @@ describe("REQ-LIBRARY-015..034 improvement analyst", () => {
       proposals: [],
       notes: "collector timed out after 1 seconds",
     });
+  });
+
+  /*
+   * PD-LIBRARY-005 (OQ-285): main reads which kind of empty artifact a pass stored from the prefix its notes begin with, so
+   * the analyst writes each of REQ-LIBRARY-022/023's notes with the prefix `@rotaris/contracts` exports — and the text after
+   * it is the failure's own, which the warning's reason quotes.
+   */
+  it("writes each empty artifact's notes with the exported prefix (PD-LIBRARY-005, REQ-LIBRARY-022/023)", async () => {
+    const deps = (value: AgentBackend, clock = new FakeClock()) => ({
+      backend: value,
+      model: MODEL,
+      thinking: "unset" as const,
+      timers: clock.timers,
+      credentialFor: () => async () => "key",
+    });
+    const crashed = await analyzeImprovement(
+      job(),
+      deps(
+        backend(() => ({
+          status: "failed",
+          text: "",
+          usage: { input: 0, output: 0 },
+          error: modelError({ code: "http", headline: "Unauthorized", status: 401, transient: false }),
+        })).value,
+      ),
+      new AbortController().signal,
+    );
+    expect(crashed.notes).toBe(`${COLLECTOR_CRASHED_PREFIX}Unauthorized`);
+    expect(crashed.notes?.startsWith("collector crashed: ")).toBe(true);
+
+    const unreadable = await analyzeImprovement(
+      job(),
+      deps(backend(() => ok("not json at all")).value),
+      new AbortController().signal,
+    );
+    expect(unreadable.proposals).toEqual([]);
+    expect(unreadable.notes?.startsWith(COLLECTOR_PARSE_FAILED_PREFIX)).toBe(true);
+    expect(unreadable.notes?.startsWith("collector parse failed: ")).toBe(true);
+    expect(unreadable.notes!.length).toBeGreaterThan(COLLECTOR_PARSE_FAILED_PREFIX.length);
+
+    const clock = new FakeClock();
+    const pending = analyzeImprovement(
+      job(),
+      deps(
+        backend(
+          (_input, _count, signal) =>
+            new Promise<TurnReport>((resolve) =>
+              signal.addEventListener("abort", () =>
+                resolve({ status: "failed", text: "", usage: { input: 0, output: 0 }, error: modelError({ code: "aborted", headline: "aborted", transient: false }) }),
+              { once: true }),
+            ),
+        ).value,
+        clock,
+      ),
+      new AbortController().signal,
+    );
+    clock.advance(1_000);
+    expect((await pending).notes).toBe(`${COLLECTOR_TIMED_OUT_PREFIX}1 seconds`);
+    expect(COLLECTOR_TIMED_OUT_PREFIX).toBe("collector timed out after ");
   });
 });
 

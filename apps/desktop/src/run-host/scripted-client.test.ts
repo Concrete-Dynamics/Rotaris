@@ -670,3 +670,36 @@ describe('withLatestHash: `@content_hash` takes the newest hash a tool result ca
     expect(withLatestHash({ hash: '@content_hash' }, [{ role: 'tool', content: [result('r1', 'none')] }])).toEqual({ hash: '@content_hash' });
   });
 });
+
+/*
+ * PD-LIBRARY-005 (OQ-285): `retrospective-proof` drives the two failed collectors the directive turns into the pass's failure
+ * warning — `crash`, a provider refusing the credential (REQ-LIBRARY-023's "collector crashed: <exc>"), and `garbage`, an answer
+ * that is no JSON on the first call and on the retry (REQ-LIBRARY-022's "collector parse failed: <err>").
+ */
+describe('scriptedClient — the improvement analyst\'s failed collectors (PD-LIBRARY-005)', () => {
+  afterEach(() => { vi.unstubAllEnvs(); });
+  const ANALYST = 'You are the retrospective improvement analyst for a software workspace.';
+  const answer = async (messages: readonly ChatMessage[]): Promise<{ failed: string | null; text: string }> => {
+    let text = '';
+    for await (const part of scriptedClient(new FakeClock(), () => undefined).stream(request(messages))) {
+      if (!part.ok) return { failed: `${part.error.code}:${part.error.headline}`, text };
+      if (part.value.kind === 'text') text += part.value.delta;
+    }
+    return { failed: null, text };
+  };
+
+  it('`crash` answers with the provider\'s 401, so the collector crashes', async () => {
+    vi.stubEnv('ROTARIS_IMPROVEMENT_SCRIPT', 'crash');
+    expect(await answer([text('system', ANALYST), text('user', 'analyse')])).toEqual({ failed: 'http:Unauthorized', text: '' });
+  });
+
+  it('`garbage` answers with text that is no JSON, on the retry as on the first call', async () => {
+    vi.stubEnv('ROTARIS_IMPROVEMENT_SCRIPT', 'garbage');
+    for (const user of ['analyse', 'analyse\n\nThe previous response failed parsing: x. Return corrected machine-readable JSON only.']) {
+      const reply = await answer([text('system', ANALYST), text('user', user)]);
+      expect(reply.failed).toBeNull();
+      expect(reply.text.length).toBeGreaterThan(0);
+      expect(() => JSON.parse(reply.text) as unknown).toThrow();
+    }
+  });
+});

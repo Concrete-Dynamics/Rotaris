@@ -2056,6 +2056,22 @@ after being specified and drawn by nothing since Part AF. And the configuration 
 `runtime.retrospective_timeout` (integer seconds, default 120, minimum 1). The evidence bounds are constants in
 `packages/engine/src/improvements/retrospective.ts`, not settings, on the same rule.
 
+**What a pass tells the person when it ends (REQ-LIBRARY-124, `PD-LIBRARY-002` (c), `PD-LIBRARY-005`).** Main chooses the notice
+from what the workspace service re-read, never from the run host's job. An artifact with proposals posts the success notice with
+"Review proposals". An empty artifact is read by the prefix of its `notes`, which the analyst writes from the three
+`COLLECTOR_*_PREFIX` constants in `@rotaris/contracts` (REQ-LIBRARY-022/023), through `emptyArtifactNotice`
+(`apps/desktop/src/main/improvement-notice.ts`):
+
+- `collector crashed: ` or `collector parse failed: ` is the pass's failure warning, with no action. Its detail gives the
+  reason and "<artifact id> holds no proposals.", and main writes a warning line to the application log (since 2026-10-14,
+  OQ-285).
+- `collector timed out after <t> seconds` is the info notice. Its detail names the limit, and for the post-run pass the control
+  that moves it (`PD-CONFIG-003` revision 2).
+- Anything else is the info notice with "Nothing was proposed in <id>.".
+
+A job that ended without an artifact posts the same warning title and detail through the coordinator's `failed`
+(`passFailureTitle`, `passFailureDetail`). A cancelled one posts nothing (REQ-LIBRARY-127).
+
 ## 9. What a surface does with a publication (ADR-0046, ADR-0045; Part Z)
 
 The run host publishes; this is the other end of the same numbered stream, in the renderer, and it is where the

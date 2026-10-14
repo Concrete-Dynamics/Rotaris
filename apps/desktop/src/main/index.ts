@@ -56,7 +56,7 @@ import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
 import { anotherMainWindowStays, confirmActiveRunClose } from './close-confirmation.js';
-import { zeroProposalDetail } from './improvement-notice.js';
+import { emptyArtifactNotice, passFailureDetail, passFailureTitle } from './improvement-notice.js';
 import { answerUnderHeldRefusal, cutRestoreNotice, storeRefusalNotice, storeRefusalOf, type StoreRefusal } from './store-notice.js'; // REQ-SESSION-202, OQ-266, OQ-281
 import { establishFlow as establishStoreFlow, restoreFlow as restoreStoreFlow, type StoreFlowDeps } from './store-resolution.js'; // OQ-281
 import { ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
@@ -1093,9 +1093,16 @@ async function main(): Promise<void> {
       const retrospective = record.artifact.source_kind === 'retrospective';
       const session = record.artifact.source_session_id ?? undefined;
       if (count === 0) {
-        // REQ-LIBRARY-124: zero proposals is an informational notice with NO action — there is nothing to review. PD-CONFIG-003
-        // revision 2 with REQ-NOTIFY-100: a post-run analysis that reached its limit says so in the detail (`zeroProposalDetail`).
-        raiseNotice('info', retrospective ? 'The retrospective found nothing to propose' : 'Improvement analysis complete — no proposals', zeroProposalDetail(record.artifact), undefined, session);
+        /*
+         * REQ-LIBRARY-124: zero proposals is an informational notice with NO action — there is nothing to review. PD-CONFIG-003
+         * revision 2 with REQ-NOTIFY-100: a post-run analysis that reached its limit says so in the detail. PD-LIBRARY-005
+         * (OQ-285): an empty artifact whose collector crashed or whose answer could not be parsed is the pass's failure warning,
+         * still with no action, its detail naming the reason and the artifact; the artifact is stored and the list re-read
+         * above as for any other, and the failure is also logged as a warning, as `failed`'s is (REQ-LIBRARY-035(b)).
+         */
+        const notice = emptyArtifactNotice(record.artifact, session);
+        if (notice.level === 'warning') log(`improvement analysis ${record.artifact.artifact_id} (${record.artifact.source_kind}) stored no proposals because its collector failed: ${record.artifact.notes ?? ''}`, 'warn');
+        raiseNotice(notice.level, notice.title, notice.detail, undefined, session);
         return;
       }
       raiseNotice(
@@ -1118,16 +1125,8 @@ async function main(): Promise<void> {
      * it names the history it read instead, on the same terms as the completion notice above.
      */
     failed: (job, reason) => {
-      const retrospective = job.pass === 'retrospective';
-      raiseNotice(
-        'warning',
-        retrospective ? 'The retrospective could not be completed' : 'The completed run could not be reviewed for improvements',
-        retrospective
-          ? `This workspace's own history was not reviewed: ${reason}.`
-          : `Session ${job.source_session_id} was not reviewed for improvements: ${reason}.`,
-        undefined,
-        job.source_session_id ?? undefined,
-      );
+      // The title and detail are the ones an empty artifact of a failed collector shares (PD-LIBRARY-005, `improvement-notice.ts`).
+      raiseNotice('warning', passFailureTitle(job.pass), passFailureDetail(job.pass, job.source_session_id, reason), undefined, job.source_session_id ?? undefined);
     },
     log,
   });

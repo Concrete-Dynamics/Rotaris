@@ -205,7 +205,11 @@ note that cites this one.
   (`relayed`), the three guard cases, and the commits case, which now expects the install line first. The NOTE "the long run's pendingLanes trap (D8)" with its
   commits, the high against React's 50, the holders and the re-rendered components stays.
 
-`pnpm update-depth-proof` asserts the install line was relayed too. Nothing in the product was changed.
+`pnpm update-depth-proof` asserts the install line was relayed too. Run once on this build under Xvfb on Linux (load 1.9 to 3.0,
+beside sibling builders): PASSED, the line `capture: renderer console: rotaris-lanes-trap: installed (:1)` at line 64 of
+`two-streams.log`, `relayed: true`, 1,925 commits, the run's high 3 against React's 50, the longest burst 2, 0 update-depth
+errors, the two streams overlapping 23.8 s. That shows the instrument and its relay working on the scripted provider; it is not
+the live run the closing rule asks for. Nothing in the product was changed.
 
 **What the orchestrator reads in the first guarded duress pack.**
 - the check "the long run's pendingLanes trap installed and its install line reached duress/app.log through the console relay

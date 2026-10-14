@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the readers are plain ESM beside the script that uses them.
-import { DIRECT_WORK_STATEMENT, SWARM_HEADING, attachReading, delegatesToReading, followUpReading, handoffReading, requestOf, swarmReading } from './delegation-readings.mjs';
+import { DIRECT_WORK_STATEMENT, HANDOFF_ARTIFACT_CAP, SWARM_HEADING, attachReading, handoffArtifact, delegatesToReading, followUpReading, handoffReading, requestOf, swarmReading } from './delegation-readings.mjs';
 
 const body = (system: string, user: string, tools: { name: string; description?: string }[]) => ({
   requestBody: JSON.stringify({ model: 'm', messages: [{ role: 'system', content: system }, { role: 'user', content: [{ type: 'text', text: user }] }], tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description ?? t.name, parameters: {} } })) }),
@@ -88,6 +88,13 @@ describe('attachReading (PD-TOOLS-006 revision 5)', () => {
 });
 
 describe('handoffReading (REQ-SESSION-115, PD-LIBRARY-003 (e))', () => {
+  it('reads a marker past the product\'s cut as cut, not absent, and reads the block only up to the next section', () => {
+    const head = 'Artifact: art_AbCdEfGh — r (child_report, completed, edited)\n';
+    const long = `${head}${'x'.repeat(HANDOFF_ARTIFACT_CAP - head.length - 3)}...\nTodo:\n- (empty)`;
+    expect(handoffReading(long, 'art_AbCdEfGh', 'M')).toMatchObject({ kind: 'carried', carriesMarker: false, cutBeforeMarker: true });
+    // A marker in a later section of the handoff is not the artifact's.
+    expect(handoffReading(`${head}body\nTodo:\n- M`, 'art_AbCdEfGh', 'M')).toMatchObject({ carriesMarker: false, cutBeforeMarker: false });
+  });
   it('credits the edited artifact marked edited, carrying the person\'s text and no frontmatter', () => {
     const user = 'Continue.\nArtifact: art_AbCdEfGh — exports-doc report (child_report, completed, edited)\n# exports-doc report\n\nLIVE-EDIT-MARKER\nTodo: …';
     expect(handoffReading(user, 'art_AbCdEfGh', 'LIVE-EDIT-MARKER')).toMatchObject({ kind: 'carried', carriesMarker: true, frontmatter: false });
@@ -98,5 +105,19 @@ describe('handoffReading (REQ-SESSION-115, PD-LIBRARY-003 (e))', () => {
     expect(handoffReading('Artifact: art_Zzzzzzzz — r (child_report, completed)', 'art_AbCdEfGh', 'M').kind).toBe('other-artifact');
     expect(handoffReading('', 'art_AbCdEfGh', 'M').kind).toBe('absent');
     expect(handoffReading('Artifact: art_AbCdEfGh — r (child_report, completed, edited)\n---\nid: "art_AbCdEfGh"\n---\nM', 'art_AbCdEfGh', 'M').frontmatter).toBe(true);
+  });
+});
+
+describe('handoffArtifact (latestArtifactText\'s choice, REQ-SESSION-115)', () => {
+  const a = (id: string, conversation_id: string | null, superseded_by: string | null = null) => ({ id, conversation_id, superseded_by });
+  const iterations = [{ opened_at: '2026-10-13T10:00:00.000Z', root_task_id: 'bg_root0001' }];
+  it('prefers the last artifact the latest iteration\'s root published over a later child\'s', () => {
+    const rows = [a('art_root', 'bg_root0001'), a('art_child', 'bg_child001')];
+    expect(handoffArtifact(rows, iterations, [])?.id).toBe('art_root');
+  });
+  it('takes the last unsuperseded artifact when the root published none, or a plan cycle opened after the iteration', () => {
+    expect(handoffArtifact([a('art_1', 'bg_child001'), a('art_2', 'bg_child002'), a('art_3', 'bg_child003', 'art_4')], iterations, [])?.id).toBe('art_2');
+    expect(handoffArtifact([a('art_root', 'bg_root0001'), a('art_child', 'bg_child001')], iterations, [{ opened_at: '2026-10-13T11:00:00.000Z' }])?.id).toBe('art_child');
+    expect(handoffArtifact([], iterations, [])).toBeNull();
   });
 });

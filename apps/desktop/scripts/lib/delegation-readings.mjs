@@ -142,18 +142,41 @@ export function attachReading(delegates, selections, children) {
  * The handoff a continued session's fresh root is given (REQ-SESSION-115, PD-LIBRARY-003 (e)): its first user message names
  * the edited artifact with its header marked `edited`, carries the person's `marker`, and no frontmatter line. `kind`:
  * `carried`, `unedited` (the artifact is there, not marked edited: a FAIL), `other-artifact` (another artifact is the latest:
- * a NOTE), `absent`.
+ * a NOTE), `absent`. `cutBeforeMarker`: the marker is absent because the block reached the product's cut before it — a NOTE,
+ * since the person's text then sits past what the handoff carries by design.
  * @param {string | null} firstUser
  * @param {string} artifactId
  * @param {string} marker
  */
+/**
+ * The artifact a continued session's handoff names, chosen as `latestArtifactText` (`packages/engine/src/sessions.ts`) chooses
+ * it: of the artifacts nothing superseded (rows in `created_at, id` order), the last one the latest iteration's root
+ * published — unless a plan cycle opened after that iteration, when there is no such root — and otherwise the last of all.
+ * `artifacts` rows carry `superseded_by` and `conversation_id`; `iterations` (by number) `opened_at` and `root_task_id`;
+ * `planCycles` (by cycle) `opened_at`.
+ */
+export function handoffArtifact(artifacts, iterations, planCycles) {
+  const open = artifacts.filter((a) => a.superseded_by === null || a.superseded_by === undefined);
+  const iteration = iterations.at(-1);
+  const cycle = planCycles.at(-1);
+  const root = cycle !== undefined && iteration !== undefined && cycle.opened_at > iteration.opened_at ? undefined : iteration?.root_task_id;
+  return open.findLast((a) => root !== undefined && a.conversation_id === root) ?? open.at(-1) ?? null;
+}
+
+/** `latestArtifactText`'s cut of the artifact's block (`packages/engine/src/sessions.ts`), marker included. */
+export const HANDOFF_ARTIFACT_CAP = 6_000;
 export function handoffReading(firstUser, artifactId, marker) {
   if (firstUser === null || firstUser === '') return { kind: 'absent', header: null };
   const header = new RegExp(`Artifact: ${artifactId} — [^\\n]*\\(([^)]*)\\)`).exec(firstUser);
   if (header === null) return { kind: /Artifact: art_/.test(firstUser) ? 'other-artifact' : 'absent', header: (/Artifact: [^\n]*/.exec(firstUser) ?? [null])[0] };
   const after = firstUser.slice(header.index);
   const edited = /, edited$/.test(header[1] ?? '');
-  const carriesMarker = after.slice(0, 6_200).includes(marker);
+  // The artifact's block runs to the handoff's next section (`Todo:`, `buildContinuationPayload`); the product cuts the block
+  // whole at HANDOFF_ARTIFACT_CAP with REQ-SESSION-194's marker, so a marker typed past the cut is absent by design.
+  const end = after.indexOf('\nTodo:');
+  const block = end < 0 ? after.slice(0, HANDOFF_ARTIFACT_CAP) : after.slice(0, end);
+  const carriesMarker = block.includes(marker);
+  const cutBeforeMarker = !carriesMarker && block.length >= HANDOFF_ARTIFACT_CAP && block.endsWith('...');
   const frontmatter = /^(?:id|slug|created_at|edited_at): "/m.test(after.slice(0, 1_500));
-  return { kind: edited ? 'carried' : 'unedited', header: header[0], carriesMarker, frontmatter };
+  return { kind: edited ? 'carried' : 'unedited', header: header[0], carriesMarker, cutBeforeMarker, frontmatter };
 }

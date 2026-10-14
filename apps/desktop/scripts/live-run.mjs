@@ -239,7 +239,7 @@ import { RENAME_FILES, RENAME_FROM, RENAME_TO, renameReading } from './lib/renam
 import { CLASSIFIER_MARK, ROOT_MARK, answerReading, planReading } from './lib/plan-open-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, summaryOpeningVerdicts, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
 import { ARTIFACTS_TAB } from './lib/library-refresh.mjs';
-import { attachReading, delegatesToReading, followUpReading, handoffReading, requestOf, swarmReading } from './lib/delegation-readings.mjs';
+import { HANDOFF_ARTIFACT_CAP, attachReading, delegatesToReading, followUpReading, handoffArtifact, handoffReading, requestOf, swarmReading } from './lib/delegation-readings.mjs';
 import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, STEADY_INTERVAL_MS, STEADY_TICKS, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pairNotReachedNote, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
@@ -2920,8 +2920,12 @@ if (wanted.includes('delegation')) {
     try {
       children = db.prepare('SELECT task_id, canonical_name, persona, state FROM children WHERE session_id = ? ORDER BY spawned_at, rowid').all(sid);
       timeline = db.prepare("SELECT name, metadata FROM timeline WHERE session_id = ? AND name IN ('child_resumed', 'context_selection') ORDER BY ordinal").all(sid).map((t) => ({ name: t.name, metadata: (() => { try { return JSON.parse(t.metadata); } catch { return {}; } })() }));
-      // The artifact the next run's handoff names: the latest the session holds that nothing superseded (`latestArtifactText`).
-      latest = db.prepare('SELECT id, key_findings, edited_at FROM artifacts WHERE session_id = ? AND superseded_by IS NULL ORDER BY created_at DESC, rowid DESC LIMIT 1').get(sid) ?? null;
+      // The artifact the next run's handoff names, chosen as `latestArtifactText` chooses it (`handoffArtifact`): the last the
+      // latest iteration's root published, else the last that nothing superseded.
+      latest = handoffArtifact(
+        db.prepare('SELECT id, key_findings, edited_at, superseded_by, conversation_id FROM artifacts WHERE session_id = ? ORDER BY created_at, id').all(sid),
+        db.prepare('SELECT opened_at, root_task_id FROM iterations WHERE session_id = ? ORDER BY iteration').all(sid),
+        db.prepare('SELECT opened_at FROM plan_cycles WHERE session_id = ? ORDER BY cycle').all(sid));
     } finally { db.close(); }
   }
   const rootRequests = readTraffic('delegation').filter((r) => String(r.path ?? '').includes('/chat/completions')).map(requestOf).filter((r) => r !== null && /^You are the orchestrator/.test(r.system));
@@ -2978,6 +2982,7 @@ if (wanted.includes('delegation')) {
       const first = readTraffic('delegation-edit').filter((r) => String(r.path ?? '').includes('/chat/completions')).map(requestOf).find((r) => r !== null && /^You are the orchestrator/.test(r.system)) ?? null;
       const handoff = handoffReading(first?.firstUser ?? null, latest.id, MARKER);
       if (handoff.kind === 'absent' || handoff.kind === 'other-artifact') noted('the continued run\'s first root request did not name the edited artifact', `${handoff.kind}: ${handoff.header ?? 'no artifact line'}`);
+      else if (handoff.kind === 'carried' && handoff.cutBeforeMarker) noted('the edited document reached the handoff\'s cut before the person\'s text, so whether the text is carried is unasked', `${handoff.header}; the block is cut at ${HANDOFF_ARTIFACT_CAP} characters (REQ-SESSION-194)`);
       else check(handoff.kind === 'carried' && handoff.carriesMarker && !handoff.frontmatter, "the continued run's handoff carried the edited document, marked edited, the person's text in it and no frontmatter (PD-LIBRARY-003 (e), REQ-SESSION-115)", `${handoff.header}; marker ${handoff.carriesMarker ? 'present' : 'absent'}; frontmatter ${handoff.frontmatter ? 'present' : 'absent'}`);
     }
     const editRead = readSession();

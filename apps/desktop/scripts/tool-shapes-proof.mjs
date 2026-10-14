@@ -145,10 +145,14 @@ writeFileSync(join(workspace, INFERRED), 'kept\n');
 const again = await launch('inferred-existing', 'writeinfer,answer', { permission_mode: 'autonomous' });
 const refused = only(again, 'write_file');
 if (refused.status === 'ok' || !refused.isError) throw new Error(`inferred-existing: a write with no operation over an existing file settled ${refused.status}:\n${refused.result}`);
-if (!/exists/i.test(refused.result)) throw new Error(`inferred-existing: the refusal does not say the file exists:\n${refused.result}`);
-// REQ-SESSION-136 (live-run finding a71-6): a call the tool gate refused as invalid_request files a tool_error issue referencing it.
+// PD-TOOLS-007's own sentence, not any mention of "exists".
+const EXISTS_SENTENCE = `${INFERRED} already exists, so the call was not read as a create; name 'overwrite' or 'edit'.`;
+if (!refused.result.includes(EXISTS_SENTENCE)) throw new Error(`inferred-existing: the refusal does not carry PD-TOOLS-007's sentence "${EXISTS_SENTENCE}":\n${refused.result}`);
+// REQ-TOOLS-032: a call that does not match its schema is refused as invalid_request — and REQ-SESSION-136 (live-run finding
+// a71-6): a call the tool gate refused as invalid_request files a tool_error issue referencing it.
+if (refused.failureKind !== 'invalid_request') throw new Error(`inferred-existing: the refusal's failure kind is ${JSON.stringify(refused.failureKind)}, not invalid_request`);
 const filed = again.issues.filter((i) => i.kind === 'tool_error' && i.evidence_ref === `tool_call_evidence#${refused.callId}`);
-if (refused.failureKind === 'invalid_request' && filed.length !== 1) throw new Error(`inferred-existing: the invalid_request refusal filed no tool_error issue referencing it (REQ-SESSION-136): ${JSON.stringify(again.issues)}`);
+if (filed.length !== 1) throw new Error(`inferred-existing: the invalid_request refusal filed no tool_error issue referencing it (REQ-SESSION-136): ${JSON.stringify(again.issues)}`);
 const kept = readFileSync(join(workspace, INFERRED), 'utf8');
 if (kept !== 'kept\n') throw new Error(`inferred-existing: ${INFERRED} was changed to ${JSON.stringify(kept)}`);
 results.inferredExisting = { status: refused.status, failureKind: refused.failureKind, toolErrorIssues: filed.length, result: refused.result.split('\n')[0].slice(0, 200), content: kept };

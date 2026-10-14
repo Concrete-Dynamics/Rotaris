@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**The Tier B handover refuses a live state the load's schema rejects (fin46, `fin46-accept1-17`; REQ-CONFIG-111, REQ-CONFIG-478).**
+`03-runtime-view.md`'s Tier B paragraph says `config.liveState` is checked with `liveStateProblems` before the run host installs
+it, and a refused state leaves the one held before; the unchecked handover it had is kept beside it. No package, edge or process
+changed. The README's date stays 2026-10-15, the later.
+
 **A merged-document fault follows the merge to the file that replaced it (fin46, `fin46-accept1-17`; REQ-CONFIG-478).**
 `03-runtime-view.md`'s fatal-report paragraph says `statingFile` now gives a fault beneath a value a later scope file replaced
 wholesale (`replacedPrefixLength`) to that file, not to an earlier file stating the deeper path; the longest-prefix rule it

@@ -1994,7 +1994,12 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
 - **Tier B** — at every run start the run host loads the files — layer 3, the discovery snapshot, folded first
   (REQ-CONFIG-034: an authenticated provider's models as entries keyed by qualified id with `auth_provider`, and its
   slot picks) — and overlays the screen's live state (`config.liveState`, handed over on every pending change), then
-  runs the loader's own passes; the run's `RunConfig`, runtime posture, persona resolver, model references, entry
+  runs the loader's own passes; **since 2026-10-14 (fin46) the handover applies the load's schema first (REQ-CONFIG-111,
+  `liveStateProblems` in `packages/config/src/tiers.ts`): a state holding a value the load would reject is refused
+  (`config.live-state-invalid`, the run host's warn line naming each path) and the state held before stays, so the passes
+  never meet an overlay value at fault and never name a scope file for one** — until then the state was installed
+  unchecked, and a live `max_depth: 0` was refused at run start in the name of a scope file that held another value
+  (`docs/defects/fixed/a-live-setting-the-load-schema-rejects-is-reported-in-a-scope-file-that-does-not-hold-it.md`); the run's `RunConfig`, runtime posture, persona resolver, model references, entry
   tier, providers to lease and message limit come from that. Initial starts capture this once before
   credential preparation and pass the completed setup into `Sessions.start`. The authorized board grant
   is a separate per-launch input carrying both fields required by REQ-TRACE-470. The runtime keys the live state lays

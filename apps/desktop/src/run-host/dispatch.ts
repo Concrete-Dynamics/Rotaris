@@ -7,7 +7,7 @@ import { clearHooksDecision, decideHooks, hooksSummaryFor, setHookToggle } from 
 import { REFS_ASK_BOUND } from './checkpoints.js';
 import { configurationForExecutionRoot, type McpHost } from './mcp.js';
 import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessionFiles } from './session-actions.js';
-import { CHECKPOINTS_DEFAULTS, type LiveState } from '@rotaris/config';
+import { CHECKPOINTS_DEFAULTS, liveStateProblems, type LiveState } from '@rotaris/config';
 import { improvementCollectorOf, retrospectiveOf } from './configuration.js';
 import { launchSession } from './launch.js';
 import { SKILLS_CONFIGURATION_UNLOADED, SkillsUnloaded, writeSkillListing, type SkillHost } from './skills.js'; // REQ-CHAT-162, OQ-279
@@ -174,8 +174,17 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return { kind: 'circuit_breaker.status', enabled: (run?.cfg.circuitBreaker.enabled ?? false) && process.env['ROTARIS_CIRCUIT_BREAKER'] !== 'off' };
     }
     case 'config.liveState': {
-      // ADR-0037 Tier B: main hands over the settings store's current values; the next run start reads them.
-      h.liveState = req.state as LiveState;
+      // ADR-0037 Tier B: main hands over the settings store's current values; the next run start reads them. REQ-CONFIG-111:
+      // a value the load's schema rejects is refused at the handover and the state held before stays, so the run start never
+      // meets it in a scope file's name (docs/defects/fixed/a-live-setting-the-load-schema-rejects-is-reported-in-a-scope-file-that-does-not-hold-it.md).
+      const state = req.state as LiveState;
+      const problems = liveStateProblems(state);
+      if (problems.length > 0) {
+        const detail = problems.map((p) => `${p.path}: ${p.message}`).join('; ');
+        log(`config: the live settings were refused, the ones held before stay — ${detail}`, 'warn');
+        return { kind: 'refused', code: 'config.live-state-invalid', headline: 'The live settings were refused', detail };
+      }
+      h.liveState = state;
       return { kind: 'ack' };
     }
     case 'session.list': {

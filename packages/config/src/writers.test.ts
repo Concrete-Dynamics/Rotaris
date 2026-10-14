@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { bootstrapConfigFile, saveDesktop, starterDocument, writeConfigFields, writeModelPreferences, writeVerifierSection } from './writers.js';
 import { loadConfiguration } from './load.js';
-import { overlayLiveState, TIER_B_RUNTIME_KEYS } from './tiers.js';
+import { liveStateProblems, overlayLiveState, TIER_B_RUNTIME_KEYS } from './tiers.js';
 import { DESKTOP_SAVE_RUNTIME_KEYS } from '@rotaris/contracts';
 import { rolePreferences, slotPreferences, followRawSlot } from './preferences.js';
 
@@ -409,6 +409,41 @@ describe('ADR-0037 Tier B — the live state over the merged document, resolved 
     const live = overlayLiveState(loaded.value, { runtime: { child_timeout: 2700 } });
     expect(live.ok && live.value.runtime.child_timeout).toBe(2700);
     expect(loaded.value.runtime.child_timeout).toBe(1200);
+  });
+
+  /**
+   * REQ-CONFIG-111 at the Tier B handover: the run host refuses a live state the load's schema rejects, so `resolveMerged`
+   * never meets an overlay value at fault and never names a scope file for it
+   * (docs/defects/fixed/a-live-setting-the-load-schema-rejects-is-reported-in-a-scope-file-that-does-not-hold-it.md).
+   */
+  it('REQ-CONFIG-111: liveStateProblems is the load\'s schema over each value the overlay lays on, by the loader\'s path', () => {
+    expect(liveStateProblems({})).toEqual([]);
+    expect(liveStateProblems({ slots: { large_model: 'fast', small_model: null }, slotThinking: { large_model: 'high' }, entryRole: 'planner', sessionModel: null, sessionThinking: 'provider_default', delegationStrategy: 'swarm', runtime: { max_depth: 3, permission_mode: 'autonomous', keep_going: true, sandbox_mode: 'nonsense' } as never, circuitBreakerEnabled: true, compressorThresholdPercentage: 95 })).toEqual([]);
+    const paths = (live: unknown) => liveStateProblems(live as never).map((p) => p.path);
+    expect(paths({ runtime: { max_depth: 0 } })).toEqual(['runtime.max_depth']);
+    expect(paths({ runtime: { permission_mode: 'sudo' } })).toEqual(['runtime.permission_mode']);
+    expect(paths({ compressorThresholdPercentage: 0 })).toEqual(['compressor.threshold_percentage']);
+    expect(paths({ compressorThresholdPercentage: 101 })).toEqual(['compressor.threshold_percentage']);
+    expect(paths({ circuitBreakerEnabled: 'yes' })).toEqual(['circuit_breaker.enabled']);
+    expect(paths({ slots: { large_model: 5 }, slotThinking: { small_model: 'extreme' } })).toEqual(['small_model_thinking', 'large_model']);
+    expect(paths({ delegationStrategy: 'mob', sessionThinking: 'turbo' })).toEqual(['personas.<entry role>.thinking', 'rotaris.delegation_strategy']);
+    expect(liveStateProblems({ runtime: { max_depth: 0 } })[0]?.message).toBe('must be at least 1, got 0');
+  });
+
+  it('a live state liveStateProblems passes overlays with no fault, and one it refuses is the one that faulted in a file\'s name', () => {
+    const s = scope();
+    writeFileSync(s.gFile, 'runtime:\n  max_depth: 4\n');
+    const loaded = loadConfiguration({ globalDir: s.globalDir, workspaceRoot: s.workspaceRoot, keepIgnored: false });
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const accepted = { runtime: { max_depth: 2 }, compressorThresholdPercentage: 50 };
+    expect(liveStateProblems(accepted)).toEqual([]);
+    expect(overlayLiveState(loaded.value, accepted).ok).toBe(true);
+    // The overlay itself still runs the loader's passes and still names the files: what keeps this from the run start is the handover's refusal.
+    const refused = { runtime: { max_depth: 0 } };
+    expect(liveStateProblems(refused)).not.toEqual([]);
+    const faulted = overlayLiveState(loaded.value, refused);
+    expect(!faulted.ok && faulted.error).toMatchObject({ path: 'runtime.max_depth', file: s.gFile });
   });
 });
 

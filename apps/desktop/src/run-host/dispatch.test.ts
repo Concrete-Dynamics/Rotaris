@@ -373,3 +373,29 @@ describe('the restore\'s controls acknowledge a workspace the run host holds no 
     expect((host as unknown as { stores: Map<string, unknown> }).stores.size).toBe(0);
   });
 });
+
+/**
+ * REQ-CONFIG-111 at ADR-0037's Tier B handover: a live state the load's schema rejects is refused and the state held before
+ * stays, so the next run start never meets the value in a scope file's name
+ * (docs/defects/fixed/a-live-setting-the-load-schema-rejects-is-reported-in-a-scope-file-that-does-not-hold-it.md).
+ */
+describe('config.liveState installs only a live state the load\'s schema accepts (REQ-CONFIG-111, REQ-CONFIG-478)', () => {
+  const hostFor = (lines: string[]) => ({ log: (m: string) => { lines.push(m); }, liveState: { runtime: { max_depth: 3 } } }) as unknown as RunHost & { liveState: unknown };
+
+  it('acknowledges a valid state and installs it', async () => {
+    const lines: string[] = [];
+    const host = hostFor(lines);
+    expect(await dispatch({ kind: 'config.liveState', state: { runtime: { max_depth: 5 }, compressorThresholdPercentage: 70 } }, host)).toEqual({ kind: 'ack' });
+    expect(host.liveState).toEqual({ runtime: { max_depth: 5 }, compressorThresholdPercentage: 70 });
+    expect(lines).toEqual([]);
+  });
+
+  it('refuses a state with a value the load would reject, naming it, and keeps the state it held', async () => {
+    const lines: string[] = [];
+    const host = hostFor(lines);
+    const r = await dispatch({ kind: 'config.liveState', state: { runtime: { max_depth: 0 }, compressorThresholdPercentage: 0 } }, host);
+    expect(r).toEqual({ kind: 'refused', code: 'config.live-state-invalid', headline: 'The live settings were refused', detail: 'runtime.max_depth: must be at least 1, got 0; compressor.threshold_percentage: must be at least 1, got 0' });
+    expect(host.liveState).toEqual({ runtime: { max_depth: 3 } });
+    expect(lines).toEqual([expect.stringContaining('config: the live settings were refused, the ones held before stay — runtime.max_depth: must be at least 1, got 0')]);
+  });
+});

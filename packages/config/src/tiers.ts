@@ -1,8 +1,11 @@
 import type { Result } from '@rotaris/kernel';
 import { clonePlain, isPlainMap, type PlainMap } from './merge.js';
-import { MODEL_SLOTS, thinkingKeyOf, type ModelSlot, type ReasoningLevel, type RoleReasoning } from './keys.js';
-import { resolveMerged, type DelegationStrategy, type LoadedConfiguration } from './load.js';
-import type { RuntimeSection } from './sections/runtime.js';
+import { MODEL_SLOTS, REASONING_LEVELS, ROLE_REASONING_LEVELS, thinkingKeyOf, type ModelSlot, type ReasoningLevel, type RoleReasoning } from './keys.js';
+import { DELEGATION_STRATEGIES, resolveMerged, type DelegationStrategy, type LoadedConfiguration } from './load.js';
+import { validateRuntimeField, type RuntimeSection } from './sections/runtime.js';
+import { readCompressorSection } from './sections/compressor.js';
+import { readCircuitBreakerSection } from './circuit-breaker-section.js';
+import { typeName, type Problem, type ProblemSink } from './sections/field.js';
 import type { FatalLoadReport } from './validate.js';
 
 /**
@@ -37,6 +40,41 @@ export interface LiveState {
   readonly runtime?: Partial<Pick<RuntimeSection, TierBRuntimeKey>>;
   readonly circuitBreakerEnabled?: boolean;
   readonly compressorThresholdPercentage?: number;
+}
+
+/**
+ * REQ-CONFIG-111 applied to Tier B: the load's own schema over each value `overlayLiveState` would lay on the merged
+ * document, by the dotted path the loader would report it at. The run host refuses a `config.liveState` that has any
+ * (`dispatch.ts`) and keeps the state it held, so no value reaches `resolveMerged` below that the load would reject: a
+ * fault there is the files', and `statingFile` can only name a file. Until 2026-10-14 the handover installed the state
+ * unchecked, and a live `max_depth: 0` was refused at run start in the name of a scope file that held 4
+ * (docs/defects/fixed/a-live-setting-the-load-schema-rejects-is-reported-in-a-scope-file-that-does-not-hold-it.md).
+ * A runtime key outside Tier B is not overlaid, so it is not checked; a slot's empty string leaves the file's value.
+ */
+export function liveStateProblems(live: LiveState): readonly Problem[] {
+  const problems: Problem[] = [];
+  const sink: ProblemSink = { errors: problems, warnings: [] };
+  const oneOf = (path: string, value: unknown, accepted: readonly string[], nullable: boolean): void => {
+    if (value === undefined || (nullable && value === null)) return;
+    if (typeof value === 'string' && accepted.includes(value)) return;
+    problems.push({ path, message: `'${typeof value === 'string' ? value : typeName(value)}' is not an accepted value; expected one of: ${accepted.join(', ')}` });
+  };
+  for (const slot of MODEL_SLOTS) {
+    const model = live.slots?.[slot];
+    if (model !== undefined && model !== null && typeof model !== 'string') problems.push({ path: slot, message: `must be a string or null, got ${typeName(model)}` });
+    oneOf(thinkingKeyOf(slot), live.slotThinking?.[slot], REASONING_LEVELS, true);
+  }
+  if (live.entryRole !== undefined && typeof live.entryRole !== 'string') problems.push({ path: 'default_persona', message: `must be a string, got ${typeName(live.entryRole)}` });
+  if (live.sessionModel !== undefined && live.sessionModel !== null && typeof live.sessionModel !== 'string') problems.push({ path: 'personas.<entry role>.model', message: `must be a string, got ${typeName(live.sessionModel)}` });
+  oneOf('personas.<entry role>.thinking', live.sessionThinking, ROLE_REASONING_LEVELS, true);
+  oneOf('rotaris.delegation_strategy', live.delegationStrategy, DELEGATION_STRATEGIES, false);
+  for (const key of TIER_B_RUNTIME_KEYS) {
+    const value = live.runtime?.[key];
+    if (value !== undefined) problems.push(...validateRuntimeField(key, value));
+  }
+  if (live.circuitBreakerEnabled !== undefined) readCircuitBreakerSection({ enabled: live.circuitBreakerEnabled }, sink);
+  if (live.compressorThresholdPercentage !== undefined) readCompressorSection({ threshold_percentage: live.compressorThresholdPercentage }, sink);
+  return problems;
 }
 
 export function overlayLiveState(config: LoadedConfiguration, live: LiveState): Result<LoadedConfiguration, FatalLoadReport> {
@@ -88,6 +126,10 @@ export function overlayLiveState(config: LoadedConfiguration, live: LiveState): 
     top['compressor'] = c;
   }
 
+  // The load's `raw` scope documents go with the overlaid document, so a fault the passes find names the scope file that
+  // stated it (REQ-CONFIG-478, `statingFile`). A fault on a value the overlay supplied would be named the same way, in a
+  // file that does not hold it; none reaches here from the product, since the run host installs only a live state
+  // `liveStateProblems` passes (REQ-CONFIG-111). A caller that skips that check gets the files' attribution.
   return resolveMerged(top, {
     workspaceRoot: config.workspaceRoot, hooks: config.hooks, files: config.files, raw: config.raw,
     delegationStrategy: live.delegationStrategy ?? config.delegationStrategy, loadMs: config.loadMs, authenticatedProviders: config.authenticatedProviders, discoveredSlots: config.discoveredSlots,

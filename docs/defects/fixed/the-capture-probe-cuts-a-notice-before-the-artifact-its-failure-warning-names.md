@@ -54,3 +54,4 @@ its own `--only=ask` live run (pack `2026-10-14T18-49-03-495Z`; the analyst's an
 `proposals[0].proposed_verifier_section`, and the probe stopped inside that error) and recorded it as
 `docs/defects/the-ask-notice-check-reads-a-probe-cut-before-a-parse-failed-warning-names-its-artifact.md`. That note described
 this defect, so its reviewer folded it into this one when the bundle was rebased onto the repair, and removed it.
+<!-- historical-path: docs/defects/the-ask-notice-check-reads-a-probe-cut-before-a-parse-failed-warning-names-its-artifact.md -->

@@ -7272,8 +7272,8 @@ the frontmatter shown read-only, and a save writing the record's frontmatter.
 > a document whose block an earlier edit broke, in the built app (the unit cases carry it). **Found along the way:** the editor is
 > drawn in the body's face, not the monospace one REQ-LIBRARY-132 asks for, because the adopted `textarea.input` rule outranks
 > the inspector's class
-> ([`the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face`](../defects/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md),
-> recorded, not repaired). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+> ([`the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face`](../defects/fixed/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md),
+> recorded, not repaired; repaired 2026-10-14 by fin44). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 
 ---

@@ -1835,8 +1835,14 @@
   .library-proposals__facts, .library-proposals__history { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* REQ-LIBRARY-131: modeless, 720x560, several open at once — the stack sits above the view and never blocks it. */
-.artifact-inspector { position: fixed; right: var(--rt-space-4, 16px); bottom: var(--rt-space-4, 16px); width: 720px; height: 560px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); display: flex; flex-direction: column; background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 8px); box-shadow: var(--rt-shadow-lg); z-index: 40; overflow: hidden; }
+/* REQ-LIBRARY-131: modeless, 720x560, several open at once — the stack sits above the view and never blocks it. It stands
+   centred in its window, as the design language's dialogs do (`.dialog-backdrop`, `place-items: center`), not at the
+   bottom-right corner REQ-NOTIFY-012 gives the acknowledgement stack: anchored there with the stack's own insets, an
+   acknowledgement's close control (which takes the pointer, REQ-NOTIFY-020) stood over Save's top-right corner, and a press
+   there closed the acknowledgement (docs/defects/fixed/an-acknowledgements-close-control-still-covers-a-corner-of-the-artifact-inspectors-save.md).
+   A window narrower than the dialog and its gutters gives up the width, and the gutter (`--rt-space-12` a side) keeps Save
+   left of the close control's column at every width down to a persona window's 560 px minimum. */
+.artifact-inspector { position: fixed; inset: 0; margin: auto; width: 720px; height: 560px; max-width: calc(100vw - 2 * var(--rt-space-12)); max-height: calc(100vh - 32px); display: flex; flex-direction: column; background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 8px); box-shadow: var(--rt-shadow-lg); z-index: 40; overflow: hidden; }
 .artifact-inspector:focus { outline: 2px solid var(--rt-focus); outline-offset: -2px; }
 .artifact-inspector__head { display: grid; grid-template-columns: 1fr auto; grid-template-areas: 'title close' 'meta close'; gap: 2px var(--rt-space-2, 8px); padding: var(--rt-space-3, 12px) var(--rt-space-4, 16px); border-bottom: 1px solid var(--rt-divider); }
 .artifact-inspector__title { grid-area: title; margin: 0; font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-size: var(--rt-text-lg, 16px); }
@@ -1845,8 +1851,14 @@
 .artifact-inspector__tabs { display: flex; gap: var(--rt-space-1, 4px); padding: 0 var(--rt-space-4, 16px); border-bottom: 1px solid var(--rt-divider); }
 .artifact-inspector__tabs .tab { background: none; border-top: 0; border-left: 0; border-right: 0; }
 .artifact-inspector__body { flex: 1; min-height: 0; overflow: auto; padding: var(--rt-space-3, 12px) var(--rt-space-4, 16px); }
-/* REQ-LIBRARY-132: a MEASURED monospace face, so tables and fenced blocks stay aligned while typing. */
-.artifact-inspector__editor { width: 100%; height: 100%; box-sizing: border-box; resize: none; font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); font-size: var(--rt-text-xs, 12px); line-height: var(--rt-leading-body, 1.5); tab-size: 2; }
+/* REQ-LIBRARY-132: a MEASURED monospace face, so tables and fenced blocks stay aligned while typing. The editor is a
+   `textarea.input`, and the adopted `textarea.input { resize: vertical; font-family: inherit }`
+   (`docs/design/system/components.css`, specificity 0,1,1) outranks a single class (0,1,0): written as
+   `.artifact-inspector__editor` alone, as `.mono` is, the face and the grip below lost to it and the editor drew in the
+   dialog's proportional face with a vertical resize grip
+   (docs/defects/fixed/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md). Two classes (0,2,0)
+   outrank it. */
+.artifact-inspector .artifact-inspector__editor { width: 100%; height: 100%; box-sizing: border-box; resize: none; font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); font-size: var(--rt-text-xs, 12px); line-height: var(--rt-leading-body, 1.5); tab-size: 2; }
 /* PD-LIBRARY-003 revision 2 (f): the Markdown tab stacks the record's frontmatter, read-only and bounded, above the editor,
    which takes the rest of the body; the block scrolls on its own past its bound. */
 .artifact-inspector__body--markdown { display: flex; flex-direction: column; gap: var(--rt-space-2); overflow: hidden; }

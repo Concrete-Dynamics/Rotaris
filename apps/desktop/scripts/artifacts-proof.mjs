@@ -23,9 +23,11 @@
  *   4. inspector — the inspector opens on the selected row, its Preview starts below the frontmatter
  *                  (PD-LIBRARY-003; captured as `inspector-preview.png`), a link in it is pressed and requests its
  *                  open through `shell.openExternal` (ADR-0051 decision 4), the Markdown tab is edited and saved WHILE the
- *                  acknowledgement that open raised stands over the footer (REQ-NOTIFY-020: it takes no pointer but at its
- *                  close control), the table's status cell gains ` · edited`, and opening the same id again RE-RAISES the
- *                  one dialog (REQ-LIBRARY-131/132/133).
+ *                  acknowledgement that open raised is showing, its close control (the one part of it that takes the
+ *                  pointer, REQ-NOTIFY-020) clear of Save since fin44 centred the inspector; the editor is read in the
+ *                  monospace face the read-only block above it uses, with no resize grip (REQ-LIBRARY-132); the table's
+ *                  status cell gains ` · edited`, and opening the same id again RE-RAISES the one dialog
+ *                  (REQ-LIBRARY-131/132/133).
  *   5. missing   — the body file is deleted underneath a stored session; on a relaunch that resumes it the
  *                  record is still listed and the inspector reports the failure (REQ-LIBRARY-091, 134). Before
  *                  that, the reopened session AT REST shows the run-level agent's declared tools standing in, marked
@@ -63,6 +65,7 @@ import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { unpressedClicks } from './lib/capture-clicks.mjs';
+import { parseEvals, readEval } from './lib/capture-evals.mjs';
 import { ARTIFACTS_TAB, PUBLISH_SCHEDULE, emptyBeforePublish } from './lib/library-refresh.mjs';
 
 const require = createRequire(import.meta.url);
@@ -177,6 +180,8 @@ const PROBE_ROWS = 'tr[data-artifact-id]';
 // Launch 4's Preview link (ADR-0051 decision 4): the URL the scripted body carries, and its control in the Preview.
 const PREVIEW_LINK = 'https://example.com/reference';
 const PREVIEW_LINK_BUTTON = `[data-testid="artifact-preview"] [data-href="${PREVIEW_LINK}"]`;
+// REQ-LIBRARY-132: the editor's computed face, size and resize, and the read-only frontmatter block's face beside it.
+const EDITOR_FACE = "(() => { const e = document.querySelector('[data-testid=\"artifact-editor\"]'); const b = document.querySelector('.artifact-inspector__frontmatter'); if (!e) return { editor: null }; const c = getComputedStyle(e); return { editor: { fontFamily: c.fontFamily, fontSize: c.fontSize, resize: c.resize }, block: b ? getComputedStyle(b).fontFamily : null }; })()";
 // The Library opens on its FIRST tab (REQ-LIBRARY-103's order), so every launch below picks the Artifacts tab
 // after the view switch (`ARTIFACTS_TAB`, from `lib/library-refresh.mjs`). Before the merge this proof drove a Library
 // that held only this tab and needed no click.
@@ -417,9 +422,10 @@ let edited = null;
     ROTARIS_SCRIPT_ARTIFACT_ARGS: JSON.stringify({ artifact_write: { slug: 'scripted-plan', title: 'The scripted plan', body: `The first line of the scripted body.\n\nA second paragraph with \`code\` and **bold**, and [the reference](${PREVIEW_LINK}).`, tags: ['research'] } }),
     // A link the Preview opens goes through `shell.openExternal`, whose capture seam records it rather than starting a browser.
     ROTARIS_CAPTURE_OPEN_EXTERNAL: 'record',
-    // The modeless inspector is 720x560 at the bottom-right (REQ-LIBRARY-131); the window is widened so the
-    // tab's own controls stay reachable beside it rather than under it — the proof drives real clicks at real
-    // coordinates, so an overlap would be measuring the window's size instead of the requirement.
+    // The modeless inspector is 720x560 (REQ-LIBRARY-131), centred in the window since fin44 (it stood at the bottom-right
+    // until then); the window is widened so the tab's own controls stay reachable beside it rather than under it — the
+    // proof drives real clicks at real coordinates, so an overlap would be measuring the window's size instead of the
+    // requirement.
     ROTARIS_CAPTURE_RESIZE: '1360x980@500',
     ROTARIS_CAPTURE_VIEWS: '6@11000',
     ROTARIS_CAPTURE_CLICKS: [
@@ -438,6 +444,8 @@ let edited = null;
     ].join(';;'),
     // Where the acknowledgement, its close control and Save stand just before the press on Save.
     ROTARIS_CAPTURE_INSPECT_AT: ['[data-testid="acknowledgement"]@16900', '.ack__close@16900', '[data-testid="artifact-save"]@16900'].join(';;'),
+    // REQ-LIBRARY-132: the face, the size and the resize the editor is drawn with, beside the read-only block's face.
+    ROTARIS_CAPTURE_EVAL_AT: `${EDITOR_FACE}@16900`,
     ROTARIS_CAPTURE_TYPE_AT: 'EDITED@16000',
     // PD-LIBRARY-003 (f): the Preview as drawn, before the Markdown tab is taken at 14500 (the end-of-launch capture shows
     // the Markdown tab and the saved edit).
@@ -480,16 +488,31 @@ let edited = null;
   if (dirty !== 'yes') throw new Error(`the editor did not take the typed characters (dirty=${dirty})`);
   if (status !== 'Saved.') throw new Error(`the footer did not read "Saved.": ${status}`);
   // REQ-NOTIFY-020 (docs/defects/fixed/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md): the
-  // acknowledgement stood over the footer when Save was pressed, and the press reached Save.
+  // acknowledgement is showing when Save is pressed, and the press reached Save. Until fin44 the inspector stood at the
+  // window's bottom-right corner, under the stack, and the press went through the acknowledgement's text; its close control
+  // still stood over Save's top-right corner, 1319,916 (12x17) over 1270,923 (57x32)
+  // (docs/defects/fixed/an-acknowledgements-close-control-still-covers-a-corner-of-the-artifact-inspectors-save.md). Centred,
+  // the inspector keeps Save clear of the close control entirely, which is what is held here.
   const ackAt = inspectedAt(r.log, '[data-testid="acknowledgement"]', 16900);
   const ackCloseAt = inspectedAt(r.log, '.ack__close', 16900);
   const saveAt = inspectedAt(r.log, '[data-testid="artifact-save"]', 16900);
   const overlaps = (a, b) => a && b && a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
   const saveCentre = saveAt[0] ? { x: saveAt[0].rect.x + saveAt[0].rect.width / 2, y: saveAt[0].rect.y + saveAt[0].rect.height / 2 } : null;
   const inside = (p, r0) => p && r0 && p.x >= r0.x && p.x <= r0.x + r0.width && p.y >= r0.y && p.y <= r0.y + r0.height;
-  if (ackAt.length !== 1 || !/Opened in your browser/.test(ackAt[0].text) || !overlaps(ackAt[0].rect, saveAt[0]?.rect)) throw new Error(`the acknowledgement did not stand over Save when it was pressed, so the press under it was not measured: ${JSON.stringify({ ack: ackAt.map((m) => [m.rect, m.text]), save: saveAt.map((m) => m.rect) })}`);
-  if (inside(saveCentre, ackCloseAt[0]?.rect)) throw new Error(`the acknowledgement's close control stands over Save's centre: ${JSON.stringify({ close: ackCloseAt[0]?.rect, save: saveAt[0]?.rect })}`);
-  results.ackOverSave = { ack: ackAt[0].rect, close: ackCloseAt[0]?.rect ?? null, save: saveAt[0].rect, closeOverlapsSave: Boolean(overlaps(ackCloseAt[0]?.rect, saveAt[0]?.rect)), saved: true };
+  if (ackAt.length !== 1 || !/Opened in your browser/.test(ackAt[0].text) || saveAt.length !== 1) throw new Error(`the acknowledgement was not showing when Save was pressed, so the press beside it was not measured: ${JSON.stringify({ ack: ackAt.map((m) => [m.rect, m.text]), save: saveAt.map((m) => m.rect) })}`);
+  if (ackCloseAt.length !== 1) throw new Error(`the acknowledgement's close control was not found: ${JSON.stringify(ackCloseAt)}`);
+  if (inside(saveCentre, ackCloseAt[0].rect)) throw new Error(`the acknowledgement's close control stands over Save's centre: ${JSON.stringify({ close: ackCloseAt[0].rect, save: saveAt[0].rect })}`);
+  if (overlaps(ackCloseAt[0].rect, saveAt[0].rect)) throw new Error(`the acknowledgement's close control stands over part of Save, where a press closes the acknowledgement instead: ${JSON.stringify({ close: ackCloseAt[0].rect, save: saveAt[0].rect })}`);
+  results.ackOverSave = { ack: ackAt[0].rect, close: ackCloseAt[0].rect, save: saveAt[0].rect, ackOverlapsSave: Boolean(overlaps(ackAt[0].rect, saveAt[0].rect)), closeOverlapsSave: false, saved: true };
+  // REQ-LIBRARY-132 (docs/defects/fixed/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md): the
+  // adopted `textarea.input` rule outranked the editor's own class, and the editor drew in the dialog's proportional face
+  // with a vertical resize grip while the read-only block above it was mono.
+  const face = readEval(parseEvals(r.log), 16900, EDITOR_FACE);
+  if (!face || typeof face !== 'object' || face.editor === null) throw new Error(`the editor's face was not read: ${JSON.stringify(face)}`);
+  if (face.editor.fontFamily !== face.block) throw new Error(`the editor is not drawn in the monospace face the read-only block uses: ${JSON.stringify(face)}`);
+  if (!/JetBrains Mono|monospace/.test(face.editor.fontFamily)) throw new Error(`the editor's face is not the monospace token: ${JSON.stringify(face)}`);
+  if (face.editor.resize !== 'none') throw new Error(`the editor carries a resize grip (${face.editor.resize}): ${JSON.stringify(face)}`);
+  results.editorFace = face;
   if (statusCells.length !== 1 || statusCells[0].data['data-edited'] !== 'yes' || !statusCells[0].text.endsWith(' · edited')) throw new Error(`the row's status cell did not gain " · edited": ${JSON.stringify(statusCells)}`);
   if (reopened.length !== 1) throw new Error(`opening the same id again produced ${reopened.length} dialogs; REQ-LIBRARY-131 re-raises the one`);
   if (reopened[0].data['data-raised'] !== '2') throw new Error(`the dialog was not re-raised: data-raised=${reopened[0].data['data-raised']}`);

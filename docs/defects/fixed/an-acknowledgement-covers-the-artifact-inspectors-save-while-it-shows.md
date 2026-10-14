@@ -42,5 +42,5 @@ Save at 17 s reached it and the footer read "Saved.".
 **What remains, recorded rather than repaired:** the acknowledgement's close control (1319,916 12×17) still overlaps Save's
 top-right corner by about 8×10 px, since REQ-NOTIFY-020 keeps it interactive; a press at Save's centre is clear of it, a press at
 that corner closes the acknowledgement. Recorded as
-[`../an-acknowledgements-close-control-still-covers-a-corner-of-the-artifact-inspectors-save.md`](../an-acknowledgements-close-control-still-covers-a-corner-of-the-artifact-inspectors-save.md).
+[`an-acknowledgements-close-control-still-covers-a-corner-of-the-artifact-inspectors-save.md`](an-acknowledgements-close-control-still-covers-a-corner-of-the-artifact-inspectors-save.md) (repaired 2026-10-14 by fin44).
 

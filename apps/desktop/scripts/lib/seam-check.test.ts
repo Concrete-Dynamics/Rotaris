@@ -106,6 +106,99 @@ describe('a packaged build answers no capture variable beyond the probe\'s three
   });
 });
 
+/**
+ * The `ROTARIS_*` variables a shipped build answers on purpose, each named by the record that decided it: ADR-0059's host
+ * switch, the application log's threshold (ADR-0033), the configuration directory (`docs/spec/resolutions/09-lifecycle-hooks.md`),
+ * the preference store's root (ADR-0042), the hooks discovery's settings file (REQ-HOOKS-110), the search server's key
+ * (REQ-CONFIG-181) and the launcher's portable artifact (REQ-STARTUP-106). Every other one is a verification seam.
+ */
+const PRODUCT = new Set(['ROTARIS_CIRCUIT_BREAKER', 'ROTARIS_APP_LOG_LEVEL', 'ROTARIS_CONFIG_DIR', 'ROTARIS_PREFERENCES_ROOT',
+  'ROTARIS_CLAUDE_SETTINGS_PATH', 'ROTARIS_SEARCH_API_KEY', 'ROTARIS_PORTABLE_ARTIFACT']);
+
+/** The scripted model client's variables, the note's list (docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md). */
+const SCRIPTED = ['ROTARIS_MODEL_DIALECT', 'ROTARIS_SCRIPT', 'ROTARIS_CHILD_SCRIPT', 'ROTARIS_LOOP_SCRIPT', 'ROTARIS_INTENT_SCRIPT',
+  'ROTARIS_COMPRESSOR_SCRIPT', 'ROTARIS_IMPROVEMENT_SCRIPT', 'ROTARIS_SCRIPT_QUESTIONS', 'ROTARIS_SCRIPT_ARTIFACT_ARGS',
+  'ROTARIS_SCRIPT_DELEGATE_ARGS', 'ROTARIS_SCRIPT_MCP_ARGS', 'ROTARIS_SCRIPT_TERMINAL_ARGS', 'ROTARIS_SCRIPT_TOOL_ARGS'];
+
+/** The sources of the three roots a packaged build keeps, the two compiled-out modules aside. */
+function keptSources(): { name: string; text: string }[] {
+  const found: { name: string; text: string }[] = [];
+  for (const root of ROOTS) {
+    for (const e of readdirSync(join(SRC, root), { recursive: true, withFileTypes: true })) {
+      if (!e.isFile() || !e.name.endsWith('.ts') || e.name.endsWith('.test.ts') || e.name.endsWith('.d.ts')) continue;
+      const file = join(e.parentPath, e.name);
+      if (!COMPILED_OUT.has(file.slice(SRC.length + 1))) found.push({ name: e.name, text: readFileSync(file, 'utf8') });
+    }
+  }
+  return found;
+}
+
+/** Every `ROTARIS_*` variable read off the flag — through `process.env` or an `env` handed in — in a module a packaged build keeps. */
+function unflaggedVariables(): string[] {
+  const found: string[] = [];
+  for (const { name, text } of keptSources()) {
+    text.split('\n').forEach((line, i) => {
+      if (line.includes('__ROTARIS_SEAMS__')) return;
+      for (const m of line.matchAll(/env\[['"](ROTARIS_[A-Z0-9_]+)['"]\]/g)) {
+        if (!PRODUCT.has(m[1]!) && !(KEPT as string[]).includes(m[1]!)) found.push(`${m[1]} (${name}:${i + 1})`);
+      }
+    });
+  }
+  return found;
+}
+
+/**
+ * Every line of a block comment, in a module a packaged build keeps, that names one of the scripted client's variables: a
+ * block comment survives into the bundle (the first seam-free build of fin44's repair still carried four names in `probe.ts`'s
+ * doc comments), so the seam check would refuse a build whose reads are all compiled out.
+ */
+function blockCommentsNaming(): string[] {
+  const found: string[] = [];
+  for (const { name, text } of keptSources()) {
+    let inBlock = false;
+    text.split('\n').forEach((line, i) => {
+      const opens = /\/\*/.test(line);
+      if (inBlock || opens) for (const v of SCRIPTED) if (new RegExp(`\\b${v}\\b`).test(line)) found.push(`${v} (${name}:${i + 1})`);
+      if (opens) inBlock = true;
+      if (/\*\//.test(line)) inBlock = false;
+    });
+  }
+  return found;
+}
+
+describe('a packaged build answers none of the scripted model client\'s variables (ADR-0056, REQ-CONFIG-478)', () => {
+  /*
+   * docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md: the run host read
+   * `ROTARIS_MODEL_DIALECT` (every model of every run answered by the scripted client, no credential asked) and the client's
+   * script variables (which tool calls it makes, and with what arguments) with no flag, and the seam check named none of them.
+   */
+  let dir: string | undefined;
+  afterEach(() => { if (dir !== undefined) rmSync(dir, { recursive: true, force: true }); dir = undefined; });
+
+  it('reads every ROTARIS_ variable but the product\'s own and the probe\'s three behind __ROTARIS_SEAMS__, on the read\'s own line', () => {
+    expect(unflaggedVariables()).toEqual([]);
+  });
+
+  it('names none of the scripted client\'s variables in a block comment, which would survive into the bundle', () => {
+    expect(blockCommentsNaming()).toEqual([]);
+  });
+
+  it('names every one in the forbidden list, so the seam check fails a build that keeps one', () => {
+    for (const name of SCRIPTED) expect(covered(name), name).toBe(true);
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-seam-check-'));
+    writeFileSync(join(dir, 'index.js'), 'env.ROTARIS_CAPTURE_PNG; env.ROTARIS_CAPTURE_PROMPT; env.ROTARIS_CAPTURE_AFTER_MS;');
+    writeFileSync(join(dir, 'run-host.js'), 'deps.env["ROTARIS_MODEL_DIALECT"]; process.env["ROTARIS_SCRIPT_TOOL_ARGS"]; env.ROTARIS_CIRCUIT_BREAKER');
+    expect(seamCheck(dir).present).toEqual(['ROTARIS_MODEL_DIALECT (run-host.js)', 'ROTARIS_SCRIPT (run-host.js)']);
+  });
+
+  it('the packaged launch of package.mjs sets none of them: its configuration names the scripted model', () => {
+    const text = readFileSync(join(import.meta.dirname, '..', 'package.mjs'), 'utf8');
+    const launch = text.slice(text.indexOf('Rule 4 (b)'));
+    expect(launch).toMatch(/provider: scripted/);
+    for (const name of SCRIPTED) expect(launch, name).not.toMatch(new RegExp(`\\b${name}\\b`));
+  });
+});
+
 describe('seamCheck reads every emitted file of the main section', () => {
   let dir: string | undefined;
   afterEach(() => { if (dir !== undefined) rmSync(dir, { recursive: true, force: true }); dir = undefined; });

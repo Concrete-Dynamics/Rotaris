@@ -37,8 +37,8 @@ export interface ScriptedCallRecord {
  * without a provider, a key or a network.
  *
  * It answers the shape a real client answers (`ModelClient`) from a STEP LIST read out of the environment:
- * `ROTARIS_SCRIPT` names the orchestrator's steps, comma-separated, one per model call, and
- * `ROTARIS_CHILD_SCRIPT` every child's. `glob`, `read`, `write`, `writeinfer`, `rm`, `git`, `push`, `edit`, `todo`, `plan`, `planopen`, `plandone`, `plan:<n>`, `done`, `donereplace` request a tool
+ * the script variable (`…_SCRIPT`) names the orchestrator's steps, comma-separated, one per model call, and
+ * the child script variable (`…_CHILD_SCRIPT`) every child's. `glob`, `read`, `write`, `writeinfer`, `rm`, `git`, `push`, `edit`, `todo`, `plan`, `planopen`, `plandone`, `plan:<n>`, `done`, `donereplace` request a tool
  * call; `silent` ends the call with neither text nor a tool call (PD-ORCH-009's silent root); `fetch:<url>` a fetch of that URL; `continue:<persona>:<name>` a delegation taking up the newest continuation offer
  * the conversation was told (`offeredTaskId`, PD-ORCH-004 revisions 3 and 4); `wait:<ms>` holds the call that long ON THE CLOCK PORT and then
  * answers (the Overview proof needs a run longer than one token-sample period); anything else, or the end of
@@ -66,7 +66,21 @@ export interface ScriptedCallRecord {
  * wires, compiled out of a packaged build (the variable is not named here because this comment ships in the bundle).
  * It sits in the scripted client and nowhere else, so it can only ever see a call no provider was going to answer:
  * there is no path by which it records traffic bound for a real endpoint.
+ *
+ * IN A PACKAGED BUILD (`__ROTARIS_SEAMS__` false) it reads no variable at all: every read of its script variables sits behind
+ * the flag on its own line and is compiled out with its name, the run host's dialect switch with it (`configuration.ts`), so
+ * it answers a model only where a configuration file names the `scripted` provider, and then with `PACKAGED_SCRIPT`. Until
+ * 2026-10-14 a packaged build read them all, and a variable chose which tools it called and with which arguments
+ * (docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md).
  */
+/**
+ * The orchestrator's steps in a packaged build: the one terminal call (`git status`) that `scripts/package.mjs`'s launch of the
+ * packaged application reads back from its store (ADR-0056 rule 4 (b)), then a streamed answer; a child takes none. Fixed in
+ * the bundle, so nothing outside the configuration changes what a packaged build's scripted model does. Whether a person's own
+ * configuration may name the `scripted` provider in a shipped build at all is OQ-312.
+ */
+export const PACKAGED_SCRIPT = 'git';
+
 /** A step that answers with no assistant message, so an agent's record never shows it: a failure, a hang, a wait prefix. */
 const LEAVES_NO_MESSAGE = /^(fail(:.*)?|hang|wait:\d+)$/;
 
@@ -257,7 +271,7 @@ export function latestScriptedPlan(messages: readonly ChatMessage[]): ScriptedPl
 }
 
 /**
- * The `todo_item` a scripted delegation names: `@<k>` in its ROTARIS_SCRIPT_DELEGATE_ARGS entry is the k-th item (1-based) of
+ * The `todo_item` a scripted delegation names: `@<k>` in its delegation-arguments entry (`…_SCRIPT_DELEGATE_ARGS`) is the k-th item (1-based) of
  * the latest plan, any other string is sent as it is, null names none; with no entry, the next open item after those the
  * admitted delegations since the plan took, or none where no plan or no such item exists.
  */
@@ -313,8 +327,12 @@ export function withLatestHash(args: unknown, messages: readonly ChatMessage[]):
 export function scriptedClient(c: Clocks, log: (message: string) => void, record?: (call: ScriptedCallRecord) => void, ledger?: StandingLedger): ModelClient {
   const parse = (v: string | undefined) => (v ?? '').split(',').map((x) => x.trim()).filter((x) => x.length > 0);
   // ROTARIS_SCRIPT drives the orchestrator; ROTARIS_CHILD_SCRIPT every child (a `delegate:<persona>:<name>` step delegates).
-  const loopScript = /^loop:([^:]+):(\d+)$/.exec(process.env['ROTARIS_SCRIPT'] ?? '');
-  const scripts: Record<string, string[]> = { orchestrator: loopScript ? Array.from({ length: Number(loopScript[2]) }, () => loopScript[1]!) : parse(process.env['ROTARIS_SCRIPT']), child: parse(process.env['ROTARIS_CHILD_SCRIPT']) };
+  // Both are read behind the build-time flag on the read's own line, so a packaged build carries neither name: there the
+  // orchestrator takes the packaged probe's one step and a child none (`PACKAGED_SCRIPT`).
+  const orchestratorScript = __ROTARIS_SEAMS__ ? process.env['ROTARIS_SCRIPT'] : PACKAGED_SCRIPT;
+  const childScript = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CHILD_SCRIPT'] : undefined;
+  const loopScript = /^loop:([^:]+):(\d+)$/.exec(orchestratorScript ?? '');
+  const scripts: Record<string, string[]> = { orchestrator: loopScript ? Array.from({ length: Number(loopScript[2]) }, () => loopScript[1]!) : parse(orchestratorScript), child: parse(childScript) };
   const calls: Record<string, number> = { orchestrator: 0, child: 0, summariser: 0, compressor: 0, 'loop-classifier': 0 };
   // PD-ORCH-005: the keys whose counter has been placed by the record their first call in this client carried.
   const seeded = new Set<string>();
@@ -378,7 +396,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       record?.({ call, who, model: `${req.model.providerId}/${req.model.modelId}`, system, images: req.messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'image' ? [createHash('sha256').update(Buffer.from(p.base64, 'base64')).digest('hex')] : []))), tools: (req.tools ?? []).map((t) => t.name), delegateDescription: (req.tools ?? []).find((t) => t.name === 'delegate')?.description ?? null, firstUser: firstUserText });
       if (who === 'classifier') {
         // ROTARIS_INTENT_SCRIPT: <category> | garbage | timeout | reject (the two JSON rungs refused, then text) — verification only.
-        const want = (process.env['ROTARIS_INTENT_SCRIPT'] ?? 'moderate_feature').trim();
+        const want = ((__ROTARIS_SEAMS__ ? process.env['ROTARIS_INTENT_SCRIPT'] : undefined) ?? 'moderate_feature').trim();
         if (want === 'timeout') { await new Promise<void>((resolve) => req.signal.addEventListener('abort', () => resolve(), { once: true })); yield { ok: false as const, error: { code: 'aborted' as const, headline: 'aborted', transient: false } }; return; }
         if (want === 'reject' && req.output !== undefined) { yield { ok: false as const, error: { code: 'http' as const, headline: 'response_format is not supported by this model', status: 400, transient: false } }; return; }
         const text = want === 'garbage' ? 'lol no' : want === 'reject' ? 'small_feature\nfrom the text rung' : req.output === undefined ? `${want}\nscripted` : JSON.stringify({ intent: want, confidence: 0.75, reason: 'scripted classification' });
@@ -388,7 +406,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         return;
       }
       if (who === 'loop-classifier') {
-        const want = (process.env['ROTARIS_LOOP_SCRIPT'] ?? 'detected').trim();
+        const want = ((__ROTARIS_SEAMS__ ? process.env['ROTARIS_LOOP_SCRIPT'] : undefined) ?? 'detected').trim();
         if (want === 'timeout') { await new Promise<void>((resolve) => req.signal.addEventListener('abort', () => resolve(), { once: true })); yield { ok: false as const, error: { code: 'aborted' as const, headline: 'aborted', transient: false } }; return; }
         const loop_detected = want !== 'clear';
         yield ok<StreamPart>({ kind: 'text', delta: JSON.stringify({ loop_detected, reason: loop_detected ? 'scripted repeated work' : 'scripted progress', corrective_message: 'Pause and reassess the current path. Choose a different concrete approach and verify its viability first.' }) });
@@ -401,7 +419,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         // rejection is surfaced unchanged" has a producer. Verification only.
         // Part AO: `fail-if:<text>` fails only the pass whose compressible slice mentions the text — one agent of a
         // concurrent manual pass, so REQ-MONITOR-094's per-agent listing has a producer while the others succeed.
-        const compressorScript = (process.env['ROTARIS_COMPRESSOR_SCRIPT'] ?? '').trim();
+        const compressorScript = ((__ROTARIS_SEAMS__ ? process.env['ROTARIS_COMPRESSOR_SCRIPT'] : undefined) ?? '').trim();
         const failIf = /^fail-if:(.+)$/.exec(compressorScript);
         const slice = req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
         if (compressorScript === 'fail' || (failIf !== null && slice.includes(failIf[1]!))) {
@@ -427,7 +445,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
        * PD-LIBRARY-002 (ADR-0065): the improvement analyst, BOTH passes, recognised by its own system text
        * rather than by a role, because `analystSystem` is the only thing that tells them apart on the wire.
        *
-       * `ROTARIS_IMPROVEMENT_SCRIPT` is what a proof drives it with — `propose` (anything else, once set),
+       * The improvement script variable (`…_IMPROVEMENT_SCRIPT`) is what a proof drives it with — `propose` (anything else, once set),
        * `empty`, `timeout` (never answers, so the analyst's own wall-clock bound is what ends the pass),
        * `crash` (the provider refuses the credential, HTTP 401, so the collector crashes: REQ-LIBRARY-023),
        * `garbage` (text that is no JSON, on the first call and on the retry: REQ-LIBRARY-022's parse failure) —
@@ -439,7 +457,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
        * and the second proposal cites one that is not there — so the attribution the analyst enforces has
        * both a case it must keep and a case it must refuse, measured in the built product.
        */
-      const analystScript = (process.env['ROTARIS_IMPROVEMENT_SCRIPT'] ?? '').trim();
+      const analystScript = ((__ROTARIS_SEAMS__ ? process.env['ROTARIS_IMPROVEMENT_SCRIPT'] : undefined) ?? '').trim();
       if (analystScript !== '' && /improvement analyst for a software workspace/.test(system)) {
         log(`scripted improvement analyst: ${analystScript}`);
         let want = analystScript;
@@ -585,7 +603,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         const lastId = delegate[3] ? [...req.messages].reverse().flatMap((m) => [...m.content] as { kind: string; result?: string }[]).map((p) => (p.kind === 'tool-result' && p.result ? /task_id: (bg_[0-9a-f]{8})/.exec(p.result)?.[1] : undefined)).find((x) => x !== undefined) : undefined;
         let extra: Record<string, unknown> = {};
         try {
-          const map = JSON.parse(process.env['ROTARIS_SCRIPT_DELEGATE_ARGS'] ?? '{}') as Record<string, unknown>;
+          const map = JSON.parse((__ROTARIS_SEAMS__ ? process.env['ROTARIS_SCRIPT_DELEGATE_ARGS'] : undefined) ?? '{}') as Record<string, unknown>;
           const named = map[delegate[2]!];
           if (named !== null && typeof named === 'object' && !Array.isArray(named)) extra = named as Record<string, unknown>;
         } catch { extra = {}; }
@@ -625,7 +643,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         const toolName = artifactStep[1]!;
         if ((req.tools ?? []).some((t) => t.name === toolName)) {
           let scripted: Record<string, unknown> = {};
-          try { scripted = JSON.parse(process.env['ROTARIS_SCRIPT_ARTIFACT_ARGS'] ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
+          try { scripted = JSON.parse((__ROTARIS_SEAMS__ ? process.env['ROTARIS_SCRIPT_ARTIFACT_ARGS'] : undefined) ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
           const key = artifactStep[2] ?? toolName;
           const fallback = toolName === 'artifact_write'
             ? { slug: 'scripted-plan', title: 'The scripted plan', body: 'The first line of the scripted body.\n\nA second paragraph with `code` and **bold**.', tags: ['research'] }
@@ -648,7 +666,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       if (terminalStep) {
         if ((req.tools ?? []).some((t) => t.name === 'terminal')) {
           let scripted: Record<string, unknown> = {};
-          try { scripted = JSON.parse(process.env['ROTARIS_SCRIPT_TERMINAL_ARGS'] ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
+          try { scripted = JSON.parse((__ROTARIS_SEAMS__ ? process.env['ROTARIS_SCRIPT_TERMINAL_ARGS'] : undefined) ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
           const key = terminalStep[1]!;
           const args = key in scripted ? scripted[key] : { command: 'git status' };
           yield ok<StreamPart>({ kind: 'text', delta: `Running the terminal command for ${key}. ` });
@@ -666,7 +684,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       const toolStep = /^tool:([\w-]+)$/.exec(step);
       if (toolStep) {
         let scripted: Record<string, unknown> = {};
-        try { scripted = JSON.parse(process.env['ROTARIS_SCRIPT_TOOL_ARGS'] ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
+        try { scripted = JSON.parse((__ROTARIS_SEAMS__ ? process.env['ROTARIS_SCRIPT_TOOL_ARGS'] : undefined) ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
         const entry = scripted[toolStep[1]!] as { name?: unknown; args?: unknown } | undefined;
         const name = typeof entry?.name === 'string' ? entry.name : null;
         if (name !== null && (req.tools ?? []).some((t) => t.name === name)) {
@@ -677,7 +695,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
           yield finished('other');
           return;
         }
-        log(`scripted: the step ${step} names ${name === null ? 'no entry in ROTARIS_SCRIPT_TOOL_ARGS' : `'${name}', which is not callable here`} (the listing holds ${(req.tools ?? []).map((t) => t.name).join(', ')}); answering instead`);
+        log(`scripted: the step ${step} names ${name === null ? 'no entry in the tool steps\' arguments' : `'${name}', which is not callable here`} (the listing holds ${(req.tools ?? []).map((t) => t.name).join(', ')}); answering instead`);
       }
       // ask[:<key>] — Part AC's step: one `ask_questions` call, with the steps taken from ROTARIS_SCRIPT_QUESTIONS by
       // key (a JSON map) or the two-step default below. Verification only.
@@ -685,7 +703,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       if (askStep) {
         if ((req.tools ?? []).some((t) => t.name === 'ask_questions')) {
           let scripted: Record<string, unknown> = {};
-          try { scripted = JSON.parse(process.env['ROTARIS_SCRIPT_QUESTIONS'] ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
+          try { scripted = JSON.parse((__ROTARIS_SEAMS__ ? process.env['ROTARIS_SCRIPT_QUESTIONS'] : undefined) ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
           const key = askStep[1] ?? 'ask';
           const fallback = {
             steps: [
@@ -709,7 +727,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         if ((req.tools ?? []).some((t) => t.name === toolName)) {
           // ROTARIS_SCRIPT_MCP_ARGS: a JSON map from callable name to the arguments the scripted agent sends (Part T's proof; verification only).
           let scripted: Record<string, unknown> = {};
-          try { scripted = JSON.parse(process.env['ROTARIS_SCRIPT_MCP_ARGS'] ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
+          try { scripted = JSON.parse((__ROTARIS_SEAMS__ ? process.env['ROTARIS_SCRIPT_MCP_ARGS'] : undefined) ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
           // A renamed or prefixed fixture tool (`beta_echo`, `gamma_slow`) takes its original's arguments: since the gate checks
           // an MCP call against the advertised input schema (REQ-TOOLS-032, live-run finding G3), `{}` for an `echo` is refused.
           const original = toolName.replace(/^.*_(?=(echo|slow)$)/, '');

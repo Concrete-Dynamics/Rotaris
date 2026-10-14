@@ -527,3 +527,14 @@ must come before the next proof. *Since 2026-09-27 it says so only when the buil
 > `_AFTER_MS` alone. One thing the first such build taught: a JSDoc comment survives into the bundle, so a seam's full name
 > written in a doc comment of a module a packaged build keeps is a name the check finds; `probe.ts`'s comments name the seams
 > by their suffixes.
+>
+> **2026-10-14, plan fin45 — the scripted model client's variables.** The seam check named only capture variables, and the run
+> host read the dialect switch (`ROTARIS_MODEL_DIALECT`: every model of every run answered by the stand-in, no credential asked)
+> and twelve script variables with no flag, so a packaged build answered them all while the check passed
+> ([`../../defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md`](../../defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md)).
+> Each is read behind the flag now, the list names them, and `seam-check.test.ts` holds every `ROTARIS_*` read off the flag in a
+> module a packaged build keeps to the product's own seven and the probe's three. Rule 4 (b) keeps running on the scripted client:
+> its launch names the `scripted` provider in the scratch workspace's configuration, sets no model or script variable, and the
+> packaged build's client answers with one fixed `git status` call (`PACKAGED_SCRIPT`). Whether a person's configuration may
+> select that client in a shipped build is OQ-312. The first seam-free build taught the JSDoc lesson's sibling: a string literal
+> in a log line survives too, so the tool step's log no longer spells its variable.

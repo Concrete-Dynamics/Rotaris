@@ -14771,3 +14771,35 @@ not keep the window — or leaves unsaved settings unsaved as a programmatic clo
 update's click; not asking loses a person's edits at a restart they asked for, with no word.
 
 **What a live run then shows.** Nothing: no live scenario installs an update.
+
+<a id="oq-312"></a>
+
+**OQ-312 — May a shipped build answer a model with the scripted client when a person's own configuration names the `scripted`
+provider?** *(ADR-0056 rule 4 (b), whose packaged launch runs a session against a `models:` entry with `provider: scripted`;
+REQ-CONFIG-478 and the provider rules of ADR-0029/0030, under which a run's model is the configured model, authenticated as
+configured; the specification names no `scripted` provider anywhere. Raised 2026-10-14 by fin45 (`fin45-seams-ui-and-live`) while
+repairing
+[`a-packaged-build-still-answers-the-scripted-model-clients-variables.md`](../defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md),
+which left "whether that configuration path is product or verification, and so whether the client itself may ship" to the
+repair; the plan's range OQ-311 to OQ-330. Raised as OQ-311, its first number, and renumbered OQ-312 at landing: a sibling
+bundle, `fin45-supervision-and-quit`, landed its own OQ-311 first.)*
+
+**What is open.** The repair compiled every environment variable of the scripted client out of a packaged build, the dialect
+switch with them, so no variable selects or scripts it there. The client itself still ships, because `scripts/package.mjs`'s
+packaged launch (rule 4 (b): "the packaged app opens a store and runs a terminal call") needs a model that makes one terminal
+call without a provider, a key or a network, and it reaches it through a configuration file naming `provider: scripted`. The
+same file written by a person selects the same stand-in in a shipped build: a model that asks for no credential and answers
+with one `git status` call (`PACKAGED_SCRIPT`, `apps/desktop/src/run-host/scripted-client.ts`) and a fixed reply. No requirement
+says whether a shipped build may answer such an entry, or must treat `scripted` as any other provider it knows no endpoint for
+("No usable model is configured for the entry role", REQ-EVENTS-021).
+
+**What the build proceeds under.** The configuration path stays as it was: an entry naming the `scripted` provider is answered by
+the scripted client in every build, and in a packaged one with the fixed script alone. Rule 4 (b) needs it, and it is reachable
+only by writing the configuration file, never by the environment.
+
+**What a ruling decides.** Whether a shipped build answers `provider: scripted` from any configuration (the reading above), or
+only where the launch is the packaging step's own (which needs a signal that is neither an environment variable nor a
+configuration value a person can write, or a rule 4 (b) that proves the terminal call another way), or never (rule 4 (b) then
+needs another model that answers without a network).
+
+**What a live run then shows.** Nothing: a live run configures a real provider and never the `scripted` one.

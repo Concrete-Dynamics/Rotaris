@@ -32,6 +32,12 @@ OQ-296; `../../defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-af
 unobserved children, so the reports are the one message the run adds for that turn. `03-runtime-view.md` §3 (the fourth
 `withdrawStuck` caller) and §2 (`part-h-proof`'s `silent-wait` launch).
 
+**A packaged build answers none of the scripted model client's variables (ADR-0056's seam check; fin45,
+`fin45-seams-ui-and-live`).** The run host reads the dialect switch (`scriptedDialect`, `run-host/configuration.ts`) and every
+script variable of `run-host/scripted-client.ts` behind `__ROTARIS_SEAMS__`; without it the client's orchestrator takes
+`PACKAGED_SCRIPT`. `scripts/lib/seam-check.mjs` names them all. The **process view**'s run-host row says so. No package, edge,
+process, channel, command or store column changed.
+
 **The tool-grouping preference is stored under its registered key (fin44, `fin44-hooks-and-config`;
 `../../defects/fixed/the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md`).**
 `display/groupTools` became `display/groupToolCalls` (REQ-CONFIG-405, REQ-SHELL-006) in the preference table, the command

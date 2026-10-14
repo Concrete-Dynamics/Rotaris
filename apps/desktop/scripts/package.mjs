@@ -218,7 +218,9 @@ appRun = await stepAsync('the packaged app opens a store and runs a terminal cal
   mkdirSync(ws, { recursive: true });
   mkdirSync(lad, { recursive: true });
   writeFileSync(join(ws, 'README.md'), '# scratch\n');
-  // The run reads its files (ADR-0036): the scripted model, an autonomous mode and the single strategy.
+  // The run reads its files (ADR-0036): the scripted model, an autonomous mode and the single strategy. No variable selects or
+  // scripts the model: a packaged build compiles those out, and its scripted provider takes the one `git status` call this step
+  // reads back (`PACKAGED_SCRIPT`, run-host/scripted-client.ts; docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md).
   mkdirSync(join(ws, '.rotaris'), { recursive: true });
   writeFileSync(join(ws, '.rotaris', 'agents.yaml'), 'models:\n  scripted: { provider: scripted, model_id: scripted }\nsmall_model: scripted\nmedium_model: scripted\nlarge_model: scripted\nruntime:\n  permission_mode: autonomous\nrotaris:\n  delegation_strategy: single\n');
   spawnSync('git', ['init', '-q'], { cwd: ws, stdio: 'ignore' });
@@ -226,8 +228,6 @@ appRun = await stepAsync('the packaged app opens a store and runs a terminal cal
   const env = {
     ...process.env,
     ...proofIsolationEnv({ profileRoot: scratch, local: lad }),
-    ROTARIS_MODEL_DIALECT: 'scripted',
-    ROTARIS_SCRIPT: 'git',
     ROTARIS_CAPTURE_PNG: png,
     ROTARIS_CAPTURE_PROMPT: 'show me the tree',
     ROTARIS_CAPTURE_AFTER_MS: '9000',

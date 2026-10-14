@@ -258,8 +258,10 @@ run start from the snapshot (layer 3: every authenticated provider's discovered 
 `auth_provider`) and the two scopes' files, with the screen's live state on top. A model naming an `auth_provider`
 authenticates with the bearer **main leases the run host** at run start (`credentials.lease`); a model naming none
 uses its `api_key` or `api_key_env`, read per request. `ROTARIS_MODEL_DIALECT=scripted` selects the scripted client
-for every model (verification only) and is **the last environment stopgap**; a `models:` entry with provider
-`scripted` does the same per entry. A fatal file, no model at all ("No model configured") or an unauthenticated
+for every model (verification only) and is **the last environment stopgap** — since 2026-10-14 read behind `__ROTARIS_SEAMS__`
+(`scriptedDialect`), so a packaged build has no such switch; a `models:` entry with provider
+`scripted` does the same per entry, in every build (in a packaged one with the fixed `PACKAGED_SCRIPT`; OQ-312 asks whether a
+shipped build should answer it at all). A fatal file, no model at all ("No model configured") or an unauthenticated
 entry provider ("Provider authentication required", REQ-WORKSPACE-137) refuses the run before it starts
 (REQ-EVENTS-021, REQ-CONFIG-478). Since Part L every call resolves **the credential of the model it goes to**
 (`credentialFor`; ADR-0030 second execution): the classifier's slot, the loop classifier's model, the summariser on
@@ -1641,7 +1643,11 @@ the probe's own excepted, and so does every other `ROTARIS_*` read but ADR-0059'
 workspace service is named by the list). `vitest.config.ts` defines the flag `true`, as the ordinary build does. *Owed until 2026-10-14, then repaired by fin44:* the packaged probe's `_WAIT`, `_WAIT_MS`, `_END_VIEW`, `_END_VIEW_MS`, `_PROBE` and
 `_PROMPT_MS` and the children's `_SKILLS_HOME` and `_INSTRUCTIONS_HOME` now sit behind the flag too, the list names them, and
 `seam-check.test.ts` fails any capture variable read off the flag in a module a packaged build keeps, the probe's three aside
-(`docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`).
+(`docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`). *Repaired by fin45 the same day:* the
+scripted model client's variables — the dialect switch and the twelve script variables, read in the run host with no flag —
+are behind it too, the list names them, and `seam-check.test.ts` fails any `ROTARIS_*` read off the flag in a module a packaged
+build keeps unless it is a product variable or one of the probe's three; a packaged build's scripted provider (rule 4 (b)'s launch)
+answers with the fixed `PACKAGED_SCRIPT` (`docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md`).
 
 **A trap closed on the way:** `pnpm package` leaves `out/` holding the seam-free build, and every `*-proof` script
 launches `out/main/index.js` and drives those seams — so the next proof run after a package would have failed for a

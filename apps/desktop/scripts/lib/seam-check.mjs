@@ -48,6 +48,13 @@ export const FORBIDDEN = [
   // `ROTARIS_CAPTURE_PROMPT_MS` is named whole: `ROTARIS_CAPTURE_PROMPT` is the probe's own and stays.
   'ROTARIS_CAPTURE_WAIT', 'ROTARIS_CAPTURE_END_VIEW', 'ROTARIS_CAPTURE_PROBE', 'ROTARIS_CAPTURE_PROMPT_MS',
   'ROTARIS_CAPTURE_SKILLS_HOME', 'ROTARIS_CAPTURE_INSTRUCTIONS_HOME',
+  // fin45: the scripted model client's variables — the dialect switch, which answered every model of every run with the
+  // stand-in and asked for no credential, and the scripts, which chose the tool calls it made and their arguments. Each is read
+  // behind `__ROTARIS_SEAMS__` since 2026-10-14, and a packaged build's scripted provider takes a fixed script
+  // (docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md). `ROTARIS_SCRIPT` covers its
+  // `_SCRIPT_*_ARGS` and `_SCRIPT_QUESTIONS` family.
+  'ROTARIS_MODEL_DIALECT', 'ROTARIS_SCRIPT', 'ROTARIS_CHILD_SCRIPT', 'ROTARIS_LOOP_SCRIPT', 'ROTARIS_INTENT_SCRIPT',
+  'ROTARIS_COMPRESSOR_SCRIPT', 'ROTARIS_IMPROVEMENT_SCRIPT',
 ];
 
 /**

@@ -30,8 +30,8 @@ import { randomUUID } from 'node:crypto';
  *
  * WHERE THE MODEL AND THE RUNTIME COME FROM — the configuration files, loaded
  * per run start with the live state on top (ADR-0036/0037, `configuration.ts`).
- * `ROTARIS_MODEL_DIALECT=scripted` selects a built-in scripted client for every
- * model (verification only). A fatal file or an unreachable entry model refuses
+ * The dialect switch (`scriptedDialect`, compiled out of a packaged build) selects
+ * a built-in scripted client for every model (verification only). A fatal file or an unreachable entry model refuses
  * the run before it starts (REQ-EVENTS-021, REQ-CONFIG-478).
  */
 import { type RunHost } from './host.js';

@@ -12,7 +12,8 @@ import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelCli
  * ADR-0036 / ADR-0037 at the run-host root: one load per run start (Tier B — the files, then the live
  * state main holds, then the loader's own passes), turned into what the engine takes — the model setup,
  * the runtime posture, the persona resolver. Nothing here is read from the environment any more except
- * the one stopgap the map names: `ROTARIS_MODEL_DIALECT=scripted` (verification only).
+ * the one stopgap the map names: the dialect switch (`…_MODEL_DIALECT=scripted`, verification only), which `scriptedDialect`
+ * reads behind `__ROTARIS_SEAMS__`, so a packaged build carries neither the read nor the name.
  *
  * Credentials: a model naming an `auth_provider` (REQ-CONFIG-083, REQ-PROVIDER-092) authenticates with the
  * bearer main LEASED to this run for that provider (ADR-0030; `session.start` asks `credentials.lease` for the
@@ -474,7 +475,7 @@ export interface ConfigureDeps {
   readonly env: Readonly<Record<string, string | undefined>>;
   /** REQ-MCP-033 / ADR-0035 (Part T): what the reserved token launches — this application's own executable with the token first. */
   readonly codeIntelligenceLaunch?: BuiltinLaunch | null;
-  /** The scripted client, verification only (`ROTARIS_MODEL_DIALECT=scripted`). */
+  /** The scripted client: every model under the dialect switch (verification only), or an entry naming the `scripted` provider. */
   readonly scriptedClient: () => ModelClient;
   readonly onRequest: (info: { url: string; method: string; headers: Record<string, string> }) => void;
   readonly log: (m: string) => void;
@@ -536,7 +537,18 @@ export function restingCatalogueOf(workspaceRoot: string, deps: Pick<ConfigureDe
   const live = overlayLiveState(loaded.value, deps.liveState());
   if (!live.ok) return null;
   const snapshotRead = readProjectSnapshot(join(deps.globalDir, PROJECT_SETTINGS_FILE), () => undefined);
-  return catalogueOf(live.value, deps.env['ROTARIS_MODEL_DIALECT'] === 'scripted', deps.bearers(workspaceRoot), snapshotRead.ok ? snapshotRead.value : null);
+  return catalogueOf(live.value, scriptedDialect(deps.env), deps.bearers(workspaceRoot), snapshotRead.ok ? snapshotRead.value : null);
+}
+
+/**
+ * The dialect switch: every model of every run answered by the scripted client, with no credential asked — verification only.
+ * Read behind `__ROTARIS_SEAMS__` on the read's own line, so a packaged build compiles the read and its name out and answers a
+ * model with the scripted client only where a configuration entry names the `scripted` provider. Until 2026-10-14 it was read
+ * with no flag, and one variable replaced every model of a shipped build with the stand-in
+ * (docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md).
+ */
+export function scriptedDialect(env: Readonly<Record<string, string | undefined>>): boolean {
+  return __ROTARIS_SEAMS__ ? env['ROTARIS_MODEL_DIALECT'] === 'scripted' : false;
 }
 
 export function configureRun(workspaceRoot: string, attended: boolean, deps: ConfigureDeps, options?: PrepareOptions): Result<ConfiguredRun, ConfigureRefusal> {
@@ -602,7 +614,7 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
     if (!attended) return err({ reason: `The configuration has ${countNoun(moded.referential.length, 'unresolved reference')} and no one is present to correct ${moded.referential.length === 1 ? 'it' : 'them'}: ${moded.referential.join('; ')}`, cfg: moded });
     warnings.push(...lines);
   }
-  const scripted = deps.env['ROTARIS_MODEL_DIALECT'] === 'scripted';
+  const scripted = scriptedDialect(deps.env);
   const personas = personaResolverFor(moded, scripted, (m) => warnings.push(m));
   /*
    * PD-ORCH-005 clause 4: a continue that resumes an open iteration sets the run up as the persona its root ran as,

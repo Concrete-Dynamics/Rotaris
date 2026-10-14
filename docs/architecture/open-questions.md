@@ -14691,12 +14691,31 @@ Quit once IC-3 allows a macOS release — reopens this ruling. *The as-built rea
 answer without bound while the renderer answers its probe, is the falsified one.* Built 2026-10-14 by fin45
 (`fin45-supervision-and-quit`): `quitGuardsOutsideAnyWindow` (`apps/desktop/src/main/exit.ts`) in `before-quit`
 (`apps/desktop/src/main/index.ts`), pinned by `exit.test.ts` and `pnpm exit-trace-proof`'s `hang`, `unsaved-quit` and
-`unsaved-sigterm` launches. *The two advocates' recommendations themselves were not handed to the building bundle; the
-orchestrator's ruling record holds them.*
+`unsaved-sigterm` launches.
 *Ruled 2026-10-14, as the consortium's ruling record dates its sitting (10:00 to 10:14 UTC); fin45's brief and
 [R-072](../product/requests.md#r-072)'s row said 2026-10-13, the row recorded apart in
 [`../defects/the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md`](../defects/the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md)
 (fin46, `fin46-accept1-12`).*
+
+**The recommendations it weighed** (both followed; both kinds change-behaviour). **Advocate A** (the user's lens) recommended that
+such a quit ask no close guard at all: the renderer's unsaved-settings guard skipped, the unsaved settings discarded so the file
+keeps its last saved values (what REQ-SHELL-124's Discard restores), main logging the discard, and the orderly shutdown going
+ahead at once, with `PD-SHELL-009`'s last case revised to say so. A argued from who is at the screen: the application menu is
+removed on Linux and Windows, so no person can start this quit there, and waiting on a dialog nobody watches loses the edits to
+the supervisor's kill anyway, cuts the runs off as a crash does and holds the logout for nothing; REQ-CONFIG-287 already says a
+programmatic close does not prompt. A named its cost — a person who sends SIGTERM themselves loses unsaved edits with only the log
+to say so — and asked that the macOS reopening `PD-SHELL-009` already notes carry this guard too. **Advocate B** (the system's
+lens) recommended the same outcome in other words: no close guard asked, the edits left unsaved and nothing written, the windows
+closed in PD-ORCH-005 clause 9's all-or-none order and the run host's shutdown at once, with `PD-SHELL-009` revised and
+`PD-SHELL-010`'s bullet brought into line. B argued from the letter: `PD-SHELL-009`'s Narrows line does not name REQ-CONFIG-287,
+so the as-built wait departs from a requirement no directive displaces, and it breaks REQ-MONITOR-131/283's 30 s backstop from the
+quit request; B asked for the rule as a pure function with a unit case, `exit-trace-proof`'s `hang` launch rewritten, and the
+record to say that a later quit a person starts outside a window reopens the ruling. Both rejected keeping the wait, a time bound
+(it answers a person's Save/Discard/Cancel, which `PD-SHELL-010` rules out) and a save unasked (it writes a configuration nobody
+confirmed). The ruling took from B the wording "left unsaved, nothing written", the pure function with its unit case and the
+`hang` rewrite, and from A the log line, the SIGTERM launch and the macOS reopening note; it accepted the cost both named. *Until
+2026-10-14 this paragraph's place read: "The two advocates' recommendations themselves were not handed to the building bundle; the
+orchestrator's ruling record holds them." Written by fin46 (`fin46-accept1-12`) from that record (acceptance finding C2).*
 
 <a id="oq-299"></a>
 

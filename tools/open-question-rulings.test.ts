@@ -8,6 +8,10 @@
  * `docs/defects/fixed/consortium-rulings-of-2026-10-14-are-dated-2026-10-13-before-their-questions-were-raised.md`).
  * The date a ruling is made is the consortium's ruling record's, outside the repository; what the record can be held to
  * is that no "Ruled <date>" in an entry falls before the date the entry was raised.
+ *
+ * A ruling under R-072 also names the two recommendations it weighed. OQ-298's said only that the orchestrator's ruling
+ * record held them (acceptance finding C2 of fin46); twenty-one others name no advocate either, and are listed below as
+ * known gaps until they are written.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -59,6 +63,33 @@ function ruledBeforeRaised(text: string): string[] {
   });
 }
 
+/**
+ * Whether an entry ruled under R-072 names what its two advocates recommended: advocate A (the user's lens) and advocate B
+ * (the system's lens) each named, or the two recorded as agreeing ("both advocates followed", "both recommendations
+ * followed"). "Both of its recommendations" does not count: OQ-298 used it of the ruling's own two record changes while its
+ * advocates' recommendations went unnamed (acceptance finding C2 of fin46,
+ * `docs/defects/fixed/oq-298s-ruling-does-not-name-the-recommendations-it-weighed.md`).
+ */
+function namesItsRecommendations(text: string): boolean {
+  const a = /\b[Aa]dvocate A\b|\bA \(the user|\buser's lens\b/.test(text);
+  const b = /\b[Aa]dvocate B\b|\bB \(the system|\bsystem's lens\b/.test(text);
+  return (a && b) || /\bboth advocates\b|\bboth recommendations followed\b/.test(text);
+}
+
+/** The entries ruled under R-072: a "**Ruled <date> …" line that cites R-072. */
+function ruledUnderR072(text: string): Entry[] {
+  return entriesOf(text).filter((e) => /\*\*Ruled 20\d\d-\d\d-\d\d[^\n]*R-072/.test(e.text));
+}
+
+/**
+ * Entries ruled under R-072 that name neither advocate, recorded in
+ * `docs/defects/twenty-one-r-072-rulings-do-not-name-what-the-advocates-recommended.md` and left for the orchestrator, which
+ * holds the consortium's ruling record. A listed entry that comes to name them fails the test until it leaves this list.
+ */
+const UNNAMED_RECOMMENDATIONS = [
+  262, 265, 266, 267, 271, 272, 279, 280, 281, 282, 283, 284, 285, 292, 293, 294, 295, 296, 299, 300, 311,
+];
+
 const RECORD = readFileSync(join(import.meta.dirname, '..', 'docs', 'architecture', 'open-questions.md'), 'utf8');
 
 describe('open-questions.md: the rulings under R-072', () => {
@@ -93,5 +124,20 @@ describe('open-questions.md: the rulings under R-072', () => {
       'Raised 2026-12-01; Ruled 2026-01-01 — no entry\'s.',
     ].join('\n');
     expect(ruledBeforeRaised(fixture)).toEqual(['OQ-1 (line 1): raised 2026-10-14, ruled 2026-10-13, 2026-10-13']);
+  });
+
+  it('every ruling under R-072 names what its two advocates recommended, but the known gaps (fin46, C2)', () => {
+    const ruled = ruledUnderR072(RECORD);
+    expect(ruled.length).toBeGreaterThan(70);
+    const unnamed = ruled.filter((e) => !namesItsRecommendations(e.text)).map((e) => e.n);
+    expect(unnamed.sort((x, y) => x - y)).toEqual(UNNAMED_RECOMMENDATIONS);
+  });
+
+  it('over fixtures: both advocates named, or recorded as agreeing, pass; one advocate, or the ruling\'s own two, fail', () => {
+    expect(namesItsRecommendations('Advocate A (the user\'s lens) recommended X; advocate B recommended Y.')).toBe(true);
+    expect(namesItsRecommendations('**Ruled …, both advocates followed:** confirmed as built.')).toBe(true);
+    expect(namesItsRecommendations('(advocate B\'s recommendation followed, with one point of advocate A\'s folded in)')).toBe(true);
+    expect(namesItsRecommendations('advocate B\'s recommendation followed.')).toBe(false);
+    expect(namesItsRecommendations('The ruling carries both of its recommendations into the record.')).toBe(false);
   });
 });

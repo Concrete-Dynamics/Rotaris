@@ -101,12 +101,20 @@ function report(ctx, verdicts) {
  * three separate writes of one file. The later writes of that path by the same persona must pass with no dialog, allowed by
  * the session rule; the file must hold all three lines. A model that wrote the path once is a NOTE.
  */
+/**
+ * The approval seam's answers for `approvals`: the first `write_file` dialog "Approve for this session", every later one
+ * "Approve once", and every other tool's "Approve once". The last answer of a tool's list repeats, so `write_file=session`
+ * alone would grant the session for every `write_file` dialog — a second grant, if the model also wrote another path, that
+ * `approvalsLiveVerdicts`' one-grant check would read as a failure of a product that was right.
+ */
+export const APPROVALS_ANSWERS = 'write_file=session,once;;once';
+
 export async function runApprovalsScenario(ctx) {
   const PATH = 'notes/live.md';
   const LINES = ['first line', 'second line', 'third line'];
   const log = await withRuntime(ctx, 'approvals', { permission_mode: 'ask' }, () => ctx.launch('approvals', {
     ROTARIS_CAPTURE_PROMPT: `Create ${PATH} containing the single line "${LINES[0]}" with one write_file call. Then make a second, separate write_file call on the same file that adds the line "${LINES[1]}" after it, and a third, separate write_file call that adds the line "${LINES[2]}" after that. Use write_file for all three, not the terminal. Reply in one sentence when the file holds all three lines.`,
-    ROTARIS_CAPTURE_APPROVAL: 'write_file=session;;once',
+    ROTARIS_CAPTURE_APPROVAL: APPROVALS_ANSWERS,
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(ctx.RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
   }, ctx.RUN_WAIT_MS + 90_000));
   ctx.check(!/capture: wait for result timed out/.test(log), 'approvals: the run reached its result inside the wait');

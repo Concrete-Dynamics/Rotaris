@@ -6,6 +6,9 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the scripts that run it.
 import { approvalRequests, approvalsLiveVerdicts, awayLiveVerdicts, awayReason, awayStretch, presentedDialogs, sessionScopedWrites, timeoutReason } from './approval-readings.mjs';
+// @ts-expect-error — the scenarios are plain ESM beside the scripts that run them.
+import { APPROVALS_ANSWERS } from './approval-scenarios.mjs';
+import { approvalAnswerer } from '../../src/main/capture/approval-answers.ts';
 
 const T0 = Date.parse('2026-10-13T18:19:00.000Z');
 const at = (ms: number) => T0 + ms;
@@ -119,9 +122,16 @@ describe('awayLiveVerdicts (the live run\'s away scenario)', () => {
     const verdicts = awayLiveVerdicts;
     const s = recorded();
     const failed = verdicts(awayStretch(s), { seconds: 12, sessionLog }).filter((v: { verdict: string; passed: boolean }) => v.verdict === 'check' && !v.passed).map((v: { what: string }) => v.what);
-    expect(failed).toEqual(['away: no dialog was shown after the first went unanswered']);
+    expect(failed).toEqual(['away: no dialog was shown after the first went unanswered (ask_questions exempt)']);
     const unmarked = { ...s, timeline: [] };
     expect(verdicts(awayStretch(unmarked), { seconds: 12, sessionLog: '' }).some((v: { what: string; passed: boolean }) => /marked its user away/.test(v.what) && !v.passed)).toBe(true);
+  });
+  it('the question tool\'s own approval shown while away is exempt: a NOTE, not a failed check (PD-TOOLS-005 revision 2)', () => {
+    const s = recorded();
+    s.log = s.log.split('\n').filter((l) => /approval [AQ] presented/.test(l)).join('\n');
+    const out = awayLiveVerdicts(awayStretch(s), { seconds: 12, sessionLog });
+    expect(out.filter((v: { verdict: string; passed: boolean }) => v.verdict === 'check' && !v.passed)).toEqual([]);
+    expect(out.some((v: { verdict: string; what: string }) => v.verdict === 'note' && /ask_questions|question tool/.test(v.what))).toBe(true);
   });
   it('a model that asked for nothing is a NOTE, not a pass or a failure', () => {
     const verdicts = awayLiveVerdicts;
@@ -157,5 +167,14 @@ describe('sessionScopedWrites and approvalsLiveVerdicts (PD-TOOLS-004)', () => {
     expect(approvalsLiveVerdicts(sessionScopedWrites({ audit: [], calls: [], log: '' }), { path: 'NOTES.md' })).toEqual([expect.objectContaining({ verdict: 'note' })]);
     const once = sessionScopedWrites({ audit: [grant], calls: calls.slice(0, 1), log });
     expect(approvalsLiveVerdicts(once, { path: 'NOTES.md' }).map((v: { verdict: string }) => v.verdict)).toEqual(['check', 'note']);
+  });
+});
+
+describe('the approvals scenario\'s answers (PD-TOOLS-004)', () => {
+  it('grant the session at the first write_file dialog only, and answer every other dialog once', () => {
+    const a = approvalAnswerer(APPROVALS_ANSWERS);
+    expect(a.problems).toEqual([]);
+    expect(['write_file', 'write_file', 'write_file'].map((t) => a.next(t)?.kind)).toEqual(['session', 'once', 'once']);
+    expect(a.next('terminal')?.kind).toBe('once');
   });
 });

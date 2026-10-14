@@ -95,7 +95,12 @@ export function awayLiveVerdicts(stretch, { seconds, sessionLog = '', answer = '
   check(away !== null && stretch.awayCount === 1 && stretch.seconds === seconds && away.actor === 'rotaris', 'away: the run marked its user away once, a user_away entry naming the timeout (PD-TOOLS-011)', away === null ? 'no user_away entry' : `${stretch.awayCount} entr${stretch.awayCount === 1 ? 'y' : 'ies'}, after_seconds ${stretch.seconds}, actor ${away.actor}`);
   const line = sessionLog.split('\n').find((l) => /user away: an approval in this run went unanswered for/.test(l)) ?? null;
   check(line !== null && / WARNING /.test(line), 'away: the session log carries the away line at WARNING', line ?? 'no such line');
-  check(shown.length === 1, 'away: no dialog was shown after the first went unanswered', shown.map((p) => p.tool).join(', '));
+  // The question tool's own approval is exempt from the mark and correctly shown while away (PD-TOOLS-005 revision 2): a
+  // NOTE, not a dialog the mark failed to stop.
+  const questions = shown.filter((p) => p.tool === 'ask_questions');
+  const dialogs = shown.filter((p) => p.tool !== 'ask_questions');
+  check(dialogs.length === 1, 'away: no dialog was shown after the first went unanswered (ask_questions exempt)', dialogs.map((p) => p.tool).join(', '));
+  if (questions.length > 0) note('away: the question tool\'s own approval was shown, which PD-TOOLS-005 revision 2 exempts', `${questions.length} ask_questions dialog(s)`);
   if (askedWhileAway.length === 0) note('away: the model asked nothing more after the timeout', 'clause 2 (an ask while away is denied at once) is unasked this run');
   else {
     const wrong = askedWhileAway.filter((w) => !w.awayReason || w.shown !== null || w.decidedMs === null || w.decidedMs > 1000);

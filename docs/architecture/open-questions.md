@@ -14183,6 +14183,29 @@ directory and renaming it into place.
 
 **What a live run then shows.** Nothing: no live scenario empties a store's place.
 
+<a id="oq-292"></a>
+
+**OQ-292 — What does a `focus-session` notice action do when pressed in a window that does not hold its session?**
+*(REQ-NOTIFY-044, "focus a named session", an action concerning an object carrying its identity and acting "without asking the
+user anything further"; REQ-NOTIFY-031 and REQ-NOTIFY-032, "Open the session"; REQ-NOTIFY-024; PD-SHELL-001 and its revision 2
+([OQ-267](#oq-267)), whose reach binds the members that name a workspace; PD-SHELL-002. Raised 2026-10-14 by fin43
+(`fin43-notices-and-config`) while repairing
+[`a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md`](../defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md);
+numbered from the top of the plan's range, OQ-281 to OQ-295, below the numbers its sibling bundles took. Open.)*
+
+`focus-session` names a session and no workspace, and every notice reaches every main window. Pressed in a window whose
+workspace's store does not hold the session (a second window, or a switch since the notice was raised), it used to raise "The
+session could not be loaded" over the notice pressed and to record the session under the wrong workspace in the run host.
+Since 2026-10-14 such a press is not dispatched: nothing is recorded, no notice replaces the one pressed, and the window
+follows nothing new (main's `session.resume` with `fromNotice`, logged). The press therefore does nothing visible.
+
+**What a ruling decides.** Whether the press should reach the session where it lives — the action carrying the session's
+workspace, so PD-SHELL-001 revision 2's reach surfaces the window holding it (or adds one) and focuses the session there —
+or say in the pressing window that the session belongs to another project, or stay as built. A workspace on the member is a
+change to REQ-NOTIFY-044's vocabulary of the kind ESC-34 made for the hook review.
+
+**What a live run then shows.** Nothing: no live scenario opens two workspaces.
+
 <a id="oq-293"></a>
 
 **OQ-293 — Does the unreviewed-hooks notice name the project it is about?** *(REQ-NOTIFY-224, the notice "where a workspace

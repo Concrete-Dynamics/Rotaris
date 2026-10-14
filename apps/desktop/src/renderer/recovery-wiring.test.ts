@@ -130,3 +130,18 @@ describe('PD-WORKSPACE-005 revision 2: the project-setup action reaches its targ
     expect(text).toMatch(/bridge\.onProjectInitOpen\(\(p\) => \{[\s\S]*?useShellState\.getState\(\)\.openSettings\('project'\);/);
   });
 });
+
+/*
+ * REQ-NOTIFY-044 with PD-SHELL-001 (docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md):
+ * the `focus-session` arm marks its load as a notice action's, which main answers by not dispatching a press for a session
+ * this window's workspace does not hold, rather than replacing the pressed notice with an error.
+ */
+describe('REQ-NOTIFY-044: a focus-session press is marked as a notice action\'s', () => {
+  const text = readFileSync(new URL('./main.tsx', import.meta.url), 'utf8');
+  it('main.tsx passes fromNotice from the focus-session arm to session.resume', () => {
+    const start = text.indexOf("case 'focus-session':");
+    const arm = text.slice(start, text.indexOf('return;', text.indexOf('focusSession(action.sessionId', start)));
+    expect(arm).toContain("focusSession(action.sessionId, { fromNotice: true });");
+    expect(text).toContain("bridge.command({ kind: 'session.resume', sessionId, ...(options.fromNotice === true ? { fromNotice: true as const } : {}) })");
+  });
+});

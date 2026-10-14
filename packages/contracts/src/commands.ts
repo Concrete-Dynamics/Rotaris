@@ -142,7 +142,12 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('checkpoints.list'), sessionId: z.string().min(1) }),
   z.object({ kind: z.literal('checkpoints.preview'), sessionId: z.string().min(1), sequence: z.number().int().nonnegative() }),
   z.object({ kind: z.literal('checkpoints.restore'), sessionId: z.string().min(1), sequence: z.number().int().nonnegative(), force: z.boolean() }),
-  z.object({ kind: z.literal('session.resume'), sessionId: z.string().min(1) }),
+  /**
+   * `fromNotice` (2026-10-14): the load is a `focus-session` notice action's. Notices reach every main window, so the
+   * session may belong to another window's workspace; such a press is not dispatched — no notice replaces the one pressed
+   * (REQ-NOTIFY-044, PD-SHELL-001; docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
+   */
+  z.object({ kind: z.literal('session.resume'), sessionId: z.string().min(1), fromNotice: z.literal(true).optional() }),
   /** REQ-CHAT-011 again for a loaded session with no active run: append the user row. */
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   /** REQ-CHAT-173: thumbnail bytes are fetched on demand and never join a transcript snapshot. */

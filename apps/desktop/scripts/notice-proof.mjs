@@ -516,7 +516,12 @@ if (want('6c')) {
       // The capture seams are installed only while capturing; the capture's own end is put past the proof's, which quits first.
       ROTARIS_INIT_TEST_TASK: 'fail', ROTARIS_CAPTURE_PROJECT_FOLDER: holder, ROTARIS_CAPTURE_PNG: join(output, 'project-init.png'), ROTARIS_CAPTURE_AFTER_MS: '170000',
       // The second banner, naming a folder no window holds: published through the REAL store once the first press is done.
-      ROTARIS_CAPTURE_NOTICES: `${JSON.stringify({ op: 'report', severity: 'error', title: 'Project setup did not finish: closed-project', message: 'Rotaris could not finish setting this workspace up for code search.', persistent: true, action: { label: 'Try again', action: { kind: 'open-project-init', workspace: closed } } })}@15000`,
+      ROTARIS_CAPTURE_NOTICES: [
+        `${JSON.stringify({ op: 'report', severity: 'error', title: 'Project setup did not finish: closed-project', message: 'Rotaris could not finish setting this workspace up for code search.', persistent: true, action: { label: 'Try again', action: { kind: 'open-project-init', workspace: closed } } })}@15000`,
+        // A `focus-session` notice naming a session the pressing window's store does not hold (REQ-NOTIFY-044; the repair of
+        // docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
+        `${JSON.stringify({ op: 'report', severity: 'warning', title: 'Session S-elsewhere-0001 failed', message: 'The session on screen is unaffected. Open the failed session to see its recovery.', persistent: true, sessionId: 'S-elsewhere-0001', action: { label: 'Open the session', action: { kind: 'focus-session', sessionId: 'S-elsewhere-0001' } } })}@24000`,
+      ].join(';;'),
     },
   });
   const d = launched.driver;
@@ -550,12 +555,19 @@ if (want('6c')) {
     await d.useWindow('other-project');
     await step('Try again for the closed project', d.click('.notice__action', { text: 'Try again' }));
     const told = await step('the info notice', until(() => d.eval(`[...document.querySelectorAll('[data-testid="acknowledgement-title"]')].map((n) => n.textContent)`), (v) => Array.isArray(v) && v.includes('Project closed-project is not open in any window.'), { timeoutMs: 10_000, what: 'the info acknowledgement' }));
+    // The focus-session notice for a session this window's store does not hold: pressed, it is not dispatched, so the pressed
+    // notice still stands (no "could not be loaded" error replaces it) and the window follows nothing new.
+    const foreignBanner = await step('the foreign session\'s notice', until(() => noticeIn('other-project'), (n) => n !== null && n.title === 'Session S-elsewhere-0001 failed', { timeoutMs: 30_000, what: 'the foreign session\'s notice' }));
+    await d.useWindow('other-project');
+    await step('Open the session, in a window that does not hold it', d.click('.notice__action', { text: 'Open the session' }));
+    await new Promise((r) => setTimeout(r, 1500));
+    const stillPressed = await noticeIn('other-project');
     const after = await d.windows();
     // The edit was the proof's, and an unsaved one would hold the quit at the unsaved-settings guard: it is discarded.
     await d.useWindow('atlas-billing');
     await step('Discard the edit', d.click('.save-bar .btn-secondary', { text: 'Discard' }));
     await step('the form clean again', until(() => d.eval(`document.querySelector('.save-bar__status')?.textContent ?? null`), (v) => v === 'All changes saved', { timeoutMs: 10_000, what: 'the save bar clean' }));
-    value = { banner, dirty, there, surfaced: surfaced.windows.map((w) => w.workspace), project, stayed, closedBanner, told, windowsAfter: after.windows.map((w) => w.workspace) };
+    value = { foreignBanner, stillPressed, banner, dirty, there, surfaced: surfaced.windows.map((w) => w.workspace), project, stayed, closedBanner, told, windowsAfter: after.windows.map((w) => w.workspace) };
   } catch (cause) {
     failure = cause;
   }
@@ -578,6 +590,10 @@ if (want('6c')) {
   expect(!/notice action "open-project-init" has no target/.test(log), 'the renderer still reports the action without a target');
   expect(value.windowsAfter.length === 2, `a window was added or closed for the closed project: ${JSON.stringify(value.windowsAfter)}`);
   expect(/project-setup action for .*closed-project: no window holds it, so nothing was opened/.test(log), 'main did not log the closed project\'s press');
+  expect(value.foreignBanner.member === 'focus-session', `the foreign session's notice offers ${JSON.stringify(value.foreignBanner)}`);
+  expect(value.stillPressed?.title === 'Session S-elsewhere-0001 failed', `pressing "Open the session" for a session this window does not hold replaced the notice: ${JSON.stringify(value.stillPressed)}`);
+  expect(/notice action "focus-session" for S-elsewhere-0001 not dispatched in window \d+/.test(log), 'main did not log the undispatched focus-session press');
+  expect(!/diagnostics: notice #\d+ error "The session could not be loaded"/.test(log), 'the focus-session press raised "The session could not be loaded"');
   results.projectInit = value;
 }
 

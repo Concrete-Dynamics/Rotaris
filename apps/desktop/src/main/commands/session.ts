@@ -207,6 +207,14 @@ export function sessionCommands(
       // load would collide (REQ-MONITOR-256); the renderer treats that answer as a focus switch.
       const r = await runHost.request({ kind: 'session.resume', workspaceId: w.workspaceId, sessionId: req.sessionId }, millis(10_000));
       if (r.kind !== 'session.resumed') {
+        // REQ-NOTIFY-044 with PD-SHELL-001: a `focus-session` notice is every window's, and pressed in a window holding another
+        // workspace it names a session this window's store does not hold. That press is not dispatched: the refusal is logged,
+        // and no error notice replaces the one the user pressed (REQ-NOTIFY-024). Until 2026-10-14 it raised "The session could
+        // not be loaded" there (docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
+        if (r.kind === 'refused' && req.fromNotice === true && r.code === 'session.no-session') {
+          log(`notice action "focus-session" for ${req.sessionId} not dispatched in window ${w.wcId}: its workspace ${w.workspace} does not hold the session (REQ-NOTIFY-044)`);
+          return refusal(r, 'The session could not be loaded');
+        }
         if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail);
         return refusal(r, 'The session could not be loaded');
       }

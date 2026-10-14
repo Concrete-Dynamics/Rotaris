@@ -42,7 +42,7 @@ import { bootApproval, bootAuthRecovery, bootHookReview, bootPause, bootPersona,
  * browser state), so the root registers it here for the dispatcher, which is module-scoped because a notice may arrive
  * before any view has mounted. Null until the window has booted, and the action is then not dispatched.
  */
-let focusSession: ((sessionId: string) => void) | null = null;
+let focusSession: ((sessionId: string, options?: { readonly fromNotice?: true }) => void) | null = null;
 
 /**
  * Part X — the workspace's saved prompts (REQ-LIBRARY-137/138/139), held ABOVE the views. That placement is
@@ -1003,7 +1003,11 @@ function dispatchNoticeAction(action: NoticeAction): void {
       return;
     case 'focus-session':
       if (focusSession === null) { console.warn('notice action "focus-session" arrived before the window could open one'); return; }
-      focusSession(action.sessionId);
+      // The action names a session and no workspace, and the notice is every window's: pressed in a window holding another
+      // workspace, main finds the session absent from this window's store and the press is not dispatched — no notice
+      // replaces the one pressed, nothing is followed (REQ-NOTIFY-044, PD-SHELL-001;
+      // docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
+      focusSession(action.sessionId, { fromNotice: true });
       return;
     case 'open-library':
       // REQ-LIBRARY-103's three tab names, imported from the domain that owns the list — the same discipline the
@@ -1206,8 +1210,8 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
     }
     return outcomeOf<DeleteOutcome>(r);
   }, []);
-  const openSession = useCallback(async (sessionId: string): Promise<{ ok: true } | { ok: false; reason: string }> => {
-    const result = await bridge.command({ kind: 'session.resume', sessionId });
+  const openSession = useCallback(async (sessionId: string, options: { readonly fromNotice?: true } = {}): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const result = await bridge.command({ kind: 'session.resume', sessionId, ...(options.fromNotice === true ? { fromNotice: true as const } : {}) });
     if (!result.ok) {
       // REQ-MONITOR-249/252: focusing a background run that is already live is not a resume — the
       // engine reports that session as already active, and following it is the correct outcome.
@@ -1228,7 +1232,7 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
 
   // REQ-NOTIFY-044's `focus-session`: the dispatcher is module-scoped (a notice can arrive before a view mounts), so
   // the opener is registered here for as long as this window lives.
-  useEffect(() => { focusSession = (id) => { void openSession(id); }; return () => { focusSession = null; }; }, [openSession]);
+  useEffect(() => { focusSession = (id, options) => { void openSession(id, options).then((r) => { if (!r.ok && options?.fromNotice === true) console.warn(`notice action "focus-session" for ${id} was not dispatched here: ${r.reason}`); }); }; return () => { focusSession = null; }; }, [openSession]);
 
   /*
    * REQ-LIBRARY-125/126 (PD-LIBRARY-002): the improvement analysis activity, which main has published on its own

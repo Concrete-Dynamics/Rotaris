@@ -578,3 +578,29 @@ describe('session.release: the window stops following the session, and keeps its
     expect(h.hostAsked).toEqual([]);
   });
 });
+
+/*
+ * REQ-NOTIFY-044 with PD-SHELL-001 (`docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md`):
+ * a `focus-session` notice pressed in a window holding another workspace names a session this window's store does not hold.
+ * The press is not dispatched: no error notice replaces the one pressed, and the refusal is logged. A load the session browser
+ * asks for keeps raising its refusal as before.
+ */
+describe('session.resume for a notice action, in a window that does not hold the session (REQ-NOTIFY-044)', () => {
+  const foreign = (req: RunHostRequest): ProcessReply => (req.kind === 'session.resume'
+    ? { kind: 'refused', code: 'session.no-session', headline: 'The session could not be loaded', detail: 'No session exists under id S-A.' }
+    : { kind: 'ack' });
+
+  it('raises no notice and logs the press when the load is a notice action\'s', async () => {
+    const h = harness(() => ({ kind: 'ack' }), foreign);
+    const out = await sessionCommands(h.ctx)['session.resume']({ kind: 'session.resume', sessionId: 'S-A', fromNotice: true }, windowOn('ws-1'));
+    expect(out.ok).toBe(false);
+    expect(h.raised).toEqual([]);
+    expect(h.logs.some((l) => l.includes('notice action "focus-session" for S-A not dispatched'))).toBe(true);
+  });
+
+  it('still raises the refusal for a load the session browser asked for', async () => {
+    const h = harness(() => ({ kind: 'ack' }), foreign);
+    await sessionCommands(h.ctx)['session.resume']({ kind: 'session.resume', sessionId: 'S-A' }, windowOn('ws-1'));
+    expect(h.raised).toEqual([{ severity: 'error', headline: 'The session could not be loaded', detail: 'No session exists under id S-A.' }]);
+  });
+});

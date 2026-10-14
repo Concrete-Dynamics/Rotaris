@@ -256,3 +256,32 @@ describe('runs.active counts the workspace it names, and runs.stopWorkspace stop
     expect(seen).toEqual([['stop', '/ws/one']]);
   });
 });
+
+/**
+ * REQ-NOTIFY-044 with PD-SHELL-001 (`docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md`):
+ * a resume the engine refuses changes nothing in the run host. A `focus-session` notice pressed in a window holding another
+ * workspace asks for a session that window's store does not hold; until 2026-10-14 the run host recorded the session under the
+ * asking workspace's root before the refusal, so a session live in the other workspace took its continuation lease against
+ * the wrong workspace from then on.
+ */
+describe('session.resume records the session\'s workspace only once the engine has loaded it (REQ-NOTIFY-044)', () => {
+  const hostFor = (roots: Map<string, string>, answer: unknown) => ({
+    log: () => undefined,
+    stores: new Map([['ws-B', { dal: {}, root: '/work/b' }]]),
+    sessionRoots: roots,
+    sessions: { resume: () => answer },
+  }) as unknown as RunHost;
+
+  it('leaves a session live in another workspace recorded under its own root when the resume is refused', async () => {
+    const roots = new Map([['S-A', '/work/a']]);
+    const refused = await dispatch({ kind: 'session.resume', workspaceId: 'ws-B', sessionId: 'S-A' }, hostFor(roots, { ok: false, error: { code: 'no-session', reason: 'No session exists under id S-A.' } }));
+    expect(refused).toEqual({ kind: 'refused', code: 'session.no-session', headline: 'The session could not be loaded', detail: 'No session exists under id S-A.' });
+    expect(roots.get('S-A')).toBe('/work/a');
+  });
+
+  it('records the session under the asking workspace when the engine loads it', async () => {
+    const roots = new Map<string, string>();
+    expect(await dispatch({ kind: 'session.resume', workspaceId: 'ws-B', sessionId: 'S-B' }, hostFor(roots, { ok: true, value: { sessionId: 'S-B' } }))).toEqual({ kind: 'session.resumed', sessionId: 'S-B' });
+    expect(roots.get('S-B')).toBe('/work/b');
+  });
+});

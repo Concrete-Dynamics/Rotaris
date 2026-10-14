@@ -192,9 +192,13 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       // here would forbid every focus switch and every 2nd concurrent start.
       const s = stores.get(req.workspaceId);
       if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
-      sessionRoots.set(req.sessionId, s.root);
       const resumed = sessions.resume(s.dal, s.root, asSessionId(req.sessionId));
       if (!resumed.ok) return { kind: 'refused', code: `session.${resumed.error.code}`, headline: 'The session could not be loaded', detail: resumed.error.reason };
+      // Recorded only once the engine has loaded the session from THIS workspace's store: a `focus-session` notice pressed in
+      // a window holding another workspace asks for a session this store does not hold, and recording it first moved a session
+      // live elsewhere onto this workspace's continuation lease (REQ-NOTIFY-044, PD-SHELL-001;
+      // docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
+      sessionRoots.set(req.sessionId, s.root);
       return { kind: 'session.resumed', sessionId: resumed.value.sessionId };
     }
     case 'session.start': {

@@ -191,8 +191,8 @@ nothing but its own repairs merged after it; `"acceptance": { "fresh": true }` f
 
 Report what merged (counts, notable repairs), what remains open and why (owner rulings, platform-bound, excluded),
 each decision waiting on the owner in one line, collisions the owner must know about, and where the evidence is.
-Then remove the landing worktrees left by bundles that did not land (`<integ>-<short>`), the acceptance, live and
-reference worktrees and the landed branches (`git branch -d`), stop leftover `Xvfb`, and delete the check-in.
+Then remove the landing worktrees left by bundles that did not land (`<integ>-<short>`), the acceptance, live,
+survey and reference worktrees and the landed branches (`git branch -d`), stop leftover `Xvfb`, and delete the check-in.
 
 ## Improving this skill
 

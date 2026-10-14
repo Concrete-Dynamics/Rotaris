@@ -5,16 +5,18 @@ verified. An entry that turns out wrong is corrected by a new entry, never edite
 
 ## 2026-10-14 — a read-only survey verifies its merged list with one agent
 
-**Prompted by** the Windows-on-ARM hand-over survey, run `wf_f659576e-da7` (six sweeps, one merge, then one verifier
-per merged item: 42 `verify:<key>` labels in its journal). On the two-agent cap those 42 verifiers ran two at a time
-and took most of the survey's wall clock; the owner asked mid-run: "Can you skip the individual verify steps for the
-windows arm survey and give all results to a single verifier? This will Speed Things up this time.", and then, of
-writing it into this skill: "Yes add that to the skill." Surveys had no shape written anywhere; each was authored ad
-hoc. **Changed:** `references/workflow-tool.md` gains "A read-only survey": pin a detached worktree at one commit,
-sweep several ways, merge and verify the whole list with ONE agent (split into the fewest batches only when the list
-is too long for one agent), then draft and critic. SKILL.md §1.1 points at it. No script, template prompt, invariant
-or assertion changed. **Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check`; the skill-review
-by one reviewer agent under `references/skill-review.md`.
+**Prompted by** the Windows-on-ARM hand-over survey, run `wf_f659576e-da7`: six sweeps and one merge (85 items), then
+one verifier per merged item, two at a time on the two-agent cap. When the owner asked, 42 `verify:<key>` agents had
+started (journal line 97, `verify:per-user-dirs-windows`, about 05:48 UTC); when the run was stopped at about 06:10
+UTC, 63 had started and 61 returned, and the verify stage had run from 04:59 against 04:28 to 04:59 for the sweeps and
+the merge. The owner asked mid-run: "Can you skip the individual verify steps for the windows arm survey and give all
+results to a single verifier? This will Speed Things up this time.", and then, of writing it into this skill: "Yes add
+that to the skill." The remaining 24 items went to one verifier (run `wf_87fd482b-879`). Surveys had no shape written
+anywhere; each was authored ad hoc. **Changed:** `references/workflow-tool.md` gains "A read-only survey": pin a
+detached worktree at one commit, sweep several ways, merge, verify the whole merged list with ONE agent (split into
+the fewest batches only when the list is too long for one agent), then draft and critic. SKILL.md §1.1 points at it.
+No script, template prompt, invariant or assertion changed. **Verified** by `node scripts/orchestration.mjs self-test`
+and `pnpm check`; the skill-review by one reviewer agent under `references/skill-review.md`.
 
 ## 2026-10-13 — the skill-review of fin41's three entries, by its bundle's reviewer
 

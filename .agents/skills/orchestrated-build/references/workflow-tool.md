@@ -84,12 +84,12 @@ report, nothing is built or landed. It is a workflow of its own, outside `workfl
    named with its hash in every prompt, so all readers see one tree while plans land beside it. Remove it after.
 2. **Sweep.** Several finders at once, each searching a different way (the record by file, defect notes, code paths,
    tooling), each returning items with `file:line` sources through a schema.
-3. **Merge and verify, by one agent.** One agent merges the duplicates and verifies the whole merged list in one pass:
-   still open at the pinned commit, the steps that measure it, where the result is recorded. It defaults an item to
-   "done" when the tree shows it done. This replaces one verifier per item: the owner asked for the single
-   verifier on 2026-10-14 ("give all results to a single verifier? This will Speed Things up"), after
-   forty-two per-item verifiers took most of a survey's wall clock on a two-agent cap (above). Only a list too long
-   for one agent to read every source of is split, into the fewest batches that fit, and `log()` says so.
+3. **Merge, then verify with one agent.** One agent merges the duplicates; then ONE verifier checks the whole merged
+   list in one pass: still open at the pinned commit, the steps that measure it, where the result is recorded. It marks
+   an item done when the tree shows it done. This replaces one verifier per item, which took most of a survey's wall
+   clock on the two-agent cap (above); the owner asked for the single verifier on 2026-10-14 ("give all results to a
+   single verifier? This will Speed Things up …", then "Yes add that to the skill."). Only a list too long for one
+   agent to read every source of is split, into the fewest batches that fit, and `log()` says so.
 4. **Draft and critic.** One agent writes the deliverable from the verified list; one critic checks it against the
    tree (every command, script, flag and path exists at the pinned commit; nothing is claimed that was not
    verified); the drafter applies the corrections it confirms.

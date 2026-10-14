@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { RunHostRequest } from '@rotaris/contracts';
 import type { LoadedConfiguration } from '@rotaris/config';
 import { dispatch } from './dispatch.js';
+import type * as Engine from '@rotaris/engine';
+import type * as Configuration from './configuration.js';
 import type { RunHost } from './host.js';
 
 /*
@@ -21,12 +23,12 @@ let launchedSetup: unknown = null;
  * resolves the credential it was given, as a model request would, and the capture names the collector it was handed.
  */
 vi.mock('@rotaris/engine', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@rotaris/engine')>()),
+  ...(await importOriginal<typeof Engine>()),
   analyzeImprovement: async (job: { artifact_id: string }, deps: { credentialFor: (m: unknown) => () => Promise<string>; model: unknown }) => ({ artifact_id: job.artifact_id, credential: await deps.credentialFor(deps.model)() }),
   captureRetrospectiveJob: (_dal: unknown, input: { collectorModel: string }) => ({ artifact_id: 'impart_0000000r', collector_model: input.collectorModel, considered_session_ids: [] }),
 }));
 vi.mock('./configuration.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./configuration.js')>()),
+  ...(await importOriginal<typeof Configuration>()),
   retrospectiveOf: (cfg: { analyst: string }) => ({ key: cfg.analyst, model: { providerId: 'p', modelId: cfg.analyst, dialect: 'chat' }, thinking: 'unset' }),
 }));
 

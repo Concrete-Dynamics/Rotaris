@@ -38,6 +38,14 @@ script variable of `run-host/scripted-client.ts` behind `__ROTARIS_SEAMS__`; wit
 `PACKAGED_SCRIPT`. `scripts/lib/seam-check.mjs` names them all. The **process view**'s run-host row says so. No package, edge,
 process, channel, command or store column changed.
 
+**The agent pop-out, terminal auto-open and pane-layout preferences are stored under their registered keys (fin45,
+`fin45-retro-and-record`; `../../defects/fixed/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md`).**
+`interface/agentPopOut` became `interface/agentPopout` and `terminal/autoOpen` became `interface/terminalPopout` (REQ-CONFIG-405,
+REQ-SHELL-006); each pane layout, one object under `panels/<view>` until now, is stored across the table's `panels/version`,
+`panels/{view-key}/state` and `panels/{view-key}/panes` by `PreferenceStore.readLayout` / `writeLayout`, and named on the wire
+by its state key. `PreferenceStore` carries a value stored under any old name over once. `02-process-view.md` (the renderer's
+preference keys, the terminal window's preference).
+
 **The retrospective's authentication refusal names the retrospective (fin45, `fin45-retro-and-record`; `PD-LIBRARY-002`
 revision 5, OQ-300).** `leaseOver` takes its refusal's detail from its caller, so `leasedSetup` refuses "before running a
 retrospective" while a continuation keeps "before continuing this run"; main's `improvements.retrospective` posts

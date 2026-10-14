@@ -14822,8 +14822,9 @@ keys its row assigns to REQ-CONFIG-405 by name (line 415), and the `interface/` 
 `display/showReasoning`'s row names REQ-CHAT-167 — so the specification has no defect here. `packages/platform/src/preferences.ts`
 is confirmed as built (`display/showReasoning`, boolean, default `false`, owner REQ-CHAT-167). **The two recommendations
 weighed:** advocate A's and advocate B's, both confirm-as-built; the ruling follows both. The open note
-[`../defects/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md`](../defects/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md)
-is not decided by this ruling. Written 2026-10-14 by fin45 (`fin45-retro-and-record`).
+[`../defects/fixed/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md`](../defects/fixed/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md)
+was not decided by this ruling; it was repaired apart, in the same plan, by moving each preference to the key the table
+registers. Written 2026-10-14 by fin45 (`fin45-retro-and-record`).
 
 <a id="oq-311"></a>
 

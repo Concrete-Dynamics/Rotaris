@@ -6,7 +6,7 @@ import { Button as DesignButton, EmptyState as DesignEmptyState } from '../desig
 
 /**
  * REQ-LIBRARY-106's Prompts tab: two side-by-side cards in a drag-resizable split whose position persists across
- * restarts (REQ-SHELL-069's `panels/library`), the splitter's accessible name fixed by the requirement, minimum
+ * restarts (REQ-SHELL-069's `panels/library/state`), the splitter's accessible name fixed by the requirement, minimum
  * column width 240 px. Left, accented, the stash with "Use" and "Use and remove"; right, the history with "Use
  * selected" and no removal at all (REQ-LIBRARY-107: "the stash is the column that can be emptied").
  *

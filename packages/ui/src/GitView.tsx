@@ -262,7 +262,7 @@ export function GitView(props: GitViewProps) {
   // A selection survives a refresh only for rows that still exist (REQ-GIT-079: rebuilt each refresh, nothing stale).
   const [seenRows, setSeenRows] = useState(rows);
   if (seenRows !== rows) { setSeenRows(rows); const alive = new Set(rows.map((r) => r.path)); if ([...selected].some((p) => !alive.has(p))) setSelected(new Set([...selected].filter((p) => alive.has(p)))); }
-  // The G8 divider: pointer drag and Left/Right/Home/End; the split persists under `panels/git` (REQ-GIT-153).
+  // The G8 divider: pointer drag and Left/Right/Home/End; the split persists under `panels/git/state` (REQ-GIT-153).
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [right, setRight] = useState<number>(() => layout?.sizes[1] ?? GIT_RIGHT_DEFAULT);
   const [seenLayout, setSeenLayout] = useState(layout);

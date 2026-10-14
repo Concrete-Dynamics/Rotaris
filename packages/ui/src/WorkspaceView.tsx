@@ -177,7 +177,7 @@ export interface WorkspaceViewProps {
   readonly draft?: string | undefined;
   readonly onPublishDraft?: ((text: string) => void) | undefined;
   readonly onWriteDraft?: ((text: string) => void) | undefined;
-  /** Part AB — REQ-CHAT-010 / REQ-SHELL-069: the transcript/composer divider, persisted per user under `panels/workspace`. */
+  /** Part AB — REQ-CHAT-010 / REQ-SHELL-069: the transcript/composer divider, persisted per user under `panels/workspace/state`. */
   readonly composerHeight?: number | undefined;
   readonly onComposerHeight?: ((sizes: readonly [number, number]) => void) | undefined;
   /** Part AC — REQ-CHAT-098/103: clicking a trailer row opens the question stepper or raises the approval dialog. */
@@ -1334,7 +1334,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
 
   /**
    * REQ-CHAT-010 / REQ-SHELL-069: the divider between transcript and composer. Its position is per USER, keyed
-   * `panels/workspace`, and the declared defaults are the requirement's own figures — 150 px, never below 110 px,
+   * `workspace` (`panels/workspace/state` and `/panes`, REQ-SHELL-006), and the declared defaults are the requirement's own figures — 150 px, never below 110 px,
    * and never so tall that the transcript falls below 180 px.
    */
   const shell = useRef<HTMLDivElement | null>(null);

@@ -453,9 +453,9 @@ describe('platform — desktop preferences (ADR-0042)', () => {
     await store.write('ui/reduced_motion', true);
     expect(store.read('interface/settingsTab')).toBe('interface');
     expect(store.read('ui/reduced_motion')).toBe(true);
-    // REQ-SHELL-069: a pane layout round-trips; a wrong version, pane count or shape reads as nothing stored
-    await store.write('panels/overview', { version: 1, panes: 2, sizes: [700, 340] });
-    expect(store.read('panels/overview')).toEqual({ version: 1, panes: 2, sizes: [700, 340] });
+    // REQ-SHELL-069: a pane layout round-trips under its registered keys; a wrong version, pane count or shape reads as nothing stored
+    await store.writeLayout('overview', { version: 1, panes: 2, sizes: [700, 340] });
+    expect(store.readLayout('overview', 2)).toEqual({ version: 1, panes: 2, sizes: [700, 340] });
     expect(coercePaneLayout({ version: 2, panes: 2, sizes: [1, 2] }, 2)).toBeUndefined();
     expect(coercePaneLayout({ version: 1, panes: 3, sizes: [1, 2, 3] }, 2)).toBeUndefined();
     expect(coercePaneLayout({ version: 1, panes: 2, sizes: [1, 'x'] }, 2)).toBeUndefined();
@@ -487,8 +487,8 @@ describe('platform — desktop preferences (ADR-0042)', () => {
 
   it('registers the Workspace divider as an ordinary pane layout (REQ-CHAT-010 / REQ-SHELL-069)', async () => {
     const store = new PreferenceStore(join(dir, 'preferences'));
-    await store.write('panels/workspace', { version: 1, panes: 2, sizes: [520, 210] });
-    expect(store.read('panels/workspace')).toEqual({ version: 1, panes: 2, sizes: [520, 210] });
+    await store.writeLayout('workspace', { version: 1, panes: 2, sizes: [520, 210] });
+    expect(store.readLayout('workspace', 2)).toEqual({ version: 1, panes: 2, sizes: [520, 210] });
   });
 });
 

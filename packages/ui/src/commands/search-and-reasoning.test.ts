@@ -170,7 +170,7 @@ describe('a display:changed announcement folded into a window\'s display store â
   });
 
   it('ignores a payload that is not an announcement: another key, a non-boolean, another contract version', () => {
-    expect(displayPreferencePatch({ v: CONTRACT_SCHEMA_VERSION, preference: 'interface/agentPopOut', value: true })).toBeNull();
+    expect(displayPreferencePatch({ v: CONTRACT_SCHEMA_VERSION, preference: 'interface/agentPopout', value: true })).toBeNull();
     expect(displayPreferencePatch({ v: CONTRACT_SCHEMA_VERSION, preference: 'display/showReasoning', value: 'true' })).toBeNull();
     expect(displayPreferencePatch({ v: CONTRACT_SCHEMA_VERSION + 1, preference: 'display/showReasoning', value: true })).toBeNull();
     expect(displayPreferencePatch(null)).toBeNull();

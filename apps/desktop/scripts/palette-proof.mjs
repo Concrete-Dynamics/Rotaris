@@ -220,7 +220,7 @@ if (wanted('help')) {
 // 3. ADR-0048's application modality, observed with the host's own input.
 const s3 = scenario('modality');
 if (wanted('modality')) {
-  setPreference(s3, 'interface/agentPopOut', true);
+  setPreference(s3, 'interface/agentPopout', true);
   const r = await launch('modality', s3, {
     ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'wait:34000,answer',
     ROTARIS_CAPTURE_PROMPT: 'pop out an agent for the modality reading',
@@ -396,7 +396,7 @@ if (wanted('search-and-reasoning')) {
 //    (docs/defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md).
 const s7 = scenario('persona-follows-display');
 if (wanted('persona-follows-display')) {
-  setPreference(s7, 'interface/agentPopOut', true);
+  setPreference(s7, 'interface/agentPopout', true);
   const HEADER = '[data-testid="thinking-header"]';
   const r = await launch('persona-follows-display', s7, {
     ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,wait:20000,answer', ROTARIS_CHILD_SCRIPT: 'think',

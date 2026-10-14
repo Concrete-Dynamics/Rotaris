@@ -141,7 +141,7 @@ export function terminalRowStreamId(toolName: string, argsJson: string, agentId:
 //                                 the window closes; it reopens without focus for the new session only when it had been
 //                                 open on a session before (see `main/windows.ts` for the reading).
 //  - `window.terminalAutoOpen` → REQ-SHELL-109's preference, written by the terminal window's own control (the
-//                                 preference is `terminal/autoOpen`, registered in `platform`; key-less here like the
+//                                 preference is `interface/terminalPopout`, registered in `platform`; key-less here like the
 //                                 composer draft, Part AB, so no renderer spells the store's key).
 //  - `window.showWorkspace`    → REQ-SHELL-083's "Go to Workspace": the main window switches to the Workspace view and
 //                                 is raised, as a request.
@@ -168,4 +168,4 @@ export interface TerminalWindowPayload {
 /** `window.openTerminal`'s answer: whether a window exists afterwards, and whether it was the one already open. */
 export interface TerminalWindowOpened { readonly opened: boolean; readonly reused: boolean }
 /** REQ-SHELL-109's preference key, registered in `platform`'s `PREFERENCE_KEYS`; spelt once. */
-export const TERMINAL_AUTO_OPEN_PREFERENCE = 'terminal/autoOpen' as const;
+export const TERMINAL_AUTO_OPEN_PREFERENCE = 'interface/terminalPopout' as const;

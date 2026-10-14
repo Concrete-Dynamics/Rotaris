@@ -1,7 +1,7 @@
 ## The agent pop-out, terminal auto-open and pane-layout preferences are stored under keys the specification does not register
 
 Noticed 2026-10-14 by fin44's reviewer of `fin44-hooks-and-config` while checking the repair of
-[`the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md`](fixed/the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md)
+[`the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md`](the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md)
 against REQ-SHELL-006's table; not repaired, outside that task, which named the tool-grouping key alone.
 
 REQ-SHELL-006's table is closed — "every key the product may store is listed here … and a key absent from it does not
@@ -39,3 +39,30 @@ read against REQ-SHELL-069; this note does not decide it.
   `RENAMED_KEYS`, the carry-over a rename would extend.
 - `packages/contracts/src/commands.ts` — `PREFERENCE_COMMAND_KEYS`, which accepts `interface/agentPopOut` and the `panels/*` keys.
 - `apps/desktop/src/main/` — `window.terminalAutoOpen`, which resolves `terminal/autoOpen`.
+
+## Outcome — repaired 2026-10-14 (fin45, `fin45-retro-and-record`)
+
+[OQ-302](../../architecture/open-questions.md#oq-302), ruled under [R-072](../../product/requests.md#r-072), confirms
+REQ-SHELL-006's table as the store's one complete registry. The specification names each of the three preferences and the
+table registers a key for each, so no directive was owed: each is now stored under the key the table lists, and a value stored
+under the old name is read once and carried over (`RENAMED_KEYS` and `carryOverRenamedKeys`, `packages/platform/src/preferences.ts`;
+a value already under the registered key wins, and the old name is removed).
+
+- **Agent pop-out:** `interface/agentPopOut` → `interface/agentPopout` (registry, `PREFERENCE_COMMAND_KEYS`, main's `prefs.set`,
+  the renderer's toggle and boot read, `mission-proof` and `palette-proof`).
+- **Terminal auto-open:** `terminal/autoOpen` → `interface/terminalPopout` (`TERMINAL_AUTO_OPEN_PREFERENCE`,
+  `packages/contracts/src/terminal.ts`; main reads and writes it through that constant).
+- **Pane layouts:** read against REQ-SHELL-069 ("alongside that view's pane count and one schema-version stamp covering every
+  stored layout"), the single object per view was a defect, not an encoding left open: the encoding is free, the keys are not.
+  A layout is now stored across `panels/version` (one stamp), `panels/{view-key}/state` (the sizes) and
+  `panels/{view-key}/panes` (the count), through `PreferenceStore.readLayout` / `writeLayout`, which apply REQ-SHELL-069's
+  restore rules (no version 1, another pane count, an empty state) and its tolerant integer parsing. On the wire a layout is a
+  `PaneLayout` record named by its view's state key (`PANE_LAYOUT_PREFERENCE_KEYS`); an old `panels/<view>` object is split
+  into the three keys once. `overview-proof`, `git-proof` and `composer-proof` read and write the registered keys.
+
+Pinned by `packages/platform/src/preference-registry.test.ts` (six cases, all red before the repair): the registry holds no
+literal key REQ-SHELL-006's table does not list — read from the table itself, which before the repair named exactly the six
+keys `panels/overview`, `panels/git`, `panels/library`, `interface/agentPopOut`, `panels/workspace` and `terminal/autoOpen`; the
+two booleans' keys and defaults; their carry-over; a layout across the three keys; REQ-SHELL-069's restore rules; and a layout
+object's carry-over. `platform.test.ts`'s layout round-trips moved to `readLayout` / `writeLayout`.
+

@@ -169,9 +169,9 @@ if (sessionRows.length !== 1 || sessionRows[0].data['data-session'] !== session.
 if (!/\d+:\d{2}/.test(sessionRows[0].text) || !/tok/.test(sessionRows[0].text) || !/focused/.test(sessionRows[0].text)) throw new Error(`the session row lacks its duration, tokens or focused marker: "${sessionRows[0].text}"`);
 results.run = { status: session.execution_status, samples: samples.length, tokens: totalStored, toolCalls: session.tool_calls, chips, agents: children.length, caps, states, header, branch };
 
-// The pane split: written as the view would write it (REQ-SHELL-069), then read back by the relaunch.
+// The pane split: written as the view would write it (REQ-SHELL-069, under REQ-SHELL-006's three registered keys), then read back by the relaunch.
 mkdirSync(preferences, { recursive: true });
-writeFileSync(join(preferences, 'preferences.json'), JSON.stringify({ ...JSON.parse(existsSync(join(preferences, 'preferences.json')) ? require('node:fs').readFileSync(join(preferences, 'preferences.json'), 'utf8') : '{}'), 'panels/overview': { version: 1, panes: 2, sizes: [800, 420] } }, null, 2));
+writeFileSync(join(preferences, 'preferences.json'), JSON.stringify({ ...JSON.parse(existsSync(join(preferences, 'preferences.json')) ? require('node:fs').readFileSync(join(preferences, 'preferences.json'), 'utf8') : '{}'), 'panels/version': 1, 'panels/overview/panes': 2, 'panels/overview/state': [800, 420] }, null, 2));
 
 // 3. Relaunch: the samples identical, the split restored, the session listed.
 const again = await launch('relaunch', workspace, local, preferences, { ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_END_VIEW: '1', ROTARIS_CAPTURE_END_VIEW_MS: '3500', ROTARIS_CAPTURE_AFTER_MS: '2500' });

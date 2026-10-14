@@ -388,3 +388,19 @@ adoption runs **during render** — deliberately, as this component's "adjust st
 draft is adopted on the render that receives it rather than a paint later — and a ref read during render is exactly
 what that rule exists to stop. It is `useState` now. The value is written from an event callback and read during
 render, which is what state is for; the extra render batches with the text update in the same event.
+
+## Correction — 2026-10-14 (fin45), three preferences under keys the table does not list
+
+The second to fifth executions above registered each pane layout as ONE record `{ version, panes, sizes }` under
+`panels/<view>`, and Part R and Part AL′ registered `interface/agentPopOut` and `terminal/autoOpen`. None of those five
+keys is in REQ-SHELL-006's table, which is the registry this store enforces ("a key that does not appear in that table does
+not exist"; OQ-302, ruled under R-072, confirms the table as the one complete registry). The table registers
+`interface/agentPopout`, `interface/terminalPopout`, ONE `panels/version` stamp for every stored layout, and per view
+`panels/{view-key}/state` and `panels/{view-key}/panes`. Those are the keys now: `PreferenceStore.readLayout` / `writeLayout`
+read and write a layout whole across the three, applying REQ-SHELL-069's restore rules (no version 1, another pane count, an
+empty state), and `carryOverRenamedKeys` carries a value found under any old name over once, a value already under the
+registered key winning. The executions above are kept as written: what they measured (a nested record round-trips; the
+serialiser's replacer defect) still holds of the store; the keys they named are falsified by the table. A test now reads the
+table itself and fails on any literal key the registry holds that the table does not list
+(`packages/platform/src/preference-registry.test.ts`;
+`docs/defects/fixed/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md`).

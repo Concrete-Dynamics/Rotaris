@@ -258,7 +258,7 @@ export function TerminalApp({ streams, sessionId, initialFocus, initialAutoOpen 
   return (
     <div className="term-shell" data-testid="term-shell">
       <TerminalWindow streams={streams} actions={terminalActions} onGoToWorkspace={() => { void bridge.command({ kind: 'window.showWorkspace' }); }} focusStream={focusStream} acknowledge={acknowledge} />
-      {/* REQ-SHELL-109: the auto-open preference, default off, persisted user-wide by main under `terminal/autoOpen`. */}
+      {/* REQ-SHELL-109: the auto-open preference, default off, persisted user-wide by main under `interface/terminalPopout`. */}
       <div className="term-shell__bar" data-testid="term-auto-open">
         <span id="term-auto-open-label">Open this window automatically</span>
         <ToggleSwitch checked={autoOpen} onChange={changeAutoOpen} label="Open this window automatically" aria-labelledby="term-auto-open-label" aria-description={`Automatic opening is ${autoOpen ? 'on' : 'off'}. On, the terminal window opens without taking focus when an agent's terminal starts while it is closed.`} data-testid="term-auto-open-toggle" />

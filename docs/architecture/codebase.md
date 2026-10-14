@@ -305,7 +305,7 @@ in `configuration.ts`'s header.)
    scratch workspace now runs autonomous after the starter file is asserted, so no one sits at the approval dialog.
 
 19. **the Overview view (2026-09-05, Part M):** REQ-SHELL-026's startup view drawn — the header with the session
-   label, status and runtime; the resizable two-column body whose split persists under `panels/overview`
+   label, status and runtime; the resizable two-column body whose split persists under `panels/overview` (since 2026-10-14 the registered `panels/overview/state`, `/panes` and `panels/version`)
    (REQ-SHELL-069, ADR-0042); the tokens card over the history **the run samples** (every 10 s on the clock port,
    once at the end, 120 kept, `token_samples` on the session row — store v7) with the sparkline empty below two
    samples and the cost label carrying its qualifier; the tool-calls chips from `tool_calls`; the repository card
@@ -342,7 +342,7 @@ in `configuration.ts`'s header.)
    machine) and the first writes (`worktree add -b` collision-safe on REQ-GIT-010's exact three phrases, `worktree
    remove [--force]` with Git's own refusal recognised as the one force cures, the attach check; REQ-GIT-013's ladder
    verbatim, REQ-GIT-012's two lines the only rewording, 30 s per invocation). The view: REQ-GIT-075's header, the
-   two columns under `panels/git`, the worktrees table with multi-row selection and the per-row delete, the history
+   two columns under `panels/git` (since 2026-10-14 `panels/git/state` and `/panes`), the worktrees table with multi-row selection and the per-row delete, the history
    table, the checkpoints card **in its empty states only** (ADR-0039 not executed — a status note says so), the
    policy card, Merge selected disabled (integration owed); the worktree dialog with `validateBranchName` shared
    through contracts; the two-step delete; REQ-SHELL-125's **start-session dialog** — isolation with the generated
@@ -416,7 +416,7 @@ in `configuration.ts`'s header.)
    selected, hidden on close, destroyed with the main window, on a new session and on a different session loaded, the
    raise a request; a full renderer of the one bundle under `role=persona`, subscribing for itself on `visibilitychange`,
    its refreshes coalesced at 120 ms; first paint 292–307 ms on creation, 468–644 ms after a hide/show); the
-   `interface/agentPopOut` preference with its toggle; `AgentRecord` grown by eight of REQ-MONITOR-044's fields
+   `interface/agentPopOut` preference with its toggle (since 2026-10-14 the registered `interface/agentPopout`); `AgentRecord` grown by eight of REQ-MONITOR-044's fields
    (reasoning, the prompt reading and the limit, granted, called and active tools, the delegation session, the inherited
    context) maintained incrementally by the writer's `AgentActivity`, never recomputed over the transcript. `pnpm
    mission-proof` drives ten launches for eight items. **Found — two defects in existing code:** main's

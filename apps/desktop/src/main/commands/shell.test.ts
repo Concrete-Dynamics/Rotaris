@@ -51,7 +51,7 @@ describe('prefs.set announces a stored display preference to every window — RE
     windows.length = 0;
     const w = fakeWindow();
     expect((await facet['prefs.set']({ kind: 'prefs.set', key: 'display/showReasoning', value: 'yes' as never }, at)).ok).toBe(false);
-    expect((await facet['prefs.set']({ kind: 'prefs.set', key: 'interface/agentPopOut', value: true }, at)).ok).toBe(true);
+    expect((await facet['prefs.set']({ kind: 'prefs.set', key: 'interface/agentPopout', value: true }, at)).ok).toBe(true);
     expect(w.sent).toEqual([]);
   });
 

@@ -19,8 +19,9 @@ import { AUTH_RECOVERY_COMMAND_SCHEMAS } from './auth-recovery.js'; // REQ-NOTIF
 import { NoticeSeveritySchema } from './notices.js'; // Part AO
 
 /**
- * REQ-SHELL-069: the pane-layout keys registered so far — the Overview's, the Git view's (REQ-GIT-153) and,
- * from Part X, the Library's. `panels/library` is REQ-SHELL-069's rule applied without a suffix: the key is the
+ * REQ-SHELL-069: the pane-layout views registered so far — the Overview's, the Git view's (REQ-GIT-153) and,
+ * from Part X, the Library's, each named on the wire by its `panels/{view-key}/state` key (`PANE_LAYOUT_PREFERENCE_KEYS`,
+ * since 2026-10-14). `library` is REQ-SHELL-069's rule applied without a suffix: the view key is the
  * lower-cased view name of REQ-SHELL-023, and the `{view}.{arrangement}` form is for "a view carrying more than
  * one independent multi-pane arrangement", which the Library does not — the Prompts tab's one split is the whole
  * of it (REQ-LIBRARY-106), and the other two tabs declare no divider.
@@ -51,8 +52,15 @@ import { NoticeSeveritySchema } from './notices.js'; // Part AO
  * cannot be read into another (REQ-TRACE-497's "a fold made in one workspace taking effect in another").
  */
 export const REQUIREMENT_FOLDS_PREFERENCE_KEY = 'workspaces/{workspace}/requirementColumnFolds';
+/**
+ * REQ-SHELL-069 with REQ-SHELL-006's table: a pane layout travels as one `PaneLayout` record named by its view's registered
+ * `panels/{view-key}/state` key, and main reads and writes it whole across the table's three keys — that state, the view's
+ * `panels/{view-key}/panes` and the one `panels/version` stamp (`PreferenceStore.readLayout` / `writeLayout`). Until
+ * 2026-10-14 the record was named `panels/<view>` and stored as one object under that name, which the table does not list.
+ */
+export const PANE_LAYOUT_PREFERENCE_KEYS = ['panels/overview/state', 'panels/git/state', 'panels/library/state', 'panels/workspace/state'] as const;
 export const REQUIREMENTS_PREFERENCE_KEYS = ['requirements/filter/text', 'requirements/filter/epic', 'requirements/filter/source', 'requirements/filter/lifecycle', 'requirements/filter/health', 'requirements/filter/priority', 'requirements/sort', 'requirements/blocked_column', 'requirements/axis', 'requirements/fullPermissionRuns', 'requirements/fullPermissionNoticeSuppressed', 'requirements/answerWaitSeconds', REQUIREMENT_FOLDS_PREFERENCE_KEY] as const;
-const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git', 'panels/library', 'panels/workspace', 'interface/agentPopOut', 'display/groupToolCalls', 'display/showReasoning', 'display/autoCollapseTools', ...REQUIREMENTS_PREFERENCE_KEYS] as const;
+const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', ...PANE_LAYOUT_PREFERENCE_KEYS, 'interface/agentPopout', 'display/groupToolCalls', 'display/showReasoning', 'display/autoCollapseTools', ...REQUIREMENTS_PREFERENCE_KEYS] as const;
 
 /**
  * Channel 5: request/response. Every command returns an explicit outcome

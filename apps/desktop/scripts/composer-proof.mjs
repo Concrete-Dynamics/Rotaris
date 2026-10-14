@@ -8,7 +8,7 @@
  *   1. draft      — a draft typed into workspace A through the composer's own change path, the divider dragged
  *                   by keyboard, then the window CLOSED by the user (REQ-SHELL-159's fourth flush point). The
  *                   preference file is then read from disk: the draft is under the workspace's own key and the
- *                   divider under `panels/workspace`.
+ *                   divider under `panels/workspace/state` (with `panels/workspace/panes` and `panels/version`).
  *   2. relaunch   — the same workspace again: the composer holds the draft CHARACTER FOR CHARACTER, the divider
  *                   is where it was left, the run header says `Ready` and shows no duration before any run, and
  *                   the three chips are enabled with no reason to state.
@@ -183,8 +183,9 @@ expect(storedPreferences[keyA] === DRAFT, `the draft was not stored under ${keyA
 // it was never about. What the requirement forbids is a path spelled into a key.
 expect(Object.keys(storedPreferences).every((key) => !key.includes('alpha') && !/[\\:]/.test(key)),
   `a preference key spells a workspace path: ${JSON.stringify(Object.keys(storedPreferences))}`);
-const draggedTo = storedPreferences['panels/workspace'];
-expect(draggedTo && draggedTo.version === 1 && draggedTo.panes === 2, `the divider did not persist a pane layout: ${JSON.stringify(draggedTo)}`);
+// REQ-SHELL-069 under REQ-SHELL-006's registered keys: one `panels/version` stamp, the view's pane count and its state.
+const draggedTo = { version: storedPreferences['panels/version'], panes: storedPreferences['panels/workspace/panes'], sizes: storedPreferences['panels/workspace/state'] };
+expect(draggedTo.version === 1 && draggedTo.panes === 2 && Array.isArray(draggedTo.sizes) && !('panels/workspace' in storedPreferences), `the divider did not persist a pane layout under the registered keys: ${JSON.stringify(storedPreferences)}`);
 expect(draggedTo.sizes[1] === 180, `three ArrowUp presses of 10 px from 150 px should store 180: ${JSON.stringify(draggedTo.sizes)}`);
 const beforeAnyRun = match(draftRun, '[data-testid="run-timing"]', 4300);
 expect(beforeAnyRun?.attrs['data-seconds'] === '', `the run header showed a duration before any run: ${JSON.stringify(beforeAnyRun?.text)}`);

@@ -665,7 +665,7 @@ const s5 = scenario('open');
   expect(probesAt(r.log, 6200, '.inspector')?.[0]?.data?.['data-mode'] === 'pinned', 'the inspector was not pinned');
   results.openOff = { view: 'workspace', tag, name, windows: 0 };
 
-  setPreference(s5, 'interface/agentPopOut', true);
+  setPreference(s5, 'interface/agentPopout', true);
   const r2 = await launch('open-on', s5, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'pop out an agent',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
@@ -769,8 +769,8 @@ const s7 = scenario('settings');
   const strategy = endProbe(r.log, '#strategy')?.[0]?.value; const depth = endProbe(r.log, '#max-depth')?.[0]?.value;
   expect(strategy === 'swarm' && depth === '2', `Settings → Runtime shows strategy ${strategy}, depth ${depth}`);
   const prefs = JSON.parse(readFileSync(join(s7.preferences, 'preferences.json'), 'utf8'));
-  expect(prefs['interface/agentPopOut'] === true, `the toggle did not persist: ${JSON.stringify(prefs)} (REQ-SHELL-073)`);
-  results.settings = { yamlStrategy: 'swarm', yamlDepth: 2, settingsStrategy: strategy, settingsDepth: depth, popOutPreference: prefs['interface/agentPopOut'] };
+  expect(prefs['interface/agentPopout'] === true, `the toggle did not persist: ${JSON.stringify(prefs)} (REQ-SHELL-073)`);
+  results.settings = { yamlStrategy: 'swarm', yamlDepth: 2, settingsStrategy: strategy, settingsDepth: depth, popOutPreference: prefs['interface/agentPopout'] };
 }
 
 // 8. Reconciliation: a child left `running` on a completed session presents settled on every surface (REQ-MONITOR-211/213).

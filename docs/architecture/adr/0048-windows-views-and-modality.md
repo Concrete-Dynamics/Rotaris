@@ -190,7 +190,8 @@ window's first painted whole-session update after `show()` — 292–307 ms when
 trip, the snapshot, the 120 ms coalescer, the paint); the retained window itself appears at once with the content it held.
 "Reopening is instantaneous" holds for the window; the fresh state follows within the figure above.
 
-**Open by preference (REQ-MONITOR-072, REQ-SHELL-073):** `interface/agentPopOut` (default off, the preference store, a
+**Open by preference (REQ-MONITOR-072, REQ-SHELL-073):** `interface/agentPopOut` (since 2026-10-14 the registered `interface/agentPopout`, REQ-CONFIG-405, the old key carried over
+once; default off, the preference store, a
 toggle in Settings → Interface). Off: a click or Open selects the agent in the Workspace inspector, pinned; on: a pointer
 click on any tree row or table row opens or raises the window (a keyboard move selects only — a reading: arrow keys
 through the tree would otherwise raise a window per step). Explicit Pop out always opens it; the inspector's Steer opens it

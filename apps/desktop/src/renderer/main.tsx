@@ -1094,7 +1094,7 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
   // REQ-CHAT-067 (Part Z): the tool-grouping display preference, default ON, in the desktop preference store;
   // owned by `displayPrefs` since Part AG, so the Display settings category and the transcript read one value.
   const groupTools = useStore(displayPrefs, (s) => s.groupTools);
-  const changePopOut = useCallback((value: boolean) => { setPopOut(value); void bridge.command({ kind: 'prefs.set', key: 'interface/agentPopOut', value }); }, []);
+  const changePopOut = useCallback((value: boolean) => { setPopOut(value); void bridge.command({ kind: 'prefs.set', key: 'interface/agentPopout', value }); }, []);
   const session = useStore(replica, (s) => s.session);
   const notice = useStore(notices, (s) => s.current);
   const [theme, setTheme] = useState(initialTheme);
@@ -1109,16 +1109,16 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
   const [modelsLoaded, setModelsLoaded] = useState(false);
   // REQ-SHELL-069: the Overview's pane split, per user, under panels/.
   const [layout, setLayout] = useState<PaneLayout | undefined>(initialLayout);
-  const onLayout = useCallback((l: PaneLayout) => { setLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/overview', value: l }); }, []);
+  const onLayout = useCallback((l: PaneLayout) => { setLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/overview/state', value: l }); }, []);
   // REQ-GIT-076/153: the Git view's split, keyed `git` (REQ-SHELL-069), per user.
   const [gitLayout, setGitLayout] = useState<PaneLayout | undefined>(initialGitLayout);
-  const onGitLayout = useCallback((l: PaneLayout) => { setGitLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/git', value: l }); }, []);
+  const onGitLayout = useCallback((l: PaneLayout) => { setGitLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/git/state', value: l }); }, []);
   // REQ-LIBRARY-106 / REQ-SHELL-069 (Part X): the Prompts tab's split, keyed `library`, per user.
   const [libraryLayout, setLibraryLayout] = useState<PaneLayout | undefined>(initialLibraryLayout);
-  const onLibraryLayout = useCallback((l: PaneLayout) => { setLibraryLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/library', value: l }); }, []);
+  const onLibraryLayout = useCallback((l: PaneLayout) => { setLibraryLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/library/state', value: l }); }, []);
   // Part AB — REQ-CHAT-010 / REQ-SHELL-069: the Workspace's transcript/composer divider, keyed `workspace`, per user.
   const [workspaceLayout, setWorkspaceLayout] = useState<PaneLayout | undefined>(initialWorkspaceLayout);
-  const onWorkspaceLayout = useCallback((l: PaneLayout) => { setWorkspaceLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/workspace', value: l }); }, []);
+  const onWorkspaceLayout = useCallback((l: PaneLayout) => { setWorkspaceLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/workspace/state', value: l }); }, []);
   // Part X: the saved prompts, above every view (REQ-LIBRARY-105), and the stash dialog they open (REQ-LIBRARY-141).
   const prompts = usePrompts(workspace);
   /*
@@ -1591,11 +1591,11 @@ async function boot(): Promise<void> {
     bridge.command({ kind: 'theme.get' }),
     bridge.command({ kind: 'prefs.get', key: 'ui/reduced_motion' }),
     bridge.command({ kind: 'prefs.get', key: 'interface/settingsTab' }),
-    bridge.command({ kind: 'prefs.get', key: 'panels/overview' }),
-    bridge.command({ kind: 'prefs.get', key: 'panels/git' }),
-    bridge.command({ kind: 'prefs.get', key: 'panels/library' }),
-    bridge.command({ kind: 'prefs.get', key: 'interface/agentPopOut' }),
-    bridge.command({ kind: 'prefs.get', key: 'panels/workspace' }),
+    bridge.command({ kind: 'prefs.get', key: 'panels/overview/state' }),
+    bridge.command({ kind: 'prefs.get', key: 'panels/git/state' }),
+    bridge.command({ kind: 'prefs.get', key: 'panels/library/state' }),
+    bridge.command({ kind: 'prefs.get', key: 'interface/agentPopout' }),
+    bridge.command({ kind: 'prefs.get', key: 'panels/workspace/state' }),
   ]);
   const initialPopOut = popOutReply.ok ? (popOutReply.value as { value?: boolean }).value === true : false;
   const initialLayout = layoutReply.ok ? ((layoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;

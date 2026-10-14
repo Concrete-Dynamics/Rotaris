@@ -9,18 +9,31 @@ export const PREFERENCE_KEYS = {
   'appearance/theme': { type: 'string', default: undefined, owner: 'REQ-SHELL-128', coerce: (value: unknown) => typeof value === 'string' ? value : undefined },
   'interface/settingsTab': { type: 'string', default: 'models', owner: 'REQ-CONFIG-271', coerce: (value: unknown) => typeof value === 'string' ? value : 'models' },
   'ui/reduced_motion': { type: 'boolean', default: undefined, owner: 'REQ-SHELL-135', coerce: (value: unknown) => value === true || value === 'true' ? true : value === false || value === 'false' ? false : undefined },
-  /** REQ-SHELL-069: the Overview's two-pane split — version 1, pane count 2, the sizes; anything else reads as nothing stored. */
-  'panels/overview': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => coercePaneLayout(value, 2) },
-  /** REQ-GIT-076/153: the Git view's two-column split, keyed `git` as REQ-SHELL-069 fixes; an unusable value restores the declared default. */
-  'panels/git': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => coercePaneLayout(value, 2) },
   /**
-   * REQ-LIBRARY-106 / REQ-SHELL-069 (Part X): the Prompts tab's two-column split, keyed by the lower-cased view name.
-   * No `{view}.{arrangement}` suffix — that form is for "a view carrying more than one independent multi-pane
-   * arrangement", and the Library carries one: the other two tabs declare no divider.
+   * REQ-SHELL-069 with REQ-SHELL-006's table: the pane layouts, as the table registers them — ONE schema-version stamp,
+   * `panels/version`, covering every stored layout, and per view `panels/{view-key}/state` (the sizes) and
+   * `panels/{view-key}/panes` (the pane count). The views that store one are `PANE_LAYOUT_VIEWS`: the Overview's two-pane
+   * split, the Git view's two columns (REQ-GIT-076/153), the Library's Prompts tab (REQ-LIBRARY-106; no `{view}.{arrangement}`
+   * suffix, since the Library carries one arrangement) and the Workspace's transcript/composer divider (REQ-CHAT-010). A
+   * layout is read and written whole through `PreferenceStore.readLayout` / `writeLayout`. Until 2026-10-14 each was one
+   * object `{ version, panes, sizes }` under `panels/<view>`, which the table does not list; a value found there is carried
+   * over once (`carryOverRenamedKeys`).
    */
-  'panels/library': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => coercePaneLayout(value, 2) },
-  /** REQ-SHELL-073 / REQ-MONITOR-072: "agent pop-out" — an ordinary agent click opens the persona window; default off; persists across windows and restarts. */
-  'interface/agentPopOut': { type: 'boolean', default: false, owner: 'REQ-SHELL-073', coerce: (value: unknown) => value === true || value === 'true' },
+  'panels/version': { type: 'number', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => tolerantInteger(value) },
+  'panels/overview/state': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => paneSizes(value) },
+  'panels/overview/panes': { type: 'number', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => tolerantInteger(value) },
+  'panels/git/state': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => paneSizes(value) },
+  'panels/git/panes': { type: 'number', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => tolerantInteger(value) },
+  'panels/library/state': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => paneSizes(value) },
+  'panels/library/panes': { type: 'number', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => tolerantInteger(value) },
+  'panels/workspace/state': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => paneSizes(value) },
+  'panels/workspace/panes': { type: 'number', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => tolerantInteger(value) },
+  /**
+   * REQ-SHELL-073 / REQ-MONITOR-072: "agent pop-out" — an ordinary agent click opens the persona window; default off; persists
+   * across windows and restarts. The key and default are REQ-CONFIG-405's and REQ-SHELL-006's table's; until 2026-10-14 it was
+   * stored as `interface/agentPopOut`, which neither registers, and a value stored there is carried over once (`RENAMED_KEYS`).
+   */
+  'interface/agentPopout': { type: 'boolean', default: false, owner: 'REQ-CONFIG-405', coerce: (value: unknown) => value === true || value === 'true' },
   /**
    * REQ-CHAT-067 (Part Z): the tool-grouping display setting, default **ON** — the one member of REQ-CHAT-067's
    * pair whose default is on. A desktop preference written user-wide (REQ-CONFIG-405) and explicitly NOT part of
@@ -39,14 +52,6 @@ export const PREFERENCE_KEYS = {
   'display/showReasoning': { type: 'boolean', default: false, owner: 'REQ-CHAT-167', coerce: (value: unknown) => value === true || value === 'true' },
   /** REQ-CHAT-067: auto-collapse all but the most recent tool-call/result pair; default **off**; a desktop preference, not YAML. */
   'display/autoCollapseTools': { type: 'boolean', default: false, owner: 'REQ-CHAT-067', coerce: (value: unknown) => value === true || value === 'true' },
-  /**
-   * REQ-CHAT-010 / REQ-SHELL-069 (Part AB): the Workspace view's transcript/composer divider, keyed by the
-   * lower-cased view name with no `{view}.{arrangement}` suffix — the Workspace carries ONE multi-pane
-   * arrangement, exactly as the Library does. Pane count 2, sizes `[transcript, composer]`; the declared
-   * defaults are REQ-CHAT-010's own figures (composer 150 px, composer minimum 110 px, transcript minimum
-   * 180 px) and anything else reads as nothing stored.
-   */
-  'panels/workspace': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => coercePaneLayout(value, 2) },
   // Part AK2
   /**
    * Spec 08 §Persisted state (Part AK′; REQ-TRACE-301): the requirements board's PERSON-level keys — "a property of
@@ -78,9 +83,12 @@ export const PREFERENCE_KEYS = {
    * Part AL2 — REQ-SHELL-109: the terminal window's auto-open preference, default **off**, persisted user-wide like every
    * desktop preference (REQ-CONFIG-405) and never YAML. Written by the terminal window's own control through
    * `window.terminalAutoOpen` (main resolves the key, as it does for the composer draft) and read by main's frame
-   * observer: a stream that changes while running and the window is closed opens it without taking focus.
+   * observer: a stream that changes while running and the window is closed opens it without taking focus. The key is the
+   * one REQ-CONFIG-405 and REQ-SHELL-006's table register ("auto-open the terminal window when a command starts"); until
+   * 2026-10-14 it was stored as `terminal/autoOpen`, a namespace the table does not have, and a value stored there is carried
+   * over once (`RENAMED_KEYS`).
    */
-  'terminal/autoOpen': { type: 'boolean', default: false, owner: 'REQ-SHELL-109', coerce: (value: unknown) => value === true || value === 'true' },
+  'interface/terminalPopout': { type: 'boolean', default: false, owner: 'REQ-CONFIG-405', coerce: (value: unknown) => value === true || value === 'true' },
   /**
    * Stage B — REQ-STARTUP-146 owns this key and REQ-SHELL-006 makes this table the only place it exists. It is
    * the one key here that decides what a launch OPENS (REQ-SHELL-010 (b)), and the reason REQ-SHELL-006 keeps
@@ -167,6 +175,28 @@ export function preferenceEntry(key: PreferenceKey): { readonly coerce: (value: 
   throw new Error(`preference key ${key} is not registered (REQ-SHELL-006)`);
 }
 export interface PaneLayout { readonly version: 1; readonly panes: number; readonly sizes: readonly number[] }
+
+/** REQ-SHELL-069: "integer values are parsed tolerantly, so a value returned as a string is accepted". */
+function tolerantInteger(value: unknown): number | undefined {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN;
+  return Number.isInteger(n) ? n : undefined;
+}
+/** A stored layout state: the pane sizes, each a finite number (a string read tolerantly); anything else reads as none. */
+function paneSizes(value: unknown): readonly number[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const sizes = value.map((v) => (typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : Number.NaN));
+  return sizes.every((n) => Number.isFinite(n)) ? sizes : undefined;
+}
+
+/** The views whose pane layout this build stores (REQ-SHELL-069's lower-cased view names of REQ-SHELL-023). */
+export const PANE_LAYOUT_VIEWS = ['overview', 'git', 'library', 'workspace'] as const;
+export type PaneLayoutView = (typeof PANE_LAYOUT_VIEWS)[number];
+/** The schema-version stamp REQ-SHELL-069 fixes for every stored layout. */
+export const PANE_LAYOUT_VERSION_KEY = 'panels/version' as const;
+export function paneLayoutKeys(view: PaneLayoutView): { readonly state: `panels/${PaneLayoutView}/state`; readonly panes: `panels/${PaneLayoutView}/panes` } {
+  return { state: `panels/${view}/state`, panes: `panels/${view}/panes` };
+}
+
 export function coercePaneLayout(value: unknown, panes: number): PaneLayout | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const v = value as { version?: unknown; panes?: unknown; sizes?: unknown };
@@ -214,15 +244,36 @@ const serialise = (document: DocumentShape): string => `${JSON.stringify(Object.
 export const RENAMED_KEYS: Readonly<Record<string, PreferenceKey>> = {
   // docs/defects/fixed/the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md
   'display/groupTools': 'display/groupToolCalls',
+  // docs/defects/fixed/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md
+  'interface/agentPopOut': 'interface/agentPopout',
+  'terminal/autoOpen': 'interface/terminalPopout',
 };
 
-/** The document with every renamed key carried over to its registered name; `moved` is whether anything changed. */
+/**
+ * The document with every renamed key carried over to its registered name; `moved` is whether anything changed. A pane layout
+ * this build once stored as one object under `panels/<view>` is split into the registered `panels/<view>/state` and
+ * `panels/<view>/panes`, its version becoming `panels/version` where none is stored; a layout already stored under the
+ * registered keys wins, and the old name is removed either way.
+ */
 function carryOverRenamedKeys(document: DocumentShape): { readonly document: DocumentShape; readonly moved: boolean } {
   let moved = false;
   const next: Record<string, unknown> = { ...document };
   for (const [old, registered] of Object.entries(RENAMED_KEYS)) {
     if (!(old in next)) continue;
     if (!(registered in next)) next[registered] = next[old];
+    delete next[old];
+    moved = true;
+  }
+  for (const view of PANE_LAYOUT_VIEWS) {
+    const old = `panels/${view}`;
+    if (!(old in next)) continue;
+    const stored = next[old] as { version?: unknown; panes?: unknown; sizes?: unknown } | null;
+    const keys = paneLayoutKeys(view);
+    if (stored !== null && typeof stored === 'object' && !(keys.state in next) && !(keys.panes in next)) {
+      next[keys.state] = stored.sizes;
+      next[keys.panes] = stored.panes;
+      if (!(PANE_LAYOUT_VERSION_KEY in next)) next[PANE_LAYOUT_VERSION_KEY] = stored.version;
+    }
     delete next[old];
     moved = true;
   }
@@ -260,6 +311,34 @@ export class PreferenceStore {
     preferenceEntry(key); // REQ-SHELL-006: the gate is the same on the way in as on the way out.
     const document = this.document();
     if (value === undefined) delete document[key]; else document[key] = value;
+    const result = await replaceDocument(this.file, serialise(document), { createParent: true });
+    if (!result.ok) throw new Error(`${result.error.headline}: ${result.error.detail ?? result.error.code}`);
+  }
+
+  /**
+   * REQ-SHELL-069: a view's stored layout, or `undefined` — the declared defaults restored — when nothing is stored, the
+   * stored version is not 1, the stored pane count differs from the view's `panes`, or the stored state is empty or not the
+   * pane count's length.
+   */
+  readLayout(view: PaneLayoutView, panes: number): PaneLayout | undefined {
+    const document = this.document();
+    const keys = paneLayoutKeys(view);
+    if (tolerantInteger(document[PANE_LAYOUT_VERSION_KEY]) !== 1) return undefined;
+    if (tolerantInteger(document[keys.panes]) !== panes) return undefined;
+    const sizes = paneSizes(document[keys.state]);
+    if (sizes === undefined || sizes.length === 0 || sizes.length !== panes) return undefined;
+    return { version: 1, panes, sizes };
+  }
+
+  /** REQ-SHELL-069: a view's layout written whole — its state, its pane count and the one version stamp — in one replacement. */
+  async writeLayout(view: PaneLayoutView, layout: PaneLayout): Promise<void> {
+    const valid = coercePaneLayout(layout, layout.panes);
+    if (valid === undefined) throw new Error(`a pane layout for ${view} must be version 1 with one finite size per pane (REQ-SHELL-069)`);
+    const document = this.document();
+    const keys = paneLayoutKeys(view);
+    document[PANE_LAYOUT_VERSION_KEY] = 1;
+    document[keys.panes] = valid.panes;
+    document[keys.state] = [...valid.sizes];
     const result = await replaceDocument(this.file, serialise(document), { createParent: true });
     if (!result.ok) throw new Error(`${result.error.headline}: ${result.error.detail ?? result.error.code}`);
   }

@@ -2,10 +2,15 @@ import { BrowserWindow, app, nativeTheme, shell } from 'electron';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION, type DisplayPreferenceKey } from '@rotaris/contracts';
 import { buildIdentifier, thirdPartyLicensesPath } from '../about.js';
 import { productVersion } from '../version.js';
-import { composerDraftKey } from '@rotaris/platform';
+import { composerDraftKey, PANE_LAYOUT_VIEWS, paneLayoutKeys, type PaneLayoutView } from '@rotaris/platform';
 import { homedir } from 'node:os';
 import { millis } from '@rotaris/kernel';
 import { type CommandContext, type CommandHandlers } from './context.js';
+
+/** REQ-SHELL-069: the view a pane layout's registered state key names, or null for any other preference key. */
+function paneLayoutViewOf(key: string): PaneLayoutView | null {
+  return PANE_LAYOUT_VIEWS.find((view) => paneLayoutKeys(view).state === key) ?? null;
+}
 
 /**
  * THE SHELL — the facts a window asks for when it paints, the links it may open, the theme, the remembered
@@ -120,20 +125,24 @@ export function shellCommands(
       return { ok: true, value: { name: theme.name } };
     },
     'prefs.get': (req) => {
+      // REQ-SHELL-069: a pane layout is read whole from the table's three keys, its view named by its state key.
+      const layoutView = paneLayoutViewOf(req.key);
+      if (layoutView !== null) return { ok: true, value: { value: preferences.readLayout(layoutView, 2) } };
       return { ok: true, value: { value: preferences.read(requirementsPreferenceKey(req.key)) } };
     },
     'prefs.set': async (req) => {
-      if (req.key === 'panels/overview' || req.key === 'panels/git' || req.key === 'panels/library' || req.key === 'panels/workspace') {
+      const layoutView = paneLayoutViewOf(req.key);
+      if (layoutView !== null) {
         if (typeof req.value !== 'object') return { ok: false, code: 'preference.type', headline: 'A pane layout requires a layout record' };
-        await preferences.write(req.key, req.value);
+        await preferences.writeLayout(layoutView, req.value);
       } else if (req.key === 'ui/reduced_motion') {
         if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'Reduce motion requires a boolean value' };
         await preferences.write(req.key, req.value);
-      } else if (req.key === 'interface/agentPopOut' || req.key === 'display/showReasoning' || req.key === 'display/autoCollapseTools') {
+      } else if (req.key === 'interface/agentPopout' || req.key === 'display/showReasoning' || req.key === 'display/autoCollapseTools') {
         // Part AA: REQ-CHAT-167's `display/showReasoning` and REQ-CHAT-067's `display/autoCollapseTools`, both booleans and both off by default.
         if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'This display preference requires a boolean value' };
         await preferences.write(req.key, req.value);
-        if (req.key !== 'interface/agentPopOut') announceDisplayPreference(req.key, req.value);
+        if (req.key !== 'interface/agentPopout') announceDisplayPreference(req.key, req.value);
       } else if (req.key === 'display/groupToolCalls') {
         // REQ-CHAT-067 (Part Z): the tool-grouping switch, default on.
         if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'Tool grouping requires a boolean value' };

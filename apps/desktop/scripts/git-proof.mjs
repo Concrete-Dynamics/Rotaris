@@ -8,7 +8,7 @@
  *   1. painted   — the header (branch, `ahead 1  behind 0`), one worktree row carrying the base and active markers and
  *                  `+0 -0 / 0`, three history rows exactly one of them local, the checkpoints card's no-session sentence,
  *                  the status strip's branch item, and `git view: N reads in M ms` logged; the divider dragged in by
- *                  keyboard (three Left presses) so a layout is written under `panels/git`.
+ *                  keyboard (three Left presses) so a layout is written under `panels/git/state`.
  *   2. create    — New worktree → `feature/proof` typed → the derived directory → Create: a second row with
  *                  `ahead 0  behind 0`; the directory exists beside the workspace (REQ-GIT-115).
  *   3. isolated  — Overview → New session → isolation on → accept → the composer's prompt; the scripted run writes
@@ -33,7 +33,7 @@
  *                  (REQ-NOTIFY-048/049, REQ-GIT-109); the status put back to `completed` after.
  *   4. delete    — a file dropped into `feature/proof`; Delete → Yes → Git refuses → the second confirmation → force:
  *                  the row is gone, the directory is gone, `Worktree deleted.` (REQ-GIT-111/117).
- *   5. relaunch  — the split dragged in (1) is restored (REQ-SHELL-069, `panels/git`).
+ *   5. relaunch  — the split dragged in (1) is restored (REQ-SHELL-069, `panels/git/state`).
  *   6. no-git    — PATH without Git: the header's empty version, `Working without Git` raised, no dialog (REQ-GIT-104).
  *   6b. not-a-repository — a plain folder that is not a repository, outside this one: no notice (REQ-GIT-104). In 6 and
  *                  6b the strip's branch item reads its state words whole and unshortened, the plain folder under a deep
@@ -234,7 +234,8 @@ const painted = await launch('painted', workspace, local, preferences, {
   const restated = restatedFacts(painted.log);
   if (restated.length > 0) throw new Error(`a fact reached the log twice: ${restated.map((r) => `line ${r.line}, ${r.fact} (owner: ${r.owner}): ${r.text}`).join(' | ')}`);
   const stored = JSON.parse(readFileSync(join(preferences, 'preferences.json'), 'utf8'));
-  if (JSON.stringify(stored['panels/git']?.sizes?.[1]) !== '528') throw new Error(`panels/git was not written as [.., 528]: ${JSON.stringify(stored['panels/git'])}`);
+  // REQ-SHELL-069 under REQ-SHELL-006's registered keys: the state, the pane count and the one version stamp.
+  if (JSON.stringify(stored['panels/git/state']?.[1]) !== '528' || stored['panels/git/panes'] !== 2 || stored['panels/version'] !== 1 || 'panels/git' in stored) throw new Error(`panels/git/state was not written as [.., 528] with its pane count and version: ${JSON.stringify(stored)}`);
   results.painted = { branch: 'main', sync: text(p, '[data-testid="git-sync"]')[0], rows: r.length, history: commits.length, local: local1.length, reads: read.reads, readMs: read.ms, divider: 528, strip: { text: 'main ↑1', icon: 'ph-git-branch', title: 'Branch this workspace is on: main, 1 commit ahead.' }, png: painted.png };
 }
 
@@ -410,7 +411,7 @@ const deleted = await launch('delete', workspace, local, preferences, {
   results.delete = { rows: r.length, directoryGone: true, toast: 'Worktree deleted.', png: deleted.png };
 }
 
-// 5. Relaunch: the split dragged in (1) is restored from panels/git.
+// 5. Relaunch: the split dragged in (1) is restored from panels/git/state.
 const relaunch = await launch('relaunch', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' });
 {
   const divider = first(relaunch.probes, '[data-testid="git-divider"]');

@@ -354,7 +354,8 @@ input events) — and by the unit suites. Two consecutive green runs; the figure
 
 **Built and run.** The terminal window exists (`main/windows.ts` `TerminalWindows`; `renderer/main.tsx` `role=terminal`):
 one per main window, 900×620, titled by the renderer (`terminalWindowTitle`), shown without focus when it opens
-automatically under `terminal/autoOpen`, destroyed on close and rebuilt on the next open, closed and reopened without
+automatically under `terminal/autoOpen` (since 2026-10-14 the registered `interface/terminalPopout`, REQ-CONFIG-405; the old key
+is carried over once), destroyed on close and rebuilt on the next open, closed and reopened without
 focus when the followed session changes, closed and discarded when a session starts from none, gone with its main
 window (REQ-SHELL-080/081/086/109/110/111). It subscribes to the followed session for itself and asks the run host for
 the resync (REQ-SHELL-104). The main window and each persona window hold one `TerminalStreamSet` over the headless

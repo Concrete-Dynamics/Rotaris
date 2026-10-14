@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A window's boot read of the display preferences leaves alone what an announcement set meanwhile (REQ-CHAT-167,
+REQ-CONFIG-403, PD-CONFIG-004; fin44, `fin44-optional-findings`;
+`../../defects/fixed/a-windows-boot-read-of-the-display-preferences-can-overwrite-a-newer-announcement.md`).** No channel,
+command or store column changed. The renderer's display store and its three writers moved from `renderer/shell.ts` into
+`renderer/display-prefs.ts` (`createDisplayPrefs`); `02-process-view.md`'s channel-14 paragraph says the boot read yields to it.
+
 **A rename's warm-up search is sent quietly (PD-MCP-004 clause 3; fin44, `fin44-optional-findings`;
 `../../defects/fixed/a-rename-warm-up-that-loses-its-connection-raises-the-servers-unreachable-notice.md`).** No channel or
 store column changed: `SessionConnections.call` gained an optional `{ quiet }`, which the MCP executor passes for the search

@@ -178,7 +178,8 @@ describe('a display:changed announcement folded into a window\'s display store â
 
   it('every window subscribes before its role branch, the preload exposes the channel, and the persona window reads the store', () => {
     const renderer = src('../../../../apps/desktop/src/renderer/shell.ts');
-    expect(renderer).toContain('bridge.onDisplayChanged((payload) => { const patch = displayPreferencePatch(payload); if (patch !== null) displayPrefs.setState(patch); });');
+    // Folded through the boot read's guard (`display-prefs.ts`, fin44), so a boot read under way leaves the announced field alone.
+    expect(renderer).toContain('bridge.onDisplayChanged((payload) => { const patch = displayPreferencePatch(payload); if (patch !== null) display.fold(patch); });');
     expect(src('../../../../apps/desktop/src/preload/index.ts')).toContain('onDisplayChanged: subscribe(CHANNEL.displayChanged),');
     expect(src('../../../../apps/desktop/src/renderer/windows.tsx')).toContain('useStore(displayPrefs, (s) => s)');
   });

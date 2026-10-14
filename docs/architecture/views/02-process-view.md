@@ -652,7 +652,8 @@ every live window; `display:changed` (channel 14, 2026-10-14) is `{preference, v
 preferences (`display/showReasoning`, `display/autoCollapseTools`, `display/groupTools`) just stored by `prefs.set`, to EVERY
 live window (`announceDisplayPreference`, `main/commands/shell.ts`), the writer included; each renderer folds it into its
 `displayPrefs` store (`displayPreferencePatch`), so a persona window already open redraws its rows under the new value
-(REQ-CHAT-167, REQ-CONFIG-403; until then only the writing window's store changed); `project-init:open` (channel 15,
+(REQ-CHAT-167, REQ-CONFIG-403; until then only the writing window's store changed), and a window's boot read, still under way,
+leaves alone what such an announcement set (`renderer/display-prefs.ts`, fin44); `project-init:open` (channel 15,
 2026-10-14, PD-WORKSPACE-005 revisions 2 and 3) is `{workspace}`, to ONE main window, the one holding the workspace a
 project-setup banner names — surfaced, or since revision 3 added for it — which opens Settings › Project
 (`shell.openSettings('project')`); sent by `MainWindows`' `deliver` once the window's renderer has said it listens

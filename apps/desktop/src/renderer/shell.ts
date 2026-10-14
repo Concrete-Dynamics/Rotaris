@@ -2,6 +2,7 @@ import { createStore } from 'zustand/vanilla';
 import { BRIDGE_KEY, resolveTheme, TERMINAL_WINDOW_ROLE, type DisplayView, type RendererBridge, type TerminalFrame, type Theme, type ThemeName } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
 import { applyTheme, createCancelOverlayStore, displayPreferencePatch, headlessEmulator, readTranscriptCounts, TerminalStreamSet, useShellState, type CancelOverlayStore, type TerminalHost } from '@rotaris/ui';
+import { createDisplayPrefs } from './display-prefs.js';
 import { createSessionActions } from './session-actions.js';
 
 /**
@@ -242,19 +243,10 @@ export const openLink = (href: string): void => {
  * category a control over it, and a preference two components can set is a preference that must have one home.
  * The first two default **off**, `groupTools` defaults **on** (REQ-CHAT-067), so an unset preference reads as on.
  */
-export const displayPrefs = createStore<{ showReasoning: boolean; autoCollapseTools: boolean; groupTools: boolean }>(() => ({ showReasoning: false, autoCollapseTools: false, groupTools: true }));
-export async function readDisplayPrefs(): Promise<void> {
-  const [reasoning, collapse, group] = await Promise.all([
-    bridge.command({ kind: 'prefs.get', key: 'display/showReasoning' }),
-    bridge.command({ kind: 'prefs.get', key: 'display/autoCollapseTools' }),
-    bridge.command({ kind: 'prefs.get', key: 'display/groupTools' }),
-  ]);
-  displayPrefs.setState({
-    showReasoning: reasoning.ok && (reasoning.value as { value?: boolean }).value === true,
-    autoCollapseTools: collapse.ok && (collapse.value as { value?: boolean }).value === true,
-    groupTools: group.ok ? (group.value as { value?: boolean }).value !== false : true,
-  });
-}
+const display = createDisplayPrefs(bridge);
+export const displayPrefs = display.store;
+/** The boot read; it leaves alone any field an announcement or a write set while it was under way (`display-prefs.ts`). */
+export const readDisplayPrefs = display.read;
 /**
  * REQ-CONFIG-472 (Part AG): the Display category's four tool-row fields are workspace configuration committed by
  * Save, and they nevertheless take effect on the rows already on screen the moment a control moves. The settings
@@ -273,25 +265,15 @@ export const settingsUnsaved = createStore<{ dirty: boolean }>(() => ({ dirty: f
  * be changed from anywhere. Settings → Display and the palette's "Toggle reasoning bodies" (through `display-host.ts`)
  * both write through here, so the store is updated only after main has stored the value.
  */
-export type DisplayPrefKey = 'display/autoCollapseTools' | 'display/groupTools' | 'display/showReasoning';
+export type { DisplayPrefKey } from './display-prefs.js';
 /**
  * Channel 14 — REQ-CHAT-167 / REQ-CONFIG-403: main announces every display preference it stores to every window, and this
  * window folds it in, so a persona window already open follows a change made in the main window (and the reverse) rather
  * than keeping the values it booted with. Subscribed at module load, before the role branch, so every window role that
  * draws transcript rows has it (`docs/defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`).
  */
-bridge.onDisplayChanged((payload) => { const patch = displayPreferencePatch(payload); if (patch !== null) displayPrefs.setState(patch); });
-const DISPLAY_FIELD: Record<DisplayPrefKey, 'autoCollapseTools' | 'groupTools' | 'showReasoning'> = {
-  'display/autoCollapseTools': 'autoCollapseTools',
-  'display/groupTools': 'groupTools',
-  'display/showReasoning': 'showReasoning',
-};
-export async function writeDisplayPref(key: DisplayPrefKey, value: boolean): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const r = await bridge.command({ kind: 'prefs.set', key, value });
-  if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
-  displayPrefs.setState({ [DISPLAY_FIELD[key]]: value });
-  return { ok: true };
-}
+bridge.onDisplayChanged((payload) => { const patch = displayPreferencePatch(payload); if (patch !== null) display.fold(patch); });
+export const writeDisplayPref = display.write;
 /**
  * THE THEME THIS WINDOW IS WEARING (REQ-SHELL-128, REQ-CONFIG-329).
  *

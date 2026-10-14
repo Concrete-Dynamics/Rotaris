@@ -383,11 +383,24 @@ describe('OQ-298: a quit from outside any window asks no unsaved-settings guard 
     await settle();
     expect(log).toEqual(['confirmed A', 'confirmed B', 'closed A', 'closed B']);
     expect(log.some((l) => l.startsWith('renderer asked'))).toBe(false);
-    expect(lines[0]).toBe('quit: closing 2 main window(s) through their close guards first (PD-ORCH-005 clause 9)');
-    expect(lines).toHaveLength(2);
+    expect(lines).toEqual([
+      'quit: closing 2 main window(s) through their close guards first (PD-ORCH-005 clause 9)',
+      'quit: started outside any window; each close guard allows without a question, so no Save/Discard/Cancel or active-run box is shown, and unsaved settings, if any, stay unsaved (OQ-298)',
+    ]);
     // The quit `window-all-closed` starts once the last window has closed finds none open, and goes ahead.
     expect(handler.beforeQuit()).toBe(false);
     expect(lines).toHaveLength(2);
+  });
+
+  it('the two quit lines agree: the windows close through their close guards, and those guards put no question (OQ-298)', () => {
+    const log: string[] = [];
+    const { handler, lines } = quitHandler([guardedWindow('A', log)], log);
+    handler.beforeQuit();
+    expect(lines[0]).toMatch(/^quit: closing 1 main window\(s\) through their close guards first/);
+    // Before 2026-10-14 the second line said "no close guard is asked" beside the first's "through their close guards"
+    // (`docs/defects/fixed/the-quit-log-says-it-closes-through-close-guards-beside-saying-none-is-asked.md`).
+    expect(lines.join('\n')).not.toMatch(/no close guard/);
+    expect(lines[1]).toMatch(/each close guard allows without a question/);
   });
 
   it('a second before-quit while the close is under way is held and starts nothing more', async () => {

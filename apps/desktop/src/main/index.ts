@@ -1912,8 +1912,8 @@ async function main(): Promise<void> {
    * close would be sent as the person's Deny. Such a quit is turned into the main windows' close, all or none
    * (`closeThroughGuards`): every close is confirmed, and only then does any window close, so a dialog only ever closes once
    * every main window's close is confirmed. The last close reaches `window-all-closed`, which shuts the children down and
-   * quits; that quit finds no main window open and goes ahead. Since OQ-298's ruling (2026-10-14, R-072) no close guard is
-   * asked: such a quit is no user-initiated close (REQ-SHELL-119 guard (1), REQ-CONFIG-287), so unsaved settings stay unsaved
+   * quits; that quit finds no main window open and goes ahead. Since OQ-298's ruling (2026-10-14, R-072) no close guard puts a
+   * question: such a quit is no user-initiated close (REQ-SHELL-119 guard (1), REQ-CONFIG-287), so unsaved settings stay unsaved
    * and nothing is written (`quitGuardsOutsideAnyWindow`, `exit.ts`). Until then each renderer's unsaved-settings guard was
    * asked and its Save/Discard/Cancel waited for with no bound. The handler is `QuitOutsideAnyWindow` (`exit.ts`), whose unit
    * cases in `exit.test.ts` also pin this wiring.

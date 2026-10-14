@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-15**
 
+**The quit outside any window's second log line no longer reads as the first's opposite (2026-10-14, fin46 `fin46-accept1-8`,
+C4; PD-ORCH-005 clause 9, OQ-298).** The process view quotes the new line, "each close guard allows without a question, so no
+Save/Discard/Cancel or active-run box is shown", with the old "no close guard is asked" beside it
+(`docs/defects/fixed/the-quit-log-says-it-closes-through-close-guards-beside-saying-none-is-asked.md`). The README's date
+stays 2026-10-15.
+
 **The quit outside any window's `before-quit` handler moves into `exit.ts` (2026-10-14, fin46 `fin46-accept1-8`, C3;
 PD-SHELL-009 revision 2, PD-ORCH-005 clause 9).** The process view's quit paragraph names `QuitOutsideAnyWindow`
 (`main/exit.ts`), the handler `main/index.ts` held inline until now, and what it holds and lets go. Behaviour unchanged;

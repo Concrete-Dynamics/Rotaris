@@ -177,6 +177,10 @@ export function quitGuardsOutsideAnyWindow(
  *
  * Until 2026-10-14 this was inline code in `index.ts`, reached by no unit test, only by `exit-trace-proof` after a build
  * (`docs/defects/fixed/no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md`).
+ *
+ * Its two lines agree: the windows close through their close guards (clause 9's line, kept as written), and each guard allows
+ * without putting a question. Until 2026-10-14 the second said "no close guard is asked", which read as the first's opposite
+ * (`docs/defects/fixed/the-quit-log-says-it-closes-through-close-guards-beside-saying-none-is-asked.md`).
  */
 export class QuitOutsideAnyWindow {
   #underWay = false;
@@ -199,7 +203,7 @@ export class QuitOutsideAnyWindow {
     if (this.#underWay) return true;
     this.#underWay = true;
     this.deps.log(`quit: closing ${open.length} main window(s) through their close guards first (PD-ORCH-005 clause 9)`);
-    this.deps.log('quit: started outside any window; no close guard is asked, and unsaved settings, if any, stay unsaved (OQ-298)');
+    this.deps.log('quit: started outside any window; each close guard allows without a question, so no Save/Discard/Cancel or active-run box is shown, and unsaved settings, if any, stay unsaved (OQ-298)');
     void closeThroughGuards(quitGuardsOutsideAnyWindow(open, this.deps.closeGuards)).then((closing) => {
       this.#underWay = false;
       if (!closing) this.deps.log('quit: a close guard refused; the application stays');

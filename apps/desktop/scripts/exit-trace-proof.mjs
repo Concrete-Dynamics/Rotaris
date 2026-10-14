@@ -185,8 +185,8 @@ const results = {};
  * The stopped renderers are continued once the launch has ended (or been ended), so no stopped process outlives the proof.
  */
 const LIVENESS_BOUND_MS = 5_000;
-/** OQ-298's line: main's `before-quit` says the quit asks no close guard. */
-const OQ298_LINE = 'quit: started outside any window; no close guard is asked, and unsaved settings, if any, stay unsaved (OQ-298)';
+/** OQ-298's line: main's `before-quit` says each close guard allows without a question (until 2026-10-14, fin46: "no close guard is asked"). */
+const OQ298_LINE = 'quit: started outside any window; each close guard allows without a question, so no Save/Discard/Cancel or active-run box is shown, and unsaved settings, if any, stay unsaved (OQ-298)';
 const hangWarned = (lines) => lines.filter((l) => l.level === 'warning' && /^main window \d+: close guard: the renderer cannot answer: unresponsive \(no answer to the liveness probe within 5000 ms\); its guard allows \(PD-SHELL-010\)/.test(l.message));
 for (const [name, how] of [['hang', 'quit'], ['hang-close', 'close']]) {
   const started = await startApp({ root: join(output, name), workspace, timeoutMs: 90_000 });

@@ -6988,6 +6988,15 @@ the same delegation, 2026-10-14, the ruling of [OQ-298](../architecture/open-que
 > the ruling's implementation allows), a desktop logout, a Windows or macOS host. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **The added line's wording, corrected 2026-10-14 (fin46, `fin46-accept1-8`, C4):** the line quoted above, "no close guard is
+> asked", sat beside clause 9's "closing N main window(s) through their close guards first" and read as its opposite: the windows
+> do close through their own `CloseGuard`s, which put no question. It now reads "quit: started outside any window; each close
+> guard allows without a question, so no Save/Discard/Cancel or active-run box is shown, and unsaved settings, if any, stay unsaved
+> (OQ-298)"; clause 9's line is unchanged, and so is the behaviour. The handler is `QuitOutsideAnyWindow` (`exit.ts`) since the
+> same round
+> ([`the-quit-log-says-it-closes-through-close-guards-beside-saying-none-is-asked.md`](../defects/fixed/the-quit-log-says-it-closes-through-close-guards-beside-saying-none-is-asked.md),
+> [`no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md`](../defects/fixed/no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md)).
+
 ---
 
 <a id="pd-shell-010"></a>

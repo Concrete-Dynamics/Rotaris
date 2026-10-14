@@ -290,7 +290,8 @@ and lets the quit `window-all-closed` starts go ahead. **Since 2026-10-14
 `closeThroughGuards` one guard per open main window whose `ask` allows at once and whose `confirm` and `close` are the window's
 own `CloseGuard`'s, so the renderer's unsaved-settings guard is never asked — a quit from outside any window is no
 user-initiated close (REQ-SHELL-119 guard (1), REQ-CONFIG-287) — unsaved settings stay unsaved and nothing is written, and main
-logs "quit: started outside any window; no close guard is asked, and unsaved settings, if any, stay unsaved (OQ-298)". Until
+logs "quit: started outside any window; each close guard allows without a question, so no Save/Discard/Cancel or active-run box is shown, and unsaved settings, if any, stay unsaved (OQ-298)" (until 2026-10-14, fin46, "no close guard is asked", which read as the opposite of the line before it,
+"through their close guards first"). Until
 then it asked each renderer's guard and waited on a person's Save/Discard/Cancel without bound. What follows about a renderer
 that cannot answer now concerns a person's close of a window and REQ-SHELL-021 gate (1) alone. **A renderer that is gone cannot answer, and a guard that cannot answer allows** (since 2026-10-14, fin43): the
 renderer's guard is asked by `askRendererGuard` (`main/main-windows.ts`), which rejects at once when the window's

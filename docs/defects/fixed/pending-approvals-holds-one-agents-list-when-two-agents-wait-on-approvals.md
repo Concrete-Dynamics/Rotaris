@@ -31,6 +31,9 @@ its registry (`pendingApprovals`), the run gathers them over every port (`Run.pe
 `packages/engine/src/run/run.ts`), the session hands that to each port it builds (`ToolPortContext.pendingApprovalsOfSession`,
 `packages/engine/src/sessions.ts`), and the gate's `pendingChanged` writes it in place of the port's own list (`createToolPort`,
 `apps/desktop/src/run-host/tools.ts`) — the shape the question mirror took on 2026-10-13. With the repair both requests stand in
-the column, the first's answer leaves the second's, and the second's empties it. Not driven in the built app or a live run: no
+the column, the first's answer leaves the second's, and the second's empties it. The gathering itself is pinned by
+`packages/engine/src/children/children.test.ts` ("every port is handed the run's pending approvals over all its agents"): a
+root and two delegated children each holding one approval, every port handed all three, red with the session's wiring
+removed or the run's list cut to one port (added 2026-10-14 by the bundle's review). Not driven in the built app or a live run: no
 proof makes two agents wait on an approval at once; a run killed while two delegated children each wait on an approval would
 show it, the crash's record then withdrawing both (PD-ORCH-005 clause 9).

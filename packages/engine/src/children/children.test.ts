@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock, millis, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type ChildRow } from '@rotaris/store';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
-import { CHILD_STATES, CHILD_TRANSITIONS, FOLLOW_UP_STATE, isDelegationTarget, isLegalChildMove, isLegalFollowUp, RUN_AGENT_ID, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type PermissionPreset, type SessionRecord, type TranscriptIncrement } from '@rotaris/contracts';
+import { CHILD_STATES, CHILD_TRANSITIONS, FOLLOW_UP_STATE, isDelegationTarget, isLegalChildMove, isLegalFollowUp, RUN_AGENT_ID, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type ApprovalPayload, type PermissionPreset, type SessionRecord, type TranscriptIncrement } from '@rotaris/contracts';
 import { BUILT_IN_PERSONAS, canonicaliseName, ChildLedger, RUN_CONFIG_DEFAULTS, Scheduler, Sessions, SessionWriter, uniqueUnderParent, type DelegationOps, type PortToolResult, type Publisher, type RunConfig, type RoleName, type ToolPort, type ToolPortContext } from '../index.js';
 import type { AgentGrant, Persona, PersonaResolver } from './personas.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -427,7 +427,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
    * id-routed answer finds a holder. `closed` collects each port's close (REQ-SESSION-094): the agent, the statement its
    * open calls are settled with, and how many `session.end` events the session held at that moment.
    */
-  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; closed?: { agent: string; statement: string; ended: number }[]; personas?: PersonaResolver; capFor?: (modelKey: string) => number | null; modelKey?: string; raisingPort?: string; grant?: (ctx: ToolPortContext) => AgentGrant | null; readiness?: (ctx: ToolPortContext) => Promise<void> | undefined } = {}) {
+  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; closed?: { agent: string; statement: string; ended: number }[]; personas?: PersonaResolver; capFor?: (modelKey: string) => number | null; modelKey?: string; raisingPort?: string; grant?: (ctx: ToolPortContext) => AgentGrant | null; readiness?: (ctx: ToolPortContext) => Promise<void> | undefined; approvals?: (ctx: ToolPortContext) => readonly ApprovalPayload[] } = {}) {
     // The scripted client answers by persona and by the number of calls that persona has made.
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
@@ -460,7 +460,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         contexts.set(ctx.agentName, ctx);
         let mode: PermissionPreset = selected;
         const held = (id: string): boolean => over.pending?.has(id) ?? false;
-        const base = { ...(over.grant ? { ready: async () => { await over.readiness?.(ctx); }, grant: () => over.grant!(ctx) } : {}), close: (statement: string) => { over.closed?.push({ agent: ctx.agentName, statement, ended: dal.eventsOfKind(ctx.sessionId, 'session.end').length }); }, cancelPending: () => 0, setMode: (m: string) => { const previous = mode; mode = m as PermissionPreset; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; }, currentMode: () => mode, answerApproval: held, answerQuestions: held, cancelQuestions: held };
+        const base = { ...(over.grant ? { ready: async () => { await over.readiness?.(ctx); }, grant: () => over.grant!(ctx) } : {}), close: (statement: string) => { over.closed?.push({ agent: ctx.agentName, statement, ended: dal.eventsOfKind(ctx.sessionId, 'session.end').length }); }, cancelPending: () => 0, setMode: (m: string) => { const previous = mode; mode = m as PermissionPreset; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; }, currentMode: () => mode, answerApproval: held, answerQuestions: held, cancelQuestions: held, ...(over.approvals ? { pendingApprovals: () => over.approvals!(ctx) } : {}) };
         return ctx.delegation
           ? { ...delegationPort(ctx.delegation, ctx.parentId ?? 'root', over.tool, ctx), ...base }
           : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), ...base };
@@ -1734,6 +1734,34 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       hold.open();
       expect((await sessions.running(sid)!).status).toBe('completed');
     });
+  });
+
+  /*
+   * PD-ORCH-005 clause 9 / REQ-SESSION-031 (docs/defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md):
+   * each agent's port holds its own approvals and the session has one `pending_approvals` column, so what every port is
+   * handed to write there (`pendingApprovalsOfSession`) is the run's list over EVERY port — the root's and each child's —
+   * not the asking port's alone. Until 2026-10-14 nothing gathered them, and two agents waiting at once overwrote each other.
+   */
+  it('PD-ORCH-005 clause 9 / REQ-SESSION-031: every port is handed the run\'s pending approvals over all its agents', async () => {
+    const gates: (() => void)[] = [];
+    const approval = (agent: string): ApprovalPayload => ({ request_id: `ask-${agent}`, session_id: 'S1', agent_id: agent, persona: agent, tool_name: 'write_file', command: '', argument_summary: '', rule_id: 'r', reason: 'asks', sequence: 1 });
+    const { sessions, contexts } = sessionsWith((persona, turn) => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'one', task: 'TASK: one' } }, { callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'two', task: 'TASK: two' } }]) : answer('both done');
+      if (persona === 'summariser') return answer('{"summary":"x"}');
+      if (turn > 2) return answer('Done.');
+      const hold = new Promise<void>((r) => { gates.push(r); });
+      return { parts: [{ hold }, ...answer('Done.').parts] };
+    }, { approvals: (ctx) => [approval(ctx.agentName)] });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 400 && gates.length < 2; i += 1) await new Promise((r) => setTimeout(r, 5));
+    expect(gates).toHaveLength(2);
+    const ids = (agent: string) => [...(contexts.get(agent)!.pendingApprovalsOfSession?.() ?? [])].map((a) => a.request_id).sort();
+    const all = ['ask-one', 'ask-orchestrator', 'ask-two'];
+    expect(ids('orchestrator')).toEqual(all);
+    expect(ids('one')).toEqual(all);
+    expect(ids('two')).toEqual(all);
+    for (const open of gates) open();
+    expect((await sessions.running(sid)!).status).toBe('completed');
   });
 
   it('REQ-MONITOR-102: the persisted tool-call total is session-wide — the entry agent\'s calls AND its children\'s', async () => {

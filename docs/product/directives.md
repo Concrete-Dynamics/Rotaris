@@ -4228,7 +4228,8 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > withdrew only the last writer's
 > ([`../defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md`](../defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md));
 > the gate now writes the run's list over every port (`Run.pendingApprovals`). Measured by the run host's `tools.test.ts`
-> with two real ports, red before; not driven in the built app.
+> with two real ports, red before, and the engine's `children.test.ts` (a root and two children, every port handed all
+> three approvals, red with the gathering or its wiring removed); not driven in the built app.
 
 ---
 

@@ -64,6 +64,7 @@ describe('the network-activity disclosure on About & Legal (REQ-STARTUP-160)', (
 
   it('needs nothing dismissed, accepted or hovered: no dialog, details, checkbox, button or tooltip inside it', () => {
     const html = section(draw(true));
+    expect(html).not.toBe('');
     expect(html).not.toMatch(/<(dialog|details|summary|input|button)\b|role="dialog"|\btitle="|hidden/);
   });
 

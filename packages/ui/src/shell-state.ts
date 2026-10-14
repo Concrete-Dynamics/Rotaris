@@ -74,8 +74,9 @@ export interface ShellState {
   readonly transcriptSearch: (() => void) | null;
   registerTranscriptSearch(open: (() => void) | null): void;
   /**
-   * REQ-SHELL-055's window-level Escape on the Workspace view, in its fixed order: the slash suggestion popup
-   * (REQ-CHAT-002/026), then the transcript search panel, then both compact overlay drawers. Each surface registers a
+   * Window-level Escape on the Workspace view, in REQ-CHAT-002's fixed order: the slash suggestion popup (REQ-CHAT-002/026),
+   * then the transcript search panel, then both compact overlay drawers. REQ-SHELL-055 names only the last two, in that order;
+   * the popup's place in front of them is REQ-CHAT-002's. Each surface registers a
    * closer that returns whether it closed anything; an unregistered slot is skipped. The transcript pane registers the
    * search panel's closer while the panel is open (since 2026-10-14; until then nothing filled the slot,
    * `docs/defects/fixed/window-level-escape-skips-the-open-transcript-search-panel.md`).
@@ -133,7 +134,7 @@ export interface ComposerRegistration {
 }
 export type OverlayKind = 'slashPopup' | 'searchPanel' | 'drawers';
 export type OverlayCloser = () => boolean;
-/** REQ-SHELL-055's order of resolution, fixed. */
+/** The order of resolution, fixed: REQ-CHAT-002's popup first, then REQ-SHELL-055's panel and drawers. */
 export const OVERLAY_ORDER: readonly OverlayKind[] = ['slashPopup', 'searchPanel', 'drawers'];
 
 export interface LaunchChoices {

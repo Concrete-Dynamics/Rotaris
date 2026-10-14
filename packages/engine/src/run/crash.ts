@@ -93,6 +93,8 @@ export interface CrashRecord {
  *   transcript row does (`settleDeadToolCalls`, REQ-SESSION-129 with ADR-0024) — unless `ownCallsMayRun`: a continue
  *   while any run of this process on the session parked without closing its tool ports, whose call may still be under way;
  * - every approval still listed as pending is withdrawn by the crash, never denied (clause 9);
+ * - every question prompt still listed in `pending_questions` (v35) is withdrawn by the crash the same way, never answered
+ *   (clause 9; `withdrawStoredQuestions`);
  * - every background terminal session still recorded as running, and not held by this process, is recorded as ended by
  *   the crash (clause 10: a crash ends them).
  *

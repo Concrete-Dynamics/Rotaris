@@ -103,46 +103,24 @@ then "yes. do that."). It runs every three or four plans and once before the fin
 the four stages above:
 
 1. **Pin** the skill in a detached worktree of the survey's own (`git -C <repo> worktree add --detach
-   <repo>-wt-friction-<hash> origin/main`), named with its hash in every prompt and removed after. Never refresh a
-   running plan's reference worktree for it (`references/repository.md`): that plan's agents still read it.
-
-3. **Merge, then verify with one agent.** One agent merges the duplicates; then ONE verifier checks the whole merged
-   list in one pass: still open at the pinned commit, the steps that measure it, where the result is recorded. It marks
-   an item done when the tree shows it done. This replaces one verifier per item, which took most of a survey's wall
-   clock on the two-agent cap (above); the owner asked for the single verifier on 2026-10-14 ("give all results to a
-   single verifier? This will Speed Things up …", then "Yes add that to the skill."). Only a list too long for one
-   agent to read every source of is split, into the fewest batches that fit, and `log()` says so.
-4. **Draft and critic.** One agent writes the deliverable from the verified list; one critic checks it against the
-   tree (every command, script, flag and path exists at the pinned commit; nothing is claimed that was not
-   verified); the drafter applies the corrections it confirms.
-
-## A friction survey
-
-A read-only survey whose subject is this skill: what the runs since the last one cost, and what change to the skill
-would have spared it. The owner asked for it on 2026-10-14 ("Would it make sense to occasionally launch a surveying
-agent that gathers insights from past workflows to identify frictions and suggest updates to the according skill?",
-then "yes. do that."). It runs every three or four plans and once before the final report (SKILL.md §4 and §6), in
-the four stages above:
-
-1. **Pin** the skill in a detached worktree of the survey's own (`git -C <repo> worktree add --detach
-   <repo>-wt-friction-<hash> origin/main`), named with its hash in every prompt and removed after. Never refresh a
-   running plan's reference worktree for it (`references/repository.md`): that plan's agents still read it.
+   <repo>-wt-survey-friction-<hash> origin/main`), named with its hash in every prompt and removed after. Never
+   refresh a running plan's reference worktree for it (`references/repository.md`): that plan's agents still read it.
 2. **Sweep** the evidence, split by plan range, one finder per range. Agents cannot see the conversation: give every
    finder the absolute paths of its plans' scratchpad directories (`RUNS.txt`), the workflows journal directory
    (Journals, above; every run's `journal.jsonl` and agent transcripts), the completion notices, the orchestrator's
-   ledger and session transcript, and the time span of its range. A finder reads that transcript only within its
-   span, so no two read the same part. A finder lists what cost something: a lost or relaunched agent, a repair round past the
-   first, an `unverified`, `needs-owner` or `blocked` ending, a workaround the orchestrator ran by hand, a question
-   the skill should have answered, a statement in it that proved false, wall clock spent queued on the cap. Each item
-   names its evidence (run id and journal line, or transcript timestamp) and how often it recurred.
+   ledger and session transcript, and the time span of its range. A finder reads that transcript only within its span,
+   so no two read the same part. A finder lists what cost something: a lost or relaunched agent, a repair round past
+   the first, an `unverified`, `needs-owner` or `blocked` ending, a workaround the orchestrator ran by hand, a
+   question the skill should have answered, a statement in it that proved false, wall clock spent queued on the cap.
+   Each item names its evidence (run id and journal line, or transcript timestamp) and how often it recurred.
 3. **Merge, then verify with one agent**: the evidence exists and shows the cost; the current skill does not already
    remove it (read the skill at the pin and `CHANGELOG.md` since the range began).
 4. **Draft and critic**: a ranked list, the costliest first, each with the smallest change that removes it and where
    it belongs (the reference it concerns, `scripts/` with a self-test assertion, a step in SKILL.md), and whether it
    touches a protected invariant.
 
-Record the plan range each survey covered in the ledger; the next one starts where it ended. The survey changes nothing.
-You take each proposal you accept through "Improving this skill" (SKILL.md) as its own change with its own
+Record the plan range each survey covered in the ledger; the next one starts where it ended. The survey changes
+nothing. You take each proposal you accept through "Improving this skill" (SKILL.md) as its own change with its own
 `CHANGELOG.md` entry and review; one that crosses a protected invariant goes to the owner. A transcript can quote a
 live-run pack: no finder copies a host name, URL, key or token from one.
 

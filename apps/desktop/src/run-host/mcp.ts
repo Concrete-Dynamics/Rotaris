@@ -5,7 +5,7 @@ import type { McpHealth, McpListing, McpProvisioning, McpSecretRow, McpSecretsVi
 import { resolveUserDirs, WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
 import {
   AGENTS_FILE_NAME, classifyWorkspaceRoot, CODE_INTELLIGENCE_LANGUAGE_SERVERS, CODE_INTELLIGENCE_MARKER_SEGMENTS, CODE_INTELLIGENCE_MEMORY_LISTING_TOOL, CODE_INTELLIGENCE_SERVER_NAME,
-  CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceEdit, codeIntelligenceLanguageServerStore,
+  CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceEdit, codeIntelligenceLanguageServerStore, codeIntelligenceWarmUp,
   deriveSetupInvocation, DiagnosticSink, launchedProjectOf, mcpConfigurationForExecutionRoot, narrowAfterUpdate, renderMcpSection, resolvePersonaMcp,
   type Diagnostic, type DropReason, type LoadedConfiguration, type McpResolvedServer, type PersonaMcpSurface,
 } from '@rotaris/config';
@@ -367,11 +367,41 @@ export class McpHost {
            */
           execute: async (a, tctx) => observeReach({ root: workspaceRoot, reach: server.name === CODE_INTELLIGENCE_SERVER_NAME ? codeIntelligenceEdit(tool.reported, a as Record<string, unknown>)?.reach ?? null : null, journal: this.writes, agent: tctx.agentName }, async () => {
             const started = this.deps.clocks.monotonic.now();
+            const timedOut = () => errorObservation(`MCP server '${server.name}' did not answer '${tool.callable}' within its allowance of ${timeoutMs / 1_000} s; the call failed and was not retried (REQ-MCP-003).`, { failureKind: 'timeout' });
+            const cancelled = () => errorObservation(`The call to '${tool.callable}' on MCP server '${server.name}' was cancelled by the run before it completed; it was not retried.`, { failureKind: INTERRUPTED_FAILURE_KIND });
             try {
               // PD-MCP-002: REQ-MCP-070's `lsp_init` names the root this port's run executes in.
               const c = await connections.connect(server.name, description, workspaceRoot);
               watch(c);
-              const r = await connections.call(server.name, description, tool.reported, a as Record<string, unknown>, timeoutMs, tctx.signal);
+              /*
+               * PD-MCP-004 (OQ-273, ruled 2026-10-13 under R-072): the bundled server's symbol rename is preceded by its
+               * referencing-symbol search of the same symbol and file, whose answer is discarded — the pinned runtime answered
+               * a rename before its language server had loaded the project, and renamed the declaring file alone
+               * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+               * Asked by the reported name, so a `tool_name_map` rename (REQ-MCP-005) is still warmed, and of this server alone.
+               * The search is the run host's own request, as REQ-MCP-070's and REQ-MCP-071's are: no grant applies to it, and it
+               * writes no record, total or notice. The pair is held to the rename's one allowance, measured from `started`: the
+               * rename is sent with what the search left, so the timeout test below covers both. Until the ruling the rename was
+               * forwarded as the model made it (OQ-273's "what the build proceeds under", kept there as the falsified reading).
+               */
+              let allowance: Millis = timeoutMs;
+              const warmUp = server.name === CODE_INTELLIGENCE_SERVER_NAME ? codeIntelligenceWarmUp(tool.reported, a as Record<string, unknown>) : null;
+              if (warmUp !== null) {
+                try {
+                  await connections.call(server.name, description, warmUp.tool, warmUp.args, millis(Math.max(0, timeoutMs - (this.deps.clocks.monotonic.now() - started))), tctx.signal);
+                } catch (cause) {
+                  const text = String(cause instanceof Error ? cause.message : cause);
+                  const elapsed = this.deps.clocks.monotonic.now() - started;
+                  // The allowance before the abort, as the rename's own catch reads them (PD-TOOLS-013 revision 2).
+                  if (elapsed >= timeoutMs || (/timeout|timed out/i.test(text) && elapsed >= timeoutMs * 0.9)) return timedOut();
+                  if (tctx.signal.aborted) return cancelled();
+                  this.deps.log(`mcp: the reference search sent before '${tool.callable}' on MCP server '${server.name}' failed (${redact(text)}); the rename is sent anyway (PD-MCP-004)`, 'warn');
+                }
+                if (tctx.signal.aborted) return cancelled();
+                allowance = millis(timeoutMs - (this.deps.clocks.monotonic.now() - started));
+                if (allowance <= 0) return timedOut();
+              }
+              const r = await connections.call(server.name, description, tool.reported, a as Record<string, unknown>, allowance, tctx.signal);
               // REQ-SESSION-136 / REQ-SESSION-139, OQ-208 as ruled (2026-10-07, R-072): an MCP call's record carries no
               // `outcome_kind` — `mcp` names the tool's family, not how the call ended — and keeps its `failure_kind`, so the
               // histogram derives its bucket from `status` and `is_error` (`success` or `tool_error`). Until the ruling every
@@ -380,11 +410,11 @@ export class McpHost {
             } catch (cause) {
               const text = String(cause instanceof Error ? cause.message : cause);
               const elapsed = this.deps.clocks.monotonic.now() - started;
-              if (/timeout|timed out/i.test(text) && elapsed >= timeoutMs * 0.9) return errorObservation(`MCP server '${server.name}' did not answer '${tool.callable}' within its allowance of ${timeoutMs / 1_000} s; the call failed and was not retried (REQ-MCP-003).`, { failureKind: 'timeout' });
+              if (/timeout|timed out/i.test(text) && elapsed >= timeoutMs * 0.9) return timedOut();
               // PD-TOOLS-013 revision 2 (c), OQ-238: the SDK call receives the run's signal, so its throw on the abort is the
               // run's cancel. After the allowance test, as fetch reads its deadline first. Until revision 2 it read
               // `execution_error` and filed a `tool_error` warning.
-              if (tctx.signal.aborted) return errorObservation(`The call to '${tool.callable}' on MCP server '${server.name}' was cancelled by the run before it completed; it was not retried.`, { failureKind: INTERRUPTED_FAILURE_KIND });
+              if (tctx.signal.aborted) return cancelled();
               return errorObservation(`The call to '${tool.callable}' on MCP server '${server.name}' failed: ${redact(text)}`, { failureKind: 'execution_error' });
             }
           }),

@@ -15,6 +15,14 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-14**
 
+**A symbol rename is preceded by a reference search of the same symbol (PD-MCP-004, OQ-273; fin43).** The binding manifest gains
+`warmUps` (the rename warmed by the referencing-symbol search, with `name_path` and `relative_path`), refused by the generator
+unless the server lists both tools with both arguments; `codeIntelligenceWarmUp` reads it, and the run host's MCP executor sends
+the search before every rename to the bundled server, inside the rename's one allowance, writing no record. The **component
+view** names the field and the check, the **runtime view**'s code-intelligence paragraph the send and its allowance, and the
+**seams view** an invariant for a request the run host sends a server on its own. No package, edge, process, channel, command
+or store column changed.
+
 **The store notices' words move into `main/store-notice.ts` (OQ-266, REQ-SESSION-202; fin43's review).** The cut-restore info
 notice and the held store refusal were composed inline in `openWorkspaceInner`, untested; they are decided in a pure module
 beside main's other notice modules, with a test. The **seams** view's notice section names it. No package, edge, process,

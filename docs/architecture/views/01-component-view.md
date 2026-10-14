@@ -238,7 +238,10 @@ and `engine`'s child report and cut-off (an edge `engine → config` it already 
 (OQ-245) each entry carries a `scope` — `argument`, or `reach` with what it reaches (`project` for a rename, `path` for a
 cross-file replacement), validated by generation — and `codeIntelligenceEdit` returns the reach the run host observes:
 `agent-tools`' `observe.ts` (`snapshotTree`, `snapshotChanges`, `WriteJournal`, `observeReach`, over `config`'s gitignore
-reader, an edge it already had) and the run host's `mcp.ts` executor around a reach call. `config/src/mcp/code-intelligence.ts`
+reader, an edge it already had) and the run host's `mcp.ts` executor around a reach call. Since `PD-MCP-004` (OQ-273,
+2026-10-13) it also writes `warmUps` (the symbol rename warmed by the referencing-symbol search, with the two arguments they
+share), refused by `scripts/lib/code-intelligence-warm-ups.mjs` unless the server lists both tools with both arguments, and read
+by `codeIntelligenceWarmUp` for the run host's executor; no edge changed. `config/src/mcp/code-intelligence.ts`
 is the typed reader every consumer goes through (a test greps the tree for a runtime tool name anywhere else).
 **Edges unchanged**: `config` still imports nothing new; `mcp` gains `setup.ts` (REQ-MCP-099's step runner over
 `platform`'s spawn helper and the clock ports); the run host's `mcp.ts` reads `agent-tools`' gitignore reader for the

@@ -7,7 +7,7 @@ import { builtInDefaults } from '../defaults.js';
 import {
   CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS, CODE_INTELLIGENCE_HOME_SEGMENT, CODE_INTELLIGENCE_LANGUAGE_SERVER_STORE, CODE_INTELLIGENCE_LANGUAGE_SERVERS,
   CODE_INTELLIGENCE_MANIFEST, CODE_INTELLIGENCE_MEMORY_GATE, CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceEdit,
-  codeIntelligenceEditPaths, codeIntelligenceLanguageServerStore,
+  codeIntelligenceEditPaths, codeIntelligenceLanguageServerStore, codeIntelligenceWarmUp,
   deriveSetupInvocation, grantForTiers, hasIndexableExtension, memoriesBlockApplies, neverGrantNames, PROJECT_MEMORIES_BLOCK, tierNames,
 } from './code-intelligence.js';
 import { CODE_INTELLIGENCE_TOKEN, resolveCommand } from './commands.js';
@@ -259,5 +259,33 @@ describe('the project-memories block (REQ-MCP-102)', () => {
     const other = renderMcpSection({ persona: 'p', dropped: [], active: [server('alpha', 'node', [listing, reading])] });
     expect(other).not.toContain('Project memories');
     for (const point of ['before you start exploring the codebase', 'durable findings that are not obvious from the code', 'agent-instruction files out', 'true only of the current run']) expect(PROJECT_MEMORIES_BLOCK).toContain(point);
+  });
+});
+
+/**
+ * PD-MCP-004 (OQ-273, ruled 2026-10-13 under R-072): the symbol rename is warmed by the referencing-symbol search of the same
+ * symbol and file. The manifest records the pairing by capability and the shared argument names; the resolver answers by the
+ * name the server reports and copies exactly those arguments from the call.
+ */
+describe('the warm-up before a symbol rename (PD-MCP-004, REQ-MCP-116)', () => {
+  const { read, edit } = CODE_INTELLIGENCE_MANIFEST.tiers;
+  const shared = CODE_INTELLIGENCE_MANIFEST.warmUps.renameSymbol.arguments;
+
+  it('records the rename warmed by the referencing-symbol search, with two shared arguments, both tools reported', () => {
+    expect(CODE_INTELLIGENCE_MANIFEST.warmUps).toEqual({ renameSymbol: { tool: 'referencingSymbols', arguments: shared } });
+    expect(shared).toHaveLength(2);
+    const reported = new Set<string>(CODE_INTELLIGENCE_MANIFEST.reportedByServer);
+    expect(reported.has(edit.renameSymbol)).toBe(true);
+    expect(reported.has(read.referencingSymbols)).toBe(true);
+  });
+
+  it('answers the rename by its reported name with the search and exactly the shared arguments, and nothing for any other tool', () => {
+    const call = { [shared[0]]: 'remaining', [shared[1]]: 'src/todos.js', new_name: 'countRemaining' };
+    expect(codeIntelligenceWarmUp(edit.renameSymbol, call)).toEqual({ tool: read.referencingSymbols, args: { [shared[0]]: 'remaining', [shared[1]]: 'src/todos.js' } });
+    expect(codeIntelligenceWarmUp(edit.renameSymbol, { [shared[0]]: 'remaining' })).toEqual({ tool: read.referencingSymbols, args: { [shared[0]]: 'remaining' } });
+    for (const [capability, name] of Object.entries({ ...read, ...edit })) {
+      if (capability !== 'renameSymbol') expect(codeIntelligenceWarmUp(name, call)).toBeNull();
+    }
+    expect(codeIntelligenceWarmUp('renamed_by_the_user', call)).toBeNull();
   });
 });

@@ -12489,7 +12489,7 @@ the unrepaired build with `[]`, green with both files). The report-back is in `P
 function across two files through the language server after a reference search, and the child's report and artifact list exactly
 both; its eleventh (`child-rename-cold`), the rename alone, lists exactly the one file it changed — the observation holds — and
 finds the runtime's rename reaching the declaring file alone, recorded as
-[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
+[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
 and raised as [OQ-273](#oq-273). Not measured: a live run (the opt-in `rename` scenario, written). The report-back is in
 `PD-ORCH-004`, in place.
 
@@ -13833,7 +13833,7 @@ warm it, change the runtime, or tell the model?** *(REQ-MCP-015, the EDIT tier's
 pinned runtime the product bundles and drives as it is; REQ-MCP-116, the binding manifest, the one place the runtime's
 identifiers are written; [OQ-245](#oq-245), the reach observation that records what the call changed. Raised 2026-10-13 by
 fin42 (N59) from
-[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
 fin42 held OQ-271 to OQ-280; raised as OQ-272 (OQ-271 was taken on main by another of the plan's bundles), renumbered
 OQ-273 at its landing, `origin/main` having taken OQ-272 meanwhile. Ruled 2026-10-13 under R-072, below; it read "Open." until then.)*
 

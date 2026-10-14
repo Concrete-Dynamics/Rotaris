@@ -41,7 +41,7 @@ have to edit them one by one.
 - `REQ-ORCH-109`: a report "cannot conceal files it failed to account for" — not contradicted (the report lists the one file the
   call changed), but a report saying the rename succeeded hides that the work is broken.
 - No requirement says how the product drives the runtime's language server, or whether it may warm it, so the repair is a
-  question: [OQ-273](../architecture/open-questions.md#oq-273).
+  question: [OQ-273](../../architecture/open-questions.md#oq-273).
 
 ## Relevant files
 
@@ -56,3 +56,23 @@ have to edit them one by one.
 - `apps/desktop/scripts/code-intel-proof.mjs` — launch 10 (`child-rename`, after a referencing-symbol search, both files) and
   launch 11 (`child-rename-cold`, the rename alone), which pins this note and is red until it is repaired.
 - `apps/desktop/scripts/live-run.mjs` — the opt-in `rename` scenario, which names a cold rename that reached one file.
+
+## Outcome
+
+**Repaired 2026-10-14 by fin43** under OQ-273's ruling (R-072, option (a)), recorded as
+[`PD-MCP-004`](../../product/directives.md#pd-mcp-004): before the run host forwards a symbol rename to the bundled server it
+sends that server's referencing-symbol search for the same `name_path` and `relative_path`, discards the answer, and then
+forwards the rename, both within the rename's one REQ-MCP-003 allowance; the search writes no record. The pairing and the
+argument names are the binding manifest's `warmUps` (`manifest.mjs`, refused by `scripts/lib/code-intelligence-warm-ups.mjs`
+unless the server lists both tools with both arguments), read through `codeIntelligenceWarmUp`
+(`packages/config/src/mcp/code-intelligence.ts`) by the MCP executor in `apps/desktop/src/run-host/mcp.ts`.
+
+**Pinned by** eight cases under "PD-MCP-004" in `apps/desktop/src/run-host/mcp.test.ts` (seven red on the code before; the
+eighth, another server's same-named tool and another EDIT tool not warmed, is a guard), the resolver's cases in
+`packages/config/src/mcp/code-intelligence.test.ts` and the generator's in `code-intelligence-warm-ups.test.ts`. **Shown in the
+built app** by `code-intel-proof` launch 11 (`child-rename-cold`): the cold rename said "(2 changes applied)", changed
+`src/cold-a.ts` and `src/cold-b.ts`, and the report and the artifact listed both, with no reference-search row; launch 10 stayed
+green. With the warm-up switched off in the same build the launch went red as this note describes ("(1 changes applied)",
+`src/cold-a.ts` alone). Launch 11 is the directive's acceptance gate and is re-run on every pin change. **Not shown:** the live
+`rename` scenario, which is the orchestrator's (`live-run.mjs --only=rename`), where a cold rename that leaves a referencing file
+behind is now a finding against PD-MCP-004.

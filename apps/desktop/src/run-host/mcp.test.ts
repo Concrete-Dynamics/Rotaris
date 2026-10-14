@@ -669,3 +669,141 @@ describe('a cross-file EDIT call is observed by the files it changed (OQ-245)', 
     expect(fine.unobserved).toBeUndefined();
   });
 });
+
+/*
+ * PD-MCP-004 (OQ-273, ruled 2026-10-13 under R-072): the pinned runtime answered a symbol rename before its language server had
+ * loaded the project, so the first rename of a server session renamed the declaring file alone and said it succeeded
+ * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). Before
+ * forwarding the rename the run host sends the referencing-symbol search of the same symbol and file and discards its answer,
+ * both within the rename's one REQ-MCP-003 allowance; the search writes no record. The runtime's names and argument names come
+ * from the manifest alone (REQ-MCP-116).
+ */
+describe('a symbol rename is preceded by the referencing-symbol search of the same symbol (PD-MCP-004)', () => {
+  const { read, edit } = CODE_INTELLIGENCE_MANIFEST.tiers;
+  const [NAME_PATH, RELATIVE_PATH] = CODE_INTELLIGENCE_MANIFEST.warmUps.renameSymbol.arguments as readonly [string, string];
+  const SYMBOL_SCHEMA = { type: 'object', properties: { [NAME_PATH]: { type: 'string' }, [RELATIVE_PATH]: { type: 'string' }, new_name: { type: 'string' }, body: { type: 'string' } }, required: [NAME_PATH, RELATIVE_PATH] };
+  const RENAME = { [NAME_PATH]: 'remaining', [RELATIVE_PATH]: 'src/todos.js', new_name: 'countRemaining' };
+  type Sent = { tool: string; args: Record<string, unknown>; timeoutMs: number };
+  type Reply = { isError: boolean; text: string };
+  /** The stubbed server: what it does with each request that reaches it, by the tool's reported name. */
+  type Answer = (tool: string, signal: AbortSignal, hostClock: FakeClock) => Reply | Promise<Reply>;
+  const renamed: Answer = (tool) => ({ isError: false, text: tool === edit.renameSymbol ? 'Successfully renamed (3 changes applied)' : '[{"refs": 2}]' });
+
+  function rig(answer: Answer = renamed, opts: { server?: string; toolNameMap?: Record<string, string> } = {}) {
+    const serverName = opts.server ?? 'code_intelligence';
+    const root = scratchDir('rotaris-pdmcp004-');
+    mkdirSync(join(root, 'src'));
+    writeFileSync(join(root, 'src', 'todos.js'), 'export const remaining = 1;\n');
+    const lines: { message: string; level: string }[] = [];
+    const hostClock = new FakeClock();
+    const mcp = new McpHost({ clocks: hostClock, log: (message, level = 'info') => { lines.push({ message, level }); }, acknowledge: () => undefined, parentEnv: {}, productVersion: '0.0.0' });
+    // The persona is offered the rename and another EDIT tool; the search is not granted, and needs no grant (REQ-MCP-064's reading).
+    vi.spyOn(mcp.discovery, 'peek').mockReturnValue({ tools: [edit.renameSymbol, edit.replaceSymbolBody].map((name) => ({ name, description: 'x', inputSchema: SYMBOL_SCHEMA })), failed: false } as unknown as ReturnType<typeof mcp.discovery.peek>);
+    const sent: Sent[] = [];
+    vi.spyOn(mcp, 'connectionsFor').mockReturnValue({
+      connect: async () => ({ onToolsChanged: () => undefined }),
+      call: async (_server: string, _d: unknown, tool: string, args: Record<string, unknown>, timeoutMs: number, signal: AbortSignal) => { sent.push({ tool, args, timeoutMs }); return answer(tool, signal, hostClock); },
+    } as unknown as ReturnType<typeof mcp.connectionsFor>);
+    const entry = { type: 'stdio', enabled: true, disabled_tools: [], tool_name_map: opts.toolNameMap ?? {}, command: 'ci' };
+    const cfg = {
+      personas: { refactorer: { mcp_servers: [serverName], tools: [] } },
+      mcp: { servers: { [serverName]: { name: serverName, entry, origin: 'workspace', availability: { available: true }, description: {}, resolved: { command: 'ci', args: [] } } }, origins: { [serverName]: 'workspace' }, diagnostics: [] },
+    } as unknown as LoadedConfiguration;
+    const surface = mcp.surfaceFor(cfg, root, 'refactorer', null);
+    const executors = mcp.executorsFor({ cfg, workspaceRoot: root, role: 'refactorer', surface, ctx: { sessionId: 'S1', writer: null }, remove: () => undefined, log: () => undefined });
+    const clock = new FakeClock();
+    const issues: Record<string, unknown>[] = [];
+    const settles: Record<string, unknown>[] = [];
+    let seq = 0;
+    const gate = new Gate({
+      sessionId: 'S1', workspaceRoot: root, policy: new PolicyContext(buildPolicy({ preset: 'autonomous', workspaceRoot: root })), approvals: new PendingApprovals(clock),
+      attended: () => true, presenter: null, headlessPolicy: 'deny', abortHook: null, approvalTimeoutMs: 300_000,
+      executors: new Map(executors.map((e) => [e.name, e])), resolvePath: (p) => p, publicTool: () => false,
+      monotonic: clock, wall: clock, timers: clock, nextSequence: () => ++seq,
+      sink: {
+        decision: () => null, approvalRequested: () => undefined, pendingChanged: () => undefined, issue: (i) => { issues.push(i as Record<string, unknown>); },
+        timeline: () => undefined, toolOpen: () => ++seq, toolSettle: (_o, _open, s) => { settles.push(s as Record<string, unknown>); }, warn: () => undefined,
+      },
+    });
+    const dispatch = (name: string, args: Record<string, unknown>, signal: AbortSignal = new AbortController().signal) => gate.dispatch({ callId: `c${seq + 1}`, name, rawArgs: args, persona: 'refactorer', agentId: 'refactorer', agentName: 'refactorer' }, signal);
+    return { dispatch, sent, issues, settles, lines, executors };
+  }
+
+  it('sends the search before the rename, with exactly the symbol and the file, and answers with the rename\'s result alone', async () => {
+    const r = rig();
+    const result = await r.dispatch(edit.renameSymbol, RENAME);
+    expect(r.sent.map((s) => [s.tool, s.args])).toEqual([[read.referencingSymbols, { [NAME_PATH]: 'remaining', [RELATIVE_PATH]: 'src/todos.js' }], [edit.renameSymbol, RENAME]]);
+    expect(result).toMatchObject({ status: 'ok', isError: false, text: 'Successfully renamed (3 changes applied)' });
+  });
+
+  it('discards a search answered with an error, and forwards the rename', async () => {
+    const r = rig((tool) => (tool === read.referencingSymbols ? { isError: true, text: 'Error: no symbol remaining' } : { isError: false, text: 'Successfully renamed' }));
+    const result = await r.dispatch(edit.renameSymbol, RENAME);
+    expect(r.sent.map((s) => s.tool)).toEqual([read.referencingSymbols, edit.renameSymbol]);
+    expect(result).toMatchObject({ status: 'ok', isError: false, text: 'Successfully renamed' });
+    expect(r.issues).toEqual([]);
+  });
+
+  it('a search that throws for another reason still lets the rename go ahead, said once in the log', async () => {
+    const r = rig((tool) => { if (tool === read.referencingSymbols) throw new Error('the language server is not ready'); return { isError: false, text: 'Successfully renamed' }; });
+    const result = await r.dispatch(edit.renameSymbol, RENAME);
+    expect(r.sent.map((s) => s.tool)).toEqual([read.referencingSymbols, edit.renameSymbol]);
+    expect(result).toMatchObject({ status: 'ok', text: 'Successfully renamed' });
+    expect(r.lines.filter((l) => l.message.includes('PD-MCP-004'))).toEqual([{ level: 'warn', message: expect.stringContaining('the language server is not ready') }]);
+  });
+
+  it('a cancel during the search reads interrupted and sends no rename', async () => {
+    const run = new AbortController();
+    const r = rig((tool, signal) => (tool === read.referencingSymbols
+      ? new Promise<Reply>((_resolve, reject) => { signal.addEventListener('abort', () => reject(new Error('This operation was aborted')), { once: true }); queueMicrotask(() => run.abort()); })
+      : { isError: false, text: 'Successfully renamed' }));
+    const result = await r.dispatch(edit.renameSymbol, RENAME, run.signal);
+    expect(r.sent.map((s) => s.tool)).toEqual([read.referencingSymbols]);
+    expect(result).toMatchObject({ status: 'failed', isError: true, interrupted: true });
+    expect(r.settles[0]).toMatchObject({ failure_kind: 'interrupted' });
+  });
+
+  it('the pair shares one allowance: the rename gets what the search left, and a search that spends it all is the timeout, unsent', async () => {
+    const slow = rig((tool, _signal, hostClock) => { if (tool === read.referencingSymbols) hostClock.advance(120_000); return { isError: false, text: 'Successfully renamed' }; });
+    await slow.dispatch(edit.renameSymbol, RENAME);
+    expect(slow.sent.map((s) => s.timeoutMs)).toEqual([300_000, 180_000]);
+
+    const spent = rig((tool, _signal, hostClock) => { if (tool === read.referencingSymbols) { hostClock.advance(300_000); throw new Error('MCP error -32001: Request timed out'); } return { isError: false, text: 'Successfully renamed' }; });
+    const t = await spent.dispatch(edit.renameSymbol, RENAME);
+    expect(spent.sent.map((s) => s.tool)).toEqual([read.referencingSymbols]);
+    expect(t).toMatchObject({ status: 'failed', isError: true });
+    expect(t.text).toBe(`MCP server 'code_intelligence' did not answer '${edit.renameSymbol}' within its allowance of 300 s; the call failed and was not retried (REQ-MCP-003).`);
+    expect(spent.settles[0]).toMatchObject({ failure_kind: 'timeout' });
+
+    const answeredLate = rig((tool, _signal, hostClock) => { if (tool === read.referencingSymbols) hostClock.advance(300_000); return { isError: false, text: 'Successfully renamed' }; });
+    expect(await answeredLate.dispatch(edit.renameSymbol, RENAME)).toMatchObject({ status: 'failed', isError: true });
+    expect(answeredLate.sent.map((s) => s.tool)).toEqual([read.referencingSymbols]);
+    expect(answeredLate.settles[0]).toMatchObject({ failure_kind: 'timeout' });
+  });
+
+  it('a rename the configuration renamed (REQ-MCP-005) is still warmed, by the name the server reports', async () => {
+    const r = rig(renamed, { toolNameMap: { [edit.renameSymbol]: 'rename_it' } });
+    expect(r.executors.map((e) => e.name)).toContain('rename_it');
+    await r.dispatch('rename_it', RENAME);
+    expect(r.sent.map((s) => s.tool)).toEqual([read.referencingSymbols, edit.renameSymbol]);
+  });
+
+  it('a same-named tool on another server, and every other EDIT tool, is not warmed', async () => {
+    const other = rig(renamed, { server: 'notes' });
+    await other.dispatch(edit.renameSymbol, RENAME);
+    expect(other.sent.map((s) => s.tool)).toEqual([edit.renameSymbol]);
+    const body = rig();
+    await body.dispatch(edit.replaceSymbolBody, { [NAME_PATH]: 'remaining', [RELATIVE_PATH]: 'src/todos.js', body: 'export const remaining = 2;' });
+    expect(body.sent.map((s) => s.tool)).toEqual([edit.replaceSymbolBody]);
+  });
+
+  it('the search writes no tool-call record, total or issue: the session sees the rename\'s one row', async () => {
+    const r = rig();
+    await r.dispatch(edit.renameSymbol, RENAME);
+    expect(r.sent).toHaveLength(2);
+    // The gate opens and settles one row per call the model made — the rename's; the search is the run host's own request.
+    expect(r.settles).toHaveLength(1);
+    expect(r.settles[0]).toMatchObject({ status: 'ok' });
+    expect(r.issues).toEqual([]);
+  });
+});

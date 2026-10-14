@@ -1015,7 +1015,15 @@ the grant is the persona's tier union from the manifest (12 or
 19 names; REQ-MCP-014/015). The usage-instruction tool is described in the product's words, which the manifest carries
 by capability (`productDescriptions`, `PD-MCP-001`, OQ-115): `filterServerTools` puts them on the bundled server's tool,
 so the prompt section and the tool definition the model is handed both read them, and the runtime's own imperative
-("call this tool immediately") reaches no prompt. On connection the binding probe calls the memory-listing tool once under 15 s
+("call this tool immediately") reaches no prompt. Since `PD-MCP-004` (OQ-273, 2026-10-13) the MCP executor sends the bundled
+server's referencing-symbol search for the same `name_path` and `relative_path` before every symbol rename it forwards, by the
+name the server reports (so a `tool_name_map` rename is warmed and another server's same-named tool is not), and discards the
+answer: the pinned runtime answered a rename before its language server had loaded the project and renamed the declaring file
+alone. The pairing and the shared argument names are the manifest's `warmUps`, read through `codeIntelligenceWarmUp`; the
+search is sent under the run's signal and the rename's one REQ-MCP-003 allowance, measured from the call's start, so the rename
+gets what the search left. A search that spends the allowance is the rename's timeout and a cancel during it is `interrupted`,
+neither sending the rename; any other failure is one `warn` line and the rename goes ahead. It is no tool call: no gate, no
+record, no total, no notice. On connection the binding probe calls the memory-listing tool once under 15 s
 (REQ-MCP-071; a failure warns through REQ-MCP-044 and withholds nothing); the prompt's `## MCP servers` entry for the
 server carries the fixed project-memories block iff both gating names are granted (REQ-MCP-102). Measured cold: the
 runtime answers `tools/list` about 4 s after launch, connect about 4.2 s; the first symbol tool on a language provisions

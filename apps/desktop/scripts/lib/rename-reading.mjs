@@ -1,13 +1,15 @@
 /**
- * The live `rename` scenario's readings (fin42, N59; OQ-245, OQ-273, PD-ORCH-004, REQ-ORCH-109, REQ-MCP-015): a coding-agent
+ * The live `rename` scenario's readings (fin42, N59; OQ-245, PD-MCP-004, PD-ORCH-004, REQ-ORCH-109, REQ-MCP-015): a coding-agent
  * asked to rename the todo-app fixture's `remaining` to `countRemaining` with the code-intelligence EDIT tier's symbol rename.
  *
  * What it reads, each from the store or the files on disk and never from the model's prose:
  * - whether any agent called `rename_symbol` at all — a live model may choose another tool, and then the scenario's questions are
  *   unasked (a NOTE, "not reached"), never a silent pass;
  * - whether the agent that renamed searched for the symbol's references first (`find_referencing_symbols` before its first
- *   rename): the pinned runtime renames the declaring file alone when the rename is its first cross-file request
- *   (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273);
+ *   rename): the pinned runtime renamed the declaring file alone when the rename was its first cross-file request, and since
+ *   PD-MCP-004 (OQ-273, ruled 2026-10-13) the run host sends that search itself before every rename and records no row for it
+ *   (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md), so a
+ *   cold rename must reach every file on its own;
  * - which of the three files still call or import the old name, which carry the new one, and which were written by another tool
  *   after the first rename (mended by hand);
  * - whether the renaming child's stored report and its child-report artifact list every one of the three files that changed
@@ -73,8 +75,9 @@ export function renameReading({ calls, files, children, artifacts = [] }) {
     first: { ordinal: first.ordinal, status: first.status, args: first.args, result: String(first.result ?? '').slice(0, 300) },
     searchedFirst, cold, leftBehind, carrying, mendedAfter,
     reportFiles, reportMissing, artifactFiles: artifactLists, artifactMissing,
-    // OQ-273's signature: a rename with nothing before it that left the importing files behind, or whose importing files another
-    // tool wrote afterwards.
-    oq273: cold && (leftBehind.length > 0 || mendedAfter.some((f) => f !== 'src/todos.js')),
+    // A finding against PD-MCP-004: a rename with nothing before it that left the importing files behind, or whose importing files
+    // another tool wrote afterwards — the run host's own search before the rename did not make it reach them. Until the ruling this
+    // was OQ-273's signature, read as a NOTE (the field was `oq273`).
+    coldLeftBehind: cold && (leftBehind.length > 0 || mendedAfter.some((f) => f !== 'src/todos.js')),
   };
 }

@@ -36,10 +36,12 @@
  *                   disk, and exactly those two files in the child's stored report's `edited_files` and its child-report
  *                   artifact's: launch 9's reach observation met through the TypeScript language server, which the runtime
  *                   provisions on first use (launch 4).
- *  11. child rename, cold — (fin42, N59, OQ-273) the same rename as the child's only call. The report must list exactly the files
- *                   that changed on disk (OQ-245), and the rename must reach the calling file: RED until
- *                   docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md
- *                   is repaired — the pinned runtime renames the declaring file alone when the rename is its first cross-file request.
+ *  11. child rename, cold — (fin42, N59, OQ-273; PD-MCP-004) the same rename as the child's only call. The report must list
+ *                   exactly the files that changed on disk (OQ-245), the rename must reach the calling file, and the session must
+ *                   hold the rename's one row and no row for the reference search the run host sends before it (PD-MCP-004:
+ *                   the pinned runtime renamed the declaring file alone when the rename was its first cross-file request,
+ *                   docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ *                   PD-MCP-004's acceptance gate: it rests on the runtime's internals, so it is RE-RUN ON EVERY PIN CHANGE.
  *                   Its failure is held: the launches after it run, results.json is written, and the proof fails at its end.
  *  12. renamed tool — (fin42, N59; REQ-MCP-005, REQ-ORCH-109) the global configuration's own `tool_name_map` on the
  *                   code-intelligence entry offers the cross-file replacement as `replace_across_project`; a delegated tester
@@ -568,9 +570,11 @@ if (want(9)) {
 // before it. The first launch of this pair as built was launch 11's shape, and its rename changed the declaring file alone while
 // saying "Successfully renamed … (1 changes applied)": the pinned runtime waits for the language server's project loading before
 // a references request and not before a rename
-// (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273). Launch 11
-// keeps the assertion the product should meet and is red until that note is repaired; it records what it read, the launches after it
-// still run, and the proof fails at its end.
+// (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273).
+// PD-MCP-004 (ruled 2026-10-13 under R-072) repairs it in the run host: every rename is preceded by the reference search of the
+// same symbol and file, its answer discarded and no row written. Launch 11 is that directive's acceptance gate, re-run on every pin
+// change: both files renamed, and the child's only rows the rename's. Its failure is held — it records what it read, the launches
+// after it still run, and the proof fails at its end.
 /** Failures a launch records and the proof raises only at its end, after every later launch has run (launch 11). */
 const heldFailures = [];
 async function childRename({ name, symbol, renamed, files, childScript }) {
@@ -607,7 +611,7 @@ async function childRename({ name, symbol, renamed, files, childScript }) {
   const listed = Array.isArray(report?.edited_files) ? [...report.edited_files].sort() : [];
   const artifactFiles = artifacts.map((a) => JSON.parse(a.edited_files ?? '[]').map((f) => (typeof f === 'string' ? f : f?.path)).sort());
   const fetched = lines(r.log, /Running command 'npm install|Installing\.\.\./).map((l) => l.replace(/^.*? - /, '').slice(0, 200));
-  const reading = { call: calls[0].status, result: resultText.slice(0, 300), searchedFirst: searches.length > 0 && searches[0].ordinal < calls[0].ordinal, child: children[0].canonical_name, persona: children[0].persona, state: children[0].state, changedOnDisk, reportEditedFiles: listed, artifactEditedFiles: artifactFiles[0] ?? null, elapsedMs: r.elapsedMs, languageServerProvisioned: fetched };
+  const reading = { call: calls[0].status, result: resultText.slice(0, 300), searchedFirst: searches.length > 0 && searches[0].ordinal < calls[0].ordinal, searchRows: searches.length, child: children[0].canonical_name, persona: children[0].persona, state: children[0].state, changedOnDisk, reportEditedFiles: listed, artifactEditedFiles: artifactFiles[0] ?? null, elapsedMs: r.elapsedMs, languageServerProvisioned: fetched };
   console.log(`[code-intel-proof] ${name}: ${children[0].persona} ${children[0].state}, ${reading.searchedFirst ? 'references searched first' : 'nothing before the rename'}, the call said ${JSON.stringify(resultText.slice(0, 80))}, changed on disk ${JSON.stringify(changedOnDisk)}, report edited_files ${JSON.stringify(listed)}, artifact ${JSON.stringify(artifactFiles[0])} (${r.elapsedMs} ms; ${fetched.length} provisioning line(s))`);
   // OQ-245: the report and the artifact list exactly what the call changed on disk, and only files — whatever it changed.
   if (JSON.stringify(listed) !== JSON.stringify(changedOnDisk)) throw new Error(`${name}: the child's report lists ${JSON.stringify(listed)}, not exactly the files the rename changed on disk ${JSON.stringify(changedOnDisk)} (OQ-245, PD-ORCH-004, REQ-ORCH-109, REQ-ORCH-108)`);
@@ -617,7 +621,7 @@ async function childRename({ name, symbol, renamed, files, childScript }) {
   const called = readFileSync(calling, 'utf8');
   const both = [declaringRel, callingRel].sort();
   const reached = new RegExp(`function ${renamed}\\(`).test(declared) && !declared.includes(symbol) && new RegExp(`import \\{ ${renamed} \\}`).test(called) && !called.includes(symbol);
-  return { reading: { ...reading, reachedBoth: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) }, failure: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) ? null : `${name}: the rename of ${symbol} changed ${JSON.stringify(changedOnDisk)}, not both ${JSON.stringify(both)} — ${callingRel} still reads ${JSON.stringify(called)} (the call said ${JSON.stringify(resultText.slice(0, 200))}; REQ-MCP-015; docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273)` };
+  return { reading: { ...reading, reachedBoth: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) }, failure: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) ? null : `${name}: the rename of ${symbol} changed ${JSON.stringify(changedOnDisk)}, not both ${JSON.stringify(both)} — ${callingRel} still reads ${JSON.stringify(called)} (the call said ${JSON.stringify(resultText.slice(0, 200))}; REQ-MCP-015, PD-MCP-004; docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273)` };
 }
 if (want(10)) {
   const { reading, failure } = await childRename({ name: 'child-rename', symbol: 'countItems', renamed: 'tallyItems', files: ['src/rename-a.ts', 'src/rename-b.ts'], childScript: 'mcp:code_intelligence.find_referencing_symbols,mcp:code_intelligence.rename_symbol,answer' });
@@ -630,6 +634,8 @@ if (want(11)) {
   results.childRenameCold = reading;
   // Held to the end, so the launches after this one still run and report: the proof fails on it once they have.
   if (failure !== null) heldFailures.push(failure);
+  // PD-MCP-004 clause 3: the search the run host sends before the rename writes no tool-call row; the model made one call.
+  if (reading.searchRows !== 0) heldFailures.push(`child-rename-cold: the session holds ${reading.searchRows} reference-search row(s) beside the rename; the run host's warm-up must write none (PD-MCP-004)`);
 }
 
 // ---- 12. an EDIT tool renamed by the entry's tool_name_map is still read as a write --------------------------------

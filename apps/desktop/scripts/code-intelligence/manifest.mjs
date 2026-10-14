@@ -22,6 +22,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { warmUpRefusals } from '../lib/code-intelligence-warm-ups.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = resolve(HERE, '..', '..');
@@ -108,6 +109,17 @@ const ARGUMENT_ROLES = ['path', 'preview'];
  */
 const PRODUCT_DESCRIPTIONS = {
   usageInstructions: "Returns the code-intelligence server's manual: how its symbol, search, edit and memory tools are meant to be used together. The other tools work without it; fetch it only when that guidance would help with the task at hand.",
+};
+/**
+ * PD-MCP-004 (OQ-273, ruled 2026-10-13 under R-072): by capability, the request the product sends before forwarding a call of
+ * that capability — a capability whose tool it sends first, and the arguments the two share, copied from the call. The pinned
+ * runtime answers a symbol rename before its language server has loaded the project, so the first rename of a server session
+ * renamed the declaring file alone and said it succeeded; its referencing-symbol search waits for the loading. Checked against
+ * the server's listing (`warmUpRefusals`): both tools listed, both arguments in both input schemas, or no module is written.
+ * Rests on the runtime's internals: `code-intel-proof`'s launch 11 (`child-rename-cold`) is re-run on every pin change.
+ */
+const WARM_UPS = {
+  renameSymbol: { tool: 'referencingSymbols', arguments: ['name_path', 'relative_path'] },
 };
 const CARDINALITY = { read: 10, edit: 7, memoryWrite: 2, onboard: 1 };
 
@@ -267,6 +279,7 @@ for (const [cap, args] of Object.entries(EDIT_ARGUMENTS)) {
   if (args.scope === 'reach' && args.reach !== 'project' && args.reach !== 'path') fail(`edit tier: '${cap}' has reach scope and reaches '${args.reach}', not 'project' or 'path' (OQ-245)`);
   if (args.scope === 'argument' && args.reach !== undefined) fail(`edit tier: '${cap}' has argument scope and names a reach (OQ-245)`);
 }
+for (const refusal of warmUpRefusals(WARM_UPS, CAPABILITIES, server)) fail(refusal);
 for (const [cap, text] of Object.entries(PRODUCT_DESCRIPTIONS)) {
   if (!Object.values(CAPABILITIES).some((map) => Object.prototype.hasOwnProperty.call(map, cap))) fail(`a product description names '${cap}', which is no capability of the tiers (PD-MCP-001)`);
   if (typeof text !== 'string' || text.trim() === '') fail(`the product description for '${cap}' is empty (PD-MCP-001)`);
@@ -318,6 +331,8 @@ const lines = [
   `  neverGrant: { ${Object.entries(NEVER_GRANT).map(([cap, name]) => `${cap}: ${q(name)}`).join(', ')} },`,
   '  /** PD-MCP-001: descriptions written by the product, not reported by the runtime, by capability — each replaces the runtime\'s own description of the tool it names. */',
   `  productDescriptions: { ${Object.entries(PRODUCT_DESCRIPTIONS).map(([cap, text]) => `${cap}: ${q(text)}`).join(', ')} },`,
+  '  /** PD-MCP-004: by capability, the request sent first and discarded — a capability whose tool goes first, and the arguments the two share, copied from the call; both tools and both arguments checked against the server\'s listing. */',
+  `  warmUps: { ${Object.entries(WARM_UPS).map(([cap, w]) => `${cap}: { tool: ${q(w.tool)}, arguments: ${arr(w.arguments)} }`).join(', ')} },`,
   '  /** What the server listed under the shipped arguments, and the runtime\'s whole vocabulary, as generated. */',
   `  reportedByServer: ${arr(server.names)},`,
   `  vocabulary: ${arr(vocabulary)},`,

@@ -78,6 +78,36 @@ export function codeIntelligenceEdit(callable: string, args: Readonly<Record<str
   return { paths: [], reach: { base: path } };
 }
 
+/**
+ * PD-MCP-004 (OQ-273, ruled 2026-10-13 under R-072): the request the run host sends the bundled server before forwarding a
+ * call of `reported` — the runtime's name for the warmed tool, as the server reports it, so a `tool_name_map` rename
+ * (REQ-MCP-005) is still warmed — or null when the manifest records no warm-up for that tool. `tool` is the runtime's name
+ * of the tool sent first; `args` holds exactly the arguments the two share, copied from the warmed call (an argument the
+ * call does not carry is left out). The manifest's `warmUps` is read here and nowhere else, so no other file restates an
+ * argument name. Only the code-intelligence server's tools are asked: the caller matches the server first.
+ *
+ * The pinned runtime answered a symbol rename before its language server had loaded the project, so the first rename of a
+ * server session renamed the declaring file alone and said it succeeded; its referencing-symbol search waits for the loading
+ * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ */
+export interface CodeIntelligenceWarmUp {
+  readonly tool: string;
+  readonly args: Readonly<Record<string, unknown>>;
+}
+const WARM_UPS: ReadonlyMap<string, { readonly tool: string; readonly arguments: readonly string[] }> = new Map(
+  Object.entries(CODE_INTELLIGENCE_MANIFEST.warmUps).flatMap(([warmed, warmUp]) => {
+    const name = (capability: string): string | undefined => Object.values(CODE_INTELLIGENCE_MANIFEST.tiers).map((tier) => (tier as Record<string, string>)[capability]).find((n) => n !== undefined);
+    const warmedName = name(warmed);
+    const toolName = name(warmUp.tool);
+    return warmedName === undefined || toolName === undefined ? [] : [[warmedName, { tool: toolName, arguments: warmUp.arguments }] as const];
+  }),
+);
+export function codeIntelligenceWarmUp(reported: string, args: Readonly<Record<string, unknown>> | null): CodeIntelligenceWarmUp | null {
+  const warmUp = WARM_UPS.get(reported);
+  if (warmUp === undefined) return null;
+  return { tool: warmUp.tool, args: Object.fromEntries(warmUp.arguments.filter((a) => args !== null && Object.prototype.hasOwnProperty.call(args, a)).map((a) => [a, args![a]])) };
+}
+
 /** The files a call of the EDIT tier names in its arguments (`codeIntelligenceEdit`'s `paths`), or null outside the tier. */
 export function codeIntelligenceEditPaths(callable: string, args: Readonly<Record<string, unknown>> | null): readonly string[] | null {
   return codeIntelligenceEdit(callable, args)?.paths ?? null;

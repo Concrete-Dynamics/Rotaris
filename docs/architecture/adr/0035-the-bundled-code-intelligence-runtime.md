@@ -469,3 +469,19 @@ the usage-instruction tool's, whose own description told every agent to read the
 bundled server's tool, so REQ-MCP-101's section and the tool definition both read it; the tool keeps its place in the read
 tier. Regenerated against the bundled runtime here (serena-agent 1.7.0, Python 3.13.15, 24 tools listed), and
 `code-intel-proof`'s discovery step asserts the section carries the product's sentence and not the runtime's imperative.
+
+**The manifest carries a warm-up the runtime did not answer — 2026-10-14 (fin43; `PD-MCP-004`, OQ-273 ruled 2026-10-13 under
+R-072).** *The reading this replaces, kept beside it:* the product drove the runtime as it is — every call forwarded as the
+model made it and the runtime's result taken as the call's effect (OQ-273's "what the build proceeds under"), and the manifest
+"**is** the runtime's answer" (the Decision above). Both were falsified for one capability by `code-intel-proof`'s eleventh
+launch (fin42): the pinned runtime (serena-agent 1.7.0) answers a symbol rename before its TypeScript language server has loaded
+the project, and renamed the declaring file alone while saying it succeeded. The manifest now also carries `warmUps`, a product
+choice keyed by capability (the rename warmed by the referencing-symbol search, with the two arguments they share), which
+`manifest.mjs` checks against the server's listing as strictly as the tiers (`warmUpRefusals` in
+`scripts/lib/code-intelligence-warm-ups.mjs`: both tools listed, both arguments in both input schemas, or no module is written),
+so an upstream rename still fails a build. The run host's MCP executor sends the search before every rename to the bundled server
+and discards it, inside the rename's one allowance. Regenerated here against the bundled runtime (24 tools listed, `--check`
+equal); `code-intel-proof` launches 10 and 11 green at load 0.7 to 2.7 on four CPUs (launch 11: "(2 changes applied)", both files,
+no search row, 37.6 s), and launch 11 red with the warm-up switched off in the same build ("(1 changes applied)", the declaring
+file alone). **Revisit with every pin change:** the warm-up rests on the runtime's internals, so a later pin may make it
+unnecessary or insufficient; launch 11 is its acceptance gate and is re-run whenever `pins.json` moves.

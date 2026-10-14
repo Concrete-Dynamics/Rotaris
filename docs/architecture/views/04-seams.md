@@ -194,6 +194,12 @@ Invariants:
   `Persona.canPublishArtifacts`, carried by `personaResolverFor` with the same stated-or-built-in rule as `coordinator_only`),
   and is otherwise removed as the prerequisite `artifact_publish_not_granted` (REQ-TOOLS-004); no built-in role declares it
   or carries the flag (OQ-212).
+- **A request the run host sends a server on its own is not a tool call.** REQ-MCP-070's `lsp_init`, REQ-MCP-071's binding
+  probe and, since `PD-MCP-004` (OQ-273, 2026-10-13), the referencing-symbol search sent before the bundled server's symbol
+  rename go through no gate and write no record, total or notice. A new one of the last kind is a `warmUps` entry of the binding
+  manifest, keyed by capability and checked by `manifest.mjs` (`warmUpRefusals`, `scripts/lib/code-intelligence-warm-ups.mjs`:
+  both tools listed, both arguments in both schemas), resolved by `codeIntelligenceWarmUp` and sent by the MCP executor in
+  `run-host/mcp.ts` inside the warmed call's own allowance; no file restates the runtime's argument names.
 - **The gate's refusals before the schema parse run in one order**: REQ-ORCH-153's plan gate, then OQ-213's todo list
   owed before a task's second work item (`GateDeps.todoList`, the entry port's only, where its resolved set holds `todo`).
   A tool whose `DECLARATIONS` entry writes workspace files or runs commands is a **work item** on a direct-work grant

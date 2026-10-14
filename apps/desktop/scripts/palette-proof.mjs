@@ -4,6 +4,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { replicaRunStartDeclines, unexpectedRendererErrors } from './lib/renderer-console.mjs';
 
 /**
  * Part W's first execution in the built application: the ONE action vocabulary reaching the screen three ways.
@@ -92,8 +93,11 @@ async function launch(name, s, extra, opts = {}) {
   if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
+  // Every relayed renderer console line; a check fails on any but REQ-SESSION-161's run-start decline, which is the replica's
+  // own recovery and met about one launch in three of a stage that starts a run
+  // (docs/defects/fixed/palette-proof-fails-on-the-replicas-documented-run-start-decline.md). `replicaDeclines` keeps the count.
   const errors = log.split('\n').filter((l) => /renderer console:/.test(l));
-  return { log, png, elapsedMs: Date.now() - started, errors };
+  return { log, png, elapsedMs: Date.now() - started, errors, replicaDeclines: replicaRunStartDeclines(errors) };
 }
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** `capture: inspect-at <ms> <selector> → {...}` — the rectangle, every attribute and the text of each match. */
@@ -175,7 +179,7 @@ if (wanted('palette')) {
     closedAtMs: removed.at, viewChangedAtMs: changed.at, order: removed.at <= changed.at ? 'close-then-run' : 'run-then-close',
     endView: order.view, png: r.png, elapsedMs: r.elapsedMs,
   };
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -213,7 +217,7 @@ if (wanted('help')) {
   const after = inspectAt(r.log, 5200, '[data-testid="keyboard-help"]');
   expect(after && after.matches.length === 0, `Escape did not close the keyboard help: ${JSON.stringify(after)} (REQ-SHELL-055)`);
   results.keyboardHelp = { rows: rows.length, chords, escapeLine: prose, closedByEscape: after.matches.length === 0, png: r.png, elapsedMs: r.elapsedMs };
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -275,6 +279,7 @@ if (wanted('modality')) {
   expect(/application modality on: 1 persona window\(s\) disabled/.test(r.log) && /application modality off: 1 persona window\(s\) enabled/.test(r.log), 'main did not log the modality pair (ADR-0048)');
   results.modality = {
     enabledBefore: before[0].enabled, enabledDuring: during[0]?.enabled, enabledAfter: after[0]?.enabled,
+    replicaDeclines: r.replicaDeclines,
     ...(hostInput ? {
       hostDuring: { personaEnabled: hostDuring.personaEnabled, foregroundIsPersona: hostDuring.foregroundIsPersona },
       clickDuring: { personaEnabled: clickDuring.personaEnabled, foregroundIsPersona: clickDuring.foregroundIsPersona, at: clickDuring.clickedAt, note: 'the host raises a disabled window but delivers it no input' },
@@ -290,7 +295,7 @@ if (wanted('modality')) {
     }),
     png: r.png, elapsedMs: r.elapsedMs,
   };
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -315,7 +320,7 @@ if (wanted('shortcuts')) {
   db.close();
   expect(sessions.n === 0, `Ctrl+Return started ${sessions.n} run(s) with the send control disabled (REQ-SHELL-049)`);
   results.shortcuts = { ctrl3: view(3400), ctrlComma: view(4400), ctrlL: view(5400), caret: composer?.active?.className, sessionsAfterCtrlReturn: sessions.n, png: r.png, elapsedMs: r.elapsedMs };
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -337,7 +342,7 @@ if (wanted('minimum')) {
   // The same list as the empty-query assertion above, at the minimum window size: 19 since Part AT, 21 since N71.
   expect(rows.length === 21, `only ${rows.length} rows at the minimum size`);
   results.minimum = { rect: { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) }, rows: rows.length, png: join(output, 'palette-minimum.png'), elapsedMs: r.elapsedMs };
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -383,7 +388,7 @@ if (wanted('search-and-reasoning')) {
     reasoning: { offeredFirst: offered[0], acknowledged: ack, stored: prefs['display/showReasoning'] },
     png: r.png, elapsedMs: r.elapsedMs,
   };
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -418,8 +423,8 @@ if (wanted('persona-follows-display')) {
   expect(ack.includes('Reasoning bodies shown'), `the main window's toggle reported ${JSON.stringify(ack)} (REQ-CHAT-167)`);
   expect(Array.isArray(after) && after.length === before.length && after.every((h) => h.data['aria-expanded'] === 'true'),
     `the open persona window kept its reasoning rows closed after the main window turned reasoning bodies on: ${JSON.stringify(after)} (REQ-CHAT-167, channel 14)`);
-  results.personaFollowsDisplay = { rows: before.length, before: before.map((h) => h.data['aria-expanded']), acknowledged: ack, after: after.map((h) => h.data['aria-expanded']), png: r.png, elapsedMs: r.elapsedMs };
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  results.personaFollowsDisplay = { rows: before.length, before: before.map((h) => h.data['aria-expanded']), acknowledged: ack, after: after.map((h) => h.data['aria-expanded']), replicaDeclines: r.replicaDeclines, png: r.png, elapsedMs: r.elapsedMs };
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

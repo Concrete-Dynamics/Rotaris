@@ -4,6 +4,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { replicaRunStartDeclines, unexpectedRendererErrors } from './lib/renderer-console.mjs';
 
 /**
  * Part R's first execution in the built app — the agent surfaces: the Mission view (REQ-MONITOR-274..276), the per-agent
@@ -243,7 +244,8 @@ const evalsOf = (log) => [...log.matchAll(/capture: eval-at \d+ .*? → (\{.*\})
 // The replica's run-start decline is REQ-SESSION-161's own recovery, read from the code and left as a diagnostic
 // (docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md, "The declined increment at run
 // start"); it met this item's first launch at a load of 15 on 4 CPUs, before any click. Every other console line still fails it.
-const unexpected = (errors) => errors.filter((l) => !/\[replica\] declined increment on [^:]+: earliest-changed \d+ precedes oldest held \d+/.test(l));
+// The filter is `renderer-console.mjs`'s, shared with palette-proof since 2026-10-14.
+const unexpected = unexpectedRendererErrors;
 const s1d = scenario('timed-out', ['  child_timeout: 3']);
 {
   const box = 'const box = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; };';
@@ -281,7 +283,7 @@ const s1d = scenario('timed-out', ['  child_timeout: 3']);
   expect(treeTag?.text === 'timed out' && /\btag-fail\b/.test(treeTag.className) && treeTag.title === TIMEOUT_LINE(true), `the Mission tree's tag: ${JSON.stringify(treeTag)}`);
   expect(tags.state === 'failed' && endProbe(r.log, '.agent-table__state-text')?.[0]?.text === 'failed', 'the table row no longer reads failed');
   expect(unexpected(r.errors).length === 0, `renderer errors: ${unexpected(r.errors).join(' | ')}`);
-  results.timedOut = { replicaDeclines: r.errors.length - unexpected(r.errors).length, report: { error: 'Child timed out after 3s', cutOff: true }, workspace: g, personaWindow: { state: personaState, line: persona }, missionTable: tableTag.title, missionTree: treeTag.title, png: [join(output, 'timed-out-workspace.png'), r.png] };
+  results.timedOut = { replicaDeclines: replicaRunStartDeclines(r.errors), report: { error: 'Child timed out after 3s', cutOff: true }, workspace: g, personaWindow: { state: personaState, line: persona }, missionTable: tableTag.title, missionTree: treeTag.title, png: [join(output, 'timed-out-workspace.png'), r.png] };
 
   const tableGeometry = `(() => { const tbl = document.querySelector('.agent-table'); const row = tbl.querySelector('.agent-table__row'); const card = tbl.parentElement; return { kind: 'mission', title: row.querySelector('[data-testid="agent-timed-out"]').getAttribute('title'), cells: [...row.children].map((c) => Math.round(c.getBoundingClientRect().width)), rowHeight: Math.round(row.getBoundingClientRect().height), cardScroll: [card.scrollWidth, card.clientWidth], tagOwnLine: (() => { const t = row.querySelector('[data-testid="agent-timed-out"]').getBoundingClientRect(); const s = row.querySelector('.agent-table__state-text').getBoundingClientRect(); return t.top >= s.bottom - 1; })() }; })()`;
   const r2 = await launch('timed-out-idle', s1d, {

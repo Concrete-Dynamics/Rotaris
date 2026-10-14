@@ -39,3 +39,27 @@ export function updateDepthVerdict(name, log) {
     detail: errors.length === 0 ? undefined : errors.map((e) => `app.log line ${e.line}: ${e.text}`).join(' | '),
   };
 }
+
+/**
+ * The replica's run-start decline (`packages/ui-core/src/replica.ts`, `onDiagnostic`, relayed by the shell as
+ * `console.warn('[replica] …')`): REQ-SESSION-161's own recovery, read from the code and left as a diagnostic on purpose
+ * (docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md, "The declined increment at run
+ * start"). The replica declines the increment, reconciles from a whole-session read and draws every row; nothing on screen is
+ * wrong. Matched whole, numbers and all, so no other `[replica]` line passes for it.
+ */
+const REPLICA_RUN_START_DECLINE = /\[replica\] declined increment on [^:]+: earliest-changed \d+ precedes oldest held \d+/;
+
+/**
+ * The relayed renderer console lines a proof fails on: every one but the replica's run-start decline above, which a launch
+ * meets at a run's start under load and which is no fault (docs/defects/fixed/palette-proof-fails-on-the-replicas-documented-run-start-decline.md).
+ * `mission-proof` and `palette-proof` share it; `replicaRunStartDeclines` counts what it let through, for a proof's `results.json`.
+ * @param {string[]} errors the launch's `renderer console:` lines
+ */
+export function unexpectedRendererErrors(errors) {
+  return errors.filter((l) => !REPLICA_RUN_START_DECLINE.test(l));
+}
+
+/** How many of a launch's relayed renderer console lines are the replica's run-start decline. */
+export function replicaRunStartDeclines(errors) {
+  return errors.length - unexpectedRendererErrors(errors).length;
+}

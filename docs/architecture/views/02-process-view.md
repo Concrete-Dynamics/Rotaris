@@ -710,7 +710,8 @@ allowing exactly one failure notification per affected run; since 2026-10-14 it 
 recorded the session under in `sessionRoots`, absent where none is recorded — PD-SHELL-001 revision 3, the workspace a
 `focus-session` action names), `run.paused`, `approval.present/close`, `presenter.poll`, `notice.publish` (Part V: the fields
 REQ-NOTIFY-023 lists, `sessionId` and `persistent` among them, and since 2026-10-14 `workspaceRoot` as on `run.result`,
-stamped by `withSessionRoot`, `run-host/session-roots.ts` — the workspace a `focus-session` action names and, since OQ-293, the
+stamped by `withSessionRoot`, `run-host/session-roots.ts`, whose `runResultEvent`, `runNoticeEvent` and `reportNoticeEvent`
+build all three events `host.ts` sends about a session (2026-10-14, fin45) — the workspace a `focus-session` action names and, since OQ-293, the
 project a run's `hooks.review` notice is named for and its `open-hook-review` action reaches (`main/run-notice.ts`, through the
 open slot's composer `hooksReviewNotice`); the `ttlMs` Part S added is gone — REQ-NOTIFY-040
 forbids a notice leaving on a timer), `acknowledgement.publish` (REQ-MCP-044's warning, now a transient),

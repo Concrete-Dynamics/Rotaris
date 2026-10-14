@@ -24,7 +24,7 @@ import { dirname, join } from 'node:path';
 // The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network.
 import { fileLedger, scriptedClient, type ScriptedCallRecord } from './scripted-client.js';
 import { throwOnAbortNames } from './throw-on-abort.js';
-import { withSessionRoot } from './session-roots.js';
+import { reportNoticeEvent, runNoticeEvent, runResultEvent } from './session-roots.js';
 
 /**
  * RUN HOST — one utilityProcess, forked after `app.ready`, living exactly as
@@ -397,7 +397,7 @@ export function createRunHost() {
       const run = configuredRuns.get(sessionId);
       configuredRuns.delete(sessionId);
       runBearers.delete(sessionId);
-      send({ v: CONTRACT_SCHEMA_VERSION, event: withSessionRoot({ kind: 'run.result', sessionId, result }, sessionRoots) });
+      send({ v: CONTRACT_SCHEMA_VERSION, event: runResultEvent(sessionId, result, sessionRoots) });
       if (!run || !run.cfg.runtime.improvement_collector_enabled) return;
       const collector = improvementCollectorOf(run.cfg, run.scripted);
       if (collector === null) {
@@ -476,12 +476,12 @@ export function createRunHost() {
     // ADR-0039: the capture at iteration close — Git through main to the workspace service, the row through the writer.
     checkpoints: (ctx) => createCheckpointPort(ctx, { clocks, ask, section: configuredRuns.get(ctx.sessionId)?.cfg.checkpoints ?? CHECKPOINTS_DEFAULTS, log: (m) => log(m) }),
     // Part V: the engine's headline is the title and its prose the message body (REQ-NOTIFY-005: the detail block is for diagnostic output, which none of the three run notices carries); every run notice is dismissible.
-    // PD-SHELL-001 revision 3 (OQ-292): stamped with the session's recorded root, so main names where it lives (`withSessionRoot`).
-    notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: withSessionRoot({ kind: 'notice.publish', severity: n.severity, title: n.headline, message: n.detail, detail: '', ...(n.action === undefined ? {} : { action: n.action }), ...(n.key === undefined ? {} : { key: n.key }), sessionId: n.sessionId ?? '', persistent: true }, sessionRoots) }),
+    // PD-SHELL-001 revision 3 (OQ-292): stamped with the session's recorded root, so main names where it lives (`runNoticeEvent`).
+    notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: runNoticeEvent(n, sessionRoots) }),
     // Part AO — the two control arms' channels: the completion toast (REQ-CHAT-080/084) on the window's stack, and the two
     // failure notices with a COPYABLE detail block (REQ-MONITOR-094, REQ-NOTIFY-037/038) through main's one persistent slot.
     acknowledge: (kind, title, body) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'acknowledgement.publish', kindOf: kind, title, ...(body === undefined ? {} : { body }) } }),
-    report: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: withSessionRoot({ kind: 'notice.publish', severity: n.severity, title: n.title, message: n.message, detail: n.detail, sessionId: n.sessionId, persistent: true }, sessionRoots) }),
+    report: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: reportNoticeEvent(n, sessionRoots) }),
     supervisor: (_workspaceRoot, sessionId, countUsage, helperModel) => {
       const run = configuredRuns.get(sessionId);
       if (!run) return null;

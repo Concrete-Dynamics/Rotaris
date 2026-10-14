@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**The run host's three session events are built beside their stamp (fin45, `fin45-optional-findings`).** `runResultEvent`,
+`runNoticeEvent` and `reportNoticeEvent` (`run-host/session-roots.ts`) build `run.result` and the two `notice.publish` shapes
+`host.ts` sends, each through `withSessionRoot`; no behaviour changed. `02-process-view.md` (`notice.publish`) and
+`05-state-ownership.md` (`sessionRoots`).
+
 **Only a main window asks for the current notice at boot (fin45, `fin45-optional-findings`).** `renderer/shell.ts` sends
 `notice.current` under the main role alone; persona, terminal and dialog windows import the module and draw no notice.
 `02-process-view.md` (`notice.current`) and `05-state-ownership.md` (the renderer's copy of the notice).

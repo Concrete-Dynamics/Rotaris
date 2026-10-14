@@ -15,11 +15,13 @@
  *                `run host exited (9)` and `CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 9)`, both at
  *                `error`, and not "main ended it" (`ChildrenEndedByMain`, `exit.ts`: only a kill main sent itself is
  *                `info`). Main still answers. Then the main window's renderer is crashed with SIGSEGV: main writes
- *                `RENDERER GONE (<reason>, exit <n>) for <its URL>` at `error`. The application's quit is then asked, and
- *                is held by the dead renderer's close guard
- *                (`docs/defects/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`, open: a
- *                NOTE until it is repaired, a check after); the immediate exit ends the launch, exit 0, with
- *                `main process exiting with status 0` among main's last lines.
+ *                `RENDERER GONE (<reason>, exit <n>) for <its URL>` at `error`. The application's quit (`app.quit()`,
+ *                a person's quit) is then asked, and ends the process: the dead renderer's close guard cannot answer,
+ *                so it allows (`askRendererGuard`, `main-windows.ts`), the window closes, and the orderly shutdown runs
+ *                to `quit: exiting with status 0` and `main process exiting with status 0`, exit 0. Until 2026-10-14 the
+ *                guard's question never answered and the quit was held for good
+ *                (`docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`).
+ *                Should the quit be held again the check fails, and the immediate exit ends the launch for its trace.
  *
  * What it cannot fire: `unhandledRejection` and `uncaughtException` in main. Neither can be raised in main from outside the
  * process, and adding a seam that throws inside main to prove a one-line log call is not justified (the repaired note's
@@ -124,17 +126,15 @@ const results = {};
   check('one more GONE line at error than before the renderer crashed', goneAtError(logOf(started)).length > before);
 
   /*
-   * The application's quit after the crash. Measured 2026-10-13: it is HELD — the renderer's close guard is asked through
-   * `executeJavaScript` on a frame that is gone, which never settles, and nothing bounds the wait
-   * (docs/defects/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md, open). It is asked, bounded,
-   * and reported; while that note is open a held quit is a NOTE naming it, and its repair turns this into a check. The
-   * launch is then ended by the immediate exit (the driver's `quit` with `immediate`, `app.exit`), whose trace is asserted.
+   * The application's quit after the crash. Measured 2026-10-13 (fin42): it was HELD — the renderer's close guard was asked
+   * through `executeJavaScript` on a frame that is gone, which never settles, and nothing bounded the wait. Repaired
+   * 2026-10-14 (docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md): a renderer
+   * that is gone cannot answer, so its guard allows. The quit must now end the process through the orderly shutdown; if
+   * it is held, the check fails and the immediate exit (the driver's `quit` with `immediate`, `app.exit`) ends the launch.
    */
   const guarded = await within(started.driver.quit(), 10_000);
-  const guardedExit = await exitWithin(started.child, 15_000);
-  const heldNote = 'docs/defects/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md';
-  if (guardedExit !== null) check('the application\'s quit after a renderer crash ends the process', guardedExit.code === 0, JSON.stringify(guardedExit));
-  else console.log(`NOTE  the application's quit after a renderer crash was held (${guarded === null ? 'unanswered' : 'answered'}, no exit in 15 s) — the open defect ${heldNote}`);
+  const guardedExit = await exitWithin(started.child, 30_000);
+  check('the application\'s quit after a renderer crash ends the process, exit 0', guardedExit?.code === 0, guardedExit === null ? `held (${guarded === null ? 'unanswered' : 'answered'}, no exit in 30 s)` : JSON.stringify(guardedExit));
   let ended = guardedExit;
   if (ended === null) {
     await within(started.driver.quit({ immediate: true }), 10_000);
@@ -146,10 +146,11 @@ const results = {};
   const log = logOf(started);
   const lines = mainLines(log);
   check('after both losses the process exits 0', ended.code === 0, JSON.stringify(ended));
+  check('the quit took the orderly path: the guards were asked, and main wrote `quit: exiting with status 0`', guardedExit !== null && lines.some((l) => /^quit: closing 1 main window\(s\) through their close guards first/.test(l.message)) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
   // `process.on('exit')` is the last line main writes of its own; a child's exit Electron reports in the same turn may follow it.
   const lastOwn = lines.findLastIndex((l) => l.message === 'main process exiting with status 0');
   check('the log ends where the process did: main\'s exit line comes after the losses, and nothing of main\'s own work after it', lastOwn > lines.findIndex((l) => /^RENDERER GONE \(/.test(l.message)) && lines.slice(lastOwn + 1).every((l) => /^quit: exiting with status \d+$|^workspace service for .* exited \(\d+\)$/.test(l.message)), lines.slice(-3).map((l) => l.message).join(' | '));
-  results.crash = { runHostPid, runHost: runHostLines.map((l) => `${l.level} ${l.message}`), renderers: renderers.map((r) => r.pid), renderer: rendererLine ? `${rendererLine.level} ${rendererLine.message}` : null, guardedQuit: guardedExit === null ? { held: true, note: heldNote } : { held: false, exit: guardedExit }, exit: ended, last: lines.slice(-3).map((l) => `${l.level} ${l.message}`) };
+  results.crash = { runHostPid, runHost: runHostLines.map((l) => `${l.level} ${l.message}`), renderers: renderers.map((r) => r.pid), renderer: rendererLine ? `${rendererLine.level} ${rendererLine.message}` : null, guardedQuit: guardedExit === null ? { held: true } : { held: false, exit: guardedExit }, exit: ended, last: lines.slice(-3).map((l) => `${l.level} ${l.message}`) };
 }
 
 results.checks = checks;

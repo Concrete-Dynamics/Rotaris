@@ -761,6 +761,43 @@ export function guardClose(win: GuardedWindow, ask: () => Promise<unknown>, conf
   return guard;
 }
 
+/** The renderer's own guard, asked through `executeJavaScript` (the renderer's unsaved-settings guard, REQ-SHELL-119 guard 1). */
+export const RENDERER_CLOSE_GUARD_SCRIPT = 'typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true';
+
+/** The part of a main window's `webContents` its close guard's question needs. */
+export interface GuardedContents {
+  executeJavaScript(code: string): Promise<unknown>;
+  isCrashed(): boolean;
+  isDestroyed(): boolean;
+  once(event: 'render-process-gone', listener: () => void): unknown;
+  once(event: 'destroyed', listener: () => void): unknown;
+  removeListener(event: 'render-process-gone', listener: () => void): unknown;
+  removeListener(event: 'destroyed', listener: () => void): unknown;
+}
+
+/**
+ * Asks a main window's renderer its close guard. A renderer that is gone cannot answer, and a guard that cannot answer
+ * allows (`guardClose`), so the question rejects: at once when the renderer has crashed or its contents are destroyed, and
+ * the moment either happens while the question is out. Electron's `executeJavaScript` on a renderer that is gone neither
+ * resolves nor rejects ("Render frame was disposed before WebFrameMain could be accessed"), so until 2026-10-14 the
+ * question asked of a crashed renderer never answered, and a person's close of its window and the application's quit
+ * (`closeThroughGuards`) waited on it with no bound
+ * (`docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`). A live renderer is
+ * waited for without a bound of its own: its guard may be a person's decision (REQ-SHELL-119).
+ */
+export function askRendererGuard(contents: GuardedContents): Promise<unknown> {
+  if (contents.isDestroyed() || contents.isCrashed()) return Promise.reject(new Error('the renderer is gone'));
+  return new Promise<unknown>((resolve, reject) => {
+    const gone = (): void => { stop(); reject(new Error('the renderer went while its close guard was asked')); };
+    const stop = (): void => { contents.removeListener('render-process-gone', gone); contents.removeListener('destroyed', gone); };
+    contents.once('render-process-gone', gone);
+    contents.once('destroyed', gone);
+    let asked: Promise<unknown>;
+    try { asked = contents.executeJavaScript(RENDERER_CLOSE_GUARD_SCRIPT); } catch (error) { asked = Promise.reject(error); }
+    asked.then((answer) => { stop(); resolve(answer); }, (error: unknown) => { stop(); reject(error); });
+  });
+}
+
 /** Electron's concrete half of the lifecycle seam. Tests use an in-memory adapter with the same ordering. */
 export function createElectronMainWindowAdapter(
   dependencies: ElectronMainWindowAdapterDependencies,
@@ -847,7 +884,7 @@ export function createElectronMainWindowAdapter(
 
       const guard = guardClose(
         win,
-        () => win.webContents.executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true'),
+        () => askRendererGuard(win.webContents),
         () => dependencies.closeConfirmed?.(wcId),
         dependencies.confirmRunsAtClose === undefined ? undefined : () => dependencies.confirmRunsAtClose!(wcId, win),
       );

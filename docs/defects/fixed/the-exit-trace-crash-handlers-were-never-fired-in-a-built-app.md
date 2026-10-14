@@ -44,5 +44,6 @@ main only to watch a log call was not added. The `frictions` scenario of `live-r
 NOTE; a comment there names the proof instead.
 
 Found by building it, recorded and not repaired: the application's quit after the renderer crash was held for good by the dead
-renderer's close guard (`docs/defects/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`). The proof
-asks that quit, bounded, and reports a held one as a NOTE naming that note; its repair makes it a check.
+renderer's close guard (`docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`). The proof
+asked that quit, bounded, and reported a held one as a NOTE naming that note; its repair (2026-10-14, fin43) made it a check:
+the quit after the crash now ends the process, exit 0, through the orderly path.

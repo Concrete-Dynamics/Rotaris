@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { anotherMainWindowStays, confirmActiveRunClose } from './close-confirmation.js';
+import { closeThroughGuards } from './exit.js';
 import {
+  askRendererGuard,
   guardClose,
   MainWindows,
+  type GuardedContents,
   type GuardedWindow,
   type MainWindowAdapter,
   type MainWindowsDependencies,
@@ -652,6 +655,105 @@ describe('a main window\'s close guard, as the application\'s quit drives it (PD
     guard.confirm();
     guard.close();
     expect(log).toEqual(['confirmed', 'close', 'passed']);
+  });
+});
+
+describe('a main window whose renderer is gone cannot hold its close or the application\'s quit (REQ-SHELL-119, PD-ORCH-005 clause 9)', () => {
+  /*
+   * docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md: Electron's
+   * `executeJavaScript` on a renderer that is gone neither resolves nor rejects, so the guard asked through it never
+   * answered and the quit waited on it with no bound. The fake keeps that shape: its `executeJavaScript` never settles.
+   */
+  function contents(state: { crashed: boolean; destroyed?: boolean; answer?: Promise<unknown> }) {
+    const listeners = new Map<string, Set<() => void>>();
+    const asked: string[] = [];
+    const wc: GuardedContents & { go(event: 'render-process-gone' | 'destroyed'): void; listening(): number; asked: string[] } = {
+      executeJavaScript: (code) => { asked.push(code); return state.answer ?? new Promise<unknown>(() => undefined); },
+      isCrashed: () => state.crashed,
+      isDestroyed: () => state.destroyed === true,
+      once: (event: string, listener: () => void) => { const set = listeners.get(event) ?? new Set(); set.add(listener); listeners.set(event, set); return wc; },
+      removeListener: (event: string, listener: () => void) => { listeners.get(event)?.delete(listener); return wc; },
+      go: (event) => { for (const l of [...(listeners.get(event) ?? [])]) { listeners.get(event)?.delete(l); l(); } },
+      listening: () => [...listeners.values()].reduce((n, set) => n + set.size, 0),
+      asked,
+    };
+    return wc;
+  }
+  function fakeWindow(log: string[]) {
+    let listener: ((event: { preventDefault(): void }) => void) | null = null;
+    const win: GuardedWindow & { attempt(): void } = {
+      on: (_event, l) => { listener = l; },
+      isDestroyed: () => false,
+      close: () => { log.push('close'); win.attempt(); },
+      attempt: () => { let prevented = false; listener?.({ preventDefault: () => { prevented = true; } }); log.push(prevented ? 'held' : 'passed'); },
+    };
+    return win;
+  }
+  /** Settles within `ms`, or answers 'held' — so a hang fails the test rather than timing it out. */
+  const within = <T>(promise: Promise<T>, ms = 200): Promise<T | 'held'> => Promise.race([promise, new Promise<'held'>((r) => setTimeout(() => r('held'), ms))]);
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it('the application\'s quit closes a window whose renderer crashed: its guard cannot answer, so it allows', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    const wc = contents({ crashed: true });
+    const guard = guardClose(win, () => askRendererGuard(wc), () => log.push('confirmed'));
+    expect(await within(closeThroughGuards([guard]))).toBe(true);
+    expect(log).toEqual(['confirmed', 'close', 'passed']);
+    expect(wc.asked).toEqual([]);
+  });
+
+  it('a person\'s close of a window whose renderer crashed passes', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, () => askRendererGuard(contents({ crashed: true })), () => log.push('confirmed'));
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['held', 'confirmed', 'close', 'passed']);
+  });
+
+  it('a renderer that goes while its guard is asked releases the question, and the quit goes on', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    const wc = contents({ crashed: false });
+    const guard = guardClose(win, () => askRendererGuard(wc), () => log.push('confirmed'));
+    const closing = closeThroughGuards([guard]);
+    await settle();
+    expect(wc.asked).toHaveLength(1);
+    expect(await within(closing, 20)).toBe('held');
+    wc.go('render-process-gone');
+    expect(await within(closing)).toBe(true);
+    expect(log).toEqual(['confirmed', 'close', 'passed']);
+    expect(wc.listening()).toBe(0);
+  });
+
+  it('a window whose contents are destroyed while its guard is asked releases the question too', async () => {
+    const wc = contents({ crashed: false });
+    const asking = askRendererGuard(wc).then(() => 'answered', () => 'cannot answer');
+    await settle();
+    wc.go('destroyed');
+    expect(await within(asking)).toBe('cannot answer');
+    expect(wc.listening()).toBe(0);
+  });
+
+  it('a live renderer\'s answer still decides, and nothing is left listening once it has', async () => {
+    const refused = contents({ crashed: false, answer: Promise.resolve(false) });
+    expect(await askRendererGuard(refused)).toBe(false);
+    expect(refused.listening()).toBe(0);
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    const guard = guardClose(win, () => askRendererGuard(contents({ crashed: false, answer: Promise.resolve(false) })), () => log.push('confirmed'));
+    expect(await within(closeThroughGuards([guard]))).toBe(false);
+    expect(log).toEqual([]);
+  });
+
+  it('a renderer still deciding is waited for: the guard\'s question has no time bound of its own', async () => {
+    let answer!: (proceed: boolean) => void;
+    const wc = contents({ crashed: false, answer: new Promise<boolean>((r) => { answer = r; }) });
+    const asking = askRendererGuard(wc);
+    expect(await within(asking, 50)).toBe('held');
+    answer(true);
+    expect(await within(asking)).toBe(true);
   });
 });
 

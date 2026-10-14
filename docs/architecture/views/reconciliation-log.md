@@ -15,6 +15,12 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-14**
 
+**A main window whose renderer is gone no longer holds its close or the application's quit (REQ-SHELL-119, PD-ORCH-005
+clause 9; fin43).** The renderer's close guard is asked through `askRendererGuard` (`main/main-windows.ts`), which rejects —
+so the guard allows — when the renderer has crashed or its contents are destroyed, and when either happens while it is asked.
+The **process view**'s quit paragraph says so and names the hung renderer it does not cover. No package, edge, process,
+channel, command or store column changed.
+
 **Channel 14, `display:changed`: every window follows a stored display preference (fin43, REQ-CHAT-167, REQ-CONFIG-403).**
 `prefs.set` announces each of the three transcript display preferences it stores to every live window
 (`announceDisplayPreference`, `main/commands/shell.ts`); each renderer folds it into `displayPrefs` (`displayPreferencePatch`,

@@ -35,3 +35,29 @@ cannot be closed either — read from the code, not measured.
   ends the launch by the immediate exit; its repair turns that NOTE into a check.
 
 Noticed 2026-10-13 by fin42 while building the exit-trace proof (N60 (c)); recorded, not repaired: outside the bundle's tasks.
+
+## Outcome — repaired 2026-10-14 (fin43, `fin43-crash-and-seams`)
+
+Both closes now ask the renderer through one question, `askRendererGuard` (`apps/desktop/src/main/main-windows.ts`): the
+window's own `close` handler (`guardClose`'s `ask`, wired in `createElectronMainWindowAdapter`) and main's `closeGuard`
+dependency for REQ-SHELL-021's gate 1 (`apps/desktop/src/main/index.ts`). A renderer that is gone cannot answer, and a
+guard that cannot answer allows, so the question rejects at once when `webContents.isCrashed()` or `isDestroyed()` holds,
+and rejects the moment `render-process-gone` or `destroyed` is emitted while it is out, removing both listeners once it has
+settled either way. A live renderer is still waited for with no bound of its own, since its guard may be a person's decision
+(REQ-SHELL-119); the guard's script moved to one constant, `RENDERER_CLOSE_GUARD_SCRIPT`.
+
+Pinned by `apps/desktop/src/main/main-windows.test.ts`, "a main window whose renderer is gone cannot hold its close or the
+application's quit": a fake `webContents` whose `executeJavaScript` never settles, as Electron's does on a disposed frame.
+Against the old wiring (`() => win.webContents.executeJavaScript(…)`) four of its six cases fail, each answering `held`: the
+quit through `closeThroughGuards`, a person's close, a renderer that goes while asked, and contents destroyed while asked.
+
+Shown in the built app by `pnpm exit-trace-proof` (launch `crash`), whose NOTE is now a check: after the run host's SIGKILL and
+the renderer's SIGSEGV, the driver's `app.quit()` ends the process, exit 0, through the orderly path (`quit: closing 1 main
+window(s) through their close guards first`, then `quit: exiting with status 0` and `main process exiting with status 0`):
+13 of 13 checks PASS on 2026-10-14 under `xvfb-run` on Linux (load average 2.9). The same proof against a build without the
+repair FAILS 2 of 13 (`the application's quit after a renderer crash ends the process, exit 0 — held (answered, no exit in
+30 s)`).
+
+Not covered: a renderer that is alive but hung (an endless loop) is not gone, so its guard's question is still waited for
+without a bound — recorded apart in
+[`a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`](../a-main-window-whose-renderer-hangs-holds-the-applications-quit.md).

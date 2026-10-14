@@ -264,7 +264,13 @@ guard asked, and the process exits when it is done (`SessionEndShutdown`, `main/
 `docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`; not yet observed on a Windows host). For the quits
 that do emit it: `before-quit` is held while any main window is open, and the main windows are closed
 through their guards, all or none (`closeThroughGuards`: every guard asked, every close confirmed, then every window
-closed). Nothing a quit closes answers for a person. `QuitState` (`main/exit.ts`) knows the quit from
+closed). **A renderer that is gone cannot answer, and a guard that cannot answer allows** (since 2026-10-14, fin43): the
+renderer's guard is asked by `askRendererGuard` (`main/main-windows.ts`), which rejects at once when the window's
+`webContents` has crashed or is destroyed and the moment `render-process-gone` or `destroyed` is emitted while it is out,
+because Electron's `executeJavaScript` on a disposed frame never settles; until then a crashed renderer held a person's close
+and the quit for good (`docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`,
+shown by `pnpm exit-trace-proof`). A live renderer is waited for with no bound, a hung one included
+(`docs/defects/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`, open). Nothing a quit closes answers for a person. `QuitState` (`main/exit.ts`) knows the quit from
 `exitCleanly` and from each main window's confirmed close, which `guardClose` reports before closing. While it is under
 way an approval dialog that closes sends no Deny, and the question dock's cancellation is not forwarded. The run host's
 `shutdown` withdraws both instead (PD-ORCH-005 clause 9, OQ-96). **Since 2026-10-06 a person's close of a main window asks

@@ -45,7 +45,8 @@ beside `run host exited (9)`, and the renderer crashed with SIGSEGV (not navigat
 `unhandledRejection` is still argued, not measured: it cannot be raised in main from outside
 ([`the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`](the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md)).
 The same launch found the application's quit held for good once the renderer had crashed
-([`a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`](../a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md), open).
+([`a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`](a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md),
+open then; repaired 2026-10-14 by fin43, and the proof's quit after the crash is a check).
 
 **Not in scope, and still true:** the second half of this note — that the dev run's detached launch captured
 no stdio at all — is a property of how the process was launched, not of the product. What the product writes

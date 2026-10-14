@@ -2,7 +2,7 @@
 // first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
 import './sentinel.js';
 import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
-import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, type CloseGuard } from './main-windows.js';
+import { askRendererGuard, createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, type CloseGuard } from './main-windows.js';
 import { createNoticeStore } from './notices.js';
 import { AuthRecovery } from './auth-recovery.js'; // REQ-NOTIFY-072..080 (the 401 note's parts C and D)
 import { createAuthFallback } from './auth-fallback.js'; // REQ-NOTIFY-070/071/078 (the 401 note's parts A and B)
@@ -1423,8 +1423,7 @@ async function main(): Promise<void> {
     samePath,
     chooseProjectFolder: (win, startAt) => chooseProjectFolder(win, startAt),
     openWorkspace: (workspace) => openWorkspaceInner(workspace),
-    closeGuard: (owner) => owner.win.webContents
-      .executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true')
+    closeGuard: (owner) => askRendererGuard(owner.win.webContents)
       .then((proceed: unknown) => proceed !== false)
       .catch(() => true),
     activeRunCount: async (workspaceId) => {

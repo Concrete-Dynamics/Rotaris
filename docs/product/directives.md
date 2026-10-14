@@ -139,8 +139,8 @@ by session identifier and its workspace"), REQ-NOTIFY-031 and REQ-NOTIFY-032 are
 > switched to another project: a window was added for the session's workspace, the focus **held** on its record and delivered
 > 20 ms later at its renderer's `session.focusReady`, and the added window followed the session (load average 5.9 to 6.6 on
 > four CPUs). **Found beside it:** the unreviewed-hooks notice a run publishes still names the focused window's workspace
-> ([`a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md`](../defects/a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md)),
-> not repaired. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+> ([`a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md`](../defects/fixed/a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md)),
+> not repaired then; repaired 2026-10-14 by fin44 (`fin44-hooks-and-config`) under OQ-293's ruling. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 > **First execution of revision 2.** Built before it was ruled, as the reading OQ-267 recorded: `MainWindows.reach`
 > (`apps/desktop/src/main/main-windows.ts`) for the hook review, the 2026-10-13 row of

@@ -338,6 +338,14 @@ Invariants:
   `storeRefusalOf`, `storeRefusalNotice`; pure, pinned by its test), which `openWorkspaceInner` only raises. A new condition
   of the open follows the same path: a refusal code in `workspace-service/store-open.ts`, the set `STORE_REFUSALS` in
   `main/store-notice.ts`.
+- **A notice raised at two sites is built by one composer** (since 2026-10-14, OQ-293). The unreviewed-hooks notice
+  (REQ-NOTIFY-224) is raised in the open slot of `openWorkspaceInner` and from a run's `notice.publish`; both go through
+  `hooksReviewNotice(root, notice)` in `main/hooks-review-notice.ts` (the open slot by `hooksReviewOpenReport`, the run's by
+  `runNoticeReport` in `main/run-notice.ts`), which names the project on PD-WORKSPACE-005's rule (`main/project-name.ts`,
+  shared with the project-setup banners): title `{headline}: {name}`, the requirement's sentence as the message, the folder
+  opening the detail. A notice the run host publishes is mapped to the store's input in `runNoticeReport` alone, and the
+  action vocabulary main raises from in `recoveryFor` (`main/notice-recovery.ts`); an action naming a workspace takes the
+  root on the event (`workspaceRoot`), never the focused window's, where the event carries one.
 - A renderer that must raise a persistent notice sends `notice.report` — it does not draw one. That missing
   entry for a renderer was defect fifty-seven.
 - A transient acknowledgement may carry **exactly one** action, from a closed one-member type.

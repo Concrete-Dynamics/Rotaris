@@ -16,6 +16,15 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**The unreviewed-hooks notice names its project, built alike at both sites (OQ-293; fin44, `fin44-hooks-and-config`;
+`../../defects/fixed/the-unreviewed-hooks-notice-does-not-name-its-project.md`,
+`../../defects/fixed/the-unreviewed-hooks-notice-folds-its-sentence-under-details-at-open.md`,
+`../../defects/fixed/a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md`).** One composer,
+`main/hooks-review-notice.ts`, for the open slot and the run's `notice.publish` (`main/run-notice.ts`); PD-WORKSPACE-005's naming
+rule moved to `main/project-name.ts` and `recoveryFor` to `main/notice-recovery.ts`. No message changed: the run's notice names
+the `workspaceRoot` the event already carried. `02-process-view.md` (`notice.publish`'s `workspaceRoot`) and `04-seams.md` §6
+(a notice raised at two sites).
+
 **A pass whose improvement collector failed reads as a failure (PD-LIBRARY-005, OQ-285; fin44, `fin44-improvement-failures`;
 `../../defects/fixed/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md`).** Main's `stored` chooses an
 empty artifact's notice through `emptyArtifactNotice`, which replaces `zeroProposalDetail`. A crashed or unparseable collector is

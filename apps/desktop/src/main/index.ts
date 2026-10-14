@@ -65,6 +65,9 @@ import { workspaceCommands } from './commands/workspace.js';
 import { withoutRuntimeRequests } from './runtime-requests.js'; // REQ-STARTUP-160
 import { placeChromiumProfile } from './chromium-profile.js'; // REQ-STARTUP-145
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
+import { hooksReviewOpenReport } from './hooks-review-notice.js'; // OQ-293
+import { recoveryFor } from './notice-recovery.js';
+import { runNoticeReport } from './run-notice.js'; // Part V, OQ-293
 import { refusal, type ApprovalDialogState, type CommandContext, type CommandHandler, type CommandHandlers, type MainWindowState, type Recovery } from './commands/context.js';
 
 /**
@@ -452,7 +455,9 @@ async function main(): Promise<void> {
           .catch((cause: unknown) => { log(`config: the read at the open of ${key} failed (${String(cause)})`); return null; });
         const hooksSummary = runHost.request({ kind: 'hooks.summary', workspaceId: opened.workspaceId }, millis(10_000)).catch(() => null);
         void Promise.all([configRead, hooksSummary]).then(([snapshot, r]) => {
-          if (r?.kind === 'hooks.summary' && r.summary.status === 'review') raiseNoticeKeyed(`hooks.review:${r.summary.workspace}:${r.summary.fingerprint}`, 'warning', 'Workspace hooks need review', r.summary.notice, recoveryFor('hooks.review', r.summary.workspace));
+          // OQ-293: named for its project, REQ-HOOKS-101's sentence in the message row, built as the run's own is (`hooks-review-notice.ts`);
+          // `key` is the canonical root the windows hold. Once per workspace and hook set, by the store's key (REQ-NOTIFY-224).
+          if (r?.kind === 'hooks.summary' && r.summary.status === 'review') void notices.report(hooksReviewOpenReport(key, r.summary));
           else if (r !== null) {
             // REQ-WORKSPACE-152 (3): once the window is interactive, never as a dialog; the only run-time consequence is REQ-WORKSPACE-137's refusal.
             const authenticated = providers.list().filter((row) => row.authenticated).map((row) => row.id);
@@ -573,31 +578,6 @@ async function main(): Promise<void> {
     // store logs the suppression itself, so the synchronous answer here is "accepted", not "shown".
     return true;
   };
-  /**
-   * REQ-NOTIFY-223/224: the run host names an action; main maps it to the notice's own closed vocabulary member.
-   * ESC-34: the review action carries the workspace whose hooks it concerns, so the caller supplies one; with no
-   * workspace there is nothing to review and the notice is raised without an action rather than with an empty one.
-   */
-  const recoveryFor = (action: string | undefined, workspace?: string, sessionId?: string): Recovery =>
-    action === 'hooks.review'
-      ? (workspace === undefined || workspace === '' || workspace === '(no workspace)' ? [] : [{ label: 'Review hooks', action: { kind: 'open-hook-review', workspace } }])
-      : action === 'hooks.settings' ? [{ label: 'Open hook settings', action: { kind: 'open-settings', category: 'hooks' } }]
-        : action === 'config.models' ? [{ label: 'Open Models settings', action: { kind: 'open-settings', category: 'models' } }]
-          // OQ-279: the fatal configuration load's notice leads to the category whose card draws the report (ConfigSettings' Fatal).
-          : action === 'config.fatal' ? [{ label: 'Open Models settings', action: { kind: 'open-settings', category: 'models' } }]
-          : action === 'providers.add' ? [{ label: 'Add a provider', action: { kind: 'open-provider-sign-in' } }]
-            /**
-             * OQ-42: the durable-store failure's recovery. Reopening the session is what waits for every affected
-             * run to settle, probes the store with a rolled-back write and rebuilds the session's writer and
-             * projection (`Sessions.resume`) — so the action focuses the session the notice names, through
-             * REQ-NOTIFY-044's existing `focus-session` member. A notice with no session to name carries no
-             * action rather than one pointing nowhere, on the same terms as the hook review above. Since PD-SHELL-001
-             * revision 3 (OQ-292) the member names the session's workspace too — `workspace` is then the root the run host
-             * recorded the session under (`notice.publish`'s `workspaceRoot`), never a window's — and with none known the
-             * notice carries no action.
-             */
-            : action === 'session.reopen' ? (sessionId === undefined || sessionId === '' || workspace === undefined || workspace === '' ? [] : [{ label: 'Reopen the session', action: { kind: 'focus-session', sessionId, workspace } }])
-              : [];
   /**
    * OQ-279 (ruled 2026-10-13 under R-072): a workspace whose configuration fails to load opens, and the report is raised as
    * a persistent error notice at the open rather than first at the refusal of the first prompt; a later clean load of that
@@ -1176,15 +1156,9 @@ async function main(): Promise<void> {
       // REQ-NOTIFY-028: the run host names the session its notice concerns, so a notice about one run survives the
       // start of another (REQ-NOTIFY-029). No timer clears anything here any more: REQ-NOTIFY-040 allows a notice to
       // leave only by replacement, a run-start clear, or the user's dismissal.
-      // PD-SHELL-001 revision 3 (OQ-292): the session's own action names the root the run host recorded it under. The hook
-      // review's still names the focused window's workspace, which is wrong for a run of another window's workspace
-      // (docs/defects/a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md).
-      const recovery = recoveryFor(e.action, e.action === 'session.reopen' ? e.workspaceRoot : activeWindow()?.workspace, e.sessionId);
-      void notices.report({
-        severity: e.severity, title: e.title, message: e.message, detail: e.detail, persistent: e.persistent, sessionId: e.sessionId,
-        ...(e.key === undefined ? {} : { key: e.key }),
-        ...(recovery.length === 0 ? {} : { action: recovery[0]! }),
-      });
+      // PD-SHELL-001 revision 3 (OQ-292): the session's own action names the root the run host recorded it under; OQ-293: so
+      // does the run's unreviewed-hooks notice, built by the open slot's composer (`run-notice.ts`).
+      void notices.report(runNoticeReport(e, () => activeWindow()?.workspace));
       log(`notice from the run host: ${e.title}${e.action ? ` [${e.action}]` : ''}${e.sessionId === '' ? '' : ` (session ${e.sessionId})`}`);
     }
     else if (e.kind === 'acknowledgement.publish') {

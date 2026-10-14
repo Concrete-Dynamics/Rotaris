@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
@@ -405,14 +405,23 @@ if (want('6')) {
   const r = await launch('review-action', s4, {
     ROTARIS_CAPTURE_AFTER_MS: '6000',
     // The notice is raised 800 ms after the workspace opens; probe it, then click its action.
-    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="notice-title"]@2500',
+    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="notice-title"]@2500;;[data-testid="notice-message"]@2500;;[data-testid="notice-detail"]@2500',
     ROTARIS_CAPTURE_INSPECT_AT: '.notice__action@2500',
     ROTARIS_CAPTURE_CLICKS: '.notice__action>>Review hooks@3200',
     // Leaving the review without choosing is a rejection (REQ-HOOKS-107); the proof chooses, so nothing is left open.
     ROTARIS_CAPTURE_HOOK_REVIEW: 'refuse', ROTARIS_CAPTURE_HOOK_REVIEW_MS: '900',
   });
   const titles = (probesAt(r.log, 2500, '[data-testid="notice-title"]') ?? []).map((m) => m.text);
-  expect(titles.includes('Workspace hooks need review'), `the notice on screen: ${JSON.stringify(titles)} (REQ-NOTIFY-224)`);
+  // OQ-293 (ruled 2026-10-14 under R-072): the notice names its project on PD-WORKSPACE-005's pattern — the title followed by
+  // the folder's name, REQ-HOOKS-101's sentence in the message row (not folded under Details), the folder heading the detail.
+  const named = `Workspace hooks need review: ${basename(s4.workspace)}`;
+  expect(titles.includes(named), `the notice on screen: ${JSON.stringify(titles)}, not "${named}" (REQ-NOTIFY-224, OQ-293)`);
+  const messages = (probesAt(r.log, 2500, '[data-testid="notice-message"]') ?? []).map((m) => m.text);
+  expect(messages.some((m) => m.startsWith('Skipped ')), `the message row holds ${JSON.stringify(messages)}, not REQ-HOOKS-101's "Skipped …" sentence (REQ-NOTIFY-005, OQ-293)`);
+  const details = (probesAt(r.log, 2500, '[data-testid="notice-detail"]') ?? []).map((m) => m.text);
+  const sameFolder = (a, b) => a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
+  const folderLine = details.find((d) => d.startsWith('Project folder: '))?.split('\n')[0]?.slice('Project folder: '.length);
+  expect(folderLine !== undefined && sameFolder(folderLine, s4.workspace), `the detail area holds ${JSON.stringify(details)}, not "Project folder: ${s4.workspace}" first (OQ-293)`);
   const actions = inspectAt(r.log, 2500, '.notice__action')?.matches ?? [];
   expect(actions.length === 1 && actions[0].text === 'Review hooks', `the notice offers ${JSON.stringify(actions.map((a) => a.text))} (REQ-NOTIFY-224)`);
   expect(actions[0].attrs['data-action'] === 'open-hook-review', `the action is ${actions[0].attrs['data-action']}, not the member REQ-NOTIFY-044 gained under ESC-34`);
@@ -428,7 +437,7 @@ if (want('6')) {
   const sameRoot = opened[1].replace(/\\/g, '/').toLowerCase() === s4.workspace.replace(/\\/g, '/').toLowerCase();
   expect(sameRoot, `the review opened for ${opened[1]}, not for ${s4.workspace}`);
   results.reviewAction = {
-    title: titles.find((t) => t === 'Workspace hooks need review') ?? null,
+    title: titles.find((t) => t === named) ?? null, message: messages[0] ?? null, detail: details[0] ?? null,
     actionLabel: actions[0].text, member: actions[0].attrs['data-action'],
     reviewOpenedFor: opened[1], hooks: Number(opened[2]), workspaceMatched: sameRoot,
     png: join(output, 'review-action.png'), elapsedMs: r.elapsedMs,
@@ -450,7 +459,10 @@ if (want('6b')) {
   const r = await launch('review-other', s4b, {
     ROTARIS_CAPTURE_AFTER_MS: '11000',
     ROTARIS_CAPTURE_NOTICES: step(2000, {
-      op: 'report', severity: 'warning', title: 'Workspace hooks need review', message: 'Another workspace declares a hook.', persistent: true,
+      // OQ-293: the shape main's composer (`hooksReviewNotice`) gives the notice, named for the workspace its action reaches.
+      op: 'report', severity: 'warning', title: `Workspace hooks need review: ${basename(s4bTarget.workspace)}`,
+      message: "Skipped 1 hook declared by this workspace's .rotaris/agents.yaml: workspace hooks run shell commands and this workspace has not been reviewed and trusted yet. Review the hooks in Rotaris to allow them to run.",
+      detail: `Project folder: ${s4bTarget.workspace}`, persistent: true,
       action: { label: 'Review hooks', action: { kind: 'open-hook-review', workspace: s4bTarget.workspace } },
     }),
     ROTARIS_CAPTURE_INSPECT_AT: '.notice__action@2600',

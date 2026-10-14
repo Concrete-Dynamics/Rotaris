@@ -14255,7 +14255,7 @@ declares hooks the user has not reviewed"; REQ-HOOKS-101, whose fixed text reads
 .rotaris/agents.yaml"; PD-WORKSPACE-005, which named the project in the project-setup banners for the same reason; PD-SHELL-001
 revision 2. Raised 2026-10-14 by fin43 (`fin43-notices-and-config`) from the consortium's ruling of OQ-267 (step 8 (b)),
 recorded in
-[`the-unreviewed-hooks-notice-does-not-name-its-project.md`](../defects/the-unreviewed-hooks-notice-does-not-name-its-project.md);
+[`the-unreviewed-hooks-notice-does-not-name-its-project.md`](../defects/fixed/the-unreviewed-hooks-notice-does-not-name-its-project.md);
 numbered from the top of the plan's range. Ruled 2026-10-14 under R-072, below.)*
 
 The notice is an application notice, shown in every main window, and its words — the title "Workspace hooks need review" and
@@ -14280,10 +14280,14 @@ Both raise sites — main's at the workspace's open and the run's through `notic
 "Review hooks" action names the workspace whose hooks it counts (on the run path, the run's own workspace, never the focused
 window's). Covered by REQ-NOTIFY-224, REQ-NOTIFY-005, REQ-HOOKS-101 and REQ-HOOKS-102: no directive is minted, and
 REQ-HOOKS-101 keeps its text, since the name is carried by the title and the detail alone. Two defects found while writing it
-up: [`the-unreviewed-hooks-notice-folds-its-sentence-under-details-at-open.md`](../defects/the-unreviewed-hooks-notice-folds-its-sentence-under-details-at-open.md)
+up: [`the-unreviewed-hooks-notice-folds-its-sentence-under-details-at-open.md`](../defects/fixed/the-unreviewed-hooks-notice-folds-its-sentence-under-details-at-open.md)
 (the open path put REQ-HOOKS-101's sentence in the folded detail) and
-[`a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md`](../defects/a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md)
-(the run path's action named the focused window's workspace).
+[`a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md`](../defects/fixed/a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md)
+(the run path's action named the focused window's workspace). **Built 2026-10-14 (fin44, `fin44-hooks-and-config`):** one
+composer, `hooksReviewNotice` (`apps/desktop/src/main/hooks-review-notice.ts`), used by the open slot (`hooksReviewOpenReport`)
+and by main's mapping of the run's `notice.publish` (`runNoticeReport`, `run-notice.ts`), which names the root the run host
+recorded the session under (`workspaceRoot`, already on the event since PD-SHELL-001 revision 3, so no second field was added);
+`notice-proof` sections 6 and 6b read the named title, the sentence in the message row and "Project folder:" heading the detail.
 
 <a id="oq-294"></a>
 

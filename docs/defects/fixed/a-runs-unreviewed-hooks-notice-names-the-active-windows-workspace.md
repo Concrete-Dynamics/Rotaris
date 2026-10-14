@@ -30,3 +30,16 @@ for a named workspace"); REQ-NOTIFY-224 (the notice is about the workspace decla
 - `packages/engine/src/run/run.ts` — the run's `hooks.review` notice, keyed by `trust.workspace`.
 - `apps/desktop/src/run-host/host.ts` — the `notice` port that sends `notice.publish`, now with `workspaceRoot`.
 - `packages/contracts/src/process-protocol.ts` — `notice.publish`'s optional `workspaceRoot`.
+
+## Outcome — repaired 2026-10-14 (fin44, `fin44-hooks-and-config`), under OQ-293's ruling
+
+Main's mapping of the run host's `notice.publish` moved into `runNoticeReport` (`apps/desktop/src/main/run-notice.ts`): a
+`hooks.review` notice that carries the session's recorded root (`workspaceRoot`, stamped by `withSessionRoot` since PD-SHELL-001
+revision 3) is built by the open slot's composer, `hooksReviewNotice`, so its action names that workspace and its title and detail
+name the same project. The key stays the engine's `hooks.review:<trust.workspace>:<fingerprint>`. OQ-293's ruling asked for an
+optional `workspace` on `notice.publish` carried from the engine's `deps.workspaceRoot`; the event already carries that very root
+as `workspaceRoot` (the run host records `sessionRoots` from the same `s.root` it hands the run as `workspaceRoot`, before the run
+starts), so no second field was added. A `hooks.review` notice carrying no root keeps the active window's workspace, as the ruling
+says for other notices; no run reaches it, since every run's session is recorded at its start. `recoveryFor` moved unchanged to
+`notice-recovery.ts`. Pinned by `apps/desktop/src/main/hooks-review-notice.test.ts` (the name, a drive root, the folder line, REQ-HOOKS-101's text unchanged, the open slot's report) and `apps/desktop/src/main/run-notice.test.ts` (the two raise paths identical in title, message, detail and action; with another window active the run's notice names its own workspace), each red on the code before (the run-path cases checked by restoring the old mapping: 2 of 4 failed). No proof drives two windows with a run: `notice-proof` section 6b drives the
+reach for a notice naming another workspace, in the composer's shape.

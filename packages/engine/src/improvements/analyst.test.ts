@@ -6,8 +6,14 @@ import {
   COLLECTOR_CRASHED_PREFIX,
   COLLECTOR_PARSE_FAILED_PREFIX,
   COLLECTOR_TIMED_OUT_PREFIX,
+  IMPROVEMENT_CATEGORIES,
+  IMPROVEMENT_RISKS,
   ImprovementAnalysisJobSchema,
   ImprovementArtifactSchema,
+  VERIFIER_ROLES,
+  VERIFIER_SEVERITIES,
+  VerifierCheckSchema,
+  VerifierSectionSchema,
   type ImprovementAnalysisJob,
 } from "@rotaris/contracts";
 import { asSessionId, FakeClock, mintWorkspaceId } from "@rotaris/kernel";
@@ -24,9 +30,12 @@ import {
   StoreDal,
 } from "@rotaris/store";
 import {
+  analystSystem,
   analyzeImprovement,
   gateProposalKey,
   parseImprovementAnalysis,
+  VERIFIER_CHECK_FIELDS,
+  VERIFIER_SECTION_FIELDS,
 } from "./analyst.js";
 import {
   captureImprovementJob,
@@ -297,6 +306,95 @@ describe("REQ-LIBRARY-015..034 improvement analyst", () => {
     clock.advance(1_000);
     expect((await pending).notes).toBe(`${COLLECTOR_TIMED_OUT_PREFIX}1 seconds`);
     expect(COLLECTOR_TIMED_OUT_PREFIX).toBe("collector timed out after ");
+  });
+});
+
+/**
+ * fin46 L1 (docs/defects/fixed/the-improvement-analyst-is-never-told-the-verifier-sections-shape.md): the live run at
+ * b9e3005 lost its retrospective to a proposed_verifier_section holding invented keys, because neither system text
+ * named that block's keys. Both schemas are strict, so the text must name every key they take, and only those.
+ */
+describe("REQ-LIBRARY-009/016/022 the analyst is told the proposal's shape", () => {
+  const sectionKeys = Object.keys(VerifierSectionSchema.shape).sort();
+  const checkKeys = Object.keys(VerifierCheckSchema.shape).sort();
+  const retrospectiveJob = (): ImprovementAnalysisJob =>
+    job({
+      pass: "retrospective",
+      source_session_id: null,
+      retrospective: {
+        sessions: { available: true, entries: [] },
+        proposals: { available: true, entries: [] },
+        prompts: { available: true, entries: [] },
+        persona_memory: { available: true, entries: [] },
+        instructions: { available: true, entries: [] },
+      },
+    });
+
+  it.each([
+    ["post_run", () => job()],
+    ["retrospective", retrospectiveJob],
+  ] as const)(
+    "the %s system text names every verifier key, check key, category and risk the schemas take",
+    (_pass, make) => {
+      const system = analystSystem(make());
+      for (const key of [...sectionKeys, ...checkKeys])
+        expect(system).toContain(`${key} (`);
+      for (const value of [
+        ...VERIFIER_ROLES,
+        ...VERIFIER_SEVERITIES,
+        ...IMPROVEMENT_RISKS,
+      ])
+        expect(system).toContain(`"${value}"`);
+      for (const category of IMPROVEMENT_CATEGORIES)
+        expect(system).toContain(category);
+      expect(system).toContain(
+        "Any other key in proposed_verifier_section or in a check makes the whole reply invalid.",
+      );
+      const example = /Example: (\{.*\})\./.exec(system)?.[1];
+      expect(example).toBeDefined();
+      expect(VerifierSectionSchema.safeParse(JSON.parse(example!)).success).toBe(
+        true,
+      );
+    },
+  );
+
+  it("describes exactly the keys the strict schemas take, so a key added there is named here", () => {
+    expect(Object.keys(VERIFIER_SECTION_FIELDS).sort()).toEqual(sectionKeys);
+    expect(Object.keys(VERIFIER_CHECK_FIELDS).sort()).toEqual(checkKeys);
+  });
+
+  it("sends the shape on both attempts, and still rejects the invented keys the live run met (REQ-LIBRARY-022)", async () => {
+    const clock = new FakeClock();
+    const invented = JSON.stringify({
+      proposals: [
+        {
+          category: "verifier_gate_update",
+          summary: "Run the suite before completion",
+          recommended_action: "Add a test check",
+          evidence: [{ kind: "session", text: "the suite was skipped" }],
+          proposed_verifier_section: { when: "always", check: "npm test" },
+        },
+      ],
+    });
+    const { value, inputs } = backend(() => ok(invented));
+    const artifact = await analyzeImprovement(
+      retrospectiveJob(),
+      {
+        backend: value,
+        model: MODEL,
+        thinking: "unset",
+        timers: clock.timers,
+        credentialFor: () => async () => "key",
+      },
+      new AbortController().signal,
+    );
+    expect(inputs).toHaveLength(2);
+    for (const input of inputs) {
+      expect(input.systemPrompt).toContain("gate_completion (");
+      expect(input.systemPrompt).toContain("failure_pattern (");
+    }
+    expect(artifact.proposals).toEqual([]);
+    expect(artifact.notes).toMatch(/^collector parse failed: .*unrecognized_keys/s);
   });
 });
 

@@ -4,7 +4,10 @@ import {
   COLLECTOR_PARSE_FAILED_PREFIX,
   COLLECTOR_TIMED_OUT_PREFIX,
   IMPROVEMENT_CATEGORIES,
+  IMPROVEMENT_RISKS,
   ImprovementArtifactSchema,
+  VERIFIER_ROLES,
+  VERIFIER_SEVERITIES,
   type ImprovementAnalysisJob,
   type ImprovementArtifact,
   type ImprovementEvidence,
@@ -14,11 +17,60 @@ import { millis, type Timers } from "@rotaris/kernel";
 import type { AgentBackend, ModelRef, ThinkingLevel } from "@rotaris/model";
 import { mintImprovementId } from "./capture.js";
 
+const quoted = (values: readonly string[]): string =>
+  values.map((value) => `"${value}"`).join(", ");
+
+/**
+ * The keys of a `verifier` block (REQ-CONFIG-139..145) and of one of its checks, each with the bound
+ * `VerifierSectionSchema` / `VerifierCheckSchema` enforce. Both schemas are `.strict()`, and REQ-LIBRARY-009 (c) /
+ * REQ-LIBRARY-016 discard the whole pass over one unknown key, so the analyst is told the shape rather than left to
+ * guess it: the live run at b9e3005 lost a retrospective to an invented `when` and `check` (fin46 L1). A test holds
+ * these key sets equal to the schemas', so a key added there cannot go unnamed here.
+ */
+export const VERIFIER_SECTION_FIELDS: Readonly<Record<string, string>> = {
+  checks: "a list of check objects",
+  gate_completion: "true or false",
+  suite_timeout: "whole seconds, at least 1, or null",
+  author_gate: "true or false",
+  probe_timeout: "whole seconds, at least 1",
+  max_repair_attempts: "a whole number, at least 0",
+};
+export const VERIFIER_CHECK_FIELDS: Readonly<Record<string, string>> = {
+  name: "required, non-empty, unique among the checks",
+  command: "required, the non-empty shell command to run",
+  timeout: "whole seconds from 1 to 600",
+  severity: quoted(VERIFIER_SEVERITIES).replace(/, (?=[^,]*$)/, " or "),
+  role: quoted(VERIFIER_ROLES).replace(/, (?=[^,]*$)/, " or "),
+  cwd: "a workspace-relative directory, never absolute and never through ..",
+  failure_pattern: "a regular expression",
+};
+
+const fieldList = (fields: Readonly<Record<string, string>>): string =>
+  Object.entries(fields)
+    .map(([key, bound]) => `${key} (${bound})`)
+    .join(", ");
+
+/**
+ * What both passes are told about one proposal: every field with its closed vocabulary or bound, and the whole
+ * `proposed_verifier_section` shape with an example. The rules themselves stay the contracts' (REQ-LIBRARY-009,
+ * REQ-LIBRARY-021): this only states them, and an invalid block is still rejected.
+ */
+export const PROPOSAL_SHAPE: readonly string[] = [
+  "Each proposal needs category, summary, evidence, recommended_action and risk, plus target_persona and proposed_verifier_section when relevant.",
+  `category is one of ${IMPROVEMENT_CATEGORIES.join(", ")}. risk is one of ${quoted(IMPROVEMENT_RISKS)}.`,
+  "target_persona names one persona and is required when category is persona_memory_update.",
+  "proposed_verifier_section is null unless the proposal changes the verifier gate, and is required when category is verifier_gate_update.",
+  `It is an object holding only these keys, each optional: ${fieldList(VERIFIER_SECTION_FIELDS)}.`,
+  `Each check object holds only these keys: ${fieldList(VERIFIER_CHECK_FIELDS)}.`,
+  "Any other key in proposed_verifier_section or in a check makes the whole reply invalid.",
+  'Example: {"checks":[{"name":"unit tests","command":"npm test","timeout":300,"severity":"blocking","role":"test"}],"gate_completion":true}.',
+];
+
 export const IMPROVEMENT_ANALYST_SYSTEM = [
   "You are the post-run improvement analyst for a software workspace.",
   "Use only the frozen evidence in the request.",
   "Return one JSON object with a proposals array and optional notes.",
-  "Each proposal needs category, summary, evidence, recommended_action, risk, target_persona when relevant, and proposed_verifier_section when relevant.",
+  ...PROPOSAL_SHAPE,
   "Evidence entries need kind and text. Return an empty proposals array when the evidence supports no proposal.",
 ].join(" ");
 
@@ -34,7 +86,7 @@ export const RETROSPECTIVE_SYSTEM = [
   "Use only the frozen evidence in the request, and do not repeat a proposal the prior proposals already carry.",
   "Every evidence entry must name the record it came from: set source_session_id to a session id from considered_session_ids when the entry cites a session.",
   "Return one JSON object with a proposals array and optional notes.",
-  "Each proposal needs category, summary, evidence, recommended_action, risk, target_persona when relevant, and proposed_verifier_section when relevant.",
+  ...PROPOSAL_SHAPE,
   "Evidence entries need kind and text. Return an empty proposals array when the evidence supports no proposal.",
 ].join(" ");
 

@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**The improvement analyst is told a proposal's shape (fin46, `fin46-accept1-19`; REQ-LIBRARY-009/016/022, acceptance finding
+L1).** `02-process-view.md`'s post-run analyst paragraph says both passes' system texts now state every proposal field's
+vocabulary or bound and the `proposed_verifier_section` keys, with an example (`PROPOSAL_SHAPE`). No package, edge or process
+changed. The README's date stays 2026-10-15, the later.
+
 **The Tier B handover refuses a live state the load's schema rejects (fin46, `fin46-accept1-17`; REQ-CONFIG-111, REQ-CONFIG-478).**
 `03-runtime-view.md`'s Tier B paragraph says `config.liveState` is checked with `liveStateProblems` before the run host installs
 it, and a refused state leaves the one held before; the unchecked handover it had is kept beside it. No package, edge or process

@@ -403,7 +403,9 @@ a stop reason on REQ-ORCH-137's skip list ends it before main is asked for the h
 after that ask, and a store the quit or a workspace close has closed meanwhile, or a capture that throws, yields no job
 and a log line. Main queues `improvement.job` in one application-wide FIFO and asks the run
 host to execute `improvement.analyze`; the analyst receives no tools, retries malformed JSON once and has a hard configured
-timeout. Main then relays `save-collected` to the workspace service, rereads the canonical record, bumps
+timeout. Both passes' system texts state a proposal's whole shape: each field's closed vocabulary or bound, and every key a
+`proposed_verifier_section` and its checks may hold, with an example (`PROPOSAL_SHAPE` in `engine/src/improvements/analyst.ts`,
+fin46 L1: before it they named the field only, and the live run at `b9e3005` lost a retrospective to invented keys). Main then relays `save-collected` to the workspace service, rereads the canonical record, bumps
 `improvement-artifacts`, and publishes the ready notice. `improvement:activity` carries workspace identity, active
 state, queued count and source session, the running pass (`pass`, Part AT) and, per main window, whether a retrospective of
 that window's own workspace is pending (`retrospective_pending`, PD-LIBRARY-002 revision 2 (e)); the paragraphs below say

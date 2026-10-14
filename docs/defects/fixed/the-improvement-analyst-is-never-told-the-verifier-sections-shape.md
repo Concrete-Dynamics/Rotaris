@@ -1,5 +1,30 @@
 ## The improvement analyst is never told the verifier section's shape, so one invented key discards a whole retrospective
 
+## Outcome: repaired 2026-10-14 (fin46, `fin46-accept1-19`)
+
+Both system texts now carry `PROPOSAL_SHAPE` (`packages/engine/src/improvements/analyst.ts`): every proposal field with its
+closed vocabulary or bound (the ten categories, `risk` as `"low"`, `"medium"` or `"high"`, when `target_persona` is required),
+and the whole `proposed_verifier_section` shape: its six keys and the seven keys of a check, each with the bound the schema
+enforces (`VERIFIER_SECTION_FIELDS`, `VERIFIER_CHECK_FIELDS`), that any other key makes the whole reply invalid, and an example
+block. Nothing about validation changed: an invalid block is still rejected and still takes REQ-LIBRARY-022's recovery.
+
+**Pinned by** `analyst.test.ts`'s "REQ-LIBRARY-009/016/022 the analyst is told the proposal's shape" cases (four, all red on
+the text before): both passes' texts name every key `VerifierSectionSchema` and `VerifierCheckSchema` take, every role, severity,
+risk and category, and an example the section schema accepts; the two field maps hold exactly the strict schemas' key sets, so a
+key added there cannot go unnamed; and the shape goes out on both attempts while the live run's `when` / `check` block is still
+refused with `collector parse failed: … unrecognized_keys`. `pnpm retrospective-proof` 67 of 67 on the built head (load average
+1.8 to 3.4 on four CPUs).
+
+**Shown live:** `live-run.mjs --confirm --skip-build --only=ask` on this branch's build, 2026-10-14 from 23:22 UTC, the registered
+self-hosted default endpoint: `ask-retrospective` sent one request, whose system text carried the shape, and the model answered on
+the first try with a `verifier_gate_update` proposal whose block held only `checks` (`name`, `command`, `timeout`, `severity`,
+`role`, `cwd`) and `gate_completion`; it was stored, and the notice read "1 retrospective proposal ready". The run passed. One
+run of a nondeterministic model shows the instruction reaching it and being followed once, not that a model never invents a key;
+when one does, REQ-LIBRARY-016 still discards the pass, as it must.
+
+Not repaired, as the note says: PD-LIBRARY-005's `<err>` still carries the raw zod JSON into the notice's detail, which the
+directive asks for.
+
 Found by the default live run at `b9e3005` (acceptance finding L1 of fin46, 2026-10-14; pack `2026-10-14T13-37-17-899Z` of the
 `wt-live` tree, `ask-retrospective/app.log` lines 33 to 47). The retrospective's model wrote `when` and `check` into
 `proposals[0].proposed_verifier_section` on both of its tries. `VerifierSectionSchema` is `.strict()`, so the parse failed twice,

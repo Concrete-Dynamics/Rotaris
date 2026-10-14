@@ -30,3 +30,16 @@ No requirement is contradicted: the gap is a missing test, not a wrong behaviour
 - `apps/desktop/src/main/main-windows.ts` — `MainWindows.awaitWorkspace` (the 30,000 ms bound) and `MainWindows.reach` (the
   answer after the wait).
 - `apps/desktop/src/main/main-windows.test.ts` — the reach cases, none of which lets the bound elapse.
+
+## Outcome
+
+*Repaired 2026-10-14 by fin46 (`fin46-accept1-9`), test only; the behaviour is unchanged.* `main-windows.test.ts` gains "answers
+a reach of a window still opening when the 30 s bound elapses with that window and no workspace id, and builds once": a first
+press adds a window whose open never settles, a second press reaches it and waits, the harness's only pending timer is the
+30,000 ms bound, and once it fires the second press is answered with that window, `added: false` and no workspace id — the
+window not destroyed, no notice raised, the "stands with no workspace open" line logged, nothing built a second time. The open
+settling afterwards still completes the first press's add with the workspace id. The case is red under each of two mutations
+of `MainWindows.awaitWorkspace`: a bound that never fires (the case times out waiting for the answer) and a bound that destroys
+the holder (the answer becomes the REQ-SHELL-019 refusal). The harness's timer now records its delay (`pendingDelays`) so the
+case can name the bound. No proof reaches this path: the built app has no way to hold a workspace open for 30 s on demand, and
+the finding came from a review, not a proof; the unit case is the evidence.

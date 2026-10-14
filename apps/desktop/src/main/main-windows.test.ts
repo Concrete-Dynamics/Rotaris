@@ -30,6 +30,7 @@ interface MemoryWindow {
 
 interface PendingTimer {
   cancelled: boolean;
+  readonly delayMs: number;
   readonly callback: () => void;
 }
 
@@ -99,8 +100,8 @@ function harness(options: {
     disposeResources: (_win, _wcId, personaWindows, terminalWindows) => actions.push(`dispose:${personaWindows}:${terminalWindows}`),
   };
 
-  const after = (_delayMs: number, callback: () => void): MainWindowTimer => {
-    const pending = { cancelled: false, callback };
+  const after = (delayMs: number, callback: () => void): MainWindowTimer => {
+    const pending = { cancelled: false, delayMs, callback };
     timers.push(pending);
     return { cancel: () => { pending.cancelled = true; } };
   };
@@ -141,6 +142,8 @@ function harness(options: {
     deferOpens: () => { deferOpens = true; },
     resolveOpen: (workspace: string, opened = true) => openResolvers.get(workspace)?.(opened ? { workspaceId: `id:${workspace}`, storeFile: `${workspace}/store.db` } : undefined),
     advanceTimers: () => { for (const timer of timers.splice(0)) if (!timer.cancelled) timer.callback(); },
+    /** The delays of the timers set and neither fired nor cancelled yet. */
+    pendingDelays: () => timers.filter((timer) => !timer.cancelled).map((timer) => timer.delayMs),
   };
 }
 
@@ -470,6 +473,39 @@ describe('MainWindows', () => {
     expect(h.actions.filter((action) => action.startsWith('build:') || action.startsWith('destroy:'))).toEqual([]);
     expect(h.actions).toContain('focus:C:/a');
     expect(h.notices).toEqual([]);
+  });
+
+  // docs/defects/fixed/no-unit-case-pins-a-notice-reach-of-a-window-still-opening-after-the-30-second-bound.md: the wait for a
+  // holder still opening is bounded at 30,000 ms, and when the bound elapses with the open still pending the holder is alive, so
+  // it is reached like any standing holder — answered with that window and no workspace id, never refused in REQ-SHELL-019's
+  // words and never left hanging. Red if the bound never fires (the reach never answers) or if it refuses a live window.
+  it('answers a reach of a window still opening when the 30 s bound elapses with that window and no workspace id, and builds once', async () => {
+    const h = harness();
+    await h.mainWindows.launch('C:/a');
+    h.deferOpens();
+    const first = h.mainWindows.reach('C:/c');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const holder = h.mainWindows.ordered().find((window) => window.workspace === 'C:/c')!;
+    expect(holder.workspaceId).toBeUndefined();
+    let answer: unknown = 'pending';
+    const second = h.mainWindows.reach('C:/c').then((r) => { answer = r.ok ? { wcId: r.window.wcId, added: r.added, workspaceId: r.window.workspaceId } : { refused: r.outcome }; });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(answer).toBe('pending');
+    expect(h.pendingDelays()).toEqual([30_000]);
+
+    h.advanceTimers();
+    await second;
+    expect(answer).toEqual({ wcId: holder.wcId, added: false, workspaceId: undefined });
+    expect(h.windows.get(holder.wcId)!.destroyed).toBe(false);
+    expect(h.notices).toEqual([]);
+    expect(h.actions).toContain(`log:notice action reached C:/c: window ${holder.wcId} stands with no workspace open; its surface answers the action`);
+    expect(h.actions.filter((action) => action.startsWith('build:'))).toEqual(['build:C:/a:launch', 'build:C:/c:open-request']);
+
+    // The open settling later still completes the first press's add, with the workspace id, and builds nothing more.
+    h.resolveOpen('C:/c');
+    const added = await first;
+    expect(added.ok && { wcId: added.window.wcId, added: added.added, workspaceId: added.window.workspaceId }).toEqual({ wcId: holder.wcId, added: true, workspaceId: 'id:C:/c' });
+    expect(h.actions.filter((action) => action.startsWith('build:'))).toEqual(['build:C:/a:launch', 'build:C:/c:open-request']);
   });
 
   // PD-SHELL-001 revision 3 (OQ-292, ruled 2026-10-14 under R-072): a `focus-session` notice reaches the window holding the

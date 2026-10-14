@@ -16,6 +16,13 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A refused hook-review notice action is said on screen (2026-10-14, fin46 `fin46-accept1-10`, C22; REQ-NOTIFY-254,
+REQ-NOTIFY-003).** The process view's `hooks.review {workspace?}` entry and the sequences view's notice-action block say that the
+pressing renderer publishes main's refusal as a persistent `warning` notice (`renderer/notice-action-refusal.ts`), a refused reach
+REQ-SHELL-019 already reported excepted; until now it reached the console alone
+(`docs/defects/fixed/a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md`). The README's date stays
+2026-10-15, the later one.
+
 **The update's closes ask every window's unsaved settings (fin46, `fin46-accept1-9`; OQ-311).** `02-process-view.md`'s
 `update.install` / `update.restart` entry and `06-sequences.md`'s update block now say that `Restart now`, and the installer
 flavour's `Update now` / `Try again`, ask REQ-SHELL-124's Save/Discard/Cancel of every open main window in turn
@@ -23,13 +30,6 @@ flavour's `Update now` / `Try again`, ask REQ-SHELL-124's Save/Discard/Cancel of
 Cancel starting nothing; the renderer's guard joins a question already open. The README's date stays 2026-10-15, the later.
 
 Last reconciled with the code: **2026-10-15**
-
-**A refused hook-review notice action is said on screen (2026-10-14, fin46 `fin46-accept1-10`, C22; REQ-NOTIFY-254,
-REQ-NOTIFY-003).** The process view's `hooks.review {workspace?}` entry and the sequences view's notice-action block say that the
-pressing renderer publishes main's refusal as a persistent `warning` notice (`renderer/notice-action-refusal.ts`), a refused reach
-REQ-SHELL-019 already reported excepted; until now it reached the console alone
-(`docs/defects/fixed/a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md`). The README's date stays
-2026-10-15, the later one.
 
 **The quit outside any window's second log line no longer reads as the first's opposite (2026-10-14, fin46 `fin46-accept1-8`,
 C4; PD-ORCH-005 clause 9, OQ-298).** The process view quotes the new line, "each close guard allows without a question, so no

@@ -94,6 +94,31 @@ report, nothing is built or landed. It is a workflow of its own, outside `workfl
    tree (every command, script, flag and path exists at the pinned commit; nothing is claimed that was not
    verified); the drafter applies the corrections it confirms.
 
+## A friction survey
+
+A read-only survey whose subject is this skill: what the runs since the last one cost, and what change to the skill
+would have spared it. The owner asked for it on 2026-10-14 ("Would it make sense to occasionally launch a surveying
+agent that gathers insights from past workflows to identify frictions and suggest updates to the according skill?",
+then "yes. do that."). It runs every three or four plans and once before the final report (SKILL.md §4 and §6), in
+the four stages above:
+
+1. **Pin** the skill: the reference worktree, refreshed to `origin/main`, named with its hash.
+2. **Sweep** the evidence, split by plan range, one finder per range: each plan's `RUNS.txt`, every run's
+   `journal.jsonl` and agent transcripts (Journals, above), the completion notices, and the orchestrator's own ledger
+   and session transcript. A finder lists what cost something: a lost or relaunched agent, a repair round past the
+   first, an `unverified`, `needs-owner` or `blocked` ending, a workaround the orchestrator ran by hand, a question
+   the skill should have answered, a statement in it that proved false, wall clock spent queued on the cap. Each item
+   names its evidence (run id and journal line, or transcript timestamp) and how often it recurred.
+3. **Merge, then verify with one agent**: the evidence exists and shows the cost; the current skill does not already
+   remove it (read the skill at the pin and `CHANGELOG.md` since the range began).
+4. **Draft and critic**: a ranked list, the costliest first, each with the smallest change that removes it and where
+   it belongs (the reference it concerns, `scripts/` with a self-test assertion, a step in SKILL.md), and whether it
+   touches a protected invariant.
+
+The survey changes nothing. You take each proposal you accept through "Improving this skill" (SKILL.md) as its own
+change with its own `CHANGELOG.md` entry and review; one that crosses a protected invariant goes to the owner. A
+transcript can quote a live-run pack: no finder copies a host name, URL, key or token from one.
+
 ## Cost and duration, as observed
 
 A bundle took one to three hours end to end with separate verify and merge stages (before 2026-10-07); most passed on

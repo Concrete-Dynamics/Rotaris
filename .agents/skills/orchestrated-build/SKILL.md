@@ -18,7 +18,7 @@ as a rebase and a fast-forward push, never a merge commit (`references/repositor
 | `scripts/orchestration.mjs` | `render` a plan (fresh, or resumed from journals), `status`, `dry-run`, `self-test` |
 | `profiles/<repo>.json` | One repository's commands and places (gate, setup, proofs, live runs, worktrees) |
 | `references/environment.md` | The host: toolchain, long jobs, load, restarts, limits, pause and backup, blocked shell forms |
-| `references/workflow-tool.md` | The Workflow tool as it behaves: journals, labels, resume, concurrency |
+| `references/workflow-tool.md` | The Workflow tool as it behaves: journals, labels, resume, concurrency, surveys |
 | `references/live-runs.md` | Live runs: authorization, permission rules, refusals, running them |
 | `references/repository.md` | This repository's process in one page, pointing at its authorities |
 | `references/skill-review.md` | The fixed prompt for reviewing a change to this skill |
@@ -156,6 +156,10 @@ sent: run that scenario yourself on merged main once the bundle has landed (`ref
 **Reviewers' optional findings** come back per bundle (`optional`), beside what they repaired in place (`repaired`). One
 that is a real defect elsewhere is recorded (repository.md says how) on a docs-only branch merged with the gate green.
 
+**A friction survey** every three or four plans, in a free plan slot: a report-only read of the runs since the
+last one for what cost a round, a relaunch, a workaround or a question (`references/workflow-tool.md`, A friction
+survey). Each proposal you accept goes through "Improving this skill" on its own.
+
 **Status to the owner**: a short paragraph per event worth knowing (merges, a stuck bundle, a decision needed),
 numbers first; no narration of routine steps.
 
@@ -189,8 +193,10 @@ nothing but its own repairs merged after it; `"acceptance": { "fresh": true }` f
 
 ## 6. Final report and cleanup
 
-Report what merged (counts, notable repairs), what remains open and why (owner rulings, platform-bound, excluded),
-each decision waiting on the owner in one line, collisions the owner must know about, and where the evidence is.
+First run a friction survey over the plans since the last one (§4); its proposals that cross a protected invariant
+go in the report as proposals to the owner. Report what merged (counts, notable repairs), what remains open and why
+(owner rulings, platform-bound, excluded), each decision waiting on the owner in one line, collisions the owner must
+know about, and where the evidence is.
 Then remove the landing worktrees left by bundles that did not land (`<integ>-<short>`), the acceptance, live,
 survey and reference worktrees and the landed branches (`git branch -d`), stop leftover `Xvfb`, and delete the check-in.
 

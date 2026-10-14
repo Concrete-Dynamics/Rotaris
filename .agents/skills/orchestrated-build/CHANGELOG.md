@@ -3,6 +3,22 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-14 — a friction survey reads past runs for what this skill should change
+
+**Prompted by** the owner, in the orchestrator's session on 2026-10-14 during fin46: "Would it make sense to
+occasionally launch a surveying agent that gathers insights from past workflows to identify frictions and suggest
+updates to the according skill?", and, to the proposal of a report-only survey every three or four plans and once
+before the final report, "yes. do that." Until now an improvement started only when the orchestrator noticed a friction
+while it happened: the entry below came from the owner noticing the per-item verify stage of run `wf_f659576e-da7`
+mid-run, after 63 verifiers had started. **Changed:** `references/workflow-tool.md` gains "A friction survey": the
+read-only survey's four stages over each plan's `RUNS.txt`, the runs' journals and agent transcripts and the
+orchestrator's ledger, verified by one agent against the skill and this changelog, drafted as ranked proposals. It
+changes nothing itself: each accepted proposal goes through "Improving this skill" as its own change and review, and
+one that crosses a protected invariant goes to the owner. SKILL.md §4 runs it every three or four plans and §6 once
+before the final report; the reference table names surveys. No script, template prompt, invariant, assertion or the
+"Improving this skill" section changed. **Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check`;
+the skill-review by one reviewer agent under `references/skill-review.md`.
+
 ## 2026-10-14 — a read-only survey verifies its merged list with one agent
 
 **Prompted by** the Windows-on-ARM hand-over survey, run `wf_f659576e-da7`: six sweeps and one merge (85 items), then

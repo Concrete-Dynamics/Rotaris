@@ -1401,9 +1401,14 @@ describe('grep and glob (REQ-TOOLS-138..141)', () => {
     });
 
     it('a named file is searched alone: its own case only, and no other file of its directory', async () => {
-      const upper = join(root, 'src', 'A.ts');
-      writeFileSync(upper, 'const upper = 1;\n');
-      const caseSensitive = readFileSync(join(root, 'src', 'a.ts'), 'utf8') !== readFileSync(upper, 'utf8');
+      // On a case-insensitive filesystem (NTFS, APFS by default) `A.ts` IS `a.ts`, and writing it replaced the file under
+      // test, so the expectation below could not hold there. The filesystem is probed with a name of its own first, and
+      // `A.ts` is written only where it is a second file
+      // (`docs/defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
+      writeFileSync(join(root, 'src', 'case-probe'), '');
+      const caseSensitive = !existsSync(join(root, 'src', 'CASE-PROBE'));
+      rmSync(join(root, 'src', 'case-probe'));
+      if (caseSensitive) writeFileSync(join(root, 'src', 'A.ts'), 'const upper = 1;\n');
       const r = await grepTool(fence).execute({ pattern: 'const', paths: ['src/a.ts'], max_matches: 100 }, ctx());
       expect(r.text).toBe('src/a.ts:1:const a = 1;\nsrc/a.ts:2:const b = 2;');
       if (caseSensitive) expect(r.text).not.toContain('upper');

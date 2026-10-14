@@ -482,7 +482,10 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
       const r = await restoreStore(ctx(rh(), artifact), { forceInstallFail: 'target-exists', removeStaging: (() => { throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' }); }) as never });
       expect(r.reversal?.ok).toBe(true);
       expect(r.leftovers).toContain(stage);
-      expect(r.error).toBe(`restore failed at step 9 (ENOTEMPTY); the previous store was put back. A working copy of the backup could not be removed and is at ${stage}; it holds nothing the backup file does not, and it can be deleted.`);
+      // Step 9's code is the host's own for a rename onto a store that exists: ENOTEMPTY on POSIX, EPERM on Windows
+      // (`docs/defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
+      const installCode = process.platform === 'win32' ? 'EPERM' : 'ENOTEMPTY';
+      expect(r.error).toBe(`restore failed at step 9 (${installCode}); the previous store was put back. A working copy of the backup could not be removed and is at ${stage}; it holds nothing the backup file does not, and it can be deleted.`);
       expect(staged()).toEqual([`${id}.restoring-1`]);
     });
   });

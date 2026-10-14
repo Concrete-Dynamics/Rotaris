@@ -106,3 +106,28 @@ Two things the run confirmed rather than found: `ELECTRON_RUN_AS_NODE` keeps asa
 - **Build time**: a cold rebuild of both bindings is ~3 minutes on this machine, on every `pnpm package`,
   by design (rule 1a needs a binary newer than the marker). A warm variant is a decision for later, not a
   shortcut for now.
+
+## Windows 11 ARM64 dev tree — 2026-10-15
+
+*Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, launched from powershell
+5.1.26100.9457, at `b9e30052`. Everything above is x64; this is the first load of the `win32-arm64` bindings this record
+holds, and it is a development-tree load, not rule 4's packaged one (OQ-400's reading: it measures windows-arm64 only).*
+
+A fresh `pnpm install --prefer-offline` in a new worktree ran no node-gyp. A scratch probe modelled on
+`native-load-probe.cjs` (never committed) required both bindings from the checkout's `node_modules`, with `process.dlopen`
+wrapped, under Node and then under Electron with `ELECTRON_RUN_AS_NODE=1`:
+
+| runtime | ABI | `better-sqlite3` opened | `node-pty` opened | store | PTY |
+| --- | --- | --- | --- | --- | --- |
+| Node 24.18.0 arm64 | 137 | `prebuilds\win32-arm64.node` | `prebuilds\win32-arm64\conpty.node` | SQLite 3.53.4, WAL set, read back `wal` | `probe-ok`, exit 0, 1,431 ms |
+| Electron 44.1.1 (Node 24.19.0) arm64 | 149 | the same file | the same file | the same | `probe-ok`, exit 0, 1,367 ms |
+
+One N-API prebuild of each serves both runtimes, as on x64. The fresh install still held two `build\` directories:
+`node-pty\build\Release\conpty\` (`conpty.dll`, `OpenConsole.exe`: node-pty's own post-install copy) and
+`better-sqlite3\build\`, a node-gyp project configured for `target_arch` arm64 on 2026-09-29 in the primary checkout, with no
+`.node` in it, hard-linked into the new worktree from the pnpm store's side-effects cache. Neither is in the loader's path
+here. After a `pnpm package` on this host the prediction is that `node-pty`'s loader, which tries `build\Release` first,
+takes whatever that build writes; that is the session's I2 and is not measured yet.
+
+One shell detail for whoever repeats this: Electron's output reaches a PowerShell 5.1 redirect (`& electron.exe … > file`)
+as nothing, an empty file with exit 0, because the binary is a GUI-subsystem executable; `cmd /c "… > file"` captures it.

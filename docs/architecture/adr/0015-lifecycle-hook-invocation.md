@@ -254,3 +254,11 @@ carrying any of it.
 all behaved on dash as they had on `cmd.exe`. `REQ-HOOKS-030`'s executable lookup is the interpreter's and
 not this runner's: an unknown name is an exit status from a process that started, never `REQ-HOOKS-035`'s
 launch failure, which is reserved for a process that never did.
+
+## The runner's cmd.exe table in the suite on Windows 11 ARM64 — 2026-10-15
+
+*Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, dev tree, at `b9e30052` ([first-executions](../first-executions.md),
+the row of that date; windows-arm64 only, OQ-400).* `runner.test.ts` passed 9 and skipped 1 against `cmd.exe`, the first
+counted Windows run of it since 2026-09-16; the skip is REQ-HOOKS-039's signalled case, POSIX only (`describe.runIf(!win)`).
+REQ-HOOKS-033's grandchild holding the pipe open did not stall collection here either. The per-interpreter timings and the
+locale-free not-found reading are the session's F3, reported below when run.

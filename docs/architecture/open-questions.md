@@ -14886,3 +14886,46 @@ configuration value a person can write, or a rule 4 (b) that proves the terminal
 needs another model that answers without a network).
 
 **What a live run then shows.** Nothing: a live run configures a real provider and never the `scripted` one.
+
+<a id="oq-400"></a>
+
+**OQ-400 — What a Windows ARM64 host's readings discharge** *(REQ-STARTUP-026, which presents a Windows-ARM64 visitor the
+`windows-x64` artifacts and says that running one "under Windows-on-ARM x64 emulation is an expectation and not a supported
+configuration: it carries no acceptance criterion of its own, no release is blocked by a failure observed only under emulation";
+REQ-STARTUP-030's three platform keys and REQ-STARTUP-156's gate over exactly those; [PD-STARTUP-001](../product/directives.md#pd-startup-001),
+which narrows a release to `windows-x64`; IC-6, discharged 2026-09-04 on an x64 host, its per-runner half carried by the hardware condition; IC-7's
+pins; `apps/desktop/scripts/code-intelligence/pins.json`, which pins a uv asset for `win32-x64` and `linux-x64` only. Raised
+2026-10-15 by the Windows 11 ARM64 session (`win-arm64-*` branches), the first host of that architecture this record has met; the
+session's range OQ-400 to OQ-449, its first number.)*
+
+**What is open.** Every Windows obligation in this record was written for one host class: "a Windows host" in the test-suite and
+proof rows, and "a Windows x64 host" where an artifact is named. A Windows 11 ARM64 machine now runs the development tree
+natively (Node arm64, Electron arm64, the `win32-arm64` prebuilds of `better-sqlite3` and `node-pty`, an arm64 ConPTY), and can
+cross-build the `windows-x64` artifact and run it under the operating system's x64 emulation. Three things are not fixed:
+
+- **(a)** whether a reading of the arm64 development tree counts toward an obligation owed to "a Windows host" — the suite, the
+  proofs, the PowerShell and ConPTY first executions — or only toward a windows-arm64 reading the record does not ask for;
+- **(b)** whether an x64 artifact cross-built on ARM64 and run under emulation counts toward an obligation owed to "a Windows x64
+  host" (ADR-0056 rule 4's load, ADR-0054's naming and assets, the packaged proofs, rule 4's per-runner half). REQ-STARTUP-026
+  answers the release side — no acceptance criterion, no blocked release — and says nothing of the record's own first executions;
+- **(c)** whether `win32-arm64` needs its own uv and runtime pins (`pins.json`, IC-7), given that `pnpm code-intel:bundle` refuses on
+  arm64 without a uv on `PATH`, and that a bundle made there carries an arm64 runtime no published artifact would.
+
+**What the build proceeds under.** An arm64 reading measures `windows-arm64` and nothing else. It is recorded beside the obligation
+it bears on, labelled with its host line, and it **discharges no x64 obligation**: every passage that owes "a Windows x64 host"
+keeps owing it, and every timing taken here stands beside the x64 or Linux figure, never over it. Where the record owes "a Windows
+host" without naming an architecture, the arm64 reading is recorded as the first Windows run since the change that made it owed,
+and the x64 half is stated as still owed. An emulated run of the x64 artifact is labelled "x64 artifact cross-built on ARM64, run
+under emulation"; a red seen only there is "observed only under x64 emulation on Windows 11 ARM64" until an x64 host reproduces it.
+`pins.json` is left as it is.
+
+**What a ruling decides.** For (a), whether the Windows-host obligations are architecture-free (an arm64 run discharges them) or
+x64-bound (it only informs them). For (b), whether REQ-STARTUP-026's "no acceptance criterion" extends to the record's first
+executions (an emulated run informs and never discharges) or an emulated run may stand in for the x64 host until one exists.
+For (c), whether arm64 joins the pinned set (a `win32-arm64` uv asset and its hash, IC-7's record), or arm64 stays an
+unpinned development host whose bundle uses a uv on `PATH` that must equal the pin. **The costs:** counting arm64 readings closes
+Windows obligations sooner on hardware the release never ships to; not counting them leaves every Windows row owed until an x64
+host exists. Pinning arm64 adds one asset to every pin change; not pinning it keeps the bundle step a manual one there.
+
+**What a live run then shows.** Nothing of the question itself: a live run on this host is a windows-arm64 reading under whatever
+the ruling decides.

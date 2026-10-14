@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { builtinModules } from 'node:module';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -11,7 +12,9 @@ import { describe, expect, it } from 'vitest';
  * (docs/defects/fixed/agent-tools-imports-zod-without-declaring-it.md). Tests are left out: they run from the root's
  * development dependencies (`vitest`).
  */
-const SRC = new URL('.', import.meta.url).pathname;
+// `fileURLToPath`, not the URL's `pathname`: on Windows that is `/C:/…`, which `readdirSync` read as `C:\C:\…`
+// (`docs/defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
+const SRC = fileURLToPath(new URL('.', import.meta.url));
 const MANIFEST = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { dependencies?: Record<string, string> };
 
 function sources(dir: string): string[] {

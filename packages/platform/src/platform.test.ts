@@ -182,7 +182,9 @@ describe('platform — the atomic document primitive (ADR-0004)', () => {
       expect(r?.ok).toBe(false);
       if (r && !r.ok) {
         expect(r.error.code).toBe(code);
-        expect(r.error.detail).toMatch(/EEXIST|ENOTDIR/);
+        // Windows answers an open below a regular file with ENOENT where POSIX says ENOTDIR
+        // (`docs/defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
+        expect(r.error.detail).toMatch(process.platform === 'win32' ? /EEXIST|ENOTDIR|ENOENT/ : /EEXIST|ENOTDIR/);
       }
     }
     expect(readFileSync(f, 'utf8')).toBe('a file\n');

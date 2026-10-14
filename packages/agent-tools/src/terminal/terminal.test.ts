@@ -628,8 +628,10 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     await posix.s.run(long, { timeoutMs: 5_000 });
     const line = posix.lines()[before]!;
     expect(Buffer.byteLength(line)).toBeLessThanOrEqual(POSIX_LINE_BYTES);
-    expect(line).toMatch(/^printf '%s\\n' '__rot_[0-9a-f]+_s'; command eval '\. '\\''[^']+\/1\.sh'\\'''; printf '__rot_[0-9a-f]+_e:%s\\n' "\$\?"\r$/);
-    const file = /'\\''([^']+\/1\.sh)'\\''/.exec(line)![1]!;
+    // The script's directory is the host's temporary directory, spelled with backslashes when this pure case runs on a
+    // Windows host (`docs/defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
+    expect(line).toMatch(/^printf '%s\\n' '__rot_[0-9a-f]+_s'; command eval '\. '\\''[^']+[\\/]1\.sh'\\'''; printf '__rot_[0-9a-f]+_e:%s\\n' "\$\?"\r$/);
+    const file = /'\\''([^']+[\\/]1\.sh)'\\''/.exec(line)![1]!;
     // The script holds the command as written, after the line that removes the script; only its user may read it.
     expect(readFileSync(file, 'utf8')).toBe(stagedScript(file, long));
     expect(readFileSync(file, 'utf8')).toBe(`command rm -f -- '${file}' 2>/dev/null; ${long}\n`);
@@ -1722,8 +1724,11 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       : "printf 'Count             : 2\\nAverage           :\\nSum               :\\nMaximum           :\\nMinimum           :\\nProperty          :\\n'";
     const measured = await t.execute(args({ command: measure, timeout: 10 }), ctx());
     const rows = (output(measured.text) ?? '').split('\n').map((l) => l.trim()).filter((l) => l !== '');
-    expect(rows[0]).toBe('Count             : 2');
-    expect(rows).toContain('Property          :');
+    // `Format-List` pads to its longest property: pwsh 7 lists `StandardDeviation`, Windows PowerShell 5.1 does not, so the
+    // width is the shell's and the rows are what is under test
+    // (`docs/defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
+    expect(rows[0]).toMatch(/^Count +: 2$/);
+    expect(rows.some((r) => /^Property +:$/.test(r))).toBe(true);
     // REQ-TOOLS-113's checks read the cleaned text, never the echoed command line.
     expect(diag(measured.text)['warnings']).toEqual([]);
   }, 40_000);

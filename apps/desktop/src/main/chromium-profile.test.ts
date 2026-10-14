@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { dataLayout, resolveUserDirs } from '@rotaris/platform';
 import { placeChromiumProfile } from './chromium-profile.js';
@@ -17,9 +18,12 @@ describe('Chromium\'s own profile — REQ-STARTUP-145', () => {
     expect(profile).toBe('/home/me/.local/share/rotaris/chromium');
     expect(set['userData']).toBe(profile);
     expect(set['sessionData']).toBe(profile);
-    expect(set['crashDumps']?.startsWith(`${profile}/`)).toBe(true);
+    // `Crashpad` is joined by the host's path module, as in production, where the profile is always the host's: asked for a
+    // Linux profile on a Windows host it reads `…/chromium\Crashpad`, which a `${profile}/` prefix never matched
+    // (`docs/defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
+    expect(set['crashDumps']).toBe(join(profile, 'Crashpad'));
     // Every directory is made before it is named: `setPath` throws for one that does not exist.
-    expect(made).toEqual([profile, profile, `${profile}/Crashpad`]);
+    expect(made).toEqual([profile, profile, join(profile, 'Crashpad')]);
   });
 
   it('Windows: below `%LOCALAPPDATA%`, never the roaming `%APPDATA%` (pinned by a platform switch; not measured on Windows here)', () => {

@@ -354,16 +354,31 @@ export function matchEdit(lines: readonly string[], oldText: string): EditMatch 
   // (docs/defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md).
   const body = (s: string) => (s.endsWith('\r') ? s.slice(0, -1) : s);
   const oldBodies = oldLines.map(body);
-  for (let i = 0; i < windows; i += 1) {
+  /*
+   * PD-TOOLS-020 (OQ-295, R-072, ruled 2026-10-13): a line with no visible character takes no part in the shift. A blank line
+   * of old_string matches a blank line of the window, whatever whitespace either holds, and never a line that holds a visible
+   * character; the prefix is measured on old_string's first line that holds one and the window's line at the same index
+   * (PD-TOOLS-015's O and W), and added or removed on the visible lines only. An old_string with no visible character never
+   * matches here. Until the ruling a blank line was shifted like any other, so a block with a blank interior line never
+   * reached level 3 (docs/defects/a-block-with-a-blank-interior-line-never-matches-at-level-3.md).
+   */
+  const visible = (s: string) => /\S/.test(s);
+  const o = oldBodies.findIndex(visible);
+  for (let i = 0; o !== -1 && i < windows; i += 1) {
     const w = at(i).map(body);
-    const first = w[0] as string;
-    const firstOld = oldBodies[0] as string;
-    const shift = indent(first).length - indent(firstOld).length;
+    const wo = w[o] as string;
+    const oo = oldBodies[o] as string;
+    if (!visible(wo)) continue;
+    const shift = indent(wo).length - indent(oo).length;
     if (shift === 0) continue;
-    const shifted = oldBodies.map((l) => (shift > 0 ? `${indent(first).slice(0, shift)}${l}` : l.startsWith(indent(firstOld).slice(0, -shift)) ? l.slice(-shift) : null));
-    if (shifted.every((x) => x !== null) && eq(w, shifted as string[])) {
+    const prefix = shift > 0 ? indent(wo).slice(0, shift) : indent(oo).slice(0, -shift);
+    const same = (fileLine: string, oldLine: string): boolean => {
+      if (!visible(fileLine) || !visible(oldLine)) return !visible(fileLine) && !visible(oldLine);
+      return shift > 0 ? fileLine === `${prefix}${oldLine}` : oldLine.startsWith(prefix) && oldLine.slice(prefix.length) === fileLine;
+    };
+    if (w.length === oldBodies.length && w.every((line, j) => same(line, oldBodies[j] as string))) {
       l3.push(i);
-      shifts.push(shift > 0 ? { prefix: indent(first).slice(0, shift), deeper: true } : { prefix: indent(firstOld).slice(0, -shift), deeper: false });
+      shifts.push({ prefix, deeper: shift > 0 });
     }
   }
   if (l3.length) return { level: 3, starts: l3, shifts };
@@ -566,9 +581,13 @@ function nearMissMessage(rel: string, lines: readonly string[], m: EditMatch, ol
   } else {
     const shift = m.shifts?.[0] as { prefix: string; deeper: boolean };
     const what = `${JSON.stringify(shift.prefix)} (${countNoun(shift.prefix.length, 'character')})`;
+    // PD-TOOLS-014 revision 4 (OQ-295, with PD-TOOLS-020): a blank line takes no part in the shift, so when the window holds
+    // one the sentence names the lines that do.
+    const blankInWindow = window.some((line) => !/\S/.test(line));
+    const lines3 = blankInWindow ? ' that holds a visible character' : '';
     differs = shift.deeper
-      ? `Every line of the file carries the leading prefix ${what} in addition to old_string's indentation.`
-      : `Every line of old_string carries the leading prefix ${what} that the file's lines do not.`;
+      ? `Every line of the file${lines3} carries the leading prefix ${what} in addition to old_string's indentation.`
+      : `Every line of old_string${lines3} carries the leading prefix ${what} that the file's lines do not.`;
     // PD-TOOLS-014 revision 3 (OQ-280, with PD-TOOLS-019): level 3 sets a trailing `\r` aside, so a window and old_string may
     // differ in their line endings too; the first line that does says which way, and the quote keeps the file's.
     const oldLines = oldText.split('\n');
@@ -682,13 +701,24 @@ export function shiftNewString(newText: string, oldText: string, window: readonl
  * caller repeated without its spaces was dropped
  * (docs/defects/fixed/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md).
  */
-export function carryWindow(newText: string, oldText: string, fileLines: readonly string[], start: number, level: 2 | 3 | 4): { text: string; crlfAdded: boolean } {
+export function carryWindow(newText: string, oldText: string, fileLines: readonly string[], start: number, level: 2 | 3 | 4, givenNew: string = newText): { text: string; crlfAdded: boolean } {
   const oldLines = oldText.split('\n');
   const k = oldLines.length;
   const out = newText.split('\n');
   if (level === 2) {
     const given = [...out];
     for (const [i, j] of linePairs(oldLines, given)) out[j] = fileLines[start + i] as string;
+  }
+  /*
+   * PD-TOOLS-016 revision 4 clause 1 at level 3 (OQ-295, with PD-TOOLS-020): the pairing runs over old_string and new_string as
+   * the caller gave them, before PD-TOOLS-015's shift (which keeps every line in place), and a paired line whose old_string line
+   * holds no visible character is written as the window's own line, byte for byte — the blank line level 3 matched without its
+   * whitespace.
+   */
+  if (level === 3) {
+    for (const [i, j] of linePairs(oldLines, givenNew.split('\n'))) {
+      if (!/\S/.test(oldLines[i] as string) && j < out.length) out[j] = fileLines[start + i] as string;
+    }
   }
   // A line break follows every line of the split but its last element, the text after the final break. A window has such a
   // line unless it is that last element alone; then the file's other lines are read instead.
@@ -1033,7 +1063,7 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
           }
           // PD-TOOLS-016: a window match keeps the file's line endings, and at level 2 the bytes of the lines it leaves unchanged.
           if (m.level > 1) {
-            const carried = carryWindow(replacement, a.old_string, lines, start, m.level as 2 | 3 | 4);
+            const carried = carryWindow(replacement, a.old_string, lines, start, m.level as 2 | 3 | 4, a.new_string);
             replacement = carried.text;
             if (carried.crlfAdded) said += CRLF_SENTENCE;
           }

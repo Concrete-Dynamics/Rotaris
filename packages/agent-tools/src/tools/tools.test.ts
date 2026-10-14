@@ -1173,6 +1173,97 @@ describe('PD-TOOLS-019: a match at level 3 compares each line without its carria
   });
 });
 
+describe('PD-TOOLS-020: level 3 matches blank lines by having no visible character', () => {
+  // OQ-295 (R-072, ruled 2026-10-13). Level 3 shifted a blank line of old_string like any other — the bare prefix in the deeper
+  // direction, a failed startsWith in the shallower — while the file's blank line is empty, so a block with a blank interior line
+  // never matched at level 3: on an LF file write_file applied it at level 4 unshifted beside "Verify the result.", and on a CRLF
+  // file nothing matched (docs/defects/a-block-with-a-blank-interior-line-never-matches-at-level-3.md).
+  const CRLF = " new_string was written with the file's CRLF line endings.";
+  const FILE = ['a', '\t\tx = 1;', '', '\t\ty = 2;', 'z'];
+  const asText = (lines: readonly string[], eol: '\n' | '\r\n') => `${lines.join(eol)}${eol}`;
+  const blockAt = (tabs: number, x = '1') => [`${'\t'.repeat(tabs)}x = ${x};`, '', `${'\t'.repeat(tabs)}y = 2;`].join('\n');
+  const prepare = async (rel: string, text: string) => {
+    writeFileSync(join(root, rel), text);
+    await readFileTool(state, fence).execute({ path: rel, offset: 1, limit: 2000, grep_context: 3 }, ctx());
+  };
+  const edit = (path: string, old_string: string, new_string: string) =>
+    writeFileTool(state, fence).execute({ operation: 'edit', path, old_string, new_string, replace_all: false }, ctx());
+  const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
+  const quoteOf = (text: string): string => JSON.parse(/as this JSON string: ("(?:[^"\\]|\\.)*") If these are not/.exec(text)![1]!) as string;
+
+  it.each([
+    ['LF', 1, '\n', 'added'],
+    ['LF', 3, '\n', 'removed'],
+    ['CRLF', 1, '\r\n', 'added'],
+    ['CRLF', 3, '\r\n', 'removed'],
+  ] as const)('the defect note\'s cell, %s file, old_string at %i tab(s): level 3, shifted to the file\'s depth, the blank line kept', async (_name, tabs, eol, way) => {
+    await prepare('blank.c', asText(FILE, eol));
+    const r = await edit('blank.c', blockAt(tabs), blockAt(tabs, '10'));
+    expect(r.isError).toBe(false);
+    // Before PD-TOOLS-020: LF read "Match level: 4 (similarity: 0.89). Verify the result." with the block unshifted; CRLF "not found".
+    expect(r.text).toContain(`Match level: 3. new_string was shifted by the same leading prefix "\\t" (1 character ${way}) to the file's indentation.${eol === '\r\n' ? CRLF : ''}`);
+    expect(read('blank.c')).toBe(asText(['a', '\t\tx = 10;', '', '\t\ty = 2;', 'z'], eol));
+    if (eol === '\r\n') expect(/(^|[^\r])\n/.test(read('blank.c'))).toBe(false);
+  });
+
+  it('an old_string whose first line is blank measures the prefix on its first visible line', async () => {
+    const lines = ['a', '', '\t\tx = 1;', '\t\ty = 2;', 'z'];
+    expect(matchEdit(asText(lines, '\n').split('\n'), '\n\tx = 1;\n\ty = 2;')).toEqual({ level: 3, starts: [1], shifts: [{ prefix: '\t', deeper: true }] });
+    await prepare('first.c', asText(lines, '\n'));
+    const r = await edit('first.c', '\n\tx = 1;\n\ty = 2;', '\n\tx = 10;\n\ty = 2;');
+    expect(r.text).toContain('Match level: 3. new_string was shifted by the same leading prefix "\\t" (1 character added) to the file\'s indentation.');
+    expect(read('first.c')).toBe(asText(['a', '', '\t\tx = 10;', '\t\ty = 2;', 'z'], '\n'));
+  });
+
+  it('a whitespace-only window line facing an empty old_string line and an empty new_string line matches and is written byte for byte', async () => {
+    const lines = ['a', '\t\tx = 1;', '\t\t ', '\t\ty = 2;', 'z'];
+    expect(matchEdit(asText(lines, '\n').split('\n'), blockAt(1))).toEqual({ level: 3, starts: [1], shifts: [{ prefix: '\t', deeper: true }] });
+    await prepare('ws.c', asText(lines, '\n'));
+    const r = await edit('ws.c', blockAt(1), blockAt(1, '10'));
+    expect(r.text).toContain('Match level: 3. new_string was shifted');
+    // PD-TOOLS-016 revision 4 clause 1 at level 3: the paired blank line is the window's own, its whitespace kept.
+    expect(read('ws.c')).toBe(asText(['a', '\t\tx = 10;', '\t\t ', '\t\ty = 2;', 'z'], '\n'));
+  });
+
+  it('a blank old_string line never matches a window line that holds a visible character', () => {
+    // The first window has a visible line where old_string's is blank; only the second, whose line is blank, matches.
+    const lines = ['\t\tx = 1;', '\t\tw = 0;', '\t\ty = 2;', '--', '\t\tx = 1;', '', '\t\ty = 2;', ''];
+    expect(matchEdit(lines, blockAt(1))).toEqual({ level: 3, starts: [4], shifts: [{ prefix: '\t', deeper: true }] });
+  });
+
+  it('haet_edit: the level-3 near miss of a blank-line block says "that holds a visible character", and its quote applies at level 1', async () => {
+    writeFileSync(join(root, 'h.c'), asText(FILE, '\n'));
+    const hash = sha256(readFileSync(join(root, 'h.c')));
+    const miss = await haetEditTool(state, fence).execute({ path: 'h.c', content_hash: hash, old_string: blockAt(1), new_string: blockAt(1, '10'), replace_all: false }, ctx());
+    expect(miss.isError).toBe(true);
+    // Before PD-TOOLS-020: the plain "old_string was not found exactly in h.c. … Read it again with haet_read."
+    expect(miss.text).toContain('It matches lines 2-4 at match level 3 (indentation shift). Every line of the file that holds a visible character carries the leading prefix "\\t" (1 character) in addition to old_string\'s indentation. Your content_hash is still current and nothing was written.');
+    const quote = quoteOf(miss.text);
+    expect(quote).toBe('\t\tx = 1;\n\n\t\ty = 2;');
+    const retry = await haetEditTool(state, fence).execute({ path: 'h.c', content_hash: hash, old_string: quote, new_string: blockAt(2, '10'), replace_all: false }, ctx());
+    expect(retry.isError).toBe(false);
+    expect(retry.text).not.toMatch(/Match level/);
+    expect(read('h.c')).toBe(asText(['a', '\t\tx = 10;', '', '\t\ty = 2;', 'z'], '\n'));
+  });
+
+  it('write_file: a refusal under PD-TOOLS-015 clause 4 carries the qualified wording, in the shallower direction too', async () => {
+    const before = asText(FILE, '\n');
+    await prepare('r.c', before);
+    const r = await edit('r.c', blockAt(3), blockAt(5, '10'));
+    expect(r.isError).toBe(true);
+    expect(r.text.startsWith("old_string matches r.c only at match level 3 (indentation shift), and new_string's indentation matches neither old_string's nor the file's, so nothing was written. It matches lines 2-4 at match level 3 (indentation shift). Every line of old_string that holds a visible character carries the leading prefix \"\\t\" (1 character) that the file's lines do not.")).toBe(true);
+    expect(quoteOf(r.text)).toBe('\t\tx = 1;\n\n\t\ty = 2;');
+    expect(read('r.c')).toBe(before);
+  });
+
+  it('guards: an old_string with no visible character never matches at level 3, and level 2 still decides first', () => {
+    expect(matchEdit(['a', '\t', '\t', 'b'], '\t\t\n\t\t')?.level).not.toBe(3);
+    expect(matchEdit(['a', '  ', 'b'], '\n')?.level).not.toBe(3);
+    // A window equal but for trailing whitespace is level 2 even with a blank line inside.
+    expect(matchEdit(['\tx = 1; ', '', '\ty = 2;'], '\tx = 1;\n\n\ty = 2;')).toEqual({ level: 2, starts: [0] });
+  });
+});
+
 describe('grep and glob (REQ-TOOLS-138..141)', () => {
   it('grep returns file:line:content, honours the ignore components and gitignore, skips binaries, refuses a bad regex', async () => {
     writeFileSync(join(root, '.gitignore'), 'ignored/\n*.log\n');

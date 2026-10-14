@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**Level 3 reads a blank line by having no visible character (PD-TOOLS-020, PD-TOOLS-014 and PD-TOOLS-016 revision 4, OQ-295;
+fin44).** `matchEdit`'s level 3 measures the prefix on `old_string`'s first visible line and compares blank lines as blank;
+`carryWindow` gains the `new_string` as given and writes a paired blank line as the window's own at level 3; `nearMissMessage`'s
+level-3 sentence names the lines that hold a visible character when the window holds a blank one. The **runtime view**'s edit
+paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **The run's own follow-up is the only message it adds for the turn it follows (PD-ORCH-009 revision 4, OQ-283 and OQ-284;
 REQ-ORCH-105; fin44).** `withdrawStuck()` gains two callers: `IterationChildren.execute` before a delegated child's REQ-ORCH-095
 re-prompt and `Run.turn`'s `correction()` before a plan correction, which also calls `noteUserInstruction()` (REQ-ORCH-105). The

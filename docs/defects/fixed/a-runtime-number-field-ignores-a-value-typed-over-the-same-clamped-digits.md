@@ -24,3 +24,23 @@ fields where a stored value the field cannot show is reachable by a hand-edited 
 - `packages/ui/src/settings/config-state.ts` — `timeoutMinutesForDisplay`, `clampedNumberEdit`, `storedTimeoutNote`.
 - `apps/desktop/scripts/lib/settings-runtime-field.mjs` — the capture steps that set a Runtime field, with the deletion that
   works around it.
+
+## Outcome — repaired 2026-10-14 (fin43, `fin43-transcript-and-prefs`)
+
+`ClampedNumberField` (`packages/ui/src/settings/ConfigSettings.tsx`) commits a typed value from the native input event
+(`onInput`) instead of React's `onChange`. The browser raises an input event for every edit, an overtype of the same digits
+included; React's change event is raised only when the value differs from the one the controlled input holds. The edit
+rule itself is unchanged (`clampedNumberEdit`: a whole number inside the range commits, anything else is a draft the blur
+clamps), and so is every other path through the six fields.
+
+The reading taken: PD-CONFIG-003 stores "a user's entry", and a value the person typed into the field is one whether or
+not it reads as the digits already shown; "never rewritten until the user changes the field" is kept, since nothing but an
+entry reaches `onCommit`. No open question was raised for it.
+
+Pinned by `packages/ui/src/settings/number-field-retype.test.ts` (three cases, red on the code before: a stored 3 s shown
+as `1` minute and overtyped `1` commits `child_timeout: 60`; a stored 700 s Improvement analysis timeout shown as `600`
+and overtyped `600` commits 600; all six clamped fields commit from the input event and none from the change event). The
+workaround in `apps/desktop/scripts/lib/settings-runtime-field.mjs` (Backspace before typing) is gone, so every harness that
+sets a Runtime field types over the selection as a person does. Shown by `pnpm continuation-proof --only=later-run`: with
+the repair the bar read `Unsaved changes` after the overtype, then `All changes saved`, and the file `child_timeout: 60`;
+against a build without it the same steps failed with `{"afterEdit":"All changes saved","atEnd":"All changes saved","field":"1"}`.

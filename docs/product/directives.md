@@ -5098,7 +5098,14 @@ them: REQ-ORCH-088, REQ-CONFIG-113 and REQ-MONITOR-286.*
 > Workspace sidebar's tag as it appears ("Cut off at its per-agent timeout of 3 seconds while making progress. …"), the reading
 > the live scenario takes. **Found:** a value typed over a selection that already shows the same digits is no change to the
 > field, so a stored 3 s shown clamped as `1` and overtyped `1` stayed 3 s with the bar clean; recorded, not repaired
-> ([`a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`](../defects/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md)).
+> ([`a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`](../defects/fixed/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md)).
+> *Repaired 2026-10-14 (fin43), reported here in place:* every clamped Runtime field now commits a typed value from the
+> native input event rather than React's change event, which skips a value equal to the one the input holds, so the
+> overtyped `1` is "a user's entry" stored as 60 seconds like any other (this directive's own words; the field's text was
+> changed, and nothing outside an entry rewrites a value the control cannot express). The proof's helper no longer
+> deletes the text before typing (`lib/settings-runtime-field.mjs`): the later-run scenario now types `1` over the stored
+> 3 s shown as `1` and reads `Unsaved changes`, `All changes saved` and `child_timeout: 60`; against a build without the
+> repair the same steps read `All changes saved` straight after the edit and failed.
 > **Written, not run (the orchestrator's):** `live-run.mjs`'s opt-in `cutoff` scenario sets the control to
 > `LIVE_RUN_CUTOFF_MIN` (default 1) minute(s) the same way and gives one child more work than that; it should show the
 > control's Save storing `child_timeout: 60`, the run reading it, a child ended `failed` with "Child timed out after 60s" and

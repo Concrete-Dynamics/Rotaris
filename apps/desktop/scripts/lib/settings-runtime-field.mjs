@@ -1,11 +1,16 @@
 /**
  * One number field of Settings › Runtime set and saved as a person does it, through the capture seams of one launch: the
  * Settings view (Ctrl+7) opened on its Runtime category, the field clicked as soon as it is drawn, its text selected
- * (Ctrl+A) and deleted (Backspace), the new value typed character by character, Tab to leave the field (its blur commits a
- * draft), and the save bar's Save pressed. The deletion is not decoration: a value typed over a selection that already
- * reads the same digits is no change to the field (React's controlled input fires no change for it), so a stored 3 s
- * shown clamped as `1` minute and overtyped `1` stayed 3 s with the bar clean (first measured by `continuation-proof`,
- * 2026-10-13). The save bar's status is probed after the edit and read again at the end.
+ * (Ctrl+A), the new value typed character by character over the selection, Tab to leave the field (its blur commits a
+ * draft), and the save bar's Save pressed. The save bar's status is probed after the edit and read again at the end.
+ *
+ * The value is typed OVER the selection, as a person does it, with nothing deleted first. Until 2026-10-14 these steps
+ * pressed Backspace before typing, because a value typed over a selection that already read the same digits was no change
+ * to the field (React's controlled input raises no change for it), so a stored 3 s shown clamped as `1` minute and
+ * overtyped `1` stayed 3 s with the bar clean (first measured by `continuation-proof`, 2026-10-13). The field now commits
+ * from the input event (`ClampedNumberField`), and `continuation-proof`'s later-run scenario, which types `1` over a stored
+ * 3 s shown as `1`, is the measurement of that path
+ * (`docs/defects/fixed/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`).
  *
  * Built for PD-CONFIG-003's two Runtime timeouts, whose stored values the harnesses had only ever written into
  * `agents.yaml` themselves (`withRuntimeKey`): the Per-agent timeout (`#child-timeout`, whole minutes, stored as seconds)
@@ -24,7 +29,7 @@ export function runtimeFieldSteps({ id, value, at = 8_000 }) {
     ROTARIS_CAPTURE_CLICKS: `#${id}@~${at};;.save-bar .btn-primary>>Save@${at + 2_600}`,
     ROTARIS_CAPTURE_CHORDS: `Ctrl+A@${at + 500}`,
     ROTARIS_CAPTURE_TYPE_AT: `${value}@${at + 900}`,
-    ROTARIS_CAPTURE_KEYS: `Backspace@${at + 700};;Tab@${at + 1_800}`,
+    ROTARIS_CAPTURE_KEYS: `Tab@${at + 1_800}`,
     ROTARIS_CAPTURE_PROBE_AT: `.save-bar__status@${at + 2_200}`,
     ROTARIS_CAPTURE_PROBE: `#${id};;.save-bar__status`,
     ROTARIS_CAPTURE_AFTER_MS: String(at + 5_000),

@@ -67,3 +67,21 @@ disk and is discarded at exit; the durable control is the entry's `enabled` fiel
 **Secret**:
 A value held in `secrets.yaml` for a server, masked wherever it is rendered, unconditionally. —
 `REQ-MCP-081`, `REQ-TOOLS-171`
+
+**Binding manifest**:
+The one place in the build where the pinned code-intelligence runtime's own identifiers are written — its distribution and
+version, its transport arguments, and its tool names keyed by capability. Since `PD-MCP-004` it also records the **warm-up**. —
+`REQ-MCP-116`
+_Avoid_: tool map, pin file
+
+**Binding probe**:
+The run host's own call of the runtime's project-memory listing tool, once per connection to the code-intelligence server and
+before that server's tools are offered, allowed 15 s; a failure warns and withholds nothing. — `REQ-MCP-071`
+
+**Warm-up**:
+A request the product makes on its own before forwarding a model's call, recorded in the binding manifest by capability: the
+referencing-symbol search sent, with the same symbol and file, before every symbol rename forwarded to the code-intelligence
+server, its answer discarded. It is no tool call — no record, total or notice — and shares the rename's one allowance. The code's
+`warmUps` (the manifest's field) and `codeIntelligenceWarmUp` (the lookup) carry the term. — `PD-MCP-004`, extending
+`REQ-MCP-116` and `REQ-MCP-015`
+_Avoid_: pre-flight, priming

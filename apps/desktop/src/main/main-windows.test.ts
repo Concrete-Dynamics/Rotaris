@@ -340,6 +340,30 @@ describe('MainWindows', () => {
     expect(h.mainWindows.ordered().map((window) => window.workspace).sort()).toEqual(['C:/a', 'C:/b', 'C:/c']);
   });
 
+  // PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): a project-setup banner's action surfaces the window
+  // holding its project and builds nothing; with no holder it surfaces nothing and adds nothing.
+  it('surfaces the window holding a named workspace for a project-setup banner, and adds none where no window holds it', async () => {
+    const h = harness();
+    const first = await h.mainWindows.launch('C:/a');
+    h.folders.push('C:/b');
+    await h.mainWindows.choose(first.wcId, { newWindow: true });
+    expect(h.mainWindows.active()?.workspace).toBe('C:/b');
+    h.windows.get(first.wcId)!.minimized = true;
+
+    h.actions.length = 0;
+    const holder = h.mainWindows.surfaceHolding('c:/a');
+    expect(holder?.wcId).toBe(first.wcId);
+    expect(holder?.workspace).toBe('C:/a');
+    // REQ-SHELL-161's terms: restored from the minimised state, shown and focused; nothing built, opened or closed.
+    expect(h.actions).toEqual(['restore:C:/a', 'show:C:/a', 'focus:C:/a']);
+    expect(h.mainWindows.active()?.wcId).toBe(first.wcId);
+
+    h.actions.length = 0;
+    expect(h.mainWindows.surfaceHolding('C:/c')).toBeUndefined();
+    expect(h.actions).toEqual([]);
+    expect(h.mainWindows.ordered().map((window) => window.workspace).sort()).toEqual(['C:/a', 'C:/b']);
+  });
+
   it('answers a reach with no main window open as a refusal and builds nothing', async () => {
     const empty = harness({ cwd: 'C:/startup' });
     const reached = await empty.mainWindows.reach('C:/a');

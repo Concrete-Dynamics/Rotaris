@@ -109,3 +109,24 @@ describe('REQ-NOTIFY-045: the retry action reaches its target', () => {
     expect(text).toContain('publish: (text: string) => { composerDraft.current = text; setPublished(text); }');
   });
 });
+
+/*
+ * PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): the project-setup banners' `open-project-init` action
+ * reaches main's `projectInit.open`, which surfaces the window holding the named workspace, and that window opens
+ * Settings › Project on channel 15. Until 2026-10-14 the arm sat among the members with no target and dispatched nothing.
+ */
+describe('PD-WORKSPACE-005 revision 2: the project-setup action reaches its target', () => {
+  const text = readFileSync(new URL('./main.tsx', import.meta.url), 'utf8');
+  it('main.tsx sends open-project-init to projectInit.open with the named workspace, and no longer lists it without a target', () => {
+    const start = text.indexOf("case 'open-project-init':");
+    expect(start).toBeGreaterThan(-1);
+    const arm = text.slice(start, text.indexOf('return;', start));
+    expect(arm).toContain("bridge.command({ kind: 'projectInit.open', workspace: action.workspace })");
+    expect(text).not.toMatch(/case 'open-project-init':\s*case 'save-settings':/);
+    expect(text).not.toMatch(/case 'open-cloud-account':\s*case 'open-project-init':/);
+  });
+
+  it('main.tsx opens Settings › Project when main asks this window on channel 15', () => {
+    expect(text).toMatch(/bridge\.onProjectInitOpen\(\(p\) => \{[\s\S]*?useShellState\.getState\(\)\.openSettings\('project'\);/);
+  });
+});

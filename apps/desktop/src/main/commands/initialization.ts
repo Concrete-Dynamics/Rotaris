@@ -1,5 +1,6 @@
-import { SKIP_WRITE_FAILED } from '@rotaris/contracts';
+import { CHANNEL, CONTRACT_SCHEMA_VERSION, PROJECT_NOT_OPEN, SKIP_WRITE_FAILED } from '@rotaris/contracts';
 import { canonicalPath } from '@rotaris/platform';
+import { projectNameOf } from '../initialization.js';
 import { type CommandContext, type CommandHandlers, type MainWindowState } from './context.js';
 
 /**
@@ -41,6 +42,35 @@ export function initializationCommands(
       const root = rootOf(w);
       await initialization.cancel(root);
       return { ok: true, value: await initialization.read(root) };
+    },
+  };
+}
+
+/**
+ * PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072) — a project-setup banner's `open-project-init` action.
+ * Notices are application-wide, so the press may come from a window holding another workspace (PD-SHELL-001's second window,
+ * or a switch since the banner was raised). The window holding the named workspace is surfaced on REQ-SHELL-161's terms and
+ * told, on channel 15, to open Settings › Project, where REQ-WORKSPACE-103 puts the recorded outcome and its retry. Where no
+ * window holds it, the window the press came from shows the info notice "Project <name> is not open in any window." and
+ * nothing else happens: no window is added, replaced or asked about.
+ */
+export function projectInitCommands(
+  ctx: Pick<CommandContext, 'log' | 'mainWindows' | 'raiseTransient' | 'relay'>,
+): Pick<CommandHandlers, 'projectInit.open'> {
+  const { log, mainWindows, raiseTransient, relay } = ctx;
+  return {
+    'projectInit.open': (req, { w }) => {
+      const holder = mainWindows.surfaceHolding(req.workspace);
+      if (holder === undefined || holder.win.isDestroyed()) {
+        const text = PROJECT_NOT_OPEN(projectNameOf(req.workspace));
+        raiseTransient(w, 'info', text);
+        log(`project-setup action for ${req.workspace}: no window holds it, so nothing was opened (PD-WORKSPACE-005 revision 2) — ${text}`);
+        return { ok: true, value: { opened: false } };
+      }
+      relay.count(CHANNEL.projectInitOpen);
+      holder.win.webContents.send(CHANNEL.projectInitOpen, { v: CONTRACT_SCHEMA_VERSION, workspace: holder.workspace });
+      log(`project-setup action for ${req.workspace}: surfaced window ${holder.wcId} and opened Settings › Project there (PD-WORKSPACE-005 revision 2)`);
+      return { ok: true, value: { opened: true, window: holder.wcId } };
     },
   };
 }

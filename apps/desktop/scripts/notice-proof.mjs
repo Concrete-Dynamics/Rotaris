@@ -18,6 +18,9 @@ import { startApp, stopApp, until } from './lib/driver.mjs';
  *  1b. An invalid hook entry (a global `timeout_seconds: 0`) fails the configuration load before the hook port sees it
  *     (REQ-HOOKS-012): the run is refused with REQ-CONFIG-478's report — file, scope, key path — on screen, and no hook
  *     runs. REQ-HOOKS-085's "continuing without them" line is therefore not reachable this way; its unit cases stand.
+ *     Since OQ-279's ruling the same report is the notice on screen when the workspace opens, before any prompt.
+ *  1c. The same fault in the WORKSPACE scope (OQ-279): raised at the open, then the file corrected and a run started with
+ *     no relaunch, which clears the notice (REQ-CONFIG-478's recovery).
  *  2. Scoping (REQ-NOTIFY-028/029/058): a notice about another session survives a run start; an unscoped one does not.
  *  3. Compare-and-clear (REQ-NOTIFY-026): dismissing a superseded identifier leaves its successor standing.
  *  4. The ONE transient surface (REQ-NOTIFY-012/013/016/017/021): four published, three visible, newest nearest the
@@ -30,6 +33,9 @@ import { startApp, stopApp, until } from './lib/driver.mjs';
  *     travel through the renderer, so only the built application proves they are the same string.
  *     6b. And when the object is NOT the one on screen (ESC-34's owed half, OQ-267): a notice naming a workspace no
  *     window holds adds a window for it, asking nothing and closing nothing, and opens its review there.
+ *     6c. A project-setup banner's action (PD-WORKSPACE-005 revision 2, OQ-262), pressed in the window that does not hold
+ *     its project: the holder is surfaced on Settings › Project, an unsaved edit in another category kept; one naming a
+ *     project no window holds raises "Project <name> is not open in any window." and opens nothing.
  *  7. The retry action reaches its target (REQ-NOTIFY-045, REQ-NOTIFY-030, OQ-178): activated on a failed session, it
  *     resubmits that session's last submitted prompt as a second run of that session.
  *     And it resubmits the prompt the session sent, wherever its row is (REQ-SESSION-192) and with the image it carried
@@ -66,8 +72,12 @@ if (!process.argv.includes('--skip-build')) {
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
+// `--only=<sections>` (comma-separated: 1, 1b, 1c, 2, 4, 6, 6b, 6c, 7, 7b, 8, 9) runs those sections alone; the default is all.
+const onlyArg = process.argv.find((a) => a.startsWith('--only='));
+const only = onlyArg === undefined ? null : onlyArg.slice('--only='.length).split(',').map((x) => x.trim()).filter((x) => x !== '');
+const want = (id) => only === null || only.includes(id);
 
-function scenario(name, { globalHooks = null, workspaceHook = false, images = false, runtime = [] } = {}) {
+function scenario(name, { globalHooks = null, workspaceHook = false, images = false, runtime = [], workspaceLines = [] } = {}) {
   const root = join(output, name);
   const workspace = join(root, 'workspace');
   const local = join(root, 'local');
@@ -89,6 +99,7 @@ function scenario(name, { globalHooks = null, workspaceHook = false, images = fa
     // REQ-HOOKS-013: a WORKSPACE hook is never trusted without review, so the summary reports `review` and
     // REQ-NOTIFY-224's notice is raised once the window is interactive.
     ...(workspaceHook ? ['hooks:', '  entries:', '    - event: pre_tool', '      command: "exit 0"', ''] : []),
+    ...workspaceLines,
   ].join('\n'));
   if (globalHooks !== null) {
     // The GLOBAL scope is trusted without review (REQ-HOOKS-013), so the run reaches the failure limit without a dialog.
@@ -137,7 +148,7 @@ const s1 = scenario('advisory', {
     'hooks:', '  entries:', '    - event: pre_tool', '      command: "exit 1"', '',
   ].join('\n'),
 });
-{
+if (want('1')) {
   const r = await launch('advisory', s1, {
     ROTARIS_SCRIPT: 'read,read,read,read,answer',
     ROTARIS_CAPTURE_PROMPT: 'read a few files so the hook fails its way to being switched off',
@@ -198,19 +209,34 @@ const s1 = scenario('advisory', {
 // it starts — REQ-CONFIG-478's report, file, scope and key path — and no hook runs. So REQ-HOOKS-085's line is not
 // reachable in the built app by an invalid entry; it needs a hook set that fails to assemble after the configuration
 // loaded, which no free seam produces, and its unit cases stay its evidence. What this launch pins is the order.
-// The workspace itself opens with the global configuration unloaded, and the refusal's notice comes at the first prompt;
-// REQ-CONFIG-478 says no workspace opens (OQ-279, raised 2026-10-13). This launch asserts the refusal, not when it first shows.
+// OQ-279 (ruled 2026-10-13 under R-072): "a workspace opens" is its configuration loading. The window, the history and
+// Settings stay available; what the user is told, and when, changed: the report is raised as a persistent error notice
+// when the workspace opens — the file, its scope, the key — before any prompt (until 2026-10-14 it first showed as the
+// refusal of the first prompt). The prompt is then refused as before (REQ-EVENTS-021).
 const s1b = scenario('hook-load-fault', {
   globalHooks: ['# an entry with a budget of zero (REQ-HOOKS-012)', 'hooks:', '  entries:', '    - event: pre_tool', '      command: "exit 1"', '      timeout_seconds: 0', ''].join('\n'),
 });
-{
+if (want('1b')) {
   const r = await launch('hook-load-fault', s1b, {
     ROTARIS_SCRIPT: 'read,answer',
     ROTARIS_CAPTURE_PROMPT: 'read a file; no hook should run',
     // The run is refused, so no result comes: the wait is short and its timeout is the expected end.
+    // The prompt waits until the open-time notice has been read (OQ-279).
+    ROTARIS_CAPTURE_PROMPT_MS: '5000', ROTARIS_CAPTURE_PROBE_AT: '[data-testid="notice-title"]@3500;;[data-testid="notice-detail"]@3500;;[data-testid="notice-message"]@3500',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '12000', ROTARIS_CAPTURE_AFTER_MS: '800',
     ROTARIS_CAPTURE_PROBE: '[data-testid="notice-title"]',
   }, { timeout: 150_000 });
+  // OQ-279: before any prompt, the open has raised the fatal load as the notice on screen, naming the file, the global
+  // scope and the rejected key, with the step that recovers.
+  const atOpen = (probesAt(r.log, 3500, '[data-testid="notice-title"]') ?? []).map((n) => n.text);
+  const detailAtOpen = (probesAt(r.log, 3500, '[data-testid="notice-detail"]') ?? []).map((n) => n.text).join('\n');
+  const messageAtOpen = (probesAt(r.log, 3500, '[data-testid="notice-message"]') ?? []).map((n) => n.text).join('\n');
+  expect(atOpen.includes('The workspace configuration did not load'), `before the prompt the notice on screen was ${JSON.stringify(atOpen)}, not the fatal load (OQ-279)`);
+  expect(/agents\.yaml at hooks\.entries\.0\.timeout_seconds \(global scope\)/.test(detailAtOpen), `the open-time notice does not name the file, the key and the global scope: ${JSON.stringify(detailAtOpen)}`);
+  expect(/open the workspace again or start a run/.test(messageAtOpen), `the open-time notice does not name the step that recovers: ${JSON.stringify(messageAtOpen)}`);
+  const refusedAt = r.log.split('\n').findIndex((l) => / run refused: The run was refused before it started/.test(l));
+  const raisedAt = r.log.split('\n').findIndex((l) => l.includes('notice: The workspace configuration did not load for'));
+  expect(raisedAt >= 0 && (refusedAt < 0 || raisedAt < refusedAt), `the fatal-load notice was not raised before the prompt's refusal (raised at line ${raisedAt}, refused at line ${refusedAt})`);
   const db = open(s1b);
   const rows = timelineOf(db);
   const sessions = db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n;
@@ -222,14 +248,53 @@ const s1b = scenario('hook-load-fault', {
   expect(rows.filter((t) => t.name === 'hook_run').length === 0 && sessions === 0, `a run started or a hook ran: ${sessions} session(s), ${rows.filter((t) => t.name === 'hook_run').length} hook_run entries`);
   const onScreen = JSON.parse((r.log.match(/capture: probe \[data-testid="notice-title"\] → (\[.*\])/) ?? [])[1] ?? '[]');
   expect(onScreen.some((n) => n.text === 'The run was refused before it started'), `the refusal is not the notice on screen: ${JSON.stringify(onScreen)}`);
-  results.hookLoadFault = { refusal: refused.slice(refused.indexOf('The configuration could not be loaded')), notice: onScreen.map((n) => n.text), sessions, hookRuns: 0, hookPortLoadLine: 'not reached (REQ-HOOKS-012 fails the configuration load first)', png: r.png, elapsedMs: r.elapsedMs };
+  results.hookLoadFault = { atOpen: { titles: atOpen, detail: detailAtOpen, message: messageAtOpen }, refusal: refused.slice(refused.indexOf('The configuration could not be loaded')), notice: onScreen.map((n) => n.text), sessions, hookRuns: 0, hookPortLoadLine: 'not reached (REQ-HOOKS-012 fails the configuration load first)', png: r.png, elapsedMs: r.elapsedMs };
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1c. OQ-279 in the WORKSPACE scope, and REQ-CONFIG-478's recovery within one launch. The workspace file carries the rejected
+// key; the open raises the fatal load naming that file, the workspace scope and the key. The proof then corrects the file
+// on disk and submits a prompt: the run's own load (the per-run reload) succeeds, the run starts with no relaunch, and the
+// standing notice is cleared.
+const s1c = scenario('workspace-load-fault', { workspaceLines: ['hooks:', '  entries:', '    - event: pre_tool', '      command: "exit 0"', '      timeout_seconds: 0', ''] });
+if (want('1c')) {
+  const workspaceFile = join(s1c.workspace, '.rotaris', 'agents.yaml');
+  const launched = await startApp({ root: join(output, 'workspace-load-fault-app'), workspace: s1c.workspace, timeoutMs: 90_000, extra: { ROTARIS_SCRIPT: 'answer' } });
+  const d = launched.driver;
+  let value = null;
+  let failure = null;
+  const noticeNow = () => d.eval(`(() => { const n = document.querySelector('[data-testid="notice"]'); return n ? { title: n.querySelector('[data-testid="notice-title"]')?.textContent ?? null, message: n.querySelector('[data-testid="notice-message"]')?.textContent ?? null, detail: n.querySelector('[data-testid="notice-detail"]')?.textContent ?? null, action: n.querySelector('.notice__action')?.textContent ?? null } : null; })()`);
+  try {
+    const atOpen = await until(noticeNow, (n) => n?.title === 'The workspace configuration did not load', { timeoutMs: 30_000, what: 'the open-time fatal-load notice' });
+    // REQ-CONFIG-478's recovery: correct the rejected key in the named file, then start a run — no relaunch.
+    writeFileSync(workspaceFile, readFileSync(workspaceFile, 'utf8').replace('      timeout_seconds: 0\n', '      timeout_seconds: 5\n').replace(/hooks:\n  entries:\n(    .*\n)+/u, ''));
+    await d.click('.nav-item', { text: 'Workspace' });
+    await d.waitFor('.composer__input', { timeoutMs: 10_000 });
+    await d.click('.composer__input');
+    await d.type('the file is corrected; start the run', { enter: true });
+    const header = await until(() => d.eval(`document.querySelector('[data-testid="run-header"]')?.getAttribute('data-state') ?? null`), (v) => v !== null, { timeoutMs: 30_000, what: 'a run header after the corrected file' });
+    const after = await until(noticeNow, (n) => n === null || n.title !== 'The workspace configuration did not load', { timeoutMs: 15_000, what: 'the fatal-load notice cleared' });
+    value = { atOpen, header, after };
+  } catch (cause) {
+    failure = cause;
+  }
+  const stopped = await stopApp(launched, { screenshot: join(output, 'workspace-load-fault.png') });
+  const log = existsSync(launched.logFile) ? readFileSync(launched.logFile, 'utf8') : '';
+  writeFileSync(join(output, 'workspace-load-fault.log'), log);
+  if (failure) throw new Error(`workspace-load-fault: ${failure.message} (see workspace-load-fault.log)`);
+  expect(!stopped.overran, 'workspace-load-fault: the app did not stop within its bound');
+  expect(/\.rotaris[\\/]agents\.yaml at hooks\.entries\.0\.timeout_seconds \(workspace scope\)/.test(value.atOpen.detail ?? ''), `the open-time notice does not name the workspace file, the key and the workspace scope: ${JSON.stringify(value.atOpen)}`);
+  expect(value.atOpen.action === 'Open Models settings', `the open-time notice offers ${JSON.stringify(value.atOpen.action)}, not the Settings category drawing the report`);
+  expect(!/run refused: The run was refused before it started — The configuration could not be loaded/.test(log), 'the run after the corrected file was refused');
+  expect(/the configuration of .* loaded again; the fatal-load notice #\d+ is cleared/.test(log), 'main did not clear the fatal-load notice when the run started');
+  results.workspaceLoadFault = value;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 2 and 3. Scoping and compare-and-clear, driven through the real store.
 const s2 = scenario('scoping');
-{
+if (want('2')) {
   const step = (at, obj) => `${JSON.stringify(obj)}@${at}`;
   const r = await launch('scoping', s2, {
     ROTARIS_CAPTURE_NOTICES: [
@@ -273,7 +338,7 @@ const s2 = scenario('scoping');
 // ─────────────────────────────────────────────────────────────────────────────
 // 4 and 5. The one transient surface: depth, order, widths, inset, the clear on a view change, the presentations.
 const s3 = scenario('stack');
-{
+if (want('4')) {
   const step = (at, obj) => `${JSON.stringify(obj)}@${at}`;
   const r = await launch('stack', s3, {
     ROTARIS_CAPTURE_NOTICES: [
@@ -330,7 +395,7 @@ const s3 = scenario('stack');
 // ─────────────────────────────────────────────────────────────────────────────
 // 6. ESC-34: the review action names its workspace, and that name reaches the review.
 const s4 = scenario('review-action', { workspaceHook: true });
-{
+if (want('6')) {
   const r = await launch('review-action', s4, {
     ROTARIS_CAPTURE_AFTER_MS: '6000',
     // The notice is raised 800 ms after the workspace opens; probe it, then click its action.
@@ -374,7 +439,7 @@ const s4 = scenario('review-action', { workspaceHook: true });
 // "… which is not the open workspace" and opened nothing.
 const s4b = scenario('review-other');
 const s4bTarget = scenario('review-other-target', { workspaceHook: true });
-{
+if (want('6b')) {
   const step = (at, obj) => `${JSON.stringify(obj)}@${at}`;
   const r = await launch('review-other', s4b, {
     ROTARIS_CAPTURE_AFTER_MS: '11000',
@@ -414,6 +479,109 @@ const s4bTarget = scenario('review-other-target', { workspaceHook: true });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 6c. PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): a project-setup banner's action, pressed in the
+// window that does NOT hold its project. The launch opens a project that has answered every task; a second main window is
+// added on `atlas-billing`, which owes one failing background task (`ROTARIS_INIT_TEST_TASK`, the ordinary registry), so its
+// open raises "Project setup did not finish: atlas-billing" with "Try again" — a real banner, not a publication of the
+// proof's — once both windows exist, and the banner, an application notice, stands in both. (A window added AFTER a notice
+// was published does not show it: docs/defects/a-main-window-added-after-a-notice-was-published-does-not-show-it.md.) With
+// an unsaved edit standing in the holding window's Settings › Instructions, "Try again" is pressed in the FIRST window, which
+// does not hold the project: the holding window is surfaced and shows Settings › Project, its edit still pending.
+// Then a banner naming a folder no window holds is pressed: the pressing window says "Project <name> is not open in any
+// window." and nothing else happens. Before this, the arm logged "has no target in this build" and no banner carried it.
+if (want('6c')) {
+  const base = join(output, 'project-init');
+  const folder = (name, skipped) => {
+    const root = join(base, name);
+    mkdirSync(join(root, '.rotaris'), { recursive: true });
+    writeFileSync(join(root, 'README.md'), `# notice proof, ${name}\n`);
+    writeFileSync(join(root, 'AGENTS.md'), '# instructions the proof switches off without saving\n');
+    writeFileSync(join(root, '.rotaris', 'agents.yaml'), [
+      '# scratch configuration written by the proof script',
+      'models:', '  scripted: { provider: scripted, model_id: scripted }',
+      'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
+      'mcp_servers:', '  code_intelligence: { enabled: false }',
+      'runtime:', '  permission_mode: autonomous',
+      'initialization:', '  completed: []', `  skipped: [${skipped.join(', ')}]`, "  last_run: '2026-09-29T00:00:00.000Z'", '',
+    ].join('\n'));
+    return root;
+  };
+  const holder = folder('atlas-billing', ['code-intelligence-setup']);
+  const other = folder('other-project', ['code-intelligence-setup', 'verification-fail']);
+  const closed = join(base, 'closed-project');
+  mkdirSync(closed, { recursive: true });
+  const launched = await startApp({
+    root: join(base, 'app'), workspace: other, timeoutMs: 90_000,
+    extra: {
+      // The capture seams are installed only while capturing; the capture's own end is put past the proof's, which quits first.
+      ROTARIS_INIT_TEST_TASK: 'fail', ROTARIS_CAPTURE_PROJECT_FOLDER: holder, ROTARIS_CAPTURE_PNG: join(output, 'project-init.png'), ROTARIS_CAPTURE_AFTER_MS: '170000',
+      // The second banner, naming a folder no window holds: published through the REAL store once the first press is done.
+      ROTARIS_CAPTURE_NOTICES: `${JSON.stringify({ op: 'report', severity: 'error', title: 'Project setup did not finish: closed-project', message: 'Rotaris could not finish setting this workspace up for code search.', persistent: true, action: { label: 'Try again', action: { kind: 'open-project-init', workspace: closed } } })}@15000`,
+    },
+  });
+  const d = launched.driver;
+  const trail = [];
+  const step = async (what, promise) => { const t0 = Date.now(); try { const v = await promise; trail.push({ what, ms: Date.now() - t0 }); return v; } catch (cause) { trail.push({ what, ms: Date.now() - t0, error: String(cause) }); throw cause; } };
+  const noticeIn = async (which) => { await d.useWindow(which); return await d.eval(`(() => { const n = document.querySelector('[data-testid="notice"]'); if (!n) return null; const a = n.querySelector('.notice__action'); return { title: n.querySelector('[data-testid="notice-title"]')?.textContent ?? null, action: a?.textContent ?? null, member: a?.getAttribute('data-action') ?? null }; })()`); };
+  let value = null;
+  let failure = null;
+  try {
+    await step('the first window', d.waitFor('.nav-item', { timeoutMs: 30_000 }));
+    // The second window, on the project that owes the failing task, added last and so the active one.
+    await step('the second window', d.command({ kind: 'workspace.choose', newWindow: true }));
+    await step('two main windows', until(() => d.windows(), (w) => w.windows.length === 2 && String(w.windows[0]?.workspace ?? '').endsWith('atlas-billing'), { timeoutMs: 30_000, what: 'the holding window added' }));
+    const banner = await step('the project-setup banner in the holding window', until(() => noticeIn('atlas-billing'), (n) => n !== null && n.title === 'Project setup did not finish: atlas-billing', { timeoutMs: 45_000, what: 'the background banner' }));
+    const there = await step('the banner in the first window', until(() => noticeIn('other-project'), (n) => n !== null && n.title === 'Project setup did not finish: atlas-billing', { timeoutMs: 15_000, what: 'the banner in the first window' }));
+    // An unsaved edit in another Settings category of the holding window (REQ-CONFIG-287: Settings-to-Settings is free).
+    await d.useWindow('atlas-billing');
+    await step('Settings in the holding window', d.click('.nav-item', { text: 'Settings' }));
+    await step('Instructions', d.click('.settings__categories .nav-list__item', { text: 'Instructions' }));
+    await step('the instruction switch', d.click('[data-testid="instruction-toggle"][data-id="workspace:AGENTS.md"]'));
+    const dirty = await step('the unsaved edit', until(() => d.eval(`document.querySelector('.save-bar__status')?.textContent ?? null`), (v) => v === 'Unsaved changes', { timeoutMs: 10_000, what: 'the save bar reporting the edit' }));
+    await d.useWindow('other-project');
+    await step('Try again in the first window', d.click('.notice__action', { text: 'Try again' }));
+    const surfaced = await step('the holding window surfaced', until(() => d.windows(), (w) => String(w.windows[0]?.workspace ?? '').endsWith('atlas-billing'), { timeoutMs: 10_000, what: 'the holding window focused' }));
+    await d.useWindow('atlas-billing');
+    const project = await step('Settings › Project in the holding window', until(() => d.eval(`({ view: document.querySelector('main.view')?.getAttribute('aria-label') ?? null, category: document.querySelector('.settings__body')?.getAttribute('aria-label') ?? null, card: document.querySelector('[data-project-init]')?.getAttribute('data-init-state') ?? null, retry: [...document.querySelectorAll('button')].some((b) => b.textContent.trim() === 'Retry initialization'), save: document.querySelector('.save-bar__status')?.textContent ?? null })`), (v) => v?.view === 'Settings' && v?.category === 'Project' && v?.card !== null, { timeoutMs: 10_000, what: 'Settings › Project' }));
+    await d.useWindow('other-project');
+    const stayed = await d.eval(`document.querySelector('main.view')?.getAttribute('aria-label') ?? null`);
+    // The banner naming a folder no window holds, pressed in the second window.
+    const closedBanner = await step('the closed project\'s banner', until(() => noticeIn('other-project'), (n) => n !== null && n.title === 'Project setup did not finish: closed-project', { timeoutMs: 60_000, what: 'the closed project\'s banner' }));
+    await d.useWindow('other-project');
+    await step('Try again for the closed project', d.click('.notice__action', { text: 'Try again' }));
+    const told = await step('the info notice', until(() => d.eval(`[...document.querySelectorAll('[data-testid="acknowledgement-title"]')].map((n) => n.textContent)`), (v) => Array.isArray(v) && v.includes('Project closed-project is not open in any window.'), { timeoutMs: 10_000, what: 'the info acknowledgement' }));
+    const after = await d.windows();
+    // The edit was the proof's, and an unsaved one would hold the quit at the unsaved-settings guard: it is discarded.
+    await d.useWindow('atlas-billing');
+    await step('Discard the edit', d.click('.save-bar .btn-secondary', { text: 'Discard' }));
+    await step('the form clean again', until(() => d.eval(`document.querySelector('.save-bar__status')?.textContent ?? null`), (v) => v === 'All changes saved', { timeoutMs: 10_000, what: 'the save bar clean' }));
+    value = { banner, dirty, there, surfaced: surfaced.windows.map((w) => w.workspace), project, stayed, closedBanner, told, windowsAfter: after.windows.map((w) => w.workspace) };
+  } catch (cause) {
+    failure = cause;
+  }
+  const stopped = await stopApp(launched, { screenshot: join(output, 'project-init.closing.png') });
+  const log = existsSync(launched.logFile) ? readFileSync(launched.logFile, 'utf8') : '';
+  writeFileSync(join(output, 'project-init.log'), log);
+  writeFileSync(join(output, 'project-init.steps.json'), `${JSON.stringify(trail, null, 2)}\n`);
+  if (failure) throw new Error(`project-init: ${failure.message} (see project-init.log, project-init.steps.json)`);
+  expect(!stopped.overran, 'project-init: the app did not stop within its bound');
+  expect(value.banner.action === 'Try again' && value.banner.member === 'open-project-init', `the background banner offers ${JSON.stringify(value.banner)} (PD-WORKSPACE-005 revision 2, REQ-WORKSPACE-103)`);
+  expect(value.there.action === 'Try again' && value.there.member === 'open-project-init', `the first window's banner offers ${JSON.stringify(value.there)}`);
+  const holderId = (log.match(/main window (\d+) loaded for .*atlas-billing/) ?? [])[1];
+  expect(holderId !== undefined && new RegExp(`project-setup action for .*atlas-billing: surfaced window ${holderId} and opened`).test(log), `main did not surface the holding window (${holderId ?? 'not found'})`);
+  expect(value.project.view === 'Settings' && value.project.category === 'Project', `the holding window shows ${JSON.stringify(value.project)}, not Settings › Project`);
+  expect(value.project.retry === true, `Settings › Project offers no "Retry initialization": ${JSON.stringify(value.project)}`);
+  expect(value.project.save === 'Unsaved changes', `opening Settings › Project lost the unsaved Instructions edit: the save bar reads ${JSON.stringify(value.project.save)}`);
+  expect(value.stayed !== 'Settings', 'the pressing window opened Settings itself; only the holding window should');
+  expect(value.surfaced[0]?.endsWith('atlas-billing'), `the holding window is not the focused one after the press: ${JSON.stringify(value.surfaced)}`);
+  expect(/project-setup action for .*atlas-billing: surfaced window \d+ and opened Settings › Project there/.test(log), 'main did not log the surfacing');
+  expect(!/notice action "open-project-init" has no target/.test(log), 'the renderer still reports the action without a target');
+  expect(value.windowsAfter.length === 2, `a window was added or closed for the closed project: ${JSON.stringify(value.windowsAfter)}`);
+  expect(/project-setup action for .*closed-project: no window holds it, so nothing was opened/.test(log), 'main did not log the closed project\'s press');
+  results.projectInit = value;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 7. REQ-NOTIFY-045 (OQ-178): the retry action reaches its target. A run fails at its first model call (a 401, which no
 // recovery retries), so the session's last submitted prompt is the one that failed and the composer, submitted, is empty.
 // No failure notice in this build carries the retry as its one action (OQ-178's reading, confirmed 2026-10-06 by R-071: each failure class names
@@ -423,7 +591,7 @@ const s4bTarget = scenario('review-other-target', { workspaceHook: true });
 // measured is that the retry reached its target.) Before the repair of
 // `docs/defects/fixed/the-retry-run-notice-action-has-no-target.md` the window logged "has no target" and nothing ran.
 const s5 = scenario('retry-action');
-{
+if (want('7')) {
   const step = (at, obj) => `${JSON.stringify(obj)}@${at}`;
   const PROMPT = 'the prompt that failed once';
   const r = await launch('retry-action', s5, {
@@ -465,7 +633,7 @@ const s5 = scenario('retry-action');
 // window searched its replica, found no prompt and refused ("Nothing was retried"); before that of
 // `docs/defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md` it re-sent the text alone.
 const s6 = scenario('retry-image', { images: true });
-{
+if (want('7b')) {
   const step = (at, obj) => `${JSON.stringify(obj)}@${at}`;
   const PROMPT = 'the prompt that failed with its image';
   const RESIDENT_ROW_CAP = 5000;
@@ -539,7 +707,7 @@ const s6 = scenario('retry-image', { images: true });
 // The improvement collector off: its own notice follows a completed run within seconds and would replace the one read here
 // in the single slot (REQ-NOTIFY-024), which is that notice's business and not this scenario's.
 const s7 = scenario('background-ending', { runtime: ['  improvement_collector_enabled: false'] });
-{
+if (want('8')) {
   const PROMPT = 'a run that finishes in the background';
   const started = Date.now();
   const launched = await startApp({ root: s7.root, workspace: s7.workspace, timeoutMs: 60_000, extra: { ROTARIS_SCRIPT: 'wait:6000,answer' } });
@@ -600,7 +768,7 @@ const s7 = scenario('background-ending', { runtime: ['  improvement_collector_en
 // Before the repair of `docs/defects/fixed/a-background-run-ended-on-a-provider-limit-loses-its-quota-notice.md` nothing
 // was held for the focus, so the limit reached the user only as a plain ending.
 const s9 = scenario('background-quota', { runtime: ['  improvement_collector_enabled: false'] });
-{
+if (want('9')) {
   const PROMPT = 'a run that parks on a provider limit';
   const started = Date.now();
   // `fail:quota` with no same-tier candidate: the provider is marked exhausted and the wait never resumes on its own.

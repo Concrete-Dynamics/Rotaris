@@ -6,8 +6,8 @@ import { FakeClock } from '@rotaris/kernel';
 import type { InitializationStateView } from '@rotaris/contracts';
 import { readInitializationState, writeConfigFields } from '@rotaris/config';
 import { InitializationCoordinator } from '../initialization.js';
-import { initializationCommands } from './initialization.js';
-import type { CommandAt, MainWindowState } from './context.js';
+import { initializationCommands, projectInitCommands } from './initialization.js';
+import type { CommandAt, CommandContext, MainWindowState } from './context.js';
 
 /**
  * Each test's scratch directory below the temporary directory, removed after the test so a run leaves none behind
@@ -91,5 +91,52 @@ describe('the initialization commands, answered for the asking window\'s workspa
     expect(published).toEqual([]);
     expect(readInitializationState(a.agents).lastRun).toBe('2026-09-01T00:00:00.000+00:00');
     expect(readInitializationState(b.agents).lastRun).toBeNull();
+  });
+});
+
+/**
+ * PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): `projectInit.open`, a project-setup banner's action
+ * activated in any window. The window holding the named workspace is surfaced and told on channel 15 to open Settings ›
+ * Project; with no holder, the asking window shows "Project <name> is not open in any window." and nothing else happens.
+ * Driven with plain objects where the window registry, the relay and the windows were.
+ */
+describe('projectInit.open — a project-setup banner\'s action (PD-WORKSPACE-005 revision 2, OQ-262)', () => {
+  function facet(holder: { workspace: string; wcId: number } | undefined) {
+    const sent: { channel: string; payload: unknown }[] = [];
+    const surfaced: string[] = [];
+    const transients: { wcId: number; kind: string; title: string }[] = [];
+    const counted: string[] = [];
+    const logged: string[] = [];
+    const commands = projectInitCommands({
+      log: (m) => { logged.push(m); },
+      mainWindows: {
+        surfaceHolding: (workspace: string) => {
+          surfaced.push(workspace);
+          return holder === undefined ? undefined : { ...holder, win: { isDestroyed: () => false, webContents: { send: (channel: string, payload: unknown) => { sent.push({ channel, payload }); } } } };
+        },
+      } as unknown as CommandContext['mainWindows'],
+      raiseTransient: (w, kind, title) => { transients.push({ wcId: (w as unknown as { wcId: number }).wcId, kind, title }); },
+      relay: { count: (channel: string) => { counted.push(channel); } } as unknown as CommandContext['relay'],
+    });
+    return { commands, sent, surfaced, transients, counted, logged };
+  }
+
+  it('surfaces the window holding the named workspace and asks it, on channel 15, to open Settings › Project', async () => {
+    const f = facet({ workspace: '/work/atlas-billing', wcId: 1 });
+    const out = await f.commands['projectInit.open']({ kind: 'projectInit.open', workspace: '/work/atlas-billing' }, windowOn('/work/other', 2));
+    expect(out).toEqual({ ok: true, value: { opened: true, window: 1 } });
+    expect(f.surfaced).toEqual(['/work/atlas-billing']);
+    expect(f.sent).toEqual([{ channel: 'project-init:open', payload: { v: 1, workspace: '/work/atlas-billing' } }]);
+    expect(f.counted).toEqual(['project-init:open']);
+    expect(f.transients).toEqual([]);
+  });
+
+  it('shows the asking window the info notice and opens nothing when no window holds the workspace', async () => {
+    const f = facet(undefined);
+    const out = await f.commands['projectInit.open']({ kind: 'projectInit.open', workspace: '/work/atlas-billing' }, windowOn('/work/other', 2));
+    expect(out).toEqual({ ok: true, value: { opened: false } });
+    expect(f.sent).toEqual([]);
+    expect(f.transients).toEqual([{ wcId: 2, kind: 'info', title: 'Project atlas-billing is not open in any window.' }]);
+    expect(f.logged.some((line) => line.includes('no window holds it'))).toBe(true);
   });
 });

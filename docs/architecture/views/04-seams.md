@@ -82,7 +82,12 @@ Update the process view's **renderer → main** list.
 
 ## 2. A main → renderer channel
 
-Fourteen exist. A fifteenth is a real decision — ask whether an existing one carries it first. The fourteenth,
+Fifteen exist. A sixteenth is a real decision — ask whether an existing one carries it first. The fifteenth,
+`project-init:open` (2026-10-14, PD-WORKSPACE-005 revision 2, OQ-262), was taken because no channel asks ONE window to open
+a Settings category on main's account: a project-setup banner's action is pressed in any window and must open Settings ›
+Project in the window holding the project, which main finds (`MainWindows.surfaceHolding`) and the renderer alone can
+navigate; `notice:current` is every window's and `initialization:state` carries state, not a request. It is sent by
+`webContents.send` to that one window, with its own `projectInit.open` command inward. The fourteenth,
 `display:changed` (2026-10-14, REQ-CHAT-167 / REQ-CONFIG-403), was taken because no channel carried a preference:
 `theme:changed` names a theme and `config:changed` a workspace's configuration snapshot, while the three transcript display
 preferences are application-wide preference-store keys every window draws its rows from; it is sent like the theme, by

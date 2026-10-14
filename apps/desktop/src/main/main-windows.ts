@@ -501,6 +501,20 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     return { ok: true, window: this.#view(added), added: true };
   }
 
+  /**
+   * PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): a project-setup banner's `open-project-init` action
+   * surfaces the main window holding the named workspace — REQ-STARTUP-163's rule for which window that is, surfaced on
+   * REQ-SHELL-161's terms (restored if minimised, shown, focused) — and hands back its view. Where no window holds it, nothing
+   * is surfaced and nothing is built: the ruling has the activating window say so instead (`projectInit.open`). Unlike `reach`,
+   * this never adds a window.
+   */
+  surfaceHolding(workspace: string): MainWindowView<TWindow, TPersonaWindows, TTerminalWindows> | undefined {
+    const holder = this.#windowHolding(this.dependencies.canonicalPath(workspace));
+    if (!holder) return undefined;
+    this.#surface(holder);
+    return this.#view(holder);
+  }
+
   dispose(): void {
     for (const record of [...this.#records.values()]) {
       record.deferredOffer?.cancel();

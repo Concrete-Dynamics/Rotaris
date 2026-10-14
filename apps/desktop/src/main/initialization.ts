@@ -1,9 +1,9 @@
 import { millis, toIsoUtc, type Clocks, type TimerHandle } from '@rotaris/kernel';
 import {
-  BACKGROUND_BROKE_DOWN, BACKGROUND_FAILED_FALLBACK, BACKGROUND_FAILED_HEADLINE,
+  BACKGROUND_BROKE_DOWN, BACKGROUND_FAILED_ACTION_LABEL, BACKGROUND_FAILED_FALLBACK, BACKGROUND_FAILED_HEADLINE,
   EMPTY_INITIALIZATION_VIEW, EMPTY_RUN_REPORT, NEEDS_PROVIDER_DETAIL, NEEDS_PROVIDER_HEADLINE,
-  NOTHING_LEFT, RESOLUTION_FAILED_DETAIL, RESOLUTION_FAILED_HEADLINE,
-  type InitializationStateView, type InitRunReport, type McpSetupStatus,
+  NOTHING_LEFT, RESOLUTION_FAILED_ACTION_LABEL, RESOLUTION_FAILED_DETAIL, RESOLUTION_FAILED_HEADLINE,
+  type InitializationStateView, type InitRunReport, type McpSetupStatus, type NoticeAction,
 } from '@rotaris/contracts';
 import {
   CODE_INTELLIGENCE_SETUP_STEPS, deriveSets, executeTasks, labelFor, promptOwed, readInitializationState, recordSkip, stampOnly,
@@ -240,9 +240,11 @@ export interface InitializationDeps {
   /**
    * REQ-WORKSPACE-103: a failed background run reaches a banner, never a dialog. `message` is the banner's visible sentence
    * (the task's own summary); `detail` is the technical text REQ-NOTIFY-005 keeps in the separate, copyable detail area —
-   * empty where there is none.
+   * empty where there is none. `action` is the banner's one action (PD-WORKSPACE-005 revision 2, OQ-262): `open-project-init`
+   * naming the project's folder, labelled "Try again" on a failed background run and "Open Project settings" on a failed
+   * resolution.
    */
-  readonly banner: (headline: string, message: string, detail: string) => void;
+  readonly banner: (headline: string, message: string, detail: string, action?: { readonly label: string; readonly action: NoticeAction }) => void;
   /** REQ-WORKSPACE-110: a consent task runs an agent, so it needs a reachable model. */
   readonly modelReachable: () => boolean;
   /**
@@ -741,7 +743,7 @@ export class InitializationCoordinator {
         return await this.viewFor(e);
       }
       this.deps.log(`initialization: resolution failed for ${e.root} (${String(cause)})`, 'warn');
-      this.banner(e, RESOLUTION_FAILED_HEADLINE, RESOLUTION_FAILED_DETAIL, String(cause));
+      this.banner(e, RESOLUTION_FAILED_HEADLINE, RESOLUTION_FAILED_DETAIL, String(cause), RESOLUTION_FAILED_ACTION_LABEL);
       await this.publish(e);
       return await this.viewFor(e);
     }
@@ -769,11 +771,14 @@ export class InitializationCoordinator {
 
   /**
    * REQ-WORKSPACE-102/103 under PD-WORKSPACE-005: the banner reaches every live window, so it says which project it is about
-   * (`namedBanner`); `message` stays the requirement's sentence.
+   * (`namedBanner`); `message` stays the requirement's sentence. PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under
+   * R-072): its one action is `open-project-init` naming this project's folder, so the press reaches Settings › Project in the
+   * window holding THIS workspace, whichever window shows the banner; `label` is the banner's own.
    */
-  private banner(e: WorkspaceEntry, headline: string, message: string, detail: string): void {
+  private banner(e: WorkspaceEntry, headline: string, message: string, detail: string, label: string): void {
     const named = namedBanner(e.root, headline, detail);
-    this.deps.banner(named.headline, message, named.detail);
+    this.deps.banner(named.headline, message, named.detail, { label, action: { kind: 'open-project-init', workspace: e.root } });
+    this.deps.log(`initialization: banner "${named.headline}" offers "${label}" (open-project-init ${e.root})`);
   }
 
   private async run(e: WorkspaceEntry, tasks: readonly InitializationTask[], background: boolean): Promise<void> {
@@ -802,7 +807,7 @@ export class InitializationCoordinator {
       if (background && failed.length > 0 && !e.closed) {
         // REQ-WORKSPACE-103: a banner carrying the task's own summary, with the stated fallback.
         // The summary is a fixed sentence and says nothing of what went wrong; what did is the task's error and its steps.
-        this.banner(e, BACKGROUND_FAILED_HEADLINE, failed[0]?.summary ?? BACKGROUND_FAILED_FALLBACK, failureDetail(failed));
+        this.banner(e, BACKGROUND_FAILED_HEADLINE, failed[0]?.summary ?? BACKGROUND_FAILED_FALLBACK, failureDetail(failed), BACKGROUND_FAILED_ACTION_LABEL);
       }
       for (const t of result.report.tasks) this.deps.log(`initialization: ${t.id} → ${t.status}${t.error === '' ? '' : ` — ${t.error}`}`);
     } catch (cause) {
@@ -810,7 +815,7 @@ export class InitializationCoordinator {
       e.lastError = String(cause);
       e.report = { running: false, current: null, currentLabel: '', currentSteps: [], tasks: [], outcome: 'failed', error: String(cause) };
       this.deps.log(`initialization: the run broke down for ${e.root} (${String(cause)})`, 'warn');
-      if (background && !e.closed) this.banner(e, BACKGROUND_FAILED_HEADLINE, `${BACKGROUND_FAILED_FALLBACK} ${BACKGROUND_BROKE_DOWN}`, String(cause));
+      if (background && !e.closed) this.banner(e, BACKGROUND_FAILED_HEADLINE, `${BACKGROUND_FAILED_FALLBACK} ${BACKGROUND_BROKE_DOWN}`, String(cause), BACKGROUND_FAILED_ACTION_LABEL);
     } finally {
       e.running = null;
       e.attempting = new Set();

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CONTRACT_SCHEMA_VERSION, NoticeActionSchema, type AcknowledgementPublish, type Notice, type NoticeCurrent } from '@rotaris/contracts';
+import { CONTRACT_SCHEMA_VERSION, NoticeActionSchema, NoticeSchema, type AcknowledgementPublish, type Notice, type NoticeCurrent } from '@rotaris/contracts';
 import { createNoticeStore, type NoticeRecord, type NoticeStoreDeps } from './notices.js';
 
 /**
@@ -203,6 +203,16 @@ describe('the action vocabulary — REQ-NOTIFY-044, REQ-SHELL-115', () => {
     expect(NoticeActionSchema.safeParse({ kind: 'open-hook-review' }).success).toBe(false);
     expect(NoticeActionSchema.safeParse({ kind: 'open-hook-review', workspace: '' }).success).toBe(false);
     expect(NoticeActionSchema.safeParse({ kind: 'open-provider-sign-in', provider: '' }).success).toBe(false);
+  });
+
+  // PD-WORKSPACE-005 revision 2 (OQ-262): a project-setup banner carries `open-project-init` naming its folder, through the
+  // store to the notice every window draws, under the label the ruling gives it.
+  it('carries a project-setup banner\'s open-project-init action, naming its folder, through to the notice on screen', async () => {
+    const h = harness();
+    const action = { label: 'Try again', action: { kind: 'open-project-init' as const, workspace: '/w/atlas-billing' } };
+    await h.store.report({ severity: 'error', title: 'Project setup did not finish: atlas-billing', message: 'Rotaris could not finish setting this workspace up for code search.', action });
+    expect(h.store.current()?.action).toEqual(action);
+    expect(NoticeSchema.safeParse(h.store.current()).success).toBe(true);
   });
 
   it('carries the one action through to the notice on screen', async () => {

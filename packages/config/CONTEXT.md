@@ -57,6 +57,9 @@ environment variable or a workspace folder resolves. — `REQ-CONFIG` third-part
 **Fatal load failure**:
 A configuration failure that stops the load, with a stated message and a stated way for a user to
 recover. — `REQ-CONFIG-478`
+Under one, the workspace still opens (its window, history, repository view and Settings) and its configuration does not:
+the report is raised as a persistent error notice when the workspace opens, and every run and isolated start is refused
+until a later load succeeds (OQ-279, ruled 2026-10-13 under R-072).
 
 **Withdrawn key**:
 A key this specification once defined and has withdrawn, or one it names as not a configuration key

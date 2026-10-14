@@ -16,6 +16,14 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**Project-setup banners act; a fatal configuration load is said at the open; the setup statement names what the build carries
+(fin43, `fin43-notices-and-config`; OQ-262, OQ-279, OQ-261 ruled 2026-10-13 under R-072).** The **process view** gains the
+`projectInit.open {workspace}` command, channel 15 `project-init:open` in its diagram and its main → renderer paragraph
+(PD-WORKSPACE-005 revision 2), and the About disclosure's citation moves from OQ-261 to PD-STARTUP-006 with the first-use
+fetches it now describes. The **seams view**'s channel count reads fifteen, with the reason this one was added. The **runtime
+view**'s configuration section and the **sequences view**'s launch diagram carry the open-time fatal-load notice (OQ-279,
+`main/config-fatal-notice.ts`). No package, edge, process or store column changed.
+
 **The question mirror writes nothing after its port closed (fin43, REQ-SESSION-094).** `mirrorQuestions`
 (`apps/desktop/src/run-host/tools.ts`) reads the approvals sink's `closed`, so a question that ends after its run's end
 closed the port leaves `pending_questions` alone. The **runtime view**'s `sessions` row says so. No package, edge, process,

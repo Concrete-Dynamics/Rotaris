@@ -13563,7 +13563,7 @@ the project; REQ-SHELL-115, "start project initialization; resolve project initi
 initialization registry and its surface. Raised 2026-10-13 by fin41 while correcting the stale comment on the renderer's
 notice-action switch, recorded in
 [`code-comments-call-built-mechanisms-unbuilt-or-owed`](../defects/fixed/code-comments-call-built-mechanisms-unbuilt-or-owed.md).
-Open.)*
+Ruled 2026-10-13 under R-072, below.)*
 
 REQ-NOTIFY-044 lists "open the project-initialization surface for a named workspace" among the actions a notice may carry,
 and the contract carries it (`open-project-init`, with a `workspace`, `packages/contracts/src/notices.ts`). The renderer's
@@ -13592,6 +13592,22 @@ the comment changed, to say that the surface exists and that nothing raises the 
 window.
 
 **What a live run then shows.** Nothing until a ruling adds a notice that carries the action: no live scenario raises one.
+
+**Ruled 2026-10-13 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)):** both
+project-setup banners carry `open-project-init` naming their workspace. "Project setup did not finish: <name>" labels it
+"Try again", the label REQ-WORKSPACE-103 fixes, and "Project setup could not be checked: <name>" labels it "Open Project
+settings". From any window, activating either one surfaces the main window holding that workspace on REQ-SHELL-161's terms
+and opens Settings › Project there. When no window holds the workspace, the activating window shows the info notice
+"Project <name> is not open in any window.", and nothing else happens. Recorded as
+[`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005) revision 2 (disposition still Narrows REQ-WORKSPACE-102 and
+REQ-WORKSPACE-103, whose back-pointers are amended in place). **Built 2026-10-14 (fin43, `fin43-notices-and-config`):** the
+coordinator's banners carry the action (`InitializationCoordinator.banner`), the renderer's arm sends `projectInit.open`, main
+surfaces the holder (`MainWindows.surfaceHolding`) and sends channel 15 (`project-init:open`), or raises the info
+acknowledgement in the asking window; `pnpm notice-proof` section 6c presses it from the window that does not hold the
+project. **Not repaired by this ruling, and not owed:** the ruling's brief asked for a note that `open-hook-review` "still does
+nothing outside its own window"; on this branch it does — `MainWindows.reach` surfaces or adds the holding window since
+2026-10-13 (fin41, N86; [`a-hook-review-notice-for-another-workspace-opens-nothing.md`](../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md),
+`notice-proof` sections 6 and 6b), so no note was written.
 
 <a id="oq-263"></a>
 
@@ -14014,7 +14030,8 @@ allowance spent on it, and a binding resting on the runtime's internals. *The re
 or value sits in the **global** scope, no workspace opens until it is corrected", and its "Opening a workspace is a workflow a
 user starts, so this failure MUST present as REQ-NOTIFY-001's *failed with one concrete next step named*"; REQ-CONFIG-233;
 REQ-HOOKS-012. Raised 2026-10-13 by fin42 (`fin42-coverage-and-react`, whats-next item N61), found by building `notice-proof`'s
-section 1b; numbered from the top of the plan's range, OQ-271 to OQ-280, below OQ-280, to keep clear of its sibling bundles.)*
+section 1b; numbered from the top of the plan's range, OQ-271 to OQ-280, below OQ-280, to keep clear of its sibling bundles.
+Ruled 2026-10-13 under R-072, below.)*
 
 Driven on the built app: a global `agents.yaml` whose one hook entry has `timeout_seconds: 0` (an invalid entry,
 REQ-HOOKS-012). The window opened the workspace as usual — main window loaded, the store opened, the Git and prompt reads ran —
@@ -14031,6 +14048,23 @@ its report and asserts nothing about when the notice first shows.
 **What a ruling decides.** Whether "no workspace opens" means the window refuses to open any workspace while the global file
 is invalid (a blocking failure screen naming the file and the step), or that every workspace opens unconfigured — and, either
 way, whether REQ-CONFIG-478's notice must be raised when the workspace is opened rather than at the first refused run.
+
+**Ruled 2026-10-13 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)):** in REQ-CONFIG-478,
+as in REQ-CONFIG-233, -239 and -245 and REQ-GIT-071, "a workspace opens" means its **configuration loads**. Under a fatal load
+failure in either scope the window, the session history, the repository view and Settings stay available, and every run and
+isolated start is refused with the report, as built. The report is raised as a persistent error notice **when the workspace
+opens**, naming the file, its scope and the rejected key, with the step "correct it in the named file, then open the
+workspace again or start a run", and it is cleared once a later load of that workspace succeeds. Classified **covered**
+(REQ-CONFIG-478, REQ-NOTIFY-001, REQ-GIT-071); no directive is minted. **Built 2026-10-14 (fin43, `fin43-notices-and-config`):**
+`ConfigFatalNotices` (`apps/desktop/src/main/config-fatal-notice.ts`) is fed the open's `config.read` in the post-ack slot of
+`openWorkspaceInner`, after that slot's other notices so it is the one standing, every snapshot `configAnnouncer` carries, and
+each run start (`session.start`); it raises "The workspace configuration did not load" (`error`, persistent, detail the
+snapshot's `fatal`, action "Open Models settings" through `recoveryFor('config.fatal')`) under a key carrying the workspace's
+load generation, and clears it compare-and-clear on a clean load, so a fault that recurs after one is raised again.
+`notice-proof` section 1b reads it on screen before the prompt (global scope) and section 1c (workspace scope) corrects the
+file within the launch and starts a run with no relaunch. The run refusal, the isolated-start refusal and the per-run reload
+are unchanged. **Noticed, not decided:** the skills, instructions and queue readers fall back to defaults on a fatal load —
+[`the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md`](../defects/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md).
 
 <a id="oq-278"></a>
 

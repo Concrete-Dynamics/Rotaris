@@ -34,6 +34,8 @@ const bridge: RendererBridge = Object.freeze({
   onReauthPrompt: subscribe(CHANNEL.reauthPrompt),
   // Channel 14 — a stored transcript display preference, to every window (REQ-CHAT-167, REQ-CONFIG-403).
   onDisplayChanged: subscribe(CHANNEL.displayChanged),
+  // Channel 15 — open Settings › Project in the window holding a banner's project (PD-WORKSPACE-005 revision 2, OQ-262).
+  onProjectInitOpen: subscribe(CHANNEL.projectInitOpen),
 });
 
 contextBridge.exposeInMainWorld(BRIDGE_KEY, bridge);

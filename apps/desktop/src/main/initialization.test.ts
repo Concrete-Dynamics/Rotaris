@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
-import type { InitializationStateView, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
+import type { InitializationStateView, McpSetupStatus, McpSetupStep, NoticeAction } from '@rotaris/contracts';
 import { readInitializationState, writeConfigFields, type InitializationTask, type PlainMap } from '@rotaris/config';
 import {
   CANCELLED_BEFORE_SETUP_ERROR, CODE_INTELLIGENCE_FAILED_SUMMARY, CODE_INTELLIGENCE_SUCCESS_CODE, CODE_INTELLIGENCE_SUCCESS_NON_CODE,
@@ -77,6 +77,8 @@ interface Harness {
   readonly published: InitializationStateView[];
   readonly publishedTo: string[];
   readonly banners: { headline: string; message: string; detail: string }[];
+  /** Each banner's action, index for index with `banners` (PD-WORKSPACE-005 revision 2, OQ-262). */
+  readonly bannerActions: ({ label: string; action: NoticeAction } | undefined)[];
   readonly writes: PlainMap[];
   readonly logs: { message: string; level: string }[];
   readonly root: string;
@@ -96,6 +98,7 @@ function harness(options: { applicable?: boolean; startRefusal?: { code: string;
   /** The root each entry of `published` was sent for, index for index. */
   const publishedTo: string[] = [];
   const banners: { headline: string; message: string; detail: string }[] = [];
+  const bannerActions: ({ label: string; action: NoticeAction } | undefined)[] = [];
   const writes: PlainMap[] = [];
   const logs: { message: string; level: string }[] = [];
   const addressed: { call: 'start' | 'cancel' | 'status'; workspaceId: string }[] = [];
@@ -126,12 +129,12 @@ function harness(options: { applicable?: boolean; startRefusal?: { code: string;
       status: async (workspaceId) => { addressed.push({ call: 'status', workspaceId }); await options.statusGate; await options.hold?.current; if (options.statusRejects) throw options.statusRejects; return options.statusAnswer ?? status({ applicable: options.applicable !== false }); },
     },
     publish: (publishedRoot, s) => { publishedTo.push(publishedRoot); published.push(s); },
-    banner: (headline, message, detail) => banners.push({ headline, message, detail }),
+    banner: (headline, message, detail, action) => { banners.push({ headline, message, detail }); bannerActions.push(action); },
     modelReachable: () => options.modelReachable !== false,
     quitting: () => options.quitting?.current === true,
   });
   coordinator.open(root, agents, 'ws-h');
-  return { coordinator, published, publishedTo, banners, writes, logs, root, agents, clock, addressed, push: (s) => coordinator.onSetupStatus(s) };
+  return { coordinator, published, publishedTo, banners, bannerActions, writes, logs, root, agents, clock, addressed, push: (s) => coordinator.onSetupStatus(s) };
 }
 
 /** REQ-WORKSPACE-088: the one registered task, its id and its label, and that it needs no consent. */
@@ -195,6 +198,42 @@ describe('a banner names its project (PD-WORKSPACE-005, OQ-171)', () => {
     expect(h.banners[0]!.headline).toBe(`Project setup did not finish: ${basename(h.root)}`);
     expect(h.banners[0]!.message).toBe(CODE_INTELLIGENCE_FAILED_SUMMARY);
     expect(h.banners[0]!.detail.startsWith(`Project folder: ${h.root}\n\n`)).toBe(true);
+  });
+});
+
+/**
+ * PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): both project-setup banners carry `open-project-init`
+ * naming the project's folder — "Try again" on a failed background run (the label REQ-WORKSPACE-103 fixes), "Open Project
+ * settings" on a failed resolution (REQ-WORKSPACE-102). Until then neither banner carried an action.
+ */
+describe('a project-setup banner carries the action that reaches its project (PD-WORKSPACE-005 revision 2, OQ-262)', () => {
+  it('gives the failed background run\'s banner "Try again", naming the project\'s folder (REQ-WORKSPACE-103)', async () => {
+    const h = harness();
+    const run = h.coordinator.resolve(h.root, true);
+    await new Promise((r) => setImmediate(r));
+    h.push(status({ state: 'finished', outcome: 'failed', containsCode: true, message: 'A step failed', steps: [RUN_HOST.exited('create', 2, 'boom'), RUN_HOST.notAttempted('index'), RUN_HOST.notAttempted('memory')] }));
+    await run;
+    await new Promise((r) => setImmediate(r));
+    expect(h.bannerActions).toEqual([{ label: 'Try again', action: { kind: 'open-project-init', workspace: h.root } }]);
+  });
+
+  it('gives the banner of a run that broke down entirely the same "Try again" (REQ-WORKSPACE-103)', async () => {
+    // A task that succeeded but whose marker request rejects outright breaks the run down as a whole (REQ-WORKSPACE-109).
+    const failing = Promise.reject(new Error('link closed'));
+    failing.catch(() => undefined);
+    const h = harness({ startStatus: status({ state: 'finished', outcome: 'completed', containsCode: false, steps: [step('create', 'succeeded', 'made')] }), writeHold: { current: failing } });
+    await h.coordinator.resolve(h.root, true);
+    await settle();
+    expect(h.banners.map((b) => b.message)).toEqual(['Rotaris could not finish setting this workspace up for code search. Runs are not blocked; you can try again.']);
+    expect(h.bannerActions).toEqual([{ label: 'Try again', action: { kind: 'open-project-init', workspace: h.root } }]);
+  });
+
+  it('gives the failed resolution\'s banner "Open Project settings", naming the project\'s folder (REQ-WORKSPACE-102)', async () => {
+    const failing = Promise.reject(new Error('link closed'));
+    failing.catch(() => undefined);
+    const h = harness({ applicable: false, writeHold: { current: failing } });
+    await h.coordinator.resolve(h.root, true);
+    expect(h.bannerActions).toEqual([{ label: 'Open Project settings', action: { kind: 'open-project-init', workspace: h.root } }]);
   });
 });
 

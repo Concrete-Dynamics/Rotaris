@@ -41,11 +41,12 @@ import { approvalAnswerer, approvalButtonLabel } from './capture/approval-answer
 import { authRecoveryCommands } from './commands/auth-recovery.js';
 import { checkpointsCommands } from './commands/checkpoints.js';
 import { configAnnouncer, configCommands } from './commands/config.js';
+import { ConfigFatalNotices } from './config-fatal-notice.js';
 import { dialogsCommands } from './commands/dialogs.js';
 import { gitCommands } from './commands/git.js';
 import { hooksCommands } from './commands/hooks.js';
 import { improvementsCommands } from './commands/improvements.js';
-import { initializationCommands } from './commands/initialization.js';
+import { initializationCommands, projectInitCommands } from './commands/initialization.js';
 import { libraryCommands } from './commands/library.js';
 import { mcpCommands } from './commands/mcp.js';
 import { providersCommands } from './commands/providers.js';
@@ -432,12 +433,23 @@ async function main(): Promise<void> {
         // with no person acting. The kick is for THIS workspace, whichever window is focused when the slot comes; the
         // claim's parse runs in the workspace service, and a `manual` one with nothing armed answers without it.
         void requirementsRuns.opened(key, opened.workspaceId).then((r) => { if (r.started.length + r.abandoned.length > 0) log(`requirements: the open of ${key} dispatched ${r.started.length} run(s), ${r.abandoned.length} abandoned`); }).catch((cause: unknown) => log(`requirements: the dispatch at the open of ${key} failed (${String(cause)})`));
-        void runHost.request({ kind: 'hooks.summary', workspaceId: opened.workspaceId }, millis(10_000)).then((r) => {
-          if (r.kind === 'hooks.summary' && r.summary.status === 'review') { raiseNoticeKeyed(`hooks.review:${r.summary.workspace}:${r.summary.fingerprint}`, 'warning', 'Workspace hooks need review', r.summary.notice, recoveryFor('hooks.review', r.summary.workspace)); return; }
-          // REQ-WORKSPACE-152 (3): once the window is interactive, never as a dialog; the only run-time consequence is REQ-WORKSPACE-137's refusal.
-          const authenticated = providers.list().filter((row) => row.authenticated).map((row) => row.id);
-          log(`providers: ${authenticated.length} authenticated${authenticated.length > 0 ? ` (${authenticated.join(', ')})` : ''}`);
-          if (authenticated.length === 0 && raiseNoticeKeyed('providers.none', 'info', NO_PROVIDER_HEADLINE, 'Runs cannot start until a model provider is authenticated. Add one from Settings → Models.', recoveryFor('providers.add'))) log(`notice: ${NO_PROVIDER_HEADLINE}`);
+        // OQ-279: "a workspace opens" is its configuration loading (REQ-CONFIG-478); a fatal load is said now, as a persistent
+        // error notice naming the file, its scope and the key, not first at the refusal of the first prompt. It is published
+        // after this slot's other notices, so it is the one standing in the single slot (REQ-NOTIFY-024): the first
+        // `notice-proof` 1b run found the no-provider notice, raised in the same slot, replacing it.
+        const configRead = svc.link.request({ kind: 'config.read', workspaceRoot: key }, millis(10_000))
+          .then((r) => (r.kind === 'config.snapshot' ? r.snapshot : null))
+          .catch((cause: unknown) => { log(`config: the read at the open of ${key} failed (${String(cause)})`); return null; });
+        const hooksSummary = runHost.request({ kind: 'hooks.summary', workspaceId: opened.workspaceId }, millis(10_000)).catch(() => null);
+        void Promise.all([configRead, hooksSummary]).then(([snapshot, r]) => {
+          if (r?.kind === 'hooks.summary' && r.summary.status === 'review') raiseNoticeKeyed(`hooks.review:${r.summary.workspace}:${r.summary.fingerprint}`, 'warning', 'Workspace hooks need review', r.summary.notice, recoveryFor('hooks.review', r.summary.workspace));
+          else if (r !== null) {
+            // REQ-WORKSPACE-152 (3): once the window is interactive, never as a dialog; the only run-time consequence is REQ-WORKSPACE-137's refusal.
+            const authenticated = providers.list().filter((row) => row.authenticated).map((row) => row.id);
+            log(`providers: ${authenticated.length} authenticated${authenticated.length > 0 ? ` (${authenticated.join(', ')})` : ''}`);
+            if (authenticated.length === 0 && raiseNoticeKeyed('providers.none', 'info', NO_PROVIDER_HEADLINE, 'Runs cannot start until a model provider is authenticated. Add one from Settings → Models.', recoveryFor('providers.add'))) log(`notice: ${NO_PROVIDER_HEADLINE}`);
+          }
+          if (snapshot !== null) void configFatal.observe(key, snapshot);
         }).catch(() => undefined);
       });
     }
@@ -561,6 +573,8 @@ async function main(): Promise<void> {
       ? (workspace === undefined || workspace === '' || workspace === '(no workspace)' ? [] : [{ label: 'Review hooks', action: { kind: 'open-hook-review', workspace } }])
       : action === 'hooks.settings' ? [{ label: 'Open hook settings', action: { kind: 'open-settings', category: 'hooks' } }]
         : action === 'config.models' ? [{ label: 'Open Models settings', action: { kind: 'open-settings', category: 'models' } }]
+          // OQ-279: the fatal configuration load's notice leads to the category whose card draws the report (ConfigSettings' Fatal).
+          : action === 'config.fatal' ? [{ label: 'Open Models settings', action: { kind: 'open-settings', category: 'models' } }]
           : action === 'providers.add' ? [{ label: 'Add a provider', action: { kind: 'open-provider-sign-in' } }]
             /**
              * OQ-42: the durable-store failure's recovery. Reopening the session is what waits for every affected
@@ -571,6 +585,17 @@ async function main(): Promise<void> {
              */
             : action === 'session.reopen' ? (sessionId === undefined || sessionId === '' ? [] : [{ label: 'Reopen the session', action: { kind: 'focus-session', sessionId } }])
               : [];
+  /**
+   * OQ-279 (ruled 2026-10-13 under R-072): a workspace whose configuration fails to load opens, and the report is raised as
+   * a persistent error notice at the open rather than first at the refusal of the first prompt; a later clean load of that
+   * workspace clears it (`config-fatal-notice.ts`).
+   */
+  const configFatal = new ConfigFatalNotices({
+    report: (input) => notices.report(input),
+    dismiss: (id) => notices.dismiss(id),
+    action: recoveryFor('config.fatal')[0],
+    log,
+  });
   /**
    * REQ-SHELL-155 / REQ-SESSION-062, OQ-46 (accepted 2026-09-06): the repair is ANNOUNCED, and the failure it
    * reports is plural. ADR-0002 accepts the run-host crash as a consequence, and it stales one session per
@@ -859,7 +884,7 @@ async function main(): Promise<void> {
     if (!svc) return;
     const r = await svc.link.request({ kind: 'config.bootstrap', workspaceRoot: root }, millis(30_000)).catch(() => null);
     // A credential reaches every workspace: the active one's reloaded snapshot to its window, each other window its own (`announceConfig`).
-    if (r?.kind === 'config.snapshot') void configAnnouncer(mainWindows, services)(root, r.snapshot);
+    if (r?.kind === 'config.snapshot') void configAnnouncer(mainWindows, services, configFatal)(root, r.snapshot);
     // ADR-0037 Tier B: the run host's next load folds the snapshot itself; nothing to hand over.
     if (notices.current()?.title === NO_PROVIDER_HEADLINE && providers.list().some((row) => row.authenticated)) void notices.dismiss(notices.current()?.id);
   };
@@ -1253,7 +1278,8 @@ async function main(): Promise<void> {
     publish: (root, state) => {
       for (const holder of mainWindows.holding(root)) holder.win.webContents.send(CHANNEL.initializationState, { v: CONTRACT_SCHEMA_VERSION, ...state });
     },
-    banner: (headline, message, detail) => { void notices.report({ severity: 'error', title: headline, message, ...(detail === '' ? {} : { detail }) }); },
+    // PD-WORKSPACE-005 revision 2 (OQ-262): the banner's `open-project-init` action travels with it.
+    banner: (headline, message, detail, action) => { void notices.report({ severity: 'error', title: headline, message, ...(detail === '' ? {} : { detail }), ...(action === undefined ? {} : { action }) }); },
     modelReachable: () => providers.list().some((row) => row.authenticated),
     quitting,
   });
@@ -1742,7 +1768,7 @@ async function main(): Promise<void> {
     mainWindows, windowFor, ownerOfAuxiliary, dialogs, dialogPayloads,
     pauseWindows, pausePayloads, presentPause, reviewPayloads, authRecovery, authRecoveryPayloads, runFailures,
     measurePersonaPaint, terminalWindowCommand, surface,
-    notices, raiseNotice, raiseNoticeKeyed, recoveryFor, announceRepairs, updater,
+    notices, raiseNotice, raiseNoticeKeyed, recoveryFor, configFatal, raiseTransient: (w, kind, title) => raiseTransient(w, kind, title), announceRepairs, updater,
     providers, healthCache, providerPayloads, providerChoices, providerRows, presentProvider, afterProviderChange,
     preferences, currentTheme: () => currentTheme, setTheme: (name) => (currentTheme = resolveTheme(name)), themeBackground, requirementsPreferenceKey,
     initialization, libraryRevision, requirementsRuns, improvementUndo, improvementRuns,
@@ -1768,6 +1794,7 @@ async function main(): Promise<void> {
     ...hooksCommands(commandContext),
     ...improvementsCommands(commandContext),
     ...initializationCommands(commandContext),
+    ...projectInitCommands(commandContext),
     ...libraryCommands(commandContext),
     ...mcpCommands(commandContext),
     ...providersCommands(commandContext),

@@ -320,6 +320,12 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('initialization.skip'), ids: z.array(z.string()) }),
   z.object({ kind: z.literal('initialization.cancel') }),
   /**
+   * PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): a project-setup banner's `open-project-init` action,
+   * activated in any window. Main surfaces the main window holding `workspace` (REQ-SHELL-161's terms) and tells it, on
+   * channel 15, to open Settings › Project; where no window holds it, the activating window says so and nothing else happens.
+   */
+  z.object({ kind: z.literal('projectInit.open'), workspace: z.string().min(1) }),
+  /**
    * ADR-0048's window registry, first executed (Part R; REQ-SHELL-072/073/076/078, REQ-MONITOR-072/073): open or raise the
    * persona window for an agent — reuse per persona, the instance's tab selected, a raise as a request (REQ-SHELL-161);
    * `focusSteer` when the inspector's Steer opened it (REQ-MONITOR-137). An unknown agent id is a silent no-op.
@@ -412,6 +418,8 @@ export interface RendererBridge {
   readonly onReauthPrompt: (fn: (p: unknown) => void) => () => void;
   /** Channel 14 (REQ-CHAT-167, REQ-CONFIG-403): a transcript display preference main has just stored, from whichever window wrote it. */
   readonly onDisplayChanged: (fn: (p: unknown) => void) => () => void;
+  /** Channel 15 (PD-WORKSPACE-005 revision 2, OQ-262): main asks THIS window, which holds the named workspace, to open Settings › Project. */
+  readonly onProjectInitOpen: (fn: (p: unknown) => void) => () => void;
 }
 export const BRIDGE_KEY = 'rotaris' as const;
 

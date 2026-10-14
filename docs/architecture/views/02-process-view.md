@@ -49,7 +49,7 @@ flowchart LR
   RPE --> P
   RT --> P
   P -- "CHANNEL.command<br/>CommandRequest / CommandOutcome" --> M
-  M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>acknowledgement:publish · library:changed<br/>requirements:changed · improvement:activity<br/>initialization:state · reauth:prompt<br/>theme:changed · config:changed<br/>display:changed" --> P
+  M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>acknowledgement:publish · library:changed<br/>requirements:changed · improvement:activity<br/>initialization:state · reauth:prompt<br/>theme:changed · config:changed<br/>display:changed · project-init:open" --> P
   M -- "RunHostRequest → ProcessReply<br/>ProcessEvent ←<br/>credentials.lease ask ← · credentials.leased →" --> RHst
   M -- "WorkspaceServiceRequest → ProcessReply<br/>ServiceAsk ← (forwarded to the run host)" --> WS
   RHst --> DB
@@ -163,7 +163,11 @@ of that family for the duration, ADR-0048; a persona window sending it is refuse
 unreviewed-hooks notice's `open-hook-review` hands its named workspace back, and main reaches it — `MainWindows.reach`
 surfaces the window holding it, else adds one for it on PD-SHELL-001's route with no gate and no close (OQ-267) — then
 parents the review to that window; the dialog's payload keeps the workspace id its decision is stored against; without
-`workspace`, the asking window's own),
+`workspace`, the asking window's own), **`projectInit.open {workspace}`** (2026-10-14, [`PD-WORKSPACE-005`](../../product/directives.md#pd-workspace-005)
+revision 2, OQ-262: a project-setup banner's `open-project-init`, activated in any window; main's `MainWindows.surfaceHolding`
+surfaces the main window holding that workspace on REQ-SHELL-161's terms and sends it channel 15, or, where none holds it,
+raises the info acknowledgement "Project <name> is not open in any window." in the asking window and does nothing else —
+no window is added, unlike the hook review's `reach`),
 `playbooks.catalogue`, `config.read/save/setField/liveState`, `providers.list/health/open/save/validate/signOut/
 delete/refresh`, `provider.payload/signIn`. Main relays a session or hook command to the run host, a workspace or
 config command to the workspace service, and answers preference, theme and **provider** commands itself (the
@@ -623,7 +627,9 @@ every live window; `display:changed` (channel 14, 2026-10-14) is `{preference, v
 preferences (`display/showReasoning`, `display/autoCollapseTools`, `display/groupTools`) just stored by `prefs.set`, to EVERY
 live window (`announceDisplayPreference`, `main/commands/shell.ts`), the writer included; each renderer folds it into its
 `displayPrefs` store (`displayPreferencePatch`), so a persona window already open redraws its rows under the new value
-(REQ-CHAT-167, REQ-CONFIG-403; until then only the writing window's store changed); `config:changed` repopulates every main window **and its family** — its persona windows and its terminal
+(REQ-CHAT-167, REQ-CONFIG-403; until then only the writing window's store changed); `project-init:open` (channel 15,
+2026-10-14, PD-WORKSPACE-005 revision 2) is `{workspace}`, to ONE main window, the one holding the workspace a
+project-setup banner names, which opens Settings › Project (`shell.openSettings('project')`); `config:changed` repopulates every main window **and its family** — its persona windows and its terminal
 window (`configFamily`) — from **its own** workspace's snapshot (`announceConfig`, `main/config-broadcast.ts`): the families
 of the windows holding the written workspace take the reloaded snapshot, every other family its own workspace's, read again
 from its service. *Corrected 2026-10-03 (fin10's repair round): every window was sent the written workspace's snapshot, so a

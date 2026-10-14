@@ -34,7 +34,7 @@ interface Harness {
   readonly reported: ReportInput[];
   readonly svcAsked: WorkspaceServiceRequest[];
   readonly hostAsked: RunHostRequest[];
-  readonly ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'withdrawnByClose'>;
+  readonly ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'configFatal' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'withdrawnByClose'>;
   /** REQ-NOTIFY-030/032: the sessions whose held failure `session.subscribe` released. */
   readonly focused: string[];
   /** PD-ORCH-005 clause 9: what `quitting()` answers. */
@@ -43,6 +43,8 @@ interface Harness {
   readonly starts: { readonly op: 'begin' | 'end'; readonly wcId: number; readonly sessionId: string; readonly hostAskedBefore: number }[];
   /** REQ-NOTIFY-058: the sessions `NoticeStore.clearForRunStart` was called for, in order. */
   readonly cleared: string[];
+  /** OQ-279: the workspaces whose clean load a run start reported to the fatal-load notice. */
+  readonly loaded: string[];
 }
 
 /** The workspace service's resolved view as an isolated start reads it (REQ-GIT-073); only the fields main reads are meaningful. */
@@ -63,8 +65,10 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
   const focused: string[] = [];
   const starts: Harness['starts'] = [];
   const cleared: string[] = [];
+  const loaded: string[] = [];
   const ctx = {
     capturing: false,
+    configFatal: { observe: async () => undefined, loaded: async (root: string) => { loaded.push(root); } },
     clocks: new FakeClock(),
     quitting: () => quit.now,
     dialogs: new Map(),
@@ -84,7 +88,7 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
     runHost: { request: async (req: RunHostRequest) => { hostAsked.push(req); return host(req); } },
     services: new Map([[canonicalPath(WORKSPACE), { link: { request: async (req: WorkspaceServiceRequest) => { svcAsked.push(req); return svc(req); } } }]]) as unknown as CommandContext['services'],
   };
-  return { logs, raised, reported, svcAsked, hostAsked, ctx, quit, focused, starts, cleared };
+  return { logs, raised, reported, svcAsked, hostAsked, ctx, quit, focused, starts, cleared, loaded };
 }
 
 const created = { kind: 'worktree.created', path: `${WORKSPACE}/.rotaris/worktrees/minted-1`, branch: 'rotaris/session/minted-1', baseBranch: 'main', baseRevision: 'abc' } as const;
@@ -140,6 +144,16 @@ describe('REQ-NOTIFY-061: a sandboxed launch that was refused', () => {
 
     const taken = harness(() => ({ kind: 'ack' }), () => ({ kind: 'ack' }));
     expect(await sessionCommands(taken.ctx)['session.retry']({ kind: 'session.retry', sessionId: 'S1' }, windowOn('ws-1'))).toEqual({ ok: true });
+  });
+
+  // OQ-279: a run starts only on a configuration that loaded, so a start reports the workspace's clean load; a refusal does not.
+  it('a run that starts clears the workspace\'s fatal-load notice, and a refused one leaves it (OQ-279)', async () => {
+    const started = harness(() => ({ kind: 'ack' }), (req) => (req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: 'ws-1', count: 0 } : { kind: 'session.started', sessionId: 'S1' }));
+    expect((await sessionCommands(started.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'))).ok).toBe(true);
+    expect(started.loaded).toEqual([canonicalPath(WORKSPACE)]);
+    const refusedStart = harness(() => ({ kind: 'ack' }), (req) => (req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: 'ws-1', count: 0 } : { kind: 'refused', code: 'session.configuration', headline: 'The run was refused before it started', detail: 'The configuration could not be loaded.' }));
+    await sessionCommands(refusedStart.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'));
+    expect(refusedStart.loaded).toEqual([]);
   });
 
   it('any other refusal keeps its own notice', async () => {

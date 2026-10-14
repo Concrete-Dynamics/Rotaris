@@ -60,6 +60,7 @@ sequenceDiagram
     WS->>WS: starter agents.yaml if absent or blank (REQ-CONFIG-025/028), never over a file
     WS-->>MW: workspaceId, storeFile
     MW->>RH: workspace.opened
+    Note over M: 800 ms later, the open's slot (REQ-WORKSPACE-141): initialization resolution, the board's queue,<br/>hooks.summary → the hook-review or no-provider notice, and config.read → under a fatal load<br/>"The workspace configuration did not load", raised last so it stands (OQ-279)
     opt no folder was resolved
       MW->>MW: deferProjectOffer(wcId, 650 ms)
       Note over MW: abandoned unshown if the question<br/>was answered first

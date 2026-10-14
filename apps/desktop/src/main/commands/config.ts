@@ -13,18 +13,24 @@ import { refusal, type CommandAt, type CommandContext, type CommandHandlers } fr
 export function configAnnouncer(
   mainWindows: { ordered(): readonly (ConfigFamilyView<BrowserWindow> & { readonly workspace: string })[] },
   services: CommandContext['services'],
+  configFatal?: CommandContext['configFatal'],
 ): (root: string, snapshot: ConfigSnapshot) => Promise<void> {
+  // OQ-279: every load this announcement makes or carries is a load of that workspace — a clean one clears its fatal-load
+  // notice, a fatal one raises it (once per load generation).
+  const observe = (root: string, snapshot: ConfigSnapshot): void => { if (configFatal) void configFatal.observe(root, snapshot); };
   const readOwn = async (workspace: string): Promise<ConfigSnapshot | null> => {
     const own = canonicalPath(workspace);
     const svc = services.get(own);
     if (!svc) return null;
     const r = await svc.link.request({ kind: 'config.read', workspaceRoot: own }, millis(10_000));
-    return r.kind === 'config.snapshot' ? r.snapshot : null;
+    if (r.kind !== 'config.snapshot') return null;
+    observe(own, r.snapshot);
+    return r.snapshot;
   };
-  return (root, snapshot) => announceConfig(root, snapshot, mainWindows.ordered().map((m) => ({
+  return (root, snapshot) => { observe(canonicalPath(root), snapshot); return announceConfig(root, snapshot, mainWindows.ordered().map((m) => ({
     workspace: m.workspace,
     send: (s) => { for (const win of configFamily(m)) if (!win.isDestroyed()) win.webContents.send(CHANNEL.configChanged, { v: CONTRACT_SCHEMA_VERSION, snapshot: s }); },
-  })), { samePath, readOwn });
+  })), { samePath, readOwn }); };
 }
 
 /**
@@ -33,10 +39,10 @@ export function configAnnouncer(
  * never parses YAML of its own.
  */
 export function configCommands(
-  ctx: Pick<CommandContext, 'log' | 'mainWindows' | 'raiseNotice' | 'runHost' | 'services'>,
+  ctx: Pick<CommandContext, 'configFatal' | 'log' | 'mainWindows' | 'raiseNotice' | 'runHost' | 'services'>,
 ): Pick<CommandHandlers, 'config.read' | 'repository.read' | 'config.save' | 'config.setField' | 'config.liveState'> {
-  const { log, mainWindows, raiseNotice, runHost, services } = ctx;
-  const announce = configAnnouncer(mainWindows, services);
+  const { configFatal, log, mainWindows, raiseNotice, runHost, services } = ctx;
+  const announce = configAnnouncer(mainWindows, services, configFatal);
   const onConfigSave = async (req: Extract<CommandRequest, { kind: 'config.save' | 'config.setField' }>, { w }: CommandAt): Promise<CommandOutcome> => {
     // ADR-0037 Tier A: the service writes and loads again; every window repopulates from the reloaded snapshot (decision 4 of the plan for REQ-CONFIG-423)
     // — its own workspace's: the holders of this one take it, every other window its own read again (`announceConfig`).

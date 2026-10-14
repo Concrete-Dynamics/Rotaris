@@ -2620,7 +2620,10 @@ are not recorded, and cannot be recovered afterwards.
 > the file, the global scope and `hooks.entries.0.timeout_seconds`. No hook runs, and no "Could not resolve this run's hooks"
 > line is written. So in the built app, an invalid entry does not lead to REQ-HOOKS-085's `info` line. The line needs a hook set
 > that fails to assemble after the configuration has loaded, and no free seam produces that. Its run-host unit cases remain its
-> evidence. Neither section reads the hook engine's own `log` sink lines (REQ-HOOKS-128) in the application log.
+> evidence. Neither section reads the hook engine's own `log` sink lines (REQ-HOOKS-128) in the application log. *Added
+> 2026-10-14 ([OQ-279](../architecture/open-questions.md#oq-279), ruled 2026-10-13 under [R-072](requests.md#r-072)):* the
+> same fatal load is now raised as a persistent error notice when the workspace opens, before any prompt (section 1b reads
+> it on screen, section 1c in the workspace scope), and cleared by a later clean load.
 
 > **2026-09-28, under [R-062](requests.md#r-062):** the quit's race over each `shutdown` is unchanged, and main now also
 > waits, bounded, for the run host's EXIT before it is gone (`endBeforeMain`, `main/exit.ts`; ADR-0014's "Main is gone
@@ -5609,6 +5612,10 @@ and a reader comparing it with REQ-STARTUP-160's words finds two moments missing
 
 ### PD-WORKSPACE-005 — a project-setup banner names the project it is about
 
+*Revision 2 (2026-10-13, [R-072](requests.md#r-072), ruling [OQ-262](../architecture/open-questions.md#oq-262)) — **the
+banners' action**, below: a clause added, the revision-1 sentence it falsifies and the "every other surface" clause it
+amends quoted beside it.*
+
 **The banner.** The two initialization banners — a failed background run's "Project setup did not finish"
 (REQ-WORKSPACE-103) and a failed resolution's "Project setup could not be checked" (REQ-WORKSPACE-102) — SHALL stay
 application notices, raised once and shown in every open main window as every other notice is, and SHALL name the project
@@ -5621,8 +5628,21 @@ up. Runs are not blocked; you can check again." The banner's detail area (REQ-NO
 `Project folder: <the folder's full path>`, followed by a blank line and the technical text the requirement's surface
 already carried, so two projects whose folders share a name are told apart there.
 
+**The banners' action — revision 2.** Both banners SHALL carry REQ-NOTIFY-044's `open-project-init` action naming the
+project's folder. The failed background run's banner labels it **"Try again"**, the label REQ-WORKSPACE-103 fixes; the failed
+resolution's banner labels it **"Open Project settings"** (REQ-WORKSPACE-102). From any window, activating either one SHALL
+surface the main window holding that workspace on REQ-SHELL-161's terms and open Settings › Project there, where
+REQ-WORKSPACE-103 puts the recorded outcome and its retry. When no window holds the workspace, the activating window SHALL
+show the info notice **"Project <name> is not open in any window."**, `<name>` the project's name as above, and nothing else
+happens: no window is added, replaced or asked about.
+
+> **Revision 1 said, and no longer governs:** "the retry itself is made in that project's Settings › Project, since the
+> banner's own 'Try again' action has no target in this build" (in "Why, and what it costs" below), and "**What is
+> unchanged.** … its severity and every other surface of the two requirements", which this clause amends: the action is now
+> one of the banner's surfaces this directive states.
+
 **What is unchanged.** Which window shows the banner (every one, ADR-0049's one notice store), when it is raised, its
-severity and every other surface of the two requirements. The in-window error surface of a failed resolution — the Project
+severity and every other surface of the two requirements but the action above. The in-window error surface of a failed resolution — the Project
 section's "Project setup could not be checked" and its "Check again" (REQ-WORKSPACE-102) — is the window's own and reads
 the requirement's headline as it stands. A banner for a workspace no window holds any more is still not raised (OQ-141).
 
@@ -5631,12 +5651,40 @@ finish" in the other project's window too, carrying a summary that says "this pr
 could not tell which project to try again. Showing the banner only in the windows holding the project would make the
 application's single notice store work per window, which is a larger change than the confusion is worth; naming the
 project is a text change that removes it. The name says which project; the retry itself is made in that project's Settings ›
-Project, since the banner's own "Try again" action has no target in this build (ADR-0049, "Not built, said so"). What it costs: the title is no longer the requirement's fixed string, so a
+Project, ~~since the banner's own "Try again" action has no target in this build (ADR-0049, "Not built, said so")~~ which
+the banner's action opens since revision 2 (OQ-262: REQ-WORKSPACE-103's "Try again" had no target, and the surface that
+holds the retry is the project's own Settings › Project). What it costs: the title is no longer the requirement's fixed string, so a
 reader or a test matching the headline whole must match its start; and a long folder name lengthens the title.
 
 > **Narrows:** REQ-WORKSPACE-102, REQ-WORKSPACE-103
 
 *Raised by the owner, 2026-10-06, ruling OQ-171 as recommended; logged as [R-071](requests.md#r-071). Minted on its branch as PD-WORKSPACE-003 and renumbered PD-WORKSPACE-005 before the merge, `origin/main` having taken PD-WORKSPACE-003 and PD-WORKSPACE-004 meanwhile.*
+
+**Why revision 2, and what it costs.** REQ-WORKSPACE-103 gives the banner a "Try again" action and REQ-NOTIFY-044 has the
+member that names a workspace's initialization surface, yet the banner carried none: a user who read it had to find the
+project's window and its Settings › Project themselves. Opening the surface rather than re-running the setup from the
+banner keeps REQ-NOTIFY-047 (an action writes nothing into the project) and shows the recorded outcome before the retry.
+What it costs: "Try again" opens a surface rather than retrying in one press; the resolution banner's label departs from
+REQ-WORKSPACE-102's in-window "Check again", which stays the window's own; and a banner for a project whose window was
+closed answers with a notice and opens nothing.
+
+*Revised by [R-072](requests.md#r-072), 2026-10-13, ruling [OQ-262](../architecture/open-questions.md#oq-262) (revision 2).*
+
+> **First execution of revision 2, 2026-10-14 (fin43, `fin43-notices-and-config`).** Built the day after it was ruled:
+> `InitializationCoordinator.banner` passes `{ label, action: { kind: 'open-project-init', workspace } }` from all three sites;
+> main forwards it to the notice store; the renderer's arm sends `projectInit.open`; main's handler
+> (`projectInitCommands`, `apps/desktop/src/main/commands/initialization.ts`) surfaces the holder through
+> `MainWindows.surfaceHolding` and sends it channel 15 (`project-init:open`), whose listener opens Settings › Project, or
+> raises the info acknowledgement in the asking window. **What was measured.** `initialization.test.ts`'s three cases (the
+> two background sites and the resolution site), `main-windows.test.ts`'s `surfaceHolding` case, the handler's two cases in
+> `commands/initialization.test.ts` and `recovery-wiring.test.ts`'s two source cases, each red on the code before;
+> `init-proof` scenario 4 requires the banner's logged action; `notice-proof` section 6c, two main windows, presses "Try
+> again" in the window that does not hold the project: the holder came to the front showing Settings › Project with
+> "Retry initialization", an unsaved Instructions edit in it still pending; a banner naming a folder no window holds gave
+> "Project closed-project is not open in any window." and no window was added. **Found:** a main window added after a
+> notice was published does not show it
+> ([`a-main-window-added-after-a-notice-was-published-does-not-show-it.md`](../defects/a-main-window-added-after-a-notice-was-published-does-not-show-it.md)),
+> not repaired. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 > **First execution, 2026-10-06.** Built the day it was written: `InitializationCoordinator.banner`, `namedBanner` and
 > `projectNameOf` in `apps/desktop/src/main/initialization.ts`. **What was measured.** Three cases in

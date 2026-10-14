@@ -91,3 +91,28 @@ describe('config.setField — a main window\'s persona and terminal windows repo
     for (const name of ['B', 'B/orchestrator']) expect(sent.get(name)).toEqual([snap(canonicalPath(B), false)]);
   });
 });
+
+/**
+ * OQ-279 (ruled 2026-10-13 under R-072): every load an announcement makes or carries is a load of that workspace, so the
+ * fatal-load notice hears each one — the written workspace's reloaded snapshot and each other workspace's own, read again.
+ * A clean one clears that workspace's notice; a fatal one raises it.
+ */
+describe('config.setField — each announced load reaches the fatal-load notice (OQ-279)', () => {
+  it('observes the written workspace\'s reloaded snapshot and every other workspace\'s own', async () => {
+    const A = '/work/alpha';
+    const B = '/work/beta';
+    const snap = (root: string, loadOk: boolean) => ({ workspaceRoot: root, loadOk, fatal: loadOk ? null : `${root}/.rotaris/agents.yaml at runtime.max_depth (workspace scope): must be an integer`, runtime: {} });
+    const service = (root: string, loadOk: boolean) => ({ link: { request: async () => ({ kind: 'config.snapshot', snapshot: snap(root, loadOk) }) } });
+    const services = new Map([[canonicalPath(A), service(canonicalPath(A), true)], [canonicalPath(B), service(canonicalPath(B), false)]]) as unknown as CommandContext['services'];
+    const win = (workspace: string) => ({ workspace, win: { isDestroyed: () => false, webContents: { send: () => undefined } }, personaWindows: { list: () => [], entry: () => undefined }, terminalWindows: { current: () => null } });
+    const mainWindows = { ordered: () => [win(A), win(B)] } as unknown as CommandContext['mainWindows'];
+    const runHost = { request: async () => ({ kind: 'ack' }) } as unknown as CommandContext['runHost'];
+    const observed: { root: string; loadOk: boolean }[] = [];
+    const configFatal = { observe: async (root: string, s: { loadOk: boolean }) => { observed.push({ root, loadOk: s.loadOk }); }, loaded: async () => undefined };
+    const facet = configCommands({ configFatal, log: () => undefined, mainWindows, raiseNotice: () => undefined, runHost, services });
+    const at: CommandAt = { w: { workspaceId: 'ws-a', workspace: A, followedSessionId: null } as MainWindowState, senderId: 1, awaitWorkspace: async () => undefined };
+    expect((await facet['config.setField']({ kind: 'config.setField', patch: { runtime: { max_depth: 3 } } }, at)).ok).toBe(true);
+    await vi.waitFor(() => { expect(observed).toHaveLength(2); });
+    expect(observed).toEqual([{ root: canonicalPath(A), loadOk: true }, { root: canonicalPath(B), loadOk: false }]);
+  });
+});

@@ -2,6 +2,7 @@ import type { BrowserWindow, UtilityProcess } from 'electron';
 import type { Clocks } from '@rotaris/kernel';
 import type {
   ApprovalPayload,
+  AcknowledgementKind,
   AuthRecoveryPayload,
   CommandOutcome,
   CommandRequest,
@@ -34,6 +35,7 @@ import type { AuthFallback } from '../auth-fallback.js';
 import type { AuthRecovery } from '../auth-recovery.js';
 import type { RunFailurePublisher } from '../run-failure-notice.js';
 import type { InitializationCoordinator } from '../initialization.js';
+import type { ConfigFatalNotices } from '../config-fatal-notice.js';
 import type { createRequirementsRuns } from '../requirements-runs.js';
 import type { Updater } from '../updater/updater.js';
 
@@ -120,6 +122,13 @@ export interface CommandContext {
   readonly raiseNotice: (severity: NoticeSeverity, headline: string, detail?: string, recovery?: Recovery, sessionId?: string) => void;
   readonly raiseNoticeKeyed: (key: string, severity: NoticeSeverity, headline: string, detail?: string, recovery?: Recovery, sessionId?: string) => boolean;
   readonly recoveryFor: (action: string | undefined, workspace?: string, sessionId?: string) => Recovery;
+  /**
+   * OQ-279 (ruled 2026-10-13 under R-072): a workspace's fatal configuration load, raised as a persistent notice when it opens
+   * and cleared once a later load of it succeeds — a clean snapshot announced, or a run that starts (`config-fatal-notice.ts`).
+   */
+  readonly configFatal?: Pick<ConfigFatalNotices, 'observe' | 'loaded'> | undefined;
+  /** Channel 8: a transient acknowledgement in ONE main window's stack (REQ-NOTIFY-013) — the window a command came from, for one. */
+  readonly raiseTransient: (w: MainWindowState, kind: AcknowledgementKind, title: string) => void;
   /** PD-ORCH-005 clause 9: the application is quitting — the process exiting, or no main window staying (`exit.ts`). */
   readonly quitting: () => boolean;
   /**

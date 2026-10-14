@@ -238,7 +238,11 @@ if (!/Project setup did not finish/.test(log4)) throw new Error(`the background 
 const bannerLine = log4.split('\n').findIndex((line) => line.includes('"Project setup did not finish'));
 if (bannerLine < 0 || !log4.split('\n')[bannerLine].includes('"Project setup did not finish: atlas-billing"')) throw new Error(`the background banner did not name its project (PD-WORKSPACE-005):\n${log4}`);
 if (!log4.includes(`Project folder: ${s4.workspace}`)) throw new Error(`the background banner's detail did not open on the project's folder (PD-WORKSPACE-005):\n${log4}`);
-results.failure = { workspaceFile: ws4, banner: log4.split('\n')[bannerLine] };
+// PD-WORKSPACE-005 revision 2 (OQ-262): the banner carries `open-project-init` naming the project's folder, labelled "Try again"
+// (REQ-WORKSPACE-103); `notice-proof` section 6c presses it from a window that does not hold the project.
+const offers = log4.split('\n').find((line) => line.includes('initialization: banner "Project setup did not finish: atlas-billing" offers'));
+if (offers === undefined || !offers.includes(`offers "Try again" (open-project-init ${s4.workspace})`)) throw new Error(`the background banner does not carry "Try again" naming its folder (PD-WORKSPACE-005 revision 2): ${offers ?? 'no line'}`);
+results.failure = { workspaceFile: ws4, banner: log4.split('\n')[bannerLine], action: offers.slice(offers.indexOf('offers')) };
 
 /* --------------------------------------------------------------------------------------------- *
  * 5. REQ-WORKSPACE-101/114 — Settings › Project states the card in exactly one of six states, with

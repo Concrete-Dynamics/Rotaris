@@ -1878,6 +1878,17 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
 
 ## 8. Configuration's three tiers (ADR-0037) as they touch the run
 
+- **A fatal load, said when the workspace opens (OQ-279, ruled 2026-10-13 under R-072; 2026-10-14).** "A workspace opens"
+  means its configuration loads (REQ-CONFIG-478). Under a fatal load in either scope the window, the history, the repository
+  view and Settings stay available and every run and isolated start is refused with the report (REQ-EVENTS-021,
+  REQ-GIT-071), as before; what is new is that main reads the opened workspace's snapshot in the open's post-ack slot and,
+  where `loadOk` is false, raises "The workspace configuration did not load" — `error`, persistent, the detail the snapshot's
+  `fatal` (file, scope, key path), the action "Open Models settings" (the category whose card draws the report) — after the
+  slot's other notices, so it stands. `ConfigFatalNotices` (`main/config-fatal-notice.ts`) keys it by the workspace, its load
+  generation and the report; a clean load of that workspace — a snapshot `configAnnouncer` carries, or a run that starts —
+  clears it compare-and-clear and advances the generation, so a fault that recurs is raised again. The run's own per-run
+  reload is unchanged: correcting the file and starting a run is the recovery, with no relaunch (`notice-proof` 1c).
+
 - **What no tier reaches — the update check (REQ-STARTUP-111, the updater of 2026-09-28).** Whether, when and
   where a supported standalone build checks for an update is decided by no configuration value in any tier, no
   preference, no environment variable and no control: the endpoint is a constant of `main/updater/feed.ts`, the

@@ -23,9 +23,9 @@ export function confinementRefusalNotice(r: { readonly headline: string; readonl
  * a refusal into a notice where the surface has nowhere to show one.
  */
 export function sessionCommands(
-  ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'withdrawnByClose'>,
+  ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'configFatal' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'withdrawnByClose'>,
 ): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.chooseNextModel' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.retry' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.release' | 'session.reconcile' | 'session.pageOlder'> {
-  const { capturing, clocks, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runFailures, runHost, services, withdrawnByClose } = ctx;
+  const { capturing, clocks, configFatal, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runFailures, runHost, services, withdrawnByClose } = ctx;
   /** PD-GIT-001: the runs a launch in the workspace would share a tree with, or null when the run host's count cannot be read. */
   const sharingRunCount = async (workspaceId: string): Promise<number | null> => {
     const active = await runHost.request({ kind: 'runs.active', workspaceId, scope: 'sharing' }, millis(5_000)).catch(() => null);
@@ -180,6 +180,9 @@ export function sessionCommands(
       // REQ-NOTIFY-058 / REQ-NOTIFY-029: a starting run clears the standing notice only where it is unscoped or
       // scoped to this same session; a notice about another session survives, whatever order the events arrived in.
       await notices.clearForRunStart(r.sessionId);
+      // OQ-279: a run starts only on a configuration that loaded (REQ-EVENTS-021), so this workspace's fatal-load notice, if
+      // one stands, is cleared and a later fault raises it again (REQ-CONFIG-478's recovery: correct the file, start a run).
+      if (configFatal) await configFatal.loaded(root);
       // PD-GIT-001: a placement main forced is said, after the run start's clear and scoped to the new session, so a launch the
       // dialog showed on the base tree never lands in a worktree unannounced.
       if (forcedSessionId !== undefined && binding) raiseNotice('info', ISOLATION_REQUIRED_HINT, `This session runs on branch ${binding.branch}.`, undefined, r.sessionId);

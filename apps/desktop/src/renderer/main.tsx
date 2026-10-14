@@ -1039,14 +1039,21 @@ function dispatchNoticeAction(action: NoticeAction): void {
         if (!r.ok) void bridge.command({ kind: 'notice.report', severity: 'warning', title: 'Nothing was retried', message: r.reason, persistent: true });
       })();
       return;
-    case 'open-cloud-account':
     case 'open-project-init':
+      // PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): both project-setup banners carry this action,
+      // naming their project's folder. Notices are application-wide, so this window may hold another workspace: main
+      // surfaces the window holding the named one and opens Settings › Project there (channel 15), or, where no window
+      // holds it, says so in THIS window and does nothing else. Until 2026-10-14 this arm dispatched nothing, and no notice
+      // raised the action.
+      void bridge.command({ kind: 'projectInit.open', workspace: action.workspace }).then((outcome) => {
+        if (!outcome.ok) console.warn(`notice action "open-project-init" for ${action.workspace} was refused: ${outcome.headline}`);
+      });
+      return;
+    case 'open-cloud-account':
     case 'save-settings':
-      // Members REQ-NOTIFY-044 fixes that this arm does not dispatch; the attempt is recorded. `open-cloud-account` and
-      // `save-settings` have no target in this build (no hosted cloud, no proposal store). `open-project-init` has one,
-      // Settings › Project (ADR-0064, `ProjectSettings.tsx`), but nothing in the build raises it, and which notice offers
-      // it and what it opens for another window's workspace is OQ-262. (Until 2026-10-13 this said there was no
-      // project-initialization surface; `retry-run` was among them until 2026-10-02, its target `retryRun` above.)
+      // Members REQ-NOTIFY-044 fixes that this arm does not dispatch; the attempt is recorded. Neither has a target in this
+      // build (no hosted cloud, no proposal store). (`open-project-init` was among them until 2026-10-14, OQ-262;
+      // `retry-run` until 2026-10-02, its target `retryRun` above.)
       console.warn(`notice action "${action.kind}" has no target in this build`);
       return;
   }
@@ -1085,6 +1092,15 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
   const onWorkspaceLayout = useCallback((l: PaneLayout) => { setWorkspaceLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/workspace', value: l }); }, []);
   // Part X: the saved prompts, above every view (REQ-LIBRARY-105), and the stash dialog they open (REQ-LIBRARY-141).
   const prompts = usePrompts(workspace);
+  /*
+   * Channel 15 — PD-WORKSPACE-005 revision 2 (OQ-262): main surfaced THIS window because it holds the workspace a project-setup
+   * banner named, and this window opens Settings › Project, where REQ-WORKSPACE-103 puts the recorded outcome and its retry.
+   * A Settings-to-Settings move is free (REQ-CONFIG-287), so an unsaved edit in another category stays pending.
+   */
+  useEffect(() => bridge.onProjectInitOpen((p) => {
+    console.info(`project-setup action: opening Settings › Project for ${(p as { workspace?: string }).workspace ?? 'this workspace'}`);
+    useShellState.getState().openSettings('project');
+  }), []);
   const [stashOpen, setStashOpen] = useState(false);
   const git = useGitState(workspace);
   /**

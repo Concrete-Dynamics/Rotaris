@@ -23,6 +23,8 @@ specification moves (the key is persisted in users' preference files, so renamin
 
 - `packages/platform/src/preferences.ts` — the registry entry `display/groupTools` (default true, owner REQ-CHAT-067).
 - `packages/contracts/src/commands.ts` — `PREFERENCE_COMMAND_KEYS` accepts `display/groupTools`, not `display/groupToolCalls`.
-- `apps/desktop/src/renderer/shell.ts` — `readDisplayPrefs` and `DisplayPrefKey` read and write `display/groupTools`.
+- `apps/desktop/src/renderer/display-prefs.ts` — the window's display store, its boot read and `DisplayPrefKey`, which read and
+  write `display/groupTools` (moved there from `apps/desktop/src/renderer/shell.ts` on 2026-10-14 by fin44, `fin44-optional-findings`;
+  `shell.ts` re-exports `readDisplayPrefs`, `writeDisplayPref` and `DisplayPrefKey`).
 - `docs/spec/15-settings-configuration.md` — REQ-CONFIG-405's key list.
 - `docs/spec/12-desktop-shell-windows.md` — REQ-SHELL-006's key table.

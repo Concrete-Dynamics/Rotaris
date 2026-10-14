@@ -3285,6 +3285,12 @@ it can:
 font clause is narrowed to the faces the build carries; and whether machine setup belongs in the first release —
 without it REQ-STARTUP-058's first list is unmet, which is a larger question than the notices file.
 
+*Added 2026-10-14 ([OQ-261](#oq-261), ruled 2026-10-13 under [R-072](../product/requests.md#r-072)):* the About page's setup
+statement now names only the moment this build carries, a tool's first use ([`PD-STARTUP-006`](../product/directives.md#pd-startup-006)).
+Whichever change builds machine setup (REQ-STARTUP-060 onward) or REQ-STARTUP-064's cache warm-up restores the matching
+moment — first-launch machine setup, cache warm-up, the pinned tool-archive hosts — in that disclosure, together with the
+notices file's machine-tools sentence, in the same commit.
+
 **OQ-74 — May the reviewed-exceptions table supply a licence identifier a dependency does not declare?** *(REQ-STARTUP-143. Raised 2026-09-27 by the notices generator's first run against the bundled runtime; raised as OQ-68 and renumbered OQ-74 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71.)*
 
 **Deferred 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)).**
@@ -13468,7 +13474,7 @@ rather than at machine setup or cache warm-up?** *(REQ-STARTUP-160 with REQ-STAR
 REQ-STARTUP-084; `PD-STARTUP-005`; OQ-73, deferred, which records that machine setup is not built. Raised
 2026-10-13 by fin41, building the disclosure the note
 [`the-about-page-carries-no-network-activity-disclosure`](../defects/fixed/the-about-page-carries-no-network-activity-disclosure.md)
-records. Open.)*
+records. Ruled 2026-10-13 under R-072, below.)*
 
 REQ-STARTUP-160 has About & Legal state "that first-launch machine setup and cache warm-up may contact the pinned
 tool-archive hosts and the package registries the configured package runners use, and only for work the machine does not
@@ -13494,6 +13500,19 @@ a build that ships machine setup makes true without a change.
 **What a ruling decides.** Whether "the first time a tool is needed" may stand beside the requirement's two moments
 (extending REQ-STARTUP-160), whether a build that does not carry machine setup or warm-up must leave those two moments out
 of its disclosure, or whether both stand as built.
+
+**Ruled 2026-10-13 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)), both advocates'
+recommendations weighed:** REQ-STARTUP-160's setup statement names the moment at which this build reaches the network — the
+first time a tool is needed, when a tool server's package or a language's server is downloaded from the package registry
+that serves it, only when this machine does not already have it. It names first-launch machine setup, cache warm-up and the
+tool-archive hosts only in a build that carries machine setup (REQ-STARTUP-060 onward) or the warm-up of REQ-STARTUP-064,
+and whichever change builds either one restores the matching words. Recorded as
+[`PD-STARTUP-006`](../product/directives.md#pd-startup-006), which narrows REQ-STARTUP-160's first content statement only;
+the update-check and exposure statements, the surface, the offline readability and the no-host clause are unchanged. **Built
+2026-10-14 (fin43, `fin43-notices-and-config`):** `NETWORK_DISCLOSURE.setup` (`packages/ui/src/settings/About.tsx`) reads
+"The first time a tool is needed, such as a tool server or a language's code intelligence, it may be downloaded from the
+package registry that serves it, and only when this machine does not already have it."; the first execution is reported
+under the directive. OQ-73 carries the restoring rule beside its own deferral.
 
 <a id="oq-271"></a>
 

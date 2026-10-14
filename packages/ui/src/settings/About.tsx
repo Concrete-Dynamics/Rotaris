@@ -38,14 +38,20 @@ export const LEGAL_DOCUMENTS: readonly { readonly name: string; readonly path: s
 /**
  * REQ-STARTUP-160: the application's own statement of what it puts on the network, the three things the requirement has it
  * say, in the implementation's words. Static text in the bundle, so it reads with every outbound request blocked; it names
- * no host, endpoint or request the startup document does not require. The setup clause names a third moment beside
- * machine setup and cache warm-up, a tool's first use, because that is when this build makes such a request (OQ-261).
+ * no host, endpoint or request the startup document does not require. The setup statement follows PD-STARTUP-006 (OQ-261,
+ * ruled 2026-10-13 under R-072): it names the moments this build carries — a tool's first use — and names first-launch
+ * machine setup, cache warm-up and the tool-archive hosts only in a build that carries REQ-STARTUP-060 onward or
+ * REQ-STARTUP-064's warm-up; the change that builds either restores the matching words. Until 2026-10-14 it named all three
+ * moments and the archive hosts, which this build never contacts.
  */
 export const NETWORK_DISCLOSURE = {
-  /** REQ-STARTUP-058, REQ-STARTUP-064, REQ-STARTUP-084. */
-  setup: 'Setting up this machine\'s tools, on first launch, while warming caches, or the first time a tool is needed, may contact '
-    + 'the pinned hosts that serve tool archives and the package registries the configured package runners use, and only for '
-    + 'work this machine has not already done.',
+  /**
+   * PD-STARTUP-006 over REQ-STARTUP-160's first statement: a tool server's pinned package fetched by its package runner when
+   * that server first starts (PD-STARTUP-005), and a language's server provisioned by the bundled code-intelligence runtime
+   * at that language's first use (REQ-STARTUP-159, REQ-STARTUP-058's second list). No host is named.
+   */
+  setup: 'The first time a tool is needed, such as a tool server or a language\'s code intelligence, it may be downloaded from '
+    + 'the package registry that serves it, and only when this machine does not already have it.',
   /** REQ-STARTUP-105, REQ-STARTUP-111, REQ-STARTUP-114. */
   updates: 'A supported standalone build asks the product\'s release endpoint whether a newer release exists, once each time one '
     + 'of its windows is activated. This check cannot be turned off.',

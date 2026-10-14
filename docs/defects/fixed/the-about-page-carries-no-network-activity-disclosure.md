@@ -47,6 +47,14 @@ when this build makes such a request: machine setup and cache warm-up are not bu
 package and the code-intelligence runtime's language servers are fetched at first use. Raised as
 [OQ-261](../../architecture/open-questions.md#oq-261) with that reading; the wording follows its ruling.
 
+*Reported in place 2026-10-14 (fin43, `fin43-notices-and-config`):* OQ-261 was ruled 2026-10-13 under
+[R-072](../../product/requests.md#r-072) as [`PD-STARTUP-006`](../../product/directives.md#pd-startup-006), and the setup
+wording now follows it: "The first time a tool is needed, such as a tool server or a language's code intelligence, it may be
+downloaded from the package registry that serves it, and only when this machine does not already have it." It no longer
+names first launch, cache warm-up or the tool-archive hosts, which this build does not carry, and so no longer disagrees with
+the notices file opened from the same page. `About.test.ts`'s setup case (red on the old wording) and `pnpm settings-proof`'s
+launches 1 and 1″ pin it (three statements, no host, 611 characters selected at 1000×680, load 0.9).
+
 **Pinned by** `packages/ui/src/settings/About.test.ts` ("the network-activity disclosure on About & Legal"), whose section
 cases are red on the surface without the section, and by `pnpm settings-proof`'s launch 1″: the built app at REQ-SHELL-022's
 1000×680 content size, where a real pointer selection dragged across the section after it is scrolled into view reads the

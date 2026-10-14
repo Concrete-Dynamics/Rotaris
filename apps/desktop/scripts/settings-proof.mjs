@@ -285,12 +285,15 @@ const disclosure = disclosureOf(noWorkspace.probes);
 const heading = text(noWorkspace.probes, '#about-network-heading')[0] ?? '';
 if (heading !== 'Network activity') throw new Error(`the disclosure's heading read "${heading}", not "Network activity"`);
 if (disclosure.length !== 3) throw new Error(`the About page carried ${disclosure.length} disclosure statements, not REQ-STARTUP-160's three: ${JSON.stringify(disclosure)}`);
+// PD-STARTUP-006 (OQ-261): the setup statement names the moment this build carries, a tool's first use, and not first-launch
+// machine setup, cache warm-up or the tool-archive hosts, which it does not carry; a build that carries either restores them.
 const owed = [
-  ['first launch', 'warming caches', 'may contact', 'tool archives', 'package registries', 'only for work this machine has not already done'],
+  ['first time a tool is needed', 'may', 'package registr', 'does not already have it'],
   ['supported standalone build', 'release endpoint', 'each time one of its windows is activated', 'cannot be turned off'],
   ['IP address', 'never carry', 'project files', 'prompt text', 'provider credentials'],
 ];
 owed.forEach((parts, i) => { for (const part of parts) if (!disclosure[i].includes(part)) throw new Error(`disclosure statement ${i + 1} does not say "${part}": "${disclosure[i]}"`); });
+for (const absent of ['first launch', 'warming caches', 'tool archives']) if (disclosure[0].includes(absent)) throw new Error(`disclosure statement 1 names "${absent}", a moment this build does not carry (PD-STARTUP-006): "${disclosure[0]}"`);
 // REQ-STARTUP-160: "SHALL name no host, endpoint, or request this document does not require" — this text names none at all.
 for (const statement of disclosure) if (/:\/\/|\bwww\.|\.(com|org|io|net|ai|dev)\b|github|npmjs|pypi|api\./i.test(statement)) throw new Error(`a disclosure statement names a host: "${statement}"`);
 const minimum = await launch('about-minimum', null, local, preferences, {

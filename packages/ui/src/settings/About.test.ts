@@ -68,9 +68,13 @@ describe('the network-activity disclosure on About & Legal (REQ-STARTUP-160)', (
     expect(html).not.toMatch(/<(dialog|details|summary|input|button)\b|role="dialog"|\btitle="|hidden/);
   });
 
-  it('states the setup clause: what may be contacted, when, and only for work not already done (REQ-STARTUP-058/064/084)', () => {
+  it('states the setup clause as PD-STARTUP-006 has it: a tool\'s first use, the package registry that serves it, only what the machine lacks', () => {
     const s = NETWORK_DISCLOSURE.setup;
-    for (const part of ['first launch', 'warming caches', 'may contact', 'tool archives', 'package registries', 'package runners', 'only for work this machine has not already done']) expect(s).toContain(part);
+    for (const part of ['first time a tool is needed', 'may', 'package registr', 'does not already have it']) expect(s).toContain(part);
+    // PD-STARTUP-006 (OQ-261): this build carries neither machine setup (REQ-STARTUP-060 onward) nor REQ-STARTUP-064's cache
+    // warm-up, so the statement names neither moment nor the tool-archive hosts. A build that carries machine setup or the
+    // warm-up restores the matching words, and flips these assertions, in the same commit.
+    for (const absent of ['first launch', 'warming caches', 'tool archives']) expect(s).not.toContain(absent);
   });
 
   it('states the update check: a supported standalone build, each window activation, not able to be turned off (REQ-STARTUP-105/111/114)', () => {

@@ -4,9 +4,9 @@ import { asSessionId, err, millis, toIsoUtc, type Clocks } from '@rotaris/kernel
 import { StoreDal, type ResolvedStore } from '@rotaris/store';
 import { assertWriterDeclares, createDeliveryReader, createDeliveryWriter, createQueueSettings, createTransitions, reapStaleRuns, type BoardInput, type DeliveryReader, type DeliveryWriter, type ReapResult, type RequirementNow } from '@rotaris/workspace';
 // Part AP — runs from the board, the queue and the source write (spec 08 §Runs Started from the Board, §Delivery Queue, §Editing and Creating Requirements; ADR-0041's second execution).
-import { ACTION_CLASS, appendEpicIndexRow, checkRepositoryForRuns, composeRequirementDocument, createLocation, documentWritable, editRequirementDocument, epicIndexLink, invokeGit, nextIdentifier, probeSourceWritability, provisionUnitWorktree, readOnlySentence, readSourceText, renderBranch, requirementWorktreePath, runPromptFor, scheduleQueue, slugOf, takeOverUnitWorktree, unitIdFor, WAITING_ON_PERSON, writeSourceDocument, type ProvisionArgs, type ProvisionedWorktree, type RepositoryForRuns, type TakeOverArgs } from '@rotaris/workspace';
+import { ACTION_CLASS, appendEpicIndexRow, checkRepositoryForRuns, composeRequirementDocument, createLocation, documentWritable, editRequirementDocument, epicIndexLink, invokeGit, nextIdentifier, probeSourceWritability, provisionUnitWorktree, readOnlySentence, readSourceText, renderBranch, requirementWorktreePath, runPromptFor, scheduleQueue, slugOf, takeOverUnitWorktree, unconfiguredReason, unitIdFor, WAITING_ON_PERSON, writeSourceDocument, type ProvisionArgs, type ProvisionedWorktree, type RepositoryForRuns, type TakeOverArgs } from '@rotaris/workspace';
 import type { Result } from '@rotaris/kernel';
-import { loadConfiguration, commitConfigFields, REQUIREMENTS_DEFAULTS, validateRequirementsPatch, type RequirementsSection } from '@rotaris/config';
+import { loadConfiguration, commitConfigFields, renderFatal, REQUIREMENTS_DEFAULTS, validateRequirementsPatch, type RequirementsSection } from '@rotaris/config';
 import { resolveUserDirs } from '@rotaris/platform';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -110,13 +110,32 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
   let requirements: RequirementsSection = REQUIREMENTS_DEFAULTS;
   let permissionMode = 'ask';
   let approvalTimeoutSeconds = 300;
-  const loadConfig = (): void => {
+  /**
+   * OQ-279 (ruled 2026-10-13 under R-072) read with REQ-CONFIG-478: a fatal load leaves the workspace's configuration
+   * UNLOADED — "the load fails as a whole rather than falling back to a default" — and every run is refused on it. The
+   * queue therefore starts nothing while this holds the report: no candidate is `next` (`scheduleQueue`'s `unconfigured`),
+   * the claim takes nothing, the launch preview defers, and a run-starting board action is refused with the report. It
+   * kept the last values it read (or REQUIREMENTS_DEFAULTS) and armed the queue from them until 2026-10-14
+   * (docs/defects/fixed/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md). The configuration is
+   * read again at each claim, preview and run-starting action, so correcting the file and loading again is sufficient.
+   */
+  let configFault: string | undefined;
+  /** Reads the configuration; answers whether it moved between loading and not, so a caller can republish the queue. */
+  const loadConfig = (): boolean => {
+    const before = configFault;
     const r = loadConfiguration({ globalDir: configDir, workspaceRoot, keepIgnored: false, now: () => clocks.monotonic.now() });
-    if (!r.ok) { log(`requirements: the configuration did not load (${r.error.file}: ${r.error.path} ${r.error.message}); the queue keeps its last values`, 'warn'); return; }
+    if (!r.ok) {
+      configFault = renderFatal(r.error);
+      if (before !== configFault) log(`requirements: the configuration did not load (${configFault}); nothing starts from the queue until it loads (OQ-279, REQ-CONFIG-478)`, 'warn');
+      return before !== configFault;
+    }
+    configFault = undefined;
     requirements = r.value.requirements;
     permissionMode = r.value.runtime.permission_mode;
     approvalTimeoutSeconds = r.value.runtime.approval_timeout_seconds;
     queue.set(requirements.scheduling.mode === 'automatic', requirements.scheduling.max_concurrent_units);
+    if (before !== undefined) log('requirements: the configuration loads again; the queue starts from it');
+    return before !== undefined;
   };
   loadConfig();
   /** The scheduler's in-memory facts (REQ-TRACE-479's hold, the arming under `manual`, a claim in flight, REQ-TRACE-463's stated stall). A restart clears them all, by requirement for the stop and by reading for the rest. */
@@ -166,7 +185,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     for (const c of candidates) if (!disclosed(launches.get(c.id))) undisclosed.set(c.id, UNDISCLOSED_REASON(c.id));
     return scheduleQueue({
       candidates, executing: reader.runningRuns().map((r) => ({ id: r.id, unit: r.unit })),
-      settings: { ...reader.queue(), stopped }, held, armed, claimed, stalled, undisclosed,
+      settings: { ...reader.queue(), stopped }, held, armed, claimed, stalled, undisclosed, unconfigured: configFault,
     });
   };
   const source = () => (parse === undefined ? { writable: false, canCreate: false, reason: 'No requirement store is open.' } : probeSourceWritability(workspaceRoot, parse.layout.storeDir));
@@ -236,6 +255,9 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
   const beforeCommit = async (id: ReqId, action: BoardAction, decision: { readonly startsRun: boolean }, payload: Readonly<Record<string, string>> | undefined) => {
     if (action === 'accept-proposal') return acceptProposal(id, payload);
     if (!decision.startsRun) return undefined;
+    // OQ-279 / REQ-CONFIG-478: nothing is provisioned or started on an unloaded configuration (`configFault`).
+    loadConfig();
+    const unconfigured = configFault;
     const record = recordOf(id);
     const card = current?.cards.find((c) => c.id === id);
     const unitsStarted = Number(card?.facts.find((f) => f.label === 'Units')?.value ?? '0');
@@ -245,6 +267,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     const instructions = payload?.['instructions'];
     const softFailure = !ACTION_CLASS[action].startsRun; // resume / answer-blocker returning to ready: the blocker clears whatever happens (REQ-TRACE-463)
     const fail = (reason: string) => { if (softFailure) { stalled.set(id, reason); launches.set(id, { unit, disclosure, action, ...(instructions === undefined ? {} : { instructions }) }); return undefined; } throw new Error(reason); };
+    if (unconfigured !== undefined) return fail(unconfiguredReason(unconfigured));
     // REQ-TRACE-464: "The run SHALL take over the worktree already provisioned for it and SHALL never provision a second
     // one." A card held out of `ready` before its run began and then resumed derives the SAME unit (its `Units` fact has
     // not moved), and that unit's tree is already on disk: the launch the release left holds it, or — after a restart
@@ -746,6 +769,9 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
         }
         // Part AP — the run family: main's coordinator speaks these as the system (REQ-TRACE-392); the guard above refuses a person's copy.
         case 'requirements.run.preview': {
+          // OQ-279: the preview reads the configuration as the claim does, so it never promises a start the claim refuses.
+          const moved = loadConfig() && current !== undefined;
+          if (moved) rebuild();
           const board = await ensure();
           const record = recordOf(command.id);
           if (record === undefined) return { value: { ok: false, error: { reason: `${command.id} is not in this requirement store.` } } };
@@ -761,22 +787,26 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
             id: command.id, action: command.action, unit, branch: branch.ok ? branch.value : `(${branch.error})`,
             worktreePath: branch.ok ? requirementWorktreePath(workspaceRoot, branch.value) : requirementWorktreePath(workspaceRoot, slugOf(command.id)),
             workspaceUnattended: workspaceUnattended(),
-            startsNow: !stopped && free && (entry === undefined || entry.state === 'next'),
-            ...(stopped ? { deferredReason: 'The queue is stopped: nothing new begins until it is started again, while work already dispatched continues and completes as usual.' } : entry?.reason !== undefined ? { deferredReason: entry.reason } : !free ? { deferredReason: `Waiting for a unit slot: ${reader.runningRuns().length} of ${reader.queue().concurrency} in use.` } : {}),
+            startsNow: configFault === undefined && !stopped && free && (entry === undefined || entry.state === 'next'),
+            ...(configFault !== undefined ? { deferredReason: unconfiguredReason(configFault) } : stopped ? { deferredReason: 'The queue is stopped: nothing new begins until it is started again, while work already dispatched continues and completes as usual.' } : entry?.reason !== undefined ? { deferredReason: entry.reason } : !free ? { deferredReason: `Waiting for a unit slot: ${reader.runningRuns().length} of ${reader.queue().concurrency} in use.` } : {}),
             repository: repo.ok ? { ok: true } : { ok: false, reason: repo.reason, offerSetup: repo.offerSetup },
             approvalTimeoutSeconds,
           };
-          return { value: preview };
+          return moved ? { value: preview, changed: { generation, affected: null } } : { value: preview };
         }
         case 'requirements.run.claim': {
           // Before the first pass, under `manual` with nothing armed, nothing is claimable — under `manual` only the
           // queue's release arms a candidate, and nothing is armed after a start — so the claim main's kick at a
           // workspace open makes is answered without parsing the store (REQ-TRACE-482).
+          // OQ-279: the configuration is read again first — a file that stopped loading starts nothing, and a corrected one
+          // starts the queue again with no restart (REQ-CONFIG-478); a move either way republishes the queue's reasons.
+          const moved = loadConfig();
           if (current === undefined && !reader.queue().automatic && armed.size === 0) return { value: null };
           await ensure();
           claimStalled = false;
+          if (moved) rebuild();
           const c = await claim();
-          if (!claimStalled) return { value: c };
+          if (!claimStalled && !moved) return { value: c };
           const g = rebuild();
           return { value: c, changed: { generation: g, affected: null } };
         }

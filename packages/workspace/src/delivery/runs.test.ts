@@ -8,7 +8,7 @@ import type { StoreParse } from '@rotaris/contracts';
 import { fixtureParse } from './fixture-store.js';
 import {
   appendEpicIndexRow, checkRepositoryForRuns, composeRequirementDocument, createLocation, editRequirementDocument, heldReason, manualReason, nextIdentifier, NOT_A_REPOSITORY,
-  probeSourceWritability, provisionUnitWorktree, QUEUE_STOPPED_REASON, readOnlySentence, renderBranch, requirementWorktreePath, runPromptFor, scheduleQueue, slotReason, slugOf, stalledReason, takeOverUnitWorktree, writeSourceDocument, type ScheduleInput,
+  probeSourceWritability, provisionUnitWorktree, QUEUE_STOPPED_REASON, readOnlySentence, renderBranch, requirementWorktreePath, runPromptFor, scheduleQueue, slotReason, slugOf, stalledReason, takeOverUnitWorktree, unconfiguredReason, writeSourceDocument, type ScheduleInput,
 } from './runs.js';
 
 /**
@@ -83,6 +83,16 @@ describe('REQ-TRACE-478..483, 463: the scheduler', () => {
     expect(out.queue.entries.every((e) => e.state === 'deferred' && e.reason === manualReason(e.id))).toBe(true);
     const armed = scheduleQueue(base({ settings: { automatic: false, concurrency: 2, stopped: false }, armed: new Set(['REQ-103']) }));
     expect(armed.dispatch).toEqual(['REQ-103']);
+  });
+  it('OQ-279 / REQ-CONFIG-478: an unloaded configuration starts nothing — every candidate deferred with the report, whatever is armed or stopped; one in flight stays next', () => {
+    const report = '/g/agents.yaml at requirements.no_such_key (global scope): unknown key.';
+    const out = scheduleQueue(base({ unconfigured: report, armed: new Set(['REQ-101']) }));
+    expect(out.dispatch).toEqual([]);
+    expect(out.queue.entries.every((e) => e.state === 'deferred' && e.reason === unconfiguredReason(report))).toBe(true);
+    expect(unconfiguredReason(report)).toBe(`The workspace configuration did not load, so nothing starts from the queue until it is corrected: ${report}`);
+    expect(scheduleQueue(base({ unconfigured: report, settings: { automatic: true, concurrency: 2, stopped: true } })).queue.entries.every((e) => e.reason === unconfiguredReason(report))).toBe(true);
+    const inFlight = scheduleQueue(base({ unconfigured: report, claimed: new Set(['REQ-103']) }));
+    expect(inFlight.queue.entries.find((e) => e.id === 'REQ-103')).toEqual({ id: 'REQ-103', unit: 'u1', state: 'next' });
   });
   it('a stopped queue defers everything with the stop sentence; a hold defers one; a stalled start reports its cause until released again', () => {
     expect(scheduleQueue(base({ settings: { automatic: true, concurrency: 2, stopped: true } })).queue.entries.every((e) => e.reason === QUEUE_STOPPED_REASON)).toBe(true);

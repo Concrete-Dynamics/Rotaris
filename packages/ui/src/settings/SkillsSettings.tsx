@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import {
   SKILL_INVOCATION_MODE_LABELS, SKILL_INVOCATION_MODE_NAMES, SKILL_LOAD_MODE_LABELS,
-  type SkillInvocationModeName, type SkillLoadModeName, type SkillRow, type SkillsState,
+  type ConfigSnapshot, type SkillInvocationModeName, type SkillLoadModeName, type SkillRow, type SkillsState,
 } from '@rotaris/contracts';
 import { Button, Select, Table, TableCard, ToggleSwitch } from '../design-system/index.js';
+import { Fatal } from './ConfigSettings.js';
 import { collapseHome, elideMiddle } from '../workspace-label.js';
 
 /**
@@ -50,6 +51,12 @@ export interface SkillsSettingsProps {
   readonly onRescan: () => Promise<{ ok: true; count: number } | { ok: false; reason: string }>;
   /** REQ-WORKSPACE-151: the platform chooser, then REQ-WORKSPACE-057's rules. A dismissal changes nothing. */
   readonly onLoadFile: () => Promise<{ ok: true; cancelled: boolean; name?: string } | { ok: false; reason: string }>;
+  /**
+   * OQ-279 / REQ-CONFIG-478: the configuration snapshot when it did not load. The policy this category edits is
+   * configuration, and an unloaded one is not the shipped defaults, so the category draws the report as Models, Personas
+   * and Runtime do, and no row, switch or action (the run host refuses every `skills.*` request meanwhile).
+   */
+  readonly fatal?: ConfigSnapshot | undefined;
 }
 
 export const SKILLS_EMPTY = 'No portable skills were discovered.';
@@ -120,9 +127,10 @@ function SkillRowView({ row, home, load, invocation, onLoadMode, onInvocationMod
   );
 }
 
-export function SkillsSettings({ state, workspace, home, pending, onLoadMode, onInvocationMode, onEnabled, onRescan, onLoadFile }: SkillsSettingsProps) {
+export function SkillsSettings({ state, workspace, home, pending, onLoadMode, onInvocationMode, onEnabled, onRescan, onLoadFile, fatal }: SkillsSettingsProps) {
   const [busy, setBusy] = useState<'rescan' | 'load' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  if (fatal !== undefined && !fatal.loadOk) return <Fatal snapshot={fatal} />;
   const skills = state?.skills ?? [];
   // The pending value where the screen holds one, else what the files resolved to.
   const enabled = pending?.enabled ?? state?.enabled ?? true;

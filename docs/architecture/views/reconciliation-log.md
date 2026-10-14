@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**The readers outside a run's load follow OQ-279 (fin44, `fin44-hooks-and-config`;
+`../../defects/fixed/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md`).** The run host's
+`skills:` and instruction readers answer the fatal report, never the shipped defaults; the five `skills.*` requests refuse with
+`config.fatal`; the requirements queue starts nothing on an unloaded configuration and re-reads the file at each claim.
+`02-process-view.md` (the `skills.*` refusal) and `03-runtime-view.md` §8 (the readers under a fatal load).
+
 **The unreviewed-hooks notice names its project, built alike at both sites (OQ-293; fin44, `fin44-hooks-and-config`;
 `../../defects/fixed/the-unreviewed-hooks-notice-does-not-name-its-project.md`,
 `../../defects/fixed/the-unreviewed-hooks-notice-folds-its-sentence-under-details-at-open.md`,

@@ -8,7 +8,8 @@ import { parseSkillListing } from '@rotaris/contracts';
 import { readTrajectory, Sessions, withContextUnits, withMcpSection } from '@rotaris/engine';
 import { asSessionId, FakeClock, millis, mintMachineId, type MachineId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
-import { SkillHost, writeSkillListing, type SkillHostDeps } from './skills.js';
+import { SKILLS_CONFIGURATION_UNLOADED, SkillHost, writeSkillListing, type RunSections, type SavedRead, type SkillHostDeps } from './skills.js';
+import { skillsUnloaded } from './dispatch.js';
 
 /**
  * ADR-0063's catalog, and the fence defect its first execution found. Everything here runs against a real
@@ -34,7 +35,7 @@ function tree(): { root: string; home: string; cleanup: () => void } {
  * `skills/zeta/SKILL.md`, the gap this seam closes). With it, every case here is decidable on any host.
  */
 const host = (_root: string, home: string, section: SkillsSection = SKILLS_DEFAULTS, extra: Partial<SkillHostDeps> = {}) =>
-  new SkillHost({ home, machineDir: join(home, 'machine'), section: () => section, log: () => undefined, ...extra });
+  new SkillHost({ home, machineDir: join(home, 'machine'), section: () => ({ ok: true, value: section }), log: () => undefined, ...extra });
 
 describe('the skill catalog (REQ-WORKSPACE-058, 069, 073, 057)', () => {
   it('discovers on a cold cache and caches the answer until something clears it', () => {
@@ -237,8 +238,8 @@ const contextHost = (home: string, globalDir: string, overrides: Record<string, 
     home,
     // A scratch machine-wide base, so a Linux host's own `/etc/codex` never reaches a test's merge.
     machineDir: join(home, 'machine'),
-    section: () => SKILLS_DEFAULTS,
-    instructions: () => ({ section: { overrides }, master, globalDir }),
+    section: () => ({ ok: true, value: SKILLS_DEFAULTS }),
+    instructions: () => ({ ok: true, value: { section: { overrides }, master, globalDir } }),
     log: () => undefined,
     ...extra,
   });
@@ -620,3 +621,83 @@ describe('the /skills listing is one saved system row (REQ-CHAT-162)', () => {
     } finally { t.cleanup(); }
   });
 });
+
+/**
+ * OQ-279 (ruled 2026-10-13 under R-072) read with REQ-CONFIG-478: a fatal load leaves the configuration UNLOADED, never
+ * defaulted. The two readers answered `SKILLS_DEFAULTS` and the instruction defaults (injection on) instead, so the
+ * inventory, a force-load and every agent built afterwards proceeded on a policy the files did not state
+ * (docs/defects/fixed/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md). Each case below goes
+ * red when the reader's answer is the defaults again (`asBefore`).
+ */
+describe('the skill host on a configuration that does not load (OQ-279, REQ-CONFIG-478)', () => {
+  const FAULT = '/g/agents.yaml at hooks.entries.0.timeout_seconds (global scope): must be at least 1. Correcting the named file and loading again is sufficient; nothing else needs to change.';
+  /** The saved file, switchable between loading and not within one case. */
+  const saved = () => {
+    let fault: string | undefined = FAULT;
+    return {
+      set: (f: string | undefined) => { fault = f; },
+      section: (): SavedRead<SkillsSection> => (fault === undefined ? { ok: true, value: SKILLS_DEFAULTS } : { ok: false, fault }),
+      instructions: (globalDir: string) => (): SavedRead<{ section: { overrides: Record<string, 'on' | 'off'> }; master: boolean; globalDir: string }> =>
+        (fault === undefined ? { ok: true, value: { section: { overrides: {} }, master: true, globalDir } } : { ok: false, fault }),
+    };
+  };
+  const unloadedHost = (t: { home: string }, file: ReturnType<typeof saved>, configured?: (sessionId: string) => RunSections | undefined) =>
+    new SkillHost({
+      home: t.home, machineDir: join(t.home, 'machine'), log: () => undefined,
+      section: file.section, instructions: file.instructions(join(t.home, 'cfg')),
+      ...(configured === undefined ? {} : { configured }),
+    });
+
+  it('names the fault, and the five skills requests refuse with it as the detail rather than answering from defaults', () => {
+    const t = tree();
+    try {
+      const h = unloadedHost(t, saved());
+      expect(h.fault(t.root)).toBe(FAULT);
+      expect(skillsUnloaded(h, t.root)).toEqual({ kind: 'refused', code: 'config.fatal', headline: SKILLS_CONFIGURATION_UNLOADED, detail: FAULT });
+      expect(h.forceLoad(t.root, 's1', 'alpha')).toEqual({ ok: false, reason: `${SKILLS_CONFIGURATION_UNLOADED}: ${FAULT}` });
+      expect(() => h.state(t.root)).toThrow(SKILLS_CONFIGURATION_UNLOADED);
+    } finally { t.cleanup(); }
+  });
+
+  it('an agent built for a session with no run here is offered no skill and no instruction file — only the product statement', () => {
+    const t = tree();
+    try {
+      writeFileSync(join(t.root, 'AGENTS.md'), 'STANDING INSTRUCTIONS\n');
+      const h = unloadedHost(t, saved());
+      expect(h.contextUnits(t.root, 's1')).toEqual([PRODUCT_DIRECTORIES_UNIT]);
+      expect(h.readRoots(t.root, 's1')).toEqual([]);
+      expect(h.instructionFiles(t.root)).toEqual([]);
+    } finally { t.cleanup(); }
+  });
+
+  it('a run already under way keeps the sections it was started with: its own switches, not the shipped defaults', () => {
+    const t = tree();
+    try {
+      writeFileSync(join(t.root, 'AGENTS.md'), 'STANDING INSTRUCTIONS\n');
+      const off: RunSections = { skills: { ...SKILLS_DEFAULTS, enabled: false }, instructions: { section: { overrides: {} }, master: false, globalDir: join(t.home, 'cfg') } };
+      const on: RunSections = { skills: SKILLS_DEFAULTS, instructions: { section: { overrides: {} }, master: true, globalDir: join(t.home, 'cfg') } };
+      const h = unloadedHost(t, saved(), (sid) => (sid === 'off' ? off : sid === 'on' ? on : undefined));
+      expect(h.contextUnits(t.root, 'off')).toEqual([PRODUCT_DIRECTORIES_UNIT]);
+      const units = h.contextUnits(t.root, 'on');
+      expect(units[0]).toContain('STANDING INSTRUCTIONS');
+      expect(units.some((u) => u.includes('alpha'))).toBe(true);
+    } finally { t.cleanup(); }
+  });
+
+  it('nothing read from an unloaded configuration is cached: the agent built after the file is corrected reads it (REQ-CONFIG-478)', () => {
+    const t = tree();
+    try {
+      writeFileSync(join(t.root, 'AGENTS.md'), 'STANDING INSTRUCTIONS\n');
+      const file = saved();
+      const h = unloadedHost(t, file);
+      expect(h.contextUnits(t.root, 's1')).toEqual([PRODUCT_DIRECTORIES_UNIT]);
+      file.set(undefined);
+      expect(h.fault(t.root)).toBeUndefined();
+      expect(skillsUnloaded(h, t.root)).toBeUndefined();
+      const units = h.contextUnits(t.root, 's1');
+      expect(units[0]).toContain('STANDING INSTRUCTIONS');
+      expect(h.state(t.root).skills.map((r) => r.name)).toEqual(['alpha']);
+    } finally { t.cleanup(); }
+  });
+});
+

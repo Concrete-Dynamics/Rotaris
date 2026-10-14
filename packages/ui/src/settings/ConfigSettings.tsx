@@ -84,7 +84,11 @@ export function SaveBar({ dirty, serviceAvailable, onSave, onDiscard }: Pick<Con
 
 const LEVEL_LABELS: Readonly<Record<string, string>> = { auto: 'Auto (stored)', low: 'Low', medium: 'Medium', high: 'High', max: 'Max', default: 'Default (inherit)', provider_default: 'Provider default' };
 
-function Fatal({ snapshot }: { snapshot: ConfigSnapshot }) {
+/**
+ * REQ-CONFIG-478: the fatal load's report, drawn in place of a category's controls. Exported since 2026-10-14 for the Skills
+ * category, whose policy is configuration too (OQ-279: the configuration is unloaded, not defaulted).
+ */
+export function Fatal({ snapshot }: { snapshot: ConfigSnapshot }) {
   return (
     <DesignCard className="card settings__fatal" role="alert">
       <div className="card-kicker">Configuration could not be loaded</div>

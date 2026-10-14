@@ -219,6 +219,11 @@ export interface ScheduleInput {
   readonly undisclosed: ReadonlyMap<ReqId, string>;
   /** REQ-TRACE-463: the reason the last start did not begin, reported on the entry until the next release of it. */
   readonly stalled: ReadonlyMap<ReqId, string>;
+  /**
+   * OQ-279 / REQ-CONFIG-478: the fatal load report while the workspace's configuration does not load. Nothing starts on an
+   * unloaded configuration, so no candidate is `next` and each says why; absent when the configuration loaded.
+   */
+  readonly unconfigured?: string | undefined;
 }
 export interface ScheduleOutput { readonly queue: DeliveryQueue; readonly dispatch: readonly ReqId[] }
 
@@ -227,6 +232,8 @@ export const manualReason = (id: ReqId): string => `Automatic scheduling is off:
 export const heldReason = (id: ReqId): string => `${id} is held in the queue until you release it.`;
 export const slotReason = (executing: number, concurrency: number): string => `Waiting for a unit slot: ${executing} of ${concurrency} in use.`;
 export const stalledReason = (id: ReqId, cause: string): string => `The last start of ${id} did not begin: ${cause} Release it from the queue to try again.`;
+/** OQ-279 / REQ-CONFIG-478: why nothing starts from the queue while the configuration does not load, with the fatal report. */
+export const unconfiguredReason = (report: string): string => `The workspace configuration did not load, so nothing starts from the queue until it is corrected: ${report}`;
 
 /** The order the scheduler applies and never re-sorts for display (REQ-TRACE-478): priority, then the time the requirement entered the released column, then identifier. */
 export function scheduleQueue(input: ScheduleInput): ScheduleOutput {
@@ -238,6 +245,8 @@ export function scheduleQueue(input: ScheduleInput): ScheduleOutput {
   for (const c of ordered) {
     const deferred = (reason: string) => entries.push({ id: c.id, unit: c.unit, state: 'deferred', reason });
     if (input.claimed.has(c.id)) { entries.push({ id: c.id, unit: c.unit, state: 'next' }); free -= 1; continue; }
+    // OQ-279: before every control of the queue's own — a stop, a hold or a release cannot make an unloaded configuration load.
+    if (input.unconfigured !== undefined) { deferred(unconfiguredReason(input.unconfigured)); continue; }
     if (input.settings.stopped) { deferred(QUEUE_STOPPED_REASON); continue; }
     if (input.held.has(c.id)) { deferred(heldReason(c.id)); continue; }
     // Defect AP-4: before the stall, and never escaped by arming — the claim refuses an undisclosed launch, so a

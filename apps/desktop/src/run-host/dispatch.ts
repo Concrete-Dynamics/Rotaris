@@ -10,7 +10,7 @@ import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessi
 import { CHECKPOINTS_DEFAULTS, type LiveState } from '@rotaris/config';
 import { improvementCollectorOf, retrospectiveOf } from './configuration.js';
 import { launchSession } from './launch.js';
-import { writeSkillListing } from './skills.js'; // REQ-CHAT-162
+import { SKILLS_CONFIGURATION_UNLOADED, writeSkillListing, type SkillHost } from './skills.js'; // REQ-CHAT-162, OQ-279
 import { randomUUID } from 'node:crypto';
 // The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network.
 
@@ -106,9 +106,14 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
      * was, which is why the row a surface draws keeps showing the PERSISTED policy. The fifth, `skills.list`
      * (REQ-CHAT-162), persists exactly one thing — a transcript row — and changes no policy either.
      */
-    case 'skills.read':
+    case 'skills.read': {
+      const unloaded = skillsUnloaded(skills, req.workspaceRoot);
+      if (unloaded) return unloaded;
       return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId) };
+    }
     case 'skills.rescan': {
+      const unloaded = skillsUnloaded(skills, req.workspaceRoot);
+      if (unloaded) return unloaded;
       // REQ-WORKSPACE-069: re-read from disk, re-project, change no policy, mark nothing dirty.
       const before = skills.state(req.workspaceRoot, req.sessionId).skills.length;
       skills.rescan(req.workspaceRoot);
@@ -117,17 +122,23 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return { kind: 'skills.state', state };
     }
     case 'skills.forceLoad': {
+      const unloaded = skillsUnloaded(skills, req.workspaceRoot);
+      if (unloaded) return unloaded;
       const r = skills.forceLoad(req.workspaceRoot, req.sessionId, req.name);
       if (!r.ok) return { kind: 'refused', code: r.reason === 'disabled' ? 'skills.disabled' : 'skills.unknown', headline: r.reason === 'disabled' ? SKILLS_DISABLED_MESSAGE : r.reason };
       return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
     }
     case 'skills.loadFile': {
+      const unloaded = skillsUnloaded(skills, req.workspaceRoot);
+      if (unloaded) return unloaded;
       const r = skills.loadFile(req.workspaceRoot, req.sessionId, req.path);
       // REQ-WORKSPACE-151: a failure is reported with the reason REQ-WORKSPACE-057 gives and leaves the catalog unchanged.
       if (!r.ok) return { kind: 'refused', code: 'skills.load-failed', headline: r.reason };
       return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
     }
     case 'skills.list': {
+      const unloaded = skillsUnloaded(skills, req.workspaceRoot);
+      if (unloaded) return unloaded;
       // REQ-CHAT-162: one saved system row, through the followed session's own writer (`writeSkillListing` says why).
       const r = writeSkillListing(sessions.writer(asSessionId(req.sessionId)), skills.state(req.workspaceRoot, req.sessionId));
       if (!r.ok) return { kind: 'refused', code: r.code, headline: 'The skills could not be listed in the transcript', detail: r.reason };
@@ -744,4 +755,15 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return { kind: 'ack' };
     }
   }
+}
+
+/**
+ * OQ-279 (ruled 2026-10-13 under R-072) read with REQ-CONFIG-478: the five `skills.*` requests project or act on the saved
+ * `skills:` policy, and a fatal load leaves none — the configuration is unloaded, not defaulted — so each is refused with the
+ * fatal report as its detail, as a run is. Until 2026-10-14 they answered from the shipped defaults
+ * (docs/defects/fixed/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md).
+ */
+export function skillsUnloaded(skills: Pick<SkillHost, 'fault'>, workspaceRoot: string): Extract<ProcessReply, { kind: 'refused' }> | undefined {
+  const fault = skills.fault(workspaceRoot);
+  return fault === undefined ? undefined : { kind: 'refused', code: 'config.fatal', headline: SKILLS_CONFIGURATION_UNLOADED, detail: fault };
 }

@@ -17,6 +17,24 @@ export interface InstructionPolicy {
 }
 
 /**
+ * OQ-279 (ruled 2026-10-13 under R-072) read with REQ-CONFIG-478: one read of the SAVED configuration — the section it
+ * states, or the fatal report when it does not load. A fatal load leaves the configuration UNLOADED ("the load fails as a
+ * whole rather than falling back to a default"), so a reader answers the report and never the shipped defaults, which
+ * both readers below returned until 2026-10-14
+ * (docs/defects/fixed/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md).
+ */
+export type SavedRead<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly fault: string };
+
+/** The sections a run was configured with at its start: what a run already under way keeps whatever the file says since. */
+export interface RunSections {
+  readonly skills: SkillsSection;
+  readonly instructions: InstructionPolicy;
+}
+
+/** OQ-279: the refusal of a skills gesture or projection while the workspace's configuration does not load; the detail is the report. */
+export const SKILLS_CONFIGURATION_UNLOADED = 'The workspace configuration did not load, so no portable skill is offered until it is corrected';
+
+/**
  * ADR-0063 — the portable-skill catalog, owned by the run host.
  *
  * **Why here and not in the configuration loader.** The catalog is cached per resolved workspace root and
@@ -47,14 +65,20 @@ export interface SkillHostDeps {
   readonly machineDir?: string | undefined;
   readonly platform?: NodeJS.Platform;
   readonly ports?: DiscoveryPorts;
-  /** The SAVED `skills:` section for a workspace — see `forceLoad` on why it is read per gesture. */
-  readonly section: (workspaceRoot: string) => SkillsSection;
+  /** The SAVED `skills:` section for a workspace, or its fatal report (OQ-279) — see `forceLoad` on why it is read per gesture. */
+  readonly section: (workspaceRoot: string) => SavedRead<SkillsSection>;
   /**
    * PD-WORKSPACE-002 — the master switch, the per-file policy and the global configuration directory
-   * the instruction-file discovery reads its `global` base from. Absent means the workspace pair alone
-   * reaches an agent, which is what a build with no configuration layer would give it.
+   * the instruction-file discovery reads its `global` base from, or the fatal report (OQ-279). Absent means the
+   * workspace pair alone reaches an agent, which is what a build with no configuration layer would give it.
    */
-  readonly instructions?: ((workspaceRoot: string) => InstructionPolicy) | undefined;
+  readonly instructions?: ((workspaceRoot: string) => SavedRead<InstructionPolicy>) | undefined;
+  /**
+   * OQ-279: the sections the session's run was configured with (`configuredRuns`), for an agent built while the saved file
+   * no longer loads — the run keeps what it was given at its start. Absent, or undefined for a session with no run here:
+   * nothing is offered from an unloaded configuration.
+   */
+  readonly configured?: ((sessionId: string) => RunSections | undefined) | undefined;
   /** ADR-0006: the monotonic clock port. Absent means the discovery log carries no duration, never a global read. */
   readonly monotonic?: MonotonicClock | undefined;
   readonly log: (message: string, level?: 'info' | 'warn') => void;
@@ -152,8 +176,40 @@ export class SkillHost {
     this.sessions.delete(sessionId);
   }
 
+  /** OQ-279: the saved configuration's fatal report for this workspace, or undefined when it loads. */
+  fault(workspaceRoot: string): string | undefined {
+    const saved = this.deps.section(workspaceRoot);
+    return saved.ok ? undefined : saved.fault;
+  }
+
+  /**
+   * The `skills:` section in force: the SAVED one, or — while the file does not load (OQ-279) — the one the session's run
+   * was started with, and none at all where no run of that session is known here. Never the shipped defaults.
+   */
+  private skillsSection(workspaceRoot: string, sessionId: string | undefined): SkillsSection | undefined {
+    const saved = this.deps.section(workspaceRoot);
+    if (saved.ok) return saved.value;
+    const given = sessionId === undefined || sessionId === '' ? undefined : this.deps.configured?.(sessionId)?.skills;
+    this.deps.log(`skills: the configuration did not load for ${workspaceRoot} (${saved.fault}); ${given === undefined ? 'no skill is offered from it' : `session ${sessionId} keeps the skills section its run started with`} (OQ-279, REQ-CONFIG-478)`, 'warn');
+    return given;
+  }
+
+  /**
+   * The instruction policy in force, on the `skills:` section's terms; `'unloaded'` reads no instruction file at all.
+   * `saved` is false for a run's own policy, which is that session's and so is never cached for the workspace.
+   */
+  private instructionPolicy(workspaceRoot: string, sessionId: string | undefined): { readonly policy: InstructionPolicy | undefined; readonly saved: boolean } | 'unloaded' {
+    const saved = this.deps.instructions?.(workspaceRoot);
+    if (saved === undefined) return { policy: undefined, saved: true };
+    if (saved.ok) return { policy: saved.value, saved: true };
+    const given = sessionId === undefined || sessionId === '' ? undefined : this.deps.configured?.(sessionId)?.instructions;
+    this.deps.log(`workspace context: the configuration did not load for ${workspaceRoot} (${saved.fault}); ${given === undefined ? 'no instruction file is read' : `session ${sessionId} keeps the instruction policy its run started with`} (OQ-279, REQ-CONFIG-478)`, 'warn');
+    return given === undefined ? 'unloaded' : { policy: given, saved: false };
+  }
+
   private resolved(workspaceRoot: string, sessionId: string | undefined) {
-    return resolveSkills(this.catalog(workspaceRoot).skills, this.deps.section(workspaceRoot), this.sessionState(workspaceRoot, sessionId));
+    const section = this.skillsSection(workspaceRoot, sessionId);
+    return section === undefined ? [] : resolveSkills(this.catalog(workspaceRoot).skills, section, this.sessionState(workspaceRoot, sessionId));
   }
 
   /**
@@ -165,7 +221,7 @@ export class SkillHost {
    * section is: a switch the user has just saved gates the next session, and a run that started earlier
    * keeps what it was given. With the master switch false nothing is read at all (REQ-WORKSPACE-048).
    */
-  workspaceContext(workspaceRoot: string, executionRoot?: string): string {
+  workspaceContext(workspaceRoot: string, executionRoot?: string, sessionId?: string): string {
     /*
      * REQ-WORKSPACE-050: the files are read from the run's EXECUTION root — the worktree of an isolated
      * session — while the policy, the catalog and persona memory stay with the base workspace the user
@@ -186,7 +242,11 @@ export class SkillHost {
      */
     const clock = this.deps.monotonic;
     const started = clock?.now() ?? null;
-    const policy = this.deps.instructions?.(workspaceRoot);
+    const read = this.instructionPolicy(workspaceRoot, sessionId);
+    // OQ-279: nothing is read from an unloaded configuration, and nothing is cached either, so the agent built after the
+    // file is corrected reads it (REQ-CONFIG-478: correcting the file and loading again is sufficient).
+    if (read === 'unloaded') return '';
+    const policy = read.policy;
     const policyRead = clock?.now() ?? null;
     const enabled = this.enabledUnder(policy, workspaceRoot, readRoot, 'workspace context');
     const discovered = clock?.now() ?? null;
@@ -198,6 +258,8 @@ export class SkillHost {
       const ms = (from: number, to: number): string => (to - from).toFixed(2);
       this.deps.log(`workspace context: the enabled set of ${enabled.length} instruction file(s) merged into ${Buffer.byteLength(merged, 'utf8')} bytes in ${ms(started, ended)} ms (policy read ${ms(started, policyRead)} ms, discovery ${ms(policyRead, discovered)} ms, merge ${ms(discovered, ended)} ms) for ${readRoot}`);
     }
+    // A run's own policy (the saved file not loading, OQ-279) is that session's, not the workspace's: not cached for it.
+    if (!read.saved) return merged;
     const byRoot = this.contexts.get(workspaceRoot) ?? new Map<string, string>();
     byRoot.set(readRoot, merged);
     this.contexts.set(workspaceRoot, byRoot);
@@ -222,7 +284,8 @@ export class SkillHost {
    */
   instructionFiles(workspaceRoot: string, executionRoot?: string, forLog = 'instruction files'): readonly InstructionFileEntry[] {
     const readRoot = executionRoot === undefined || executionRoot === '' ? workspaceRoot : executionRoot;
-    return this.enabledUnder(this.deps.instructions?.(workspaceRoot), workspaceRoot, readRoot, forLog);
+    const read = this.instructionPolicy(workspaceRoot, undefined);
+    return read === 'unloaded' ? [] : this.enabledUnder(read.policy, workspaceRoot, readRoot, forLog);
   }
 
   /**
@@ -255,7 +318,10 @@ export class SkillHost {
 
   /** The projection a surface reads (REQ-WORKSPACE-067; `contracts/skills.ts`). */
   state(workspaceRoot: string, sessionId?: string): SkillsState {
-    const section = this.deps.section(workspaceRoot);
+    // OQ-279: a projection of the policy needs the policy; the run host's `skills.*` requests refuse first (`fault`).
+    const saved = this.deps.section(workspaceRoot);
+    if (!saved.ok) throw new Error(`${SKILLS_CONFIGURATION_UNLOADED}: ${saved.fault}`);
+    const section = saved.value;
     const discovery = this.catalog(workspaceRoot);
     const forced = this.sessionState(workspaceRoot, sessionId).forced;
     const skills: SkillRow[] = this.resolved(workspaceRoot, sessionId).map((r) => ({
@@ -286,7 +352,10 @@ export class SkillHost {
    * exactly as it was, settings are not marked dirty.
    */
   forceLoad(workspaceRoot: string, sessionId: string | undefined, name: string): { ok: true; name: string } | { ok: false; reason: string } {
-    if (!this.deps.section(workspaceRoot).enabled) return { ok: false, reason: 'disabled' };
+    const saved = this.deps.section(workspaceRoot);
+    // OQ-279: a gesture made now reads the file now, and an unloaded one offers no skill to force.
+    if (!saved.ok) return { ok: false, reason: `${SKILLS_CONFIGURATION_UNLOADED}: ${saved.fault}` };
+    if (!saved.value.enabled) return { ok: false, reason: 'disabled' };
     const known = this.resolved(workspaceRoot, sessionId).find((r) => r.skill.name === name);
     if (!known) return { ok: false, reason: `No skill named '${name}' was discovered in this workspace.` };
     this.stateFor(this.keyFor(workspaceRoot, sessionId)).forced.add(name);
@@ -331,7 +400,7 @@ export class SkillHost {
     // REQ-WORKSPACE-047: ahead of the catalog, ahead of every force-loaded body. Empty merged content
     // constructs no unit — "with no context files, or injection disabled, no such unit SHALL be built".
     // The unit closes after its last file, so nothing the prompt carries next reads as that file's own (H4, 27a5127).
-    const context = instructionContextUnit(this.workspaceContext(workspaceRoot, executionRoot));
+    const context = instructionContextUnit(this.workspaceContext(workspaceRoot, executionRoot, sessionId));
     if (context !== '') units.push(context);
     const catalog = skillCatalogBlock(resolved);
     if (catalog !== null) units.push(catalog);

@@ -12,7 +12,7 @@ import { runPreflight } from './intent.js';
 import { createLoopClassifier } from './loop.js';
 import { createCheckpointPort } from './checkpoints.js';
 import { McpHost } from './mcp.js';
-import { CHECKPOINTS_DEFAULTS, INSTRUCTIONS_DEFAULTS, loadConfiguration, RUNTIME_DEFAULTS, SKILLS_DEFAULTS, type LiveState } from '@rotaris/config';
+import { CHECKPOINTS_DEFAULTS, loadConfiguration, renderFatal, RUNTIME_DEFAULTS, type LiveState } from '@rotaris/config';
 import { codeIntelligenceLaunchFor } from './code-intelligence-launch.js';
 import { SkillHost } from './skills.js'; // ADR-0063
 import { captureAfterRun, dalWhileOpen } from './improvement-capture.js';
@@ -258,24 +258,31 @@ export function createRunHost() {
      * packaged build.
      */
     ...(machineDir === undefined || machineDir === '' ? {} : { machineDir }),
+    // OQ-279 / REQ-CONFIG-478: a fatal load is answered as the report, never as the shipped defaults (`SavedRead`); the
+    // skill host says what it does instead, and the run host's `skills.*` requests refuse with it.
     section: (workspaceRoot) => {
       const loaded = loadConfiguration({ globalDir: configDir, workspaceRoot });
-      if (loaded.ok) return loaded.value.skills;
-      log(`skills: the configuration could not be read for ${workspaceRoot}; the shipped defaults stand`, 'warn');
-      return SKILLS_DEFAULTS;
+      return loaded.ok ? { ok: true, value: loaded.value.skills } : { ok: false, fault: renderFatal(loaded.error) };
     },
     /*
      * PD-WORKSPACE-002 / REQ-WORKSPACE-048 — the master switch and the per-file instruction policy, read
      * from the SAVED configuration on the same argument the `skills:` section is: a switch saved now gates
-     * the next session, and a run already under way keeps what it was given. A configuration that cannot be
-     * read leaves the shipped defaults standing — injection on, no file switched off — because a broken
-     * file must not silently take an agent's standing instructions away.
+     * the next session, and a run already under way keeps what it was given. FALSIFIED 2026-10-14, kept beside its
+     * replacement: "A configuration that cannot be read leaves the shipped defaults standing — injection on, no file
+     * switched off — because a broken file must not silently take an agent's standing instructions away." REQ-CONFIG-478
+     * says the load fails as a whole rather than falling back to a default, and OQ-279's ruling refuses every run on it;
+     * a run already under way keeps the policy it was started with (`configured` below), and nothing else reads one.
      */
     instructions: (workspaceRoot) => {
       const loaded = loadConfiguration({ globalDir: configDir, workspaceRoot });
-      if (loaded.ok) return { section: loaded.value.instructions, master: loaded.value.injectAgentsMd, globalDir: configDir };
-      log(`workspace context: the configuration could not be read for ${workspaceRoot}; the shipped defaults stand`, 'warn');
-      return { section: INSTRUCTIONS_DEFAULTS, master: true, globalDir: configDir };
+      return loaded.ok
+        ? { ok: true, value: { section: loaded.value.instructions, master: loaded.value.injectAgentsMd, globalDir: configDir } }
+        : { ok: false, fault: renderFatal(loaded.error) };
+    },
+    // OQ-279: what a run under way was configured with, for an agent it builds after the file stopped loading.
+    configured: (sessionId) => {
+      const cfg = configuredRuns.get(sessionId)?.cfg;
+      return cfg === undefined ? undefined : { skills: cfg.skills, instructions: { section: cfg.instructions, master: cfg.injectAgentsMd, globalDir: configDir } };
     },
   });
 

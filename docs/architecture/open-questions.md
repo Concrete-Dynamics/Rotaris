@@ -14094,7 +14094,14 @@ load generation, and clears it compare-and-clear on a clean load, so a fault tha
 `notice-proof` section 1b reads it on screen before the prompt (global scope) and section 1c (workspace scope) corrects the
 file within the launch and starts a run with no relaunch. The run refusal, the isolated-start refusal and the per-run reload
 are unchanged. **Noticed, not decided:** the skills, instructions and queue readers fall back to defaults on a fatal load —
-[`the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md`](../defects/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md).
+[`the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md`](../defects/fixed/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md).
+**Repaired 2026-10-14 under this ruling (fin44, `fin44-hooks-and-config`):** read with REQ-CONFIG-478's "the load fails as a
+whole rather than falling back to a default", no reader answers an unloaded configuration with defaults. The run host's skills
+and instruction readers answer the report and its five `skills.*` requests refuse with it (Settings › Skills draws the report
+as Models does); an agent built meanwhile gets its run's own configured sections, or none; the requirements queue starts
+nothing until the file loads again, re-reading it at each claim, preview and run-starting action. Noticed beside it, not
+repaired: a merged-document fault in the global file is reported in the workspace file
+([`a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md`](../defects/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md)).
 
 <a id="oq-278"></a>
 

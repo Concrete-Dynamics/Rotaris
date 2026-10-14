@@ -1925,6 +1925,16 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   generation and the report; a clean load of that workspace — a snapshot `configAnnouncer` carries, or a run that starts —
   clears it compare-and-clear and advances the generation, so a fault that recurs is raised again. The run's own per-run
   reload is unchanged: correcting the file and starting a run is the recovery, with no relaunch (`notice-proof` 1c).
+  **The readers outside the run's load follow it (2026-10-14, fin44):** none answers an unloaded configuration with defaults.
+  The run host's `skills:` and instruction readers answer the report (`SavedRead`, `run-host/skills.ts`); the five `skills.*`
+  requests refuse with code `config.fatal` and the report as detail, so the Settings › Skills category draws the report
+  (the `Fatal` card Models, Personas and Runtime draw) and the composer registers no skill command; an agent built while the
+  file does not load gets the sections its run was configured with (`configuredRuns`), or no skill and no instruction file
+  where no run of that session is known, and nothing read that way is cached for the workspace. The workspace service's
+  requirements reader holds the report (`configFault`, `workspace-service/delivery.ts`), re-reads the file at each claim,
+  launch preview and run-starting board action, and while it does not load the queue starts nothing — every candidate
+  deferred with "The workspace configuration did not load, so nothing starts from the queue until it is corrected: <report>"
+  (`scheduleQueue`'s `unconfigured`), the claim takes nothing, a run-starting action is refused and provisions nothing.
 
 - **What no tier reaches — the update check (REQ-STARTUP-111, the updater of 2026-09-28).** Whether, when and
   where a supported standalone build checks for an update is decided by no configuration value in any tier, no

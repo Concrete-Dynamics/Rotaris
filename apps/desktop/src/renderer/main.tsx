@@ -897,7 +897,8 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
   const readSkillsState = useCallback(async () => {
     if (workspace === null) { setSkillsState(null); return; }
     const r = await bridge.command({ kind: 'skills.read' });
-    if (r.ok) setSkillsState(r.value as SkillsState);
+    // OQ-279: a refusal (the configuration did not load) leaves no projection standing — never the last one read.
+    setSkillsState(r.ok ? (r.value as SkillsState) : null);
   }, [workspace]);
   // Re-read on a configuration change too: `skills.enabled` and both override maps are configuration, so a Save
   // must put the resolved policy back on the rows rather than leaving the screen's own copy standing.
@@ -905,6 +906,8 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
   const skills = useMemo(() => ({
     state: skillsState,
     home,
+    // OQ-279 / REQ-CONFIG-478: an unloaded configuration draws its report here, as Models, Personas and Runtime do.
+    ...(config.snapshot && !config.snapshot.loadOk ? { fatal: config.snapshot } : {}),
     // REQ-CONFIG-279: the selectors show what the SCREEN holds, so an unsaved choice does not snap back.
     ...(config.pending ? { pending: config.pending.skills } : {}),
     onEnabled: (value: boolean) => config.onChange({ kind: 'skillsEnabled', value }),

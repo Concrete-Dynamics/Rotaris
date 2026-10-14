@@ -295,6 +295,47 @@ describe('createDeliveryService', () => {
     expect(claim).toMatchObject({ id: 'REQ-101', unit: 'u1', permissions: 'permissive' });
     expect(calls).toEqual(['u1']);
   });
+  /**
+   * OQ-279's ruling (2026-10-13, R-072) read with REQ-CONFIG-478: under a fatal load the configuration is UNLOADED — "the
+   * load fails as a whole rather than falling back to a default" — and nothing starts on it. The reader kept the queue's
+   * last values and armed the queue from them, so an automatic queue went on claiming after the file stopped loading
+   * (docs/defects/fixed/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md).
+   */
+  it('OQ-279 / REQ-CONFIG-478: a configuration that stops loading starts nothing from the queue, says why, and a corrected file starts it again', async () => {
+    const { port, calls } = provisioningGit();
+    const deps = { db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port };
+    const before = createDeliveryService(deps);
+    await before.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    await before.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'suppressed' } }, USER);
+    writeFileSync(join(root, 'agents.yaml'), 'requirements:\n  scheduling:\n    mode: automatic\n');
+    const s = createDeliveryService(deps);
+    // The file stops loading after the service read it: an unknown key under `requirements:` is fatal (REQ-CONFIG-233).
+    writeFileSync(join(root, 'agents.yaml'), 'requirements:\n  scheduling:\n    mode: automatic\n  no_such_key: 1\n');
+    expect((await s.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM, 'suppressed')).value).toBeNull();
+    const preview = (await s.handle({ name: 'requirements.run.preview', workspace: 'x', id: 'REQ-101', action: 'release' }, SYSTEM, 'suppressed')).value as { startsNow: boolean; deferredReason?: string };
+    expect(preview.startsNow).toBe(false);
+    expect(preview.deferredReason).toMatch(/^The workspace configuration did not load, so nothing starts from the queue until it is corrected: .*agents\.yaml at requirements\.no_such_key \((global|workspace) scope\)/);
+    // Either scope: a merged-document fault is attributed to the workspace file (docs/defects/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md).
+    const board = (await s.handle({ name: 'requirements.board', workspace: 'x' }, USER, 'suppressed')).value as BoardProjection;
+    expect(board.queue.entries.find((e) => e.id === 'REQ-101')).toMatchObject({ state: 'deferred', reason: expect.stringMatching(/^The workspace configuration did not load/) });
+    // Only the release's own tree, provisioned before the file broke; nothing was provisioned on the unloaded configuration.
+    expect(calls).toEqual(['u1']);
+    // REQ-CONFIG-478's recovery: correcting the file and loading again is sufficient — the next claim reads it.
+    writeFileSync(join(root, 'agents.yaml'), 'requirements:\n  scheduling:\n    mode: automatic\n');
+    const claim = (await s.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM, 'suppressed')).value as { id: string; unit: string } | null;
+    expect(claim).toMatchObject({ id: 'REQ-101', unit: 'u1' });
+    expect(calls).toEqual(['u1']);
+  });
+  it('OQ-279 / REQ-CONFIG-478: a run-starting board action on an unloaded configuration is refused with the report and provisions nothing', async () => {
+    const { port, calls } = provisioningGit();
+    writeFileSync(join(root, 'agents.yaml'), 'requirements:\n  no_such_key: 1\n');
+    const s = createDeliveryService({ db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port });
+    const acted = await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    expect((acted.value as { ok: boolean; error?: Refusal }).ok).toBe(false);
+    expect((acted.value as { error: Refusal }).error.reason).toMatch(/The workspace configuration did not load, so nothing starts from the queue until it is corrected: .*requirements\.no_such_key/);
+    expect(acted.changed).toBeUndefined();
+    expect(calls).toEqual([]);
+  });
   it('REQ-TRACE-478/472: a standing disclosure that moves republishes the queue under it, and the reply carries the move for channel 10; one that holds changes nothing', async () => {
     const { port } = provisioningGit();
     const deps = { db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port };

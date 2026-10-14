@@ -241,6 +241,20 @@ async function until(d, selector, predicate, timeoutMs) {
     await sleep(200);
   }
 }
+/**
+ * `until` over `inspect`'s matches (every attribute, as `attrs`): a wait that reads the attributes the same way as the check
+ * after it, so the two cannot disagree. Launch 7's wait read `.data['aria-disabled']` from `probe` and timed out on every
+ * run while the check that followed read `aria-disabled=true` (fin42's review); read through `inspect`, it holds at once.
+ */
+async function untilInspected(d, selector, predicate, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const { matches } = await d.inspect(selector);
+    if (predicate(matches ?? [])) return true;
+    if (Date.now() > deadline) return false;
+    await sleep(200);
+  }
+}
 
 /**
  * The notice whose text matches, returned AS IT MATCHED rather than re-probed afterwards.
@@ -641,7 +655,7 @@ await (async () => {
       offered === null ? 'no gesture on the tab' : `aria-disabled=${offered.attrs['aria-disabled']} title="${offered.attrs['title'] ?? ''}" with the ${stillPostRun ?? 'no'} pass running`);
     await d.screenshot(join(output, 'during-post-run.png'));
     await d.click('[data-testid="library-retrospective"]', { timeoutMs: 15_000 });
-    const queued = await until(d, '[data-testid="library-retrospective"]', (m) => m[0]?.attrs?.['aria-disabled'] === 'true', 3_000);
+    const queued = await untilInspected(d, '[data-testid="library-retrospective"]', (m) => m[0]?.attrs?.['aria-disabled'] === 'true', 3_000);
     const rested = (await d.inspect('[data-testid="library-retrospective"]')).matches[0] ?? null;
     const passAfterPress = (await one(d, '[data-testid="improvement-activity-title-bar"]'))?.data['data-pass'] ?? null;
     check('the press queues the retrospective behind the post-run analysis, and the gesture then rests with its reason (PD-LIBRARY-002 revision 2 (e))',

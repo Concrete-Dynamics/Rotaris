@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { INDICATOR, passOutcome, postRunVerdict, refusalWait, retrospectiveArtifactVerdict, retrospectiveInstructionFiles, retrospectiveRefusalVerdict, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './analysis-reading.mjs';
+import { INDICATOR, passOutcome, postRunVerdict, PROVIDER_BANNER_HEADLINE, refusalClicks, refusalPressOrder, refusalWait, retrospectiveArtifactVerdict, retrospectiveInstructionFiles, retrospectiveRefusalVerdict, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './analysis-reading.mjs';
 
 describe('analysis reading (live-run `ask`, REQ-LIBRARY-123..127, PD-LIBRARY-002)', () => {
   it('the wait holds only once the named pass was seen and no indicator stands', () => {
@@ -197,5 +197,48 @@ describe('the retrospective\'s authentication refusal (live-run `ask-retrospecti
     expect(run([])).toBe(false);
     expect(run(['Something else'])).toBe(false);
     expect(run([refusal.text])).toBe(true);
+  });
+  /*
+   * Acceptance finding L6 (fin46, the default run at b9e3005): the press won the race with the open's "No model provider is
+   * authenticated yet", which then replaced the refusal in the single slot (REQ-NOTIFY-024) and the check read 0 refusals.
+   */
+  const LOG_B9E3005 = [
+    '[main 2026-10-14T13:40:15.851Z] info    capture: clicked "[data-testid="library-tab"][data-tab="proposals"]"',
+    '[main 2026-10-14T13:40:15.903Z] info    capture: clicked "[data-testid="library-retrospective"]:not([aria-disabled="true"])"',
+    '[main 2026-10-14T13:40:15.953Z] info    diagnostics: notice #1 error "Provider authentication required"',
+    '[main 2026-10-14T13:40:16.059Z] info    providers: 0 authenticated',
+    '[main 2026-10-14T13:40:16.061Z] info    notice: No model provider is authenticated yet',
+  ].join('\n');
+  const LOG_3C3F447 = [
+    '[main 2026-10-14T16:00:48.690Z] info    providers: 0 authenticated',
+    '[main 2026-10-14T16:00:48.701Z] info    notice: No model provider is authenticated yet',
+    '[main 2026-10-14T16:00:48.705Z] info    capture: clicked "[data-testid="library-retrospective"]:not([aria-disabled="true"])"',
+    '[main 2026-10-14T16:00:48.711Z] info    diagnostics: notice #2 error "Provider authentication required"',
+  ].join('\n');
+  it('the press waits for the provider banner, so the refusal is the newest notice in the slot (L6, REQ-NOTIFY-024)', () => {
+    const clicks = refusalClicks();
+    const steps = clicks.split(';;');
+    expect(steps).toHaveLength(2);
+    const press = steps[1]!;
+    // The press is held until the banner the open posts is on screen, matched by its accessible name (`Notice.tsx`).
+    expect(press).toContain(`body:has([data-testid="notice"][aria-label$=${JSON.stringify(PROVIDER_BANNER_HEADLINE)}])`);
+    expect(press).toMatch(/\[data-testid="library-retrospective"\]:not\(\[aria-disabled="true"\]\)@~\d+$/);
+    // The capture grammar splits a step at its LAST '@' and at '>>' (`parseSteps`): the selector holds neither.
+    const selector = press.slice(0, press.lastIndexOf('@'));
+    expect(selector).not.toContain('@');
+    expect(selector).not.toContain('>>');
+    expect(PROVIDER_BANNER_HEADLINE).toBe('No model provider is authenticated yet');
+  });
+  it('reads the press against the banner from the launch log', () => {
+    expect(refusalPressOrder(LOG_B9E3005)).toMatchObject({ banner: true, pressed: true, after: false });
+    expect(refusalPressOrder(LOG_3C3F447)).toMatchObject({ banner: true, pressed: true, after: true });
+    expect(refusalPressOrder('[main 2026-10-14T16:00:48.701Z] info    notice: No model provider is authenticated yet\n[main 2026-10-14T16:01:08.000Z] info    capture: no "body:has(x) [data-testid="library-retrospective"]" control on screen')).toMatchObject({ banner: true, pressed: false, after: false });
+    expect(refusalPressOrder('')).toMatchObject({ banner: false, pressed: false, after: false });
+  });
+  it('the live run\'s unauthenticated launch presses through refusalClicks and checks the order', () => {
+    const source = readFileSync(resolve(import.meta.dirname, '..', 'live-run.mjs'), 'utf8');
+    const launch = source.slice(source.indexOf("launch('ask-retrospective-unauth'"), source.indexOf("results.scenarios['ask-retrospective-unauth']"));
+    expect(launch).toContain('ROTARIS_CAPTURE_CLICKS: refusalClicks()');
+    expect(launch).toContain('refusalPressOrder(refusedLog)');
   });
 });

@@ -152,6 +152,53 @@ export function refusalWait() {
 }
 
 /**
+ * REQ-WORKSPACE-152 (3)'s first-launch notice, which the open's notice slot posts once it counts no authenticated provider
+ * (`apps/desktop/src/main/index.ts`, `NO_PROVIDER_HEADLINE`). With the credential file withheld it is posted in every
+ * `ask-retrospective-unauth` launch.
+ */
+export const PROVIDER_BANNER_HEADLINE = 'No model provider is authenticated yet';
+
+const RETROSPECTIVE_PRESS = '[data-testid="library-retrospective"]:not([aria-disabled="true"])';
+
+/**
+ * `ROTARIS_CAPTURE_CLICKS` for `ask-retrospective-unauth`: the Proposals tab, then the gesture, held until the provider banner
+ * is on screen. Acceptance finding L6 (fin46; the default run at `b9e3005`): pressed as soon as the gesture was enabled, the
+ * press won the race with the open's banner, which then replaced the refusal in the single slot (REQ-NOTIFY-024) 100 ms
+ * later, and the wait for the refusal read 0 notices over a product that had posted one. Held behind the banner, the refusal
+ * is the newest notice and the one that stands. The banner is matched by its accessible name (`Notice.tsx`:
+ * `<severity word>: <title>`), since a selector reads no text; a banner that never comes leaves the press unmade, which
+ * `refusalPressOrder` names.
+ */
+export function refusalClicks(deadlineMs = 30_000) {
+  return `[data-testid="library-tab"][data-tab="proposals"]@~10000;;body:has([data-testid="notice"][aria-label$=${JSON.stringify(PROVIDER_BANNER_HEADLINE)}]) ${RETROSPECTIVE_PRESS}@~${deadlineMs}`;
+}
+
+const stamped = (line) => {
+  const m = /^\[\w+ (\d{4}-\d\d-\d\dT[\d:.]+Z)\]/.exec(line);
+  return m ? Date.parse(m[1]) : null;
+};
+
+/**
+ * Whether `ask-retrospective-unauth`'s press came after the provider banner, read from the launch's log: the shell's
+ * `notice: No model provider is authenticated yet` line and the capture's `clicked "…library-retrospective…"` line. `after` is
+ * true only when both are there and the press is not earlier than the banner.
+ */
+export function refusalPressOrder(log) {
+  const lines = String(log).split('\n');
+  const bannerLine = lines.find((l) => l.includes(`notice: ${PROVIDER_BANNER_HEADLINE}`));
+  const pressLine = lines.find((l) => /capture: clicked ".*\[data-testid="library-retrospective"\]/.test(l));
+  const bannerAt = bannerLine === undefined ? null : stamped(bannerLine);
+  const pressedAt = pressLine === undefined ? null : stamped(pressLine);
+  const banner = bannerLine !== undefined;
+  const pressed = pressLine !== undefined;
+  const after = bannerAt !== null && pressedAt !== null && pressedAt >= bannerAt;
+  const detail = !banner ? 'no provider banner in the log, so the press was held and never made'
+    : !pressed ? 'the banner was posted but the gesture was never pressed'
+      : `pressed ${pressedAt === null || bannerAt === null ? '?' : pressedAt - bannerAt} ms after the banner`;
+  return { banner, pressed, after, detail };
+}
+
+/**
  * PD-LIBRARY-002 revision 5 (OQ-300), the live run's `ask-retrospective-unauth`: a retrospective pressed with the entry
  * provider's credential withheld owes ONE notice titled with REQ-WORKSPACE-137's headline, the retrospective's sentence as its
  * body and the "Open Models settings" action, and stores no retrospective artifact. `notices` are the capture's probe of

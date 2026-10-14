@@ -42,7 +42,8 @@
  *                 completed", naming the artifact), and a verdict with no detail prints no "— undefined". Since fin45 (PD-LIBRARY-002
  *                 revision 5, OQ-300) `ask-retrospective-unauth` presses the gesture again with the credential file moved aside
  *                 for one launch: one "Provider authentication required" notice naming the retrospective, with "Open Models
- *                 settings", and no artifact.
+ *                 settings", and no artifact. Since fin46 (finding L6) that press waits for the open's "No model provider is
+ *                 authenticated yet" banner, which otherwise could replace the refusal in the single slot (REQ-NOTIFY-024).
  *   3. edit     — one real run that implements REQ-103 and runs the suite in the terminal. Asserted from the
  *                 files on disk, from `git diff`, and by running `node --test` again in this script. The work is
  *                 split between two children writing IN PARALLEL, each under a declared write scope (PD-TOOLS-006):
@@ -246,7 +247,7 @@ import { runApprovalsScenario, runAwayScenario, runPlanGateScenario } from './li
 import { runCutScenario } from './lib/cut-scenario.mjs';
 import { runCrlfScenario } from './lib/crlf-scenario.mjs';
 import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-field.mjs';
-import { passOutcome, postRunVerdict, refusalWait, retrospectiveArtifactVerdict, retrospectiveInstructionFiles, retrospectiveRefusalVerdict, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './lib/analysis-reading.mjs';
+import { passOutcome, postRunVerdict, refusalClicks, refusalPressOrder, refusalWait, retrospectiveArtifactVerdict, retrospectiveInstructionFiles, retrospectiveRefusalVerdict, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './lib/analysis-reading.mjs';
 import { verdictLine } from './lib/verdict-line.mjs';
 import { RENAME_FILES, RENAME_FROM, RENAME_TO, renameReading } from './lib/rename-reading.mjs';
 import { CLASSIFIER_MARK, DELEGATED_MARK, REPORT_MARK, ROOT_MARK, answerReading, planReading, waitReading } from './lib/plan-open-reading.mjs';
@@ -1661,13 +1662,16 @@ if (wanted.includes('ask')) {
       try {
         refusedLog = await launch('ask-retrospective-unauth', {
           ROTARIS_CAPTURE_VIEW: '6',
-          ROTARIS_CAPTURE_CLICKS: '[data-testid="library-tab"][data-tab="proposals"]@~10000;;[data-testid="library-retrospective"]:not([aria-disabled="true"])@~20000',
+          // L6 (fin46): the press is held behind the open's provider banner, so the refusal is the notice left standing.
+          ROTARIS_CAPTURE_CLICKS: refusalClicks(),
           ROTARIS_CAPTURE_WAIT: refusalWait(), ROTARIS_CAPTURE_WAIT_MS: '60000', ROTARIS_CAPTURE_AFTER_MS: '2500',
           ROTARIS_CAPTURE_PROBE: '[data-testid="notice"]',
         }, 150_000);
       } finally {
         renameSync(withheld, tokensFile);
       }
+      const pressOrder = refusalPressOrder(refusedLog);
+      check(pressOrder.after, 'ask-retrospective-unauth: the gesture was pressed after the provider banner, so the refusal is the newest notice in the slot (REQ-NOTIFY-024)', `${pressOrder.detail} (see ask-retrospective-unauth/app.log)`);
       const refusedNotices = JSON.parse(/capture: probe \[data-testid="notice"\] → (\[.*\])\s*$/m.exec(refusedLog)?.[1] ?? '[]');
       const refusal = retrospectiveRefusalVerdict(refusedNotices, retroBefore, improvementArtifacts().filter((a) => a.source_kind === 'retrospective').length);
       check(refusal.passed, 'a retrospective pressed with the entry provider\'s credential withheld posts one "Provider authentication required" notice naming the retrospective, with "Open Models settings", and stores nothing (PD-LIBRARY-002 revision 5, OQ-300)', `${refusal.detail}: ${refusedNotices.map((n) => n.text.slice(0, 260)).join(' | ') || 'no notice on screen'}`);

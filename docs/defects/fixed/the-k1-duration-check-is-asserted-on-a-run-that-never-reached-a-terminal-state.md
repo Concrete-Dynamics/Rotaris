@@ -31,3 +31,27 @@ run-level row read one interval". The header marks which reading it shows with `
 - `apps/desktop/scripts/lib/run-duration-agreement.mjs` — `runDurationReading` (line 44), which reads `frozen` but
   leaves it out of `agree` and out of any verdict.
 - `packages/ui/src/RunHeader.tsx` — the header's `data-frozen` (`'1'` once the run is not busy).
+
+## Outcome — repaired 2026-10-14
+
+The verdict now lives beside the reading: `runDurationVerdict` in `apps/desktop/scripts/lib/run-duration-agreement.mjs`
+asserts the agreement only when the header says it is frozen (`data-frozen` `1`). A header that is live, or carries no
+mark, is a NOTE (`reason: 'not-terminal'`), as a capture whose inspector shows another agent already was
+(`'another-agent'`); a probe that found nothing is still a failure, since the instrument did not read. `checkRunDuration`
+in `live-run.mjs` takes the verdict and words the new note "the run was not terminal at the capture (the header is not
+frozen), so the run duration's agreement is not read", with the same detail line. A timed-out wait still fails on its own
+check ("the terminal run reached its result inside the wait"); only the false second failure is gone.
+
+Pinned by `apps/desktop/scripts/lib/run-duration-agreement.test.ts` "notes, never fails, a capture of a run that is not
+terminal (L4)", which reads the three probe lines of pack `2026-10-14T15-58-45-917Z`'s `terminal` verbatim, and "asserts a
+frozen header: K1's pair fails, one figure passes, another agent is noted, a missing probe fails": both red without the
+change (`runDurationVerdict is not a function`; before it, the same reading's `agree` was false with `runLevel` true, so
+`checkRunDuration` failed it).
+
+Shown on the evidence that found it and by the live scenario. Replayed through the new verdict, the four captures of pack
+`2026-10-14T15-58-45-917Z` read `ask` `0:07`/`done · 7s`, `edit` `2:53`/`done · 2m 53s` and `frictions` `0:27`/`done · 27s`,
+each frozen and each a pass, and `terminal` `1:00` (frozen 0) beside `running · 9m 13s`, a note, not a failure. The live
+run on this branch against the registered self-hosted endpoint (`--only=terminal`, pack `2026-10-14T18-14-43-484Z`,
+`live-run PASSED`, load 0.8 to 1.4) reached its result inside the wait, so the check asserted: header `8:40`
+(`data-seconds` 520, frozen 1) beside `orchestrator` `done · 8m 40s · 13 tool calls`, PASS. That run did not reach the
+not-terminal path; the replay above is its evidence.

@@ -59,6 +59,7 @@
  * so a feature is measured working beside the others, and the run costs no extra scenario for it.
  * `ask`, `edit`, `frictions` and `terminal` also read, at their capture, the run header's frozen duration against the
  * inspector's run-level row: one interval, one figure (REQ-CHAT-158, REQ-MONITOR-107; K1 of the default live run at c2fdd6a).
+ * A capture of a run that is not yet terminal (its header not frozen) notes the reading instead (acceptance L4).
  *   4. requirements — the REQUIREMENTS BOARD, driven as a person drives it: REQ-104 selected, the move control
  *                 pressed, the release confirmed, and the run that follows watched from `backlog` through
  *                 `running` to `review`, its review decision taken and the card left resting in `done`. Asserted
@@ -236,7 +237,7 @@ import { nearMissReading } from './lib/near-miss-edits.mjs';
 import { stallIssueCadence } from './lib/stall-issue-cadence.mjs';
 import { conclusive, pacedWindows, stallsWhileStreaming } from './lib/paced-arguments.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
-import { DURATION_PROBES, runDurationReading } from './lib/run-duration-agreement.mjs';
+import { DURATION_PROBES, runDurationReading, runDurationVerdict } from './lib/run-duration-agreement.mjs';
 import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
 import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, toolIntervals, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
@@ -945,14 +946,18 @@ function expectedConfiguredCost(tokensIn, tokensOut) {
 /**
  * REQ-CHAT-158, REQ-MONITOR-107 (acceptance K1 of the default live run at c2fdd6a): at the capture the run header's frozen
  * duration and the inspector's run-level row read one interval and must read one figure; the header floored it and the
- * row rounded it, a second apart in 3 of 4 runs. Asserted when the inspector shows the run-level agent; a capture that
- * shows another agent is noted, since the row it reads is then not the run's.
+ * row rounded it, a second apart in 3 of 4 runs. Asserted only when the header is frozen at a terminal state and the
+ * inspector shows the run-level agent (`runDurationVerdict`): a capture of a run that is still live (a wait that ran out,
+ * acceptance L4 at 3c3f447) reads two figures by design, the call in flight against the time since spawn, and is noted,
+ * as is one that shows another agent, whose row is then not the run's.
  */
 function checkRunDuration(name, log) {
   const reading = runDurationReading(log, 'orchestrator');
   const detail = `header "${reading.header}" (data-seconds ${reading.dataSeconds}, frozen ${reading.frozen}) · inspector "${reading.name}" "${reading.meta}"`;
-  if (reading.header !== null && reading.meta !== null && !reading.runLevel) { noted(`${name}: the inspector showed another agent at the capture, so the run duration's agreement is not read`, detail); return; }
-  check(reading.agree, `${name}: the run header and the inspector's run-level row read the run's duration as one figure (K1)`, detail);
+  const { verdict, reason } = runDurationVerdict(reading);
+  if (reason === 'not-terminal') { noted(`${name}: the run was not terminal at the capture (the header is not frozen), so the run duration's agreement is not read`, detail); return; }
+  if (reason === 'another-agent') { noted(`${name}: the inspector showed another agent at the capture, so the run duration's agreement is not read`, detail); return; }
+  check(verdict === 'pass', `${name}: the run header and the inspector's run-level row read the run's duration as one figure (K1)`, detail);
 }
 function checkPricing(name, session) {
   if (!session) return;

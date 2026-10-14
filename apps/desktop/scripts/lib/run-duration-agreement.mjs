@@ -44,3 +44,18 @@ export function runDurationReading(log, entryPersona) {
   const agree = fromText !== null && row !== null && runLevel && fromText === row && (fromData === null || fromData === fromText);
   return { header: header?.text ?? null, frozen: header?.data?.['data-frozen'] ?? null, headerSeconds: fromText, dataSeconds: fromData, name, runLevel, meta, rowSeconds: row, agree };
 }
+
+/**
+ * Whether the live run asserts the reading, notes it, or fails it (acceptance L4,
+ * `docs/defects/fixed/the-k1-duration-check-is-asserted-on-a-run-that-never-reached-a-terminal-state.md`). The two figures
+ * agree by design only once the run is terminal: while it is live the header counts the model call in flight, restarting
+ * at each call (REQ-CHAT-158), and the run-level row counts from spawn (REQ-MONITOR-107). So the agreement is asserted only
+ * when the header says it is frozen (`data-frozen` `1`); a header that is live, or carries no mark, is a NOTE with
+ * `reason: 'not-terminal'`, as is a capture whose inspector shows another agent (`'another-agent'`). A probe that found
+ * nothing is still a failure: the instrument did not read.
+ */
+export function runDurationVerdict(reading) {
+  if (reading.header !== null && reading.frozen !== '1') return { verdict: 'note', reason: 'not-terminal' };
+  if (reading.header !== null && reading.meta !== null && !reading.runLevel) return { verdict: 'note', reason: 'another-agent' };
+  return { verdict: reading.agree ? 'pass' : 'fail' };
+}

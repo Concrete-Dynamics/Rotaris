@@ -134,6 +134,8 @@ function installFirstStore(workspacesRoot: string, id: WorkspaceId, workspaceRoo
   rmSync(sibling, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   let migration: MigrateOutcome;
   try {
+    // The workspaces root itself may not exist yet (a first workspace on this machine): it is made, as the place once was.
+    mkdirSync(workspacesRoot, { recursive: true });
     mkdirSync(sibling);
     const db = openStore(join(sibling, STORE_FILE));
     try {

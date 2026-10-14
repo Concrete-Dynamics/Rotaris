@@ -187,6 +187,14 @@ describe('store — OQ-281 (ruled 2026-10-14 under R-072): a first store is made
     expect(existsSync(firstStoreSibling(root, id))).toBe(false);
   });
 
+  it('a workspaces root that does not exist yet is made, as the place once was', () => {
+    const fresh = join(root, 'not-yet', 'workspaces');
+    const r = openWorkspaceStore(fresh, id, ws);
+    expect(readdirSync(fresh)).toEqual([id]);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
   it('a stray sibling for the identifier — a store never installed — is swept at its next open, whatever it holds', () => {
     const sibling = firstStoreSibling(root, id);
     expect(sibling).toBe(join(root, `.${id}.new`));

@@ -1261,8 +1261,9 @@ async function main(): Promise<void> {
   // REQ-WORKSPACE-084/109: the run host is never forked again, so a setup it held can never send its finished status; the
   // coordinator ends that follow as a failure, or every later setup would wait behind it for the life of the process.
   runHostChild.on('exit', (code) => { initialization.onRunHostExit(code ?? -1); });
-  /**
-   * Verification only — `ROTARIS_INIT_TEST_TASK=consent|fail`. REQ-WORKSPACE-080's last sentence is what
+  /*
+   * Verification only — `ROTARIS_INIT_TEST_TASK=consent|fail`, and compiled out of a packaged build (a block comment, not a
+   * doc comment, which the bundle would keep for the seam check to find). REQ-WORKSPACE-080's last sentence is what
    * this exercises and it is the only way to exercise it: "a setup task added after the fact SHALL
    * participate in the prompt and in the setup UI under exactly the rules stated here, with no additional
    * behavior of its own". The product's own default set requires no consent (REQ-WORKSPACE-088), so
@@ -1270,7 +1271,7 @@ async function main(): Promise<void> {
    * and the composer gate would therefore be unreachable by any launch of the shipped product. This seam
    * registers an ordinary task through the ordinary registry; it adds no code path of its own.
    */
-  const testTask = process.env['ROTARIS_INIT_TEST_TASK'];
+  const testTask = __ROTARIS_SEAMS__ ? process.env['ROTARIS_INIT_TEST_TASK'] : undefined; // compiled out of a packaged build
   if (testTask === 'consent' || testTask === 'fail') {
     initialization.registry.register({
       id: `verification-${testTask}`,
@@ -1351,7 +1352,7 @@ async function main(): Promise<void> {
     capturing,
     timers: { after: (delayMs, callback) => clocks.timers.after(millis(delayMs), callback) },
     loadMainWindow: async (win) => {
-      const rowsProof = capturing && process.env['ROTARIS_ROWS_PROOF'] === '1';
+      const rowsProof = __ROTARIS_SEAMS__ && capturing && process.env['ROTARIS_ROWS_PROOF'] === '1';
       if (process.env['ELECTRON_RENDERER_URL']) await win.loadURL(rowsProof ? `${process.env['ELECTRON_RENDERER_URL']}?role=rows-proof` : process.env['ELECTRON_RENDERER_URL']);
       else await win.loadFile(join(__dirname, '../renderer/index.html'), rowsProof ? { query: { role: 'rows-proof' } } : undefined);
     },

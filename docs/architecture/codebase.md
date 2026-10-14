@@ -1627,7 +1627,8 @@ Until then its `forbidden` list named none of main's dialog answers — the hook
 choosers' — which were read behind the run-time `capturing` test alone and shipped
 (`docs/defects/fixed/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md`). Two tests now hold the source and
 the list together: `apps/desktop/src/main/capture/seam-reads.test.ts` (every capture read in main carries the flag on its line,
-the probe's own excepted) and `apps/desktop/scripts/lib/seam-check.test.ts` (every flagged read in main, the run host and the
+the probe's own excepted, and so does every other `ROTARIS_*` read but ADR-0059's `ROTARIS_CIRCUIT_BREAKER`: the rows proof's
+`ROTARIS_ROWS_PROOF` and the initialization proof's `ROTARIS_INIT_TEST_TASK` were found unguarded at review) and `apps/desktop/scripts/lib/seam-check.test.ts` (every flagged read in main, the run host and the
 workspace service is named by the list). `vitest.config.ts` defines the flag `true`, as the ordinary build does. Still owed:
 `docs/defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`.
 

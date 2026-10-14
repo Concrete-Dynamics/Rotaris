@@ -68,6 +68,16 @@ the note's names in `out/main/index.js` (`grep -rhoE "ROTARIS_CAPTURE_[A-Z0-9_]+
 press) and `part-j-proof` (the message boxes' and the pause window's answers) drive them in the built app. `pnpm package` itself
 was not run (its electron-builder lane is the release lane R-071 deferred).
 
+**Found at review (2026-10-14), repaired in the same bundle:** two more of main's seams, of the class this note describes but
+not named `ROTARIS_CAPTURE_*`, so neither its list nor the first form of the tests saw them, and the same seam-free build
+still carried both: `ROTARIS_ROWS_PROOF` (`loadMainWindow` in `apps/desktop/src/main/index.ts`, read behind `capturing` alone,
+which loads the main window as the rows proof's renderer role instead of the application) and `ROTARIS_INIT_TEST_TASK`
+(read with no test at all, which registers a verification setup task, a consent one included, into REQ-WORKSPACE-080's
+registry; its `/** */` comment, which names it, is now a block comment). Both now carry the flag on their line and are named
+by the `forbidden` list; `seam-reads.test.ts` holds every `ROTARIS_*` read in main but ADR-0059's `ROTARIS_CIRCUIT_BREAKER`
+to the flag (red on those two lines before), and `seam-check.test.ts` holds every flagged `ROTARIS_*` read to the list. A
+`ROTARIS_BUILD=package` build then carries neither name, and `node apps/desktop/scripts/lib/seam-check.mjs` reads `PASS`.
+
 Still in a packaged build, outside this note's list and recorded apart: the packaged probe's own `_WAIT` (whose `js:` form
 evaluates an expression in the renderer), `_PROBE`, `_END_VIEW` and `_PROMPT_MS`, and the children's `_SKILLS_HOME` and
 `_INSTRUCTIONS_HOME`, read with no guard at all

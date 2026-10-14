@@ -512,7 +512,8 @@ must come before the next proof. *Since 2026-09-27 it says so only when the buil
 > window's and every message box's answer, the backup, restore, export, directory and skill-file choosers' paths, the
 > provider dialog's fill, the external-link swallow, the stale question answer, the subscription's delay and hold, the
 > theme, the scale, the network log and the resume timing — sat behind `capturing` alone, and a `ROTARIS_BUILD=package` build
-> carried twenty of their names in `out/main/index.js`. Each read now carries the flag on its own line, the seam check's lists
+> carried twenty of their names in `out/main/index.js`; the bundle's review found two more not named `ROTARIS_CAPTURE_*`,
+> `ROTARIS_ROWS_PROOF` (behind `capturing` alone) and `ROTARIS_INIT_TEST_TASK` (behind nothing), repaired the same way. Each read now carries the flag on its own line, the seam check's lists
 > live in `scripts/lib/seam-check.mjs` and name them all, and two tests hold source and list together
 > (`main/capture/seam-reads.test.ts`, `scripts/lib/seam-check.test.ts`); the same build then carries none, and the check
 > passes over it. **Still owed:** the packaged probe answers more than its three variables, and the run host and the workspace

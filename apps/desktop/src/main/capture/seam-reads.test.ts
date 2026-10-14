@@ -64,4 +64,25 @@ describe('main reads every scriptable capture variable behind __ROTARIS_SEAMS__ 
       .map((r) => `${r.file}:${r.line} ${r.text}`);
     expect(unguarded).toEqual([]);
   });
+
+  /*
+   * The same rule for main's seams that are not named `ROTARIS_CAPTURE_*`: the rows proof's renderer role
+   * (`ROTARIS_ROWS_PROOF`, read behind `capturing` alone) and the initialization proof's registered task
+   * (`ROTARIS_INIT_TEST_TASK`, read with no test at all) were both left in a `ROTARIS_BUILD=package` build (fin43's review,
+   * 2026-10-14). Every `ROTARIS_*` variable main reads is a verification seam but the product's own host switch.
+   */
+  it('each read of any other ROTARIS_ variable but the product\'s own carries the flag on its own line', () => {
+    const PRODUCT = new Set(['ROTARIS_CIRCUIT_BREAKER']); // ADR-0059's host switch, a product variable
+    const unguarded: string[] = [];
+    for (const path of sources(MAIN)) {
+      const file = relative(MAIN, path).split('\\').join('/');
+      if (OUTSIDE_THIS_RULE.has(file)) continue;
+      readFileSync(path, 'utf8').split('\n').forEach((text, index) => {
+        const names = [...text.matchAll(/process\.env\[['"](ROTARIS_[A-Z0-9_]+)['"]\]/g)].map((m) => m[1]!)
+          .filter((name) => !name.startsWith('ROTARIS_CAPTURE_') && !PRODUCT.has(name));
+        if (names.length > 0 && !/__ROTARIS_SEAMS__/.test(text)) unguarded.push(`${file}:${index + 1} ${text.trim()}`);
+      });
+    }
+    expect(unguarded).toEqual([]);
+  });
 });

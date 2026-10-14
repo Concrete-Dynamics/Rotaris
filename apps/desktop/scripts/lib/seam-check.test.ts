@@ -22,7 +22,7 @@ function flaggedReads(): Map<string, string> {
       if (!e.isFile() || !e.name.endsWith('.ts') || e.name.endsWith('.test.ts')) continue;
       readFileSync(join(e.parentPath, e.name), 'utf8').split('\n').forEach((line, i) => {
         if (!line.includes('__ROTARIS_SEAMS__')) return;
-        for (const m of line.matchAll(/process\.env\[['"]((?:ROTARIS_CAPTURE|ROTARIS_THEME_PROOF|ROTARIS_DRIVER)[A-Z0-9_]*)['"]\]/g)) found.set(m[1]!, `${e.name}:${i + 1}`);
+        for (const m of line.matchAll(/process\.env\[['"](ROTARIS_[A-Z0-9_]+)['"]\]/g)) found.set(m[1]!, `${e.name}:${i + 1}`);
       });
     }
   }

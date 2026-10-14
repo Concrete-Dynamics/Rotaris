@@ -15,6 +15,11 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-14**
 
+**Main's two seams not named `ROTARIS_CAPTURE_*` are read behind `__ROTARIS_SEAMS__` too (ADR-0056; fin43's review).**
+`ROTARIS_ROWS_PROOF` and `ROTARIS_INIT_TEST_TASK` (`main/index.ts`) gain the flag on their line and join the seam check's
+`forbidden` list. The **process view**'s main row names them. No package, edge, process, channel, command or store column
+changed.
+
 **Main's remaining capture seams are read behind `__ROTARIS_SEAMS__` (ADR-0056, REQ-HOOKS-104; fin43).** Twenty-two reads in
 `main/index.ts`, `main-windows.ts` and three command facets gain the flag on their own line; the seam check's lists move to
 `scripts/lib/seam-check.mjs` and name them. The **process view**'s main row says so and names the probe's and the children's

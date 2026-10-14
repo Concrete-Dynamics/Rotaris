@@ -15,6 +15,11 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-14**
 
+**The question mirror writes nothing after its port closed (fin43, REQ-SESSION-094).** `mirrorQuestions`
+(`apps/desktop/src/run-host/tools.ts`) reads the approvals sink's `closed`, so a question that ends after its run's end
+closed the port leaves `pending_questions` alone. The **runtime view**'s `sessions` row says so. No package, edge, process,
+channel, command or store column changed.
+
 **The artifact inspector shows the frontmatter read-only and a save writes the record's frontmatter (PD-LIBRARY-003 revision 2,
 OQ-272; fin43).** `ArtifactInspector` holds a document's leading block apart from the editor (`artifact-frontmatter`, a bounded
 read-only region above it) and sends it back unchanged in front of the edited text; `ArtifactStore.editBody` writes the record's

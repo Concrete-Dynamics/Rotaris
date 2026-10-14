@@ -319,6 +319,28 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
   });
 
   /*
+   * REQ-SESSION-094 for the question mirror (`docs/defects/fixed/a-question-mirror-writes-pending-questions-after-its-port-closed.md`):
+   * like the approvals sink, the mirror drops its write once the port is closed, so a question a stop's grace detached
+   * cannot write `pending_questions` into a session whose run has ended.
+   */
+  it('REQ-SESSION-094: a question that ends after its port closed writes nothing to pending_questions', async () => {
+    const port = portFor(null, null, {}, { tools: '[read_file, ask_questions]' });
+    const stored = (): string | null | undefined => dal.getSession(asSessionId('S1'))?.pending_questions;
+    const call = { callId: 'q1', name: 'ask_questions', rawArgs: JSON.stringify({ steps: [{ id: 'a', title: 'Which one?' }] }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' };
+    const pending = port.dispatch(call, new AbortController().signal);
+    await vi.waitFor(() => expect(presented).toHaveLength(1));
+    expect(port.answerApproval(presented[0]!.request_id, 'once')).toBe(true);
+    await vi.waitFor(() => expect(port.pendingQuestions?.()).toHaveLength(1));
+    const asked = port.pendingQuestions!()[0]!;
+    expect(JSON.parse(stored() ?? '[]')).toHaveLength(1);
+    port.close?.('This call was interrupted by the stop before it completed, and it was not re-run.');
+    const before = stored();
+    expect(port.answerQuestions?.(asked.request_id, { a: { selected_option: null, freeform_text: 'Late.' } })).toBe(true);
+    await pending;
+    expect(stored()).toBe(before);
+  });
+
+  /*
    * Defect `an-approval-asked-after-the-last-window-closes-is-denied` (R-067): the last window's revoke comes at once, the
    * run host's shutdown only after REQ-GIT-101's checkpoint wait. What an agent asks in that gap is the quit's to withdraw.
    */

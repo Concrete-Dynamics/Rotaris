@@ -420,9 +420,12 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
    * port's, so two agents asking at once do not overwrite each other (the overwrite `pending_approvals` suffers,
    * docs/defects/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md) — mirrored to
    * `pending_questions` each time one of this port's prompts is put or ends. A crash's record withdraws what it lists; the
-   * listing flags the session as awaiting input. Never read back as pending (PD-ORCH-005 revision 3).
+   * listing flags the session as awaiting input. Never read back as pending (PD-ORCH-005 revision 3). Like the approvals
+   * sink, it writes nothing once the run's end has closed this port (REQ-SESSION-094): a question a stop's grace detached
+   * ends into a session whose run is over (`docs/defects/fixed/a-question-mirror-writes-pending-questions-after-its-port-closed.md`).
    */
   const mirrorQuestions = (): void => {
+    if (writes.closed()) return;
     ctx.writer.save(ctx.writer.currentStatus, { pending_questions: JSON.stringify(ctx.pendingQuestionsOfSession?.() ?? questions.pending()) });
   };
   executors.set('ask_questions', askQuestionsTool({

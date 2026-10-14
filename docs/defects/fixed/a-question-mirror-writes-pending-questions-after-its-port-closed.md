@@ -20,3 +20,10 @@ listed prompt to `[]` after the close. The withdrawal at rest makes it unlikely 
 
 - `apps/desktop/src/run-host/tools.ts` — `mirrorQuestions`, and `writerSink`'s `closed` it does not read.
 - `apps/desktop/src/run-host/tools.test.ts` — the mirror's cases beside the `REQ-SESSION-094` close case.
+
+## Repaired — 2026-10-14 (fin43, `fin43-optional-findings`)
+
+`mirrorQuestions` returns before writing once `writes.closed()` — the approvals sink's own flag, set when the run's end
+closes the port — so the mirror and the sink stop together. Pinned by `tools.test.ts`, "REQ-SESSION-094: a question that
+ends after its port closed writes nothing to pending_questions", which failed without the guard (the column went from the
+listed prompt to `[]` after the close). The runtime view's `sessions` row names it. No open question was raised.

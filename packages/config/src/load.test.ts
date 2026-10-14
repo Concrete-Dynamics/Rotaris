@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { canonicaliseRoles, mergeLayers, overlaySection, PLAIN_OPS } from './merge.js';
-import { loadConfiguration, readDelegationStrategy, repositoryExcludeFile, spelledAsStated, statedPrefixLength, type LoadedConfiguration } from './load.js';
+import { loadConfiguration, readDelegationStrategy, repositoryExcludeFile, replacedPrefixLength, spelledAsStated, statedPrefixLength, statingFile, type LoadedConfiguration, type ScopeFiles } from './load.js';
 import { parseConfig } from './document.js';
 import { referentialMessages, renderFatal, renderProblems } from './validate.js';
 import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase, syntheticOriginOf } from './slots.js';
@@ -465,6 +465,46 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
       expect(statedPrefixLength(doc, 'top')).toBe(-1);
       expect(statedPrefixLength(doc, 'absent.key')).toBe(-1);
       expect(statedPrefixLength(null, 'models')).toBe(-1);
+    });
+    /**
+     * A value the merge replaced wholesale (REQ-CONFIG-044/050: a models entry over a non-mapping, a list) is the later
+     * file's in every part, so a fault on a value MISSING beneath it is that file's, even where an earlier file states the
+     * deeper path (docs/defects/fixed/a-fault-inside-a-wholesale-replaced-value-is-attributed-to-an-earlier-file-that-states-the-deeper-path.md).
+     */
+    it('a field missing from a models entry the workspace file replaced wholesale is the workspace file\'s, not the global file that states it (REQ-CONFIG-044)', () => {
+      const s = scopes('models:\n  m: { provider: openai, model_id: x }\n', 'models:\n  m: { model_id: y }\n', { globalModels: 'models:\n  m: oops\n' });
+      expect(fault(s)).toMatchObject({ path: 'models.m.provider', file: join(s.workspaceRoot, '.rotaris', 'agents.yaml'), scope: 'workspace' });
+    });
+    it('a fault beneath a list item names the file whose list the merge kept, not an earlier file whose item states the deeper path (REQ-CONFIG-050)', () => {
+      const files = (scope: 'global' | 'workspace', dir: string): ScopeFiles => ({ scope, dir, agents: join(dir, 'agents.yaml'), models: join(dir, 'models.yml') });
+      const both = { global: files('global', '/g'), workspace: files('workspace', '/w/.rotaris') };
+      const raw = (global: Record<string, unknown> | null, workspace: Record<string, unknown> | null) => ({ global: { agents: global, models: null }, workspace: { agents: workspace, models: null } });
+      const lower = { runtime: { roots: [{ a: 1 }, { a: 2, b: 3 }] } };
+      expect(statingFile('runtime.roots[1].b', both, raw(lower, { runtime: { roots: [{ a: 1 }, { a: 2 }] } }))).toEqual({ file: '/w/.rotaris/agents.yaml', scope: 'workspace', path: 'runtime.roots[1].b' });
+      // A section the later file overlays per field (a sibling key, no replacement on the path) leaves the earlier file's claim standing.
+      expect(statingFile('runtime.roots[1].b', both, raw(lower, { runtime: { other: 1 } }))).toEqual({ file: '/g/agents.yaml', scope: 'global', path: 'runtime.roots[1].b' });
+      // A models entry overlaid field by field (REQ-CONFIG-043) keeps the earlier file's fields: the earlier file still states them.
+      expect(statingFile('models.m.provider', both, raw({ models: { m: { provider: 7 } } }, { models: { m: { model_id: 'y' } } }))).toEqual({ file: '/g/agents.yaml', scope: 'global', path: 'models.m.provider' });
+      // A nested mapping inside an entry is replaced wholesale (REQ-CONFIG-046): what it does not hold is the later file's to state.
+      expect(statingFile('personas.coder.tool_restrictions.terminal', both, raw({ personas: { coder: { tool_restrictions: { terminal: 5 } } } }, { personas: { coder: { tool_restrictions: {} } } }))).toEqual({ file: '/w/.rotaris/agents.yaml', scope: 'workspace', path: 'personas.coder.tool_restrictions.terminal' });
+      // The replacing file states the role under its legacy name: it takes the fault, spelled as it states it (REQ-CONFIG-062).
+      expect(statingFile('personas.codebase-analyst.tool_restrictions.terminal', both, raw({ personas: { 'codebase-analyst': { tool_restrictions: { terminal: 5 } } } }, { personas: { oracle: { tool_restrictions: {} } } }))).toEqual({ file: '/w/.rotaris/agents.yaml', scope: 'workspace', path: 'personas.oracle.tool_restrictions.terminal' });
+    });
+    it('the replacement walk finds where a file replaces wholesale under each merge class, and -1 where it only overlays (REQ-CONFIG-040..050)', () => {
+      const below = { runtime: { roots: [1], nested: { a: 1 } }, models: { m: 'oops', n: { provider: 'p' } }, large_model: 'x' };
+      expect(replacedPrefixLength(below, { large_model: 'y' }, 'large_model')).toBe('large_model'.length);
+      expect(replacedPrefixLength(below, { large_model: null }, 'large_model')).toBe(-1);
+      expect(replacedPrefixLength(below, { models: { m: { model_id: 'y' } } }, 'models.m.provider')).toBe('models.m'.length);
+      expect(replacedPrefixLength(below, { models: { n: { model_id: 'y' } } }, 'models.n.provider')).toBe(-1);
+      expect(replacedPrefixLength(below, { models: { n: { provider: 'q' } } }, 'models.n.provider')).toBe('models.n.provider'.length);
+      expect(replacedPrefixLength(below, { runtime: { roots: [2] } }, 'runtime.roots[0].b')).toBe('runtime.roots'.length);
+      expect(replacedPrefixLength(below, { runtime: { nested: { b: 2 } } }, 'runtime.nested.a')).toBe(-1);
+      expect(replacedPrefixLength(below, { runtime: { nested: 5 } }, 'runtime.nested.a')).toBe('runtime.nested'.length);
+      expect(replacedPrefixLength(below, { runtime: ~0 }, 'runtime.nested')).toBe('runtime'.length);
+      expect(replacedPrefixLength({}, { compressor: { model: 'm' } }, 'compressor.model')).toBe('compressor.model'.length);
+      expect(replacedPrefixLength(below, { runtime: null, no_such_top: 1 }, 'runtime.roots')).toBe(-1);
+      expect(replacedPrefixLength(below, { no_such_top: { a: 1 } }, 'no_such_top.a')).toBe(-1);
+      expect(replacedPrefixLength(below, null, 'runtime')).toBe(-1);
     });
   });
   /**

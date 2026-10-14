@@ -1,5 +1,28 @@
 ## A fault inside a wholesale-replaced value is attributed to an earlier file that states the deeper path
 
+## Outcome (2026-10-14, fin46 `fin46-accept1-17`): repaired
+
+`statingFile` now follows the merge along the fault's path. A new `replacedPrefixLength(below, doc, path)`
+(`packages/config/src/load.ts`) mirrors `mergeLayers` under REQ-CONFIG-040..050's classes and says where a scope file,
+merged over the scope files before it, replaces the value wholesale: a replace-class key that is not null; a named entry
+that is not a mapping or lands on one that is not, else the entry's immediate field (`overlayEntry` sets it whole); a
+section value that is not a mapping or lands on one that is not, at any depth; any list. A file that replaces at a prefix
+of the path takes the fault whatever an earlier file states beneath it; otherwise the longest stated prefix still decides,
+the later file on a tie, so the cases fin45 pinned (a sibling key in the same section, a top-level null, a legacy role
+name, a dotted model name) read as before.
+
+Pinned in `packages/config/src/load.test.ts` (REQ-CONFIG-478 block), each red on `0c513e0`: "a field missing from a
+models entry the workspace file replaced wholesale is the workspace file's" (the three-file reproduction above, through
+`loadConfiguration`), and "a fault beneath a list item names the file whose list the merge kept" (`statingFile` over a
+replaced list, with the overlay-only, field-overlay and nested-entry-mapping answers beside it); "the replacement walk
+finds where a file replaces wholesale under each merge class" pins `replacedPrefixLength` itself. In the built app,
+`notice-proof` section 1d (a merged-document fault in the global file) still names the global file and scope.
+
+No reader raises a fault on a value missing beneath a list today (list items are reported as `<key>.<n>`, a step
+`statedPrefixLength` does not take), so the list case is pinned on `statingFile` directly; the models-entry case is
+reachable through the load.
+
+
 Noticed 2026-10-14 by the reviewer of fin45 (`fin45-config-and-terminal`, optional finding on Task 1) and taken as acceptance
 finding C9 of fin46; confirmed on `fin46-accept1-17` (cut from `origin/main` `0c513e0`) with two failing cases in
 `packages/config/src/load.test.ts`.

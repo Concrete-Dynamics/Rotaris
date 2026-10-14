@@ -8,7 +8,7 @@ import { parseConfig, plainOf, triOf, asMap, vocabularyText, type ParsedConfig }
 import { exactPrices } from './prices.js';
 import { builtInDefaults } from './defaults.js';
 import { canonicaliseRoles, isPlainMap, mergeLayers, type Layer, type PlainMap } from './merge.js';
-import { MODEL_SLOTS, thinkingKeyOf, type ModelSlot, type ReasoningLevel, type TierAlias, REASONING_LEVELS } from './keys.js';
+import { keyClass, MODEL_SLOTS, thinkingKeyOf, type ModelSlot, type ReasoningLevel, type TierAlias, REASONING_LEVELS } from './keys.js';
 import { EMPTY_HOOKS_LAYER, mergeHooks, readHooksSection, type HooksLayer, type HooksResolved } from './hooks-section.js';
 import { readRuntimeSection, type RuntimeSection } from './sections/runtime.js';
 import { readModelsSection, type ModelEntry } from './sections/models.js';
@@ -376,6 +376,21 @@ export interface ResolveContext {
   readonly mcp: McpResolveContext;
 }
 
+/** The key of `map` the rest of a dotted path starts with, the longest when several do (a key may hold a dot). */
+function pathKeyOf(map: PlainMap, rest: string): string | null {
+  let key: string | null = null;
+  for (const k of Object.keys(map)) {
+    if ((rest === k || rest.startsWith(`${k}.`) || rest.startsWith(`${k}[`)) && (key === null || k.length > key.length)) key = k;
+  }
+  return key;
+}
+
+/** The rest of a path after a step of `step` characters, its separating dot dropped. */
+function afterStep(rest: string, step: number): string {
+  const next = rest.slice(step);
+  return next.startsWith('.') ? next.slice(1) : next;
+}
+
 /**
  * How much of a problem's dotted path `doc` states: the length of its longest stated prefix, -1 when the document does
  * not state even the top-level key. A key may hold a dot (`models.gpt-4.1.provider`), so each level takes the longest key
@@ -397,33 +412,86 @@ export function statedPrefixLength(doc: PlainMap | null, path: string): number {
       value = node[index];
       step = item[0].length;
     } else if (isPlainMap(node)) {
-      let key: string | null = null;
-      for (const k of Object.keys(node)) {
-        if ((rest === k || rest.startsWith(`${k}.`) || rest.startsWith(`${k}[`)) && (key === null || k.length > key.length)) key = k;
-      }
+      const key = pathKeyOf(node, rest);
       if (key === null) break;
       value = node[key];
       if (depth === 0 && (value === null || value === undefined)) break;
       step = key.length;
     } else break;
     matched = path.length - rest.length + step;
-    rest = rest.slice(step);
-    if (rest.startsWith('.')) rest = rest.slice(1);
+    rest = afterStep(rest, step);
     node = value;
   }
   return matched;
 }
 
 /**
+ * Where along a problem's path `doc`, merged over `below` (the scope files before it, already merged), REPLACES the value
+ * wholesale under REQ-CONFIG-040..050's classes, so that everything beneath that prefix in the merged document is `doc`'s:
+ * the prefix's length, or -1 when `doc` only overlays mappings along the path, or contributes nothing to it. Mirrors
+ * `mergeLayers`: a replace-class key that is not null (REQ-CONFIG-052); a named entry that is not a mapping or lands on one
+ * that is not (REQ-CONFIG-044), else the entry's immediate field, which `overlayEntry` sets whole (REQ-CONFIG-046); a
+ * section value that is not a mapping or lands on one that is not, at any depth (REQ-CONFIG-047/048); and any list
+ * (REQ-CONFIG-050). A bare section or named key, and a computed, separate or unknown key, contribute nothing.
+ */
+export function replacedPrefixLength(below: PlainMap, doc: PlainMap | null, path: string): number {
+  if (doc === null || path === '') return -1;
+  const top = pathKeyOf(doc, path);
+  if (top === null) return -1;
+  const value = doc[top];
+  const at = (rest: string): number => path.length - rest.length;
+  let rest = afterStep(path, top.length);
+  switch (keyClass(top)) {
+    case 'replace':
+      return value === null || value === undefined ? -1 : top.length;
+    case 'named': {
+      if (!isPlainMap(value) || rest === '') return -1;
+      const name = pathKeyOf(value, rest);
+      if (name === null) return -1;
+      const entry = value[name];
+      const current = isPlainMap(below[top]) ? (below[top] as PlainMap)[name] : undefined;
+      if (!isPlainMap(entry) || !isPlainMap(current)) return at(rest) + name.length;
+      rest = afterStep(rest, name.length);
+      if (rest === '') return -1;
+      const field = pathKeyOf(entry, rest);
+      return field === null ? -1 : at(rest) + field.length;
+    }
+    case 'section': {
+      if (value === null || value === undefined) return -1;
+      let node: unknown = value;
+      // A section merges onto `{}` where nothing below states it (`mergeLayers`), so only a deeper mismatch replaces.
+      let current: unknown = isPlainMap(below[top]) ? below[top] : {};
+      let prefix = top.length;
+      for (;;) {
+        if (!isPlainMap(node) || !isPlainMap(current)) return prefix;
+        if (rest === '') return -1;
+        const key = pathKeyOf(node, rest);
+        if (key === null) return -1;
+        node = node[key];
+        current = current[key];
+        prefix = at(rest) + key.length;
+        rest = afterStep(rest, key.length);
+      }
+    }
+    default:
+      return -1;
+  }
+}
+
+/**
  * REQ-CONFIG-478: the file a fault found on the MERGED document belongs to — the scope file stating the longest prefix of
  * its path, the later in REQ-CONFIG-031's merge order on a tie (global `agents.yaml`, global `models.yml`, workspace
- * `agents.yaml`, workspace `models.yml`), since that is the layer whose value the merge kept there. Each `agents.yaml` is
- * read with its legacy role names canonicalised, as it was merged (REQ-CONFIG-062), and each `models.yml` for its
- * `models:` key alone (REQ-CONFIG-004). The answer's `path` is the fault's path spelled as that file states it
- * (`spelledAsStated`): a role the file holds under its legacy name is named by that name, so the key the report names is
- * one the named file holds. A path no scope file states (a value only a built-in default, the discovery snapshot or a
- * run's live overlay supplied) names the workspace `agents.yaml`, the file a user edits by default (REQ-CONFIG-463), and
- * keeps its path.
+ * `agents.yaml`, workspace `models.yml`), since that is the layer whose value the merge kept there. A file that REPLACED
+ * the value wholesale at a prefix of the path (`replacedPrefixLength`) takes it whatever an earlier file states beneath
+ * that prefix, since the merge discarded the earlier value there: a field missing from a models entry the later file
+ * replaced whole is the later file's, not an earlier file's that states it
+ * (docs/defects/fixed/a-fault-inside-a-wholesale-replaced-value-is-attributed-to-an-earlier-file-that-states-the-deeper-path.md).
+ * Each `agents.yaml` is read with its legacy role names canonicalised, as it was merged (REQ-CONFIG-062), and each
+ * `models.yml` for its `models:` key alone (REQ-CONFIG-004). The answer's `path` is the fault's path spelled as that file
+ * states it (`spelledAsStated`): a role the file holds under its legacy name is named by that name, so the key the report
+ * names is one the named file holds. A path no scope file states (a value only a built-in default, the discovery snapshot
+ * or a run's live overlay supplied) names the workspace `agents.yaml`, the file a user edits by default (REQ-CONFIG-463),
+ * and keeps its path.
  */
 export function statingFile(path: string, files: { global: ScopeFiles; workspace: ScopeFiles }, raw: ResolveContext['raw']): { file: string; scope: ConfigScope; path: string } {
   return statingFileOf(path, files, raw) ?? { file: files.workspace.agents, scope: 'workspace', path };
@@ -442,6 +510,7 @@ export function statingFile(path: string, files: { global: ScopeFiles; workspace
 export function statingFileOf(path: string, files: { global: ScopeFiles; workspace: ScopeFiles }, raw: ResolveContext['raw']): { file: string; scope: ConfigScope; path: string } | null {
   let best: { file: string; scope: ConfigScope; path: string } | null = null;
   let bestLength = -1;
+  let below: PlainMap = {};
   for (const scope of ['global', 'workspace'] as const) {
     const agents = raw[scope].agents;
     const models = raw[scope].models;
@@ -450,8 +519,10 @@ export function statingFileOf(path: string, files: { global: ScopeFiles; workspa
       [files[scope].models, models && models['models'] !== undefined ? { models: models['models'] } : null, null],
     ];
     for (const [file, doc, stated] of candidates) {
+      if (doc === null) continue;
       const length = statedPrefixLength(doc, path);
-      if (length >= 0 && length >= bestLength) { best = { file, scope, path: stated ? spelledAsStated(stated, path) : path }; bestLength = length; }
+      if (replacedPrefixLength(below, doc, path) >= 0 || (length >= 0 && length >= bestLength)) { best = { file, scope, path: stated ? spelledAsStated(stated, path) : path }; bestLength = length; }
+      below = mergeLayers([{ source: 'below', value: below }, { source: file, value: doc }]).value;
     }
   }
   return best;

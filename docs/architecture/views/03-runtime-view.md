@@ -1966,7 +1966,12 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   `warnings` as `<file> at <path> (<scope> scope): <message>`, the fatal report's form, the file found by `statingFileOf`
   (`statingFile`'s search, null where no scope file states the path); a warning on a value no scope file states keeps the
   bare `<path>: <message>`. Until then every such warning was the bare form, naming no file (REQ-CONFIG-233, REQ-CONFIG-183;
-  `notice-proof` 1e).
+  `notice-proof` 1e). **Since 2026-10-14 (fin46) the attribution follows the merge:** a scope file
+  that replaced the value wholesale at a prefix of the path (`replacedPrefixLength`, REQ-CONFIG-040..050's classes: a
+  models or personas entry over a non-mapping, an entry's immediate field, a list, a scalar over a section's mapping) takes
+  the fault (and a warning, through the same search) whatever an earlier file states beneath that prefix, so a field
+  missing from an entry a later file replaced whole is no longer reported in the earlier file whose value the merge discarded
+  (`docs/defects/fixed/a-fault-inside-a-wholesale-replaced-value-is-attributed-to-an-earlier-file-that-states-the-deeper-path.md`).
 
 - **What no tier reaches — the update check (REQ-STARTUP-111, the updater of 2026-09-28).** Whether, when and
   where a supported standalone build checks for an update is decided by no configuration value in any tier, no

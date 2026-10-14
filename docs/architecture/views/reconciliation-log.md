@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A merged-document fault follows the merge to the file that replaced it (fin46, `fin46-accept1-17`; REQ-CONFIG-478).**
+`03-runtime-view.md`'s fatal-report paragraph says `statingFile` now gives a fault beneath a value a later scope file replaced
+wholesale (`replacedPrefixLength`) to that file, not to an earlier file stating the deeper path; the longest-prefix rule it
+had is kept beside it. No package, edge or process changed. The README's date stays 2026-10-15, the later.
+
 **A fatal report spells a legacy-named role as its file does (fin46, `fin46-accept1-16`; REQ-CONFIG-478, REQ-CONFIG-062,
 acceptance finding A1).** `03-runtime-view.md` §8 says the report's key path takes the spelling the named file holds
 (`spelledAsStated`), with the old reading (the canonical name) kept beside it. No package, edge or process changed. The

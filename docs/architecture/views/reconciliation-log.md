@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A merged-document fault names the file that stated it (fin45, `fin45-config-and-terminal`;
+`../../defects/fixed/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md`).** `resolveMerged` attributes each
+fault its typed section readers raise to the scope file stating the longest prefix of the fault's path (`statingFile`), not
+to the workspace `agents.yaml` whatever file declared it (REQ-CONFIG-478). `03-runtime-view.md` §8.
+
 **A quit from outside any window asks no close guard (fin45, `fin45-supervision-and-quit`; OQ-298, `PD-SHELL-009` revision 2).**
 `before-quit` feeds `closeThroughGuards` with `quitGuardsOutsideAnyWindow`'s guards (`main/exit.ts`): each open main window's own
 `confirm` and `close`, an `ask` that allows at once, and one more log line. `02-process-view.md` (the quit paragraph and the

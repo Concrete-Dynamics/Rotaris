@@ -376,6 +376,71 @@ export interface ResolveContext {
 }
 
 /**
+ * How much of a problem's dotted path `doc` states: the length of its longest stated prefix, -1 when the document does
+ * not state even the top-level key. A key may hold a dot (`models.gpt-4.1.provider`), so each level takes the longest key
+ * the rest of the path starts with; a list item is `[n]`. A top-level null states nothing: the merge leaves the lower
+ * layer's value in force there (REQ-CONFIG-052/054), while a null inside a section or an entry does overlay.
+ */
+export function statedPrefixLength(doc: PlainMap | null, path: string): number {
+  if (doc === null || path === '') return -1;
+  let node: unknown = doc;
+  let rest = path;
+  let matched = -1;
+  for (let depth = 0; rest !== ''; depth++) {
+    let value: unknown;
+    let step: number;
+    const item = /^\[(\d+)\]/.exec(rest);
+    if (item && Array.isArray(node)) {
+      const index = Number(item[1]);
+      if (index >= node.length) break;
+      value = node[index];
+      step = item[0].length;
+    } else if (isPlainMap(node)) {
+      let key: string | null = null;
+      for (const k of Object.keys(node)) {
+        if ((rest === k || rest.startsWith(`${k}.`) || rest.startsWith(`${k}[`)) && (key === null || k.length > key.length)) key = k;
+      }
+      if (key === null) break;
+      value = node[key];
+      if (depth === 0 && (value === null || value === undefined)) break;
+      step = key.length;
+    } else break;
+    matched = path.length - rest.length + step;
+    rest = rest.slice(step);
+    if (rest.startsWith('.')) rest = rest.slice(1);
+    node = value;
+  }
+  return matched;
+}
+
+/**
+ * REQ-CONFIG-478: the file a fault found on the MERGED document belongs to — the scope file stating the longest prefix of
+ * its path, the later in REQ-CONFIG-031's merge order on a tie (global `agents.yaml`, global `models.yml`, workspace
+ * `agents.yaml`, workspace `models.yml`), since that is the layer whose value the merge kept there. Each `agents.yaml` is
+ * read with its legacy role names canonicalised, as it was merged (REQ-CONFIG-062), and each `models.yml` for its
+ * `models:` key alone (REQ-CONFIG-004). A path no scope file states (a value only a built-in default, the discovery
+ * snapshot or a run's live overlay supplied) names the workspace `agents.yaml`, the file a user edits by default
+ * (REQ-CONFIG-463).
+ */
+export function statingFile(path: string, files: { global: ScopeFiles; workspace: ScopeFiles }, raw: ResolveContext['raw']): { file: string; scope: ConfigScope } {
+  let best: { file: string; scope: ConfigScope } = { file: files.workspace.agents, scope: 'workspace' };
+  let bestLength = -1;
+  for (const scope of ['global', 'workspace'] as const) {
+    const agents = raw[scope].agents;
+    const models = raw[scope].models;
+    const candidates: [string, PlainMap | null][] = [
+      [files[scope].agents, agents ? canonicaliseRoles(agents) : null],
+      [files[scope].models, models && models['models'] !== undefined ? { models: models['models'] } : null],
+    ];
+    for (const [file, doc] of candidates) {
+      const length = statedPrefixLength(doc, path);
+      if (length >= 0 && length >= bestLength) { best = { file, scope }; bestLength = length; }
+    }
+  }
+  return best;
+}
+
+/**
  * The passes over a merged document in REQ-CONFIG-035..037's order: the typed sections (schema, fatal),
  * tier aliases and reasoning synthesis, then the referential list. The load calls this once; ADR-0037's
  * Tier B calls it again over the same document with the live state overlaid — "exactly as the loader
@@ -405,10 +470,10 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
   // REQ-MCP-002: every defect of a YAML-scope server entry is fatal and every one is reported (the discovered entries were validated before the merge).
   const mcpServers = readMcpServersSection(top['mcp_servers'], sink);
 
-  const fatal = [...problems, ...sink.errors.map((p) => ({ ...p, file: files.workspace.agents, scope: 'workspace' as const }))];
+  // REQ-CONFIG-478: each fault found on the merged value names the file that stated it, by full path and scope.
+  const fatal = [...problems, ...sink.errors.map((p) => ({ ...p, ...statingFile(p.path, files, ctx.raw) }))];
   if (fatal.length > 0) {
     const first = fatal[0]!;
-    // A schema problem is found on the merged value; the workspace file is the one a user edits by default (REQ-CONFIG-463).
     return err({ file: first.file, scope: first.scope, path: first.path, message: first.message, kind: 'schema', lines: renderProblems(fatal) });
   }
 

@@ -314,8 +314,10 @@ describe('createDeliveryService', () => {
     expect((await s.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM, 'suppressed')).value).toBeNull();
     const preview = (await s.handle({ name: 'requirements.run.preview', workspace: 'x', id: 'REQ-101', action: 'release' }, SYSTEM, 'suppressed')).value as { startsNow: boolean; deferredReason?: string };
     expect(preview.startsNow).toBe(false);
-    expect(preview.deferredReason).toMatch(/^The workspace configuration did not load, so nothing starts from the queue until it is corrected: .*agents\.yaml at requirements\.no_such_key \((global|workspace) scope\)/);
-    // Either scope: a merged-document fault is attributed to the workspace file (docs/defects/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md).
+    // The key is the global file's (`root` is the configuration directory), and the report names that file and scope (REQ-CONFIG-478;
+    // docs/defects/fixed/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md).
+    expect(preview.deferredReason).toMatch(/^The workspace configuration did not load, so nothing starts from the queue until it is corrected: /);
+    expect(preview.deferredReason).toContain(`${join(root, 'agents.yaml')} at requirements.no_such_key (global scope)`);
     const board = (await s.handle({ name: 'requirements.board', workspace: 'x' }, USER, 'suppressed')).value as BoardProjection;
     expect(board.queue.entries.find((e) => e.id === 'REQ-101')).toMatchObject({ state: 'deferred', reason: expect.stringMatching(/^The workspace configuration did not load/) });
     // Only the release's own tree, provisioned before the file broke; nothing was provisioned on the unloaded configuration.

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { canonicaliseRoles, mergeLayers, overlaySection, PLAIN_OPS } from './merge.js';
-import { loadConfiguration, readDelegationStrategy, repositoryExcludeFile, type LoadedConfiguration } from './load.js';
+import { loadConfiguration, readDelegationStrategy, repositoryExcludeFile, statedPrefixLength, type LoadedConfiguration } from './load.js';
 import { parseConfig } from './document.js';
 import { referentialMessages, renderFatal, renderProblems } from './validate.js';
 import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase, syntheticOriginOf } from './slots.js';
@@ -385,6 +385,51 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
     expect(r.error.path).toBe('models.m.model_id');
     expect(r.error.lines).toEqual(['runtime.max_depth: must be an integer, got string', 'models with missing required fields: m (model_id)', expect.stringContaining('replaced as a whole')]);
     expect(renderFatal(r.error)).toContain('does not recognise it');
+  });
+  /**
+   * REQ-CONFIG-478: the report names the file that STATED the rejected key, by full path and scope — a fault found on the
+   * merged document was attributed to the workspace `agents.yaml` whatever file declared it, naming a file that need not
+   * exist and the wrong scope (docs/defects/fixed/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md).
+   */
+  describe('REQ-CONFIG-478: a merged-document fault names the file and scope that stated it', () => {
+    const fault = (s: { globalDir: string; workspaceRoot: string }) => { const r = loadConfiguration(s); if (r.ok) throw new Error('the load did not fail'); return r.error; };
+    it('an unknown key under requirements: in the global file, with no workspace file, is the global file\'s (REQ-CONFIG-183)', () => {
+      const s = scopes('requirements:\n  scheduling:\n    mode: automatic\n  no_such_key: 1\n', null);
+      const e = fault(s);
+      expect(e).toMatchObject({ kind: 'schema', path: 'requirements.no_such_key', file: join(s.globalDir, 'agents.yaml'), scope: 'global' });
+      expect(renderFatal(e)).toContain(`${join(s.globalDir, 'agents.yaml')} at requirements.no_such_key (global scope)`);
+    });
+    it('a workspace file that states a sibling key in the same section does not take the global file\'s fault', () => {
+      const s = scopes('requirements:\n  no_such_key: 1\n', 'requirements:\n  scheduling:\n    mode: automatic\n');
+      expect(fault(s)).toMatchObject({ path: 'requirements.no_such_key', file: join(s.globalDir, 'agents.yaml'), scope: 'global' });
+    });
+    it('a key both scopes state is the workspace file\'s, the value the merge kept', () => {
+      const s = scopes('requirements:\n  no_such_key: 1\n', 'requirements:\n  no_such_key: 2\n');
+      expect(fault(s)).toMatchObject({ path: 'requirements.no_such_key', file: join(s.workspaceRoot, '.rotaris', 'agents.yaml'), scope: 'workspace' });
+    });
+    it('a top-level null in the workspace file states nothing, so the global value it left in force is the global file\'s (REQ-CONFIG-052)', () => {
+      const s = scopes('inject_agents_md: 5\n', 'inject_agents_md: ~\n');
+      expect(fault(s)).toMatchObject({ path: 'inject_agents_md', file: join(s.globalDir, 'agents.yaml'), scope: 'global' });
+    });
+    it('a model field stated in the global models.yml names that file, a model name holding a dot included (REQ-CONFIG-004)', () => {
+      const s = scopes(null, null, { globalModels: 'models:\n  gpt-4.1: { provider: openai, model_id: m, input_cost_per_token: cheap, output_cost_per_token: 0.1 }\n' });
+      expect(fault(s)).toMatchObject({ path: 'models.gpt-4.1.input_cost_per_token', file: join(s.globalDir, 'models.yml'), scope: 'global' });
+    });
+    it('a role stated under its legacy name in the global file is found under its canonical name (REQ-CONFIG-062)', () => {
+      const s = scopes('personas:\n  oracle:\n    purpose: "two\\nlines"\n', 'personas:\n  tester:\n    purpose: one line\n');
+      expect(fault(s)).toMatchObject({ path: 'personas.codebase-analyst.purpose', file: join(s.globalDir, 'agents.yaml'), scope: 'global' });
+    });
+    it('the path walk takes the longest key at each level, steps into list items, and stops where the document stops', () => {
+      const doc = { models: { 'gpt-4': { a: 1 }, 'gpt-4.1': { provider: 'x' } }, hooks: [{ event: 'x' }], top: null, runtime: { k: null } };
+      expect(statedPrefixLength(doc, 'models.gpt-4.1.provider')).toBe('models.gpt-4.1.provider'.length);
+      expect(statedPrefixLength(doc, 'models.gpt-4.1.model_id')).toBe('models.gpt-4.1'.length);
+      expect(statedPrefixLength(doc, 'hooks[0].event')).toBe('hooks[0].event'.length);
+      expect(statedPrefixLength(doc, 'hooks[3].event')).toBe('hooks'.length);
+      expect(statedPrefixLength(doc, 'runtime.k')).toBe('runtime.k'.length);
+      expect(statedPrefixLength(doc, 'top')).toBe(-1);
+      expect(statedPrefixLength(doc, 'absent.key')).toBe(-1);
+      expect(statedPrefixLength(null, 'models')).toBe(-1);
+    });
   });
   it('referential messages come in REQ-CONFIG-231/232\'s order and never throw', () => {
     const models = { m: readModelEntry('m', { provider: 'p', model_id: 'm' }, sink())! };

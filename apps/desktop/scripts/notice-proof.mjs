@@ -21,6 +21,8 @@ import { startApp, stopApp, until } from './lib/driver.mjs';
  *     Since OQ-279's ruling the same report is the notice on screen when the workspace opens, before any prompt.
  *  1c. The same fault in the WORKSPACE scope (OQ-279): raised at the open, then the file corrected and a run started with
  *     no relaunch, which clears the notice (REQ-CONFIG-478's recovery).
+ *  1d. A fault found on the merged document, stated in the GLOBAL file (an unknown key under `requirements:`): the open-time
+ *     notice names the global file and the global scope, not the workspace file (REQ-CONFIG-478).
  *  2. Scoping (REQ-NOTIFY-028/029/058): a notice about another session survives a run start; an unscoped one does not.
  *  3. Compare-and-clear (REQ-NOTIFY-026): dismissing a superseded identifier leaves its successor standing.
  *  4. The ONE transient surface (REQ-NOTIFY-012/013/016/017/021): four published, three visible, newest nearest the
@@ -78,7 +80,7 @@ if (!process.argv.includes('--skip-build')) {
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
-// `--only=<sections>` (comma-separated: 1, 1b, 1c, 2, 4, 6, 6b, 6c, 6d, 7, 7b, 8, 9) runs those sections alone; the default is all.
+// `--only=<sections>` (comma-separated: 1, 1b, 1c, 1d, 2, 4, 6, 6b, 6c, 6d, 7, 7b, 8, 9) runs those sections alone; the default is all.
 const onlyArg = process.argv.find((a) => a.startsWith('--only='));
 const only = onlyArg === undefined ? null : onlyArg.slice('--only='.length).split(',').map((x) => x.trim()).filter((x) => x !== '');
 const want = (id) => only === null || only.includes(id);
@@ -295,6 +297,38 @@ if (want('1c')) {
   expect(!/run refused: The run was refused before it started — The configuration could not be loaded/.test(log), 'the run after the corrected file was refused');
   expect(/the configuration of .* loaded again; the fatal-load notice #\d+ is cleared/.test(log), 'main did not clear the fatal-load notice when the run started');
   results.workspaceLoadFault = value;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1d. A fault found on the MERGED document, stated in the GLOBAL file (REQ-CONFIG-478, REQ-CONFIG-183): an unknown key under
+// `requirements:` in the global `agents.yaml`, the workspace file stating no `requirements:` at all. The open-time notice names
+// the global file by full path and the global scope — until 2026-10-14 every merged-document fault named the workspace file
+// and scope whatever file stated it (docs/defects/fixed/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md).
+// 1b's hook fault is found before the merge, so it never reached that attribution.
+const s1d = scenario('global-merged-fault');
+if (want('1d')) {
+  // The driven launch keeps its profile under its own root (`startApp`), so the global file is written in THAT profile's configuration directory.
+  const appRoot = join(output, 'global-merged-fault-app');
+  const globalFile = join(configDirFor(join(appRoot, 'local')), 'agents.yaml');
+  mkdirSync(dirname(globalFile), { recursive: true });
+  writeFileSync(globalFile, ['# an unknown key under requirements: (REQ-CONFIG-183)', 'requirements:', '  no_such_key: 1', ''].join('\n'));
+  const launched = await startApp({ root: appRoot, workspace: s1d.workspace, timeoutMs: 90_000, extra: { ROTARIS_SCRIPT: 'answer' } });
+  const d = launched.driver;
+  let value = null;
+  let failure = null;
+  try {
+    value = await until(() => d.eval(`(() => { const n = document.querySelector('[data-testid="notice"]'); return n ? { title: n.querySelector('[data-testid="notice-title"]')?.textContent ?? null, detail: n.querySelector('[data-testid="notice-detail"]')?.textContent ?? null } : null; })()`), (n) => n?.title === 'The workspace configuration did not load', { timeoutMs: 30_000, what: 'the open-time fatal-load notice' });
+  } catch (cause) {
+    failure = cause;
+  }
+  const stopped = await stopApp(launched, { screenshot: join(output, 'global-merged-fault.png') });
+  const log = existsSync(launched.logFile) ? readFileSync(launched.logFile, 'utf8') : '';
+  writeFileSync(join(output, 'global-merged-fault.log'), log);
+  if (failure) throw new Error(`global-merged-fault: ${failure.message} (see global-merged-fault.log)`);
+  expect(!stopped.overran, 'global-merged-fault: the app did not stop within its bound');
+  expect((value.detail ?? '').includes(`${globalFile} at requirements.no_such_key (global scope)`), `the open-time notice does not name the global file ${globalFile}, the key and the global scope: ${JSON.stringify(value)}`);
+  expect(!(value.detail ?? '').includes('workspace scope'), `the open-time notice names the workspace scope for a key the global file stated: ${JSON.stringify(value)}`);
+  results.globalMergedFault = { ...value, globalFile };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

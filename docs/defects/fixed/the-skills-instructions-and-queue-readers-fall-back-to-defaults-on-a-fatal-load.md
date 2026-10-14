@@ -65,4 +65,4 @@ which claimed REQ-101 on the unloaded configuration; the second provisioned and 
 restored in `SkillHost`), and `packages/ui/src/settings/skills-fatal.test.ts` (the Skills category draws the report). No
 proof drives a fatal load into Settings › Skills or the board; `notice-proof` 1b and 1c drive the fatal load itself.
 Noticed beside it, not repaired:
-[`a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md`](../a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md).
+[`a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md`](a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md) (repaired since, 2026-10-14, fin45).

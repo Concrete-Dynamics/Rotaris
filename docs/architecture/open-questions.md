@@ -14101,7 +14101,8 @@ and instruction readers answer the report and its five `skills.*` requests refus
 as Models does); an agent built meanwhile gets its run's own configured sections, or none; the requirements queue starts
 nothing until the file loads again, re-reading it at each claim, preview and run-starting action. Noticed beside it, not
 repaired: a merged-document fault in the global file is reported in the workspace file
-([`a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md`](../defects/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md)).
+([`a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md`](../defects/fixed/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md);
+repaired 2026-10-14 by fin45, `fin45-config-and-terminal`: the report names the file and scope that stated the key).
 
 <a id="oq-278"></a>
 

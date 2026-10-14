@@ -1941,6 +1941,13 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   launch preview and run-starting board action, and while it does not load the queue starts nothing — every candidate
   deferred with "The workspace configuration did not load, so nothing starts from the queue until it is corrected: <report>"
   (`scheduleQueue`'s `unconfigured`), the claim takes nothing, a run-starting action is refused and provisions nothing.
+  **The report names the file that stated the rejected key (2026-10-14, fin45):** a fault found before the merge (a
+  syntax error, the hooks section) carries its own file, and one found on the merged document (`resolveMerged`'s typed
+  section readers) is attributed by `statingFile` (`packages/config/src/load.ts`) to the scope file stating the longest
+  prefix of its path, the later in REQ-CONFIG-031's order on a tie, each `agents.yaml` read with its legacy role names
+  canonicalised and each `models.yml` for `models:` alone; a path no scope file states names the workspace `agents.yaml`.
+  Until then every merged-document fault named the workspace file and scope, so a global fault named a file that need not
+  exist (REQ-CONFIG-478; `notice-proof` 1d).
 
 - **What no tier reaches — the update check (REQ-STARTUP-111, the updater of 2026-09-28).** Whether, when and
   where a supported standalone build checks for an update is decided by no configuration value in any tier, no

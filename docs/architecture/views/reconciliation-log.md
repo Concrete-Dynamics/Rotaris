@@ -16,6 +16,10 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**Only a main window asks for the current notice at boot (fin45, `fin45-optional-findings`).** `renderer/shell.ts` sends
+`notice.current` under the main role alone; persona, terminal and dialog windows import the module and draw no notice.
+`02-process-view.md` (`notice.current`) and `05-state-ownership.md` (the renderer's copy of the notice).
+
 **A window's renderer that starts a new document listens again only once it says so (fin45, `fin45-optional-findings`).**
 `MainWindowAdapter.onNavigated` (Electron: the main frame's `did-start-navigation`, not same-document) clears a window record's
 `listening`, so a session focus or Settings › Project request made while the renderer reloads is held for it, not sent to a

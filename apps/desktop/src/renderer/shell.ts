@@ -156,11 +156,15 @@ Object.assign(window as unknown as Record<string, unknown>, {
   __rotarisResetApplies: () => { applySamples.length = 0; return true; },
   __rotarisRow: (index: number) => replica.getState().rows.find((r) => r.index === index) ?? null,
 });
+/** The role this window was opened under (ADR-0056: one bundle, the role by route); a main window carries none. */
+const windowRole = new URLSearchParams(window.location.search).get('role') ?? 'main';
 bridge.onNotice((p) => notices.getState().apply(p));
 // ADR-0049 / PD-WORKSPACE-005: the notice current before this window existed, which channel 4 will not repeat — asked once,
 // after the listener above, and applied only if no publication arrived first (`seed`). A window added after a publication
-// used to show none (docs/defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).
-void bridge.command({ kind: 'notice.current' }).then((outcome) => { if (outcome.ok) notices.getState().seed(outcome.value); }, () => undefined);
+// used to show none (docs/defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md). Only a main
+// window draws the notice, so only a main window asks: a persona, terminal or dialog window boots without the request
+// (fin44's review of `fin44-notice-reach`; until 2026-10-14 every window importing this module sent it).
+if (windowRole === 'main') void bridge.command({ kind: 'notice.current' }).then((outcome) => { if (outcome.ok) notices.getState().seed(outcome.value); }, () => undefined);
 bridge.onAcknowledgement((p) => acknowledgements.getState().apply(p));
 /**
  * Part AL2 — the terminal in THIS window (REQ-SHELL-079..111; ADR-0021 first executed through a window, ADR-0047's
@@ -182,7 +186,6 @@ bridge.onAcknowledgement((p) => acknowledgements.getState().apply(p));
  * reaches this window by then — `terminal.streams` asks the run host for one `screen` frame per retained stream
  * (REQ-SHELL-104). A persona window resyncs again each time it is shown, because it unsubscribes while hidden.
  */
-const windowRole = new URLSearchParams(window.location.search).get('role') ?? 'main';
 export const terminalStreams = new TerminalStreamSet(headlessEmulator);
 let terminalFollowed: string | null = replica.getState().sessionId;
 let terminalResynced: string | null = null;

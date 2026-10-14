@@ -68,6 +68,7 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { unpressedClicks } from './lib/capture-clicks.mjs';
 import { parseEvals, readEval } from './lib/capture-evals.mjs';
 import { ARTIFACTS_TAB, PUBLISH_SCHEDULE, emptyBeforePublish } from './lib/library-refresh.mjs';
+import { frontmatterOfRow } from './lib/artifact-frontmatter.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -778,11 +779,11 @@ let travel = null;
   const block = /^---\n[\s\S]*?\n---\n/.exec(document)?.[0] ?? '';
   const below = document.slice(block.length);
   if (block === '' || !below.includes('EDITED-BY-A-PERSON')) throw new Error(`edited: the typed characters did not reach the document below its frontmatter:\n${document.slice(0, 1200)}`);
-  // PD-LIBRARY-003 revision 2 (c): the saved block is the record's rendering — its fields and the save's `edited_at` — and
-  // nothing typed at the read-only block reached the document.
-  const recordLines = [`id: "${record.id}"`, `slug: "${record.slug}"`, `title: "${record.title}"`, `status: "${record.status}"`, `created_at: "${record.created_at}"`, `edited_at: "${record.edited_at}"`];
-  const missing = recordLines.filter((line) => !block.split('\n').includes(line));
-  if (missing.length > 0) throw new Error(`edited: the saved document's frontmatter is not the record's rendering with edited_at (PD-LIBRARY-003 revision 2 (c)); missing ${JSON.stringify(missing)}:\n${block}`);
+  // PD-LIBRARY-003 revision 2 (c): the saved block IS the record's rendering — every line the engine renders from the row,
+  // kind and tags included, with the save's `edited_at` — and nothing typed at the read-only block reached the document.
+  // `frontmatterOfRow` is pinned to the engine's `renderFrontmatter` by its own test (fin44: until then six lines were checked).
+  const expectedBlock = frontmatterOfRow(record);
+  if (block !== expectedBlock || !block.includes(`edited_at: "${record.edited_at}"`)) throw new Error(`edited: the saved document's frontmatter is not the record's rendering with edited_at (PD-LIBRARY-003 revision 2 (c)):\n${block}\nexpected:\n${expectedBlock}`);
   if (document.includes('TYPED-AT-THE-FRONTMATTER')) throw new Error(`edited: characters typed at the read-only frontmatter reached the document:\n${document.slice(0, 1200)}`);
   // After the save the shown block is refreshed from the saved document, so it carries `edited_at` too.
   const shownAfter = probe(r.log, '[data-testid="artifact-frontmatter"]', 18200)[0]?.text ?? '';

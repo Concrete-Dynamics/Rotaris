@@ -243,6 +243,7 @@ import { CLASSIFIER_MARK, ROOT_MARK, answerReading, planReading } from './lib/pl
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, summaryOpeningVerdicts, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
 import { ARTIFACTS_TAB } from './lib/library-refresh.mjs';
 import { HANDOFF_ARTIFACT_CAP, attachReading, delegatesToReading, followUpReading, handoffArtifact, handoffReading, requestOf, swarmReading } from './lib/delegation-readings.mjs';
+import { frontmatterOfRow, leadingFrontmatter } from './lib/artifact-frontmatter.mjs';
 import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, STEADY_INTERVAL_MS, STEADY_TICKS, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pairNotReachedNote, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
@@ -2986,7 +2987,8 @@ if (wanted.includes('delegation')) {
       ROTARIS_CAPTURE_RESIZE: '1360x980@500',
       ROTARIS_CAPTURE_VIEWS: '6@4000',
       ROTARIS_CAPTURE_CLICKS: [`${ARTIFACTS_TAB}@4600`, `tr[data-artifact-id="${latest.id}"]@5400`, '[data-testid="library-artifacts-inspect"]@6200', '[data-testid="artifact-tab-markdown"]@7400', 'textarea[data-testid="artifact-editor"]@8000', '[data-testid="artifact-save"]@10200'].join(';;'),
-      // The click lands in the editor's centre, inside the frontmatter a re-render rewrites; the caret goes to the end first.
+      // Since PD-LIBRARY-003 revision 2 the editor holds only the text below the read-only block, so the click cannot land in
+      // the frontmatter; the Ctrl+End chord, which moved the caret past it before, is now redundant and harmless.
       ROTARIS_CAPTURE_CHORDS: 'Ctrl+End@8500',
       ROTARIS_CAPTURE_TYPE_AT: ` ${MARKER}@9000`,
       ROTARIS_CAPTURE_PROBE_AT: '[data-testid="artifact-inspector-status"]@11000',
@@ -2996,12 +2998,16 @@ if (wanted.includes('delegation')) {
     }, RUN_WAIT_MS + 120_000);
     const db = new Database(oneDatabase(), { readonly: true });
     let after = null;
-    try { after = db.prepare('SELECT id, key_findings, edited_at FROM artifacts WHERE session_id = ? AND id = ?').get(sid, latest.id) ?? null; } finally { db.close(); }
+    try { after = db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND id = ?').get(sid, latest.id) ?? null; } finally { db.close(); }
     const saved = /capture: probe-at 11000 \[data-testid="artifact-inspector-status"\] → (\[.*\])/.exec(editLog)?.[1] ?? '[]';
     const status = (() => { try { return JSON.parse(saved)[0]?.text ?? ''; } catch { return ''; } })();
     if (after?.edited_at === null || after === null) noted('the person\'s edit was not saved, so the handoff of an edited artifact is unasked', `inspector status ${JSON.stringify(status)}; the Library is driven at fixed times and the reopened session may not have been ready`);
     else {
       check(after.key_findings === latest.key_findings, "the edit stamped edited_at and left key_findings as published (PD-LIBRARY-003 (c))", `edited_at ${after.edited_at}`);
+      // PD-LIBRARY-003 revision 2 (c): the saved document's block is the record's rendering, the save's edited_at included.
+      const savedDocument = (() => { try { return readFileSync(join(dirname(oneDatabase()), 'sessions', sid, after.body_file), 'utf8'); } catch { return ''; } })();
+      const savedBlock = leadingFrontmatter(savedDocument);
+      check(savedBlock === frontmatterOfRow(after) && savedBlock.includes(`edited_at: "${after.edited_at}"`), "the saved document's frontmatter is the record's rendering, carrying edited_at (PD-LIBRARY-003 revision 2 (c))", savedBlock === '' ? `no leading block in ${after.body_file}` : savedBlock.trim().split('\n').slice(1, -1).join('; '));
       const first = readTraffic('delegation-edit').filter((r) => String(r.path ?? '').includes('/chat/completions')).map(requestOf).find((r) => r !== null && /^You are the orchestrator/.test(r.system)) ?? null;
       const handoff = handoffReading(first?.firstUser ?? null, latest.id, MARKER);
       if (handoff.kind === 'absent' || handoff.kind === 'other-artifact') noted('the continued run\'s first root request did not name the edited artifact', `${handoff.kind}: ${handoff.header ?? 'no artifact line'}`);

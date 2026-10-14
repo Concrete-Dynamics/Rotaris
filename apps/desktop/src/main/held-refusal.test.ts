@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CommandOutcome } from '@rotaris/contracts';
+import { CHECKPOINTS_NO_WORKSPACE, type CommandOutcome } from '@rotaris/contracts';
 import { answerUnderHeldRefusal } from './store-notice.js';
 
 /**
@@ -16,6 +16,12 @@ describe('a workspace-scoped refusal in a window holding a refused store (OQ-281
     for (const headline of ['Open a workspace before reading its configuration', 'Open a workspace first', 'No workspace is open', 'The workspace service is not running']) {
       expect(answerUnderHeldRefusal(none(headline), { workspaceId: undefined }, held)).toEqual({ ok: false, code: held.code, headline: held.headline, detail: held.detail });
     }
+  });
+
+  it('the checkpoints\' own "no workspace" refusal is said as the held condition too (CHECKPOINTS_NO_WORKSPACE)', () => {
+    const checkpoints: CommandOutcome = { ok: false, code: 'checkpoint.no-workspace', headline: CHECKPOINTS_NO_WORKSPACE };
+    expect(answerUnderHeldRefusal(checkpoints, { workspaceId: undefined }, held)).toEqual({ ok: false, code: held.code, headline: held.headline, detail: held.detail });
+    expect(answerUnderHeldRefusal(checkpoints, { workspaceId: undefined }, undefined)).toBe(checkpoints);
   });
 
   it('leaves every other answer alone: a success, another refusal, no refusal held, or a window whose store opened', () => {

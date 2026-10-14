@@ -686,7 +686,7 @@ main as an error notice and answered by `session.list` as the same refusal, `wor
 succeeds, and while it is held `workspace.restore.assess/perform` are admitted for that window — no `runs.active` asked, no
 store having been handed to the run host, whose restore controls acknowledge a workspace it holds none for — with
 `RestoreAssessment.target.placeEmpty` saying what was found; every other workspace-scoped command in that window answers the
-held refusal rather than `workspace.none`, main's `runCommand` mapping it in one place), `workspace.store.establish.assess {workspaceRoot}` →
+held refusal rather than `workspace.none` (or the checkpoints' `checkpoint.no-workspace`), main's `runCommand` mapping it in one place), `workspace.store.establish.assess {workspaceRoot}` →
 `workspace.store.establishable {place, kept, stamp}` and `workspace.store.establish.perform {workspaceRoot, stamp}` →
 `workspace.store.established {place, kept}` (OQ-281: Settings › Project's deliberate new store, asked by main first with Cancel
 the default; the service re-checks the condition, moves the found place aside as `<identifier>.displaced-<stamp>` and keeps it,

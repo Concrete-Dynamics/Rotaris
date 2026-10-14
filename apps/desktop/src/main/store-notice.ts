@@ -67,14 +67,21 @@ export function cutRestoreNotice(cut: NonNullable<Opened['cutRestore']>): StoreN
 }
 
 /**
+ * The codes a command gate answers when the window holds no workspace identifier: `workspace.none`, and the checkpoints'
+ * own `checkpoint.no-workspace` ("Checkpoints are unavailable without a workspace.", `commands/checkpoints.ts`).
+ */
+const NO_WORKSPACE_CODES: ReadonlySet<string> = new Set(['workspace.none', 'checkpoint.no-workspace']);
+
+/**
  * OQ-281 (ruled 2026-10-14 under R-072), REQ-SESSION-202 / REQ-SESSION-089: every workspace-scoped refusal in a window whose
- * store the open refused states the held condition. The command gates answer `workspace.none` from the window's missing
- * workspace identifier — "Open a workspace first", false in a window that holds one — so `runCommand` (`index.ts`) passes every
- * answer through this before it leaves main: a `workspace.none` refusal in a window with no identifier, while a refusal is
- * held for its workspace, becomes that refusal in the workspace service's own words. Anything else passes unchanged.
+ * store the open refused states the held condition. The command gates answer `workspace.none` (the checkpoints'
+ * `checkpoint.no-workspace`) from the window's missing workspace identifier — "Open a workspace first", false in a window that
+ * holds one — so `runCommand` (`index.ts`) passes every answer through this before it leaves main: such a refusal in a window
+ * with no identifier, while a refusal is held for its workspace, becomes that refusal in the workspace service's own words.
+ * Anything else passes unchanged.
  * (`docs/defects/fixed/a-refused-store-is-reported-as-no-workspace-by-every-command-but-the-listing.md`.)
  */
 export function answerUnderHeldRefusal(outcome: CommandOutcome, w: { readonly workspaceId: string | undefined }, held: StoreRefusal | undefined): CommandOutcome {
-  if (outcome.ok || outcome.code !== 'workspace.none' || w.workspaceId !== undefined || held === undefined) return outcome;
+  if (outcome.ok || !NO_WORKSPACE_CODES.has(outcome.code) || w.workspaceId !== undefined || held === undefined) return outcome;
   return { ok: false, code: held.code, headline: held.headline, ...(held.detail === undefined ? {} : { detail: held.detail }) };
 }

@@ -51,6 +51,23 @@ export const RENDER_LINES = [
   '}',
 ];
 
+/**
+ * A loop body with a blank interior line, the commonest shape a multi-line edit carries. An LF `old_string` one tab shallow over
+ * the body reaches level 3 since `PD-TOOLS-020` (OQ-295); until then a blank line took part in the shift and the block landed at
+ * level 4, or matched nothing on a CRLF file (`docs/defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md`).
+ */
+export const BLANK_LINES = [
+  'function total(items) {',
+  '\tlet sum = 0;',
+  '\tfor (const item of items) {',
+  '\t\tconst price = item.price;',
+  '',
+  '\t\tsum += price;',
+  '\t}',
+  '\treturn sum;',
+  '}',
+];
+
 /** A word that occurs twice, for `replace_all` (PD-TOOLS-017). */
 export const LIST_LINES = ['alpha', 'beta', 'alpha'];
 

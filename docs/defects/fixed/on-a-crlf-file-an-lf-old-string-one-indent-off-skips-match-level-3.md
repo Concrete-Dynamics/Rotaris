@@ -62,5 +62,5 @@ endings add no sentence and a typo stays at level 4. **Shown in the built app** 
 through `haet_edit`. **Not shown:** the live `crlf` scenario, the orchestrator's, which now fails a level-4 window edit whose
 `old_string` was a uniform indent off. A neighbouring gap the ruling does not decide — a block with a blank interior line never
 reaches level 3 — is
-[`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../a-block-with-a-blank-interior-line-never-matches-at-level-3.md)
+[`a-block-with-a-blank-interior-line-never-matches-at-level-3`](a-block-with-a-blank-interior-line-never-matches-at-level-3.md)
 ([OQ-295](../../architecture/open-questions.md#oq-295)).

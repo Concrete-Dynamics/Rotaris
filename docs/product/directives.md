@@ -8141,6 +8141,10 @@ carries up to the window's size.
 
 > **In the built app, 2026-10-13 (fin42, N52):** `pnpm edits-proof` drove this directive through the run host on a CRLF, tab-indented fixture it generates (`apps/desktop/scripts/lib/crlf-fixture.mjs`), the scripted coordinator's calls sent by the new step `tool:<key>`; load average 6.8 to 12.2 on four CPUs beside a sibling plan. **Held as written.** `near`: a `haet_edit` whose two-line LF `old_string` met the CRLF file at match level 2 was refused, named "match level 2" and lines 2-3 before the quote, and quoted the window as `"\tconst greeting = 'Hello';\r\n\tif (name) {\r"`; `retry`, that quote sent back with the same hash, applied with `PD-TOOLS-017`'s sentence before ` content_hash:`; the file stayed CRLF throughout, and `lib/near-miss-edits.mjs`'s reading counted one level-2 miss, retried, not probed. **Found:** on a CRLF file an LF `old_string` one indent off never reaches level 3 (the `\r` takes part in level 3's comparison), so this directive's level-3 near miss is not given there: the plain miss is ([`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3`](../defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md), raised as [OQ-280](../architecture/open-questions.md#oq-280)). **What was not measured.** No live run. The live run's `crlf` scenario (`apps/desktop/scripts/lib/crlf-scenario.mjs`, default set) is written and unit-tested and is the orchestrator's to run; what it reads depends on the shapes the model chooses. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **Revision 4's first execution, 2026-10-14 (fin44):** reported under [`PD-TOOLS-020`](#pd-tools-020), with which it was
+> built and measured (`tools.test.ts`, "PD-TOOLS-020": the qualified sentence in `haet_edit`'s near miss and in `PD-TOOLS-015`
+> clause 4's refusal, both red on `a3be56c`).
+
 > **Since `PD-TOOLS-019` and revision 3, 2026-10-14 (fin43):** the "Found" above is repaired: level 3 sets a line's trailing `\r` aside, so an LF `old_string` one indent off on a CRLF file is this directive's level-3 near miss, and the reply names the line endings (clause 2, revision 3). `edits-proof`'s new `near-lf` step asserts it in the built app, with its quote retried by `retry-lf` and applied; the row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
@@ -8398,6 +8402,10 @@ added to the edit's success).*
 > [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
 > The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **Revision 4's first execution, 2026-10-14 (fin44):** reported under [`PD-TOOLS-020`](#pd-tools-020), with which it was
+> built and measured (`tools.test.ts`, "PD-TOOLS-020": a whitespace-only window line paired with blank `old_string` and
+> `new_string` lines written byte for byte, red on `a3be56c`; `edits-proof`'s `blank-lf`, the CRLF blank line the file's own).
+
 > **In the built app, 2026-10-13 (fin42, N52):** `pnpm edits-proof` drove this directive through the run host on a CRLF, tab-indented fixture it generates (`apps/desktop/scripts/lib/crlf-fixture.mjs`), the scripted coordinator's calls sent by the new step `tool:<key>`; load average 6.8 to 12.2 on four CPUs beside a sibling plan. **Held as written.** `window`: a two-line LF `old_string` matched the CRLF file at level 2 only and applied with "Match level: 2." and the CRLF sentence, the unchanged line written verbatim and the file CRLF throughout (clauses 1 to 3); `noop-window`: the same window with `new_string` already what the file holds was refused in clause 4's words, "old_string matches crlf/window.js only at match level 2 (lines 2-3), and those lines already hold new_string as this edit would write it; …" (revision 3), the bytes unchanged; `shift` carried the endings at level 3 after `PD-TOOLS-015`'s sentence. **What was not measured.** No live run. The live run's `crlf` scenario (`apps/desktop/scripts/lib/crlf-scenario.mjs`, default set) is written and unit-tested and is the orchestrator's to run; what it reads depends on the shapes the model chooses. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
@@ -8605,7 +8613,7 @@ three is otherwise revised.*
 > at load 1.0 to 1.5 on four CPUs: `shift-lf` asserted (level 3, both sentences, exact bytes), and the new `near-lf` and
 > `retry-lf` steps through `haet_edit` (the level-3 near miss naming the line endings, its quote applying, the file wholly CRLF).
 > **Found:** a block with a blank interior line never reaches level 3, on LF and CRLF alike — not decided by this ruling, recorded
-> as [`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../defects/a-block-with-a-blank-interior-line-never-matches-at-level-3.md)
+> as [`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md)
 > and raised as [OQ-295](../architecture/open-questions.md#oq-295). **What was not measured.** A live run: the `crlf` scenario
 > (`lib/crlf-scenario.mjs`) now fails a level-4 window edit whose `old_string` was a uniform indent off, checks a level-3 one lands
 > at the file's depth and a level-3 near miss names the endings, and is the orchestrator's to run. Repairs
@@ -8658,6 +8666,29 @@ departs from an implementation built from the specification alone, which shifts 
 revision 4, ruled with it; names `PD-TOOLS-015`, `PD-TOOLS-017` and `PD-TOOLS-019`, the other narrowings of REQ-TOOLS-136, each
 carrying an in-place note where its text meets this one. The build's reading, kept as the falsified one: a blank line takes part
 in level 3's shift like any other.*
+
+> **First execution, 2026-10-14, built under [R-072](requests.md#r-072) (fin44, `fin44-supervision-and-match`), with
+> `PD-TOOLS-014` revision 4 and `PD-TOOLS-016` revision 4:** the rule held as written. `matchEdit`
+> (`packages/agent-tools/src/tools/files.ts`) finds `old_string`'s first line with a visible character, skips a window whose line
+> at that index is blank or at the same depth, takes the prefix from those two lines, and compares each pair — two blank lines
+> equal, a blank and a visible one unequal, two visible ones by the shifted equality as before; `starts` and `shifts` keep their
+> shape. `carryWindow` takes `new_string` as the caller gave it (the level-3 caller passes `a.new_string`) and at level 3 writes
+> each line `linePairs` pairs with a blank `old_string` line as the window's own; the CRLF carry and `PD-TOOLS-016` clause 4's
+> no-op refusal are unchanged. `nearMissMessage`'s level-3 sentence adds "that holds a visible character" only when a window line
+> has none. **What was measured.** Nine cases under "PD-TOOLS-020" in `packages/agent-tools/src/tools/tools.test.ts`, each red
+> on `a3be56c` (the defect note's four cells through `write_file`; a blank first line of `old_string`; a whitespace-only window
+> line kept byte for byte; a blank `old_string` line never matching a visible window line; `haet_edit`'s qualified near miss and
+> its quote retried at level 1; a `PD-TOOLS-015` clause 4 refusal in the qualified wording), and a guard case green before and
+> after (no visible character never at level 3; level 2 first); every earlier `PD-TOOLS-014` to `PD-TOOLS-019` case unchanged
+> and green. In the built app, `pnpm edits-proof` green at load 1.7 to 2.5 on 4 CPUs with a new `blank-lf` step on the CRLF
+> fixture (`lib/crlf-fixture.mjs`'s `BLANK_LINES`): "Match level: 3." with the shift sentence and the CRLF sentence, "(+1 -1)",
+> the exact bytes, the blank line the file's own `\r\n`; on a build with `a3be56c`'s `files.ts` the same step failed — "Match
+> level: 4 (similarity: 0.89). Verify the result.", the block one tab too shallow. **Found:** on that nine-line CRLF file the
+> as-built result was level 4, not the "no match" the defect note's five-line file gave; the cell depends on the window's
+> similarity, and both readings are outside level 3. **What was not measured.** No live run: the `crlf` scenario, which fails a
+> level-4 window edit whose `old_string` was a uniform indent off, is the orchestrator's. Repairs
+> [`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md).
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

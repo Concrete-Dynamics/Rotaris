@@ -1177,7 +1177,7 @@ describe('PD-TOOLS-020: level 3 matches blank lines by having no visible charact
   // OQ-295 (R-072, ruled 2026-10-13). Level 3 shifted a blank line of old_string like any other — the bare prefix in the deeper
   // direction, a failed startsWith in the shallower — while the file's blank line is empty, so a block with a blank interior line
   // never matched at level 3: on an LF file write_file applied it at level 4 unshifted beside "Verify the result.", and on a CRLF
-  // file nothing matched (docs/defects/a-block-with-a-blank-interior-line-never-matches-at-level-3.md).
+  // file nothing matched (docs/defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md).
   const CRLF = " new_string was written with the file's CRLF line endings.";
   const FILE = ['a', '\t\tx = 1;', '', '\t\ty = 2;', 'z'];
   const asText = (lines: readonly string[], eol: '\n' | '\r\n') => `${lines.join(eol)}${eol}`;

@@ -13922,7 +13922,7 @@ prefix is added to or removed from every line of the candidate"; [`PD-TOOLS-015`
 shift leaves a `new_string` line with no visible character as given; [`PD-TOOLS-019`](../product/directives.md#pd-tools-019),
 which sets a trailing `\r` aside at level 3 and does not decide this; [`PD-TOOLS-014`](../product/directives.md#pd-tools-014)'s
 level-3 near miss. Raised 2026-10-14 by fin43 (`fin43-rename-and-match`) from
-[`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../defects/a-block-with-a-blank-interior-line-never-matches-at-level-3.md);
+[`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md);
 numbered from the top of the plan's range, OQ-281 to OQ-295, to keep clear of its sibling bundles: whichever lands second takes
 the next free number.)*
 

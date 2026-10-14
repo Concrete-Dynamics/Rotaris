@@ -21,6 +21,7 @@
  *   shift-lf      write_file edit, a one-tab-shallow LF `old_string` on a CRLF loop: level 3      PD-TOOLS-019 with 015 and 016
  *   near-lf       haet_edit with the same LF `old_string` on a copy of the loop: level 3          PD-TOOLS-019 with 014 revision 3
  *   retry-lf      haet_edit with that near miss's quote, the same hash                           PD-TOOLS-014 clause 5 with 017
+ *   blank-lf      write_file edit, an LF block one tab shallow with an empty interior line: level 3   PD-TOOLS-020 with 015 and 016
  *
  * Asserted from the bytes on disk (every line of every file still CRLF, each file's exact bytes), from each call's stored
  * result (the directive's sentence, the match level, a refusal's words) and from `lib/near-miss-edits.mjs`'s reading, the one
@@ -30,7 +31,9 @@
  * 0.91)" and wrote the block one tab too shallow beside a success, recorded here as observed
  * (`docs/defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`). Level 3 now sets a line's
  * trailing `\r` aside, and `shift-lf`, `near-lf` and `retry-lf` are asserted: level 3, the shift sentence then the CRLF sentence,
- * the exact bytes; the near miss naming the line endings; its quote applying.
+ * the exact bytes; the near miss naming the line endings; its quote applying. Until `PD-TOOLS-020` (OQ-295, ruled 2026-10-13) a
+ * blank line took part in level 3's shift, so `blank-lf`'s block, which holds one, matched nothing on the CRLF file; it is
+ * asserted at level 3 with the shift sentence, the CRLF sentence and the exact bytes, the blank line kept as the file's own.
  *
  * Evidence under `.proof/edits-proof/`: the launch's log and picture, `results.json`, and the files as the run left them.
  * `--skip-build` skips the build.
@@ -41,7 +44,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { cleanEnvironment, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
-import { CHECK_LINES, GREET_LINES, LIST_LINES, RENDER_LINES, crlf, lineEndings, writeCrlfFixture } from './lib/crlf-fixture.mjs';
+import { BLANK_LINES, CHECK_LINES, GREET_LINES, LIST_LINES, RENDER_LINES, crlf, lineEndings, writeCrlfFixture } from './lib/crlf-fixture.mjs';
 import { nearMissReading } from './lib/near-miss-edits.mjs';
 
 const require = createRequire(import.meta.url);
@@ -84,6 +87,7 @@ writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
 const FILES = {
   'crlf/exact.js': GREET_LINES, 'crlf/list.txt': LIST_LINES, 'crlf/window.js': GREET_LINES,
   'crlf/shift.js': CHECK_LINES, 'crlf/haet.js': GREET_LINES, 'crlf/render.js': RENDER_LINES, 'crlf/render-haet.js': RENDER_LINES,
+  'crlf/blank.js': BLANK_LINES,
 };
 writeCrlfFixture(workspace, FILES);
 for (const [path, lines] of Object.entries(FILES)) if (readFileSync(join(workspace, path), 'utf8') !== crlf(lines)) throw new Error(`the fixture ${path} was not written as CRLF`);
@@ -99,6 +103,9 @@ const QUOTE_LF = RENDER_LINES.slice(3, 6).map((l) => `${l}\r`).join('\n');
 const DEEP_NEW = ['\t\tif (item.visible) {', '\t\t\tout.push(`<li class="shown">${item.label}</li>`);', '\t\t}'].join('\n');
 /** `render.js` after the edit: the push line at the file's depth with the attribute. */
 const RENDER_SHOWN = RENDER_LINES.map((l) => l.replace('out.push(`<li>', 'out.push(`<li class="shown">'));
+/** `blank.js`'s loop body one tab shallow, LF, its blank interior line empty (PD-TOOLS-020); and the same with the price doubled. */
+const BLANK_OLD = ['\tconst price = item.price;', '', '\tsum += price;'].join('\n');
+const BLANK_NEW = ['\tconst price = item.price * 2;', '', '\tsum += price;'].join('\n');
 const write = (key, args) => [key, { name: 'write_file', args }];
 const read = (key, path) => [key, { name: 'read_file', args: { path } }];
 const STEPS = [
@@ -121,6 +128,8 @@ const STEPS = [
   ['haet-read-render', { name: 'haet_read', args: { path: 'crlf/render-haet.js' } }],
   ['near-lf', { name: 'haet_edit', args: { path: 'crlf/render-haet.js', content_hash: '@content_hash', old_string: SHALLOW_OLD, new_string: SHALLOW_NEW } }],
   ['retry-lf', { name: 'haet_edit', args: { path: 'crlf/render-haet.js', content_hash: '@content_hash', old_string: QUOTE_LF, new_string: DEEP_NEW } }],
+  read('read-blank', 'crlf/blank.js'),
+  write('blank-lf', { operation: 'edit', path: 'crlf/blank.js', old_string: BLANK_OLD, new_string: BLANK_NEW }),
 ];
 const toolArgs = Object.fromEntries(STEPS);
 
@@ -202,12 +211,17 @@ const nearLf = text('near-lf');
 check(refused('near-lf') && nearLf.startsWith('old_string was not found exactly in crlf/render-haet.js.') && nearLf.includes('It matches lines 4-6 at match level 3 (indentation shift).') && nearLf.includes("The line endings differ too: CRLF in the file and LF in old_string. The quoted text carries the file's line endings.") && nearLf.includes(JSON.stringify(QUOTE_LF)), 'near-lf: a haet_edit near miss at match level 3 names the line endings and quotes the window with its carriage returns (PD-TOOLS-019, PD-TOOLS-014 revision 3)', nearLf);
 check(ok('retry-lf') && !/Match level/.test(text('retry-lf')) && text('retry-lf').includes(`${CRLF_EDIT} content_hash: `), 'retry-lf: the quote sent back with the same hash applied at level 1, the CRLF sentence before content_hash (PD-TOOLS-014 clause 5, PD-TOOLS-017)', text('retry-lf'));
 check(readFileSync(join(workspace, 'crlf/render-haet.js'), 'utf8') === crlf(RENDER_SHOWN), 'render-haet.js holds the retried edit at the file\'s depth, every line CRLF', JSON.stringify(readFileSync(join(workspace, 'crlf/render-haet.js'), 'utf8')));
+// PD-TOOLS-020 with PD-TOOLS-015 clause 2 and PD-TOOLS-016: the LF block one tab shallow with an empty interior line matched the
+// CRLF loop at level 3, took the shift, then the file's endings; the blank line is the file's own (`\r` and nothing else). Until
+// the ruling the blank line took part in the shift and the block matched nothing on the CRLF file.
+check(ok('blank-lf') && text('blank-lf').includes(`${SHIFTED} ${CRLF_EDIT}`), 'blank-lf: an LF block with a blank interior line, one tab shallow on a CRLF file, matches at level 3, the shift sentence then the CRLF sentence (PD-TOOLS-020, PD-TOOLS-015 clause 2, PD-TOOLS-016 clause 3)', text('blank-lf'));
+check(readFileSync(join(workspace, 'crlf/blank.js'), 'utf8') === crlf(BLANK_LINES.map((l) => l.replace('item.price;', 'item.price * 2;'))), 'blank.js holds the shifted block at the file\'s depth, its blank line kept, every line CRLF (PD-TOOLS-020)', JSON.stringify(readFileSync(join(workspace, 'crlf/blank.js'), 'utf8')));
 // The live run's own reading of a near miss: two misses, at levels 2 and 3, each retried on the same path and not probed.
 const reading = nearMissReading([{ scenario: 'edits', calls }]);
 check(reading.misses.length === 2 && reading.misses.map((m) => m.level).join(',') === '2,3' && reading.retried.length === 2 && reading.probed.length === 0 && reading.ambiguous.length === 0, 'the near-miss reading counts a level-2 and a level-3 miss, each retried on the same path, with no probe', JSON.stringify(reading));
 results.nearMiss = { misses: reading.misses.length, retried: reading.retried.length, probed: reading.probed.length, ambiguous: reading.ambiguous.length };
 // Every file the asserted steps touched is still CRLF throughout.
-for (const path of ['crlf/exact.js', 'crlf/list.txt', 'crlf/window.js', 'crlf/shift.js', 'crlf/haet.js', 'crlf/render.js', 'crlf/render-haet.js']) {
+for (const path of ['crlf/exact.js', 'crlf/list.txt', 'crlf/window.js', 'crlf/shift.js', 'crlf/haet.js', 'crlf/render.js', 'crlf/render-haet.js', 'crlf/blank.js']) {
   const endings = lineEndings(readFileSync(join(workspace, path), 'utf8'));
   results.files[path] = endings;
   check(endings.lfOnly === 0, `${path}: no line lost its carriage return`, `LF-only lines ${endings.lfOnlyLines.join(', ')}`);

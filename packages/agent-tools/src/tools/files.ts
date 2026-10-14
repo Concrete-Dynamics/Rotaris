@@ -360,7 +360,7 @@ export function matchEdit(lines: readonly string[], oldText: string): EditMatch 
    * character; the prefix is measured on old_string's first line that holds one and the window's line at the same index
    * (PD-TOOLS-015's O and W), and added or removed on the visible lines only. An old_string with no visible character never
    * matches here. Until the ruling a blank line was shifted like any other, so a block with a blank interior line never
-   * reached level 3 (docs/defects/a-block-with-a-blank-interior-line-never-matches-at-level-3.md).
+   * reached level 3 (docs/defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md).
    */
   const visible = (s: string) => /\S/.test(s);
   const o = oldBodies.findIndex(visible);

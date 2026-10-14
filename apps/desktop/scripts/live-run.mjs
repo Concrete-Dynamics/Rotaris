@@ -3009,7 +3009,7 @@ if (wanted.includes('delegation')) {
   const attached = attachReading(delegates, timeline.filter((t) => t.name === 'context_selection').map((t) => t.metadata), children);
   if (attached.kind === 'not-asked') noted('no delegation attached an artifact', 'attach_artifacts is unasked this run');
   else if (attached.kind !== 'attached') noted('a delegation named attachments, and none was given whole', `${attached.kind}: ${delegates.filter((d) => Array.isArray(d.args.attach_artifacts) && d.args.attach_artifacts.length > 0).map((d) => `#${d.ordinal} ${JSON.stringify(d.args.attach_artifacts)}`).join(', ')}`);
-  else check(attached.faults.length === 0, "an attached artifact was given to the child whole, the observation and the child's context_selection entry agreeing (PD-TOOLS-006 revision 5)", attached.faults.length === 0 ? `${attached.given} given whole over ${attached.asked} delegation(s)` : attached.faults.join('; '));
+  else check(attached.faults.length === 0, "an attached artifact was given to the child whole, the observation and the child's context_selection entry agreeing (PD-TOOLS-006 revision 5)", attached.faults.length === 0 ? `${attached.given} given whole over ${attached.asked} admitted delegation(s)${attached.rejected > 0 ? `; ${attached.rejected} rejected by the gate, not read` : ''}` : attached.faults.join('; '));
   // PD-TOOLS-006 revision 3 / PD-ORCH-005 clause 22: the first child followed up under its own task id.
   const followed = followUpReading(delegates, children, timeline.filter((t) => t.name === 'child_resumed'));
   if (followed.kind === 'not-asked') noted('no delegation carried a session_id', 'the follow-up of a settled child is unasked this run');

@@ -23,3 +23,22 @@ no entry to agree with.
 - `apps/desktop/scripts/lib/delegation-readings.test.ts` — its cases, none of which carries a rejected call.
 - `apps/desktop/scripts/live-run.mjs` — the `delegation` scenario's call site; `readToolCalls` already gives each call its
   `status`.
+
+## Outcome — repaired 2026-10-14 (fin46, `fin46-accept1-2`); the harness misread, the product did not
+
+`attachReading` reads only the admitted delegations (status `ok`): a rejected one (status `failed`) is counted in a new
+`rejected` field and never paired with a child. A run whose every attaching delegation was rejected reads `rejected` (the
+scenario's NOTE path, nothing having been given), not a disagreement. The scenario's PASS detail now says how many admitted
+delegations it read and how many rejections it left unread (`apps/desktop/scripts/live-run.mjs`).
+
+**Pinned** by `apps/desktop/scripts/lib/delegation-readings.test.ts` ("attachReading (PD-TOOLS-006 revision 5)"): the pack's
+shape (a rejected #10 and an admitted #11 of one `task_name`, the child's entry at 1) reads `attached` with no fault, and a lone
+rejection reads `rejected`. Red before the change: both failed, the first with the pack's own fault, "#10: the observation gave 0
+whole, the entry 1" (16 tests, 2 failed); green after (16 passed).
+
+**Shown** over the 3c3f447 pack (`2026-10-14T15-58-45-917Z`, session `8de7ccb2…`, read from its `workspace.db`): fin45's reading
+gives `{"kind":"attached","asked":2,"given":1,"faults":["#10: the observation gave 0 whole, the entry 1"]}`, this one
+`{"kind":"attached","asked":1,"given":1,"rejected":1,"faults":[]}`. A live run of the scenario on this branch
+(`live-run.mjs --confirm --skip-build --only=delegation`, pack `2026-10-14T18-00-01-593Z`) PASSED the check, "1 given whole over 1
+admitted delegation(s)"; that run's model was not rejected before attaching, so the rejected path is shown by the pack replay
+and the test, not live.

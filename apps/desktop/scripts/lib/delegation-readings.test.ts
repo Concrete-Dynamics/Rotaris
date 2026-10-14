@@ -75,15 +75,33 @@ describe('followUpReading (PD-TOOLS-006 revision 3, PD-ORCH-005 clause 22)', () 
 describe('attachReading (PD-TOOLS-006 revision 5)', () => {
   const children = [{ task_id: 'bg_0000cccc', canonical_name: 'exports-doc' }];
   it('credits an attachment given whole that the context_selection entry agrees with', () => {
-    const r = attachReading([{ ordinal: 7, args: { task_name: 'exports-doc', attach_artifacts: ['art_AAAAAAAA'] }, result: "Task 'exports-doc': queued\n1 attached artifact will be given to the child whole." }], [{ task_id: 'bg_0000cccc', attached_included: 1 }], children);
+    const r = attachReading([{ ordinal: 7, status: 'ok', args: { task_name: 'exports-doc', attach_artifacts: ['art_AAAAAAAA'] }, result: "Task 'exports-doc': queued\n1 attached artifact will be given to the child whole." }], [{ task_id: 'bg_0000cccc', attached_included: 1 }], children);
     expect(r).toMatchObject({ kind: 'attached', given: 1, faults: [] });
   });
 
   it('names a disagreement, reads an unresolved reference as a NOTE, and none as not asked', () => {
-    const r = attachReading([{ ordinal: 7, args: { task_name: 'exports-doc', attach_artifacts: ['art_AAAAAAAA'] }, result: '1 attached artifact will be given to the child whole.' }], [{ task_id: 'bg_0000cccc', attached_included: 0 }], children);
+    const r = attachReading([{ ordinal: 7, status: 'ok', args: { task_name: 'exports-doc', attach_artifacts: ['art_AAAAAAAA'] }, result: '1 attached artifact will be given to the child whole.' }], [{ task_id: 'bg_0000cccc', attached_included: 0 }], children);
     expect(r.faults).toEqual(['#7: the observation gave 1 whole, the entry 0']);
-    expect(attachReading([{ ordinal: 2, args: { task_name: 'x', attach_artifacts: ['nothing'] }, result: 'No attached artifact will be given to the child. 1 attachment could not be resolved: nothing.' }], [], children).kind).toBe('unresolved');
-    expect(attachReading([{ ordinal: 2, args: { task_name: 'x' }, result: '' }], [], children).kind).toBe('not-asked');
+    expect(attachReading([{ ordinal: 2, status: 'ok', args: { task_name: 'x', attach_artifacts: ['nothing'] }, result: 'No attached artifact will be given to the child. 1 attachment could not be resolved: nothing.' }], [], children).kind).toBe('unresolved');
+    expect(attachReading([{ ordinal: 2, status: 'ok', args: { task_name: 'x' }, result: '' }], [], children).kind).toBe('not-asked');
+  });
+
+  /*
+   * L3 of the acceptance round at 3c3f447 (pack 2026-10-14T15-58-45-917Z, session 8de7ccb2): #10 was rejected for naming no todo
+   * item, #11 (the same task_name) was admitted with "1 attached artifact will be given to the child whole", and the one child's
+   * context_selection entry read attached_included 1. A rejected delegation queues no child, so it has no entry to agree with.
+   */
+  it('reads only the admitted delegations, never a rejection paired with the child its admitted retry made', () => {
+    const attach = { task_name: 'exports-doc', attach_artifacts: ['art_URyDbLA9'], persona: 'docs-writer' };
+    const rejected = { ordinal: 10, status: 'failed', args: attach, result: "Task 'exports-doc': rejected — This delegation names no todo item, and you keep a todo list for this task" };
+    const admitted = { ordinal: 11, status: 'ok', args: attach, result: "Task 'exports-doc': queued — Accepted; the child runs in the foreground. 1 attached artifact will be given to the child whole." };
+    const r = attachReading([rejected, admitted], [{ task_id: 'bg_0000cccc', attached_included: 1 }], children);
+    expect(r).toMatchObject({ kind: 'attached', asked: 1, given: 1, rejected: 1, faults: [] });
+  });
+
+  it('reads a run whose every attaching delegation was rejected as rejected, not as a disagreement', () => {
+    const r = attachReading([{ ordinal: 10, status: 'failed', args: { task_name: 'exports-doc', attach_artifacts: ['art_URyDbLA9'] }, result: "Task 'exports-doc': rejected — …" }], [], children);
+    expect(r).toMatchObject({ kind: 'rejected', asked: 0, given: 0, rejected: 1, faults: [] });
   });
 });
 

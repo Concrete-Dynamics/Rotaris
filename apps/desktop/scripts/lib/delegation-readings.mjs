@@ -110,17 +110,24 @@ export function followUpReading(delegates, children, timeline) {
 }
 
 /**
- * Artifacts attached to a delegation (PD-TOOLS-006 revision 5): the delegate calls with a non-empty `attach_artifacts`, each read
- * against the observation's selection and the child's `context_selection` entry. `kind`: `attached` (at least one attachment
- * was given whole and the entry agrees), `unresolved` (every one named nothing: a NOTE naming them), `not-asked`; `faults`
- * lists an observation and an entry that disagree.
- * @param {readonly { ordinal: number, args: any, result: string }[]} delegates
+ * Artifacts attached to a delegation (PD-TOOLS-006 revision 5): the ADMITTED delegate calls (status `ok`) with a non-empty
+ * `attach_artifacts`, each read against the observation's selection and the child's `context_selection` entry. A delegation the
+ * gate rejected (status `failed`, "Task '…': rejected — …") queues no child and promises nothing whole, so it is counted in
+ * `rejected` and never paired with the child an admitted retry of the same `task_name` made: until 2026-10-14 it was, and the
+ * 3c3f447 acceptance run failed "#10: the observation gave 0 whole, the entry 1" over a rejected #10 and an admitted #11 (finding
+ * L3; fin46, `docs/defects/fixed/the-live-attach-reading-pairs-a-rejected-delegation-with-the-admitted-child-of-its-name.md`).
+ * `kind`: `attached` (at least one attachment was given whole and the entry agrees), `unresolved` (every one named nothing: a
+ * NOTE naming them), `rejected` (every attaching delegation was rejected: nothing was given, a NOTE), `none-given`,
+ * `not-asked`; `faults` lists an observation and an entry that disagree. `asked` counts the admitted ones.
+ * @param {readonly { ordinal: number, status: string, args: any, result: string }[]} delegates
  * @param {readonly { task_id?: string, attached_included?: number, attached_elided?: string[], attached_unresolved?: string[] }[]} selections
  * @param {readonly { task_id: string, canonical_name: string }[]} children
  */
 export function attachReading(delegates, selections, children) {
-  const asked = delegates.filter((d) => Array.isArray(d.args?.attach_artifacts) && d.args.attach_artifacts.length > 0);
-  if (asked.length === 0) return { kind: 'not-asked', asked: 0, given: 0, faults: [] };
+  const attaching = delegates.filter((d) => Array.isArray(d.args?.attach_artifacts) && d.args.attach_artifacts.length > 0);
+  if (attaching.length === 0) return { kind: 'not-asked', asked: 0, given: 0, rejected: 0, faults: [] };
+  const asked = attaching.filter((d) => d.status === 'ok');
+  const rejected = attaching.length - asked.length;
   /** @type {string[]} */
   const faults = [];
   let given = 0;
@@ -135,7 +142,8 @@ export function attachReading(delegates, selections, children) {
     if (n > 0 && entry === undefined) faults.push(`#${d.ordinal}: no context_selection entry for ${d.args.task_name}`);
     else if (entry !== undefined && (entry.attached_included ?? 0) !== n) faults.push(`#${d.ordinal}: the observation gave ${n} whole, the entry ${entry.attached_included ?? 0}`);
   }
-  return { kind: given > 0 ? 'attached' : unresolved > 0 ? 'unresolved' : 'none-given', asked: asked.length, given, faults };
+  const kind = given > 0 ? 'attached' : unresolved > 0 ? 'unresolved' : asked.length === 0 ? 'rejected' : 'none-given';
+  return { kind, asked: asked.length, given, rejected, faults };
 }
 
 /**

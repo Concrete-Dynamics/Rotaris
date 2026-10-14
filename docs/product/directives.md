@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Eighty-eight.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Eighty-nine.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -8124,6 +8124,57 @@ Extends REQ-TOOLS-135 (fills its silence on the line endings an insert writes, a
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 > **In the built app, 2026-10-13 (fin42, N52):** `pnpm edits-proof` drove this directive through the run host on a CRLF, tab-indented fixture it generates (`apps/desktop/scripts/lib/crlf-fixture.mjs`), the scripted coordinator's calls sent by the new step `tool:<key>`; load average 6.8 to 12.2 on four CPUs beside a sibling plan. **Held as written.** `insert`: two LF lines inserted at line 0 of a CRLF file landed CRLF with "Inserted 2 lines into crlf/exact.js at line 0." and clause 3's sentence. Red with clause 1's test forced false (the pre-directive insert): the two inserted lines LF-only and no sentence. **What was not measured.** No live run. The live run's `crlf` scenario (`apps/desktop/scripts/lib/crlf-scenario.mjs`, default set) is written and unit-tested and is the orchestrator's to run; what it reads depends on the shapes the model chooses. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-mcp-004"></a>
+
+### PD-MCP-004 — a code-intelligence symbol rename is preceded by a referencing-symbol search of the same symbol
+
+**The case.** An agent calls the bundled code-intelligence runtime's **symbol rename** (REQ-MCP-015's EDIT tier) on the server
+whose entry carries the built-in code-intelligence name, under whatever name the model calls it (a `tool_name_map` rename of
+REQ-MCP-005, or REQ-MCP-057's collision prefix, included). Another server's tool of the same name, and every other tool of the
+EDIT tier, is not this case.
+
+1. **The manifest.** REQ-MCP-116's binding manifest SHALL also record a **warm-up**, keyed by capability: the EDIT tier's symbol
+   rename is warmed by the READ tier's referencing-symbol search, together with the names of the arguments the two share — the
+   symbol's name path and the file that declares it (as the pinned runtime spells them, `name_path` and `relative_path`). The
+   generator SHALL refuse a manifest in which either tool is not reported by the runtime's `tools/list`, or in which either
+   tool's listed input schema lacks either argument, so an upstream rename fails a build and never a rename.
+2. **The search.** Before the product forwards every such rename to the server, it SHALL send that server the
+   referencing-symbol search with exactly the two shared arguments copied from the rename's own call, and SHALL discard the
+   answer, an answer marked as an error included. The search is the product's own request, made as REQ-MCP-070's and
+   REQ-MCP-071's are: no persona grant, `disabled_tools` or `tool_name_map` applies to it (REQ-MCP-064 reads post-connect
+   probes the same way), and it never reaches the model.
+3. **The record.** The search SHALL write no tool-call record, no total, no histogram bucket, no child-report entry and no
+   notice. The session record shows the rename's one row, as before.
+4. **The allowance.** The search and the rename SHALL be held to the rename's one REQ-MCP-003 allowance, measured from the
+   dispatch of the rename: the rename is forwarded with what the search left. A search that exhausts the allowance ends the
+   rename as REQ-MCP-003's failed call, unsent. A search that fails otherwise (an error result, a thrown fault, a lost
+   connection) still lets the rename go ahead, the failure written to the application log. A cancel by the run during the search
+   stops it, and the rename is not sent (`PD-TOOLS-013`'s `interrupted`).
+
+Everything else stands: the rename's arguments, result and reach observation (OQ-245) are the runtime's and the run host's as
+before, and the search changes nothing in the workspace.
+
+**Why, and what it costs.** The pinned runtime (`serena-agent` 1.7.0) waits for the TypeScript language server to load the
+project before a references request and not before a rename, so the first rename of a server session that needs the server's
+cross-file view renamed the declaring file alone and reported success: `code-intel-proof`'s eleventh launch
+(`child-rename-cold`) and four arrangements over the runtime's stdio branch, a copy of the live run's `todo-app` fixture among
+them, each changed one file, while the same rename after one referencing-symbol search reached every file
+([OQ-273](../architecture/open-questions.md#oq-273)). A model reaches for a rename precisely so that it does not have to edit
+the referencing files one by one, and nothing told it they were left behind. What it costs: every rename makes one server
+request the model did not make, and spends part of its allowance on it; the manifest gains a capability of the binding that
+rests on the runtime's internals (a later pin may make the search unnecessary, or insufficient), so `code-intel-proof`'s
+eleventh launch is re-run on every pin change as its acceptance gate; and the product departs from an implementation built from
+the specification alone, which forwards the rename as the model made it. Precedent for a request the product makes on its own:
+REQ-MCP-070's `lsp_init` and REQ-MCP-071's binding probe.
+
+> **Extends:** REQ-MCP-116, REQ-MCP-015
+
+*Ruled under the owner's delegation, 2026-10-13 ([OQ-273](../architecture/open-questions.md#oq-273), option (a)); logged as
+[R-072](requests.md#r-072). Extends REQ-MCP-116 (the manifest records the pairing and the argument names) and governs what
+REQ-MCP-015's EDIT-tier symbol rename reaches on the bundled server.*
 
 ---
 

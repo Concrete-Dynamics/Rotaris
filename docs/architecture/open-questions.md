@@ -13834,8 +13834,8 @@ pinned runtime the product bundles and drives as it is; REQ-MCP-116, the binding
 identifiers are written; [OQ-245](#oq-245), the reach observation that records what the call changed. Raised 2026-10-13 by
 fin42 (N59) from
 [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
-Open. fin42 held OQ-271 to OQ-280; raised as OQ-272 (OQ-271 was taken on main by another of the plan's bundles), renumbered
-OQ-273 at its landing, `origin/main` having taken OQ-272 meanwhile.)*
+fin42 held OQ-271 to OQ-280; raised as OQ-272 (OQ-271 was taken on main by another of the plan's bundles), renumbered
+OQ-273 at its landing, `origin/main` having taken OQ-272 meanwhile. Ruled 2026-10-13 under R-072, below; it read "Open." until then.)*
 
 The first rename of a server session that needs the language server's cross-file view renames the declaring file alone and says
 it succeeded: `code-intel-proof`'s eleventh launch (`child-rename-cold`) and four arrangements over the runtime's stdio branch,
@@ -13867,6 +13867,21 @@ reach observation lists the one file it changed. A model that searched for refer
 which of the three files still name `remaining` and which were written by another tool after the rename, and whether
 `node --test` passes; a cold rename whose importing files were left behind, or were mended by hand afterwards, is a NOTE naming
 this question.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)), option (a):** before the run host
+forwards any symbol rename to the bundled code-intelligence server, it sends that server's referencing-symbol search for the same
+`name_path` and `relative_path`, discards the answer, and then forwards the rename. Both requests are held within the rename's one
+REQ-MCP-003 allowance, and the search never reaches the model or the session's tool-call record. Minted as
+[`PD-MCP-004`](../product/directives.md#pd-mcp-004), which extends REQ-MCP-116 (the manifest records the pairing and the argument
+names) and governs what REQ-MCP-015's rename must reach; `code-intel-proof`'s launch 11 (`child-rename-cold`) is its acceptance
+gate and is re-run on every pin change. **The two recommendations weighed:** both advocates recommended (a), the product-side
+warm-up, and the ruling followed both. It sits in the one executor every code-intelligence call already goes through, and it is
+measured to work (launch 10, and the fifth arrangement of the defect note). Where (a) above read "before the first rename of each
+server session", the ruling says before **every** rename. **Rejected:** (b), a patched distribution the recipe and the drift check must carry, or an upgrade not
+yet measured; (c), advice that leaves a broken project whenever it is ignored; (d), a success reported for a rename that left the
+project unbuildable. **Costs kept on record:** one server request per rename that the model did not make, part of the rename's
+allowance spent on it, and a binding resting on the runtime's internals. *The reading the build proceeded under until the ruling
+("As built: the call is forwarded as the model made it …", above) is kept as the falsified reading.*
 
 <a id="oq-279"></a>
 

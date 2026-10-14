@@ -5181,6 +5181,12 @@ REQ-NOTIFY-100, REQ-NOTIFY-261, OQ-217 and revision 2's notice detail.*
 ruling of [OQ-253](../architecture/open-questions.md#oq-253) (TS1), from revision 3's first execution. Cites, without changing
 them: REQ-ORCH-088, REQ-CONFIG-113 and REQ-MONITOR-286.*
 
+*Ruled 2026-10-14 under [OQ-301](../architecture/open-questions.md#oq-301) ([R-072](requests.md#r-072)), with no revision:
+"until the user changes the field" and "until the field changes" mean until the person types or steps a value into the field,
+an entry equal to the value shown included — that entry is "a user's entry", replaces the pending value, marks the form dirty
+when it differs from the saved value, and is written by Save. Opening, repopulating, focusing or leaving the field without
+typing changes nothing, and the stored value survives all of them. Revisions 1 to 4 keep their text.*
+
 > **First execution, 2026-10-07, built under [R-072](requests.md#r-072):** the directive held as written. **What was
 > measured.** `settings/child-timeout.test.ts` (the minutes and seconds both ways, the stored-value line, a stored 1250 s and
 > 36000 s kept and unsaved, no change on a repopulation, the save carrying `child_timeout` only after an edit, the live state

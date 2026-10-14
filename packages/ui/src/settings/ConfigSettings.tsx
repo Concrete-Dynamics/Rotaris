@@ -248,15 +248,13 @@ export function Confirm({ title, body, onYes, onCancel }: { title: string; body:
  * focus (`clampedNumberEdit`, `clampedNumberCommit`). Every in-range value can be typed and no out-of-range one can be saved.
  * The improvement analysis timeout's draft-until-blur pattern, shared by every number field since fin34
  * (`docs/defects/fixed/a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md`).
- */
-/**
- * PD-CONFIG-003 / REQ-CONFIG-322, REQ-CONFIG-325: a Settings › Runtime number field, clamped at the widget. A typed value
- * reaches `onCommit` from the native `input` event (`onInput`), never from React's `onChange`: React raises no change for
- * a value equal to the one the input already holds, so a person who selected a stored value the field shows clamped
+ *
+ * A typed value reaches `onCommit` from the native `input` event (`onInput`), never from React's `onChange`: React raises no
+ * change for a value equal to the one the input already holds, so a person who selected a stored value the field shows clamped
  * (3 s shown as `1` minute) and typed the same `1` over it had entered nothing — the bar stayed clean and the stored 3 s
  * stood. PD-CONFIG-003 stores "a user's entry", and an entry typed over the same digits is one, so it is committed like
  * any other (`docs/defects/fixed/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`, 2026-10-14).
- * That reading is raised as OQ-301 so the consortium can put it on record.
+ * That reading is ruled under OQ-301 (R-072).
  */
 function ClampedNumberField(props: { readonly id: string; readonly range: NumberRange; readonly shown: number; readonly onCommit: (value: number) => void; readonly description?: string }) {
   const { id, range, shown, onCommit } = props;

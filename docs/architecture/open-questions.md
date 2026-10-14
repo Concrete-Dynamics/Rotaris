@@ -130,7 +130,8 @@ restore cut between its renames is reversed at the next open; no directive); [OQ
 [OQ-278](#oq-278), changed (a note closes unreproduced only under a guard, `docs/defects/README.md`); [OQ-280](#oq-280), changed
 (`PD-TOOLS-019`). Written 2026-10-14 by fin45 (`fin45-retro-and-record`): [OQ-299](#oq-299), the search's failure confirmed as
 built and the answered search's check reordered to match (a ruling note under `PD-MCP-004` clause 4, no directive);
-[OQ-300](#oq-300), changed (`PD-LIBRARY-002` revision 5).
+[OQ-300](#oq-300), changed (`PD-LIBRARY-002` revision 5); [OQ-301](#oq-301), confirmed as built (a ruling note under
+`PD-CONFIG-003`, no directive).
 
 ***Three of those counts changed on 2026-09-02 and the direction is not the usual one, so a reader should
 not skim them.*** The seven escalations this register carried as open were **all ruled on that date** and
@@ -14775,6 +14776,15 @@ then.
 
 **What a ruling decides.** Whether that reading stands (an entry is an entry), or a value equal to the one shown leaves the stored
 value as it was (the field never changed what it reads).
+
+**Ruled 2026-10-14 under the owner's delegation ([R-072](../product/requests.md#r-072)), both advocates followed:** confirmed as
+built. A whole number a person types or steps into a clamped Settings number field is "a user's entry" and a change of the field,
+whatever its digits: it replaces the pending value, marks the form dirty when it differs from the saved value, and Save writes it.
+Opening, repopulating, focusing or leaving the field without typing commits nothing, and the stored value survives all of them
+(REQ-CONFIG-446, REQ-CONFIG-419, [`PD-CONFIG-003`](../product/directives.md#pd-config-003), whose normative text stands unchanged;
+an italic ruling note there points here, with no revision number). Its pins: the three cases of
+`packages/ui/src/settings/number-field-retype.test.ts`, and `pnpm continuation-proof --only=later-run`, whose shared Runtime-field
+helper types over the selection as a person does. Written 2026-10-14 by fin45 (`fin45-retro-and-record`).
 
 <a id="oq-302"></a>
 

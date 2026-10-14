@@ -3380,7 +3380,11 @@ if (wanted.includes('empty-answer')) {
 
 // ── 9. The long run ──────────────────────────────────────────────────────────────────────────────────────
 /**
- * OPT-IN, and the only scenario here that is. `--only=duress`.
+ * OPT-IN (`--only=duress`), one of five: `OPT_IN` also names `cutoff`, `rename`, `plan-open` and `empty-answer` (8e, 8i, 8j
+ * and 8k above), and no default run reaches any of them. What only they ask — PD-ORCH-009 revisions 3 to 5 (`empty-answer`),
+ * PD-ORCH-015 (`plan-open`), PD-MCP-004's cold rename (`rename`), PD-CONFIG-003's cut-off child (`cutoff`) and the long run
+ * here — is measured by a run that names them, never by a default one (acceptance finding L9 at b9e3005,
+ * docs/defects/fixed/the-live-runs-duress-section-calls-itself-its-only-opt-in-scenario.md).
  *
  * `codebase.md` names the gap this exists to enter: "`pnpm live-run` runs short tasks against an unmetered
  * endpoint, so it holds **no generation near the model timeout, no multi-line command, and no re-spawn**. Every

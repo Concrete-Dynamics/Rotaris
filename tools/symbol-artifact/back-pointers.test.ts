@@ -145,7 +145,8 @@ describe('the back-pointers in docs/spec agree with the directive register', () 
   it('OQ-237 (GV1, R-072): a requirement two directives narrow lists both, and the dispositions the one-per-verb rule bent are corrected', () => {
     expect(narrowed('REQ-TOOLS-112')).toEqual(['PD-TOOLS-009', 'PD-TOOLS-013']);
     expect(narrowed('REQ-SESSION-136')).toEqual(['PD-SESSION-003', 'PD-TOOLS-013']);
-    expect(narrowed('REQ-SHELL-021')).toEqual(['PD-SHELL-001', 'PD-SHELL-009']);
+    // PD-SHELL-010 (OQ-297, HR1, R-072, 2026-10-14) narrows gate (1) as a third directive beside these two.
+    expect(narrowed('REQ-SHELL-021')).toEqual(['PD-SHELL-001', 'PD-SHELL-009', 'PD-SHELL-010']);
     expect(narrowed('REQ-CONFIG-464')).toEqual(['PD-CONFIG-001', 'PD-WORKSPACE-002']);
     expect(narrowed('REQ-CONFIG-256')).toEqual(['PD-CONFIG-003', 'PD-WORKSPACE-002']);
     expect(narrowed('REQ-CONFIG-417')).toEqual(['PD-CONFIG-003', 'PD-WORKSPACE-002']);
@@ -169,6 +170,19 @@ describe('the back-pointers in docs/spec agree with the directive register', () 
         backPointers()
           .filter((p) => p.requirement === req && p.directive === pd)
           .map((p) => p.verb),
+      ).toEqual(['Narrowed']);
+    }
+  });
+
+  it('PD-SHELL-010 (OQ-297, the consortium\'s HR1, R-072): it narrows REQ-SHELL-119, REQ-SHELL-124 and REQ-SHELL-021, and each requirement\'s note says so', () => {
+    for (const req of ['REQ-SHELL-119', 'REQ-SHELL-124', 'REQ-SHELL-021']) {
+      expect(narrowed(req), req).toContain('PD-SHELL-010');
+      expect(extended(req) ?? [], req).not.toContain('PD-SHELL-010');
+      expect(
+        backPointers()
+          .filter((p) => p.requirement === req && p.directive === 'PD-SHELL-010')
+          .map((p) => p.verb),
+        req,
       ).toEqual(['Narrowed']);
     }
   });

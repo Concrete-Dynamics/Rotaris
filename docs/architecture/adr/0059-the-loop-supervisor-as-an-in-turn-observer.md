@@ -202,3 +202,19 @@ execution, after a plan correction ([OQ-284](../open-questions.md#oq-284)). Pinn
 `withdrawStuck` cases and `answerless.test.ts`'s two revision-3 cases (all five red on `29dbc4e`), and by `pnpm part-h-proof`'s
 `answerless` and `answer-when-asked` launches with supervision on (no loop classification and no stuck activation).
 **Not measured:** a live run since the change (the orchestrator's `empty-answer`).
+
+## 2026-10-14 — the producer narrowed again: the run's own follow-ups (PD-ORCH-009 revision 4, fin44)
+
+**Ruled under the owner's delegation (R-072)** as [OQ-283](../open-questions.md#oq-283) and [OQ-284](../open-questions.md#oq-284):
+the two neighbouring shapes the entry above named. A delegated child's empty turn before its REQ-ORCH-095 re-prompt, and an
+execution iteration's root turn the run follows with REQ-ORCH-078's plan correction, are no stuck report either: `withdrawStuck()`
+is called before the child's "Carry out the task now, …" (`IterationChildren.execute`) and before the correction (`Run.turn`'s
+`correction()`), so each is the last message of its request. **The reading it replaces, kept beside it:** after revision 3, every
+empty reply with no call but the re-prompted root's was a stuck report — measured as built, the child's request ended [task, empty
+turn, re-prompt, corrective] and a correction's [... , correction, corrective]. Decision 3's consecutive counter met a second gap
+here: the plan correction is REQ-ORCH-105's todo-correction message and never reset the series (an activation after a correction
+that followed two others escalated), so the correction now calls `noteUserInstruction()` too. What still arms stuck: every other
+empty turn, a root silent while its background child runs among them — the corrective follows the child's report (pinned as found,
+raised as [OQ-296](../open-questions.md#oq-296)). Pinned by `children.test.ts`'s and `coordinator-plan.test.ts`'s revision-4
+cases (five red on `a3be56c`) and by `pnpm part-h-proof`'s `silent-correction` and `silent-child` launches (0 loop
+classifications, 0 stuck activations). **Not measured:** a live run since the change.

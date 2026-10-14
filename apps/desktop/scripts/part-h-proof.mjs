@@ -327,9 +327,60 @@ for (const c of [{ name: 'answerless', script: 'silent,silent', told: true }, { 
 }
 writeFileSync(join(output, 'answerless-observed.json'), `${JSON.stringify(answerless, null, 2)}\n`);
 
+/*
+ * PD-ORCH-009 revision 4 (OQ-283 and OQ-284, ruled 2026-10-13 under R-072; fin44): the run's own follow-up is the only message
+ * it adds for the turn it follows, with loop supervision on. `silent-correction`: a coordinating root writes its plan with the
+ * report item open, is silent, is asked once (`ANSWER_REPROMPT`), is silent again — a stuck report under REQ-ORCH-096 — and is
+ * sent REQ-ORCH-078's plan correction; the correction is the last message before the root's next step, and no loop
+ * classification is asked and no stuck activation written. `silent-child`: a delegated child silent once is re-prompted
+ * ("Carry out the task now, …", REQ-ORCH-095) and the re-prompt is the last message before its next step, with no stuck
+ * activation. Before revision 4 each request ended with "Pause and reassess …" after the run's message.
+ */
+const followUps = {};
+const CHILD_REPROMPT = 'Carry out the task now, using your tools where the task needs them, then answer with what you did.';
+for (const c of [
+  { name: 'silent-correction', script: { ROTARIS_SCRIPT: 'planopen,silent,silent,plandone,report' }, mark: 'You declared success with 1 item of your plan not complete' },
+  { name: 'silent-child', script: { ROTARIS_SCRIPT: 'delegate:coding-agent:survey', ROTARIS_CHILD_SCRIPT: 'silent,answer' }, mark: CHILD_REPROMPT },
+]) {
+  const root = join(output, c.name);
+  const ws = join(root, 'workspace');
+  const local = join(root, 'local');
+  mkdirSync(ws, { recursive: true });
+  mkdirSync(local, { recursive: true });
+  writeFileSync(join(ws, 'README.md'), '# follow-up proof\n');
+  scratchAgentsYaml(ws, null);
+  writeFileSync(join(ws, '.rotaris', 'agents.yaml'), `${readFileSync(join(ws, '.rotaris', 'agents.yaml'), 'utf8')}circuit_breaker:\n  enabled: true\n`);
+  const { log } = await launch(c.name, ws, local, join(root, 'preferences'), {
+    ...c.script,
+    ROTARIS_CAPTURE_PROMPT: 'do the scripted work and report it',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '2000',
+  });
+  const db = new Database(oneDatabase(local), { readonly: true });
+  const session = db.prepare('SELECT session_id, execution_status, stop_reason FROM sessions').get();
+  const iterations = db.prepare('SELECT iteration, outcome FROM iterations ORDER BY iteration').all();
+  const messages = db.prepare('SELECT task_id, seq, body FROM agent_messages ORDER BY task_id, seq').all().map((r) => { let m = {}; try { m = JSON.parse(r.body); } catch { /* not a message */ } return { task: r.task_id, seq: r.seq, role: m.role ?? null, text: (Array.isArray(m.content) ? m.content : []).map((p) => (typeof p?.text === 'string' ? p.text : '')).join('\n') }; });
+  const stuck = db.prepare("SELECT actor, message, metadata FROM timeline WHERE name = 'loop_supervisor_activation' ORDER BY ordinal").all().filter((a) => JSON.parse(a.metadata ?? '{}').trigger === 'stuck');
+  const children = db.prepare('SELECT canonical_name, state FROM children').all();
+  db.close();
+  const at = messages.findIndex((m) => m.role === 'user' && m.text.startsWith(c.mark));
+  const next = at < 0 ? null : messages[at + 1] ?? null;
+  const classifications = (log.match(/scripted model call: [^\n]*\(loop-classifier\)/g) ?? []).length;
+  const sent = messages.filter((m) => m.role === 'user' && m.text.startsWith(c.mark)).length;
+  followUps[c.name] = { session, iterations, children, sent, next: next === null ? null : { role: next.role, text: next.text.slice(0, 120) }, stuck, classifications };
+  if (session?.execution_status !== 'completed') throw new Error(`${c.name}: the session ended ${session?.execution_status} / ${session?.stop_reason}`);
+  if (sent !== 1) throw new Error(`${c.name}: the run's follow-up was sent ${sent} time(s), not once (see ${c.name}.log)`);
+  if (next === null || next.task !== messages[at].task || next.role !== 'assistant') throw new Error(`${c.name}: the follow-up is not the last message before the agent's next step: ${JSON.stringify(next)} (PD-ORCH-009 revision 4)`);
+  if (stuck.length !== 0) throw new Error(`${c.name}: the turn the run followed up was taken as a stuck report: ${JSON.stringify(stuck)} (PD-ORCH-009 revision 4)`);
+  if (classifications !== 0) throw new Error(`${c.name}: ${classifications} loop classification(s) were asked (PD-ORCH-009 revision 4; see ${c.name}.log)`);
+  if (c.name === 'silent-correction' && iterations.map((r) => r.outcome).join(',') !== 'succeeded') throw new Error(`${c.name}: iterations ${JSON.stringify(iterations)}`);
+  if (c.name === 'silent-child' && (children.length !== 1 || children[0].state !== 'succeeded')) throw new Error(`${c.name}: children ${JSON.stringify(children)}`);
+}
+writeFileSync(join(output, 'follow-ups-observed.json'), `${JSON.stringify(followUps, null, 2)}\n`);
+
 const result = {
   planHeld: { session: heldSession, iterations: heldIterations, heldSystemRows: heldSystemRows.map((row) => row.body), corrections, heldAnswerCarried: carried !== null, screenshot: 'plan-held.png' },
   answerless: Object.fromEntries(Object.entries(answerless).map(([k, v]) => [k, { status: v.session?.execution_status, asked: v.asked, reprompts: v.reprompts, rows: v.rows, issues: v.issues.length, stuckActivations: v.stuck.length, classifications: v.classifications }])),
+  followUps: Object.fromEntries(Object.entries(followUps).map(([k, v]) => [k, { status: v.session?.execution_status, sent: v.sent, next: v.next?.role ?? null, stuckActivations: v.stuck.length, classifications: v.classifications }])),
   planCorrection: { session: correctionSessionShown, iterations: correctionIterations, heldRows: heldRows.length, todoCalls: todoCalls.length, agentStates, screenshot: 'plan-correction.png' },
   loop: { session: loopSession, activations: loopActivations.length, issues: loopIssues, toolCalls: loopCalls.length, screenshot: 'loop-supervisor.png' },
   rawCountFallback: Object.fromEntries(Object.entries(rawObserved).map(([k, v]) => [k, { status: v.session?.execution_status, activations: v.activations.length }])),

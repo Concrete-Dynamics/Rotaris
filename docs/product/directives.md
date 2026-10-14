@@ -5974,6 +5974,25 @@ the owner's delegation, 2026-10-13; logged under [R-072](requests.md#r-072), the
 > which now also check that no stuck classification was asked and no stuck activation written; the run is the orchestrator's.
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First execution of revision 4, 2026-10-14 (fin44, `fin44-supervision-and-match`):** built as ruled. `withdrawStuck()` gains
+> two callers: `IterationChildren.execute` (`packages/engine/src/children/orchestration.ts`) immediately before a delegated
+> child's REQ-ORCH-095 re-prompt, and `Run.turn`'s `correction()` (`packages/engine/src/run/run.ts`) immediately before it
+> returns a plan correction, where it also calls `noteUserInstruction()` — REQ-ORCH-105's todo-correction message, which the
+> build had never told the supervisor of. **What was measured.** `children.test.ts`, "PD-ORCH-009 revision 4 (OQ-283)": silent
+> then an answer, and silent twice (the child `failed` with `no_activity`, no activation, no escalation), both red on `a3be56c`;
+> `coordinator-plan.test.ts`, "PD-ORCH-009 revision 4 (OQ-284)": the two cases that pinned OQ-284 flipped (the correction last,
+> no classification, no activation) and the REQ-ORCH-105 reset (activations counted 1, 2, then 1, no escalation), all three
+> red on `a3be56c`, and a guard that a raw-count trigger the answered turn armed is kept, green before and after. In the built
+> app, `pnpm part-h-proof` (load 3.0 to 3.5 on 4 CPUs) with two new launches, both with `circuit_breaker.enabled: true`:
+> `silent-correction` (`planopen,silent,silent,plandone,report`) — the correction sent once and followed by the root's own step,
+> 0 stuck activations, 0 loop classifications, one `succeeded` iteration; `silent-child` — the child's re-prompt sent once and
+> followed by its own step, 0 and 0, the child `succeeded`. **Found beside it:** the route revision 4 leaves out, a root silent
+> while its background child runs, takes the stuck corrective after the child's report (pinned as found in `children.test.ts`;
+> [OQ-296](../architecture/open-questions.md#oq-296)). **What was not measured:** a build without the calls through the new
+> launches (the unit cases are the red evidence), and any live run — the `empty-answer` scenario with the plan open and a
+> delegation scenario meeting a silent child are the orchestrator's. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-hooks-001"></a>

@@ -10,7 +10,7 @@ pending lands after a plan correction", two cases). The route the raising agent 
 was checked and does not occur: each iteration's root has a fresh task id and so a fresh supervisor (`answerless.test.ts`,
 "PD-ORCH-009 revision 3 with OQ-284 …"). A root resumed after a child's report in the same execution would take a pending trigger
 the same way; that route was not measured. Noticed 2026-10-14 by fin43 (`fin43-live-findings`) while building
-[`PD-ORCH-009`](../product/directives.md#pd-orch-009) revision 3; raised as [OQ-284](../architecture/open-questions.md#oq-284).
+[`PD-ORCH-009`](../../product/directives.md#pd-orch-009) revision 3; raised as [OQ-284](../../architecture/open-questions.md#oq-284).
 Not repaired: whether the trigger stands is the ruling's.
 
 ## Specs
@@ -26,3 +26,21 @@ the answer re-prompt answers.
 - `packages/engine/src/run/turn.ts` — `observeStuck()` at a turn's empty end; `check()` at the next turn's first step.
 - `packages/engine/src/run/supervisor.ts` — `LoopSupervisor` keeps `pending` across turns of one conversation.
 - `packages/engine/src/run/coordinator-plan.test.ts`, `packages/engine/src/run/answerless.test.ts` — the cases that confirm and bound it.
+
+## Outcome
+
+**Repaired 2026-10-14 by fin44 (`fin44-supervision-and-match`)** under [OQ-284](../../architecture/open-questions.md#oq-284)'s
+ruling (R-072), recorded as [`PD-ORCH-009`](../../product/directives.md#pd-orch-009) revision 4: a plan correction is the only
+message the run adds for the turn it follows. `Run.turn`'s `correction()` (`packages/engine/src/run/run.ts`) calls
+`withdrawStuck()` on the root's supervisor before it returns the correction (a repetition, cycle or raw-count trigger stays), and
+`noteUserInstruction()` beside it (REQ-ORCH-105, the companion note
+[`a-plan-correction-does-not-restart-the-consecutive-activation-series`](a-plan-correction-does-not-restart-the-consecutive-activation-series.md)).
+**Pinned by** `coordinator-plan.test.ts`, "PD-ORCH-009 revision 4 (OQ-284): …": the two cases that confirmed this note, flipped
+(the correction last, `asked` empty, no activation; red on `a3be56c`), and a guard that a raw-count trigger the answered turn armed
+is kept. **Shown in the built app** by `pnpm part-h-proof`'s `silent-correction` launch (`planopen,silent,silent,plandone,report`,
+`circuit_breaker.enabled: true`): the correction sent once and followed by the root's own step, 0 stuck activations, 0 loop
+classifications, one `succeeded` iteration. The route this note left unmeasured — a root resumed after a child's report — was
+measured: the corrective follows the report; it is outside the ruling, recorded as
+[`a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn`](../a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md)
+and raised as [OQ-296](../../architecture/open-questions.md#oq-296). **Not shown:** the live `empty-answer` scenario with the plan
+open, the orchestrator's.

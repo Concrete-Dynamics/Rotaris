@@ -14293,7 +14293,7 @@ child's REQ-ORCH-095 re-prompt) and [OQ-284](#oq-284) (a stuck trigger left pend
 *(REQ-ORCH-095, "one re-prompt"; REQ-ORCH-096, "one corrective message"; REQ-ORCH-104's stuck-mode clause; [OQ-282](#oq-282) and
 [`PD-ORCH-009`](../product/directives.md#pd-orch-009) revision 3, which narrowed the same shape for the entry role alone and
 named every delegated child as unchanged. Raised 2026-10-14 by fin43 (`fin43-live-findings`) from
-[`../defects/a-delegated-childs-re-prompt-is-followed-by-the-stuck-corrective-in-the-same-request.md`](../defects/a-delegated-childs-re-prompt-is-followed-by-the-stuck-corrective-in-the-same-request.md).)*
+[`../defects/fixed/a-delegated-childs-re-prompt-is-followed-by-the-stuck-corrective-in-the-same-request.md`](../defects/fixed/a-delegated-childs-re-prompt-is-followed-by-the-stuck-corrective-in-the-same-request.md).)*
 
 **What is open.** A child that ends its turn with neither text nor a call is re-prompted once ("Carry out the task now, …",
 `IterationChildren` in `packages/engine/src/children/orchestration.ts`), and that empty turn also armed REQ-ORCH-096's stuck
@@ -14327,7 +14327,7 @@ falsified one.* Written 2026-10-14 by fin44 (`fin44-supervision-and-match`).
 *(REQ-ORCH-096; REQ-ORCH-104's stuck-mode clause; REQ-ORCH-105, "after every activation cycle … counters and fingerprints MUST
 reset"; REQ-ORCH-078 and [`PD-ORCH-015`](../product/directives.md#pd-orch-015), the plan correction;
 [`PD-ORCH-009`](../product/directives.md#pd-orch-009) revision 3. Raised 2026-10-14 by fin43 (`fin43-live-findings`) from
-[`../defects/a-stuck-trigger-a-roots-unanswered-empty-turn-armed-lands-after-a-later-plan-correction.md`](../defects/a-stuck-trigger-a-roots-unanswered-empty-turn-armed-lands-after-a-later-plan-correction.md).)*
+[`../defects/fixed/a-stuck-trigger-a-roots-unanswered-empty-turn-armed-lands-after-a-later-plan-correction.md`](../defects/fixed/a-stuck-trigger-a-roots-unanswered-empty-turn-armed-lands-after-a-later-plan-correction.md).)*
 
 **What is open.** A root's final empty turn that the run does not follow up — the re-prompt answered by a second silence, or an
 empty turn after an answer and a plan correction — arms a stuck trigger that stays pending in that root's supervisor. Confirmed by
@@ -14353,7 +14353,7 @@ withdrawn, so no classification is asked, no corrective message follows, and no 
 A repetition, cycle or raw-count trigger is kept, so the case stays disjoint from `PD-ORCH-016`. The correction also counts as
 REQ-ORCH-105's todo-correction instruction and restarts the consecutive-activation series — REQ-ORCH-105 as written, which the
 build did not do (recorded as
-[`../defects/a-plan-correction-does-not-restart-the-consecutive-activation-series.md`](../defects/a-plan-correction-does-not-restart-the-consecutive-activation-series.md)).
+[`../defects/fixed/a-plan-correction-does-not-restart-the-consecutive-activation-series.md`](../defects/fixed/a-plan-correction-does-not-restart-the-consecutive-activation-series.md)).
 Recorded as [`PD-ORCH-009`](../product/directives.md#pd-orch-009) revision 4 beside [OQ-283](#oq-283)'s ruling, citing
 REQ-ORCH-078, REQ-ORCH-096, REQ-ORCH-099, REQ-ORCH-102 and REQ-ORCH-105 without change. A root resumed with a child's report
 after an empty turn is outside this ruling: measured, recorded as a defect note and raised as [OQ-296](#oq-296). *The as-built

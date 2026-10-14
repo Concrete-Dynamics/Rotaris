@@ -282,7 +282,7 @@ pauses at the message limit, and at the teardown either "The run ended without a
 cancelled (`interrupted`), the iteration's row. A plan cycle's root is not asked. With no children (no tool port's delegation) the same loop runs
 around `firstTurn`. The scripted client's verification-only step `silent` (since fin42) is such a turn —
 a call ending `stop` with neither text nor a tool call — which `part-h-proof`'s `answerless` and `answer-when-asked` launches
-take.
+take, and since fin44 its `silent-correction` and `silent-child` launches (`PD-ORCH-009` revision 4, §3).
 
 **The coordinator's own plan and the task's completion (REQ-ORCH-029, REQ-ORCH-075, REQ-ORCH-078; since 2026-10-06,
 live-run finding G5).** A root that answers `succeeded` while its own plan (`Run.agentTodo`, REQ-TOOLS-144's states) holds an

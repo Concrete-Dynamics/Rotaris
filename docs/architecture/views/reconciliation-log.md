@@ -19,8 +19,9 @@ Last reconciled with the code: **2026-10-14**
 **The run's own follow-up is the only message it adds for the turn it follows (PD-ORCH-009 revision 4, OQ-283 and OQ-284;
 REQ-ORCH-105; fin44).** `withdrawStuck()` gains two callers: `IterationChildren.execute` before a delegated child's REQ-ORCH-095
 re-prompt and `Run.turn`'s `correction()` before a plan correction, which also calls `noteUserInstruction()` (REQ-ORCH-105). The
-**runtime view**'s turn paragraph names the three follow-ups and the root resumed with a child's report as unchanged (OQ-296).
-No package, edge, process, channel, command or store column changed.
+**runtime view**'s turn paragraph names the three follow-ups and the root resumed with a child's report as unchanged (OQ-296),
+and its answer re-prompt paragraph names `part-h-proof`'s `silent-correction` and `silent-child` launches. No package, edge,
+process, channel, command or store column changed.
 
 **A retrospective leases and completes its setup as a run does (PD-LIBRARY-002, ADR-0065 decision 5; the live run at `ce5f952`,
 F2; fin43).** `leasedSetup` (`run-host/launch.ts`) prepares the configuration, leases the providers it names and completes the

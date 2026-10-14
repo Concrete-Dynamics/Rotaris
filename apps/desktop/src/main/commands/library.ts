@@ -10,7 +10,7 @@ import { refusal, type CommandAt, type CommandContext, type CommandHandlers } fr
  * run host's; main chooses the destination file when one is written out.
  */
 export function libraryCommands(
-  ctx: Pick<CommandContext, 'announceRepairs' | 'chooseExportPath' | 'clocks' | 'libraryRevision' | 'log' | 'mainWindows' | 'raiseNotice' | 'runHost' | 'services'>,
+  ctx: Pick<CommandContext, 'announceRepairs' | 'chooseExportPath' | 'clocks' | 'libraryRevision' | 'log' | 'mainWindows' | 'raiseNotice' | 'runHost' | 'services' | 'storeRefusal'>,
 ): Pick<CommandHandlers, 'session.list' | 'artifacts.list' | 'artifacts.body' | 'artifacts.save' | 'session.repair' | 'session.delete' | 'session.export' | 'session.exportTrajectory' | 'session.openLog' | 'session.revealFiles' | 'prompts.read' | 'prompts.push' | 'prompts.take' | 'prompts.roots.read'> {
   const { announceRepairs, chooseExportPath, clocks, libraryRevision, log, mainWindows, raiseNotice, runHost, services } = ctx;
   const onSessionExport = async (req: Extract<CommandRequest, { kind: 'session.export' | 'session.exportTrajectory' }>, { w, awaitWorkspace }: CommandAt): Promise<CommandOutcome> => {
@@ -70,7 +70,12 @@ export function libraryCommands(
   return {
     'session.list': async (_req, { w, awaitWorkspace }) => {
       await awaitWorkspace();
-      if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before browsing sessions' };
+      if (!w.workspaceId) {
+        // REQ-SESSION-202 / REQ-SESSION-043: a store the open refused is reported as what was found, never as an empty list.
+        const held = ctx.storeRefusal?.(w.workspace);
+        if (held) return { ok: false, code: held.code, headline: held.headline, ...(held.detail === undefined ? {} : { detail: held.detail }) };
+        return { ok: false, code: 'workspace.none', headline: 'Open a workspace before browsing sessions' };
+      }
       const r = await runHost.request({ kind: 'session.list', workspaceId: w.workspaceId }, millis(5_000));
       return r.kind === 'session.list' ? { ok: true, value: { sessions: r.sessions } } : refusal(r, 'The session list could not be loaded');
     },

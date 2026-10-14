@@ -1412,6 +1412,22 @@ ordinary state and not an error. So the worst observable in the gap is an empty 
 store is closed anyway; it is not a corrupt store and not a half-restored one, which is what the requirement
 actually forbids.
 
+**A process cut in the gap, and the journal that names it.** *(Added 2026-10-14, [OQ-266](../open-questions.md#oq-266)
+ruled 2026-10-13 under R-072; the paragraph above holds for a restore that reaches step 9, and the 2026-10-13 measurement in
+"Not exercised" below is what it did not cover.)* The gap is milliseconds for a restore that runs on, and indefinite for a
+process that dies in it: the next open met an empty target name and created a fresh store there, 10 of 10. So the restore
+writes **`<identifier>.restore-pending`** after 9a and before step 8 — `{stamp, stagingN, targetExisted}`, replaced where a
+stale one is there, the file and its directory flushed — and removes it once step 9 has succeeded (before the run host is told
+to reopen) or the R1/R2 reversal has; a failed R2 keeps it. **The workspace service's next open acts on it before anything is
+created** (`recoverCutRestore`, `packages/store/src/recover.ts`, from `openWorkspaceStore`): a journal beside a present store
+is a restore that finished, or a stale journal, and is removed with nothing touched; a journal beside an absent store puts back
+the highest `<identifier>.displaced-<journal stamp>[.n]` where there was a store before, and otherwise lets the ordinary
+creating open follow; nothing from the backup is applied either way, the staging copy stays where it is, and the user is told
+once (`workspace.opened`'s `cutRestore`, raised by main as an info notice). A rename back that fails keeps the journal and
+refuses the open with both paths, creating nothing. While the service's own restore is in flight its opens skip the check and
+refuse rather than create beside the journal. **This is not a restore run by itself** — the rule below is untouched: the open
+reverses step 8, which is REQ-SESSION-201's failure clause carried out, and installs nothing from any artifact.
+
 **The reversal, rewritten 2026-09-02, because as written it failed in exactly the case it exists for.** If
 step 9 fails after step 8 succeeded, step 8 is reversed before the failure is reported. This record
 previously made that reversal a single rename of `<identifier>.displaced-<stamp>` back to `<identifier>` —
@@ -1466,7 +1482,8 @@ itself cannot run — the obstruction holds a handle of its own — the failure 
 person can finish a rename the product could not. That text was specified before it was ever run, it worked
 when it was, and it was the only reason the measured end state was recoverable by hand at all.
 
-**Two things a restore never does.** It never runs by itself — not at startup, not on finding an artifact,
+**Two things a restore never does.** *(2026-10-14: the open-time reversal of a cut restore, above, is not one — it applies
+nothing from an artifact and only undoes step 8.)* It never runs by itself — not at startup, not on finding an artifact,
 not as a repair, and **not as a step of the recovery ladder below**, which may *name* it as a remedy the
 user can choose but may never perform it. And it never reads an artifact except as part of a restore the
 user asked for, so nothing scans for artifacts or offers to use one it noticed.
@@ -1716,6 +1733,7 @@ maintained, and is not consulted — so there is nothing for the store to disagr
    > | the old identifier's whole store | ESC-26's confirmed establishment | nothing — kept on purpose, and it is the undo |
    > | `<identifier>.restoring-<n>` | **every** restore, staging the artifact | **since 2026-10-14 ([OQ-265](../open-questions.md#oq-265), ruled 2026-10-13 under R-072): deleted by the restore on every failure that leaves the store as it was; kept and reported after a failed reversal; left by a killed process ([OQ-266](../open-questions.md#oq-266)); cleared by the next restore's step 6.** *Until then: nothing, and nothing knows it exists.* |
    > | `<identifier>.obstruction-<stamp>` | the R1/R2 reversal, displacing whatever occupied the target | ***nothing, and nothing knows it exists*** |
+   > | `<identifier>.restore-pending` *(added 2026-10-14, [OQ-266](../open-questions.md#oq-266))* | every restore that reaches step 8, its journal, a file of a few dozen bytes | step 9, the in-process reversal, or the next open (`recoverCutRestore`); kept after a failed R2 until the next open retries the rename |
    >
    > **The last two are defect D5 and it is open.** The staging copy was left behind in every measured
    > failure of spike 22 — 30 of 30 on the literal reading, 30 of 30 with a file manager holding the store
@@ -1748,7 +1766,10 @@ maintained, and is not consulted — so there is nothing for the store to disagr
    also measured to be *not* the worst observable, and that is the part this consequence must not be read
    as covering on its own: a failed reversal left a store directory present and empty, durably, in 20 of 20
    occupied-name failures. That state is now excluded by the reversal's displace step rather than by luck,
-   and the exclusion is a correctness property of the reversal and not a nicety of it.
+   and the exclusion is a correctness property of the reversal and not a nicety of it. *(2026-10-14: a process cut in
+   the gap is the case the 20 observations did not cover — the absence then lasts until the next open, which now
+   reverses it from the restore's journal, [OQ-266](../open-questions.md#oq-266); and a store directory present and
+   empty, whatever reaches it, is refused at the open rather than created over, REQ-SESSION-202 and W-31.)*
 8. **Restoring on a machine other than the one that took the backup changes which sessions need repair.**
    Foreign-host lock rows are dropped on the way in (ADR-0005), so every session that was live when the
    backup was taken arrives stale and needs the ordinary explicit repair. That is a correct outcome, it is
@@ -2131,9 +2152,18 @@ OQ-265's ruling, consequence 18.)*
 > met by a reader observing a third, empty one. REQ-SESSION-202 declines this case by name (an absent place "is an absence
 > and not this condition, including while a restore is under way"), so finishing, reversing or reporting it is a question:
 > [OQ-266](../open-questions.md#oq-266), with the defect note
-> [`../../defects/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md`](../../defects/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md).
+> [`../../defects/fixed/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md`](../../defects/fixed/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md).
 > `store.test.ts` pins the gap state in-process, as built. Not measured: a power loss in the gap (R-071's O-8 is the
 > power-loss test, a different fault), and the run host's side (its refusal lease expires by itself, 3b, untouched here).
+
+> **The kill-in-the-gap case after OQ-266's ruling — measured 2026-10-14 (fin43); the 2026-10-13 paragraph above is kept as
+> what was measured as built.** The same harness, the same ten kills (killed 93 to 152 ms after launch; load average 0.6 to
+> 1.3 on 4 CPUs). **Ten of ten** left the model's disk with the journal beside the empty target name, and in **ten of ten**
+> the next open (`openWorkspaceStore`, the workspace service's) put the displaced store back before creating anything: it
+> listed `S-old-1` and `S-old-2`, migrated nothing, reported what it reversed, and left the reinstated `workspace.db`
+> **byte-identical** to the displaced one, the journal gone and the staging copy kept. The proof now FAILs on any of those.
+> The journal-less counterfactual (`skipJournal`, `store.test.ts`) reproduces the empty store. Still not measured: a power
+> loss in the gap (the journal is flushed with its directory before step 8, which is the property such a test would weigh).
 
 **Consequence 1 confirmed under the loader, 2026-09-04** (`../spikes/native-load-proof.md`): the packaged
 Electron opened `app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node` — compiled

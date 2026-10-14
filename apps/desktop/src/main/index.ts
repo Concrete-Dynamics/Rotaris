@@ -306,6 +306,10 @@ async function main(): Promise<void> {
   endRunHost = () => endBeforeMain(runHostEndable, runHostExit, clocks.timers, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
 
   const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest>; exit: ChildExit }>();
+  /** REQ-SESSION-202 / OQ-266: each workspace whose store the last open refused rather than create over, by canonical root. */
+  const storeRefusals = new Map<string, { code: string; headline: string; detail?: string }>();
+  /** The refusals that are a lasting condition of the store's place, as against a restore merely under way. */
+  const STORE_REFUSALS: ReadonlySet<string> = new Set(['workspace.store-missing', 'workspace.store-displaced']);
   let cancelImprovementWorkspace = (_workspaceRoot: string): void => undefined;
   /**
    * Step A1 of the window builder (ADR-0048's registry over main windows; ADR-0055 consequences 5 and 6).
@@ -387,7 +391,22 @@ async function main(): Promise<void> {
       });
     }
     const opened = await svc.link.request({ kind: 'workspace.open', workspaceRoot: key }, millis(10_000));
-    if (opened.kind !== 'workspace.opened') { log(`workspace.open refused: ${JSON.stringify(opened)}`); return undefined; }
+    if (opened.kind !== 'workspace.opened') {
+      log(`workspace.open refused: ${JSON.stringify(opened)}`);
+      // REQ-SESSION-202 / W-31, OQ-266: a store the open refused rather than create over is reported as what was found, and
+      // the listing answers with the same condition instead of an empty list or "open a workspace" (`storeRefusals`).
+      if (opened.kind === 'refused' && STORE_REFUSALS.has(opened.code)) {
+        storeRefusals.set(key, { code: opened.code, headline: opened.headline, ...(opened.detail === undefined ? {} : { detail: opened.detail }) });
+        raiseNotice('error', opened.headline, opened.detail);
+      }
+      return undefined;
+    }
+    storeRefusals.delete(key);
+    // OQ-266: a restore cut between its renames was reversed by this open, before anything was created; said once.
+    if (opened.cutRestore) {
+      const cut = opened.cutRestore;
+      raiseNotice('info', `The restore begun at ${cut.stamp} did not finish`, `${cut.hadStore ? 'The sessions this workspace had here were put back' : 'This workspace had no sessions here before it'}, and nothing from the backup was applied. Restore again from Settings to apply it. The prepared copy is kept at ${cut.staging}.`);
+    }
     // W-18: the run host is HANDED the resolved path; it never reads the identifier file.
     const ack = await runHost.request({ kind: 'workspace.opened', workspaceId: opened.workspaceId, storeFile: opened.storeFile, workspaceRoot: key }, millis(5_000));
     log(`workspace ${key} → ${opened.workspaceId} (schema v${opened.schemaVersion}); run host: ${ack.kind}`);
@@ -1725,6 +1744,7 @@ async function main(): Promise<void> {
     chooseSave, chooseExportPath, chooseDirectory, chooseSkillFile,
     openHookReview, restoreFlow, checkpointOp, quitting, authFallback,
     withdrawnByClose: (sessionId) => quit.withdrawnByClose(sessionId),
+    storeRefusal: (workspace) => storeRefusals.get(canonicalPath(workspace)),
   };
   /**
    * Every command this product answers, filed under its kind. `CommandHandlers` is total over

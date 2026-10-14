@@ -1,7 +1,7 @@
 import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, ServiceAnswerEnvelopeSchema, WorkspaceServiceRequestSchema, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { millis, toIsoUtc, type Millis, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
-import { establishWorkspaceId, openWorkspaceStore, forgetSpelling, REFUSAL_LEASE_MS, type ResolvedStore, type RunHostControl } from '@rotaris/store';
+import { establishWorkspaceId, forgetSpelling, REFUSAL_LEASE_MS, type ResolvedStore, type RunHostControl } from '@rotaris/store';
 import { assessRestore, backupWorkspace, capture as captureCheckpoint, checkAttach, createWorktree, deleteNamespace, deleteRefs, listRefs, performRestore, preview as previewCheckpoint, readGitView, readRepository, removeWorktree, restore as restoreCheckpoint, sessionWorktreePath, validateBranchName } from '@rotaris/workspace';
 import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
 import { homedir } from 'node:os';
@@ -10,6 +10,7 @@ import { deliveryServiceFor } from './delivery.js'; // Part AK
 import { promptsRootsRead } from './prompts.js'; // Part AO
 import { improvementServiceFor } from './improvements.js';
 import { bootstrapAtOpen } from './open-bootstrap.js';
+import { openStoreAtOpen, RestoreInFlight } from './store-open.js';
 
 /**
  * WORKSPACE SERVICE — one utilityProcess per open workspace, keyed by
@@ -38,6 +39,8 @@ const layout = dataLayout(dirs);
 mkdirSync(layout.workspaces, { recursive: true });
 const thisMachine = readOrMintMachineId(layout.machineId);
 let open: ResolvedStore | null = null;
+/** OQ-266: set while `workspace.restore.perform` runs the mechanism; an open meanwhile leaves the restore's journal alone. */
+const restoreInFlight = new RestoreInFlight();
 
 /*
  * PD-WORKSPACE-002 — the home the instruction-file discovery reads user-scope files from.
@@ -108,9 +111,14 @@ function openOwn(workspaceRoot: string): ProcessReply {
     return { kind: 'refused', code: 'workspace.identifier-unreadable', headline: 'The workspace identifier is present but cannot be read', detail: `It will not be minted over (REQ-SESSION-197). Content begins: ${ident.raw}` };
   }
   closeOwn();
-  open = openWorkspaceStore(layout.workspaces, ident.id, workspaceRoot);
+  // OQ-266's cut-restore check, then REQ-SESSION-202's (W-31): both before anything is created (`store-open.ts`).
+  const opened = openStoreAtOpen(layout.workspaces, ident.id, workspaceRoot, restoreInFlight.active);
+  if (!opened.ok) { log(`open of ${ident.id} refused: ${opened.refusal.headline} — ${opened.refusal.detail ?? ''}`, 'warn'); return opened.refusal; }
+  open = opened.store;
   const v = open.db.pragma('user_version', { simple: true }) as number;
-  return { kind: 'workspace.opened', workspaceId: ident.id, storeFile: open.file, schemaVersion: v };
+  const cut = open.cutRestore;
+  if (cut) log(`open of ${ident.id}: a restore begun at ${cut.stamp} did not finish; ${cut.reversed ? `the store it displaced was put back from ${cut.reversed}` : 'there was no store here before it'}; the prepared copy is kept at ${cut.staging} (OQ-266)`, 'warn');
+  return { kind: 'workspace.opened', workspaceId: ident.id, storeFile: open.file, schemaVersion: v, ...(cut ? { cutRestore: { ...cut } } : {}) };
 }
 
 async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
@@ -150,7 +158,8 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       const renew = clocks.timers.every(millis(10_000), () => { void ask({ kind: 'runHost.renewLease', workspaceId: targetId, leaseMs: REFUSAL_LEASE_MS }, millis(5_000)).catch(() => undefined); });
       let report;
       try {
-        report = await performRestore({ workspacesRoot: layout.workspaces, workspaceRoot: req.workspaceRoot, artifact: req.artifact, thisMachine, decisions: req.decisions, runHost, timers: clocks.timers, wall: clocks.wall });
+        // OQ-266: while the mechanism runs, an open leaves its journal to it; the reopen below, after it, may act on it.
+        report = await restoreInFlight.around(() => performRestore({ workspacesRoot: layout.workspaces, workspaceRoot: req.workspaceRoot, artifact: req.artifact, thisMachine, decisions: req.decisions, runHost, timers: clocks.timers, wall: clocks.wall }));
       } finally {
         renew.cancel();
       }
@@ -158,6 +167,10 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       // Reopen — re-establishing the identifier, which the restore may have written — so the next open and migration are the ordinary ones.
       const reopened = openOwn(req.workspaceRoot);
       if (reopened.kind === 'refused') log(`reopen after restore refused: ${reopened.headline}`, 'warn');
+      // OQ-266: a failed reversal the reopen has just repaired — the report says so rather than promising the next open.
+      if (reopened.kind === 'workspace.opened' && reopened.cutRestore?.reversed && report.error !== undefined) {
+        report = { ...report, error: `${report.error.replace(/; the next open of this workspace will try that rename again$/, '')}. Reopening the workspace has since put the store back.` };
+      }
       return { kind: 'workspace.restored', report };
     }
     case 'config.read':

@@ -1832,6 +1832,15 @@ host's connection closed: the artifact staged as `<identifier>.restoring-<n>` (s
 staging copy installed (step 9), and on a failed install the R1/R2 reversal. Every failure that returns with the store as it
 was deletes the staging copy before it returns (OQ-265, `discardStaging`); a delete that fails is listed in the report's
 `leftovers`, named in its error and logged; a reversal that failed keeps and lists the copy beside the displaced store.
+Before step 8 it writes the journal `<identifier>.restore-pending`, removed once step 9 or the reversal succeeds (OQ-266).
+
+**The store open (the workspace service's `openOwn` → `openWorkspaceStore`).** Before anything is created, in order: a
+restore cut between its renames is reversed from its journal (`recoverCutRestore` puts back the displaced store, applies
+nothing from the backup, and `workspace.opened` carries `cutRestore`, which main raises once as an info notice); then a
+place that exists and holds no `workspace.db` is refused as `workspace.store-missing` and nothing is put there
+(REQ-SESSION-202, W-31), so the run host is never handed a store and `session.list` answers that refusal; only an absent
+place is created and opened creating (REQ-SESSION-043). While the service's own restore is in flight its opens skip the
+first check and refuse rather than create beside the journal.
 
 | Table | Holds | Written by |
 |---|---|---|

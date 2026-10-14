@@ -31,3 +31,22 @@ one. REQ-SESSION-200's concern (a user told by an empty list that their history 
 - `apps/desktop/src/workspace-service/index.ts` — `openOwn`, the open that follows.
 - `apps/desktop/scripts/restore-kill-proof.mjs`, `packages/store/src/restore-kill.child.ts` — the harness and its child.
 - `packages/store/src/store.test.ts` — the in-process pin of the gap state.
+
+## Outcome — repaired 2026-10-14 (fin43, `fin43-restore-recovery`; OQ-266 ruled 2026-10-13 under R-072)
+
+The restore now writes a durable journal, `<identifier>.restore-pending` (`{stamp, stagingN, targetExisted}`, flushed with
+its directory), after step 9a and before step 8, and removes it once step 9 or the in-process reversal has succeeded; a
+failed R2 keeps it. The workspace service's next open runs `recoverCutRestore` (`packages/store/src/recover.ts`) from
+`openWorkspaceStore` before anything is created: with the target absent and a store before, it renames the highest
+`<identifier>.displaced-<journal stamp>[.n]` back, removes the journal, and reports `cutRestore` on `workspace.opened`, which
+main raises as one info notice (the stamp, the sessions put back or none here before, nothing from the backup applied, restore
+again from Settings to apply it, the prepared copy's path). A journal beside a present store is removed and nothing touched; a
+rename back that fails keeps the journal and refuses the open with both paths. While the service's own restore runs, its opens
+skip the check and refuse rather than create beside the journal.
+
+Pinned by `packages/store/src/store.test.ts` (the kill-in-the-gap case, flipped: the reopened store lists S-1 and S-2,
+migrates nothing and says what it reversed; and its OQ-266 block, with the journal-less counterfactual reproducing the empty
+store), `apps/desktop/src/workspace-service/store-open.test.ts`, and `pnpm restore-kill-proof`, which now fails unless the
+next open puts the store back: 10 of 10 on 2026-10-14, byte-identical to the displaced `workspace.db` in 10 of 10, the
+journal gone, the staging copy kept. Reported back in OQ-266, ADR-0058 (the restore section and consequence 5) and
+`docs/architecture/first-executions.md`.

@@ -1,4 +1,5 @@
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
@@ -22,7 +23,9 @@ import { restoreStore, type RunHostControl } from './restore.js';
  *   artifact {file, id, sessions}            — a backup artifact of a store holding `sessions`
  *   restore  {root, id, artifact, marker}    — the restore; at the gap it writes `marker` and waits to be killed
  *   survey   {root, id}                      — what `root` holds: each entry, and each store's sessions and quick_check
- *   reopen   {root, id, workspace}           — the workspace service's open (`openWorkspaceStore`), and what it found
+ *   reopen   {root, id, workspace}           — the workspace service's open (`openWorkspaceStore`), what it found, and what
+ *                                             it did about a cut restore (`cutRestore`, OQ-266); `sha256` is the store's
+ *                                             bytes before that open read it
  */
 const MACHINE = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const clocks = nodeClocks();
@@ -38,14 +41,17 @@ function seed(root: string, id: WorkspaceId, sessions: readonly string[]): void 
   forgetSpelling(r.dir);
 }
 
-function storeFacts(dir: string): { sessions: string[]; quickCheck: string } | null {
+function storeFacts(dir: string): { sessions: string[]; quickCheck: string; sha256: string } | null {
   const file = join(dir, STORE_FILE);
   if (!existsSync(file)) return null;
+  // The bytes before the read: the reinstated store must be the displaced one, byte for byte (OQ-266).
+  const sha256 = createHash('sha256').update(readFileSync(file)).digest('hex');
   const db = openStore(file, { readonly: true, mustExist: true });
   try {
-    return { sessions: new StoreDal(db).listSessions().map((s) => s.session_id).sort(), quickCheck: String(db.pragma('quick_check', { simple: true })) };
+    return { sessions: new StoreDal(db).listSessions().map((s) => s.session_id).sort(), quickCheck: String(db.pragma('quick_check', { simple: true })), sha256 };
   } finally {
     db.close();
+    forgetSpelling(dir);
   }
 }
 
@@ -86,12 +92,12 @@ async function main(): Promise<unknown> {
     case 'survey': {
       const root = String(a['root']);
       const entries = readdirSync(root).sort();
-      return { entries, stores: Object.fromEntries(entries.filter((n) => n === id || n.startsWith(`${id}.`)).map((n) => [n, storeFacts(join(root, n))])) };
+      return { id, entries, stores: Object.fromEntries(entries.filter((n) => n === id || n.startsWith(`${id}.`)).map((n) => [n, storeFacts(join(root, n))])) };
     }
     case 'reopen': {
       const r = openWorkspaceStore(String(a['root']), id, String(a['workspace']));
       try {
-        return { migration: r.migration, sessions: new StoreDal(r.db).listSessions().map((s) => s.session_id) };
+        return { migration: r.migration, sessions: new StoreDal(r.db).listSessions().map((s) => s.session_id).sort(), cutRestore: r.cutRestore ?? null };
       } finally {
         r.db.close();
         forgetSpelling(r.dir);

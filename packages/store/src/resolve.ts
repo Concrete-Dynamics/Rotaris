@@ -3,9 +3,10 @@ import { mkdirSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { mintWorkspaceId, parseWorkspaceId, type WorkspaceId } from '@rotaris/kernel';
 import { exclusiveCreate, guardedRead, WORKSPACE_ID_FILE, WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
-import { ORIGIN_FILE, storeDir, storeFile } from './layout.js';
+import { ORIGIN_FILE, restoreJournal, storeDir, storeFile } from './layout.js';
 import { migrateStore, type MigrateOutcome } from './migrate.js';
 import { openStore, type StoreHandle } from './open.js';
+import { recoverCutRestore, type CutRestore } from './recover.js';
 
 /**
  * Only the workspace service resolves a workspace identifier (W-18). It
@@ -77,17 +78,56 @@ export interface ResolvedStore {
   readonly file: string;
   readonly db: StoreHandle;
   readonly migration: MigrateOutcome;
+  /** OQ-266: a restore cut between its renames, reversed by this open before anything was created; main says so once. */
+  readonly cutRestore?: CutRestore;
 }
 
-/** Open (creating on first use) and migrate the store for `id`. The workspace service's job and nobody else's. */
-export function openWorkspaceStore(workspacesRoot: string, id: WorkspaceId, workspaceRoot: string): ResolvedStore {
+/**
+ * REQ-SESSION-202 / W-31 (1): the place for this workspace's store exists and the store is not in it. It counts as a store
+ * that could not be opened: nothing is created there, and what is reported is what was found — no engine reason exists
+ * for it, and none is invented.
+ */
+export class StorePlaceEmptyError extends Error {
+  constructor(readonly dir: string, readonly file: string) {
+    super(`the place for this workspace's session store exists (${dir}) and the store is not in it`);
+    this.name = 'StorePlaceEmptyError';
+  }
+}
+
+/** OQ-266: the open was asked to skip the cut-restore check (a restore is under way) and that restore's journal is beside an absent store. */
+export class RestorePendingError extends Error {
+  constructor(readonly dir: string) {
+    super(`a restore of this workspace is under way and its store (${dir}) is not in place; nothing was created`);
+    this.name = 'RestorePendingError';
+  }
+}
+
+export interface OpenWorkspaceStoreOptions {
+  /** OQ-266: run the cut-restore check first (the default). The workspace service skips it while its own restore is in flight. */
+  readonly recover?: boolean;
+}
+
+/**
+ * Open and migrate the store for `id`, creating it only where nothing is kept for the workspace (REQ-SESSION-043). The
+ * workspace service's job and nobody else's. In order, before anything is created:
+ *  1. OQ-266 — a restore cut between its two renames is reversed (`recoverCutRestore`, recover.ts);
+ *  2. REQ-SESSION-202 / W-31 — a place that exists and holds no `workspace.db` is refused (`StorePlaceEmptyError`), never
+ *     opened by a call that creates: an empty store there would answer every later check perfectly;
+ *  3. the place is created where it is absent, and only then may the open create the store in it.
+ */
+export function openWorkspaceStore(workspacesRoot: string, id: WorkspaceId, workspaceRoot: string, opts: OpenWorkspaceStoreOptions = {}): ResolvedStore {
   const dir = storeDir(workspacesRoot, id);
-  mkdirSync(dir, { recursive: true });
   const file = storeFile(workspacesRoot, id);
-  const db = openStore(file);
+  const recover = opts.recover !== false;
+  const cutRestore = recover ? recoverCutRestore(workspacesRoot, id) : null;
+  const placeExists = existsSync(dir);
+  if (!recover && !placeExists && existsSync(restoreJournal(workspacesRoot, id))) throw new RestorePendingError(dir);
+  if (placeExists && !existsSync(file)) throw new StorePlaceEmptyError(dir, file);
+  if (!placeExists) mkdirSync(dir, { recursive: true });
+  const db = openStore(file, placeExists ? { mustExist: true } : {});
   const migration = migrateStore(db);
   // origin.txt: the reclamation surface's only way to say which project a store belongs to (OQ-48).
   const origin = join(dir, ORIGIN_FILE);
   if (!existsSync(origin)) writeFileSync(origin, `${workspaceRoot}\n`);
-  return { id, dir, file, db, migration };
+  return { id, dir, file, db, migration, ...(cutRestore ? { cutRestore } : {}) };
 }

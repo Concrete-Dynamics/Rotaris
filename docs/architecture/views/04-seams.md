@@ -306,6 +306,11 @@ Invariants:
 - **A disabled action carries its reason.** `action.disabled` in `packages/contracts/src/notices.ts` is the
   accessible description REQ-SHELL-118 requires; its presence is the disabled state, and `Notice.tsx` renders the
   control disabled with that text as its description. There is no disabled action without a reason.
+- **A notice about a workspace's store is main's, raised from the open's answer** (`openWorkspaceInner`, since 2026-10-14):
+  `workspace.opened`'s `cutRestore` becomes one info notice (OQ-266), and a refused store (`workspace.store-missing`,
+  `workspace.store-displaced`) an error notice whose headline and detail are the workspace service's own words, held for the
+  listing to answer with (REQ-SESSION-202). A new condition of the open follows the same path: a refusal code in
+  `workspace-service/store-open.ts`, the set `STORE_REFUSALS` in main.
 - A renderer that must raise a persistent notice sends `notice.report` — it does not draw one. That missing
   entry for a renderer was defect fifty-seven.
 - A transient acknowledgement may carry **exactly one** action, from a closed one-member type.

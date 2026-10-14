@@ -122,6 +122,11 @@ export interface CommandContext {
   readonly recoveryFor: (action: string | undefined, workspace?: string, sessionId?: string) => Recovery;
   /** PD-ORCH-005 clause 9: the application is quitting — the process exiting, or no main window staying (`exit.ts`). */
   readonly quitting: () => boolean;
+  /**
+   * REQ-SESSION-202 / OQ-266: the condition the last open of `workspace` refused its store for — a place holding no store, or
+   * a cut restore whose store could not be put back — so the listing reports it rather than an empty list.
+   */
+  readonly storeRefusal?: ((workspace: string) => { readonly code: string; readonly headline: string; readonly detail?: string } | undefined) | undefined;
   /** PD-SHELL-009: the session's run was stopped by its window's close, which withdraws what it waits on (`QuitState`). */
   readonly withdrawnByClose?: ((sessionId: string) => boolean) | undefined;
   readonly announceRepairs: (repaired: readonly { readonly sessionId: string; readonly from: string; readonly reason: string }[]) => void;

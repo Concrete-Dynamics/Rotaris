@@ -17,6 +17,8 @@ import type { WorkspaceId } from '@rotaris/kernel';
  *                                      kept and reported after a failed reversal; left by a killed process
  *                                      (OQ-266); cleared by the next restore's step 6
  *     <identifier>.obstruction-<stamp>[.n] what the reversal moved off the target name — D5
+ *     <identifier>.restore-pending     a restore's journal (OQ-266): written before step 8, removed by step 9, by the
+ *                                      in-process reversal, or by the next open (`recoverCutRestore`, recover.ts)
  *
  * Leftover shapes are tabulated in ADR-0058 consequence 5. D5's staging half is repaired (OQ-265, 2026-10-14);
  * its obstruction half is deferred with OQ-48's inspect-and-delete surface (R-071, "after the first release").
@@ -39,6 +41,10 @@ export function storeFile(workspacesRoot: string, id: WorkspaceId): string {
 }
 export function stagingDir(workspacesRoot: string, id: WorkspaceId, n: number): string {
   return join(workspacesRoot, `${id}.restoring-${n}`);
+}
+/** OQ-266: the journal a restore writes before it displaces the target, so a cut between its renames is known. */
+export function restoreJournal(workspacesRoot: string, id: WorkspaceId): string {
+  return join(workspacesRoot, `${id}.restore-pending`);
 }
 export function asideName(workspacesRoot: string, id: WorkspaceId, kind: 'displaced' | 'obstruction', stamp: string, counter: number): string {
   return join(workspacesRoot, `${id}.${kind}-${stamp}${counter === 0 ? '' : `.${counter}`}`);

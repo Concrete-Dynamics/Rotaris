@@ -469,7 +469,14 @@ export type ProcessRequestEnvelope = z.infer<typeof ProcessRequestEnvelopeSchema
 export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('hello'), process: ProcessKindSchema, pid: z.number().int() }),
   z.object({ kind: z.literal('pong') }),
-  z.object({ kind: z.literal('workspace.opened'), workspaceId: z.string(), storeFile: z.string(), schemaVersion: z.number().int() }),
+  /**
+   * `cutRestore` (OQ-266): the open found a restore cut between its two renames and reversed it before creating anything —
+   * the store put back (`reversed`, or `null` where the workspace had none here), the staging copy kept, the restore's stamp.
+   */
+  z.object({
+    kind: z.literal('workspace.opened'), workspaceId: z.string(), storeFile: z.string(), schemaVersion: z.number().int(),
+    cutRestore: z.object({ reversed: z.string().nullable(), hadStore: z.boolean(), staging: z.string(), stamp: z.string() }).optional(),
+  }),
   z.object({ kind: z.literal('workspace.ack'), workspaceId: z.string() }),
   z.object({ kind: z.literal('session.started'), sessionId: z.string() }),
   z.object({ kind: z.literal('session.attachment'), base64: z.string().min(1) }),

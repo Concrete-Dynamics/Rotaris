@@ -1680,7 +1680,10 @@ absorbed, because a sub-case folded into a discharged spike is a gap nobody can 
   (fin41), `pnpm restore-kill-proof`:*** killed 10 of 10 times between the renames, the disk was always the
   model's (target empty, displaced and staging stores whole), and the next open always created an empty store
   there and listed no session — finish, reverse or report is [OQ-266](open-questions.md#oq-266)'s (ADR-0058,
-  the restore section's report). A power loss in the gap is still unmeasured.
+  the restore section's report). ***Repaired 2026-10-14 (fin43; OQ-266 ruled 2026-10-13 under R-072: reverse, at the
+  next open):*** the restore journals the cut (`<identifier>.restore-pending`, before step 8), and the next open puts the
+  displaced store back before creating anything — 10 of 10 in the same proof, byte-identical, the journal gone. A power loss
+  in the gap is still unmeasured.
 - **`REQ-STARTUP-165`(c)'s "no usable preparation at all" branch and its notice**, not attempted by spike
   20. It is the only part of that requirement left untouched, ADR-0054 wrote it from scratch against the
   amended text, and its failure mode is a **missing warning** — the artifact is permanently slow and nothing

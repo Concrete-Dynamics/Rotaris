@@ -15,6 +15,14 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-14**
 
+**A restore cut between its renames is reversed at the next open; a store place with no database is refused (OQ-266, ruled
+2026-10-13 under R-072; REQ-SESSION-201, REQ-SESSION-202, W-31; fin43).** The restore writes `<identifier>.restore-pending`
+before step 8; `openWorkspaceStore` reverses a cut restore from it and refuses a place that holds no store, both before
+anything is created; `workspace.opened` gains the optional `cutRestore`. The **process view** names the journal on disk, the
+new field and the three refusals; the **runtime view**'s §7 gains the store open; the **state ownership** view gains the
+journal's row; the **seams** view's notice section says how main raises a store notice from the open's answer. No package,
+edge, process, channel, command or store column changed.
+
 **A restore that fails safely deletes its own staging copy (OQ-265, ruled 2026-10-13 under R-072; REQ-SESSION-201; fin43).**
 `restoreStore` deletes `<identifier>.restoring-<n>` on every failure that returns with the store as it was, and lists it in
 `leftovers` only after a failed reversal or a failed delete. The **process view**'s files-on-disk row says who deletes the

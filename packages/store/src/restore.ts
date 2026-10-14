@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { fileStamp, millis, type MachineId, type Millis, type Timers, type WallClock, type WorkspaceId } from '@rotaris/kernel';
 import { canonicalPath, isLockForeign, isLockLive } from '@rotaris/platform';
 import { expandArtifact } from './backup.js';
+import { removeRestoreJournal, writeRestoreJournal } from './recover.js';
 import { StoreDal } from './dal.js';
 import { ASIDE_TRIES, asideName, CONTAINER_MANIFEST, CONTAINER_STORE_FILE, ORIGIN_FILE, restoreStorePaths, STORE_FILE, stagingDir, storeDir, storeFile, storePathLimit } from './layout.js';
 import { forgetSpelling, openStore, type StoreHandle } from './open.js';
@@ -34,6 +35,9 @@ import { forgetSpelling, openStore, type StoreHandle } from './open.js';
  *      claim on this platform (D6; the counter, not the granularity, is
  *      load-bearing — IC-1 E4).
  *  9   staging → <identifier>.
+ *  8-journal (OQ-266, 2026-10-14): `<identifier>.restore-pending`, durable before
+ *      step 8 and removed once step 9 or the reversal has succeeded, so a process
+ *      cut between the two renames is reversed at the next open (recover.ts).
  *  R1/R2 on a failed install: displace whatever occupies the target name,
  *      then rename the displaced store back. The single-rename reversal
  *      reached a store directory holding no database 10/10 (IC-1 E2c).
@@ -105,6 +109,10 @@ export interface RestoreOptions {
    * process here; `store.test.ts` throws here. Never set by the product.
    */
   readonly betweenRenames?: () => Promise<void>;
+  /** Test hook: R2 does not run, as though its rename had failed, so the journal is kept for the next open (OQ-266). */
+  readonly forceReversalFail?: boolean;
+  /** OQ-266's counterfactual: no journal is written before step 8, so a cut between the renames is the case as it was. */
+  readonly skipJournal?: boolean;
   /** Test hook: the delete OQ-265's discard runs, replaced to make it fail. Never set by the product. */
   readonly removeStaging?: typeof rmSync;
   /** D11: the engine's database-path limit to hold the restore to; `null` for none (D11 as it was). Defaults to this platform's. */
@@ -280,8 +288,11 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
   const stage = stagingDir(workspacesRoot, id, opts.stagingN ?? 1);
   const rm = opts.removeStaging ?? rmSync;
   rmSync(stage, { recursive: true, force: true });
+  /** OQ-266: the journal, once written, is removed by every return but a failed reversal's. */
+  let journalWritten = false;
   /** OQ-265: a failure that leaves the store as it was deletes the staging copy; a delete that fails is listed and named. */
   const failSafely = (error: string, extra: Partial<RestoreReport> = {}): RestoreReport => {
+    if (journalWritten) removeRestoreJournal(workspacesRoot, id);
     const left = discardStaging(stage, rm);
     if (left !== null) leftovers.push(left);
     return { ok: false, abandoned: false, ...extra, error: left === null ? error : `${error}. ${stagingLeftDetail(left)}`, leftovers, steps };
@@ -314,9 +325,17 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
   // 9a — origin.txt before the install (D7). The counterfactual leaves the container's layout as it was.
   if (!opts.skipArrange) { writeFileSync(join(stage, ORIGIN_FILE), `${ctx.originLabel}\n`); steps.push('9a-origin'); }
 
-  // 8 — displace the target. Milliseconds AND a counter; the rename is the claim.
+  // OQ-266 — the journal, durable before step 8, so a process cut between the two renames leaves a restore the next open
+  // can name and reverse (`recoverCutRestore`, recover.ts). The counterfactual (`skipJournal`) is the cut as it was.
   const stamp = opts.stamp ?? fileStamp(ctx.wall.instant());
   const targetExisted = existsSync(target);
+  if (!opts.skipJournal) {
+    writeRestoreJournal(workspacesRoot, id, { stamp, stagingN: opts.stagingN ?? 1, targetExisted });
+    journalWritten = true;
+    steps.push('8-journal');
+  }
+
+  // 8 — displace the target. Milliseconds AND a counter; the rename is the claim.
   let displaced: string | undefined;
   if (targetExisted) {
     const c = claimAsideName(workspacesRoot, id, stamp, 'displaced', target);
@@ -337,6 +356,7 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
   steps.push(installErr ? `9-install-FAILED(${installErr})` : '9-install');
 
   if (!installErr) {
+    if (journalWritten) removeRestoreJournal(workspacesRoot, id);
     await runHost.reopen(id, dbFile).catch(() => undefined);
     steps.push('10-reopen');
     const r: RestoreReport = { ok: true, abandoned: false, leftovers, steps, stamp };
@@ -356,20 +376,23 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
       if (c.ok) { obstruction = c.to; leftovers.push(c.to); }
     }
     let r2ok = false;
-    if (r1ok) { try { renameSync(displaced, target); r2ok = true; } catch { /* */ } }
+    if (r1ok && !opts.forceReversalFail) { try { renameSync(displaced, target); r2ok = true; } catch { /* */ } }
     const reversal = { mode: 'displace-then-rename' as const, ok: r2ok, ...(obstruction ? { obstruction } : {}) };
     // The store is back: the staging copy is discarded (OQ-265). Not back: it is kept and listed, beside the store to rename.
     if (r2ok) return failSafely(`restore failed at step 9 (${installErr}); the previous store was put back`, { displaced, stamp, reversal });
+    // The journal stays (OQ-266): with the target name free, the next open of this workspace renames the store back.
     leftovers.push(stage);
+    const retried = journalWritten && !existsSync(target);
     return {
       ok: false, abandoned: false, displaced, leftovers, steps, stamp, reversal,
-      error: `restore failed at step 9 (${installErr}): the store for this workspace is at ${displaced} and must be renamed to ${target}`,
+      error: `restore failed at step 9 (${installErr}): the store for this workspace is at ${displaced} and must be renamed to ${target}${retried ? '; the next open of this workspace will try that rename again' : ''}`,
     };
   }
   // The single-rename counterfactual (E2c) stays as it was measured.
   leftovers.push(stage);
   let ok = false;
   try { renameSync(displaced, target); ok = true; } catch { /* */ }
+  if (ok && journalWritten) removeRestoreJournal(workspacesRoot, id);
   return {
     ok: false, abandoned: false, displaced, leftovers, steps, stamp, reversal: { mode: 'single-rename', ok },
     error: ok ? `restore failed at step 9 (${installErr}); the previous store was put back` : `restore failed at step 9 (${installErr}): the store for this workspace is at ${displaced} and must be renamed to ${target}`,

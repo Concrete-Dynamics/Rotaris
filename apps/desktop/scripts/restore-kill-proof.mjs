@@ -10,13 +10,16 @@
  * 9 has not begun. No display is needed.
  *
  * Each trial: seed a store holding two sessions; take an artifact of a store holding one other session; restore it in the
- * child and kill the child in the gap; survey the workspaces root (each entry, each store's sessions and quick_check); then
- * open the workspace the way the workspace service does (`openWorkspaceStore`) and record what it made.
+ * child and kill the child in the gap; survey the workspaces root (each entry, each store's sessions, quick_check and
+ * bytes); then open the workspace the way the workspace service does (`openWorkspaceStore`) and survey again.
  *
  * The verdict FAILs when the harness did not measure what it says: the child was not killed in the gap, or the disk is not
- * the state the mechanism's model gives for that point (the target name empty, the displaced store whole with both
- * sessions, the staging store whole with the artifact's). What the next open does is a FINDING, reported, not a verdict:
- * it is the question OQ-266 raises, and the proof says what it saw either way.
+ * the state the mechanism's model gives for that point (the target name empty, the restore's journal beside it, the
+ * displaced store whole with both sessions, the staging store whole with the artifact's). Since OQ-266's ruling
+ * (2026-10-13, R-072; built 2026-10-14) it also FAILs unless the next open put the displaced store back: the open lists the
+ * two previous sessions and migrated nothing, says what it reversed (`cutRestore`), the reinstated `workspace.db` is byte
+ * for byte the one that was displaced, the journal is gone, and the staging copy is kept. Until then (fin41, 2026-10-13)
+ * what the next open did was a FINDING only: an empty store, created and migrated from 0, in 10 of 10.
  *
  * Evidence under `.proof/restore-kill-proof/` (`results.json`); `--trials=N` (default 10).
  */
@@ -85,30 +88,43 @@ for (let t = 1; t <= trials; t++) {
   const survey = run('survey', { root, id: ID });
   const reopen = run('reopen', { root, id: ID, workspace: join(dir, 'project') });
   const after = run('survey', { root, id: ID });
-  const names = Object.keys(survey.stores);
+  const names = Object.keys(survey.stores).filter((n) => survey.stores[n] !== null);
   const displaced = names.find((n) => n.includes('.displaced-'));
   const staging = names.find((n) => n.endsWith('.restoring-1'));
   const target = names.find((n) => !n.includes('.'));
+  const SID = survey.id; // the identifier as minted, the store's directory name
+  const journal = `${SID}.restore-pending`;
   const trial = { trial: t, kill: { signal: kill.signal, killedAtMs: kill.killedAtMs, completed: kill.stdout !== '' }, survey, reopen, after };
   results.trials.push(trial);
   const wrong = [];
   if (kill.signal !== 'SIGKILL' || kill.stdout !== '') wrong.push(`the child was not killed in the gap (signal ${kill.signal}, output ${kill.stdout || 'none'})`);
   if (target !== undefined) wrong.push(`the target name holds ${target}`);
-  if (!displaced || JSON.stringify(survey.stores[displaced]) !== JSON.stringify({ sessions: ['S-old-1', 'S-old-2'], quickCheck: 'ok' })) wrong.push(`the displaced store is not whole: ${JSON.stringify(displaced ? survey.stores[displaced] : null)}`);
-  if (!staging || JSON.stringify(survey.stores[staging]) !== JSON.stringify({ sessions: ['S-from-backup'], quickCheck: 'ok' })) wrong.push(`the staging store is not whole: ${JSON.stringify(staging ? survey.stores[staging] : null)}`);
+  const whole = (facts, sessions) => facts !== undefined && facts !== null && JSON.stringify(facts.sessions) === JSON.stringify(sessions) && facts.quickCheck === 'ok';
+  if (!displaced || !whole(survey.stores[displaced], ['S-old-1', 'S-old-2'])) wrong.push(`the displaced store is not whole: ${JSON.stringify(displaced ? survey.stores[displaced] : null)}`);
+  if (!staging || !whole(survey.stores[staging], ['S-from-backup'])) wrong.push(`the staging store is not whole: ${JSON.stringify(staging ? survey.stores[staging] : null)}`);
+  if (!survey.entries.includes(journal)) wrong.push(`no journal (${journal}) beside the empty target`);
+  // OQ-266: the next open puts the displaced store back, byte for byte, and creates nothing.
+  if (JSON.stringify(reopen.sessions) !== JSON.stringify(['S-old-1', 'S-old-2'])) wrong.push(`the next open listed ${JSON.stringify(reopen.sessions)}, not the two previous sessions`);
+  if (reopen.migration.kind !== 'unchanged') wrong.push(`the next open migrated (${JSON.stringify(reopen.migration)}): a store was created`);
+  if (!reopen.cutRestore || !displaced || !reopen.cutRestore.reversed?.endsWith(displaced) || reopen.cutRestore.hadStore !== true) wrong.push(`the next open did not say it reversed ${displaced}: ${JSON.stringify(reopen.cutRestore)}`);
+  const reinstated = after.stores[SID];
+  if (!displaced || !reinstated || reinstated.sha256 !== survey.stores[displaced]?.sha256) wrong.push(`the reinstated workspace.db is not the displaced one byte for byte (${reinstated?.sha256 ?? 'absent'} against ${displaced ? survey.stores[displaced]?.sha256 : 'none'})`);
+  if (after.entries.includes(journal)) wrong.push('the journal is still there after the next open');
+  if (!after.entries.includes(`${SID}.restoring-1`)) wrong.push('the staging copy was not kept');
   if (wrong.length > 0) failures.push(`trial ${t}: ${wrong.join('; ')}`);
-  console.log(`trial ${t}: killed at ${kill.killedAtMs} ms by ${kill.signal}; left ${names.join(', ')}; the next open: ${reopen.migration.kind} from ${reopen.migration.from ?? '-'}, ${reopen.sessions.length} session(s)`);
+  console.log(`trial ${t}: killed at ${kill.killedAtMs} ms by ${kill.signal}; left ${survey.entries.filter((n) => n.startsWith(SID)).join(', ')}; the next open: ${reopen.migration.kind}${reopen.migration.from === undefined ? '' : ` from ${reopen.migration.from}`}, ${reopen.sessions.length} session(s), reversed ${reopen.cutRestore?.reversed ? 'the displaced store' : 'nothing'}; after it: ${after.entries.filter((n) => n.startsWith(SID)).join(', ')}`);
 }
 
 const opened = results.trials.map((t) => t.reopen);
 results.finding = {
   nextOpenCreatedAnEmptyStore: opened.filter((o) => o.migration.kind === 'migrated' && o.migration.from === 0 && o.sessions.length === 0).length,
-  displacedStillWhole: results.trials.filter((t) => Object.entries(t.after.stores).some(([n, s]) => n.includes('.displaced-') && s?.sessions?.length === 2)).length,
+  nextOpenPutTheStoreBack: results.trials.filter((t) => JSON.stringify(t.reopen.sessions) === JSON.stringify(['S-old-1', 'S-old-2']) && t.reopen.cutRestore?.reversed).length,
+  reinstatedByteIdentical: results.trials.filter((t) => { const d = Object.keys(t.survey.stores).find((n) => n.includes('.displaced-')); return d !== undefined && t.after.stores[t.survey.id]?.sha256 === t.survey.stores[d]?.sha256; }).length,
   trials,
 };
 results.verdict = failures.length === 0 ? 'PASS' : 'FAIL';
 results.failures = failures;
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
-console.log(`FINDING: the next open created an empty store in ${results.finding.nextOpenCreatedAnEmptyStore} of ${trials}; the displaced store stayed whole beside it in ${results.finding.displacedStillWhole} of ${trials} (OQ-266).`);
+console.log(`OQ-266: the next open put the displaced store back in ${results.finding.nextOpenPutTheStoreBack} of ${trials}, byte-identical in ${results.finding.reinstatedByteIdentical} of ${trials}; it created an empty store in ${results.finding.nextOpenCreatedAnEmptyStore} of ${trials}.`);
 console.log(`${results.verdict}${failures.length > 0 ? `\n${failures.join('\n')}` : ''} — evidence in ${relative(repo, output)}`);
 process.exitCode = failures.length === 0 ? 0 : 1;

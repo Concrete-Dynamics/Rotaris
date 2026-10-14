@@ -13667,7 +13667,8 @@ fails for any reason MUST leave the store exactly as it was … no reader may ob
 REQ-SESSION-202's last paragraph, under which an absent place is "an absence and not this condition, including while a restore
 is under way"; REQ-SESSION-043; REQ-SESSION-200; ADR-0058's restore, steps 8 and 9, and README B2; OQ-48, deferred under
 [R-071](../product/requests.md#r-071). Raised 2026-10-13 by fin41, task N42, as OQ-265, after measuring the case (renumbered OQ-266 at landing, origin/main holding OQ-264):
-[`../defects/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md`](../defects/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md).)*
+[`../defects/fixed/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md`](../defects/fixed/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md).
+**Ruled 2026-10-13.**)*
 
 **What is open.** `pnpm restore-kill-proof` killed a real `restoreStore` process between step 8 (the target displaced) and step
 9 (the staging copy installed) ten times. Every time the target name held nothing, the previous store sat whole at
@@ -13698,6 +13699,38 @@ left beside a store that is present (the normal successful restore) is ever touc
 REQ-SESSION-201 keeps.
 
 **What a live run then shows.** Nothing: no live scenario restores a store. `pnpm restore-kill-proof` is the measurement.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a restore cut between step 8 and
+step 9 is **reversed** at the workspace service's next open of that identifier, before anything is created. The restore marks
+the cut exactly with a durable journal, `<identifier>.restore-pending`, written before step 8 and removed once step 9 or the
+in-process reversal has succeeded. The open then puts back the store this restore displaced, applies nothing from the backup,
+and tells the user once. A `.displaced-*` beside a present store is never touched. This is REQ-SESSION-201's failure clause
+carried out, so the defect is closed against that requirement and no directive is needed. The two advocates'
+recommendations are in the orchestrator's ruling record, not copied here.
+
+***Built 2026-10-14 (fin43, `fin43-restore-recovery`).*** `restoreStore` writes the journal (`{stamp, stagingN,
+targetExisted}`, replaced where a stale one is there, then the file and its directory flushed) after step 9a and before step 8
+(step `8-journal`), removes it when step 9 succeeds (before the run host is told to reopen) and when the R1/R2 reversal
+succeeds, and keeps it when R2 fails, whose error then says the next open will try the rename again.
+`recoverCutRestore` (`packages/store/src/recover.ts`) acts on the journal alone: none, nothing; a journal beside a present
+target (a restore that finished, or a stale journal), the journal removed and nothing else; an absent target with a store
+before, the highest `<identifier>.displaced-<journal stamp>[.n]` renamed back and the journal removed; an absent target with
+no store before, the journal removed and the ordinary creating open follows (REQ-SESSION-043); a journal that cannot be read
+(its write cut before its flush, so step 8 never ran), removed. A rename that fails, or a displaced store that is not there,
+keeps the journal and refuses the open ("the store for this workspace is at X and must be renamed to Y"), creating nothing.
+`openWorkspaceStore` runs it before anything else and carries what it did as `cutRestore`; the workspace service skips it
+while its own restore is in flight (`RestoreInFlight`, `apps/desktop/src/workspace-service/store-open.ts`), and then
+refuses rather than create beside the journal. The flag wraps `performRestore` and not the whole request: the service's own
+reopen after it runs the check, so a failed R2 with the target name free is repaired at once (and the report's error says so),
+where a flag around the whole request would have let that reopen create over the empty target; `workspace.opened` carries `cutRestore`, and main raises one info notice
+naming the stamp, whether the workspace's sessions were put back or it had none here, that nothing from the backup was
+applied, that a restore from Settings applies it, and where the prepared copy is kept. REQ-SESSION-202's check (W-31) runs
+after this one in the same open. Pinned by `store.test.ts` (the kill-in-the-gap case flipped, and its OQ-266 block: a stale
+journal, an older aside with no journal, no store before, a failed R2 repaired at the next open, the journal absent after
+success and after a reversal, a rename back that fails, the in-flight open, and the counterfactual with no journal),
+`store-open.test.ts` (the in-flight flag, and its counterfactual) and `pnpm restore-kill-proof`, which now FAILs unless the
+next open puts the store back: 10 of 10 on 2026-10-14 (load average 0.6 to 1.3), the reinstated `workspace.db` byte-identical
+to the displaced one in 10 of 10, the journal gone and the staging copy kept in 10 of 10.
 
 <a id="oq-267"></a>
 
@@ -13887,3 +13920,35 @@ count, and the trap on the duress launch, each a NOTE rather than a failure.
 - the note stays open until it is reproduced and repaired;
 - the monitor is promoted. A launch with an update-depth error becomes a live-run FAILURE rather than a NOTE, so a recurrence
   cannot pass unread, and the note closes on that guard.
+
+<a id="oq-281"></a>
+
+**OQ-281 — Where does the user resolve a store place that holds no store, and what does the listing show meanwhile?**
+*(REQ-SESSION-202, "An action that establishes a new store in that place MUST be one the user takes deliberately, having been
+told what was found and that it recovers nothing that may have been there", and "the listing reports the condition rather than
+an empty list"; REQ-SESSION-043; REQ-SESSION-089; REQ-EVENTS-084; W-31 (3), "a fence, not a new surface"; REQ-SHELL-023.
+Raised 2026-10-14 by fin43 (`fin43-restore-recovery`) while repairing
+[`../defects/fixed/a-store-place-that-holds-no-database-is-opened-as-a-fresh-empty-store.md`](../defects/fixed/a-store-place-that-holds-no-database-is-opened-as-a-fresh-empty-store.md);
+the plan's range is OQ-281 to OQ-295, and this is the first of it this bundle takes — renumbered at landing if a sibling took
+it first.)*
+
+**What is open.** The open now refuses a place that exists and holds no `workspace.db`, creates nothing there, and says what was
+found. REQ-SESSION-202 fixes what the resolving action must not be (automatic, a default, a side effect of a run, an open, a
+preparation or a repair) and that it must be deliberate and told what it recovers, but not where it is offered or how it reads,
+and W-31 (3) calls it "a fence, not a new surface". The listing is likewise owed "the condition rather than an empty list", and
+no surface in REQ-SHELL-023's structure names where a refused store is shown.
+
+**What the build proceeds under.** No product action establishes a store in such a place. The open is refused with
+`workspace.store-missing` ("The session store for this workspace is not where it is kept"; the detail names the directory,
+says the store is not in it, that nothing was created and that no session can start until it is resolved). Main raises that as
+an error notice, and `session.list` answers it as the same refusal rather than an empty list or "Open a workspace". The only
+resolution is outside the product (the directory removed or the store put back by hand, then the workspace opened again). A
+narrower residue sits beside it: the open itself makes the place before the engine creates the file in it, so a process killed
+between the two (microseconds) leaves the very condition this refuses; nothing measured it.
+
+**What a ruling decides.** Whether the deliberate action is built, and where (an action on the error notice, a control in the
+Sessions view's refusal, a Settings action beside the restore); its wording, which must say what was found and that it recovers
+nothing; and whether the open's own window (the place made before the file) is closed by making the store first in a sibling
+directory and renaming it into place.
+
+**What a live run then shows.** Nothing: no live scenario empties a store's place.

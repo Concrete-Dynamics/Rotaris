@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, fileStamp, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
+import { CutRestoreError, recoverCutRestore, RestorePendingError, restoreJournal, StorePlaceEmptyError, writeRestoreJournal } from './index.js';
 import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, FILE_STAMP_LENGTH, openStore, openStoreForInspection, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, storePathLimit, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
 /** PD-ORCH-005 clause 9 / REQ-SESSION-031: what v35 added, undone before v34's so a test that lowers `user_version` below 35 can climb it again. */
@@ -129,6 +130,27 @@ describe('store — open (ADR-0058 rule 3, rule 6)', () => {
     expect(migrateStore(r.db)).toEqual({ kind: 'unchanged', version: CURRENT_SCHEMA_VERSION });
     expect(readFileSync(join(r.dir, 'origin.txt'), 'utf8').trim()).toBe(ws);
     r.db.close();
+  });
+  it('REQ-SESSION-202 / W-31 (1): a place that exists and holds no store is refused, never opened by a call that creates; nothing is put there', () => {
+    const id = mintWorkspaceId('00000000000000000000000000000004');
+    const dir = storeDir(root, id);
+    mkdirSync(dir, { recursive: true });
+    expect(() => openWorkspaceStore(root, id, ws)).toThrow(StorePlaceEmptyError);
+    expect(readdirSync(dir)).toEqual([]);
+    // What a copy, a move or a hand tidy that took `workspace.db` and left its directory leaves: refused the same way.
+    writeFileSync(join(dir, 'origin.txt'), `${ws}\n`);
+    mkdirSync(join(dir, 'sessions'));
+    let thrown: unknown;
+    try { openWorkspaceStore(root, id, ws); } catch (e) { thrown = e; }
+    expect(thrown).toBeInstanceOf(StorePlaceEmptyError);
+    expect((thrown as Error).message).toBe(`the place for this workspace's session store exists (${dir}) and the store is not in it`);
+    expect(readdirSync(dir).sort()).toEqual(['origin.txt', 'sessions']);
+    // REQ-SESSION-043 is unchanged: where nothing is kept for the workspace, the open creates the store.
+    rmSync(dir, { recursive: true });
+    const r = openWorkspaceStore(root, id, ws);
+    expect(r.migration).toEqual({ kind: 'migrated', from: 0, to: CURRENT_SCHEMA_VERSION });
+    r.db.close();
+    forgetSpelling(r.dir);
   });
   it('W-27 / rule 6: whatever spelling a caller passes, the engine is opened by the ONE canonical spelling', () => {
     if (process.platform !== 'win32') return;
@@ -332,6 +354,9 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
     expect(existsSync(storeFile(root, id))).toBe(false);
     expect(r.error).toContain(r.displaced!);
     expect(r.error).toContain(storeDir(root, id));
+    // REQ-SESSION-202: the next open meets the place with no store in it and refuses, creating nothing there.
+    expect(() => openWorkspaceStore(root, id, 'C:/ws')).toThrow(StorePlaceEmptyError);
+    expect(existsSync(storeFile(root, id))).toBe(false);
   });
 
   it('E3a: an unanswered close REFUSES within the bound rather than proceeding, with the target untouched and no staging left', async () => {
@@ -420,14 +445,14 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
     for (const d of displaced) expect(existsSync(join(root, d, 'workspace.db'))).toBe(true);
   });
 
-  it('the kill-in-the-gap state (README B2; docs/defects/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md): cut after the displacement and before the install, the target name holds nothing, both stores are whole beside it, and the next open makes an empty store there — as built, pending OQ-266', async () => {
+  it('the kill-in-the-gap state (README B2; OQ-266, ruled 2026-10-13 under R-072): cut after the displacement and before the install, both stores are whole beside an empty target name, and the next open puts back the store the restore displaced and creates nothing', async () => {
     seed(root, id, [{ sid: 'S-1', rows: 3 }, { sid: 'S-2', rows: 2 }]);
     const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 4 }]);
     const cut = restoreStore(ctx(fakeRunHost(root, id, { raceAtStep: 'none', closeAnswers: true }), artifact), { betweenRenames: async () => { throw new Error('cut'); } });
     await expect(cut).rejects.toThrow('cut');
     expect(existsSync(storeDir(root, id))).toBe(false);
     const aside = readdirSync(root).filter((n) => n.startsWith(`${id}.`)).sort();
-    expect(aside.map((n) => n.replace(/displaced-.*$/, 'displaced-<stamp>'))).toEqual([`${id}.displaced-<stamp>`, `${id}.restoring-1`]);
+    expect(aside.map((n) => n.replace(/displaced-.*$/, 'displaced-<stamp>'))).toEqual([`${id}.displaced-<stamp>`, `${id}.restore-pending`, `${id}.restoring-1`]);
     const sessionsIn = (dir: string): string[] => {
       const db = openStore(join(root, dir, 'workspace.db'), { readonly: true, mustExist: true });
       const s = new StoreDal(db).listSessions().map((r) => r.session_id).sort();
@@ -436,14 +461,136 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
       return s;
     };
     expect(sessionsIn(aside[0]!)).toEqual(['S-1', 'S-2']);
-    expect(sessionsIn(aside[1]!)).toEqual(['S-from-backup']);
-    // What the workspace service's open does next (`openOwn` → `openWorkspaceStore`): a fresh store, no session, nothing said.
+    expect(sessionsIn(aside[2]!)).toEqual(['S-from-backup']);
+    const displacedBytes = readFileSync(join(root, aside[0]!, 'workspace.db'));
+    // What the workspace service's open does next (`openOwn` → `openWorkspaceStore`): the displaced store put back, nothing created.
     const reopened = openWorkspaceStore(root, id, 'C:/ws');
-    expect(reopened.migration).toEqual({ kind: 'migrated', from: 0, to: CURRENT_SCHEMA_VERSION });
-    expect(new StoreDal(reopened.db).listSessions()).toEqual([]);
+    expect(reopened.migration).toEqual({ kind: 'unchanged', version: CURRENT_SCHEMA_VERSION });
+    expect(new StoreDal(reopened.db).listSessions().map((r) => r.session_id).sort()).toEqual(['S-1', 'S-2']);
+    expect(reopened.cutRestore).toEqual({ reversed: join(root, aside[0]!), hadStore: true, staging: join(root, `${id}.restoring-1`), stamp: aside[0]!.replace(`${id}.displaced-`, '') });
     reopened.db.close();
     forgetSpelling(reopened.dir);
-    expect(sessionsIn(aside[0]!)).toEqual(['S-1', 'S-2']);
+    expect(readFileSync(storeFile(root, id))).toEqual(displacedBytes);
+    expect(readdirSync(root).filter((n) => n.startsWith(`${id}.`))).toEqual([`${id}.restoring-1`]);
+  });
+
+  describe('OQ-266 (ruled 2026-10-13 under R-072): the restore journal, and the next open that acts on it', () => {
+    const rh = (wid: WorkspaceId = id) => fakeRunHost(root, wid, { raceAtStep: 'none', closeAnswers: true });
+    const journal = () => restoreJournal(root, id);
+
+    it('the journal is absent after a successful restore and after a successful in-process reversal', async () => {
+      seed(root, id, [{ sid: 'S-1', rows: 1 }]);
+      const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 1 }]);
+      const ok = await restoreStore(ctx(rh(), artifact));
+      expect(ok.ok).toBe(true);
+      expect(ok.steps).toContain('8-journal');
+      expect(existsSync(journal())).toBe(false);
+      const reversed = await restoreStore(ctx(rh(), artifact), { forceInstallFail: 'target-exists' });
+      expect(reversed.reversal?.ok).toBe(true);
+      expect(existsSync(journal())).toBe(false);
+    });
+
+    it('a stale journal beside a present store acts on nothing and is removed; a .displaced-* beside it is never touched', () => {
+      const stamp = '2026-10-13T00-00-00-000Z';
+      seed(root, id, [{ sid: 'S-1', rows: 1 }]);
+      const old = join(root, `${id}.displaced-${stamp}`);
+      mkdirSync(old);
+      writeFileSync(join(old, 'marker'), 'kept');
+      writeRestoreJournal(root, id, { stamp, stagingN: 1, targetExisted: true });
+      const r = openWorkspaceStore(root, id, 'C:/ws');
+      expect(r.cutRestore).toBeUndefined();
+      expect(new StoreDal(r.db).listSessions().map((x) => x.session_id)).toEqual(['S-1']);
+      r.db.close();
+      forgetSpelling(r.dir);
+      expect(existsSync(journal())).toBe(false);
+      expect(readFileSync(join(old, 'marker'), 'utf8')).toBe('kept');
+    });
+
+    it('an older .displaced-* and a .restoring-1 with no journal, the target absent: an ordinary empty open, nothing reinstated', () => {
+      seed(root, id, [{ sid: 'S-1', rows: 1 }]);
+      const c = claimAsideName(root, id, '2026-10-01T00-00-00-000Z', 'displaced', storeDir(root, id));
+      expect(c.ok).toBe(true);
+      mkdirSync(join(root, `${id}.restoring-1`));
+      const r = openWorkspaceStore(root, id, 'C:/ws');
+      expect(r.migration).toEqual({ kind: 'migrated', from: 0, to: CURRENT_SCHEMA_VERSION });
+      expect(r.cutRestore).toBeUndefined();
+      expect(new StoreDal(r.db).listSessions()).toEqual([]);
+      r.db.close();
+      forgetSpelling(r.dir);
+      expect(existsSync(join(c.ok ? c.to : '', 'workspace.db'))).toBe(true);
+    });
+
+    it('a cut restore into a workspace that had no store here reinstates nothing, sets the notice field, and creates the ordinary store', async () => {
+      const fresh = mintWorkspaceId('00000000000000000000000000000015');
+      const artifact = makeArtifact(root, fresh, [{ sid: 'S-from-backup', rows: 2 }]);
+      const cut = restoreStore({ ...ctx(rh(fresh), artifact), id: fresh }, { betweenRenames: async () => { throw new Error('cut'); } });
+      await expect(cut).rejects.toThrow('cut');
+      expect(existsSync(restoreJournal(root, fresh))).toBe(true);
+      const r = openWorkspaceStore(root, fresh, 'C:/ws');
+      expect(r.cutRestore).toEqual({ reversed: null, hadStore: false, staging: join(root, `${fresh}.restoring-1`), stamp: expect.any(String) });
+      expect(r.migration).toEqual({ kind: 'migrated', from: 0, to: CURRENT_SCHEMA_VERSION });
+      expect(new StoreDal(r.db).listSessions()).toEqual([]);
+      r.db.close();
+      forgetSpelling(r.dir);
+      expect(existsSync(restoreJournal(root, fresh))).toBe(false);
+    });
+
+    it('a reversal whose R2 failed keeps the journal, says the next open will retry, and the next open puts the store back', async () => {
+      seed(root, id, [{ sid: 'S-1', rows: 2 }, { sid: 'S-2', rows: 1 }]);
+      const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 3 }]);
+      const r = await restoreStore(ctx(rh(), artifact), { forceInstallFail: 'target-exists', forceReversalFail: true });
+      expect(r.reversal).toEqual({ mode: 'displace-then-rename', ok: false, obstruction: expect.any(String) });
+      expect(existsSync(storeDir(root, id))).toBe(false);
+      expect(existsSync(journal())).toBe(true);
+      expect(r.error).toMatch(/; the next open of this workspace will try that rename again$/);
+      const reopened = openWorkspaceStore(root, id, 'C:/ws');
+      expect(reopened.cutRestore?.reversed).toBe(r.displaced);
+      expect(new StoreDal(reopened.db).listSessions().map((x) => x.session_id).sort()).toEqual(['S-1', 'S-2']);
+      reopened.db.close();
+      forgetSpelling(reopened.dir);
+      expect(existsSync(journal())).toBe(false);
+    });
+
+    it('a rename back that fails keeps the journal and refuses the open, naming both paths, with nothing created', async () => {
+      seed(root, id, [{ sid: 'S-1', rows: 1 }]);
+      const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 1 }]);
+      await expect(restoreStore(ctx(rh(), artifact), { betweenRenames: async () => { throw new Error('cut'); } })).rejects.toThrow('cut');
+      const displaced = readdirSync(root).find((n) => n.includes('.displaced-'))!;
+      const refusing = () => { throw Object.assign(new Error('EPERM'), { code: 'EPERM' }); };
+      expect(() => recoverCutRestore(root, id, { rename: refusing as never })).toThrow(CutRestoreError);
+      try { recoverCutRestore(root, id, { rename: refusing as never }); } catch (e) {
+        expect((e as Error).message).toBe(`the store for this workspace is at ${join(root, displaced)} and must be renamed to ${storeDir(root, id)} (EPERM)`);
+      }
+      expect(existsSync(journal())).toBe(true);
+      expect(existsSync(storeDir(root, id))).toBe(false);
+      // A displaced store that is not there is refused the same way: nothing is created over the condition.
+      rmSync(join(root, displaced), { recursive: true });
+      expect(() => openWorkspaceStore(root, id, 'C:/ws')).toThrow(CutRestoreError);
+      expect(existsSync(storeDir(root, id))).toBe(false);
+      expect(existsSync(journal())).toBe(true);
+    });
+
+    it('an open that skips the check while its own restore is in flight creates nothing where the journal stands beside an absent store', async () => {
+      seed(root, id, [{ sid: 'S-1', rows: 1 }]);
+      const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 1 }]);
+      await expect(restoreStore(ctx(rh(), artifact), { betweenRenames: async () => { throw new Error('cut'); } })).rejects.toThrow('cut');
+      expect(() => openWorkspaceStore(root, id, 'C:/ws', { recover: false })).toThrow(RestorePendingError);
+      expect(existsSync(storeDir(root, id))).toBe(false);
+      expect(existsSync(journal())).toBe(true);
+    });
+
+    it('(counterfactual, the journal not written) the cut is the case as it was: the next open creates an empty store', async () => {
+      seed(root, id, [{ sid: 'S-1', rows: 3 }, { sid: 'S-2', rows: 2 }]);
+      const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 4 }]);
+      await expect(restoreStore(ctx(rh(), artifact), { skipJournal: true, betweenRenames: async () => { throw new Error('cut'); } })).rejects.toThrow('cut');
+      expect(existsSync(journal())).toBe(false);
+      const reopened = openWorkspaceStore(root, id, 'C:/ws');
+      expect(reopened.migration).toEqual({ kind: 'migrated', from: 0, to: CURRENT_SCHEMA_VERSION });
+      expect(new StoreDal(reopened.db).listSessions()).toEqual([]);
+      expect(reopened.cutRestore).toBeUndefined();
+      reopened.db.close();
+      forgetSpelling(reopened.dir);
+    });
   });
 
   it('D8 (ADR-0058 consequence 18): an inspection of a cleanly closed store leaves its directory holding what it found; the read-only open (counterfactual, D8 as it was) leaves -wal and -shm', () => {

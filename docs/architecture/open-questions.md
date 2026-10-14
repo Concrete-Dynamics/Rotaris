@@ -13502,7 +13502,8 @@ artifacts — `task_run` artifacts other than the session's own, the five newest
 records the source session of each; REQ-LIBRARY-017, "Data from another run, another session, or another workspace MUST NOT
 inform it", beside "the bounded prior-artifact history of REQ-LIBRARY-034"; [`PD-LIBRARY-002`](../product/directives.md#pd-library-002)
 revision 2 (a), a retrospective artifact stores `source_session_id` null and names the sessions it read. Raised 2026-10-13 by
-fin42 from [`a-post-run-analysis-after-a-retrospective-is-never-captured.md`](../defects/fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md).)*
+fin42 from [`a-post-run-analysis-after-a-retrospective-is-never-captured.md`](../defects/fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md).
+Ruled 2026-10-13 under R-072, below.)*
 
 A retrospective's artifact carries `source_run_type` `task_run` and no source session, so REQ-LIBRARY-034's filter, read by its
 letter, keeps it among a later run's five prior artifacts, and REQ-LIBRARY-025 has no session of it to record. Until fin42 the
@@ -13521,6 +13522,19 @@ from informing a run's analysis — and, if it stays, whether `considered_sessio
 itself read. **The costs either way:** kept, a run's analyst reads proposals written over sessions it was never shown, and only
 their summaries; excluded, a run's analyst may propose again what a retrospective already proposed, which REQ-LIBRARY-046's
 suppression at store time still catches.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)): retrospective artifacts stay out of a
+later run's analysis history.** The per-run analyst's prior-artifact history holds only `post_run` artifacts: the capture drops
+every artifact whose `source_kind` is `retrospective` before it applies REQ-LIBRARY-034's five-artifact bound, so each artifact
+supplied has a source session, and REQ-LIBRARY-025 and REQ-LIBRARY-017 hold word for word for every run. Recorded as
+[`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 3, clause (h), which narrows REQ-LIBRARY-034 (back-pointer
+written in the same commit); REQ-LIBRARY-017 stays on the directive's Extends line and REQ-LIBRARY-025 is untouched. The
+retrospective's own reading of every prior proposal stays as it is. **The build's earlier reading, kept beside the ruling:** the
+paragraph "What the build proceeds under" above (the letter of REQ-LIBRARY-034, the retrospective's artifact kept with no
+session recorded for it) governed from fin42 until this ruling and no longer does. **Built in fin43** (`fin43-analysis-and-artifacts`):
+`captureImprovementJob` filters on `source_kind === "post_run"` ahead of the bound; a legacy artifact with no `source_kind` parses
+as `post_run` and stays in history. **The cost kept on record:** a run's analyst may propose again what a retrospective already
+proposed, and REQ-LIBRARY-046's suppression at store time catches it.
 
 <a id="oq-262"></a>
 

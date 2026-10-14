@@ -15,6 +15,12 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-14**
 
+**A retrospective's artifact stays out of a later run's analysis history (PD-LIBRARY-002 revision 3 (h), OQ-271; fin43).**
+`captureImprovementJob` (`engine/src/improvements/capture.ts`) drops every prior artifact whose `source_kind` is `retrospective`
+before REQ-LIBRARY-034's bound of five, so every artifact supplied has a source session and `considered_session_ids` names each.
+The **process view**'s post-run analyst paragraph says so where it said a retrospective's artifact was history naming no session
+and that OQ-271 asked. No package, edge, process, channel, command or store column changed.
+
 **Main's two seams not named `ROTARIS_CAPTURE_*` are read behind `__ROTARIS_SEAMS__` too (ADR-0056; fin43's review).**
 `ROTARIS_ROWS_PROOF` and `ROTARIS_INIT_TEST_TASK` (`main/index.ts`) gain the flag on their line and join the seam check's
 `forbidden` list. The **process view**'s main row names them. No package, edge, process, channel, command or store column
@@ -146,8 +152,9 @@ so. No package, edge or process changed; the `ConfigSnapshot` contract gained on
 `captureImprovementJob` (`engine/src/improvements/capture.ts`) names in `considered_session_ids` the source session of each prior
 artifact that has one, so a retrospective's artifact, which has none, stays in a later run's history and names no session; until
 then its null made the job's parse throw and no later run's analysis was captured. The **process view**'s post-run analyst
-paragraph says so (OQ-271 asks whether such an artifact belongs there). No package, edge, process, channel, command or store
-column changed.
+paragraph says so (OQ-271 asks whether such an artifact belongs there; *ruled 2026-10-13 under R-072 and built 2026-10-14 by
+fin43: the history holds post-run artifacts only, PD-LIBRARY-002 revision 3 (h), entry at the top*). No package, edge, process,
+channel, command or store column changed.
 
 **A scripted root can take up a continuation offer (PD-ORCH-004 revisions 3 and 4; fin42).** The scripted client gains the
 step `continue:<persona>:<name>`, a `delegate` whose `continuation_of` names the newest offer its conversation was told

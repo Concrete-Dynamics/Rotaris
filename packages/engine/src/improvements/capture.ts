@@ -174,9 +174,13 @@ export function captureImprovementJob(
         event.kind === "verifier.progress",
     )
     .map((event) => event.payload);
+  // REQ-LIBRARY-034 narrowed by PD-LIBRARY-002 revision 3 (h) (OQ-271, ruled under R-072): the per-run history holds
+  // post-run artifacts only. A retrospective's artifact is dropped before the five-artifact bound, so every artifact
+  // supplied has the source session REQ-LIBRARY-025 records. A legacy artifact with no `source_kind` parses as post_run.
   const priorArtifacts = input.priorArtifacts
     .filter(
       (artifact) =>
+        artifact.source_kind === "post_run" &&
         artifact.source_run_type === "task_run" &&
         artifact.source_session_id !== input.sessionId,
     )
@@ -191,9 +195,9 @@ export function captureImprovementJob(
     generated_at: input.generatedAt,
     timeout_seconds: input.timeoutSeconds,
     collector_model: input.collectorModel,
-    // REQ-LIBRARY-025: the source session of each prior artifact supplied as history. A retrospective's artifact has none
-    // (PD-LIBRARY-002 revision 2 (a)) and REQ-LIBRARY-034's filter keeps it, so it records none; until fin42 its null
-    // reached the job and the parse threw, and no later run's analysis was captured (OQ-271 asks whether it belongs here).
+    // REQ-LIBRARY-025: the source session of each prior artifact supplied as history. Since PD-LIBRARY-002 revision 3 (h)
+    // every one is post-run and has one; the null guard stays as a defensive no-op (until fin42 a retrospective's null
+    // reached the job and the parse threw, and no later run's analysis was captured).
     considered_session_ids: [
       ...new Set(priorArtifacts.flatMap((artifact) => (artifact.source_session_id === null ? [] : [artifact.source_session_id]))),
     ],

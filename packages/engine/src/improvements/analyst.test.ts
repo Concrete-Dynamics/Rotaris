@@ -350,35 +350,53 @@ describe("REQ-LIBRARY-032/165 improvement capture", () => {
   });
 
   /*
-   * docs/defects/fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md (fin42): a retrospective artifact carries no
-   * source session (PD-LIBRARY-002 revision 2 (a)) and is a `task_run`, so REQ-LIBRARY-034's filter keeps it among a later
-   * run's prior artifacts; REQ-LIBRARY-025 records the source session of each, and a retrospective has none to record. Before
-   * the repair the null reached `considered_session_ids` and the job's parse threw, so the run's analysis was never captured.
+   * docs/defects/fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md (fin42) and OQ-271's ruling (R-072,
+   * PD-LIBRARY-002 revision 3 (h)): a retrospective artifact carries no source session (revision 2 (a)), so the per-run
+   * history drops it before REQ-LIBRARY-034's bound. Every artifact supplied then has the source session REQ-LIBRARY-025
+   * records. Before fin42 the null reached `considered_session_ids` and the job's parse threw; before revision 3 the
+   * retrospective was kept in the history with no session recorded for it.
    */
-  it("captures a run's analysis when a retrospective artifact is among the prior ones, recording no session for it (REQ-LIBRARY-025/034, OQ-271)", () => {
+  const captureFixture = (hex: string) => {
     const root = mkdtempSync(join(tmpdir(), "rotaris-improvement-capture-"));
     paths.push(root);
-    const workspaceId = mintWorkspaceId("000000000000000000000000000000ac");
+    const workspaceId = mintWorkspaceId(hex);
     const opened = openWorkspaceStore(root, workspaceId, "C:\\workspace");
     paths.push(storeDir(root, workspaceId));
     const db = opened.db;
     const dal = new StoreDal(db);
-    dal.upsertSession({ session_id: "session-2", workspace_root: "C:\\workspace", execution_status: "completed", created_at: "2026-10-13T09:00:00.000Z", updated_at: "2026-10-13T10:00:00.000Z", run_type: "task_run" });
-    dal.updateSessionRun(asSessionId("session-2"), { stop_reason: "completed" });
+    dal.upsertSession({ session_id: "session-9", workspace_root: "C:\\workspace", execution_status: "completed", created_at: "2026-10-13T09:00:00.000Z", updated_at: "2026-10-13T10:00:00.000Z", run_type: "task_run" });
+    dal.updateSessionRun(asSessionId("session-9"), { stop_reason: "completed" });
     const artifact = (id: string, source: string | null, considered: string[]) => ImprovementArtifactSchema.parse({
       artifact_id: id, source_session_id: source, source_kind: source === null ? "retrospective" : "post_run", source_run_type: "task_run",
       generated_at: "2026-10-13T08:00:00.000Z", collector_model: "medium", considered_session_ids: considered, notes: null,
       checkpoints: [], rolled_back_at: null, proposals: [],
     });
+    const capture = (priorArtifacts: ReturnType<typeof artifact>[]) => captureImprovementJob(dal, {
+      workspaceId, workspaceRoot: "C:\\workspace", sessionId: "session-9", generatedAt: "2026-10-13T10:00:00.000Z",
+      timeoutSeconds: 60, collectorModel: "medium", priorArtifacts,
+    });
+    return { db, artifact, capture };
+  };
+
+  it("keeps a retrospective artifact out of a later run's prior-artifact history (REQ-LIBRARY-034, PD-LIBRARY-002 rev 3 (h))", () => {
+    const { db, artifact, capture } = captureFixture("000000000000000000000000000000ac");
     const retrospective = artifact("impart_0000000r", null, ["session-0", "session-1"]);
     const postRun = artifact("impart_0000000p", "session-1", []);
-    const captured = captureImprovementJob(dal, {
-      workspaceId, workspaceRoot: "C:\\workspace", sessionId: "session-2", generatedAt: "2026-10-13T10:00:00.000Z",
-      timeoutSeconds: 60, collectorModel: "medium", priorArtifacts: [retrospective, postRun],
-    });
+    const captured = capture([retrospective, postRun]);
     expect(captured).not.toBeNull();
+    expect(captured?.prior_artifacts.map((a) => a.artifact_id)).toEqual(["impart_0000000p"]);
     expect(captured?.considered_session_ids).toEqual(["session-1"]);
-    expect(captured?.prior_artifacts.map((a) => a.artifact_id)).toEqual(["impart_0000000r", "impart_0000000p"]);
+    db.close();
+  });
+
+  it("drops the retrospective before the five-artifact bound, so five post-run artifacts behind a newer retrospective are all supplied (REQ-LIBRARY-034, PD-LIBRARY-002 rev 3 (h))", () => {
+    const { db, artifact, capture } = captureFixture("000000000000000000000000000000ad");
+    const retrospective = artifact("impart_0000000r", null, ["session-1"]);
+    const postRuns = [1, 2, 3, 4, 5].map((n) => artifact(`impart_000000p${n}`, `session-${n}`, []));
+    const captured = capture([retrospective, ...postRuns]);
+    expect(IMPROVEMENT_EVIDENCE_BOUNDS.priorArtifacts).toBe(5);
+    expect(captured?.prior_artifacts.map((a) => a.artifact_id)).toEqual(postRuns.map((a) => a.artifact_id));
+    expect(captured?.considered_session_ids).toEqual(["session-1", "session-2", "session-3", "session-4", "session-5"]);
     db.close();
   });
 });

@@ -1247,6 +1247,10 @@ word for word. **Where the retrospective departs from the requirements it sits b
 one paragraph added after "Reach, and the boundary it holds"; revision 1 said nothing on these points, so nothing is
 replaced.*
 
+*Revision 3 (2026-10-13, [R-072](requests.md#r-072), ruling [OQ-271](../architecture/open-questions.md#oq-271)) — **the
+per-run history**: clause (h) is added to the revision-2 paragraph and REQ-LIBRARY-034 joins the Narrows line. Revision 2
+said nothing on the per-run history, so nothing is replaced.*
+
 **The rule.** Beside the per-run analyst of section 3, the improvement domain SHALL carry a second
 kind of analysis pass, the **retrospective**. A retrospective SHALL read only material this product
 already keeps for the workspace it runs in — session records, improvement artifacts and their
@@ -1314,6 +1318,10 @@ the per-run pass unchanged. For a retrospective, and only for one, each of these
   improvement collector after each run, and from retrospectives over this workspace's history." The empty label reads "No
   proposals yet. They appear here after a run's improvement collector finds signals, or after a retrospective over this
   workspace's history."
+- (h) **The per-run history (REQ-LIBRARY-034).** A later per-run pass's prior-artifact history excludes every artifact
+  whose `source_kind` is `retrospective`. The exclusion is applied before the five-artifact bound, so every prior artifact
+  supplied has a source session that REQ-LIBRARY-025 records, and REQ-LIBRARY-017's naming clause holds as written. The
+  retrospective's own reading of prior proposals, post-run ones included, is unchanged. *(Revision 3, OQ-271.)*
 
 The retrospective also shows the indicators of REQ-LIBRARY-126 when no session's analysis is in progress, and its gesture
 sits in the header of REQ-LIBRARY-128's card beside the tag and "Open in Library →"; both requirements are untouched. The
@@ -1385,7 +1393,7 @@ record with evidence, review, undo, history, export and an executor behind it.
   REQ-LIBRARY-037's shape and it is kept. The cost is one more empty-slot refusal a user can meet;
   it is paid once per gesture, names the exact field to set, and stops there.
 
-> **Narrows:** REQ-LIBRARY-011, REQ-LIBRARY-020, REQ-LIBRARY-109, REQ-LIBRARY-124, REQ-LIBRARY-125, REQ-LIBRARY-130, REQ-NOTIFY-250
+> **Narrows:** REQ-LIBRARY-011, REQ-LIBRARY-020, REQ-LIBRARY-034, REQ-LIBRARY-109, REQ-LIBRARY-124, REQ-LIBRARY-125, REQ-LIBRARY-130, REQ-NOTIFY-250
 > **Extends:** REQ-LIBRARY-003, REQ-LIBRARY-006, REQ-LIBRARY-015, REQ-LIBRARY-017, REQ-LIBRARY-126, REQ-LIBRARY-128, REQ-MONITOR-173, REQ-NOTIFY-251, REQ-WORKSPACE-041
 
 *Until 2026-10-07 this block read `> **Extends:** REQ-LIBRARY-003, REQ-LIBRARY-006, REQ-LIBRARY-015` and beneath it
@@ -1403,10 +1411,17 @@ Narrows line is added and REQ-LIBRARY-126 and REQ-LIBRARY-128 join the Extends l
 the cases are the revision-2 paragraph's (a) to (g)
 ([`pd-library-002-reaches-further-requirements-its-disposition-does-not-name`](../defects/fixed/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md)).*
 
+*Revision 3, 2026-10-13 ([OQ-271](../architecture/open-questions.md#oq-271), ruled under [R-072](requests.md#r-072)):
+REQ-LIBRARY-034 joins the Narrows line with its back-pointer (clause (h)). REQ-LIBRARY-017 stays on the Extends line, and
+REQ-LIBRARY-025 is untouched: with no retrospective artifact supplied as history, both read word for word for every run.*
+
 *Raised by the owner, 2026-09-17; logged as [R-033](requests.md#r-033).*
 Revision 2 logged as [R-072](requests.md#r-072) (OQ-235 and OQ-236), ruled by the consortium under the owner's
 delegation: on OQ-235 the system-lens advocate's recommendation followed in substance and a revision taken in place of an
 italic note; on OQ-236 both advocates' recommendations followed in part.
+Revision 3 logged as [R-072](requests.md#r-072) (OQ-271), ruled by the consortium under the owner's delegation on
+2026-10-13: the per-run history holds post-run artifacts only, so REQ-LIBRARY-025 and REQ-LIBRARY-017 hold word for word for
+every run.
 
 > **First execution of revision 2, 2026-10-13, ruled by [R-072](requests.md#r-072) (OQ-235) and built in plan fin34:** the
 > clause held as written. The run host's `SkillHost.retrospectiveInstructionFiles` keeps the `workspace:` entries of the
@@ -1458,6 +1473,20 @@ italic note; on OQ-236 both advocates' recommendations followed in part.
 > [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
 > [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
 > The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 3, 2026-10-14 (fin43, `fin43-analysis-and-artifacts`), ruled by [R-072](requests.md#r-072)
+> (OQ-271):** clause (h) held as written. `captureImprovementJob` (`packages/engine/src/improvements/capture.ts`) now keeps a
+> prior artifact only when its `source_kind` is `post_run`, ahead of REQ-LIBRARY-034's bound of five; the null guard on
+> `considered_session_ids` stays as a defensive no-op. **What was measured.** Two cases in `analyst.test.ts`, both red on the
+> code before: a retrospective and a post-run artifact yield the post-run one alone and `considered_session_ids` `["session-1"]`;
+> a newest retrospective ahead of five post-run artifacts yields exactly the five. `pnpm symbols` registers one more narrowed
+> requirement (206) and `back-pointers.test.ts` reads REQ-LIBRARY-034's note both ways. `pnpm retrospective-proof`, 54 of 54 at
+> a load average of 1.3 to 2.2 on four CPUs: launch 8's `live-shape-timeout`, a run after a retrospective in one workspace,
+> still captured its analysis (the timed-out empty artifact and its notice), with no "capture failed" line in its log.
+> **What was not measured.** That the later run's job carried no retrospective artifact, in the built app: the job's
+> `prior_artifacts` are not stored or logged, and the stored artifact's `considered_session_ids` read the same before and after
+> (the retrospective contributed no session either way); the unit cases carry it. A live run after a retrospective (no live
+> scenario drives one yet). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

@@ -35,3 +35,9 @@ analysis when a retrospective artifact is among the prior ones …", red on the 
 Shown in the built app by `retrospective-proof`'s launch 8 (`live-shape-timeout`, a run after a retrospective in one
 workspace): before, the run's notice read "The run completed." and no artifact was stored; after, the run's empty artifact
 notes "collector timed out after 10 seconds" and its notice names the 10-second limit — 54 of 54 checks.
+
+*OQ-271 was ruled 2026-10-13 under the owner's delegation ([R-072](../../product/requests.md#r-072)) as
+[`PD-LIBRARY-002`](../../product/directives.md#pd-library-002) revision 3 (h): a later run's prior-artifact history holds
+post-run artifacts only, the retrospective's dropped before the five-artifact bound, so the reading above no longer governs;
+built 2026-10-14 by fin43 (`fin43-analysis-and-artifacts`), pinned by `analyst.test.ts`'s two REQ-LIBRARY-034 / revision 3 (h)
+cases, which replace the case named above.*

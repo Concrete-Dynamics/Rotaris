@@ -24,3 +24,17 @@ REQ-CONFIG-405's list.
 
 - `docs/architecture/open-questions.md` — OQ-302's ruling paragraph, "from line 402: \"every key the product may store …\"".
 - `docs/spec/12-desktop-shell-windows.md` — line 400 holds the quoted sentence; line 402 the table's header row.
+
+## Outcome (2026-10-14, fin46 `fin46-accept1-13`, Task 1)
+
+Repaired in the record only; nothing in the product or the specification changed. OQ-302's ruling paragraph now reads "from line
+400: \"every key the product may store is listed here, whatever document owns the behavior behind it\"", with a correction beside it
+keeping the old "from line 402" and saying what that line holds, and a link to this note. Its other citations (lines 27, 413 and
+415) were checked against the specification and stand.
+
+**Pinned by** `tools/open-question-line-citations.test.ts`: it reads the three lines OQ-302 cites inside the preference table (the
+quoted sentence, the `display/showReasoning` row and the `requirements/` row) and requires their spacing to be the spacing of the
+specification's lines that hold them. It was red on the old citation ("cited the closing sentence +11, stands the closing
+sentence +13") and is green on the new one. It pins the spacing, not the absolute line, because a directive's back-pointer added
+above the table moves every line of it and would otherwise turn the test red on another change and ask a ruling's history to be
+rewritten. No proof or live scenario reads the record; the finding was found by reading, and the test is its check.

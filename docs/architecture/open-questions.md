@@ -14826,7 +14826,9 @@ itself owns, in which case nothing is owed.
 confirmed as built, with no directive, no amendment and no code change. REQ-CONFIG-405's list names the desktop preference keys
 whose meaning and default REQ-CONFIG-405 itself owns; REQ-SHELL-006's per-user preference store table is the store's one
 complete registry (its ownership clause, `docs/spec/12-desktop-shell-windows.md` line 27, and the table that clause makes closed,
-from line 402: "every key the product may store is listed here, whatever document owns the behavior behind it").
+from line 400: "every key the product may store is listed here, whatever document owns the behavior behind it"; *corrected
+2026-10-14: this read "from line 402", the table's header row, two lines below the sentence it quotes —
+[the note](../defects/fixed/oq-302-cites-the-preference-tables-closing-sentence-at-line-402-where-it-stands-at-line-400.md)*).
 `display/showReasoning` stands as that table registers it (line 413) and REQ-CHAT-167 owns it: default off, written user-wide under
 REQ-CONFIG-405's write policy. REQ-CONFIG-405's list equals the set the table leaves to it — the three `requirements/` elevation
 keys its row assigns to REQ-CONFIG-405 by name (line 415), and the `interface/` and `display/` rows that name no other owner;

@@ -14230,7 +14230,8 @@ user anything further"; REQ-NOTIFY-031 and REQ-NOTIFY-032, "Open the session"; R
 ([OQ-267](#oq-267)), whose reach binds the members that name a workspace; PD-SHELL-002. Raised 2026-10-14 by fin43
 (`fin43-notices-and-config`) while repairing
 [`a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md`](../defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md);
-numbered from the top of the plan's range, OQ-281 to OQ-295, below the numbers its sibling bundles took. Open.)*
+numbered from the top of the plan's range, OQ-281 to OQ-295, below the numbers its sibling bundles took. Ruled 2026-10-14
+under R-072, below.)*
 
 `focus-session` names a session and no workspace, and every notice reaches every main window. Pressed in a window whose
 workspace's store does not hold the session (a second window, or a switch since the notice was raised), it used to raise "The
@@ -14244,6 +14245,16 @@ or say in the pressing window that the session belongs to another project, or st
 change to REQ-NOTIFY-044's vocabulary of the kind ESC-34 made for the hook review.
 
 **What a live run then shows.** Nothing: no live scenario opens two workspaces.
+
+**Ruled 2026-10-14 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)):** the press reaches
+the session where it lives. `focus-session` carries the workspace of the session it names, taken from the run host's record of
+that session's root (never from a window), and a press takes [`PD-SHELL-001`](../product/directives.md#pd-shell-001)'s reach:
+it brings forward the main window holding that workspace, or adds one where none does, and focuses the session in that window
+through that window's own session load. A notice whose session's workspace is unknown carries no action, and the logged
+silence of 2026-10-14 ("What the build proceeds under" above, the press not dispatched) is withdrawn: kept above as the
+falsified reading. Recorded as PD-SHELL-001 revision 3, which extends REQ-NOTIFY-044 (with its Data & Formats
+parameterisation, "parameterised by session identifier and its workspace"), REQ-NOTIFY-031 and REQ-NOTIFY-032, each with its
+back-pointer.
 
 <a id="oq-293"></a>
 

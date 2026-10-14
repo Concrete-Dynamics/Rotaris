@@ -43,5 +43,9 @@ refused load moves nothing. A load the session browser asks for raises its refus
 `run-host/dispatch.test.ts` (a refused resume leaves the session under its own root, red before) and
 `renderer/recovery-wiring.test.ts`; `pnpm notice-proof` section 6c presses "Open the session" for a session the pressing
 window's store does not hold and reads the notice still standing, the "not dispatched" line in the log and no "could not be
-loaded" error. What the press should do instead — reach the window that holds the session — is not decided:
-[OQ-292](../../architecture/open-questions.md#oq-292).
+loaded" error. ~~What the press should do instead — reach the window that holds the session — is not decided:
+[OQ-292](../../architecture/open-questions.md#oq-292).~~ *Amended 2026-10-14 (fin44, `fin44-notice-reach`):* decided —
+[OQ-292](../../architecture/open-questions.md#oq-292) was ruled the same day under R-072 as
+[`PD-SHELL-001`](../../product/directives.md#pd-shell-001) revision 3: the action carries its session's workspace and reaches
+the window holding it (or adds one), and the session is focused there. The silence above (`fromNotice`, the logged
+`session.no-session`) is withdrawn by that revision; the run host's ordering repair stays.

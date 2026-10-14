@@ -150,8 +150,14 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 **REQ-NOTIFY-030** — Changing the focused session moves every recovery affordance with it. Afterwards, a retry resubmits the newly focused session's draft, or that session's last submitted prompt where the draft is empty, and never the previously focused session's; the newly focused session still has its first automatic authentication fallback available under REQ-NOTIFY-070, whether or not the previously focused session spent one; the sandbox indicator describes the newly focused session; and the live output on screen belongs to that session alone.
 
 **REQ-NOTIFY-031** — A run other than the focused one reaching a terminal state that is not a failure raises a persistent notice naming that session and the state it reached, with severity `success` where the state normalises to `completed` and `info` for every other non-failure terminal state. Its body states that the session on screen is unaffected and that the finished session can be opened for review, and it offers an action focusing that session. Publishing it changes neither the focused session nor what the focused view shows, and the session list shows the finished session's new state. A failure of a non-focused run is reported under REQ-NOTIFY-032 and raises nothing under this requirement.
+  > **Extended by [`PD-SHELL-001`](../product/directives.md#pd-shell-001) revision 3, 2026-10-14.** The action focusing the
+  > session carries that session's workspace and reaches it: the main window holding it is surfaced, else one is added for it
+  > on PD-SHELL-001's add terms, and the session is focused there ([OQ-292](../architecture/open-questions.md#oq-292)).
 
 **REQ-NOTIFY-032** — A run other than the focused one that fails raises a persistent notice of severity `warning` naming that session, carrying in its copyable detail the failure text exactly as the run reported it, and offering an action focusing that session. It replaces the completion notice of REQ-NOTIFY-031 rather than accompanying it. It is the only notice such a failure raises: the classification of REQ-NOTIFY-060 still runs, setting the session's status and fixing the recovery that session will offer, but the classification's own error notice is not published while that session is not focused. Focusing that session publishes the classification notice for it, so the recovery affordances arrive with the focus change under REQ-NOTIFY-030 and two notices about one failure are never on screen at once. This notice's severity is `warning`, not `error`, because the work the user is looking at is unaffected; REQ-NOTIFY-065 governs error notices and does not reach this one.
+  > **Extended by [`PD-SHELL-001`](../product/directives.md#pd-shell-001) revision 3, 2026-10-14.** The action focusing the
+  > session carries that session's workspace and reaches it: the main window holding it is surfaced, else one is added for it
+  > on PD-SHELL-001's add terms, and the session is focused there ([OQ-292](../architecture/open-questions.md#oq-292)).
 
 ### A9. What a notice can offer the user
 
@@ -159,6 +165,10 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
   > **Extended by [`PD-SHELL-001`](../product/directives.md#pd-shell-001) revision 2, 2026-10-13.** An action naming a
   > workspace surfaces the main window holding it, else adds one for it on PD-SHELL-001's add terms (no gate, nothing
   > asked, nothing closed), and opens its surface there.
+  > *Amended in place 2026-10-14 (revision 3, [OQ-292](../architecture/open-questions.md#oq-292)):* "focus a named session"
+  > carries the session's workspace as well — in Data & Formats, "parameterised by session identifier and its workspace" —
+  > taken from the run host's record of the session's root, and takes the same reach; the session is focused in the window
+  > surfaced or added. A notice whose session's workspace is not known carries no action.
 
 **REQ-NOTIFY-045** — Activating a retry action resubmits the current composer draft, or the last submitted prompt where the draft is empty.
 

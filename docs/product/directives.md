@@ -24,6 +24,8 @@ directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 
 
 ### PD-SHELL-001 — a chosen project folder may be opened in an additional main window
 
+*Revision 3 (2026-10-14, [R-072](requests.md#r-072), ruling [OQ-292](../architecture/open-questions.md#oq-292)) — **`focus-session`
+names its session's workspace and takes the reach**, in the gesture clause below; revision 2's clause quoted beside it.*
 *Revision 2 (2026-10-13, [R-072](requests.md#r-072), ruling [OQ-267](../architecture/open-questions.md#oq-267)) — **a notice
 action's reach**, in the gesture clause below; revision 1's clause quoted beside it.*
 
@@ -32,7 +34,7 @@ be decided by the gesture that starts the flow rather than by a question asked a
 **replacement** of REQ-SHELL-017, or the **addition** of a main window on the chosen folder with the
 window that issued the request left open and unchanged.
 
-**The gestures — revision 2.** The add route SHALL be reachable by two gestures — a shortcut-less command
+**The gestures — revision 3.** The add route SHALL be reachable by two gestures — a shortcut-less command
 palette entry labelled "Open project folder in a new window", present in every window and in the
 composer's slash catalogue on the terms of REQ-SHELL-048 and REQ-SHELL-056; and activating the
 title-bar workspace chip of REQ-SHELL-035 with the platform's secondary-activation modifier held —
@@ -40,9 +42,17 @@ and by one reach that opens no chooser: **activating a notice action of REQ-NOTI
 workspace.** Where a main window holds that workspace under REQ-STARTUP-163's rule, it is surfaced, no
 window is built, and the action's surface opens there. Otherwise a main window is added for it on this
 directive's add terms below, and the action's surface opens in the added window. The reach binds every
-vocabulary member that names a workspace: the hook review now, and project initialization once a notice
-carries it (OQ-262). Every other activation of the chip is the replacement route, on which REQ-SHELL-021
-governs in full.
+vocabulary member that names a workspace: the hook review, project initialization (OQ-262), and
+**`focus-session`, which SHALL carry the workspace of the session it names**, taken from the run host's record
+of the root that session was started or resumed under and never from a window. Its surface is the session
+itself: the session SHALL be focused in the window surfaced or added, through that window's own session load.
+A notice whose session's workspace is not known SHALL carry no action. Every other activation of the chip is
+the replacement route, on which REQ-SHELL-021 governs in full.
+
+> **Revision 2 said, and no longer governs:** "The reach binds every vocabulary member that names a workspace: the hook
+> review now, and project initialization once a notice carries it (OQ-262)." — `focus-session` named a session and no
+> workspace, so it was outside the reach; pressed in a window whose workspace did not hold the session it was, from
+> 2026-10-14, not dispatched and only logged. That silence is withdrawn by this revision.
 
 > **Revision 1 said, and no longer governs:** "The add route SHALL be reachable by exactly two gestures, and by no other: a
 > shortcut-less command palette entry labelled "Open project folder in a new window", present in every window and in the
@@ -89,13 +99,30 @@ workspace's initialization resolution and its own automatic requirements queue (
 workspace becomes the remembered one; focus moves to the surfaced or added window; and a persistent notice kept after a
 switch (REQ-NOTIFY-224) can reopen a workspace the user left.
 
-> **Extends:** REQ-SHELL-017, REQ-STARTUP-161, REQ-NOTIFY-044
+**Why revision 3, and what it costs.** REQ-NOTIFY-031's and REQ-NOTIFY-032's notices are raised exactly when their session
+is not on screen, and every notice is shown in every main window, so with two windows on two workspaces (or after a switch)
+"Open the session" was pressed in a window whose store does not hold the session. It used to raise "The session could not be
+loaded" there and record the session under the wrong workspace; from 2026-10-14 it did nothing visible. REQ-NOTIFY-044 asks
+that an action concerning an object act on that object without asking anything further, and a session's object includes
+where it lives: so the action carries the session's workspace, as the hook review carries its own (ESC-34), and reaches it
+the same way. What it costs, beyond revision 2's costs for any reach: where no window holds the session's workspace, the press
+adds one, so that workspace's initialization resolution and its automatic requirements queue (REQ-TRACE-476/482) may start
+work, it becomes the remembered workspace, focus moves to the added window, and a persistent notice left over from a session
+of a project the user has since closed (REQ-NOTIFY-224 keeps one across a switch) reopens that project when pressed. A notice
+raised for a session the run host has no root for carries no action at all, rather than one that guesses a window. And the
+logged silence is withdrawn: a refusal in the session's own workspace (a deleted session, a session another process holds)
+is raised there as the ordinary load error.
+
+> **Extends:** REQ-SHELL-017, REQ-STARTUP-161, REQ-NOTIFY-044, REQ-NOTIFY-031, REQ-NOTIFY-032
 > **Narrows:** REQ-SHELL-021
 
 *Raised by the owner, 2026-09-12; logged as [R-004](requests.md#r-004).* *Revised by [R-072](requests.md#r-072), 2026-10-13,
 ruling [OQ-267](../architecture/open-questions.md#oq-267) (revision 2): both advocates recommended the add; the ruling takes
 one advocate's user-facing costs and the other's directive revision. The new case stays disjoint from
 [`PD-SHELL-009`](#pd-shell-009)'s narrowing of REQ-SHELL-021, which covers gate (3)'s count on the replacement route.*
+*Revised by [R-072](requests.md#r-072), 2026-10-14, ruling [OQ-292](../architecture/open-questions.md#oq-292) (revision 3): the
+press reaches the session where it lives; REQ-NOTIFY-044 (with its Data & Formats parameterisation, which becomes "parameterised
+by session identifier and its workspace"), REQ-NOTIFY-031 and REQ-NOTIFY-032 are extended and carry the back-pointer.*
 
 > **First execution of revision 2.** Built before it was ruled, as the reading OQ-267 recorded: `MainWindows.reach`
 > (`apps/desktop/src/main/main-windows.ts`) for the hook review, the 2026-10-13 row of

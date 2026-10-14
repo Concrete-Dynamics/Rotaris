@@ -30,7 +30,8 @@ as a rebase and a fast-forward push, never a merge commit (`references/repositor
 ## 1. Scope
 
 1. Survey read-only: open defect notes, unimplemented requirements, the release plan, open questions that bind
-   work, and what the owner excluded. Fan a wide survey out to read-only agents; keep their conclusions.
+   work, and what the owner excluded. Fan a wide survey out to read-only agents; keep their conclusions
+   (`references/workflow-tool.md`, A read-only survey).
 2. Classify every item: **repairable by an agent**, **needs the owner** (a ruling, a permission, a platform this
    host lacks), or **excluded**. Only the first kind becomes a task; the others go in the report.
    **An open question is no longer the owner's** (R-072, 2026-10-07; `references/repository.md`): rule it with the

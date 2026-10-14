@@ -75,6 +75,25 @@ every bundle's ending, acceptance); the journal holds every agent's.
   or a workflow and you, coordinate through `origin/main`: a push that is not a fast-forward is rejected, and whoever is
   rejected fetches, rebases, runs the gate again and pushes again. Never run two runs of one `RUNS.txt` at once.
 
+## A read-only survey
+
+Scoping (SKILL.md §1.1), a "what is left" map, or a hand-over list for another host is a survey: agents read and
+report, nothing is built or landed. It is a workflow of its own, outside `workflow.template.js`, in four stages:
+
+1. **Pin.** A detached worktree at one `origin/main` commit (`git worktree add --detach <repo>-wt-<name> origin/main`),
+   named with its hash in every prompt, so all readers see one tree while plans land beside it. Remove it after.
+2. **Sweep.** Several finders at once, each searching a different way (the record by file, defect notes, code paths,
+   tooling), each returning items with `file:line` sources through a schema.
+3. **Merge and verify, by one agent.** One agent merges the duplicates and verifies the whole merged list in one pass:
+   still open at the pinned commit, the steps that measure it, where the result is recorded. It defaults an item to
+   "done" when the tree shows it done. This replaces one verifier per item: the owner asked for the single
+   verifier on 2026-10-14 ("give all results to a single verifier? This will Speed Things up"), after
+   forty-two per-item verifiers took most of a survey's wall clock on a two-agent cap (above). Only a list too long
+   for one agent to read every source of is split, into the fewest batches that fit, and `log()` says so.
+4. **Draft and critic.** One agent writes the deliverable from the verified list; one critic checks it against the
+   tree (every command, script, flag and path exists at the pinned commit; nothing is claimed that was not
+   verified); the drafter applies the corrections it confirms.
+
 ## Cost and duration, as observed
 
 A bundle took one to three hours end to end with separate verify and merge stages (before 2026-10-07); most passed on

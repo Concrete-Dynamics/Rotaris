@@ -36,3 +36,26 @@ push message on the seams view's channel path, not a change inside the writer.
   sends `CHANNEL.themeChanged` to every live window.
 - `packages/ui/src/display-host.ts` — its header says the change takes effect on the rows already on screen, which holds
   for the window that toggled.
+
+## Outcome — repaired 2026-10-14 (fin43, `fin43-transcript-and-prefs`)
+
+**Confirmed in the built app before the repair:** `pnpm palette-proof --only=persona-follows-display` against a build
+without the announcement popped out the coding agent's persona window holding one reasoning row, ran "Toggle reasoning
+bodies" from the main window's palette ("Reasoning bodies shown" acknowledged) and read the persona window's row still
+`aria-expanded="false"`.
+
+Main now announces every transcript display preference it stores, to every live window, on a new channel 14,
+`display:changed` (`{v, preference, value}`, `DisplayChangedSchema` in `packages/contracts/src/channels.ts`; the preload's
+`onDisplayChanged`): `prefs.set` calls `announceDisplayPreference` (`apps/desktop/src/main/commands/shell.ts`) after it
+has stored `display/showReasoning`, `display/autoCollapseTools` or `display/groupTools`, the way `theme.set` announces a
+theme, skipping a destroyed window and shedding one whose frame throws. Every renderer subscribes at module load, before
+its role branch (`apps/desktop/src/renderer/shell.ts`), and folds the announcement into its `displayPrefs` store through
+`displayPreferencePatch` (`packages/ui/src/display-host.ts`), so the persona window's rows, which read that store, follow
+the change at once (`REQ-CHAT-167`), and so do the two `REQ-CONFIG-403` switches' preferences.
+
+Pinned by `apps/desktop/src/main/commands/shell.test.ts` (three cases, red on the code before: each key reaches every
+window after it is stored, nothing is announced for a refused value or another key, a destroyed or broken window is
+skipped) and by the three channel-14 cases in `packages/ui/src/commands/search-and-reasoning.test.ts` (the fold, a
+payload ignored, the subscription and the preload entry). Shown by `pnpm palette-proof --only=persona-follows-display`
+with the repair: the same row read `aria-expanded="false"` before the toggle and `"true"` after it
+(`results.json` → `personaFollowsDisplay`).

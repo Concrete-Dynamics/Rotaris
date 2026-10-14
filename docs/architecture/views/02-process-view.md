@@ -49,7 +49,7 @@ flowchart LR
   RPE --> P
   RT --> P
   P -- "CHANNEL.command<br/>CommandRequest / CommandOutcome" --> M
-  M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>acknowledgement:publish · library:changed<br/>requirements:changed · improvement:activity<br/>initialization:state · reauth:prompt<br/>theme:changed · config:changed" --> P
+  M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>acknowledgement:publish · library:changed<br/>requirements:changed · improvement:activity<br/>initialization:state · reauth:prompt<br/>theme:changed · config:changed<br/>display:changed" --> P
   M -- "RunHostRequest → ProcessReply<br/>ProcessEvent ←<br/>credentials.lease ask ← · credentials.leased →" --> RHst
   M -- "WorkspaceServiceRequest → ProcessReply<br/>ServiceAsk ← (forwarded to the run host)" --> WS
   RHst --> DB
@@ -608,7 +608,11 @@ windows holding that workspace (`MainWindows.holding`) whichever view each is sh
 followed session's, so the prompt moves with the focused session (REQ-NOTIFY-030). *Corrected 2026-10-02 (the repair
 round): it first went to the one window following the session (`ownerOf`) and was drawn there whatever that window
 focused next, so another session's prompt stood over the focused one and acted on its own session;* `theme:changed` repaints
-every live window; `config:changed` repopulates every main window **and its family** — its persona windows and its terminal
+every live window; `display:changed` (channel 14, 2026-10-14) is `{preference, value}`, one of the three transcript display
+preferences (`display/showReasoning`, `display/autoCollapseTools`, `display/groupTools`) just stored by `prefs.set`, to EVERY
+live window (`announceDisplayPreference`, `main/commands/shell.ts`), the writer included; each renderer folds it into its
+`displayPrefs` store (`displayPreferencePatch`), so a persona window already open redraws its rows under the new value
+(REQ-CHAT-167, REQ-CONFIG-403; until then only the writing window's store changed); `config:changed` repopulates every main window **and its family** — its persona windows and its terminal
 window (`configFamily`) — from **its own** workspace's snapshot (`announceConfig`, `main/config-broadcast.ts`): the families
 of the windows holding the written workspace take the reloaded snapshot, every other family its own workspace's, read again
 from its service. *Corrected 2026-10-03 (fin10's repair round): every window was sent the written workspace's snapshot, so a

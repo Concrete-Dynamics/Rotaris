@@ -43,6 +43,10 @@ export type TimelineSeverity = z.infer<typeof TimelineSeveritySchema>;
  *     (Part AS, ADR-0064). Pushed rather than polled: REQ-WORKSPACE-109 wants a step visible "at the
  *     moment that step finishes", and SR-3 withdrew polling wherever two processes CAN talk — these two
  *     can, so a cadence here would be the fossil that ruling names.
+ * 13. reauth:prompt        — main → the main windows: the non-modal re-authentication prompt (REQ-NOTIFY-071)
+ * 14. display:changed      — main → every window: one transcript display preference main has just stored, so a window
+ *     that did not write it (a persona window, a second main window) redraws its rows too (REQ-CHAT-167, REQ-CONFIG-403;
+ *     2026-10-14, `docs/defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`)
  *
  * Channels 1 and 2 share ONE per-session counter (REQ-MONITOR-214), stamped in
  * the run host by the projection owner at publication. Main relays it
@@ -67,6 +71,7 @@ export const CHANNEL = {
   improvementActivity: 'improvement:activity',
   initializationState: 'initialization:state', // Part AS (ADR-0064)
   reauthPrompt: 'reauth:prompt', // the 401 note's part B (REQ-NOTIFY-071, ADR-0048)
+  displayChanged: 'display:changed', // REQ-CHAT-167 / REQ-CONFIG-403: a stored display preference, to every window
   command: 'command',
 } as const;
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -498,6 +503,17 @@ export type AcknowledgementPublish = z.infer<typeof AcknowledgementPublishSchema
 export const ThemeChangedSchema = z.object({ v: schemaVersion, name: z.enum(['rotaris-dim', 'nocturne', 'high-contrast']) });
 export type ThemeChanged = z.infer<typeof ThemeChangedSchema>;
 
+/**
+ * Channel 14 — REQ-CHAT-167 and REQ-CHAT-067 / REQ-CONFIG-403: the three transcript display preferences are global to the
+ * transcript, so one stored by any window is announced to every window, and each folds it into its own store. `preference`
+ * is the preference's own key (`PREFERENCE_KEYS`) — not named `key`, which ADR-0030's credential-name check refuses on any
+ * payload that reaches a renderer — and the value is what main stored.
+ */
+export const DISPLAY_PREFERENCE_KEYS = ['display/showReasoning', 'display/autoCollapseTools', 'display/groupTools'] as const;
+export type DisplayPreferenceKey = (typeof DISPLAY_PREFERENCE_KEYS)[number];
+export const DisplayChangedSchema = z.object({ v: schemaVersion, preference: z.enum(DISPLAY_PREFERENCE_KEYS), value: z.boolean() });
+export type DisplayChanged = z.infer<typeof DisplayChangedSchema>;
+
 /** ADR-0037: a configuration write happened (a save, a per-field write); every window repopulates from the snapshot. */
 export const ConfigChangedSchema = z.object({ v: schemaVersion, snapshot: ConfigSnapshotSchema });
 export type ConfigChanged = z.infer<typeof ConfigChangedSchema>;
@@ -534,6 +550,7 @@ export const CHANNEL_SCHEMAS = {
   [CHANNEL.improvementActivity]: ImprovementActivityPublishSchema,
   [CHANNEL.initializationState]: InitializationStatePublishSchema, // Part AS
   [CHANNEL.reauthPrompt]: ReauthPromptPublishSchema, // REQ-NOTIFY-071
+  [CHANNEL.displayChanged]: DisplayChangedSchema, // REQ-CHAT-167, REQ-CONFIG-403
 } as const;
 
 /** The two channels that share one per-session counter. Order across BOTH must be preserved by the relay. */

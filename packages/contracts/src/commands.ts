@@ -410,6 +410,8 @@ export interface RendererBridge {
   readonly onInitializationState: (fn: (p: unknown) => void) => () => void;
   /** Channel 13 (REQ-NOTIFY-071, ADR-0048): this window's non-modal re-authentication prompt, or null when it closes. */
   readonly onReauthPrompt: (fn: (p: unknown) => void) => () => void;
+  /** Channel 14 (REQ-CHAT-167, REQ-CONFIG-403): a transcript display preference main has just stored, from whichever window wrote it. */
+  readonly onDisplayChanged: (fn: (p: unknown) => void) => () => void;
 }
 export const BRIDGE_KEY = 'rotaris' as const;
 

@@ -1,5 +1,5 @@
 import { BrowserWindow, app, nativeTheme, shell } from 'electron';
-import { CHANNEL, CONTRACT_SCHEMA_VERSION } from '@rotaris/contracts';
+import { CHANNEL, CONTRACT_SCHEMA_VERSION, type DisplayPreferenceKey } from '@rotaris/contracts';
 import { buildIdentifier, thirdPartyLicensesPath } from '../about.js';
 import { productVersion } from '../version.js';
 import { composerDraftKey } from '@rotaris/platform';
@@ -12,6 +12,25 @@ import { type CommandContext, type CommandHandlers } from './context.js';
  * preferences, the composer draft and the notices (REQ-SHELL-*, REQ-CHAT-076). The scheme check on an
  * external link lives here and nowhere else: transcript text is model-authored, so only http and https open.
  */
+/**
+ * Channel 14 — REQ-CHAT-167 ("global to the transcript — changing it changes every reasoning row at once") and
+ * REQ-CONFIG-403 (each Display toggle wired to the stored preference and "a live re-render notification"): a transcript
+ * display preference main has just stored is announced to EVERY live window, the way `theme.set` announces the theme, so
+ * a persona window or a second main window already open redraws its rows under the new value rather than the one it
+ * booted with. The window that wrote it receives it too and folds the same value it already holds. Until 2026-10-14 the
+ * value reached only the writer's own store
+ * (`docs/defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`).
+ */
+export function announceDisplayPreference(key: DisplayPreferenceKey, value: boolean, windows: readonly BrowserWindow[] = BrowserWindow.getAllWindows()): number {
+  let sent = 0;
+  for (const window of windows) {
+    if (window.isDestroyed()) continue;
+    // A window whose frame is gone is shed, never thrown on (the channel invariant in the seams view).
+    try { window.webContents.send(CHANNEL.displayChanged, { v: CONTRACT_SCHEMA_VERSION, preference: key, value }); sent += 1; } catch { /* a disposed frame */ }
+  }
+  return sent;
+}
+
 export function shellCommands(
   ctx: Pick<CommandContext, 'capturing' | 'currentTheme' | 'log' | 'notices' | 'preferences' | 'processes' | 'requirementsPreferenceKey' | 'runHost' | 'services' | 'setTheme' | 'themeBackground' | 'updater'>,
 ): Pick<CommandHandlers, 'shell.hello' | 'shell.openExternal' | 'shell.openThirdPartyLicenses' | 'theme.get' | 'theme.set' | 'prefs.get' | 'prefs.set' | 'composer.readDraft' | 'composer.writeDraft' | 'notice.acknowledge' | 'notice.report'> {
@@ -113,10 +132,12 @@ export function shellCommands(
         // Part AA: REQ-CHAT-167's `display/showReasoning` and REQ-CHAT-067's `display/autoCollapseTools`, both booleans and both off by default.
         if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'This display preference requires a boolean value' };
         await preferences.write(req.key, req.value);
+        if (req.key !== 'interface/agentPopOut') announceDisplayPreference(req.key, req.value);
       } else if (req.key === 'display/groupTools') {
         // REQ-CHAT-067 (Part Z): the tool-grouping switch, default on.
         if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'Tool grouping requires a boolean value' };
         await preferences.write(req.key, req.value);
+        announceDisplayPreference(req.key, req.value);
       } else {
         if (typeof req.value !== 'string') return { ok: false, code: 'preference.type', headline: 'The Settings category requires a string value' };
         await preferences.write(requirementsPreferenceKey(req.key), req.value);

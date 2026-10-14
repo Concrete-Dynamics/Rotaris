@@ -3,8 +3,9 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildCatalogue } from '../slash/catalogue.js';
+import { CONTRACT_SCHEMA_VERSION } from '@rotaris/contracts';
 import {
-  bindReasoningPreference, REASONING_HIDDEN_BODY, REASONING_HIDDEN_TITLE, REASONING_NOT_CHANGED_TITLE, REASONING_SHOWN_BODY,
+  bindReasoningPreference, displayPreferencePatch, REASONING_HIDDEN_BODY, REASONING_HIDDEN_TITLE, REASONING_NOT_CHANGED_TITLE, REASONING_SHOWN_BODY,
   REASONING_SHOWN_TITLE, toggleReasoningBodies, type PreferenceAnswer,
 } from '../display-host.js';
 import { DisplaySettings } from '../settings/DisplaySettings.js';
@@ -137,5 +138,31 @@ describe('"Toggle reasoning bodies" — REQ-CHAT-167, the one writer of display/
     expect(off).toContain('Show reasoning bodies');
     expect(/data-testid="show-reasoning"[^>]*data-on="false"|data-on="false"[^>]*data-testid="show-reasoning"/.test(off)).toBe(true);
     expect(/data-testid="show-reasoning"[^>]*data-on="true"|data-on="true"[^>]*data-testid="show-reasoning"/.test(draw(true))).toBe(true);
+  });
+});
+
+/**
+ * Channel 14 (REQ-CHAT-167, REQ-CONFIG-403): every window folds a stored display preference main announces, so a persona
+ * window already open follows a change made elsewhere (`docs/defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`).
+ */
+describe('a display:changed announcement folded into a window\'s display store — REQ-CHAT-167, REQ-CONFIG-403', () => {
+  it('sets the one field the stored key names to the stored value', () => {
+    expect(displayPreferencePatch({ v: CONTRACT_SCHEMA_VERSION, preference: 'display/showReasoning', value: true })).toEqual({ showReasoning: true });
+    expect(displayPreferencePatch({ v: CONTRACT_SCHEMA_VERSION, preference: 'display/autoCollapseTools', value: false })).toEqual({ autoCollapseTools: false });
+    expect(displayPreferencePatch({ v: CONTRACT_SCHEMA_VERSION, preference: 'display/groupTools', value: false })).toEqual({ groupTools: false });
+  });
+
+  it('ignores a payload that is not an announcement: another key, a non-boolean, another contract version', () => {
+    expect(displayPreferencePatch({ v: CONTRACT_SCHEMA_VERSION, preference: 'interface/agentPopOut', value: true })).toBeNull();
+    expect(displayPreferencePatch({ v: CONTRACT_SCHEMA_VERSION, preference: 'display/showReasoning', value: 'true' })).toBeNull();
+    expect(displayPreferencePatch({ v: CONTRACT_SCHEMA_VERSION + 1, preference: 'display/showReasoning', value: true })).toBeNull();
+    expect(displayPreferencePatch(null)).toBeNull();
+  });
+
+  it('every window subscribes before its role branch, the preload exposes the channel, and the persona window reads the store', () => {
+    const renderer = src('../../../../apps/desktop/src/renderer/shell.ts');
+    expect(renderer).toContain('bridge.onDisplayChanged((payload) => { const patch = displayPreferencePatch(payload); if (patch !== null) displayPrefs.setState(patch); });');
+    expect(src('../../../../apps/desktop/src/preload/index.ts')).toContain('onDisplayChanged: subscribe(CHANNEL.displayChanged),');
+    expect(src('../../../../apps/desktop/src/renderer/windows.tsx')).toContain('useStore(displayPrefs, (s) => s)');
   });
 });

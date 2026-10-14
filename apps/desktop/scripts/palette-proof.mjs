@@ -22,6 +22,8 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *  4. The shortcut table still carries the window: Ctrl+3, Ctrl+, and Ctrl+L, and Ctrl+Return declining while the send
  *     control is disabled (REQ-SHELL-049/050).
  *  5. The palette is reachable at the minimum window size (REQ-SHELL-022's 1000×680).
+ *  6. Ctrl+F from another view, and the palette's "Toggle reasoning bodies" (N71, 2026-10-13).
+ *  7. A persona window already open follows that toggle run in the main window (channel 14, 2026-10-14).
  *
  * Every assertion reads the built application's own log or its store; nothing is asserted from this script's model of
  * what should have happened.
@@ -101,13 +103,19 @@ const orderAt = (log, at, phase) => { const m = log.match(new RegExp(`capture: o
 const windowsAt = (log, at) => { const m = log.match(new RegExp(`capture: windows-at ${at} → (\\[.*\\])`)); return m ? JSON.parse(m[1]) : null; };
 const personaProbesAt = (log, at, selector) => { const m = log.match(new RegExp(`capture: persona-probe-at ${at} ${escape(selector)} → (\\[.*\\]|null)`)); return m ? JSON.parse(m[1]) : null; };
 const osInputAt = (log, at, op) => { const m = log.match(new RegExp(`capture: os-input ${at} ${op}[^\\n]*→ (\\{.*\\}|[^\\n]*)`)); if (!m) return null; try { return JSON.parse(m[1]); } catch { return { raw: m[1] }; } };
+/** `--only=<scenario>[,…]` runs the named stages alone (2026-10-14); with none, every stage runs. */
+const STAGES = ['palette', 'help', 'modality', 'shortcuts', 'minimum', 'search-and-reasoning', 'persona-follows-display'];
+const onlyArg = process.argv.find((a) => a.startsWith('--only='));
+const only = onlyArg === undefined ? null : onlyArg.slice('--only='.length).split(',').map((x) => x.trim()).filter((x) => x !== '');
+if (only !== null) for (const name of only) if (!STAGES.includes(name)) throw new Error(`--only takes ${STAGES.join(', ')}; got ${name}`);
+const wanted = (stage) => only === null || only.includes(stage);
 const results = {};
 const expect = (cond, message) => { if (!cond) throw new Error(message); };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. The palette: the dialog, the filter, the hidden keywords, the close-then-run order.
 const s1 = scenario('palette');
-{
+if (wanted('palette')) {
   const r = await launch('palette', s1, {
     ROTARIS_CAPTURE_CHORDS: 'Ctrl+K@3000;;Return@5200',
     ROTARIS_CAPTURE_TYPE_AT: 'config@4200',
@@ -173,7 +181,7 @@ const s1 = scenario('palette');
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. Keyboard help: a row per shortcut-bearing command, no Escape row, the prose line, Escape closes.
 const s2 = scenario('help');
-{
+if (wanted('help')) {
   const r = await launch('help', s2, {
     ROTARIS_CAPTURE_CHORDS: 'F1@3000;;Escape@4600',
     ROTARIS_CAPTURE_INSPECT_AT: [
@@ -211,7 +219,7 @@ const s2 = scenario('help');
 // ─────────────────────────────────────────────────────────────────────────────
 // 3. ADR-0048's application modality, observed with the host's own input.
 const s3 = scenario('modality');
-{
+if (wanted('modality')) {
   setPreference(s3, 'interface/agentPopOut', true);
   const r = await launch('modality', s3, {
     ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'wait:34000,answer',
@@ -288,7 +296,7 @@ const s3 = scenario('modality');
 // ─────────────────────────────────────────────────────────────────────────────
 // 4. The rest of the table still carries the window, and Ctrl+Return declines while the send control is disabled.
 const s4 = scenario('shortcuts');
-{
+if (wanted('shortcuts')) {
   const r = await launch('shortcuts', s4, {
     ROTARIS_CAPTURE_CHORDS: 'Ctrl+3@3000;;Ctrl+,@4000;;Ctrl+L@5000;;Ctrl+Return@6000',
     ROTARIS_CAPTURE_INSPECT_AT: '.app-shell@3400;;.app-shell@4400;;.app-shell@5400;;.composer__input@5400;;.app-shell@6600',
@@ -313,7 +321,7 @@ const s4 = scenario('shortcuts');
 // ─────────────────────────────────────────────────────────────────────────────
 // 5. Reachable at the minimum window size (REQ-SHELL-022).
 const s5 = scenario('minimum');
-{
+if (wanted('minimum')) {
   const r = await launch('minimum', s5, {
     ROTARIS_CAPTURE_RESIZE: '1000x680@2600',
     ROTARIS_CAPTURE_CHORDS: 'Ctrl+K@3400',
@@ -340,7 +348,7 @@ const s5 = scenario('minimum');
 //    reports the new state. One activation is driven here (off to on); the way back (on to off, "Reasoning bodies
 //    hidden") is pinned by `packages/ui/src/commands/search-and-reasoning.test.ts`, not by this stage.
 const s6 = scenario('search-and-reasoning');
-{
+if (wanted('search-and-reasoning')) {
   const r = await launch('search-and-reasoning', s6, {
     ROTARIS_CAPTURE_CHORDS: 'Ctrl+3@3000;;Ctrl+F@3800;;Escape@4800;;Ctrl+K@5400;;Return@6600',
     ROTARIS_CAPTURE_TYPE_AT: 'reasoning bodies@6000',
@@ -375,6 +383,42 @@ const s6 = scenario('search-and-reasoning');
     reasoning: { offeredFirst: offered[0], acknowledged: ack, stored: prefs['display/showReasoning'] },
     png: r.png, elapsedMs: r.elapsedMs,
   };
+  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. 2026-10-14 (fin43): a persona window already open follows "Toggle reasoning bodies" run in the main window.
+//    REQ-CHAT-167: the preference "is global to the transcript — changing it changes every reasoning row at once", and
+//    toggling "MUST take effect immediately on the rows already on screen". The delegated child thinks before it answers,
+//    so its persona window holds a reasoning row; that window is popped out from Mission's agent table, then the main window's palette turns reasoning
+//    bodies on, and the persona window's reasoning row is read before and after. Until channel 14 (`display:changed`) the
+//    persona window kept the value it booted with
+//    (docs/defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md).
+const s7 = scenario('persona-follows-display');
+if (wanted('persona-follows-display')) {
+  setPreference(s7, 'interface/agentPopOut', true);
+  const HEADER = '[data-testid="thinking-header"]';
+  const r = await launch('persona-follows-display', s7, {
+    ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,wait:20000,answer', ROTARIS_CHILD_SCRIPT: 'think',
+    ROTARIS_CAPTURE_PROMPT: 'delegate one agent that thinks before answering, for the persona window reading',
+    ROTARIS_CAPTURE_VIEWS: '3@3500',
+    ROTARIS_CAPTURE_CLICKS: '.agent-table__row@5000;;.agent-table__row .btn>>Pop out@7500',
+    ROTARIS_CAPTURE_PERSONA_PROBE_AT: `${HEADER}@9600;;${HEADER}@13400`,
+    ROTARIS_CAPTURE_CHORDS: 'Ctrl+K@10400;;Return@11600',
+    ROTARIS_CAPTURE_TYPE_AT: 'reasoning bodies@11000',
+    ROTARIS_CAPTURE_INSPECT_AT: `[data-testid="acknowledgement-title"]@12400`,
+    ROTARIS_CAPTURE_AFTER_MS: '14200',
+    timeout: 200_000,
+  }, { timeout: 200_000 });
+  const before = personaProbesAt(r.log, 9600, HEADER);
+  const after = personaProbesAt(r.log, 13400, HEADER);
+  expect(Array.isArray(before) && before.length >= 1, `the persona window holds no reasoning row to read: ${JSON.stringify(before)}`);
+  expect(before.every((h) => h.data['aria-expanded'] === 'false'), `the persona window's reasoning rows were open before the toggle: ${JSON.stringify(before)} (REQ-CHAT-167, default off)`);
+  const ack = (inspectAt(r.log, 12400, '[data-testid="acknowledgement-title"]')?.matches ?? []).map((m) => m.text);
+  expect(ack.includes('Reasoning bodies shown'), `the main window's toggle reported ${JSON.stringify(ack)} (REQ-CHAT-167)`);
+  expect(Array.isArray(after) && after.length === before.length && after.every((h) => h.data['aria-expanded'] === 'true'),
+    `the open persona window kept its reasoning rows closed after the main window turned reasoning bodies on: ${JSON.stringify(after)} (REQ-CHAT-167, channel 14)`);
+  results.personaFollowsDisplay = { rows: before.length, before: before.map((h) => h.data['aria-expanded']), acknowledged: ack, after: after.map((h) => h.data['aria-expanded']), png: r.png, elapsedMs: r.elapsedMs };
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
 }
 

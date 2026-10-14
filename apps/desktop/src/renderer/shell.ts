@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 import { BRIDGE_KEY, resolveTheme, TERMINAL_WINDOW_ROLE, type DisplayView, type RendererBridge, type TerminalFrame, type Theme, type ThemeName } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { applyTheme, createCancelOverlayStore, headlessEmulator, readTranscriptCounts, TerminalStreamSet, useShellState, type CancelOverlayStore, type TerminalHost } from '@rotaris/ui';
+import { applyTheme, createCancelOverlayStore, displayPreferencePatch, headlessEmulator, readTranscriptCounts, TerminalStreamSet, useShellState, type CancelOverlayStore, type TerminalHost } from '@rotaris/ui';
 import { createSessionActions } from './session-actions.js';
 
 /**
@@ -270,6 +270,13 @@ export const settingsUnsaved = createStore<{ dirty: boolean }>(() => ({ dirty: f
  * both write through here, so the store is updated only after main has stored the value.
  */
 export type DisplayPrefKey = 'display/autoCollapseTools' | 'display/groupTools' | 'display/showReasoning';
+/**
+ * Channel 14 — REQ-CHAT-167 / REQ-CONFIG-403: main announces every display preference it stores to every window, and this
+ * window folds it in, so a persona window already open follows a change made in the main window (and the reverse) rather
+ * than keeping the values it booted with. Subscribed at module load, before the role branch, so every window role that
+ * draws transcript rows has it (`docs/defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`).
+ */
+bridge.onDisplayChanged((payload) => { const patch = displayPreferencePatch(payload); if (patch !== null) displayPrefs.setState(patch); });
 const DISPLAY_FIELD: Record<DisplayPrefKey, 'autoCollapseTools' | 'groupTools' | 'showReasoning'> = {
   'display/autoCollapseTools': 'autoCollapseTools',
   'display/groupTools': 'groupTools',

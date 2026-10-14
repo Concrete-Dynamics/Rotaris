@@ -34,6 +34,7 @@ export class UpdateRelay {
     [CHANNEL.improvementActivity]: 0,
     [CHANNEL.initializationState]: 0, // Part AS — channel 12's counter, on the same reservation rule
     [CHANNEL.reauthPrompt]: 0, // channel 13 (REQ-NOTIFY-071), on the same rule
+    [CHANNEL.displayChanged]: 0, // channel 14 (REQ-CHAT-167, REQ-CONFIG-403), on the same rule
   };
 
   attach(sink: RendererSink): void {

@@ -15,6 +15,13 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-14**
 
+**Channel 14, `display:changed`: every window follows a stored display preference (fin43, REQ-CHAT-167, REQ-CONFIG-403).**
+`prefs.set` announces each of the three transcript display preferences it stores to every live window
+(`announceDisplayPreference`, `main/commands/shell.ts`); each renderer folds it into `displayPrefs` (`displayPreferencePatch`,
+`packages/ui/src/display-host.ts`), so a persona window already open follows a change made in the main window. The **process
+view** gains the channel in its diagram and its main → renderer paragraph; the **seams view**'s channel count reads fourteen,
+with the reason this one was added rather than carried. No package, edge, process, command or store column changed.
+
 **The transcript search panel holds its Escape slot, and the toolbar has a search control (fin43, REQ-SHELL-055, REQ-CHAT-074).**
 The pane registers the `searchPanel` closer in `shell-state` while its panel is open (`searchPanelCloser`, `transcript/search.ts`),
 so window-level Escape closes the panel and refocuses the composer before the drawers; the walk over the slots is

@@ -82,7 +82,11 @@ Update the process view's **renderer → main** list.
 
 ## 2. A main → renderer channel
 
-Thirteen exist. A fourteenth is a real decision — ask whether an existing one carries it first. The thirteenth,
+Fourteen exist. A fifteenth is a real decision — ask whether an existing one carries it first. The fourteenth,
+`display:changed` (2026-10-14, REQ-CHAT-167 / REQ-CONFIG-403), was taken because no channel carried a preference:
+`theme:changed` names a theme and `config:changed` a workspace's configuration snapshot, while the three transcript display
+preferences are application-wide preference-store keys every window draws its rows from; it is sent like the theme, by
+`webContents.send` to every live window. The thirteenth,
 `reauth:prompt` (2026-10-02, REQ-NOTIFY-071), was that decision taken: the re-authentication prompt is window-scoped
 state main opens and closes on its own account (after a fallback restart), which neither the notice slot (one notice,
 any session) nor channel 12 (one workspace's initialization) could carry without changing what they mean. It is the

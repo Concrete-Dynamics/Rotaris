@@ -32,6 +32,8 @@ const bridge: RendererBridge = Object.freeze({
   onInitializationState: subscribe(CHANNEL.initializationState),
   // Channel 13 — the non-modal re-authentication prompt (REQ-NOTIFY-071, ADR-0048).
   onReauthPrompt: subscribe(CHANNEL.reauthPrompt),
+  // Channel 14 — a stored transcript display preference, to every window (REQ-CHAT-167, REQ-CONFIG-403).
+  onDisplayChanged: subscribe(CHANNEL.displayChanged),
 });
 
 contextBridge.exposeInMainWorld(BRIDGE_KEY, bridge);

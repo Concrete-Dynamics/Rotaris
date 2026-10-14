@@ -1,3 +1,4 @@
+import { DisplayChangedSchema, type DisplayPreferenceKey } from '@rotaris/contracts';
 /**
  * REQ-CHAT-167 — the reasoning-visibility preference's one writer, and why it is module-level.
  *
@@ -9,7 +10,10 @@
  * A leaf module, so the registry can import it without a cycle through the catalogue.
  *
  * The write is the renderer's `writeDisplayPref`: `prefs.set` to main and then the window's `displayPrefs` store, which
- * every transcript surface reads, so the change takes effect on the rows already on screen (REQ-CHAT-167). A row the
+ * every transcript surface reads, so the change takes effect on the rows already on screen (REQ-CHAT-167). Main then
+ * announces the stored value to every window (channel 14, `display:changed`) and each folds it into its own store
+ * through `displayPreferencePatch`, so the rows of a persona window already open change with it — until 2026-10-14 only
+ * the window that wrote did. A row the
  * reader opened or closed by hand keeps that state (REQ-CHAT-059): the preference is only the default the pane folds
  * the reader's overrides over (`TranscriptPane.tsx`), and changing it does not touch the overrides.
  *
@@ -49,4 +53,21 @@ export async function toggleReasoningBodies(): Promise<boolean | null> {
   if (next) host.acknowledge('ok', REASONING_SHOWN_TITLE, REASONING_SHOWN_BODY);
   else host.acknowledge('ok', REASONING_HIDDEN_TITLE, REASONING_HIDDEN_BODY);
   return next;
+}
+
+/**
+ * Channel 14 (REQ-CHAT-167, REQ-CONFIG-403): what one `display:changed` announcement changes in a window's display store —
+ * the one field the stored key names, set to the stored value — or null for a payload that is not one, which the window
+ * ignores. Every window folds every announcement, its own write's included, so all of them draw the stored value.
+ */
+export type DisplayPreferencePatch = Partial<{ showReasoning: boolean; autoCollapseTools: boolean; groupTools: boolean }>;
+const DISPLAY_FIELDS: Readonly<Record<DisplayPreferenceKey, keyof DisplayPreferencePatch>> = {
+  'display/showReasoning': 'showReasoning',
+  'display/autoCollapseTools': 'autoCollapseTools',
+  'display/groupTools': 'groupTools',
+};
+export function displayPreferencePatch(payload: unknown): DisplayPreferencePatch | null {
+  const parsed = DisplayChangedSchema.safeParse(payload);
+  if (!parsed.success) return null;
+  return { [DISPLAY_FIELDS[parsed.data.preference]]: parsed.data.value };
 }

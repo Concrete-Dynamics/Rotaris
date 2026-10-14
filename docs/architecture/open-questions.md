@@ -14333,3 +14333,33 @@ whatever message leads it.
 follow-up being a correction, not a recovery), whether it stands and the corrective follows the correction (two instructions),
 or whether the correction replaces it. **The costs:** withdrawing it loses a stuck report the requirement names; keeping it puts
 "Pause and reassess" after an instruction that already tells the root what to do.
+
+<a id="oq-285"></a>
+
+**OQ-285 — Does an improvement artifact whose collector crashed read as "nothing to propose", or as the failure it is?**
+*(REQ-LIBRARY-023, "On any other crash, `notes` = `collector crashed: <exc>`"; REQ-LIBRARY-124, the zero-proposal info notice and
+the failure warning "a job that ended without producing an artifact"; REQ-LIBRARY-035; REQ-NOTIFY-100;
+[`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 2 (c), the retrospective's three notices;
+[`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 2 and OQ-223, the timed-out detail. Raised
+2026-10-14 by fin43 (`fin43-live-findings`) from the live scenario run at `ce5f952` (finding F3) and
+[`../defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md`](../defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md).)*
+
+**What is open.** A collector that crashes (a provider's 401, a refused request, any raise other than the timeout) still stores
+REQ-LIBRARY-023's empty artifact, so REQ-LIBRARY-124 reads it as "a result with zero proposals": the info notice "Improvement
+analysis complete — no proposals", or for the retrospective "The retrospective found nothing to propose" with "Nothing was
+proposed in <id>.". The failure warning is the letter's only for a job that produced no artifact. `PD-LIBRARY-002` revision 2 (c)
+states the retrospective's zero-proposal and failure notices as the requirement states the sibling's and does not name a crashed
+collector. A pass that never reached the model is told to the person as one that looked and found nothing.
+
+**What the build proceeds under.** The letter: a crashed collector's artifact is a zero-proposal result, its info notice and
+the detail "Nothing was proposed in <id>."; only a post-run pass's timed-out note changes the detail (`PD-CONFIG-003` revision 2).
+
+**What a ruling decides.** For each pass, whether a crashed collector's artifact posts the failure warning ("The retrospective
+could not be completed" / "The completed run could not be reviewed for improvements", with the crash as its reason) in place of the
+zero-proposal notice; or keeps the info notice with a detail that says the analysis failed and why (the timed-out precedent);
+and whether the timed-out retrospective, which has no control to name, is read the same way. **The costs:** the warning makes a
+stored artifact report as a failure (the artifact still exists, with its notes, in the Library); the detail alone keeps a title
+that reads as success.
+
+**What a live run then shows.** `ask-retrospective` with a collector that cannot authenticate (a key withheld) shows the ruled
+notice; with the credential repaired it shows neither.

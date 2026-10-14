@@ -3,16 +3,20 @@ import { anotherMainWindowStays, confirmActiveRunClose } from './close-confirmat
 import { closeThroughGuards } from './exit.js';
 import {
   askRendererGuard,
+  askUnsavedInTurn,
   guardClose,
   MainWindows,
   RENDERER_CLOSE_GUARD_SCRIPT,
   RENDERER_LIVENESS_BOUND_MS,
   RENDERER_LIVENESS_PROBE,
+  RENDERER_UNSAVED_PROBE_SCRIPT,
   type GuardedContents,
   type GuardedWindow,
   type MainWindowAdapter,
   type MainWindowsDependencies,
   type MainWindowTimer,
+  type UnsavedGuardAnswer,
+  type UnsavedGuardWindow,
 } from './main-windows.js';
 
 interface MemoryWindow {
@@ -961,6 +965,18 @@ describe('a main window whose renderer is gone cannot hold its close or the appl
   const within = <T>(promise: Promise<T>, ms = 200): Promise<T | 'held'> => Promise.race([promise, new Promise<'held'>((r) => setTimeout(() => r('held'), ms))]);
   const settle = () => new Promise((r) => setTimeout(r, 0));
 
+  // OQ-311: the unsaved-settings probe is asked on the guard's own terms — the given script, and "cannot answer" for a
+  // renderer that is gone — so a crashed window in the update's sequence allows rather than holding it.
+  it('asks the given question in place of the guard\'s, on the same terms (OQ-311\'s unsaved probe)', async () => {
+    const live = contents({ crashed: false, answer: Promise.resolve(false) });
+    expect(await askRendererGuard(live, { timers: clock() }, RENDERER_UNSAVED_PROBE_SCRIPT)).toBe(false);
+    expect(live.asked).toEqual([RENDERER_UNSAVED_PROBE_SCRIPT]);
+    expect(live.listening()).toBe(0);
+    const crashed = contents({ crashed: true });
+    await expect(askRendererGuard(crashed, { timers: clock() }, RENDERER_UNSAVED_PROBE_SCRIPT)).rejects.toThrow(/cannot answer: gone/);
+    expect(crashed.asked).toEqual([]);
+  });
+
   it('the application\'s quit closes a window whose renderer crashed: its guard cannot answer, so it allows', async () => {
     const log: string[] = [];
     const win = fakeWindow(log);
@@ -1270,5 +1286,84 @@ describe('two main windows closed in one gesture each ask about their own projec
     expect(p.log).toContain('closed b');
     expect(p.log.indexOf('stop a')).toBeGreaterThan(-1);
     expect(p.log.indexOf('stop a')).toBeLessThan(p.log.indexOf('closed a'));
+  });
+});
+
+/*
+ * OQ-311 (ruled 2026-10-14 under R-072): the update's `Restart now`, and `Update now` / `Try again` on the installer flavour,
+ * ask REQ-SHELL-124's Save/Discard/Cancel of every open main window, one window at a time — the active window first, then the
+ * rest in `MainWindows.ordered()` order — and stop at the first Cancel or failed Save.
+ */
+describe('askUnsavedInTurn — every main window\'s unsaved-settings guard, one at a time (OQ-311, REQ-SHELL-124)', () => {
+  function windowsOf(spec: Record<number, { unsaved?: boolean | 'cannot-answer'; answer?: boolean | 'cannot-answer'; destroyed?: boolean }>) {
+    const events: string[] = [];
+    const windows: UnsavedGuardWindow[] = Object.entries(spec).map(([id, w]) => {
+      const wcId = Number(id);
+      return {
+        wcId,
+        isDestroyed: () => w.destroyed === true,
+        unsaved: async () => {
+          events.push(`probe:${wcId}`);
+          if (w.unsaved === 'cannot-answer') throw new Error('the renderer cannot answer: gone');
+          return w.unsaved ?? false;
+        },
+        focus: () => { events.push(`focus:${wcId}`); },
+        ask: async () => {
+          events.push(`ask:${wcId}`);
+          if (w.answer === 'cannot-answer') throw new Error('the renderer cannot answer: unresponsive');
+          return w.answer ?? true;
+        },
+      };
+    });
+    const answers: string[] = [];
+    const answered = (wcId: number, answer: UnsavedGuardAnswer) => { answers.push(`${wcId}:${answer}`); };
+    return { windows, events, answers, answered };
+  }
+
+  it('a clean window asks nothing visible: it is neither focused nor asked, and the sequence goes on', async () => {
+    const w = windowsOf({ 1: { unsaved: false }, 2: { unsaved: false } });
+    expect(await askUnsavedInTurn(w.windows, 1, w.answered)).toBe(true);
+    expect(w.events).toEqual(['probe:1', 'probe:2']);
+    expect(w.answers).toEqual(['1:clean', '2:clean']);
+  });
+
+  it('asks the active window first, then the rest in the given order, focusing each before asking it', async () => {
+    const w = windowsOf({ 1: { unsaved: true }, 2: { unsaved: true }, 3: { unsaved: true } });
+    expect(await askUnsavedInTurn(w.windows, 2, w.answered)).toBe(true);
+    expect(w.events).toEqual(['probe:2', 'focus:2', 'ask:2', 'probe:1', 'focus:1', 'ask:1', 'probe:3', 'focus:3', 'ask:3']);
+    expect(w.answers).toEqual(['2:allowed', '1:allowed', '3:allowed']);
+  });
+
+  it('the first Cancel stops the sequence and answers false; no later window is asked', async () => {
+    const w = windowsOf({ 1: { unsaved: true, answer: true }, 2: { unsaved: true, answer: false }, 3: { unsaved: true } });
+    expect(await askUnsavedInTurn(w.windows, 1, w.answered)).toBe(false);
+    expect(w.events).toEqual(['probe:1', 'focus:1', 'ask:1', 'probe:2', 'focus:2', 'ask:2']);
+    expect(w.answers).toEqual(['1:allowed', '2:declined']);
+  });
+
+  it('a renderer that cannot answer allows (PD-SHELL-010), at the probe or at the question', async () => {
+    const w = windowsOf({ 1: { unsaved: 'cannot-answer' }, 2: { unsaved: true, answer: 'cannot-answer' }, 3: { unsaved: true, answer: true } });
+    expect(await askUnsavedInTurn(w.windows, 1, w.answered)).toBe(true);
+    expect(w.events).toEqual(['probe:1', 'probe:2', 'focus:2', 'ask:2', 'probe:3', 'focus:3', 'ask:3']);
+    expect(w.answers).toEqual(['1:cannot-answer', '2:cannot-answer', '3:allowed']);
+  });
+
+  it('skips a destroyed window, and with no window open answers true', async () => {
+    const w = windowsOf({ 1: { destroyed: true, unsaved: true, answer: false }, 2: { unsaved: true } });
+    expect(await askUnsavedInTurn(w.windows, 1, w.answered)).toBe(true);
+    expect(w.events).toEqual(['probe:2', 'focus:2', 'ask:2']);
+    expect(w.answers).toEqual(['1:gone', '2:allowed']);
+    expect(await askUnsavedInTurn([], undefined)).toBe(true);
+  });
+
+  it('without a probe every standing window is focused and asked', async () => {
+    const w = windowsOf({ 1: {}, 2: {} });
+    const unprobed = w.windows.map(({ unsaved: _unsaved, ...rest }) => rest);
+    expect(await askUnsavedInTurn(unprobed, undefined)).toBe(true);
+    expect(w.events).toEqual(['focus:1', 'ask:1', 'focus:2', 'ask:2']);
+  });
+
+  it('the probe asks whether the renderer installed its guard, which it does only while its Settings form is dirty', () => {
+    expect(RENDERER_UNSAVED_PROBE_SCRIPT).toBe('typeof window.__rotarisCloseGuard === "function"');
   });
 });

@@ -10,7 +10,7 @@ import { FEED_ACCEPT, FEED_ENDPOINT, FEED_TIMEOUT_MS, SUMMARY_FALLBACK } from '.
 import type { NetworkResponse, StagingArea, UpdateNetwork } from './install.js';
 import type { StrategyFiles, StrategySpawn } from './strategies.js';
 import { passFailedSentence } from './successor.js';
-import { createUpdater, DOWNLOAD_IN_PROGRESS, downloadingMessage, downloadingTitle, FINISH_TITLE, INSTALLED_TITLE, INSTALLER_AUTO_CLOSE_MS, NOT_INSTALLED_MESSAGE, NOT_INSTALLED_TITLE, offerTitle, RESTART_NOW, RETURN_TO_WINDOW, TRY_AGAIN, UPDATE_DECLINED, UPDATE_NOW, mustAskAtHandOff, updateCloseBox, updateCloseDetail, updateCloseMessage, type UpdaterDeps } from './updater.js';
+import { createUpdater, DOWNLOAD_IN_PROGRESS, downloadingMessage, downloadingTitle, FINISH_TITLE, INSTALLED_TITLE, INSTALLER_AUTO_CLOSE_MS, NOT_INSTALLED_MESSAGE, NOT_INSTALLED_TITLE, offerTitle, RESTART_NOW, RETURN_TO_WINDOW, TRY_AGAIN, UPDATE_DECLINED, UPDATE_DECLINED_UNSAVED, UPDATE_NOW, mustAskAtHandOff, updateCloseBox, updateCloseDetail, updateCloseMessage, type UpdaterDeps } from './updater.js';
 
 const PORTABLE = 'Rotaris-0.2.0-windows-x64-portable.exe';
 const SETUP = 'Rotaris-0.2.0-windows-x64-setup.exe';
@@ -105,7 +105,7 @@ const portable: Classification = { updatable: true, flavour: 'portable', target:
 const installer: Classification = { updatable: true, flavour: 'installer', target: INSTALL_DIR };
 const dev: Classification = { updatable: false, reason: 'a development or source-tree launch, not a released standalone artifact (REQ-STARTUP-106)' };
 
-function harness(options: { classification?: Classification; feed?: FeedOptions; running?: string; dismissed?: string; keys?: 'carried' | 'empty' | 'other'; successor?: 'passes' | 'fails' | 'never' | 'refused'; volumeFiles?: Record<string, string>; confirm?: boolean | 'throws' | 'hold' | readonly boolean[]; runs?: readonly (number | null | 'throws')[] } = {}) {
+function harness(options: { classification?: Classification; feed?: FeedOptions; running?: string; dismissed?: string; keys?: 'carried' | 'empty' | 'other'; successor?: 'passes' | 'fails' | 'never' | 'refused'; volumeFiles?: Record<string, string>; confirm?: boolean | 'throws' | 'hold' | readonly boolean[]; runs?: readonly (number | null | 'throws')[]; unsaved?: boolean | 'throws' | readonly boolean[] } = {}) {
   const srv = server(options.feed);
   const clock = new FakeClock();
   const logged: string[] = [];
@@ -127,6 +127,9 @@ function harness(options: { classification?: Classification; feed?: FeedOptions;
   const started: string[] = [];
   let closed = 0;
   const asked: string[] = [];
+  /** OQ-311: each asking of every window's unsaved-settings guard, and the order of both guards' askings together. */
+  const unsavedAsked: string[] = [];
+  const order: string[] = [];
   const held: ((answer: boolean) => void)[] = [];
   const runs = options.runs ?? [0];
   let reads = 0;
@@ -155,15 +158,25 @@ function harness(options: { classification?: Classification; feed?: FeedOptions;
     // OQ-86: the active-run confirmation — the user closes anyway unless told otherwise; `hold` waits for `answer`.
     confirmClose: async (closeAsk) => {
       asked.push(`${closeAsk.action}@${closeAsk.moment}:${closeAsk.activeRuns ?? 'unknown'}`);
+      order.push(`runs:${closeAsk.action}@${closeAsk.moment}`);
       const confirm = options.confirm;
       if (confirm === 'throws') throw new Error('no window to ask from');
       if (confirm === 'hold') return new Promise<boolean>((resolve) => { held.push(resolve); });
       if (Array.isArray(confirm)) return (confirm as readonly boolean[])[asked.length - 1] ?? true;
       return (confirm as boolean | undefined) ?? true;
     },
+    // OQ-311: every window's unsaved-settings guard — every window allows unless told otherwise; a sequence is answered in order.
+    confirmUnsaved: async (unsavedAsk) => {
+      unsavedAsked.push(`${unsavedAsk.action}@${unsavedAsk.moment}`);
+      order.push(`unsaved:${unsavedAsk.action}@${unsavedAsk.moment}`);
+      const unsaved = options.unsaved;
+      if (unsaved === 'throws') throw new Error('no main window could be asked');
+      if (Array.isArray(unsaved)) return (unsaved as readonly boolean[])[unsavedAsked.length - 1] ?? true;
+      return (unsaved as boolean | undefined) ?? true;
+    },
   };
   const updater = createUpdater(deps);
-  return { updater, srv, clock, logged, recorded, broadcasts, notices, staging, vol, spawned, started, asked, held, reads: () => reads, closed: () => closed, dismissed: () => dismissed };
+  return { updater, srv, clock, logged, recorded, broadcasts, notices, staging, vol, spawned, started, asked, unsavedAsked, order, held, reads: () => reads, closed: () => closed, dismissed: () => dismissed };
 }
 
 describe('activation — REQ-STARTUP-106, REQ-STARTUP-114, REQ-STARTUP-057, REQ-STARTUP-150', () => {
@@ -684,6 +697,152 @@ describe('`Restart now` — REQ-STARTUP-121', () => {
     expect(await h.updater.restart()).toMatchObject({ ok: false, code: 'update.notApplied' });
     await h.updater.activate({ windowId: 1 });
     expect(await h.updater.restart()).toMatchObject({ ok: false, code: 'update.notApplied' });
+  });
+});
+
+/*
+ * OQ-311, ruled 2026-10-14 by the consortium under R-072: `Restart now`, and `Update now` / `Try again` on the installer
+ * flavour, are user-initiated closes. Each asks REQ-SHELL-124's Save/Discard/Cancel of every open main window at the click,
+ * ahead of OQ-86's active-run confirmation (REQ-SHELL-119's order), and again immediately before the installer or the
+ * successor starts. A Cancel, or a Save that fails, starts nothing and leaves the notice as it was. The portable's in-place
+ * apply and the installer's 1,200 ms auto-close are programmatic and ask nothing. Until the ruling was built every one of
+ * these closes discarded a window's unsaved settings unasked.
+ */
+describe('the unsaved-settings guard at the update\'s closes — OQ-311, REQ-SHELL-119 guard (1), REQ-SHELL-124', () => {
+  it('Restart now asks the settings before the runs, at the click and at the hand-off; Cancel at the click starts nothing and asks no run box', async () => {
+    const declined = harness({ runs: [1], unsaved: [false] });
+    await declined.updater.activate({ windowId: 1 });
+    await declined.updater.install();
+    const notice = declined.notices.current();
+    expect(notice).toMatchObject({ title: INSTALLED_TITLE, action: { label: RESTART_NOW } });
+    expect(await declined.updater.restart()).toEqual(UPDATE_DECLINED_UNSAVED);
+    expect(declined.unsavedAsked).toEqual(['restart@click']);
+    expect(declined.asked).toEqual([]);
+    expect(declined.reads()).toBe(0);
+    expect(declined.started).toEqual([]);
+    expect(declined.closed()).toBe(0);
+    expect(declined.notices.current()).toEqual(notice);
+    expect(declined.updater.state().kind).toBe('applied');
+    expect(declined.updater.inFlight()).toBe(false);
+    expect(declined.logged.some((l) => /update restart: a window's unsaved settings were not saved or discarded at the click; nothing is started/.test(l))).toBe(true);
+
+    const accepted = harness({ runs: [1] });
+    await accepted.updater.activate({ windowId: 1 });
+    await accepted.updater.install();
+    expect(await accepted.updater.restart()).toEqual({ ok: true, value: { outcome: 'handed-over' } });
+    expect(accepted.order).toEqual(['unsaved:restart@click', 'runs:restart@click', 'unsaved:restart@hand-off']);
+    expect(accepted.started).toEqual([TARGET]);
+    expect(accepted.closed()).toBe(1);
+  });
+
+  it('Update now on the installer flavour asks the settings before the runs; Cancel at the click downloads nothing, asks no run box, and leaves the offer', async () => {
+    const declined = harness({ classification: installer, runs: [1], unsaved: false });
+    await declined.updater.activate({ windowId: 1 });
+    const offer = declined.notices.current();
+    const requestsBefore = declined.srv.requests.length;
+    expect(await declined.updater.install()).toEqual(UPDATE_DECLINED_UNSAVED);
+    expect(declined.unsavedAsked).toEqual(['install@click']);
+    expect(declined.asked).toEqual([]);
+    expect(declined.reads()).toBe(0);
+    expect(declined.srv.requests.length).toBe(requestsBefore);
+    expect(declined.spawned).toEqual([]);
+    expect(declined.notices.current()).toEqual(offer);
+    expect(declined.updater.state().kind).toBe('offered');
+    expect(declined.updater.inFlight()).toBe(false);
+
+    const accepted = harness({ classification: installer, confirm: [true, true], runs: [1, 1] });
+    await accepted.updater.activate({ windowId: 1 });
+    expect(await accepted.updater.install()).toMatchObject({ ok: true, value: { outcome: 'handed-off' } });
+    expect(accepted.order).toEqual(['unsaved:install@click', 'runs:install@click', 'unsaved:install@hand-off', 'runs:install@hand-off']);
+    expect(accepted.spawned).toHaveLength(1);
+  });
+
+  it('Try again on the installer flavour asks too; Cancel leaves `Update not installed` as it was', async () => {
+    const h = harness({ classification: installer, keys: 'empty', unsaved: [true, false] });
+    await h.updater.activate({ windowId: 1 });
+    expect(await h.updater.install()).toMatchObject({ ok: false });
+    const failure = h.notices.current();
+    expect(failure).toMatchObject({ title: NOT_INSTALLED_TITLE, action: { label: TRY_AGAIN } });
+    expect(await h.updater.install()).toEqual(UPDATE_DECLINED_UNSAVED);
+    expect(h.unsavedAsked).toEqual(['install@click', 'install@click']);
+    expect(h.notices.current()).toEqual(failure);
+    expect(h.updater.state().kind).toBe('failed');
+    expect(h.spawned).toEqual([]);
+  });
+
+  it('a window that became dirty while the installer downloaded is asked at the hand-off; Cancel spawns no installer and brings the offer back', async () => {
+    const h = harness({ classification: installer, unsaved: [true, false] });
+    await h.updater.activate({ windowId: 1 });
+    expect(await h.updater.install()).toEqual(UPDATE_DECLINED_UNSAVED);
+    expect(h.unsavedAsked).toEqual(['install@click', 'install@hand-off']);
+    // The download ran and was verified; the hand-off's settings answer stopped it before the run count was re-read.
+    expect(h.srv.requests.some((r) => r.url.endsWith(SETUP))).toBe(true);
+    expect(h.reads()).toBe(1);
+    expect(h.asked).toEqual([]);
+    expect(h.spawned).toEqual([]);
+    expect(h.staging.dirs.size).toBe(0);
+    expect(h.notices.current()).toMatchObject({ id: 1, title: offerTitle('0.2.0'), action: { label: UPDATE_NOW } });
+    expect(h.updater.state().kind).toBe('offered');
+    expect(h.updater.inFlight()).toBe(false);
+    h.clock.advance(INSTALLER_AUTO_CLOSE_MS * 10);
+    expect(h.closed()).toBe(0);
+    expect(h.logged.some((l) => /update install: a window's unsaved settings were not saved or discarded at the hand-off/.test(l))).toBe(true);
+  });
+
+  it('Restart now: Cancel at the hand-off starts no successor and leaves `Update installed` as it was', async () => {
+    const h = harness({ unsaved: [true, false] });
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    const notice = h.notices.current();
+    expect(await h.updater.restart()).toEqual(UPDATE_DECLINED_UNSAVED);
+    expect(h.unsavedAsked).toEqual(['restart@click', 'restart@hand-off']);
+    expect(h.started).toEqual([]);
+    expect(h.closed()).toBe(0);
+    expect(h.notices.current()).toEqual(notice);
+    expect(h.updater.state().kind).toBe('applied');
+  });
+
+  it('the portable\'s Update now asks nothing: its in-place apply closes no window', async () => {
+    const h = harness({ runs: [1], unsaved: false });
+    await h.updater.activate({ windowId: 1 });
+    expect(await h.updater.install()).toEqual({ ok: true, value: { outcome: 'replaced' } });
+    expect(h.unsavedAsked).toEqual([]);
+    expect(h.asked).toEqual([]);
+  });
+
+  it('the installer\'s 1,200 ms auto-close asks nothing: it is programmatic', async () => {
+    const h = harness({ classification: installer });
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    expect(h.unsavedAsked).toEqual(['install@click', 'install@hand-off']);
+    h.clock.advance(INSTALLER_AUTO_CLOSE_MS);
+    expect(h.closed()).toBe(1);
+    expect(h.unsavedAsked).toEqual(['install@click', 'install@hand-off']);
+  });
+
+  it('a guard that cannot be asked declines, with a warning: nothing starts', async () => {
+    const h = harness({ unsaved: 'throws' });
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    expect(await h.updater.restart()).toEqual(UPDATE_DECLINED_UNSAVED);
+    expect(h.started).toEqual([]);
+    expect(h.logged.some((l) => /^warn: update restart: the unsaved-settings guard could not be asked at the click \(no main window could be asked\)/.test(l))).toBe(true);
+  });
+
+  it('the successor-failure path is unchanged: both guards allowed, nothing closes and `Update not installed` surfaces', async () => {
+    const h = harness({ successor: 'fails' });
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    expect(await h.updater.restart()).toMatchObject({ ok: false, code: 'update.restart', headline: NOT_INSTALLED_TITLE });
+    expect(h.unsavedAsked).toEqual(['restart@click', 'restart@hand-off']);
+    expect(h.closed()).toBe(0);
+    expect(h.notices.current()).toMatchObject({ severity: 'error', title: NOT_INSTALLED_TITLE, action: { label: TRY_AGAIN } });
+  });
+
+  it('the declined outcome cites REQ-SHELL-124 and OQ-311 and is a cancellation, not a failure', () => {
+    expect(UPDATE_DECLINED_UNSAVED.ok).toBe(true);
+    expect(UPDATE_DECLINED_UNSAVED.value.cancelled).toBe(true);
+    expect(UPDATE_DECLINED_UNSAVED.value.reason).toMatch(/REQ-SHELL-124, OQ-311/);
   });
 });
 

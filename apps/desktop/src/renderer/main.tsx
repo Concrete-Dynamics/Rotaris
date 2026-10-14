@@ -22,6 +22,7 @@ import '@phosphor-icons/web/fill';
 // The window itself: the bridge, the replica and the two stacks, the terminal registry, the display preferences and
 // the theme — everything this window has before a surface mounts (`shell.ts`).
 import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, composerDraft, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, retryRun, setMode, setNextModel, setRunStartMode, settingsUnsaved, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
+import { joinOrAsk, type OpenQuestion } from './guard-question.js';
 import { openWorkspaceFolder, useWindowWidth, useWorkspaceUsage } from './strip-facts.js';
 // What a transcript surface reads about the session it is following, shared with the persona window (`session-view.ts`).
 import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery, useShownSession } from './session-view.js';
@@ -699,10 +700,13 @@ function useConfiguration(workspace: string | null) {
     const r = await bridge.command({ kind: 'config.setField', scope, patch });
     return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
   }, []);
-  // REQ-CONFIG-286/287: the guard — Save (default), Discard, Cancel — on a view switch away and on a user-initiated close.
+  // REQ-CONFIG-286/287: the guard — Save (default), Discard, Cancel — on a view switch away and on a user-initiated close,
+  // the update's `Restart now` and the installer's `Update now` among them (OQ-311). An asking while the question is open
+  // joins it and settles with its one answer; it never replaces `guarding`, which would strand the first asker.
+  const openQuestion = useRef<OpenQuestion>({ current: null });
   const guard = useCallback((): Promise<boolean> => {
-    if (!dirty) return Promise.resolve(true);
-    return new Promise<boolean>((resolve) => setGuarding({ resolve }));
+    if (!dirty && openQuestion.current.current === null) return Promise.resolve(true);
+    return joinOrAsk(openQuestion.current, (answer) => setGuarding({ resolve: answer }));
   }, [dirty]);
   useEffect(() => {
     useShellState.getState().setNavigationGuard(dirty ? () => guard() : null);

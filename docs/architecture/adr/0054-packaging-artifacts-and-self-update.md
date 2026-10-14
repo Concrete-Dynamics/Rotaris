@@ -1725,6 +1725,19 @@ download — minutes in which the window accepts input — be ended by the auto-
 immediately before the installer is spawned or the successor started (`UpdaterDeps.activeRuns`, `runInstall`'s
 `beforeApply`, `mustAskAtHandOff`): after a download, any run active then is asked about again; for `Restart now`, a run
 past the count the click covered. Declined there, the verified download is discarded and the offer returns in place.
+*Falsified again 2026-10-14 for the unsaved-settings guard, by [OQ-311](../open-questions.md#oq-311) (ruled that day by the
+consortium under [R-072](../../product/requests.md#r-072), no directive), and built by fin46 (`fin46-accept1-9`): "rather than
+asking the close guard" no longer stands for these clicks.* `Restart now`, and `Update now` / `Try again` on the installer
+flavour, are user-initiated closes (REQ-SHELL-119 guard (1), REQ-CONFIG-287), so `UpdaterDeps.confirmUnsaved` asks
+REQ-SHELL-124's Save/Discard/Cancel of every open main window, one at a time (`askUnsavedInTurn`, `main-windows.ts`: the active
+window first, a window holding no unsaved settings neither surfaced nor asked, a renderer that cannot answer allowing under
+PD-SHELL-010), at the click ahead of the run box and again first in the hand-off's check. A Cancel or a failed Save answers
+`UPDATE_DECLINED_UNSAVED` and starts nothing; at the installer's hand-off it takes the declined path above. The portable's apply
+and REQ-STARTUP-119's auto-close stay programmatic and ask nothing, and the successor-failure path is unchanged. **First
+execution, 2026-10-14:** over fakes only — `updater.test.ts`'s OQ-311 block (ten cases, nine red against the unrepaired
+updater), `main-windows.test.ts` (`askUnsavedInTurn`) and `apps/desktop/src/renderer/guard-question.test.ts` (an asking while
+the question is open joins it); a development host's build is classified not updatable, so no launch reaches these guards, and
+their run in the built app is owed to the Windows package (IC-3), as `AGENTS.md`'s `updater-proof` line records.
 
 **Repaired at verification, 2026-09-28 (same item, R-062).** The independent verification found three defects in the
 build above, and writing the third's test found a fourth; each is repaired with a test beside it, and nothing in this

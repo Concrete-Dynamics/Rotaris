@@ -246,6 +246,17 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     return ordered;
   }
 
+  /**
+   * Restores, shows and focuses the main window `wcId`, if it still stands: the window a question is about to be asked in
+   * (OQ-311's unsaved-settings guard, `askUnsavedInTurn`). True when the window stands.
+   */
+  surface(wcId: number): boolean {
+    const record = this.#liveRecord(wcId);
+    if (!record) return false;
+    this.#surface(record);
+    return true;
+  }
+
   ownerOfAuxiliary(senderId: number): MainWindowView<TWindow, TPersonaWindows, TTerminalWindows> | undefined {
     for (const record of this.#records.values()) {
       if (this.dependencies.adapter.ownsAuxiliary(record.personaWindows, record.terminalWindows, senderId)) return this.#view(record);
@@ -893,6 +904,68 @@ export function guardClose(win: GuardedWindow, ask: () => Promise<unknown>, conf
 export const RENDERER_CLOSE_GUARD_SCRIPT = 'typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true';
 
 /**
+ * Whether the renderer holds unsaved settings, asked without asking the guard: the renderer installs
+ * `__rotarisCloseGuard` only while its Settings form is dirty (`renderer/main.tsx`). OQ-311's sequence asks it first, so a
+ * clean window is neither surfaced nor asked.
+ */
+export const RENDERER_UNSAVED_PROBE_SCRIPT = 'typeof window.__rotarisCloseGuard === "function"';
+
+/** One main window as OQ-311's sequence asks it (`askUnsavedInTurn`). */
+export interface UnsavedGuardWindow {
+  readonly wcId: number;
+  readonly isDestroyed: () => boolean;
+  /**
+   * Whether the window holds unsaved settings; false skips it, unsurfaced and unasked. A rejection is PD-SHELL-010's
+   * "cannot answer", which allows. Absent, every window is surfaced and asked.
+   */
+  readonly unsaved?: () => Promise<boolean>;
+  /** Restores, shows and focuses the window, so the question it is about to show is in front (REQ-SHELL-124). */
+  readonly focus: () => void;
+  /** The renderer's guard (`askRendererGuard`): `false` is Cancel or a failed Save; a rejection is "cannot answer". */
+  readonly ask: () => Promise<unknown>;
+}
+
+/** What one window answered in OQ-311's sequence, for main's log line. */
+export type UnsavedGuardAnswer = 'gone' | 'clean' | 'cannot-answer' | 'allowed' | 'declined';
+
+/**
+ * OQ-311 (ruled 2026-10-14 under R-072): the update's `Restart now`, and `Update now` / `Try again` on the installer flavour,
+ * are user-initiated closes of every main window, so each asks REQ-SHELL-124's Save/Discard/Cancel of every open main window,
+ * one window at a time (REQ-SHELL-119 guard (1)). The active window is asked first, then the rest in `windows`' order
+ * (`MainWindows.ordered()`). A destroyed window is skipped; a window holding no unsaved settings is skipped unsurfaced; each
+ * other window is focused, then asked. The sequence stops at the first `false` (Cancel, or a Save that failed) and answers
+ * false; a window whose renderer cannot answer (a rejection, PD-SHELL-010) allows. True when every window allowed.
+ */
+export async function askUnsavedInTurn(
+  windows: readonly UnsavedGuardWindow[],
+  activeWcId: number | undefined,
+  answered?: (wcId: number, answer: UnsavedGuardAnswer) => void,
+): Promise<boolean> {
+  const active = windows.find((window) => window.wcId === activeWcId);
+  const order = active === undefined ? [...windows] : [active, ...windows.filter((window) => window !== active)];
+  for (const window of order) {
+    if (window.isDestroyed()) { answered?.(window.wcId, 'gone'); continue; }
+    if (window.unsaved !== undefined) {
+      const unsaved = await window.unsaved().catch(() => null);
+      if (unsaved === null) { answered?.(window.wcId, 'cannot-answer'); continue; }
+      if (!unsaved) { answered?.(window.wcId, 'clean'); continue; }
+      if (window.isDestroyed()) { answered?.(window.wcId, 'gone'); continue; }
+    }
+    window.focus();
+    let proceed: boolean;
+    try {
+      proceed = (await window.ask()) !== false;
+      answered?.(window.wcId, proceed ? 'allowed' : 'declined');
+    } catch {
+      proceed = true;
+      answered?.(window.wcId, 'cannot-answer');
+    }
+    if (!proceed) return false;
+  }
+  return true;
+}
+
+/**
  * PD-SHELL-010: how long main waits for its liveness probe's answer before a renderer that is alive "cannot answer" its
  * close guard. The probe is a question of main's own, which needs no person; the guard's question gets no bound, because its
  * answer may be a person's Save/Discard/Cancel (REQ-SHELL-124).
@@ -937,8 +1010,9 @@ export interface RendererGuardDependencies {
  *
  * A renderer that answers its probes is waited for without a bound of its own: its guard may be a person deciding. Every
  * listener and timer is removed once the question settles, whichever way, and an answer or a signal after that is ignored.
+ * `script` is the question; the guard's by default, or OQ-311's `RENDERER_UNSAVED_PROBE_SCRIPT`, asked on the same terms.
  */
-export function askRendererGuard(contents: GuardedContents, dependencies: RendererGuardDependencies): Promise<unknown> {
+export function askRendererGuard(contents: GuardedContents, dependencies: RendererGuardDependencies, script: string = RENDERER_CLOSE_GUARD_SCRIPT): Promise<unknown> {
   const cannotAnswer = (signal: 'gone' | 'unresponsive', why: string): Error => {
     const reason = `cannot answer: ${signal} (${why})`;
     dependencies.warn?.(`close guard: the renderer ${reason}; its guard allows (PD-SHELL-010)`);
@@ -979,7 +1053,7 @@ export function askRendererGuard(contents: GuardedContents, dependencies: Render
     contents.once('destroyed', destroyed);
     contents.once('unresponsive', unresponsive);
     let asked: Promise<unknown>;
-    try { asked = contents.executeJavaScript(RENDERER_CLOSE_GUARD_SCRIPT); } catch (error) { asked = Promise.reject(error); }
+    try { asked = contents.executeJavaScript(script); } catch (error) { asked = Promise.reject(error); }
     asked.then((answer) => finish(() => resolve(answer)), (error: unknown) => finish(() => reject(error)));
     probe();
   });

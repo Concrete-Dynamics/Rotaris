@@ -3643,6 +3643,8 @@ REQ-STARTUP-118: "a non-persistent notice titled `Downloading Rotaris {version}`
 
 **What the build proceeds under.** The identity is kept and the notice updated in place (REQ-SHELL-118 and ADR-0054's "the same notice by identity, never by replacement"); the title and message are REQ-STARTUP-118's, because Distribution owns the words and Shell the surface (`CONTEXT-MAP.md`); the notice is not persistent while the download runs, so no dismissal can wave off a version whose install is in flight; the action is disabled with an accessible description; and the apply follows the verified download without a pause, so the "ready to install" state stands only for the length of the apply. The failure becomes REQ-STARTUP-120's `Update not installed` in place. **What a ruling decides.** Which of the two texts is amended to the other on the title, the persistence, the message and the pause. Nothing in the mechanism moves with the answer beyond the words and one boolean.
 
+<a id="oq-86"></a>
+
 **OQ-86 — Does the update's own close ask REQ-STARTUP-046's active-run confirmation?** *(REQ-STARTUP-046, REQ-STARTUP-119, REQ-STARTUP-121; ADR-0054 "The updater". Raised 2026-09-28 by the verification of the updater, first-release-plan.md §4.6, under R-062. Raised as OQ-79 on its branch; renumbered OQ-86 at the merge, because OQ-76 to OQ-82 were already on `main`. Ruled 2026-10-06 by the owner, and built.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** REQ-STARTUP-046's confirmation governs the
@@ -3663,7 +3665,10 @@ then is asked about again, since a count carries no identity and cannot say the 
 count the click was asked about, or where the click asked nothing. Declined at that point, the verified download is
 discarded, nothing is started, and the offer comes back in the same notice. The confirmation is part of the one update
 operation in flight (REQ-STARTUP-114), so a second click while its box is open is refused rather than opening another.
-The reading below is kept as the build proceeded under it until then.
+The reading below is kept as the build proceeded under it until then. *Since [OQ-311](#oq-311) (ruled 2026-10-14 under R-072,
+built by fin46): the same clicks are user-initiated closes for REQ-SHELL-119 guard (1), so every main window's unsaved-settings
+guard is asked first, at the click and again at the hand-off, and this confirmation follows it; this ruling said nothing of
+guard (1).*
 
 REQ-STARTUP-046: "When a run is active, a confirmation SHALL be presented before anything is torn down; declining it SHALL abort the close, leaving the window open and accepting input and the run still executing." REQ-STARTUP-119: "when the hand-off requires quitting (Windows installer), the window SHALL auto-close after a 1200 ms single delay." REQ-STARTUP-121: "the current window closes only after the successor has started". The installer's auto-close and the restart's close are closes of a window, and a run may be active in it when the user chooses `Update now` or `Restart now`. If the confirmation is asked and declined, the installer is already running against the tree the window runs from, and after a restart the record has already passed to the successor, so the declining instance would stay beside the one that now holds the record.
 
@@ -14840,7 +14845,8 @@ REQ-CONFIG-287, "on a user-initiated window close only — a programmatic close 
 auto-close and REQ-STARTUP-121's `Restart now`; OQ-86, which ruled that REQ-STARTUP-046's active-run confirmation
 governs the update's closes and said nothing of guard (1); [OQ-298](#oq-298), whose ruling reopens on a quit a person starts
 outside a window. Raised 2026-10-14 by fin45 (`fin45-supervision-and-quit`) as the brief for OQ-298's build asked; the plan's range
-OQ-311 to OQ-330, its first free number on this branch — renumbered at landing if a sibling took it first.)*
+OQ-311 to OQ-330, its first free number on this branch — renumbered at landing if a sibling took it first. Ruled 2026-10-14 under
+R-072, below, and built the same day by fin46.)*
 
 **What is open.** The update closes every main window through `mainWindows.dispose()` (`closeWindows` in
 `apps/desktop/src/main/index.ts`): the installer flavour 1,200 ms after its hand-off (REQ-STARTUP-119), and `Restart now` once the
@@ -14858,6 +14864,32 @@ not keep the window — or leaves unsaved settings unsaved as a programmatic clo
 update's click; not asking loses a person's edits at a restart they asked for, with no word.
 
 **What a live run then shows.** Nothing: no live scenario installs an update.
+
+**Ruled 2026-10-14 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)), with no directive:**
+`Restart now`, and `Update now` / `Try again` on the installer flavour, are user-initiated closes. Each asks REQ-SHELL-124's
+Save/Discard/Cancel of every open main window, one window at a time. It asks at the click, ahead of [OQ-86](#oq-86)'s active-run
+confirmation (REQ-SHELL-119's order: guard (1) before guard (3)), and again immediately before the installer or the successor
+starts. A Cancel, or a Save that fails, starts nothing and leaves the notice as it was. The portable's in-place apply and the
+installer's 1,200 ms auto-close are programmatic and ask nothing (REQ-CONFIG-287). No requirement's text is departed from —
+REQ-SHELL-119 guard (1) and REQ-CONFIG-287 govern as written once these clicks are read as user-initiated — so the ruling alone
+settles it. *The as-built reading kept above, neither close asking guard (1) and unsaved Settings edits lost at the update's
+restart, is the falsified one.* **The two recommendations weighed:** the advocates' recommendations themselves were not handed
+to the building bundle, and the orchestrator's ruling record holds them; advocate B's report that no code implements
+REQ-SHELL-119 guard (2), "Integration in progress", anywhere in `apps/` or `packages/` was, and the builder confirmed it
+([`the-integration-in-progress-close-guard-has-no-code.md`](../defects/the-integration-in-progress-close-guard-has-no-code.md),
+outside this ruling's repair: worktree integration is deferred from the first release, so the guard is vacuous until it is built).
+**Built 2026-10-14 by fin46 (`fin46-accept1-9`):** `UpdaterDeps.confirmUnsaved` and the `UPDATE_DECLINED_UNSAVED` outcome
+(`apps/desktop/src/main/updater/updater.ts`), asked first in `restart()` and in the installer flavour's `install()`, and first in
+`confirmAtHandOff` (so `doRestart`'s pre-start check and `runInstall`'s `beforeApply`), a thrown guard declining with a `warn`
+line; `askUnsavedInTurn` (`apps/desktop/src/main/main-windows.ts`: the active window first, then `MainWindows.ordered()`, a
+destroyed window skipped, a window whose renderer installed no guard neither surfaced nor asked, each other window surfaced then
+asked, the first `false` stopping it, a renderer that cannot answer allowing under PD-SHELL-010), wired in `index.ts` over
+`askRendererGuard` with one log line per asking; and the renderer's guard joining a question already open
+(`apps/desktop/src/renderer/guard-question.ts`). Pinned by `updater.test.ts` (the OQ-311 block), `main-windows.test.ts`
+(`askUnsavedInTurn`) and `guard-question.test.ts`. A development host's built app is classified not updatable, so no launch
+reaches `update.restart`'s guards there: the built-app run is owed to the Windows package (IC-3), as `AGENTS.md`'s
+`updater-proof` line records
+([`../defects/fixed/an-update-restart-discards-a-windows-unsaved-settings-unasked.md`](../defects/fixed/an-update-restart-discards-a-windows-unsaved-settings-unasked.md)).
 
 <a id="oq-312"></a>
 

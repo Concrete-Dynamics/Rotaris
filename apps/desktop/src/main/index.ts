@@ -2,7 +2,7 @@
 // first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
 import './sentinel.js';
 import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
-import { askRendererGuard, createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, type CloseGuard } from './main-windows.js';
+import { askRendererGuard, askUnsavedInTurn, createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, RENDERER_UNSAVED_PROBE_SCRIPT, type CloseGuard, type UnsavedGuardAnswer } from './main-windows.js';
 import { createNoticeStore } from './notices.js';
 import { AuthRecovery } from './auth-recovery.js'; // REQ-NOTIFY-072..080 (the 401 note's parts C and D)
 import { createAuthFallback } from './auth-fallback.js'; // REQ-NOTIFY-070/071/078 (the 401 note's parts A and B)
@@ -552,6 +552,32 @@ async function main(): Promise<void> {
       const answer = await askBox(parent === undefined || parent.isDestroyed() ? null : parent, opts);
       log(`update ${closeAsk.action}: active-run confirmation at the ${closeAsk.moment} (${closeAsk.activeRuns === null ? 'run count unknown' : `${closeAsk.activeRuns} active`}) → ${answer === 1 ? 'close anyway' : 'return to the window'} (REQ-STARTUP-046, OQ-86)`);
       return answer === 1;
+    },
+    /*
+     * REQ-SHELL-119 guard (1), REQ-SHELL-124 (OQ-311, ruled 2026-10-14 under R-072): `Restart now` and the installer's
+     * `Update now` / `Try again` are user-initiated closes, so every open main window's renderer is asked its
+     * Save/Discard/Cancel in turn — the active window first, a clean window neither surfaced nor asked, a renderer that
+     * cannot answer allowing (PD-SHELL-010) — at the click and again at the hand-off (`askUnsavedInTurn`).
+     */
+    confirmUnsaved: async ({ action, moment }) => {
+      const guardTimers = { after: (delayMs: number, callback: () => void) => clocks.timers.after(millis(delayMs), callback) };
+      const answers: string[] = [];
+      const proceed = await askUnsavedInTurn(
+        mainWindows.ordered().map((window) => {
+          const warn = (m: string) => log(`main window ${window.wcId}: ${m}`, 'warn');
+          return {
+            wcId: window.wcId,
+            isDestroyed: () => window.win.isDestroyed(),
+            unsaved: () => askRendererGuard(window.win.webContents, { timers: guardTimers, warn }, RENDERER_UNSAVED_PROBE_SCRIPT).then((answer) => answer === true),
+            focus: () => { mainWindows.surface(window.wcId); },
+            ask: () => askRendererGuard(window.win.webContents, { timers: guardTimers, warn }),
+          };
+        }),
+        mainWindows.active()?.wcId,
+        (wcId: number, answer: UnsavedGuardAnswer) => { answers.push(`${wcId} ${answer}`); },
+      );
+      log(`update ${action}: unsaved-settings guard at the ${moment} (${answers.length === 0 ? 'no main window' : answers.join(', ')}) → ${proceed ? 'go on' : 'cancelled; nothing is started'} (REQ-SHELL-119 (1), REQ-SHELL-124, OQ-311)`);
+      return proceed;
     },
   });
   /**

@@ -14,6 +14,14 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-10-14**
+
+**The update's closes ask every window's unsaved settings (fin46, `fin46-accept1-9`; OQ-311).** `02-process-view.md`'s
+`update.install` / `update.restart` entry and `06-sequences.md`'s update block now say that `Restart now`, and the installer
+flavour's `Update now` / `Try again`, ask REQ-SHELL-124's Save/Discard/Cancel of every open main window in turn
+(`UpdaterDeps.confirmUnsaved`, `askUnsavedInTurn`) at the click before OQ-86's run box and again first at the hand-off, a
+Cancel starting nothing; the renderer's guard joins a question already open. The README's date stays 2026-10-15, the later.
+
 Last reconciled with the code: **2026-10-15**
 
 **The quit outside any window's second log line no longer reads as the first's opposite (2026-10-14, fin46 `fin46-accept1-8`,

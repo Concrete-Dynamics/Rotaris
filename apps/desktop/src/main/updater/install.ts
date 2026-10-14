@@ -50,7 +50,9 @@ export interface InstallContext {
   /**
    * Asked once the download is verified and immediately before the apply starts anything (OQ-86, ruled 2026-10-06 by
    * R-071): false declines — the verified download is discarded and nothing is started. The updater passes it for the
-   * installer flavour, whose hand-off closes the windows, so a run begun while the download ran is never ended unasked.
+   * installer flavour, whose hand-off closes the windows, so a run begun while the download ran is never ended unasked —
+   * and, since OQ-311 (2026-10-14, R-072), so a window's unsaved settings are asked about first; the updater keeps which
+   * guard declined, and this step's sentence is not shown.
    */
   readonly beforeApply?: () => Promise<boolean>;
 }

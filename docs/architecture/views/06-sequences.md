@@ -100,6 +100,10 @@ sequenceDiagram
   participant F as the release feed
   participant S as the successor
   R->>M: update.install (Update now / Try again)
+  opt installer flavour: every main window's unsaved settings first (REQ-SHELL-119 (1), REQ-SHELL-124, OQ-311 since 2026-10-14)
+    M->>R: askUnsavedInTurn — active window first; a window with no guard installed skipped; each other surfaced, then asked Save/Discard/Cancel
+    M-->>R: Cancel or a failed Save: { cancelled } — nothing downloaded, no run box, the notice as it was
+  end
   opt installer flavour, a run active (REQ-STARTUP-046, OQ-86 since 2026-10-06)
     M->>M: activeRuns — runs.active, instance-wide; confirmClose at the click, the message box "A run is still executing", Return to the window the default
     M-->>R: returned: { cancelled } — nothing downloaded or started, the offer notice stays
@@ -113,7 +117,9 @@ sequenceDiagram
   alt portable: rename aside, move in (REQ-STARTUP-125)
     M->>M: "Update installed" + Restart now (REQ-STARTUP-119)
     R->>M: update.restart
-    M->>M: confirmClose first when a run is active (REQ-STARTUP-046, OQ-86); returned → { cancelled }, nothing started
+    M->>R: confirmUnsaved at the click — every main window's Save/Discard/Cancel in turn (OQ-311); Cancel or a failed Save → { cancelled }, no run box, nothing started
+    M->>M: confirmClose next when a run is active (REQ-STARTUP-046, OQ-86); returned → { cancelled }, nothing started
+    M->>R: confirmUnsaved again just before the start (OQ-311); Cancel → { cancelled }, no successor
     M->>M: activeRuns re-read just before the start; a run past what the click covered is asked about again (mustAskAtHandOff)
     M->>S: spawn <artifact> builtin:update-successor -- <this endpoint>, detached
     S->>S: no claim; open its own endpoint (inheritInstance)
@@ -128,7 +134,7 @@ sequenceDiagram
     end
     M-->>S: {"ok":true,"record":"passed"} (should the connection end without it, the successor reads the record)
     M->>M: destroy the windows; the ordinary quit; close leaves a record that no longer names it
-  else installer: beforeApply — activeRuns re-read; any run active now is asked about again (OQ-86); returned → the download discarded, the offer back in place, { cancelled }
+  else installer: beforeApply — every window's unsaved settings asked again (OQ-311), then activeRuns re-read and any run active now asked about again (OQ-86); either declined → the download discarded, the offer back in place, { cancelled }
     M->>M: spawn the setup, detached (REQ-STARTUP-125)
     M->>M: "Finish the update", no action; the window closes after ONE 1200 ms delay (REQ-STARTUP-119)
   else any failure
@@ -149,6 +155,16 @@ then was ended by the auto-close unasked. After a download any run active then i
 identity); `Restart now` asks again only for a run past the count its click was asked about, or where the click asked
 nothing. Declined there, the verified download is discarded and the offer comes back in the same notice. The confirmation
 belongs to the one update operation in flight, so a second click while its box is open is `update.busy`.
+
+*Since 2026-10-14 (OQ-311, ruled by the consortium under R-072, built by fin46):* the same clicks are user-initiated closes for
+REQ-SHELL-119 guard (1), so **before** the run box, at the click and again first at the hand-off, main asks REQ-SHELL-124's
+Save/Discard/Cancel of every open main window one at a time (`UpdaterDeps.confirmUnsaved` → `askUnsavedInTurn`, wired in
+`index.ts` over `askRendererGuard`): the active window first, then `MainWindows.ordered()`; a window whose renderer installed no
+guard (`RENDERER_UNSAVED_PROBE_SCRIPT`) is neither surfaced nor asked; each other is surfaced, then asked; the first Cancel or
+failed Save stops the sequence and answers `UPDATE_DECLINED_UNSAVED`, starting nothing (at the installer's hand-off, the
+declined path above); a renderer that cannot answer allows (PD-SHELL-010). One log line per asking names the action, the moment
+and each window's answer. A renderer asked again while its dialog is open joins that question
+(`apps/desktop/src/renderer/guard-question.ts`). The portable's apply and the 1,200 ms auto-close ask nothing.
 
 A successor that cannot be started surfaces through `Update not installed` and nothing closes; one that never
 signals leaves this instance holding its record and its window, with no timeout (REQ-STARTUP-121, ADR-0055). A

@@ -641,7 +641,7 @@ await (async () => {
       offered === null ? 'no gesture on the tab' : `aria-disabled=${offered.attrs['aria-disabled']} title="${offered.attrs['title'] ?? ''}" with the ${stillPostRun ?? 'no'} pass running`);
     await d.screenshot(join(output, 'during-post-run.png'));
     await d.click('[data-testid="library-retrospective"]', { timeoutMs: 15_000 });
-    const queued = await until(d, '[data-testid="library-retrospective"]', (m) => m[0]?.data?.['aria-disabled'] === 'true' || m[0]?.data?.['data-disabled'] === 'true', 3_000);
+    const queued = await until(d, '[data-testid="library-retrospective"]', (m) => m[0]?.attrs?.['aria-disabled'] === 'true', 3_000);
     const rested = (await d.inspect('[data-testid="library-retrospective"]')).matches[0] ?? null;
     const passAfterPress = (await one(d, '[data-testid="improvement-activity-title-bar"]'))?.data['data-pass'] ?? null;
     check('the press queues the retrospective behind the post-run analysis, and the gesture then rests with its reason (PD-LIBRARY-002 revision 2 (e))',

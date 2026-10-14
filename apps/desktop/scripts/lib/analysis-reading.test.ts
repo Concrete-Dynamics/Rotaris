@@ -2,6 +2,8 @@
  * The live run's reading of the improvement passes it lets finish (fin42, N58): the capture's wait, each pass's outcome
  * against the notice it owes, and the retrospective's instruction-file line.
  */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { INDICATOR, passOutcome, postRunVerdict, retrospectiveInstructionFiles, settledAfterMs, settledWait } from './analysis-reading.mjs';
@@ -59,5 +61,14 @@ describe('analysis reading (live-run `ask`, REQ-LIBRARY-123..127, PD-LIBRARY-002
     expect(retrospectiveInstructionFiles('run host: retrospective: 2 of 2 enabled instruction file(s) at the workspace root (workspace:AGENTS.md, user-agents:AGENTS.md) for /w')?.rootOnly).toBe(false);
     expect(retrospectiveInstructionFiles('run host: retrospective: 0 of 1 enabled instruction file(s) at the workspace root for /w')).toEqual({ handed: 0, enabled: 1, ids: [], rootOnly: true });
     expect(retrospectiveInstructionFiles('no such line')).toBeNull();
+  });
+});
+
+describe('live-run\'s ask scenario puts the analyst timeout back whatever happens', () => {
+  it('restores the workspace file in a finally, as cutoff restores its limit', () => {
+    const text = readFileSync(resolve(import.meta.dirname, '..', 'live-run.mjs'), 'utf8');
+    const ask = text.slice(text.indexOf("if (wanted.includes('ask')) {"), text.indexOf('// ── 3. One real run'));
+    expect(ask).toMatch(/const agentsBeforeAsk = readFileSync\(agentsFile, 'utf8'\);[\s\S]*?\n  try \{\n/);
+    expect(ask).toMatch(/\n  \} finally \{\n    writeFileSync\(agentsFile, agentsBeforeAsk\);\n  \}\n/);
   });
 });

@@ -84,6 +84,21 @@ export function cutOffChildren(children, limitS, requestBodies = []) {
   });
 }
 
+/**
+ * OQ-217 (D9) for the summaries of `cut` (`cutOffChildren`'s rows), as verdicts `{ verdict: 'check' | 'note', passed, what,
+ * detail }`. Opening as the run failing is the defect, so it is a check. Whether the opening names the limit is read from the
+ * model's own words (`STATES_LIMIT`): a correct opening worded another way ("ran out of time") must not read as a failure,
+ * so a miss there is a NOTE that quotes the openings.
+ */
+export function summaryOpeningVerdicts(cut) {
+  const openings = cut.map((c) => `${c.name}: "${c.opening}"`).join(' | ');
+  const out = [{ verdict: 'check', passed: cut.every((c) => !c.opensAsRunFailed), what: 'no cut-off child\'s summary opens as "The run failed" (OQ-217, D9)', detail: openings }];
+  const unnamed = cut.filter((c) => !c.statesLimit);
+  if (unnamed.length === 0) out.push({ verdict: 'check', passed: true, what: 'each cut-off child\'s summary opens with its own outcome at the limit (OQ-217, D9)', detail: openings });
+  else out.push({ verdict: 'note', passed: true, what: 'a cut-off child\'s summary opening does not name the limit in words the reader knows (time limit, timed out, timeout, cut off); read it', detail: unnamed.map((c) => `${c.name}: "${c.opening}"`).join(' | ') });
+  return out;
+}
+
 /** OQ-217 (D9): the `child_result` entries that relay a child's summary as the run failing — wrong on a session that completed. */
 export function runFailedRelays(timeline) {
   return timeline.filter((e) => e.name === 'child_result' && /reported failed: (?:the )?(?:run|session) (?:has )?failed/i.test(e.message ?? ''));

@@ -2,11 +2,13 @@
  * The live `cutoff` scenario's readings (fin42, N50): the tag's line mirrored from the product, OQ-217's facts head and
  * summary opening, the D9 relay, and an offer taken by a later root.
  */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { timeoutLine as productLine } from '@rotaris/ui';
 import { OUTCOME_HEAD as productHead, outcomeLine } from '@rotaris/engine';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { OUTCOME_HEAD, TAG_EVAL, cutOffChildren, firstSentence, offerTaken, runFailedRelays, tagReading, timeoutLine } from './cut-off-reading.mjs';
+import { OUTCOME_HEAD, TAG_EVAL, cutOffChildren, firstSentence, offerTaken, runFailedRelays, summaryOpeningVerdicts, tagReading, timeoutLine } from './cut-off-reading.mjs';
 
 const report = (o: Record<string, unknown>) => JSON.stringify({ errors: [{ type: 'timeout', message: 'Child timed out after 60s' }], ...o });
 
@@ -77,5 +79,27 @@ describe('cut-off reading (live-run `cutoff`, PD-CONFIG-003 revisions 3 and 4, O
     ].join('\n');
     expect(tagReading(log)).toEqual({ kind: 'cutoff-tag', text: 'timed out', title: line, description: line });
     expect(tagReading('capture: nothing here')).toBeNull();
+  });
+});
+
+describe('summaryOpeningVerdicts (OQ-217, D9)', () => {
+  const row = (name: string, opening: string, statesLimit: boolean, opensAsRunFailed: boolean) => ({ name, opening, statesLimit, opensAsRunFailed });
+  it('passes an opening that names the limit, and fails one that opens as the run failing', () => {
+    expect(summaryOpeningVerdicts([row('a', 'This agent was stopped at its time limit.', true, false)]).every((v: { verdict: string; passed: boolean }) => v.verdict === 'check' && v.passed)).toBe(true);
+    expect(summaryOpeningVerdicts([row('a', 'The run failed.', false, true)]).some((v: { verdict: string; passed: boolean }) => v.verdict === 'check' && !v.passed)).toBe(true);
+  });
+  it('reads an opening worded another way as a NOTE that quotes it, not as a failure', () => {
+    const out = summaryOpeningVerdicts([row('a', 'This agent ran out of time while writing the file.', false, false)]);
+    expect(out.filter((v: { verdict: string; passed: boolean }) => v.verdict === 'check' && !v.passed)).toEqual([]);
+    expect(out.at(-1)).toMatchObject({ verdict: 'note', detail: 'a: "This agent ran out of time while writing the file."' });
+  });
+});
+
+describe('live-run\'s cutoff scenario reads the openings through summaryOpeningVerdicts', () => {
+  it('hands each verdict to check or noted, and no longer folds statesLimit into one check', () => {
+    const text = readFileSync(resolve(import.meta.dirname, '..', 'live-run.mjs'), 'utf8');
+    const cutoff = text.slice(text.indexOf("if (wanted.includes('cutoff'))"));
+    expect(cutoff).toMatch(/for \(const v of summaryOpeningVerdicts\(cut\)\) \{ if \(v\.verdict === 'note'\) noted\(v\.what, v\.detail\); else check\(v\.passed, v\.what, v\.detail\); \}/);
+    expect(cutoff).not.toMatch(/c\.statesLimit\)/);
   });
 });

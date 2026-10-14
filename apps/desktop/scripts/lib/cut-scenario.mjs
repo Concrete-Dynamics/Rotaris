@@ -90,6 +90,27 @@ export function cutVerdicts({ quitSent, calls, issues, summary }) {
   return verdicts;
 }
 
+/**
+ * Whether the quit landed before the run reached its result, read by the ORDER of the application log's lines: the first
+ * `quit: requested` against the capture's `wait for result satisfied`. A run its quit cuts still ends with its one result —
+ * the interrupted end the shutdown writes (`ended interrupted (application_shutdown)`) — and the capture's wait, still
+ * installed, reports that result as satisfied after the quit; only a result reached BEFORE the quit means nothing was cut.
+ * Until 2026-10-14 the check read the satisfied line anywhere in the log and failed the a3be56c pack's cut, whose every other
+ * check passed (live-run finding L1 of that pack; fin45).
+ * @param {string} log
+ * @returns {{ passed: boolean, detail: string }}
+ */
+export function quitLandedFirst(log) {
+  const lines = String(log ?? '').split('\n');
+  const quit = lines.findIndex((l) => /\bquit: requested\b/.test(l));
+  const result = lines.findIndex((l) => /capture: wait for result satisfied/.test(l));
+  const ended = lines.find((l, i) => i > quit && quit >= 0 && /\bended \w+ \([a-z_]+\)/.test(l))?.replace(/^.*?\b(run \S+ ended .*)$/, '$1').trim();
+  if (result < 0) return { passed: true, detail: quit < 0 ? 'no quit line was logged and the run reached no result' : 'the run reached no result after the quit' };
+  if (quit < 0) return { passed: false, detail: `the run reached its result (${lines[result].trim()}) and main logged no quit` };
+  if (result < quit) return { passed: false, detail: `the run reached its result (line ${result + 1}) before the quit (line ${quit + 1})` };
+  return { passed: true, detail: `the quit (line ${quit + 1}) came first; the result the wait reported (line ${result + 1}) is the run's end after it${ended === undefined ? '' : `: ${ended}`}` };
+}
+
 function readCut(dbPath, sessionId) {
   const Database = require('better-sqlite3');
   const db = new Database(dbPath, { readonly: true });
@@ -154,7 +175,7 @@ export async function runCutScenario(ctx) {
   const summary = existsSync(summaryFile) ? readFileSync(summaryFile, 'utf8') : null;
   const verdicts = cutVerdicts({ quitSent: quitSent !== null, calls, issues, summary });
   for (const v of verdicts) { if (v.verdict === 'note') ctx.noted(v.what, v.detail); else ctx.check(v.passed, v.what, v.detail ?? undefined); }
-  if (quitSent !== null) ctx.check(!/capture: wait for result satisfied/.test(log), 'cut: the quit landed before the run reached its result', undefined);
+  if (quitSent !== null) { const order = quitLandedFirst(log); ctx.check(order.passed, 'cut: the quit landed before the run reached its result', order.detail); }
   ctx.check(read.session.execution_status !== 'failed', 'cut: a run its quit cut did not fail', `${read.session.execution_status} (${read.session.stop_reason})`);
   const sleep = calls.find((c) => c.tool_name === 'terminal' && isCutCommand(c.args?.command));
   ctx.results.scenarios.cut = {

@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the scripts that run it.
-import { CUT_COMMAND, CUT_PROMPT, OPEN_WITHOUT_MARKER_MS, cutVerdicts, isCutCommand, openCutCall } from './cut-scenario.mjs';
+import { CUT_COMMAND, CUT_PROMPT, OPEN_WITHOUT_MARKER_MS, cutVerdicts, isCutCommand, openCutCall, quitLandedFirst } from './cut-scenario.mjs';
 
 type Verdict = { verdict: 'check' | 'note'; passed?: boolean; what: string; detail?: string };
 const running = (ordinal: number, command: string, tool = 'terminal') => ({ ordinal, tool_name: tool, status: 'running', entry: { args: { command, timeout: 90 } } });
@@ -74,5 +74,36 @@ describe('the cut scenario (PD-TOOLS-013 live)', () => {
     const soft: Verdict[] = cutVerdicts({ quitSent: false, calls: [cutCall({ status: 'ok', args: { command: 'sleep 60' } })], issues: [], summary: null });
     expect(soft[0]).toMatchObject({ verdict: 'note' });
     expect(soft[0]?.detail).toMatch(/no timeout supplied, so soft-paused/);
+  });
+});
+
+/*
+ * L1 of the live runs at a3be56c (pack 2026-10-14T04-30-51-088Z, cut/): every cut check passed — the call failed / interrupted,
+ * the run paused `application_shutdown`, summary.md counting it under interrupted — but "the quit landed before the run reached
+ * its result" FAILED, because it read the log for the capture's "wait for result satisfied" line ANYWHERE. A run its quit cuts
+ * still ends with its one result (the interrupted end the shutdown writes), and the capture's wait, still installed, reports
+ * that result as satisfied 750 ms after the quit. The order is the reading: a result reached before the quit is the failure.
+ */
+describe('the cut scenario reads whether the quit came before the run\'s result by the log\'s order', () => {
+  const line = (at: string, text: string) => `[main 2026-10-14T05:05:${at}Z] info    ${text}`;
+  const quit = line('52.905', 'quit: requested (before-quit)');
+  const ended = line('53.576', 'run f0d6d135 ended interrupted (application_shutdown) → paused');
+  const satisfied = line('53.654', 'capture: wait for result satisfied after 13012 ms');
+
+  it('passes the a3be56c pack\'s order: the quit, then the interrupted end, then the wait reporting that end', () => {
+    const r = quitLandedFirst([line('48.518', 'run host: model request POST …'), quit, ended, satisfied, line('53.735', 'quit: requested (before-quit)')].join('\n'));
+    expect(r.passed, r.detail).toBe(true);
+    expect(r.detail).toMatch(/ended interrupted \(application_shutdown\)/);
+  });
+
+  it('fails a run that reached its result before the quit', () => {
+    const r = quitLandedFirst([line('50.000', 'run f0d6d135 ended completed (end_turn) → completed'), satisfied, quit].join('\n'));
+    expect(r.passed).toBe(false);
+    expect(r.detail).toMatch(/before the quit/);
+  });
+
+  it('passes a launch that never reached a result at all, and fails one whose result came with no quit logged', () => {
+    expect(quitLandedFirst([quit, ended].join('\n')).passed).toBe(true);
+    expect(quitLandedFirst([satisfied].join('\n')).passed).toBe(false);
   });
 });

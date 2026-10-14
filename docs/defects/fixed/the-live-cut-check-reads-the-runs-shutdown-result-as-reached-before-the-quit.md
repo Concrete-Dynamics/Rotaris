@@ -19,3 +19,19 @@ the harness's reading of the scenario's own precondition — that the quit cut t
 
 - `apps/desktop/scripts/lib/cut-scenario.mjs` — `runCutScenario`'s last check, `!/capture: wait for result satisfied/.test(log)`.
 - `apps/desktop/scripts/lib/cut-scenario.test.ts` — the readings' tests, none of which covers this one.
+
+## Outcome — repaired 2026-10-14 (fin45, `fin45-seams-ui-and-live`); the harness misread, the product did not
+
+`cut-scenario.mjs` reads the order now: `quitLandedFirst(log)` compares the first `quit: requested` line with the capture's
+`wait for result satisfied` line, and fails only a result reached BEFORE the quit (or one reached with no quit logged); a result
+after the quit is the run's own end, named in the check's detail (`run … ended interrupted (application_shutdown)`).
+
+**Pinned** by `apps/desktop/scripts/lib/cut-scenario.test.ts` ("the cut scenario reads whether the quit came before the run's
+result by the log's order"): the a3be56c pack's order passes, a result before the quit fails, a launch with no result passes, a
+result with no quit logged fails (red before: the reading did not exist, and the old one failed the first case). Read over the
+pack's own `cut/app.log`, it passes: "the quit (line 40) came first; the result the wait reported (line 46) is the run's end after
+it: run f0d6d135-7b8f-480c-915a-6e3cd43fe21a ended interrupted (application_shutdown) → paused".
+
+**What a live run should show** (the orchestrator's: `node apps/desktop/scripts/live-run.mjs --confirm --only=cut`): every cut
+check PASS, this one included, with its detail naming the run's interrupted end after the quit; a run that finished before the
+harness's quit still FAILS it.

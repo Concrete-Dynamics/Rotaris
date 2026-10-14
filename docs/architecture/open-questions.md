@@ -13584,6 +13584,25 @@ too, on REQ-GIT-071's terms, with the same report (key, value, the namespace it 
 
 **What a live run then shows.** Nothing: the live-run workspaces keep the default `worktrees`.
 
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)): confirmed as built.** A
+`worktree_storage_subpath` is rejected at load only when it resolves to `.rotaris/requirements/worktrees` or to a directory
+inside it; a value whose session directory contains that directory, such as `requirements` or `.`, loads. In REQ-GIT-138's first
+sentence, "the directory of another" means a worktree directory of another namespace, or the fixed container REQ-GIT-137 names;
+it does not mean every directory that encloses that container. A dated note under REQ-GIT-138
+([`06-git-worktrees-checkpoints.md`](../spec/06-git-worktrees-checkpoints.md)) records this reading, the requirement's text
+kept, and the domain's resolution record logs it. No directive is needed and no behaviour changes.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: confirm as built and record only — no session tree can
+land in the requirement container, since a session id is never `worktrees`, so a user who chose `requirements` or `.` loses
+nothing and a rejection would refuse a configuration that works. *Advocate B (the system's lens)*: confirm as built and add a
+clarifying note under REQ-GIT-138, so the first sentence no longer reads against the stated rejection. **The ruling follows
+both**: confirmed as built, with B's note. **The reason**: REQ-GIT-130's integration layout,
+`<workspace>/.rotaris/<storage-subpath>/integrations/<id>`, already puts one namespace's container inside the session storage
+directory, so namespace containers may nest by design; what the requirement keeps disjoint is the worktree directories
+themselves. **The caveat**: the disjointness depends on session ids being UUIDs, which never equal `worktrees` or
+`integrations`. A future requirement that names session ids differently, adds a fixed directory under `.rotaris/` or
+`.rotaris/requirements/`, or enumerates the session storage directory must reopen this ruling.
+
 <a id="oq-264"></a>
 **OQ-264 — Where in Settings does REQ-CHAT-167's reasoning-visibility switch live, when REQ-CONFIG-403 says the
 Display category "holds two transcript toggles"?** *(REQ-CHAT-167 with REQ-CONFIG-403 and REQ-CONFIG-472. Raised

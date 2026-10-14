@@ -195,7 +195,8 @@ Main now reads the key from the service's `config.read` snapshot and sends it; `
 creates, writes and lists a session tree at `.rotaris/trees/sessions/<sid>` with no `.rotaris/worktrees/` made. The write path of
 this record (REQ-GIT-005's placement and its `Worktree storage path must stay inside .rotaris.` refusal in
 `sessionWorktreePath`) held as written; the defect was upstream of it. REQ-GIT-138's directory half, which the record did not
-place, is now made at load (`worktreeStorageCollision`); OQ-263 asks about a value that contains the requirement directory.
+place, is now made at load (`worktreeStorageCollision`); a value that contains the requirement directory loads, ruled (OQ-263, confirmed as built,
+2026-10-13 under R-072).
 
 **REQ-GIT-010/012's phrase matches, now executed:** the collision phrase was hit by a real `worktree add` on an existing
 branch (`a branch named '…' already exists`), the suffix `-2` taken; the long-path phrases are matched against a

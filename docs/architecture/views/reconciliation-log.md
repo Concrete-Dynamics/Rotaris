@@ -15,6 +15,10 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-14**
 
+**OQ-263 ruled: a session storage directory that contains the requirement checkout container loads (fin43, R-072).** The
+**runtime view**'s `worktree_storage_subpath` sentence names the ruling (confirmed as built) where it said the question was
+open. No behaviour, package, edge, process, channel, command or store column changed.
+
 **Match level 3 compares each line without its carriage return (PD-TOOLS-019, PD-TOOLS-014 revision 3, OQ-280; fin43).**
 `matchEdit`'s level 3 sets one trailing `\r` aside on both sides, and the level-3 near miss names differing line endings. The
 **runtime view**'s file-tools paragraph says both. No package, edge, process, channel, command or store column changed.

@@ -19,7 +19,7 @@ describe('REQ-GIT-138: the load-time check and the worktree placement agree', ()
   it('a value is rejected at load exactly when the session tree it places would lie in that directory', () => {
     const fixed = resolve(ws, REQUIREMENT_WORKTREES_SUBPATH);
     const inside = (p: string) => { const r = relative(fixed, p); return r === '' || (!r.startsWith('..') && !isAbsolute(r)); };
-    for (const sub of ['worktrees', '', 'trees/sessions', 'requirements', 'requirements/worktrees', 'requirements/worktrees/s', './requirements/worktrees', 'requirements/worktrees2', 'x/requirements/worktrees']) {
+    for (const sub of ['worktrees', '', 'trees/sessions', 'requirements', '.', 'requirements/worktrees', 'requirements/worktrees/s', './requirements/worktrees', 'requirements/worktrees2', 'x/requirements/worktrees']) {
       const placed = sessionWorktreePath(ws, sub, 'sid');
       expect(placed.ok, sub).toBe(true);
       if (!placed.ok) continue;

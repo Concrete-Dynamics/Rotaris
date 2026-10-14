@@ -729,7 +729,7 @@ describe('REQ-GIT-073 / REQ-CONFIG-068 / REQ-GIT-138: worktree_storage_subpath',
       expect(text).toContain('.rotaris/requirements/worktrees');
       expect(text).toContain('REQ-GIT-138');
     }
-    // Beside it, above it and the default all pass (a value CONTAINING the directory is OQ-263's question, loaded as stated).
+    // Beside it, above it and the default all pass (a value CONTAINING the directory loads — ruled (OQ-263, confirmed as built)).
     for (const good of ['requirements', '.', 'requirements/worktrees-x', 'requirement/worktrees', 'worktrees']) expect(loaded(null, `worktree_storage_subpath: ${good}\n`).worktreeStorageSubpath).toBe(good);
   });
 });

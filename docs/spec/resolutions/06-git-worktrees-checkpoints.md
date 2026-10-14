@@ -8,6 +8,20 @@ status: resolved
 # Open-Question Resolutions — Git Integration, Worktrees, and Checkpoints
 
 
+> ## Amendment, 2026-10-13 — a session storage directory that contains the requirement checkout container (OQ-263)
+>
+> `REQ-GIT-138` gains a dated note beneath its text, which is kept unchanged. In its first sentence, "the directory of
+> another" means a worktree directory of another namespace, or the fixed requirement checkout container `REQ-GIT-137` names
+> (`<workspace>/.rotaris/requirements/worktrees/`), and not every directory that encloses it; a `worktree_storage_subpath` of
+> `requirements` or `.`, whose session directory contains that container, loads, and the directory-side rejection is exactly
+> the one the requirement states (the container itself, or a directory inside it).
+>
+> **Why this is a note and not a directive.** The requirement's two sentences read differently over those two values, and
+> `REQ-GIT-130`'s own layout — the integration container `integrations/` inside the session storage directory — shows that
+> namespace containers nest by design. Nothing the product does changes. Ruled under the owner's delegation
+> ([R-072](../../product/requests.md#r-072)), confirmed as built; the ruling, with its caveat on session ids, is in
+> [`open-questions.md`](../../architecture/open-questions.md#oq-263).
+
 > ## Superseded by the storage rulings (2026-09-01)
 >
 > The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and

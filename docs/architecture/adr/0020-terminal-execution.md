@@ -825,6 +825,22 @@ backends through `encodedSnapshot`; the tag stands in for POSIX's leading `/` in
 rows. Pinned on Linux over the parse through the `@xterm/headless` emulator at 20 to 240 columns, from the rows the
 command's loop prints. **Not executed:** no Windows host and no `pwsh` here, so the PowerShell capture's first execution
 is still owed, and it reports back here.
+
+*Reported back 2026-10-15, the PowerShell capture's first execution on a real PTY (Windows 11 ARM64 (build 26200.9457),
+Node 24.18.0 arm64, dev tree, pwsh 7.6.6 and Windows PowerShell 5.1, at `fbbc3d23`; the Windows ARM64 session's B2;
+windows-arm64 only, OQ-400).* **Held from 34 columns up.** A new case, three runs under each shell, read the capture whole
+off the screen and restored the directory (170 characters) and every variable byte for byte across a hard-timeout reset at
+34, 40, 64, 75, 76, 77, 120 and 240 columns: a `Path` with 24 extra entries, a 600-character value, a non-ASCII one, one
+PowerShell would read as code; a spawn variable the command removed stayed removed; with one exclusion under 5.1 only, the
+product's own empty `PSModuleAnalysisCachePath`, lost across the reset
+([recorded](../../defects/windows-powershell-5-1-loses-the-spawn-environments-empty-psmoduleanalysiscachepath-across-a-reset.md)).
+The capture took 139 to 220 ms of its 15 s; the restore line was 3,009 to 3,165 characters, which bears on M1's
+unmeasured line cap. **Not reached below 34 columns:** there no PowerShell call ends at all. ConPTY writes a wrapped row as
+a hard `\r\n`, a cursor move back to the row it left and that column's character again, and the frame match over the
+VT-stripped stream (`${end}:(-?\d+)`) never meets a 34-character frame split that way
+([`below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md`](../../defects/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md),
+recorded, not repaired). And a restore line whose `Set-Item` fails still exits 0, so a partial restore reads "were
+restored" ([recorded](../../defects/a-powershell-restore-whose-set-item-fails-is-still-reported-restored.md)).
 *(2026-10-15, Windows 11 ARM64 (build 26200.9457), pwsh 7.6.6 and Windows PowerShell 5.1, the session's B1: one real
 PowerShell capture and restore ran, in "PD-TOOLS-001 (OQ-134): a reset restores the snapshot of the last command the
 product saw complete", green in every run under both shells (about 17 s); the emulated-screen parse cases ran too. The

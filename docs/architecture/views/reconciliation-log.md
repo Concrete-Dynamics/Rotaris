@@ -16,6 +16,9 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-15**
 
+**PD-TOOLS-001's PowerShell capture run on Windows (the Windows ARM64 session's B2).** A comment in `snapshotCommand` and
+new test cases only; no view changed.
+
 **Every PowerShell command takes the guarded payload (the Windows ARM64 session's B3; REQ-TOOLS-097/179).** `wrapCommand`'s
 PowerShell branch no longer splices a single-line command raw into the line: one line or many, the command is carried as
 base64, parsed alone, then dot-sourced in a `try` with its flag's line appended. No view changed: the wrapper's spelling is

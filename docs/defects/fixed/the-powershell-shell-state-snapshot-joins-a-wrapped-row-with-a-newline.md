@@ -65,3 +65,24 @@ PowerShell read without the tag is refused whatever follows. Pinned by "a PowerS
 resumes at a `/` is refused, never read as a POSIX capture" (a value whose `/` lands on byte 48, so the rows after the
 first decode to `/usr/bin\0B=two\0`): red before the change ("expected { cwd: '/usr/bin', env: { B: 'two' } } to be
 null").
+
+## Windows run — 2026-10-15
+
+*Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6 arm64 and Windows
+PowerShell 5.1.26100.9457, at `fbbc3d23` (the Windows ARM64 session's B2). It measures windows-arm64 only (OQ-400).*
+
+**The repair holds on a real PowerShell, from 34 columns up.** "PD-TOOLS-001, REQ-TOOLS-099/128: at every width from 34 to
+240 columns a hard-timeout reset restores PowerShell's directory and environment byte for byte" in `terminal.test.ts`, three
+runs under each shell, green: at 34, 40, 64, 75, 76, 77, 120 and 240 columns, a directory of 170 characters, a `Path` with 24
+extra entries, a 600-character value, `héllo-ü-日本-€`, and ``O'Brien $(whoami) `tick`` came back from the reset byte for byte, none
+holding a `\r` or `\n`; a spawn variable the command removed stayed removed; the product's own capture read off each
+width's screen parsed whole; `cmd.exe` resolved and `cmd /c ver` exited 0 after the reset. Every other variable survived,
+with one exclusion under 5.1 only (the product's own empty `PSModuleAnalysisCachePath`,
+[`windows-powershell-5-1-loses-…`](../windows-powershell-5-1-loses-the-spawn-environments-empty-psmoduleanalysiscachepath-across-a-reset.md)).
+The capture took 139 to 220 ms against its 15 s bound (`SNAPSHOT_TIMEOUT_MS`); the restore line for that environment was 3,009
+characters under 5.1 and 3,165 under pwsh, 8 variables; a 1 s hard cap's call returned after about 1.9 s.
+
+**Not reached:** 20 and 33 columns. Below 34 no PowerShell call ends at all, so the reset is never reached there
+([`below-34-columns-…`](../below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md)). **Found beside it:** a restore
+line whose `Set-Item` fails still exits 0, so it is reported restored
+([`a-powershell-restore-whose-set-item-fails-…`](../a-powershell-restore-whose-set-item-fails-is-still-reported-restored.md)).

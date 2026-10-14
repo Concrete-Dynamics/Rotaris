@@ -884,7 +884,9 @@ export function snapshotCommand(backend: ShellBackend): string {
     // and the parse took a row the screen wrapped for a newline inside the value — a `Path` past the 240 columns, every
     // row at the 20 the display may narrow to — and cut a directory wider than the screen at its edge
     // (docs/defects/fixed/the-powershell-shell-state-snapshot-joins-a-wrapped-row-with-a-newline.md). Read from the
-    // POSIX repair and pinned over the parse on Linux; executing it needs a Windows host.
+    // POSIX repair and pinned over the parse on Linux; executing it needs a Windows host. Executed 2026-10-15 on Windows 11
+    // ARM64 under pwsh 7.6.6 and 5.1: read whole and restored byte for byte at 34 to 240 columns (B2 of that session's
+    // record, ADR-0020); below 34 no call ends at all (docs/defects/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md).
     return `$__m = '${SNAPSHOT_MARK}'; $__s = '${PS_SNAPSHOT_TAG}' + [char]0 + (Get-Location).Path + [char]0 + ((Get-ChildItem Env: | ForEach-Object { $_.Name + '=' + $_.Value + [char]0 }) -join ''); $__b = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($__s)); for ($__i = 0; $__i -lt $__b.Length; $__i += ${SNAPSHOT_ROW}) { Write-Output ($__m + ':' + $__b.Substring($__i, [Math]::Min(${SNAPSHOT_ROW}, $__b.Length - $__i))) }`;
   }
   // POSIX: the directory and `env -0`, NUL-separated, as base64 folded to 64 columns. The capture is the EMULATED

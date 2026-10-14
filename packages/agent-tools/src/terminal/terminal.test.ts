@@ -88,10 +88,14 @@ const args = (a: Record<string, unknown>) => ({ command: '', is_input: false, re
  * and `cols` is the width the display resized its PTY to before its first call (REQ-TOOLS-128).
  */
 async function posixSession(file: string, opts: { env?: Record<string, string>; cols?: number } = {}) {
+  return backendSession({ kind: 'posix', file }, opts);
+}
+/** The same on any backend: PowerShell's PD-TOOLS-001 cases need the width and the spawn environment too. */
+async function backendSession(backend: ShellBackend, opts: { env?: Record<string, string>; cols?: number } = {}) {
   const env = { ...Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), ...opts.env };
-  const m = new TerminalManager({ factory: await nodePtyFactory(), backend: { kind: 'posix', file }, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env, warn: () => undefined });
+  const m = new TerminalManager({ factory: await nodePtyFactory(), backend, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env, warn: () => undefined });
   if (opts.cols !== undefined) m.session(`${ctx().sessionId}:${ctx().agentName}`, root).resize(opts.cols, 50);
-  return { m, t: terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }) };
+  return { m, t: terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }), env };
 }
 
 afterAll(async () => { await manager?.dispose(); rmSync(root, { recursive: true, force: true }); if (bashAsSh) rmSync(join(bashAsSh, '..'), { recursive: true, force: true }); });
@@ -724,6 +728,9 @@ describe.skipIf(process.platform === 'win32')('PD-TOOLS-001: the POSIX shell-sta
 // capture's encoded rows. No PowerShell runs on this host: `powershellCapture` prints what the command's loop prints
 // (the tag, the directory and each `NAME=value`, NUL-terminated, UTF-8, base64, 64 characters a row behind the marker),
 // and the parse is read off the emulated screen at every width the display may give it. The Windows run is owed.
+// Run 2026-10-15 on Windows 11 ARM64 (pwsh 7.6.6 and 5.1): the real-PTY case "at every width from 34 to 240 columns a
+// hard-timeout reset restores PowerShell's directory and environment byte for byte" below; below 34 columns no call ends
+// (docs/defects/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md).
 describe('PD-TOOLS-001: the PowerShell shell-state capture survives a screen that wraps (REQ-TOOLS-104, REQ-TOOLS-128)', () => {
   const ps: ShellBackend = { kind: 'powershell', file: 'pwsh' };
   const powershellCapture = (cwd: string, env: Readonly<Record<string, string>>): string => {
@@ -1555,6 +1562,72 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       } finally { await m.dispose(); }
     }
   }, 90_000);
+  // PD-TOOLS-001's PowerShell capture and restore over a real PTY, first run on a Windows host 2026-10-15 (Windows 11 ARM64,
+  // the session's B2): the POSIX case above at the widths the display may give, a directory and a `Path` wider than the
+  // screen, a value of 600 characters, a non-ASCII one, one PowerShell would read as code, and a spawn variable the
+  // command removed. The environment and the directory are dumped from inside the shell before the hard cap and after
+  // the reset, and compared here.
+  it.runIf(PS)('PD-TOOLS-001, REQ-TOOLS-099/128: at every width from 34 to 240 columns a hard-timeout reset restores PowerShell\'s directory and environment byte for byte', async () => {
+    let dir = join(root, 'ps-wide-cwd');
+    while (dir.length < 170) dir = join(dir, 'segment-of-a-long-directory');
+    mkdirSync(dir, { recursive: true });
+    const dumps = join(root, 'ps-dumps');
+    mkdirSync(dumps, { recursive: true });
+    const dumpOf = (tag: string) =>
+      `Get-ChildItem Env: | Sort-Object Name | ForEach-Object { $_.Name + '=' + $_.Value } | Set-Content -LiteralPath '${join(dumps, `${tag}.env`)}' -Encoding utf8; `
+      + `Set-Content -LiteralPath '${join(dumps, `${tag}.cwd`)}' -Value (Get-Location).Path -Encoding utf8`;
+    const read = (tag: string): { env: Map<string, string>; cwd: string } => {
+      const text = (f: string) => readFileSync(join(dumps, f), 'utf8').replace(/^\uFEFF/, '');
+      const env = new Map<string, string>();
+      for (const line of text(`${tag}.env`).split(/\r?\n/)) { const eq = line.indexOf('='); if (eq > 0) env.set(line.slice(0, eq), line.slice(eq + 1)); }
+      return { env, cwd: text(`${tag}.cwd`).replace(/\r?\n$/, '') };
+    };
+    const dummies = Array.from({ length: 24 }, (_, i) => `C:\\Program Files\\Tool${i + 1}\\bin`).join(';');
+    const nonAscii = 'héllo-ü-日本-€';
+    const asCode = "O'Brien $(whoami) `tick";
+    // From 34 columns: below that every PowerShell call runs to its hard cap
+    // (docs/defects/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md), so 20 and 33 are owed to its repair.
+    for (const cols of [34, 40, 64, 75, 76, 77, 120, 240]) {
+      const { m, t } = await backendSession(shell!, { cols, env: { ROTARIS_SPAWN_ONLY: 'present' } });
+      try {
+        const setup = await t.execute(args({ command: `Set-Location -LiteralPath '${dir}'; $env:Path = '${dummies};' + $env:Path; `
+          + `$env:ROTARIS_NONASCII = '${nonAscii}'; $env:ROTARIS_LONG = 'v' * 600; $env:ROTARIS_ASCODE = '${asCode.replace(/'/g, "''")}'; `
+          + `Remove-Item Env:ROTARIS_SPAWN_ONLY; ${dumpOf(`before-${cols}`)}`, timeout: 15 }), ctx());
+        expect(diag(setup.text)['exit_code'], `setup at ${cols}`).toBe(0);
+        // The capture is the product's own command read off this width's screen, and it parses whole.
+        const captured = await t.execute(args({ command: snapshotCommand(shell!), timeout: 15 }), ctx());
+        expect(parseSnapshot(output(captured.text) ?? '', 'powershell'), `parse at ${cols}`).not.toBeNull();
+        const r = await t.execute(args({ command: "Start-Sleep -Seconds 20; Write-Output 'late'", timeout: 1 }), ctx());
+        expect(diag(r.text), `reset at ${cols}`).toMatchObject({ exit_code: 124, failure_kind: 'timeout', kill_status: 'session_reset' });
+        expect(r.text, `reset at ${cols}`).toContain('were restored');
+        const after = await t.execute(args({ command: `${dumpOf(`after-${cols}`)}; (Get-Command cmd.exe).Source; cmd /c ver`, timeout: 15 }), ctx());
+        expect(diag(after.text), `after at ${cols}`).toMatchObject({ exit_code: 0, session_reinitialized: true });
+        const before = read(`before-${cols}`);
+        const restored = read(`after-${cols}`);
+        expect(restored.cwd, `cwd at ${cols}`).toBe(dir);
+        // A Windows variable's name is matched without case: the spawn environment spells `Path` or `PATH` by whoever made it.
+        const pathName = [...before.env.keys()].find((k) => k.toLowerCase() === 'path')!;
+        expect(before.env.get(pathName)!.startsWith(dummies), `Path at ${cols}`).toBe(true);
+        for (const name of [pathName, 'ROTARIS_NONASCII', 'ROTARIS_LONG', 'ROTARIS_ASCODE']) {
+          const value = restored.env.get(name);
+          expect(value, `${name} at ${cols}`).toBe(before.env.get(name));
+          expect(value ?? '', `${name} at ${cols}`).not.toMatch(/[\r\n]/);
+        }
+        expect(restored.env.get('ROTARIS_NONASCII')).toBe(nonAscii);
+        expect(restored.env.get('ROTARIS_ASCODE')).toBe(asCode);
+        expect(restored.env.get('ROTARIS_LONG')).toBe('v'.repeat(600));
+        expect(restored.env.has('ROTARIS_SPAWN_ONLY'), `spawn-only at ${cols}`).toBe(false);
+        // Every other variable survives the reset as it stood.
+        // One exclusion, under Windows PowerShell 5.1 only: the product's own empty `PSModuleAnalysisCachePath` (the spawn
+        // environment's) reads present before the reset and absent after
+        // (docs/defects/windows-powershell-5-1-loses-the-spawn-environments-empty-psmoduleanalysiscachepath-across-a-reset.md).
+        const excluded = /pwsh\.exe$/i.test(shell!.file) ? [] : ['PSModuleAnalysisCachePath'];
+        const lost = [...before.env.keys()].filter((k) => !excluded.includes(k) && restored.env.get(k) !== before.env.get(k));
+        const gained = [...restored.env.keys()].filter((k) => !before.env.has(k));
+        expect({ lost, gained }, `variables at ${cols}`).toEqual({ lost: [], gained: [] });
+      } finally { await m.dispose(); }
+    }
+  }, 240_000);
   // fin15's verification: where a startup file turns bash's readline back on, the sideways row it draws of the next call's
   // wrapper is too narrow below about 50 columns to carry the whole end statement, and it reached the interrupted call's
   // poll at 40 columns (`scrolledEcho` reads its tail).

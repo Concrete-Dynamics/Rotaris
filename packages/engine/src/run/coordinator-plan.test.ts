@@ -9,7 +9,7 @@ import { ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, 
 import { decodeStoredTodo, projectSessionTodos, type AgentTodoDocument } from '../todo-view.js';
 import { TODO_LIST_OWED_TEXT } from './stop-conditions.js';
 import { ANSWER_REPROMPT } from './run.js';
-import { SUPERVISOR_DEFAULTS, type LoopActivation, type LoopClassifier } from './supervisor.js';
+import { SUPERVISOR_DEFAULTS, type LoopActivation, type LoopClassifier, type SupervisorConfig } from './supervisor.js';
 
 /**
  * The repair of `the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md` (live-run finding G5):
@@ -46,7 +46,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
-  function sessionsWith(calls: ScriptedCall[], runOverride: 'single' | 'swarm' | null = null, gate?: (callId: string) => Promise<void>, config: Partial<typeof RUN_CONFIG_DEFAULTS> = {}, runStartMode: 'auto' | 'plan' = 'auto', withoutTodo = false, classifier?: LoopClassifier) {
+  function sessionsWith(calls: ScriptedCall[], runOverride: 'single' | 'swarm' | null = null, gate?: (callId: string) => Promise<void>, config: Partial<typeof RUN_CONFIG_DEFAULTS> = {}, runStartMode: 'auto' | 'plan' = 'auto', withoutTodo = false, classifier?: LoopClassifier, supervisorConfig: SupervisorConfig = SUPERVISOR_DEFAULTS) {
     const client = new ScriptedModelClient(calls);
     const workItemsRun: string[] = [];
     const warnings: string[] = [];
@@ -81,7 +81,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
       clocks: clock, publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 86, host: HOST, retentionCap: 20_000, warn: (m) => { warnings.push(m); },
       mintSessionId: () => `S-plan-${++minted}`, model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, ...config, model: MODEL, credentialFor: () => async () => 'k' } }, runtime,
       sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), tools: portFor, attended: () => true,
-      ...(classifier ? { supervisor: () => ({ config: SUPERVISOR_DEFAULTS, classifier }) } : {}),
+      ...(classifier ? { supervisor: () => ({ config: supervisorConfig, classifier }) } : {}),
     });
     return { sessions, client, workItemsRun, warnings };
   }
@@ -654,44 +654,82 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     });
 
     /*
-     * OQ-284 (raised 2026-10-14 by fin43 beside PD-ORCH-009 revision 3): a root turn that ends empty arms REQ-ORCH-096's stuck
-     * trigger, and a turn the run does not follow up leaves it pending in the root's supervisor. When the run then sends a plan
-     * correction (REQ-ORCH-078, PD-ORCH-015), the correction's request takes the trigger at its first step: the stuck corrective
-     * follows the correction in the same request — the shape revision 3 removed for the re-prompt alone. These two cases pin
-     * what was found, as found; a ruling of OQ-284 changes them.
+     * PD-ORCH-009 revision 4 (OQ-284, ruled 2026-10-13 under R-072), narrowing REQ-ORCH-104's stuck-mode clause: when the run
+     * follows an execution iteration's root turn with REQ-ORCH-078's plan correction (PD-ORCH-015), the correction is the only
+     * message it adds for that turn. A stuck trigger the turn armed is withdrawn — no classification, no corrective, no stuck
+     * `loop_supervisor_activation` — while a repetition, cycle or raw-count trigger is kept (disjoint from PD-ORCH-016). The
+     * correction also counts as REQ-ORCH-105's todo-correction message and restarts the consecutive-activation series.
+     *
+     * Until revision 4 the first two cases pinned the shape as found (raised as OQ-284 by fin43): the correction's request took
+     * the pending trigger at its first step, so it ended [..., correction, "Pause and reassess the current task."] and the
+     * classifier was asked once (`stuck`).
      */
-    describe('OQ-284: a stuck trigger an unanswered empty turn left pending lands after a plan correction', () => {
-      const supervised = () => {
+    describe('PD-ORCH-009 revision 4 (OQ-284): a plan correction replaces the stuck corrective its turn armed', () => {
+      const supervised = (detect: (a: LoopActivation) => boolean = () => true) => {
         const asked: LoopActivation[] = [];
-        const classifier: LoopClassifier = { classify: async (a) => { asked.push(a); return { loop_detected: true, reason: 'stuck', corrective_message: 'Pause and reassess the current task.' }; } };
+        const classifier: LoopClassifier = { classify: async (a) => { asked.push(a); return { loop_detected: detect(a), reason: 'loop', corrective_message: 'Pause and reassess the current task.' }; } };
         return { asked, classifier };
       };
       const userTexts = (r: ModelRequest): string[] => r.messages.filter((m) => m.role === 'user').map((m) => m.content.map((c) => (c.kind === 'text' ? c.text : '')).join(''));
+      const activations = (sid: SessionId) => dal.timelineOf(sid).filter((t) => t.name === 'loop_supervisor_activation').map((t) => (JSON.parse(t.metadata) as { trigger: string; activation_count: number }));
 
-      it('a second silence (the re-prompt answered by none): the plan correction is followed by the stuck corrective', async () => {
+      it('a second silence (the re-prompt answered by none): the plan correction is its request\'s last message, with no stuck steering', async () => {
         const { asked, classifier } = supervised();
         const { sessions, client } = sessionsWith([writePlan('c1', ['COMPLETED', 'PENDING']), silent, silent, writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done.')], null, undefined, {}, 'auto', false, classifier);
         const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
         expect((await sessions.running(sid)!).status).toBe('completed');
         // Revision 3: the re-prompt is the request's last message.
         expect(lastUser(client.requests[2]!)).toBe(ANSWER_REPROMPT);
-        // The silence that answered it armed stuck, and the correction's request took it.
+        // Revision 4: the silence that answered it armed stuck, and the correction withdrew it. Before revision 4:
+        // after.at(-2) was the correction and after.at(-1) 'Pause and reassess the current task.', asked ['stuck'].
         const after = userTexts(client.requests[3]!);
-        expect(after.at(-2)!.startsWith('You declared success with 1 item')).toBe(true);
-        expect(after.at(-1)).toBe('Pause and reassess the current task.');
-        expect(asked.map((a) => a.trigger)).toEqual(['stuck']);
+        expect(after.at(-1)!.startsWith('You declared success with 1 item')).toBe(true);
+        expect(asked).toEqual([]);
+        expect(activations(sid)).toEqual([]);
       });
 
-      it('an empty turn after an answer and a plan correction: a second correction is followed by the stuck corrective', async () => {
+      it('an empty turn after an answer and a plan correction: the second correction is its request\'s last message, with no stuck steering', async () => {
         const { asked, classifier } = supervised();
         const { sessions, client } = sessionsWith([writePlan('c1', ['COMPLETED', 'PENDING']), answer(REPORT), silent, writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Recorded.')], null, undefined, { validationRetries: 2 }, 'auto', false, classifier);
         const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
         expect((await sessions.running(sid)!).status).toBe('completed');
         expect(lastUser(client.requests[2]!).startsWith('Your answer has been shown to the person.')).toBe(true);
+        // Before revision 4: after.at(-2) was the correction and after.at(-1) the stuck corrective, asked ['stuck'].
         const after = userTexts(client.requests[3]!);
+        expect(after.at(-1)!.startsWith('Your answer has been shown to the person.')).toBe(true);
+        expect(asked).toEqual([]);
+        expect(activations(sid)).toEqual([]);
+      });
+
+      it('a raw-count trigger the answered turn armed is kept: the correction is followed by its corrective (disjoint from PD-ORCH-016)', async () => {
+        const { asked, classifier } = supervised();
+        // Two messages arm REQ-ORCH-101's raw-count trigger: the plan write's and the answer's, the latter at the turn's last step.
+        const { sessions, client } = sessionsWith([writePlan('c1', ['COMPLETED', 'PENDING']), answer(REPORT), writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Recorded.')], null, undefined, {}, 'auto', false, classifier, { ...SUPERVISOR_DEFAULTS, messageThreshold: 2 });
+        const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+        expect((await sessions.running(sid)!).status).toBe('completed');
+        const after = userTexts(client.requests[2]!);
         expect(after.at(-2)!.startsWith('Your answer has been shown to the person.')).toBe(true);
         expect(after.at(-1)).toBe('Pause and reassess the current task.');
-        expect(asked.map((a) => a.trigger)).toEqual(['stuck']);
+        expect(asked.map((a) => a.trigger)).toEqual(['raw-count']);
+        expect(activations(sid)).toEqual([{ trigger: 'raw-count', reason: 'raw event threshold', activation_count: 1 }]);
+      });
+
+      it('REQ-ORCH-105: a correction restarts the consecutive series — two activations before it and a trigger after it inject, never escalate', async () => {
+        // The classifier declines every raw-count loop, so each activation only counts (REQ-ORCH-102 counts before it classifies).
+        const { asked, classifier } = supervised(() => false);
+        const { sessions } = sessionsWith([
+          writePlan('c1', ['COMPLETED', 'PENDING']), writePlan('c1b', ['COMPLETED', 'PENDING']), // armed; taken at the next step: 1
+          writePlan('c1c', ['COMPLETED', 'PENDING']), writePlan('c1d', ['COMPLETED', 'PENDING']), // armed; taken at the next step: 2
+          answer(REPORT),
+          // The correction's turn: armed again by its second message, taken at the next step — 1 after the reset, else 3.
+          writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Recorded.'),
+        ], null, undefined, {}, 'auto', false, classifier, { ...SUPERVISOR_DEFAULTS, messageThreshold: 2 });
+        const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+        expect((await sessions.running(sid)!).status).toBe('completed');
+        expect(asked.map((a) => [a.trigger, a.activationCount])).toEqual([['raw-count', 1], ['raw-count', 2], ['raw-count', 1]]);
+        // Without the reset the third activation was the third in a row: escalated, the root failed and the run aborted.
+        expect(dal.issuesOf(sid).filter((i) => i.kind === 'circuit_breaker_escalation')).toEqual([]);
+        expect(outcomes(sid)).toEqual(['succeeded']);
       });
     });
 

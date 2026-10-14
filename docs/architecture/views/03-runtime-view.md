@@ -603,11 +603,16 @@ message; each tool call is observed, written as a running `tool` row, dispatched
 approval when needed — resolved at once under the headless policy while the run treats the user as **away**,
 `PD-TOOLS-005`, §5 → executor; hooks in its two slots), settled with its outcome (and a `diff` row for an
 edit); the results go back as one tool message; hook feedback follows as a user message. A reply with no tool call ends the turn — unless a steer is pending, in which case
-the agent takes another round; an empty reply with no call is the runtime's stuck report to the supervisor — except the entry
-role's empty turn that earns `PD-ORCH-009`'s answer re-prompt: `Run.turn` withdraws that stuck trigger (`withdrawStuck`) before
-it sends `ANSWER_REPROMPT`, so the re-prompt is the request's last message, with no classification, corrective or activation
-(revision 3, OQ-282). A child's empty turn before its REQ-ORCH-095 re-prompt is still a stuck report (OQ-283), and a stuck
-trigger a root's last empty turn leaves pending is taken by its next turn in the same execution, after a plan correction (OQ-284).
+the agent takes another round; an empty reply with no call is the runtime's stuck report to the supervisor — except where the
+run itself follows the turn up (`PD-ORCH-009` revisions 3 and 4): `LoopSupervisor.withdrawStuck()` clears a pending `stuck`
+trigger (and nothing else — a repetition, cycle or raw-count trigger stays, and the counter is not moved) before the run sends
+its own message, so that message is the request's last, with no classification, corrective or activation. Three callers:
+`Run.turn`'s `correction()` before `ANSWER_REPROMPT` (revision 3, OQ-282) and before REQ-ORCH-078's plan correction (revision 4,
+OQ-284), and `IterationChildren.execute` before a child's REQ-ORCH-095 re-prompt "Carry out the task now, …" (revision 4,
+OQ-283). The plan correction also calls `noteUserInstruction()` — REQ-ORCH-105's todo-correction message restarts the
+consecutive series (since fin44; before it the series ran on across the correction). A root's empty turn while its background
+child runs is still a stuck report: no follow-up of the run's own follows it, and the turn the child's report leads takes the
+trigger, the corrective after the report (as found, raised as OQ-296).
 
 **The conversation record (PD-ORCH-005 clause 1; `run/record.ts`).** Every agent's `Conversation` carries a
 recorder, so every `push` — the task or the resume message, a steer, a supervisor correction, the assistant message

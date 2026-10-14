@@ -130,11 +130,14 @@ export class LoopSupervisor {
   }
 
   /**
-   * PD-ORCH-009 revision 3 (OQ-282, ruled 2026-10-13 under R-072), narrowing REQ-ORCH-104's stuck-mode clause for one turn:
-   * the entry role's empty turn that its answer re-prompt answers is no stuck report. The run withdraws the trigger that turn
-   * armed before it sends the re-prompt, so the re-prompt is the request's last message — no classification is asked and no
-   * corrective message follows it. Only a pending `stuck` trigger is withdrawn: a repetition, cycle or raw-count trigger the
-   * same turn armed first stays, and the consecutive-activation count is not touched (no activation happened).
+   * PD-ORCH-009 revisions 3 and 4 (OQ-282, OQ-283 and OQ-284, ruled 2026-10-13 under R-072), narrowing REQ-ORCH-104's
+   * stuck-mode clause: when the run itself follows an empty turn up, the message it sends is the only one it adds for that turn,
+   * and the stuck report the turn armed is withdrawn first, so no classification is asked and no corrective message follows it.
+   * Three callers, one per case: `Run.turn`'s `correction()` before the entry role's answer re-prompt (revision 3) and before an
+   * execution iteration's root is sent REQ-ORCH-078's plan correction (revision 4, OQ-284), and `IterationChildren.execute`
+   * before a delegated child's REQ-ORCH-095 re-prompt (revision 4, OQ-283). Only a pending `stuck` trigger is withdrawn: a
+   * repetition, cycle or raw-count trigger the same turn armed first stays (disjoint from PD-ORCH-016), and the
+   * consecutive-activation count is not touched (no activation happened).
    */
   withdrawStuck(): void {
     if (this.pending?.trigger === 'stuck') this.pending = null;

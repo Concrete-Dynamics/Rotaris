@@ -1467,6 +1467,11 @@ export class IterationChildren implements DelegationOps {
           // PD-ORCH-005 clause 2: no model call once the run is coming to rest — the re-prompt waits for the resume.
           if (this.resting) rePromptOwed = true;
           else {
+            // PD-ORCH-009 revision 4 (OQ-283, ruled 2026-10-13 under R-072), narrowing REQ-ORCH-104's stuck-mode clause: the
+            // empty turn this re-prompt answers is no stuck report, so the re-prompt is the one message the run adds for it —
+            // no classification, corrective or stuck activation follows it. Only a pending `stuck` trigger is withdrawn; the
+            // implementer's text-only turn arms none, so for it this does nothing.
+            deps.supervisorFor?.(row.task_id).withdrawStuck();
             const again = await turn('Carry out the task now, using your tools where the task needs them, then answer with what you did.', outcome.messages);
             outcome = { ...again, toolCallCount: outcome.toolCallCount + again.toolCallCount };
           }

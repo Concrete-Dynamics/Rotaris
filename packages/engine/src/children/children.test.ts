@@ -507,31 +507,89 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
   });
 
   /*
-   * REQ-ORCH-096 unchanged by PD-ORCH-009 revision 3 (OQ-282): the directive narrows REQ-ORCH-104's stuck-mode clause for the
-   * entry role's one re-prompted turn only. A delegated child's empty turn is still the runtime's stuck report, so its
-   * REQ-ORCH-095 re-prompt is followed, in the same request, by the stuck corrective — the shape OQ-283 asks about. This case
-   * pins the narrowing's edge: if it changes, it changes by a ruling of OQ-283, not as a side effect of revision 3.
+   * PD-ORCH-009 revision 4 (OQ-283, ruled 2026-10-13 under R-072), narrowing REQ-ORCH-104's stuck-mode clause: a delegated
+   * child's empty turn that REQ-ORCH-095's single re-prompt answers is no stuck report. The run withdraws the stuck trigger that
+   * turn armed before it sends the re-prompt, so the re-prompt is the last message of the request it leads to: no classification
+   * is asked, no corrective follows it, and no stuck `loop_supervisor_activation` is written. Until revision 4 this case pinned
+   * the shape as found (revision 3 named every delegated child as unchanged): the request ended [task, empty turn, re-prompt,
+   * "Pause and reassess the current task."], the classifier was asked once (`stuck`) and one activation was written for the
+   * child.
    */
-  it('REQ-ORCH-096 with PD-ORCH-009 revision 3: a delegated child\'s empty turn still arms stuck — its re-prompt request carries the stuck corrective', async () => {
-    const asked: LoopActivation[] = [];
-    const classifier: LoopClassifier = { classify: async (a) => { asked.push(a); return { loop_detected: true, reason: 'stuck', corrective_message: 'Pause and reassess the current task.' }; } };
+  describe('PD-ORCH-009 revision 4 (OQ-283): a delegated child\'s re-prompted empty turn is no stuck report', () => {
+    const textOf = (m: ModelRequest['messages'][number]): string => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
     const silentStep: ScriptedCall = { parts: [{ part: { kind: 'reasoning', delta: 'Thinking about it…' } }, { part: { kind: 'finish', reason: 'stop' } }] };
-    const { sessions, client } = sessionsWith((persona, turn) => {
+    const supervised = () => {
+      const asked: LoopActivation[] = [];
+      const classifier: LoopClassifier = { classify: async (a) => { asked.push(a); return { loop_detected: true, reason: 'stuck', corrective_message: 'Pause and reassess the current task.' }; } };
+      return { asked, classifier };
+    };
+    const delegateSurvey = (persona: string, turn: number, child: (turn: number) => ScriptedCall): ScriptedCall => {
       if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: read it', run_in_background: false } }], 'Delegating.') : answer('All done.');
       if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
-      return turn === 1 ? silentStep : answer('The module is small.');
-    }, { classifier });
-    const sid = (sessions.start(dal, 'C:/ws', 'survey the thing') as { value: SessionId }).value;
-    expect((await sessions.running(sid)!).status).toBe('completed');
-    const textOf = (m: ModelRequest['messages'][number]): string => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
-    const reprompted = client.requests.find((r) => r.messages.some((m) => m.role === 'user' && textOf(m).startsWith('Carry out the task now')))!;
-    expect(reprompted).toBeDefined();
-    const users = reprompted.messages.filter((m) => m.role === 'user').map(textOf);
-    expect(users.at(-2)).toMatch(/^Carry out the task now/);
-    expect(users.at(-1)).toBe('Pause and reassess the current task.');
-    expect(asked.map((a) => a.trigger)).toEqual(['stuck']);
-    const activations = dal.timelineOf(sid).filter((t) => t.name === 'loop_supervisor_activation');
-    expect(activations.map((t) => [t.actor, (JSON.parse(t.metadata) as { trigger: string }).trigger])).toEqual([['survey', 'stuck']]);
+      return child(turn);
+    };
+
+    it('silent then an answer: the re-prompt ends its request, no classification is asked and no activation is written', async () => {
+      const { asked, classifier } = supervised();
+      const { sessions, client } = sessionsWith((persona, turn) => delegateSurvey(persona, turn, (t) => (t === 1 ? silentStep : answer('The module is small.'))), { classifier });
+      const sid = (sessions.start(dal, 'C:/ws', 'survey the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const reprompted = client.requests.find((r) => r.messages.some((m) => m.role === 'user' && textOf(m).startsWith('Carry out the task now')))!;
+      expect(reprompted).toBeDefined();
+      const users = reprompted.messages.filter((m) => m.role === 'user').map(textOf);
+      expect(users.at(-1)).toMatch(/^Carry out the task now/);
+      expect(users.some((u) => u.startsWith('Pause and reassess'))).toBe(false);
+      expect(asked).toEqual([]);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'loop_supervisor_activation')).toEqual([]);
+      expect(children(sid).find((c) => c.canonical_name === 'survey')!.state).toBe('succeeded');
+    });
+
+    it('silent twice: the child ends failed with an incomplete_execution issue naming no_activity — no stuck activation, no escalation', async () => {
+      const { asked, classifier } = supervised();
+      const { sessions, client } = sessionsWith((persona, turn) => delegateSurvey(persona, turn, () => silentStep), { classifier });
+      const sid = (sessions.start(dal, 'C:/ws', 'survey the thing') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      // Asked once, never twice; the re-prompt is still its request's last message.
+      const reprompts = client.requests.filter((r) => r.messages.some((m) => m.role === 'user' && textOf(m).startsWith('Carry out the task now')));
+      expect(reprompts).toHaveLength(1);
+      expect(reprompts[0]!.messages.filter((m) => m.role === 'user').map(textOf).at(-1)).toMatch(/^Carry out the task now/);
+      const row = children(sid).find((c) => c.canonical_name === 'survey')!;
+      expect(row.state).toBe('failed');
+      expect((JSON.parse(row.report!) as { errors: { type: string; message: string }[] }).errors).toEqual(expect.arrayContaining([{ type: 'incomplete_execution', message: 'no_activity' }]));
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'incomplete_execution').map((i) => i.message)).toEqual(['Child survey ended with no activity after one re-prompt (category no_activity).']);
+      // The second silence arms stuck (REQ-ORCH-096 unchanged for it), but the child takes no further turn, so nothing takes it.
+      expect(asked).toEqual([]);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'loop_supervisor_activation')).toEqual([]);
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'circuit_breaker_escalation')).toEqual([]);
+    });
+
+    /*
+     * Outside PD-ORCH-009 revision 4 (OQ-284's ruling names it as its own question): a root whose turn ends with neither text
+     * nor a call while its background child runs is not idle, so neither the answer re-prompt nor a plan correction follows it
+     * (`runWithChildren` asks its follow-up only once no child is pending). The stuck trigger that empty turn armed stays
+     * pending, and the root's next turn — the one the child's report leads — takes it at its first step. Pinned as found.
+     */
+    it('as found: a root silent while its background child runs is resumed with the report, and the stuck corrective follows the report', async () => {
+      const { asked, classifier } = supervised();
+      const { sessions, client } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'implement', task: 'TASK: write it' } }], 'Delegating.');
+          return turn === 2 ? silentStep : answer('All done: the child implemented it.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"The child wrote the file.","key_findings":[],"tags":[]}');
+        return answer('I implemented it.');
+      }, { classifier });
+      const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const resumed = client.requests.find((r) => r.messages.some((m) => m.role === 'user' && textOf(m).includes('[Background task completed]')))!;
+      expect(resumed).toBeDefined();
+      const users = resumed.messages.filter((m) => m.role === 'user').map(textOf);
+      expect(users.at(-2)).toContain('[Background task completed]');
+      expect(users.at(-1)).toBe('Pause and reassess the current task.');
+      expect(asked.map((a) => a.trigger)).toEqual(['stuck']);
+      const root = dal.timelineOf(sid).filter((t) => t.name === 'loop_supervisor_activation').map((t) => [t.actor, (JSON.parse(t.metadata) as { trigger: string }).trigger]);
+      expect(root).toEqual([['orchestrator', 'stuck']]);
+    });
   });
 
   it('delegate in the background → the child runs its own turn, reports, the parent is resumed once with the report, the run completes', async () => {

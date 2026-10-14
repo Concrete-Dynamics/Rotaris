@@ -292,13 +292,14 @@ export function offeredTaskId(messages: readonly ChatMessage[]): string | null {
 
 /**
  * `tool:<key>`'s arguments with every `@content_hash` value replaced by the newest `content_hash: <64 hex>` a tool result of
- * the conversation carries, newest result first; left as written when none does, so the gate's schema refuses it visibly.
+ * the conversation carries, newest result first (the last of a message's results before its earlier ones); left as written
+ * when none does, so the gate's schema refuses it visibly.
  */
 export function withLatestHash(args: unknown, messages: readonly ChatMessage[]): unknown {
   let hash: string | null = null;
   for (const m of [...messages].reverse()) {
     if (m.role !== 'tool') continue;
-    for (const part of m.content) {
+    for (const part of [...m.content].reverse()) {
       if (part.kind !== 'tool-result') continue;
       const all = [...part.result.matchAll(/content_hash: ([0-9a-f]{64})/g)];
       if (all.length > 0) { hash = all.at(-1)![1]!; break; }
@@ -309,7 +310,7 @@ export function withLatestHash(args: unknown, messages: readonly ChatMessage[]):
   return Object.fromEntries(Object.entries(args as Record<string, unknown>).map(([k, v]) => [k, v === '@content_hash' ? hash : v]));
 }
 
-export function scriptedClient(c: Clocks,log: (message: string) => void, record?: (call: ScriptedCallRecord) => void, ledger?: StandingLedger): ModelClient {
+export function scriptedClient(c: Clocks, log: (message: string) => void, record?: (call: ScriptedCallRecord) => void, ledger?: StandingLedger): ModelClient {
   const parse = (v: string | undefined) => (v ?? '').split(',').map((x) => x.trim()).filter((x) => x.length > 0);
   // ROTARIS_SCRIPT drives the orchestrator; ROTARIS_CHILD_SCRIPT every child (a `delegate:<persona>:<name>` step delegates).
   const loopScript = /^loop:([^:]+):(\d+)$/.exec(process.env['ROTARIS_SCRIPT'] ?? '');

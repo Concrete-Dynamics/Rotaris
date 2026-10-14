@@ -5,7 +5,7 @@ import { rebuild } from '@rotaris/engine';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileLedger, latestScriptedPlan, memoryLedger, scriptedClient, scriptedTodoItem } from './scripted-client.js';
+import { fileLedger, latestScriptedPlan, memoryLedger, scriptedClient, scriptedTodoItem, withLatestHash } from './scripted-client.js';
 
 /*
  * The scripted client is verification only; these tests pin the step it takes, which is what a driven proof scripts
@@ -653,5 +653,20 @@ describe('scriptedClient — `tool:<key>` (fin42, N52; edits-proof)', () => {
     expect(JSON.parse(second[0]!.args)).toMatchObject({ content_hash: HASH_B });
     // `git_commit` is not in this listing: the step answers instead (the reply streams on the clock).
     expect(await taken(clock, client, [...after, ...step('c3', 'haet_edit')])).toBe('answer');
+  });
+});
+
+describe('withLatestHash: `@content_hash` takes the newest hash a tool result carries', () => {
+  const h = (c: string): string => c.repeat(64);
+  const result = (callId: string, text: string): { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean } => ({ kind: 'tool-result', callId, name: 'read_file', result: text, isError: false });
+  it('reads the newest message first, and within one message the last result that carries a hash', () => {
+    const messages: ChatMessage[] = [
+      { role: 'tool', content: [result('r1', `content_hash: ${h('1')}`)] },
+      { role: 'tool', content: [result('r2', `content_hash: ${h('2')}`), result('r3', 'no hash here'), result('r4', `content_hash: ${h('4')}`)] },
+    ];
+    expect(withLatestHash({ path: 'a.txt', hash: '@content_hash' }, messages)).toEqual({ path: 'a.txt', hash: h('4') });
+  });
+  it('leaves the arguments as written when no result carries a hash', () => {
+    expect(withLatestHash({ hash: '@content_hash' }, [{ role: 'tool', content: [result('r1', 'none')] }])).toEqual({ hash: '@content_hash' });
   });
 });

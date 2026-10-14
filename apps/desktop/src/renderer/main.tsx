@@ -24,6 +24,7 @@ import '@phosphor-icons/web/fill';
 import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, composerDraft, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, retryRun, setMode, setNextModel, setRunStartMode, settingsUnsaved, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
 import { joinOrAsk, type OpenQuestion } from './guard-question.js';
 import { openWorkspaceFolder, useWindowWidth, useWorkspaceUsage } from './strip-facts.js';
+import { reportNoticeActionRefusal } from './notice-action-refusal.js';
 // What a transcript surface reads about the session it is following, shared with the persona window (`session-view.ts`).
 import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery, useShownSession } from './session-view.js';
 // The other windows this same bundle is the root of, each one a role on the route (`windows.tsx`, ADR-0056).
@@ -1012,9 +1013,10 @@ function dispatchNoticeAction(action: NoticeAction): void {
       // main reaches the named workspace — the window holding it surfaced, else one added for it, asking nothing
       // (PD-SHELL-001 revision 2, OQ-267 ruled 2026-10-13 under R-072) — and opens its review there. Until 2026-10-13 this case compared the name with this window's workspace and
       // opened nothing on a mismatch (docs/defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md).
-      void bridge.command({ kind: 'hooks.review', workspace: action.workspace }).then((outcome) => {
-        if (!outcome.ok) console.warn(`notice action "open-hook-review" for ${action.workspace} was refused: ${outcome.headline}`);
-      });
+      // A refusal — "Open a workspace before reviewing its hooks", "This workspace declares no hooks" — is published as a
+      // persistent notice in main's words (REQ-NOTIFY-254, REQ-NOTIFY-003). Until 2026-10-14 it reached the console alone
+      // (docs/defects/fixed/a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md).
+      void reportNoticeActionRefusal(bridge, 'open-hook-review', bridge.command({ kind: 'hooks.review', workspace: action.workspace }));
       return;
     case 'open-provider-sign-in':
       // REQ-WORKSPACE-152: clause (3)'s notice starts the flow at the catalog step, which is `add`. Clause (1)'s

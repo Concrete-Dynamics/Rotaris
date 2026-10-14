@@ -24,6 +24,13 @@ Cancel starting nothing; the renderer's guard joins a question already open. The
 
 Last reconciled with the code: **2026-10-15**
 
+**A refused hook-review notice action is said on screen (2026-10-14, fin46 `fin46-accept1-10`, C22; REQ-NOTIFY-254,
+REQ-NOTIFY-003).** The process view's `hooks.review {workspace?}` entry and the sequences view's notice-action block say that the
+pressing renderer publishes main's refusal as a persistent `warning` notice (`renderer/notice-action-refusal.ts`), a refused reach
+REQ-SHELL-019 already reported excepted; until now it reached the console alone
+(`docs/defects/fixed/a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md`). The README's date stays
+2026-10-15, the later one.
+
 **The quit outside any window's second log line no longer reads as the first's opposite (2026-10-14, fin46 `fin46-accept1-8`,
 C4; PD-ORCH-005 clause 9, OQ-298).** The process view quotes the new line, "each close guard allows without a question, so no
 Save/Discard/Cancel or active-run box is shown", with the old "no close guard is asked" beside it

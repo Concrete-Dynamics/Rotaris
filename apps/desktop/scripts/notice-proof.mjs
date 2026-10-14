@@ -35,6 +35,9 @@ import { startApp, stopApp, until } from './lib/driver.mjs';
  *     travel through the renderer, so only the built application proves they are the same string.
  *     6b. And when the object is NOT the one on screen (ESC-34's owed half, OQ-267): a notice naming a workspace no
  *     window holds adds a window for it, asking nothing and closing nothing, and opens its review there.
+ *     6e. And when main REFUSES the review (REQ-NOTIFY-254, REQ-NOTIFY-003): the notice names the window's own workspace, which
+ *     declares no hooks, and the press publishes main's "This workspace declares no hooks" as a persistent warning notice in
+ *     the pressing window, with no renderer console line.
  *     6c. A project-setup banner's action (PD-WORKSPACE-005 revisions 2 and 3, OQ-262, OQ-294), pressed in the window that
  *     does not hold its project: the holder is surfaced on Settings › Project, an unsaved edit in another category kept; one
  *     naming a project no window holds adds a main window for it, asking nothing, which shows Settings › Project with
@@ -80,7 +83,7 @@ if (!process.argv.includes('--skip-build')) {
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
-// `--only=<sections>` (comma-separated: 1, 1b, 1c, 1d, 2, 4, 6, 6b, 6c, 6d, 7, 7b, 8, 9) runs those sections alone; the default is all.
+// `--only=<sections>` (comma-separated: 1, 1b, 1c, 1d, 2, 4, 6, 6b, 6e, 6c, 6d, 7, 7b, 8, 9) runs those sections alone; the default is all.
 const onlyArg = process.argv.find((a) => a.startsWith('--only='));
 const only = onlyArg === undefined ? null : onlyArg.slice('--only='.length).split(',').map((x) => x.trim()).filter((x) => x !== '');
 const want = (id) => only === null || only.includes(id);
@@ -527,6 +530,46 @@ if (want('6b')) {
     reviewOpenedFor: opened[1], hooks: Number(opened[2]), decision: decided[1], decidedFor: decided[2].trim(),
     png: join(output, 'review-other.png'), elapsedMs: r.elapsedMs,
   };
+  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6e. The review action REFUSED (REQ-NOTIFY-254, REQ-NOTIFY-003): the unreviewed-hooks notice names the window's own
+// workspace, whose configuration declares no hooks by the time it is pressed (its hooks were removed after the notice was
+// raised). Main reaches the workspace and refuses the review — "This workspace declares no hooks" — and that refusal is
+// published as a persistent notice in the pressing window, in main's words. Until 2026-10-14 the renderer's arm answered it
+// with `console.warn` alone and the screen did not move
+// (docs/defects/fixed/a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md).
+const s4e = scenario('review-refused');
+if (want('6e')) {
+  const pressed = `Workspace hooks need review: ${basename(s4e.workspace)}`;
+  const r = await launch('review-refused', s4e, {
+    ROTARIS_CAPTURE_AFTER_MS: '6500',
+    ROTARIS_CAPTURE_NOTICES: `${JSON.stringify({
+      op: 'report', severity: 'warning', title: pressed,
+      message: "Skipped 1 hook declared by this workspace's .rotaris/agents.yaml: workspace hooks run shell commands and this workspace has not been reviewed and trusted yet. Review the hooks in Rotaris to allow them to run.",
+      detail: `Project folder: ${s4e.workspace}`, persistent: true,
+      action: { label: 'Review hooks', action: { kind: 'open-hook-review', workspace: s4e.workspace } },
+    })}@2000`,
+    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="notice-title"]@2600;;[data-testid="notice-title"]@5500;;[data-testid="notice"]@5500',
+    ROTARIS_CAPTURE_CLICKS: '.notice__action>>Review hooks@3200',
+  });
+  const before = (probesAt(r.log, 2600, '[data-testid="notice-title"]') ?? []).map((m) => m.text);
+  expect(before.includes(pressed), `the notice pressed was not on screen: ${JSON.stringify(before)}`);
+  const reached = r.log.match(/notice action reached (.+): (added|surfaced) window (\d+)/);
+  expect(reached?.[2] === 'surfaced', `the action named the window's own workspace and main ${reached?.[2] ?? 'reached nothing'}`);
+  expect(!/hook review opened for/.test(r.log), 'a review opened for a workspace that declares no hooks — the refusal this section needs was not met');
+  const after = (probesAt(r.log, 5500, '[data-testid="notice-title"]') ?? []).map((m) => m.text);
+  expect(after.length === 1 && after[0] === 'This workspace declares no hooks', `the refusal is not on screen: the notice reads ${JSON.stringify(after)} after the press (REQ-NOTIFY-254, REQ-NOTIFY-003)`);
+  const reported = r.log.match(/notice from the renderer: (\w+) "This workspace declares no hooks" → #(\d+)/);
+  expect(reported?.[1] === 'warning', `main did not publish the refusal as a warning notice: ${reported?.[0] ?? 'no notice.report line'}`);
+  const banner = probesAt(r.log, 5500, '[data-testid="notice"]') ?? [];
+  expect(banner.length === 1 && !banner[0].text.includes('Skipped '), `the banner still holds the pressed notice: ${JSON.stringify(banner.map((b) => b.text))}`);
+  results.reviewRefused = {
+    pressed, reached: { workspace: reached[1], how: reached[2] }, noticeAfter: after[0], published: { severity: reported[1], id: Number(reported[2]) },
+    png: join(output, 'review-refused.png'), elapsedMs: r.elapsedMs,
+  };
+  // The refusal is said on screen, not on the console: before the repair its `console.warn` was relayed here.
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
 }
 

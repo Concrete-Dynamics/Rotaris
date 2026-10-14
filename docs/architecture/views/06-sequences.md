@@ -208,8 +208,10 @@ then the active-run count. A gate that declines answers `{cancelled: true}` — 
 and returned (waiting, bounded, for its open if it is still opening it, and returned also when that open left it with no
 workspace — a store refused, OQ-281 — so its surface answers), else a window is added for it by `#addWindow` — no
 gate, nothing closed, the workspace persisted as last opened, a failure reported under REQ-SHELL-019. The action's surface
-then opens in the reached window. For the hook review main parents the dialog to it. For `focus-session` (revision 3, OQ-292)
-main asks it to focus the session on channel 16:
+then opens in the reached window. For the hook review main parents the dialog to it; a review main refuses ("This workspace
+declares no hooks", "Open a workspace before reviewing its hooks") is published by the pressing window as a persistent
+`warning` notice in main's words (`renderer/notice-action-refusal.ts`, REQ-NOTIFY-254, since 2026-10-14), except a refused reach,
+which REQ-SHELL-019 already reported. For `focus-session` (revision 3, OQ-292) main asks it to focus the session on channel 16:
 
 ```mermaid
 sequenceDiagram

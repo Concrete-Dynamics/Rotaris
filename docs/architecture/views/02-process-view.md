@@ -174,7 +174,11 @@ revision 2, OQ-267 ruled 2026-10-13), and where the holder is a window still ope
 the load of the window the first press added) waits for its open before acting, since 2026-10-14, and a holder left with
 no workspace open (its store refused, OQ-281) is reached all the same, the surface answering in it — then
 parents the review to that window; the dialog's payload keeps the workspace id its decision is stored against; without
-`workspace`, the asking window's own), **`projectInit.open {workspace}`** (2026-10-14, [`PD-WORKSPACE-005`](../../product/directives.md#pd-workspace-005)
+`workspace`, the asking window's own. A refusal — "This workspace declares no hooks", "Open a workspace before reviewing its
+hooks", "The review dialog could not be opened" — is published by the pressing renderer as a persistent `warning` notice
+through `notice.report`, main's headline its title (`renderer/notice-action-refusal.ts`, REQ-NOTIFY-254/003, 2026-10-14); a
+refused reach coded `workspace.buildFailed`/`workspace.openFailed` is only logged there, REQ-SHELL-019 having reported it;
+until 2026-10-14 every refusal reached the renderer console alone), **`projectInit.open {workspace}`** (2026-10-14, [`PD-WORKSPACE-005`](../../product/directives.md#pd-workspace-005)
 revisions 2 and 3, OQ-262, OQ-294: a project-setup banner's `open-project-init`, activated in any window; main reaches the
 workspace as the hook review does — `MainWindows.reach`, the holder surfaced on REQ-SHELL-161's terms, else a window added on
 PD-SHELL-001's add terms — and asks the reached window for Settings › Project through `MainWindows.openProjectInit`: channel

@@ -46,3 +46,12 @@ workspace before reviewing its hooks"; `focus-session` asks the window to load t
 The readiness cases (a holder still opening, a failed add refused, a reach between build and open) stay green. No proof drives a
 notice action pressed for a workspace whose store is refused (a refused store raises no project-setup banner of its own); the
 unit case is the evidence. `06-sequences.md` and `02-process-view.md` say so.
+
+*Corrected 2026-10-14 by fin46 (`fin46-accept1-10`, acceptance finding C22).* "The hook review answers its own 'Open a
+workspace before reviewing its hooks'" above was true of main and not of the screen: main answered that refusal, and the
+renderer's `open-hook-review` arm wrote it to the console alone (`console.warn`), so the person who pressed the action saw
+nothing — the same unreported failure this note was about, one step later. Since fin46 the arm publishes it as a persistent
+`warning` notice in main's words
+([`a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md`](a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md)).
+A `focus-session` refusal is still only logged
+([`../a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md`](../a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md)).

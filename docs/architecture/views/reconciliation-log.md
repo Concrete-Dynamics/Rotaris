@@ -15,6 +15,11 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-14**
 
+**Main's remaining capture seams are read behind `__ROTARIS_SEAMS__` (ADR-0056, REQ-HOOKS-104; fin43).** Twenty-two reads in
+`main/index.ts`, `main-windows.ts` and three command facets gain the flag on their own line; the seam check's lists move to
+`scripts/lib/seam-check.mjs` and name them. The **process view**'s main row says so and names the probe's and the children's
+variables still answered by a packaged build. No package, edge, process, channel, command or store column changed.
+
 **A main window whose renderer is gone no longer holds its close or the application's quit (REQ-SHELL-119, PD-ORCH-005
 clause 9; fin43).** The renderer's close guard is asked through `askRendererGuard` (`main/main-windows.ts`), which rejects —
 so the guard allows — when the renderer has crashed or its contents are destroyed, and when either happens while it is asked.

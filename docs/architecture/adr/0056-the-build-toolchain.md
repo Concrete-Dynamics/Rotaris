@@ -506,4 +506,15 @@ must come before the next proof. *Since 2026-09-27 it says so only when the buil
 > behind the flag and the check names them
 > ([`../../defects/fixed/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md`](../../defects/fixed/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md)).
 > The rest of main's dialog answers read behind `capturing` alone are recorded, not repaired:
-> [`../../defects/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md`](../../defects/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md).
+> [`../../defects/fixed/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md`](../../defects/fixed/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md).
+
+> **2026-10-14, plan fin43 — the rest of main's seams.** Twenty-two reads in main — the hook review's press, the pause
+> window's and every message box's answer, the backup, restore, export, directory and skill-file choosers' paths, the
+> provider dialog's fill, the external-link swallow, the stale question answer, the subscription's delay and hold, the
+> theme, the scale, the network log and the resume timing — sat behind `capturing` alone, and a `ROTARIS_BUILD=package` build
+> carried twenty of their names in `out/main/index.js`. Each read now carries the flag on its own line, the seam check's lists
+> live in `scripts/lib/seam-check.mjs` and name them all, and two tests hold source and list together
+> (`main/capture/seam-reads.test.ts`, `scripts/lib/seam-check.test.ts`); the same build then carries none, and the check
+> passes over it. **Still owed:** the packaged probe answers more than its three variables, and the run host and the workspace
+> service read two home-directory seams with no guard
+> ([`../../defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`](../../defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md)).

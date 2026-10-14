@@ -237,6 +237,12 @@ async function main(): Promise<void> {
 
   const preferenceRoot = resolvePreferenceRoot();
   const preferences = new PreferenceStore(preferenceRoot);
+  /*
+   * Whether this launch is a capture. A packaged build still answers it (the packaged probe, `capture/probe.ts`), so it decides
+   * nothing scriptable on its own: every seam main reads beside it — the dialogs' answers, the choosers' paths, the theme, the
+   * scale — is read behind `__ROTARIS_SEAMS__` on the same line, which a packaged build compiles out with its variable's name
+   * (docs/defects/fixed/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md; `capture/seam-reads.test.ts`).
+   */
   const capturing = Boolean(process.env['ROTARIS_CAPTURE_PNG']);
   /*
    * Verification seam: the approval dialog answered with a real click or Escape (`capture/approval-answers.ts`). Read behind
@@ -247,13 +253,13 @@ async function main(): Promise<void> {
   const scriptedApprovalMs = __ROTARIS_SEAMS__ ? Number(process.env['ROTARIS_CAPTURE_APPROVAL_MS'] ?? 700) : 700;
   const scriptedDialogPng = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_DIALOG_PNG'] : undefined;
   for (const problem of scriptedApprovals?.problems ?? []) log(`capture: approval answers: ${problem}`, 'warn');
-  const capturedTheme = capturing ? process.env['ROTARIS_CAPTURE_THEME'] : undefined;
+  const capturedTheme = __ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_THEME'] : undefined;
   if (capturedTheme) preferences.writeThemeSync(capturedTheme);
   let currentTheme: Theme = resolveTheme(capturedTheme ?? preferences.read('appearance/theme'));
   const themeBackground = () => srgbToHex(oklchToSrgb(parseOklch(currentTheme.tokens.color['--rt-bg']!)));
   nativeTheme.themeSource = currentTheme.dark ? 'dark' : 'light';
   log(`preference root ${preferenceRoot}; theme ${currentTheme.name} (${currentTheme.dark ? 'dark' : 'light'})`);
-  const captureScale = capturing ? process.env['ROTARIS_CAPTURE_SCALE'] : undefined;
+  const captureScale = __ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_SCALE'] : undefined;
   if (captureScale) app.commandLine.appendSwitch('force-device-scale-factor', captureScale);
 
   await app.whenReady();
@@ -420,7 +426,7 @@ async function main(): Promise<void> {
       // the window is interactive, never during its construction and never as a dialog opened unbidden.
       // REQ-WORKSPACE-013/102: this workspace's own automatic resolution, whichever window is focused when the slot comes.
       initialization.open(key, scopeFiles(resolveUserDirs().config, key).workspace.agents, opened.workspaceId);
-      clocks.timers.after(millis(process.env['ROTARIS_CAPTURE_RESUME'] ? 1_800 : 800), () => {
+      clocks.timers.after(millis(__ROTARIS_SEAMS__ && process.env['ROTARIS_CAPTURE_RESUME'] ? 1_800 : 800), () => {
         void initialization.resolve(key, true).catch((cause: unknown) => log(`initialization: resolve failed (${String(cause)})`));
         // REQ-TRACE-476/482: the queue resumes where it stopped — an automatic queue picks a candidate up at the open
         // with no person acting. The kick is for THIS workspace, whichever window is focused when the slot comes; the
@@ -623,7 +629,7 @@ async function main(): Promise<void> {
     pausePayloads.set(wc, payload);
     dlg.setMenuBarVisibility(false);
     dlg.on('closed', () => { pausePayloads.delete(wc); if (pauseWindows.get(payload.sessionId) === dlg) pauseWindows.delete(payload.sessionId); });
-    const answer = process.env['ROTARIS_CAPTURE_PNG'] ? process.env['ROTARIS_CAPTURE_PAUSE_ANSWER'] : undefined;
+    const answer = __ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_PAUSE_ANSWER'] : undefined;
     const query = { role: 'pause', ...(answer ? { answer } : {}) };
     try {
       if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
@@ -815,7 +821,7 @@ async function main(): Promise<void> {
       // ROTARIS_CAPTURE_PROVIDER_EMPTY_OK=1: an endpoint that answers discovery with no models leaves an unattended
       // run at the zero-model alert, so the seam takes that dialog's own "Continue anyway" (REQ-PROVIDER-133's
       // recovery) — polled, because discovery takes as long as the endpoint takes.
-      const fill = process.env['ROTARIS_CAPTURE_PNG'] ? process.env['ROTARIS_CAPTURE_PROVIDER_FILL'] : undefined;
+      const fill = __ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_PROVIDER_FILL'] : undefined;
       if (fill) {
         const [label, url, apiKey] = fill.split('>>');
         const centre = (selector: string, text: string | null): string => `(() => { const b = [...document.querySelectorAll(${JSON.stringify(selector)})].find((x) => !x.disabled${text === null ? '' : ` && x.textContent.trim() === ${JSON.stringify(text)}`}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`;
@@ -834,7 +840,7 @@ async function main(): Promise<void> {
             .then((r) => log(`capture: provider dialog filled ${JSON.stringify(r)}; ${apiKey ? "pressing the dialog's own button" : 'waiting for the key to be pasted and Authenticate pressed'}`)).catch((e) => log(`capture: provider fill failed: ${String(e)}`));
           if (apiKey !== undefined && apiKey !== '') {
             clocks.timers.after(millis(500), () => press('button', centre('[data-action="authenticate"]', null)));
-            if (process.env['ROTARIS_CAPTURE_PROVIDER_EMPTY_OK']) {
+            if (__ROTARIS_SEAMS__ && process.env['ROTARIS_CAPTURE_PROVIDER_EMPTY_OK']) {
               for (const at of [3_000, 6_000, 10_000, 16_000, 24_000]) clocks.timers.after(millis(at), () => press('"Continue anyway"', centre('[aria-label="No models discovered"] button', 'Continue anyway')));
             }
           }
@@ -995,11 +1001,11 @@ async function main(): Promise<void> {
       dlg.focus();
       log(`hook review opened for ${entry.workspace} (${entry.entries.length} hook(s))`);
       // Verification seam (only with ROTARIS_CAPTURE_PNG): capture the dialog, then click Allow or Do-not-run.
-      const scriptedReview = capturing ? process.env['ROTARIS_CAPTURE_HOOK_REVIEW'] : undefined;
+      const scriptedReview = __ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_HOOK_REVIEW'] : undefined;
       if (scriptedReview) {
-        clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_HOOK_REVIEW_MS'] ?? 900)), async () => {
+        clocks.timers.after(millis(__ROTARIS_SEAMS__ ? Number(process.env['ROTARIS_CAPTURE_HOOK_REVIEW_MS'] ?? 900) : 900), async () => {
           if (dlg.isDestroyed()) return;
-          const png = process.env['ROTARIS_CAPTURE_REVIEW_PNG'];
+          const png = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_REVIEW_PNG'] : undefined;
           if (png) { const { writeFileSync } = await import('node:fs'); writeFileSync(png, (await dlg.webContents.capturePage()).toPNG()); log(`captured review dialog ${png}`); }
           const label = scriptedReview === 'allow' ? 'Allow these hooks' : 'Do not run these hooks';
           const rect = await dlg.webContents.executeJavaScript(`(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === ${JSON.stringify(label)}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
@@ -1518,12 +1524,13 @@ async function main(): Promise<void> {
     }
   };
 
-  /**
-   * Verification seams for an unattended run (only with ROTARIS_CAPTURE_PNG set): the save and open
-   * dialogs answer from the environment and every message box is logged with its text and answered from
-   * ROTARIS_CAPTURE_ANSWERS in order. A user-driven run never enters these branches.
+  /*
+   * Verification seams for an unattended run (only with ROTARIS_CAPTURE_PNG set, and compiled out of a packaged build): the
+   * save and open dialogs answer from the environment and every message box is logged with its text and answered from
+   * ROTARIS_CAPTURE_ANSWERS in order. A user-driven run never enters these branches. A block comment, not a doc comment:
+   * the bundle keeps a doc comment, and the seam check reads the bundle's text.
    */
-  const scriptedAnswers = (process.env['ROTARIS_CAPTURE_ANSWERS'] ?? '').split(',').filter((s) => s.length > 0).map(Number);
+  const scriptedAnswers = (__ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_ANSWERS'] ?? '' : '').split(',').filter((s) => s.length > 0).map(Number);
   /**
    * A3 — every one of these takes the window it is to be shown over. They had all closed over the one main
    * window, which is invisible as a bug until there are two: a modal parented onto the other window blocks a
@@ -1535,7 +1542,7 @@ async function main(): Promise<void> {
    * which lapses the presenter registration and silently denies the user's own agent's tool calls.
    */
   const chooseSave = async (parent: BrowserWindow, opts: Electron.SaveDialogOptions): Promise<string | null> => {
-    const forced = capturing ? process.env['ROTARIS_CAPTURE_BACKUP_TO'] : undefined;
+    const forced = __ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_BACKUP_TO'] : undefined;
     if (forced) { log(`capture: save dialog "${opts.title}" → ${forced}`); return forced; }
     const r = await dialog.showSaveDialog(parent, opts);
     return r.canceled || !r.filePath ? null : r.filePath;
@@ -1543,7 +1550,7 @@ async function main(): Promise<void> {
   // Part U: ROTARIS_CAPTURE_SAVE_PATH answers the EXPORT save dialogs (REQ-SESSION-189/199) in a scripted launch — a
   // separate seam from the backup's, so a proof can exercise both in one launch; verification only.
   // The seam takes `;;`-separated paths, consumed in order, so one launch can take several exports.
-  const scriptedSavePaths = (capturing ? process.env['ROTARIS_CAPTURE_SAVE_PATH'] ?? '' : '').split(';;').map((s) => s.trim()).filter((s) => s !== '');
+  const scriptedSavePaths = (__ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_SAVE_PATH'] ?? '' : '').split(';;').map((s) => s.trim()).filter((s) => s !== '');
   const chooseExportPath = async (parent: BrowserWindow, opts: Electron.SaveDialogOptions): Promise<string | null> => {
     const forced = scriptedSavePaths.shift();
     if (forced) { log(`capture: save dialog "${opts.title}" → ${forced}`); return forced; }
@@ -1551,14 +1558,14 @@ async function main(): Promise<void> {
     return r.canceled || !r.filePath ? null : r.filePath;
   };
   const chooseOpen = async (parent: BrowserWindow, opts: Electron.OpenDialogOptions): Promise<string | null> => {
-    const forced = capturing ? process.env['ROTARIS_CAPTURE_RESTORE_FROM'] : undefined;
+    const forced = __ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_RESTORE_FROM'] : undefined;
     if (forced) { log(`capture: open dialog "${opts.title}" → ${forced}`); return forced; }
     const r = await dialog.showOpenDialog(parent, opts);
     return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]!;
   };
   // ROTARIS_CAPTURE_DIRECTORY: the folder chooser's answer for the attach flow (REQ-GIT-158); verification only.
   const chooseDirectory = async (parent: BrowserWindow, opts: Electron.OpenDialogOptions): Promise<string | null> => {
-    const forced = capturing ? process.env['ROTARIS_CAPTURE_DIRECTORY'] : undefined;
+    const forced = __ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_DIRECTORY'] : undefined;
     if (forced) { log(`capture: folder chooser "${opts.title}" → ${forced}`); return forced; }
     const r = await dialog.showOpenDialog(parent, opts);
     return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]!;
@@ -1577,7 +1584,7 @@ async function main(): Promise<void> {
    * `ROTARIS_CAPTURE_SKILL_FILE` takes `;;`-separated answers consumed in order, so one launch can exercise a
    * selection and a dismissal; the literal `(cancel)` is a dismissal. Verification only.
    */
-  const scriptedSkillFiles = (capturing ? process.env['ROTARIS_CAPTURE_SKILL_FILE'] ?? '' : '').split(';;').map((s) => s.trim()).filter((s) => s !== '');
+  const scriptedSkillFiles = (__ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_SKILL_FILE'] ?? '' : '').split(';;').map((s) => s.trim()).filter((s) => s !== '');
   const chooseSkillFile = async (parent: BrowserWindow, startAt: string): Promise<string | null> => {
     const forced = scriptedSkillFiles.shift();
     if (forced) { log(`capture: skill file chooser → ${forced}`); return forced === '(cancel)' ? null : forced; }

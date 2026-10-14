@@ -30,11 +30,12 @@
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { closingLines, reached, STEPS } from './lib/package-verdict.mjs';
+import { FORBIDDEN, KEPT, seamCheck } from './lib/seam-check.mjs';
 import { ABOUT_ASSETS, flagUsage, settleNoticesStep, WITHOUT_NOTICES } from './lib/about-assets.mjs';
 import { declaredProductVersion, namedConfigurationText, packagingArtifactNames } from './lib/artifact-names.mjs';
 
@@ -157,27 +158,12 @@ try {
    * check while the seams were inline in `main()`, and it stopped being sufficient the moment they were not.
    */
   step('the packaged bundle carries no scriptable seam', () => {
-    const mainOut = join(APP, 'out', 'main');
-    const emitted = readdirSync(mainOut, { recursive: true, withFileTypes: true })
-      .filter((e) => e.isFile() && e.name.endsWith('.js'))
-      .map((e) => join(e.parentPath, e.name));
-    const bundle = readFileSync(join(mainOut, 'index.js'), 'utf8');
-    const kept = ['ROTARIS_CAPTURE_PNG', 'ROTARIS_CAPTURE_PROMPT', 'ROTARIS_CAPTURE_AFTER_MS'];
-    // The last two are the injection proof's (2026-09-27): one writes every scripted model call's system text to a
-    // file it names, the other points the machine-wide instruction base at any directory — neither may ship. The
-    // scripted client's standing ledger (2026-10-01) is a file the run host writes under the same flag. The approval dialog's
-    // scripted answer (2026-10-13) clicks Approve in a permission dialog: it shipped behind the run-time test alone until then
-    // (docs/defects/fixed/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md); `_APPROVAL` also covers `_APPROVAL_MS`.
-    const forbidden = ['scripted-standing.json', 'ROTARIS_CAPTURE_CLICKS', 'ROTARIS_CAPTURE_DOUBLE_CLICKS', 'ROTARIS_CAPTURE_TYPE', 'ROTARIS_CAPTURE_CHORDS', 'ROTARIS_CAPTURE_EVAL_AT', 'ROTARIS_CAPTURE_CONFIG_PAIR_AT', 'ROTARIS_CAPTURE_OS_INPUT', 'ROTARIS_CAPTURE_SELECT', 'ROTARIS_CAPTURE_NOTICES', 'ROTARIS_CAPTURE_DRAG_AT', 'ROTARIS_CAPTURE_PERSONA_STEER', 'ROTARIS_CAPTURE_PERSONA_CLICKS', 'ROTARIS_THEME_PROOF_DIR', 'ROTARIS_DRIVER', 'ROTARIS_CAPTURE_MODEL_REQUESTS', 'ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE', 'ROTARIS_CAPTURE_SKILLS_MACHINE', 'ROTARIS_CAPTURE_APPROVAL', 'ROTARIS_CAPTURE_DIALOG_PNG', 'ROTARIS_CAPTURE_GRIP_DRAG', 'ROTARIS_CAPTURE_THROW_ON_ABORT'];
-    const missing = kept.filter((name) => !bundle.includes(name));
-    const present = [];
-    for (const file of emitted) {
-      const text = readFileSync(file, 'utf8');
-      for (const name of forbidden) if (text.includes(name)) present.push(`${name} (${relative(mainOut, file)})`);
-    }
+    // The two lists live in `lib/seam-check.mjs`, held to the source by its test (2026-10-14: main's dialog answers were
+    // missing from them, docs/defects/fixed/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md).
+    const { missing, present, files, bytes } = seamCheck(join(APP, 'out', 'main'));
     if (missing.length) throw new Error(`the packaged bundle lost a seam the probe needs: ${missing.join(', ')}`);
     if (present.length) throw new Error(`the packaged bundle still carries scriptable seams: ${present.join(', ')}`);
-    return { kept, removed: forbidden.length, files: emitted.length, bytes: bundle.length };
+    return { kept: KEPT, removed: FORBIDDEN.length, files, bytes };
   });
   // The keep-prebuild counterfactual packs from the same configuration minus the prebuild exclusions, so the
   // prebuild is in the asar index where the binding's own loader looks first. Rule 4 has to refuse it.

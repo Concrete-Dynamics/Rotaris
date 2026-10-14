@@ -230,7 +230,7 @@ export function sessionCommands(
       // id of a forwarded `answerQuestion` so that no wait carries it. REQ-CHAT-102's failed delivery is otherwise
       // a race between the click and the wait being released, which no script can hit reliably; the whole product
       // path — the stepper, the channel, the run host's routing — is exercised unchanged, only the id is stale.
-      const forwarded = capturing && process.env['ROTARIS_CAPTURE_QUESTION_STALE'] && req.request.op === 'answerQuestion'
+      const forwarded = __ROTARIS_SEAMS__ && capturing && process.env['ROTARIS_CAPTURE_QUESTION_STALE'] && req.request.op === 'answerQuestion'
         ? { ...req.request, args: { ...req.request.args, requestId: `${String(req.request.args['requestId'])}-stale` } }
         : req.request;
       // Part AO: a manual compression settles only once every live conversation has (REQ-MONITOR-092), each pass bounded by
@@ -278,7 +278,7 @@ export function sessionCommands(
       // reaches main — 30 ms against 57 ms at load 10 in finacc2's acceptance, and not at all on a quiet host — so
       // resilience-proof's auth-fallback launches widen that window to make it certain, and assert the started session is
       // still the focused one (docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
-      const delay = capturing ? Number(process.env['ROTARIS_CAPTURE_SUBSCRIBE_DELAY_MS'] ?? 0) : 0;
+      const delay = __ROTARIS_SEAMS__ && capturing ? Number(process.env['ROTARIS_CAPTURE_SUBSCRIBE_DELAY_MS'] ?? 0) : 0;
       if (delay > 0) {
         log(`capture: session.subscribe held ${delay} ms before it takes effect`);
         await new Promise<void>((done) => { clocks.timers.after(millis(delay), done); });
@@ -301,7 +301,7 @@ export function sessionCommands(
       // meets the composer's settling send. That window is the app's and a few milliseconds wide, which no script hits
       // reliably; held, `part-j-proof`'s steer-early launch opens the steer dialog inside it every time
       // (docs/defects/fixed/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md).
-      const hold = capturing ? Number(process.env['ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS'] ?? 0) : 0;
+      const hold = __ROTARIS_SEAMS__ && capturing ? Number(process.env['ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS'] ?? 0) : 0;
       if (hold > 0 && r.kind === 'ack') {
         log(`capture: session.subscribe reply held ${hold} ms`);
         await new Promise<void>((done) => { clocks.timers.after(millis(hold), done); });

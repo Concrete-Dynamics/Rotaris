@@ -76,7 +76,7 @@ export function shellCommands(
       }
       // Verification seam (only with ROTARIS_CAPTURE_PNG): `record` opens nothing and reports success, `fail`
       // reports the platform refusal, so both halves of the requirement are exercised without launching a browser.
-      const scripted = capturing ? process.env['ROTARIS_CAPTURE_OPEN_EXTERNAL'] : undefined;
+      const scripted = __ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_OPEN_EXTERNAL'] : undefined;
       if (scripted === 'fail') { log(`capture: open-external REFUSED ${parsed.href}`); return { ok: false, code: 'link.failed', headline: 'That link could not be opened', detail: 'The system browser refused to open it (scripted).' }; }
       if (scripted === 'record') { log(`capture: open-external ${parsed.href}`); return { ok: true, value: { url: parsed.href } }; }
       try { await shell.openExternal(parsed.href); }
@@ -92,7 +92,7 @@ export function shellCommands(
     'shell.openThirdPartyLicenses': async () => {
       const path = thirdPartyLicensesPath();
       if (path === null) return { ok: false, code: 'licenses.absent', headline: 'No third-party license bundle', detail: 'This build does not carry a third-party license bundle.' };
-      const scripted = capturing ? process.env['ROTARIS_CAPTURE_OPEN_EXTERNAL'] : undefined;
+      const scripted = __ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_OPEN_EXTERNAL'] : undefined;
       if (scripted === 'fail') { log(`capture: open-licenses REFUSED ${path}`); return { ok: false, code: 'licenses.failed', headline: 'The license bundle could not be opened', detail: 'The system refused to open it (scripted).' }; }
       if (scripted === 'record') { log(`capture: open-licenses ${path}`); return { ok: true, value: { path } }; }
       const failed = await shell.openPath(path);

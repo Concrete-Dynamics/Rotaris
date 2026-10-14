@@ -892,7 +892,7 @@ export function createElectronMainWindowAdapter(
       win.once('closed', () => dependencies.closeGuard?.(wcId, null));
       win.once('ready-to-show', () => win.show());
 
-      if (dependencies.capturing && process.env['ROTARIS_CAPTURE_NET'] === '1') {
+      if (__ROTARIS_SEAMS__ && dependencies.capturing && process.env['ROTARIS_CAPTURE_NET'] === '1') {
         win.webContents.session.webRequest.onBeforeRequest((details, callback) => {
           dependencies.log(`capture: net ${details.method} ${details.resourceType} ${details.url}`);
           callback({});

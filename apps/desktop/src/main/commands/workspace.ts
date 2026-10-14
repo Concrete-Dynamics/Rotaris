@@ -24,7 +24,7 @@ export function workspaceCommands(
     'workspace.openFolder': async (_req, { w }) => {
       if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'No workspace folder is open' };
       const path = w.workspace;
-      const scripted = capturing ? process.env['ROTARIS_CAPTURE_OPEN_EXTERNAL'] : undefined;
+      const scripted = __ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_OPEN_EXTERNAL'] : undefined;
       if (scripted === 'fail') { log(`capture: open-folder REFUSED ${path}`); return { ok: false, code: 'folder.failed', headline: 'The workspace folder could not be opened', detail: `${path} — the file manager refused to open it (scripted).` }; }
       if (scripted === 'record') { log(`capture: open-folder ${path}`); return { ok: true, value: { path } }; }
       const opened = await openFolder(path, (p) => shell.openPath(p), clocks.timers);

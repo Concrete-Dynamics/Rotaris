@@ -42,4 +42,5 @@ left `ROTARIS_CAPTURE_APPROVAL` in `out/main/index.js`; after the repair the sam
 Left as found, beside it in main: the other dialog answers read behind `capturing` alone (`ROTARIS_CAPTURE_HOOK_REVIEW`, `ROTARIS_CAPTURE_PAUSE_ANSWER`, `ROTARIS_CAPTURE_BACKUP_TO`,
 `ROTARIS_CAPTURE_RESTORE_FROM`, `ROTARIS_CAPTURE_SAVE_PATH`, `ROTARIS_CAPTURE_ANSWERS` and others). They are not
 this note's repair, which concerned the permission dialog the task extended, and are recorded in
-[`../a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md`](../a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md).
+[`a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md`](a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md)
+(repaired 2026-10-14 by fin43).

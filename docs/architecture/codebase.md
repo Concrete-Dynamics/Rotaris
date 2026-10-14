@@ -1621,6 +1621,16 @@ survived into the shipped bundle with their variable names. Both reads are behin
 its author before it ever failed anyone else is the argument for having written it as an assertion about the
 artifact.
 
+**Its lists live in `apps/desktop/scripts/lib/seam-check.mjs` since 2026-10-14** (fin43): the check is one function there,
+which `package.mjs` calls and which runs alone over a seam-free `out/main` (`node apps/desktop/scripts/lib/seam-check.mjs`).
+Until then its `forbidden` list named none of main's dialog answers — the hook review's press, the message boxes', the
+choosers' — which were read behind the run-time `capturing` test alone and shipped
+(`docs/defects/fixed/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md`). Two tests now hold the source and
+the list together: `apps/desktop/src/main/capture/seam-reads.test.ts` (every capture read in main carries the flag on its line,
+the probe's own excepted) and `apps/desktop/scripts/lib/seam-check.test.ts` (every flagged read in main, the run host and the
+workspace service is named by the list). `vitest.config.ts` defines the flag `true`, as the ordinary build does. Still owed:
+`docs/defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`.
+
 **A trap closed on the way:** `pnpm package` leaves `out/` holding the seam-free build, and every `*-proof` script
 launches `out/main/index.js` and drives those seams — so the next proof run after a package would have failed for a
 reason nobody would have guessed from its output. The script now says so on exit — since 2026-09-27 only when the

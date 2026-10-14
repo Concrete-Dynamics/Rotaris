@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
+  // The build-time verification flag (`apps/desktop/src/main/seams.d.ts`): true in every build but the packaged one, so
+  // tests run the seams as an ordinary build compiles them in. Its false side is the packaged build's, which
+  // `apps/desktop/scripts/package.mjs`'s seam check asserts on the artifact.
+  define: { __ROTARIS_SEAMS__: 'true' },
   resolve: {
     alias: {
       '@rotaris/kernel': `${root}packages/kernel/src/index.ts`,

@@ -5,19 +5,21 @@ verified. An entry that turns out wrong is corrected by a new entry, never edite
 
 ## 2026-10-14 — a friction survey reads past runs for what this skill should change
 
-**Prompted by** the owner, in the orchestrator's session on 2026-10-14 during fin46: "Would it make sense to
-occasionally launch a surveying agent that gathers insights from past workflows to identify frictions and suggest
-updates to the according skill?", and, to the proposal of a report-only survey every three or four plans and once
-before the final report, "yes. do that." Until now an improvement started only when the orchestrator noticed a friction
-while it happened: the entry below came from the owner noticing the per-item verify stage of run `wf_f659576e-da7`
-mid-run, after 63 verifiers had started. **Changed:** `references/workflow-tool.md` gains "A friction survey": the
-read-only survey's four stages over each plan's `RUNS.txt`, the runs' journals and agent transcripts and the
-orchestrator's ledger, verified by one agent against the skill and this changelog, drafted as ranked proposals. It
-changes nothing itself: each accepted proposal goes through "Improving this skill" as its own change and review, and
-one that crosses a protected invariant goes to the owner. SKILL.md §4 runs it every three or four plans and §6 once
-before the final report; the reference table names surveys. No script, template prompt, invariant, assertion or the
-"Improving this skill" section changed. **Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check`;
-the skill-review by one reviewer agent under `references/skill-review.md`.
+**Prompted by** the owner, in the orchestrator's session on 2026-10-14, during fin44 (06:03 UTC): "Would it make sense
+to occasionally launch a surveying agent that gathers insights from past workflows to identify frictions and suggest
+updates to the according skill?", and, during fin46 (15:28 UTC), to the proposal of a report-only survey every three or
+four plans and once before the final report, "yes. do that." Until now an improvement started only when the orchestrator
+noticed a friction while it happened: the entry below came from the owner noticing the per-item verify stage of run
+`wf_f659576e-da7` mid-run, after 42 verifiers had started (63 by the time it was stopped). **Changed:**
+`references/workflow-tool.md` gains "A friction survey": the read-only survey's four stages over each plan's `RUNS.txt`,
+the runs' journals and agent transcripts and the orchestrator's ledger, pinned in a detached worktree of its own (a
+running plan's reference worktree is never refreshed for it), each finder given the absolute paths and its plan range's
+time span, the range recorded in the ledger, verified by one agent against the skill and this changelog, drafted as
+ranked proposals. It changes nothing itself: each accepted proposal goes through "Improving this skill" as its own
+change and review, and one that crosses a protected invariant goes to the owner. SKILL.md §4 runs it every three or four
+plans and §6 once before the final report; the reference table names surveys. No script, template prompt, invariant,
+assertion or the "Improving this skill" section changed. **Verified** by `node scripts/orchestration.mjs self-test` and
+`pnpm check`; the skill-review by one reviewer agent under `references/skill-review.md`.
 
 ## 2026-10-14 — a read-only survey verifies its merged list with one agent
 

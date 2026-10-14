@@ -623,7 +623,7 @@ Recorded and repaired in
 On Linux as root under Xvfb, three consecutive runs passed all ten launches. They included `repair-all` (B and C
 repaired, D untouched, then "Nothing was stale") and everything after it, which had never run on Linux.
 
-**What it could not show:** Windows and macOS were not run (IC-3). The macOS spelling is measured only by the unit
+**What it could not show:** Windows and macOS were not run (IC-3 — *corrected 2026-10-14: for the Windows half, a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*). The macOS spelling is measured only by the unit
 test against `dataLayout`.
 
 ## First execution — 2026-09-29, the lock a continue takes back

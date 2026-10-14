@@ -45,6 +45,53 @@ function uncorrectedWindowsIc3(text: string, file: string): string[] {
   return found;
 }
 
+/**
+ * The same shorthand on Windows checks that are not packaging checks ("anything on Windows (IC-3)", "Windows and macOS were
+ * not run (IC-3)"): what such a check waits on is a Windows host, which this Linux container is not, and only a macOS half
+ * beside it is IC-3's (`docs/defects/fixed/windows-checks-outside-packaging-still-name-ic-3-as-their-reason.md`). An IC-3
+ * whose own clause (the text after the last `.`, `;` or `)` before it) names Windows must carry "a Windows host" right after
+ * it. Passed: a tag in a clause that names only macOS or Linux, the correction's own words, "Windows only (IC-3)" (the
+ * package step runs on Windows because IC-3 bars the others) and "the one release target IC-3 leaves".
+ */
+const HOST_CORRECTION = /a Windows (x64 )?host/;
+
+function uncorrectedWindowsCheckIc3(text: string, file: string): string[] {
+  const found: string[] = [];
+  for (const paragraph of text.split(/\n\s*\n/)) {
+    const flat = paragraph.replace(/\n>?\s*/g, ' ');
+    for (const m of flat.matchAll(/IC-3/g)) {
+      const at = m.index ?? 0;
+      const before = flat.slice(Math.max(0, at - 160), at);
+      const after = flat.slice(at + 4, at + 164);
+      const clause = before.slice(Math.max(before.lastIndexOf('.'), before.lastIndexOf(';'), before.lastIndexOf(')')) + 1);
+      if (!/Windows/.test(clause)) continue;
+      if (/^\s*(binds Linux|leaves)/.test(after)) continue;
+      if (/Windows only \($/.test(clause)) continue;
+      if (!HOST_CORRECTION.test(after.slice(0, 120))) found.push(`${file}: …${clause.slice(-90)}IC-3${after.slice(0, 20)}`);
+    }
+  }
+  return found;
+}
+
+describe('a Windows check outside packaging does not name IC-3 as its reason', () => {
+  it('every IC-3 tag on a Windows check carries the correction', () => {
+    const found = files.flatMap((f) => uncorrectedWindowsCheckIc3(readFileSync(f, 'utf8'), relative(root, f)));
+    expect(found).toEqual([]);
+  });
+
+  it('flags the shorthand and passes the corrected, the macOS-only and the Linux forms', () => {
+    expect(uncorrectedWindowsCheckIc3('anything on Windows (IC-3).', 'x')).toHaveLength(1);
+    expect(uncorrectedWindowsCheckIc3('Windows and macOS were not run (IC-3).', 'x')).toHaveLength(1);
+    expect(uncorrectedWindowsCheckIc3('nothing ran on Windows (no host, IC-3) or on macOS.', 'x')).toHaveLength(1);
+    expect(uncorrectedWindowsCheckIc3('anything on Windows (IC-3 — *corrected 2026-10-14: a Windows host; IC-3 binds Linux and macOS artifacts*).', 'x')).toEqual([]);
+    expect(uncorrectedWindowsCheckIc3('A Windows re-run (no host). Anything on macOS (IC-3).', 'x')).toEqual([]);
+    expect(uncorrectedWindowsCheckIc3('a Windows re-run of the spellings (no host), or macOS (IC-3).', 'x')).toEqual([]);
+    expect(uncorrectedWindowsCheckIc3('(d) Windows only is measured; POSIX waits on IC-3.', 'x')).toEqual([]);
+    expect(uncorrectedWindowsCheckIc3('the rebuild is ~3 minutes. Windows only (IC-3).', 'x')).toEqual([]);
+    expect(uncorrectedWindowsCheckIc3('Windows is the one release target IC-3 leaves.', 'x')).toEqual([]);
+  });
+});
+
 describe('a Windows packaging check does not name IC-3 as its reason', () => {
   it('reads the record', () => {
     expect(files.length).toBeGreaterThan(50);

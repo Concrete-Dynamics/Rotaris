@@ -246,7 +246,7 @@ closed stream without end
 ([note](../../defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md), recorded and not repaired
 then; repaired 2026-09-29 under R-067).
 The repair is in [the proof's note](../../defects/fixed/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md).
-**Could not show:** the ladder against a real provider's 429 (unchanged from above); anything on Windows (IC-3).
+**Could not show:** the ladder against a real provider's 429 (unchanged from above); anything on Windows (IC-3 — *corrected 2026-10-14: a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).
 
 ## Fourth execution — 2026-09-12, the timeout a real run found (REQ-CONFIG-115, REQ-ORCH-092)
 

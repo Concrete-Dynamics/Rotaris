@@ -350,7 +350,7 @@ assertions are unchanged. Three runs in a row as root under Xvfb all passed ever
 override's wording, its absence after a relaunch, the five fates, the granted set, the two contacts per two probes,
 the mask and the scope all read as the first execution recorded them. The steps finished in about 10 s (launch 6) and
 3 to 5 s (launch 7), against the 14 s and 19 s the offsets had reserved. **Could not show:** the loaded-host red itself
-on demand, and anything on Windows (IC-3).
+on demand, and anything on Windows (IC-3 — *corrected 2026-10-14: a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).
 
 **The sink's severities gain `debug` — 2026-09-29, R-067 (acceptance finding A41).** "Every diagnostic is a value
 carrying its severity" held, and the severities stopped at `info`: `DiagnosticSeverity` was `info | warning | error`, and

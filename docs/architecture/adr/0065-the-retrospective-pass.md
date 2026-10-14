@@ -230,7 +230,7 @@ checks pass. The live `ask` scenario shows the post-run label whole on two lines
 `../../defects/fixed/the-improvement-label-is-clipped-without-an-ellipsis.md`, and, recorded without a repair,
 `../../defects/fixed/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md` (repaired
 2026-10-01, acceptance A40). Not shown: Windows or
-macOS (IC-3).
+macOS (IC-3 — *corrected 2026-10-14: for the Windows half, a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).
 
 *(Added 2026-09-30, the verifier's fix round 1.)* The title-bar label is now measured at the same two sizes too
 (`TITLE_BAR_LABEL_GEOMETRY`). It must be whole, or elided on the label element with `text-overflow: ellipsis` in force,

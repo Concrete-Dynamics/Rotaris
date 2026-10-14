@@ -299,7 +299,7 @@ Recorded and repaired in
 applicability is REQ-MCP-037's availability and that rule does not read `enabled` (OQ-109, built as the letter).
 **What it could not show:** launches 3 to 6 keep their fixed offsets (the revise at 6,000 and 6,600 ms, the approve
 at 6,000, the chip at 10,000 and 11,000, the prompts at 10,000 and 15,000). They were green on every run here and
-were not moved. Windows and macOS were not run (IC-3).
+were not moved. Windows and macOS were not run (IC-3 — *corrected 2026-10-14: for the Windows half, a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).
 
 ## The admission refusal meets an alias on the built-in table's path — 2026-09-30 (R-067)
 

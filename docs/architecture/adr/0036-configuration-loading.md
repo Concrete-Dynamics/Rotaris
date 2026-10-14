@@ -512,4 +512,4 @@ whose two clicks pressed nothing, and whose script carried on. Recorded and repa
 **What it could not show:** whether a Settings save and the initialization record can interleave so that one
 overwrites the other. Both writers round-trip the whole document. This run saw them land a second apart, never
 together, and nothing here measures the overlap. The run was on Linux as root under Xvfb; Windows and macOS were
-not measured (IC-3).
+not measured (IC-3 — *corrected 2026-10-14: for the Windows half, a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).

@@ -302,7 +302,7 @@ the proof asserts after it passed in a diagnostic run with its checks made non-f
 catalogue and REQ-CHAT-032's messages, `/stop` idle and during a run, the stash and both Pops, `/model scripted-2`,
 Escape, `/theme` both ways, `/logout`, `/sessions`, `/new`, `/worktree`, the `/ ` escape, `/compress`, the stored theme
 and the restart painting the same ground, `/logout` against the real registry and credential store, and REQ-CHAT-028's
-two live rebuilds. Not shown: any of it on Windows or macOS (IC-3).
+two live rebuilds. Not shown: any of it on Windows or macOS (IC-3 — *corrected 2026-10-14: for the Windows half, a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).
 
 ## Fifth execution — 2026-09-29 (R-067), the four derived on the ground the dock paints
 
@@ -324,7 +324,7 @@ execution's `--rt-bg` values), resolved 9.20:1, argument 8.56:1; `nocturne` on `
 unknown 9.94:1, resolved 10.82:1, argument 11.14:1; `high-contrast` on `oklch(0.12 0 0)` — partial 4.50:1, unknown
 13.91:1, resolved 15.07:1, argument 16.02:1. Four distinct colours on each palette, the weights unchanged. Repaired note:
 `../../defects/fixed/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`. Not
-shown: any of it on Windows or macOS (IC-3).
+shown: any of it on Windows or macOS (IC-3 — *corrected 2026-10-14: for the Windows half, a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).
 
 **The design material.** *(Added 2026-09-30, the verifier's fix round 1.)* The mockup (`pnpm mockup`, its
 `<!-- queue + composer -->` block) draws the composer as the design's `.input` textarea on its own `--rt-bg`
@@ -415,7 +415,7 @@ reopened that note, and it is repaired in the proof, not in the palette:
 
 The palette is unchanged, and OQ-56's disabled-text question is untouched. The repaired note is
 `../../defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`. Not shown: Windows or macOS
-(IC-3).
+(IC-3 — *corrected 2026-10-14: for the Windows half, a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).
 
 ## Seventh execution — 2026-10-01 (fin2 round), the contrast verdict bounded by what it measured
 
@@ -449,6 +449,6 @@ the host:
   175 %, 17 status-strip slivers), the largest inside one surface 9.5% (`settings-03` at 125 %, 4 of 42), the fewest
   measured inside a surface 7 (`view-1`); `--counterfactual=offscreen` exit 1 on `contrast` alone, with the same
   `view-2` failure, 1366 texts measured, none below its floor and no capture incoherent.
-- **Not run here:** the `text` and `focus` counterfactuals (their code is unchanged), and Windows or macOS (IC-3).
+- **Not run here:** the `text` and `focus` counterfactuals (their code is unchanged), and Windows or macOS (IC-3 — *corrected 2026-10-14: for the Windows half, a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).
 
 The palette is unchanged.

@@ -513,7 +513,7 @@ In three consecutive runs on Linux as root under Xvfb, the pid was dead at the f
 repair was logged 1.48 to 1.81 s after the previous main's exit. All twelve scenarios passed.
 
 **What it could not show:** the check firing on the built app. It would need the window `459e7c8` closed, and that
-was not reopened; the failing path is pinned by `lock-holder.test.ts` only. Windows and macOS were not run (IC-3).
+was not reopened; the failing path is pinned by `lock-holder.test.ts` only. Windows and macOS were not run (IC-3 — *corrected 2026-10-14: for the Windows half, a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).
 
 ## The listing record's `checkpoint_count` is this record's derived count — 2026-10-03 (fin11)
 

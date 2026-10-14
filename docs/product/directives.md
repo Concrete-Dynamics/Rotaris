@@ -6441,7 +6441,7 @@ gestures on which no gate is evaluated.*
 > found that a rest published before the stop's reply left the session held for its next run, now repaired and pinned).
 > **What was not measured.** A held-back notice, a withdrawn approval dialog or question dock in the built app: no proof
 > makes a stopped session publish a notice or hold a dialog as its window closes, so the one-line calls in `index.ts` are
-> exercised by no test or proof; a Windows host (IC-3). The row is in
+> exercised by no test or proof; a Windows host (IC-3 — *corrected 2026-10-14: a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*). The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 >
 > **Follow-up, 2026-10-07, fin29 (fin28 reviewers' findings on the landed build, 2631eaf).** Four claims of the first

@@ -336,7 +336,7 @@ runs, three reports each). On the repair as committed it passed three runs alone
 average 4.8 to 14.9), as did `theme.remeasureReportsOnce`; an earlier wiring of the same gate passed twelve more at 11.6
 to 18.
 
-**Could not show.** Windows and macOS (IC-3). A face still loading when it is applied would change the cell after the
+**Could not show.** Windows and macOS (IC-3 — *corrected 2026-10-14: for the Windows half, a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*). A face still loading when it is applied would change the cell after the
 measurement. The mono face is bundled but declared `font-display: swap` (`packages/ui/src/fonts.css`), so this could
 happen at first paint. The gate does not watch font loading, and this round did not measure that case.
 

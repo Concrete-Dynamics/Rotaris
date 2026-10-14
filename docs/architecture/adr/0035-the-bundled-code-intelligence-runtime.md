@@ -343,7 +343,7 @@ without the switch dies with SIGTRAP (exit 133); the driven app's `create` line 
 `… builtin:code-intelligence --no-sandbox -- project create <root>` and exits 127 at the sentinel; and with a stand-in
 `bin/python3` (a shell script writing its arguments, placed under the git-ignored `apps/desktop/resources/` and removed
 after) the runtime received `-c <entry> start-mcp-server --transport stdio` — no switch — and its exit status 7 was
-propagated. **Unmeasured on Windows (IC-3):** the 2026-09-06 spike's quirk is a scheme-looking positional FOLLOWED BY
+propagated. **Unmeasured on Windows (IC-3 — *corrected 2026-10-14: a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*):** the 2026-09-06 spike's quirk is a scheme-looking positional FOLLOWED BY
 another positional exiting before JavaScript; `--no-sandbox` is a switch, not a positional, and a packaged Windows
 parent does not normally carry it, but `Rotaris.exe builtin:code-intelligence --no-sandbox --` has not been run.
 

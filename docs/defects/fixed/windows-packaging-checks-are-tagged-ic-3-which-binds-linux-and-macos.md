@@ -52,4 +52,4 @@ OQ-80 line ("the Windows package that shows it still owed, IC-3"). Each now carr
 right after a Windows package, a packaged branch or `win-unpacked` with no correction beside it, and passes a tag on a
 Linux or macOS artifact, which IC-3 does bind; it was red on the nine before. Windows checks that are not packaging
 checks but carry the same shorthand ("anything on Windows (IC-3)") are outside this repair and recorded in
-`docs/defects/windows-checks-outside-packaging-still-name-ic-3-as-their-reason.md`.
+`docs/defects/fixed/windows-checks-outside-packaging-still-name-ic-3-as-their-reason.md` (repaired 2026-10-14).

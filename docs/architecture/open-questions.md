@@ -14574,3 +14574,61 @@ sent themselves; a bound answers for a person who may be at the screen; waiting 
 alive past a shutdown the desktop asked for.
 
 **What a live run then shows.** Nothing: the live run does not leave settings unsaved, and no scenario quits by a signal.
+
+<a id="oq-299"></a>
+
+**OQ-299 — When a rename's warm-up search fails with its allowance spent and the run cancelled at once, is the rename a timeout
+or interrupted?** *([`PD-MCP-004`](../product/directives.md#pd-mcp-004) clause 4; REQ-MCP-003; [`PD-TOOLS-013`](../product/directives.md#pd-tools-013)
+revision 2 (c). Raised 2026-10-14 by fin44 (`fin44-optional-findings`) from fin43's review of `fin43-rename-and-match`; the plan's
+range OQ-296 to OQ-310, its first free number on this branch — renumbered at landing if a sibling took it first.)*
+
+**What is open.** Clause 4 gives the search two exits that stop the rename unsent: a search that exhausts the rename's allowance
+ends it as REQ-MCP-003's failed call (`failure_kind: timeout`), and a cancel by the run during the search stops it
+(`interrupted`). It does not say which governs when both hold at once — the search's failure arrives after the whole allowance
+and after the run's cancel. [OQ-273](#oq-273)'s ruling paragraph names the cancel's exit before the allowance's.
+
+**What the build proceeds under.** The allowance first, then the abort (`apps/desktop/src/run-host/mcp.ts`, the warm-up's catch),
+the order the rename's own catch already has under PD-TOOLS-013 revision 2, which reads a deadline before the abort as `fetch`
+does. The two readings differ only in that coincidence: one row's `failure_kind` and observation text.
+
+**What a ruling decides.** Which exit names the call when both hold, so clause 4 states the order: the allowance first (one
+order for the search and the rename it precedes), or the cancel first (the run's intent over a deadline that also passed).
+
+<a id="oq-300"></a>
+
+**OQ-300 — What does a retrospective's refusal say when its entry provider has no credential?** *(REQ-WORKSPACE-137, "Provider
+authentication required" / "Authenticate at least one configured provider before starting a run."; [`PD-LIBRARY-002`](../product/directives.md#pd-library-002)
+with ADR-0030, a retrospective authenticates as a run does. Raised 2026-10-14 by fin44 (`fin44-optional-findings`) from fin43's
+review of `fin43-live-findings`; the plan's range, its next free number on this branch.)*
+
+**What is open.** A retrospective takes its lease through `leasedSetup` (`apps/desktop/src/run-host/launch.ts`), which shares
+`leaseOver` with a continuation. An entry provider main cannot resolve is refused there with the continuation's wording,
+"Authenticate at least one configured provider before continuing this run." A retrospective continues no run (it analyses a
+session at rest), so the sentence names something that is not there. REQ-WORKSPACE-137 words the refusal for submitting a prompt
+("before starting a run"), the continuation's "before continuing this run" is the build's adaptation of it, and nothing in the
+specification words the retrospective's.
+
+**What the build proceeds under.** The continuation's sentence, unchanged since before fin43.
+
+**What a ruling decides.** The detail a retrospective's lease refusal carries: REQ-WORKSPACE-137's sentence as written, a sentence
+that names the analysis ("… before the session can be analysed", or the like), or the continuation's as it stands.
+
+<a id="oq-301"></a>
+
+**OQ-301 — Is typing, into a clamped number field, the digits it already shows a change of the field?** *(REQ-CONFIG-446 and
+[`PD-CONFIG-003`](../product/directives.md#pd-config-003), "never rewritten until the field is changed" and "a user's entry".
+Raised 2026-10-14 by fin44 (`fin44-optional-findings`) from fin43's review of `fin43-transcript-and-prefs`, so the reading the
+repair took is on record; the plan's range, its next free number on this branch.)*
+
+**What is open.** A Runtime field that cannot show its stored value draws it clamped and states the stored value beneath
+(`ClampedNumberField`). Whether a person who selects the text and types the very digits shown has changed the field — and so
+replaces the stored value with the shown one — is not said by either text.
+[`../defects/fixed/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`](../defects/fixed/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md)
+says so in its Specs section.
+
+**What the build proceeds under.** Since fin43: yes. The field commits from the native input event, so an overtype of the same
+digits is "a user's entry" and is stored (`packages/ui/src/settings/number-field-retype.test.ts`); no open question was raised
+then.
+
+**What a ruling decides.** Whether that reading stands (an entry is an entry), or a value equal to the one shown leaves the stored
+value as it was (the field never changed what it reads).

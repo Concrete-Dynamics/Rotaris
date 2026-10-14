@@ -252,6 +252,7 @@ export function Confirm({ title, body, onYes, onCancel }: { title: string; body:
  * (3 s shown as `1` minute) and typed the same `1` over it had entered nothing — the bar stayed clean and the stored 3 s
  * stood. PD-CONFIG-003 stores "a user's entry", and an entry typed over the same digits is one, so it is committed like
  * any other (`docs/defects/fixed/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`, 2026-10-14).
+ * That reading is raised as OQ-301 so the consortium can put it on record.
  */
 function ClampedNumberField(props: { readonly id: string; readonly range: NumberRange; readonly shown: number; readonly onCommit: (value: number) => void; readonly description?: string }) {
   const { id, range, shown, onCommit } = props;

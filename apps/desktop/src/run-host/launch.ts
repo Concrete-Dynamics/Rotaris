@@ -44,7 +44,10 @@ export async function leaseForContinuation(workspaceRoot: string, deps: Continua
   return leaseOver(prepared.value, deps);
 }
 
-/** The lease a prepared configuration needs: the providers it names, asked of main; refused when the entry provider is not resolved. */
+/**
+ * The lease a prepared configuration needs: the providers it names, asked of main; refused when the entry provider is not resolved.
+ * The refusal's detail is the continuation's for a retrospective too, which continues no run: raised as OQ-300.
+ */
 async function leaseOver(prepared: PreparedRun, deps: Pick<ContinuationLeaseDeps, 'leaseCredentials'>): Promise<ContinuationLease> {
   const bearers = prepared.authProviders.length > 0
     ? await deps.leaseCredentials(prepared.authProviders).catch(() => ({} as Readonly<Record<string, string>>))

@@ -393,7 +393,8 @@ export class McpHost {
                 } catch (cause) {
                   const text = String(cause instanceof Error ? cause.message : cause);
                   const elapsed = this.deps.clocks.monotonic.now() - started;
-                  // The allowance before the abort, as the rename's own catch reads them (PD-TOOLS-013 revision 2).
+                  // The allowance before the abort, as the rename's own catch reads them (PD-TOOLS-013 revision 2); which governs when
+                  // both hold at once is raised as OQ-299.
                   if (elapsed >= timeoutMs || (/timeout|timed out/i.test(text) && elapsed >= timeoutMs * 0.9)) return timedOut();
                   if (tctx.signal.aborted) return cancelled();
                   this.deps.log(`mcp: the reference search sent before '${tool.callable}' on MCP server '${server.name}' failed (${redact(text)}); the rename is sent anyway (PD-MCP-004)`, 'warn');

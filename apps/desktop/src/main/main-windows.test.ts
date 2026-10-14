@@ -454,6 +454,22 @@ describe('MainWindows', () => {
     expect(h.actions.filter((action) => action.startsWith('build:'))).toEqual(['build:C:/a:launch', 'build:C:/c:open-request']);
   });
 
+  // docs/defects/fixed/a-notice-action-reaching-a-window-whose-store-was-refused-answers-an-unreported-failure.md: a window whose
+  // open settled with no workspace id and that stands (the launch's, whose store the workspace service refused — OQ-281 keeps
+  // it so Settings › Project can resolve the place) is reached, not refused: the caller opens the action's surface in it.
+  it('answers a reach of a live window whose open settled with no workspace id with that window, and builds nothing', async () => {
+    const h = harness();
+    h.openFailures.add('C:/a');
+    const launched = await h.mainWindows.launch('C:/a');
+    expect(launched.workspaceId).toBeUndefined();
+    h.actions.length = 0;
+    const reached = await h.mainWindows.reach('C:/a');
+    expect(reached.ok && { wcId: reached.window.wcId, added: reached.added, workspaceId: reached.window.workspaceId }).toEqual({ wcId: launched.wcId, added: false, workspaceId: undefined });
+    expect(h.actions.filter((action) => action.startsWith('build:') || action.startsWith('destroy:'))).toEqual([]);
+    expect(h.actions).toContain('focus:C:/a');
+    expect(h.notices).toEqual([]);
+  });
+
   // PD-SHELL-001 revision 3 (OQ-292, ruled 2026-10-14 under R-072): a `focus-session` notice reaches the window holding the
   // session's workspace and asks THAT window to focus the session; a window the reach added holds the request until its renderer
   // is ready for it, and is given it once.

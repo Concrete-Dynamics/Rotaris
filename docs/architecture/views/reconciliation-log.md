@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A notice action reaches a window whose store was refused (fin45, `fin45-optional-findings`;
+`../../defects/fixed/a-notice-action-reaching-a-window-whose-store-was-refused-answers-an-unreported-failure.md`).**
+`MainWindows.reach`, after waiting on a holder's open, refuses only a window that is gone; one that stands with no workspace id
+is reached, and the action's surface answers in it. `02-process-view.md` (`hooks.review`) and `06-sequences.md` (the readiness
+paragraph and the notice-action section).
+
 **A merged-document fault names the file that stated it (fin45, `fin45-config-and-terminal`;
 `../../defects/fixed/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md`).** `resolveMerged` attributes each
 fault its typed section readers raise to the scope file stating the longest prefix of the fault's path (`statingFile`), not

@@ -74,7 +74,10 @@ repository card — therefore arrives while no workspace exists yet. Those reads
 Overview. The readiness they wait on is pending from `MainWindows.build` and settles when the window's first open settles
 (or the window is forgotten), so the wait also covers a read that arrives between the window's load and its open; and a
 notice action's `reach` that meets a window still opening the workspace it names waits on the same readiness before acting
-on it (2026-10-14, `../../defects/fixed/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md`).
+on it (2026-10-14, `../../defects/fixed/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md`). After
+that wait only a window that is gone is refused; one that stands with no workspace open (its store refused, OQ-281) is
+reached, and the action's surface answers in it (2026-10-14,
+`../../defects/fixed/a-notice-action-reaching-a-window-whose-store-was-refused-answers-an-unreported-failure.md`).
 
 **The update check rides the post-show activation, and so does every window built later.** `MainWindows` fires
 `postShowActivation` once per window on the window's own show event — the launch's window, a replacement's
@@ -186,7 +189,8 @@ then the active-run count. A gate that declines answers `{cancelled: true}` — 
 ### A notice action that names a workspace (PD-SHELL-001 revisions 2 and 3)
 
 `MainWindows.reach(workspace)` is the chooser's third ending without a chooser: the window holding the workspace is surfaced
-and returned (waiting, bounded, for its open if it is still opening it), else a window is added for it by `#addWindow` — no
+and returned (waiting, bounded, for its open if it is still opening it, and returned also when that open left it with no
+workspace — a store refused, OQ-281 — so its surface answers), else a window is added for it by `#addWindow` — no
 gate, nothing closed, the workspace persisted as last opened, a failure reported under REQ-SHELL-019. The action's surface
 then opens in the reached window. For the hook review main parents the dialog to it. For `focus-session` (revision 3, OQ-292)
 main asks it to focus the session on channel 16:

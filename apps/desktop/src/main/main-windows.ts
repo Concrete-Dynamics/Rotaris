@@ -533,16 +533,24 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
         /*
          * The holder names the workspace from `build`, but its open has not settled — a second press while the window the
          * first press added is still loading. The action acts on the workspace (REQ-NOTIFY-044), so it waits, bounded, for the
-         * open rather than answering with no workspace id; an open that failed destroyed the window, and the press is refused
-         * (the failure was already reported under REQ-SHELL-019). Until 2026-10-14 it answered at once, and the hook review
-         * said "Open a workspace before reviewing its hooks"
+         * open rather than answering with no workspace id. Until 2026-10-14 it answered at once, and the hook review said
+         * "Open a workspace before reviewing its hooks"
          * (docs/defects/fixed/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md).
+         *
+         * After the wait, only a window that is GONE is refused: an open that failed in a window `reach` itself added destroyed
+         * it, and `#addWindow` reported the failure under REQ-SHELL-019. A window that stands with no workspace id — the
+         * launch's, whose store the workspace service refused (OQ-281 keeps it open so Settings › Project can resolve the
+         * place) — is reached like any holder, and the caller opens the action's surface in it, which says what it can act on.
+         * Until 2026-10-14 that window was refused too, in REQ-SHELL-019's words though nothing was reported, and the
+         * project-setup action never opened Settings › Project there
+         * (docs/defects/fixed/a-notice-action-reaching-a-window-whose-store-was-refused-answers-an-unreported-failure.md).
          */
         this.dependencies.log(`notice action reached ${target}: window ${holder.wcId} is still opening it; waiting for the open`);
         await this.awaitWorkspace(holder.wcId);
-        if (this.#liveRecord(holder.wcId) === undefined || holder.workspaceId === undefined) {
+        if (this.#liveRecord(holder.wcId) === undefined) {
           return { ok: false, outcome: { ok: false, code: 'workspace.openFailed', headline: `Could not open the selected project: ${target} could not be opened as a workspace.` } };
         }
+        if (holder.workspaceId === undefined) this.dependencies.log(`notice action reached ${target}: window ${holder.wcId} stands with no workspace open; its surface answers the action`);
       }
       return { ok: true, window: this.#view(holder), added: false };
     }

@@ -32,3 +32,17 @@ fin45 (`fin45-optional-findings`).
 - `apps/desktop/src/main/commands/initialization.ts`, `apps/desktop/src/main/commands/session.ts`, `apps/desktop/src/main/index.ts`
   (`openHookReview`) — the three callers, which return the reach's outcome when it is not ok.
 - `apps/desktop/src/main/main-windows.test.ts` — the reach cases.
+
+## Outcome
+
+*Repaired 2026-10-14 by fin45 (`fin45-optional-findings`).* Confirmed first on the branch: a launch window whose open settled
+with no workspace id (the harness's open answering nothing, as a refused store does) was reached as a refusal
+(`main-windows.test.ts`, "answers a reach of a live window whose open settled with no workspace id with that window, and builds
+nothing", red before the repair). `MainWindows.reach` now refuses, after its wait, only a holder that is gone — the window
+`#addWindow` built and destroyed when its open failed, which `#addWindow` reported under REQ-SHELL-019 — and answers a holder
+that stands with that window, logging that it has no workspace open. The callers then act as before the readiness repair: the
+project-setup action opens Settings › Project in it, where OQ-281 resolves the place; the hook review answers its own "Open a
+workspace before reviewing its hooks"; `focus-session` asks the window to load the session, which its `session.resume` answers.
+The readiness cases (a holder still opening, a failed add refused, a reach between build and open) stay green. No proof drives a
+notice action pressed for a workspace whose store is refused (a refused store raises no project-setup banner of its own); the
+unit case is the evidence. `06-sequences.md` and `02-process-view.md` say so.

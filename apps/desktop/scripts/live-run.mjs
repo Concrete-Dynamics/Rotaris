@@ -35,7 +35,9 @@
  *                 (N58) its post-run analysis is let finish under an Improvement analysis timeout set through Settings
  *                 (`LIVE_RUN_ANALYST_TIMEOUT_S`, default 300): one artifact with proposals or the timed-out notes (one
  *                 that proposed nothing is a NOTE), and the notice it owes; then `ask-retrospective` presses the Library's retrospective gesture and lets it finish:
- *                 its artifact, the sessions it read, and the workspace root's instruction files alone (PD-LIBRARY-002).
+ *                 its artifact, the sessions it read, and the workspace root's instruction files alone (PD-LIBRARY-002). Since fin43
+ *                 (the live run at ce5f952, F2/F4): its launch starts no run first, every model request of either launch carries a
+ *                 credential, and a "collector crashed" artifact fails the artifact and notice checks.
  *   3. edit     — one real run that implements REQ-103 and runs the suite in the terminal. Asserted from the
  *                 files on disk, from `git diff`, and by running `node --test` again in this script. The work is
  *                 split between two children writing IN PARALLEL, each under a declared write scope (PD-TOOLS-006):
@@ -235,7 +237,7 @@ import { runApprovalsScenario, runAwayScenario, runPlanGateScenario } from './li
 import { runCutScenario } from './lib/cut-scenario.mjs';
 import { runCrlfScenario } from './lib/crlf-scenario.mjs';
 import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-field.mjs';
-import { passOutcome, postRunVerdict, retrospectiveInstructionFiles, settledAfterMs, settledWait } from './lib/analysis-reading.mjs';
+import { passOutcome, postRunVerdict, retrospectiveInstructionFiles, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './lib/analysis-reading.mjs';
 import { RENAME_FILES, RENAME_FROM, RENAME_TO, renameReading } from './lib/rename-reading.mjs';
 import { CLASSIFIER_MARK, ROOT_MARK, answerReading, planReading } from './lib/plan-open-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, summaryOpeningVerdicts, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
@@ -1572,6 +1574,8 @@ if (wanted.includes('ask')) {
     const askArtifacts = read === null ? [] : improvementArtifacts().filter((a) => a.source_session_id === read.session.session_id);
     const analysis = passOutcome(askArtifacts[0]?.artifact ?? null, askNotices);
     check(analysisMs !== null, 'the post-run analysis was seen running and ended before the capture quit (REQ-LIBRARY-125/127)', analysisMs === null ? `the wait for it ran out at ${ASK_WAIT_MS} ms` : `${analysisMs} ms from the prompt's submission`);
+    // F2's other half (the live run at ce5f952): every model request of the launch, the run's and its analysis's, carried a credential.
+    check(unauthorizedRequests(log) === 0, 'ask: every model request carried a credential (ADR-0030)', `${unauthorizedRequests(log)} request(s) logged with no authorization header`);
     // An analyst that proposed nothing for another reason is the model's judgement over a one-file run, REQ-LIBRARY-124's own
     // "no proposals" outcome: a NOTE, its notice still checked below (`postRunVerdict`).
     const analysisVerdict = postRunVerdict(askArtifacts.length, analysis);
@@ -1605,8 +1609,16 @@ if (wanted.includes('ask')) {
       const retro = passOutcome(retroArtifacts[0]?.artifact ?? null, retroNotices, { retrospective: true });
       const files = retrospectiveInstructionFiles(retroLog);
       check(settledAfterMs(retroLog) !== null, 'the retrospective pressed in the Library ran and ended before the capture quit (PD-LIBRARY-002)', settledAfterMs(retroLog) === null ? `the wait for it ran out at ${RETRO_WAIT_MS} ms (see ask-retrospective/app.log)` : `${settledAfterMs(retroLog)} ms`);
-      check(retroArtifacts.length === 1 && retroArtifacts[0].source_session_id === null && (retroArtifacts[0].artifact.considered_session_ids ?? []).includes(read.session.session_id),
-        'one retrospective artifact, belonging to no session and having read the ask session (PD-LIBRARY-002 revision 2 (a))',
+      /*
+       * The live run at ce5f952 (F2, F4): the retrospective's request went out with no credential and its collector crashed on the
+       * 401, and both checks below PASSed over "collector crashed: Unauthorized". The launch must start no run before the gesture
+       * (the shape that exposed F2: no run has leased the bearer for it), every model request it makes must carry a credential,
+       * and a crashed collector fails the artifact check; the notice check fails on it too (`passOutcome`, OQ-285).
+       */
+      check(runsStarted(retroLog) === 0, 'ask-retrospective: the launch started no run before the retrospective, so it leases its own credential (F2)', `${runsStarted(retroLog)} run(s) started in the launch`);
+      check(unauthorizedRequests(retroLog) === 0, 'ask-retrospective: every model request carried a credential (ADR-0030, PD-LIBRARY-002)', `${unauthorizedRequests(retroLog)} request(s) logged with no authorization header (see ask-retrospective/app.log)`);
+      check(retroArtifacts.length === 1 && retroArtifacts[0].source_session_id === null && (retroArtifacts[0].artifact.considered_session_ids ?? []).includes(read.session.session_id) && retro.outcome !== 'crashed',
+        'one retrospective artifact, belonging to no session, having read the ask session, its collector not crashed (PD-LIBRARY-002 revision 2 (a), REQ-LIBRARY-023)',
         retroArtifacts.map((a) => `${a.artifact_id}: ${retro.outcome}, ${retro.proposals} proposal(s), considered ${JSON.stringify(a.artifact.considered_session_ids ?? [])}, notes ${JSON.stringify(a.artifact.notes ?? null)}`).join(' | ') || 'none stored');
       check(files !== null && files.rootOnly, 'the retrospective was handed the workspace root\'s instruction files and no other base\'s (PD-LIBRARY-002 revision 2, OQ-235)', files === null ? 'no "at the workspace root" line in ask-retrospective/app.log' : `${files.handed} of ${files.enabled}: ${files.ids.join(', ') || 'none'}`);
       if (retroArtifacts.length === 1) check(retro.noticeMatches === true, 'the notice on screen is the one the retrospective\'s outcome owes (PD-LIBRARY-002 revision 2 (c))', retroNotices.map((n) => n.text.slice(0, 160)).join(' | ') || 'no notice on screen');

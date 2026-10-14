@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { INDICATOR, passOutcome, postRunVerdict, retrospectiveInstructionFiles, settledAfterMs, settledWait } from './analysis-reading.mjs';
+import { INDICATOR, passOutcome, postRunVerdict, retrospectiveInstructionFiles, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './analysis-reading.mjs';
 
 describe('analysis reading (live-run `ask`, REQ-LIBRARY-123..127, PD-LIBRARY-002)', () => {
   it('the wait holds only once the named pass was seen and no indicator stands', () => {
@@ -61,6 +61,30 @@ describe('analysis reading (live-run `ask`, REQ-LIBRARY-123..127, PD-LIBRARY-002
     expect(retrospectiveInstructionFiles('run host: retrospective: 2 of 2 enabled instruction file(s) at the workspace root (workspace:AGENTS.md, user-agents:AGENTS.md) for /w')?.rootOnly).toBe(false);
     expect(retrospectiveInstructionFiles('run host: retrospective: 0 of 1 enabled instruction file(s) at the workspace root for /w')).toEqual({ handed: 0, enabled: 1, ids: [], rootOnly: true });
     expect(retrospectiveInstructionFiles('no such line')).toBeNull();
+  });
+
+  /*
+   * The live run at ce5f952 (F4): ask-retrospective PASSed "one retrospective artifact …" and "the notice on screen is the one the
+   * retrospective's outcome owes" over an artifact whose notes read "collector crashed: Unauthorized" and the notice "The
+   * retrospective found nothing to propose". A crashed collector is no outcome a pass owes: it never reached the model.
+   */
+  it('a crashed collector is its own outcome: no notice matches it, and the post-run verdict fails on it', () => {
+    const crashed = passOutcome({ proposals: [], notes: 'collector crashed: Unauthorized' }, [{ text: 'iThe retrospective found nothing to proposeDetailsNothing was proposed in impart_dL3YK5Xd.CopyDismiss' }], { retrospective: true });
+    expect(crashed).toMatchObject({ outcome: 'crashed', crashed: true, noticeMatches: false });
+    expect(postRunVerdict(1, passOutcome({ proposals: [], notes: 'collector crashed: Unauthorized' }, [{ text: 'Improvement analysis complete — no proposalsDetailsNothing was proposed in impart_x.' }]))).toBe('fail');
+    // Not a crash: the timed-out, the suppressed-duplicates and the null notes keep their outcomes.
+    expect(passOutcome({ proposals: [], notes: 'Suppressed duplicate proposals already covered by: impart_a.' }, [], { retrospective: true }).outcome).toBe('empty');
+  });
+
+  it('reads the run host\'s unauthenticated model requests and the runs a launch started (F2\'s shape: no run before the retrospective)', () => {
+    const log = [
+      '[main 2026-10-13T23:10:22.440Z] info    run host: credentials: leased for openai-compatible--katalyst (workspace /w)',
+      '[main 2026-10-13T23:10:22.488Z] info    run host: model request POST http://127.0.0.1:36079/chat/completions (no authorization header)',
+    ].join('\n');
+    expect(unauthorizedRequests(log)).toBe(1);
+    expect(unauthorizedRequests('run host: model request POST http://127.0.0.1:1/chat/completions')).toBe(0);
+    expect(runsStarted(log)).toBe(0);
+    expect(runsStarted('[main] info    run host: session 0791fa1e-70df-4a20-95c4-906ceb8aa71b started; row 0 recorded; the run is executing')).toBe(1);
   });
 });
 

@@ -28,12 +28,15 @@ export function settledAfterMs(log) {
 }
 
 const TIMED_OUT = /^collector timed out after (\d+(?:\.\d+)?) seconds\b/;
+/** REQ-LIBRARY-023's note for any other crash of the collector: the pass never reached an answer from the model. */
+const CRASHED = /^collector crashed: /;
 
 /**
  * What a pass left, read from its artifact and the notice on screen when the capture ended (`notices`: the
  * `[data-testid="notice"]` probe's rows). `outcome` is `proposals` (REQ-LIBRARY-124's success notice), `timed-out` (the
- * empty artifact REQ-LIBRARY-023's timeout writes, with REQ-NOTIFY-100's detail naming the limit), `empty` (no proposal for
- * another reason) or `none` (no artifact at all). `noticeMatches` says whether the notice on screen is the one the outcome
+ * empty artifact REQ-LIBRARY-023's timeout writes, with REQ-NOTIFY-100's detail naming the limit), `crashed` (the empty
+ * artifact REQ-LIBRARY-023 writes for any other crash, which no notice matches), `empty` (no proposal for another reason) or
+ * `none` (no artifact at all). `noticeMatches` says whether the notice on screen is the one the outcome
  * owes, and is null where the outcome owes none.
  */
 export function passOutcome(artifact, notices, { retrospective = false } = {}) {
@@ -46,6 +49,12 @@ export function passOutcome(artifact, notices, { retrospective = false } = {}) {
     const title = retrospective ? new RegExp(`${proposals} retrospective proposals? ready`) : new RegExp(`${proposals} improvement proposals? ready`);
     return { outcome: 'proposals', proposals, notes, noticeMatches: has(title) };
   }
+  /*
+   * A crashed collector (REQ-LIBRARY-023's "collector crashed: <exc>") is no outcome a pass owes: it never reached the model.
+   * No notice matches it — which notice it does owe is OQ-285's — so the notice check fails on it, and so does the artifact
+   * check that reads `crashed` (the live run at ce5f952, F4: both PASSed "collector crashed: Unauthorized").
+   */
+  if (CRASHED.test(notes ?? '')) return { outcome: 'crashed', crashed: true, proposals, notes, noticeMatches: false };
   const limit = TIMED_OUT.exec(notes ?? '');
   const title = retrospective ? /The retrospective found nothing to propose/ : /Improvement analysis complete — no proposals/;
   if (limit !== null) {
@@ -79,3 +88,21 @@ export function retrospectiveInstructionFiles(log) {
   const ids = (m[3] ?? '').split(',').map((s) => s.trim()).filter((s) => s !== '');
   return { handed: Number(m[1]), enabled: Number(m[2]), ids, rootOnly: ids.every((id) => id.startsWith('workspace:')) && ids.length === Number(m[1]) };
 }
+
+/**
+ * The run host's model requests that went out with no credential — its `onRequest` line, "model request POST <url> (no
+ * authorization header)" (`run-host/host.ts`). The live run at ce5f952 (F2) found the retrospective's one request so.
+ */
+export function unauthorizedRequests(log) {
+  return [...String(log).matchAll(/run host: model request \S+ \S+ \(no authorization header\)/g)].length;
+}
+
+/**
+ * The runs a launch started, from the run host's "session <id> started" line. `ask-retrospective` owes none before its gesture:
+ * a retrospective in a launch no run has leased in is the shape that exposed F2 (the live run at ce5f952), and a run started
+ * first would lease the bearer for it and hide a retrospective that leases nothing itself.
+ */
+export function runsStarted(log) {
+  return [...String(log).matchAll(/run host: session \S+ started; /g)].length;
+}
+

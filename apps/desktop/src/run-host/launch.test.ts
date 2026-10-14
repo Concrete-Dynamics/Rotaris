@@ -271,8 +271,13 @@ describe('the continuation lease (REQ-PROVIDER-066; a defect note, removed once 
     expect(await r.setup.model.config.credentialFor(r.setup.model.config.model)()).toBe('fresh-bearer');
   });
 
-  it('leasedSetup: an entry provider main cannot resolve refuses as a continuation does, and a configuration that will not load says why', async () => {
-    expect(await leasedSetup(dir, deps(async () => ({})))).toMatchObject({ kind: 'refused', reply: { kind: 'refused', code: 'session.provider-auth' } });
+  /*
+   * PD-LIBRARY-002 revision 5 (OQ-300, ruled under R-072): the retrospective's refusal takes REQ-WORKSPACE-137's code and headline
+   * with a detail naming the retrospective, which continues no run; the continuation keeps its own sentence.
+   */
+  it('leasedSetup: an entry provider main cannot resolve refuses with the retrospective\'s sentence, and a configuration that will not load says why', async () => {
+    expect(await leasedSetup(dir, deps(async () => ({})))).toEqual({ kind: 'refused', reply: { kind: 'refused', code: 'session.provider-auth', headline: 'Provider authentication required', detail: 'Authenticate at least one configured provider before running a retrospective.' } });
+    expect(await leaseForContinuation(dir, deps(async () => ({})))).toEqual({ kind: 'refused', reply: { kind: 'refused', code: 'session.provider-auth', headline: 'Provider authentication required', detail: 'Authenticate at least one configured provider before continuing this run.' } });
     writeFileSync(join(dir, '.rotaris', 'agents.yaml'), 'runtime: [invalid]\n');
     const lease = vi.fn(async () => ({ 'provider-one': 'fresh-bearer' }));
     expect(await leasedSetup(dir, deps(lease))).toMatchObject({ kind: 'unconfigured', reason: expect.stringMatching(/^The configuration could not be loaded/) });

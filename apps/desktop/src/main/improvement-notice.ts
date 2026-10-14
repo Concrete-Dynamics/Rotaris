@@ -36,11 +36,16 @@ export function passFailureTitle(pass: AnalysisPass): string {
   return pass === 'retrospective' ? 'The retrospective could not be completed' : 'The completed run could not be reviewed for improvements';
 }
 
-/** The failure warning's detail: the run it belonged to (the history, for a retrospective, which names no run) and the reason. */
+/**
+ * The failure warning's detail: the run it belonged to (the history, for a retrospective, which names no run) and the reason,
+ * ending in a single period. A reason that is a refusal's sentence already ends in its own terminal punctuation, and gains no
+ * second mark (`PD-LIBRARY-002` revision 5, OQ-300).
+ */
 export function passFailureDetail(pass: AnalysisPass, sessionId: string | null | undefined, reason: string): string {
+  const closed = /[.!?]$/.test(reason) ? reason : `${reason}.`;
   return pass === 'retrospective'
-    ? `This workspace's own history was not reviewed: ${reason}.`
-    : `Session ${sessionId} was not reviewed for improvements: ${reason}.`;
+    ? `This workspace's own history was not reviewed: ${closed}`
+    : `Session ${sessionId} was not reviewed for improvements: ${closed}`;
 }
 
 /** PD-LIBRARY-005's reason for a failed collector, from its stored notes; null when the notes record no such failure. */

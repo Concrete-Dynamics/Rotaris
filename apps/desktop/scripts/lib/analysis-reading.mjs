@@ -137,3 +137,32 @@ export function runsStarted(log) {
   return [...String(log).matchAll(/run host: session \S+ started; /g)].length;
 }
 
+
+/** PD-LIBRARY-002 revision 5 (OQ-300): the retrospective's authentication refusal, as main posts it at capture. */
+export const RETROSPECTIVE_AUTH_HEADLINE = 'Provider authentication required';
+export const RETROSPECTIVE_AUTH_DETAIL = 'Authenticate at least one configured provider before running a retrospective.';
+export const RETROSPECTIVE_AUTH_ACTION = 'Open Models settings';
+
+/** The capture's wait for `ask-retrospective-unauth`: a notice on screen naming the refusal's headline. */
+export function refusalWait() {
+  return `js:[...document.querySelectorAll('[data-testid="notice"]')].some((n) => (n.textContent || '').includes(${JSON.stringify(RETROSPECTIVE_AUTH_HEADLINE)}))`;
+}
+
+/**
+ * PD-LIBRARY-002 revision 5 (OQ-300), the live run's `ask-retrospective-unauth`: a retrospective pressed with the entry
+ * provider's credential withheld owes ONE notice titled with REQ-WORKSPACE-137's headline, the retrospective's sentence as its
+ * body and the "Open Models settings" action, and stores no retrospective artifact. `notices` are the capture's probe of
+ * `[data-testid="notice"]` (each `{ text }`); `artifactsBefore` and `artifactsAfter` count the retrospective artifacts.
+ */
+export function retrospectiveRefusalVerdict(notices, artifactsBefore, artifactsAfter) {
+  const texts = (notices ?? []).map((n) => String(n?.text ?? ''));
+  const refusals = texts.filter((t) => t.includes(RETROSPECTIVE_AUTH_HEADLINE));
+  const one = refusals.length === 1 ? refusals[0] : null;
+  const worded = one !== null && one.includes(RETROSPECTIVE_AUTH_DETAIL) && !one.includes(`${RETROSPECTIVE_AUTH_DETAIL}.`);
+  const actioned = one !== null && one.includes(RETROSPECTIVE_AUTH_ACTION);
+  const generic = texts.some((t) => t.includes('The retrospective could not be started'));
+  const queued = artifactsAfter - artifactsBefore;
+  const passed = one !== null && worded && actioned && !generic && queued === 0;
+  const detail = `${refusals.length} refusal notice(s)${one === null ? '' : `, worded ${worded}, action ${actioned}`}${generic ? ', and the generic "could not be started" notice' : ''}; ${queued} retrospective artifact(s) stored by the press`;
+  return { passed, detail, refusals: refusals.length, worded, actioned, queued };
+}

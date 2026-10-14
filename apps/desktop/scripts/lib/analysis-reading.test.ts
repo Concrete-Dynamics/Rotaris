@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { INDICATOR, passOutcome, postRunVerdict, retrospectiveArtifactVerdict, retrospectiveInstructionFiles, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './analysis-reading.mjs';
+import { INDICATOR, passOutcome, postRunVerdict, refusalWait, retrospectiveArtifactVerdict, retrospectiveInstructionFiles, retrospectiveRefusalVerdict, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './analysis-reading.mjs';
 
 describe('analysis reading (live-run `ask`, REQ-LIBRARY-123..127, PD-LIBRARY-002)', () => {
   it('the wait holds only once the named pass was seen and no indicator stands', () => {
@@ -155,5 +155,33 @@ describe('live-run\'s ask scenario puts the analyst timeout back whatever happen
     const ask = text.slice(text.indexOf("if (wanted.includes('ask')) {"), text.indexOf('// ── 3. One real run'));
     expect(ask).toMatch(/const agentsBeforeAsk = readFileSync\(agentsFile, 'utf8'\);[\s\S]*?\n  try \{\n/);
     expect(ask).toMatch(/\n  \} finally \{\n    writeFileSync\(agentsFile, agentsBeforeAsk\);\n  \}\n/);
+  });
+});
+
+/**
+ * PD-LIBRARY-002 revision 5 (OQ-300): the live run's `ask-retrospective-unauth` reads one refusal notice — REQ-WORKSPACE-137's
+ * headline, the retrospective's sentence, the "Open Models settings" action — and no artifact stored by the press.
+ */
+describe('the retrospective\'s authentication refusal (live-run `ask-retrospective-unauth`, PD-LIBRARY-002 revision 5)', () => {
+  const refusal = { text: '!Provider authentication requiredDetailsAuthenticate at least one configured provider before running a retrospective.Open Models settingsCopyDismiss' };
+  it('passes on the one notice the ruling owes, with nothing stored', () => {
+    expect(retrospectiveRefusalVerdict([refusal], 1, 1)).toMatchObject({ passed: true, refusals: 1, worded: true, actioned: true, queued: 0 });
+  });
+  it('fails the as-built notice, a continuation\'s sentence, a missing action, a doubled notice and a stored artifact', () => {
+    const asBuilt = { text: '!The retrospective could not be startedDetailsProvider authentication required: Authenticate at least one configured provider before continuing this run.CopyDismiss' };
+    expect(retrospectiveRefusalVerdict([asBuilt], 0, 0).passed).toBe(false);
+    expect(retrospectiveRefusalVerdict([{ text: refusal.text.replace('running a retrospective', 'continuing this run') }], 0, 0).passed).toBe(false);
+    expect(retrospectiveRefusalVerdict([{ text: refusal.text.replace('Open Models settings', '') }], 0, 0).passed).toBe(false);
+    expect(retrospectiveRefusalVerdict([refusal, refusal], 0, 0).passed).toBe(false);
+    expect(retrospectiveRefusalVerdict([refusal], 0, 1).passed).toBe(false);
+    expect(retrospectiveRefusalVerdict([], 0, 0)).toMatchObject({ passed: false, refusals: 0 });
+  });
+  it('the wait holds once a notice names the headline', () => {
+    const wait = refusalWait();
+    expect(wait.startsWith('js:')).toBe(true);
+    const run = (texts: string[]) => Boolean(new Function('document', `return ${wait.slice(3)};`)({ querySelectorAll: () => texts.map((textContent) => ({ textContent })) }));
+    expect(run([])).toBe(false);
+    expect(run(['Something else'])).toBe(false);
+    expect(run([refusal.text])).toBe(true);
   });
 });

@@ -38,6 +38,12 @@ script variable of `run-host/scripted-client.ts` behind `__ROTARIS_SEAMS__`; wit
 `PACKAGED_SCRIPT`. `scripts/lib/seam-check.mjs` names them all. The **process view**'s run-host row says so. No package, edge,
 process, channel, command or store column changed.
 
+**The retrospective's authentication refusal names the retrospective (fin45, `fin45-retro-and-record`; `PD-LIBRARY-002`
+revision 5, OQ-300).** `leaseOver` takes its refusal's detail from its caller, so `leasedSetup` refuses "before running a
+retrospective" while a continuation keeps "before continuing this run"; main's `improvements.retrospective` posts
+`session.provider-auth` as one error notice per gesture with the "Open Models settings" action, and the failure warning's
+detail ends in a single period whatever its reason ends in. `02-process-view.md` (the retrospective pass's refusals).
+
 **The tool-grouping preference is stored under its registered key (fin44, `fin44-hooks-and-config`;
 `../../defects/fixed/the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md`).**
 `display/groupTools` became `display/groupToolCalls` (REQ-CONFIG-405, REQ-SHELL-006) in the preference table, the command

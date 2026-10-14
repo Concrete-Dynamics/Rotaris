@@ -311,7 +311,7 @@ describe('a retrospective authenticates as a run does: leased first, its setup c
   });
 
   it('a lease refusal comes back before anything is captured or analysed', async () => {
-    const refusal = { kind: 'refused', code: 'session.provider-auth', headline: 'Provider authentication required', detail: 'Authenticate at least one configured provider before continuing this run.' };
+    const refusal = { kind: 'refused', code: 'session.provider-auth', headline: 'Provider authentication required', detail: 'Authenticate at least one configured provider before running a retrospective.' };
     const host = { ...(hostFor([]) as unknown as Record<string, unknown>), retrospectiveSetup: async () => ({ kind: 'refused', reply: refusal }) } as unknown as RunHost;
     expect(await dispatch({ kind: 'retrospective.capture', workspaceId: 'W1', workspaceRoot: root }, host)).toEqual(refusal);
     expect(await dispatch({ kind: 'improvement.analyze', job } as unknown as RunHostRequest, host)).toEqual(refusal);

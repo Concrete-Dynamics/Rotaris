@@ -58,6 +58,15 @@ export function improvementsCommands(
           raiseNotice('info', 'The retrospective needs a model', 'Choose a retrospective or medium model, then run the retrospective again.', [{ label: 'Open Models settings', action: { kind: 'open-settings', category: 'models' } }]);
           return { ok: false, code: captured.code, headline: captured.headline, detail };
         }
+        /*
+         * PD-LIBRARY-002 revision 5 (OQ-300, ruled under R-072): the lease left the entry provider unresolved. REQ-WORKSPACE-137's
+         * refusal, worded for the retrospective by the run host, posted per gesture as an error notice titled with its headline,
+         * its detail the body, carrying the action REQ-WORKSPACE-152 (2) gives that requirement's refusals.
+         */
+        if (captured.kind === 'refused' && captured.code === 'session.provider-auth') {
+          raiseNotice('error', captured.headline, captured.detail, [{ label: 'Open Models settings', action: { kind: 'open-settings', category: 'models' } }]);
+          return refusal(captured, captured.headline);
+        }
         if (captured.kind === 'refused' && captured.code === 'retrospective.no-evidence') {
           raiseNotice('info', 'There is nothing to look back over yet', 'This workspace has no sessions, prompts, proposals or instruction files for a retrospective to read.');
           return { ok: false, code: captured.code, headline: captured.headline, detail };

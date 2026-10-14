@@ -39,7 +39,10 @@
  *                 (the live run at ce5f952, F2/F4): its launch starts no run first, every model request of either launch carries a
  *                 credential, and a "collector crashed" artifact fails the artifact check. Since fin44 (PD-LIBRARY-005, OQ-285) the
  *                 notice check reads the warning a crashed or unparseable collector owes ("The retrospective could not be
- *                 completed", naming the artifact), and a verdict with no detail prints no "— undefined".
+ *                 completed", naming the artifact), and a verdict with no detail prints no "— undefined". Since fin45 (PD-LIBRARY-002
+ *                 revision 5, OQ-300) `ask-retrospective-unauth` presses the gesture again with the credential file moved aside
+ *                 for one launch: one "Provider authentication required" notice naming the retrospective, with "Open Models
+ *                 settings", and no artifact.
  *   3. edit     — one real run that implements REQ-103 and runs the suite in the terminal. Asserted from the
  *                 files on disk, from `git diff`, and by running `node --test` again in this script. The work is
  *                 split between two children writing IN PARALLEL, each under a declared write scope (PD-TOOLS-006):
@@ -207,7 +210,7 @@
  *
  * The run is unattended and its window is hidden; `--gui` shows it, for watching rather than using.
  */
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
@@ -242,7 +245,7 @@ import { runApprovalsScenario, runAwayScenario, runPlanGateScenario } from './li
 import { runCutScenario } from './lib/cut-scenario.mjs';
 import { runCrlfScenario } from './lib/crlf-scenario.mjs';
 import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-field.mjs';
-import { passOutcome, postRunVerdict, retrospectiveArtifactVerdict, retrospectiveInstructionFiles, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './lib/analysis-reading.mjs';
+import { passOutcome, postRunVerdict, refusalWait, retrospectiveArtifactVerdict, retrospectiveInstructionFiles, retrospectiveRefusalVerdict, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './lib/analysis-reading.mjs';
 import { verdictLine } from './lib/verdict-line.mjs';
 import { RENAME_FILES, RENAME_FROM, RENAME_TO, renameReading } from './lib/rename-reading.mjs';
 import { CLASSIFIER_MARK, DELEGATED_MARK, REPORT_MARK, ROOT_MARK, answerReading, planReading, waitReading } from './lib/plan-open-reading.mjs';
@@ -1635,6 +1638,34 @@ if (wanted.includes('ask')) {
       if (retroArtifacts.length === 1) check(retro.noticeMatches === true, 'the notice on screen is the one the retrospective\'s outcome owes (PD-LIBRARY-002 revision 2 (c), PD-LIBRARY-005)', retroNotices.map((n) => n.text.slice(0, 260)).join(' | ') || 'no notice on screen');
       if (retro.outcome === 'parse-failed') noted('the retrospective\'s model answered twice in a shape the parser could not read (REQ-LIBRARY-022); its warning is checked above', `notes ${JSON.stringify(retro.notes)}`);
       results.scenarios['ask-retrospective'] = { ...retro, settledAfterMs: settledAfterMs(retroLog), instructionFiles: files };
+
+      /*
+       * PD-LIBRARY-002 revision 5 (OQ-300, ruled under R-072): the same gesture with the entry provider's credential withheld —
+       * the credential file moved aside for one launch, so main's lease answers no bearer for it. The press owes ONE error
+       * notice, "Provider authentication required", with "Authenticate at least one configured provider before running a
+       * retrospective." as its body and the "Open Models settings" action, and stores no artifact; the model is never asked.
+       * The file is put back whatever the launch does. Costs nothing: no request reaches the endpoint.
+       */
+      const withheld = `${tokensFile}.withheld`;
+      const retroBefore = improvementArtifacts().filter((a) => a.source_kind === 'retrospective').length;
+      renameSync(tokensFile, withheld);
+      let refusedLog = '';
+      try {
+        refusedLog = await launch('ask-retrospective-unauth', {
+          ROTARIS_CAPTURE_VIEW: '6',
+          ROTARIS_CAPTURE_CLICKS: '[data-testid="library-tab"][data-tab="proposals"]@~10000;;[data-testid="library-retrospective"]:not([aria-disabled="true"])@~20000',
+          ROTARIS_CAPTURE_WAIT: refusalWait(), ROTARIS_CAPTURE_WAIT_MS: '60000', ROTARIS_CAPTURE_AFTER_MS: '2500',
+          ROTARIS_CAPTURE_PROBE: '[data-testid="notice"]',
+        }, 150_000);
+      } finally {
+        renameSync(withheld, tokensFile);
+      }
+      const refusedNotices = JSON.parse(/capture: probe \[data-testid="notice"\] → (\[.*\])\s*$/m.exec(refusedLog)?.[1] ?? '[]');
+      const refusal = retrospectiveRefusalVerdict(refusedNotices, retroBefore, improvementArtifacts().filter((a) => a.source_kind === 'retrospective').length);
+      check(refusal.passed, 'a retrospective pressed with the entry provider\'s credential withheld posts one "Provider authentication required" notice naming the retrospective, with "Open Models settings", and stores nothing (PD-LIBRARY-002 revision 5, OQ-300)', `${refusal.detail}: ${refusedNotices.map((n) => n.text.slice(0, 260)).join(' | ') || 'no notice on screen'}`);
+      const refusedCompletions = proxy === null ? null : readTraffic('ask-retrospective-unauth').filter((r) => String(r.path ?? '').includes('/chat/completions')).length;
+      check(!/run host: model request /.test(refusedLog) && (refusedCompletions ?? 0) === 0, 'ask-retrospective-unauth: no model request was sent', refusedCompletions === null ? 'from ask-retrospective-unauth/app.log (no recording proxy)' : `${refusedCompletions} completion(s) in the recorded traffic`);
+      results.scenarios['ask-retrospective-unauth'] = refusal;
     }
   } finally {
     writeFileSync(agentsFile, agentsBeforeAsk);

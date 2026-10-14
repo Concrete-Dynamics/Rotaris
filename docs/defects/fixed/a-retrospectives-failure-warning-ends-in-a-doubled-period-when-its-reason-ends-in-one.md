@@ -10,7 +10,7 @@ period"; the post-run pass's detail has the same shape.
 
 ## Specs
 
-`PD-LIBRARY-002` revision 5 ([OQ-300](../architecture/open-questions.md#oq-300)): at analysis, the reason "appears inside clause
+`PD-LIBRARY-002` revision 5 ([OQ-300](../../architecture/open-questions.md#oq-300)): at analysis, the reason "appears inside clause
 (c)'s failure warning, which offers no action and ends in a single period". REQ-LIBRARY-124's warning carries "the failure's
 reason" for the post-run pass on the same terms.
 
@@ -19,3 +19,11 @@ reason" for the post-run pass on the same terms.
 - `apps/desktop/src/main/improvement-notice.ts` — `passFailureDetail`, the closing period.
 - `apps/desktop/src/main/improvements.ts` — `reasonOf`, which carries a refusal's detail into the reason whole.
 - `apps/desktop/src/main/index.ts` — the coordinator's `failed` hook, which posts the warning.
+
+## Outcome
+
+Repaired 2026-10-14 by fin45 (`fin45-retro-and-record`), in the commit that builds `PD-LIBRARY-002` revision 5: `passFailureDetail`
+adds its closing period only when the reason does not already end in `.`, `!` or `?`, for both passes; a reason ending in `)`
+(`PD-LIBRARY-005`'s "the analysis call failed (<exc>)") still gains one. Pinned by `apps/desktop/src/main/improvement-notice.test.ts`,
+"adds the closing period only to a reason that does not already end in terminal punctuation, for both passes", red before the
+change. No proof drives a refused analysis; the live run's credential-withheld step (OQ-300) is the orchestrator's.

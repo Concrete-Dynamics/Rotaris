@@ -30,6 +30,18 @@ describe("the empty artifact's notice (REQ-LIBRARY-124, REQ-LIBRARY-022/023, REQ
     expect(passFailureDetail('retrospective', undefined, 'boom')).toBe("This workspace's own history was not reviewed: boom.");
   });
 
+  /*
+   * PD-LIBRARY-002 revision 5 (OQ-300): a reason that is a refusal's sentence ends in its own period, and the warning ends in a
+   * single one (docs/defects/fixed/a-retrospectives-failure-warning-ends-in-a-doubled-period-when-its-reason-ends-in-one.md).
+   */
+  it('adds the closing period only to a reason that does not already end in terminal punctuation, for both passes', () => {
+    const refused = 'the analyst could not start — Provider authentication required: Authenticate at least one configured provider before running a retrospective.';
+    expect(passFailureDetail('retrospective', null, refused)).toBe(`This workspace's own history was not reviewed: ${refused}`);
+    expect(passFailureDetail('post_run', 'session-1', 'it stopped!')).toBe('Session session-1 was not reviewed for improvements: it stopped!');
+    expect(passFailureDetail('post_run', 'session-1', 'did it answer?')).toBe('Session session-1 was not reviewed for improvements: did it answer?');
+    expect(passFailureDetail('retrospective', null, 'the analysis call failed (Unauthorized)')).toBe("This workspace's own history was not reviewed: the analysis call failed (Unauthorized).");
+  });
+
   describe('the post-run pass', () => {
     it('a crashed collector is the failure warning, its reason and the artifact that holds no proposals, with no action', () => {
       expect(emptyArtifactNotice(postRun('collector crashed: Unauthorized'), 'session-1')).toEqual({

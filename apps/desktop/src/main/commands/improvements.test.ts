@@ -77,6 +77,41 @@ describe('improvements.retrospective — refused only while a retrospective is p
 });
 
 /**
+ * PD-LIBRARY-002 revision 5 (OQ-300, ruled under R-072): a retrospective whose lease leaves its entry provider unresolved is
+ * refused at capture with REQ-WORKSPACE-137's headline and the retrospective's sentence, posted as ONE error notice per gesture
+ * carrying the action REQ-WORKSPACE-152 (2) gives that requirement's refusals, and nothing is queued. Before, it reached the
+ * generic branch: "The retrospective could not be started", the headline and the continuation's sentence joined as its body, and
+ * no action.
+ */
+describe('improvements.retrospective — the lease\'s authentication refusal (PD-LIBRARY-002 revision 5, REQ-WORKSPACE-137/152)', () => {
+  it('posts one error notice titled with the headline, the detail as its body and the Open Models settings action, and queues nothing', async () => {
+    const refused = { kind: 'refused', code: 'session.provider-auth', headline: 'Provider authentication required', detail: 'Authenticate at least one configured provider before running a retrospective.' } as const;
+    const notices: unknown[][] = [];
+    const queued: string[] = [];
+    const facet = improvementsCommands({
+      runHost: { request: async () => refused } as unknown as CommandContext['runHost'],
+      retrospectivePending: () => false,
+      enqueueImprovement: (job: ImprovementAnalysisJob) => { queued.push(job.artifact_id); },
+      raiseNotice: (...args: unknown[]) => { notices.push(args); },
+      log: () => undefined,
+    } as unknown as Parameters<typeof improvementsCommands>[0]);
+    const at: CommandAt = { w: { workspaceId: 'ws-1', workspace: '/work/project' } as MainWindowState, senderId: 1, awaitWorkspace: async () => undefined };
+    const press = () => facet['improvements.retrospective']({ kind: 'improvements.retrospective' }, at);
+    expect(await press()).toMatchObject({ ok: false, code: 'session.provider-auth', headline: 'Provider authentication required' });
+    expect(notices).toEqual([[
+      'error',
+      'Provider authentication required',
+      'Authenticate at least one configured provider before running a retrospective.',
+      [{ label: 'Open Models settings', action: { kind: 'open-settings', category: 'models' } }],
+    ]]);
+    // Per gesture: a second press is answered again.
+    await press();
+    expect(notices).toHaveLength(2);
+    expect(queued).toEqual([]);
+  });
+});
+
+/**
  * PD-LIBRARY-002 revision 2, clause (e) (OQ-236), fin38's review: a main window reads the activity as it mounts, after it has
  * subscribed. The push main sends a window that has just opened a workspace can reach a renderer that has not subscribed yet
  * (the window has loaded, but its root subscribes only after its boot's own reads and first render), and is then lost

@@ -1601,6 +1601,25 @@ retrospective and opens Settings at Models.
 > (the retrospective contributed no session either way); the unit cases carry it. A live run after a retrospective (no live
 > scenario drives one yet). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First execution of revision 5, 2026-10-14 (fin45, `fin45-retro-and-record`), ruled by [R-072](requests.md#r-072)
+> (OQ-300):** the sentence held as written; nothing in it met a build it could not describe. `leaseOver`
+> (`apps/desktop/src/run-host/launch.ts`) takes its refusal's detail from its caller; `leasedSetup` passes the retrospective's
+> sentence and `leaseForContinuation` keeps "before continuing this run". Main's `improvements.retrospective` posts
+> `session.provider-auth` as one error notice per gesture, titled "Provider authentication required", the detail its body, with
+> "Open Models settings" (`open-settings`, `models`), where it reached the generic "The retrospective could not be started"
+> notice with no action before. **Found by building:** at analysis the warning read the reason's own period and then its own
+> (`passFailureDetail`), so "… running a retrospective.." — repaired in the same change
+> ([`fixed/a-retrospectives-failure-warning-ends-in-a-doubled-period-when-its-reason-ends-in-one.md`](../defects/fixed/a-retrospectives-failure-warning-ends-in-a-doubled-period-when-its-reason-ends-in-one.md));
+> and the lease checks the entry role's provider rather than the retrospective model's, recorded and not repaired
+> ([`a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`](../defects/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md)).
+> **What was measured.** Three unit cases, each red before the change: `launch.test.ts` (both sentences, the retrospective's
+> and the continuation's), `commands/improvements.test.ts` (the notice's severity, title, body and action, twice for two
+> presses, nothing queued) and `improvement-notice.test.ts` (a single period after a reason ending in `.`, `!` or `?`, one
+> added after `)`); `pnpm symbols` registers two more extended requirements (69) and `back-pointers.test.ts` reads both notes
+> both ways. **What was not measured.** The refusal in the built app: every proof drives the scripted provider, whose lease
+> names no entry provider, so no proof reaches it; the live run with the entry provider's credential withheld is the
+> orchestrator's. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-shell-002"></a>

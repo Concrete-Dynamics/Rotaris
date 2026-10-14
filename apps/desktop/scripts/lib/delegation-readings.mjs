@@ -139,16 +139,6 @@ export function attachReading(delegates, selections, children) {
 }
 
 /**
- * The handoff a continued session's fresh root is given (REQ-SESSION-115, PD-LIBRARY-003 (e)): its first user message names
- * the edited artifact with its header marked `edited`, carries the person's `marker`, and no frontmatter line. `kind`:
- * `carried`, `unedited` (the artifact is there, not marked edited: a FAIL), `other-artifact` (another artifact is the latest:
- * a NOTE), `absent`. `cutBeforeMarker`: the marker is absent because the block reached the product's cut before it — a NOTE,
- * since the person's text then sits past what the handoff carries by design.
- * @param {string | null} firstUser
- * @param {string} artifactId
- * @param {string} marker
- */
-/**
  * The artifact a continued session's handoff names, chosen as `latestArtifactText` (`packages/engine/src/sessions.ts`) chooses
  * it: of the artifacts nothing superseded (rows in `created_at, id` order), the last one the latest iteration's root
  * published — unless a plan cycle opened after that iteration, when there is no such root — and otherwise the last of all.
@@ -165,6 +155,17 @@ export function handoffArtifact(artifacts, iterations, planCycles) {
 
 /** `latestArtifactText`'s cut of the artifact's block (`packages/engine/src/sessions.ts`), marker included. */
 export const HANDOFF_ARTIFACT_CAP = 6_000;
+
+/**
+ * The handoff a continued session's fresh root is given (REQ-SESSION-115, PD-LIBRARY-003 (e)): its first user message names
+ * the edited artifact with its header marked `edited`, carries the person's `marker`, and no frontmatter line. `kind`:
+ * `carried`, `unedited` (the artifact is there, not marked edited: a FAIL), `other-artifact` (another artifact is the latest:
+ * a NOTE), `absent`. `cutBeforeMarker`: the marker is absent because the block reached the product's cut before it — a NOTE,
+ * since the person's text then sits past what the handoff carries by design.
+ * @param {string | null} firstUser
+ * @param {string} artifactId
+ * @param {string} marker
+ */
 export function handoffReading(firstUser, artifactId, marker) {
   if (firstUser === null || firstUser === '') return { kind: 'absent', header: null };
   const header = new RegExp(`Artifact: ${artifactId} — [^\\n]*\\(([^)]*)\\)`).exec(firstUser);

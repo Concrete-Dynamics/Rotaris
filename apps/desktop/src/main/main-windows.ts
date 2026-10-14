@@ -478,7 +478,9 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
    * is surfaced (REQ-STARTUP-163's rule, as the chooser and the hand-over take it); where none holds it, a window is added
    * for it on PD-SHELL-001's add route — no gate evaluated and no window closed, so nothing is asked and nothing the user
    * has open is lost. Replacing the activating window instead would run REQ-SHELL-021's gates, whose unsaved-settings
-   * guard asks. That reading is OQ-267's, built provisionally until the consortium rules.
+   * guard asks. That is PD-SHELL-001 revision 2's reach (OQ-267, ruled 2026-10-13 under R-072), which binds every
+   * REQ-NOTIFY-044 member naming a workspace; the project-setup action takes `surfaceHolding` instead (PD-WORKSPACE-005
+   * revision 2, OQ-262), and which of the two governs that member for a workspace no window holds is OQ-294.
    */
   async reach(workspace: string): Promise<
     | { readonly ok: true; readonly window: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>; readonly added: boolean }

@@ -986,7 +986,8 @@ async function main(): Promise<void> {
   /**
    * ESC-34 / REQ-NOTIFY-044: with `workspace` (a notice action's named workspace) the review is for THAT workspace,
    * whichever window the action was activated in: `MainWindows.reach` surfaces the window holding it, else adds one for it
-   * without asking anything (OQ-267), and the dialog is parented to that window and decides for that workspace. Until
+   * without asking anything (PD-SHELL-001 revision 2, OQ-267 ruled 2026-10-13 under R-072), and the dialog is parented to
+   * that window and decides for that workspace. Until
    * 2026-10-13 a notice naming another workspace opened nothing
    * (docs/defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md). Without it, the asking window's own.
    */

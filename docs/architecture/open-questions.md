@@ -13609,6 +13609,14 @@ nothing outside its own window"; on this branch it does — `MainWindows.reach` 
 2026-10-13 (fin41, N86; [`a-hook-review-notice-for-another-workspace-opens-nothing.md`](../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md),
 `notice-proof` sections 6 and 6b), so no note was written.
 
+*Added 2026-10-14 ([OQ-267](#oq-267), ruled 2026-10-13 under R-072):* OQ-267's ruling, as written, answers this question's
+second half — what the action opens for a workspace another window holds, or no window holds — by
+[`PD-SHELL-001`](../product/directives.md#pd-shell-001) revision 2's reach, and leaves its first half, which notice offers the
+action, to this entry. This entry's own ruling, above, answered both halves the same day; the two agree where a window holds
+the workspace (it is surfaced and the surface opens there) and disagree where none does (this ruling: a notice and nothing
+else; OQ-267's: a window added). The build follows this entry's ruling for the project-setup action; the disagreement is
+[OQ-294](#oq-294).
+
 <a id="oq-263"></a>
 
 **OQ-263 — Is a `worktree_storage_subpath` that contains the requirement checkout directory rejected at load?**
@@ -13831,7 +13839,7 @@ to the displaced one in 10 of 10, the journal gone and the staging copy kept in 
 asking the user anything further"; REQ-NOTIFY-224; ESC-34's consequences, "navigating between workspaces from a notice is
 owed"; PD-SHELL-001's add route; REQ-STARTUP-163; REQ-SHELL-017/021. Raised 2026-10-13 by fin41 (item N86) while repairing
 [`../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md`](../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md);
-the plan's range began at OQ-261, and origin/main already held OQ-261 to OQ-266.)*
+the plan's range began at OQ-261, and origin/main already held OQ-261 to OQ-266. Ruled 2026-10-13 under R-072, below.)*
 
 **What is open.** Notices are application-wide, so the unreviewed-hooks notice of workspace A can be activated in a window
 holding workspace B: a second window (PD-SHELL-001), or the window that raised it after a switch. ESC-34 says the navigation
@@ -13851,6 +13859,22 @@ add route, the added workspace becomes the remembered one.
 whether the same reading binds the other members that name a workspace (the project-initialization action, OQ-262).
 
 **What a live run then shows.** Nothing: no live scenario opens two workspaces.
+
+**Ruled 2026-10-13 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)):** when a notice
+action names a workspace, activating it surfaces the main window that holds that workspace under REQ-STARTUP-163's rule;
+where no window holds it, activation **adds** a main window for it on PD-SHELL-001's add terms — no REQ-SHELL-021 gate is
+evaluated, no window is closed, nothing is asked, the workspace is persisted as the last-opened one, and a failure is reported
+under REQ-SHELL-019 — and the action's surface then opens in that window. The rule binds every REQ-NOTIFY-044 member that
+names a workspace: the hook review today and, once a notice carries it, the project-initialization action of OQ-262. Both
+advocates recommended the add; the ruling follows one's account of the user-facing costs and the other's form, a revision of
+the directive. Recorded as [`PD-SHELL-001`](../product/directives.md#pd-shell-001) revision 2, whose closed list of add
+gestures gains this reach (Extends REQ-NOTIFY-044, which gains its back-pointer; Narrows REQ-SHELL-021 and Extends
+REQ-SHELL-017 and REQ-STARTUP-161 stand), disjoint from PD-SHELL-009's narrowing of REQ-SHELL-021. **No behaviour changed:**
+`MainWindows.reach` has done exactly this for the hook review since 2026-10-13 (fin41, N86; `notice-proof` sections 6 and
+6b); the comments that called it provisional cite the revision since 2026-10-14 (fin43, `fin43-notices-and-config`).
+**Raised beside it, not ruled:** OQ-262's ruling of the same day has a project-setup banner whose project no window holds show
+"Project <name> is not open in any window." and add nothing, where this rule would add a window; the build follows OQ-262's
+ruling for that member, and the disagreement is [OQ-294](#oq-294).
 
 <a id="oq-272"></a>
 
@@ -14158,3 +14182,49 @@ nothing; and whether the open's own window (the place made before the file) is c
 directory and renaming it into place.
 
 **What a live run then shows.** Nothing: no live scenario empties a store's place.
+
+<a id="oq-293"></a>
+
+**OQ-293 — Does the unreviewed-hooks notice name the project it is about?** *(REQ-NOTIFY-224, the notice "where a workspace
+declares hooks the user has not reviewed"; REQ-HOOKS-101, whose fixed text reads "declared by this workspace's
+.rotaris/agents.yaml"; PD-WORKSPACE-005, which named the project in the project-setup banners for the same reason; PD-SHELL-001
+revision 2. Raised 2026-10-14 by fin43 (`fin43-notices-and-config`) from the consortium's ruling of OQ-267 (step 8 (b)),
+recorded in
+[`the-unreviewed-hooks-notice-does-not-name-its-project.md`](../defects/the-unreviewed-hooks-notice-does-not-name-its-project.md);
+numbered from the top of the plan's range. Open.)*
+
+The notice is an application notice, shown in every main window, and its words — the title "Workspace hooks need review" and
+REQ-HOOKS-101's message, "declared by this workspace's .rotaris/agents.yaml" — say "this workspace". In a window holding another
+workspace "this" is that window's, which is the wrong project; its "Review hooks" reaches the right one (PD-SHELL-001 revision
+2), so the words and the action disagree.
+
+**What the build proceeds under.** Unchanged: the title and REQ-HOOKS-101's text as fixed, no project named. Changing
+REQ-HOOKS-101's fixed text needs a directive.
+
+**What a ruling decides.** Whether the notice names its project — the title followed by the project's name, and the project's
+folder heading the detail area, as PD-WORKSPACE-005 does for the project-setup banners — and, if so, whether REQ-HOOKS-101's
+"this workspace's" is narrowed by a directive or the name is carried by the title and detail alone.
+
+**What a live run then shows.** Nothing: no live scenario opens two workspaces.
+
+<a id="oq-294"></a>
+
+**OQ-294 — A project-setup banner pressed for a project no window holds: a notice (OQ-262) or an added window (OQ-267)?**
+*([`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005) revision 2 (OQ-262); [`PD-SHELL-001`](../product/directives.md#pd-shell-001)
+revision 2 (OQ-267); REQ-NOTIFY-044. Raised 2026-10-14 by fin43 (`fin43-notices-and-config`) while writing both revisions into
+the record; numbered from the top of the plan's range. Open.)*
+
+Both rulings were made on 2026-10-13 under R-072. OQ-262's: from any window, a project-setup banner's `open-project-init`
+surfaces the main window holding the project and opens Settings › Project there; when no window holds it, the activating window
+shows "Project <name> is not open in any window." and nothing else happens. OQ-267's: an action naming a workspace no window
+holds adds a main window for it and opens the action's surface there, and the rule "binds every REQ-NOTIFY-044 member that names
+a workspace … the project-initialization action of OQ-262 once a notice carries it". A notice has carried it since 2026-10-14,
+so the two rules now speak to the same press and answer it differently.
+
+**What the build proceeds under.** OQ-262's ruling, the specific one for this member: the press for a project no window holds
+shows the info notice and adds nothing (`projectInit.open`, `notice-proof` section 6c). The hook review follows OQ-267's.
+
+**What a ruling decides.** Which of the two governs the project-setup action for a project no window holds, and the matching
+correction of the other directive's text.
+
+**What a live run then shows.** Nothing: no live scenario opens two workspaces.

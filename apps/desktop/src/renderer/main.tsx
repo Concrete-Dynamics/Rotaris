@@ -984,8 +984,8 @@ function dispatchNoticeAction(action: NoticeAction): void {
     case 'open-hook-review':
       // ESC-34: the action names the workspace whose hooks it concerns, and the review is for THAT workspace. Notices are
       // application-wide, so this window may hold another one (a second window, or a switch since the notice was raised):
-      // main reaches the named workspace — the window holding it surfaced, else one added for it, asking nothing (OQ-267)
-      // — and opens its review there. Until 2026-10-13 this case compared the name with this window's workspace and
+      // main reaches the named workspace — the window holding it surfaced, else one added for it, asking nothing
+      // (PD-SHELL-001 revision 2, OQ-267 ruled 2026-10-13 under R-072) — and opens its review there. Until 2026-10-13 this case compared the name with this window's workspace and
       // opened nothing on a mismatch (docs/defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md).
       void bridge.command({ kind: 'hooks.review', workspace: action.workspace }).then((outcome) => {
         if (!outcome.ok) console.warn(`notice action "open-hook-review" for ${action.workspace} was refused: ${outcome.headline}`);
@@ -1043,8 +1043,9 @@ function dispatchNoticeAction(action: NoticeAction): void {
       // PD-WORKSPACE-005 revision 2 (OQ-262, ruled 2026-10-13 under R-072): both project-setup banners carry this action,
       // naming their project's folder. Notices are application-wide, so this window may hold another workspace: main
       // surfaces the window holding the named one and opens Settings › Project there (channel 15), or, where no window
-      // holds it, says so in THIS window and does nothing else. Until 2026-10-14 this arm dispatched nothing, and no notice
-      // raised the action.
+      // holds it, says so in THIS window and does nothing else. Its window rule is ruled; PD-SHELL-001 revision 2 (OQ-267)
+      // would add a window for a workspace no window holds, and which governs this member there is OQ-294. Until 2026-10-14
+      // this arm dispatched nothing, and no notice raised the action.
       void bridge.command({ kind: 'projectInit.open', workspace: action.workspace }).then((outcome) => {
         if (!outcome.ok) console.warn(`notice action "open-project-init" for ${action.workspace} was refused: ${outcome.headline}`);
       });

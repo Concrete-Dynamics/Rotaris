@@ -161,7 +161,8 @@ palette, the keyboard help — registering itself open or closed; main's registr
 of that family for the duration, ADR-0048; a persona window sending it is refused `window.notMain`),
 `hooks.summary/review/reviewPayload/reviewDecide/clearDecision/setToggle` (**`hooks.review {workspace?}`**, ESC-34: the
 unreviewed-hooks notice's `open-hook-review` hands its named workspace back, and main reaches it — `MainWindows.reach`
-surfaces the window holding it, else adds one for it on PD-SHELL-001's route with no gate and no close (OQ-267) — then
+surfaces the window holding it, else adds one for it on PD-SHELL-001's route with no gate and no close (PD-SHELL-001
+revision 2, OQ-267 ruled 2026-10-13) — then
 parents the review to that window; the dialog's payload keeps the workspace id its decision is stored against; without
 `workspace`, the asking window's own), **`projectInit.open {workspace}`** (2026-10-14, [`PD-WORKSPACE-005`](../../product/directives.md#pd-workspace-005)
 revision 2, OQ-262: a project-setup banner's `open-project-init`, activated in any window; main's `MainWindows.surfaceHolding`

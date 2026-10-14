@@ -224,7 +224,9 @@ the two members shipped here carried none — `open-hook-review` now names the w
 happens to be open), and `open-provider-sign-in` names a provider where one is named. ~~A review action naming a
 workspace other than the open one opens nothing and is logged; navigating between workspaces from a notice is not
 built.~~ *Built 2026-10-13 (fin41, N86): a review action naming another workspace reaches it — the window holding it
-surfaced, else one added for it, asking nothing and closing nothing ([OQ-267](../open-questions.md#oq-267)) — and opens
+surfaced, else one added for it, asking nothing and closing nothing ([OQ-267](../open-questions.md#oq-267); the build's
+reading until it was ruled on 2026-10-13 under [R-072](../../product/requests.md#r-072) as
+[`PD-SHELL-001`](../../product/directives.md#pd-shell-001) revision 2) — and opens
 that workspace's review there; `pnpm notice-proof`'s `review-other` launch measures it
 ([`../../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md`](../../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md)).
 The provider-named branch still only logs: no notice in the build names a provider.* The ruling is `owner-decisions.md` ESC-34 and the amendment is recorded in

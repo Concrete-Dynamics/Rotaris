@@ -24,6 +24,9 @@ directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 
 
 ### PD-SHELL-001 — a chosen project folder may be opened in an additional main window
 
+*Revision 2 (2026-10-13, [R-072](requests.md#r-072), ruling [OQ-267](../architecture/open-questions.md#oq-267)) — **a notice
+action's reach**, in the gesture clause below; revision 1's clause quoted beside it.*
+
 Choosing a project folder from inside a window SHALL offer two outcomes, and which one is taken SHALL
 be decided by the gesture that starts the flow rather than by a question asked afterwards: the
 **replacement** of REQ-SHELL-017, or the **addition** of a main window on the chosen folder with the
@@ -32,8 +35,25 @@ window that issued the request left open and unchanged.
 The add route SHALL be reachable by exactly two gestures, and by no other: a shortcut-less command
 palette entry labelled "Open project folder in a new window", present in every window and in the
 composer's slash catalogue on the terms of REQ-SHELL-048 and REQ-SHELL-056; and activating the
-title-bar workspace chip of REQ-SHELL-035 with the platform's secondary-activation modifier held.
-Every other activation of that chip is the replacement route, on which REQ-SHELL-021 governs in full.
+title-bar workspace chip of REQ-SHELL-035 with the platform's secondary-activation modifier held —
+and by one reach that opens no chooser: **activating a notice action of REQ-NOTIFY-044 that names a
+workspace.** Where a main window holds that workspace under REQ-STARTUP-163's rule, it is surfaced, no
+window is built, and the action's surface opens there. Otherwise a main window is added for it on this
+directive's add terms below, and the action's surface opens in the added window. The reach binds every
+vocabulary member that names a workspace: the hook review now, and project initialization once a notice
+carries it (OQ-262). Every other activation of the chip is the replacement route, on which REQ-SHELL-021
+governs in full.
+
+> **Revision 1 said, and no longer governs:** "The add route SHALL be reachable by exactly two gestures, and by no other: a
+> shortcut-less command palette entry labelled "Open project folder in a new window", present in every window and in the
+> composer's slash catalogue on the terms of REQ-SHELL-048 and REQ-SHELL-056; and activating the title-bar workspace chip of
+> REQ-SHELL-035 with the platform's secondary-activation modifier held."
+>
+> *Noted 2026-10-14 by fin43, not ruled:* project initialization's notice action is carried since 2026-10-14 by the
+> project-setup banners under [`PD-WORKSPACE-005`](#pd-workspace-005) revision 2 (OQ-262, ruled the same day as this
+> revision), whose clause has a press for a project no window holds show "Project <name> is not open in any window." and
+> add nothing. The two rulings disagree for that one case; the build follows PD-WORKSPACE-005 revision 2 there, and the
+> disagreement is raised as [OQ-294](../architecture/open-questions.md#oq-294).
 
 On the add route the product SHALL build a main window on the chosen folder, show it, surface it on
 the terms REQ-SHELL-161 fixes for every window this product owns, and leave every window already open
@@ -61,10 +81,28 @@ workspace, so the gesture must be as cheap to undo as to make, which is why clos
 changes nothing else; and the choice cannot be offered by the native chooser, which carries no
 buttons of ours (REQ-SHELL-164), which is why the gesture is chosen before the chooser opens.
 
-> **Extends:** REQ-SHELL-017, REQ-STARTUP-161
+**Why revision 2, and what it costs.** The closed list of two gestures existed so that skipping REQ-SHELL-021's gates is
+always a deliberate, chosen act before a chooser opens. A notice opens no chooser, REQ-NOTIFY-044 forbids asking anything
+further, and a declined gate would leave the action doing nothing, so that reason does not reach a notice's action; adding a
+window asks nothing and closes nothing the user has open. What it costs: the reach is a full workspace open, so the
+workspace's initialization resolution and its own automatic requirements queue (REQ-TRACE-476/482) may start work; the named
+workspace becomes the remembered one; focus moves to the surfaced or added window; and a persistent notice kept after a
+switch (REQ-NOTIFY-224) can reopen a workspace the user left.
+
+> **Extends:** REQ-SHELL-017, REQ-STARTUP-161, REQ-NOTIFY-044
 > **Narrows:** REQ-SHELL-021
 
-*Raised by the owner, 2026-09-12; logged as [R-004](requests.md#r-004).*
+*Raised by the owner, 2026-09-12; logged as [R-004](requests.md#r-004).* *Revised by [R-072](requests.md#r-072), 2026-10-13,
+ruling [OQ-267](../architecture/open-questions.md#oq-267) (revision 2): both advocates recommended the add; the ruling takes
+one advocate's user-facing costs and the other's directive revision. The new case stays disjoint from
+[`PD-SHELL-009`](#pd-shell-009)'s narrowing of REQ-SHELL-021, which covers gate (3)'s count on the replacement route.*
+
+> **First execution of revision 2.** Built before it was ruled, as the reading OQ-267 recorded: `MainWindows.reach`
+> (`apps/desktop/src/main/main-windows.ts`) for the hook review, the 2026-10-13 row of
+> [`../architecture/first-executions.md`](../architecture/first-executions.md) (fin41, N86), and `pnpm notice-proof` sections 6
+> (a notice naming the window's own workspace surfaces it and builds none) and 6b (a notice naming a workspace no window holds
+> adds a window, asks nothing and closes nothing). The ruling changed no behaviour; the comments that called the reading
+> provisional now cite this revision (2026-10-14, fin43).
 
 <a id="pd-workspace-001"></a>
 

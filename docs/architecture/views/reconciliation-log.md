@@ -14,6 +14,14 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-10-15**
+
+**Every PowerShell command takes the guarded payload (the Windows ARM64 session's B3; REQ-TOOLS-097/179).** `wrapCommand`'s
+PowerShell branch no longer splices a single-line command raw into the line: one line or many, the command is carried as
+base64, parsed alone, then dot-sourced in a `try` with its flag's line appended. No view changed: the wrapper's spelling is
+none of the maintenance rule's triggers, and the runtime view names the marker protocol, not its PowerShell text. Recorded
+because the code changed (`docs/defects/fixed/a-single-line-powershell-command-that-throws-loses-its-end-frame.md`).
+
 Last reconciled with the code: **2026-10-14**
 
 **A run's unreviewed-hooks notice with no recorded root names no workspace (fin45, `fin45-optional-findings`; OQ-293).**

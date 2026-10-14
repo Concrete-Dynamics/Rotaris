@@ -735,9 +735,9 @@ export function killTree(pid: number, force: boolean): boolean {
 const NO_PAGER: Record<string, string> = { GIT_PAGER: 'cat', PAGER: 'cat' };
 
 /**
- * ADR-0020's exit-status expression, over whichever flag carried "the last statement succeeded": `$?` on the
- * single-line path, and the payload's own flag on the multi-line one. A native command's status is in
- * `$LASTEXITCODE` either way (REQ-TOOLS-179).
+ * ADR-0020's exit-status expression, over the flag that carried "the last statement succeeded": the payload's own
+ * flag (until 2026-10-15 also `$?` on a single-line path, which no longer exists: `wrapCommand`). A native command's
+ * status is in `$LASTEXITCODE` either way (REQ-TOOLS-179).
  */
 function powershellExit(ok: string): string {
   return `$(if (${ok}) { if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 0 } } else { if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { $LASTEXITCODE } else { 1 } })`;
@@ -755,16 +755,30 @@ export function wrapCommand(backend: ShellBackend, command: string, start: strin
     // form propagates `$?` out of the payload — a failing cmdlet reported 0 — so the payload records `$?` into
     // a flag named for this call's nonce, and the exit expression reads that instead. The `try` is what keeps a
     // terminating error from eating the end frame and wedging the session until the hard cap.
-    if (command.includes('\n')) {
-      const flag = `$global:${end}_ok`;
-      const payload = Buffer.from(`${command}\n${flag} = $?`, 'utf8').toString('base64');
-      return `$global:LASTEXITCODE = $null; ${flag} = $true; Write-Output '${start}'; `
-        + `try { . ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${payload}')))) } `
-        + `catch { ${flag} = $false; Write-Output ($_ | Out-String).TrimEnd() }; `
-        + `Write-Output ('${end}:' + ${powershellExit(flag)})`;
-    }
-    // `$?` says whether the last statement succeeded; a native command's status is in $LASTEXITCODE.
-    return `$global:LASTEXITCODE = $null; Write-Output '${start}'; ${command}; Write-Output ('${end}:' + ${powershellExit('$?')})`;
+    //
+    // FALSIFIED, kept beside its replacement (the Windows ARM64 session's B3, 2026-10-15): "a single-line command keeps
+    // today's wrapper, byte for byte" — `…; Write-Output '<start>'; <command>; Write-Output ('<end>:' + …)`, the command
+    // spliced into the line with no `try`. A terminating error in it (`throw`, `-ErrorAction Stop`, a `Stop` preference)
+    // abandoned the rest of the line, and a line that did not parse (`if (`, and `&&`/`||` under Windows PowerShell 5.1)
+    // ran none of it, so the end frame never printed: measured under pwsh 7.6.6 and 5.1, every such command read 124 at the
+    // hard cap with its session reset, where the same command over two lines reported exit 1 in about 0.1 s; and 5.1's
+    // error text quoted the wrapper's own exit expression to the agent
+    // (docs/defects/fixed/a-single-line-powershell-command-that-throws-loses-its-end-frame.md). Every command now takes
+    // the guarded path, one line or many. An `exit` in the payload still ends the session's shell (measured, both shells),
+    // so a command that ends the shell reads as OQ-144 ruled it (R-071), unchanged.
+    //
+    // The command is parsed ALONE before it runs with the flag's line after it: a command that does not parse (`if (`)
+    // otherwise ran the parser on into that line, and the error the agent read quoted `$global:<nonce>_ok = $?`. The
+    // decoded text sits in a nonce-named global for the two parses and is removed before the end frame.
+    const flag = `$global:${end}_ok`;
+    const source = `$global:${end}_src`;
+    const payload = Buffer.from(command, 'utf8').toString('base64');
+    return `$global:LASTEXITCODE = $null; ${flag} = $true; Write-Output '${start}'; `
+      + `try { ${source} = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${payload}')); $null = [scriptblock]::Create(${source}); `
+      + `. ([scriptblock]::Create(${source} + [char]10 + '${flag} = $?')) } `
+      + `catch { ${flag} = $false; Write-Output ($_ | Out-String).TrimEnd() }; `
+      + `Remove-Variable -Name '${end}_src' -Scope Global -ErrorAction SilentlyContinue; `
+      + `Write-Output ('${end}:' + ${powershellExit(flag)})`;
   }
   // FALSIFIED, kept beside its replacement (ADR-0020's note, POSIX first execution 2026-09-16): "a real pty's
   // line discipline passes a newline through as a line terminator rather than swallowing it, so `sh` reads a

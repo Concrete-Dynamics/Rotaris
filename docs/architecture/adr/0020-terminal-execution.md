@@ -258,6 +258,8 @@ proposed:**
   appended to it and the expression reads that flag instead of `$?`. The flag is named for the call's nonce,
   so consequence 1's forgery argument covers it unchanged. The single-line path keeps `$?` and today's
   wrapper byte for byte.
+  *(2026-10-15, superseded: there is no single-line path any more; every command takes the guarded payload, and the
+  command is parsed alone before it runs with the flag's line appended. See the next bullet's report-back.)*
 - A **terminating error eats the end frame**. `throw` inside the payload aborted the statement list and the
   frame never printed, so the call wedged until the hard cap. Measured, this is NOT new and NOT the script
   block's doing: a single-line `Write-Output 'a'; throw 'boom'` wedges the same way today, and always has —
@@ -266,7 +268,28 @@ proposed:**
   wedges on a terminating error**, now bounded by defect A's hard cap rather than unbounded; that is the
   narrower remainder and it is not repaired here.
 
+  > **Held, measured and repaired — 2026-10-15, Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1
+  > arm64, dev tree, pwsh 7.6.6 arm64 and Windows PowerShell 5.1.26100.9457, at `3c3f4478` (the Windows ARM64 session's
+  > B3).** The remainder held exactly as written, on both shells, three runs each, every run alike: on one line
+  > `Write-Output 'a'; throw 'boom'`, `throw 'boom'`, `Write-Error 'boom' -ErrorAction Stop` and a `Stop` preference's
+  > `Get-Item` of a missing file each read **124 at about 5.5 s of a 5 s cap, `session_reset`**, the error text captured
+  > and the end frame lost; at the product's default no-output window too. Measured beyond it: a line that does not parse
+  > (`Write-Output 'x'; if (`, and `&&` or `||` under 5.1, which has neither) ran nothing and wedged the same way, and
+  > 5.1's error text for a single line quoted the wrapper's exit expression. The two-line control returned exit 1 in
+  > 108 to 186 ms. **Repaired**: `wrapCommand` sends every PowerShell command through the guarded payload, and parses the
+  > command alone first (`$null = [scriptblock]::Create(<command>)`) so a parse error is caught naming the command, never
+  > the flag's line. After, every one of those commands reads **exit 1, `shell_failure`, 125 to 233 ms, no reset, the
+  > session's state kept**, on both shells; `exit 3` on one line or two still ends the shell (`execution_error`,
+  > `session_reset`, about 1.5 s), so OQ-144's path is unchanged; a plain call costs about 30 ms more (62 to 93 ms under
+  > pwsh) for the decode and the second parse
+  > ([`a-single-line-powershell-command-that-throws-loses-its-end-frame.md`](../../defects/fixed/a-single-line-powershell-command-that-throws-loses-its-end-frame.md)).
+  > Left: 5.1 renders an error raised in the payload with the script block's text and the wrapper's line as its
+  > position, the nonce included ([`windows-powershell-5-1s-error-text-quotes-the-terminals-wrapper.md`](../../defects/windows-powershell-5-1s-error-text-quotes-the-terminals-wrapper.md),
+  > recorded); pwsh's concise view does not.
+
 `exit` inside a payload exits the shell itself, catchable by nothing, and is likewise left to the hard cap.
+*(2026-10-15, Windows 11 ARM64, both shells: it exits the shell on one line and on two, and since OQ-144's repair the
+call reads `execution_error` with `session_reset` at about 1.5 s, not the hard cap; the session's B6 measures the rest.)*
 **The `posix` branch is UNCHANGED and unmeasured**: a real pty's line discipline passes a newline through as a
 line terminator rather than swallowing it, so `sh` should read a multi-line command across lines as written —
 but that is reasoning, no POSIX shell runs on the host this was built on, and `REQ-TOOLS-104` sends Windows to
@@ -348,7 +371,9 @@ discipline's 4,096-byte input buffer while nothing read it, so its echo arrived 
 command's own output, and neither part could be dropped as the wrapper's echo: the paused call's poll carried
 `QQQ…done-later`. **PowerShell is unchanged and unmeasured:** its multi-line path is still one base64 line; whether ConPTY
 or PSReadLine caps a submitted line is not measurable on a Linux host, and is owed to the first Windows run, as the rest
-of the PowerShell branch is. Pinned by "REQ-TOOLS-096/098/179 (live-run M1): …" in `terminal.test.ts` (dash, bash as
+of the PowerShell branch is. *(2026-10-15: the suite's first Windows run since, on Windows 11 ARM64, sent no PowerShell
+line over 4 KB, so this stays unmeasured; the session's B4 measures it. Since B3's repair the same day, a single-line
+command is carried as base64 too, about a third longer on the line.)* Pinned by "REQ-TOOLS-096/098/179 (live-run M1): …" in `terminal.test.ts` (dash, bash as
 `sh`, and the 20-column floor; a soft-paused road included), red on the one-line carrier with exit 124 after its 15 s
 timeout; "REQ-TOOLS-096 (live-run M1): a POSIX command too long for one PTY line is staged …" pins the line, the script
 and PowerShell's line; and `pnpm terminal-proof`'s `live.longCommandReachesTheShellWhole` and
@@ -473,7 +498,9 @@ reports how (`INTERRUPT_UNSEEN_NOTE`, `ForegroundResult.interruptUnseen`), OQ-16
 the reporting. A Linux whose `/proc` does not answer is read the same way. The host is a session dependency
 (`SessionDeps.platform`, `TerminalManagerDeps.platform`), so the branch is pinned on this Linux host by three
 "(OQ-168, ruled)" cases in `terminal.test.ts` over a real PTY told it runs on `win32` or `darwin`, each red under the
-write-anyway reading. Still unmeasured on a Windows or macOS host.*
+write-anyway reading. Still unmeasured on a Windows or macOS host.* *(2026-10-15: still unmeasured on Windows. On
+Windows 11 ARM64 those three cases are skipped where the shell is PowerShell (`it.skipIf(PS)`), so the suite never runs
+them on a Windows host; the session's B5 and B7 owe the reading.)*
 
 *Reported back 2026-10-01, the repair of
 [`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll`](../../defects/fixed/output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md)
@@ -798,6 +825,11 @@ backends through `encodedSnapshot`; the tag stands in for POSIX's leading `/` in
 rows. Pinned on Linux over the parse through the `@xterm/headless` emulator at 20 to 240 columns, from the rows the
 command's loop prints. **Not executed:** no Windows host and no `pwsh` here, so the PowerShell capture's first execution
 is still owed, and it reports back here.
+*(2026-10-15, Windows 11 ARM64 (build 26200.9457), pwsh 7.6.6 and Windows PowerShell 5.1, the session's B1: one real
+PowerShell capture and restore ran, in "PD-TOOLS-001 (OQ-134): a reset restores the snapshot of the last command the
+product saw complete", green in every run under both shells (about 17 s); the emulated-screen parse cases ran too. The
+width sweep over a real PTY ("at 20 and 40 columns a hard-timeout reset restores …") is POSIX-only and skipped here; the
+session's B2 owes it.)*
 
 ## The suite on Windows 11 ARM64 — 2026-10-15, the PowerShell branch's first counted Windows run since 2026-10-02
 

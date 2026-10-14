@@ -214,7 +214,14 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
   });
   it('the wrapper brackets the command with the two markers and recovers the exit status', () => {
     const w = wrapCommand({ kind: 'powershell', file: 'pwsh' }, 'git status', 'S', 'E');
-    expect(w).toContain("Write-Output 'S'; git status; Write-Output ('E:'");
+    // One line or many, the command is carried as base64 into a guarded script block between the two markers
+    // (docs/defects/fixed/a-single-line-powershell-command-that-throws-loses-its-end-frame.md); it was spliced raw
+    // into the line, `Write-Output 'S'; git status; Write-Output ('E:'…`, until 2026-10-15.
+    expect(w).toMatch(/^\$global:LASTEXITCODE = \$null; \$global:E_ok = \$true; Write-Output 'S'; try \{ \$global:E_src = /);
+    // The command alone is carried, parsed once by itself and then run with the flag's line after it.
+    expect(Buffer.from(/FromBase64String\('([^']+)'\)/.exec(w)![1]!, 'base64').toString('utf8')).toBe('git status');
+    expect(w).toContain("$null = [scriptblock]::Create($global:E_src); . ([scriptblock]::Create($global:E_src + [char]10 + '$global:E_ok = $?'))");
+    expect(w).toMatch(/Remove-Variable -Name 'E_src' -Scope Global -ErrorAction SilentlyContinue; Write-Output \('E:' \+ \$\(if \(\$global:E_ok\)/);
     // Live-run L1: the command runs under `command eval`, so an error `sh` meets in it cannot abandon the end frame.
     expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, 'ls', 'S', 'E')).toBe("printf '%s\\n' 'S'; command eval 'ls'; printf 'E:%s\\n' \"$?\"");
     expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, "echo 'q'", 'S', 'E')).toBe("printf '%s\\n' 'S'; command eval 'echo '\\''q'\\'''; printf 'E:%s\\n' \"$?\"");
@@ -644,7 +651,8 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     await pwsh.s.run(long, { timeoutMs: 5_000 });
     const psLine = pwsh.lines().find((w) => w.includes('FromBase64String'))!;
     const payload = /FromBase64String\('([^']+)'\)/.exec(psLine)![1]!;
-    expect(Buffer.from(payload, 'base64').toString('utf8')).toBe(`${long}\n$global:${/__rot_[0-9a-f]+_e/.exec(psLine)![0]}_ok = $?`);
+    // The command alone since 2026-10-15; the flag's line is appended on the far side, after the command has parsed.
+    expect(Buffer.from(payload, 'base64').toString('utf8')).toBe(long);
   });
 });
 
@@ -1611,8 +1619,47 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     await t.execute(args({ command: keep, timeout: 10 }), ctx());
     const kept = PS ? 'Write-Output "[$rotMulti]"' : 'printf \'[%s]\\n\' "$rotMulti"';
     expect(output((await t.execute(args({ command: kept, timeout: 10 }), ctx())).text)).toBe('[kept]');
-    // A single-line command keeps today's wrapper, byte for byte.
-    expect(wrapCommand({ kind: 'powershell', file: 'pwsh' }, 'git status', 'S', 'E')).toContain("Write-Output 'S'; git status; Write-Output ('E:'");
+    // FALSIFIED, kept: "A single-line command keeps today's wrapper, byte for byte." A single line spliced raw lost its end
+    // frame to a terminating or parse error (the case below); since 2026-10-15 one line takes the multi-line path too.
+    expect(wrapCommand({ kind: 'powershell', file: 'pwsh' }, 'git status', 'S', 'E')).toContain('FromBase64String');
+  }, 60_000);
+
+  // docs/defects/fixed/a-single-line-powershell-command-that-throws-loses-its-end-frame.md (Windows ARM64 session B3, 2026-10-15): on
+  // one line, a terminating error abandoned the rest of the wrapper's line and a parse error ran none of it, so the end
+  // frame never printed and a command that failed at once read as the hard timeout, 124, with its session reset.
+  it.runIf(PS)('REQ-TOOLS-097/179: a single-line command that throws or does not parse ends with exit 1 and its own error, never at the hard cap, and the session keeps its state', async () => {
+    const t = await tool();
+    await t.execute(args({ command: "$env:ROTARIS_B3_KEPT = 'kept'", timeout: 10 }), ctx());
+    const failing: [string, string | null][] = [
+      ["Write-Output 'a'; throw 'boom'", 'boom'],
+      ["throw 'boom'", 'boom'],
+      ["Write-Error 'boom' -ErrorAction Stop", 'boom'],
+      ["$ErrorActionPreference = 'Stop'; Get-Item C:\\definitely\\not\\here.txt", 'here.txt'],
+      // A line that does not parse: nothing of it runs, and the parser's own message is the output.
+      ["Write-Output 'x'; if (", null],
+    ];
+    for (const [command, says] of failing) {
+      const started = performance.now();
+      const r = await t.execute(args({ command, timeout: 10 }), ctx());
+      expect(performance.now() - started, command).toBeLessThan(5_000);
+      expect(diag(r.text), command).toMatchObject({ exit_code: 1, outcome_kind: 'shell_failure' });
+      expect(diag(r.text)['kill_status'], command).toBeUndefined();
+      if (says !== null) expect(output(r.text), command).toContain(says);
+      else expect((output(r.text) ?? '').trim(), command).not.toBe('');
+      // A parse error names the command alone, never the flag's line appended after it.
+      if (says === null) expect(output(r.text), command).not.toContain('_ok = $?');
+      // pwsh's concise error view names the command, never the wrapper around it. Windows PowerShell 5.1's error record
+      // quotes the wrapper's line and the script block's text however the command is carried
+      // (docs/defects/windows-powershell-5-1s-error-text-quotes-the-terminals-wrapper.md), so that half is pwsh's only.
+      if (/pwsh\.exe$/i.test(shell!.file)) {
+        expect(output(r.text), command).not.toContain('LASTEXITCODE');
+        expect(output(r.text), command).not.toContain('__rot_');
+      }
+    }
+    // Nothing was reset: what the session set before the failures is still set, and the session was not reinitialized.
+    const kept = await t.execute(args({ command: "$ErrorActionPreference = 'Continue'; Write-Output \"[$env:ROTARIS_B3_KEPT]\"", timeout: 10 }), ctx());
+    expect(output(kept.text)).toBe('[kept]');
+    expect(diag(kept.text)['session_reinitialized']).not.toBe(true);
   }, 60_000);
 
   // docs/defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md (live-run M1, 2026-10-06):
@@ -2069,7 +2116,11 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     writeFileSync(join(root, 'b'), 'one\nTWO\nthree\n');
     writeFileSync(join(root, 'src', 'a.ts'), 'export const a = 1;\n');
     // The run's shape: `git diff --no-index` with differences exits 1 carrying the payload.
-    const r = await t.execute(args({ command: 'git diff --no-index -- a b || true; git diff --no-index -- a b', timeout: 15 }), ctx());
+    // Windows PowerShell 5.1 has no `||`, and a line it cannot parse is now its own exit-1 parse error
+    // (docs/defects/fixed/a-single-line-powershell-command-that-throws-loses-its-end-frame.md), so PowerShell's spelling
+    // is the `;` both shells read; the second diff's status is the call's either way.
+    const twice = PS ? 'git diff --no-index -- a b; git diff --no-index -- a b' : 'git diff --no-index -- a b || true; git diff --no-index -- a b';
+    const r = await t.execute(args({ command: twice, timeout: 15 }), ctx());
     expect(diag(r.text)['exit_code']).toBe(1);
     expect(diag(r.text)).toMatchObject({ outcome_kind: 'success', outcome_severity: 'info' });
     expect(r.isError).toBe(false);

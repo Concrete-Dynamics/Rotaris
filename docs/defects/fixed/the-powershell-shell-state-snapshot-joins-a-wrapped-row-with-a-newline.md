@@ -29,6 +29,10 @@ rows; it needs a Windows host to execute.
   `parseSnapshot` (its PowerShell half: the continuation rejoined with a newline, the directory's dropped),
   `restoreCommand` (the `Set-Item` and `Set-Location` it builds from the parse).
 - `packages/agent-tools/src/terminal/terminal.test.ts` — the PD-TOOLS-001 cases, which run PowerShell only on Windows.
+  *(Corrected 2026-10-15, the first Windows run of them, on Windows 11 ARM64 under pwsh 7.6.6 and 5.1: only one runs
+  PowerShell there, "PD-TOOLS-001 (OQ-134): a reset restores the snapshot …", green; the width case "at 20 and 40 columns a
+  hard-timeout reset restores …" is `it.skipIf(PS)` and runs on no Windows host. The Windows run this note owes is the
+  Windows ARM64 session's B2.)*
 
 ## Repaired — 2026-10-06 (fin21, bundle `fin21-leftover-notes`)
 

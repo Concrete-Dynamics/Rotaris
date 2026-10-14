@@ -740,7 +740,8 @@ planted by hand, and a relaunch that opens the stored session from the Sessions 
 (asserting the identity, the row order, the carried-intent status row, the settled child, one ordinal series
 and no lock left behind). Since fin42 (N56) it also re-queues a coordinating root that ignored its plan correction and reads
 the held answer in the next root's first message (`plan-held`, PD-ORCH-015), and meets PD-ORCH-009's silent root through the
-scripted `silent` step (`answerless`, `answer-when-asked`). Its evidence lands under `.proof/part-h-proof/`.
+scripted `silent` step (`answerless`, `answer-when-asked`), with loop supervision on and, since `PD-ORCH-009` revision 3
+(OQ-282), no loop classification and no stuck activation for the re-prompted turn. Its evidence lands under `.proof/part-h-proof/`.
 
 **Configuration.** `packages/config/src/` — `load.ts` (the one entry point, no database handle), `merge.ts` (the four
 classes; the overlay shared with the per-field writer through a mapping adapter), `sections/`, `slots.ts`, `validate.ts`,

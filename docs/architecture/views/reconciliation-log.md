@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**The answer re-prompt is the root's only message for the turn it answers (PD-ORCH-009 revision 3, OQ-282; fin43).**
+`LoopSupervisor.withdrawStuck()` clears a pending `stuck` trigger and nothing else; `Run.turn`'s `correction()` calls it on the
+root's supervisor before it returns `ANSWER_REPROMPT`. The **runtime view**'s turn paragraph says the root's re-prompted empty turn
+is no stuck report, and names OQ-283 (a child's re-prompt) and OQ-284 (a pending trigger after a plan correction). No package,
+edge, process, channel, command or store column changed.
+
 **A notice's reach ruled; a `focus-session` press for another workspace's session not dispatched; one approvals list per
 session (fin43, `fin43-notices-and-config`; OQ-267 ruled 2026-10-13 under R-072).** The **process view**'s hook-review
 paragraph cites `PD-SHELL-001` revision 2 (OQ-267, ruled 2026-10-13 under R-072) where it called the add provisional. `session.resume` gains

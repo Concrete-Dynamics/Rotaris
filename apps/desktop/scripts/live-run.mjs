@@ -148,7 +148,8 @@
  *                 `empty` rule, which answers the coordinating root's completions with no content and no tool call, `stop`:
  *                 `empty-answer` (both of the root's calls empty) — exactly one re-prompt sent and logged, then "The run ended
  *                 without an answer: …" and one warning `incomplete_execution` issue; `empty-once` (the first call only) — one
- *                 re-prompt, the model's answer to it, and no such row or issue.
+ *                 re-prompt, the model's answer to it, and no such row or issue. In both (revision 3, OQ-282): no stuck
+ *                 classification asked and no root stuck `loop_supervisor_activation`.
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -1014,6 +1015,16 @@ function readIssues(sessionId) {
   const db = new Database(oneDatabase(), { readonly: true });
   try { return db.prepare('SELECT ordinal, id, recorded_at, kind, severity, actor, message, evidence_ref, metadata FROM issues WHERE session_id = ? ORDER BY ordinal').all(sessionId); }
   finally { db.close(); }
+}
+/** One session's loop-supervisor timeline entries and its delegated children's canonical names (PD-ORCH-009 revision 3). */
+function readSupervision(sessionId) {
+  const Database = require('better-sqlite3');
+  const db = new Database(oneDatabase(), { readonly: true });
+  try {
+    const activations = db.prepare("SELECT name, actor, message, metadata FROM timeline WHERE session_id = ? AND name = 'loop_supervisor_activation' ORDER BY ordinal").all(sessionId);
+    const childNames = db.prepare('SELECT canonical_name FROM children WHERE session_id = ?').all(sessionId).map((c) => c.canonical_name);
+    return { activations, childNames };
+  } finally { db.close(); }
 }
 /**
  * The root a session's write fence stands on, from its own record (`fenceRootOf` in `lib/tool-frictions.mjs`): a
@@ -3200,6 +3211,9 @@ if (wanted.includes('plan-open')) {
  *      without an answer: …" in a `system` row and one warning `incomplete_execution` issue (`reprompted`, `run_ended`).
  *   2. `empty-once` — the first call alone: one re-prompt, the model's own answer to it, and neither the row nor the issue.
  *
+ * In both, since PD-ORCH-009 revision 3 (OQ-282; the live run at ce5f952, F1): the re-prompt is the request's final message, no
+ * loop classification reads 'Trigger: stuck', and the session holds no root `loop_supervisor_activation` with trigger `stuck`.
+ *
  * It needs the proxy; without it the scenario is a NOTE.
  */
 if (wanted.includes('empty-answer')) {
@@ -3217,10 +3231,15 @@ if (wanted.includes('empty-answer')) {
       if (read === null) { check(false, `${c.name}: the run left a session row`, 'no session was recorded'); continue; }
       preserveRun(c.name, read.session.session_id);
       checkPricing(c.name, read.session);
-      const r = answerReading({ log, bodies: readTraffic(c.name).map((x) => String(x.requestBody ?? '')), systemRows: read.rows.filter((x) => x.kind === 'system').map((x) => String(x.body ?? '')), issues: readIssues(read.session.session_id), fired });
+      const supervision = readSupervision(read.session.session_id);
+      const r = answerReading({ log, bodies: readTraffic(c.name).map((x) => String(x.requestBody ?? '')), systemRows: read.rows.filter((x) => x.kind === 'system').map((x) => String(x.body ?? '')), issues: readIssues(read.session.session_id), fired, activations: supervision.activations, childNames: supervision.childNames });
       record[c.name] = { status: read.session.execution_status, stopReason: read.session.stop_reason, ...r };
       check(r.fired === c.times, `${c.name}: the proxy answered ${c.times} of the root's completion(s) empty`, `${r.fired} empty answer(s) over ${r.rootRequests} root request(s)`);
       check(r.reprompts === 1 && r.logged === 1, `${c.name}: the root was asked for its answer exactly once, in its own conversation (PD-ORCH-009)`, `${r.reprompts} re-prompt request(s), ${r.logged} log line(s)`);
+      // PD-ORCH-009 revision 3 (OQ-282, ruled 2026-10-13 under R-072): the silent turn the re-prompt answers is no stuck report, so
+      // the re-prompt is the request's final message — the live run at ce5f952 (F1) appended "Pause and reassess …" after it.
+      check(r.stuckClassifications === 0, `${c.name}: no stuck classification was asked (PD-ORCH-009 revision 3)`, `${r.stuckClassifications} classifier request(s) reading 'Trigger: stuck'`);
+      check(r.stuckActivations.length === 0, `${c.name}: the root wrote no stuck loop_supervisor_activation (PD-ORCH-009 revision 3)`, JSON.stringify(r.stuckActivations));
       if (c.told) {
         check(r.unanswered.length === 1 && /^The run ended without an answer: /.test(r.unanswered[0]), `${c.name}: the person was told once that the run ended without an answer (PD-ORCH-009)`, r.unanswered.join(' | ') || 'no such row');
         check(r.incomplete.length === 1 && r.incomplete[0].severity === 'warning' && r.incomplete[0].metadata.reprompted === true && r.incomplete[0].metadata.run_ended === true, `${c.name}: one warning incomplete_execution issue, reprompted and run_ended`, JSON.stringify(r.incomplete));

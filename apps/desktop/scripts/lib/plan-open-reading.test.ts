@@ -3,9 +3,11 @@
  * look for are the engine's own, and each reading is taken from what the model was sent, the log and the transcript.
  */
 import { describe, expect, it } from 'vitest';
-import { ANSWER_REPROMPT as productReprompt, BUILT_IN_PERSONAS, CLASSIFIER_SYSTEM_PROMPT, entryInstructionsFor, planCarryText, planCorrectionText, planHeldRowText } from '@rotaris/engine';
+import { ANSWER_REPROMPT as productReprompt, BUILT_IN_PERSONAS, CLASSIFIER_SYSTEM_PROMPT, entryInstructionsFor, planCarryText, planCorrectionText, planHeldRowText, RungMemory, type LoopActivation } from '@rotaris/engine';
+import type { AgentBackend, TurnInput } from '@rotaris/model';
+import { createLoopClassifier } from '../../src/run-host/loop.js';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { ANSWER_REPROMPT, CARRY_HEAD, CLASSIFIER_MARK, HELD_ROW, NOT_COMPLETE, ROOT_MARK, SHOWN, UNANSWERED_ROW, answerReading, heldAnswerOf, planReading, requestOf } from './plan-open-reading.mjs';
+import { ANSWER_REPROMPT, CARRY_HEAD, CLASSIFIER_MARK, HELD_ROW, NOT_COMPLETE, ROOT_MARK, SHOWN, STUCK_TRIGGER, UNANSWERED_ROW, answerReading, heldAnswerOf, planReading, requestOf } from './plan-open-reading.mjs';
 
 const SYSTEM = `${ROOT_MARK} You coordinate.`;
 const body = (messages: { role: string; content: unknown }[], system = SYSTEM) => JSON.stringify({ model: 'm', stream: true, messages: [{ role: 'system', content: system }, ...messages] });
@@ -86,6 +88,41 @@ describe('answer reading (live-run `empty-answer`, PD-ORCH-009 revision 2)', () 
     const corrected = [{ role: 'user', content: TASK }, { role: 'assistant', content: ANSWER }, { role: 'user', content: planCorrectionText(OPEN, true) }];
     const p = planReading({ log: 'a correction is sent into its conversation (1 of 1, REQ-ORCH-078, PD-ORCH-015)', bodies: [body([{ role: 'user', content: TASK }]), body(corrected), body([...corrected, ...toolTurn])], systemRows: [], iterations: [{ iteration: 1, outcome: 'succeeded' }], answers: [ANSWER] });
     expect(p).toMatchObject({ corrections: 1, shownSaid: true, reprompts: 0 });
+  });
+
+  /*
+   * PD-ORCH-009 revision 3 (OQ-282, ruled 2026-10-13 under R-072): the silent turn the re-prompt answers is no stuck report. The
+   * live run at ce5f952 (F1) sent [prompt, empty turn, re-prompt, "Pause and reassess …"] after a classification over an empty
+   * excerpt; the reading counts the stuck classifications asked and the root's stuck activations, and the scenario owes none.
+   */
+  it('PD-ORCH-009 revision 3: the stuck trigger it looks for is the one the loop classifier\'s prompt opens with', async () => {
+    const inputs: TurnInput[] = [];
+    const b: AgentBackend = { ownsTheLoop: false, runTurn: async (input) => { inputs.push(input); return { status: 'succeeded', text: '{"loop_detected":true,"reason":"r","corrective_message":"m"}', usage: { input: 1, output: 1 } }; } };
+    const M = { providerId: 'p', modelId: 'small', dialect: 'chat' as const };
+    const classifier = createLoopClassifier({ backend: b, runModel: M, thinking: 'unset', credentialFor: () => async () => 'k', memory: new RungMemory(), configuredModel: null, slots: { small: M, fallback: null, summary: null }, modelTimeoutMs: 30_000 })!;
+    await classifier.classify({ trigger: 'stuck', reason: 'the agent reported that it cannot make progress', excerpt: '', events: [], activationCount: 1 } as LoopActivation, new AbortController().signal);
+    const prompt = inputs[0]!.messages[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
+    expect(prompt.startsWith(STUCK_TRIGGER)).toBe(true);
+  });
+
+  it('PD-ORCH-009 revision 3: a stuck classification and the root\'s stuck activation are read; a child\'s, and other triggers, are not', () => {
+    const asked = [{ role: 'user', content: 'say one word' }, { role: 'assistant', content: '' }, { role: 'user', content: productReprompt }];
+    const classifierBody = (trigger: string) => body([{ role: 'user', content: `Trigger: ${trigger} (why).\n<conversation_excerpt>\n\n</conversation_excerpt>\n\nAnswer in JSON.` }], 'You judge whether an agent is looping.');
+    const f1 = answerReading({
+      log: '', fired: 2, systemRows: [], issues: [],
+      bodies: [body([{ role: 'user', content: 'say one word' }]), classifierBody('stuck'), body([...asked, { role: 'user', content: 'Pause and reassess the current task.' }]), classifierBody('raw-count')],
+      activations: [
+        { name: 'loop_supervisor_activation', actor: 'orchestrator', message: 'Pause and reassess the current task.', metadata: JSON.stringify({ trigger: 'stuck', activation_count: 1 }) },
+        { name: 'loop_supervisor_activation', actor: 'survey', message: 'Pause.', metadata: JSON.stringify({ trigger: 'stuck', activation_count: 1 }) },
+        { name: 'loop_supervisor_activation', actor: 'orchestrator', message: 'Pause.', metadata: JSON.stringify({ trigger: 'raw-count', activation_count: 1 }) },
+      ],
+      childNames: ['survey'],
+    });
+    // The ce5f952 shape: the steering after the re-prompt makes it no request's final message, one stuck classification, and
+    // the root's stuck activation.
+    expect(f1).toMatchObject({ reprompts: 0, stuckClassifications: 1, stuckActivations: [{ actor: 'orchestrator', message: 'Pause and reassess the current task.' }] });
+    const fixed = answerReading({ log: '', fired: 2, systemRows: [], issues: [], bodies: [body([{ role: 'user', content: 'say one word' }]), body(asked)] });
+    expect(fixed).toMatchObject({ reprompts: 1, stuckClassifications: 0, stuckActivations: [] });
   });
 
   it('reads a request\'s content given as parts as well as a string', () => {

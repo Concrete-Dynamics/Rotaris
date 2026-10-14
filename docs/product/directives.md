@@ -5790,6 +5790,11 @@ and may leave a partly written project or index for the next setup to redo.
 [`PD-ORCH-015`](#pd-orch-015). The first sentence is narrowed below and its revision-1 text quoted beside it. Revision 1
 (2026-10-06, [R-071](requests.md#r-071)) is otherwise unchanged.*
 
+*Revision 3 (2026-10-13, [R-072](requests.md#r-072), ruling [OQ-282](../architecture/open-questions.md#oq-282), the
+consortium's E1) — **the re-prompt is the root's only message for that turn**: one paragraph is added after the re-prompt's,
+which narrows REQ-ORCH-104's stuck-mode clause for the one turn the re-prompt answers. Revision 2's paragraph is quoted beside
+it, unchanged; everything else stands as revisions 1 and 2 wrote it.*
+
 When the entry role of an execution iteration ends its turn with neither text nor a tool call — its last model step wrote
 nothing for the person — and the run is not stopping, pausing or coming to rest, the run SHALL send it one further message
 in its own conversation asking it to answer, and SHALL let it take that turn as it takes any — **revision 2:** only where no
@@ -5802,6 +5807,17 @@ earlier turn of the same execution of the root wrote an answer. A turn that foll
 > turn as it takes any." It was written when a plan correction followed only a positive validation-retry setting; under
 > `PD-ORCH-015` every root that answers with its plan open is corrected, and a correction answered by a `todo` write and no
 > text would have been asked for a second copy of the answer the person had already been shown.
+
+**Revision 3:** The re-prompt is the one message the run adds for that turn. The empty turn it answers is not a stuck report
+to loop supervision: no classification is asked, no corrective message joins the re-prompt, no `loop_supervisor_activation` is
+written, and the consecutive-activation count is unchanged. Every other trigger, every other empty turn and every delegated
+child stay as REQ-ORCH-096 and REQ-ORCH-099..107 say.
+
+> Revision 2's paragraph above stands unchanged, and revision 3 adds only the paragraph after it. Revision 2 said nothing of
+> loop supervision, and as built the empty turn the re-prompt answers was also REQ-ORCH-096's stuck report: the stuck
+> trigger it armed was taken at the re-prompt's first step, so the request the re-prompt leads to ended [prompt, empty turn,
+> re-prompt, "Pause and reassess the current task. …"] — the re-prompt was not the model's last instruction, and a classifier
+> was asked over an empty excerpt (the live scenario run at `ce5f952`, `empty-answer` and `empty-once`, finding F1).
 
 The re-prompt SHALL be asked once in
 each execution of the iteration's root, never twice. Where the turn that message leads to still ends without an answer, the
@@ -5820,8 +5836,23 @@ the root now is too. What it costs: one more model call for a root that wrote no
 that fails; a root that wrote nothing on purpose is asked anyway.
 
 > **Extends:** REQ-ORCH-069
+> **Narrows:** REQ-ORCH-104
 
-*Raised by the owner, 2026-10-06, ruling OQ-199 as recommended; logged as [R-071](requests.md#r-071).*
+*Revision 3's case, stated exhaustively:* REQ-ORCH-104's stuck-mode clause ("for stuck-mode triggers, ALWAYS recover with a
+deterministic corrective message") on the one turn of an execution iteration's entry role that this directive's re-prompt
+answers — the empty turn that earned it. There no stuck trigger stands, so the clause has nothing to recover. Outside that one
+turn REQ-ORCH-104 governs as written. [`PD-ORCH-016`](#pd-orch-016) narrows the same requirement's raw-count clause ("≥ 4
+consecutive same-tool calls"); the two cases are disjoint — a raw-count trigger the same turn armed first is kept, and
+revision 3 withdraws only a stuck one — as [README.md](README.md) ("Two directives on one requirement") requires of two
+narrowings.
+
+*Revision 3 cites without changing:* REQ-ORCH-096 (an empty reply with no call is the runtime's stuck report — still so for
+every other turn and every delegated child), REQ-ORCH-099, REQ-ORCH-102 (the activation counter, which this turn does not
+move), REQ-NOTIFY-102 and REQ-NOTIFY-103.
+
+*Raised by the owner, 2026-10-06, ruling OQ-199 as recommended; logged as [R-071](requests.md#r-071). Revision 3 ruled under
+the owner's delegation, 2026-10-13; logged under [R-072](requests.md#r-072), the ruling of
+[OQ-282](../architecture/open-questions.md#oq-282) (the consortium's E1).*
 
 *Renumbered before landing: built as `PD-ORCH-006` on its branch, it took the next free number, `PD-ORCH-009`, when
 `PD-ORCH-006` to `PD-ORCH-008` (OQ-202, OQ-119, OQ-116) landed on `main` first; its citations followed.*
@@ -5891,6 +5922,24 @@ that fails; a root that wrote nothing on purpose is asked anyway.
 > `empty-answer` scenario should show, with both of the root's calls emptied, exactly one re-prompt sent and logged, the row and
 > the issue; with the first only (`empty-once`), one re-prompt, the model's own answer, and neither. The run is the
 > orchestrator's. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 3, 2026-10-14 (fin43, `fin43-live-findings`):** built as ruled. `LoopSupervisor.withdrawStuck()`
+> (`packages/engine/src/run/supervisor.ts`) clears a pending trigger only when it is `stuck` and leaves the consecutive-activation
+> count alone; `Run.turn`'s `correction()` calls it on the root's supervisor immediately before it returns `ANSWER_REPROMPT`.
+> **What was measured.** `supervisor.test.ts`'s three `withdrawStuck` cases (a stuck trigger withdrawn and the next `check()`
+> continuing with no classifier call; a raw-count trigger kept; the count unchanged) and `answerless.test.ts`'s two revision-3
+> cases with a supervisor and a scripted classifier (silent then an answer; silent then silent, the person told once): the
+> re-prompt request ends with `ANSWER_REPROMPT`, the classifier is not called and no `loop_supervisor_activation` is written —
+> all five red on `29dbc4e`. `children.test.ts` pins the edge: a delegated child's empty turn still arms stuck and its
+> REQ-ORCH-095 re-prompt request carries the corrective (REQ-ORCH-096 unchanged; raised as OQ-283). In the built app, `pnpm
+> part-h-proof`'s `answerless` and `answer-when-asked` launches, with `circuit_breaker.enabled: true`, show 0 loop
+> classifications and 0 stuck activations beside the row, the issue and the answer as before (load about 1.5 on 4 CPUs); on a
+> build without the `withdrawStuck` call the same proof failed at `answerless` with one stuck activation ("Pause and reassess
+> the current path. …", `activation_count` 1). **Found beside it, not decided:** a stuck trigger a root's last empty turn leaves
+> pending is taken by its next turn after a plan correction (OQ-284; two `coordinator-plan.test.ts` cases); the next iteration's
+> root is a fresh supervisor and does not take it. **What was not measured:** the live `empty-answer` and `empty-once` scenarios,
+> which now also check that no stuck classification was asked and no stuck activation written; the run is the orchestrator's.
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

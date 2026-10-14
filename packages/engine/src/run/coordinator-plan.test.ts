@@ -9,6 +9,7 @@ import { ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, 
 import { decodeStoredTodo, projectSessionTodos, type AgentTodoDocument } from '../todo-view.js';
 import { TODO_LIST_OWED_TEXT } from './stop-conditions.js';
 import { ANSWER_REPROMPT } from './run.js';
+import { SUPERVISOR_DEFAULTS, type LoopActivation, type LoopClassifier } from './supervisor.js';
 
 /**
  * The repair of `the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md` (live-run finding G5):
@@ -45,7 +46,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
-  function sessionsWith(calls: ScriptedCall[], runOverride: 'single' | 'swarm' | null = null, gate?: (callId: string) => Promise<void>, config: Partial<typeof RUN_CONFIG_DEFAULTS> = {}, runStartMode: 'auto' | 'plan' = 'auto', withoutTodo = false) {
+  function sessionsWith(calls: ScriptedCall[], runOverride: 'single' | 'swarm' | null = null, gate?: (callId: string) => Promise<void>, config: Partial<typeof RUN_CONFIG_DEFAULTS> = {}, runStartMode: 'auto' | 'plan' = 'auto', withoutTodo = false, classifier?: LoopClassifier) {
     const client = new ScriptedModelClient(calls);
     const workItemsRun: string[] = [];
     const warnings: string[] = [];
@@ -80,6 +81,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
       clocks: clock, publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 86, host: HOST, retentionCap: 20_000, warn: (m) => { warnings.push(m); },
       mintSessionId: () => `S-plan-${++minted}`, model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, ...config, model: MODEL, credentialFor: () => async () => 'k' } }, runtime,
       sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), tools: portFor, attended: () => true,
+      ...(classifier ? { supervisor: () => ({ config: SUPERVISOR_DEFAULTS, classifier }) } : {}),
     });
     return { sessions, client, workItemsRun, warnings };
   }
@@ -649,6 +651,48 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
       // The iteration's summary is the answer the correction followed, not the correction turn's silence.
       expect(ends(sid)[0]).toMatchObject({ iteration: 1, outcome: 'succeeded', summary: REPORT.slice(0, 200) });
       expect(systemRows(sid)).toEqual([]);
+    });
+
+    /*
+     * OQ-284 (raised 2026-10-14 by fin43 beside PD-ORCH-009 revision 3): a root turn that ends empty arms REQ-ORCH-096's stuck
+     * trigger, and a turn the run does not follow up leaves it pending in the root's supervisor. When the run then sends a plan
+     * correction (REQ-ORCH-078, PD-ORCH-015), the correction's request takes the trigger at its first step: the stuck corrective
+     * follows the correction in the same request — the shape revision 3 removed for the re-prompt alone. These two cases pin
+     * what was found, as found; a ruling of OQ-284 changes them.
+     */
+    describe('OQ-284: a stuck trigger an unanswered empty turn left pending lands after a plan correction', () => {
+      const supervised = () => {
+        const asked: LoopActivation[] = [];
+        const classifier: LoopClassifier = { classify: async (a) => { asked.push(a); return { loop_detected: true, reason: 'stuck', corrective_message: 'Pause and reassess the current task.' }; } };
+        return { asked, classifier };
+      };
+      const userTexts = (r: ModelRequest): string[] => r.messages.filter((m) => m.role === 'user').map((m) => m.content.map((c) => (c.kind === 'text' ? c.text : '')).join(''));
+
+      it('a second silence (the re-prompt answered by none): the plan correction is followed by the stuck corrective', async () => {
+        const { asked, classifier } = supervised();
+        const { sessions, client } = sessionsWith([writePlan('c1', ['COMPLETED', 'PENDING']), silent, silent, writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done.')], null, undefined, {}, 'auto', false, classifier);
+        const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+        expect((await sessions.running(sid)!).status).toBe('completed');
+        // Revision 3: the re-prompt is the request's last message.
+        expect(lastUser(client.requests[2]!)).toBe(ANSWER_REPROMPT);
+        // The silence that answered it armed stuck, and the correction's request took it.
+        const after = userTexts(client.requests[3]!);
+        expect(after.at(-2)!.startsWith('You declared success with 1 item')).toBe(true);
+        expect(after.at(-1)).toBe('Pause and reassess the current task.');
+        expect(asked.map((a) => a.trigger)).toEqual(['stuck']);
+      });
+
+      it('an empty turn after an answer and a plan correction: a second correction is followed by the stuck corrective', async () => {
+        const { asked, classifier } = supervised();
+        const { sessions, client } = sessionsWith([writePlan('c1', ['COMPLETED', 'PENDING']), answer(REPORT), silent, writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Recorded.')], null, undefined, { validationRetries: 2 }, 'auto', false, classifier);
+        const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+        expect((await sessions.running(sid)!).status).toBe('completed');
+        expect(lastUser(client.requests[2]!).startsWith('Your answer has been shown to the person.')).toBe(true);
+        const after = userTexts(client.requests[3]!);
+        expect(after.at(-2)!.startsWith('Your answer has been shown to the person.')).toBe(true);
+        expect(after.at(-1)).toBe('Pause and reassess the current task.');
+        expect(asked.map((a) => a.trigger)).toEqual(['stuck']);
+      });
     });
 
     it('a correction answered with a short line keeps the answer as the iteration\'s summary', async () => {

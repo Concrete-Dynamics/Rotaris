@@ -261,6 +261,49 @@ describe('loop supervisor (REQ-ORCH-099..107)', () => {
     expect(classify).toHaveBeenCalledOnce();
   });
 
+  /*
+   * PD-ORCH-009 revision 3 (OQ-282, ruled 2026-10-13 under R-072 as E1), narrowing REQ-ORCH-104's stuck-mode clause for
+   * the one turn the entry role's answer re-prompt answers: that empty turn is no stuck report. The run withdraws the
+   * trigger the turn armed before it sends ANSWER_REPROMPT, so no classification is asked and no corrective message joins
+   * the re-prompt. Live run at ce5f952 (F1): the steering followed the re-prompt in the same request.
+   */
+  describe('PD-ORCH-009 revision 3: withdrawStuck', () => {
+    it('withdraws a pending stuck trigger, and the next check continues with no classification', async () => {
+      const classify = vi.fn(async () => classification());
+      const s = new LoopSupervisor(sessionId, config(), { classify }, new FakeClock());
+      message(s, '');
+      s.observeStuck();
+      s.withdrawStuck();
+      expect(await s.check()).toEqual({ kind: 'continue' });
+      expect(classify).not.toHaveBeenCalled();
+    });
+
+    it('keeps a pending raw-count trigger: only a stuck one is withdrawn', async () => {
+      const seen: LoopActivation[] = [];
+      const s = new LoopSupervisor(sessionId, config({ messageThreshold: 1, repetitionThreshold: 99, cycleThreshold: 99 }), classifier(async (a) => { seen.push(a); return classification(); }), new FakeClock());
+      message(s, '');
+      // The raw-count trigger armed first; the stuck report finds it pending and arms nothing.
+      s.observeStuck();
+      s.withdrawStuck();
+      expect((await s.check()).kind).toBe('inject');
+      expect(seen.map((a) => a.trigger)).toEqual(['raw-count']);
+    });
+
+    it('leaves the consecutive-activation count unchanged', async () => {
+      const seen: LoopActivation[] = [];
+      const s = new LoopSupervisor(sessionId, config({ repetitionThreshold: 1 }), classifier(async (a) => { seen.push(a); return classification(); }), new FakeClock());
+      tool(s, 'read_file', '{}');
+      expect((await s.check()).kind).toBe('inject');
+      s.observeStuck();
+      s.withdrawStuck();
+      expect((await s.check()).kind).toBe('continue');
+      tool(s, 'read_file', '{}');
+      expect((await s.check()).kind).toBe('inject');
+      // Neither reset to zero nor counted: the activation after the withdrawn one is the second of the series.
+      expect(seen.map((a) => a.activationCount)).toEqual([1, 2]);
+    });
+  });
+
   it('keeps separate state for separate supervisor instances', async () => {
     const a = new LoopSupervisor(sessionId, config(), classifier(), new FakeClock());
     const b = new LoopSupervisor(asSessionId('01JOTHERSUPERVISOR0000000000'), config(), classifier(), new FakeClock());

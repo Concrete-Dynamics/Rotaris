@@ -183,3 +183,22 @@ move the budget's start. The supervisor now records, on the monotonic clock, whe
 nothing left no call is dispatched and decision 5's fallback decides (a failed classification, REQ-NOTIFY-109). Pinned by
 three further `supervisor.test.ts` cases, red on the first form. **What a live run should show:** classifications after a long
 tool call cut short or not sent (the fallback deciding), and after a quick one cut at about 2 s as before.
+
+## 2026-10-14 — the third execution's producer narrowed: the re-prompted empty turn (PD-ORCH-009 revision 3, fin43)
+
+**Found by the live scenario run at `ce5f952`** (`empty-answer` and `empty-once`, finding F1): the third execution's producer —
+"an empty reply with no tool call is read as the runtime's 'cannot make progress' report" — also fired on the entry role's empty
+turn that earns [`PD-ORCH-009`](../../product/directives.md#pd-orch-009)'s answer re-prompt. The re-prompt's turn took the trigger
+at its first `check()`, a classification was asked over an empty excerpt, and the stuck corrective ("Pause and reassess the
+current task. …") followed the re-prompt in the same request, so the re-prompt was not the model's last instruction. Ruled under
+the owner's delegation (R-072) as [OQ-282](../open-questions.md#oq-282) and carried by `PD-ORCH-009` revision 3, which narrows
+REQ-ORCH-104's stuck-mode clause for that one turn: `LoopSupervisor.withdrawStuck()` clears a pending trigger only when it is
+`stuck` (a repetition, cycle or raw-count one stays) and leaves the consecutive counter alone, and `Run.turn` calls it on the
+root's supervisor immediately before it returns `ANSWER_REPROMPT`. **The reading it replaces, kept beside it:** *every* empty
+reply with no call is a stuck report, so the supervisor recovers it whatever the run itself sends next. It now holds for every
+turn but that one; a delegated child's empty turn before its REQ-ORCH-095 re-prompt still arms stuck (pinned as found, raised as
+[OQ-283](../open-questions.md#oq-283)), and a trigger a root's last empty turn leaves pending is taken by its next turn in the same
+execution, after a plan correction ([OQ-284](../open-questions.md#oq-284)). Pinned by `supervisor.test.ts`'s three
+`withdrawStuck` cases and `answerless.test.ts`'s two revision-3 cases (all five red on `29dbc4e`), and by `pnpm part-h-proof`'s
+`answerless` and `answer-when-asked` launches with supervision on (no loop classification and no stuck activation).
+**Not measured:** a live run since the change (the orchestrator's `empty-answer`).

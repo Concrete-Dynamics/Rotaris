@@ -293,6 +293,9 @@ for (const c of [{ name: 'answerless', script: 'silent,silent', told: true }, { 
   mkdirSync(local, { recursive: true });
   writeFileSync(join(ws, 'README.md'), '# answerless proof\n');
   scratchAgentsYaml(ws);
+  // PD-ORCH-009 revision 3 (OQ-282): with loop supervision on — named here, though it is the default — the silent turn the
+  // re-prompt answers is no stuck report, so no classification is asked and no stuck activation is written.
+  writeFileSync(join(ws, '.rotaris', 'agents.yaml'), `${readFileSync(join(ws, '.rotaris', 'agents.yaml'), 'utf8')}circuit_breaker:\n  enabled: true\n`);
   const { log } = await launch(c.name, ws, local, join(root, 'preferences'), {
     ROTARIS_SCRIPT: c.script,
     ROTARIS_CAPTURE_PROMPT: 'say what the readme says',
@@ -304,9 +307,13 @@ for (const c of [{ name: 'answerless', script: 'silent,silent', told: true }, { 
   const issues = db.prepare("SELECT severity, actor, message, metadata FROM issues WHERE kind = 'incomplete_execution' ORDER BY ordinal").all();
   const reprompts = db.prepare('SELECT body FROM agent_messages ORDER BY task_id, seq').all().filter((r) => r.body.includes(REPROMPT)).length;
   const answer = db.prepare("SELECT body FROM transcript_rows WHERE kind = 'agent' ORDER BY row_index").all().map((r) => r.body).filter((b) => b.trim() !== '');
+  const stuck = db.prepare("SELECT actor, message, metadata FROM timeline WHERE name = 'loop_supervisor_activation' ORDER BY ordinal").all().filter((a) => JSON.parse(a.metadata ?? '{}').trigger === 'stuck');
   db.close();
   const asked = (log.match(/ended its turn without writing an answer; it is asked once more \(PD-ORCH-009, OQ-199\)/g) ?? []).length;
-  answerless[c.name] = { session, asked, reprompts, rows, issues: issues.map((i) => ({ ...i, metadata: JSON.parse(i.metadata) })), answers: answer.length };
+  const classifications = (log.match(/scripted model call: [^\n]*\(loop-classifier\)/g) ?? []).length;
+  answerless[c.name] = { session, asked, reprompts, rows, issues: issues.map((i) => ({ ...i, metadata: JSON.parse(i.metadata) })), answers: answer.length, stuck, classifications };
+  if (stuck.length !== 0) throw new Error(`${c.name}: the silent turn the re-prompt answers was taken as a stuck report: ${JSON.stringify(stuck)} (PD-ORCH-009 revision 3)`);
+  if (classifications !== 0) throw new Error(`${c.name}: ${classifications} loop classification(s) were asked for a silent root (PD-ORCH-009 revision 3; see ${c.name}.log)`);
   if (asked !== 1 || reprompts !== 1) throw new Error(`${c.name}: the root was asked ${asked} time(s) in the log and ${reprompts} in its conversation, not once (PD-ORCH-009)`);
   if (session?.execution_status !== 'completed') throw new Error(`${c.name}: the session ended ${session?.execution_status} / ${session?.stop_reason}`);
   if (c.told) {
@@ -322,7 +329,7 @@ writeFileSync(join(output, 'answerless-observed.json'), `${JSON.stringify(answer
 
 const result = {
   planHeld: { session: heldSession, iterations: heldIterations, heldSystemRows: heldSystemRows.map((row) => row.body), corrections, heldAnswerCarried: carried !== null, screenshot: 'plan-held.png' },
-  answerless: Object.fromEntries(Object.entries(answerless).map(([k, v]) => [k, { status: v.session?.execution_status, asked: v.asked, reprompts: v.reprompts, rows: v.rows, issues: v.issues.length }])),
+  answerless: Object.fromEntries(Object.entries(answerless).map(([k, v]) => [k, { status: v.session?.execution_status, asked: v.asked, reprompts: v.reprompts, rows: v.rows, issues: v.issues.length, stuckActivations: v.stuck.length, classifications: v.classifications }])),
   planCorrection: { session: correctionSessionShown, iterations: correctionIterations, heldRows: heldRows.length, todoCalls: todoCalls.length, agentStates, screenshot: 'plan-correction.png' },
   loop: { session: loopSession, activations: loopActivations.length, issues: loopIssues, toolCalls: loopCalls.length, screenshot: 'loop-supervisor.png' },
   rawCountFallback: Object.fromEntries(Object.entries(rawObserved).map(([k, v]) => [k, { status: v.session?.execution_status, activations: v.activations.length }])),

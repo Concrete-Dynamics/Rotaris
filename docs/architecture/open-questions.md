@@ -14251,3 +14251,85 @@ shows the info notice and adds nothing (`projectInit.open`, `notice-proof` secti
 correction of the other directive's text.
 
 **What a live run then shows.** Nothing: no live scenario opens two workspaces.
+
+<a id="oq-282"></a>
+
+**OQ-282 — When the entry role is sent PD-ORCH-009's answer re-prompt, is the empty turn that earned it also a stuck report to
+loop supervision?** *(REQ-ORCH-096, "an empty reply with no call is the runtime's stuck report"; REQ-ORCH-104's stuck-mode clause,
+"ALWAYS recover with a deterministic corrective message"; REQ-ORCH-099 and REQ-ORCH-102, the supervisor and its counter;
+REQ-NOTIFY-102 and REQ-NOTIFY-103; [`PD-ORCH-009`](../product/directives.md#pd-orch-009) revisions 1 and 2, the re-prompt;
+[`PD-ORCH-016`](../product/directives.md#pd-orch-016), the other narrowing of REQ-ORCH-104. Raised 2026-10-13 by the orchestrator
+from the live scenario run at `ce5f952` (finding F1) and ruled the same day by the consortium as E1; entered here 2026-10-14 by
+fin43 (`fin43-live-findings`), the plan's range OQ-281 to OQ-295, its first free number on this branch — renumbered at landing if
+a sibling took it first.)*
+
+**What was found.** In `empty-answer` and `empty-once` the root's empty turn earned the re-prompt (the warning logged, the issue's
+metadata `reprompted: true`), and in the same request loop supervision's stuck steering followed it: the request ended [prompt,
+empty assistant, re-prompt, "Pause and reassess the current task. …"], after a stuck classification over an empty excerpt. The
+harness reads a re-prompt by the request's final message, so it counted none and FAILed "asked exactly once … 0 re-prompt
+request(s), 1 log line(s)". As built, `runTurn` reads every empty reply with no call as `observeStuck()` (ADR-0059's third
+execution), and the re-prompt's turn takes the trigger at its first step's `check()`.
+
+**What the build proceeded under.** Both: the re-prompt and the stuck corrective, in that order, in one request.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)), the consortium's E1:** when
+`PD-ORCH-009` sends the entry role its answer re-prompt, the empty turn that earned it is not a stuck report to loop supervision.
+The run asks no classification for it, adds no corrective message, writes no stuck `loop_supervisor_activation`, and leaves the
+consecutive-activation count unchanged, so `ANSWER_REPROMPT` is the final message of the request it leads to. Recorded as
+[`PD-ORCH-009`](../product/directives.md#pd-orch-009) revision 3, which keeps "Extends: REQ-ORCH-069" and adds "Narrows:
+REQ-ORCH-104" for that one turn, disjoint from `PD-ORCH-016`'s raw-count case; REQ-ORCH-096, REQ-ORCH-099, REQ-ORCH-102,
+REQ-NOTIFY-102 and REQ-NOTIFY-103 are cited without change. The live harness keeps its `sent` check and adds a check for no stuck
+classification and one for no stuck activation. *The build's reading (both messages in one request) is kept above as the
+falsified one.*
+
+**As built (fin43, `fin43-live-findings`, 2026-10-14).** `LoopSupervisor.withdrawStuck()` clears a pending trigger only when it
+is `stuck` and leaves the counter alone; `Run.turn`'s `correction()` calls it on the root's supervisor immediately before it
+returns `ANSWER_REPROMPT`. Two neighbouring shapes the ruling does not decide are raised as [OQ-283](#oq-283) (a delegated
+child's REQ-ORCH-095 re-prompt) and [OQ-284](#oq-284) (a stuck trigger left pending by a turn the run does not follow up).
+
+<a id="oq-283"></a>
+
+**OQ-283 — Is a delegated child's REQ-ORCH-095 re-prompt also followed by the stuck corrective, in the same request?**
+*(REQ-ORCH-095, "one re-prompt"; REQ-ORCH-096, "one corrective message"; REQ-ORCH-104's stuck-mode clause; [OQ-282](#oq-282) and
+[`PD-ORCH-009`](../product/directives.md#pd-orch-009) revision 3, which narrowed the same shape for the entry role alone and
+named every delegated child as unchanged. Raised 2026-10-14 by fin43 (`fin43-live-findings`) from
+[`../defects/a-delegated-childs-re-prompt-is-followed-by-the-stuck-corrective-in-the-same-request.md`](../defects/a-delegated-childs-re-prompt-is-followed-by-the-stuck-corrective-in-the-same-request.md).)*
+
+**What is open.** A child that ends its turn with neither text nor a call is re-prompted once ("Carry out the task now, …",
+`IterationChildren` in `packages/engine/src/children/orchestration.ts`), and that empty turn also armed REQ-ORCH-096's stuck
+trigger in its supervisor, so the re-prompt's first step (`runTurn`'s `check()`, `packages/engine/src/run/turn.ts`) adds the stuck
+corrective after it: the child's request ends [task, empty turn, re-prompt, corrective], two instructions where REQ-ORCH-095 asks
+for one re-prompt and REQ-ORCH-096 for one corrective message. Pinned as found by `children.test.ts`, "REQ-ORCH-096 with
+PD-ORCH-009 revision 3: a delegated child's empty turn still arms stuck".
+
+**What the build proceeds under.** As found: both messages, the re-prompt first; one stuck activation written for the child.
+
+**What a ruling decides.** Whether the child's re-prompted turn is, like the root's under revision 3, no stuck report (the
+re-prompt alone), whether the corrective replaces the re-prompt (the corrective alone), or whether both stand. **The costs:**
+withdrawing it makes a child's first silence cost one message instead of two and leaves REQ-ORCH-102's counter for repeated
+silences; keeping both doubles the instruction and spends a classification on an empty excerpt.
+
+<a id="oq-284"></a>
+
+**OQ-284 — What becomes of a stuck trigger a root's empty turn armed when the run does not follow that turn up?**
+*(REQ-ORCH-096; REQ-ORCH-104's stuck-mode clause; REQ-ORCH-105, "after every activation cycle … counters and fingerprints MUST
+reset"; REQ-ORCH-078 and [`PD-ORCH-015`](../product/directives.md#pd-orch-015), the plan correction;
+[`PD-ORCH-009`](../product/directives.md#pd-orch-009) revision 3. Raised 2026-10-14 by fin43 (`fin43-live-findings`) from
+[`../defects/a-stuck-trigger-a-roots-unanswered-empty-turn-armed-lands-after-a-later-plan-correction.md`](../defects/a-stuck-trigger-a-roots-unanswered-empty-turn-armed-lands-after-a-later-plan-correction.md).)*
+
+**What is open.** A root's final empty turn that the run does not follow up — the re-prompt answered by a second silence, or an
+empty turn after an answer and a plan correction — arms a stuck trigger that stays pending in that root's supervisor. Confirmed by
+tests before this entry was written: when the run then sends a plan correction (REQ-ORCH-078) into the same conversation, the
+correction's request takes the trigger at its first step and the stuck corrective follows the correction in that request
+(`coordinator-plan.test.ts`, "OQ-284: …", two cases, the second at `validation_retries: 2`). The other route the raising agent
+named, the next iteration's first request, **does not occur**: each iteration's root is a fresh task id and so a fresh
+conversation in the run's `SupervisorRegistry` (`answerless.test.ts`, "PD-ORCH-009 revision 3 with OQ-284 …"). A root resumed
+as a parent after a child's report (`runWithChildren`) would take it the same way and was not measured.
+
+**What the build proceeds under.** As found: the pending trigger is taken by the root's next turn in the same execution, after
+whatever message leads it.
+
+**What a ruling decides.** Whether a stuck trigger is withdrawn when the turn that armed it is the root's last (the run's own
+follow-up being a correction, not a recovery), whether it stands and the corrective follows the correction (two instructions),
+or whether the correction replaces it. **The costs:** withdrawing it loses a stuck report the requirement names; keeping it puts
+"Pause and reassess" after an instruction that already tells the root what to do.

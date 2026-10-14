@@ -32,6 +32,12 @@ export const UNANSWERED_ROW = /^(The run|Iteration \d+) ended without an answer:
 export const ROOT_MARK = 'You are the orchestrator.';
 /** The intent classifier's instructions open with this; its request carries the person's prompt too. */
 export const CLASSIFIER_MARK = 'You classify a user request';
+/**
+ * The loop classifier's prompt names its trigger first (`createLoopClassifier`, `apps/desktop/src/run-host/loop.ts`): a stuck
+ * classification's user message opens with this. PD-ORCH-009 revision 3 (OQ-282): none is asked for the silent turn the
+ * answer re-prompt answers.
+ */
+export const STUCK_TRIGGER = 'Trigger: stuck';
 
 /** The text of one OpenAI-shaped message's content, a string or a list of parts. */
 function textOf(content) {
@@ -94,20 +100,35 @@ export function planReading({ log, bodies, systemRows, iterations, answers = [] 
 }
 
 /**
- * `PD-ORCH-009` revision 2's reading of one launch: the re-prompts the root was sent (requests whose last user message is
- * `ANSWER_REPROMPT`) and logged, the empty answers the proxy gave, the `system` rows and `incomplete_execution` issues.
+ * `PD-ORCH-009` revisions 2 and 3's reading of one launch: the re-prompts the root was sent (requests whose final message is
+ * `ANSWER_REPROMPT`) and logged, the empty answers the proxy gave, the `system` rows and `incomplete_execution` issues, and —
+ * revision 3 — the stuck classifications asked (requests whose prompt opens `Trigger: stuck`) and the root's stuck
+ * `loop_supervisor_activation` entries, both owed none.
  *
  * @param {{ log: string, bodies: string[], systemRows: string[], issues: Array<{ kind: string, severity: string, metadata: string }>,
- *           fired: number }} input  `fired` is how many `empty` answers the proxy gave in this launch.
+ *           fired: number, activations?: Array<{ name: string, actor: string, message: string, metadata: string }>,
+ *           childNames?: string[] }} input  `fired` is how many `empty` answers the proxy gave in this launch; `activations` the
+ *           session's timeline entries, `childNames` its delegated children's canonical names.
  */
-export function answerReading({ log, bodies, systemRows, issues, fired }) {
-  const roots = bodies.map(requestOf).filter((r) => r.root);
+export function answerReading({ log, bodies, systemRows, issues, fired, activations = [], childNames = [] }) {
+  const requests = bodies.map(requestOf);
+  const roots = requests.filter((r) => r.root);
   const unanswered = systemRows.filter((row) => UNANSWERED_ROW.test(row));
   const incomplete = issues.filter((i) => i.kind === 'incomplete_execution').map((i) => { let metadata = {}; try { metadata = JSON.parse(i.metadata); } catch { metadata = {}; } return { severity: i.severity, metadata }; });
+  // PD-ORCH-009 revision 3 (OQ-282): the re-prompted silent turn is no stuck report — no classification is asked, and the root
+  // writes no stuck activation. A child's empty turn still is one (REQ-ORCH-096), so a child's activation is not the root's.
+  const children = new Set(childNames);
+  const stuckActivations = activations.filter((a) => {
+    let metadata = {};
+    try { metadata = JSON.parse(a.metadata); } catch { metadata = {}; }
+    return a.name === 'loop_supervisor_activation' && metadata.trigger === 'stuck' && !children.has(a.actor);
+  }).map((a) => ({ actor: a.actor, message: a.message }));
   return {
     fired, rootRequests: roots.length,
     reprompts: roots.filter((r) => r.sent === ANSWER_REPROMPT).length,
     logged: [...String(log).matchAll(REPROMPT_WARNING)].length,
     unanswered, incomplete,
+    stuckClassifications: requests.filter((r) => !r.root && r.firstUser.startsWith(STUCK_TRIGGER)).length,
+    stuckActivations,
   };
 }

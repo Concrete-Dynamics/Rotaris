@@ -20,6 +20,7 @@ import { FULL_CONTEXT_BUDGET } from '../artifacts/context.js';
 import { userCancellation } from './ledger.js';
 import { inheritedContext } from './notify.js';
 import { CODE_INTELLIGENCE_MANIFEST } from '@rotaris/config';
+import { SUPERVISOR_DEFAULTS, type LoopActivation, type LoopClassifier } from '../run/supervisor.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -427,7 +428,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
    * id-routed answer finds a holder. `closed` collects each port's close (REQ-SESSION-094): the agent, the statement its
    * open calls are settled with, and how many `session.end` events the session held at that moment.
    */
-  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; closed?: { agent: string; statement: string; ended: number }[]; personas?: PersonaResolver; capFor?: (modelKey: string) => number | null; modelKey?: string; raisingPort?: string; grant?: (ctx: ToolPortContext) => AgentGrant | null; readiness?: (ctx: ToolPortContext) => Promise<void> | undefined; approvals?: (ctx: ToolPortContext) => readonly ApprovalPayload[] } = {}) {
+  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; closed?: { agent: string; statement: string; ended: number }[]; personas?: PersonaResolver; capFor?: (modelKey: string) => number | null; modelKey?: string; raisingPort?: string; grant?: (ctx: ToolPortContext) => AgentGrant | null; readiness?: (ctx: ToolPortContext) => Promise<void> | undefined; approvals?: (ctx: ToolPortContext) => readonly ApprovalPayload[]; classifier?: LoopClassifier } = {}) {
     // The scripted client answers by persona and by the number of calls that persona has made.
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
@@ -467,6 +468,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       },
       attended: () => true,
       ...(over.hooks ? { hooks: () => over.hooks! } : {}),
+      ...(over.classifier ? { supervisor: () => ({ config: SUPERVISOR_DEFAULTS, classifier: over.classifier! }) } : {}),
       runtime,
       // A resolved `personas:` table reaches a run only through the root's configuration (RunSetup).
       ...(over.personas ? { configure: () => ({ ok: true as const, value: { model: { backend: new DefaultAgentBackend(client), config }, runtime, personas: over.personas! } }) } : {}),
@@ -502,6 +504,34 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     it('the same call of the code-intelligence server\'s tool is', async () => {
       expect(await editedFor('code_intelligence')).toEqual(['notes/inbox.md']);
     });
+  });
+
+  /*
+   * REQ-ORCH-096 unchanged by PD-ORCH-009 revision 3 (OQ-282): the directive narrows REQ-ORCH-104's stuck-mode clause for the
+   * entry role's one re-prompted turn only. A delegated child's empty turn is still the runtime's stuck report, so its
+   * REQ-ORCH-095 re-prompt is followed, in the same request, by the stuck corrective — the shape OQ-283 asks about. This case
+   * pins the narrowing's edge: if it changes, it changes by a ruling of OQ-283, not as a side effect of revision 3.
+   */
+  it('REQ-ORCH-096 with PD-ORCH-009 revision 3: a delegated child\'s empty turn still arms stuck — its re-prompt request carries the stuck corrective', async () => {
+    const asked: LoopActivation[] = [];
+    const classifier: LoopClassifier = { classify: async (a) => { asked.push(a); return { loop_detected: true, reason: 'stuck', corrective_message: 'Pause and reassess the current task.' }; } };
+    const silentStep: ScriptedCall = { parts: [{ part: { kind: 'reasoning', delta: 'Thinking about it…' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+    const { sessions, client } = sessionsWith((persona, turn) => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: read it', run_in_background: false } }], 'Delegating.') : answer('All done.');
+      if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+      return turn === 1 ? silentStep : answer('The module is small.');
+    }, { classifier });
+    const sid = (sessions.start(dal, 'C:/ws', 'survey the thing') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const textOf = (m: ModelRequest['messages'][number]): string => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
+    const reprompted = client.requests.find((r) => r.messages.some((m) => m.role === 'user' && textOf(m).startsWith('Carry out the task now')))!;
+    expect(reprompted).toBeDefined();
+    const users = reprompted.messages.filter((m) => m.role === 'user').map(textOf);
+    expect(users.at(-2)).toMatch(/^Carry out the task now/);
+    expect(users.at(-1)).toBe('Pause and reassess the current task.');
+    expect(asked.map((a) => a.trigger)).toEqual(['stuck']);
+    const activations = dal.timelineOf(sid).filter((t) => t.name === 'loop_supervisor_activation');
+    expect(activations.map((t) => [t.actor, (JSON.parse(t.metadata) as { trigger: string }).trigger])).toEqual([['survey', 'stuck']]);
   });
 
   it('delegate in the background → the child runs its own turn, reports, the parent is resumed once with the report, the run completes', async () => {

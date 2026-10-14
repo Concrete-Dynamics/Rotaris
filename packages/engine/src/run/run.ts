@@ -2023,6 +2023,9 @@ export class Run {
           answerAsked = true;
           awaitingAnswer = true;
           this.deps.warn(`iteration ${iteration}: ${rootName} ended its turn without writing an answer; it is asked once more (PD-ORCH-009, OQ-199)`);
+          // PD-ORCH-009 revision 3 (OQ-282): the empty turn this re-prompt answers is no stuck report (narrowing REQ-ORCH-104's
+          // stuck-mode clause), so the re-prompt is the one message the run adds for it — no stuck steering follows it.
+          this.deps.supervisorFor?.(this.rootId).withdrawStuck();
           return ANSWER_REPROMPT;
         }
         const planTask = this.iterationTaskRecord();

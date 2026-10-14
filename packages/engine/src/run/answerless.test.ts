@@ -7,6 +7,7 @@ import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/stor
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, type Publisher, type ToolPort } from '../index.js';
 import { ANSWER_REPROMPT } from './run.js';
+import { SUPERVISOR_DEFAULTS, type LoopActivation, type LoopClassifier } from './supervisor.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000d') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -38,7 +39,7 @@ describe('PD-ORCH-009: the entry role is asked once more for an answer it did no
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
-  function sessionsWith(calls: ScriptedCall[]) {
+  function sessionsWith(calls: ScriptedCall[], classifier?: LoopClassifier) {
     const client = new ScriptedModelClient(calls);
     let n = 0;
     const port: ToolPort = { specs: () => [{ name: 'read_file', description: 'read', parameters: { type: 'object' } }], dispatch: async () => ({ text: '# Rotaris', isError: false, status: 'ok', durationMs: 0, label: 'read_file', args: {} }), cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false };
@@ -47,6 +48,7 @@ describe('PD-ORCH-009: the entry role is asked once more for an answer it did no
       model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' } }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       tools: () => port, attended: () => true,
       runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' },
+      ...(classifier ? { supervisor: () => ({ config: SUPERVISOR_DEFAULTS, classifier }) } : {}),
     });
     return { sessions, client };
   }
@@ -122,6 +124,72 @@ describe('PD-ORCH-009: the entry role is asked once more for an answer it did no
       'The run ended without an answer: orchestrator ended its turn without writing one, even when asked once more.',
     ]);
     expect(answerlessIssues(sid).map((i) => JSON.parse(i.metadata) as unknown)).toMatchObject([{ iteration: 1, run_ended: false }, { iteration: 2, run_ended: true }]);
+  });
+
+  /*
+   * PD-ORCH-009 revision 3 (OQ-282, ruled 2026-10-13 under R-072 as E1), narrowing REQ-ORCH-104's stuck-mode clause: the
+   * empty turn that earns the re-prompt is no stuck report to loop supervision. The live run at ce5f952 (F1) sent
+   * [prompt, empty turn, re-prompt, "Pause and reassess the current task. …"]: the stuck steering followed the re-prompt in
+   * the same request, after a classification over an empty excerpt.
+   */
+  describe('PD-ORCH-009 revision 3: the re-prompt is the root\'s only message for that turn — no stuck steering', () => {
+    const supervised = () => {
+      const asked: LoopActivation[] = [];
+      const classifier: LoopClassifier = { classify: async (a) => { asked.push(a); return { loop_detected: true, reason: 'stuck', corrective_message: 'Pause and reassess the current task.' }; } };
+      return { asked, classifier };
+    };
+    const lastMessageText = (req: ModelRequest): string => { const m = req.messages.at(-1)!; return m.role === 'user' ? m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') : `<${m.role}>`; };
+    const activations = (sid: SessionId) => dal.timelineOf(sid).filter((t) => t.name === 'loop_supervisor_activation');
+
+    it('silent, then an answer: the re-prompt request ends with ANSWER_REPROMPT, no classification is asked, no activation is written', async () => {
+      const { asked, classifier } = supervised();
+      const { sessions, client } = sessionsWith([read('r1'), silent(), answer('The first heading is "Rotaris".')], classifier);
+      const sid = (sessions.start(dal, 'C:/ws', QUESTION) as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests).toHaveLength(3);
+      expect(lastMessageText(client.requests[2]!)).toBe(ANSWER_REPROMPT);
+      expect(client.requests[2]!.messages.filter((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text.startsWith('Pause and reassess')))).toEqual([]);
+      expect(asked).toEqual([]);
+      expect(activations(sid)).toEqual([]);
+      expect(dal.residentRows(sid).some((r) => r.body.includes('The first heading is "Rotaris".'))).toBe(true);
+      expect(noAnswerRows(sid)).toEqual([]);
+    });
+
+    it('silent, then silent: the re-prompt request ends with ANSWER_REPROMPT, no classification, no activation, and the person is told once', async () => {
+      const { asked, classifier } = supervised();
+      const { sessions, client } = sessionsWith([read('r1'), silent(), silent('Still thinking…')], classifier);
+      const sid = (sessions.start(dal, 'C:/ws', QUESTION) as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests).toHaveLength(3);
+      expect(lastMessageText(client.requests[2]!)).toBe(ANSWER_REPROMPT);
+      expect(client.requests.filter((r) => lastUserText(r) === ANSWER_REPROMPT)).toHaveLength(1);
+      expect(asked.filter((a) => a.trigger === 'stuck')).toEqual([]);
+      expect(activations(sid).filter((t) => (JSON.parse(t.metadata) as { trigger?: string }).trigger === 'stuck')).toEqual([]);
+      expect(noAnswerRows(sid).map((r) => r.body)).toEqual(['The run ended without an answer: orchestrator ended its turn without writing one, even when asked once more.']);
+    });
+  });
+
+  /*
+   * OQ-284's other route, checked and not found: the stuck trigger the root's second silence arms stays pending in its
+   * supervisor, but the next iteration's root is a fresh task id (`Run.turn` mints one) and so a fresh conversation in the
+   * run's SupervisorRegistry — its first request carries the queued prompt alone.
+   */
+  it('PD-ORCH-009 revision 3 with OQ-284: a silence left pending by one iteration\'s root does not reach the next iteration\'s root', async () => {
+    const asked: LoopActivation[] = [];
+    const classifier: LoopClassifier = { classify: async (a) => { asked.push(a); return { loop_detected: true, reason: 'stuck', corrective_message: 'Pause and reassess the current task.' }; } };
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const first: ScriptedCall = { parts: [{ hold }, ...read('r1').parts] };
+    const { sessions, client } = sessionsWith([first, silent(), silent(), answer('The workspace holds README.md.')], classifier);
+    const sid = (sessions.start(dal, 'C:/ws', QUESTION) as { value: SessionId }).value;
+    await Promise.resolve();
+    queue(sid, 'Now list the files in this workspace.');
+    release();
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(client.requests).toHaveLength(4);
+    expect(client.requests[3]!.messages.map((m) => m.role)).toEqual(['system', 'user']);
+    expect(asked).toEqual([]);
+    expect(dal.timelineOf(sid).filter((t) => t.name === 'loop_supervisor_activation')).toEqual([]);
   });
 
   it('a root that answers is not asked again, and nothing is said', async () => {

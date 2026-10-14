@@ -603,7 +603,11 @@ message; each tool call is observed, written as a running `tool` row, dispatched
 approval when needed — resolved at once under the headless policy while the run treats the user as **away**,
 `PD-TOOLS-005`, §5 → executor; hooks in its two slots), settled with its outcome (and a `diff` row for an
 edit); the results go back as one tool message; hook feedback follows as a user message. A reply with no tool call ends the turn — unless a steer is pending, in which case
-the agent takes another round; an empty reply with no call is the runtime's stuck report to the supervisor.
+the agent takes another round; an empty reply with no call is the runtime's stuck report to the supervisor — except the entry
+role's empty turn that earns `PD-ORCH-009`'s answer re-prompt: `Run.turn` withdraws that stuck trigger (`withdrawStuck`) before
+it sends `ANSWER_REPROMPT`, so the re-prompt is the request's last message, with no classification, corrective or activation
+(revision 3, OQ-282). A child's empty turn before its REQ-ORCH-095 re-prompt is still a stuck report (OQ-283), and a stuck
+trigger a root's last empty turn leaves pending is taken by its next turn in the same execution, after a plan correction (OQ-284).
 
 **The conversation record (PD-ORCH-005 clause 1; `run/record.ts`).** Every agent's `Conversation` carries a
 recorder, so every `push` — the task or the resume message, a steer, a supervisor correction, the assistant message

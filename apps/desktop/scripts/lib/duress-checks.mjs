@@ -244,7 +244,7 @@ export const PRODUCT_SHARE_BOUND = 0.1;
  *             failure, naming the share.
  * Without recorded traffic nothing can be attributed, so an overrun stays a failure and says why.
  */
-export function deadlineReading({ timedOut, attribution: a, budgetMs, traffic, usage }) {
+export function deadlineReading({ timedOut, attribution: a, budgetMs, traffic, usage, raise = 'LIVE_RUN_DURESS_MS' }) {
   const s = (ms) => `${n(ms / 1000)} s`;
   const parts = [
     `endpoint generating ${s(a.endpointMs)} (${pct(a.endpointMs, a.waitMs)} %${usage ? `; ${a.requests} request${a.requests === 1 ? '' : 's'}, ${n(usage.completionTokens)} output tokens of which ${n(usage.reasoningTokens)} reasoning` : ''})`,
@@ -263,6 +263,24 @@ export function deadlineReading({ timedOut, attribution: a, budgetMs, traffic, u
   const tail = progressing
     ? `the last request or tool call to end on its own ended ${s(a.quietTailMs)} before the launch did${cut === '' ? '' : `; ${cut}`}`
     : cut === '' ? `nothing had been in flight for ${s(a.quietTailMs)} when the launch ended` : `nothing had ended on its own for ${s(a.quietTailMs)} when the launch ended; ${cut}`;
-  if (progressing && !productBound) return { outcome: 'window', detail: `${head}: ${parts.join(', ')}; ${tail} — raise LIVE_RUN_DURESS_MS to ask for the result on this endpoint` };
+  if (progressing && !productBound) return { outcome: 'window', detail: `${head}: ${parts.join(', ')}; ${tail} — raise ${raise} to ask for the result on this endpoint` };
   return { outcome: 'product', detail: `${head}: ${parts.join(', ')}; ${tail}` };
+}
+
+/**
+ * The deadline reading of one launch whose capture waited for its result, composed from what the pack holds: the launch's
+ * log (whether the wait ran out, and when — `waitRanOutAt`), its recorded traffic (each call's interval at the endpoint and
+ * its usage), and the session's tool calls as `live-run.mjs`'s `readToolCalls` reads them (a wait on children left out by
+ * `toolIntervals`). `startedAt` and `endedAt` bound the launch; `recorded` says whether the proxy recorded at all, since an
+ * empty record from a launch it did record still means no request was made; `raise` names the variable that widens this
+ * launch's wait. The duress run took this reading first (finding H-h); the `delegation-swarm` launch takes it since a swarm
+ * coordinator that invented work for itself ran out its wait with the product clean (acceptance finding L8 at b9e3005,
+ * `docs/defects/a-swarm-run-the-model-kept-working-past-its-wait-fails-the-live-run.md`).
+ */
+export function overrunReading({ log, startedAt, endedAt, records, calls, budgetMs, recorded, raise }) {
+  const traffic = (Array.isArray(records) ? records : []).map(trafficCall);
+  const attribution = attributeWait({ startedAt, endedAt, quitAt: waitRanOutAt(log), requests: traffic, tools: toolIntervals(Array.isArray(calls) ? calls : []) });
+  const usage = { completionTokens: traffic.reduce((t, c) => t + (c.completionTokens ?? 0), 0), reasoningTokens: traffic.reduce((t, c) => t + (c.reasoningTokens ?? 0), 0) };
+  const timedOut = /capture: wait for result timed out/.test(typeof log === 'string' ? log : '');
+  return deadlineReading({ timedOut, attribution, budgetMs, traffic: recorded && traffic.length > 0, usage, ...(raise === undefined ? {} : { raise }) });
 }

@@ -134,7 +134,9 @@
  *   8f. delegation — (since 2026-10-13, N57) three launches: a run whose orchestrator's `delegates_to` names two personas,
  *                 asked to delegate a child, hand its report artifact to a second through `attach_artifacts`, and follow the
  *                 first up by `session_id`; that session reopened, its latest artifact edited and saved in the Library's
- *                 inspector, and continued, whose handoff must carry the edit; and a `rotaris.delegation_strategy: swarm` run.
+ *                 inspector, and continued, whose handoff must carry the edit; and a `rotaris.delegation_strategy: swarm` run,
+ *                 whose overrun takes the duress run's reading since fin46 (L8): a model that kept the endpoint busy to the
+ *                 end of the wait is a NOTE, a run that stopped moving or a product that held the time FAILS.
  *   8i. rename   — OPT-IN (`--only=rename`), a few minutes: one coding-agent child delegated to rename the fixture's `remaining`
  *                 to `countRemaining` with the code-intelligence EDIT tier's symbol rename (`rename_symbol`), then run `node --test`.
  *                 Asserted from the store and the files (`lib/rename-reading.mjs`): the rename row `ok`; `src/todos.js`,
@@ -241,7 +243,7 @@ import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
 import { DURATION_PROBES, runDurationReading, runDurationVerdict } from './lib/run-duration-agreement.mjs';
 import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
 import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
-import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, toolIntervals, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
+import { commandsReading, compressionNote, compressionTrigger, overrunReading, silentFailedChildren, trafficCall } from './lib/duress-checks.mjs';
 import { withPersonaKey, withRuntimeKey, withSectionKey } from './lib/runtime-key.mjs';
 import { runApprovalsScenario, runAwayScenario, runPlanGateScenario } from './lib/approval-scenarios.mjs';
 import { runCutScenario } from './lib/cut-scenario.mjs';
@@ -3080,6 +3082,7 @@ if (wanted.includes('delegation')) {
   // ── delegation-swarm: the strategy, as the mapping in force reads it (PD-ORCH-006 revision 3, REQ-ORCH-025) ──
   const SWARM_PROMPT = 'Make addTodo in src/todos.js refuse an empty or blank title, add a test for it beside the existing ones, and mention the rule in README.md. Run the tests when done. Reply with one sentence.';
   let swarmLog = '';
+  const swarmStartedAt = Date.now();
   try {
     writeFileSync(agentsFile, withSectionKey(agentsBefore, 'rotaris', 'delegation_strategy', 'swarm'));
     cpSync(agentsFile, join(scenarioDir('delegation-swarm'), 'agents.yaml'));
@@ -3090,8 +3093,22 @@ if (wanted.includes('delegation')) {
   } finally {
     writeFileSync(agentsFile, agentsBefore);
   }
-  check(!/capture: wait for result timed out/.test(swarmLog), 'the swarm run reached its result inside the wait');
+  const swarmEndedAt = Date.now();
   const swarmRead = readSession();
+  /*
+   * The run's length is the model's, not what this launch measures (PD-ORCH-006 revision 3 is read from the first root
+   * request below). At b9e3005 the coordinator invented a README loss and then a user ask to move persistence to Dexie, and
+   * ran out the 840 s wait doing that work with the product clean (acceptance finding L8,
+   * docs/defects/a-swarm-run-the-model-kept-working-past-its-wait-fails-the-live-run.md). So an overrun takes the duress
+   * run's reading (`overrunReading`, finding H-h): still progressing with the product holding at most a tenth of the wait is
+   * the window's bound, a NOTE; a run that stopped moving, or a product that held more, still FAILS.
+   */
+  const swarmDeadline = overrunReading({
+    log: swarmLog, startedAt: swarmStartedAt, endedAt: swarmEndedAt, records: readTraffic('delegation-swarm'),
+    calls: swarmRead === null ? [] : readToolCalls(swarmRead.session.session_id), budgetMs: EDIT_WAIT_MS, recorded: proxy !== null, raise: 'LIVE_RUN_EDIT_WAIT_MS',
+  });
+  if (swarmDeadline.outcome === 'window') noted('the swarm run was bounded by the window, not by the product', `${swarmDeadline.detail}; what the coordinator chose to do with the time is the model's (PD-ORCH-006 revision 3 is read from its first root request below)`);
+  else check(swarmDeadline.outcome === 'inside', 'the swarm run reached its result inside the wait', swarmDeadline.detail);
   checkPricing('delegation-swarm', swarmRead?.session);
   const firstRoot = readTraffic('delegation-swarm').filter((r) => String(r.path ?? '').includes('/chat/completions')).map(requestOf).find((r) => r !== null && /^You are the orchestrator/.test(r.system)) ?? null;
   const swarm = swarmReading(firstRoot);
@@ -3099,7 +3116,7 @@ if (wanted.includes('delegation')) {
   else check(swarm.faults.length === 0, swarm.kind === 'granted' ? 'a swarm run the mapping granted was told the direct-work statement, no swarm layer, and offered the writing tools beside delegate (PD-ORCH-006 revision 3)' : "a swarm run the mapping did not grant carried REQ-ORCH-025's swarm layer and its coordination-only tool set", swarm.faults.length === 0 ? `${swarm.kind}; offered ${swarm.offered.join(', ')}` : swarm.faults.join('; '));
   const swarmChildren = swarmRead === null ? 0 : readToolCalls(swarmRead.session.session_id).filter((c) => c.tool_name === 'delegate' && c.status === 'ok').length;
   if (swarm.kind === 'coordinating') noted('what the swarm coordinator delegated', `${swarmChildren} admitted delegation(s); how widely it divided the work is the model's, and is recorded rather than asserted`);
-  results.scenarios['delegation-swarm'] = { status: swarmRead?.session.execution_status, kind: swarm.kind, offered: swarm.offered, delegations: swarmChildren };
+  results.scenarios['delegation-swarm'] = { status: swarmRead?.session.execution_status, kind: swarm.kind, offered: swarm.offered, delegations: swarmChildren, deadline: swarmDeadline.outcome };
   if (swarmRead) preserveRun('delegation-swarm', swarmRead.session.session_id);
   await budgetGate();
 }
@@ -3469,16 +3486,11 @@ if (wanted.includes('duress')) {
    * "Still progressing" is read only from what ENDED ON ITS OWN before the wait ran out — a request the quit cut off
    * ends at the quit whatever it was doing, so a stream hung from early in the wait would otherwise read as progress.
    */
-  const durTraffic = readTraffic('duress').map(trafficCall);
+  const durRecords = readTraffic('duress');
+  const durTraffic = durRecords.map(trafficCall);
   const durCalls = read === null ? [] : readToolCalls(read.session.session_id);
-  const attribution = attributeWait({
-    startedAt, endedAt: startedAt + elapsed, quitAt: waitRanOutAt(log),
-    requests: durTraffic,
-    // A wait on children is not a tool running: `toolIntervals` leaves it out (finding H7 at 27a5127).
-    tools: toolIntervals(durCalls),
-  });
-  const usage = { completionTokens: durTraffic.reduce((t, c) => t + (c.completionTokens ?? 0), 0), reasoningTokens: durTraffic.reduce((t, c) => t + (c.reasoningTokens ?? 0), 0) };
-  const deadline = deadlineReading({ timedOut: /capture: wait for result timed out/.test(log), attribution, budgetMs: DURESS_MS, traffic: proxy !== null && durTraffic.length > 0, usage });
+  // A wait on children is not a tool running: `overrunReading`'s `toolIntervals` leaves it out (finding H7 at 27a5127).
+  const deadline = overrunReading({ log, startedAt, endedAt: startedAt + elapsed, records: durRecords, calls: durCalls, budgetMs: DURESS_MS, recorded: proxy !== null });
   if (deadline.outcome === 'window') noted('the long run was bounded by the window, not by the product', deadline.detail);
   else check(deadline.outcome === 'inside', 'the long run reached its result inside the wait', deadline.detail);
   checkPricing('duress', read?.session);

@@ -4,8 +4,10 @@
  * the unrepaired check answered there, so the case fails on the old reading.
  */
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 // @ts-expect-error — the readers are plain ESM beside the script that runs them.
-import { PRODUCT_SHARE_BOUND, PROGRESSING_TAIL_MS, attributeWait, childrenThatRanCommands, toolIntervals, waitsOnChildren, commandsReading, compressionNote, compressionTrigger, deadlineReading, saysSomething, silentFailedChildren, trafficCall, usageOf, waitRanOutAt } from './duress-checks.mjs';
+import { PRODUCT_SHARE_BOUND, PROGRESSING_TAIL_MS, attributeWait, childrenThatRanCommands, toolIntervals, waitsOnChildren, commandsReading, compressionNote, compressionTrigger, deadlineReading, overrunReading, saysSomething, silentFailedChildren, trafficCall, usageOf, waitRanOutAt } from './duress-checks.mjs';
 
 type Report = Record<string, unknown>;
 const reportOf = (c: { report: Report | null }) => c.report ?? {};
@@ -265,5 +267,57 @@ describe('an overrun says where the time went (H-h)', () => {
     const inside = deadlineReading({ timedOut: false, attribution: firstExecution, budgetMs: 3_000_000, traffic: true, usage: { completionTokens: 1, reasoningTokens: 0 } });
     expect(inside.outcome).toBe('inside');
     expect(inside.detail).toContain('endpoint generating');
+  });
+});
+
+describe('a launch\'s overrun is read from its pack: the swarm launch takes the duress run\'s reading (acceptance finding L8)', () => {
+  const at = (s: number) => new Date(Date.UTC(2026, 9, 14, 14, 15, 0) + s * 1000).toISOString();
+  const ms = (s: number) => Date.parse(at(s));
+  /** A record as `model-traffic.jsonl` holds it: its start, its duration and how it ended. */
+  const record = (start: number, end: number, outcome: string, completionTokens = 100) => ({ at: at(start), ms: (end - start) * 1000, outcome, usage: { prompt_tokens: 1000, completion_tokens: completionTokens, reasoning_tokens: 10 } });
+  const timedOutLog = (s: number) => `[main ${at(0)}] info    capture: prompt submitted\n[main ${at(s)}] info    capture: wait for result timed out after 840000 ms\n`;
+  /** The b9e3005 shape: a coordinator that kept asking the endpoint and running tools the whole 840 s, and one request the quit cut. */
+  const wandering = {
+    log: timedOutLog(842), startedAt: ms(0), endedAt: ms(846), budgetMs: 840_000, recorded: true, raise: 'LIVE_RUN_EDIT_WAIT_MS',
+    records: [...Array.from({ length: 40 }, (_, k) => record(5 + k * 20, 5 + k * 20 + 19, 'complete')), record(810, 846, 'aborted')],
+    calls: [
+      { tool_name: 'read_file', args: {}, endedAt: ms(24), elapsedMs: 1_000 },
+      { tool_name: 'wait_for_tasks', args: { task_ids: [] }, endedAt: ms(700), elapsedMs: 400_000 },
+      { tool_name: 'terminal', args: { command: 'node --test' }, endedAt: ms(805), elapsedMs: 2_000 },
+    ],
+  };
+
+  it('a run the model kept working to the end of its wait is the window\'s bound, and names the variable that widens this launch\'s wait', () => {
+    const r = overrunReading(wandering);
+    expect(r.outcome).toBe('window');
+    expect(r.detail).toMatch(/^846 s of 840 s: endpoint generating/);
+    expect(r.detail).toContain('41 requests, 4,100 output tokens of which 410 reasoning');
+    expect(r.detail).toContain('1 request still open when the wait ran out');
+    expect(r.detail).toContain('raise LIVE_RUN_EDIT_WAIT_MS');
+    expect(r.detail).not.toContain('LIVE_RUN_DURESS_MS');
+    // The duress run's own reading still names its own variable.
+    expect(overrunReading({ ...wandering, raise: undefined }).detail).toContain('raise LIVE_RUN_DURESS_MS');
+  });
+
+  it('a run that stopped moving long before its wait ran out is still the product\'s, and so is an overrun with nothing recorded', () => {
+    const stopped = overrunReading({ ...wandering, records: [record(5, 300, 'complete'), record(300, 846, 'aborted')], calls: [] });
+    expect(stopped.outcome).toBe('product');
+    expect(stopped.detail).toContain('nothing had ended on its own for 546 s');
+    expect(overrunReading({ ...wandering, recorded: false }).outcome).toBe('product');
+    expect(overrunReading({ ...wandering, records: [] }).outcome).toBe('product');
+  });
+
+  it('a launch whose log carries no timed-out line reached its result inside the wait', () => {
+    const r = overrunReading({ ...wandering, log: `[main ${at(500)}] info    capture: result\n`, endedAt: ms(504) });
+    expect(r.outcome).toBe('inside');
+  });
+
+  it('live-run.mjs reads the delegation-swarm launch\'s overrun through it, not through a bare timed-out check', () => {
+    const script = readFileSync(join(import.meta.dirname, '..', 'live-run.mjs'), 'utf8');
+    const swarm = script.slice(script.indexOf('// ── delegation-swarm:'), script.indexOf("results.scenarios['delegation-swarm']"));
+    expect(swarm.length).toBeGreaterThan(0);
+    expect(swarm).not.toMatch(/check\(!\/capture: wait for result timed out\/\.test\(swarmLog\)/);
+    expect(swarm).toMatch(/overrunReading\(\{[^}]*log: swarmLog[^}]*raise: 'LIVE_RUN_EDIT_WAIT_MS'/s);
+    expect(swarm).toContain("if (swarmDeadline.outcome === 'window') noted(");
   });
 });

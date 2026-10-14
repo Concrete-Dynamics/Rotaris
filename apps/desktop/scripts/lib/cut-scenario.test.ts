@@ -30,10 +30,25 @@ describe('the cut scenario (PD-TOOLS-013 live)', () => {
     expect(openCutCall([running(3, CUT_COMMAND)], { markerExists: true, now: 1_500, firstSeen })).toEqual({ ordinal: 3, command: CUT_COMMAND });
   });
 
+  it('never quits on a running sleep of a session created before the launch began', () => {
+    const firstSeen = new Map();
+    const stale = { ...running(5, CUT_COMMAND), session_id: 'old', session_created_at: '2026-10-13T09:00:00.000Z' };
+    const mine = { ...running(2, CUT_COMMAND), session_id: 'new', session_created_at: '2026-10-14T10:00:01.000Z' };
+    const since = '2026-10-14T10:00:00.000Z';
+    expect(openCutCall([stale], { markerExists: false, now: 10_000 + OPEN_WITHOUT_MARKER_MS, firstSeen, since })).toBeNull();
+    expect(openCutCall([stale, mine], { markerExists: true, now: 20_000, firstSeen, since })).toEqual({ ordinal: 2, command: CUT_COMMAND });
+  });
+
   it('quits a sleep the model ran without the marker once its record has stood open long enough', () => {
     const firstSeen = new Map();
     expect(openCutCall([running(4, 'sleep 60')], { markerExists: false, now: 10_000, firstSeen })).toBeNull();
     expect(openCutCall([running(4, 'sleep 60')], { markerExists: false, now: 10_000 + OPEN_WITHOUT_MARKER_MS, firstSeen })).toEqual({ ordinal: 4, command: 'sleep 60' });
+  });
+
+  it('fails a cut call whose diagnostic does not read outcome_severity warning (PD-TOOLS-013 revision 1, as driver-proof 13d reads it)', () => {
+    const errorSeverity = cutCall({ result: interruptedResult.replace('"outcome_severity":"warning"', '"outcome_severity":"error"') });
+    const vs: Verdict[] = cutVerdicts({ quitSent: true, calls: [errorSeverity], issues: [], summary: summary('interrupted 1', 0) });
+    expect(failed(vs)).toEqual(['cut: it carries no exit code, timeout false, a session reset, and outcome_severity warning (PD-TOOLS-013 revision 1)']);
   });
 
   it('passes the record revision 1 leaves: interrupted, no exit code, no issue, the interrupted bucket', () => {

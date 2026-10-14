@@ -46,14 +46,17 @@ export function isCutCommand(command) {
 /**
  * The open terminal call the quit should cut, or null: a `running` row of the `terminal` tool whose command is the sleep,
  * once the command marked its file or the record has stood open `OPEN_WITHOUT_MARKER_MS`. `rows` are `{ status, tool_name,
- * entry }` with `entry` parsed; `firstSeen` maps a row's key to when the harness first saw it open.
+ * entry, session_created_at }` with `entry` parsed; `firstSeen` maps a row's key to when the harness first saw it open.
+ * `since` (an ISO instant) keeps only the rows of sessions created once this launch began: a `running` sleep an earlier,
+ * crashed scenario left in the store is not this launch's to quit on.
  */
-export function openCutCall(rows, { markerExists, now, firstSeen }) {
+export function openCutCall(rows, { markerExists, now, firstSeen, since = null }) {
   for (const row of rows) {
     if (row.tool_name !== 'terminal' || row.status !== 'running') continue;
+    if (since !== null && !(String(row.session_created_at ?? '') >= since)) continue;
     const command = row.entry?.args?.command ?? '';
     if (!isCutCommand(command)) continue;
-    const key = String(row.ordinal);
+    const key = `${row.session_id ?? ''}#${row.ordinal}`;
     if (!firstSeen.has(key)) firstSeen.set(key, now);
     if (markerExists || now - firstSeen.get(key) >= OPEN_WITHOUT_MARKER_MS) return { ordinal: row.ordinal, command };
   }
@@ -72,7 +75,7 @@ export function cutVerdicts({ quitSent, calls, issues, summary }) {
   const result = String(cut.result ?? '');
   const verdicts = [
     { verdict: 'check', passed: cut.status === 'failed' && cut.failureKind === 'interrupted' && cut.outcomeKind === 'interrupted', what: 'cut: the terminal call the quit cut is recorded failed, interrupted (PD-TOOLS-013)', detail: `${cut.status} / failure ${cut.failureKind} / outcome ${cut.outcomeKind}, ${cut.elapsedMs ?? '?'} ms` },
-    { verdict: 'check', passed: (cut.exitCode ?? null) === null && /"timeout":false/.test(result) && /"kill_status":"(session_reset|reset_failed)"/.test(result), what: 'cut: it carries no exit code, timeout false, and a session reset', detail: (/\[terminal_diagnostic\] (.*)$/m.exec(result)?.[1] ?? '(no diagnostic)').replace(/"detail":"[^"]*",?/, '').slice(0, 300) },
+    { verdict: 'check', passed: (cut.exitCode ?? null) === null && /"timeout":false/.test(result) && /"kill_status":"(session_reset|reset_failed)"/.test(result) && /"outcome_severity":"warning"/.test(result), what: 'cut: it carries no exit code, timeout false, a session reset, and outcome_severity warning (PD-TOOLS-013 revision 1)', detail: (/\[terminal_diagnostic\] (.*)$/m.exec(result)?.[1] ?? '(no diagnostic)').replace(/"detail":"[^"]*",?/, '').slice(0, 300) },
     { verdict: 'check', passed: /cancelled by the run before the command/.test(result) && !/exceeded its timeout/.test(result), what: 'cut: its result says the run cancelled the call and names no timeout', detail: result.split('\n')[0]?.slice(0, 240) ?? '(no result)' },
   ];
   const own = issues.filter((i) => i.evidence_ref === `tool_call_evidence#${cut.callId}` || i.kind === 'terminal_timeout');
@@ -101,13 +104,13 @@ function readCut(dbPath, sessionId) {
   } finally { db.close(); }
 }
 
-/** The open rows of every session, read while the launch runs; empty before the first save. */
+/** The open rows of every session, each with its session's creation instant, read while the launch runs; empty before the first save. */
 function openRows(dbPath) {
   const Database = require('better-sqlite3');
   let db;
   try { db = new Database(dbPath, { readonly: true, fileMustExist: true }); } catch { return []; }
   try {
-    return db.prepare("SELECT ordinal, tool_name, status, entry FROM tool_calls WHERE status = 'running'").all().map((r) => { let entry = {}; try { entry = JSON.parse(r.entry); } catch { /* still open */ } return { ...r, entry }; });
+    return db.prepare("SELECT t.session_id, t.ordinal, t.tool_name, t.status, t.entry, s.created_at AS session_created_at FROM tool_calls t JOIN sessions s ON s.session_id = t.session_id WHERE t.status = 'running'").all().map((r) => { let entry = {}; try { entry = JSON.parse(r.entry); } catch { /* still open */ } return { ...r, entry }; });
   } catch { return []; } finally { db.close(); }
 }
 
@@ -118,11 +121,12 @@ export async function runCutScenario(ctx) {
   let quitSent = null;
   let cutCall = null;
   const started = Date.now();
+  const since = new Date(started).toISOString();
   const watch = setInterval(() => {
     if (quitSent !== null) return;
     let dbPath;
     try { dbPath = ctx.oneDatabase(); } catch { return; }
-    const open = openCutCall(openRows(dbPath), { markerExists: existsSync(marker), now: Date.now(), firstSeen });
+    const open = openCutCall(openRows(dbPath), { markerExists: existsSync(marker), now: Date.now(), firstSeen, since });
     if (open === null) return;
     cutCall = open;
     quitSent = Date.now() + SETTLE_MS;

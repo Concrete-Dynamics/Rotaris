@@ -492,7 +492,8 @@ async function cancelLaunch(name, extra) {
   // The fixture appends each `tools/call` it receives to the call file: the quit is sent 300 ms after `slow` arrives.
   const watch = setInterval(() => {
     if (quitAt !== null || child === null) return;
-    const received = readFileSync(calls, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l));
+    // A line caught half-written is skipped, not thrown inside the interval (which would end the proof); the next tick reads it.
+    const received = readFileSync(calls, 'utf8').split('\n').filter((l) => l.trim() !== '').flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
     if (!received.some((c) => c.name === 'slow')) return;
     quitAt = Date.now() + 300;
     setTimeout(() => { try { process.kill(child.pid, 'SIGTERM'); } catch { /* already gone */ } }, 300);

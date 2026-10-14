@@ -270,12 +270,14 @@ A run takes one top-level user task and executes it through an autonomous, itera
   > same-tool calls" counts only calls that are the same action by REQ-ORCH-101's comparison — the same tool name and
   > identical whole arguments; calls of one tool with differing arguments are counts alone. The rest of the requirement
   > governs as written.
-  > **Narrowed by [`PD-ORCH-009`](../product/directives.md#pd-orch-009) revision 4, 2026-10-14 (revision 3, 2026-10-13).** Its
-  > stuck-mode clause does not reach three turns the run itself follows up: the one empty turn of an entry role that
-  > `PD-ORCH-009`'s answer re-prompt answers (revision 3), a delegated child's empty turn that REQ-ORCH-095's re-prompt answers
-  > (revision 4, OQ-283), and an execution iteration's root turn that REQ-ORCH-078's plan correction follows (revision 4,
-  > OQ-284). On each, a stuck trigger the turn armed is withdrawn, so no classification is asked and no corrective message
-  > joins the run's own. Disjoint from `PD-ORCH-016`'s raw-count case; the rest of the requirement governs as written.
+  > **Narrowed by [`PD-ORCH-009`](../product/directives.md#pd-orch-009) revision 5, 2026-10-14 (revision 4, 2026-10-14; revision 3,
+  > 2026-10-13).** Its stuck-mode clause does not reach four turns the run itself follows up: the one empty turn of an entry role
+  > that `PD-ORCH-009`'s answer re-prompt answers (revision 3), a delegated child's empty turn that REQ-ORCH-095's re-prompt
+  > answers (revision 4, OQ-283), an execution iteration's root turn that REQ-ORCH-078's plan correction follows (revision 4,
+  > OQ-284), and a parent's empty turn while a child of its is pending or ended unobserved, which the run follows by waiting
+  > and resuming the parent with its children's reports (revision 5, OQ-296). On each, a stuck trigger the turn armed is
+  > withdrawn, so no classification is asked and no corrective message joins the run's own. Disjoint from `PD-ORCH-016`'s
+  > raw-count case; the rest of the requirement governs as written.
 - **REQ-ORCH-105** — After every activation cycle, regardless of outcome, tool/message counters and fingerprints MUST reset to zero. The consecutive-activation counter resets only on a new user instruction — a real user message, injected steering, or a todo-correction message all count. Supervisor state MUST be strictly session-scoped, never leaking across sessions.
 - **REQ-ORCH-106** — Supervisor escalation MUST surface as: the child transitioned to failed; an escalation error issue ("child aborted after repeated activations"); a report carrying the escalation signal; and, at loop level, a session abort ending the run with stop reason `agent_session_aborted`.
 - **REQ-ORCH-107** — Disabling supervision via configuration MUST construct no supervisor and no model client; the runtime distinguishes "intentionally disabled" from "not yet built" and tolerates the absence; the setting round-trips through configuration files; configurations without the field deserialize as enabled; a host-level toggle propagates into the run configuration.

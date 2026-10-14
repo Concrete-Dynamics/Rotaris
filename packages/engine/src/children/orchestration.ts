@@ -1010,6 +1010,17 @@ export class IterationChildren implements DelegationOps {
         toolCalls += outcome.toolCallCount;
         continue;
       }
+      /*
+       * PD-ORCH-009 revision 5, case (d) (OQ-296, ruled 2026-10-13 under R-072), narrowing REQ-ORCH-104's stuck-mode clause: a
+       * parent's turn that ended with neither text nor a call while a child of its is pending, or ended unobserved, is
+       * REQ-ORCH-055's wait and no stuck report. The stuck trigger that turn armed is withdrawn as the parent is taken into the
+       * wait, so its children's reports are the only message the run adds for that turn. Unconditional: only a pending `stuck`
+       * trigger is removed, and here the only one that can be pending is the one the turn just armed — a repetition, cycle or
+       * raw-count trigger stays. The consecutive-activation count is untouched: a report is no user instruction (REQ-ORCH-105).
+       * The one placement covers the root (keyed by the root id `Run` passes in), a delegated child acting as parent, the
+       * REQ-MONITOR-135 steering-wake step and a child that had already ended unobserved.
+       */
+      this.deps.supervisorFor?.(agentId).withdrawStuck();
       if (unobserved.length === 0) await this.awaitTerminal(agentId);
       // REQ-HOOKS-080: a child that has ended is taken once its settle's `child_completed` hook is done — as a parent the
       // settle wakes takes it — never while the hook still runs because the parent found it ended on its own.

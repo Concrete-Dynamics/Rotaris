@@ -11,6 +11,7 @@ import type { AgentGrant, Persona, PersonaResolver } from './personas.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { HookPort } from '../hooks-port.js';
 import { conversationOf } from '../run/record.js';
+import { ANSWER_REPROMPT } from '../run/run.js';
 import { callsRun, interruptedResult } from '../run/interruption.js';
 import { recordCrash } from '../run/crash.js';
 import { decodeStoredTodo } from '../todo-view.js';
@@ -20,7 +21,7 @@ import { FULL_CONTEXT_BUDGET } from '../artifacts/context.js';
 import { userCancellation } from './ledger.js';
 import { inheritedContext } from './notify.js';
 import { CODE_INTELLIGENCE_MANIFEST } from '@rotaris/config';
-import { SUPERVISOR_DEFAULTS, type LoopActivation, type LoopClassifier } from '../run/supervisor.js';
+import { SUPERVISOR_DEFAULTS, type LoopActivation, type LoopClassifier, type SupervisorConfig } from '../run/supervisor.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -428,7 +429,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
    * id-routed answer finds a holder. `closed` collects each port's close (REQ-SESSION-094): the agent, the statement its
    * open calls are settled with, and how many `session.end` events the session held at that moment.
    */
-  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; closed?: { agent: string; statement: string; ended: number }[]; personas?: PersonaResolver; capFor?: (modelKey: string) => number | null; modelKey?: string; raisingPort?: string; grant?: (ctx: ToolPortContext) => AgentGrant | null; readiness?: (ctx: ToolPortContext) => Promise<void> | undefined; approvals?: (ctx: ToolPortContext) => readonly ApprovalPayload[]; classifier?: LoopClassifier } = {}) {
+  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; closed?: { agent: string; statement: string; ended: number }[]; personas?: PersonaResolver; capFor?: (modelKey: string) => number | null; modelKey?: string; raisingPort?: string; grant?: (ctx: ToolPortContext) => AgentGrant | null; readiness?: (ctx: ToolPortContext) => Promise<void> | undefined; approvals?: (ctx: ToolPortContext) => readonly ApprovalPayload[]; classifier?: LoopClassifier; supervisorConfig?: Partial<SupervisorConfig> } = {}) {
     // The scripted client answers by persona and by the number of calls that persona has made.
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
@@ -468,7 +469,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       },
       attended: () => true,
       ...(over.hooks ? { hooks: () => over.hooks! } : {}),
-      ...(over.classifier ? { supervisor: () => ({ config: SUPERVISOR_DEFAULTS, classifier: over.classifier! }) } : {}),
+      ...(over.classifier ? { supervisor: () => ({ config: { ...SUPERVISOR_DEFAULTS, ...over.supervisorConfig }, classifier: over.classifier! }) } : {}),
       runtime,
       // A resolved `personas:` table reaches a run only through the root's configuration (RunSetup).
       ...(over.personas ? { configure: () => ({ ok: true as const, value: { model: { backend: new DefaultAgentBackend(client), config }, runtime, personas: over.personas! } }) } : {}),
@@ -515,7 +516,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
    * "Pause and reassess the current task."], the classifier was asked once (`stuck`) and one activation was written for the
    * child.
    */
-  describe('PD-ORCH-009 revision 4 (OQ-283): a delegated child\'s re-prompted empty turn is no stuck report', () => {
+  describe('PD-ORCH-009 revisions 4 and 5 (OQ-283, OQ-296): an empty turn the run re-prompts or waits out is no stuck report', () => {
     const textOf = (m: ModelRequest['messages'][number]): string => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
     const silentStep: ScriptedCall = { parts: [{ part: { kind: 'reasoning', delta: 'Thinking about it…' } }, { part: { kind: 'finish', reason: 'stop' } }] };
     const supervised = () => {
@@ -564,12 +565,14 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     });
 
     /*
-     * Outside PD-ORCH-009 revision 4 (OQ-284's ruling names it as its own question): a root whose turn ends with neither text
-     * nor a call while its background child runs is not idle, so neither the answer re-prompt nor a plan correction follows it
-     * (`runWithChildren` asks its follow-up only once no child is pending). The stuck trigger that empty turn armed stays
-     * pending, and the root's next turn — the one the child's report leads — takes it at its first step. Pinned as found.
+     * PD-ORCH-009 revision 5 (OQ-296, ruled 2026-10-13 under R-072), case (d): a parent's turn that ends with neither text nor a
+     * call while a child of its is pending, or has ended with a report the parent has not seen, is REQ-ORCH-055's wait and no
+     * stuck report. The run withdraws the stuck trigger that turn armed when it takes the parent into the wait, so the children's
+     * reports are the only message the run adds for that turn. As found (revision 4 named it unchanged), the resumed request
+     * ended [… report, "Pause and reassess the current task."], the classifier was asked once (`stuck`) and one stuck
+     * activation was written for the root (`docs/defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md`).
      */
-    it('as found: a root silent while its background child runs is resumed with the report, and the stuck corrective follows the report', async () => {
+    it('PD-ORCH-009 r5 (OQ-296): a root silent while its background child runs is resumed with the report alone — no classification, no activation', async () => {
       const { asked, classifier } = supervised();
       const { sessions, client } = sessionsWith((persona, turn) => {
         if (persona === 'orchestrator') {
@@ -584,11 +587,102 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const resumed = client.requests.find((r) => r.messages.some((m) => m.role === 'user' && textOf(m).includes('[Background task completed]')))!;
       expect(resumed).toBeDefined();
       const users = resumed.messages.filter((m) => m.role === 'user').map(textOf);
+      expect(users.at(-1)).toContain('[Background task completed]');
+      expect(users.some((u) => u.startsWith('Pause and reassess'))).toBe(false);
+      expect(asked).toEqual([]);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'loop_supervisor_activation')).toEqual([]);
+    });
+
+    it('PD-ORCH-009 r5 (OQ-296): a root that delegates and waits silently across three batches completes — no escalation', async () => {
+      const { asked, classifier } = supervised();
+      const batch = ['first', 'second', 'third'];
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          // Odd calls delegate the next batch (the first and every resumed turn), even calls are the silent wait after it.
+          if (turn % 2 === 1 && turn <= 5) return toolCalls([{ callId: `d${turn}`, name: 'delegate', args: { persona: 'coder', task_name: batch[(turn - 1) / 2]!, task: `TASK: part ${turn}` } }], 'Delegating.');
+          return turn <= 6 ? silentStep : answer('All three parts are done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        return answer('Part done.');
+      }, { classifier });
+      const sid = (sessions.start(dal, 'C:/ws', 'build it in three parts') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(children(sid).map((c) => [c.canonical_name, c.state])).toEqual(batch.map((n) => [n, 'succeeded']));
+      expect(asked).toEqual([]);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'loop_supervisor_activation')).toEqual([]);
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'circuit_breaker_escalation')).toEqual([]);
+    });
+
+    it('PD-ORCH-009 r5 (OQ-296): a delegated child silent while its own background child runs takes no stuck activation', async () => {
+      const { asked, classifier } = supervised();
+      const userText = (req: ModelRequest): string => req.messages.filter((m) => m.role === 'user').map(textOf).join('\n');
+      let midAsked = 0;
+      const { sessions, client } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'mid', task: 'TASK: mid', run_in_background: false } }], 'Delegating.') : answer('mid finished.');
+        if (persona === 'summariser') return answer('{"summary":"x","key_findings":[],"tags":[]}');
+        if (!userText(req).includes('TASK: mid')) return answer('leaf done');
+        midAsked += 1;
+        if (midAsked === 1) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'leaf', task: 'TASK: leaf' } }], 'Delegating.');
+        return midAsked === 2 ? silentStep : answer('Leaf reported; done.');
+      }, { classifier });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(midAsked).toBe(3);
+      expect(children(sid).find((c) => c.canonical_name === 'mid')!.state).toBe('succeeded');
+      const resumed = client.requests.find((r) => userText(r).includes('TASK: mid') && r.messages.some((m) => m.role === 'user' && textOf(m).includes('[Background task completed]')))!;
+      expect(resumed).toBeDefined();
+      expect(resumed.messages.filter((m) => m.role === 'user').map(textOf).at(-1)).toContain('[Background task completed]');
+      expect(asked).toEqual([]);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'loop_supervisor_activation')).toEqual([]);
+    });
+
+    /*
+     * Revision 5 withdraws only a pending `stuck` trigger. A raw-count trigger the same empty turn armed first (its message
+     * reached the threshold, so `observeStuck` armed nothing) is kept, and the resumed turn's first step takes it: the
+     * classification is asked and its corrective follows the report (disjoint from PD-ORCH-016).
+     */
+    it('PD-ORCH-009 r5 guard: a raw-count trigger the silent turn armed is kept and taken after the report', async () => {
+      const { asked, classifier } = supervised();
+      const { sessions, client } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'implement', task: 'TASK: write it' } }], 'Delegating.');
+          return turn === 2 ? silentStep : answer('All done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        return answer('I implemented it.');
+      }, { classifier, supervisorConfig: { messageThreshold: 2 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(asked.map((a) => a.trigger)).toEqual(['raw-count']);
+      const resumed = client.requests.find((r) => r.messages.some((m) => m.role === 'user' && textOf(m).includes('[Background task completed]')))!;
+      const users = resumed.messages.filter((m) => m.role === 'user').map(textOf);
       expect(users.at(-2)).toContain('[Background task completed]');
       expect(users.at(-1)).toBe('Pause and reassess the current task.');
-      expect(asked.map((a) => a.trigger)).toEqual(['stuck']);
       const root = dal.timelineOf(sid).filter((t) => t.name === 'loop_supervisor_activation').map((t) => [t.actor, (JSON.parse(t.metadata) as { trigger: string }).trigger]);
-      expect(root).toEqual([['orchestrator', 'stuck']]);
+      expect(root).toEqual([['orchestrator', 'raw-count']]);
+    });
+
+    /*
+     * Revision 5 leaves revisions 2 and 3 as they are: a root silent after its last report, with nothing pending, is idle, and
+     * PD-ORCH-009's answer re-prompt follows it as the one message the run adds (revision 3 withdraws its stuck trigger).
+     */
+    it('PD-ORCH-009 r5 guard: a root silent after its last report with nothing pending is still asked for its answer', async () => {
+      const { asked, classifier } = supervised();
+      const { sessions, client } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'implement', task: 'TASK: write it' } }], 'Delegating.');
+          return turn <= 3 ? silentStep : answer('The child implemented it.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        return answer('I implemented it.');
+      }, { classifier });
+      const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const reprompted = client.requests.filter((r) => r.messages.some((m) => m.role === 'user' && textOf(m) === ANSWER_REPROMPT));
+      expect(reprompted).toHaveLength(1);
+      expect(reprompted[0]!.messages.filter((m) => m.role === 'user').map(textOf).at(-1)).toBe(ANSWER_REPROMPT);
+      expect(asked).toEqual([]);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'loop_supervisor_activation')).toEqual([]);
     });
   });
 

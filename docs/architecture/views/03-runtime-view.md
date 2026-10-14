@@ -282,7 +282,8 @@ pauses at the message limit, and at the teardown either "The run ended without a
 cancelled (`interrupted`), the iteration's row. A plan cycle's root is not asked. With no children (no tool port's delegation) the same loop runs
 around `firstTurn`. The scripted client's verification-only step `silent` (since fin42) is such a turn —
 a call ending `stop` with neither text nor a tool call — which `part-h-proof`'s `answerless` and `answer-when-asked` launches
-take, and since fin44 its `silent-correction` and `silent-child` launches (`PD-ORCH-009` revision 4, §3).
+take, since fin44 its `silent-correction` and `silent-child` launches (`PD-ORCH-009` revision 4, §3), and since fin45 its
+`silent-wait` launch (`PD-ORCH-009` revision 5: three background delegations each followed by a silent root turn).
 
 **The coordinator's own plan and the task's completion (REQ-ORCH-029, REQ-ORCH-075, REQ-ORCH-078; since 2026-10-06,
 live-run finding G5).** A root that answers `succeeded` while its own plan (`Run.agentTodo`, REQ-TOOLS-144's states) holds an
@@ -604,15 +605,18 @@ approval when needed — resolved at once under the headless policy while the ru
 `PD-TOOLS-005`, §5 → executor; hooks in its two slots), settled with its outcome (and a `diff` row for an
 edit); the results go back as one tool message; hook feedback follows as a user message. A reply with no tool call ends the turn — unless a steer is pending, in which case
 the agent takes another round; an empty reply with no call is the runtime's stuck report to the supervisor — except where the
-run itself follows the turn up (`PD-ORCH-009` revisions 3 and 4): `LoopSupervisor.withdrawStuck()` clears a pending `stuck`
+run itself follows the turn up (`PD-ORCH-009` revisions 3 to 5): `LoopSupervisor.withdrawStuck()` clears a pending `stuck`
 trigger (and nothing else — a repetition, cycle or raw-count trigger stays, and the counter is not moved) before the run sends
-its own message, so that message is the request's last, with no classification, corrective or activation. Three callers:
+its own message, so that message is the request's last, with no classification, corrective or activation. Four callers:
 `Run.turn`'s `correction()` before `ANSWER_REPROMPT` (revision 3, OQ-282) and before REQ-ORCH-078's plan correction (revision 4,
-OQ-284), and `IterationChildren.execute` before a child's REQ-ORCH-095 re-prompt "Carry out the task now, …" (revision 4,
-OQ-283). The plan correction also calls `noteUserInstruction()` — REQ-ORCH-105's todo-correction message restarts the
-consecutive series (since fin44; before it the series ran on across the correction). A root's empty turn while its background
-child runs is still a stuck report: no follow-up of the run's own follows it, and the turn the child's report leads takes the
-trigger, the corrective after the report (as found, raised as OQ-296).
+OQ-284), `IterationChildren.execute` before a child's REQ-ORCH-095 re-prompt "Carry out the task now, …" (revision 4,
+OQ-283), and `IterationChildren.runWithChildren` as it takes a parent — a root, or a delegated child acting as one — into the
+wait on a child of its that is pending or ended unobserved (revision 5, OQ-296, case (d)): the children's reports are then the
+one message the run adds for that turn. The plan correction also calls `noteUserInstruction()` — REQ-ORCH-105's
+todo-correction message restarts the consecutive series (since fin44; before it the series ran on across the correction); a
+report does not (it is no user instruction), so the wait leaves the series where it stood. Until fin45 a parent's empty turn
+while its background child ran was still a stuck report: the turn the child's report led took the trigger, the corrective
+followed the report, and a root that waited silently over three batches escalated (`agent_session_aborted`).
 
 **The conversation record (PD-ORCH-005 clause 1; `run/record.ts`).** Every agent's `Conversation` carries a
 recorder, so every `push` — the task or the resume message, a steer, a supervisor correction, the assistant message

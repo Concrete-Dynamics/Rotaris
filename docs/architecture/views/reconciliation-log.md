@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A parent's silent wait on its children is no stuck report (fin45, `fin45-supervision-and-quit`; PD-ORCH-009 revision 5,
+OQ-296; `../../defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md`).**
+`IterationChildren.runWithChildren` withdraws a pending `stuck` trigger as it takes a parent into the wait on its pending or
+unobserved children, so the reports are the one message the run adds for that turn. `03-runtime-view.md` §3 (the fourth
+`withdrawStuck` caller) and §2 (`part-h-proof`'s `silent-wait` launch).
+
 **The tool-grouping preference is stored under its registered key (fin44, `fin44-hooks-and-config`;
 `../../defects/fixed/the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md`).**
 `display/groupTools` became `display/groupToolCalls` (REQ-CONFIG-405, REQ-SHELL-006) in the preference table, the command

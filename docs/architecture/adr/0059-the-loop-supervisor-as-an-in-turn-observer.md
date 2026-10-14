@@ -218,3 +218,20 @@ empty turn, a root silent while its background child runs among them — the cor
 raised as [OQ-296](../open-questions.md#oq-296)). Pinned by `children.test.ts`'s and `coordinator-plan.test.ts`'s revision-4
 cases (five red on `a3be56c`) and by `pnpm part-h-proof`'s `silent-correction` and `silent-child` launches (0 loop
 classifications, 0 stuck activations). **Not measured:** a live run since the change.
+
+## 2026-10-14 — the producer narrowed a third time: a parent's silent wait (PD-ORCH-009 revision 5, fin45)
+
+**Ruled under the owner's delegation (R-072)** as [OQ-296](../open-questions.md#oq-296): the shape the entry above left as found.
+A parent — an execution iteration's root, or a delegated child acting as parent — whose turn ends with neither text nor a call
+while a child of its is pending or ended unobserved is waiting (REQ-ORCH-055), not stuck: `IterationChildren.runWithChildren`
+calls `withdrawStuck()` as it takes the parent into the wait, so the children's reports are the request's last message. Decision
+3's consecutive counter is untouched — a report is no user instruction (REQ-ORCH-105) — and a repetition, cycle or raw-count
+trigger the same turn armed still stands. **The reading it replaces, kept beside it:** after revision 4, a parent's empty turn
+while its children ran was still a stuck report: the turn the report led took the trigger, the corrective followed the report, and
+because no report resets the series, a root that delegated and waited silently three times reached decision 3's third consecutive
+activation and was escalated — measured in the built app before the change, the session ended `agent_session_aborted` with "child
+aborted after repeated activations". The same measurement showed decision 4's budget at work: the trigger was armed when the root
+fell silent and taken only when the report came, seconds later, so no classification was dispatched and the deterministic
+corrective was sent. Pinned by `children.test.ts`'s revision-5 cases (four red on `ee586d3`, a raw-count guard green before and
+after) and `pnpm part-h-proof`'s `silent-wait` launch (0 stuck activations, 0 escalations, the session `completed`).
+**Not measured:** a live run since the change.

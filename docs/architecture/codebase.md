@@ -742,7 +742,9 @@ and no lock left behind). Since fin42 (N56) it also re-queues a coordinating roo
 the held answer in the next root's first message (`plan-held`, PD-ORCH-015), and meets PD-ORCH-009's silent root through the
 scripted `silent` step (`answerless`, `answer-when-asked`), with loop supervision on and, since `PD-ORCH-009` revision 3
 (OQ-282), no loop classification and no stuck activation for the re-prompted turn; since revision 4 (fin44, OQ-283 and OQ-284)
-its `silent-correction` and `silent-child` launches show the same for a plan correction and a child's re-prompt. Its evidence lands
+its `silent-correction` and `silent-child` launches show the same for a plan correction and a child's re-prompt, and since
+revision 5 (fin45, OQ-296) its `silent-wait` launch for a root that waits silently on three background delegations in turn,
+resumed each time with the child's report alone and never escalated. Its evidence lands
 under `.proof/part-h-proof/`.
 
 **Configuration.** `packages/config/src/` — `load.ts` (the one entry point, no database handle), `merge.ts` (the four

@@ -377,10 +377,59 @@ for (const c of [
 }
 writeFileSync(join(output, 'follow-ups-observed.json'), `${JSON.stringify(followUps, null, 2)}\n`);
 
+/*
+ * PD-ORCH-009 revision 5, case (d) (OQ-296, ruled 2026-10-13 under R-072; fin45): a parent's turn that ends with neither text nor
+ * a call while a child of its is pending is REQ-ORCH-055's wait and no stuck report, with loop supervision on. `silent-wait`: a
+ * coordinating root writes a plan of three items, then three times delegates one in the background and ends its turn silent;
+ * each child's report resumes it. The report is the last message before the root's next step every time, no loop
+ * classification is asked, no stuck activation is written, and the session completes. Before revision 5 each report was
+ * followed by "Pause and reassess …", and the third silent wait was the third consecutive activation: the root escalated and
+ * the session ended `agent_session_aborted` ("child aborted after repeated activations", REQ-ORCH-106).
+ */
+const REPORT_MARK = '[Background task completed]';
+const waitRoot = join(output, 'silent-wait');
+const waitWs = join(waitRoot, 'workspace');
+const waitLocal = join(waitRoot, 'local');
+mkdirSync(waitWs, { recursive: true });
+mkdirSync(waitLocal, { recursive: true });
+writeFileSync(join(waitWs, 'README.md'), '# silent wait proof\n');
+scratchAgentsYaml(waitWs, null);
+writeFileSync(join(waitWs, '.rotaris', 'agents.yaml'), `${readFileSync(join(waitWs, '.rotaris', 'agents.yaml'), 'utf8')}circuit_breaker:\n  enabled: true\n`);
+const { log: waitLog } = await launch('silent-wait', waitWs, waitLocal, join(waitRoot, 'preferences'), {
+  ROTARIS_SCRIPT: 'plan:3,delegate:coding-agent:one,silent,delegate:coding-agent:two,silent,delegate:coding-agent:three,silent,done,report',
+  ROTARIS_CHILD_SCRIPT: 'answer',
+  ROTARIS_CAPTURE_PROMPT: 'do the scripted work in three parts and report it',
+  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '100000', ROTARIS_CAPTURE_AFTER_MS: '2000',
+});
+const silentWait = (() => {
+  const db = new Database(oneDatabase(waitLocal), { readonly: true });
+  const session = db.prepare('SELECT session_id, execution_status, stop_reason FROM sessions').get();
+  const messages = db.prepare('SELECT task_id, seq, body FROM agent_messages ORDER BY task_id, seq').all().map((r) => { let m = {}; try { m = JSON.parse(r.body); } catch { /* not a message */ } return { task: r.task_id, seq: r.seq, role: m.role ?? null, text: (Array.isArray(m.content) ? m.content : []).map((p) => (typeof p?.text === 'string' ? p.text : '')).join('\n') }; });
+  const activations = db.prepare("SELECT actor, message, metadata FROM timeline WHERE name = 'loop_supervisor_activation' ORDER BY ordinal").all().map((a) => ({ actor: a.actor, trigger: JSON.parse(a.metadata ?? '{}').trigger ?? null, message: a.message }));
+  const escalations = db.prepare("SELECT actor, message FROM issues WHERE kind = 'circuit_breaker_escalation' ORDER BY ordinal").all();
+  const children = db.prepare('SELECT canonical_name, state FROM children ORDER BY spawned_at').all();
+  db.close();
+  const reports = messages.flatMap((m, i) => (m.role === 'user' && m.text.includes(REPORT_MARK) ? [{ at: i, task: m.task }] : []));
+  const after = reports.map(({ at, task }) => { const n = messages[at + 1]; return n === undefined ? null : { sameAgent: n.task === task, role: n.role, text: n.text.slice(0, 80) }; });
+  const silentSteps = messages.filter((m) => m.role === 'assistant' && m.text.trim() === '').length;
+  const classifications = (waitLog.match(/scripted model call: [^\n]*\(loop-classifier\)/g) ?? []).length;
+  return { session, children, reports: reports.length, after, silentSteps, activations, escalations, classifications };
+})();
+writeFileSync(join(output, 'silent-wait-observed.json'), `${JSON.stringify(silentWait, null, 2)}\n`);
+if (silentWait.session?.execution_status !== 'completed') throw new Error(`silent-wait: the session ended ${silentWait.session?.execution_status} / ${silentWait.session?.stop_reason} (PD-ORCH-009 revision 5; see silent-wait.log)`);
+if (silentWait.escalations.length !== 0) throw new Error(`silent-wait: the waiting root escalated: ${JSON.stringify(silentWait.escalations)} (PD-ORCH-009 revision 5)`);
+if (silentWait.children.length !== 3 || silentWait.children.some((c) => c.state !== 'succeeded')) throw new Error(`silent-wait: children ${JSON.stringify(silentWait.children)}`);
+if (silentWait.silentSteps < 3) throw new Error(`silent-wait: the root's conversation holds ${silentWait.silentSteps} silent step(s), not the three the script asks for (see silent-wait.log)`);
+if (silentWait.reports < 3) throw new Error(`silent-wait: ${silentWait.reports} report message(s) resumed the root, not three`);
+if (silentWait.after.some((n) => n === null || !n.sameAgent || n.role !== 'assistant')) throw new Error(`silent-wait: a report is not the last message before the root's next step: ${JSON.stringify(silentWait.after)} (PD-ORCH-009 revision 5)`);
+if (silentWait.activations.some((a) => a.trigger === 'stuck')) throw new Error(`silent-wait: the silent wait was taken as a stuck report: ${JSON.stringify(silentWait.activations)} (PD-ORCH-009 revision 5)`);
+if (silentWait.classifications !== 0) throw new Error(`silent-wait: ${silentWait.classifications} loop classification(s) were asked (PD-ORCH-009 revision 5; see silent-wait.log)`);
+
 const result = {
   planHeld: { session: heldSession, iterations: heldIterations, heldSystemRows: heldSystemRows.map((row) => row.body), corrections, heldAnswerCarried: carried !== null, screenshot: 'plan-held.png' },
   answerless: Object.fromEntries(Object.entries(answerless).map(([k, v]) => [k, { status: v.session?.execution_status, asked: v.asked, reprompts: v.reprompts, rows: v.rows, issues: v.issues.length, stuckActivations: v.stuck.length, classifications: v.classifications }])),
   followUps: Object.fromEntries(Object.entries(followUps).map(([k, v]) => [k, { status: v.session?.execution_status, sent: v.sent, next: v.next?.role ?? null, stuckActivations: v.stuck.length, classifications: v.classifications }])),
+  silentWait: { status: silentWait.session?.execution_status, stopReason: silentWait.session?.stop_reason, reports: silentWait.reports, nextAfterReport: silentWait.after.map((n) => n?.role ?? null), stuckActivations: silentWait.activations.filter((a) => a.trigger === 'stuck').length, escalations: silentWait.escalations.length, classifications: silentWait.classifications },
   planCorrection: { session: correctionSessionShown, iterations: correctionIterations, heldRows: heldRows.length, todoCalls: todoCalls.length, agentStates, screenshot: 'plan-correction.png' },
   loop: { session: loopSession, activations: loopActivations.length, issues: loopIssues, toolCalls: loopCalls.length, screenshot: 'loop-supervisor.png' },
   rawCountFallback: Object.fromEntries(Object.entries(rawObserved).map(([k, v]) => [k, { status: v.session?.execution_status, activations: v.activations.length }])),

@@ -14537,7 +14537,7 @@ whose corrective joins the report?** *(REQ-ORCH-096, "an empty reply with no cal
 stuck-mode clause; REQ-ORCH-055..059, the parent resumed with its children's reports;
 [`PD-ORCH-009`](../product/directives.md#pd-orch-009) revision 4, whose case names three follow-ups and leaves this one out.
 Raised 2026-10-14 by fin44 (`fin44-supervision-and-match`) from
-[`../defects/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md`](../defects/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md),
+[`../defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md`](../defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md),
 as [OQ-284](#oq-284)'s ruling asked; the plan's range OQ-296 to OQ-310, its first free number on this branch — renumbered at
 landing if a sibling took it first.)*
 
@@ -14557,6 +14557,22 @@ and waits has nothing to say until a report comes — REQ-ORCH-055's wait), whet
 revision 4's three follow-ups do, or whether both stand. **The costs:** withdrawing it makes a waiting root's silence free and
 leaves a root that is truly stuck to REQ-ORCH-102's counter on a later turn; keeping it puts "Pause and reassess" after the
 report the root was waiting for and spends a classification.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a parent's silent wait on its children
+is no stuck report. A parent's turn that ends with neither text nor a call while a child of its is pending, or has ended with a
+report the parent has not seen, is REQ-ORCH-055's wait. When the run takes the parent into that wait it withdraws the stuck
+trigger the turn armed, so the children's reports are the only message the run adds for that turn. This holds for an execution
+iteration's root and for a delegated child waiting on children of its own. Only a pending stuck trigger is withdrawn — a
+repetition, cycle or raw-count trigger is kept, so the case stays disjoint from `PD-ORCH-016` — and the consecutive-activation
+count is neither moved nor reset, because a report is no user instruction under REQ-ORCH-105. Recorded as
+[`PD-ORCH-009`](../product/directives.md#pd-orch-009) revision 5, case (d), which replaces revision 4's two sentences naming this
+turn as governed by REQ-ORCH-104 as written (quoted there beside their replacements), and cites REQ-ORCH-055..059, REQ-ORCH-096,
+REQ-ORCH-102, REQ-ORCH-105 and REQ-ORCH-106 without change. *The as-built reading — the report followed by the stuck corrective
+in one request, one stuck activation per silent wait, and a root that waited silently across three batches escalated
+(`agent_session_aborted`) — is kept above as the falsified one.* Written and built 2026-10-14 by fin45
+(`fin45-supervision-and-quit`): `IterationChildren.runWithChildren` calls `withdrawStuck()` as the parent is taken into the wait;
+[`../defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md`](../defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md)
+moved to `fixed/`.
 
 <a id="oq-297"></a>
 

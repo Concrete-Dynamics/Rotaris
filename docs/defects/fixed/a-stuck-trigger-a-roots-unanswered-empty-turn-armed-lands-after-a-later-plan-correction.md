@@ -41,6 +41,6 @@ is kept. **Shown in the built app** by `pnpm part-h-proof`'s `silent-correction`
 `circuit_breaker.enabled: true`): the correction sent once and followed by the root's own step, 0 stuck activations, 0 loop
 classifications, one `succeeded` iteration. The route this note left unmeasured — a root resumed after a child's report — was
 measured: the corrective follows the report; it is outside the ruling, recorded as
-[`a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn`](../a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md)
+[`a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn`](a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md)
 and raised as [OQ-296](../../architecture/open-questions.md#oq-296). **Not shown:** the live `empty-answer` scenario with the plan
 open, the orchestrator's.

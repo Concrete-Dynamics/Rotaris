@@ -52,6 +52,5 @@ PASSED on "The retrospective found nothing to propose", and the run ended "live-
 Seen again, before this repair reached it: fin46's `fin46-accept1-4`, built on a base older than the repair, met the same cut in
 its own `--only=ask` live run (pack `2026-10-14T18-49-03-495Z`; the analyst's answer failed to parse on
 `proposals[0].proposed_verifier_section`, and the probe stopped inside that error) and recorded it as
-`docs/defects/the-ask-notice-check-reads-a-probe-cut-before-a-parse-failed-warning-names-its-artifact.md`. That note described
-this defect, so its reviewer folded it into this one when the bundle was rebased onto the repair, and removed it.
-<!-- historical-path: docs/defects/the-ask-notice-check-reads-a-probe-cut-before-a-parse-failed-warning-names-its-artifact.md -->
+`docs/defects/the-ask-notice-check-reads-a-probe-cut-before-a-parse-failed-warning-names-its-artifact.md`. <!-- historical-path: docs/defects/the-ask-notice-check-reads-a-probe-cut-before-a-parse-failed-warning-names-its-artifact.md -->
+That note described this defect, so its reviewer folded it into this one when the bundle was rebased onto the repair, and removed it.

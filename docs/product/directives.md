@@ -1617,8 +1617,10 @@ retrospective and opens Settings at Models.
 > presses, nothing queued) and `improvement-notice.test.ts` (a single period after a reason ending in `.`, `!` or `?`, one
 > added after `)`); `pnpm symbols` registers two more extended requirements (69) and `back-pointers.test.ts` reads both notes
 > both ways. **What was not measured.** The refusal in the built app: every proof drives the scripted provider, whose lease
-> names no entry provider, so no proof reaches it; the live run with the entry provider's credential withheld is the
-> orchestrator's. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+> names no entry provider, so no proof reaches it; the live run with the entry provider's credential withheld (`live-run.mjs`'s
+> new `ask-retrospective-unauth`) is the orchestrator's. `pnpm retrospective-proof`, 61 of 61 at a load average of 1.2 to 1.9
+> on four CPUs, shows the other warnings `passFailureDetail` builds unchanged: a crashed collector's reason ending in ")" still
+> gains its one period. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

@@ -32,9 +32,9 @@ export interface ExitDeps {
 
 /**
  * PD-ORCH-005 clause 9: the application's quit, as main can tell it. A quit is the process exiting at once
- * (`exitCleanly`), or every main window's close confirmed by its guard; a quit Electron starts on its own account
- * (SIGTERM, the desktop's logout where Electron emits `before-quit`, `app.quit()`) is turned into the second before any
- * window closes (`before-quit` in `index.ts`); on Windows, where a logout or shutdown emits no `before-quit`, the session's
+ * (`exitCleanly`), or every main window's close confirmed; a quit Electron starts on its own account (SIGTERM, the desktop's
+ * logout where Electron emits `before-quit`, `app.quit()`) is turned into the second before any window closes (`before-quit`
+ * in `index.ts`), asking no close guard since OQ-298 (`quitGuardsOutsideAnyWindow`); on Windows, where a logout or shutdown emits no `before-quit`, the session's
  * end marks the first (`SessionEndShutdown`, below). While it is under way, what a closing surface would send as a person's answer — REQ-TOOLS-063's Deny
  * for an approval dialog, REQ-CHAT-101's cancellation from the question dock — is the quit's, and is not sent: the run
  * host's `shutdown` withdraws the approval or the question instead, and a withdrawal is never recorded as an answer.
@@ -115,19 +115,54 @@ export class QuitState {
   }
 }
 
+/** One main window's part in the application's quit: asked, then confirmed, then closed (`closeThroughGuards`). */
+export interface QuitGuard {
+  ask(): Promise<boolean>;
+  confirm(): void;
+  close(): void;
+}
+
 /**
- * PD-ORCH-005 clause 9: a quit Electron starts on its own account closes the main windows through their guards, all or
- * none. Every guard is asked first; only when every one allows is every close confirmed, and only then is any window
- * closed — so no window's dialog closes while another main window's guard is still undecided, which would leave
- * `QuitState` seeing a window that stays (found by phase 7's second review). A guard that refuses closes nothing, which
- * is what a refused close has always meant. Answers whether the windows are closing.
+ * PD-ORCH-005 clause 9: a quit Electron starts on its own account closes the main windows in an all-or-none order. Every
+ * guard is asked first; only when every one allows is every close confirmed, and only then is any window closed — so no
+ * window's dialog closes while another main window's guard is still undecided, which would leave `QuitState` seeing a window
+ * that stays (found by phase 7's second review). A guard that refuses closes nothing, which is what a refused close has always
+ * meant. Answers whether the windows are closing. Since OQ-298's ruling the quit that reaches this (`before-quit`) hands it
+ * `quitGuardsOutsideAnyWindow`'s guards, which ask no renderer and always allow, so the order is all it still decides there.
  */
-export async function closeThroughGuards(guards: readonly { ask(): Promise<boolean>; confirm(): void; close(): void }[]): Promise<boolean> {
+export async function closeThroughGuards(guards: readonly QuitGuard[]): Promise<boolean> {
   const allowed = await Promise.all(guards.map((g) => g.ask()));
   if (allowed.some((a) => !a)) return false;
   for (const g of guards) g.confirm();
   for (const g of guards) g.close();
   return true;
+}
+
+/**
+ * OQ-298, ruled 2026-10-14 under the owner's delegation (R-072): a quit that starts outside any window — a signal, the
+ * desktop's logout where Electron emits `before-quit`, the driver's or the capture's `app.quit()` — asks no close guard.
+ * REQ-SHELL-119's guard (1) and REQ-CONFIG-287 are a **user-initiated** close's; such a quit is none, so the renderer's
+ * unsaved-settings guard is never asked, the edits stay unsaved, nothing is written, and the workspace configuration keeps its
+ * last saved values. For each open main window this answers a guard whose `ask` allows at once and whose `confirm` and `close`
+ * are the window's own `CloseGuard`'s (so its next close passes) — or, for a window with none registered, `fallback`'s. Fed to
+ * `closeThroughGuards`, the windows still close in PD-ORCH-005 clause 9's all-or-none order, and the run host's shutdown
+ * follows at once (`window-all-closed`). Before the ruling the quit asked each renderer's guard and waited on a person's
+ * Save/Discard/Cancel with no bound while the renderer answered its liveness probe (PD-SHELL-009's last case, revision 1). A
+ * quit a person starts outside a window, which a later change may add (a tray or menu Quit, macOS Dock Quit under IC-3),
+ * reopens the ruling.
+ */
+export function quitGuardsOutsideAnyWindow(
+  open: readonly { readonly wcId: number; readonly confirm: () => void; readonly close: () => void }[],
+  closeGuards: { get(wcId: number): Pick<QuitGuard, 'confirm' | 'close'> | undefined },
+): QuitGuard[] {
+  return open.map((fallback) => {
+    const own = closeGuards.get(fallback.wcId);
+    return {
+      ask: async () => true,
+      confirm: own === undefined ? fallback.confirm : () => own.confirm(),
+      close: own === undefined ? fallback.close : () => own.close(),
+    };
+  });
 }
 
 /**
@@ -141,7 +176,8 @@ export async function closeThroughGuards(guards: readonly { ask(): Promise<boole
  * of any main window the quit is marked as the process's own exit (`QuitState.exiting`: what a closing dialog or dock
  * would send as an answer is the shutdown's to withdraw, PD-ORCH-005 clause 9), the same orderly shutdown
  * `window-all-closed` runs starts at once, and the process exits when it is done. No guard is asked and no box is shown:
- * the session's end cannot be refused, as a quit outside any window asks nothing (PD-SHELL-009). Every main window
+ * the session's end cannot be refused, as a quit outside any window asks nothing (PD-SHELL-009; since OQ-298 not even the
+ * unsaved-settings guard, `quitGuardsOutsideAnyWindow`). Every main window
  * reports the event; the shutdown runs once
  * (`docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`).
  */

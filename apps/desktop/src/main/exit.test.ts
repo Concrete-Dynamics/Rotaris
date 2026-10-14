@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ProcessEvent, ProcessReply } from '@rotaris/contracts';
 import { FakeClock, millis } from '@rotaris/kernel';
-import { CHILD_CLOSE_BOUND_MS, ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
+import { CHILD_CLOSE_BOUND_MS, ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, quitGuardsOutsideAnyWindow, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
+import { guardClose, type GuardedWindow } from './main-windows.js';
 
 /** A window whose destruction reports `closed` at once, later, or never. */
 function win(opts: { parent: boolean; closes?: 'now' | 'never' }, log: string[], name: string): ClosableWindow & { closed: () => void } {
@@ -301,6 +302,58 @@ describe('PD-ORCH-005 clause 9: a quit Electron starts closes the main windows t
     const log: string[] = [];
     expect(await closeThroughGuards([guard('A', log, true), guard('B', log, false, 5)])).toBe(false);
     expect(log).toEqual(['asked A', 'asked B']);
+  });
+});
+
+/*
+ * OQ-298, ruled 2026-10-14 under R-072: a quit that starts outside any window (a signal, a logout where Electron emits
+ * `before-quit`, the driver's or the capture's quit) asks no close guard — REQ-CONFIG-287 and REQ-SHELL-119 guard (1) as written,
+ * "user-initiated" only. Unsaved settings stay unsaved, and the main windows close in PD-ORCH-005 clause 9's all-or-none order.
+ */
+describe('OQ-298: a quit from outside any window asks no unsaved-settings guard (exit.ts)', () => {
+  /** A main window whose close is held by its own `guardClose`, as `createElectronMainWindowAdapter` builds it. */
+  function guardedWindow(name: string, log: string[]): GuardedWindow & { readonly closeGuard: ReturnType<typeof guardClose> } {
+    let listener: ((e: { preventDefault(): void }) => void) | null = null;
+    let destroyed = false;
+    const win: GuardedWindow = {
+      on: (_e, l) => { listener = l; },
+      isDestroyed: () => destroyed,
+      close: () => { let prevented = false; listener?.({ preventDefault: () => { prevented = true; } }); if (!prevented) { destroyed = true; log.push(`closed ${name}`); } else log.push(`held ${name}`); },
+    };
+    // The renderer's unsaved-settings guard: asked, it never answers — a person's Save/Discard/Cancel that no one gives.
+    const closeGuard = guardClose(win, () => { log.push(`renderer asked ${name}`); return new Promise<unknown>(() => undefined); }, () => log.push(`confirmed ${name}`));
+    return Object.assign(win, { closeGuard });
+  }
+  const settle = (ms = 20) => new Promise((r) => setTimeout(r, ms));
+
+  it('as built before the ruling: the same quit wired through the window\'s own CloseGuard is held on the renderer\'s guard', async () => {
+    const log: string[] = [];
+    const a = guardedWindow('A', log);
+    let done = false;
+    void closeThroughGuards([a.closeGuard]).then(() => { done = true; });
+    await settle();
+    expect(done).toBe(false);
+    expect(log).toEqual(['renderer asked A']);
+  });
+
+  it('the builder never asks the renderer, every confirm precedes any close, and every window closes', async () => {
+    const log: string[] = [];
+    const a = guardedWindow('A', log);
+    const b = guardedWindow('B', log);
+    const closeGuards = new Map([[1, a.closeGuard], [2, b.closeGuard]]);
+    const fallback = (wcId: number) => ({ wcId, confirm: () => log.push(`fallback confirm ${wcId}`), close: () => log.push(`fallback close ${wcId}`) });
+    const guards = quitGuardsOutsideAnyWindow([fallback(1), fallback(2)], closeGuards);
+    expect(await closeThroughGuards(guards)).toBe(true);
+    expect(log).toEqual(['confirmed A', 'confirmed B', 'closed A', 'closed B']);
+    expect(log.some((l) => l.startsWith('renderer asked'))).toBe(false);
+  });
+
+  it('a window with no CloseGuard registered takes the fallback confirm and close, in the same order', async () => {
+    const log: string[] = [];
+    const a = guardedWindow('A', log);
+    const guards = quitGuardsOutsideAnyWindow([{ wcId: 1, confirm: () => log.push('fallback confirm 1'), close: () => log.push('fallback close 1') }, { wcId: 7, confirm: () => log.push('fallback confirm 7'), close: () => log.push('fallback close 7') }], new Map([[1, a.closeGuard]]));
+    expect(await closeThroughGuards(guards)).toBe(true);
+    expect(log).toEqual(['confirmed A', 'fallback confirm 7', 'closed A', 'fallback close 7']);
   });
 });
 

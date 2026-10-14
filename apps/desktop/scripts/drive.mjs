@@ -23,7 +23,7 @@
  *   pnpm app:drive useWindow persona:coding-agent       (every later command acts on that window; no argument: the active main window)
  *   pnpm app:drive probe "#approval-title" --window=approval    (--window= on any command: that window, for that command alone)
  *   pnpm app:drive log [--tail=40]
- *   pnpm app:drive stop            (the application's quit: close guards, then the run host's shutdown)
+ *   pnpm app:drive stop            (the application's quit: the windows closed, no guard asked, then the run host's shutdown)
  *   pnpm app:drive stop --crash    (the immediate exit: a live run is left as a crash leaves it)
  *
  * A window is named by its index in `windows` (0 is the most recently focused main window), by a suffix of a main
@@ -118,14 +118,15 @@ switch (command) {
     break;
   }
   /*
-   * `stop` sends the application's quit — what a person's quit is: every main window closed through its close guard,
-   * then the run host and each workspace service asked to `shutdown`, so a live run comes to rest (PD-ORCH-005 clause
-   * 3) — and waits for the process to end. `stop --crash` sends the immediate exit instead, which asks the run host
+   * `stop` sends the application's quit — a quit from outside any window: every main window closed in PD-ORCH-005 clause
+   * 9's order with no close guard asked (OQ-298: unsaved settings stay unsaved), then the run host and each workspace
+   * service asked to `shutdown`, so a live run comes to rest (PD-ORCH-005 clause 3) — and waits for the process to end. `stop --crash` sends the immediate exit instead, which asks the run host
    * nothing and leaves a live run as a crash leaves it. Until 2026-09-29 `stop` sent the immediate exit and said
    * nothing of it (`docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`).
    *
-   * A quit a close guard keeps (a window with unsaved settings asks its person) leaves the application running and
-   * driven; `stop` says so and leaves the endpoint, so the dialog can be answered, or `stop --crash` sent.
+   * Until OQ-298's ruling (2026-10-14) a close guard could keep the quit (a window with unsaved settings asked its
+   * person); none is asked now. A launch still running at the bound — a shutdown that has not finished — is said so, and
+   * the endpoint is left, so `stop --crash` can be sent.
    */
   case 'stop': {
     if (!existsSync(endpointFile)) { print('nothing to stop'); break; }
@@ -140,7 +141,7 @@ switch (command) {
       const bound = Number(flag('timeout', 60_000));
       const started = Date.now();
       while (alive() && Date.now() - started < bound) await new Promise((r) => setTimeout(r, 200));
-      if (alive()) { print(`${crash ? 'the immediate exit' : "the application's quit"} was sent and ${pid} is still running after ${bound} ms — a close guard may be asking; answer it, or \`pnpm app:drive stop --crash\``); break; }
+      if (alive()) { print(`${crash ? 'the immediate exit' : "the application's quit"} was sent and ${pid} is still running after ${bound} ms — its shutdown has not finished; wait, or \`pnpm app:drive stop --crash\``); break; }
       print(`${sent?.how === 'immediate' ? 'exited at once (the immediate exit)' : "quit (the application's quit)"}; ${pid ? `${pid} has ended` : 'no pid was recorded'}`);
     } else {
       if (pid) { try { process.kill(pid); print(`killed ${pid}`); } catch { print(`no process ${pid}`); } }

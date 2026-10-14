@@ -281,8 +281,14 @@ is turned into the same path. **On Windows Electron emits no `before-quit` at a 
 guard asked, and the process exits when it is done (`SessionEndShutdown`, `main/exit.ts`;
 `docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`; not yet observed on a Windows host). For the quits
 that do emit it: `before-quit` is held while any main window is open, and the main windows are closed
-through their guards, all or none (`closeThroughGuards`: every guard asked, every close confirmed, then every window
-closed). **A renderer that is gone cannot answer, and a guard that cannot answer allows** (since 2026-10-14, fin43): the
+all or none (`closeThroughGuards`: every guard asked, every close confirmed, then every window closed). **Since 2026-10-14
+(fin45; OQ-298, `PD-SHELL-009` revision 2) that quit asks no close guard**: `quitGuardsOutsideAnyWindow` (`main/exit.ts`) hands
+`closeThroughGuards` one guard per open main window whose `ask` allows at once and whose `confirm` and `close` are the window's
+own `CloseGuard`'s, so the renderer's unsaved-settings guard is never asked — a quit from outside any window is no
+user-initiated close (REQ-SHELL-119 guard (1), REQ-CONFIG-287) — unsaved settings stay unsaved and nothing is written, and main
+logs "quit: started outside any window; no close guard is asked, and unsaved settings, if any, stay unsaved (OQ-298)". Until
+then it asked each renderer's guard and waited on a person's Save/Discard/Cancel without bound. What follows about a renderer
+that cannot answer now concerns a person's close of a window and REQ-SHELL-021 gate (1) alone. **A renderer that is gone cannot answer, and a guard that cannot answer allows** (since 2026-10-14, fin43): the
 renderer's guard is asked by `askRendererGuard` (`main/main-windows.ts`), which rejects at once when the window's
 `webContents` has crashed or is destroyed and the moment `render-process-gone` or `destroyed` is emitted while it is out,
 because Electron's `executeJavaScript` on a disposed frame never settles; until then a crashed renderer held a person's close
@@ -297,8 +303,10 @@ renderer held a person's close and the quit, a SIGTERM's included, for good
 (`docs/defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`, shown by `exit-trace-proof`'s `hang`
 and `hang-close` launches: the renderer stopped with SIGSTOP, the quit and the host's close each end the process, exit 0, about
 5.6 s after they were asked). The allowed `win.close()` completes on a hung renderer, so the close stays a close, not a
-`destroy()`. A renderer that answers its probes is waited for with no bound: its guard may be a person's Save/Discard/Cancel —
-which a quit from outside any window also waits on ([OQ-298](../open-questions.md#oq-298), open). Nothing a quit closes answers for a person. `QuitState` (`main/exit.ts`) knows the quit from
+`destroy()`. A renderer that answers its probes is waited for with no bound: its guard may be a person's Save/Discard/Cancel
+(a quit from outside any window no longer asks it: [OQ-298](../open-questions.md#oq-298), ruled; `exit-trace-proof`'s `hang`
+quit now exits in well under a second, and its `unsaved-quit` and `unsaved-sigterm` launches leave the configuration file
+byte-identical). Nothing a quit closes answers for a person. `QuitState` (`main/exit.ts`) knows the quit from
 `exitCleanly` and from each main window's confirmed close, which `guardClose` reports before closing. While it is under
 way an approval dialog that closes sends no Deny, and the question dock's cancellation is not forwarded. The run host's
 `shutdown` withdraws both instead (PD-ORCH-005 clause 9, OQ-96). **Since 2026-10-06 a person's close of a main window asks
@@ -308,7 +316,8 @@ active-run confirmation — a message box over the closing window, "Quit while a
 the default and Escape's answer (`activeRunCloseBox`, `confirmActiveRunClose`, `main/close-confirmation.ts`, reached through
 the adapter's `confirmRunsAtClose`). Only Yes confirms the close; Cancel leaves the window, its state and the run as they
 were. A close made while the guards are being asked is held and asks nothing more. The application's quit
-(`closeThroughGuards`) asks the renderer's guard alone: it is not a person's close of a window. **Since 2026-10-07 the close
+(`closeThroughGuards`) asks no guard at all since OQ-298 (it asked the renderer's guard alone until 2026-10-14): it is not a
+person's close of a window. **Since 2026-10-07 the close
 of one of several main windows ends its own project's runs, asking first** (PD-SHELL-009, OQ-206 ruled under R-072; fin28):
 main → run host `runs.active {workspaceId, scope: 'stoppable'}` counts that workspace's runs the stop would take (the
 session row's `workspace_root`, `Sessions.stoppableRunCount`: a live run whose end is not yet written — the predicate

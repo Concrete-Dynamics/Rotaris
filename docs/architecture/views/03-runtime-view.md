@@ -1746,10 +1746,12 @@ its next turn (`Run.rebuildEntryFromMemory`) — the turn in flight finishes on 
 
 **The application's end, and the locks the run host holds (ADR-0014 "Main is gone only after the run host",
 2026-09-28).** A run's teardown releases its lock at the end of cleanup; the application's end reaches the same point
-from outside. A quit first closes every main window through its close guard (`closeThroughGuards`, the process view's
-quit paragraph), and a window's renderer that cannot answer its guard — gone, failing main's 5 s liveness probe, or reported
-`unresponsive` while the question is out — allows (`askRendererGuard`, `PD-SHELL-010`, since 2026-10-14), so a hung renderer
-no longer keeps the quit from reaching `window-all-closed`; one that answers is waited for without bound (OQ-298). The orderly
+from outside. A quit first closes every main window in PD-ORCH-005 clause 9's all-or-none order (`closeThroughGuards`, the
+process view's quit paragraph) asking no close guard since OQ-298 (`quitGuardsOutsideAnyWindow`, `PD-SHELL-009` revision 2,
+fin45): neither a hung renderer nor an answering one with unsaved settings keeps the quit from reaching `window-all-closed`,
+and unsaved settings stay unsaved. *Until 2026-10-14 (fin45) the quit asked each renderer's guard: one that could not answer —
+gone, failing main's 5 s liveness probe, or reported `unresponsive` — allowed (`askRendererGuard`, `PD-SHELL-010`), and one that
+answered was waited for without bound.* The orderly
 quit (`window-all-closed`, `main/index.ts`) asks the run host to `shutdown` — every run asked
 to stop before any is waited on, then `Sessions.closeAll` releases every lock a finished session still holds, and a
 code-intelligence setup under way ended and waited for (`McpHost.endSetup`, 2 s grace, every stop's under `PD-MCP-003` (OQ-172); the process view's

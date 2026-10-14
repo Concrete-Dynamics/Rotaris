@@ -59,7 +59,7 @@ import { anotherMainWindowStays, confirmActiveRunClose } from './close-confirmat
 import { emptyArtifactNotice, passFailureDetail, passFailureTitle } from './improvement-notice.js';
 import { answerUnderHeldRefusal, cutRestoreNotice, storeRefusalNotice, storeRefusalOf, type StoreRefusal } from './store-notice.js'; // REQ-SESSION-202, OQ-266, OQ-281
 import { establishFlow as establishStoreFlow, restoreFlow as restoreStoreFlow, type StoreFlowDeps } from './store-resolution.js'; // OQ-281
-import { ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
+import { ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, quitGuardsOutsideAnyWindow, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
 import { withoutRuntimeRequests } from './runtime-requests.js'; // REQ-STARTUP-160
@@ -1909,11 +1909,13 @@ async function main(): Promise<void> {
    * `before-quit` (on Windows it emits none at a logout or shutdown; a main window's `session-end` starts the orderly shutdown
    * there, `SessionEndShutdown`: `docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`), `app.quit()` —
    * closes every window at once, an approval dialog before its main window's close guard has answered, and the dialog's
-   * close would be sent as the person's Deny. Such a quit is turned into the main windows' guarded close, all or none
-   * (`closeThroughGuards`): every guard is asked, every close is confirmed, and only then does any window close, so a
-   * dialog only ever closes once every main window's close is confirmed. The last close reaches `window-all-closed`,
-   * which shuts the children down and quits; that quit finds no main window open and goes ahead. A guard that refuses
-   * keeps every window, its dialogs and the application, as a refused close always did.
+   * close would be sent as the person's Deny. Such a quit is turned into the main windows' close, all or none
+   * (`closeThroughGuards`): every close is confirmed, and only then does any window close, so a dialog only ever closes once
+   * every main window's close is confirmed. The last close reaches `window-all-closed`, which shuts the children down and
+   * quits; that quit finds no main window open and goes ahead. Since OQ-298's ruling (2026-10-14, R-072) no close guard is
+   * asked: such a quit is no user-initiated close (REQ-SHELL-119 guard (1), REQ-CONFIG-287), so unsaved settings stay unsaved
+   * and nothing is written (`quitGuardsOutsideAnyWindow`, `exit.ts`). Until then each renderer's unsaved-settings guard was
+   * asked and its Save/Discard/Cancel waited for with no bound.
    */
   let guardsAsked = false;
   app.on('before-quit', (event) => {
@@ -1923,7 +1925,8 @@ async function main(): Promise<void> {
     if (guardsAsked) return;
     guardsAsked = true;
     log(`quit: closing ${open.length} main window(s) through their close guards first (PD-ORCH-005 clause 9)`);
-    const guards = open.map((m) => closeGuards.get(m.wcId) ?? { ask: async () => true, confirm: () => quit.closeConfirmed(m.wcId), close: () => m.win.close() });
+    log('quit: started outside any window; no close guard is asked, and unsaved settings, if any, stay unsaved (OQ-298)');
+    const guards = quitGuardsOutsideAnyWindow(open.map((m) => ({ wcId: m.wcId, confirm: () => quit.closeConfirmed(m.wcId), close: () => m.win.close() })), closeGuards);
     void closeThroughGuards(guards).then((closing) => {
       guardsAsked = false;
       if (!closing) log('quit: a close guard refused; the application stays');

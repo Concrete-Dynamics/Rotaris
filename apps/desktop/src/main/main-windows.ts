@@ -844,8 +844,9 @@ export interface CloseGuard {
  * A person's close asks REQ-SHELL-119's guards in their order: the renderer's (unsaved settings, guard 1), then, once
  * that allows, `confirmRuns` (the active-run confirmation, guard 3; REQ-STARTUP-046, `close-confirmation.ts`), which
  * declines when it cannot answer. A declined close changes nothing. A close attempted while the guards are still being
- * asked is held and adds no second question. The application's quit asks `ask` alone (`closeThroughGuards`): it is not
- * a person's close of the window (PD-SHELL-009). Under PD-SHELL-009 a `confirmRuns` that allows the close of one of several
+ * asked is held and adds no second question. The application's quit asks neither: it is not a person's close of the window
+ * (PD-SHELL-009), and since OQ-298's ruling (2026-10-14, R-072) it takes only this guard's `confirm` and `close`
+ * (`quitGuardsOutsideAnyWindow`, `exit.ts`), so the renderer's unsaved-settings guard is never asked and the edits stay unsaved. Under PD-SHELL-009 a `confirmRuns` that allows the close of one of several
  * windows has already stopped the window's own runs, so the stop precedes `confirmed` and the presenter's revoke.
  */
 export function guardClose(win: GuardedWindow, ask: () => Promise<unknown>, confirmed: () => void, confirmRuns?: () => Promise<boolean>): CloseGuard {

@@ -73,9 +73,10 @@ export interface DriverDeps {
   /** Verification only: arm REQ-SHELL-011's deferred offer for the selected main window. */
   deferProjectOffer: (win: BrowserWindow, delayMs: number) => void;
   /**
-   * The application's quit — `app.quit()`, the path a person's quit takes: every main window closed through its close
-   * guard, then `window-all-closed` asks the run host and each workspace service to `shutdown`, so a live run comes to
-   * rest as PD-ORCH-005 clause 3 says a quit leaves it. What `quit` sends unless it is asked for the immediate exit.
+   * The application's quit — `app.quit()`, a quit that starts outside any window: every main window closed in PD-ORCH-005
+   * clause 9's all-or-none order with no close guard asked (OQ-298: no person's close, so unsaved settings stay unsaved), then
+   * `window-all-closed` asks the run host and each workspace service to `shutdown`, so a live run comes to rest as PD-ORCH-005
+   * clause 3 says a quit leaves it. What `quit` sends unless it is asked for the immediate exit.
    */
   quit: () => void;
   /**
@@ -537,13 +538,15 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
          * (`docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`). This op used to be the immediate
          * exit alone, which skips `window-all-closed`, where main asks the run host to `shutdown`: a driven quit was a
          * crash to a live run, and the session stayed `running` with no stop reason (measured 2026-09-29 on the build
-         * before this repair). Now it is `app.quit()`, which a person's quit is.
+         * before this repair). Now it is `app.quit()`, the application's orderly quit — a quit from outside any window, which
+         * since OQ-298's ruling asks no close guard (`quitGuardsOutsideAnyWindow`, `exit.ts`).
          *
          * The immediate exit: the reply goes out first, then the seam takes itself down, then the process ends. In that
          * order: a client that is told "quitting" and then finds the endpoint file still there has been told a
          * falsehood. The application's quit leaves the seam up until `will-quit` (main closes it there): the shutdown
-         * takes as long as it takes, and a close guard may keep the application — a window with unsaved settings asks
-         * its person — which a driver must still be able to see and answer. The reply says which one was sent.
+         * takes as long as it takes. Until OQ-298's ruling a close guard could keep the application here — a window with
+         * unsaved settings asked its person — and a driver had to see and answer it; now no guard is asked, unsaved settings
+         * stay unsaved, and the seam stays up only for the shutdown. The reply says which one was sent.
          */
         if (request.immediate === true) {
           deps.timers.after(millis(50), () => { cleanup(); deps.exit(); });

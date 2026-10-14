@@ -6782,6 +6782,11 @@ narrow widths and never hides this one, and a record that predates the backend's
 
 ### PD-SHELL-009 — closing a main window ends its own project's runs, and asks first
 
+*Revision 2 (2026-10-14, [R-072](requests.md#r-072), ruling [OQ-298](../architecture/open-questions.md#oq-298)) — **a quit
+that starts outside any window asks no close guard**: the last case below is revised, its revision-1 text quoted beside it.
+No requirement gains a back-pointer: the case now follows REQ-CONFIG-287 and REQ-SHELL-119 guard (1) as written. Everything
+else stands as revision 1 wrote it.*
+
 Closing a main window SHALL end the active runs of the project open in it, and SHALL ask REQ-STARTUP-046's confirmation
 first, after REQ-SHELL-119's earlier guards. Which close asks what:
 
@@ -6813,12 +6818,22 @@ first, after REQ-SHELL-119's earlier guards. Which close asks what:
   workspace's count being zero once the gate has passed; a run started in between is asked about at that close, and a
   Cancel there discards the replacement (REQ-STARTUP-047).
 - **A quit that starts outside any window** — a signal, the end of the desktop session where Electron emits `before-quit`,
-  the driver's or the capture's quit — asks no active-run confirmation, as built; it asks only the renderer's
-  unsaved-settings guard, and its shutdown leaves the runs as PD-ORCH-005 clause 3 says. *Since 2026-10-14
-  ([`PD-SHELL-010`](#pd-shell-010), [OQ-297](../architecture/open-questions.md#oq-297)) it asks that guard only while the
-  renderer can answer: a renderer that is gone, fails main's liveness probe or is reported `unresponsive` cannot, its guard
-  allows, and the quit goes on asking nothing more. A renderer that answers its probe is still waited for without bound
-  ([OQ-298](../architecture/open-questions.md#oq-298), open).*
+  the driver's or the capture's quit — asks no close guard at all (**revision 2**, [OQ-298](../architecture/open-questions.md#oq-298)):
+  no active-run confirmation, as built, and no unsaved-settings guard, because such a quit is no **user-initiated** close
+  (REQ-SHELL-119 guard (1), REQ-CONFIG-287: "a programmatic close does not prompt"). Unsaved Settings edits stay unsaved and
+  nothing is written, so the workspace configuration keeps its last saved values. The main windows close in PD-ORCH-005
+  clause 9's all-or-none order, and the run host's shutdown follows at once, leaving the runs as PD-ORCH-005 clause 3 says. A
+  quit a person starts outside a window that a later change adds — a tray or menu Quit, or macOS Dock Quit once IC-3 allows
+  a macOS release — reopens this case, together with the active-run confirmation noted under "What it costs".
+
+  > Revision 1 said, and no longer governs: "asks no active-run confirmation, as built; it asks only the renderer's
+  > unsaved-settings guard, and its shutdown leaves the runs as PD-ORCH-005 clause 3 says. *Since 2026-10-14
+  > ([`PD-SHELL-010`](#pd-shell-010), [OQ-297](../architecture/open-questions.md#oq-297)) it asks that guard only while the
+  > renderer can answer: a renderer that is gone, fails main's liveness probe or is reported `unresponsive` cannot, its guard
+  > allows, and the quit goes on asking nothing more. A renderer that answers its probe is still waited for without bound
+  > ([OQ-298](../architecture/open-questions.md#oq-298), open).*" As built under it, a SIGTERM, the driver's quit or the
+  > capture's quit with Settings left unsaved raised REQ-SHELL-124's Save/Discard/Cancel and held the quit — the run host never
+  > asked to `shutdown` — until a person answered or the process was killed.
 
 **As built.** `confirmActiveRunClose`, `activeRunCloseBox` and `windowCloseBox` (`apps/desktop/src/main/close-confirmation.ts`),
 wired in `confirmRunsAtClose` (`apps/desktop/src/main/index.ts`), which awaits the run host's `runs.stopWorkspace` before the
@@ -6850,7 +6865,8 @@ holds. Its case, gate (3)'s count on the replacement route, is disjoint from `PD
 gestures on which no gate is evaluated.*
 
 *Raised by the consortium under the owner's delegation, 2026-10-07; logged as [R-072](requests.md#r-072), the ruling of
-[OQ-206](../architecture/open-questions.md) (advocate A, the user's lens, followed).*
+[OQ-206](../architecture/open-questions.md) (advocate A, the user's lens, followed). Revision 2 ruled by the consortium under
+the same delegation, 2026-10-14, the ruling of [OQ-298](../architecture/open-questions.md#oq-298).*
 
 > **First execution, 2026-10-07, built under [R-072](requests.md#r-072):** the directive held as written, and one claim the
 > record carried was false. The run host's per-workspace predicate ADR-0013 names as its registry's job was not built: every
@@ -6902,6 +6918,31 @@ gestures on which no gate is evaluated.*
 > Windows run that shows it is owed. **Still not measured:** the unshown-approval report in the built app (no proof queues a
 > second approval behind an open dialog); a Windows host.
 
+> **First execution of revision 2, 2026-10-14 (fin45, `fin45-supervision-and-quit`):** built as ruled. `quitGuardsOutsideAnyWindow`
+> (`apps/desktop/src/main/exit.ts`) answers, for each open main window, a guard whose `ask` allows at once and whose `confirm` and
+> `close` are the window's own `CloseGuard`'s (or the fallback's); `before-quit` in `apps/desktop/src/main/index.ts` feeds it to
+> `closeThroughGuards`, keeping clause 9's ask-all, confirm-all, close-all order and its line, and adds one: "quit: started outside
+> any window; no close guard is asked, and unsaved settings, if any, stay unsaved (OQ-298)". A window's own close (`guardClose`) and
+> REQ-SHELL-021 gate (1) (`closeGuard`) are unchanged. **What was measured.** `exit.test.ts`, "OQ-298": over two windows whose
+> renderer guard never settles, the builder asks no renderer, `closeThroughGuards` resolves true and both confirms precede both
+> closes (a window with no `CloseGuard` takes the fallback in the same order); the same quit wired through the window's own
+> `CloseGuard` stays held, the as-built shape. `pnpm exit-trace-proof` (37 of 37, load 1.9 to 2.3 on 4 CPUs): `hang` — the
+> renderer stopped with SIGSTOP, the driver's quit exited 0 in 625 ms with the OQ-298 line and no PD-SHELL-010 `warn` line (it was
+> 5.6 s under PD-SHELL-010's probe); `unsaved-quit` and `unsaved-sigterm` — the renderer's guard replaced by one that never settles
+> (a dirty Settings form's guard until a person answers), the driver's quit and SIGTERM to main each exited 0 through
+> `quit: exiting with status 0` in 133 ms and 70 ms, no dialog, the workspace configuration file byte-identical. On the build
+> before the change the same proof read 28 of 37: `hang` released only by the 5 s probe (5,621 ms, with the `warn` line), and both
+> `unsaved` launches held with no exit in 20 s until the immediate exit ended them. `hang-close` (a person's close, still asking
+> the renderer) stays PD-SHELL-010's measure, 5,567 ms. `pnpm workspace-proof` (63 passed, 2 skipped): the `veto` and `add-window`
+> launches, whose renderer guard refuses every close, now end at the driver's quit through the orderly path with the OQ-298 line.
+> **Found beside it.** A second quit during the orderly shutdown exits at once, as REQ-MONITOR-283 requires: with the run host
+> stopped (SIGSTOP) after a first quit, a second — SIGTERM or the driver's quit — exited 0 in 53 ms and 110 ms (a scratch check,
+> not a proof). The update's closes (`mainWindows.dispose()`, REQ-STARTUP-119/121) ask no unsaved-settings guard either; whether
+> `Restart now`, a person's action, is a user-initiated close for guard (1) is raised as
+> [OQ-311](../architecture/open-questions.md#oq-311). **Not measured:** a real dirty Settings form (the guard was replaced, which
+> the ruling's implementation allows), a desktop logout, a Windows or macOS host. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-shell-010"></a>
@@ -6923,7 +6964,10 @@ was. Nothing else changes:
 
 - a **person's close** of the window still meets guard (3)'s native active-run box, as `PD-SHELL-009` narrows REQ-SHELL-119 (the
   box is main's, not the renderer's, and is asked as before);
-- a **quit that starts outside any window** (`PD-SHELL-009`'s last case) asks nothing more;
+- a **quit that starts outside any window** (`PD-SHELL-009`'s last case) asks nothing more — *amended 2026-10-14 (OQ-298,
+  `PD-SHELL-009` revision 2): such a quit asks no close guard at all, so this directive does not reach it; it reaches a person's
+  close of a window and REQ-SHELL-021 gate (1) alone.* The bullet first read, and no longer governs: "a **quit that starts
+  outside any window** (`PD-SHELL-009`'s last case) asks nothing more;";
 - a renderer that **answers the probe** is waited for **with no bound**, because its guard is a person's Save/Discard/Cancel,
   which no time may answer for;
 - REQ-SHELL-021 gate (1) asks the same question on the same terms: a renderer that cannot answer passes gate (1), and gates (2)
@@ -6934,8 +6978,10 @@ it settles, and a late answer is ignored.
 
 **As built.** `askRendererGuard` and `RENDERER_LIVENESS_BOUND_MS` (`apps/desktop/src/main/main-windows.ts`), over the main-window
 timers port; asked by the window's own close guard (`guardClose`, wired in `createElectronMainWindowAdapter`) and by main's
-`closeGuard` for REQ-SHELL-021's gate 1 (`apps/desktop/src/main/index.ts`). The application's quit drives the same guard through
-`closeThroughGuards` (`apps/desktop/src/main/exit.ts`), unchanged.
+`closeGuard` for REQ-SHELL-021's gate 1 (`apps/desktop/src/main/index.ts`). *Amended 2026-10-14 (OQ-298):* the application's quit
+no longer asks it — `closeThroughGuards` (`apps/desktop/src/main/exit.ts`) is fed `quitGuardsOutsideAnyWindow`'s guards, which take
+only each window's `confirm` and `close`. First written, and no longer true: "The application's quit drives the same guard through
+`closeThroughGuards` (`apps/desktop/src/main/exit.ts`), unchanged."
 
 **Why, and what it costs.** OQ-297 (the consortium's HR1), ruled 2026-10-14 under the owner's delegation (R-072). Before it, a
 renderer that was alive but hung held a person's close of its window and the application's quit — a SIGTERM's included — with no
@@ -6946,7 +6992,9 @@ The gone case was built by fin43 on 2026-10-14 without a directive
 this directive is its record home. What it costs: a renderer busy for more than 5 s on its main thread while its window is being
 closed — a long synchronous task, not a person deciding — loses its guard, so unsaved settings in it are not offered for saving;
 and an answering renderer with unsaved settings still holds a quit from outside any window on a person's answer
-([OQ-298](../architecture/open-questions.md#oq-298), raised apart, not decided here). This directive's cases are disjoint from
+([OQ-298](../architecture/open-questions.md#oq-298), raised apart, not decided here). *Amended 2026-10-14: OQ-298 is ruled
+(`PD-SHELL-009` revision 2) — such a quit asks no guard, so an answering renderer no longer holds it; its unsaved settings stay
+unsaved and are not written.* This directive's cases are disjoint from
 `PD-SHELL-009`'s (guard (3) and gate (3)'s count) and from `PD-SHELL-001`'s (the add-a-window gestures, on which no gate is
 evaluated): it narrows only guard (1) and gate (1), when the renderer cannot answer.
 

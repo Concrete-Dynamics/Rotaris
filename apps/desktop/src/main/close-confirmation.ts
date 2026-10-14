@@ -15,7 +15,9 @@
  * its Yes stops those runs as the stop control does before the window closes (PD-ORCH-005 clauses 3, 9, 10 and 21: the
  * agents rest `paused` by `stop` and Continue resumes them). A window with no active run of its own closes without asking.
  * A quit that starts outside any window (`before-quit`: a signal, the end of the desktop session where Electron emits it,
- * the driver's or the capture's `app.quit()`) is not a person's close of a window and asks no active-run confirmation. On
+ * the driver's or the capture's `app.quit()`) is not a person's close of a window and asks no active-run confirmation — and,
+ * since OQ-298's ruling (2026-10-14, R-072), no unsaved-settings guard either (REQ-SHELL-119 guard (1) and REQ-CONFIG-287 are a
+ * user-initiated close's): unsaved settings stay unsaved (`quitGuardsOutsideAnyWindow`, `exit.ts`). On
  * Windows, Electron emits no `before-quit` at a logout or shutdown at all; a main window's `session-end` starts the orderly
  * shutdown there instead, asking nothing (`SessionEndShutdown`, `exit.ts`;
  * `docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`).

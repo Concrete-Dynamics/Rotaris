@@ -52,8 +52,9 @@ export interface CaptureHost {
   /** The immediate exit (`exitCleanly`): the run host is asked nothing, so a live run is left as a crash leaves it. */
   readonly exit: (code: number) => void;
   /**
-   * The application's quit (`app.quit()`): the main windows closed through their guards, then the run host's `shutdown`,
-   * so a live run comes to rest as a quit leaves it (PD-ORCH-005 clause 3). How a capture whose wait timed out ends.
+   * The application's quit (`app.quit()`): the main windows closed in PD-ORCH-005 clause 9's order with no close guard asked
+   * (OQ-298: a quit from outside any window leaves unsaved settings unsaved), then the run host's `shutdown`, so a live run
+   * comes to rest as a quit leaves it (PD-ORCH-005 clause 3). How a capture whose wait timed out ends.
    */
   readonly quit: () => void;
 }

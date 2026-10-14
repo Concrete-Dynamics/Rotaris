@@ -14622,7 +14622,7 @@ signal, a logout where Electron emits `before-quit`) still waits without bound o
 is clean and complete"; [`PD-SHELL-009`](../product/directives.md#pd-shell-009)'s last case, "it asks only the renderer's
 unsaved-settings guard"; [`PD-SHELL-010`](../product/directives.md#pd-shell-010); PD-ORCH-005 clause 9. Raised 2026-10-14 by fin44
 (`fin44-hang-and-seams`) as [OQ-297](#oq-297)'s ruling asked: the residual it does not decide. The plan's range OQ-296 to OQ-310,
-the next free number on this branch — renumbered at landing if a sibling took it first. Open.)*
+the next free number on this branch — renumbered at landing if a sibling took it first. Ruled 2026-10-14 under R-072, below.)*
 
 **What is open.** A quit that starts outside any window — SIGTERM, the desktop's logout where Electron emits `before-quit`, the
 driver's or the capture's quit — is turned into every main window's guarded close (`closeThroughGuards`), and asks the renderer's
@@ -14643,6 +14643,23 @@ sent themselves; a bound answers for a person who may be at the screen; waiting 
 alive past a shutdown the desktop asked for.
 
 **What a live run then shows.** Nothing: the live run does not leave settings unsaved, and no scenario quits by a signal.
+
+**Ruled 2026-10-14 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a quit that starts outside any window
+asks no close guard. Such a quit — a signal, a desktop logout where Electron emits `before-quit`, the driver's or the capture's
+quit — is no **user-initiated** close, so REQ-CONFIG-287 ("on a user-initiated window close only — a programmatic close does not
+prompt") and REQ-SHELL-119 guard (1) govern as written: no guard is asked, unsaved Settings edits stay unsaved and nothing is
+written, so the workspace configuration keeps its last saved values. The main windows close in PD-ORCH-005 clause 9's
+all-or-none order and the run host's shutdown follows at once. The ruling carries both of its recommendations into the record:
+[`PD-SHELL-009`](../product/directives.md#pd-shell-009)'s last case is revised (revision 2), and
+[`PD-SHELL-010`](../product/directives.md#pd-shell-010)'s quit bullet, its As-built sentence about `closeThroughGuards` and its
+"What it costs" sentence naming this question are amended. No new directive and no back-pointer: the behaviour now follows the
+requirements as written. A quit a person starts outside a window that a later change adds — a tray or menu Quit, or macOS Dock
+Quit once IC-3 allows a macOS release — reopens this ruling. *The as-built reading kept above, the quit waiting on a person's
+answer without bound while the renderer answers its probe, is the falsified one.* Built 2026-10-14 by fin45
+(`fin45-supervision-and-quit`): `quitGuardsOutsideAnyWindow` (`apps/desktop/src/main/exit.ts`) in `before-quit`
+(`apps/desktop/src/main/index.ts`), pinned by `exit.test.ts` and `pnpm exit-trace-proof`'s `hang`, `unsaved-quit` and
+`unsaved-sigterm` launches. *The two advocates' recommendations themselves were not handed to the building bundle; the
+orchestrator's ruling record holds them.*
 
 <a id="oq-299"></a>
 
@@ -14726,3 +14743,30 @@ specification for the amendment round, and the key stands as REQ-SHELL-006 regis
 itself owns, in which case nothing is owed.
 
 **What a live run then shows.** Nothing: a live run reads no Display preference.
+
+<a id="oq-311"></a>
+
+**OQ-311 — Is the update's `Restart now` a user-initiated close for the unsaved-settings guard?** *(REQ-SHELL-119 guard (1),
+"with unsaved settings present, a **user-initiated** close raises the save/discard/cancel dialog of REQ-SHELL-124";
+REQ-CONFIG-287, "on a user-initiated window close only — a programmatic close does not prompt"; REQ-STARTUP-119's installer
+auto-close and REQ-STARTUP-121's `Restart now`; OQ-86, which ruled that REQ-STARTUP-046's active-run confirmation
+governs the update's closes and said nothing of guard (1); [OQ-298](#oq-298), whose ruling reopens on a quit a person starts
+outside a window. Raised 2026-10-14 by fin45 (`fin45-supervision-and-quit`) as the brief for OQ-298's build asked; the plan's range
+OQ-311 to OQ-330, its first free number on this branch — renumbered at landing if a sibling took it first.)*
+
+**What is open.** The update closes every main window through `mainWindows.dispose()` (`closeWindows` in
+`apps/desktop/src/main/index.ts`): the installer flavour 1,200 ms after its hand-off (REQ-STARTUP-119), and `Restart now` once the
+successor has taken the record (REQ-STARTUP-121). `dispose` destroys the windows, so neither close asks the renderer's
+unsaved-settings guard. The installer's auto-close is plainly programmatic. `Restart now` is a person's click on a notice action
+inside a window, whose consequence is that every window closes: REQ-CONFIG-287 does not say whether a close a person asked for
+through another control is "user-initiated".
+
+**What the build proceeds under.** Neither close asks guard (1): unsaved Settings edits are lost at the update's restart, as at any
+programmatic close. The active-run confirmation is asked at the click and again before the hand-off, as OQ-86 ruled.
+
+**What a ruling decides.** Whether `Restart now` (and `Update now` on the installer flavour) asks REQ-SHELL-124's Save/Discard/Cancel
+before the successor or installer starts — then at the click, beside OQ-86's confirmation, since after the hand-off declining could
+not keep the window — or leaves unsaved settings unsaved as a programmatic close. **The costs:** asking adds one more box to the
+update's click; not asking loses a person's edits at a restart they asked for, with no word.
+
+**What a live run then shows.** Nothing: no live scenario installs an update.

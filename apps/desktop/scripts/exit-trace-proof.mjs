@@ -6,7 +6,7 @@
  * `render-process-gone` for a renderer lost, `child-process-gone` for a utility child lost, and `process.on('exit')` last
  * (`docs/defects/fixed/process-exit-left-no-diagnosable-trace.md`). The orderly half was measured when it landed; the crash
  * handlers were "argued, not measured", and no proof or live launch killed a process until this one
- * (`docs/defects/fixed/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Four driven launches:
+ * (`docs/defects/fixed/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Six driven launches:
  *
  *   1. orderly — launched and quit through the driver: the log carries `quit: exiting with status 0` and
  *                `main process exiting with status 0`, and NO `error` line for a renderer or a child gone. The control for
@@ -16,21 +16,28 @@
  *                `error`, and not "main ended it" (`ChildrenEndedByMain`, `exit.ts`: only a kill main sent itself is
  *                `info`). Main still answers. Then the main window's renderer is crashed with SIGSEGV: main writes
  *                `RENDERER GONE (<reason>, exit <n>) for <its URL>` at `error`. The application's quit (`app.quit()`,
- *                a person's quit) is then asked, and ends the process: the dead renderer's close guard cannot answer,
- *                so it allows (`askRendererGuard`, `main-windows.ts`), the window closes, and the orderly shutdown runs
- *                to `quit: exiting with status 0` and `main process exiting with status 0`, exit 0. Until 2026-10-14 the
- *                guard's question never answered and the quit was held for good
- *                (`docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`).
- *                Should the quit be held again the check fails, and the immediate exit ends the launch for its trace.
+ *                a quit from outside any window) is then asked, and ends the process: since OQ-298's ruling it asks no
+ *                close guard at all (`quitGuardsOutsideAnyWindow`, `exit.ts`), the window closes, and the orderly shutdown
+ *                runs to `quit: exiting with status 0` and `main process exiting with status 0`, exit 0. Until 2026-10-14
+ *                the dead renderer's guard was asked and its question never answered, and the quit was held for good
+ *                (`docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`); from
+ *                then until OQ-298 a guard that could not answer allowed. Should the quit be held again the check fails,
+ *                and the immediate exit ends the launch for its trace.
  *
- *   3. hang    — the main window's renderer stopped with SIGSTOP (alive, answering nothing), then the driver's quit: the
- *                close guard's question is sent with main's liveness probe beside it, the probe goes unanswered for
- *                `RENDERER_LIVENESS_BOUND_MS` (5 s), main writes at `warn` that the renderer cannot answer, its guard allows,
- *                and the orderly shutdown runs to exit 0 within 15 s (PD-SHELL-010; until 2026-10-14 the quit was held
- *                for good: `docs/defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`).
+ *   3. hang    — the main window's renderer stopped with SIGSTOP (alive, answering nothing), then the driver's quit. Since
+ *                OQ-298 (2026-10-14, R-072) the quit asks no close guard, so it waits for no renderer: main writes the
+ *                OQ-298 line, no PD-SHELL-010 `warn` line, and exits 0 well under `RENDERER_LIVENESS_BOUND_MS` (5 s).
+ *                Under PD-SHELL-010 alone (fin44) the same quit asked the guard and was released by the liveness probe
+ *                after about 5.6 s (`docs/defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`).
  *   4. hang-close — the same hang, then the host's close of the window (the driver's `closeWindow`,
- *                `BrowserWindow.close()`): a person's close, which is released the same way and ends the application
- *                with its last window.
+ *                `BrowserWindow.close()`): a person's close, which still asks the renderer's guard (REQ-SHELL-119 guard (1))
+ *                and is released by the liveness probe (PD-SHELL-010's built-app measure), ending the application with its
+ *                last window.
+ *   5. unsaved — OQ-298: a main window whose renderer's unsaved-settings guard would never answer
+ *                (`window.__rotarisCloseGuard`, a promise that never settles — what a dirty Settings form's guard is until
+ *                a person answers Save/Discard/Cancel). Quit once through the driver (`unsaved-quit`) and once by SIGTERM to
+ *                main (`unsaved-sigterm`): each exits 0 through the orderly path (`quit: exiting with status 0`) with the
+ *                OQ-298 line, shows no dialog, and leaves the workspace configuration file byte-identical.
  *
  * What it cannot fire: `unhandledRejection` and `uncaughtException` in main. Neither can be raised in main from outside the
  * process, and adding a seam that throws inside main to prove a one-line log call is not justified (the repaired note's
@@ -155,7 +162,7 @@ const results = {};
   const log = logOf(started);
   const lines = mainLines(log);
   check('after both losses the process exits 0', ended.code === 0, JSON.stringify(ended));
-  check('the quit took the orderly path: the guards were asked, and main wrote `quit: exiting with status 0`', guardedExit !== null && lines.some((l) => /^quit: closing 1 main window\(s\) through their close guards first/.test(l.message)) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
+  check('the quit took the orderly path: the windows closed in clause 9\'s order asking no guard (OQ-298), and main wrote `quit: exiting with status 0`', guardedExit !== null && lines.some((l) => /^quit: closing 1 main window\(s\) through their close guards first/.test(l.message)) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
   // `process.on('exit')` is the last line main writes of its own; a child's exit Electron reports in the same turn may follow it.
   const lastOwn = lines.findLastIndex((l) => l.message === 'main process exiting with status 0');
   check('the log ends where the process did: main\'s exit line comes after the losses, and nothing of main\'s own work after it', lastOwn > lines.findIndex((l) => /^RENDERER GONE \(/.test(l.message)) && lines.slice(lastOwn + 1).every((l) => /^quit: exiting with status \d+$|^workspace service for .* exited \(\d+\)$/.test(l.message)), lines.slice(-3).map((l) => l.message).join(' | '));
@@ -178,6 +185,8 @@ const results = {};
  * The stopped renderers are continued once the launch has ended (or been ended), so no stopped process outlives the proof.
  */
 const LIVENESS_BOUND_MS = 5_000;
+/** OQ-298's line: main's `before-quit` says the quit asks no close guard. */
+const OQ298_LINE = 'quit: started outside any window; no close guard is asked, and unsaved settings, if any, stay unsaved (OQ-298)';
 const hangWarned = (lines) => lines.filter((l) => l.level === 'warning' && /^main window \d+: close guard: the renderer cannot answer: unresponsive \(no answer to the liveness probe within 5000 ms\); its guard allows \(PD-SHELL-010\)/.test(l.message));
 for (const [name, how] of [['hang', 'quit'], ['hang-close', 'close']]) {
   const started = await startApp({ root: join(output, name), workspace, timeoutMs: 90_000 });
@@ -208,19 +217,60 @@ for (const [name, how] of [['hang', 'quit'], ['hang-close', 'close']]) {
   for (const r of leftover) { try { process.kill(r.pid, 'SIGKILL'); } catch { /* gone */ } }
   const lines = mainLines(logOf(started));
   const warned = hangWarned(lines);
-  check(`${name}: main writes at warn which signal fired — the liveness probe unanswered within ${LIVENESS_BOUND_MS} ms`, warned.length === 1, warned.map((l) => `${l.level} ${l.message}`).join(' | ') || 'no line');
-  check(
-    `${name}: the close waited for the probe's bound and no longer`,
-    tookMs !== null && tookMs >= LIVENESS_BOUND_MS - 500 && tookMs < 15_000,
-    tookMs === null ? 'no exit' : `${tookMs} ms from the ${how} to the exit`,
-  );
+  if (how === 'quit') check(`${name}: no renderer was asked, so main writes no PD-SHELL-010 warn line`, warned.length === 0 && !lines.some((l) => /PD-SHELL-010/.test(l.message)), warned.map((l) => `${l.level} ${l.message}`).join(' | ') || 'none');
+  else check(`${name}: main writes at warn which signal fired — the liveness probe unanswered within ${LIVENESS_BOUND_MS} ms`, warned.length === 1, warned.map((l) => `${l.level} ${l.message}`).join(' | ') || 'no line');
   if (how === 'quit') {
-    check(`${name}: the quit took the orderly path: the guards were asked, and main wrote \`quit: exiting with status 0\``, exited !== null && lines.some((l) => /^quit: closing 1 main window\(s\) through their close guards first/.test(l.message)) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
+    // OQ-298: the quit from outside any window asks no guard, so the hung renderer holds it for no bound and no probe.
+    check(`${name}: the quit asked no close guard — well under the probe's ${LIVENESS_BOUND_MS} ms bound`, tookMs !== null && tookMs < LIVENESS_BOUND_MS, tookMs === null ? 'no exit' : `${tookMs} ms from the quit to the exit`);
+    check(`${name}: the quit took the orderly path and said it asked no guard: the OQ-298 line, and \`quit: exiting with status 0\``, exited !== null && lines.some((l) => /^quit: closing 1 main window\(s\) through their close guards first/.test(l.message)) && lines.some((l) => l.message === OQ298_LINE) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
   } else {
+    check(
+      `${name}: the close waited for the probe's bound and no longer`,
+      tookMs !== null && tookMs >= LIVENESS_BOUND_MS - 500 && tookMs < 15_000,
+      tookMs === null ? 'no exit' : `${tookMs} ms from the ${how} to the exit`,
+    );
     check(`${name}: the close was a person's, not the application's quit: no guarded quit was started, and main wrote \`quit: exiting with status 0\``, exited !== null && !lines.some((l) => /^quit: closing \d+ main window\(s\) through their close guards first/.test(l.message)) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
   }
   check(`${name}: main's last line of its own is its exit`, lines.some((l) => l.message === 'main process exiting with status 0'), lines.slice(-3).map((l) => l.message).join(' | '));
   results[name] = { renderers: renderers.map((r) => r.pid), asked, exit: ended, tookMs, leftoverRenderers: leftover.map((r) => r.pid), warned: warned.map((l) => `${l.level} ${l.message}`), last: lines.slice(-4).map((l) => `${l.level} ${l.message}`) };
+}
+
+// ── 5. unsaved: a renderer guard that would never answer, then the quit from outside any window (OQ-298) ─────────────
+/*
+ * OQ-298, ruled 2026-10-14 under R-072: a quit that starts outside any window asks no close guard, so unsaved settings stay
+ * unsaved and nothing is written. The renderer's guard is replaced by one that never settles — a dirty Settings form's guard
+ * is exactly that until a person answers its Save/Discard/Cancel — so a quit that asked it would be held for good, as the
+ * build before the ruling was. Twice: the driver's quit (`app.quit()`), and SIGTERM sent to main (Electron's quit on a signal).
+ */
+const configFile = join(workspace, '.rotaris', 'agents.yaml');
+for (const [name, how] of [['unsaved-quit', 'driver'], ['unsaved-sigterm', 'sigterm']]) {
+  const started = await startApp({ root: join(output, name), workspace, timeoutMs: 90_000 });
+  await started.driver.waitFor('.app-shell', { timeoutMs: 60_000 });
+  const before = readFileSync(configFile);
+  // ONE expression: the driver evaluates what it is given as an expression (workspace-proof's veto launch says why).
+  const armed = await started.driver.eval('Boolean(window.__rotarisCloseGuard = () => new Promise(() => undefined))').catch((e) => String(e));
+  check(`${name}: the renderer's close guard now never answers`, armed === true, JSON.stringify(armed));
+  const dialogBefore = await started.driver.eval('document.querySelectorAll(".dialog-title").length').catch(() => null);
+  const askedAt = Date.now();
+  if (how === 'driver') await within(started.driver.quit(), 10_000);
+  else process.kill(started.child.pid, 'SIGTERM');
+  const exited = await exitWithin(started.child, 20_000);
+  const tookMs = exited === null ? null : Date.now() - askedAt;
+  let ended = exited;
+  if (ended === null) {
+    await within(started.driver.quit({ immediate: true }), 10_000);
+    ended = await exitWithin(started.child, 15_000);
+  }
+  started.driver.close();
+  if (ended === null) { await endLaunch(started.child); throw new Error(`${name}: the launch did not exit on the immediate exit either:\n${logTail(logOf(started))}`); }
+  await drainGroup(started.child);
+  const lines = mainLines(logOf(started));
+  const after = readFileSync(configFile);
+  check(`${name}: the quit with a guard that never answers ends the process, exit 0`, exited?.code === 0, exited === null ? 'held: no exit in 20 s' : `${JSON.stringify(exited)} after ${tookMs} ms`);
+  check(`${name}: it took the orderly path and asked no guard: the OQ-298 line, and \`quit: exiting with status 0\``, exited !== null && lines.some((l) => l.message === OQ298_LINE) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
+  check(`${name}: no dialog was shown, and no close guard was asked of the renderer`, dialogBefore === 0 && !lines.some((l) => /close guard: the renderer|PD-SHELL-010|a close guard refused/.test(l.message)), `${dialogBefore} dialog title(s) before the quit; ${lines.filter((l) => /close guard/.test(l.message)).map((l) => l.message).join(' | ') || 'no close-guard line'}`);
+  check(`${name}: the workspace configuration file is byte-identical — nothing unsaved was written`, Buffer.compare(before, after) === 0, `${before.length} bytes before, ${after.length} after`);
+  results[name] = { exit: ended, tookMs, armed, dialogBefore, configUnchanged: Buffer.compare(before, after) === 0, last: lines.slice(-4).map((l) => `${l.level} ${l.message}`) };
 }
 
 results.checks = checks;

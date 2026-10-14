@@ -124,7 +124,7 @@ const pause = (ms: number): void => { Atomics.wait(new Int32Array(new SharedArra
  * never present without a store in it — the open's own window between making the place and creating the file is gone, and a
  * process cut anywhere leaves the place absent (REQ-SESSION-043's ordinary state, created at the next open), never empty
  * (REQ-SESSION-202). The sibling is dot-prefixed and named for the identifier (`firstStoreSibling`), holds only a store that
- * was never installed, and is removed at the identifier's next first-store attempt; every scan of the workspaces root skips
+ * was never installed, and is removed at the identifier's next open (`openWorkspaceStore`); every scan of the workspaces root skips
  * dot-prefixed entries. Answers the creation's migration, or `null` where the place appeared meanwhile (the caller re-runs the
  * open over what is there).
  */
@@ -187,6 +187,10 @@ export function openWorkspaceStore(workspacesRoot: string, id: WorkspaceId, work
   const recover = opts.recover !== false;
   const cutRestore = recover ? recoverCutRestore(workspacesRoot, id) : null;
   if (!recover && !existsSync(dir) && existsSync(restoreJournal(workspacesRoot, id))) throw new RestorePendingError(dir);
+  // OQ-281: a stray sibling — a first store a cut open never installed — is removed at the identifier's next open, however the
+  // place is found: absent (the install below sweeps it too), or back by another way meanwhile (a restore, a person).
+  const sibling = firstStoreSibling(workspacesRoot, id);
+  if (existsSync(sibling)) rmSync(sibling, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   const created = existsSync(dir) ? null : installFirstStore(workspacesRoot, id, workspaceRoot, opts);
   // Present now in every case — installed by this open, or found (before it, or appearing meanwhile): opened, never created.
   if (!existsSync(file)) throw new StorePlaceEmptyError(dir, file);

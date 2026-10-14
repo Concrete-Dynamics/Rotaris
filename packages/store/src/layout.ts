@@ -20,7 +20,7 @@ import type { WorkspaceId } from '@rotaris/kernel';
  *     <identifier>.restore-pending     a restore's journal (OQ-266): written before step 8, removed by step 9, by the
  *                                      in-process reversal, or by the next open (`recoverCutRestore`, recover.ts)
  *     .<identifier>.new                a first store being made whole before its rename into place (OQ-281); left only by
- *                                      a cut open, and removed by the identifier's next first-store attempt. Every scan of
+ *                                      a cut open, and removed at the identifier's next open. Every scan of
  *                                      this root skips dot-prefixed entries (the assessment's `.assess-*` among them).
  *
  * Leftover shapes are tabulated in ADR-0058 consequence 5. D5's staging half is repaired (OQ-265, 2026-10-14);
@@ -45,7 +45,7 @@ export function storeFile(workspacesRoot: string, id: WorkspaceId): string {
 /**
  * OQ-281: where a first store is made whole before it is renamed into `<identifier>` — dot-prefixed, so every scan of the
  * workspaces root passes it over, and five characters longer than the identifier's name. It holds only a store that was never
- * installed, and is removed by the identifier's next first-store attempt.
+ * installed, and is removed at the identifier's next open.
  */
 export function firstStoreSibling(workspacesRoot: string, id: WorkspaceId): string {
   return join(workspacesRoot, `.${id}.new`);

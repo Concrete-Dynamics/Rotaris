@@ -209,6 +209,21 @@ describe('store — OQ-281 (ruled 2026-10-14 under R-072): a first store is made
     expect(readdirSync(root)).toEqual([id]);
   });
 
+  it('a stray sibling is swept at the identifier\'s next open even where the place came back by another way, and the store there is untouched', () => {
+    // A cut first create left `.<id>.new`; the place then reappeared without an open making it (a restore, a person).
+    expect(() => openWorkspaceStore(root, id, ws, cut([]))).toThrow();
+    const other = mintWorkspaceId('000000000000000000000000000002f6');
+    seed(root, other, [{ sid: 'S-back', rows: 1 }]);
+    renameSync(storeDir(root, other), storeDir(root, id));
+    expect(existsSync(firstStoreSibling(root, id))).toBe(true);
+    const r = openWorkspaceStore(root, id, ws);
+    expect(new StoreDal(r.db).listSessions().map((x) => x.session_id)).toEqual(['S-back']);
+    r.db.close();
+    forgetSpelling(r.dir);
+    expect(existsSync(firstStoreSibling(root, id))).toBe(false);
+    expect(readdirSync(root)).toEqual([id]);
+  });
+
   it('a place that appeared meanwhile is never written over: a store there is opened, an empty one refused, and the sibling discarded', () => {
     const other = mintWorkspaceId('000000000000000000000000000002f3');
     seed(root, other, [{ sid: 'S-there', rows: 1 }]);

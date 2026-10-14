@@ -1859,7 +1859,7 @@ place that exists and holds no `workspace.db` is refused as `workspace.store-mis
 place gets a store created (REQ-SESSION-043) — since 2026-10-14 (OQ-281) made whole in the dot-prefixed sibling
 `.<identifier>.new` (created, migrated, closed, `origin.txt` written), renamed into `<identifier>` with a bounded retry on
 `EPERM`/`EBUSY`, and then opened `mustExist` like any present store; a place that appeared meanwhile discards the sibling and is
-opened (or refused) as found, a failed create removes it, and a stray one is removed at the identifier's next first-store attempt.
+opened (or refused) as found, a failed create removes it, and a stray one is removed at the identifier's next open, however the place is found.
 Every scan of the workspaces root skips dot-prefixed entries. While the service's own restore is in flight its opens skip the
 first check and refuse rather than create beside the journal. In a window holding such a refusal, every command's
 `workspace.none` answer leaves `runCommand` as the held refusal (`answerUnderHeldRefusal`), and `session.start` says nothing was

@@ -25,7 +25,9 @@ dot-prefixed sibling, `.<identifier>.new` (`firstStoreSibling`, `packages/store/
 identifier's name): created, migrated, closed and its spelling forgotten, `origin.txt` written; then renamed to `<identifier>`,
 retried up to five times 50 ms apart on `EPERM`/`EBUSY`, and opened with `mustExist`. Where the place appeared meanwhile the
 sibling is discarded and the open proceeds over what is there (a store opened, an empty place refused); a failed create removes
-the sibling; a stray sibling left by a cut open is removed by the identifier's next first-store attempt. The place therefore never
+the sibling; a stray sibling left by a cut open is removed at the identifier's next open, however the place is found
+(corrected at review: it was swept only by the next first-store attempt, so a place that came back by another way kept it for
+good; `store.test.ts`'s "swept at the identifier's next open" case, red before). The place therefore never
 exists without a store in it on account of the open: a cut leaves it absent, which the next open creates (REQ-SESSION-043).
 Every scan of the workspaces root skips dot-prefixed entries (`displacedUnder`, `packages/store/src/recover.ts`; the proofs'
 `findDatabases`, `apps/desktop/scripts/lib/harness.mjs`). Pinned by `packages/store/src/store.test.ts`'s OQ-281 first-store

@@ -614,8 +614,10 @@ export class IterationChildren implements DelegationOps {
   /**
    * PD-TOOLS-008 revision 2 (OQ-249, ruled 2026-10-07 under R-072): the items of `callerId`'s own plan its non-terminal
    * children hold as their `todo_item` — its direct children, every root's counting as one plan as `owns` reads them; queued,
-   * waiting, running, summarising and paused children all hold (`PD-TOOLS-006` revision 6's set). Read at each `todo` call,
-   * so an item whose child has ended counts against the next write that marks a task.
+   * waiting, running, summarising and paused children all hold (`PD-TOOLS-006` revision 6's set). Read at each `todo` call
+   * and by `openServedItemsOf`. It said, until 2026-10-15, "so an item whose child has ended counts against the next write that
+   * marks a task": since `PD-TOOLS-008` revision 4 (OQ-333) the single-active count reads `servedTodoItems`, which keeps such an
+   * item exempt, and this set decides which served item a `replace` may close and the reason a kept one gives.
    */
   heldTodoItems(callerId: string): ReadonlySet<string> {
     const held = new Set<string>();

@@ -3157,7 +3157,7 @@ the child's report, so the line goes there, beside the report it asks the caller
 revision 3 as [R-067](requests.md#r-067). Revision 4 ruled under the owner's delegation, [R-072](requests.md#r-072), from
 the final live runs' findings L4 and N3. Revision 5 ruled under the same delegation from OQ-221 (the consortium's question AB1), revision 6 from OQ-220, revision 7
 from OQ-249 (the consortium's question P3), revision 8 from OQ-250 (the consortium's question D3, the duress live run's finding D3),
-revision 9 from OQ-256 and OQ-257 (the consortium's questions V1 and V2, the duress live run at `552d346`), revision 11 from
+revision 9 from OQ-256 and OQ-257 (the consortium's questions V1 and V2, the duress live run at `552d346`), revision 10 from
 OQ-334 (finding F10 of fin46's final acceptance, the default live run at `3c03287`), revision 11 from
 OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287`).*
 
@@ -4824,15 +4824,17 @@ replace was rejected and nothing was saved. Send it again with at most one task 
 naming each task the list marked `IN_PROGRESS` by the name it was sent with, in the list's order, and no task id. The list
 is still rejected whole and nothing of it is stored.
 
-Everything else REQ-TOOLS-145 fixes still governs, as revision 2 bounds it below: every other violation — an `add_task` or
-`update` that would make a second unheld task active, and REQ-TOOLS-146's `replace` that marks another task while an unheld
-protected active task exists — still answers in REQ-TOOLS-145's own sentence, naming the stored active task.
+Everything else REQ-TOOLS-145 fixes still governs, as revisions 2 and 4 bound it below: every other violation — an `add_task` or
+`update` that would make a second unserved task active, and REQ-TOOLS-146's `replace` that marks another task while an unserved
+protected active task exists — still answers in REQ-TOOLS-145's own sentence, naming the stored active task. *(Until 2026-10-15
+this read "as revision 2 bounds it below", "a second unheld task" and "an unheld protected active task"; revision 4 counts the
+unserved ones.)*
 
 **A task a running delegation holds is outside the count (revision 2).** An `IN_PROGRESS` task is **held** while a
 non-terminal child of the list's owner records it as its `todo_item` (`PD-TOOLS-006` revision 6); non-terminal is that
 revision's set, queued to paused. REQ-TOOLS-145's bound and REQ-TOOLS-146's protection count only the tasks no such child
 holds:
-- **The bound.** At most one `IN_PROGRESS` task may be unheld, and the bound is checked only on a write that marks a task
+- **The bound.** At most one `IN_PROGRESS` task may be unserved (revision 4; "may be unheld" until then), and the bound is checked only on a write that marks a task
   `IN_PROGRESS`: an `add_task` or `update` that marks one, or a `replace` whose incoming list marks `IN_PROGRESS` a task that
   is not already a protected `IN_PROGRESS` task. A task a child of the list's owner serves, running or ended, is never counted
   against such a write (revision 4 below).

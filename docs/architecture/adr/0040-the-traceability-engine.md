@@ -849,7 +849,7 @@ taken under the same conditions, and these were not: the half side ran after the
 cheap. Acceptance round 1 saw the parse ratio at 3.04 and 3.16, twice in a row on an idle host, against a work ratio of
 2.14. This branch saw 3.37. The failure message also printed the half readings on both sides.
 
-The replacement: each pair is read by `interleavedMinima` (`packages/workspace/src/traceability/growth-readings.ts`),
+The replacement: each pair is read by `interleavedMinima` (`packages/workspace/src/traceability/growth-readings.ts` (since 2026-10-15 `growth-readings.test-support.ts`)),
 seven readings a side after one warm-up each. The sides are interleaved, and each round swaps which side goes first.
 The ratio is still the quotient of the two minima, and `growthVerdict` (`apps/desktop/scripts/lib/growth-verdict.mjs`)
 prints each side's readings as that side's. Point 1, the 25 ms floor and the 3.0 ceiling are unchanged. Six runs after
@@ -868,7 +868,7 @@ contended side is still contended, by an amount the other side need not share.
 
 The replacement: each pass is read on two clocks, and the ratio is the quotient of the minima of the thread's own CPU
 time (`process.threadCpuUsage()`, user plus system), the measure of REQ-TRACE-088's reference conditions, one execution
-thread timing the pass alone. A reader returns `{ wallMs, cpuMs }` (`PassReading`, `growth-readings.ts`); the sweep,
+thread timing the pass alone. A reader returns `{ wallMs, cpuMs }` (`PassReading`, `growth-readings.ts` (since 2026-10-15 `growth-readings.test-support.ts`)); the sweep,
 which times itself, is handed a clock that reads the thread's CPU time and keeps the wall instants beside it
 (`dualClock`, `traceability.proof.test.ts`). The wall readings, their quotient and the host's load averages and CPU count
 are recorded beside the CPU figures in `spike-results.json`, and `growthVerdict` prints them on every line. The minimum is

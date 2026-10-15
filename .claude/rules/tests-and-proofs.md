@@ -10,8 +10,8 @@ paths:
 Unit tests sit **beside the unit they cover** (`<unit>.test.ts`), run on Node with scripted model
 clients, and are collected by `vitest.config.ts` — `*.test.ts` only, so a `.tsx` suffix collects
 nothing. The narrowest verification is `pnpm vitest run <path>`. A module only tests import is
-named `<unit>.test-support.ts`, and no product module imports it (pinned for `@rotaris/ui` by
-`packages/ui/src/test-support.test.ts`).
+named `<unit>.test-support.ts`, and no product module imports it (pinned for every package under `packages/` by
+`tools/test-support-naming/test-support-naming.test.ts`).
 
 - **A handful of suites go red only under full-suite parallelism** — the ones driving a real PTY or a
   real child process. Re-run the file alone before believing a red from `pnpm test`.

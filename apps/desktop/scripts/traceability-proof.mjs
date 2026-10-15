@@ -58,7 +58,7 @@ const expect = (condition, message) => { if (!condition) throw new Error(message
  *    that cannot fail is not evidence, and neither is one that pretends a 3 ms reading measured something.
  *
  * 2026-10-01 (R-067): the two sides are now read EVENLY — seven readings each after one warm-up each, interleaved
- * and alternating which side goes first (`interleavedMinima`, `packages/workspace/src/traceability/growth-readings.ts`).
+ * and alternating which side goes first (`interleavedMinima`, `packages/workspace/src/traceability/growth-readings.test-support.ts`).
  * Reading the full tree first and the half tree afterwards had let the half side run hotter and read cheap, and the
  * parse went red at 3.04 to 3.37, twice in a row on an idle host. The verdict and its message are `growthVerdict`
  * (`lib/growth-verdict.mjs`), which prints each side's readings as that side's

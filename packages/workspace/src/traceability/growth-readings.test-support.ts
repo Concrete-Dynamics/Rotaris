@@ -19,6 +19,11 @@
  * CPUs (`docs/defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`). REQ-TRACE-088's
  * reference conditions are one execution thread timing the pass alone, which the thread's own CPU time measures and a
  * contended wall clock does not. The wall-clock readings are kept beside the CPU ones, and so is their ratio.
+ *
+ * Test support, and named so (`*.test-support.ts`, which `vitest.config.ts` does not collect; `growth-readings.ts` until
+ * 2026-10-15, its own test keeping the name `growth-readings.test.ts`): only the proof and that test import it and the
+ * package entry does not reach it, which `tools/test-support-naming/test-support-naming.test.ts` pins
+ * (`docs/defects/fixed/workspace-traceability-test-support-is-named-as-product-modules.md`).
  */
 export type GrowthSide = 'full' | 'half';
 

@@ -10,7 +10,7 @@
  * It reads compound selectors of a type and classes joined by descendant or child combinators — every selector that can reach
  * a classed element in these sheets — and skips the rest (attribute selectors, pseudo-classes, `@media` bodies), which a test
  * using it must not depend on. Test support only, and named so (`*.test-support.ts`, which `vitest.config.ts` does not collect):
- * nothing in the product imports it, neither package entry reaches it (`test-support.test.ts` pins both), and it reads no file
+ * nothing in the product imports it, neither package entry reaches it (`tools/test-support-naming/test-support-naming.test.ts` pins both), and it reads no file
  * itself — the caller hands it the sheets, in the order `apps/desktop/src/renderer/design.css` imports them.
  */
 

@@ -9,7 +9,7 @@
  * half readings twice and never the full ones
  * (`docs/defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
  *
- * A pair is what `growthPair` in `packages/workspace/src/traceability/growth-readings.ts` records:
+ * A pair is what `growthPair` in `packages/workspace/src/traceability/growth-readings.test-support.ts` records:
  * `{ work: { full, half }, clock, ratio, fullRunsMs, halfRunsMs, fullMinMs, halfMinMs, wallRatio, fullCpuRunsMs,
  * halfCpuRunsMs, fullCpuMinMs, halfCpuMinMs }`, and the proof adds the `host` it was read on.
  *

@@ -262,7 +262,7 @@ function deliveryRows(local) {
 
 /**
  * A generated store of 100 epics × 14 children = 1,500 requirements, shaped as spike 7's generator shapes one
- * (`packages/workspace/src/traceability/scale-fixture.ts`: an epic's number is a multiple of 100, its children live
+ * (`packages/workspace/src/traceability/scale-fixture.test-support.ts`: an epic's number is a multiple of 100, its children live
  * in its stem directory and take it as their epic by the parser's index-document rule) but documents only, with
  * a two-file source tree so the sweep has something to read. Deterministic.
  */

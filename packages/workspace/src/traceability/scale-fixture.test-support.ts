@@ -6,6 +6,11 @@ import { join } from 'node:path';
  * 10^3 documents and a source tree of the order of 10^3 files carrying 10^4 annotation sites, so REQ-TRACE-501's
  * parse budget and REQ-TRACE-088's sweep budget can be measured under the reference conditions. Deterministic: the
  * same options produce byte-identical trees. Not exported from the package index; the proof and the tests use it.
+ *
+ * Test support, and named so (`*.test-support.ts`, which `vitest.config.ts` does not collect; `scale-fixture.ts` until
+ * 2026-10-15): nothing in the product imports it and the package entry does not reach it, which
+ * `tools/test-support-naming/test-support-naming.test.ts` pins
+ * (`docs/defects/fixed/workspace-traceability-test-support-is-named-as-product-modules.md`).
  */
 export interface ScaleOptions {
   readonly blocks: number;

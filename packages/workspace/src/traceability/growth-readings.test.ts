@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { growthPair, interleavedMinima } from './growth-readings.js';
+import { growthPair, interleavedMinima } from './growth-readings.test-support.js';
 
 /**
  * REQ-TRACE-501 / REQ-TRACE-088: the readings the proof's linear-growth ratio is computed from

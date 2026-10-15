@@ -31,7 +31,8 @@ it at the old one (`the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-
 is not one `vitest.config.ts` collects (`*.test.ts` only), and it is not one the lint treats as a test, so the module is
 still type-checked and linted as source. `.claude/rules/tests-and-proofs.md` states the naming.
 
-**Pinned** by `packages/ui/src/test-support.test.ts`, which walks the package's relative imports from the entries its
+**Pinned** by `packages/ui/src/test-support.test.ts` (since 2026-10-15 `tools/test-support-naming/test-support-naming.test.ts`,
+widened to every package), which walks the package's relative imports from the entries its
 `package.json` exports: every module that only tests reach must be named `*.test-support.ts`, no product module may import
 one, and no entry may reach one. On the unrepaired tree it fails with `["css-cascade.ts"]` misnamed; with an
 `import './css-cascade.test-support.js'` added to `theme.ts` it fails with `theme.ts -> css-cascade.test-support.ts`.
@@ -41,4 +42,5 @@ the evidence is that a `pnpm build` of this branch carries no trace of the modul
 `cascadeOf`, `selectorMatches` and `css-cascade` finds nothing). Neither entry reached it before the rename either, so this shows the rename changed nothing that ships.
 
 The same shape outside `@rotaris/ui` is recorded, not repaired here:
-[`../workspace-traceability-test-support-is-named-as-product-modules.md`](../workspace-traceability-test-support-is-named-as-product-modules.md).
+[`workspace-traceability-test-support-is-named-as-product-modules.md`](workspace-traceability-test-support-is-named-as-product-modules.md)
+(repaired 2026-10-15, fin47).

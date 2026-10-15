@@ -38,7 +38,7 @@ product that meets them, and its failure message hides the figures a reader need
 
 ## Repaired — 2026-10-01, under R-067
 
-**The readings.** `interleavedMinima` (`packages/workspace/src/traceability/growth-readings.ts`) reads each side of a
+**The readings.** `interleavedMinima` (`packages/workspace/src/traceability/growth-readings.ts` (since 2026-10-15 `growth-readings.test-support.ts`)) reads each side of a
 growth pair seven times after one unrecorded warm-up each. The sides are interleaved, and each round swaps which side
 goes first (full, half, half, full, …). Whatever one pass leaves behind for the next, a hotter JIT or garbage still to
 collect, therefore falls on both sides equally. `growthPair` records `fullRunsMs`, `halfRunsMs`, both minima, the ratio

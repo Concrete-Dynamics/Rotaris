@@ -35,14 +35,14 @@ fail a product that meets them (`.claude/rules/tests-and-proofs.md`: a proof is 
 
 - `apps/desktop/scripts/traceability-proof.mjs`: `linear`, the three growth assertions.
 - `apps/desktop/scripts/lib/growth-verdict.mjs`: the verdict, the floor and the band.
-- `packages/workspace/src/traceability/growth-readings.ts`: `interleavedMinima`, the seven readings a side.
+- `packages/workspace/src/traceability/growth-readings.ts` (since 2026-10-15 `growth-readings.test-support.ts`): `interleavedMinima`, the seven readings a side.
 - `packages/workspace/src/traceability/traceability.proof.test.ts`: the in-thread parse budget that went red once.
 
 ## Outcome — repaired 2026-10-02 (fin5, harness-readers)
 
 The three growth pairs are now read on two clocks, and the ratio is asserted on the CPU time of the thread that ran each
 pass, which REQ-TRACE-088's reference conditions ("one execution thread … timing the sweep alone") name, and a contended
-wall clock does not. A reader returns a `PassReading`, `{ wallMs, cpuMs }` (`packages/workspace/src/traceability/growth-readings.ts`);
+wall clock does not. A reader returns a `PassReading`, `{ wallMs, cpuMs }` (`packages/workspace/src/traceability/growth-readings.ts` (since 2026-10-15 `growth-readings.test-support.ts`));
 `interleavedMinima` keeps both series, and `growthPair` records `clock: 'thread-cpu'`, the CPU readings and minima, and
 the ratio of the CPU minima, with the wall readings, their minima and their quotient (`wallRatio`) beside them. In
 `traceability.proof.test.ts` the parse and the parser are read by `both` (`process.threadCpuUsage()` deltas, user plus

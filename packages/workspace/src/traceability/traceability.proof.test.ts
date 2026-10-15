@@ -11,8 +11,8 @@ import { createInThreadExecutor } from './executor.js';
 import { loadLayout } from './layout.js';
 import { loadParser, parserLoadMs } from './parser.js';
 import { parseStore } from './store.js';
-import { SPIKE_7, generateScaleRepository } from './scale-fixture.js';
-import { growthPair, interleavedMinima, type GrowthSide, type PassReading } from './growth-readings.js';
+import { SPIKE_7, generateScaleRepository } from './scale-fixture.test-support.js';
+import { growthPair, interleavedMinima, type GrowthSide, type PassReading } from './growth-readings.test-support.js';
 import { sweepRepository, type SweepDetails } from './sweep.js';
 
 /**
@@ -38,7 +38,7 @@ const ms = (fn: () => void): number => { const t0 = performance.now(); fn(); ret
  * recorded with them so the proof can assert the input really is half-size, which no clock can tell it.
  *
  * 2026-10-01 (R-067): `msMin` still takes the budget figures; the GROWTH pairs are read by `interleavedMinima`
- * (`growth-readings.ts`) — seven readings a side after a warm-up each, the sides alternating. All full-size readings
+ * (`growth-readings.test-support.ts`) — seven readings a side after a warm-up each, the sides alternating. All full-size readings
  * used to come first and the half-size ones after them, so the half side ran hotter and the parse ratio read 3.04 to
  * 3.37 on an idle host against a work ratio of 2.14; and the sweep's full side was a single reading
  * (`docs/defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).

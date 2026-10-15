@@ -268,19 +268,52 @@ async function artifactBuildCompleted(ctx) {
   console.log(`[ic6] naming: produced ${path.basename(ctx.file)}, the declared version's name`);
 }
 
+/** The PE/COFF machine values a Windows artifact's interpreter can carry, by the `process.arch` name electron-builder uses. */
+const PE_MACHINES = { 0x8664: 'x64', 0xaa64: 'arm64', 0x014c: 'ia32' };
+
+/**
+ * OQ-400 (ruled 2026-10-15 under R-072): the architecture a PE image is built for, read from its bytes and never by
+ * running it — the `MZ` stub, the PE header's offset `e_lfanew` at 0x3C, the `PE\0\0` signature there, then the COFF
+ * header's machine field (u16, little-endian). Throws on a file that is no PE image or is cut short of its machine field.
+ * Pure: the caller reads the file.
+ */
+function peArchOf(bytes) {
+  if (bytes.length < 2 || bytes[0] !== 0x4d || bytes[1] !== 0x5a) throw new Error('not a PE image (no MZ stub)');
+  if (bytes.length < 0x40) throw new Error(`truncated: ${bytes.length} bytes, short of the DOS header's e_lfanew at 0x3C`);
+  const at = bytes.readUInt32LE(0x3c);
+  if (at + 6 > bytes.length) throw new Error(`truncated: e_lfanew points at 0x${at.toString(16)}, past the file's ${bytes.length} bytes`);
+  if (bytes.readUInt32BE(at) !== 0x50450000) throw new Error(`not a PE image (no "PE\\0\\0" signature at e_lfanew 0x${at.toString(16)})`);
+  const machine = bytes.readUInt16LE(at + 4);
+  return { machine, arch: PE_MACHINES[machine] || `machine 0x${machine.toString(16).padStart(4, '0')}` };
+}
+
 /**
  * ADR-0035 / ADR-0054 (Part T): the bundled code-intelligence runtime is in the artifact and ANSWERS from inside it — the
  * interpreter under win-unpacked/resources/code-intelligence/runtime reports its version and the distribution's, both equal
  * to the committed pins. Evidence about the artifact (ADR-0056's discipline), not about the bundle step's exit status.
+ *
+ * OQ-400 (2026-10-15): first, before anything runs, the interpreter must be built for the artifact's architecture — its
+ * PE machine field equal to `arch` — and the bundle's marker must say it was built for that architecture. An arm64
+ * interpreter answers its versions correctly on an ARM64 build host, so the spawn below could never catch it there
+ * (`docs/defects/fixed/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md`). `spawn` is
+ * `spawnSync` but in the tests.
  */
-function checkRuntime(appOutDir) {
+function checkRuntime(appOutDir, arch, spawn = spawnSync) {
   const pins = JSON.parse(readFileSync(path.join(APP_DIR, 'scripts', 'code-intelligence', 'pins.json'), 'utf8'));
   const root = path.join(appOutDir, 'resources', 'code-intelligence');
   const python = path.join(root, 'runtime', 'python.exe');
   if (!existsSync(python)) throw new Error(`runtime: no interpreter at ${python} — extraResources did not carry the bundle`);
+  let pe;
+  try { pe = peArchOf(readFileSync(python)); } catch (e) { throw new Error(`runtime: ${python} is no interpreter this artifact can run: ${e.message}`); }
+  if (pe.arch !== arch) throw new Error(`runtime: the packaged interpreter is built for ${pe.arch}, the artifact for ${arch}`);
   const marker = JSON.parse(readFileSync(path.join(root, 'bundle.json'), 'utf8'));
+  if (marker.targetArch !== arch) {
+    throw new Error(typeof marker.targetArch === 'string'
+      ? `runtime: bundle.json says the bundle was built for ${marker.targetArch}, the artifact is ${arch}`
+      : `runtime: bundle.json says the bundle was built for no recorded architecture, the artifact is ${arch} — a bundle from before OQ-400; rebuild it with pnpm code-intel:bundle --target=win32-${arch}`);
+  }
   if (marker.version !== pins.version || marker.python !== pins.python) throw new Error(`runtime: the artifact's bundle.json pins ${marker.distribution} ${marker.version} on Python ${marker.python}; pins.json says ${pins.version} on ${pins.python}`);
-  const r = spawnSync(python, ['-I', '-c', 'import importlib.metadata as m, sys, json; print(json.dumps({"python": sys.version.split()[0], "version": m.version("serena-agent"), "distribution": "serena-agent"}))'], { encoding: 'utf8', windowsHide: true, timeout: 60_000, env: { PYTHONUTF8: '1', SYSTEMROOT: process.env['SYSTEMROOT'] || 'C:\\Windows' } });
+  const r = spawn(python, ['-I', '-c', 'import importlib.metadata as m, sys, json; print(json.dumps({"python": sys.version.split()[0], "version": m.version("serena-agent"), "distribution": "serena-agent"}))'], { encoding: 'utf8', windowsHide: true, timeout: 60_000, env: { PYTHONUTF8: '1', SYSTEMROOT: process.env['SYSTEMROOT'] || 'C:\\Windows' } });
   if (r.status !== 0) throw new Error(`runtime: the packaged interpreter did not answer (exit ${r.status ?? r.signal}): ${(r.stderr || '').slice(-400)}`);
   const answers = JSON.parse(r.stdout.trim());
   if (answers.python !== pins.python) throw new Error(`runtime: the packaged interpreter answers Python ${answers.python}, the pin is ${pins.python}`);
@@ -289,7 +322,7 @@ function checkRuntime(appOutDir) {
   const walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else { bytes += statSync(p).size; files += 1; } } };
   walk(root);
   // The tool server's licence file is no longer carried here (REQ-STARTUP-015, the "assets" rule below counts its copies).
-  return { python, answers, bytes, files };
+  return { python, machine: pe.arch, answers, bytes, files };
 }
 
 /**
@@ -340,8 +373,8 @@ async function afterPack(ctx) {
     const { declaredProductVersion } = await artifactNames();
     report.naming = { normalised: ctx.packager.appInfo.version, ...(await checkNaming(declaredProductVersion(APP_DIR), configuredArtifactNames(ctx))) };
     console.log(`[ic6] naming: declared ${report.naming.declared}, electron-builder's normalised ${report.naming.normalised}; configured to produce ${report.naming.rendered.join(', ')}`);
-    report.runtime = checkRuntime(appOutDir);
-    console.log(`[ic6] runtime: ${report.runtime.python} answered Python ${report.runtime.answers.python}, ${report.runtime.answers.distribution} ${report.runtime.answers.version} from inside the artifact (${report.runtime.files} files, ${(report.runtime.bytes / 1048576).toFixed(1)} MiB)`);
+    report.runtime = checkRuntime(appOutDir, arch);
+    console.log(`[ic6] runtime: ${report.runtime.python} (PE machine ${report.runtime.machine}, the artifact's) answered Python ${report.runtime.answers.python}, ${report.runtime.answers.distribution} ${report.runtime.answers.version} from inside the artifact (${report.runtime.files} files, ${(report.runtime.bytes / 1048576).toFixed(1)} MiB)`);
     report.assets = await checkAssets(appOutDir);
     console.log(`[ic6] assets: build-id.txt ${report.assets.buildId}; THIRD-PARTY-LICENSES.txt ${report.assets.notices}; the tool server's licence text ${report.assets.notices === 'carried' ? 'once, in the notices file' : 'not carried (a development package)'}`);
     const probe = runProbe(exe, appOutDir);
@@ -354,4 +387,4 @@ async function afterPack(ctx) {
   }
 }
 
-module.exports = { beforeBuild, afterPack, artifactBuildCompleted, BINDINGS, checkRule1a, checkRule4, checkNaming, configuredArtifactNames, checkAssets, MARKER, REPORT };
+module.exports = { beforeBuild, afterPack, artifactBuildCompleted, peArchOf, checkRuntime, BINDINGS, checkRule1a, checkRule4, checkNaming, configuredArtifactNames, checkAssets, MARKER, REPORT };

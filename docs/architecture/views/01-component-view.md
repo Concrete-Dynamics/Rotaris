@@ -226,7 +226,11 @@ holds `runtime/` — a self-contained CPython 3.13.15 with `serena-agent==1.7.0`
 environment, its console-script launchers trimmed — and `bundle.json`, the marker with the pins' hash and the
 interpreter's own answers. `apps/desktop/scripts/code-intelligence/pins.json` is the one place the build pins the
 interpreter, the distribution and `uv` (by version and sha256; never shipped); `bundle.mjs` builds the tree
-(`pnpm code-intel:bundle`, idempotent on the marker; the build fetches, the product never does); `manifest.mjs`
+(`pnpm code-intel:bundle`, idempotent on the marker; the build fetches, the product never does) for one target
+architecture — since OQ-400 (2026-10-15) `--target=<platform>-<arch>`, the host by default and `win32-x64` from
+`package.mjs`, the interpreter installed by its full uv key and the target's architecture in the marker and its hash
+(`target.mjs`), a Windows ARM64 host using the pinned `win32-x64` uv; `build-hooks.cjs`'s `afterPack` refuses a packaged
+interpreter whose PE machine field is not the artifact's (`peArchOf`, `checkRuntime`); `manifest.mjs`
 starts the bundled runtime, reads `tools/list` and its version and the extensions it indexes, and **generates**
 `packages/config/src/mcp/code-intelligence-manifest.generated.ts` — REQ-MCP-116's binding manifest, committed so
 `pnpm check` needs no Python, regenerated and diffed by `pnpm package` (`--check`). Since `PD-MCP-001` (2026-10-06) the

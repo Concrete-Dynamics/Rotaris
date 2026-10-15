@@ -15420,3 +15420,19 @@ keeps a manual step that checks the version with no hash; Windows 11 ARM64 runs 
 uv gives hashed provenance with no new pin, and build tooling run under emulation is never acceptance evidence. For the guard it
 took A's PE machine-field read over B's `sysconfig` platform tag: a byte read that executes nothing and depends on no unverified
 string. No earlier ruling is revised; R-071 (3) still defers the x64-host work.
+
+**Built 2026-10-15 by fin47 (`fin47-record-and-windows-reading`).** (c) in code:
+`apps/desktop/scripts/code-intelligence/target.mjs` (`parseTarget`, `interpreterKey`, `pinsHashInput`, `uvAssetFor`) under
+`bundle.mjs`'s `--target=<platform>-<arch>`, the host by default and `win32-x64` from `package.mjs`: the interpreter installed by
+its full uv key, `target` and `targetArch` in `bundle.json` and `targetArch` in the pins' hash (recipe 4), and on `win32-arm64`
+the pinned `win32-x64` uv, logged as running under emulation, with `pins.json` unchanged; `build-hooks.cjs`'s `peArchOf` and
+`checkRuntime`, which read the packaged `python.exe`'s PE machine field and the marker's `targetArch` before spawning anything and
+refuse either one that is not the artifact's. Pinned by `build-hooks.test.ts` (PE-header fixtures; the arm64 case red against the
+old `checkRuntime`) and `target.test.ts`; read over the real Windows `python.exe` of both architectures, and the bundle built on
+Linux by the full key ([first-executions](first-executions.md), the row of 2026-10-15 "The bundle's target architecture and the
+packaging guard";
+[`../defects/fixed/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md`](../defects/fixed/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md)).
+(a) and (b) in the record: the arm64 rows of 2026-10-15 in `first-executions.md` and the pointers they left on the rows of
+2026-09-16 and 2026-10-06 amended in place, each struck reading kept; `spikes/native-load-proof.md`'s ARM64 section; ADR-0035,
+ADR-0054 and IC-7, dated notes. **Owed:** the first `pnpm package` on the Windows ARM64 host, which shows whether the emulated uv
+installs the x86_64 interpreter and takes `win_amd64` wheels.

@@ -388,6 +388,12 @@ signing, `REQ-STARTUP-156`'s gate, an icon, and the per-runner half (IC-3 item 3
 
 ## IC-7 — the bundled code-intelligence runtime fetches its language servers; the release is bound until the owner decides (ADOPTED 2026-09-06, option 2 — DISCHARGED 2026-09-27, the pipeline's evidence owed)
 
+> *Note 2026-10-15 ([OQ-400](open-questions.md#oq-400), ruled under R-072), not a change to this condition: Windows ARM64 is
+> an **unpinned development host**. `pins.json` pins uv for `win32-x64` and `linux-x64` only, and no `win32-arm64` asset is
+> added; on that host `bundle.mjs` takes the pinned, hash-checked `win32-x64` uv, which runs under the operating system's x64
+> emulation, and builds the bundle for the artifact's architecture (`--target`), so the pins this condition's record names are
+> unchanged by it.*
+
 > **DISCHARGED 2026-09-27 — the second half, by the notices generator's first execution** (`first-release-plan.md`
 > §4.3; `tools/notices/`, `pnpm notices`). The criterion option 2 set — "the specification carries the amendment and
 > the notices generator lists them" — is met. The generator writes the `Tools provisioned after installation` section

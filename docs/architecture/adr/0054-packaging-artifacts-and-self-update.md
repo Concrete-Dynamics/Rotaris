@@ -1083,6 +1083,17 @@ filtered out of the artifact and kept in the source tree for the generator. See 
 will write that section is the one still owed here — IC-7's second half is discharged when it does. *It did, on
 2026-09-27: see "The notices generator" below.*
 
+*2026-10-15, OQ-400 (ruled under R-072), fin47: the "runtime" rule now reads the packaged `python.exe`'s PE machine
+field before it spawns the interpreter (`peArchOf` in `build-hooks.cjs`: `e_lfanew` at 0x3C, the `PE\0\0` signature, the
+machine u16, 0x8664 x64 and 0xAA64 arm64) and refuses one built for another architecture than the artifact's — "runtime:
+the packaged interpreter is built for arm64, the artifact for x64" — and a `bundle.json` whose `targetArch` is not the
+artifact's. The spawn could never catch it: an arm64 interpreter answers its versions correctly on an ARM64 build host.
+`package.mjs` builds the bundle with `--target=win32-x64` (ADR-0035's note of the same date). The machine field is a
+byte check, so it counts from any Windows build host (OQ-400 (b)); rule 4's load, which executes the artifact, stays
+owed to a Windows x64 host. Pinned by `build-hooks.test.ts` over PE-header fixtures and read over the real
+python-build-standalone `python.exe` of both architectures (first-executions, 2026-10-15); no `pnpm package` has run
+with it yet.*
+
 ## Two assets the About page asks this record for — 2026-09-08 (Part AG)
 
 `REQ-SHELL-140` reads the build identifier from **a bundled text asset** and `REQ-SHELL-142` opens **a bundled

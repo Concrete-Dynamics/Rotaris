@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**The code-intelligence bundle is built for the artifact's architecture, and packaging refuses an interpreter of another one
+(fin47, `fin47-record-and-windows-reading`; OQ-400 ruled under R-072; REQ-STARTUP-015, REQ-STARTUP-159).** `01-component-view.md`'s
+bundled-runtime section names `bundle.mjs`'s `--target`, `target.mjs` (the full uv key, the target's architecture in the marker
+and its hash, the `win32-x64` uv on a Windows ARM64 host) and `afterPack`'s PE machine-field guard (`peArchOf`, `checkRuntime`).
+No package, edge or process changed. The README's date stays 2026-10-15.
+
 **A child's report is said to be an artifact, and a publishing grant is named (fin47, `fin47-delegation-routing`;
 `PD-TOOLS-006` revision 10, OQ-334; REQ-TOOLS-152, REQ-TOOLS-154).** `03-runtime-view.md`'s write-scope paragraph says every child
 payload carries `CHILD_REPORT_ARTIFACT_SENTENCE` between the workspace-root line and the scopes, and its `delegate` description

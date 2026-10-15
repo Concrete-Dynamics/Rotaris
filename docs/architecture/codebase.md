@@ -1860,7 +1860,14 @@ shown by `workspace-proof`'s scenario 8b. The same rule for a close that is not 
 [OQ-141](open-questions.md) stays open for it — *ruled 2026-10-06 as built ([R-071](../product/requests.md#r-071)): a close that is not a switch's cancels the same way*.)* No in-flight worktree integration is
 observable from main (`worktree.integrate`: none; `'integrating'`: one occurrence, an unread member of
 `MERGE_STATUSES`), so `REQ-SHELL-021`'s second gate is written in its place in the fixed order as an explicit
-no-op that names the state it would read. And this product has **no session name**: `SessionRecordSchema`
+no-op that names the state it would read. *(That sentence was false until 2026-10-15: no such no-op existed in
+`apps/desktop/src/main/`, so the gate's place was held by nothing
+([the note](../defects/fixed/the-integration-in-progress-close-guard-has-no-code.md)). Since 2026-10-15 (fin47) it holds:
+`apps/desktop/src/main/integration-guard.ts` builds REQ-SHELL-119 guard (2) and REQ-SHELL-021 / REQ-STARTUP-053 gate (2) in their
+places — the close's between the unsaved-settings guard and the active-run confirmation (`guardClose`), the workspace-open flow's
+between gates 1 and 3 — over `noWorktreeIntegration`, the reader that names a binding's `'integrating'` status and answers none
+running until integration is built; what the requirement leaves open beyond one window's close is
+[OQ-361](open-questions.md#oq-361).)* And this product has **no session name**: `SessionRecordSchema`
 carries an identifier, a status, a workspace root, timestamps and run state, so `REQ-WORKSPACE-017`'s "the
 current session name (or `—` when there is none)" can only honestly render `—`, which the chip does.
 
@@ -1935,7 +1942,8 @@ below the crash, which reads exactly like a shorter proof — so a harness error
 rather than allowed to kill the process. And one app runs at a time: seven live Electron processes were competing
 with a 650 ms measurement, and a finished launch's socket rejecting with nobody awaiting it took the run down
 twice. The two remaining skips are stated rather than quietly passed, and both are properties of this build
-rather than of the proof: gate 2 has no worktree-integration state to read, and `REQ-STARTUP-043` has no
+rather than of the proof: gate 2 has no worktree-integration state to read *(built since 2026-10-15 over a reader that
+answers none running, so the gate 3 check passes through it and the skip says so)*, and `REQ-STARTUP-043` has no
 observable unshown interval on a route that shows its window in the same turn it builds it. Gate 3 is not among
 them — it passes, with the requirement's own sentence and no chooser opened.
 

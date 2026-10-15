@@ -14916,7 +14916,7 @@ settles it. *The as-built reading kept above, neither close asking guard (1) and
 restart, is the falsified one.* **The two recommendations weighed:** the advocates' recommendations themselves were not handed
 to the building bundle, and the orchestrator's ruling record holds them; advocate B's report that no code implements
 REQ-SHELL-119 guard (2), "Integration in progress", anywhere in `apps/` or `packages/` was, and the builder confirmed it
-([`the-integration-in-progress-close-guard-has-no-code.md`](../defects/the-integration-in-progress-close-guard-has-no-code.md),
+([`the-integration-in-progress-close-guard-has-no-code.md`](../defects/fixed/the-integration-in-progress-close-guard-has-no-code.md),
 outside this ruling's repair: worktree integration is deferred from the first release, so the guard is vacuous until it is built).
 **Built 2026-10-14 by fin46 (`fin46-accept1-9`):** `UpdaterDeps.confirmUnsaved` and the `UPDATE_DECLINED_UNSAVED` outcome
 (`apps/desktop/src/main/updater/updater.ts`), asked first in `restart()` and in the installer flavour's `install()`, and first in
@@ -14985,6 +14985,53 @@ pipeline under R-071; IC-3 binds Linux and macOS artifacts)
 ([`../defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md`](../defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md)).
 Recorded beside it, outside the ruling's repair:
 [`../defects/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md`](../defects/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md).
+
+<a id="oq-361"></a>
+
+**OQ-361 — Where does REQ-SHELL-119's guard (2), "Integration in progress", stand beyond a person's close of one window?**
+*(REQ-SHELL-119 guard (2), "while a worktree integration is running, the close is refused **unconditionally** by an informational
+dialog titled "Integration in progress""; guards (1) and (3), each written for a **user-initiated** close; REQ-SHELL-021 and
+REQ-STARTUP-053 gate (2); [OQ-311](#oq-311), which ruled the update's `Restart now`, `Update now` and `Try again` user-initiated closes
+for guard (1) and said nothing of guard (2); [OQ-86](#oq-86), the same for guard (3); [OQ-298](#oq-298), under which a quit that starts
+outside any window asks no close guard; [`PD-SHELL-009`](../product/directives.md#pd-shell-009), which scoped guard (3) at the close of
+one of several main windows to that window's own project and left guard (2) as written; REQ-GIT-083 and REQ-GIT-125 to REQ-GIT-135,
+worktree integration itself, deferred from the first release. Raised 2026-10-15 by fin47 (`fin47-guard-and-support`) while building
+the guard
+([`the-integration-in-progress-close-guard-has-no-code.md`](../defects/fixed/the-integration-in-progress-close-guard-has-no-code.md));
+the plan's range OQ-361 to OQ-380, its first number — renumbered at landing if a sibling took it first.)*
+
+**What is open.** The guard is built in its place in both fixed orders (`apps/desktop/src/main/integration-guard.ts`): a person's close
+of a main window asks it between the renderer's unsaved-settings guard and the active-run confirmation (`guardClose`), and the
+workspace chip's and the chooser's flow between gates 1 and 3 (`MainWindows`'s workspace-open gates). Main reads
+`noWorktreeIntegration`, since nothing writes a binding's `'integrating'` status, so the guard refuses nothing in this build. Three
+things the requirement does not fix, all reachable only once integration is built:
+
+- **(a) The update's closes.** OQ-311 reads `Restart now`, and `Update now` / `Try again` on the installer flavour, as user-initiated
+  closes of every main window, and asks guard (1) then guard (3) at the click and again at the hand-off. Guard (2)'s "unconditionally"
+  says a close is refused while an integration runs, which would hold the update's restart back; nothing says whether those clicks
+  are a close guard (2) refuses, nor whether the installer's 1,200 ms auto-close and the portable's in-place apply, which ask nothing
+  under OQ-311, are refused by it.
+- **(b) One of several main windows.** "While a worktree integration is running" names no project. PD-SHELL-009 scoped guard (3) at
+  the close of one of several windows to that window's own project; whether guard (2) refuses such a close for an integration of
+  another window's project, or only for the window's own, is not said. The same holds for the chip's gate 2 in a window whose project
+  runs no integration.
+- **(c) A state that cannot be read.** Whether an integration state main cannot read counts as one running (the close refused, with
+  no answer that lets it through) or as none.
+
+**What the build proceeds under.** (a) No update path asks guard (2): the updater's closes ask guards (1) and (3) as OQ-311 and OQ-86
+ruled, and an integration running would not hold them. (b) The guard and the gate are instance-wide, as the requirement is written:
+any integration running refuses every main window's close and declines every window's workspace-open flow. (c) A state that cannot
+be read counts as an integration running, as an active-run count that cannot be read counts as a run active (REQ-STARTUP-046's
+reading, `confirmActiveRunClose`). A quit that starts outside any window asks no guard, guard (2) included, as OQ-298 ruled.
+
+**What a ruling decides.** For (a), whether the update's user-initiated closes ask guard (2) at the click and at the hand-off (and so
+decline while an integration runs), and whether its programmatic closes do. For (b), whether guard (2) and gate (2) are instance-wide
+or the window's own project's. For (c), which way an unreadable state falls. **The costs:** refusing the update's restart keeps a
+person from an update until the integration ends, where not refusing it can cut an integration off mid-merge; an instance-wide guard
+holds windows whose projects are idle, where a per-project one needs integration to say which workspace it belongs to; an unreadable
+state that refuses leaves a close no answer can pass, where one that allows can cut an integration off.
+
+**What a live run then shows.** Nothing: no build integrates a worktree, so no live scenario reaches the guard.
 
 <a id="oq-400"></a>
 

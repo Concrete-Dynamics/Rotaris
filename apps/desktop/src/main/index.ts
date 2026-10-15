@@ -2,6 +2,7 @@
 // first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
 import './sentinel.js';
 import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
+import { integrationAllowsClose, noWorktreeIntegration } from './integration-guard.js';
 import { askRendererGuard, askUnsavedInTurn, createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, RENDERER_UNSAVED_PROBE_SCRIPT, type CloseGuard, type UnsavedGuardAnswer } from './main-windows.js';
 import { createNoticeStore } from './notices.js';
 import { AuthRecovery } from './auth-recovery.js'; // REQ-NOTIFY-072..080 (the 401 note's parts C and D)
@@ -1433,6 +1434,16 @@ async function main(): Promise<void> {
      * (`QuitState.stoppedByClose`): their waits are the stop's to withdraw and their notices are held back. The box is shown
      * over the closing window.
      */
+    /*
+     * REQ-SHELL-119 guard 2: while a worktree integration runs, a person's close is refused by the informational "Integration
+     * in progress" box over the closing window. Main reads `noWorktreeIntegration` — no binding can be `'integrating'`
+     * while worktree integration is deferred (REQ-GIT-083, REQ-GIT-125..135) — so the guard holds its place and refuses nothing yet.
+     */
+    integrationAllowsClose: (_wcId, win) => integrationAllowsClose({
+      running: noWorktreeIntegration,
+      show: (box) => askBox(win.isDestroyed() ? null : win, box),
+      log,
+    }),
     confirmRunsAtClose: (wcId, win) => {
       const workspaceId = mainWindows.ordered().find((m) => m.wcId === wcId)?.workspaceId;
       return confirmActiveRunClose({
@@ -1481,6 +1492,8 @@ async function main(): Promise<void> {
     })
       .then((proceed: unknown) => proceed !== false)
       .catch(() => true),
+    // REQ-SHELL-021 gate 2 / REQ-STARTUP-053 gate 2: no integration can run until one is built (`integration-guard.ts`).
+    integrationRunning: noWorktreeIntegration,
     activeRunCount: async (workspaceId) => {
       const active = await runHost.request({ kind: 'runs.active', workspaceId }, millis(5_000)).catch(() => null);
       return active?.kind === 'runs.count' ? active.count : null;

@@ -154,7 +154,8 @@ host, answering `{ok, applies}` or `{ok: false, message}`; the dismissal closes 
 REQ-NOTIFY-071/078), **`notice.report {severity, title, message?, detail?, persistent, sessionId?}`** (Part AO: a renderer surface raising a PERSISTENT notice through main's one store — ADR-0049 decision B's missing entry for a renderer, defect fifty-seven, first needed by REQ-CHAT-021's "Command not run"; `sessionId` absent means the focused run and REQ-NOTIFY-268's record applies; answered `{id}`), **`prompts.roots.read`** (Part AO, REQ-CHAT-160: no workspace on the wire — main names the open one and relays to the workspace service, below), **`skills.read` / `skills.rescan` / `skills.forceLoad {name}` / `skills.loadFile {path?}`** (ADR-0063, REQ-WORKSPACE-051..073/151: none carries a workspace or a session — main names the window's open workspace and the session it follows and relays to the RUN HOST, which owns the catalog; the run host refuses all five with code `config.fatal`, the fatal report as the detail, while the saved configuration does not load (OQ-279, since 2026-10-14); `skills.loadFile` with no path opens the native chooser in main first, on REQ-SHELL-164's terms, and a dismissal answers `{cancelled: true}` having changed nothing), **`skills.list`** (REQ-CHAT-162's `/skills`, 2026-09-27: no argument — main refuses a window following no session before anything crosses (OQ-67), else relays `skills.list {workspaceRoot, sessionId}` to the run host, which writes the listing as ONE `system` row through that session's own writer and answers `skills.listed {count, index}`; the row reaches every window following the session on the transcript channel like any other row, so nothing is drawn from the answer), `workspace.backup/restore`,
 **`workspace.choose`** (Stage B, REQ-SHELL-035 / REQ-WORKSPACE-016: the title-bar chip asking for the
 project-folder flow. It carries **no folder and no window** — main evaluates REQ-SHELL-021's three gates in that
-requirement's fixed order, opens the native chooser asynchronously (ADR-0019's application-wide prohibition on a
+requirement's fixed order (gate 2, the worktree-integration decline, since 2026-10-15 over `noWorktreeIntegration`, which
+answers none running while integration is deferred; `main/integration-guard.ts`), opens the native chooser asynchronously (ADR-0019's application-wide prohibition on a
 synchronous one) and interprets every answer the host can return, so no surface can skip a gate or name a folder
 it was not given; the request is attributed to the window that sent it, REQ-SHELL-020. **`newWindow`** is
 `PD-SHELL-001`'s add route, decided by the gesture before the chooser opens — a palette entry or the chip with the
@@ -326,7 +327,11 @@ byte-identical). Nothing a quit closes answers for a person. `QuitState` (`main/
 `exitCleanly` and from each main window's confirmed close, which `guardClose` reports before closing. While it is under
 way an approval dialog that closes sends no Deny, and the question dock's cancellation is not forwarded. The run host's
 `shutdown` withdraws both instead (PD-ORCH-005 clause 9, OQ-96). **Since 2026-10-06 a person's close of a main window asks
-REQ-SHELL-119's guards in order** (REQ-STARTUP-046, OQ-206; fin22): the renderer's unsaved-settings guard, then, when no
+REQ-SHELL-119's guards in order** (REQ-STARTUP-046, OQ-206; fin22): the renderer's unsaved-settings guard, then guard (2)
+(since 2026-10-15, fin47: while a worktree integration runs the close is refused by the informational "Integration in progress"
+box, `integrationAllowsClose`, `main/integration-guard.ts`, reached through the adapter's `integrationAllowsClose`; main reads
+`noWorktreeIntegration`, which answers none running while integration is deferred, so it refuses nothing in this build;
+[OQ-361](../open-questions.md#oq-361) holds what it leaves open), then, when no
 other main window stays open and the run host's `runs.active` counts a run (a count that cannot be read counts), the
 active-run confirmation — a message box over the closing window, "Quit while a run is active?" with Cancel and Yes, Cancel
 the default and Escape's answer (`activeRunCloseBox`, `confirmActiveRunClose`, `main/close-confirmation.ts`, reached through

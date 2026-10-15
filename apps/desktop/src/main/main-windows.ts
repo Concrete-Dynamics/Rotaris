@@ -3,6 +3,7 @@ import type { HandOver } from '@rotaris/platform';
 import type { BrowserWindow, BrowserWindowConstructorOptions, OpenDialogOptions } from 'electron';
 import { PersonaWindows, TerminalWindows } from './windows.js';
 import { onConsoleWarning } from './capture/console-relay.js';
+import { integrationDeclinesWorkspaceOpen, type WorktreeIntegrationRunning } from './integration-guard.js';
 
 export type MainWindowOrigin = 'launch' | 'open-request' | 'hand-over';
 
@@ -80,6 +81,11 @@ export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWind
     owner: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>,
   ) => Promise<{ readonly workspaceId: string; readonly storeFile: string } | undefined>;
   readonly closeGuard: (owner: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>) => Promise<boolean>;
+  /**
+   * REQ-SHELL-021 gate 2 / REQ-STARTUP-053 gate 2: whether a worktree integration is running in this instance
+   * (`integration-guard.ts`; main reads `noWorktreeIntegration` until integration is built). A rejection declines.
+   */
+  readonly integrationRunning: WorktreeIntegrationRunning;
   readonly activeRunCount: (workspaceId: string) => Promise<number | null>;
   readonly persistWorkspace: (workspace: string) => Promise<void>;
   readonly raiseTransient: (
@@ -706,6 +712,12 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
       this.dependencies.log('workspace open ended by the unsaved-settings guard (REQ-SHELL-021 gate 1)');
       return { ok: false, outcome: { ok: true, value: { cancelled: true } } };
     }
+    const integrating = await integrationDeclinesWorkspaceOpen(this.dependencies.integrationRunning);
+    if (integrating !== null) {
+      this.dependencies.raiseTransient(requester.wcId, 'fail', integrating);
+      this.dependencies.log(`workspace open declined: ${integrating} (REQ-SHELL-021 gate 2)`);
+      return { ok: false, outcome: { ok: true, value: { cancelled: true, declined: integrating } } };
+    }
     if (requester.workspaceId) {
       const count = await this.dependencies.activeRunCount(requester.workspaceId);
       if (count !== null && count > 0) {
@@ -819,7 +831,12 @@ export interface ElectronMainWindowAdapterDependencies {
   readonly forgetTerminalFrames: (wcId: number) => void;
   /** A main window's close was confirmed and is now under way: what an application quit is recognised by (`exit.ts`). */
   readonly closeConfirmed?: ((wcId: number) => void) | undefined;
-  /** REQ-STARTUP-046 / REQ-SHELL-119 guard 3: a person's close of this window, asked once the renderer's guard allows. */
+  /**
+   * REQ-SHELL-119 guard 2: a person's close of this window, asked once the renderer's guard allows and before guard 3;
+   * false refuses the close ("Integration in progress", `integrationAllowsClose`, `integration-guard.ts`).
+   */
+  readonly integrationAllowsClose?: ((wcId: number, win: BrowserWindow) => Promise<boolean>) | undefined;
+  /** REQ-STARTUP-046 / REQ-SHELL-119 guard 3: a person's close of this window, asked once guards 1 and 2 allow. */
   readonly confirmRunsAtClose?: ((wcId: number, win: BrowserWindow) => Promise<boolean>) | undefined;
   /** Each main window's close guard as it is built, and `null` once the window has closed. */
   readonly closeGuard?: ((wcId: number, guard: CloseGuard | null) => void) | undefined;
@@ -873,14 +890,21 @@ export interface CloseGuard {
  * can ask every window's guard before confirming any.
  *
  * A person's close asks REQ-SHELL-119's guards in their order: the renderer's (unsaved settings, guard 1), then, once
- * that allows, `confirmRuns` (the active-run confirmation, guard 3; REQ-STARTUP-046, `close-confirmation.ts`), which
- * declines when it cannot answer. A declined close changes nothing. A close attempted while the guards are still being
+ * that allows, `integrationAllows` (a worktree integration running refuses the close unconditionally, guard 2;
+ * `integration-guard.ts`), then `confirmRuns` (the active-run confirmation, guard 3; REQ-STARTUP-046,
+ * `close-confirmation.ts`); guards 2 and 3 decline when they cannot answer. A declined close changes nothing. A close attempted while the guards are still being
  * asked is held and adds no second question. The application's quit asks neither: it is not a person's close of the window
  * (PD-SHELL-009), and since OQ-298's ruling (2026-10-14, R-072) it takes only this guard's `confirm` and `close`
  * (`quitGuardsOutsideAnyWindow`, `exit.ts`), so the renderer's unsaved-settings guard is never asked and the edits stay unsaved. Under PD-SHELL-009 a `confirmRuns` that allows the close of one of several
  * windows has already stopped the window's own runs, so the stop precedes `confirmed` and the presenter's revoke.
  */
-export function guardClose(win: GuardedWindow, ask: () => Promise<unknown>, confirmed: () => void, confirmRuns?: () => Promise<boolean>): CloseGuard {
+export function guardClose(
+  win: GuardedWindow,
+  ask: () => Promise<unknown>,
+  confirmed: () => void,
+  confirmRuns?: () => Promise<boolean>,
+  integrationAllows?: () => Promise<boolean>,
+): CloseGuard {
   let closeConfirmed = false;
   let asking = false;
   const guard: CloseGuard = {
@@ -894,6 +918,7 @@ export function guardClose(win: GuardedWindow, ask: () => Promise<unknown>, conf
     if (asking) return;
     asking = true;
     void guard.ask()
+      .then((allowed) => (allowed && integrationAllows ? integrationAllows().catch(() => false) : allowed))
       .then((allowed) => (allowed && confirmRuns ? confirmRuns().catch(() => false) : allowed))
       .then((allowed) => { asking = false; if (allowed) { guard.confirm(); guard.close(); } });
   });
@@ -1148,6 +1173,7 @@ export function createElectronMainWindowAdapter(
         () => askRendererGuard(win.webContents, { timers: dependencies.timers, warn: (m) => (dependencies.warn ?? dependencies.log)(`main window ${wcId}: ${m}`) }),
         () => dependencies.closeConfirmed?.(wcId),
         dependencies.confirmRunsAtClose === undefined ? undefined : () => dependencies.confirmRunsAtClose!(wcId, win),
+        dependencies.integrationAllowsClose === undefined ? undefined : () => dependencies.integrationAllowsClose!(wcId, win),
       );
       dependencies.closeGuard?.(wcId, guard);
       win.once('closed', () => dependencies.closeGuard?.(wcId, null));

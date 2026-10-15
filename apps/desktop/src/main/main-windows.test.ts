@@ -45,8 +45,14 @@ function harness(options: {
   readonly postShowActivation?: (wcId: number) => void;
   /** The run host's count for a workspace id, as REQ-SHELL-021's gate 3 asks it (PD-SHELL-009: keyed by workspace). */
   readonly runsIn?: (workspaceId: string) => number;
+  /** Whether a worktree integration is running, as REQ-SHELL-021's gate 2 asks it; also counts each asking. */
+  readonly integrating?: () => boolean;
+  /** The unsaved-settings guard's answer (REQ-SHELL-021 gate 1); true when absent. */
+  readonly unsavedAllows?: () => boolean;
 } = {}) {
   const actions: string[] = [];
+  /** The workspace-open gates asked, in order (REQ-SHELL-021). */
+  const gates: string[] = [];
   const workspacesOpened: string[] = [];
   const delivered: string[] = [];
   const notices: { windowId: number; title: string; action?: string }[] = [];
@@ -125,8 +131,9 @@ function harness(options: {
       if (!deferOpens) return { workspaceId: `id:${workspace}`, storeFile: `${workspace}/store.db` };
       return new Promise((resolve) => { openResolvers.set(workspace, resolve); });
     },
-    closeGuard: async () => true,
-    activeRunCount: async (workspaceId) => options.runsIn?.(workspaceId) ?? 0,
+    closeGuard: async () => { gates.push('unsaved'); return options.unsavedAllows?.() ?? true; },
+    integrationRunning: async () => { gates.push('integration'); return options.integrating?.() ?? false; },
+    activeRunCount: async (workspaceId) => { gates.push('runs'); return options.runsIn?.(workspaceId) ?? 0; },
     persistWorkspace: async (workspace) => { actions.push(`persist:${workspace}`); },
     raiseTransient: (windowId, _kind, title, _body, action) => {
       notices.push({ windowId, title, ...(action === undefined ? {} : { action: action.label }) });
@@ -142,7 +149,7 @@ function harness(options: {
 
   const mainWindows = new MainWindows<MemoryWindow, string, string, string, string>(dependencies);
   return {
-    mainWindows, actions, workspacesOpened, delivered, notices, folders, windows, openFailures,
+    mainWindows, actions, gates, workspacesOpened, delivered, notices, folders, windows, openFailures,
     deferOpens: () => { deferOpens = true; },
     resolveOpen: (workspace: string, opened = true) => openResolvers.get(workspace)?.(opened ? { workspaceId: `id:${workspace}`, storeFile: `${workspace}/store.db` } : undefined),
     advanceTimers: () => { for (const timer of timers.splice(0)) if (!timer.cancelled) timer.callback(); },
@@ -1235,6 +1242,126 @@ describe("REQ-SHELL-021's gate 3 counts the requesting window's own workspace (P
     expect(declined).toEqual({ ok: true, value: { cancelled: true, declined: 'Finish the active run before opening another project.' } });
     expect(h.notices).toContainEqual({ windowId: running.wcId, title: 'Finish the active run before opening another project.' });
     expect(h.mainWindows.ordered().map((w) => w.workspace).sort()).toEqual(['C:/a', 'C:/c']);
+  });
+});
+
+describe("REQ-SHELL-021's gate 2: the workspace-open flow is declined while a worktree integration runs (REQ-STARTUP-053)", () => {
+  it('declined with the requirement\'s sentence after gate 1 and before gate 3: no chooser, no switch, nothing persisted', async () => {
+    const h = harness({ integrating: () => true, runsIn: () => 1 });
+    const window = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    await h.mainWindows.open(window.wcId, 'C:/a');
+    h.folders.push('C:/b');
+    const declined = await h.mainWindows.choose(window.wcId, { newWindow: false });
+    expect(declined).toEqual({ ok: true, value: { cancelled: true, declined: 'Finish the worktree integration before opening another project.' } });
+    expect(h.gates).toEqual(['unsaved', 'integration']);
+    expect(h.notices).toEqual([{ windowId: window.wcId, title: 'Finish the worktree integration before opening another project.' }]);
+    expect(h.folders).toEqual(['C:/b']);
+    expect(h.actions.filter((a) => a.startsWith('persist:'))).toEqual([]);
+    expect(h.actions).toContain('log:workspace open declined: Finish the worktree integration before opening another project. (REQ-SHELL-021 gate 2)');
+    expect(h.mainWindows.ordered().map((w) => w.workspace)).toEqual(['C:/a']);
+  });
+
+  it('the unsaved-settings gate comes first: ended there, gate 2 is never asked', async () => {
+    const h = harness({ integrating: () => true, unsavedAllows: () => false });
+    const window = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    await h.mainWindows.open(window.wcId, 'C:/a');
+    expect(await h.mainWindows.choose(window.wcId, { newWindow: false })).toEqual({ ok: true, value: { cancelled: true } });
+    expect(h.gates).toEqual(['unsaved']);
+    expect(h.notices).toEqual([]);
+  });
+
+  it('with none running the flow goes on to gate 3, in the fixed order', async () => {
+    const h = harness({ integrating: () => false });
+    const window = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    await h.mainWindows.open(window.wcId, 'C:/a');
+    h.folders.push('C:/b');
+    const switched = await h.mainWindows.choose(window.wcId, { newWindow: false });
+    expect(switched.ok && (switched.value as { workspace?: string }).workspace).toBe('C:/b');
+    expect(h.gates).toEqual(['unsaved', 'integration', 'runs']);
+  });
+
+  it('a window that holds no workspace yet is declined all the same: the gate is not the window\'s project\'s', async () => {
+    const h = harness({ integrating: () => true });
+    const window = await h.mainWindows.build({ workspace: '(no workspace)', origin: 'launch' });
+    h.folders.push('C:/b');
+    const declined = await h.mainWindows.choose(window.wcId, { newWindow: false });
+    expect(declined).toEqual({ ok: true, value: { cancelled: true, declined: 'Finish the worktree integration before opening another project.' } });
+    expect(h.folders).toEqual(['C:/b']);
+  });
+
+  it("PD-SHELL-001's add route evaluates no gate, gate 2 included", async () => {
+    const h = harness({ integrating: () => true });
+    const window = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    await h.mainWindows.open(window.wcId, 'C:/a');
+    h.folders.push('C:/b');
+    await h.mainWindows.choose(window.wcId, { newWindow: true });
+    expect(h.gates).toEqual([]);
+  });
+});
+
+describe('a person\'s close asks REQ-SHELL-119\'s three guards in their fixed order (guard 2: "Integration in progress")', () => {
+  function fakeWindow(log: string[]) {
+    let listener: ((event: { preventDefault(): void }) => void) | null = null;
+    const win: GuardedWindow & { attempt(): void } = {
+      on: (_event, l) => { listener = l; },
+      isDestroyed: () => false,
+      close: () => { log.push('close'); win.attempt(); },
+      attempt: () => { let prevented = false; listener?.({ preventDefault: () => { prevented = true; } }); log.push(prevented ? 'held' : 'passed'); },
+    };
+    return win;
+  }
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it('refused by guard 2, the close is aborted and guard 3 is never asked', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, async () => { log.push('settings'); return true; }, () => log.push('confirmed'), async () => { log.push('runs'); return true; }, async () => { log.push('integration'); return false; });
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['settings', 'held', 'integration']);
+  });
+
+  it('allowed by guard 2, guard 3 is asked next and decides', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, async () => { log.push('settings'); return true; }, () => log.push('confirmed'), async () => { log.push('runs'); return true; }, async () => { log.push('integration'); return true; });
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['settings', 'held', 'integration', 'runs', 'confirmed', 'close', 'passed']);
+  });
+
+  it('guard 1 comes first: refused there, guard 2 is never asked', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, async () => { log.push('settings'); return false; }, () => log.push('confirmed'), async () => { log.push('runs'); return true; }, async () => { log.push('integration'); return true; });
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['settings', 'held']);
+  });
+
+  it('guard 2 holds with no guard 3 wired: refused, nothing is reported or closed', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, async () => true, () => log.push('confirmed'), undefined, async () => { log.push('integration'); return false; });
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['held', 'integration']);
+  });
+
+  it('a guard 2 that throws keeps the window, as a guard 3 that cannot be asked does', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, async () => true, () => log.push('confirmed'), async () => { log.push('runs'); return true; }, async () => { throw new Error('no box'); });
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['held']);
+  });
+
+  it('the application\'s quit asks none of them (OQ-298): the guard\'s ask is the renderer\'s alone', async () => {
+    const log: string[] = [];
+    const guard = guardClose(fakeWindow(log), async () => { log.push('settings'); return true; }, () => log.push('confirmed'), async () => { log.push('runs'); return false; }, async () => { log.push('integration'); return false; });
+    expect(await guard.ask()).toBe(true);
+    expect(log).toEqual(['settings']);
   });
 });
 

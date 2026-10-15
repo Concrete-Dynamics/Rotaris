@@ -1241,7 +1241,7 @@ try {
       skip('REQ-SHELL-021 gate 3: the active-run decline', `no session could be started to make a run active (${JSON.stringify(started).slice(0, 200)})`);
     }
     skip('REQ-SHELL-021 gate 2: the worktree-integration decline',
-      'no in-flight worktree integration is observable from main in this build — `worktree.integrate` does not exist and `integrating` is an unread MERGE_STATUSES member, so the gate has no state to read');
+      'the gate is built in its place between gates 1 and 3 (`apps/desktop/src/main/integration-guard.ts`, pinned by `main-windows.test.ts`), but no worktree integration can run in this build — worktree integration is deferred and nothing writes the `integrating` MERGE_STATUSES member, so main reads `noWorktreeIntegration` and the gate never declines; the gate 3 check above passes through it');
     skip('REQ-STARTUP-043: a constructed-but-unshown window opens no network connection',
       'the add route shows its window in the same turn it builds it, so there is no observable unshown interval to measure from outside the process');
   }

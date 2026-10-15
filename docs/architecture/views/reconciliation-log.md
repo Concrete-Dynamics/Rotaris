@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**REQ-SHELL-119's guard (2) and REQ-SHELL-021's gate (2) are built in their places (fin47, `fin47-guard-and-support`;
+REQ-SHELL-119, REQ-SHELL-021, REQ-STARTUP-053; OQ-361 raised).** `02-process-view.md`'s close-guard paragraph names guard (2)
+between the unsaved-settings guard and the active-run confirmation, and its `workspace.choose` entry says gate 2 reads
+`noWorktreeIntegration` (`main/integration-guard.ts`), which answers none running while worktree integration is deferred. No
+package, edge or process changed. The README's date stays 2026-10-15.
+
 **A withdrawn `requirements.delivery.store_subpath` is reported and ignored (fin47, `fin47-gate-timeout-and-config`;
 REQ-CONFIG-192, REQ-CONFIG-183).** `03-runtime-view.md`'s `requirements:` paragraph names both of REQ-CONFIG-183's carved-out
 keys, where it named `execution.worktree_subpath` alone, and says `delivery.store_subpath` is now reported once and dropped

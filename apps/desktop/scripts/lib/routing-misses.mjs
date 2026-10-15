@@ -29,38 +29,6 @@
  *
  * `sessions`: `{ scenario, nonWriterFileTasks?: number, publishers?: string[], rootNames: string[], calls: { ordinal, tool_name, agent_name, status, result, failureKind, args?, endedAt? }[] }[]`.
  */
-/** PD-TOOLS-006 revision 10 (OQ-334): the word a catalogue entry carries where its child's resolved grant holds `artifact_write`. */
-export const PUBLISHES_ARTIFACTS = 'publishes artifacts';
-
-/**
- * OQ-334: the personas a `delegate` description's catalogue names as publishing — each `name (words)` entry whose words include
- * "publishes artifacts".
- * @param {string} description
- * @returns {string[]}
- */
-export function publishersOf(description) {
-  const out = [];
-  for (const m of String(description ?? '').matchAll(/([A-Za-z0-9][\w.-]*) \(([^()]*)\)/g)) {
-    if (m[2].split(', ').includes(PUBLISHES_ARTIFACTS) && !out.includes(m[1])) out.push(m[1]);
-  }
-  return out;
-}
-
-/**
- * OQ-334: whether a brief asks its child to publish an artifact — an imperative "publish" followed within the sentence by
- * "artifact", or the tool's own name — and not where the clause forbids it ("Do not publish …") or names one already published.
- * @param {string} task
- */
-export function asksToPublish(task) {
-  const text = String(task ?? '');
-  if (/\bartifact_write\b/.test(text)) return true;
-  for (const m of text.matchAll(/\bpublish\b[^.\n]{0,60}\bartifacts?\b/gi)) {
-    const before = text.slice(Math.max(0, (m.index ?? 0) - 24), m.index ?? 0);
-    if (!/\b(?:not|never|no)\b[^.\n]*$/i.test(before)) return true;
-  }
-  return false;
-}
-
 export function routingMissReading(sessions) {
   const scopeRefusals = [];
   const unknownTools = [];
@@ -106,4 +74,36 @@ export function routingMissReading(sessions) {
   }
   const unknownArtifactWrites = unknownTools.filter((u) => u.tool === 'artifact_write');
   return { read: sessions.map((s) => s.scenario), scopeRefusals, unknownTools, unknownArtifactWrites, publishBriefs, flagged };
+}
+
+/** PD-TOOLS-006 revision 10 (OQ-334): the word a catalogue entry carries where its child's resolved grant holds `artifact_write`. */
+export const PUBLISHES_ARTIFACTS = 'publishes artifacts';
+
+/**
+ * OQ-334: the personas a `delegate` description's catalogue names as publishing — each `name (words)` entry whose words include
+ * "publishes artifacts".
+ * @param {string} description
+ * @returns {string[]}
+ */
+export function publishersOf(description) {
+  const out = [];
+  for (const m of String(description ?? '').matchAll(/([A-Za-z0-9][\w.-]*) \(([^()]*)\)/g)) {
+    if (m[2].split(', ').includes(PUBLISHES_ARTIFACTS) && !out.includes(m[1])) out.push(m[1]);
+  }
+  return out;
+}
+
+/**
+ * OQ-334: whether a brief asks its child to publish an artifact — an imperative "publish" followed within the sentence by
+ * "artifact", or the tool's own name — and not where the clause forbids it ("Do not publish …") or names one already published.
+ * @param {string} task
+ */
+export function asksToPublish(task) {
+  const text = String(task ?? '');
+  if (/\bartifact_write\b/.test(text)) return true;
+  for (const m of text.matchAll(/\bpublish\b[^.\n]{0,60}\bartifacts?\b/gi)) {
+    const before = text.slice(Math.max(0, (m.index ?? 0) - 24), m.index ?? 0);
+    if (!/\b(?:not|never|no)\b[^.\n]*$/i.test(before)) return true;
+  }
+  return false;
 }

@@ -14989,7 +14989,7 @@ Windows `pnpm package` run of the re-based step is owed to the next Windows pack
 pipeline under R-071; IC-3 binds Linux and macOS artifacts)
 ([`../defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md`](../defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md)).
 Recorded beside it, outside the ruling's repair:
-[`../defects/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md`](../defects/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md).
+[`../defects/fixed/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md`](../defects/fixed/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md) (repaired 2026-10-15, fin47).
 
 <a id="oq-361"></a>
 

@@ -565,6 +565,28 @@ either way. Read through the product's own verification seam (`ROTARIS_CAPTURE_E
 launch wrote; the section is `pnpm terminal-stream-proof --packaged`, which refuses with a stated reason rather than
 passing if the packaged executable is absent.
 
+*Reported back 2026-10-15 (fin47): **the reading above, through `ROTARIS_CAPTURE_EVAL_AT` and the scripted dialect, is
+falsified for every package built since fin43 to fin46, and is kept here beside its replacement.** ADR-0056 compiles the
+verification seams out of a packaged build: `_EVAL_AT` since fin43, the dialect switch and `ROTARIS_SCRIPT` since fin45, and
+since fin46 the scripted model client itself (OQ-312). The section therefore drove a model and a reading a package no longer
+had, and measured nothing on any package `pnpm package` could produce
+([`terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out`](../../defects/fixed/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md)).
+Each launch now names an OpenAI-compatible model at a loopback stub the section starts for it (`scripts/lib/stub-model-endpoint.mjs`,
+the one rule 4 (b) runs against since OQ-312), which the shipped model client reaches and which answers with the one `git status`
+call. The launch is given the packaged probe's three variables and nothing else of the product's own. The surface is read
+through REQ-SHELL-109: the scratch profile's `interface/terminalPopout` preference is on, so a running stream's first frame opens
+the terminal window and main logs "terminal window auto-opening for <stream> (REQ-SHELL-109)". That line is the live view
+reaching main and its window, and with the key off no frame is published and no line is written. This also answers (5) above
+in part: the window is now opened under the launch, though its DOM is still not read. The toolbar's session total and the
+preview blocks are no longer read in the packaged section, because a packaged renderer has no reading but its photograph. They
+remain read in the development build by the proof's Electron half. A sixth check, that each terminal call came from the stub
+through the shipped client, joins the five. **Measured 2026-10-15 on Linux** against a `ROTARIS_BUILD=package` bundle whose seam
+check passed, under Electron (`--app=`, the section's new option for a host without the Windows package, IC-3; it refuses a
+build the seam check fails). Load was 2.16 to 1.71 on 4 CPUs. With the key on, the terminal window auto-opened for `fg:orchestrator`;
+with it off, nothing opened. Both `terminal` calls were `ok`, not errors, with byte-identical observations. Both launches painted
+and exited 0, and the stub served each 2 tools requests and 1 terminal call. All six checks were true. **Not measured:** the
+Windows package itself (no Windows host in this session).*
+
 ## The owner's ruling — 2026-09-11: OQ-5, OQ-38 and OQ-55 closed, and one reading of this record narrowed
 
 Three questions this record raised and carried three executions have been ruled, and the specification now states

@@ -2822,7 +2822,9 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     /**
      * PD-TOOLS-006 revision 7 and PD-TOOLS-008 revision 2 (OQ-249, ruled 2026-10-07 under R-072): an admitted delegation hands
      * back the item it serves, so the caller's port marks it IN_PROGRESS, and the items the caller's non-terminal children hold
-     * are the set REQ-TOOLS-145's count leaves out — read live, so an item whose child has ended counts again.
+     * are the set REQ-TOOLS-145's count leaves out — read live, so an item whose child has ended counts again. (Until
+     * 2026-10-15: since `PD-TOOLS-008` revision 4, OQ-333, the count leaves out the served set, held inside it, so such an item
+     * no longer counts; the held set still decides which served item a `replace` may close.)
      */
     it('revision 7: an admitted delegation hands back its item, a rejected one none, and the held set is the live children\'s items (and, revision 3, the served set every child\'s)', async () => {
       const observed: string[] = [];

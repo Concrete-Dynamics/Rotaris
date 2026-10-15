@@ -236,11 +236,13 @@ run's todo list, which the run writes and resolves itself. The coordinator's age
 of REQ-ORCH-029: from a task's second work item on the run refuses the next until one is written for that task (OQ-213), its
 open items hold the task's completion (REQ-ORCH-075, OQ-203), and a background child's completion notification names them
 (REQ-ORCH-059). The Todo pane shows it as "Agent plan" (REQ-CHAT-088). At most one of its tasks is IN_PROGRESS that the agent
-works on itself; a task one of its running delegated children holds as `todo_item` is outside that count, and an admitted
-delegation marks its PENDING item IN_PROGRESS (`PD-TOOLS-008` revision 2, `PD-TOOLS-006` revision 7, OQ-249). Once no running
-child holds a delegated item, a `replace` closes it, and a `replace` names each task it kept over a different state
-(`PD-TOOLS-008` revision 3, OQ-255). — `REQ-TOOLS-144`, `REQ-TOOLS-145`, `REQ-TOOLS-146`, `REQ-TOOLS-147`, `REQ-ORCH-029`,
-`REQ-ORCH-075`, OQ-213, OQ-249, OQ-255
+works on itself; a task one of its delegated children serves as `todo_item`, running or ended, is outside that count, and an
+admitted delegation marks its PENDING item IN_PROGRESS (`PD-TOOLS-006` revision 7, OQ-249; `PD-TOOLS-008` revision 4, OQ-333 —
+until 2026-10-15, under revision 2, only a task a *running* child held was outside it, so an item whose child had ended counted
+again). Once no running child holds a delegated item, a `replace` closes it, and a `replace` names each task it kept over a
+different state (`PD-TOOLS-008` revision 3, OQ-255); the run never closes it, and the message that resumes a wait names each
+reported child's item still IN_PROGRESS (`PD-TOOLS-006` revision 11, OQ-333). — `REQ-TOOLS-144`, `REQ-TOOLS-145`,
+`REQ-TOOLS-146`, `REQ-TOOLS-147`, `REQ-ORCH-029`, `REQ-ORCH-063`, `REQ-ORCH-075`, OQ-213, OQ-249, OQ-255, OQ-333
 _Avoid_: planner plan (the run's todo list), task ledger
 
 ### Finishing work

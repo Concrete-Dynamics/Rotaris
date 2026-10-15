@@ -508,7 +508,10 @@ the reporting. A Linux whose `/proc` does not answer is read the same way. The h
 "(OQ-168, ruled)" cases in `terminal.test.ts` over a real PTY told it runs on `win32` or `darwin`, each red under the
 write-anyway reading. Still unmeasured on a Windows or macOS host.* *(2026-10-15: still unmeasured on Windows. On
 Windows 11 ARM64 those three cases are skipped where the shell is PowerShell (`it.skipIf(PS)`), so the suite never runs
-them on a Windows host; the session's B5 and B7 owe the reading.)*
+them on a Windows host; the session's B5 and B7 owe the reading.)* *(B7, the same day: measured on a real PowerShell and
+ConPTY, pwsh 7.6.6 and 5.1, three runs a shell, and held as ruled — nothing written after an interrupt, the soft pause led by
+`INTERRUPT_UNSEEN_NOTE`, the next command reporting the end; PowerShell abandons its line on `C-c`; a running call's
+interrupt ends the program at once and the call still runs out its cap. OQ-168's entry carries the detail.)*
 
 *Reported back 2026-10-01, the repair of
 [`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll`](../../defects/fixed/output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md)

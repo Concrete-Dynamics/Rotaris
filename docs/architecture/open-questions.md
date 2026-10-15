@@ -1527,7 +1527,7 @@ Windows.
 
 **Ruled 2026-09-21 for background pipe sessions, on the owner's fix instruction ([R-044](../product/requests.md#r-044)); the foreground/PTY scope stays open.** A pipe has no graceful interrupt on Windows, so SIGINT and SIGHUP terminate the session's own tree there — the mapping SIGTERM and SIGKILL already used (`packages/agent-tools/src/terminal/background.ts`). `send_signal` therefore delivers every signal in its vocabulary on every platform, as `REQ-TOOLS-110` states, and the stream-control `interrupt` (`REQ-TOOLS-128`) stops a win32 background session instead of answering false. *(Measured 2026-10-15 on Windows 11 ARM64 (build 26200.9457), dev tree, pwsh 7.6.6 and Windows PowerShell 5.1, the session's B1: "OQ-10 (R-044): send_signal SIGINT stops a background session instead of refusing it" and live-run L4's "a session the agent ends with send_signal SIGINT reads killed (−1) at warning" passed in every run under both shells (3 and 3); the background half is measured on windows-arm64, OQ-400's reading. The tree termination's timing per signal is the session's B8.)*
 
-**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the foreground scope is confirmed as built, and recorded here beside R-044's ruling for background pipe sessions. A foreground session runs in a pseudo-terminal on every platform, and is interrupted by writing the interrupt character (`C-c`, ETX) into it, which the Windows console host delivers to the running program as Ctrl+C (`ForegroundSession.interrupt`); the user's kill terminates the process tree behind the running command. No signal argument is ever passed to the pseudo-terminal library, which ignores one on Windows, and `send_signal` addresses background sessions alone. The Windows half is reasoned and not run on a Windows host (IC-3 — *corrected 2026-10-14: a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the foreground scope is confirmed as built, and recorded here beside R-044's ruling for background pipe sessions. A foreground session runs in a pseudo-terminal on every platform, and is interrupted by writing the interrupt character (`C-c`, ETX) into it, which the Windows console host delivers to the running program as Ctrl+C (`ForegroundSession.interrupt`); the user's kill terminates the process tree behind the running command. No signal argument is ever passed to the pseudo-terminal library, which ignores one on Windows, and `send_signal` addresses background sessions alone. The Windows half is reasoned and not run on a Windows host (IC-3 — *corrected 2026-10-14: a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*). *(Run 2026-10-15 on Windows 11 ARM64, pwsh 7.6.6 and Windows PowerShell 5.1: the interrupt character written into the PTY ends a running `ping -t` and a running node within a second; the user's kill ends the running command and its grandchild, both gone, and node-pty's `kill()` is never given a signal argument. Recorded: a kill of a soft-paused command does nothing and reports success ([`the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md`](../defects/the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md)), and a kill's reset does not restore the shell's state ([`a-kill-from-the-terminal-window-resets-the-session-without-restoring-its-state.md`](../defects/a-kill-from-the-terminal-window-resets-the-session-without-restoring-its-state.md)).)*
 
 **OQ-11 — Resolved by dissolution.** See *Resolved, and closed with the reason* above, and **OQ-44**,
 which the closure opened.
@@ -7191,7 +7191,7 @@ Raised 2026-09-30 by the verification of acceptance finding A10,
 under [R-067](../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-144 on its branch, renumbered OQ-147 at the merge,
 OQ-143 to OQ-145 having been taken on `main`.)*
 
-**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: a soft-paused command that ended without printing its own status is handed over with exit −1, its reason as an `execution_error`, and its output up to the next call's start marker.
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: a soft-paused command that ended without printing its own status is handed over with exit −1, its reason as an `execution_error`, and its output up to the next call's start marker. *(Measured on Windows 2026-10-15, Windows 11 ARM64, pwsh 7.6.6 and 5.1: there a poll after C-c finds no end — OQ-168's ruling writes nothing to look for one — so it stays the soft pause, and the next command hands over "with no exit status of its own", which is this reading reported one call later.)*
 
 An interactive `sh` that takes the interrupt abandons the rest of the wrapper's line, so the paused call's end frame,
 which carries `$?`, never prints. The shell reaches the next call's line only once the paused one is done, so that
@@ -9028,6 +9028,19 @@ is only carried into the soft pause, and a call given a `timeout` still runs out
 has run it (no Windows host here; no macOS artifact is built, IC-3), and whether PowerShell abandons the rest of its line
 on `C-c` as `sh` does is reasoned, not measured. Windows is the one release target IC-3 leaves, so this is where the
 reading's risk lies.
+
+*(Measured 2026-10-15 on Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, dev tree, pwsh 7.6.6 and Windows PowerShell
+5.1, three runs a shell, under the ruling below as built — the paragraph above describes the reading the ruling replaced: a
+poll after the agent's C-c on a soft-paused `Start-Sleep` writes nothing into the session (every write recorded) and reads
+the soft pause led by the ruling's sentence; PowerShell does abandon the rest of its line on `C-c`, so what followed the
+sleep never ran and the next command reports the paused one ended with no status of its own. A node program that ignores the
+interrupt and reads its input is written nothing after the C-c, takes the next typed line (`got:hello`), and — the wrapper's
+line abandoned — no end frame follows its own exit, so the poll stays the ruling's soft pause. The window's interrupt ends a
+running `ping -t` or node process within a second, and the call given a `timeout` still runs out its cap and is reset, its
+state restored. Pinned by "OQ-168 / OQ-147 / OQ-10 on PowerShell and ConPTY" in `terminal.test.ts`. The three "(OQ-168,
+ruled)" cases that act Windows out through a POSIX shell stay skipped on a Windows host. Recorded beside it: the live run's
+interrupt check reads this ruled soft pause as "still running"
+([`the-live-runs-interrupt-check-reads-oq-168s-windows-soft-pause-as-still-running.md`](../defects/the-live-runs-interrupt-check-reads-oq-168s-windows-soft-pause-as-still-running.md)).)*
 
 The cases "REQ-TOOLS-098/179 (OQ-147): a poll after C-c reports …", "REQ-TOOLS-096/098 (OQ-147): a poll after C-c writes
 nothing into a program that survived …", "REQ-TOOLS-127 (OQ-147): the no-op line a poll after an interrupt submits …",

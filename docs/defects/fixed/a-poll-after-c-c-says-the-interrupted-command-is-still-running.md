@@ -72,7 +72,9 @@ The live run's `terminal` scenario carries the shape now (`interrupt` in `apps/d
 without an exit status of its own", output `^C`, and the scenario passed with no `__rot_` in any terminal result.
 
 Not reached: Windows and macOS, where nothing says who holds the terminal; PowerShell's no-op (`$null`) and whether it
-abandons its line on `C-c` are reasoned, not measured.
+abandons its line on `C-c` are reasoned, not measured. *(Windows reached 2026-10-15, Windows 11 ARM64, pwsh 7.6.6 and 5.1:
+under OQ-168's ruling no no-op is written there at all, and PowerShell does abandon its line on `C-c`; OQ-168's entry carries
+the readings.)*
 
 ## Outcome, corrected by the repair's first verification (2026-10-01)
 

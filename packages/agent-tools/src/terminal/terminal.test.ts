@@ -1249,7 +1249,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
   // the capture kept the whole screen — `done-later`, the paused call's own `__rot_…_e:0`, the shell's error — while the
   // live stream, which opens only at the printed start marker (L9), carried nothing. POSIX only: the kill character is the
   // POSIX line discipline's, and PowerShell's first statement already takes a prefix without losing the start marker.
-  it.skipIf(PS)('REQ-TOOLS-096/097/127 (A10): keystrokes left without Enter under a soft-paused command neither leak its end frame and late output into the next call nor blank that call\'s live stream', async () => {
+  it('REQ-TOOLS-096/097/127 (A10): keystrokes left without Enter under a soft-paused command neither leak its end frame and late output into the next call nor blank that call\'s live stream', async () => {
     const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
     const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
     try {
@@ -1281,7 +1281,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
   // A10's verification: a soft-paused command that ends while the next call is already queued behind it. Before the
   // repair the paused call was closed by the NEXT call's end frame and took that call's exit status, so a paused command
   // that failed read as a success. The paused call's own frame is read now, and so is its own status.
-  it.skipIf(PS)('REQ-TOOLS-098/179 (A10): a soft-paused command that ends behind the next call reports its own exit status, not the next call\'s', async () => {
+  it('REQ-TOOLS-098/179 (A10): a soft-paused command that ends behind the next call reports its own exit status, not the next call\'s', async () => {
     const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
     const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
     try {
@@ -1291,7 +1291,10 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(diag(next.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
       expect(output(next.text)).toBe('next-ok');
       // OQ-164: the call that waited behind it reports the paused command's end — its own output and its own status, 1.
-      expect(earlierOutput(next.text)).toBe('failed-later');
+      // PowerShell's failing `Get-Item` prints its error after the line, where `false` prints nothing (run on PowerShell since
+      // 2026-10-15, the Windows ARM64 session's B5).
+      if (PS) expect(earlierOutput(next.text)?.startsWith('failed-later\n')).toBe(true);
+      else expect(earlierOutput(next.text)).toBe('failed-later');
       expect(String(diag(next.text)['detail'])).toMatch(/that command ended .* with exit code 1\./);
       expect(next.text).not.toContain('__rot_');
     } finally { await m.dispose(); }
@@ -1323,6 +1326,57 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       // Reported once: BBB says nothing of it.
       expect(String(diag(bbb.text)['detail'])).toBe('The command exited with code 0.');
       // The paused call was handed over once; there is nothing left to poll.
+      expect((await t.execute(args({ command: '' }), ctx())).text).toContain('No paused command to poll.');
+    } finally { await m.dispose(); }
+  }, 60_000);
+
+  // A10 on PowerShell (the Windows ARM64 session's B5, 2026-10-15; pwsh 7.6.6 and 5.1). The case above stays POSIX-only:
+  // it writes its next line in the same tick as the C-c, and PowerShell discards a line that arrives with the interrupt
+  // (docs/defects/on-windows-a-command-written-in-the-same-tick-as-a-c-c-is-swallowed.md).
+  it.runIf(PS)('REQ-TOOLS-096/098/179 (A10, OQ-146): on PowerShell, typeahead under a paused command leaks nothing, and no stale native exit status reaches the next call', async () => {
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
+    try {
+      for (const [then, expectedExit] of [[SH.echo('own-output'), 0], [`${SH.echo('own-output')}; ${SH.fails()}`, 1]] as const) {
+        // A native command leaves `$LASTEXITCODE` at 3: the next call's status must be its own.
+        expect(diag((await t.execute(args({ command: SH.exit(3), timeout: 15 }), ctx())).text)['exit_code']).toBe(3);
+        expect(diag((await t.execute(args({ command: `${SH.sleep(3)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+        expect(diag((await t.execute(args({ command: 'x', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+        expect(m.streams.sendKeys(foregroundStreamId('orchestrator'), 'y').ok).toBe(true);
+        const session = m.session('s1:orchestrator', root);
+        let tapped = '';
+        const untap = session.onOutput((chunk) => { tapped += chunk; });
+        const r = await t.execute(args({ command: then, timeout: 15 }), ctx());
+        untap();
+        expect(diag(r.text)['exit_code'], then).toBe(expectedExit);
+        expect((output(r.text) ?? '').split('\n')[0], then).toBe('own-output');
+        expect(r.text, then).not.toContain('__rot_');
+        expect(r.text, then).not.toMatch(/not recognized/i);
+        expect(stripVt(tapped).split('\n').map((l) => l.trim()).filter((l) => l !== '')[0], then).toBe('own-output');
+        expect(earlierOutput(r.text), then).toBe('done-later');
+      }
+    } finally { await m.dispose(); }
+  }, 60_000);
+  it.runIf(PS)('REQ-TOOLS-098/127 (A10, OQ-147, OQ-168): on PowerShell a poll at once after C-c is OQ-168\'s soft pause, and the next calls report the end once, each with its own output', async () => {
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
+    try {
+      await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
+      expect(diag((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: 'C-c', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+      const poll = await t.execute(args({ command: '' }), ctx());
+      expect(diag(poll.text)).toMatchObject({ exit_code: -1, outcome_kind: 'soft_pause' });
+      expect(String(diag(poll.text)['detail']).startsWith(INTERRUPT_UNSEEN_NOTE)).toBe(true);
+      // The poll writes nothing and returns at once; a line written within the C-c's own tick would be discarded with it, which
+      // no agent's next call can be (see the note above), so the next command comes a little later, as a model's does.
+      await new Promise((res) => setTimeout(res, 200));
+      const aaa = await t.execute(args({ command: SH.echo('AAA'), timeout: 15 }), ctx());
+      expect(output(aaa.text)).toBe('AAA');
+      expect(String(diag(aaa.text)['detail'])).toContain('with no exit status of its own');
+      for (const leaked of ['__rot_', 'AAA', 'done-later', '__rot_b64__']) expect(earlierOutput(aaa.text) ?? '').not.toContain(leaked);
+      const bbb = await t.execute(args({ command: SH.echo('BBB'), timeout: 15 }), ctx());
+      expect(output(bbb.text)).toBe('BBB');
+      expect(String(diag(bbb.text)['detail'])).toBe('The command exited with code 0.');
       expect((await t.execute(args({ command: '' }), ctx())).text).toContain('No paused command to poll.');
     } finally { await m.dispose(); }
   }, 60_000);

@@ -16,6 +16,9 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-15**
 
+**A10's cases run on PowerShell (the Windows ARM64 session's B5).** Test cases and a comment in `foreground.ts` only; no view
+changed.
+
 **A retrospective is not refused by the confinement gate, and a loaded configuration is never called unloadable (2026-10-15,
 fin47 `fin47-accept1-4`; PD-LIBRARY-002, REQ-SANDBOX-094/095/097, REQ-NOTIFY-254, acceptance finding A3).** The process view's
 retrospective paragraph says ADR-0022's start-time gate is a run start's and does not meet a retrospective's setup, that only a

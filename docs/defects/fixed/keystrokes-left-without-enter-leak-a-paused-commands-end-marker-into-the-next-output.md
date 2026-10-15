@@ -34,7 +34,10 @@ branch: the case below, run against `/bin/sh` (dash) through a real PTY on the u
   preceded by the line discipline's kill character, `^U`, which node-pty sets as `VKILL`. The start marker prints
   again, so the capture starts after it and the live stream's `CommandRegion` opens on it. Keystrokes that end their
   own line clear nothing. PowerShell is unchanged: its first statement takes the prefix, not the start marker
-  (reasoned, not measured on this Linux host). What becomes of a partial line no one ended is stated nowhere, so the
+  (reasoned, not measured on this Linux host; *measured 2026-10-15 on Windows 11 ARM64 under pwsh 7.6.6 and 5.1, three runs
+  each: `x` typed with no Enter and `y` through send-keys under a soft-paused command leaked nothing into the next call — its
+  output its own, no `__rot_`, nothing "not recognized", the live tap its own line, the paused command's `done-later`
+  handed over as earlier output — and after a native `cmd /c exit 3` the next call's status was its own, 0 or 1*). What becomes of a partial line no one ended is stated nowhere, so the
   reading built is raised as [OQ-146](../../architecture/open-questions.md) (OQ-143 on its branch).
 - **The paused call's end frame is its own.** ~~`onData` matched only the active call's frame while a call was
   active, so a soft-paused command that ended behind the next call never read as finished, and the poll after it said

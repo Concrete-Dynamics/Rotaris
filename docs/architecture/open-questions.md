@@ -7158,7 +7158,7 @@ acceptance finding A10,
 under [R-067](../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-143 on its branch, renumbered OQ-146 at the merge,
 OQ-143 to OQ-145 having been taken on `main`.)*
 
-**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: on the POSIX backend a partial line left without a line end is erased with `^U` before the product submits its next line, never run, and the PowerShell backend is unchanged.
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: on the POSIX backend a partial line left without a line end is erased with `^U` before the product submits its next line, never run, and the PowerShell backend is unchanged. *(The PowerShell backend measured 2026-10-15 on Windows 11 ARM64, pwsh 7.6.6 and 5.1, three runs each: keystrokes left without a line end under a paused command, by `is_input` and by send-keys, leak nothing into the next call, whose output, live tap and status are its own, a stale `$LASTEXITCODE` of 3 included.)*
 
 An agent's `is_input` text or a control surface's send-keys with no Enter after it waits in the shell's input as a
 partial line when nothing reads it, as under a soft-paused `sleep`. A person at a terminal would see it on the next
@@ -8686,6 +8686,8 @@ live-run autopsy at 71ad8e8 finding a71-8,
 [`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../defects/fixed/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md).
 ~~Open.~~ Ruled 2026-10-06. Raised as OQ-163 on its branch and renumbered OQ-164 before it reached `main`, where OQ-160 had been taken
 meanwhile.)*
+
+*(Measured on PowerShell 2026-10-15, Windows 11 ARM64, pwsh 7.6.6 and 5.1, three runs each: the two real-PTY OQ-164 cases ran green in every run of the suite, and a paused command that ends behind the next call reports its own status, 1, its output and its error text handed over as earlier output; after C-c the next calls report the paused command's end once, with no status of its own. A line written in the same tick as a C-c is discarded by PowerShell — [recorded](../defects/on-windows-a-command-written-in-the-same-tick-as-a-c-c-is-swallowed.md).)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the current behaviour is the rule. A foreground call made while an earlier command is soft-paused is neither refused nor made to interrupt it: its line is submitted at once and waits behind the paused command, and its no-output window and timeout run from its own start, the wait included. Its observation reports the paused command beside its own outcome, as the reading above states: that it waited, when and how that command ended, and what it wrote since it was last observed, outside the cap on the call's own output; a second soft pause no longer disposes of the first. The tool description tells agents the third move: "a new command issued meanwhile waits behind it, and its result reports how the paused one ended". REQ-TOOLS-187 does not reach a soft-paused call, which has returned, so this ruling settles it; [`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../defects/fixed/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md) closes with it.
 

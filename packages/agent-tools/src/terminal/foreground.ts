@@ -1979,7 +1979,9 @@ export class ForegroundSession {
    * is; what is cleared is a line no one ended, as OQ-146's ruling of 2026-10-06 (R-071) confirmed as built, the
    * PowerShell backend unchanged. PowerShell is left as it was: its wrapper's
    * first statement is the exit-status reset, not the start marker, so a prefix costs that statement and, by construction,
-   * not the marker (reasoned; no Windows host has run it), and ConPTY's cooked input has no `^U`.
+   * not the marker (reasoned; no Windows host has run it), and ConPTY's cooked input has no `^U`. (Measured 2026-10-15 on
+   * Windows 11 ARM64, pwsh 7.6.6 and 5.1: typeahead under a paused command leaks nothing and no stale `$LASTEXITCODE` reaches
+   * the next call; `terminal.test.ts`'s A10 cases on PowerShell pin it.)
    */
   private submit(p: PtyLike, wrapped: string): void {
     const clear = this.typeahead && this.deps.backend.kind === 'posix' ? '\x15' : '';

@@ -51,4 +51,4 @@ console line is relayed.
 
 The two sibling arms that read a command's outcome the same way (`focus-session`, `open-project-init`) were outside this task
 and are recorded in
-[`../a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md`](../a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md).
+[`a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md`](a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md), repaired 2026-10-15 by fin47 with the same helper.

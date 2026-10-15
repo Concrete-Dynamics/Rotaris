@@ -44,6 +44,9 @@ import { startApp, stopApp, until } from './lib/driver.mjs';
  *     6e. And when main REFUSES the review (REQ-NOTIFY-254, REQ-NOTIFY-003): the notice names the window's own workspace, which
  *     declares no hooks, and the press publishes main's "This workspace declares no hooks" as a persistent warning notice in
  *     the pressing window, with no renderer console line.
+ *     6f. And when main refuses a `focus-session` or project-setup press (REQ-NOTIFY-254, REQ-SHELL-019): both name a regular
+ *     file, the reach answers REQ-SHELL-019's "Could not open the selected project", said once in the pressing window, and
+ *     the arms hand the answer to the refusal report, which publishes nothing twice and writes no renderer console line.
  *     6c. A project-setup banner's action (PD-WORKSPACE-005 revisions 2 and 3, OQ-262, OQ-294), pressed in the window that
  *     does not hold its project: the holder is surfaced on Settings › Project, an unsaved edit in another category kept; one
  *     naming a project no window holds adds a main window for it, asking nothing, which shows Settings › Project with
@@ -89,7 +92,7 @@ if (!process.argv.includes('--skip-build')) {
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
-// `--only=<sections>` (comma-separated: 1, 1b, 1c, 1d, 1e, 1f, 2, 4, 6, 6b, 6e, 6c, 6d, 7, 7b, 8, 9) runs those sections alone; the default is all.
+// `--only=<sections>` (comma-separated: 1, 1b, 1c, 1d, 1e, 1f, 2, 4, 6, 6b, 6e, 6f, 6c, 6d, 7, 7b, 8, 9) runs those sections alone; the default is all.
 const onlyArg = process.argv.find((a) => a.startsWith('--only='));
 const only = onlyArg === undefined ? null : onlyArg.slice('--only='.length).split(',').map((x) => x.trim()).filter((x) => x !== '');
 const want = (id) => only === null || only.includes(id);
@@ -629,6 +632,49 @@ if (want('6e')) {
     png: join(output, 'review-refused.png'), elapsedMs: r.elapsedMs,
   };
   // The refusal is said on screen, not on the console: before the repair its `console.warn` was relayed here.
+  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6f. The focus-session and project-setup actions REFUSED (REQ-NOTIFY-254, REQ-NOTIFY-003, REQ-SHELL-019): each names a
+// "workspace" that is a regular file, so main's reach adds no window and answers `workspace.openFailed`, after
+// `MainWindows.#addWindow` has said REQ-SHELL-019's "Could not open the selected project: …" in the pressing window. The arms
+// hand that answer to `reportNoticeActionRefusal`, which logs it and — the failure already reported — publishes nothing a second
+// time. Until 2026-10-15 each arm wrote it to the console (`console.warn`), relayed here as a renderer error, and every other
+// refusal of the two (`window.gone`, `window.notMain`, which no built-app press reaches deterministically, and the unit cases
+// in `notice-action-refusal.test.ts` pin) reached no one
+// (docs/defects/fixed/a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md).
+const s4f = scenario('action-refused');
+if (want('6f')) {
+  const notADirectory = join(s4f.workspace, 'README.md');
+  const SESSION = 'proof-refused-session';
+  const r = await launch('action-refused', s4f, {
+    ROTARIS_CAPTURE_AFTER_MS: '11000',
+    ROTARIS_CAPTURE_NOTICES: [
+      `${JSON.stringify({ op: 'report', severity: 'success', title: `Session ${SESSION} completed`, message: 'The session on screen is unaffected.', persistent: true, action: { label: 'Open the session', action: { kind: 'focus-session', sessionId: SESSION, workspace: notADirectory } } })}@2000`,
+      `${JSON.stringify({ op: 'report', severity: 'error', title: 'Project setup did not finish: README.md', message: 'Rotaris could not finish setting this workspace up for code search.', persistent: true, action: { label: 'Try again', action: { kind: 'open-project-init', workspace: notADirectory } } })}@6000`,
+    ].join(';;'),
+    ROTARIS_CAPTURE_PROBE_AT: [
+      '[data-testid="notice-title"]@2600', '[data-testid="acknowledgement-title"]@4300',
+      '[data-testid="notice-title"]@6600', '[data-testid="acknowledgement-title"]@8300',
+    ].join(';;'),
+    ROTARIS_CAPTURE_CLICKS: '.notice__action>>Open the session@3000;;.notice__action>>Try again@7000',
+  });
+  const titles = (at, selector) => (probesAt(r.log, at, selector) ?? []).map((m) => m.text);
+  expect(titles(2600, '[data-testid="notice-title"]').includes(`Session ${SESSION} completed`), `the focus-session notice was not on screen: ${JSON.stringify(titles(2600, '[data-testid="notice-title"]'))}`);
+  expect(titles(6600, '[data-testid="notice-title"]').includes('Project setup did not finish: README.md'), `the project-setup notice was not on screen: ${JSON.stringify(titles(6600, '[data-testid="notice-title"]'))}`);
+  const focusRefused = r.log.match(new RegExp(`notice action "focus-session" for ${SESSION}: .*README\\.md could not be reached \\((Could not open the selected project: [^)]*)\\)`));
+  expect(focusRefused !== null, 'main did not log the focus-session reach refused');
+  const initRefused = r.log.match(/project-setup action for .*README\.md: the workspace could not be reached \((Could not open the selected project: [^)]*)\)/);
+  expect(initRefused !== null, 'main did not log the project-setup reach refused');
+  expect(!/added main window \d+ on/.test(r.log), 'a window was added for a regular file');
+  // REQ-SHELL-019's report, said once in the pressing window by `#addWindow` for each press.
+  const said = [...titles(4300, '[data-testid="acknowledgement-title"]'), ...titles(8300, '[data-testid="acknowledgement-title"]')];
+  expect(said.filter((t) => t.startsWith('Could not open the selected project:')).length >= 2, `REQ-SHELL-019's report is not on screen after each press: ${JSON.stringify(said)}`);
+  // …and not published a second time by the renderer, whose arms now only log a refusal already reported.
+  expect(!/notice from the renderer: \w+ "Could not open the selected project/.test(r.log), 'the renderer published REQ-SHELL-019\'s report a second time');
+  results.actionRefused = { focus: focusRefused[1], projectInit: initRefused[1], said, png: join(output, 'action-refused.png'), elapsedMs: r.elapsedMs };
+  // The refusal is handed to the report, not written to the console: before the repair both arms' `console.warn` were relayed here.
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
 }
 

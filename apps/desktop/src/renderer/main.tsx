@@ -1035,9 +1035,11 @@ function dispatchNoticeAction(action: NoticeAction): void {
       // (the `onSessionFocus` listener in `App`). This window focuses nothing itself unless it is the one reached. From
       // 2026-10-14 until this revision a press here for a session another workspace holds was not dispatched
       // (docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
-      void bridge.command({ kind: 'session.focusFromNotice', sessionId: action.sessionId, workspace: action.workspace }).then((outcome) => {
-        if (!outcome.ok) console.warn(`notice action "focus-session" for ${action.sessionId} was refused: ${outcome.headline}`);
-      });
+      // A refusal — "The window holding the session closed before it could focus it", "No main window is open" — is published
+      // as a persistent notice in main's words (REQ-NOTIFY-254, REQ-NOTIFY-003), a refused reach REQ-SHELL-019 already reported
+      // only logged. Until 2026-10-15 it reached the console alone
+      // (docs/defects/fixed/a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md).
+      void reportNoticeActionRefusal(bridge, 'focus-session', bridge.command({ kind: 'session.focusFromNotice', sessionId: action.sessionId, workspace: action.workspace }));
       return;
     case 'open-library':
       // REQ-LIBRARY-103's three tab names, imported from the domain that owns the list — the same discipline the
@@ -1079,10 +1081,10 @@ function dispatchNoticeAction(action: NoticeAction): void {
       // the named one by PD-SHELL-001 revision 2's reach — the window holding it surfaced, else one added for it, asking
       // nothing — and opens Settings › Project there (channel 15). Revision 2 (OQ-262) had a press for a project no window
       // held say "Project <name> is not open in any window." here and do nothing else. Until 2026-10-14 this arm dispatched
-      // nothing, and no notice raised the action.
-      void bridge.command({ kind: 'projectInit.open', workspace: action.workspace }).then((outcome) => {
-        if (!outcome.ok) console.warn(`notice action "open-project-init" for ${action.workspace} was refused: ${outcome.headline}`);
-      });
+      // nothing, and no notice raised the action. A refusal — "The window holding the project closed before Settings › Project
+      // could open" — is published as the focus-session arm's is (REQ-NOTIFY-254, REQ-NOTIFY-003); until 2026-10-15 it reached
+      // the console alone.
+      void reportNoticeActionRefusal(bridge, 'open-project-init', bridge.command({ kind: 'projectInit.open', workspace: action.workspace }));
       return;
     case 'open-cloud-account':
     case 'save-settings':

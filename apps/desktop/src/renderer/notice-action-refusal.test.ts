@@ -71,3 +71,48 @@ describe("the hook-review arm hands main's answer to the refusal report", () => 
     expect(arm).not.toContain('console.warn');
   });
 });
+
+/**
+ * The two sibling arms that send a command and read its outcome: `focus-session` (`session.focusFromNotice`, PD-SHELL-001
+ * revision 3) and `open-project-init` (`projectInit.open`, PD-WORKSPACE-005 revision 3). Main refuses them with "The window
+ * holding the session closed before it could focus it" / "…the project closed before Settings › Project could open"
+ * (`window.gone`), "No main window is open" (`window.notMain`) or a refused reach; until 2026-10-15 each arm wrote the refusal to
+ * the console alone (docs/defects/fixed/a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md).
+ * `notice-proof` section 6f presses both where the reach is refused in the built app.
+ */
+describe("the focus-session and project-setup arms hand main's answer to the refusal report", () => {
+  const main = readFileSync(new URL('./main.tsx', import.meta.url), 'utf8');
+  const armOf = (from: string, to: string) => main.slice(main.indexOf(from), main.indexOf(to));
+
+  it('passes the session.focusFromNotice outcome to reportNoticeActionRefusal and writes no console warning of its own', () => {
+    const arm = armOf("case 'focus-session':", "case 'open-library':");
+    expect(arm.length).toBeGreaterThan(0);
+    expect(arm).toContain("void reportNoticeActionRefusal(bridge, 'focus-session', bridge.command({ kind: 'session.focusFromNotice', sessionId: action.sessionId, workspace: action.workspace }));");
+    expect(arm).not.toContain('console.warn');
+  });
+
+  it('passes the projectInit.open outcome to reportNoticeActionRefusal and writes no console warning of its own', () => {
+    const arm = armOf("case 'open-project-init':", "case 'open-cloud-account':");
+    expect(arm.length).toBeGreaterThan(0);
+    expect(arm).toContain("void reportNoticeActionRefusal(bridge, 'open-project-init', bridge.command({ kind: 'projectInit.open', workspace: action.workspace }));");
+    expect(arm).not.toContain('console.warn');
+  });
+});
+
+describe('a refused focus-session or project-setup press is published in main\'s words (REQ-NOTIFY-254, REQ-NOTIFY-003)', () => {
+  const cases: readonly [string, CommandOutcome][] = [
+    ['focus-session', { ok: false, code: 'window.gone', headline: 'The window holding the session closed before it could focus it' }],
+    ['focus-session', { ok: false, code: 'window.notMain', headline: 'No main window is open' }],
+    ['open-project-init', { ok: false, code: 'window.gone', headline: 'The window holding the project closed before Settings › Project could open' }],
+  ];
+  for (const [action, outcome] of cases) {
+    it(`${action}: ${outcome.ok ? '' : outcome.code}`, async () => {
+      const sent: CommandRequest[] = [];
+      const lines: string[] = [];
+      await reportNoticeActionRefusal({ command: async (req: CommandRequest) => { sent.push(req); return { ok: true, value: { id: 1 } }; } }, action, Promise.resolve(outcome), (l) => { lines.push(l); });
+      if (outcome.ok) throw new Error('unreachable');
+      expect(sent).toEqual([{ kind: 'notice.report', severity: 'warning', title: outcome.headline, persistent: true }]);
+      expect(lines).toEqual([`notice action "${action}" was refused: ${outcome.headline} (${outcome.code})`]);
+    });
+  }
+});

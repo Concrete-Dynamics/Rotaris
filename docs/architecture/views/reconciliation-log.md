@@ -80,6 +80,14 @@ Cancel starting nothing; the renderer's guard joins a question already open. The
 
 Last reconciled with the code: **2026-10-15**
 
+**A refused focus-session or project-setup notice action is said on screen (2026-10-15, fin47 `fin47-notice-and-retro`;
+REQ-NOTIFY-254, REQ-NOTIFY-003).** The process view's `session.focusFromNotice` and `projectInit.open` entries and the sequences
+view's notice-action block say that the pressing renderer hands their refusal to `reportNoticeActionRefusal` as the hook review
+does — published as a persistent `warning` notice, a refused reach REQ-SHELL-019 already reported only logged; until now it
+reached the console alone
+(`docs/defects/fixed/a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md`). No
+package, edge or process changed. The README's date stays 2026-10-15.
+
 **The quit outside any window's second log line no longer reads as the first's opposite (2026-10-14, fin46 `fin46-accept1-8`,
 C4; PD-ORCH-005 clause 9, OQ-298).** The process view quotes the new line, "each close guard allows without a question, so no
 Save/Discard/Cancel or active-run box is shown", with the old "no close guard is asked" beside it

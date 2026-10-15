@@ -10,7 +10,11 @@ import type { CommandOutcome, RendererBridge } from '@rotaris/contracts';
  * words the reason; this publishes it, unchanged, as the persistent `warning` notice the retry action's refusal already takes
  * ("Nothing was retried"), its headline the title and its detail the copyable detail (REQ-NOTIFY-005). Until 2026-10-14 the
  * renderer's arm wrote it to the console alone, and the person who pressed the action saw nothing
- * (docs/defects/fixed/a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md).
+ * (docs/defects/fixed/a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md). The two sibling arms
+ * that read a command's outcome take it too since 2026-10-15: `focus-session` (`session.focusFromNotice`: "The window holding
+ * the session closed before it could focus it", "No main window is open") and `open-project-init` (`projectInit.open`: "The
+ * window holding the project closed before Settings › Project could open")
+ * (docs/defects/fixed/a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md).
  *
  * A refused REACH that built no window has already been reported: `MainWindows.#addWindow` raises REQ-SHELL-019's "Could not
  * open the selected project: {reason}" before it answers `workspace.buildFailed` or `workspace.openFailed`, and the reach after

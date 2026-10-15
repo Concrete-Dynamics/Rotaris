@@ -120,7 +120,11 @@ which logged a `focus-session` press refused `session.no-session` and raised not
 pressed in any window — main reaches `workspace` (`MainWindows.reach`: the holder surfaced, else a window added) and asks THAT
 window, on channel 16, to focus the session through its own `resume` (`MainWindows.focusSession`); a window still loading
 holds the request on its record, and **`session.focusReady`** — sent by the renderer once it listens on channel 16 — marks it
-listening and answers `{sessionId}`, the held focus delivered once, or null; `continue`
+listening and answers `{sessionId}`, the held focus delivered once, or null. A refusal of `session.focusFromNotice` — "The
+window holding the session closed before it could focus it" (`window.gone`), "No main window is open" (`window.notMain`) — is
+published by the pressing renderer as the hook review's is (`renderer/notice-action-refusal.ts`, REQ-NOTIFY-254/003, since
+2026-10-15), a refused reach REQ-SHELL-019 already reported only logged; until 2026-10-15 it reached the renderer console
+alone; `continue`
 carries `{action, withoutPaused?}` since PD-ORCH-005's phase 5, the option clause 6's "continue without them",
 relayed as it is to the run host's `session.continue`, which since clause 18 also continues a session a crash left),
 **`session.retry {sessionId}`** (REQ-NOTIFY-045 / REQ-CHAT-173, OQ-178; 2026-10-02: a notice's retry with a blank composer draft, relayed to the run host as itself after the continuation lease a `session.prompt` takes; `Sessions.retry` resubmits the session's last submitted prompt — read over every row, released ones included (`lastSubmittedPrompt`) — with its images read back from the session's directory and verified by digest (`readBackAttachments`), so no prompt text or image bytes cross from the renderer again; answered `ack`, or refused `session.no-prompt`, `session.attachment-unavailable` naming the image, or any refusal a `session.prompt` meets), **`authRecovery.payload` / `authRecovery.retry {modelKey}` / `authRecovery.reauthenticate {apiKey}` / `authRecovery.cancel`** (REQ-NOTIFY-072..077/080, 2026-10-02: the recovery window's payload and answers, keyed by the SENDER as a pause window's are, so the window acts on the session it was opened for and names none; `retry` is relayed to the run host as `session.authRestart {sessionId, modelKey}` — refused for a key the dialog did not list; `reauthenticate` carries a pasted key INWARD to main's provider key store (`ProviderService.reauthenticateWithKey`, validated by discovery before it is saved, never logged) and then relays `session.authRestart {sessionId, modelKey: null}`; each answered `{ok}` or the sentence the dialog shows), **`session.planEdit {text}` / `session.planDecision {decision, changes?}` / `session.planRearm {sessionId}`**
@@ -183,7 +187,10 @@ revisions 2 and 3, OQ-262, OQ-294: a project-setup banner's `open-project-init`,
 workspace as the hook review does — `MainWindows.reach`, the holder surfaced on REQ-SHELL-161's terms, else a window added on
 PD-SHELL-001's add terms — and asks the reached window for Settings › Project through `MainWindows.openProjectInit`: channel
 15 at once to a renderer listening, held on the record of one still loading; a failed reach answers its outcome, the add
-route having reported it. *Under revision 2 (fin43, until the same day) main surfaced a holder through `surfaceHolding` and,
+route having reported it. A refusal — "The window holding the project closed before Settings › Project could open"
+(`window.gone`), or a refused reach — is handed by the pressing renderer to `reportNoticeActionRefusal`, which publishes the
+first as a persistent `warning` notice and only logs the second (REQ-NOTIFY-254/003, since 2026-10-15; the console alone
+before). *Under revision 2 (fin43, until the same day) main surfaced a holder through `surfaceHolding` and,
 with none, raised "Project <name> is not open in any window." in the asking window and added nothing*), **`projectInit.ready`**
 (PD-WORKSPACE-005 revision 3: sent by a main window's renderer right after it registers for channel 15; marks the window
 listening and answers `{owed}`, whether an open was held for it, once),

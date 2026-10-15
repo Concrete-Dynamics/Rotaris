@@ -53,5 +53,5 @@ renderer's `open-hook-review` arm wrote it to the console alone (`console.warn`)
 nothing — the same unreported failure this note was about, one step later. Since fin46 the arm publishes it as a persistent
 `warning` notice in main's words
 ([`a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md`](a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md)).
-A `focus-session` refusal is still only logged
-([`../a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md`](../a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md)).
+A `focus-session` refusal was still only logged *(so it read until 2026-10-15; since then fin47 publishes it the same way)*
+([`a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md`](a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md)).

@@ -14537,7 +14537,7 @@ unchanged (quoted beside its replacement), stays disjoint from `PD-ORCH-016`'s r
 withdrawn), and cites REQ-ORCH-095 without change. REQ-ORCH-104's text is unchanged; its back-pointer names revision 4.
 *The build's reading — both messages, the re-prompt first, with one stuck activation for the child — is kept above as the
 falsified one.* Written 2026-10-14 by fin44 (`fin44-supervision-and-match`).
-*Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
+*Dated 2026-10-13, a day before the question was raised, until fin46 (`fin46-accept1-12`) corrected it on 2026-10-14 from the
 consortium's ruling record, whose sitting ruled it 2026-10-14 by 04:58 UTC.*
 
 **The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
@@ -14584,7 +14584,7 @@ REQ-ORCH-078, REQ-ORCH-096, REQ-ORCH-099, REQ-ORCH-102 and REQ-ORCH-105 without 
 after an empty turn is outside this ruling: measured, recorded as a defect note and raised as [OQ-296](#oq-296). *The as-built
 reading — the correction followed by the stuck corrective in one request — is kept above as the falsified one.* Written
 2026-10-14 by fin44 (`fin44-supervision-and-match`).
-*Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
+*Dated 2026-10-13, a day before the question was raised, until fin46 (`fin46-accept1-12`) corrected it on 2026-10-14 from the
 consortium's ruling record, whose sitting ruled it 2026-10-14 by 04:58 UTC.*
 
 **The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
@@ -14641,7 +14641,7 @@ both passes (its back-pointer in the same commit), and as [`PD-LIBRARY-002`](../
 4, one sentence added to clause (c); REQ-LIBRARY-022, REQ-LIBRARY-023, REQ-LIBRARY-024, REQ-LIBRARY-035, REQ-NOTIFY-100,
 REQ-NOTIFY-254, `PD-CONFIG-003` revision 2 and OQ-223 are cited without change. Written 2026-10-14 by fin44
 (`fin44-improvement-failures`).
-*Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
+*Dated 2026-10-13, a day before the question was raised, until fin46 (`fin46-accept1-12`) corrected it on 2026-10-14 from the
 consortium's ruling record, whose sitting ruled it 2026-10-14 by 04:58 UTC.*
 
 **The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
@@ -14692,7 +14692,7 @@ character when the window holds a blank one) and [`PD-TOOLS-016`](../product/dir
 pairing also runs at level 3 for blank lines); `PD-TOOLS-015` and `PD-TOOLS-019` carry in-place notes. *The build's reading — "What
 the build proceeds under" above, a blank line taking part in the shift like any other — is kept as the falsified one.* Written
 2026-10-14 by fin44 (`fin44-supervision-and-match`).
-*Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
+*Dated 2026-10-13, a day before the question was raised, until fin46 (`fin46-accept1-12`) corrected it on 2026-10-14 from the
 consortium's ruling record, whose sitting ruled it 2026-10-14 by 04:58 UTC.*
 
 **The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
@@ -14744,7 +14744,7 @@ in one request, one stuck activation per silent wait, and a root that waited sil
 (`fin45-supervision-and-quit`): `IterationChildren.runWithChildren` calls `withdrawStuck()` as the parent is taken into the wait;
 [`../defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md`](../defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md)
 moved to `fixed/`.
-*Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
+*Dated 2026-10-13, a day before the question was raised, until fin46 (`fin46-accept1-12`) corrected it on 2026-10-14 from the
 consortium's ruling record, whose sitting ruled it 2026-10-14 by 10:14 UTC.*
 
 **The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
@@ -14907,7 +14907,7 @@ differently — the search's catch reads the clock alone (`elapsed >= timeoutMs`
 rename's own catch a timeout text at 90 % alone — so a failure arriving within the same tick as the allowance's end can read
 differently in the two; the ruling does not align them. No proof re-run: `code-intel-proof` launch 11 does not reach the
 coincidence. **What a live run then shows.** Nothing.
-*Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
+*Dated 2026-10-13, a day before the question was raised, until fin46 (`fin46-accept1-12`) corrected it on 2026-10-14 from the
 consortium's ruling record, whose sitting ruled it 2026-10-14 by 10:14 UTC.*
 
 **The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
@@ -14956,7 +14956,7 @@ retrospective analyses on its own slot's, recorded apart as
 [`../defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`](../defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md),
 which this ruling does not repair (*repaired 2026-10-14 by fin46, `fin46-accept1-11`: the retrospective's lease requires the
 sign-in provider of its own model, `retrospective_model` then `medium_model`, and a continuation still the entry role's*).
-*Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
+*Dated 2026-10-13, a day before the question was raised, until fin46 (`fin46-accept1-12`) corrected it on 2026-10-14 from the
 consortium's ruling record, whose sitting ruled it 2026-10-14 by 10:14 UTC.*
 
 **The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's

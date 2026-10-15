@@ -39,7 +39,7 @@ one, and no entry may reach one. On the unrepaired tree it fails with `["css-cas
 
 **Shown** by the build: no proof found this (it was a reviewer's reading), and the product's behaviour does not change, so
 the evidence is that a `pnpm build` of this branch carries no trace of the module in `apps/desktop/out/` (a search for
-`cascadeOf`, `selectorMatches` and `css-cascade` finds nothing). Neither entry reached it before the rename either, so this shows the rename changed nothing that ships.
+`cascadeOf`, `selectorMatches` and `css-cascade` finds nothing). Neither entry reached it before the rename either — read from the import graph, since the base was not built — so the rename changed nothing that ships: measured on the renamed build, reasoned for the base.
 
 The same shape outside `@rotaris/ui` is recorded, not repaired here:
 [`workspace-traceability-test-support-is-named-as-product-modules.md`](workspace-traceability-test-support-is-named-as-product-modules.md)

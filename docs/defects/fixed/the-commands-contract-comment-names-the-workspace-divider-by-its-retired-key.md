@@ -27,12 +27,14 @@ The product's behaviour is unaffected: the code writes the registered keys.
 ## Outcome — repaired 2026-10-14 (fin46, bundle `fin46-accept1-18`)
 
 The comment now says Part AB adds `panels/workspace/state` (with its `panels/workspace/panes`), keyed `workspace` for the
-same reason the Library's is keyed `library`, and names `panels/workspace` only as the record's name until 2026-10-14,
-retired and never reused (REQ-SHELL-069's last sentence). No code changed: the product already wrote the registered keys.
+same reason the Library's is keyed `library`, and names `panels/workspace` only as the record's name until 2026-10-14 —
+one stored object the store's table (REQ-SHELL-006) does not list, never a registered key — retired and never reused
+(REQ-SHELL-069's last sentence). No code changed: the product already wrote the registered keys.
 
 Pinned by `packages/contracts/src/commands.test.ts`: every backticked `panels/` name in `commands.ts` is a registered key
 (`panels/version`, a `panels/{view-key}/state` of `PANE_LAYOUT_PREFERENCE_KEYS` or its `/panes` sibling, or the table's
-`{view-key}` forms), or is marked as history ("until 2026-10-14", "formerly", "retired") in the eighty characters before it.
+`{view-key}` forms), or is marked as history ("until 2026-10-14", "formerly", "retired") in the eighty characters before it
+(in its own sentence, up to the name, since fin47: a mark ending the sentence before no longer covers it).
 It failed on the old comment with `["panels/workspace", "panels/library"]` and passes on the new one. `pnpm composer-proof`
 (built app, 2026-10-14, load 0.95) passed, and its stored `preferences.json` holds `panels/workspace/state` and
 `panels/workspace/panes` and no `panels/workspace`: the keys the comment now names are the ones the divider is stored under.

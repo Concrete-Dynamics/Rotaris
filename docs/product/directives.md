@@ -6131,8 +6131,8 @@ the owner's delegation, 2026-10-13; logged under [R-072](requests.md#r-072), the
 and written, both 2026-10-14; logged under [R-072](requests.md#r-072), the rulings of
 [OQ-283](../architecture/open-questions.md#oq-283) and [OQ-284](../architecture/open-questions.md#oq-284). Revision 5 ruled
 under the owner's delegation and written, both 2026-10-14; logged under [R-072](requests.md#r-072), the ruling of
-[OQ-296](../architecture/open-questions.md#oq-296). Revisions 4 and 5 read "ruled … 2026-10-13, and written 2026-10-14" until
-2026-10-14, a day before their questions were raised; corrected by fin46 (`fin46-accept1-12`) from the consortium's ruling
+[OQ-296](../architecture/open-questions.md#oq-296). Revisions 4 and 5 read "ruled … 2026-10-13, and written 2026-10-14" — a ruling date a day before
+their questions were raised — until fin46 (`fin46-accept1-12`) corrected them on 2026-10-14 from the consortium's ruling
 record, which dates both sittings 2026-10-14 (by 04:58 and by 10:14 UTC).*
 
 *Renumbered before landing: built as `PD-ORCH-006` on its branch, it took the next free number, `PD-ORCH-009`, when

@@ -9,13 +9,15 @@ raised on the merged document in the fatal report's form, `<file> at <path> (<sc
 order on a tie), which answers null where no scope file states the path. A warning on such a value (one only a built-in
 default, the discovery snapshot or a run's live overlay supplied) keeps the bare `<path>: <message>`, since there is no file
 to correct and the workspace file, `statingFile`'s fallback for a fatal report, does not hold the key; no warning of that
-shape was found reachable. REQ-CONFIG-183's withdrawn `requirements.execution.worktree_subpath` travels the same route
+shape was found reachable. `requirements.execution.worktree_subpath`, which REQ-CONFIG-194 names as not a configuration key
+of this domain (REQ-CONFIG-183's carve-out reports it rather than failing the load; until fin47 this note called it "withdrawn"),
+travels the same route
 (`requirements.ts`'s `ex.warn`), so its report now names its file and scope too. The merge's own unknown TOP-LEVEL key
 warning already named its file (`merge.ts`, `${source}: …`) and is unchanged.
 
 Pinned by `packages/config/src/load.test.ts` (an unknown `compressor:` key in the global file with no workspace file; the
-same key in the workspace file beside a global `models.yml` entry's unknown key, each naming its own file; and the withdrawn
-`worktree_subpath` naming the global file and scope), and by `notice-proof` section 1e (`global-merged-warning`), which
+same key in the workspace file beside a global `models.yml` entry's unknown key, each naming its own file; and
+`worktree_subpath`, not a key of this domain, naming the global file and scope), and by `notice-proof` section 1e (`global-merged-warning`), which
 writes `compressor: { bogus_key: 1 }` into the driven profile's global `agents.yaml`, runs one scripted answer and reads the
 run host's `configuration:` warning naming that file, the key and `(global scope)` — red on the unrepaired build (the log
 read `warning run host: configuration: compressor.bogus_key: unknown key 'bogus_key' …`), green after.

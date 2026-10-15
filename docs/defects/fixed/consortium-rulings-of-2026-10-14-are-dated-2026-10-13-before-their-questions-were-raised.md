@@ -1,9 +1,11 @@
 ## Consortium rulings of 2026-10-14 are dated 2026-10-13, before their questions were raised
 
-The orchestrator's consortium ([R-072](../../product/requests.md#r-072)) sat four times between 2026-10-13 and 2026-10-14 (UTC, as
-every date in the record): its sitting on E1 ended at 23:56 on 2026-10-13, and the next two sat on 2026-10-14, one from about
-04:30 to 04:58 (HR1, OQ-281, OQ-283, OQ-284, OQ-285, OQ-292 to OQ-295) and one from about 10:00 to 10:14 (OQ-296, OQ-298 to
-OQ-302). Seven of the 2026-10-14 rulings are dated 2026-10-13 in the record — OQ-283, OQ-284, OQ-285, OQ-295, OQ-296, OQ-299 and
+The orchestrator's consortium ([R-072](../../product/requests.md#r-072)) sat six times between 2026-10-13 and 2026-10-14 (UTC, as
+every date in the record; its ruling record's groups 20 to 25): three on 2026-10-13, the last of them, on E1, ending at 23:56;
+and three on 2026-10-14, one from about 04:30 to 04:58 (HR1, OQ-281, OQ-283, OQ-284, OQ-285, OQ-292 to OQ-295), one from about
+10:00 to 10:14 (OQ-296, OQ-298 to OQ-302), and one ending at 13:43 (OQ-311, OQ-312), whose rulings are dated 2026-10-14 and are
+not this note's. *(Until fin47 this read "sat four times"; the three sittings it named, the E1 sitting and the first two of
+2026-10-14, were right.)* Seven of the 2026-10-14 rulings are dated 2026-10-13 in the record — OQ-283, OQ-284, OQ-285, OQ-295, OQ-296, OQ-299 and
 OQ-300 — each a day before the question itself was raised (OQ-283, OQ-284, OQ-285, OQ-295 and OQ-296 raised 2026-10-14 by fin44,
 OQ-296 in `0005d60` at 05:06; OQ-299 and OQ-300 in `67c267a` at 08:19), while the same sittings' other rulings (HR1, OQ-281,
 OQ-292 to OQ-294, OQ-298, OQ-301, OQ-302) are dated 2026-10-14.

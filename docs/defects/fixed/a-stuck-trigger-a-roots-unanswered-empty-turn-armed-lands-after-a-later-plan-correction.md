@@ -42,8 +42,10 @@ is kept. **Shown in the built app** by `pnpm part-h-proof`'s `silent-correction`
 classifications, one `succeeded` iteration. The route this note left unmeasured — a root resumed after a child's report — was
 measured: the corrective follows the report; it is outside the ruling, recorded as
 [`a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn`](a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md)
-and raised as [OQ-296](../../architecture/open-questions.md#oq-296) (since ruled 2026-10-13 under
+and raised as [OQ-296](../../architecture/open-questions.md#oq-296) (since ruled 2026-10-14 — "2026-10-13" here until fin47, the
+date OQ-296's entry carried until fin46 corrected it — under
 [R-072](../../product/requests.md#r-072): a parent's silent wait on its children is no stuck report, recorded as
 [`PD-ORCH-009`](../../product/directives.md#pd-orch-009) revision 5, case (d), and built 2026-10-14 by fin45
-(`fin45-supervision-and-quit`); that note is closed in `fixed/`). **Not shown:** the live `empty-answer` scenario with the plan
+(`fin45-supervision-and-quit`); the `a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn` note is closed in
+`fixed/`). **Not shown:** the live `empty-answer` scenario with the plan
 open, the orchestrator's.

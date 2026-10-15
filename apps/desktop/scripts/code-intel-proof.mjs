@@ -1,6 +1,6 @@
 /**
  * The code-intelligence proof (Part T): ADR-0035's first execution behind the real run host — the bundled runtime
- * (`pnpm code-intel:bundle`, run here if the marker is absent), the pre-bootstrap branch, the generated manifest, the
+ * (`pnpm code-intel:bundle`, run here when `bundle.mjs --check` finds it absent or stale), the pre-bootstrap branch, the generated manifest, the
  * client's owed halves and the project setup, in seven launches against one scratch profile:
  *
  *   1. branch     — the development entry with the token → JSON-RPC only on standard output (the bytes before the
@@ -55,7 +55,9 @@
  *                   (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
  *                   RED until OQ-362 is ruled and built; held, as launch 11's failure is; re-run on every pin change.
  *
- * Evidence under `.proof/code-intel-proof/`: one log and PNG per launch, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/code-intel-proof/`: one log and PNG per launch, `results.json` (its `bundle` names the recipe, pins
+ * hash and target the launches ran on, and whether this run built it). `--skip-build` skips the desktop build only: the
+ * bundle is checked (`bundle.mjs --check`) and rebuilt when absent or stale either way.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -65,6 +67,7 @@ import { cleanEnvironment, configDirFor, dataDirFor, electron, hostSwitches, pro
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { lineRpcClient } from './lib/line-rpc-client.mjs';
 import { codeIntelligenceListing } from './lib/code-intelligence-discovery.mjs';
+import { ensureBundle } from './lib/code-intelligence-bundle.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -100,12 +103,15 @@ if (!keepOutput) {
 }
 mkdirSync(dataDirFor(local), { recursive: true });
 
-// The bundle, then the build.
+// The bundle, then the build. `bundle.mjs --check` first, as `init-proof` and `live-run` ask it: a tree built under an older
+// recipe or pin is stale, and launch 11 is PD-MCP-004's acceptance gate, re-run on every pin change, so it must run on the
+// pinned runtime. This proof used to test the marker's presence alone and ran launches 1 to 13 on the recipe-3 bundle that
+// 559003b superseded, without a word (docs/defects/fixed/code-intel-proof-uses-a-stale-code-intelligence-bundle-without-checking-it.md).
+// Unlike `init-proof` it builds the bundle under `--skip-build` too, as it always built an absent one: the bundle is this
+// proof's subject (ADR-0035), and `--skip-build` skips the desktop build alone.
+const bundleState = ensureBundle({ skipBuild: false });
+console.log(`[code-intel-proof] the code-intelligence bundle is ${bundleState}`);
 const marker = join(app, 'resources', 'code-intelligence', 'bundle.json');
-if (!existsSync(marker)) {
-  const b = spawnSync(process.execPath, [join(app, 'scripts', 'code-intelligence', 'bundle.mjs')], { cwd: repo, encoding: 'utf8', stdio: 'inherit', timeout: 900_000 });
-  if (b.status !== 0) throw new Error(`the bundle step exited ${b.status ?? b.signal}`);
-}
 const bundle = JSON.parse(readFileSync(marker, 'utf8'));
 if (!process.argv.includes('--skip-build')) {
   // By platform, as `init-proof` builds: `cmd.exe` alone could not build off Windows.
@@ -264,7 +270,7 @@ async function exitStatus({ exe, before, env }) {
   return { code: r.status, stdout: r.stdout ?? '', stderrTail: (r.stderr ?? '').trim().split(/\r?\n/).at(-1) ?? '' };
 }
 const SERVER_TAIL = (ws) => ['start-mcp-server', '--transport', 'stdio', '--context', 'ide', '--project', ws];
-const results = { ...previous, bundle: { python: bundle.python, distribution: bundle.distribution, version: bundle.version, bytes: bundle.size.bytes, files: bundle.size.files, compiled: bundle.compiled, trimmed: bundle.trimmed } };
+const results = { ...previous, bundle: { recipe: bundle.recipe, pinsHash: bundle.pinsHash, target: bundle.target, ensured: bundleState, python: bundle.python, distribution: bundle.distribution, version: bundle.version, bytes: bundle.size.bytes, files: bundle.size.files, compiled: bundle.compiled, trimmed: bundle.trimmed } };
 const baseEnv = { ...cleanEnvironment(), ...proofIsolationEnv({ local }), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' };
 
 // ---- 1. the branch guard (ADR-0035 c.1) ------------------------------------------------------------------------

@@ -106,6 +106,39 @@ describe('init-proof states its bundle precondition and quotes the app\'s setup 
 });
 
 /*
+ * Finding A4 of fin47's acceptance round 1: `code-intel-proof` ran the bundle step only when the marker was absent and never
+ * asked `bundle.mjs --check`, so PD-MCP-004's acceptance gate (launch 11, re-run on every pin change) ran on the recipe-3
+ * runtime that 559003b superseded, without a word
+ * (docs/defects/fixed/code-intel-proof-uses-a-stale-code-intelligence-bundle-without-checking-it.md).
+ */
+describe('code-intel-proof checks the bundle is current, not only present, and records which one it ran on (A4)', () => {
+  const text = readFileSync(resolve(import.meta.dirname, '..', 'code-intel-proof.mjs'), 'utf8');
+  const at = text.indexOf('ensureBundle({');
+
+  it('ensures the bundle (bundle.mjs --check, rebuilt when absent or stale) before the marker is read and before any launch', () => {
+    expect(at).toBeGreaterThan(-1);
+    expect(at).toBeLessThan(text.indexOf("const bundle = JSON.parse(readFileSync(marker, 'utf8'))"));
+    expect(at).toBeLessThan(text.indexOf('if (want(1)) {'));
+    expect(at).toBeLessThan(text.indexOf("spawnSync('pnpm', ['--filter', '@rotaris/desktop', 'build']"));
+  });
+
+  it('no longer gates the bundle step on the marker\'s presence alone', () => {
+    expect(text).not.toMatch(/if \(!existsSync\(marker\)\)/);
+  });
+
+  it('builds the bundle itself under --skip-build too, as it always built an absent one: the bundle is its subject', () => {
+    expect(text.slice(at, at + 80)).toMatch(/skipBuild: false/);
+  });
+
+  it('results.json names the runtime the launches ran on: recipe, pins hash, target, and whether this run built it', () => {
+    const line = text.split('\n').find((l) => l.startsWith('const results = {')) ?? '';
+    for (const field of ['recipe: bundle.recipe', 'pinsHash: bundle.pinsHash', 'target: bundle.target', 'ensured: bundleState']) {
+      expect(line, field).toContain(field);
+    }
+  });
+});
+
+/*
  * Finding U5 of the duress live run at 1763f7f: a `--skip-build` live run on a tree without the bundle ran every scenario,
  * its setup and discovery failed, and it passed all 18 checks without a line saying code intelligence never ran
  * (docs/defects/fixed/the-live-run-runs-without-the-code-intelligence-bundle-and-passes-without-saying-so.md).

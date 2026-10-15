@@ -1648,7 +1648,9 @@ workspace service is named by the list). `vitest.config.ts` defines the flag `tr
 (`docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`). *Repaired by fin45 the same day:* the
 scripted model client's variables — the dialect switch and the twelve script variables, read in the run host with no flag —
 are behind it too, the list names them, and `seam-check.test.ts` fails any `ROTARIS_*` read off the flag in a module a packaged
-build keeps unless it is a product variable or one of the probe's three (`docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md`).
+build keeps unless it is a product variable or one of the probe's three (`docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md`). *Since 2026-10-15 (fin46)* its rules read a variable in every form a read takes — the bracket and dot forms, a read keyed by a
+string constant of the app's or the packages' sources, and a destructured environment — where until then they read
+`env['ROTARIS_X']` alone (`docs/defects/fixed/the-seam-checks-source-test-reads-only-the-bracket-form-of-a-variable-read.md`).
 *Built by fin46 the same day (OQ-312, ruled under R-072 with no directive):* the scripted client itself does not ship. `host.ts`
 builds it only behind the flag, so rollup leaves `scripted-client.ts` out of the packaged `run-host.js`; `isScriptedProvider` answers
 a `provider: scripted` entry with it only where the seams are compiled in; the list names the client's own log line

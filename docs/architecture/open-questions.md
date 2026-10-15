@@ -5737,7 +5737,10 @@ named none, one (edit) was applying the tie-break, and one (terminal) received n
 as ruled on 2026-10-06; what changed is the strict rung's text, which now names the object's three keys. **The intent-bound limb
 reopens** if a default pack after that change shows a classification cut after its reasoning has named its category with no
 deliberation about field names, or 3 or more cuts in 10 launches where the endpoint was not queueing (bytes were received before
-the cut).)*
+the cut). [Sharpened 2026-10-15 by [OQ-332](#oq-332)'s ruling (R-072), the old wording kept: the first limb now
+reads "a classification cut after its reasoning has named its category and not reopened that choice, the rest of the bound spent
+on field names, format or the answer's wording"; a category named and then reopened is category deliberation, read under the
+count limb, which is unchanged. At `3c03287` neither limb is met: 2 cuts in 17 default launches, both category deliberation.])*
 
 **OQ-115 — Should the bundled code-intelligence server's tool descriptions reach the system prompt verbatim?** *(REQ-MCP-101, which renders each tool's description text in the persona's MCP section; REQ-MCP-015, which puts usage-instruction retrieval in the READ tier every persona carrying the server holds. Raised 2026-09-29 from the first live run's finding L8 under [R-067](../product/requests.md#r-067). Open until 2026-10-06; ruled then, below. Raised as OQ-114 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
@@ -13364,6 +13367,10 @@ The two recommendations weighed, and the ruling followed **both** — they recom
 confirming as built. **Reopening condition (OQ-114's intent-bound limb):** a default pack after this change that shows a
 classification cut after its reasoning has named its category, with no deliberation about field names; or 3 or more cuts in 10
 launches where the endpoint was not queueing (bytes were received before the cut).
+*Sharpened 2026-10-15 by [OQ-332](#oq-332)'s ruling (R-072), the old wording kept above:* the first limb now reads "a
+classification cut after its reasoning has named its category and not reopened that choice, the rest of the bound spent on field
+names, format or the answer's wording". A category named and then reopened is category deliberation, read under the count limb,
+which is unchanged.
 
 **What a live run then shows.** Every `json_schema` classifier request's user text ends with the keys sentence naming `intent`,
 `confidence` and `reason`, and the reasoning no longer debates `category`, `classification` or `intent` as the key. Cuts at the
@@ -13393,6 +13400,19 @@ where 3 cuts in 10 launches received bytes (`apps/desktop/scripts/lib/intent-rea
 the figures above without an autopsy: 10 launches, 1 fell back, the requirements cut at 12.0 s after 91,112 bytes, the other nine
 2.4 to 9.8 s via `json_schema` (measured from the session's start line, so 0.1 s above the autopsy's 2.3 for the fastest). The
 other limb — a cut after the reasoning named its category — still needs the reasoning read, which the NOTE does not do.
+*(Since 2026-10-15, [OQ-332](#oq-332)'s ruling: it does, printing the last 300 or so reasoning characters of each cut from the
+recorded traffic, `reasoningTail`.)*
+
+**Reported back 2026-10-15 (fin46), from the default pack at `3c03287`** (pack `2026-10-15T03-10-08-908Z`, read by fin46's final
+acceptance as finding F7): the reopening condition is **not met** on either limb, as [OQ-332](#oq-332) rules. The NOTE read
+"intent classification over 17 launch(es): 2 fell back (2 cut at REQ-ORCH-008's bound, 2 after the endpoint had sent bytes)" —
+2 in 17, under the count limb's 3 in 10. faults-args (record 0 of its traffic) was cut at 11,972 ms after about 95.6 kB: its
+reasoning named `single_file_change` ("Let's settle: single_file_change. Confidence 0.85.") and then reopened the choice ("But if
+explicit_trivial preferred? Let's re-evaluate."), debating no key; the scenario's pace fault holds back tool-call events only and
+was not involved. It fell back to `moderate_feature` and delegated one child (70 s) where `0bc3eee` had run direct. edit was cut at
+11,958 ms after 90.8 kB, still choosing between `small_feature` and `moderate_feature`: category deliberation. **Duress now
+classifies `whole_project` in time** (about 5.0 s at `3c03287`), the measure this ruling's "What a live run then shows" left
+unmeasured at `0bc3eee`. The first limb is sharpened above; the row is in [`first-executions.md`](first-executions.md).
 
 <a id="oq-259"></a>
 
@@ -15161,6 +15181,72 @@ call against a loopback OpenAI-compatible stub that `scripts/package.mjs` stands
 change-behaviour): "Rule 'never': a packaged build answers no `provider: scripted` entry. The scripted client is compiled out of
 the packaged bundle with its seams." Both followed: A's lens on what a person who writes `scripted` meets, B's on why a middle
 reading cannot be built.
+
+<a id="oq-332"></a>
+
+**OQ-332 — Is a classification cut at the 12 s bound after its reasoning named a category, and then reopened that choice, the
+cut OQ-258's first reopening limb names?** *(REQ-ORCH-007 and REQ-ORCH-008, the fallback to `moderate_feature` and the 12 s bound,
+kept by OQ-114's ruling under R-071; REQ-ORCH-010, the three-rung ladder and its strict rung; REQ-ORCH-014, the
+category shown on screen; [`PD-ORCH-011`](../product/directives.md#pd-orch-011) revision 2, what `single_file_change` means;
+[OQ-258](#oq-258)'s reopening condition, whose first limb reads "a classification cut after its reasoning has named its category,
+with no deliberation about field names". Raised 2026-10-15 from finding F7 of fin46's final acceptance (round 2 at `3c03287`), with
+its harness half F8; the plan's range OQ-361 to OQ-380 does not hold it, because it is written at the number the consortium's ruling
+names. **Ruled 2026-10-15.**)*
+
+**What is open.** In the default live run at `3c03287` (pack `2026-10-15T03-10-08-908Z`, the registered self-hosted endpoint,
+`qwen3.8-flash-next`) the faults-args launch's classifier request (`faults-args/model-traffic.jsonl` record 0) was cut at
+**11,972 ms after about 95.6 kB** of stream (3,773 reasoning characters, no answer text). Its reasoning had weighed
+`explicit_trivial` against `single_file_change`, written "Let's settle: single_file_change. Confidence 0.85. … Final:
+{"intent":"single_file_change","confidence":0.85,…}", and then reopened that choice: "But if explicit_trivial preferred? Let's
+re-evaluate. The categories: explicit_trivial, question, …", listing the categories again when it was cut. It debated no key: OQ-258's
+keys sentence was in the request and the three keys were never in question. The scenario's pace fault (120 ms on every chunk) was
+not involved: it holds back tool-call events only, and the classifier's stream carries none. The launch fell back to
+`moderate_feature` and then delegated one child (a 70 s delegate) instead of writing the file itself. The edit launch was cut too, at
+**11,958 ms after 90.8 kB**, its reasoning still choosing between `small_feature` and `moderate_feature` under the tie-break:
+category deliberation, which OQ-258's ruling expected. That is **2 cuts in 17 default launches**, under the count limb's 3 in 10, and
+the duress launch of the same build classified `whole_project` in **about 5.0 s**. slice-proof's intents-3 met the same bound in the
+proof sweep (F8, below). The limb says "a classification cut after its reasoning has named its category"; whether a category named
+and then reopened is such a cut, or category deliberation, it does not settle.
+
+**What the build proceeds under.** OQ-114's 12 s bound, REQ-ORCH-007's fallback, the strict rung's text and `PD-ORCH-011` revision 2
+as built (`packages/engine/src/intent/classifier.ts`).
+
+**Ruled 2026-10-15 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)), with no directive:**
+OQ-258's first reopening limb is **not met**. faults-args' reasoning named `single_file_change` and then reopened that choice, so the
+cut at 11,972 ms is category deliberation, which OQ-258's ruling expected. The 12 s bound (REQ-ORCH-008, OQ-114 as ruled under
+R-071), REQ-ORCH-007's fallback, the strict rung's text and `PD-ORCH-011` revision 2 stand as built: no product code, no
+specification text and no symbol changes. The limb is sharpened in place, in OQ-258's reopening condition and in OQ-114's addendum of
+2026-10-13, its old wording kept beside it: **"a classification cut after its reasoning has named its category and not reopened that
+choice, the rest of the bound spent on field names, format or the answer's wording"**. A category named and then reopened is
+category deliberation and is read under the count limb, which is unchanged. slice-proof's red on a timed-out fallback (F8) is a
+harness defect, repaired by giving that fallback the same one extra ask an answer outside the accepted set already gets.
+
+**The two recommendations weighed.** The ruling as handed to the building bundle states its outcome and the alternatives it rejected
+(below); the two advocates' own recommendations were not handed to it, and the orchestrator's ruling record holds them.
+
+**Rejected, with the reasons:**
+- **Taking the category the reasoning named** when the call is cut. It breaks REQ-ORCH-007 (a call that reaches the bound falls back)
+  and REQ-ORCH-014 (the category shown would be one the model never answered); it parses untrusted reasoning text, which could steer
+  the tool grant that follows the category (REQ-ORCH-016, `PD-ORCH-006`); and it depends on the provider streaming its reasoning at
+  all, and in a form the product would have to read.
+- **A longer bound.** The owner kept 12 s on 2026-10-06 (OQ-114), and the count limb, the measure of whether the bound is too tight,
+  reads 2 in 17.
+- **Changing the rung's text** on one sample: one launch's reopened choice is the sampled model's, and the strict rung already names
+  the keys and the two smallest edits.
+
+**What a live run then shows.** The product looks the same: a classification that reaches 12 s still falls back to
+`moderate_feature`, and the status line gives the timeout as the reason. The live run's intent NOTE also prints the tail of each
+cut's reasoning (the last 300 characters, from the recorded traffic), so a reader sees whether the category was settled or still
+being chosen. `slice-proof` asks a prompt once more after its first timed-out fallback and keeps that attempt's log; it goes red only
+after a second timeout, an answer outside the set after it, or any other kind of fallback.
+
+*Built 2026-10-15 (fin47):* the harness half (F8) by `c005066`,
+[`../defects/fixed/slice-proof-reds-on-an-intent-classification-timed-out-at-req-orch-008s-bound.md`](../defects/fixed/slice-proof-reds-on-an-intent-classification-timed-out-at-req-orch-008s-bound.md)
+(`intentVerdict`'s `timedOut`, `intentOutcome`'s shared extra ask, slice-proof's `intents-<n>.attempt-1.log` listed under earlier with
+its reason; `live-answers.test.ts`'s four "OQ-332 (F8)" and "scenario 3b asks once more" cases, red on the code before); the reading
+half by `reasoningTail` in `apps/desktop/scripts/lib/intent-reading.mjs`, which the live run's classifier NOTE prints for every cut
+(`intent-reading.test.ts`'s OQ-332 case, red on the code before). OQ-258's limb and its report-back, OQ-114's addendum and
+`PD-ORCH-011` revision 2's NOTE are written in place; the row is in [`first-executions.md`](first-executions.md).
 
 <a id="oq-361"></a>
 

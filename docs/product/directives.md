@@ -6452,6 +6452,18 @@ advocate's first execution against the registered self-hosted endpoint.
 > *Since 2026-10-13 (fin41, item N67) the next default pack is read by the live run itself: a NOTE gives each launch's
 > classification, its seconds and each cut's bytes received, and counts the fallbacks (`lib/intent-reading.mjs`); over the
 > `0bc3eee` pack it reproduces the figures above, faults-args `explicit_trivial` 0.78 in 9.2 s.*
+>
+> **Reported back 2026-10-15 (fin47), revision 2 at `3c03287` — a NOTE** (pack `2026-10-15T03-10-08-908Z`, fin46's final
+> acceptance, finding F7; ruled as [OQ-332](../architecture/open-questions.md#oq-332) under [R-072](requests.md#r-072)).
+> **faults-args, the prompt this revision defines, fell back instead of reaching the micro group.** Its classification was cut at
+> REQ-ORCH-008's 12 s bound (11,972 ms, about 95.6 kB of stream) after its reasoning had named `single_file_change` at 0.85 and
+> then reopened the choice against `explicit_trivial`; it took REQ-ORCH-007's fallback, `moderate_feature`, and the coordinator
+> delegated one child (70 s) instead of writing the file itself. The cause is the reasoning's category deliberation within the
+> bound, not this revision's meaning: the label it reasoned toward was the one this revision defines, and no key was debated. OQ-332
+> rules the cut category deliberation, so neither of OQ-258's reopening limbs is met (2 cuts in 17 launches), and this revision, the
+> strict rung and the bound stand as built. The live run's intent NOTE now prints each cut's reasoning tail, so the next pack shows
+> without an autopsy whether a cut settled its category. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

@@ -49,6 +49,20 @@ describe('REQ-LIBRARY verifier proposal contract', () => {
     });
   });
 
+  it('bounds a check timeout below at 1 s and nowhere above, as REQ-CONFIG-145 does (600 s is the default, REQ-ORCH-124)', () => {
+    expect(VerifierSectionSchema.parse({ checks: [{ name: 'slow suite', command: 'pnpm test', timeout: 900 }] }).checks?.[0]?.timeout).toBe(900);
+    expect(VerifierSectionSchema.parse({ checks: [{ name: 'soak', command: 'pnpm soak', timeout: 86_400 }] }).checks?.[0]?.timeout).toBe(86_400);
+    for (const timeout of [0, -1, 1.5]) expect(VerifierSectionSchema.safeParse({ checks: [{ name: 'suite', command: 'pnpm test', timeout }] }).success).toBe(false);
+    const proposal = ImprovementProposalSchema.safeParse({
+      id: 'imp_00000001', category: 'verifier_gate_update', summary: 'Run the slow suite.',
+      evidence: [{ kind: 'analyst', text: 'The suite takes twelve minutes.', source_task_id: null, source_artifact_id: null, source_session_id: null }],
+      recommended_action: 'Add the suite with a fifteen-minute budget.', risk: 'low', status: 'pending_review', target_persona: null,
+      proposed_verifier_section: { checks: [{ name: 'suite', command: 'pnpm test', timeout: 900 }] },
+      created_at: '2026-10-15T10:00:00.000Z',
+    });
+    expect(proposal.success).toBe(true);
+  });
+
   it.each([
     [{ checks: [{ name: '', command: 'pnpm test' }] }, 'name'],
     [{ checks: [{ name: 'suite', command: '' }] }, 'command'],

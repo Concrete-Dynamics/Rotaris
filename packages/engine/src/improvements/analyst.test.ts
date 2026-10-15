@@ -358,6 +358,29 @@ describe("REQ-LIBRARY-009/016/022 the analyst is told the proposal's shape", () 
     },
   );
 
+  it("states a check timeout's bound as the configuration surface does, and keeps a proposal whose check takes 900 s (REQ-CONFIG-145, REQ-LIBRARY-009)", () => {
+    expect(VERIFIER_CHECK_FIELDS["timeout"]).toBe("whole seconds, at least 1 (600 when omitted)");
+    expect(analystSystem(job())).not.toMatch(/from 1 to 600/);
+    const artifact = parseImprovementAnalysis(
+      JSON.stringify({
+        proposals: [
+          {
+            category: "verifier_gate_update",
+            summary: "Gate on the slow suite",
+            recommended_action: "Add the suite with a fifteen-minute budget",
+            evidence: [{ kind: "session", text: "the suite ran for twelve minutes" }],
+            proposed_verifier_section: {
+              checks: [{ name: "suite", command: "pnpm test", timeout: 900 }],
+            },
+          },
+        ],
+      }),
+      job(),
+      () => "imp_00000001",
+    );
+    expect(artifact.proposals[0]?.proposed_verifier_section?.checks?.[0]?.timeout).toBe(900);
+  });
+
   it("describes exactly the keys the strict schemas take, so a key added there is named here", () => {
     expect(Object.keys(VERIFIER_SECTION_FIELDS).sort()).toEqual(sectionKeys);
     expect(Object.keys(VERIFIER_CHECK_FIELDS).sort()).toEqual(checkKeys);

@@ -38,7 +38,7 @@ export const VERIFIER_SECTION_FIELDS: Readonly<Record<string, string>> = {
 export const VERIFIER_CHECK_FIELDS: Readonly<Record<string, string>> = {
   name: "required, non-empty, unique among the checks",
   command: "required, the non-empty shell command to run",
-  timeout: "whole seconds from 1 to 600",
+  timeout: "whole seconds, at least 1 (600 when omitted)",
   severity: quoted(VERIFIER_SEVERITIES).replace(/, (?=[^,]*$)/, " or "),
   role: quoted(VERIFIER_ROLES).replace(/, (?=[^,]*$)/, " or "),
   cwd: "a workspace-relative directory, never absolute and never through ..",

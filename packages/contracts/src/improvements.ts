@@ -62,10 +62,15 @@ const nullableId = z.string().min(1).nullable().default(null);
 
 export const VERIFIER_ROLES = ['test', 'typecheck', 'lint', 'other'] as const;
 export const VERIFIER_SEVERITIES = ['blocking', 'advisory'] as const;
+/**
+ * One check entry of the `verifier` section (REQ-CONFIG-145): the one schema REQ-LIBRARY-009 (c) allows, used at a gate
+ * proposal's construction, at its application (REQ-LIBRARY-063) and by the config writer. `timeout` is bounded as the
+ * configuration surface bounds it, whole seconds ≥ 1 with no ceiling; 600 s is its default (REQ-ORCH-124), never a cap.
+ */
 export const VerifierCheckSchema = z.object({
   name: z.string().trim().min(1),
   command: z.string().trim().min(1),
-  timeout: z.number().int().min(1).max(600).default(600),
+  timeout: z.number().int().min(1).default(600),
   severity: z.enum(VERIFIER_SEVERITIES).default('blocking'),
   role: z.enum(VERIFIER_ROLES).optional(),
   cwd: z.string().trim().min(1).optional(),

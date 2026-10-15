@@ -250,6 +250,14 @@ describe('REQ-LIBRARY verifier gate writer', () => {
     expect(second.ok && second.value.changed).toBe(false);
   });
 
+  it('writes a check timeout above 600 s, which the configuration surface accepts (REQ-CONFIG-145, REQ-LIBRARY-009 (c), REQ-LIBRARY-063)', async () => {
+    const s = scope();
+    writeFileSync(s.wsFile, 'runtime:\n  max_depth: 4\n');
+    const result = await writeVerifierSection(s.wsFile, { checks: [{ name: 'suite', command: 'pnpm test', timeout: 900 }] });
+    expect(result.ok && result.value.changed).toBe(true);
+    expect(readFileSync(s.wsFile, 'utf8')).toContain('      timeout: 900\n');
+  });
+
   it('rejects an unsafe verifier section before touching the file', async () => {
     const s = scope();
     writeFileSync(s.wsFile, 'runtime:\n  max_depth: 4\n');

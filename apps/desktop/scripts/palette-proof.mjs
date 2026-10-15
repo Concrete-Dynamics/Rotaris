@@ -94,7 +94,8 @@ async function launch(name, s, extra, opts = {}) {
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   // Every relayed renderer console line; a check fails on any but REQ-SESSION-161's run-start decline, which is the replica's
-  // own recovery and met about one launch in three of a stage that starts a run
+  // own recovery: the `persona-follows-display` stage met it in 2 of 6 launches on fin46's base (loads 0.87 and 2.99), in 1 of 8
+  // after the repair (loads 2.55 to 4.26), and in 2 of 4 when first seen (loads 1.9 to 3.1)
   // (docs/defects/fixed/palette-proof-fails-on-the-replicas-documented-run-start-decline.md). `replicaDeclines` keeps the count.
   const errors = log.split('\n').filter((l) => /renderer console:/.test(l));
   return { log, png, elapsedMs: Date.now() - started, errors, replicaDeclines: replicaRunStartDeclines(errors) };

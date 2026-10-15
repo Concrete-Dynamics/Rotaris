@@ -221,8 +221,8 @@ for (const [name, how] of [['hang', 'quit'], ['hang-close', 'close']]) {
   else check(`${name}: main writes at warn which signal fired — the liveness probe unanswered within ${LIVENESS_BOUND_MS} ms`, warned.length === 1, warned.map((l) => `${l.level} ${l.message}`).join(' | ') || 'no line');
   if (how === 'quit') {
     // OQ-298: the quit from outside any window asks no guard, so the hung renderer holds it for no bound and no probe.
-    check(`${name}: the quit asked no close guard — well under the probe's ${LIVENESS_BOUND_MS} ms bound`, tookMs !== null && tookMs < LIVENESS_BOUND_MS, tookMs === null ? 'no exit' : `${tookMs} ms from the quit to the exit`);
-    check(`${name}: the quit took the orderly path and said it asked no guard: the OQ-298 line, and \`quit: exiting with status 0\``, exited !== null && lines.some((l) => /^quit: closing 1 main window\(s\) through their close guards first/.test(l.message)) && lines.some((l) => l.message === OQ298_LINE) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
+    check(`${name}: no close guard put a question to the quit — well under the probe's ${LIVENESS_BOUND_MS} ms bound`, tookMs !== null && tookMs < LIVENESS_BOUND_MS, tookMs === null ? 'no exit' : `${tookMs} ms from the quit to the exit`);
+    check(`${name}: the quit took the orderly path and said no close guard put a question: the OQ-298 line, and \`quit: exiting with status 0\``, exited !== null && lines.some((l) => /^quit: closing 1 main window\(s\) through their close guards first/.test(l.message)) && lines.some((l) => l.message === OQ298_LINE) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
   } else {
     check(
       `${name}: the close waited for the probe's bound and no longer`,
@@ -267,7 +267,7 @@ for (const [name, how] of [['unsaved-quit', 'driver'], ['unsaved-sigterm', 'sigt
   const lines = mainLines(logOf(started));
   const after = readFileSync(configFile);
   check(`${name}: the quit with a guard that never answers ends the process, exit 0`, exited?.code === 0, exited === null ? 'held: no exit in 20 s' : `${JSON.stringify(exited)} after ${tookMs} ms`);
-  check(`${name}: it took the orderly path and asked no guard: the OQ-298 line, and \`quit: exiting with status 0\``, exited !== null && lines.some((l) => l.message === OQ298_LINE) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
+  check(`${name}: it took the orderly path and no close guard put a question: the OQ-298 line, and \`quit: exiting with status 0\``, exited !== null && lines.some((l) => l.message === OQ298_LINE) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
   check(`${name}: no dialog was shown, and no close guard was asked of the renderer`, dialogBefore === 0 && !lines.some((l) => /close guard: the renderer|PD-SHELL-010|a close guard refused/.test(l.message)), `${dialogBefore} dialog title(s) before the quit; ${lines.filter((l) => /close guard/.test(l.message)).map((l) => l.message).join(' | ') || 'no close-guard line'}`);
   check(`${name}: the workspace configuration file is byte-identical — nothing unsaved was written`, Buffer.compare(before, after) === 0, `${before.length} bytes before, ${after.length} after`);
   results[name] = { exit: ended, tookMs, armed, dialogBefore, configUnchanged: Buffer.compare(before, after) === 0, last: lines.slice(-4).map((l) => `${l.level} ${l.message}`) };

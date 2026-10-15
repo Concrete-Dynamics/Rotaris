@@ -421,14 +421,16 @@ describe('OQ-298: a quit from outside any window asks no unsaved-settings guard 
   });
 
   it('index.ts wires before-quit through QuitOutsideAnyWindow over the open, not-closing main windows and their own close guards', () => {
-    const source = readFileSync(join(import.meta.dirname, 'index.ts'), 'utf8');
+    // Read with every run of whitespace folded to one space, so a reformat that only wraps or re-indents these lines (prettier
+    // breaking the one-line handler, say) keeps the case green; a change of what they call still turns it red.
+    const source = readFileSync(join(import.meta.dirname, 'index.ts'), 'utf8').replace(/\s+/g, ' ');
     expect(source).toMatch(/app\.on\('before-quit', \(event\) => \{ if \(quitOutsideAnyWindow\.beforeQuit\(\)\) event\.preventDefault\(\); \}\);/);
     const start = source.indexOf('new QuitOutsideAnyWindow({');
     const wiring = source.slice(start, source.indexOf("app.on('before-quit', (event)", start));
     expect(wiring).toContain('mainWindows.ordered()');
     expect(wiring).toContain('.filter((m) => !m.win.isDestroyed() && !quit.isClosing(m.wcId))');
     expect(wiring).toContain('confirm: () => quit.closeConfirmed(m.wcId), close: () => m.win.close()');
-    expect(wiring).toMatch(/^\s*closeGuards,$/m);
+    expect(wiring).toMatch(/[{,] closeGuards,/);
     // The one before-quit handler that may hold the quit; the other (`quit: requested (before-quit)`) only logs.
     expect(source.match(/app\.on\('before-quit', \(event\)/g)).toHaveLength(1);
   });

@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PANE_LAYOUT_VIEWS, PreferenceStore, paneLayoutKeys } from '@rotaris/platform';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION } from '@rotaris/contracts';
@@ -108,6 +108,31 @@ describe('notice.current answers the notice a window opened after its publicatio
  * 2, so a view that gained a pane would have had every layout it wrote discarded and a two-pane layout applied to it
  * (`docs/defects/fixed/the-pane-layout-read-assumes-two-panes-for-every-view.md`). The store is a real `PreferenceStore` on disk.
  */
+/**
+ * REQ-SHELL-069: the components that WRITE each view's layout state its pane count as a literal (the renderer and `@rotaris/ui`
+ * do not import `@rotaris/platform`), while `prefs.get` reads against `PANE_LAYOUT_PANES`. A view that gained a pane in one and not
+ * the other would have every layout it writes discarded at the next read, silently (fin46's review, accept1-7; the fixed note
+ * `docs/defects/fixed/the-pane-layout-read-assumes-two-panes-for-every-view.md` says the two must change together). This holds
+ * them together: each writer's `panes: N` is its view's figure in the table.
+ */
+describe('each view\'s layout writer states the pane count PANE_LAYOUT_PANES declares — REQ-SHELL-069', () => {
+  const repo = resolve(import.meta.dirname, '..', '..', '..', '..', '..');
+  const writers: Readonly<Record<(typeof PANE_LAYOUT_VIEWS)[number], string>> = {
+    overview: 'packages/ui/src/OverviewView.tsx',
+    git: 'packages/ui/src/GitView.tsx',
+    library: 'packages/ui/src/library/PromptsTab.tsx',
+    workspace: 'apps/desktop/src/renderer/main.tsx',
+  };
+  it('names one writer per view, and each writes its view\'s count and no other', () => {
+    expect(Object.keys(writers).sort()).toEqual([...PANE_LAYOUT_VIEWS].sort());
+    for (const view of PANE_LAYOUT_VIEWS) {
+      const counts = [...readFileSync(join(repo, writers[view]), 'utf8').matchAll(/onLayout\w*\(\{\s*version:\s*1,\s*panes:\s*(\d+)/g)].map((m) => Number(m[1]));
+      expect(counts.length, `${view}: ${writers[view]} writes a layout`).toBeGreaterThan(0);
+      for (const n of counts) expect(n, `${view}: ${writers[view]} writes panes: ${n}`).toBe(paneCounts[view]);
+    }
+  });
+});
+
 describe('prefs.get reads a pane layout against its own view\'s pane count — REQ-SHELL-069', () => {
   const dirs: string[] = [];
   const declared = { ...paneCounts };

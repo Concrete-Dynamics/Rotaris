@@ -318,6 +318,22 @@ describe('a packaged build carries no scripted model client (OQ-312, ADR-0056)',
     expect(seamCheck(dir).present).toEqual(['scripted model call: (run-host.js)']);
   });
 
+  it('host.ts builds the scripted client only behind __ROTARIS_SEAMS__, and names it nowhere else', () => {
+    // Caught before a package (fin46's review, accept1-11): with the guard removed, rollup keeps `scripted-client.ts` in the
+    // packaged `run-host.js` and only the bundle check above would refuse it, at packaging.
+    const host = readFileSync(join(SRC, 'run-host', 'host.ts'), 'utf8');
+    const calls = [...host.matchAll(/\bscriptedClient\(/g)];
+    expect(calls, 'one construction of the scripted client').toHaveLength(1);
+    const before = host.slice(0, calls[0]!.index).replace(/\s+/g, ' ');
+    expect(before.endsWith('const scripted: () => ModelClient = __ROTARIS_SEAMS__ ? () => '), 'its construction is the seams arm of the flag').toBe(true);
+    const code = host.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    // A property KEY named `scriptedClient` (the configuration's dependency slot, which receives `scripted`) is not a use.
+    const uses = [...code.matchAll(/\b(?:scriptedClient|fileLedger)\b(?!\s*:)/g)].length;
+    // The import names both, the construction names scriptedClient, the standing ledger names fileLedger behind the flag too.
+    expect(uses, 'scriptedClient and fileLedger named only by the import and the two flagged constructions').toBe(4);
+    expect(code).toMatch(/const standing = __ROTARIS_SEAMS__ \? fileLedger\(/);
+  });
+
   it('package.mjs\'s rule 4 (b) launch names no provider: scripted, and runs against the stub it starts', () => {
     const text = readFileSync(join(import.meta.dirname, '..', 'package.mjs'), 'utf8');
     const launch = text.slice(text.indexOf('Rule 4 (b)'));

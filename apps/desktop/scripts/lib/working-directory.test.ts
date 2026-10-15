@@ -6,7 +6,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { app, repo } from './harness.mjs';
 import { assertOpened, emptyWorkingDirectory, enclosingRepository, openedWorkspace } from './working-directory.mjs';
@@ -49,7 +49,9 @@ describe('emptyWorkingDirectory — where a launch with no workspace argument ru
 
   it('the checkout\'s own `apps/desktop`, where the proof ran these launches, is in the repository', () => {
     // Asked, not made: `emptyWorkingDirectory` would empty it.
-    expect(enclosingRepository(app)).toBe(realpathSync(repo));
+    // Git for Windows prints its top level with forward slashes; the host's resolve spells it natively
+    // (docs/defects/fixed/the-working-directory-case-compares-gits-forward-slashed-top-level-with-a-native-path.md).
+    expect(resolve(enclosingRepository(app) ?? '')).toBe(realpathSync(repo));
   });
 });
 

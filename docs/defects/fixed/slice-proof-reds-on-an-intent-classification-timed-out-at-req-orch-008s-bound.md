@@ -1,5 +1,20 @@
 ## slice-proof reds on an intent classification timed out at REQ-ORCH-008's bound
 
+**Outcome (2026-10-15, fin47, as OQ-332's ruling names it): repaired in the harness; the product is unchanged.**
+`intentVerdict` (`apps/desktop/scripts/lib/live-answers.mjs`) marks `timedOut` only the classifier's own reason, "(fallback:
+the classification call timed out after 12 s)", on REQ-ORCH-007's fallback category `moderate_feature`, with the bound and the
+time from the run's first model request to the intent line (`elapsedMs`; 11,979 ms on the F8 log). A timeout at another bound,
+one that lands on another category, a model's text or an endpoint's failure headline that mentions a timeout, and every other
+fallback are no such verdict. `intentOutcome` gives a first timed-out fallback the one extra ask an answer outside the set gets;
+the two share it, so a second problem of either kind is the red, naming both, and any other fallback or a missing intent line
+stays a red at once, first or second. `slice-proof.mjs`'s intents stage prints a `NOTE` for it (the bound, the elapsed time, and
+that the proof records no model traffic, so the cut reasoning's length is the live run's intent NOTE to read), keeps the attempt
+as `intents-<n>.attempt-1.log` and `.png`, lists it under `results.intents[].earlier` with its reason, problem, bound and elapsed
+time, and on `--resume` clears the attempt files with the others. Pinned by `apps/desktop/scripts/lib/live-answers.test.ts`'s
+"OQ-332 (F8)" cases and its describe "scenario 3b asks once more on one fallback at the 12 s bound", red on the code before
+(4 of 23 cases failed there), and a source-shape case on the proof's NOTE and `earlier` entries. OQ-114's 2026-10-04 addendum
+carries a dated sentence. Not driven against the live endpoint by this repair (the orchestrator's slice-proof run is the evidence).
+
 `apps/desktop/scripts/slice-proof.mjs`'s intents stage (scenario 3b) treats every classifier fallback as a red at once
 (`intentOutcome` in `apps/desktop/scripts/lib/live-answers.mjs`: "A fallback (REQ-ORCH-007) and a missing intent line are the
 product's and stay reds at once"). A fallback taken because the classification call reached REQ-ORCH-008's 12 s bound is the

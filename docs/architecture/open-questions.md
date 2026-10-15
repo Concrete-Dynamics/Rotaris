@@ -5697,7 +5697,12 @@ host's load at 2.16 and no other live run or `slice-proof` on this host (another
 from here), and the run after it (load 0.52) classified it `moderate_feature` (0.68) in time. So the bound is also reached
 with no concurrent run in sight. What the build proceeds under is unchanged: the 12 s default, and the fallback
 when the call reaches it. `slice-proof` still treats a fallback as a red. It now names this question in the red, and records
-the host's load at each launch (`apps/desktop/scripts/lib/live-answers.mjs`, `lib/proof-reds.mjs`). This case adds one thing
+the host's load at each launch (`apps/desktop/scripts/lib/live-answers.mjs`, `lib/proof-reds.mjs`). [Added 2026-10-15 under
+OQ-332's ruling (R-072; F8 of fin46's final acceptance): no longer so for a fallback at the 12 s bound. That fallback is
+REQ-ORCH-007's specified answer, so `slice-proof` reports it as a NOTE with the bound and the time it took, keeps the
+attempt as `intents-<n>.attempt-1.log`, and asks once more, sharing the one extra ask an answer outside the set gets; a
+second problem of either kind is the red, and any other fallback is still a red at once
+(`docs/defects/fixed/slice-proof-reds-on-an-intent-classification-timed-out-at-req-orch-008s-bound.md`).] This case adds one thing
 to what a ruling of this question decides: whether the bound should allow for a self-hosted endpoint shared by concurrent
 runs.)*
 

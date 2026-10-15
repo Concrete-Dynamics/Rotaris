@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-15**
 
+**Three Windows repairs (the Windows ARM64 session).** `03-runtime-view.md`'s store open names OQ-281's sibling `.<32 hex>`,
+two characters shorter than the place, where it named `.<identifier>.new`, and says a sibling of the earlier name is removed at
+the next open too. `@rotaris/platform` exports `presentExecutable`, which `findShell` and `findExecutable` ask (an App Execution
+Alias is present); `files.ts` keeps `mkdirSync`'s first directory in `dirname`'s spelling. No package, edge or process changed.
+
 **ConPTY's wrapped rows rejoined for the frame match (the Windows ARM64 session).** `rejoinConptyWraps` in `classify.ts`,
 used by `ForegroundSession`'s frame scan before `stripVt`; the emulator's input is unchanged. No view changed: the runtime
 view names the marker protocol, not how the raw stream is read for it.

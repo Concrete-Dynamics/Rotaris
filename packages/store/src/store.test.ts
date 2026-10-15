@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, fileStamp, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
-import { checkEmptyPlace, establishInEmptyPlace, firstStoreSibling, plannedAsideName } from './index.js';
+import { checkEmptyPlace, establishInEmptyPlace, firstStoreSibling, legacyFirstStoreSibling, plannedAsideName } from './index.js';
 import { CutRestoreError, recoverCutRestore, RestorePendingError, restoreJournal, StorePlaceEmptyError, writeRestoreJournal } from './index.js';
 import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, FILE_STAMP_LENGTH, openStore, openStoreForInspection, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, storePathLimit, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
@@ -202,8 +202,11 @@ describe('store — OQ-281 (ruled 2026-10-14 under R-072): a first store is made
 
   it('a stray sibling for the identifier — a store never installed — is swept at its next open, whatever it holds', () => {
     const sibling = firstStoreSibling(root, id);
-    expect(sibling).toBe(join(root, `.${id}.new`));
-    expect(sibling.length - join(root, id).length).toBe(5);
+    // Two characters shorter than the place, so the sibling's database never crosses D11's limit first; it was
+    // `.<id>.new`, five longer, until 2026-10-15
+    // (docs/defects/fixed/a-first-store-at-247-to-251-characters-cannot-be-created-on-windows.md).
+    expect(sibling).toBe(join(root, `.${id.slice('v1-'.length)}`));
+    expect(sibling.length - join(root, id).length).toBe(-2);
     mkdirSync(join(sibling, 'sessions'), { recursive: true });
     writeFileSync(join(sibling, 'workspace.db'), 'half a store');
     const r = openWorkspaceStore(root, id, ws);
@@ -211,6 +214,18 @@ describe('store — OQ-281 (ruled 2026-10-14 under R-072): a first store is made
     r.db.close();
     forgetSpelling(r.dir);
     expect(existsSync(sibling)).toBe(false);
+    expect(readdirSync(root)).toEqual([id]);
+  });
+
+  it('a stray sibling under its earlier name, `.<id>.new`, is swept at the identifier\'s next open too', () => {
+    const legacy = legacyFirstStoreSibling(root, id);
+    expect(legacy).toBe(join(root, `.${id}.new`));
+    mkdirSync(legacy, { recursive: true });
+    writeFileSync(join(legacy, 'workspace.db'), 'half a store');
+    const r = openWorkspaceStore(root, id, ws);
+    r.db.close();
+    forgetSpelling(r.dir);
+    expect(existsSync(legacy)).toBe(false);
     expect(readdirSync(root)).toEqual([id]);
   });
 

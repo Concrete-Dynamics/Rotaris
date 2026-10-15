@@ -14348,7 +14348,13 @@ fin44:** `session.start` in such a window says nothing was started because the s
 `runCommand` turns every other gate's `workspace.none` (and the checkpoints' `checkpoint.no-workspace`) into the held refusal (`answerUnderHeldRefusal`, `main/store-notice.ts`);
 `openWorkspaceStore` makes a first store whole in `.<identifier>.new` and renames it into place (`installFirstStore`,
 `packages/store/src/resolve.ts`), so the open no longer leaves the place it made without a store — the residue this entry's
-"What the build proceeds under" named is closed. W-31 (1) and (2) carry that report-back.
+"What the build proceeds under" named is closed. W-31 (1) and (2) carry that report-back. *(First run on Windows 2026-10-15,
+Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, dev tree: `.<identifier>.new` is five characters longer than the
+place, so at a live path of 247 to 251 characters, which D11 admits, the sibling's database crossed the engine's 251, the
+create failed, and its cleanup's `EPERM` replaced the engine's error; no first store could be made there. Repaired the same
+day on the owner's ruling: the sibling is `.<32 hex>`, two characters shorter than the place, a `.<identifier>.new` an earlier
+build left is removed at the next open too, and the cleanup never replaces the failure it follows
+([`a-first-store-at-247-to-251-characters-cannot-be-created-on-windows.md`](../defects/fixed/a-first-store-at-247-to-251-characters-cannot-be-created-on-windows.md)).)*
 
 **The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
 lens, change-behaviour): "Build the resolution inside the product … the existing restore, made to work there, and a new deliberate

@@ -1,5 +1,6 @@
 import { countNoun } from '@rotaris/kernel';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync } from 'node:fs';
+import { presentExecutable } from '@rotaris/platform';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { Clocks } from '@rotaris/kernel';
@@ -51,7 +52,10 @@ export function findShell(env: NodeJS.ProcessEnv = process.env, platform: NodeJS
     for (const exe of ['pwsh.exe', 'powershell.exe']) {
       for (const d of dirs) {
         const f = join(d, exe);
-        try { if (existsSync(f) && statSync(f).isFile()) return { kind: 'powershell', file: f }; } catch { /* next */ }
+        // `presentExecutable`, not `existsSync(f) && statSync(f).isFile()`: an App Execution Alias (an MSIX pwsh) answers
+        // neither, and was passed over for Windows PowerShell 5.1 until 2026-10-15
+        // (docs/defects/fixed/the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md).
+        if (presentExecutable(f)) return { kind: 'powershell', file: f };
       }
     }
     return null;

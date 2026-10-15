@@ -862,9 +862,11 @@ times ([first-executions](../first-executions.md), the row of that date). It mea
 its MSIX package, reached through an App Execution Alias on `PATH`. `findShell` accepts a candidate only when
 `existsSync(f) && statSync(f).isFile()`; on the alias Node answers `EACCES` and `false`, though spawning it runs pwsh. So
 `findShell` passed over it and every real-PTY case of the first two runs ran under Windows PowerShell 5.1:
-[`the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md`](../../defects/the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md),
+[`the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md`](../../defects/fixed/the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md),
 recorded, not repaired. "`pwsh` else `powershell`, presence-only availability" (the first execution above) holds only for a
-pwsh that is a plain file on `PATH`.
+pwsh that is a plain file on `PATH`. *(Repaired the same day on the owner's ruling: `findShell` and `findExecutable` take a
+candidate through `presentExecutable` (`@rotaris/platform`), which accepts an alias — `stat` refused with `EACCES`, `lstat`
+reading a link — and a real call through the MSIX pwsh's alias answered `Core`, exit 0.)*
 
 **Under pwsh 7.6.6 arm64 (a zip install, first on `PATH`), `terminal.test.ts` passed 64 and skipped 45, `streams.test.ts`
 15 and 6, `background.test.ts` 8 and 13**, every skip POSIX-only (`it.skipIf(PS)`, a `dash` or `bash` `/bin/sh`) or a proof

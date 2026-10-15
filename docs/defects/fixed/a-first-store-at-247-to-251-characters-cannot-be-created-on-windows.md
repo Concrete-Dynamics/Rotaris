@@ -1,5 +1,13 @@
 ## A first store at 247 to 251 characters cannot be created on Windows
 
+**Repaired 2026-10-15** (the owner's ruling that day: repair it). `firstStoreSibling` names the sibling for the identifier's
+random part, `.<32 hex>`, two characters shorter than the place, so its `workspace.db` never crosses the engine's limit before
+the live store's would; `legacyFirstStoreSibling` keeps the earlier `.<identifier>.new`, which the next open removes as well;
+and `installFirstStore`'s cleanup can no longer replace the error it follows. Red before on this host (the D11 case at 251, in
+its seed); green after, `store.test.ts` whole (108 passed), with the sibling's pin amended (length −2, not +5) and a case for
+the legacy name; `store-resolution-proof`'s sibling check reads both names. Not run: the store-resolution proof itself (the
+built app; the session's G1 sweep runs it).
+
 Found 2026-10-15 by the full suite on Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev
 tree, pwsh 7.6.7, `LongPathsEnabled` 0, at `b9e30052` (A1 of the Windows ARM64 session). `store.test.ts`'s D11 case "a live
 store at 251 characters is refused before step 1 …" goes red in its seed, before the restore it tests is reached: the seed's

@@ -1907,7 +1907,8 @@ nothing from the backup, and `workspace.opened` carries `cutRestore`, which main
 place that exists and holds no `workspace.db` is refused as `workspace.store-missing` and nothing is put there
 (REQ-SESSION-202, W-31), so the run host is never handed a store and `session.list` answers that refusal; only an absent
 place gets a store created (REQ-SESSION-043) — since 2026-10-14 (OQ-281) made whole in the dot-prefixed sibling
-`.<identifier>.new` (created, migrated, closed, `origin.txt` written), renamed into `<identifier>` with a bounded retry on
+`.<32 hex>` (the identifier's random part, two characters shorter than the place so its database never crosses D11's limit
+first; `.<identifier>.new` until 2026-10-15, which the next open still removes) (created, migrated, closed, `origin.txt` written), renamed into `<identifier>` with a bounded retry on
 `EPERM`/`EBUSY`, and then opened `mustExist` like any present store; a place that appeared meanwhile discards the sibling and is
 opened (or refused) as found, a failed create removes it, and a stray one is removed at the identifier's next open, however the place is found.
 Every scan of the workspaces root skips dot-prefixed entries. While the service's own restore is in flight its opens skip the

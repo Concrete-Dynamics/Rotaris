@@ -1,5 +1,10 @@
 ## Undoing a create on Windows leaves the directories the create made
 
+**Repaired 2026-10-15** (the owner's ruling that day: repair it). `atomicWrite` keeps the first directory it made in the plain
+spelling `dirname` gives (`plainSpelling` in `files.ts`: `\\?\C:\…` becomes `C:\…`, and `\\?\UNC\…` becomes `\\…`), so
+`removeCreated` matches it again. The three cases were red on this host before and are green after, with `tools.test.ts` and
+`files-undo-failure.test.ts` whole (163 passed, 1 skipped). No other code keeps `mkdirSync`'s answer.
+
 Found 2026-10-15 by the full suite on Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev
 tree, pwsh 7.6.7, at `b9e30052` (A1 of the Windows ARM64 session). Three cases go red, every run, alone and in the suite:
 `tools.test.ts`'s "the directories a create made are removed with its file …" and "a created file another writer has
@@ -19,7 +24,7 @@ Not repaired (record-only; the session's brief repairs only where an item says s
 
 REQ-TOOLS-132 and REQ-TOOLS-135: undoing a create puts the path back as it was before the write, and the create made those
 directories, so the undo leaves the workspace with directories that were not there before the create. The repaired
-note [`undoing-a-create-leaves-an-empty-file.md`](fixed/undoing-a-create-leaves-an-empty-file.md) fixed the file half on
+note [`undoing-a-create-leaves-an-empty-file.md`](undoing-a-create-leaves-an-empty-file.md) fixed the file half on
 Linux; this is the directory half on Windows.
 
 ## Relevant files

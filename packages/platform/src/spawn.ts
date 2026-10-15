@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
-import { statSync } from 'node:fs';
+import { lstatSync, statSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 
 /**
@@ -39,6 +39,23 @@ export function spawnChild(spec: SpawnSpec): ChildProcess {
 }
 
 /**
+ * Whether `path` is a file a PATH lookup may name: a regular file, or, on Windows, an App Execution Alias — the reparse point
+ * through which an MSIX or Store package is started (`%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe`, `python.exe`). Node
+ * cannot `stat` an alias (`EACCES`; `existsSync` is false) though it starts when run, and `lstat` reads it as a symbolic
+ * link, so it is taken where `stat` refuses with `EACCES` and `lstat` reads a link. Until 2026-10-15 only the `stat` was
+ * asked, and a pwsh installed by `winget install Microsoft.PowerShell` on Windows 11 ARM64 was passed over for Windows
+ * PowerShell 5.1 (docs/defects/fixed/the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md).
+ */
+export function presentExecutable(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'EACCES') return false;
+    try { return lstatSync(path).isSymbolicLink(); } catch { return false; }
+  }
+}
+
+/**
  * A PATH lookup over an environment (REQ-MCP-037's rule, one implementation for every surface): Windows honours PATHEXT;
  * a command carrying a path separator is checked where it points. Returns the file found or null.
  */
@@ -57,7 +74,7 @@ export function findExecutable(command: string, env: Readonly<Record<string, str
   // wrap never saw `.cmd`. The falsified form, kept: `[base, ...exts.map((e) => base + e)]`. Windows executes a name only
   // under a PATHEXT extension, so on win32 a base without one is tried with the extensions ONLY.
   const candidates = (base: string): string[] => (win && !exts.some((e) => base.toLowerCase().endsWith(e.toLowerCase())) ? exts.map((e) => base + e) : [base]);
-  const isFile = (p: string): boolean => { try { return statSync(p).isFile(); } catch { return false; } };
+  const isFile = presentExecutable;
   if (isAbsolute(command) || command.includes('/') || command.includes('\\')) {
     for (const c of candidates(command)) if (isFile(c)) return c;
     return null;

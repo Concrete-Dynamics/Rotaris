@@ -1,5 +1,13 @@
 ## The terminal never finds a pwsh installed as an App Execution Alias
 
+**Repaired 2026-10-15** (the owner's ruling that day: repair it). `presentExecutable` in `packages/platform/src/spawn.ts`
+takes a path a regular file, or, where `stat` refuses with `EACCES` and `lstat` reads a link, an App Execution Alias;
+`findShell` and `findExecutable` both ask it. Red before on this host: "REQ-TOOLS-104: a pwsh on PATH as an App Execution
+Alias is present, taken before powershell, and runs a call" (`terminal.test.ts`, run only where the host has such an alias)
+returned Windows PowerShell 5.1; green after, its real PTY call through the alias answering `Core`, exit 0. `findExecutable`
+now finds the alias too (spelled `pwsh.EXE` from `PATHEXT`, the same file). Not measured: a Store `python.exe` alias through
+the MCP launch.
+
 Found 2026-10-15 on Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, at `b9e30052`.
 `winget install Microsoft.PowerShell` on this host installed PowerShell 7.6.7 as its MSIX package (Arm64), reached through
 the App Execution Alias `%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe` (and the package's own

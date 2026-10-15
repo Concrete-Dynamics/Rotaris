@@ -34,7 +34,7 @@ has run only on Linux, and these were written or changed there.
    long for one PTY line is staged …" matches the staged script's path with `/1\.sh`, and on a Windows host the script sits
    under a backslash-spelled temporary directory; (b) the real-PTY case "the capture is the emulated screen" pins pwsh 7's
    `Format-List` width (`Count             : 2`), which Windows PowerShell 5.1 prints as `Count    : 2` (the suite ran under
-   5.1 here: [the alias note](../the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md)).
+   5.1 here: [the alias note](the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md)).
 
 ## Specs
 

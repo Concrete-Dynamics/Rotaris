@@ -211,7 +211,8 @@ for (const [name, withCopy] of [['cut-restore', true], ['cut-restore-no-copy', f
 }
 {
   const workspacesRoot = dirname(secondEmptying.place);
-  const siblings = readdirSync(workspacesRoot).filter((n) => n.startsWith('.') && n.endsWith('.new'));
+  // The sibling is `.<32 hex>` since 2026-10-15 and was `.<identifier>.new` before (layout.ts, `firstStoreSibling`).
+  const siblings = readdirSync(workspacesRoot).filter((n) => /^\.[0-9a-f]{32}$/.test(n) || (n.startsWith('.') && n.endsWith('.new')));
   check('every first store was renamed into place: no sibling left beside it', siblings.length === 0, JSON.stringify(readdirSync(workspacesRoot)));
 }
 save();

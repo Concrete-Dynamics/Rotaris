@@ -19,7 +19,8 @@ import type { WorkspaceId } from '@rotaris/kernel';
  *     <identifier>.obstruction-<stamp>[.n] what the reversal moved off the target name — D5
  *     <identifier>.restore-pending     a restore's journal (OQ-266): written before step 8, removed by step 9, by the
  *                                      in-process reversal, or by the next open (`recoverCutRestore`, recover.ts)
- *     .<identifier>.new                a first store being made whole before its rename into place (OQ-281); left only by
+ *     .<32 hex>                        a first store being made whole before its rename into place (OQ-281; `.<identifier>.new`
+ *                                      until 2026-10-15, removed at the next open as well); left only by
  *                                      a cut open, and removed at the identifier's next open. Every scan of
  *                                      this root skips dot-prefixed entries (the assessment's `.assess-*` among them).
  *
@@ -44,10 +45,20 @@ export function storeFile(workspacesRoot: string, id: WorkspaceId): string {
 }
 /**
  * OQ-281: where a first store is made whole before it is renamed into `<identifier>` — dot-prefixed, so every scan of the
- * workspaces root passes it over, and five characters longer than the identifier's name. It holds only a store that was never
- * installed, and is removed at the identifier's next open.
+ * workspaces root passes it over, and named for the identifier's random part (`.<32 hex>`), two characters SHORTER than the
+ * place, so its `workspace.db` never crosses the engine's path limit before the live store's would (ADR-0058 consequence 18,
+ * D11's 251 on Windows). It holds only a store that was never installed, and is removed at the identifier's next open.
+ *
+ * FALSIFIED, kept beside its replacement (the Windows ARM64 session, 2026-10-15): "`.<identifier>.new`, five characters longer
+ * than the identifier's name". At a live path of 247 to 251 characters, which D11 admits, the sibling's database crossed 251,
+ * the engine refused it, and no first store could be made for that workspace on Windows
+ * (docs/defects/fixed/a-first-store-at-247-to-251-characters-cannot-be-created-on-windows.md).
  */
 export function firstStoreSibling(workspacesRoot: string, id: WorkspaceId): string {
+  return join(workspacesRoot, `.${id.slice(id.indexOf('-') + 1)}`);
+}
+/** The sibling's name from 2026-10-14 to 2026-10-15, `.<identifier>.new`: one a build of those days left is removed at the next open too. */
+export function legacyFirstStoreSibling(workspacesRoot: string, id: WorkspaceId): string {
   return join(workspacesRoot, `.${id}.new`);
 }
 export function stagingDir(workspacesRoot: string, id: WorkspaceId, n: number): string {

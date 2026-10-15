@@ -3,7 +3,7 @@ import { mkdirSync, existsSync, renameSync, rmSync, writeFileSync } from 'node:f
 import { join } from 'node:path';
 import { mintWorkspaceId, parseWorkspaceId, type WorkspaceId } from '@rotaris/kernel';
 import { exclusiveCreate, guardedRead, WORKSPACE_ID_FILE, WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
-import { firstStoreSibling, ORIGIN_FILE, restoreJournal, STORE_FILE, storeDir, storeFile } from './layout.js';
+import { firstStoreSibling, legacyFirstStoreSibling, ORIGIN_FILE, restoreJournal, STORE_FILE, storeDir, storeFile } from './layout.js';
 import { migrateStore, type MigrateOutcome } from './migrate.js';
 import { forgetSpelling, openStore, type StoreHandle } from './open.js';
 import { recoverCutRestore, type CutRestore } from './recover.js';
@@ -147,8 +147,11 @@ function installFirstStore(workspacesRoot: string, id: WorkspaceId, workspaceRoo
     // origin.txt: the reclamation surface's only way to say which project a store belongs to (OQ-48) — in place before the rename.
     writeFileSync(join(sibling, ORIGIN_FILE), `${workspaceRoot}\n`);
   } catch (e) {
-    // A failed create leaves nothing: the place stays absent.
-    rmSync(sibling, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    // A failed create leaves nothing it can remove: the place stays absent. The removal never replaces the failure it follows:
+    // on Windows a failed open can still hold the sibling's file, the removal is refused (`EPERM`), and that refusal was what
+    // the caller read instead of the engine's (docs/defects/fixed/a-first-store-at-247-to-251-characters-cannot-be-created-on-windows.md);
+    // what it leaves is removed at the next open.
+    try { rmSync(sibling, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* the cause below is the caller's */ }
     throw e;
   }
   opts.betweenCreateAndRename?.(sibling);
@@ -189,8 +192,9 @@ export function openWorkspaceStore(workspacesRoot: string, id: WorkspaceId, work
   if (!recover && !existsSync(dir) && existsSync(restoreJournal(workspacesRoot, id))) throw new RestorePendingError(dir);
   // OQ-281: a stray sibling — a first store a cut open never installed — is removed at the identifier's next open, however the
   // place is found: absent (the install below sweeps it too), or back by another way meanwhile (a restore, a person).
-  const sibling = firstStoreSibling(workspacesRoot, id);
-  if (existsSync(sibling)) rmSync(sibling, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  for (const sibling of [firstStoreSibling(workspacesRoot, id), legacyFirstStoreSibling(workspacesRoot, id)]) {
+    if (existsSync(sibling)) rmSync(sibling, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  }
   const created = existsSync(dir) ? null : installFirstStore(workspacesRoot, id, workspaceRoot, opts);
   // Present now in every case — installed by this open, or found (before it, or appearing meanwhile): opened, never created.
   if (!existsSync(file)) throw new StorePlaceEmptyError(dir, file);

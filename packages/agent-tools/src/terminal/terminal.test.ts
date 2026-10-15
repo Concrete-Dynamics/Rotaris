@@ -1,10 +1,10 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, type Clocks } from '@rotaris/kernel';
 import { foregroundStreamId } from '@rotaris/contracts';
-import { nodeClocks } from '@rotaris/platform';
+import { findExecutable, nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, rejoinConptyWraps, stripVt } from './classify.js';
 import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, POSIX_LINE_BYTES, posixShellArgs, printsMarker, processIdentity, restoreCommand, shellHoldsTerminal, snapshotCommand, stagedScript, unstartedShare, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
 import { xtermEmulatorFactory, type EmulatorFactory } from './emulator.js';
@@ -2498,6 +2498,25 @@ describe('terminal — availability (REQ-TOOLS-104)', () => {
     if (process.platform !== 'win32') expect(findShell(process.env, process.platform)?.kind).toBe('posix');
     void FakeClock;
   });
+
+  // docs/defects/fixed/the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md: a pwsh installed from its MSIX
+  // package (winget's choice on Windows 11 ARM64, measured 2026-10-15) is reached through an App Execution Alias, a reparse
+  // point Node cannot `stat` (EACCES) though it starts when run, and `findShell` passed over it to Windows PowerShell 5.1.
+  // Run where this host has such an alias; skipped elsewhere, since no test can make one.
+  const aliasDir = join(process.env['LOCALAPPDATA'] ?? '', 'Microsoft', 'WindowsApps');
+  const pwshAlias = join(aliasDir, 'pwsh.exe');
+  const hasPwshAlias = process.platform === 'win32' && (() => { try { return lstatSync(pwshAlias).isSymbolicLink(); } catch { return false; } })();
+  it.runIf(hasPwshAlias)('REQ-TOOLS-104: a pwsh on PATH as an App Execution Alias is present, taken before powershell, and runs a call', async () => {
+    expect(findShell({ PATH: `${aliasDir};C:\\Windows\\System32\\WindowsPowerShell\\v1.0` }, 'win32')).toEqual({ kind: 'powershell', file: pwshAlias });
+    // Spelled with PATHEXT's extension (`pwsh.EXE`): the same file on Windows.
+    expect(findExecutable('pwsh', { PATH: aliasDir, PATHEXT: '.COM;.EXE' }, 'win32')?.toLowerCase()).toBe(pwshAlias.toLowerCase());
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: { kind: 'powershell', file: pwshAlias }, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    try {
+      const r = await terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }).execute(args({ command: 'Write-Output $PSVersionTable.PSEdition', timeout: 30 }), ctx());
+      expect(diag(r.text)['exit_code']).toBe(0);
+      expect(output(r.text)).toBe('Core');
+    } finally { await m.dispose(); }
+  }, 60_000);
 
   it("splits a Windows PATH on the platform's separator, not the host's (R3 separator residue)", () => {
     // Found 2026-09-22 by sweeping every platform-parameterised function for a host-bound `node:path`

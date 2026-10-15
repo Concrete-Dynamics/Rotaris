@@ -91,11 +91,22 @@ export function decodeText(bytes: Buffer): { text: string; binary: boolean } {
 }
 
 /**
+ * A directory as `dirname` spells it. On Windows, Node 24's `mkdirSync(…, { recursive: true })` answers the first directory it
+ * made in its namespaced form (`\\?\C:\…`, `\\?\UNC\server\share\…`), which no plain path ever equals: the undo of a create
+ * compared the two, matched nothing and left every directory the create made (measured 2026-10-15 on Windows 11 ARM64, Node
+ * 24.18.0; docs/defects/fixed/undoing-a-create-on-windows-leaves-the-directories-the-create-made.md).
+ */
+function plainSpelling(dir: string | undefined): string | undefined {
+  if (dir === undefined || process.platform !== 'win32' || !dir.startsWith('\\\\?\\')) return dir;
+  return dir.startsWith('\\\\?\\UNC\\') ? `\\\\${dir.slice('\\\\?\\UNC\\'.length)}` : dir.slice('\\\\?\\'.length);
+}
+
+/**
  * Temp-then-rename in the target's directory; the previous content is never partially replaced. Returns the first directory
  * it had to make for the target (absolute), or undefined when the target's directory was already there.
  */
 export function atomicWrite(target: string, content: string): string | undefined {
-  const madeDir = mkdirSync(dirname(target), { recursive: true });
+  const madeDir = plainSpelling(mkdirSync(dirname(target), { recursive: true }));
   const tmp = join(dirname(target), `.${basename(target)}.tmp-${process.pid}-${randomBytes(4).toString('hex')}`);
   writeFileSync(tmp, content, 'utf8');
   renameSync(tmp, target);

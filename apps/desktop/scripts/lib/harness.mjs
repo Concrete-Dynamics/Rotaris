@@ -79,7 +79,7 @@ export function findDatabases(root) {
   const found = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     const path = join(root, entry.name);
-    // OQ-281: a dot-prefixed directory under the workspaces root is a first store being made (`.<id>.new`), never a store.
+    // OQ-281: a dot-prefixed directory under the workspaces root is a first store being made (`.<32 hex>`, `.<id>.new` before 2026-10-15), never a store.
     if (entry.isDirectory() && entry.name.startsWith('.')) continue;
     if (entry.isDirectory()) found.push(...findDatabases(path));
     else if (entry.name === 'workspace.db') found.push(path);

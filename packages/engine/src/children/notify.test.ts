@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChildRow } from '@rotaris/store';
 import { cutOffReport } from './cut-off.js';
 import { HAND_OFF_BUDGET } from '@rotaris/kernel';
-import { childPayload, completionNotification, inheritedContext, inheritedContextBlock, openTodoReminderLines, priorAgentContext, priorAgentContextParts, REPORT_BLOCK_CAP, reportBlock, resumeMessage } from './notify.js';
+import { childPayload, CHILD_REPORT_ARTIFACT_SENTENCE, completionNotification, inheritedContext, inheritedContextBlock, openTodoReminderLines, priorAgentContext, priorAgentContextParts, REPORT_BLOCK_CAP, reportBlock, resumeMessage } from './notify.js';
 
 describe('the child payload order — REQ-TOOLS-154, REQ-ORCH-035, PD-TOOLS-006, REQ-TOOLS-152', () => {
   const prior = '[Prior agent context — authoritative: rely on these findings rather than repeating the investigation]';
@@ -25,7 +25,27 @@ describe('the child payload order — REQ-TOOLS-154, REQ-ORCH-035, PD-TOOLS-006,
   it('starts with the workspace root when the child has no dependencies, and omits the blocks it has none of', () => {
     const payload = childPayload('/ws', 'the task', '', [index, ''], '');
     expect(payload.split('\n\n')[0]).toMatch(/^Workspace root: \/ws\./);
-    expect(payload.split('\n\n').slice(1)).toEqual([...index.split('\n\n'), 'the task']);
+    // PD-TOOLS-006 revision 10: the report-artifact sentence is the one block every payload carries after the root.
+    expect(payload.split('\n\n').slice(1)).toEqual([CHILD_REPORT_ARTIFACT_SENTENCE, ...index.split('\n\n'), 'the task']);
+  });
+
+  /*
+   * PD-TOOLS-006 revision 10 (OQ-334, ruled 2026-10-15 under R-072): every child is told that the run keeps its report as an artifact
+   * and that the report meets a request to publish when it holds no publishing tool — directly after the workspace-root line, ahead of
+   * the write scopes, the attachments and the task. Before it, a codebase-analyst briefed to publish invented `artifact_write`
+   * (finding F10, the default live run's `delegation` scenario at 3c03287, d0c3a7f0 #10).
+   */
+  it('PD-TOOLS-006 revision 10 (red): the report-artifact sentence follows the workspace-root line in every payload, ahead of the write scopes, attachments and task', () => {
+    expect(CHILD_REPORT_ARTIFACT_SENTENCE).toBe('When you end, the run keeps your report as an artifact that later agents can list and be handed; if your task asks you to publish your findings and you hold no tool that publishes artifacts, your report meets that request.');
+    const full = childPayload('/ws', 'the task', prior, [index, attached], scopes, inherited);
+    expect(full).toContain(`Workspace root: /ws. Treat any other absolute path you encounter as stale; every path you use is relative to this root.\n\n${CHILD_REPORT_ARTIFACT_SENTENCE}\n\n${scopes}\n\n${index}`);
+    const order = [prior, 'Workspace root: /ws.', CHILD_REPORT_ARTIFACT_SENTENCE, scopes, index, attached, inherited, 'the task'].map((text) => full.indexOf(text));
+    expect(order.every((position) => position >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    // A bare payload — no prior context, scopes, artifacts or inherited block — carries it too, second, before the task.
+    expect(childPayload('/ws', 'the task', '').split('\n\n')).toEqual(['Workspace root: /ws. Treat any other absolute path you encounter as stale; every path you use is relative to this root.', CHILD_REPORT_ARTIFACT_SENTENCE, 'the task']);
+    // It names no persona and no tool a child could mistake for one it holds.
+    expect(CHILD_REPORT_ARTIFACT_SENTENCE).not.toMatch(/artifact_write|codebase-analyst|docs-writer/);
   });
 
   it('with nothing inherited the payload is what it was before item (5) existed', () => {

@@ -230,7 +230,7 @@ import { lanesTrapGuard, lanesTrapReading, lanesTrapSteps } from './lib/lanes-tr
 import { starterMissing } from './lib/starter-config.mjs';
 import { preserveSummary, summaryReading } from './lib/summary-sections.mjs';
 import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
-import { routingMissReading } from './lib/routing-misses.mjs';
+import { publishersOf, routingMissReading } from './lib/routing-misses.mjs';
 import { handOffCutReading } from './lib/hand-off-cuts.mjs';
 import { classifierNote, classifierReading } from './lib/intent-reading.mjs';
 import { agentPlanTaskCount, coordinatorTodoReading, heldItemReading, launchRunOverride, planItemIds, rootAgentPlan, todoItemReading } from './lib/coordinator-todo.mjs';
@@ -1220,6 +1220,18 @@ function checkIntentClassification() {
  * verifier's route): two. No other scenario's request routes a file to a non-writer, so every other scenario reads 0.
  */
 const NON_WRITER_FILE_TASKS = { duress: 2 };
+/**
+ * OQ-334 (`PD-TOOLS-006` revision 10): the personas whose catalogue entry read "publishes artifacts" in any `delegate` description
+ * a scenario's requests were offered — none under the defaults (OQ-212), so every publishing brief counts there.
+ */
+function publishersOffered(scenario) {
+  const names = new Set();
+  for (const record of readTraffic(scenario)) {
+    const description = requestOf(record)?.tools.find((t) => t.name === 'delegate')?.description;
+    if (description) for (const name of publishersOf(description)) names.add(name);
+  }
+  return [...names];
+}
 function checkRoutingMisses() {
   if (preservedSessions.length === 0) return;
   let r;
@@ -1227,7 +1239,7 @@ function checkRoutingMisses() {
     const Database = require('better-sqlite3');
     const db = new Database(oneDatabase(), { readonly: true });
     try {
-      r = routingMissReading(preservedSessions.map(({ scenario, sessionId }) => ({ scenario, nonWriterFileTasks: NON_WRITER_FILE_TASKS[scenario] ?? 0, rootNames: db.prepare('SELECT DISTINCT root_persona FROM iterations WHERE session_id = ?').all(sessionId).map((row) => row.root_persona), calls: readToolCalls(sessionId) })));
+      r = routingMissReading(preservedSessions.map(({ scenario, sessionId }) => ({ scenario, nonWriterFileTasks: NON_WRITER_FILE_TASKS[scenario] ?? 0, publishers: publishersOffered(scenario), rootNames: db.prepare('SELECT DISTINCT root_persona FROM iterations WHERE session_id = ?').all(sessionId).map((row) => row.root_persona), calls: readToolCalls(sessionId) })));
     } finally { db.close(); }
   } catch (cause) {
     check(false, 'the delegate and child calls of every session the run kept were read for PD-TOOLS-006 revision 8', cause instanceof Error ? cause.message : String(cause));
@@ -1236,6 +1248,10 @@ function checkRoutingMisses() {
   const reroute = (x) => `${x.scenario} #${x.ordinal}: ${x.persona}, ${x.rerouted ? 're-routed' : 'NOT re-routed'} by the next delegate${x.secondsToNext === null ? '' : ` ${x.secondsToNext} s later`}`;
   noted('write scopes given to a persona that cannot write files (PD-TOOLS-006 revision 9, OQ-331; bound: at most one per task routed to a non-writer — 2 in duress, 0 elsewhere — no work refused twice, each re-routed by the next delegate within 60 s), and child calls of a tool they do not hold (OQ-250; target 0)',
     `${r.scopeRefusals.length} write-scope refusal(s)${r.scopeRefusals.length === 0 ? '' : ` (${r.scopeRefusals.map(reroute).join('; ')})`}; ${r.unknownTools.length} unknown-tool call(s) by a child${r.unknownTools.length === 0 ? '' : ` (${r.unknownTools.map((x) => `${x.scenario} #${x.ordinal}: ${x.agent} ${x.tool}`).join(', ')})`}`);
+  // OQ-334 (PD-TOOLS-006 revision 10): both counts printed in every run, default and duress; the target of each is 0, and either
+  // above it meets OQ-334's reopening condition.
+  noted('children\'s calls of an artifact_write they do not hold, and briefs asking a persona whose entry lacks "publishes artifacts" to publish an artifact (PD-TOOLS-006 revision 10, OQ-334; target 0 each)',
+    `${r.unknownArtifactWrites.length} unknown artifact_write call(s) by a child${r.unknownArtifactWrites.length === 0 ? '' : ` (${r.unknownArtifactWrites.map((x) => `${x.scenario} #${x.ordinal}: ${x.agent}`).join(', ')})`}; ${r.publishBriefs.length} brief(s) asking a non-publisher to publish${r.publishBriefs.length === 0 ? '' : ` (${r.publishBriefs.map((x) => `${x.scenario} #${x.ordinal}: ${x.persona}`).join(', ')})`}`);
   if (r.flagged.length > 0) noted('write-scope refusals over OQ-331\'s bound (reopens OQ-331)', r.flagged.map((f) => `${f.scenario}${f.ordinal === null ? '' : ` #${f.ordinal}`}: ${f.why}`).join('; '));
 }
 

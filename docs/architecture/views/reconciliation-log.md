@@ -16,6 +16,13 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A child's report is said to be an artifact, and a publishing grant is named (fin47, `fin47-delegation-routing`;
+`PD-TOOLS-006` revision 10, OQ-334; REQ-TOOLS-152, REQ-TOOLS-154).** `03-runtime-view.md`'s write-scope paragraph says every child
+payload carries `CHILD_REPORT_ARTIFACT_SENTENCE` between the workspace-root line and the scopes, and its `delegate` description
+paragraph adds `REPORT_ARTIFACT_SENTENCE` (where the run holds a store) and the catalogue's fourth word, "publishes artifacts"
+(`catalogueWords`). `04-seams.md` §4's resolution bullet says the same word comes from `resolveAgentGrant` and that `createToolPort`
+passes `delegateTool` the store's presence. No package, edge or process changed. The README's date stays 2026-10-15.
+
 **REQ-SHELL-119's guard (2) and REQ-SHELL-021's gate (2) are built in their places (fin47, `fin47-guard-and-support`;
 REQ-SHELL-119, REQ-SHELL-021, REQ-STARTUP-053; OQ-361 raised).** `02-process-view.md`'s close-guard paragraph names guard (2)
 between the unsaved-settings guard and the active-run confirmation, and its `workspace.choose` entry says gate 2 reads

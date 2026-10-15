@@ -1488,7 +1488,13 @@ context, port), `agent-tools/src/tools/artifacts.ts` (the three executors the re
 string, with the bounded cache) and `ui/src/library/{ArtifactsTab,ArtifactInspector}.tsx`. Artifact bodies are files
 named flat beside the session's other files (`artifact-<id>.md`), because REQ-SESSION-002 closes that directory to
 three kinds of file and a subdirectory's standing under that sentence is arguable. `ROTARIS_CAPTURE_PROMPTS` and the
-scripted client's `artifact:<tool>[:<key>]` step are the verification seams.
+scripted client's `artifact:<tool>[:<key>]` step are the verification seams. *Since 2026-10-15 (fin47, `PD-TOOLS-006` revision 10, OQ-334)*
+every agent is told that the run keeps a child's report as a `child_report` artifact: `delegate`'s description carries
+`REPORT_ARTIFACT_SENTENCE` where the run holds a store, its catalogue names "publishes artifacts" on an entry whose resolved grant
+holds `artifact_write` (`catalogueWords`, `agent-tools/src/tools/delegation.ts`), and every child payload carries
+`CHILD_REPORT_ARTIFACT_SENTENCE` after its workspace-root line (`engine/src/children/notify.ts`); the live run counts children's
+unknown `artifact_write` calls and briefs asking a non-publisher to publish (`routingMissReading`'s `unknownArtifactWrites` and
+`publishBriefs`, target 0 each).
 
 **What `pnpm library-proof` does.** It launches the app six times over four scratch profiles: Ctrl+6 shows the view
 with its title, its one field and the three tabs in order; a prompt stashed from the composer is in the store and is

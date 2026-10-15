@@ -188,8 +188,18 @@ export function inheritedContextBlock(siblings: readonly ChildRow[]): string {
 }
 
 /**
+ * `PD-TOOLS-006` revision 10 (OQ-334, ruled 2026-10-15 under R-072): every child is told that the run keeps its report as an
+ * artifact (REQ-LIBRARY-092), and that its report meets a request to publish when it holds no tool that publishes artifacts. Fixed,
+ * and true under every grant: a child that holds `artifact_write` is not told its report meets the request. Before it a
+ * codebase-analyst briefed to publish called `artifact_write`, which it does not hold (the default live run at 3c03287, d0c3a7f0
+ * #10), and the report the run then kept said no artifact had been created (finding F10).
+ */
+export const CHILD_REPORT_ARTIFACT_SENTENCE = 'When you end, the run keeps your report as an artifact that later agents can list and be handed; if your task asks you to publish your findings and you hold no tool that publishes artifacts, your report meets that request.';
+
+/**
  * REQ-TOOLS-154's order: REQ-ORCH-047's prior-agent context ahead of everything when present (REQ-ORCH-035), then
- * (1) the workspace root with PD-TOOLS-006's write scopes immediately after it, then Part Y's artifact blocks —
+ * (1) the workspace root, followed by PD-TOOLS-006 revision 10's report-artifact sentence (OQ-334), with PD-TOOLS-006's write
+ * scopes immediately after them, then Part Y's artifact blocks —
  * (3) `PRIOR SIBLING ARTIFACT INDEX` and (4), where the launch attached any, `PRIOR AGENT CONTEXT (FULL)`
  * (REQ-LIBRARY-097, REQ-LIBRARY-098) — then (5) the inherited-context block (REQ-TOOLS-152), and (6) the task last.
  * `artifactBlocks` arrives in that (3), (4) order. Item (2) has no block here: the verification suite REQ-ORCH-129
@@ -200,6 +210,8 @@ export function childPayload(workspaceRoot: string, task: string, priorContext: 
   const parts: string[] = [];
   if (priorContext) parts.push(priorContext);
   parts.push(`Workspace root: ${workspaceRoot}. Treat any other absolute path you encounter as stale; every path you use is relative to this root.`);
+  // PD-TOOLS-006 revision 10 (OQ-334): directly after the root, ahead of the write scopes — in every payload.
+  parts.push(CHILD_REPORT_ARTIFACT_SENTENCE);
   if (writeScopes !== '') parts.push(writeScopes);
   for (const block of artifactBlocks) if (block !== '') parts.push(block);
   if (inheritedContext !== '') parts.push(inheritedContext);

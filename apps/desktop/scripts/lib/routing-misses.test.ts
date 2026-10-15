@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { routingMissReading } from './routing-misses.mjs';
+import { publishersOf, routingMissReading } from './routing-misses.mjs';
 
 const call = (ordinal: number, tool_name: string, agent_name: string, status: string, result: string, failureKind: string | null = null, args: Record<string, unknown> = {}, endedAt: number | null = null) => ({ ordinal, tool_name, agent_name, status, result, failureKind, args, endedAt });
 
@@ -22,7 +22,7 @@ describe('routingMissReading (PD-TOOLS-006 revision 8, OQ-250)', () => {
 
   it('a root\'s own unknown tool is not a child\'s brief, and a run with neither reads zero', () => {
     const r = routingMissReading([{ scenario: 'edit', rootNames: ['orchestrator'], calls: [call(3, 'terminal', 'orchestrator', 'failed', "Unknown tool 'terminal'. The call was not executed; choose one of the tools listed.", 'invalid_request')] }]);
-    expect(r).toEqual({ read: ['edit'], scopeRefusals: [], unknownTools: [], flagged: [] });
+    expect(r).toEqual({ read: ['edit'], scopeRefusals: [], unknownTools: [], unknownArtifactWrites: [], publishBriefs: [], flagged: [] });
   });
 
   // OQ-257 (PD-TOOLS-006 revision 9): the bound that replaced the target of zero — each refusal re-routed by the coordinator's next
@@ -118,5 +118,46 @@ describe('routingMissReading (PD-TOOLS-006 revision 8, OQ-250)', () => {
     const r = routingMissReading([{ scenario: 'duress', nonWriterFileTasks: 2, rootNames: ['orchestrator'], calls }]);
     expect(r.scopeRefusals[0]).toMatchObject({ ordinal: 105, secondsToNext: 61, rerouted: true });
     expect(r.flagged).toEqual([{ scenario: 'duress', ordinal: 105, why: 're-routed 61 s later, over 60 s' }]);
+  });
+});
+
+/**
+ * PD-TOOLS-006 revision 10 (OQ-334, ruled 2026-10-15 under R-072): in every live run, default and duress, two counts with a target of
+ * 0 — a child's call of an `artifact_write` it does not hold, and a brief asking a persona whose catalogue entry lacks "publishes
+ * artifacts" to publish an artifact. Pinned against the shape the default run at 3c03287 recorded (session d0c3a7f0: #5 briefed a
+ * codebase-analyst "Publish your findings as an artifact so later steps can attach it.", #10 the child's `artifact_write`).
+ */
+describe('routingMissReading — publishing briefs and invented artifact_write (PD-TOOLS-006 revision 10, OQ-334)', () => {
+  const brief = 'TASK: Read src/todos.js and report every function that the module exports.\n\nMUST DO:\n- Read src/todos.js itself.\n- Publish your findings as an artifact so later steps can attach it.\n\nMUST NOT DO:\n- Do not modify any file.';
+  const d0c3a7f0 = (publishers?: string[]) => [{ scenario: 'delegation', rootNames: ['orchestrator'], ...(publishers ? { publishers } : {}), calls: [
+    call(5, 'delegate', 'orchestrator', 'ok', "Task 'exports': queued — Accepted; the child runs in the background.\ntask_id: bg_aa74009b", null, { persona: 'codebase-analyst', task_name: 'exports', task: brief }),
+    call(10, 'artifact_write', 'exports', 'failed', "Unknown tool 'artifact_write'. The call was not executed; choose one of the tools listed.", 'invalid_request'),
+    call(17, 'delegate', 'orchestrator', 'ok', "Task 'exports-doc': queued — Accepted.", null, { persona: 'docs-writer', task_name: 'exports-doc', task: 'TASK: Write docs/exports.md. Start from the attached "exports report" artifact; pass nothing else.', attach_artifacts: ['art_C1ZUuJ3B'] }),
+  ] }];
+
+  it('(red) counts the d0c3a7f0 shape: one brief asking a non-publisher to publish, one artifact_write a child does not hold', () => {
+    const r = routingMissReading(d0c3a7f0());
+    expect(r.publishBriefs).toEqual([{ scenario: 'delegation', ordinal: 5, persona: 'codebase-analyst' }]);
+    expect(r.unknownArtifactWrites).toEqual([{ scenario: 'delegation', ordinal: 10, agent: 'exports', tool: 'artifact_write' }]);
+  });
+
+  it('(red) a brief to a persona whose entry reads "publishes artifacts" is not counted', () => {
+    expect(routingMissReading(d0c3a7f0(['codebase-analyst'])).publishBriefs).toEqual([]);
+  });
+
+  it('(red) a brief that forbids publishing, names a published artifact or hands one on asks nothing; a schema-refused call delivered no brief', () => {
+    const asks = (task: string, result = "Task 'x': queued — Accepted.") => routingMissReading([{ scenario: 'd', rootNames: ['orchestrator'], calls: [call(1, 'delegate', 'orchestrator', 'ok', result, null, { persona: 'codebase-analyst', task_name: 'x', task })] }]).publishBriefs.length;
+    expect(asks('MUST NOT DO:\n- Do not publish any artifact.')).toBe(0);
+    expect(asks('CONTEXT: the analyst published artifact art_C1ZUuJ3B; read it.')).toBe(0);
+    expect(asks("Pass the report artifact's id in attach_artifacts so the child starts from it.")).toBe(0);
+    expect(asks('Publish an artifact named findings.')).toBe(1);
+    expect(asks('Write the findings with artifact_write.')).toBe(1);
+    expect(asks('Publish your findings as an artifact.', "The arguments for 'delegate' do not match its schema (task_name: Invalid input). Re-issue the call with corrected arguments.")).toBe(0);
+  });
+
+  it('(red) reads the publishers from a delegate description: each entry whose words include "publishes artifacts"', () => {
+    const description = "Delegate a task to a specialist persona. The personas you can delegate to, each with what the product's own tools a child of yours would be granted let it do (tool-server and plugin tools are not described): codebase-analyst (reads workspace files); release-manager (reads workspace files, publishes artifacts); herald (publishes artifacts). Aliases: coder (coding-agent). Ask a persona only for work its tools allow.";
+    expect(publishersOf(description)).toEqual(['release-manager', 'herald']);
+    expect(publishersOf("Delegate a task. The personas you can delegate to (tool-server and plugin tools are not described): docs-writer (reads workspace files, writes workspace files).")).toEqual([]);
   });
 });

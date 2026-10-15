@@ -1300,7 +1300,9 @@ writers that caller's map lets write, `fileWriters`) and,
 once the ledger has accepted the child, records its **claim** in `WriteClaims` — in memory, in acceptance order —
 together with the child's **disclosure**: its own scope and the live scopes of the others as they
 stand at that moment. The disclosure is rendered as a block immediately after the workspace-root line of the child's
-payload (`childPayload`). A claim is live while its child's ledger state is non-terminal, read at every query, so
+payload (`childPayload`) — since `PD-TOOLS-006` revision 10 (OQ-334, fin47) after one fixed sentence that every payload carries
+between the root line and the scopes (`CHILD_REPORT_ARTIFACT_SENTENCE`, `children/notify.ts`): the run keeps the child's report as an
+artifact, and that report meets a request to publish when the child holds no tool that publishes artifacts. A claim is live while its child's ledger state is non-terminal, read at every query, so
 it lapses on every terminal path without a hook of its own. The refusal is the **gate's**: each agent's
 `ToolPortContext.writeClaimFor` is bound to that agent's task id and reaches `Run.writeClaimFor` →
 `IterationChildren.writeClaimFor`, which answers with the earliest live claim matching the path unless the caller
@@ -1328,6 +1330,12 @@ Since revision 9 (OQ-257, fin38) the description's write-scope sentence (`WRITE_
 persona whose entry writes workspace files and says a scope given to any other is refused, and the `write_scope` field carries the
 same in the offered schema (`WRITE_SCOPE_FIELD_SENTENCE`, through `z.toJSONSchema`); a sentence after it (`HAND_OFF_SENTENCE`) says
 what `depends_on`, `inherited_context` and `attach_artifacts` each carry, with the hand-off budget (`HAND_OFF_BUDGET`, `kernel`).
+Since revision 10 (OQ-334, fin47), where the caller's run holds an artifact store (`delegateTool`'s `artifactStore`, the same
+prerequisite the catalogue's grants are resolved under), a sentence after that one (`REPORT_ARTIFACT_SENTENCE`) says the run keeps an
+ended child's report as a `child_report` artifact and that a child is asked to publish only where its entry says it publishes
+artifacts; and the catalogue adds a fourth computed word, "publishes artifacts", to an entry whose resolved grant holds
+`artifact_write` (`catalogueWords`) — the persona's own `can_publish_artifacts` with the store (OQ-212), so no built-in entry
+carries it under the defaults.
 
 **Which personas a delegation may name (OQ-228, OQ-229, ruled 2026-10-07 under R-072; fin33).** One list answers it:
 `delegationTargetsFor(resolver, caller)` (`children/personas.ts`) — the resolver's `delegationTargets()` (every configured

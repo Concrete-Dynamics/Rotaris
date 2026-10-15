@@ -15130,7 +15130,7 @@ the child's payload; REQ-ORCH-028, the routing table; OQ-212, which keeps every 
 `can_publish_artifacts` false; [OQ-250](#oq-250)'s limb "any brief offering a command or tool its target lacks", stated for a duress
 run; [OQ-256](#oq-256), whose duress run held the same false belief at request 98; [OQ-257](#oq-257). Raised 2026-10-15 from
 finding F10 of fin46's final acceptance (round 2 at `3c03287`), recorded in
-[`a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for`](../defects/a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for.md);
+[`a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for`](../defects/fixed/a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for.md);
 written at the number the consortium's ruling names. **Ruled 2026-10-15.**)*
 
 **What is open.** In the default live run's `delegation` scenario at `3c03287` (pack `2026-10-15T03-10-08-908Z`, session
@@ -15180,6 +15180,14 @@ the payload sentence, about 40 more tokens. In the default `delegation` scenario
 child makes 0 `artifact_write` calls, and `art_C1ZUuJ3B`'s successor carries no claim that publishing failed. The harness NOTE
 prints both counts — children's unknown `artifact_write` calls and briefs asking a non-publisher to publish — at 0 in default and
 duress runs.
+
+*Built 2026-10-15 (fin47, `fin47-delegation-routing`); its first execution is reported in `PD-TOOLS-006` revision 10.*
+`REPORT_ARTIFACT_SENTENCE` and `catalogueWords` (`packages/agent-tools/src/tools/delegation.ts`), with `createToolPort` passing
+`delegateTool` the run's store presence (`apps/desktop/src/run-host/tools.ts`); `CHILD_REPORT_ARTIFACT_SENTENCE` in `childPayload`
+(`packages/engine/src/children/notify.ts`); the live run's `unknownArtifactWrites` and `publishBriefs`
+(`apps/desktop/scripts/lib/routing-misses.mjs`), whose NOTE prints both in every run. Pinned by `tools/delegation.test.ts`,
+`run-host/tools.test.ts`, `children/notify.test.ts` and `lib/routing-misses.test.ts`, red on the code before. Not yet driven live: the
+next default pack is the measure. The note is repaired. The row is in [`first-executions.md`](first-executions.md).
 
 <a id="oq-400"></a>
 

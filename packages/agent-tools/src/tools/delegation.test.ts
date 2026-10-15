@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, isDelegationTarget, ROLE_SPAWN_ALIASES } from '@rotaris/contracts';
 import { expandDeclared } from '../registry.js';
-import { attachmentWarnings, delegateTool, grantFacets, HAND_OFF_SENTENCE, handOffWarnings, renderDelegateCatalogue, TODO_ITEM_MARK_SENTENCE, TODO_ITEM_SENTENCE, WRITE_SCOPE_FIELD_SENTENCE, WRITE_SCOPE_SENTENCE, type AttachmentReport, type DelegateCatalogue, type DelegationPort, type HandOffReport } from './delegation.js';
+import { attachmentWarnings, delegateTool, grantFacets, HAND_OFF_SENTENCE, handOffWarnings, renderDelegateCatalogue, REPORT_ARTIFACT_SENTENCE, TODO_ITEM_MARK_SENTENCE, TODO_ITEM_SENTENCE, WRITE_SCOPE_FIELD_SENTENCE, WRITE_SCOPE_SENTENCE, type AttachmentReport, type DelegateCatalogue, type DelegationPort, type HandOffReport } from './delegation.js';
 import type { ToolContext } from './types.js';
 
 /**
@@ -217,6 +217,46 @@ describe('delegate — PD-TOOLS-006 revision 9', () => {
     const r = await tool(handOff).execute(call, {} as ToolContext);
     expect(r.text).toBe(`Task 'doc': queued — Accepted. ${handOffWarnings(handOff).join(' ')}\ntask_id: bg_00000002`);
     expect((await tool().execute(call, {} as ToolContext)).text).toBe("Task 'doc': queued — Accepted.\ntask_id: bg_00000002");
+  });
+});
+
+/**
+ * PD-TOOLS-006 revision 10 (OQ-334, ruled 2026-10-15 under R-072): `delegate` says that the run keeps every ended child's report as a
+ * `child_report` artifact, where the caller's run holds a store, and the catalogue names "publishes artifacts" on an entry whose
+ * resolved grant holds `artifact_write`. Before it a coordinator briefed a codebase-analyst to publish an artifact it holds no tool
+ * for, and the child invented `artifact_write` (finding F10, the default live run at 3c03287, d0c3a7f0 #5 and #10).
+ */
+describe('delegate — PD-TOOLS-006 revision 10 (OQ-334)', () => {
+  const port: DelegationPort = {
+    delegate: async (_parent, req) => ({ status: 'queued', canonicalName: req.taskName, taskId: 'bg_00000002', message: 'Accepted.' }),
+    backgroundOutput: () => ({ status: 'not_found', state: '', text: '' }),
+    waitForTasks: async () => ({ immediate: true, requested: 0, text: '' }),
+  };
+
+  it('(red) the report-artifact sentence follows the hand-off sentence verbatim where the run holds an artifact store, and names no persona', () => {
+    expect(REPORT_ARTIFACT_SENTENCE).toBe('When a child ends, the run keeps its report as an artifact of kind child_report, which artifact_list shows and attach_artifacts hands on; ask a child for its findings in its report, and ask it to publish an artifact only where its entry says it publishes artifacts.');
+    const text = delegateTool(port, 'root:1', BUILT_IN_CATALOGUE, { artifactStore: true }).description;
+    expect(text).toContain(`${WRITE_SCOPE_SENTENCE} ${HAND_OFF_SENTENCE} ${REPORT_ARTIFACT_SENTENCE} When a child's report`);
+    for (const name of [...BUILT_IN_ROLE_NAMES, ...Object.keys(ROLE_SPAWN_ALIASES)]) expect(REPORT_ARTIFACT_SENTENCE).not.toMatch(new RegExp(`\\b${name}\\b`));
+    // A run with no artifact store keeps no report artifact, so its caller is not told of one.
+    expect(delegateTool(port, 'root:1', BUILT_IN_CATALOGUE).description).not.toContain(REPORT_ARTIFACT_SENTENCE);
+    expect(delegateTool(port, 'root:1', BUILT_IN_CATALOGUE, { artifactStore: false }).description).toContain(`${HAND_OFF_SENTENCE} When a child's report`);
+  });
+
+  it('(red) an entry whose resolved grant holds artifact_write reads "publishes artifacts"; the same entry without it does not', () => {
+    const publishing = renderDelegateCatalogue({ personas: [{ name: 'release-manager', tools: ['read_file', 'artifact_read', 'artifact_list', 'artifact_write'] }, { name: 'herald', tools: ['artifact_write'] }], aliases: [] });
+    expect(publishing).toContain('release-manager (reads workspace files, publishes artifacts);');
+    // A grant whose only reach is publishing states that alone, not "none of these".
+    expect(publishing).toContain('herald (publishes artifacts).');
+    const withheld = renderDelegateCatalogue({ personas: [{ name: 'release-manager', tools: ['read_file', 'artifact_read', 'artifact_list'] }], aliases: [] });
+    expect(withheld).toContain('release-manager (reads workspace files).');
+    expect(withheld).not.toContain('publishes artifacts');
+  });
+
+  it('(OQ-212) no built-in persona\'s entry reads "publishes artifacts"', () => {
+    const text = renderDelegateCatalogue(BUILT_IN_CATALOGUE);
+    for (const p of BUILT_IN_CATALOGUE.personas) expect({ name: p.name, publishes: p.tools.includes('artifact_write') }).toEqual({ name: p.name, publishes: false });
+    expect(text).not.toContain('publishes artifacts');
   });
 });
 

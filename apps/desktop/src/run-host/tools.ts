@@ -459,7 +459,9 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     // granted, resolved by `resolveAgentGrant` as that child's own port resolves it. A delegated child always holds a
     // delegation runtime, and a port never runs `single` where delegation is available, so `coordinating` is true.
     const catalogue = delegateCatalogue(resolver, persona, { ...prerequisites, delegationRuntime: true });
-    executors.set('delegate', delegateTool(ctx.delegation, parentId, catalogue, { markItem: markDelegatedItem }) as ToolExecutor);
+    // PD-TOOLS-006 revision 10 (OQ-334): the report-artifact sentence where this run holds a store — the prerequisite the
+    // catalogue's grants are resolved under, so "publishes artifacts" and the sentence never disagree about the store.
+    executors.set('delegate', delegateTool(ctx.delegation, parentId, catalogue, { markItem: markDelegatedItem, artifactStore: prerequisites.artifactStore }) as ToolExecutor);
     executors.set('background_output', backgroundOutputTool(ctx.delegation, parentId) as ToolExecutor);
     executors.set('wait_for_tasks', waitForTasksTool(ctx.delegation, parentId) as ToolExecutor);
   }

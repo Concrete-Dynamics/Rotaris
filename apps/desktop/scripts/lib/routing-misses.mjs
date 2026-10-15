@@ -20,14 +20,55 @@
  * set of `write_scope` paths, or the same `task_name`); a refusal re-routed more than 60 s later; a refusal with no later
  * `delegate` by the same agent; or one whose next `delegate` does not re-route it.
  *
- * `sessions`: `{ scenario, nonWriterFileTasks?: number, rootNames: string[], calls: { ordinal, tool_name, agent_name, status, result, failureKind, args?, endedAt? }[] }[]`.
+ * Since OQ-334 (`PD-TOOLS-006` revision 10, ruled 2026-10-15 under R-072) two more counts, in every run, default and duress, each
+ * with a target of 0: `unknownArtifactWrites`, a child's call of an `artifact_write` it does not hold (one of `unknownTools`, the
+ * default run at 3c03287 had one, d0c3a7f0 #10); and `publishBriefs`, a `delegate` brief asking a persona whose catalogue entry
+ * lacks "publishes artifacts" to publish an artifact (that run's #5, "Publish your findings as an artifact so later steps can
+ * attach it.", to a codebase-analyst). `publishers` names the personas whose entry carried the word in the delegate description
+ * the run was offered (`publishersOf`); none under the defaults (OQ-212).
+ *
+ * `sessions`: `{ scenario, nonWriterFileTasks?: number, publishers?: string[], rootNames: string[], calls: { ordinal, tool_name, agent_name, status, result, failureKind, args?, endedAt? }[] }[]`.
  */
+/** PD-TOOLS-006 revision 10 (OQ-334): the word a catalogue entry carries where its child's resolved grant holds `artifact_write`. */
+export const PUBLISHES_ARTIFACTS = 'publishes artifacts';
+
+/**
+ * OQ-334: the personas a `delegate` description's catalogue names as publishing — each `name (words)` entry whose words include
+ * "publishes artifacts".
+ * @param {string} description
+ * @returns {string[]}
+ */
+export function publishersOf(description) {
+  const out = [];
+  for (const m of String(description ?? '').matchAll(/([A-Za-z0-9][\w.-]*) \(([^()]*)\)/g)) {
+    if (m[2].split(', ').includes(PUBLISHES_ARTIFACTS) && !out.includes(m[1])) out.push(m[1]);
+  }
+  return out;
+}
+
+/**
+ * OQ-334: whether a brief asks its child to publish an artifact — an imperative "publish" followed within the sentence by
+ * "artifact", or the tool's own name — and not where the clause forbids it ("Do not publish …") or names one already published.
+ * @param {string} task
+ */
+export function asksToPublish(task) {
+  const text = String(task ?? '');
+  if (/\bartifact_write\b/.test(text)) return true;
+  for (const m of text.matchAll(/\bpublish\b[^.\n]{0,60}\bartifacts?\b/gi)) {
+    const before = text.slice(Math.max(0, (m.index ?? 0) - 24), m.index ?? 0);
+    if (!/\b(?:not|never|no)\b[^.\n]*$/i.test(before)) return true;
+  }
+  return false;
+}
+
 export function routingMissReading(sessions) {
   const scopeRefusals = [];
   const unknownTools = [];
+  const publishBriefs = [];
   const flagged = [];
   for (const s of sessions) {
     const roots = new Set(s.rootNames ?? []);
+    const publishers = new Set(Array.isArray(s.publishers) ? s.publishers : []);
     const calls = s.calls ?? [];
     const bound = Number.isInteger(s.nonWriterFileTasks) && s.nonWriterFileTasks >= 0 ? s.nonWriterFileTasks : 0;
     const refusedWork = [];
@@ -52,11 +93,17 @@ export function routingMissReading(sessions) {
         refusedWork.push({ ordinal: c.ordinal, paths, taskName });
         if (secondsToNext !== null && secondsToNext > 60) flagged.push({ scenario: s.scenario, ordinal: c.ordinal, why: `${rerouted ? 're-routed' : 'the next delegate came'} ${secondsToNext} s later, over 60 s` });
       }
+      // OQ-334: a brief the run delivered (not a call refused at its schema) asking a non-publisher to publish an artifact.
+      if (c.tool_name === 'delegate' && typeof c.args?.task === 'string' && !/do not match its schema/.test(result) && asksToPublish(c.args.task)) {
+        const persona = typeof c.args.persona === 'string' ? c.args.persona : '?';
+        if (!publishers.has(persona)) publishBriefs.push({ scenario: s.scenario, ordinal: c.ordinal, persona });
+      }
       if (!roots.has(c.agent_name) && /^Unknown tool '[^']+'\./.test(result)) {
         unknownTools.push({ scenario: s.scenario, ordinal: c.ordinal, agent: c.agent_name, tool: c.tool_name });
       }
     }
     if (refusedHere > bound) flagged.push({ scenario: s.scenario, ordinal: null, why: `${refusedHere} write-scope refusal${refusedHere === 1 ? '' : 's'} in one run, over its ${bound} task(s) routed to a persona that writes no files` });
   }
-  return { read: sessions.map((s) => s.scenario), scopeRefusals, unknownTools, flagged };
+  const unknownArtifactWrites = unknownTools.filter((u) => u.tool === 'artifact_write');
+  return { read: sessions.map((s) => s.scenario), scopeRefusals, unknownTools, unknownArtifactWrites, publishBriefs, flagged };
 }

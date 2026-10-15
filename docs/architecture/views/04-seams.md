@@ -231,6 +231,10 @@ Invariants:
   every coordinator's description with no edit beyond step 2. The same resolution answers which delegations are
   implementation delegations (`implementationRole`, injected as `SessionsDeps.implementationRole`), so the todo-item
   refusals of `PD-TOOLS-006` revision 6 (OQ-220) and the description never disagree about a persona.
+  Since revision 10 (OQ-334) an entry whose resolved grant holds `artifact_write` also reads "publishes artifacts"
+  (`catalogueWords`, beside `grantFacets`), and `createToolPort` passes `delegateTool` the run's store presence
+  (`artifactStore`, the prerequisite the catalogue was resolved under) for `REPORT_ARTIFACT_SENTENCE`; a new tool that publishes
+  is therefore described by the same resolution, and a new sentence in `delegate`'s description names no persona.
 - **What the coordinator is told about who does the work** lives in two places, and neither names a persona's tools twice: the
   facts are `delegate`'s catalogue (`renderDelegateCatalogue`, computed per caller), and the routing table (`ROUTING`,
   `engine/children/personas.ts`) only points to it (`ROUTING_WORK_SENTENCE`, `PD-TOOLS-006` revision 8). A per-route capability

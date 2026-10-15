@@ -3500,6 +3500,31 @@ OQ-334 (finding F10 of fin46's final acceptance, the default live run at `3c0328
 > OQ-331)"), pinned by `lib/routing-misses.test.ts`, red on the code before. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First execution of revision 10, 2026-10-15, ruled under [R-072](requests.md#r-072) ([OQ-334](../architecture/open-questions.md#oq-334)),
+> built by fin47 (`fin47-delegation-routing`):** built as written, and the text met the code in two places.
+>
+> - **Where the store's presence reaches the description.** `delegate`'s description is written in `agent-tools`, which knows no
+>   run; the run host already resolves the catalogue under the run's prerequisites, so `createToolPort` hands `delegateTool` the same
+>   `artifactStore` (`DelegateToolOptions.artifactStore`), and the sentence and the word never disagree about the store.
+> - **The fourth word sits beside the facets, not among them.** "Publishes artifacts" is no REQ-TOOLS-001 facet, so `grantFacets`
+>   is unchanged and `catalogueWords` appends it; an entry whose grant only publishes reads "publishes artifacts" alone rather than
+>   "none of these".
+>
+> The payload sentence is fixed and carries its own condition ("and you hold no tool that publishes artifacts"), so it is true under
+> every grant and is rendered in every payload, the run's store being one the product always opens for a running session.
+> **What was measured.** In `tools/delegation.test.ts`: `REPORT_ARTIFACT_SENTENCE` verbatim directly after `HAND_OFF_SENTENCE`, absent
+> where no store is, naming no persona; the word on an entry holding `artifact_write`, not on the same entry without it. In
+> `run-host/tools.test.ts`: a persona configured with `artifact_write` and `can_publish_artifacts: true` reads "publishes artifacts"
+> under a store; without the flag, or without a store, it does not; no built-in entry does under the defaults. In
+> `children/notify.test.ts` and `children/children.test.ts`: the payload sentence after the root line, ahead of the write scopes,
+> attachments and task, in every payload. In `scripts/lib/routing-misses.test.ts`: the live run's two counts, both 1 over the
+> `d0c3a7f0` shape. Each red on the code before, except the built-in guard, which the old code met trivially. **What was not
+> measured.** No live run: the next default pack is the measure — the sentence in every delegating request, every child's first
+> request carrying the payload sentence, 0 `artifact_write` calls by a child that does not hold it, 0 briefs asking a non-publisher
+> to publish, and no `child_report` artifact claiming publishing failed. Repairs
+> [`a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for`](../defects/fixed/a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for.md).
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-startup-001"></a>

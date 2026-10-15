@@ -25,7 +25,7 @@ belief at an earlier duress run (request 98, "believed the architect had publish
   forbids a brief offering a tool the entry does not show — which cannot cover publishing while no entry can show it.
 - REQ-TOOLS-154: the child's payload, which carries nothing about its report.
 - OQ-250's limb "any brief offering a command or tool its target lacks", stated for a duress run; here met in a default run.
-- Ruled as [OQ-334](../architecture/open-questions.md#oq-334) under [R-072](../product/requests.md#r-072): `PD-TOOLS-006`
+- Ruled as [OQ-334](../../architecture/open-questions.md#oq-334) under [R-072](../../product/requests.md#r-072): `PD-TOOLS-006`
   revision 10.
 
 ## Relevant files
@@ -36,3 +36,23 @@ belief at an earlier duress run (request 98, "believed the architect had publish
   own `can_publish_artifacts` and the store.
 - `packages/engine/src/children/notify.ts` — `childPayload`, the child's first message.
 - `apps/desktop/scripts/lib/routing-misses.mjs` — the live run's count of unknown-tool calls by children (`#10` was one).
+
+## Outcome — repaired 2026-10-15 (fin47, `fin47-delegation-routing`)
+
+Built as [OQ-334](../../architecture/open-questions.md#oq-334) ruled, `PD-TOOLS-006` revision 10:
+- `REPORT_ARTIFACT_SENTENCE` (`packages/agent-tools/src/tools/delegation.ts`) follows `HAND_OFF_SENTENCE` in `delegate`'s
+  description wherever the caller's run holds an artifact store (`DelegateToolOptions.artifactStore`, which `createToolPort` sets
+  from the prerequisite the catalogue's grants are resolved under);
+- `catalogueWords` appends "publishes artifacts" to an entry whose resolved grant holds `artifact_write` — under the defaults no
+  built-in entry does (OQ-212);
+- `CHILD_REPORT_ARTIFACT_SENTENCE` (`packages/engine/src/children/notify.ts`) follows the workspace-root line in every child payload,
+  ahead of the write scopes, attachments and task.
+
+Pinned by `tools/delegation.test.ts` (the sentence verbatim after the hand-off sentence and absent without a store; the word present
+with `artifact_write`, absent without it), `run-host/tools.test.ts` (a persona configured with `artifact_write` and
+`can_publish_artifacts: true` reads the word, without the flag or without a store it does not, no built-in does) and
+`children/notify.test.ts` with `children/children.test.ts` (the sentence after the root in every payload) — each red on the code
+before, but the built-in guard, which the old code met trivially. The live run counts children's unknown `artifact_write` calls and
+briefs asking a non-publisher to publish (`routingMissReading`'s `unknownArtifactWrites` and `publishBriefs`, target 0 each); replayed
+over the 3c03287 default pack they read 1 and 1 (`#10`, `#5`), the shape above. Not yet shown live: the next default pack is the
+measure (0 of each, and the analyst's report artifact carrying no claim that publishing failed).

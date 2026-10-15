@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
 import { TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset } from '@rotaris/contracts';
 import { CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS, loadConfiguration, renderMcpSection, type LoadedConfiguration, type PersonaMcpSurface } from '@rotaris/config';
-import { anySchema, gitReadTool, grantFacets, permissivePolicyRead, simpleExecutor, TodoList, todoTool, type TerminalManager, type ToolExecutor } from '@rotaris/agent-tools';
+import { anySchema, gitReadTool, grantFacets, HAND_OFF_SENTENCE, permissivePolicyRead, REPORT_ARTIFACT_SENTENCE, simpleExecutor, TodoList, todoTool, type TerminalManager, type ToolExecutor } from '@rotaris/agent-tools';
 import { resolveDelegationTarget, SessionWriter, UserPresence, type ArtifactOps, type ToolPortContext } from '@rotaris/engine';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { personaResolverFor, runtimeFromConfiguration, type ConfiguredRun } from './configuration.js';
@@ -1218,6 +1218,31 @@ ${personas === '' ? '' : `personas:\n${personas}`}runtime:
     const lifted = setup('  orchestrator:\n    name: orchestrator\n    model: selected\n    delegates_to: []\n');
     expect([...catalogueOf(descriptionOf(lifted.portOf('orchestrator', { parentId: 'root:1', depth: 0 }))).keys()]).toEqual(lifted.resolver!.delegationTargets());
     rmSync(join(dir, 'global'), { recursive: true, force: true });
+  });
+
+  /*
+   * PD-TOOLS-006 revision 10 (OQ-334, ruled 2026-10-15 under R-072): the catalogue's "publishes artifacts" is computed from the
+   * child's resolved grant — the persona's own `can_publish_artifacts` with the caller's run's store (OQ-212) — and the
+   * report-artifact sentence is carried where that store is. Finding F10 at 3c03287: a coordinator briefed a codebase-analyst to
+   * publish, and nothing it was offered could say who publishes.
+   */
+  it('PD-TOOLS-006 revision 10 (red): a persona with artifact_write and can_publish_artifacts reads "publishes artifacts"; without the flag, or with no store, it does not; no built-in does', () => {
+    const artifacts: ArtifactOps = { write: () => ({ ok: true, id: 'art_00000001', slug: 's' }), read: () => ({ ok: true, text: '' }), list: () => [] };
+    const persona = (flag: string) => `  release-manager:\n    name: release-manager\n    model: selected\n    tools: [read_file, artifact_read, artifact_list, artifact_write]\n${flag}`;
+    const flagged = setup(persona('    can_publish_artifacts: true\n'));
+    const withStore = descriptionOf(flagged.portOf('orchestrator', { parentId: 'root:1', depth: 0, artifacts }));
+    expect(catalogueOf(withStore).get('release-manager')).toBe('reads workspace files, publishes artifacts');
+    expect(withStore).toContain(`${HAND_OFF_SENTENCE} ${REPORT_ARTIFACT_SENTENCE} When a child's report`);
+    // The same persona under a run with no store: no artifact_write is granted, so neither the word nor the sentence.
+    const noStore = descriptionOf(flagged.portOf('orchestrator', { parentId: 'root:1', depth: 0 }));
+    expect(catalogueOf(noStore).get('release-manager')).toBe('reads workspace files');
+    expect(noStore).not.toContain(REPORT_ARTIFACT_SENTENCE);
+    // Without the flag the declared tool is withheld (REQ-TOOLS-004), and the entry says nothing of publishing.
+    const unflagged = descriptionOf(setup(persona('')).portOf('orchestrator', { parentId: 'root:1', depth: 0, artifacts }));
+    expect(catalogueOf(unflagged).get('release-manager')).toBe('reads workspace files');
+    // OQ-212: under the defaults no built-in persona publishes, so every default entry is as it was.
+    const defaults = catalogueOf(descriptionOf(setup('').portOf('orchestrator', { parentId: 'root:1', depth: 0, artifacts })));
+    expect([...defaults.values()].filter((words) => words.includes('publishes artifacts'))).toEqual([]);
   });
 
   it('a configured tools: override changes that persona\'s line', async () => {

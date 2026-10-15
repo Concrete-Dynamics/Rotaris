@@ -19,7 +19,7 @@ import { resumableOf } from '../sessions.js';
 import { summaryFactsOf } from '../run/summary.js';
 import { FULL_CONTEXT_BUDGET } from '../artifacts/context.js';
 import { userCancellation } from './ledger.js';
-import { inheritedContext } from './notify.js';
+import { CHILD_REPORT_ARTIFACT_SENTENCE, inheritedContext } from './notify.js';
 import { CODE_INTELLIGENCE_MANIFEST } from '@rotaris/config';
 import { SUPERVISOR_DEFAULTS, type LoopActivation, type LoopClassifier, type SupervisorConfig } from '../run/supervisor.js';
 
@@ -951,8 +951,10 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(claim('ui', 'src/ui/view.ts')).toBeNull();
       expect(claim('api', 'src/ui/view.ts')).toBeNull();
       // The disclosure sits immediately after the workspace-root prefix: the holder's own scope, the sibling's view of it.
-      expect(payloads.get('api')).toMatch(/Workspace root: [^\n]*\n\nWrite scopes:\n- Yours: 'src\/api\/\*\*'\./);
-      expect(payloads.get('ui')).toMatch(/Workspace root: [^\n]*\n\nWrite scopes:\n- Held by other agents[^\n]*\n {2}- api: 'src\/api\/\*\*'\n/);
+      // PD-TOOLS-006 revision 10 (OQ-334): the report-artifact sentence sits between them, ahead of the scopes.
+      const root = (scopes: string) => new RegExp(`Workspace root: [^\\n]*\\n\\n${CHILD_REPORT_ARTIFACT_SENTENCE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n\\n${scopes}`);
+      expect(payloads.get('api')).toMatch(root("Write scopes:\\n- Yours: 'src\\/api\\/\\*\\*'\\."));
+      expect(payloads.get('ui')).toMatch(root("Write scopes:\\n- Held by other agents[^\\n]*\\n {2}- api: 'src\\/api\\/\\*\\*'\\n"));
       // PD-TOOLS-006 revision 2: the declared scope is stored with the child's record, so a resumed child can claim it again.
       expect(Object.fromEntries(children(sid).map((c) => [c.canonical_name, c.write_scope]))).toEqual({ api: '["src/api/**"]', ui: '[]' });
       release();
@@ -1689,7 +1691,9 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(JSON.parse(build.inherited_context)).toEqual([survey.task_id]);
       // (1) the root, (3) the sibling-artifact index the survey's report became, (5) the same report block the parent
       // was handed, (6) the task — in REQ-TOOLS-154's order, with nothing between (5) and (6).
-      expect(payloads.get('build')).toMatch(/Workspace root: C:\/ws\.[^\n]*\n\nPRIOR SIBLING ARTIFACT INDEX\n[^\n]*survey[^\n]*\n\n\[Inherited context — [^\n]*\]\n\n### survey \(codebase-analyst\) — succeeded\nThe module is small\.\n\nTASK: build$/);
+      // PD-TOOLS-006 revision 10 (OQ-334): the report-artifact sentence follows the root, ahead of (3).
+      expect(payloads.get('build')).toContain(`Workspace root: C:/ws. Treat any other absolute path you encounter as stale; every path you use is relative to this root.\n\n${CHILD_REPORT_ARTIFACT_SENTENCE}\n\nPRIOR SIBLING ARTIFACT INDEX\n`);
+      expect(payloads.get('build')?.replace(`${CHILD_REPORT_ARTIFACT_SENTENCE}\n\n`, '')).toMatch(/Workspace root: C:\/ws\.[^\n]*\n\nPRIOR SIBLING ARTIFACT INDEX\n[^\n]*survey[^\n]*\n\n\[Inherited context — [^\n]*\]\n\n### survey \(codebase-analyst\) — succeeded\nThe module is small\.\n\nTASK: build$/);
       const parentRead = textOf(client.requests.find((r) => textOf(r).includes('TASK: build'))!);
       expect(parentRead).toContain('### survey (codebase-analyst) — succeeded\nThe module is small.');
       // The survey's own payload carried no such block: nothing had been named for it.

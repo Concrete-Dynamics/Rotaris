@@ -100,6 +100,16 @@ export const WRITE_SCOPE_FIELD_SENTENCE = "The paths this child will write; only
  */
 export const HAND_OFF_SENTENCE = `depends_on and inherited_context each carry the whole answer of every task they name, up to ${HAND_OFF_BUDGET.toLocaleString('en-US')} characters per field (a longer answer is cut, and both you and the child are told); attach_artifacts carries artifact bodies.`;
 
+/**
+ * `PD-TOOLS-006` revision 10 (OQ-334, ruled 2026-10-15 under R-072): the run keeps every ended child's report as a `child_report`
+ * artifact (REQ-LIBRARY-092), and the caller is told so, and told to ask a child to publish only where its entry says it publishes
+ * artifacts. Fixed, naming no persona; rendered only where the caller's run holds an artifact store, since a run without one keeps
+ * no report artifact. Before it nothing the coordinator was offered said so, and in the default live run at 3c03287 it briefed a
+ * codebase-analyst "Publish your findings as an artifact" (d0c3a7f0 #5), whose child invented `artifact_write` (#10, finding F10,
+ * docs/defects/fixed/a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for.md).
+ */
+export const REPORT_ARTIFACT_SENTENCE = 'When a child ends, the run keeps its report as an artifact of kind child_report, which artifact_list shows and attach_artifacts hands on; ask a child for its findings in its report, and ask it to publish an artifact only where its entry says it publishes artifacts.';
+
 const delegateSchema = z.object({
   persona: z.string().min(1),
   task_name: z.string().min(1),
@@ -155,6 +165,18 @@ export function grantFacets(tools: readonly string[]): readonly string[] {
 }
 
 /**
+ * `PD-TOOLS-006` revision 10 (OQ-334): the catalogue's fourth computed word, stated on an entry whose child's resolved grant holds
+ * `artifact_write` — which `resolveAgentGrant` hands over only where the run holds a store and the persona's own
+ * `can_publish_artifacts` is true (OQ-212), so under the defaults no entry carries it.
+ */
+export const PUBLISHES_ARTIFACTS = 'publishes artifacts';
+
+/** An entry's words: REQ-TOOLS-001's facets (`grantFacets`), then "publishes artifacts" where the grant holds `artifact_write`. */
+export function catalogueWords(tools: readonly string[]): readonly string[] {
+  return [...grantFacets(tools), ...(tools.includes('artifact_write') ? [PUBLISHES_ARTIFACTS] : [])];
+}
+
+/**
  * PD-TOOLS-006 revision 4: the catalogue as `delegate`'s description states it — every persona with its facets, a persona
  * declaring none said to, the aliases, and the instruction to ask a persona only for work its tools allow.
  *
@@ -169,8 +191,9 @@ export function grantFacets(tools: readonly string[]): readonly string[] {
  */
 export function renderDelegateCatalogue(catalogue: DelegateCatalogue): string {
   const personas = catalogue.personas.map((p) => {
-    const facets = grantFacets(p.tools);
-    return `${p.name} (${facets.length > 0 ? facets.join(', ') : 'none of these: it neither reads nor writes workspace files nor runs commands'})`;
+    // PD-TOOLS-006 revision 10 (OQ-334): "publishes artifacts" joins the facets where the grant holds `artifact_write`.
+    const words = catalogueWords(p.tools);
+    return `${p.name} (${words.length > 0 ? words.join(', ') : 'none of these: it neither reads nor writes workspace files nor runs commands'})`;
   });
   const aliases = catalogue.aliases.length > 0 ? ` Aliases: ${catalogue.aliases.map((a) => `${a.alias} (${a.target})`).join(', ')}.` : '';
   // OQ-229 (R-072): a caller whose `delegates_to` narrowed the list is told so, and told when it leaves no persona at all, so a
@@ -203,6 +226,11 @@ export const TODO_ITEM_MARK_SENTENCE = 'A delegation the run admits marks the PE
  */
 export interface DelegateToolOptions {
   readonly markItem?: ((item: string) => { readonly sentence: string; readonly state: string } | null) | undefined;
+  /**
+   * `PD-TOOLS-006` revision 10 (OQ-334): whether the caller's run holds an artifact store (REQ-TOOLS-004's `artifactStore`
+   * prerequisite, which `resolveAgentGrant` reads); only then does the description carry `REPORT_ARTIFACT_SENTENCE`.
+   */
+  readonly artifactStore?: boolean | undefined;
 }
 
 export function delegateTool(port: DelegationPort, parentId: string, catalogue: DelegateCatalogue, opts: DelegateToolOptions = {}): ToolExecutor<z.infer<typeof delegateSchema>> {
@@ -210,8 +238,8 @@ export function delegateTool(port: DelegationPort, parentId: string, catalogue: 
     name: 'delegate',
     // OQ-114 as ruled (R-071, PD-ORCH-004 revision 5): `continuation_of`'s sentence says a continuation starts with no memory.
     // PD-TOOLS-006 revision 4 (OQ-216): the persona list is the caller's catalogue with each persona's facets; the sentences
-    // after it are unchanged.
-    description: `Delegate a task to a specialist persona. ${renderDelegateCatalogue(catalogue)} Write the task with the sections TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Returns at once with a task_id; the child runs in the background unless run_in_background is false. ${WRITE_SCOPE_SENTENCE} ${HAND_OFF_SENTENCE} When a child's report makes a continuation offer, give continuation_of: that child\'s task_id, to delegate the remaining work as its continuation. A continuation starts with no memory of the child it continues: write its task as a complete brief of what was asked, what that child did and found, and what remains. To ask a child of yours that has ended something more, give session_id: its task_id — it resumes its own conversation with task as its next message and reports again; a child cut off by its time limit is continued with continuation_of instead. ${TODO_ITEM_SENTENCE} ${TODO_ITEM_MARK_SENTENCE}`,
+    // after it are unchanged. Revision 10 (OQ-334): the report-artifact sentence follows the hand-off sentence where a store is.
+    description: `Delegate a task to a specialist persona. ${renderDelegateCatalogue(catalogue)} Write the task with the sections TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Returns at once with a task_id; the child runs in the background unless run_in_background is false. ${WRITE_SCOPE_SENTENCE} ${HAND_OFF_SENTENCE}${opts.artifactStore === true ? ` ${REPORT_ARTIFACT_SENTENCE}` : ''} When a child's report makes a continuation offer, give continuation_of: that child\'s task_id, to delegate the remaining work as its continuation. A continuation starts with no memory of the child it continues: write its task as a complete brief of what was asked, what that child did and found, and what remains. To ask a child of yours that has ended something more, give session_id: its task_id — it resumes its own conversation with task as its next message and reports again; a child cut off by its time limit is continued with continuation_of instead. ${TODO_ITEM_SENTENCE} ${TODO_ITEM_MARK_SENTENCE}`,
     schema: delegateSchema,
     label: (a) => `delegate ${a.persona}: ${a.task_name}`,
     execute: async (a) => {

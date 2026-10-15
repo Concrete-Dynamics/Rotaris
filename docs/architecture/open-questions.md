@@ -15302,8 +15302,19 @@ with one line telling it to close the item with `update`. Recorded as [`PD-TOOLS
 on `main` first). This revises OQ-249's bound, which counted held tasks only, and revision 2's
 accepted cost, quoted beside its replacement in the directive. The completion notification of REQ-ORCH-059 is unchanged.
 
-**The two recommendations weighed.** The ruling as handed to the building bundle states its outcome and what it revises; the two
-advocates' own recommendations were not handed to it, and the orchestrator's ruling record holds them.
+**The two recommendations weighed, and the ruling followed both** (both advocates recommended changing the behaviour).
+*Advocate A (the user's lens)* recommended keeping a served item outside REQ-TOOLS-145's count after its child ends, until the
+coordinator closes it, with one line in the observation that delivers the child's end telling the coordinator the item is still
+IN_PROGRESS: the refusal filed a `tool_error` issue on a run that succeeded, recurred in all three default packs, and depended on
+a child's end the coordinator could not see (requirements `#50`, where the same write a little earlier would have been accepted).
+*Advocate B (the system's lens)* recommended the same change to the count, recorded as `PD-TOOLS-008` revision 4 over the served
+set, terminal children included, with the run never closing an item: as built, a `replace` was allowed what an `update` was
+refused for the same item. Both rejected an automatic close by the run (REQ-ORCH-030's attempt count and a verification that fails
+after the child's report need the coordinator's judgement; REQ-ORCH-029 keeps the list the coordinator's) and confirming as built.
+The ruling took B's mechanism and record, and A's line, placed only in REQ-ORCH-063's message that resumes a wait and kept out of
+REQ-ORCH-059's completion notification, whose open-todo reminder lines already name open items. *(Until 2026-10-15 this paragraph
+said the advocates' recommendations were not handed to the building bundle; fin47's reviewer wrote them from the orchestrator's
+ruling record.)*
 
 ~~A task a running delegation holds is never counted against such a write.~~ **Replaced 2026-10-15 (revision 4):** a task a child
 of the list's owner serves, running or ended, is never counted against such a write.

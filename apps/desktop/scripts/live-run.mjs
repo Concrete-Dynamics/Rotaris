@@ -1133,7 +1133,7 @@ function checkCoordinatorTodo() {
         // cannot say when a followed-up child held its item (`holdingWindows`).
         const timeline = db.prepare("SELECT ordinal, at, name, metadata FROM timeline WHERE session_id = ? AND name IN ('child_start', 'child_end', 'child_resumed') ORDER BY ordinal").all(sessionId);
         const listed = calls.find((c) => rootNames.includes(c.agent_name) && c.tool_name === 'todo' && c.status === 'ok');
-        return { scenario, rootNames, calls, agentPlanTasks: agentPlanTaskCount(todo), listedAt: listed?.endedAt ?? null, rootPlanIds: planItemIds(rootAgentPlan(todo)), children, timeline,
+        return { scenario, rootNames, calls, agentPlanTasks: agentPlanTaskCount(todo), listedAt: listed?.endedAt ?? null, rootPlanIds: planItemIds(rootAgentPlan(todo)), rootPlan: rootAgentPlan(todo), children, timeline,
           runOverride: launchRunOverride(db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(sessionId)?.payload ?? null),
         };
       });
@@ -1162,7 +1162,13 @@ function checkCoordinatorTodo() {
   const heldAt = (h) => `${h.scenario} #${h.ordinal}: ${h.child} on ${h.item}`;
   check(held.heldPending.length === 0, 'no coordinator\'s plan recorded a running child\'s todo item PENDING (PD-TOOLS-008 revision 2, PD-TOOLS-006 revision 7, OQ-249)', held.heldPending.length === 0 ? `${held.coordinating.length} coordinating session(s): ${held.coordinating.join(', ') || 'none'}` : held.heldPending.map(heldAt).join(', '));
   check(held.closedWhileHeld.length === 0, 'no coordinator marked a todo item COMPLETED while an implementation child still held it (REQ-ORCH-029, OQ-249)', held.closedWhileHeld.length === 0 ? `${held.coordinating.length} coordinating session(s)` : held.closedWhileHeld.map(heldAt).join(', '));
-  if (held.singleActive.length > 0) noted('todo calls refused under REQ-TOOLS-145 or PD-TOOLS-008 in coordinating sessions (OQ-249; target 0)', held.singleActive.map((h) => `${h.scenario} #${h.ordinal}`).join(', '));
+  // Since PD-TOOLS-008 revision 4 (OQ-333) a served item counts against no mark, so the target of 0 has no accepted cause left.
+  if (held.singleActive.length > 0) noted('todo calls refused under REQ-TOOLS-145 or PD-TOOLS-008 in coordinating sessions (OQ-249, OQ-333; target 0)', held.singleActive.map((h) => `${h.scenario} #${h.ordinal}`).join(', '));
+  // PD-TOOLS-006 revision 11 (OQ-333): the resume line, the delegated items still open when the coordinator answered, and the
+  // seconds from each child's end to its item's close.
+  if (held.resumeLines.length > 0) noted('wait results that named a reported child\'s todo item still IN_PROGRESS (PD-TOOLS-006 revision 11, OQ-333)', held.resumeLines.map((h) => `${h.scenario} #${h.ordinal}: ${h.items.join(', ')}`).join('; '));
+  if (held.openAtAnswer.length > 0) noted('delegated todo items still IN_PROGRESS when the coordinator answered, every child serving them ended (PD-TOOLS-006 revision 11, OQ-333)', held.openAtAnswer.map((h) => `${h.scenario}: ${h.item} (${h.children.join(', ')})`).join('; '));
+  if (held.closeLatencies.length > 0) noted('seconds from a delegated child\'s end to its coordinator closing its todo item (PD-TOOLS-006 revision 11, OQ-333)', held.closeLatencies.map((h) => `${h.scenario} ${h.item} (${h.child}) #${h.ordinal}: ${h.seconds.toFixed(1)} s`).join('; '));
   // PD-TOOLS-008 revision 3 (OQ-255): a `replace` closing an item whose children have all ended closes it; a task a `replace` kept
   // over a different state is named in its observation, a NOTE (the next call should be an `update` for it).
   // A run in which no coordinator closed a served-and-ended item with a `replace` asked nothing of revision 3: a NOTE, never a

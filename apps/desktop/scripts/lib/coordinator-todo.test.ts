@@ -203,6 +203,61 @@ describe('heldItemReading (PD-TOOLS-008 revision 2, OQ-249)', () => {
   });
 
   /*
+   * PD-TOOLS-008 revision 4 and PD-TOOLS-006 revision 11 (OQ-333): the delegation-swarm session 3e4b7210 at 3c03287. Three
+   * children served impl101, test101 and doc101; `wait_for_tasks` (#14) reported them; #26 marked verify101 and was refused;
+   * #27 to #29 closed the three items. As built since the revision #26 is accepted and the wait names each open item.
+   */
+  describe('revision 11: the resume line, the items open at the answer, and the seconds to each close (OQ-333)', () => {
+    const swarmKids = [
+      { task_id: 'bg_1', canonical_name: 'impl', persona: 'coding-agent', depth: 1, todo_item: 'impl101', spawned_at: '2026-10-15T03:48:47.100Z', completed_at: '2026-10-15T03:49:40.000Z' },
+      { task_id: 'bg_2', canonical_name: 'tests', persona: 'tester', depth: 1, todo_item: 'test101', spawned_at: '2026-10-15T03:48:47.150Z', completed_at: '2026-10-15T03:49:44.000Z' },
+      { task_id: 'bg_3', canonical_name: 'docs', persona: 'docs-writer', depth: 1, todo_item: 'doc101', spawned_at: '2026-10-15T03:48:47.200Z', completed_at: '2026-10-15T03:49:46.000Z' },
+    ];
+    const line = (name: string, id: string) => `Todo item ${name} (${id}) is still IN_PROGRESS: close it with update once you accept this report.`;
+    const update = (ordinal: number, task_id: string, st: string, endedAt: string, status = 'ok', result = 'Updated task.') => ({ ...c(ordinal, 'todo', status, result, endedAt), args: { operation: 'update', task_id, state: st } });
+    const plan = (states: Record<string, string>) => ({ schema_version: 1, phases: [{ id: 'e40a534e', name: 'main', tasks: Object.entries(states).map(([id, st]) => ({ id, name: id, description: '', state: st })) }] });
+    const wait = c(14, 'wait_for_tasks', 'ok', `The waited-for background tasks completed (3).\n\n### impl (coding-agent) — succeeded\nok\n${line('addTodo refuses empty or blank title in src/todos.js', 'impl101')}\n\n### tests (tester) — succeeded\nok\n${line('Test the rule', 'test101')}\n\n### docs (docs-writer) — succeeded\nok`, '2026-10-15T03:49:46.150Z');
+
+    it('as recorded at 3c03287: #26 refused (target 0), no resume line, the closes 9.4 to 11.9 s after each child ended', () => {
+      const r = heldItemReading([{ scenario: 'delegation-swarm', rootNames: ['orchestrator'], children: swarmKids, rootPlan: plan({ impl101: 'COMPLETED', test101: 'COMPLETED', doc101: 'COMPLETED', verify101: 'COMPLETED' }), calls: [
+        c(7, 'delegate', 'ok', "Task 'impl': queued", '2026-10-15T03:48:47.121Z'),
+        c(14, 'wait_for_tasks', 'ok', 'The waited-for background tasks completed (3).\n\n### impl (coding-agent) — succeeded\nok', '2026-10-15T03:49:46.150Z'),
+        update(26, 'verify101', 'IN_PROGRESS', '2026-10-15T03:49:48.704Z', 'failed', 'Only one task can be IN_PROGRESS at a time. Active task: impl101 (addTodo refuses empty or blank title in src/todos.js). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.'),
+        update(27, 'impl101', 'COMPLETED', '2026-10-15T03:49:51.427Z'),
+        update(28, 'test101', 'COMPLETED', '2026-10-15T03:49:53.320Z'),
+        update(29, 'doc101', 'COMPLETED', '2026-10-15T03:49:55.863Z'),
+      ] }]);
+      expect(r.singleActive).toEqual([{ scenario: 'delegation-swarm', ordinal: 26 }]);
+      expect(r.resumeLines).toEqual([]);
+      expect(r.openAtAnswer).toEqual([]);
+      expect(r.closeLatencies.map((h) => [h.item, h.ordinal, h.seconds])).toEqual([['impl101', 27, 11.427], ['test101', 28, 9.32], ['doc101', 29, 9.863]]);
+    });
+
+    it('as built: the wait names the open items, #26 is accepted, and an item never closed is reported open at the answer', () => {
+      const r = heldItemReading([{ scenario: 'delegation-swarm', rootNames: ['orchestrator'], children: swarmKids, rootPlan: plan({ impl101: 'COMPLETED', test101: 'IN_PROGRESS', doc101: 'COMPLETED', verify101: 'COMPLETED' }), calls: [
+        c(7, 'delegate', 'ok', "Task 'impl': queued", '2026-10-15T03:48:47.121Z'),
+        wait,
+        update(26, 'verify101', 'IN_PROGRESS', '2026-10-15T03:49:48.704Z'),
+        update(27, 'impl101', 'COMPLETED', '2026-10-15T03:49:50.000Z'),
+        { ...c(28, 'todo', 'ok', 'Replaced the todo list: 1 phase, 4 tasks.', '2026-10-15T03:49:52.000Z'), args: JSON.stringify({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: 'doc101', name: 'docs', state: 'ABANDONED' }] }] }) },
+      ] }]);
+      expect(r.singleActive).toEqual([]);
+      expect(r.resumeLines).toEqual([{ scenario: 'delegation-swarm', ordinal: 14, items: ['impl101', 'test101'] }]);
+      expect(r.openAtAnswer).toEqual([{ scenario: 'delegation-swarm', item: 'test101', children: ['tests'] }]);
+      expect(r.closeLatencies.map((h) => [h.item, h.ordinal, h.seconds])).toEqual([['impl101', 27, 10], ['doc101', 28, 6]]);
+    });
+
+    it('an item a child still serves while running is not reported open at the answer, and no plan stored reads none', () => {
+      const running = [{ ...swarmKids[0]!, completed_at: null }];
+      const r = heldItemReading([{ scenario: 'resume', rootNames: ['orchestrator'], children: running, rootPlan: plan({ impl101: 'IN_PROGRESS' }), calls: [c(7, 'delegate', 'ok', "Task 'impl': queued", '2026-10-15T03:48:47.121Z')] }]);
+      expect(r.openAtAnswer).toEqual([]);
+      expect(r.closeLatencies).toEqual([]);
+      const none = heldItemReading([{ scenario: 'edit', rootNames: ['orchestrator'], children: swarmKids, calls: [c(7, 'delegate', 'ok', "Task 'impl': queued", '2026-10-15T03:48:47.121Z')] }]);
+      expect(none.openAtAnswer).toEqual([]);
+    });
+  });
+
+  /*
    * docs/defects/fixed/the-live-runs-held-item-check-holds-a-followed-up-child-across-the-gap-between-its-runs.md (finding L2):
    * the 3c3f447 terminal session 7fce100f. The tester ended (child_end 16:17:34.521), the root closed its item (#15, 16:17:42),
    * and a `session_id` follow-up resumed it (child_resumed 16:17:52.370); the quit then paused it, so `completed_at` is null.

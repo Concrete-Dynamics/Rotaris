@@ -169,7 +169,8 @@ export function todoStates(text) {
  * (`holdingWindows`: each run of it while non-terminal, from the session's timeline).
  *
  * `sessions`: `{ scenario, rootNames, calls: { ordinal, tool_name, agent_name, status, result, endedAt }[], children: { task_id,
- * canonical_name, persona, depth, todo_item, spawned_at, completed_at }[], timeline?: { ordinal, at, name, metadata }[] }[]`.
+ * canonical_name, persona, depth, todo_item, spawned_at, completed_at }[], timeline?: { ordinal, at, name, metadata }[],
+ * rootPlan?: { phases } | null }[]`.
  * Returns, over every coordinating session (one whose root delegated):
  * - `heldPending` — each reading of a held item as PENDING (the default live run's `#14` at a68f121; target 0);
  * - `closedWhileHeld` — each reading of an item COMPLETED while an implementation child (`WRITER_ROLES`) still held it (target 0);
@@ -181,6 +182,16 @@ export function todoStates(text) {
  *   decides, asked. Empty, `restoredOverClose` measured nothing, and the live run says so in a NOTE rather than a PASS (at
  *   `0bc3eee` every coordinator closed with `update`: docs/defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md);
  * - `namedRestores` — each accepted root `replace` whose observation names a task it kept over a different state (a NOTE).
+ *
+ * Since `PD-TOOLS-008` revision 4 and `PD-TOOLS-006` revision 11 (OQ-333, ruled 2026-10-15 under R-072) a served item no longer
+ * counts against the coordinator's next mark (`singleActive` keeps its target of 0, now with no accepted cause), and the
+ * message that resumes a wait names a reported child's item still open. Three more readings, each a NOTE:
+ * - `openAtAnswer` — each item a root child served that the stored root plan (`rootPlan`, the session's final agent plan, as the
+ *   coordinator left it when it answered) still holds IN_PROGRESS with every child serving it ended;
+ * - `closeLatencies` — for each root child whose item a later root `todo` call closed (an `update` of that id, or a `replace`
+ *   sending it, to COMPLETED or ABANDONED, accepted), the seconds from the child's end (its last holding window's close) to that
+ *   call's end;
+ * - `resumeLines` — each root `wait_for_tasks` or `delegate` result carrying revision 11's line, with the items it names.
  */
 export function heldItemReading(sessions) {
   const heldPending = [];
@@ -189,6 +200,9 @@ export function heldItemReading(sessions) {
   const restoredOverClose = [];
   const closes = [];
   const namedRestores = [];
+  const openAtAnswer = [];
+  const closeLatencies = [];
+  const resumeLines = [];
   const coordinating = [];
   for (const s of sessions) {
     const roots = new Set(s.rootNames);
@@ -228,8 +242,53 @@ export function heldItemReading(sessions) {
         if (states.get(t.id) === 'IN_PROGRESS') restoredOverClose.push({ scenario: s.scenario, ordinal: c.ordinal, item: t.id });
       }
     }
+    // PD-TOOLS-006 revision 11 (OQ-333): the resume line, the items left open when the coordinator answered, and how long each
+    // delegated item stayed open after its child ended. Read from the arguments and the stored plan, never from a Todo state
+    // block, whose reader takes eight-hex ids alone (`todoStates`).
+    for (const c of rootCalls) {
+      if ((c.tool_name !== 'wait_for_tasks' && c.tool_name !== 'delegate') || typeof c.result !== 'string') continue;
+      const items = [...c.result.matchAll(RESUME_LINE)].map((m) => m[1]);
+      if (items.length > 0) resumeLines.push({ scenario: s.scenario, ordinal: c.ordinal, items });
+    }
+    const endOf = (k) => {
+      const last = windows.get(k)?.at(-1);
+      return last === undefined || !Number.isFinite(last[1]) ? null : last[1];
+    };
+    const finalStates = new Map(planTasks(s.rootPlan).map((t) => [t.id, t.state]));
+    const reported = new Set();
+    for (const k of kids) {
+      if (reported.has(k.todo_item) || finalStates.get(k.todo_item) !== 'IN_PROGRESS') continue;
+      const servers = kids.filter((x) => x.todo_item === k.todo_item);
+      if (servers.some((x) => endOf(x) === null)) continue;
+      reported.add(k.todo_item);
+      openAtAnswer.push({ scenario: s.scenario, item: k.todo_item, children: servers.map((x) => x.canonical_name) });
+    }
+    for (const k of kids) {
+      const end = endOf(k);
+      if (end === null) continue;
+      const close = rootCalls.find((c) => c.tool_name === 'todo' && c.status === 'ok' && typeof c.endedAt === 'number' && c.endedAt >= end && closesItem(argsOf(c.args), k.todo_item));
+      if (close !== undefined) closeLatencies.push({ scenario: s.scenario, item: k.todo_item, child: k.canonical_name, ordinal: close.ordinal, seconds: (close.endedAt - end) / 1000 });
+    }
   }
-  return { coordinating, heldPending, closedWhileHeld, singleActive, restoredOverClose, closes, namedRestores };
+  return { coordinating, heldPending, closedWhileHeld, singleActive, restoredOverClose, closes, namedRestores, openAtAnswer, closeLatencies, resumeLines };
+}
+
+/** `PD-TOOLS-006` revision 11's line, as the run writes it after a reported child's result; group 1 is the item's id. */
+const RESUME_LINE = /^Todo item .+ \(([^()\s]+)\) is still IN_PROGRESS: close it with update once you accept this report\.$/gm;
+
+/** Every task of a stored agent plan (`{ schema_version: 1, phases }`), `{ id, state }`; none where there is no plan. */
+function planTasks(plan) {
+  if (!plan || !Array.isArray(plan.phases)) return [];
+  return plan.phases.flatMap((phase) => (Array.isArray(phase.tasks) ? phase.tasks : [])).filter((t) => typeof t?.id === 'string');
+}
+
+/** Whether a `todo` call's arguments close `item`: an `update` of it, or a `replace` sending it, to COMPLETED or ABANDONED. */
+function closesItem(args, item) {
+  if (args === null) return false;
+  const closed = (state) => state === 'COMPLETED' || state === 'ABANDONED';
+  if (args.operation === 'update') return args.task_id === item && closed(args.state);
+  if (args.operation !== 'replace' || !Array.isArray(args.phases)) return false;
+  return args.phases.some((p) => Array.isArray(p?.tasks) && p.tasks.some((t) => t?.id === item && closed(t.state)));
 }
 
 /**

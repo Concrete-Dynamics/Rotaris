@@ -732,6 +732,7 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     expect(file).not.toContain('__rot_');
     rmSync(join(file, '..'), { recursive: true, force: true });
     // PowerShell keeps its one base64 line: no Windows host here measures whether ConPTY caps a line (ADR-0020's M1 note).
+    // (Measured 2026-10-15 on Windows 11 ARM64: no cap short of about 87 KB, pwsh or 5.1; the M1 PowerShell case pins it.)
     const pwsh = session({ kind: 'powershell', file: 'pwsh' });
     await pwsh.s.run(long, { timeoutMs: 5_000 });
     const psLine = pwsh.lines().find((w) => w.includes('FromBase64String'))!;
@@ -1855,6 +1856,31 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     // staged line is one short line and puts none.)
     await wideEchoCase(t, 6_000);
   };
+  // M1's PowerShell half, measured 2026-10-15 on Windows 11 ARM64 under pwsh 7.6.6 and Windows PowerShell 5.1: ConPTY and the
+  // console host cap no submitted line short of 87 KB (a 64 KB command carried as base64), so PowerShell keeps its one line.
+  // One case well over Linux's 4,095-character line pins it.
+  it.runIf(PS)('REQ-TOOLS-096/098/179 (live-run M1): on PowerShell a command far longer than a POSIX PTY\'s line reaches the shell whole, one line or many', async () => {
+    const t = await tool();
+    const raw = `$x = '${'a'.repeat(16 * 1024)}'; Write-Output $x.Length`;
+    const a = await t.execute(args({ command: raw, timeout: 60 }), ctx());
+    expect(diag(a.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+    expect(output(a.text)).toBe('16384');
+    // A here-string with the characters a carrier could mangle, written and read back byte for byte.
+    const body = Array.from({ length: 128 }, (_, i) => `${String(i).padStart(5, '0')} quote' "dq" back\`tick $dollar %pct% é 中 ${'z'.repeat(20)}`).join('\n');
+    const file = join(root, 'm1-ps.txt');
+    const b = await t.execute(args({ command: `$t = @'\n${body}\n'@\nSet-Content -LiteralPath '${file}' -Value $t -NoNewline -Encoding utf8`, timeout: 60 }), ctx());
+    expect(diag(b.text)['exit_code']).toBe(0);
+    expect(readFileSync(file, 'utf8').replace(/^﻿/, '').replace(/\r\n/g, '\n')).toBe(body);
+    // What a long command sets reaches the next call; a long multi-line command reports its native status.
+    await t.execute(args({ command: `$env:ROTARIS_M1_LONG = '${'L'.repeat(8 * 1024)}'`, timeout: 60 }), ctx());
+    expect(output((await t.execute(args({ command: 'Write-Output $env:ROTARIS_M1_LONG.Length', timeout: 30 }), ctx())).text)).toBe('8192');
+    const d = await t.execute(args({ command: `$y = '${'d'.repeat(8 * 1024)}'\nWrite-Output $y.Length\ncmd /c exit 7`, timeout: 60 }), ctx());
+    expect(diag(d.text)).toMatchObject({ exit_code: 7, outcome_kind: 'shell_failure' });
+    for (const r of [a, b, d]) {
+      expect(r.text).not.toContain('__rot_');
+      expect(output(r.text)).not.toMatch(/^>> /m);
+    }
+  }, 120_000);
   it.skipIf(PS)('REQ-TOOLS-096/098/179 (live-run M1): a command whose wrapper is longer than the PTY\'s input line reaches the shell whole', async () => {
     const { m, t } = await posixSession(shell!.file);
     try { await longCase(m, t, 'sh'); } finally { await m.dispose(); }

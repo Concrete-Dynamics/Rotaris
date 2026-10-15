@@ -73,7 +73,9 @@ processes) was live in a separate worktree throughout, at load 0.1–0.3:
 | streaming off: frames on / off, exit on / off, output equal | 4 / 0, 3 / 3, yes | 4 / 0, 3 / 3, yes | 4 / 0, 3 / 3, yes |
 | resize to 80×24: what the process reports, clean | `cols=80 rows=24`, yes | `cols=80 rows=24`, yes | `cols=80 rows=24`, yes |
 
-Nothing in the product changed. **Could not show:** a Windows re-run on this branch. The PowerShell spellings are the
+Nothing in the product changed. **Could not show:** a Windows re-run on this branch. *(Run 2026-10-15 on Windows 11 ARM64
+under pwsh 7.6.6, three times, every flag green, the 10,000 lines' 108,894 bytes equal to Linux's; ADR-0021, "The stream
+proofs on Windows 11 ARM64".)* The PowerShell spellings are the
 same literals as before, so nothing that ran there changed, but no Windows host was available. Nothing ran on macOS
 either (IC-3). The echo is quick on `dash` because the kernel's line discipline echoes the keystroke, whereas
 PowerShell echoes it itself. Both are the frame the armed flush produces, so the figure measures the flush and not the

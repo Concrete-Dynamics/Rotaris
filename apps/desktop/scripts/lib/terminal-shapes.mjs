@@ -138,7 +138,8 @@ export function terminalShapes(platform = process.platform) {
       // Live-run finding M1 (pack `2026-10-06T17-41-48-175Z`, requirements #67): a 3,700-character heredoc wrapped to one
       // physical line of about 4,304 bytes, which the PTY's line discipline cut inside its quote; the shell stood on its
       // continuation prompt, the command never ran, and the call read as a soft pause with `>` for its output. POSIX only:
-      // the staging that repaired it is the POSIX carrier's, and whether ConPTY caps a line is owed to a Windows run.
+      // the staging that repaired it is the POSIX carrier's, and whether ConPTY caps a line is owed to a Windows run. (Run
+      // 2026-10-15 on Windows 11 ARM64, pwsh and 5.1: no cap short of about 87 KB, so PowerShell needs no staging; ADR-0020's M1.)
       { id: 'long-command', match: /<<\s*'?ROWS\b/, command: longCommand() },
       // Acceptance finding A9 (OQ-144), the verifier's live run of 2026-09-29 (pack `2026-09-29T22-08-13-005Z`, call #5): the
       // model ran `exec bash`, which keeps the shell's pid and never returns to the wrapper's end frame, so it read as a
@@ -154,7 +155,8 @@ export function terminalShapes(platform = process.platform) {
       // command that ENDS the session's shell never prints the end frame, because the shell that would print it is gone, so
       // it read as a soft pause after 30 s and the next call ran in a fresh shell reporting `session_reinitialized` false.
       // The shape after it (the wedge) is the next call, which must say the session was reinitialized. POSIX only here:
-      // PowerShell's `exit` takes the same path in the product, reasoned and not run on a Windows host.
+      // PowerShell's `exit` takes the same path in the product, reasoned and not run on a Windows host. (Run 2026-10-15 on
+      // Windows 11 ARM64, pwsh and 5.1: `exit 3` on one line or two reads `execution_error`, `session_reset`, about 1.5 s; OQ-144.)
       { id: 'ends-shell', match: /^\s*exit\s+3\s*$/, command: 'exit 3' },
       ...common,
       { id: 'pipe-to-shell', match: /\|\s*(?:sh|bash|zsh)\b/, command: "git status --porcelain | sh -c 'head -5'" },

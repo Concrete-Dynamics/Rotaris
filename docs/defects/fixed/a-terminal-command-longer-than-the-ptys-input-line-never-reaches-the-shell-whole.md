@@ -112,3 +112,12 @@ plan hold re-queued (live-run finding P1), each `success`, exit 0, in 146 ms and
 this the staged script's first live execution; it is its second, after the terminal-only run of 2026-10-06 above, and its
 first in a full default pack. Found nothing against the repair. The row is in
 [`../../architecture/first-executions.md`](../../architecture/first-executions.md).
+
+## Shown on Windows — 2026-10-15
+
+*Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, dev tree, pwsh 7.6.6 and Windows PowerShell 5.1 (the Windows ARM64
+session's B4).* The PowerShell half, owed since this note: no cap. A raw line of up to 64 KB and multi-line commands of the
+same sizes (about 87 KB on the line, as base64) reached the shell whole and ended in their own status in 123 to 387 ms under
+both shells, a here-string read back byte for byte, a long command's variable seen by the next call, `cmd /c exit 7` reported.
+`terminal-proof`'s `live.longCommandReachesTheShellWhole` and `live.longCommandGridShowsNoCarrier` read 4,775 bytes,
+`bytes=4699`, exit 0, 120 ms. PowerShell keeps its one line, and a case in `terminal.test.ts` pins it over 4 KB.

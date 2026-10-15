@@ -16,6 +16,9 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-15**
 
+**M1's PowerShell half pinned, and the stream proofs run on Windows (the Windows ARM64 session's B4 and B9).** A test case and
+comments only (`terminal.test.ts`, `terminal-shapes.mjs`); no view changed.
+
 **Three Windows repairs (the Windows ARM64 session).** `03-runtime-view.md`'s store open names OQ-281's sibling `.<32 hex>`,
 two characters shorter than the place, where it named `.<identifier>.new`, and says a sibling of the earlier name is removed at
 the next open too. `@rotaris/platform` exports `presentExecutable`, which `findShell` and `findExecutable` ask (an App Execution

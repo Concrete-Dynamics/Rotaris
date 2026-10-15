@@ -77,7 +77,10 @@ Xvfb, Node 24, `/bin/sh` → `dash`: three runs in a row, each exit 0 with **116
 | `live.floodPainted` (grid and preview show `line 10000`) | yes | yes | yes |
 | key to frame / key to paint (ms) | 1.5–3.7 / 8.4–27.7 | 3.1–3.9 / 9.5–29.5 | 3.5–4.0 / 10.6–29.2 |
 
-The product did not change. **Could not show:** a Windows re-run on this branch. The PowerShell spellings are the same
+The product did not change. **Could not show:** a Windows re-run on this branch. *(Run 2026-10-15 on Windows 11 ARM64, four
+times: the live section's PowerShell spellings ran (`live.shell` `powershell`), 118 of 122 green each time; the four reds are
+recorded in [`terminal-proofs-echo-and-burst-never-reach-the-windows-grid-in-time.md`](../terminal-proofs-echo-and-burst-never-reach-the-windows-grid-in-time.md)
+and [`terminal-proofs-gutter-colour-reads-off-at-150-percent-display-scale.md`](../terminal-proofs-gutter-colour-reads-off-at-150-percent-display-scale.md).)* The PowerShell spellings are the same
 literals, so nothing that ran there changed, but no Windows host was available. Nothing ran on macOS (IC-3). `sleep`
 with a fraction is accepted by GNU coreutils and BSD `sleep`, and POSIX does not require it. ADR-0047's "live section
 on a POSIX shell" note (2026-09-28) records this as a first execution.

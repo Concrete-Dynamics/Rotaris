@@ -373,7 +373,15 @@ command's own output, and neither part could be dropped as the wrapper's echo: t
 or PSReadLine caps a submitted line is not measurable on a Linux host, and is owed to the first Windows run, as the rest
 of the PowerShell branch is. *(2026-10-15: the suite's first Windows run since, on Windows 11 ARM64, sent no PowerShell
 line over 4 KB, so this stays unmeasured; the session's B4 measures it. Since B3's repair the same day, a single-line
-command is carried as base64 too, about a third longer on the line.)* Pinned by "REQ-TOOLS-096/098/179 (live-run M1): …" in `terminal.test.ts` (dash, bash as
+command is carried as base64 too, about a third longer on the line.)* *(Measured the same day, B4, under pwsh 7.6.6 and
+Windows PowerShell 5.1: neither ConPTY nor the console host caps a submitted line short of about 87 KB. A raw line of 4, 8,
+16, 32 and 64 KB, a multi-line here-string of the same sizes holding quotes, a backtick, `$`, `%`, `é` and `中` (written and
+read back byte for byte), a long command's variable read by the next call, and a long multi-line command ending
+`cmd /c exit 7` (which reported 7) each ended in its own status in 123 to 387 ms, with no `__rot_`, no `>>` prompt and no
+parse error. One shell difference, not the product's: 5.1 refuses an environment value past 32,767 characters, exit 1, where
+pwsh stored 64 KB. `pnpm terminal-proof`'s long command, 4,775 bytes, read `bytes=4699`, exit 0, in 120 ms, nothing of the
+carrier on the grid. PowerShell keeps its one line; "REQ-TOOLS-096/098/179 (live-run M1): on PowerShell a command far
+longer than a POSIX PTY's line reaches the shell whole" pins it.)* Pinned by "REQ-TOOLS-096/098/179 (live-run M1): …" in `terminal.test.ts` (dash, bash as
 `sh`, and the 20-column floor; a soft-paused road included), red on the one-line carrier with exit 124 after its 15 s
 timeout; "REQ-TOOLS-096 (live-run M1): a POSIX command too long for one PTY line is staged …" pins the line, the script
 and PowerShell's line; and `pnpm terminal-proof`'s `live.longCommandReachesTheShellWhole` and

@@ -39,6 +39,11 @@ const UNDO_V24 = `${UNDO_V25} DROP TABLE agent_fingerprints;`;
 const UNDO_V23 = `${UNDO_V24} ALTER TABLE children DROP COLUMN interruption; ALTER TABLE children DROP COLUMN resume_state; ALTER TABLE children DROP COLUMN write_scope; DROP TABLE iterations; DROP TABLE agent_messages; DROP TABLE agent_terminals;`;
 
 const M = mintMachineId('0000000000000000000000000000000a') as MachineId;
+/**
+ * The archiver the product's backup uses (`backup.ts`, `tarBin`): a bare `tar` launched from Git Bash is Git's GNU tar, which
+ * reads `C:` as a remote host (docs/defects/fixed/two-store-cases-pack-their-artifact-with-whichever-tar-path-finds-first.md).
+ */
+const TAR = process.platform === 'win32' ? 'C:\\Windows\\System32\\tar.exe' : 'tar';
 const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
 const clocks = nodeClocks();
 
@@ -404,7 +409,7 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
         bytes.writeUInt32BE(bytes.readUInt32BE(28) + 2, 28);
         writeFileSync(file, Buffer.concat([bytes, Buffer.alloc(pageSize * 2)]));
         rmSync(artifact);
-        const t = spawnSync('tar', ['-cf', artifact, '-C', dir, '.']);
+        const t = spawnSync(TAR, ['-cf', artifact, '-C', dir, '.']);
         expect(t.status).toBe(0);
       } finally {
         rmSync(dir, { recursive: true, force: true });
@@ -663,7 +668,7 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
         mkdirSync(join(unpacked, 'origin.txt'));
         writeFileSync(join(unpacked, 'origin.txt', 'x'), 'x');
         rmSync(artifact);
-        expect(spawnSync('tar', ['-cf', artifact, '-C', unpacked, '.']).status).toBe(0);
+        expect(spawnSync(TAR, ['-cf', artifact, '-C', unpacked, '.']).status).toBe(0);
       } finally {
         rmSync(unpacked, { recursive: true, force: true });
       }

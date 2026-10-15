@@ -478,17 +478,18 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
     it('a fault beneath a list item names the file whose list the merge kept, not an earlier file whose item states the deeper path (REQ-CONFIG-050)', () => {
       const files = (scope: 'global' | 'workspace', dir: string): ScopeFiles => ({ scope, dir, agents: join(dir, 'agents.yaml'), models: join(dir, 'models.yml') });
       const both = { global: files('global', '/g'), workspace: files('workspace', '/w/.rotaris') };
+      // The files as the host's `join` built them (docs/defects/fixed/a-config-case-expects-posix-spelled-files-its-own-join-built.md).
       const raw = (global: Record<string, unknown> | null, workspace: Record<string, unknown> | null) => ({ global: { agents: global, models: null }, workspace: { agents: workspace, models: null } });
       const lower = { runtime: { roots: [{ a: 1 }, { a: 2, b: 3 }] } };
-      expect(statingFile('runtime.roots[1].b', both, raw(lower, { runtime: { roots: [{ a: 1 }, { a: 2 }] } }))).toEqual({ file: '/w/.rotaris/agents.yaml', scope: 'workspace', path: 'runtime.roots[1].b' });
+      expect(statingFile('runtime.roots[1].b', both, raw(lower, { runtime: { roots: [{ a: 1 }, { a: 2 }] } }))).toEqual({ file: both.workspace.agents, scope: 'workspace', path: 'runtime.roots[1].b' });
       // A section the later file overlays per field (a sibling key, no replacement on the path) leaves the earlier file's claim standing.
-      expect(statingFile('runtime.roots[1].b', both, raw(lower, { runtime: { other: 1 } }))).toEqual({ file: '/g/agents.yaml', scope: 'global', path: 'runtime.roots[1].b' });
+      expect(statingFile('runtime.roots[1].b', both, raw(lower, { runtime: { other: 1 } }))).toEqual({ file: both.global.agents, scope: 'global', path: 'runtime.roots[1].b' });
       // A models entry overlaid field by field (REQ-CONFIG-043) keeps the earlier file's fields: the earlier file still states them.
-      expect(statingFile('models.m.provider', both, raw({ models: { m: { provider: 7 } } }, { models: { m: { model_id: 'y' } } }))).toEqual({ file: '/g/agents.yaml', scope: 'global', path: 'models.m.provider' });
+      expect(statingFile('models.m.provider', both, raw({ models: { m: { provider: 7 } } }, { models: { m: { model_id: 'y' } } }))).toEqual({ file: both.global.agents, scope: 'global', path: 'models.m.provider' });
       // A nested mapping inside an entry is replaced wholesale (REQ-CONFIG-046): what it does not hold is the later file's to state.
-      expect(statingFile('personas.coder.tool_restrictions.terminal', both, raw({ personas: { coder: { tool_restrictions: { terminal: 5 } } } }, { personas: { coder: { tool_restrictions: {} } } }))).toEqual({ file: '/w/.rotaris/agents.yaml', scope: 'workspace', path: 'personas.coder.tool_restrictions.terminal' });
+      expect(statingFile('personas.coder.tool_restrictions.terminal', both, raw({ personas: { coder: { tool_restrictions: { terminal: 5 } } } }, { personas: { coder: { tool_restrictions: {} } } }))).toEqual({ file: both.workspace.agents, scope: 'workspace', path: 'personas.coder.tool_restrictions.terminal' });
       // The replacing file states the role under its legacy name: it takes the fault, spelled as it states it (REQ-CONFIG-062).
-      expect(statingFile('personas.codebase-analyst.tool_restrictions.terminal', both, raw({ personas: { 'codebase-analyst': { tool_restrictions: { terminal: 5 } } } }, { personas: { oracle: { tool_restrictions: {} } } }))).toEqual({ file: '/w/.rotaris/agents.yaml', scope: 'workspace', path: 'personas.oracle.tool_restrictions.terminal' });
+      expect(statingFile('personas.codebase-analyst.tool_restrictions.terminal', both, raw({ personas: { 'codebase-analyst': { tool_restrictions: { terminal: 5 } } } }, { personas: { oracle: { tool_restrictions: {} } } }))).toEqual({ file: both.workspace.agents, scope: 'workspace', path: 'personas.oracle.tool_restrictions.terminal' });
     });
     it('the replacement walk finds where a file replaces wholesale under each merge class, and -1 where it only overlays (REQ-CONFIG-040..050)', () => {
       const below = { runtime: { roots: [1], nested: { a: 1 } }, models: { m: 'oops', n: { provider: 'p' } }, large_model: 'x' };

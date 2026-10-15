@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { MonotonicClock, Timers, TimerHandle, Millis } from '@rotaris/kernel';
-import { stripVt } from './classify.js';
+import { rejoinConptyWraps, stripVt } from './classify.js';
 import type { EmulatorFactory, ScreenEmulator } from './emulator.js';
 
 /**
@@ -895,8 +895,9 @@ export function snapshotCommand(backend: ShellBackend): string {
     // row at the 20 the display may narrow to — and cut a directory wider than the screen at its edge
     // (docs/defects/fixed/the-powershell-shell-state-snapshot-joins-a-wrapped-row-with-a-newline.md). Read from the
     // POSIX repair and pinned over the parse on Linux; executing it needs a Windows host. Executed 2026-10-15 on Windows 11
-    // ARM64 under pwsh 7.6.6 and 5.1: read whole and restored byte for byte at 34 to 240 columns (B2 of that session's
-    // record, ADR-0020); below 34 no call ends at all (docs/defects/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md).
+    // ARM64 under pwsh 7.6.6 and 5.1: read whole and restored byte for byte at 20 to 240 columns (B2 of that session's
+    // record, ADR-0020), 20 and 33 once ConPTY's wrapped rows were rejoined for the frame match the same day
+    // (docs/defects/fixed/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md).
     return `$__m = '${SNAPSHOT_MARK}'; $__s = '${PS_SNAPSHOT_TAG}' + [char]0 + (Get-Location).Path + [char]0 + ((Get-ChildItem Env: | ForEach-Object { $_.Name + '=' + $_.Value + [char]0 }) -join ''); $__b = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($__s)); for ($__i = 0; $__i -lt $__b.Length; $__i += ${SNAPSHOT_ROW}) { Write-Output ($__m + ':' + $__b.Substring($__i, [Math]::Min(${SNAPSHOT_ROW}, $__b.Length - $__i))) }`;
   }
   // POSIX: the directory and `env -0`, NUL-separated, as base64 folded to 64 columns. The capture is the EMULATED
@@ -1261,7 +1262,9 @@ export class ForegroundSession {
     this.pendingText += chunk;
     // The echoed wrapper carries the marker text too (`'__rot_x_e:' + $(...`), so the match is the marker
     // FOLLOWED BY DIGITS on the VT-stripped stream — only the shell's own Write-Output produces that.
-    const text = stripVt(this.pendingText);
+    // ConPTY's wrapped rows are rejoined first: below 34 columns the end frame wraps, and ConPTY writes the wrap as a
+    // hard line end (`rejoinConptyWraps`). A POSIX PTY never writes that shape, so the rejoin changes nothing there.
+    const text = stripVt(rejoinConptyWraps(this.pendingText));
     const frame = (end: string): number | null => {
       const m = new RegExp(`${end}:(-?\\d+)`).exec(text);
       return m ? Number(m[1]) : null;

@@ -157,6 +157,21 @@ export function renderAction(a: { command: string; timeout?: number | undefined;
  * `Clear-Host` came back as the rows of the screen left behind as blank lines. That capture is ADR-0021's
  * headless screen now (`ForegroundSession`); this stays for the scan, and for the marker only.
  */
+/**
+ * REQ-TOOLS-128: the RAW stream with ConPTY's wrapped rows put back together, for the marker scan alone (the emulator is
+ * given the bytes as they came). Where a line is wider than the screen, ConPTY does not let the line wrap: it writes the
+ * row, a hard line end, a move back to that row's last column, that column's character again, and the rest — measured on
+ * Windows 11 at 33 columns as `…_e:\r\n<ESC>[49;33H:0`. Stripped of escapes that reads `…_e:` and `:0` on two lines, so
+ * below 34 columns no end frame (34 characters) ever matched and every PowerShell call ran to its hard cap
+ * (docs/defects/fixed/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md). Only that shape is rejoined —
+ * a character, the line end, a cursor move, and the same character again, control sequences allowed between (a colour,
+ * and under Windows PowerShell 5.1 the cursor hidden, `<ESC>[?25l`, before the line end) — and the repainted character
+ * is kept once. Any other line end stands.
+ */
+export function rejoinConptyWraps(raw: string): string {
+  return raw.replace(/([^\x1b\r\n])((?:\x1b\[[0-9;?]*[ -/]*[@-~])*)\r\n\x1b\[\d+;\d+H((?:\x1b\[[0-9;?]*[ -/]*[@-~])*)\1/g, '$1$2$3');
+}
+
 export function stripVt(text: string): string {
   return text
     // CSI: \x1b [ params intermediates final

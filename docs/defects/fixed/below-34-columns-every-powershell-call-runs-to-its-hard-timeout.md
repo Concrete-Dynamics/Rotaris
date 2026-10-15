@@ -1,5 +1,16 @@
 ## Below 34 columns every PowerShell call runs to its hard timeout
 
+**Repaired 2026-10-15** (the owner's ruling that day: repair it). `rejoinConptyWraps` (`classify.ts`) puts ConPTY's wrapped
+rows back together in the raw text the frame match reads (`foreground.ts`, before `stripVt`): a character, the line end, a
+cursor move, and the same character again, any control sequence allowed between (a colour; under Windows PowerShell 5.1
+the cursor hidden, `<ESC>[?25l`, before the line end), the repainted character kept once. The emulator is still given the
+bytes as they came. Red before on this host: PD-TOOLS-001's PowerShell sweep put back at 20 and 33 columns ("setup at 20:
+expected 124") and a pure case over the two recorded raw shapes; green after, in three runs each of `terminal.test.ts`,
+`streams.test.ts` and `background.test.ts` under pwsh 7.6.6 and under 5.1 (90 passed, 64 skipped), the sweep restoring the
+directory and environment byte for byte at all ten widths from 20 to 240. **Not measured:** the live stream's
+`CommandRegion` and the paused calls' shares read raw chunks for the markers the same way, without the rejoin, so at
+these widths the live preview may still carry the wrapper or nothing; no case narrows a live tap.
+
 Measured 2026-10-15 on Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, dev tree, pwsh 7.6.6 arm64, at `fbbc3d23`,
 and on `3c3f4478` (before the B3 repair) the same (the Windows ARM64 session's B2). A session whose PTY the display resized
 to 33 columns or fewer never sees a call's end frame: every command, `Write-Output` of 50 characters included, prints its

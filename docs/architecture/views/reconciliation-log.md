@@ -16,6 +16,10 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-15**
 
+**ConPTY's wrapped rows rejoined for the frame match (the Windows ARM64 session).** `rejoinConptyWraps` in `classify.ts`,
+used by `ForegroundSession`'s frame scan before `stripVt`; the emulator's input is unchanged. No view changed: the runtime
+view names the marker protocol, not how the raw stream is read for it.
+
 **settings-proof's launches with no workspace argument run in an empty directory of their own (fin47, `fin47-accept1-3`;
 acceptance finding A5; REQ-CONFIG-277, REQ-SHELL-010, OQ-169).** `01-component-view.md` names
 `scripts/lib/working-directory.mjs` beside `staged-resources.mjs` as `settings-proof`'s, and its use of `build-id.mjs`'s

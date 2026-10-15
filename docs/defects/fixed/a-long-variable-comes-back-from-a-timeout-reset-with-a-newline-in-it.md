@@ -41,4 +41,4 @@ Windows value longer than 240 columns may wrap the same way. That has not been m
 to test. *(2026-10-15, Windows 11 ARM64, pwsh 7.6.6 and 5.1: the capture has printed encoded rows since 2026-10-06, and a
 `Path` of 24 extra entries and a 600-character value came back from a hard-timeout reset whole, with no newline, at every
 width from 34 to 240 columns; below 34 no call ends at all, so the reset is not reached there
-([`below-34-columns-…`](../below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md)).)*
+([`below-34-columns-…`](below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md)).)*

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock, type Clocks } from '@rotaris/kernel';
 import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
-import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
+import { classifyOutcome, diagnosticBlock, outputWarnings, rejoinConptyWraps, stripVt } from './classify.js';
 import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, POSIX_LINE_BYTES, posixShellArgs, printsMarker, processIdentity, restoreCommand, shellHoldsTerminal, snapshotCommand, stagedScript, unstartedShare, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
 import { xtermEmulatorFactory, type EmulatorFactory } from './emulator.js';
 import { endOfExit } from './background.js';
@@ -278,6 +278,21 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
   });
   it.runIf(process.platform !== 'linux')('OQ-144: off Linux there is no /proc, and no identity to watch', () => {
     expect(processIdentity(process.pid)).toBeNull();
+  });
+  // docs/defects/fixed/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md: ConPTY writes a row the screen
+  // wraps as the row, a hard line end, a move back to the row's last column and that column's character again; the frame
+  // scan rejoins it, and nothing else that looks like it.
+  it('REQ-TOOLS-128: ConPTY\'s wrapped rows are rejoined for the marker scan, the repainted character once', () => {
+    // As recorded from the product's own PTY at 33 columns, 2026-10-15.
+    const raw = '__rot_6cb32f31ee7df0909f2e3dc6_e:\r\n\x1b[49;33H:0\r\nPS>';
+    expect(stripVt(rejoinConptyWraps(raw))).toBe('__rot_6cb32f31ee7df0909f2e3dc6_e:0\nPS>');
+    // A colour between the character and the line end, or after the move, is kept for `stripVt` to remove.
+    expect(stripVt(rejoinConptyWraps('ab\x1b[m\r\n\x1b[12;20H\x1b[93mbc'))).toBe('abc');
+    // Windows PowerShell 5.1 at 20 columns hides the cursor before the line end, as recorded the same day.
+    expect(stripVt(rejoinConptyWraps('__rot_e8834d85d32919\x1b[?25l\r\n\x1b[49;20H9e4c0113237_e:0      \x1b[50;15H\x1b[?25h\r\nPS>'))).toBe('__rot_e8834d85d32919e4c0113237_e:0      \nPS>');
+    // An ordinary line end is left alone: the next row does not start with a move, or the move does not repaint the character.
+    expect(rejoinConptyWraps('ab\r\ncd')).toBe('ab\r\ncd');
+    expect(rejoinConptyWraps('ab\r\n\x1b[12;20Hcd')).toBe('ab\r\n\x1b[12;20Hcd');
   });
   it('strips VT sequences and carriage returns', () => {
     expect(stripVt('\x1b[32mhi\x1b[0m\r\n\x1b]0;title\x07x')).toBe('hi\nx');
@@ -794,9 +809,9 @@ describe.skipIf(process.platform === 'win32')('PD-TOOLS-001: the POSIX shell-sta
 // capture's encoded rows. No PowerShell runs on this host: `powershellCapture` prints what the command's loop prints
 // (the tag, the directory and each `NAME=value`, NUL-terminated, UTF-8, base64, 64 characters a row behind the marker),
 // and the parse is read off the emulated screen at every width the display may give it. The Windows run is owed.
-// Run 2026-10-15 on Windows 11 ARM64 (pwsh 7.6.6 and 5.1): the real-PTY case "at every width from 34 to 240 columns a
-// hard-timeout reset restores PowerShell's directory and environment byte for byte" below; below 34 columns no call ends
-// (docs/defects/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md).
+// Run 2026-10-15 on Windows 11 ARM64 (pwsh 7.6.6 and 5.1): the real-PTY case "at every width from 20 to 240 columns a
+// hard-timeout reset restores PowerShell's directory and environment byte for byte" below; below 34 columns no call ended
+// until the same day's repair (docs/defects/fixed/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md).
 describe('PD-TOOLS-001: the PowerShell shell-state capture survives a screen that wraps (REQ-TOOLS-104, REQ-TOOLS-128)', () => {
   const ps: ShellBackend = { kind: 'powershell', file: 'pwsh' };
   const powershellCapture = (cwd: string, env: Readonly<Record<string, string>>): string => {
@@ -1633,7 +1648,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
   // screen, a value of 600 characters, a non-ASCII one, one PowerShell would read as code, and a spawn variable the
   // command removed. The environment and the directory are dumped from inside the shell before the hard cap and after
   // the reset, and compared here.
-  it.runIf(PS)('PD-TOOLS-001, REQ-TOOLS-099/128: at every width from 34 to 240 columns a hard-timeout reset restores PowerShell\'s directory and environment byte for byte', async () => {
+  it.runIf(PS)('PD-TOOLS-001, REQ-TOOLS-099/128: at every width from 20 to 240 columns a hard-timeout reset restores PowerShell\'s directory and environment byte for byte', async () => {
     let dir = join(root, 'ps-wide-cwd');
     while (dir.length < 170) dir = join(dir, 'segment-of-a-long-directory');
     mkdirSync(dir, { recursive: true });
@@ -1651,9 +1666,9 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     const dummies = Array.from({ length: 24 }, (_, i) => `C:\\Program Files\\Tool${i + 1}\\bin`).join(';');
     const nonAscii = 'héllo-ü-日本-€';
     const asCode = "O'Brien $(whoami) `tick";
-    // From 34 columns: below that every PowerShell call runs to its hard cap
-    // (docs/defects/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md), so 20 and 33 are owed to its repair.
-    for (const cols of [34, 40, 64, 75, 76, 77, 120, 240]) {
+    // 20 and 33 too since 2026-10-15: below 34 columns every PowerShell call ran to its hard cap until ConPTY's wrapped rows
+    // were rejoined for the frame match (docs/defects/fixed/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md).
+    for (const cols of [20, 33, 34, 40, 64, 75, 76, 77, 120, 240]) {
       const { m, t } = await backendSession(shell!, { cols, env: { ROTARIS_SPAWN_ONLY: 'present' } });
       try {
         const setup = await t.execute(args({ command: `Set-Location -LiteralPath '${dir}'; $env:Path = '${dummies};' + $env:Path; `

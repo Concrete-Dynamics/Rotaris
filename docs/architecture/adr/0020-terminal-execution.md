@@ -842,8 +842,10 @@ The capture took 139 to 220 ms of its 15 s; the restore line was 3,009 to 3,165 
 unmeasured line cap. **Not reached below 34 columns:** there no PowerShell call ends at all. ConPTY writes a wrapped row as
 a hard `\r\n`, a cursor move back to the row it left and that column's character again, and the frame match over the
 VT-stripped stream (`${end}:(-?\d+)`) never meets a 34-character frame split that way
-([`below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md`](../../defects/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md),
-recorded, not repaired). And a restore line whose `Set-Item` fails still exits 0, so a partial restore reads "were
+([`below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md`](../../defects/fixed/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md),
+recorded, not repaired). *(Repaired the same day on the owner's ruling: ConPTY's wrapped rows are rejoined in the text the
+frame match reads (`rejoinConptyWraps`), and the sweep now restores byte for byte at 20 and 33 columns too, under both
+shells. The live tap's own raw scan is not rejoined and is unmeasured at those widths.)* And a restore line whose `Set-Item` fails still exits 0, so a partial restore reads "were
 restored" ([recorded](../../defects/a-powershell-restore-whose-set-item-fails-is-still-reported-restored.md)).
 *(2026-10-15, Windows 11 ARM64 (build 26200.9457), pwsh 7.6.6 and Windows PowerShell 5.1, the session's B1: one real
 PowerShell capture and restore ran, in "PD-TOOLS-001 (OQ-134): a reset restores the snapshot of the last command the

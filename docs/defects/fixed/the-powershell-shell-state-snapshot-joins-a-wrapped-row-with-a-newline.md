@@ -83,6 +83,7 @@ The capture took 139 to 220 ms against its 15 s bound (`SNAPSHOT_TIMEOUT_MS`); t
 characters under 5.1 and 3,165 under pwsh, 8 variables; a 1 s hard cap's call returned after about 1.9 s.
 
 **Not reached:** 20 and 33 columns. Below 34 no PowerShell call ends at all, so the reset is never reached there
-([`below-34-columns-…`](../below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md)). **Found beside it:** a restore
+([`below-34-columns-…`](below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md)). *(Reached the same day, after
+that note's repair: the case runs at 20 and 33 columns too and holds there under both shells.)* **Found beside it:** a restore
 line whose `Set-Item` fails still exits 0, so it is reported restored
 ([`a-powershell-restore-whose-set-item-fails-…`](../a-powershell-restore-whose-set-item-fails-is-still-reported-restored.md)).

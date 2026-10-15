@@ -15227,8 +15227,18 @@ choice, the rest of the bound spent on field names, format or the answer's wordi
 category deliberation and is read under the count limb, which is unchanged. slice-proof's red on a timed-out fallback (F8) is a
 harness defect, repaired by giving that fallback the same one extra ask an answer outside the accepted set already gets.
 
-**The two recommendations weighed.** The ruling as handed to the building bundle states its outcome and the alternatives it rejected
-(below); the two advocates' own recommendations were not handed to it, and the orchestrator's ruling record holds them.
+**The two recommendations weighed, and the ruling followed both** (both advocates recommended confirming as built). *Advocate A
+(the user's lens)* recommended keeping the bound, REQ-ORCH-007's fallback and the strict rung's text, reading the limb as met in
+its wording but the cut, read in full, as category deliberation, the limb clarified to say so: the user was told the truth ("the
+classification call timed out after 12 s"), the reasoning wrote "Final: {…}" at about 91% of its stream and then reopened the
+choice, and F8 is a slice-proof defect to be given one more ask. *Advocate B (the system's lens)* recommended the same outcome
+with the limb read as not met: OQ-258 predicted that the remaining cuts would "come only from category deliberation or a
+queueing endpoint", which is what this pack shows (no key debated, bytes received throughout, the upstream stamps' 7.4 to 9.5 s
+lead being clock skew, not queueing), and that only a timed-out fallback, not an unparseable, unmapped or setup one, gets the
+extra ask. The ruling took B's reading and B's wording of the sharpened limb, which also covers a settled category that loses the
+rest of the bound to format or the answer's wording; B's addition that the live NOTE prints each cut's reasoning tail; B's limit on
+the extra ask; and A's NOTE under `PD-ORCH-011` revision 2. *(Until 2026-10-15 this paragraph said the advocates'
+recommendations were not handed to the building bundle; fin47's reviewer wrote them from the orchestrator's ruling record.)*
 
 **Rejected, with the reasons:**
 - **Taking the category the reasoning named** when the call is cut. It breaks REQ-ORCH-007 (a call that reaches the bound falls back)

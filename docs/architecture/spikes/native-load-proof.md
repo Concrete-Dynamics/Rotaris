@@ -112,6 +112,9 @@ Two things the run confirmed rather than found: `ELECTRON_RUN_AS_NODE` keeps asa
 *Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, launched from powershell
 5.1.26100.9457, at `b9e30052`. Everything above is x64; this is the first load of the `win32-arm64` bindings this record
 holds, and it is a development-tree load, not rule 4's packaged one (OQ-400's reading: it measures windows-arm64 only).*
+*OQ-400, ruled 2026-10-15 under R-072: this section **informs** and discharges nothing of rule 4. Rule 4's load executes the
+`windows-x64` artifact, so it stays owed to a Windows x64 host; an emulated run of that artifact on this host would inform and
+never discharge it (REQ-STARTUP-026).*
 
 A fresh `pnpm install --prefer-offline` in a new worktree ran no node-gyp. A scratch probe modelled on
 `native-load-probe.cjs` (never committed) required both bindings from the checkout's `node_modules`, with `process.dlopen`

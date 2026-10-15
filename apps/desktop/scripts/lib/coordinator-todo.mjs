@@ -149,18 +149,37 @@ export function todoItemReading(sessions) {
   return { read: sessions.map((s) => s.scenario), named, unnamed, overlaps, stale };
 }
 
-/** The task states a `Todo state:` block (REQ-TOOLS-147's rendering) carries, by id, or null where the text holds none. */
+/**
+ * The task states a `Todo state:` block (REQ-TOOLS-147's rendering, `  [STATE] name (id)` and ` — description` when there is
+ * one) carries, by id, or null where the text holds none.
+ *
+ * Any id is read, not only the eight-hex one REQ-TOOLS-144 generates: a `replace` stores a new task under the id its model sent
+ * (docs/defects/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md), and until fin47 this reader matched
+ * `([0-9a-f]{8})` alone, so every task of the 3c03287 swarm session (`impl101`, …) was invisible to `heldItemReading`, whose
+ * checks then passed having read nothing (finding A7,
+ * docs/defects/fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md). An id is a parenthesised token with
+ * no space, followed by the line's end or ` — `. A name or description holding such a token too leaves its line several
+ * readings: the lines of one reading are taken first, then each reading of the others that no line has given yet.
+ */
 export function todoStates(text) {
   if (typeof text !== 'string') return null;
   const at = text.indexOf('Todo state:');
   if (at < 0) return null;
   const states = new Map();
+  const ambiguous = [];
   for (const line of text.slice(at).split('\n')) {
-    const task = /^ {2}\[(PENDING|IN_PROGRESS|COMPLETED|ABANDONED)\] .+? \(([0-9a-f]{8})\)(?: — .*)?$/.exec(line);
-    if (task) states.set(task[2], task[1]);
+    const task = /^ {2}\[(PENDING|IN_PROGRESS|COMPLETED|ABANDONED)\] (.+)$/.exec(line);
+    if (!task) continue;
+    const ids = [...task[2].matchAll(TASK_ID)].map((m) => m[1]);
+    if (ids.length === 1) states.set(ids[0], task[1]);
+    else if (ids.length > 1) ambiguous.push([ids, task[1]]);
   }
+  for (const [ids, state] of ambiguous) for (const id of ids) if (!states.has(id)) states.set(id, state);
   return states;
 }
+
+/** A rendered task line's id: ` (id)` closing the name, before the line's end or the description's ` — `. */
+const TASK_ID = / \(([^()\s]+)\)(?= — |$)/g;
 
 /**
  * PD-TOOLS-008 revision 2 and PD-TOOLS-006 revision 7 (OQ-249, ruled 2026-10-07 under R-072): what the coordinator's plan
@@ -181,7 +200,11 @@ export function todoStates(text) {
  * - `closes` — every such close a root `replace` sent, whatever its result stored (`sent`, `stored`): the case revision 3
  *   decides, asked. Empty, `restoredOverClose` measured nothing, and the live run says so in a NOTE rather than a PASS (at
  *   `0bc3eee` every coordinator closed with `update`: docs/defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md);
- * - `namedRestores` — each accepted root `replace` whose observation names a task it kept over a different state (a NOTE).
+ * - `namedRestores` — each accepted root `replace` whose observation names a task it kept over a different state (a NOTE);
+ * - `heldReads` — how many states of a held item those Todo states gave (`heldPending` and `closedWhileHeld` read these), and
+ *   `unread` — each held item, and each item a closing `replace` sent, that the Todo state its call carried does not show
+ *   (target 0): until fin47 a model-chosen id was never read, and the three checks passed over a session having read nothing
+ *   of it (finding A7, docs/defects/fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md).
  *
  * Since `PD-TOOLS-008` revision 4 and `PD-TOOLS-006` revision 11 (OQ-333, ruled 2026-10-15 under R-072) a served item no longer
  * counts against the coordinator's next mark (`singleActive` keeps its target of 0, now with no accepted cause), and the
@@ -203,6 +226,8 @@ export function heldItemReading(sessions) {
   const openAtAnswer = [];
   const closeLatencies = [];
   const resumeLines = [];
+  const unread = [];
+  let heldReads = 0;
   const coordinating = [];
   for (const s of sessions) {
     const roots = new Set(s.rootNames);
@@ -214,6 +239,9 @@ export function heldItemReading(sessions) {
     }
     const kids = (s.children ?? []).filter((k) => k.depth === 1 && k.todo_item);
     const windows = new Map(kids.map((k) => [k, holdingWindows(k, s.timeline)]));
+    const missed = (c, item) => {
+      if (!unread.some((u) => u.scenario === s.scenario && u.ordinal === c.ordinal && u.item === item)) unread.push({ scenario: s.scenario, ordinal: c.ordinal, item });
+    };
     for (const c of rootCalls) {
       if (c.status !== 'ok' || c.endedAt === null || c.endedAt === undefined) continue;
       if (c.tool_name !== 'todo' && c.tool_name !== 'delegate') continue;
@@ -222,6 +250,8 @@ export function heldItemReading(sessions) {
       for (const k of kids) {
         if (!holdsAt(windows.get(k), c.endedAt)) continue;
         const state = states.get(k.todo_item);
+        if (state === undefined) { missed(c, k.todo_item); continue; }
+        heldReads += 1;
         if (state === 'PENDING') heldPending.push({ scenario: s.scenario, ordinal: c.ordinal, child: k.canonical_name, item: k.todo_item });
         if (state === 'COMPLETED' && WRITER_ROLES.has(k.persona)) closedWhileHeld.push({ scenario: s.scenario, ordinal: c.ordinal, child: k.canonical_name, item: k.todo_item });
       }
@@ -239,12 +269,13 @@ export function heldItemReading(sessions) {
         if (servers.length === 0 || servers.some((k) => holdsAt(windows.get(k), c.endedAt))) continue;
         // The case revision 3 decides, asked: a `replace` closing an item every child serving it has ended.
         closes.push({ scenario: s.scenario, ordinal: c.ordinal, item: t.id, sent: t.state, stored: states.get(t.id) ?? null });
+        if (!states.has(t.id)) missed(c, t.id);
         if (states.get(t.id) === 'IN_PROGRESS') restoredOverClose.push({ scenario: s.scenario, ordinal: c.ordinal, item: t.id });
       }
     }
     // PD-TOOLS-006 revision 11 (OQ-333): the resume line, the items left open when the coordinator answered, and how long each
-    // delegated item stayed open after its child ended. Read from the arguments and the stored plan, never from a Todo state
-    // block, whose reader takes eight-hex ids alone (`todoStates`).
+    // delegated item stayed open after its child ended. Read from the arguments and the stored plan, not from a Todo state block
+    // (whose reader took eight-hex ids alone until fin47's finding A7).
     for (const c of rootCalls) {
       if ((c.tool_name !== 'wait_for_tasks' && c.tool_name !== 'delegate') || typeof c.result !== 'string') continue;
       const items = [...c.result.matchAll(RESUME_LINE)].map((m) => m[1]);
@@ -270,7 +301,7 @@ export function heldItemReading(sessions) {
       if (close !== undefined) closeLatencies.push({ scenario: s.scenario, item: k.todo_item, child: k.canonical_name, ordinal: close.ordinal, seconds: (close.endedAt - end) / 1000 });
     }
   }
-  return { coordinating, heldPending, closedWhileHeld, singleActive, restoredOverClose, closes, namedRestores, openAtAnswer, closeLatencies, resumeLines };
+  return { coordinating, heldReads, unread, heldPending, closedWhileHeld, singleActive, restoredOverClose, closes, namedRestores, openAtAnswer, closeLatencies, resumeLines };
 }
 
 /** `PD-TOOLS-006` revision 11's line, as the run writes it after a reported child's result; group 1 is the item's id. */

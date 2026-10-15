@@ -16,7 +16,10 @@ Two consequences:
   eight-hex id pattern, so in this session every task was invisible to `heldItemReading`'s `heldPending`, `closedWhileHeld` and
   `restoredOverClose`: those checks passed over the swarm session having read nothing of it. The readings fin47 added for
   OQ-333 (`openAtAnswer`, `closeLatencies`, `resumeLines`) read the arguments and the stored plan instead, and do not share the
-  gap.
+  gap. **Repaired 2026-10-15 by fin47 (`fin47-accept1-2`, finding A7) and split out to its own note,
+  [`fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md`](fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md):**
+  the reader takes any id, and a held or closed item it cannot find fails the live run rather than passing. This note stays
+  open for the product half alone.
 
 ## Specs
 
@@ -28,5 +31,5 @@ settled here.
 ## Relevant files
 
 - `packages/agent-tools/src/tools/todo.ts`: `replace` keeps `t.id` for a task matching no protected one.
-- `apps/desktop/scripts/lib/coordinator-todo.mjs`: `todoStates` matches `([0-9a-f]{8})` only.
+- `apps/desktop/scripts/lib/coordinator-todo.mjs`: `todoStates` matched `([0-9a-f]{8})` only, until fin47 (the harness half, repaired).
 - `packages/agent-tools/src/tools/tools.test.ts`: no case sends an unknown id to `replace`.

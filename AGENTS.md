@@ -363,7 +363,9 @@ over a different state is a NOTE (`namedRestores`); since fin47 (`PD-TOOLS-008` 
 the single-active refusals' target of 0 has no accepted cause left, and three NOTEs read the wait results carrying the line that a
 reported child's item is still IN_PROGRESS (`resumeLines`), the delegated items still IN_PROGRESS in the stored plan when the
 coordinator answered (`openAtAnswer`) and the seconds from each child's end to its item's close (`closeLatencies`), read from the
-arguments and the stored plan; and (`PD-TOOLS-006` revision 8, OQ-250) a NOTE counts `delegate` calls
+arguments and the stored plan; since fin47 (finding A7) the Todo state those three checks read is read under any task id, not
+only an eight-hex one, and a held item, or one a closing `replace` sent, that the Todo state does not show fails a check of its own
+(`unread`, target 0; `docs/defects/fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md`); and (`PD-TOOLS-006` revision 8, OQ-250) a NOTE counts `delegate` calls
 refused for a `write_scope` given to a persona that cannot write files and child calls of a tool they do not hold
 (`lib/routing-misses.mjs`; OQ-216's target is 0 for each, the duress run at `a68f121` had one of each). Since fin38 (`PD-TOOLS-006`
 revision 9, OQ-257) the write-scope refusals are read against a bound, each re-routed by the coordinator's next `delegate`, the

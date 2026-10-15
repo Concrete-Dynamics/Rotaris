@@ -338,4 +338,58 @@ describe('heldItemReading (PD-TOOLS-008 revision 2, OQ-249)', () => {
     expect(r.restoredOverClose).toEqual([]);
     expect(r.closes).toEqual([]);
   });
+
+  /*
+   * Acceptance finding A7 (docs/defects/fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md): the
+   * delegation-swarm session 3e4b7210 at 3c03287 stored its tasks under the ids its model chose (`impl101`, `test101`, …), and
+   * `todoStates` matched `([0-9a-f]{8})` alone, so every task of that session was invisible and `heldPending`, `closedWhileHeld`
+   * and `restoredOverClose` passed having read nothing of it. The reader takes whatever id the rendering carries, and a held
+   * item or a closed one the Todo state does not show is reported (`unread`), never passed over.
+   */
+  describe('a task stored under a model-chosen id is read like any other (finding A7, REQ-TOOLS-144, PD-TOOLS-008)', () => {
+    const swarm = [
+      { task_id: 'bg_1', canonical_name: 'impl', persona: 'coding-agent', depth: 1, todo_item: 'impl101', spawned_at: '2026-10-15T03:48:47.100Z', completed_at: '2026-10-15T03:49:40.000Z' },
+      { task_id: 'bg_2', canonical_name: 'tests', persona: 'tester', depth: 1, todo_item: 'test101', spawned_at: '2026-10-15T03:48:47.150Z', completed_at: '2026-10-15T03:49:44.000Z' },
+    ];
+
+    it('todoStates reads a non-hex id, and the id rather than a parenthesis in the name or the description', () => {
+      const text = `Todo state:\nPhase main (e40a534e)\n  [IN_PROGRESS] addTodo refuses empty (or blank) title (impl101) — see src/todos.js (line 4)\n  [PENDING] Test (the rule) (test-1.a)\n  [COMPLETED] Docs (0000000c)`;
+      expect([...todoStates(text)!]).toEqual([['impl101', 'IN_PROGRESS'], ['test-1.a', 'PENDING'], ['0000000c', 'COMPLETED']]);
+      // A name holding " (x) — " leaves its line two readings; the id a line of one reading carries wins over it, in either order.
+      const lines = ['  [PENDING] Fix (test101) — then ship (impl101)', '  [IN_PROGRESS] Test it (test101)'];
+      for (const order of [lines, [...lines].reverse()]) {
+        const tricky = todoStates(`Todo state:\nPhase main (e40a534e)\n${order.join('\n')}`)!;
+        expect(tricky.get('impl101')).toBe('PENDING');
+        expect(tricky.get('test101')).toBe('IN_PROGRESS');
+      }
+    });
+
+    it('a held item read PENDING, an item closed while held, and an ended item a replace left open are reported', () => {
+      const closeImpl = { operation: 'replace', phases: [{ name: 'main', tasks: [{ id: 'impl101', name: 'impl', state: 'COMPLETED' }, { id: 'test101', name: 'tests', state: 'IN_PROGRESS' }] }] };
+      const r = heldItemReading([{ scenario: 'delegation-swarm', rootNames: ['orchestrator'], children: swarm, calls: [
+        c(7, 'delegate', 'ok', `Task 'impl': queued\ntask_id: bg_1\n\n${state([['IN_PROGRESS', 'impl', 'impl101'], ['PENDING', 'tests', 'test101']])}`, '2026-10-15T03:48:47.130Z'),
+        c(8, 'delegate', 'ok', `Task 'tests': queued\ntask_id: bg_2\n\n${state([['IN_PROGRESS', 'impl', 'impl101'], ['PENDING', 'tests', 'test101']])}`, '2026-10-15T03:48:47.160Z'),
+        c(9, 'todo', 'ok', state([['COMPLETED', 'impl', 'impl101'], ['IN_PROGRESS', 'tests', 'test101']]), '2026-10-15T03:49:00.000Z'),
+        { ...c(20, 'todo', 'ok', `Replaced the todo list: 1 phase, 2 tasks.\n${state([['IN_PROGRESS', 'impl', 'impl101'], ['IN_PROGRESS', 'tests', 'test101']])}`, '2026-10-15T03:49:50.000Z'), args: closeImpl },
+      ] }]);
+      expect(r.heldPending).toEqual([{ scenario: 'delegation-swarm', ordinal: 8, child: 'tests', item: 'test101' }]);
+      expect(r.closedWhileHeld).toEqual([{ scenario: 'delegation-swarm', ordinal: 9, child: 'impl', item: 'impl101' }]);
+      expect(r.restoredOverClose).toEqual([{ scenario: 'delegation-swarm', ordinal: 20, item: 'impl101' }]);
+      expect(r.unread).toEqual([]);
+      expect(r.heldReads).toBe(5);
+    });
+
+    it('a held or closed item its coordinator\'s Todo state does not show is reported unread, so no check passes on nothing', () => {
+      const closeImpl = { operation: 'replace', phases: [{ name: 'main', tasks: [{ id: 'impl101', name: 'impl', state: 'COMPLETED' }] }] };
+      const r = heldItemReading([{ scenario: 'delegation-swarm', rootNames: ['orchestrator'], children: swarm, calls: [
+        c(8, 'delegate', 'ok', `Task 'tests': queued\n\n${state([['IN_PROGRESS', 'impl', 'impl101']])}`, '2026-10-15T03:48:47.160Z'),
+        { ...c(20, 'todo', 'ok', `Replaced the todo list: 1 phase, 1 task.\n${state([['COMPLETED', 'tests', 'test101']])}`, '2026-10-15T03:49:50.000Z'), args: closeImpl },
+      ] }]);
+      expect(r.unread).toEqual([
+        { scenario: 'delegation-swarm', ordinal: 8, item: 'test101' },
+        { scenario: 'delegation-swarm', ordinal: 20, item: 'impl101' },
+      ]);
+      expect(r.heldReads).toBe(1);
+    });
+  });
 });

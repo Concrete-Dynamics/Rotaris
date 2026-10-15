@@ -13589,6 +13589,13 @@ session recorded for it) governed from fin42 until this ruling and no longer doe
 as `post_run` and stays in history. **The cost kept on record:** a run's analyst may propose again what a retrospective already
 proposed, and REQ-LIBRARY-046's suppression at store time catches it.
 
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, confirm-as-built): "Confirm the build as it stands. A retrospective's artifact stays in a later run's prior-artifact history
+under REQ-LIBRARY-034's letter and bound … Write the departure down as PD-LIBRARY-002 revision 3." **Advocate B** (the system's
+lens, change-behaviour): "Exclude a retrospective's artifact from the per-run analyst's history. The capture filters on
+`source_kind === 'post_run'` before the five-artifact bound." Advocate B's followed; A's confirmation not taken, since closing the
+gap it admits would widen REQ-LIBRARY-017, which `PD-LIBRARY-002` and ADR-0065 keep whole.
+
 <a id="oq-262"></a>
 
 **OQ-262 — Which notice offers REQ-NOTIFY-044's project-initialization action, and what does the action open for a
@@ -13642,6 +13649,15 @@ project. **Not repaired by this ruling, and not owed:** the ruling's brief asked
 nothing outside its own window"; on this branch it does — `MainWindows.reach` surfaces or adds the holding window since
 2026-10-13 (fin41, N86; [`a-hook-review-notice-for-another-workspace-opens-nothing.md`](../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md),
 `notice-proof` sections 6 and 6b), so no note was written.
+
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "the two project-setup banners each carry `open-project-init` naming their workspace … Activating either
+opens Settings › Project in the window that holds the named workspace … If no window holds the workspace any more, the activating
+window says so in a short notice and nothing else happens." **Advocate B** (the system's lens, change-behaviour): "The
+failed-background-run banner 'Project setup did not finish: <name>' … carries REQ-WORKSPACE-103's own 'Try again' action …
+surfaces the one main window holding that workspace and opens Settings › Project there … The failed-resolution banner stays
+without an action." Both followed: B's single path through main to the holding window, and A's action on the resolution banner,
+A's notice for the no-holder case (since revised by [OQ-294](#oq-294)) and A's vehicle, `PD-WORKSPACE-005` revision 2.
 
 *Added 2026-10-14 ([OQ-267](#oq-267), ruled 2026-10-13 under R-072):* OQ-267's ruling, as written, answers this question's
 second half — what the action opens for a workspace another window holds, or no window holds — by
@@ -13781,6 +13797,15 @@ the notice and the log. The copy is kept, and listed, only where the reversal fa
 ([OQ-266](#oq-266)) runs no deletion at all. The obstruction aside stays deferred with OQ-48 under R-071. No directive: the
 specification is silent on what lies beside the store, and the ruling builds REQ-SESSION-201 without departing from it.
 
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "On every failure path that leaves the store as it was, the restore deletes its own staging copy
+(`<identifier>.restoring-<n>`) before it returns … If the delete itself fails, the path goes into the error notice the user
+already sees and into the log." **Advocate B** (the system's lens, change-behaviour): "the restore deletes its own staging copy …
+on every failure return where it reports the store as it was … It keeps the staging copy only on the last-resort path, where the
+reversal itself failed." Both followed: from A the expansion moved inside step 6's guard and a failed delete told to the user;
+from B the reading of a `.restoring-<n>` left on disk as a restore that never returned ([OQ-266](#oq-266)) and the
+first-executions row.
+
 ***Built 2026-10-14 (fin43, `fin43-restore-recovery`).*** `discardStaging` in `packages/store/src/restore.ts` deletes the copy
 (`rmSync`, recursive, three retries) and returns the path when the delete throws; each failure listed above goes through it,
 and the sentence it adds reads "A working copy of the backup could not be removed and is at <path>; it holds nothing the backup
@@ -13791,8 +13816,9 @@ workspace service's restore line in the log names `leftovers=` when there are an
 `.restoring-` on disk or listed; the `.obstruction-` aside still listed) and the six cases of its OQ-265 block (a store that
 fails `quick_check`, an unreadable artifact, step 8 with every aside name taken, step 9 with no previous store, a failed
 reversal that keeps and lists the copy, and a delete that fails); all six and E2 are red on the code before the change. E3a
-and the kill-in-the-gap case are unchanged. The two advocates' recommendations are in the orchestrator's ruling record, not
-copied here.
+and the kill-in-the-gap case are unchanged. The two advocates' recommendations are quoted under "The recommendations it weighed"
+above (fin47, 2026-10-15); *until then this sentence read: "The two advocates' recommendations are in the orchestrator's ruling
+record, not copied here."*
 
 ***Extended 2026-10-14 (fin44, `fin44-optional-findings`).*** Step 9a's write of `origin.txt` was the one failure before step 8
 left outside the guard: a throw there rejected the restore after the run host had closed its store, with the copy left
@@ -13845,7 +13871,15 @@ the cut exactly with a durable journal, `<identifier>.restore-pending`, written 
 in-process reversal has succeeded. The open then puts back the store this restore displaced, applies nothing from the backup,
 and tells the user once. A `.displaced-*` beside a present store is never touched. This is REQ-SESSION-201's failure clause
 carried out, so the defect is closed against that requirement and no directive is needed. The two advocates'
-recommendations are in the orchestrator's ruling record, not copied here.
+recommendations are quoted in the paragraph below (fin47, 2026-10-15); *until then this sentence read: "The two advocates'
+recommendations are in the orchestrator's ruling record, not copied here."*
+
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "Reverse the cut restore at the workspace service's next open, before anything is created, and tell the
+user." **Advocate B** (the system's lens, change-behaviour): "Reverse, at the workspace service's open, before anything is created
+… The restore marks the cut exactly with a small fsynced journal file that it writes before step 8 and removes after step 9 or
+after its reversal." Both followed on the outcome; B's on how the open recognises the cut (the journal), in place of A's inference
+from `origin.txt`'s modification time, which can pick the wrong folder.
 
 ***Built 2026-10-14 (fin43, `fin43-restore-recovery`).*** `restoreStore` writes the journal (`{stamp, stagingN,
 targetExisted}`, replaced where a stale one is there, then the file and its directory flushed) after step 9a and before step 8
@@ -13928,6 +13962,12 @@ REQ-SHELL-017 and REQ-STARTUP-161 stand), disjoint from PD-SHELL-009's narrowing
 "Project <name> is not open in any window." and add nothing, where this rule would add a window; the build follows OQ-262's
 ruling for that member, and the disagreement is [OQ-294](#oq-294).
 
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, confirm-as-built): "Confirm the add route as built … surface the window that holds the workspace, and add one where none
+does." **Advocate B** (the system's lens, confirm-as-built): "Confirm the add reading as built … Record it as revision 2 of
+PD-SHELL-001, so that the directive's closed list of add gestures stops contradicting the build." Both followed; B's on the record
+work, `PD-SHELL-001` revision 2.
+
 *Added 2026-10-14 ([OQ-294](#oq-294), ruled 2026-10-14 under R-072):* this rule now governs the project-setup member as built —
 a press for a project no window holds adds a window for it and opens Settings › Project there
 ([`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005) revision 3, fin44) — and, by
@@ -13971,6 +14011,13 @@ proofs taking the caret below it with `Ctrl+End`) governed from fin42 until this
 (`fin43-analysis-and-artifacts`): `ArtifactStore.editBody` writes through the same `withRecordFrontmatter` as `rerender`;
 `ArtifactInspector` holds the block apart (`artifact-frontmatter`) and sends it back unchanged in front of the edited text;
 `artifacts-proof` launch 8 no longer takes the caret anywhere before typing. The live run's `delegation-edit` chord may stay.
+
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "the inspector's Markdown tab shows the document's leading frontmatter block read-only above the editor,
+and the editor holds and edits the text below it. Save writes the block as loaded, followed by the edited text." **Advocate B**
+(the system's lens, change-behaviour): "The Markdown tab shows the frontmatter read-only above an editor that holds the rest of
+the document. The store's save writes the record's frontmatter in front of whatever text it is given." Both followed on the
+surface; B's on enforcing it in the store; the ruling added a height bound on the block's region of its own.
 
 <a id="oq-280"></a>
 
@@ -14020,6 +14067,13 @@ near-miss quote of such a window carries `\r`s, and the product departs from a s
 ("What the build proceeds under", above: level 3 compares lines exactly, `\r` included) is kept as the falsified reading.* A
 neighbouring gap the ruling does not decide — a block holding a blank line never matches at level 3, on LF and CRLF alike — is
 recorded separately.
+
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "one trailing `\r` is dropped from each window line and each `old_string` line before the indentation is
+measured and the lines are compared … Record this as directive PD-TOOLS-019, which narrows REQ-TOOLS-136 level 3." **Advocate B**
+(the system's lens, change-behaviour): "Match level 3 compares each line without its line ending … Record it as a new directive,
+PD-TOOLS-019, which extends REQ-TOOLS-136 … Add a revision 3 to PD-TOOLS-014." Both followed: A's disposition, Narrows; B's
+`PD-TOOLS-014` revision 3, the `\r` alone set aside, and a separate note for blank interior lines.
 
 <a id="oq-273"></a>
 
@@ -14127,6 +14181,14 @@ nothing until the file loads again, re-reading it at each claim, preview and run
 repaired: a merged-document fault in the global file is reported in the workspace file
 ([`a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md`](../defects/fixed/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md);
 repaired 2026-10-14 by fin45, `fin45-config-and-terminal`: the report names the file and scope that stated the key).
+
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "Keep the workspace opening while the global configuration is unloaded … raise REQ-CONFIG-478's
+actionable failure as a persistent error notice at the moment the workspace opens … Mint PD-CONFIG-004 to govern REQ-CONFIG-478's
+sentence 'no workspace opens until it is corrected'." **Advocate B** (the system's lens, change-behaviour): "'no workspace opens'
+means no workspace's configuration loads … That half stays as built. The timing half is a build defect against a faithful
+requirement." Both followed on the behaviour; B's on the classification (no directive), A's on the notice's placement beside the
+hook-review and no-provider notices.
 
 <a id="oq-278"></a>
 
@@ -14256,6 +14318,13 @@ fin44:** `session.start` in such a window says nothing was started because the s
 `packages/store/src/resolve.ts`), so the open no longer leaves the place it made without a store — the residue this entry's
 "What the build proceeds under" named is closed. W-31 (1) and (2) carry that report-back.
 
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "Build the resolution inside the product … the existing restore, made to work there, and a new deliberate
+'Start a new session store…' action. Cancel is the default on both." **Advocate B** (the system's lens, change-behaviour): "Keep
+the refusal, and build no one-click 'start a new store' action. Admit the existing Settings restore into a workspace whose open is
+held as `workspace.store-missing`." Both followed on the refusal kept, the restore admitted and the first store created beside and
+renamed into place; A's on the deliberate establishing action, which B read REQ-SESSION-202 as warning against.
+
 <a id="oq-292"></a>
 
 **OQ-292 — What does a `focus-session` notice action do when pressed in a window that does not hold its session?**
@@ -14289,6 +14358,13 @@ silence of 2026-10-14 ("What the build proceeds under" above, the press not disp
 falsified reading. Recorded as PD-SHELL-001 revision 3, which extends REQ-NOTIFY-044 (with its Data & Formats
 parameterisation, "parameterised by session identifier and its workspace"), REQ-NOTIFY-031 and REQ-NOTIFY-032, each with its
 back-pointer.
+
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "The `focus-session` notice action carries the workspace of the session it names, and pressing it takes
+PD-SHELL-001 revision 2's reach … Record this as PD-SHELL-001 revision 3." **Advocate B** (the system's lens, change-behaviour):
+"`focus-session` gains the workspace of the session it names, stamped by whatever raises the notice … Record this as PD-SHELL-001
+revision 3." Both followed; B's source for the workspace (the run host's record of the session's root) and B's hold for an added
+window not yet ready, A's user-facing account and proof section 6c.
 
 <a id="oq-293"></a>
 
@@ -14331,6 +14407,12 @@ and by main's mapping of the run's `notice.publish` (`runNoticeReport`, `run-not
 recorded the session under (`workspaceRoot`, already on the event since PD-SHELL-001 revision 3, so no second field was added);
 `notice-proof` sections 6 and 6b read the named title, the sentence in the message row and "Project folder:" heading the detail.
 
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "The title reads 'Workspace hooks need review: <project name>' … Record this as a new directive
+(PD-NOTIFY-001, or the next free number) that extends REQ-NOTIFY-224." **Advocate B** (the system's lens, change-behaviour): "the
+unreviewed-hooks notice names its project the way PD-WORKSPACE-005 names it … no new directive is needed because no requirement's
+text changes." Both followed on the behaviour; B's on the record, with no directive.
+
 <a id="oq-294"></a>
 
 **OQ-294 — A project-setup banner pressed for a project no window holds: a notice (OQ-262) or an added window (OQ-267)?**
@@ -14367,6 +14449,12 @@ one-line pointer here. **Built 2026-10-14 (fin44, `fin44-notice-reach`):** `proj
 `projectInit.ready`; `notice-proof` section 6c presses it for a project no window holds and reads a third window on Settings ›
 Project with "Retry initialization".
 
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "A project-setup banner pressed for a project no window holds adds a main window for that project on
+PD-SHELL-001 revision 2's add terms and opens Settings › Project in it. PD-WORKSPACE-005 gains a revision 3." **Advocate B** (the
+system's lens, change-behaviour): "a main window is added for it on PD-SHELL-001 revision 2's reach and Settings › Project opens
+there … The vocabulary then has one navigation rule for every member that names a workspace." Both followed.
+
 <a id="oq-282"></a>
 
 **OQ-282 — When the entry role is sent PD-ORCH-009's answer re-prompt, is the empty turn that earned it also a stuck report to
@@ -14396,6 +14484,14 @@ REQ-ORCH-104" for that one turn, disjoint from `PD-ORCH-016`'s raw-count case; R
 REQ-NOTIFY-102 and REQ-NOTIFY-103 are cited without change. The live harness keeps its `sent` check and adds a check for no stuck
 classification and one for no stuck activation. *The build's reading (both messages in one request) is kept above as the
 falsified one.*
+
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "Loop supervision stays silent on the turn PD-ORCH-009's re-prompt answers … The re-prompt is the single
+message the root receives, and it is the request's final message. Record this as PD-ORCH-009 revision 3." **Advocate B** (the
+system's lens, change-behaviour): "Loop supervision stays silent on the entry role's empty turn in an execution iteration … The
+harness reads it correctly and keeps its `sent` check; it gains three checks of its own." Both followed on the outcome; A's
+mechanism (the stuck trigger withdrawn where the re-prompt is decided) in place of B's wider switch over every empty root turn,
+and B's invisibility and escalation arguments with the delegated child's case raised apart ([OQ-283](#oq-283)).
 
 **As built (fin43, `fin43-live-findings`, 2026-10-14).** `LoopSupervisor.withdrawStuck()` clears a pending trigger only when it
 is `stuck` and leaves the counter alone; `Run.turn`'s `correction()` calls it on the root's supervisor immediately before it
@@ -14438,6 +14534,12 @@ falsified one.* Written 2026-10-14 by fin44 (`fin44-supervision-and-match`).
 *Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
 consortium's ruling record, whose sitting ruled it 2026-10-14 by 04:58 UTC.*
 
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "When REQ-ORCH-095 re-prompts a delegated child after an empty turn, that empty turn is no stuck report.
+The re-prompt is the only message the run adds for it." **Advocate B** (the system's lens, change-behaviour): "Rule the re-prompt
+alone … This is the same ruling E1 (OQ-282) made for the root, and it is recorded as PD-ORCH-009 revision 4." Both followed; B's
+reading of REQ-ORCH-095 as the specific rule for a child that does nothing decided it.
+
 <a id="oq-284"></a>
 
 **OQ-284 — What becomes of a stuck trigger a root's empty turn armed when the run does not follow that turn up?**
@@ -14478,6 +14580,12 @@ reading — the correction followed by the stuck corrective in one request — i
 2026-10-14 by fin44 (`fin44-supervision-and-match`).
 *Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
 consortium's ruling record, whose sitting ruled it 2026-10-14 by 04:58 UTC.*
+
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "When the run sends the root its plan correction … the correction is the only message the run adds … The
+correction also counts as REQ-ORCH-105's todo-correction instruction, so the consecutive-activation counter resets." **Advocate
+B** (the system's lens, change-behaviour): "the plan correction replace the stuck corrective … This would be recorded as
+PD-ORCH-009 revision 4 … the correction should also reset the consecutive-activation counter." Both followed.
 
 <a id="oq-285"></a>
 
@@ -14530,6 +14638,14 @@ REQ-NOTIFY-254, `PD-CONFIG-003` revision 2 and OQ-223 are cited without change. 
 *Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
 consortium's ruling record, whose sitting ruled it 2026-10-14 by 04:58 UTC.*
 
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "When a pass ends on an empty artifact because its collector failed … it posts that pass's existing
+failure warning … A timed-out retrospective posts the same warning with the reason 'it reached its <t>-second limit'." **Advocate
+B** (the system's lens, change-behaviour): "When a pass's empty artifact records a collector failure … it posts that pass's
+failure warning … A timeout keeps OQ-223's info notice and its limit detail … Record this as a new directive, PD-LIBRARY-005."
+Both followed on the failure warning; B's on the timeout, which keeps its info notice with the limit in its detail, and on the
+vehicle, `PD-LIBRARY-005`.
+
 <a id="oq-295"></a>
 
 **OQ-295 — Does match level 3 shift a blank line?** *(REQ-TOOLS-136 level 3, "exact after one and the same leading-whitespace
@@ -14572,6 +14688,12 @@ the build proceeds under" above, a blank line taking part in the shift like any 
 2026-10-14 by fin44 (`fin44-supervision-and-match`).
 *Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
 consortium's ruling record, whose sitting ruled it 2026-10-14 by 04:58 UTC.*
+
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "a line of `old_string` with no visible character … matches a window line with no visible character at
+the same position, whatever the shift … Record this as a new directive, PD-TOOLS-020." **Advocate B** (the system's lens,
+change-behaviour): "a line of `old_string` with no visible character matches a window line with no visible character at any shift
+… An `old_string` with no visible character never matches at level 3." Both followed.
 
 <a id="oq-296"></a>
 
@@ -14618,6 +14740,13 @@ in one request, one stuck activation per silent wait, and a root that waited sil
 moved to `fixed/`.
 *Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
 consortium's ruling record, whose sitting ruled it 2026-10-14 by 10:14 UTC.*
+
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "A parent's empty turn that ends while a child of its is still pending or reported-but-unobserved is the
+wait REQ-ORCH-055 allows, so it is no stuck report … Record this as PD-ORCH-009 revision 5, case (d)." **Advocate B** (the
+system's lens, change-behaviour): "that turn is no stuck report. The child's report is the only message the run adds for it. This
+holds for the root and for a delegated child that is waiting on children of its own." Both followed; B's escalation point, the
+activation count a silent wait would climb, decided it, and A confirmed it independently.
 
 <a id="oq-297"></a>
 
@@ -14775,6 +14904,12 @@ coincidence. **What a live run then shows.** Nothing.
 *Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
 consortium's ruling record, whose sitting ruled it 2026-10-14 by 10:14 UTC.*
 
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, confirm-as-built): "Confirm the build's reading … the rename's row reads REQ-MCP-003's timeout. PD-MCP-004 clause 4 gains
+one sentence stating that order." **Advocate B** (the system's lens, confirm-as-built): "Confirm the build's reading … the
+allowance governs … The one place in the warm-up path that tests the cancel first … should be brought into the same order." Both
+followed.
+
 <a id="oq-300"></a>
 
 **OQ-300 — What does a retrospective's refusal say when its entry provider has no credential?** *(REQ-WORKSPACE-137, "Provider
@@ -14817,6 +14952,14 @@ which this ruling does not repair (*repaired 2026-10-14 by fin46, `fin46-accept1
 sign-in provider of its own model, `retrospective_model` then `medium_model`, and a continuation still the entry role's*).
 *Dated 2026-10-13 until 2026-10-14, a day before the question was raised; corrected by fin46 (`fin46-accept1-12`) from the
 consortium's ruling record, whose sitting ruled it 2026-10-14 by 10:14 UTC.*
+
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "the refusal should keep REQ-WORKSPACE-137's headline 'Provider authentication required', say
+'Authenticate at least one configured provider before running a retrospective.', and carry the same 'Open Models settings' action
+… Record this as a one-sentence revision to PD-LIBRARY-002." **Advocate B** (the system's lens, change-behaviour): "A
+retrospective's lease refusal keeps REQ-WORKSPACE-137's headline … At capture it also carries the Models settings action … Record
+this as PD-LIBRARY-002 revision 5." Both followed: A's notice shape (the headline as title, error severity); from B the analysis
+path's lease, the back-pointers on both requirements and the provider mismatch recorded apart.
 
 <a id="oq-301"></a>
 
@@ -14925,8 +15068,9 @@ starts. A Cancel, or a Save that fails, starts nothing and leaves the notice as 
 installer's 1,200 ms auto-close are programmatic and ask nothing (REQ-CONFIG-287). No requirement's text is departed from —
 REQ-SHELL-119 guard (1) and REQ-CONFIG-287 govern as written once these clicks are read as user-initiated — so the ruling alone
 settles it. *The as-built reading kept above, neither close asking guard (1) and unsaved Settings edits lost at the update's
-restart, is the falsified one.* **The two recommendations weighed:** the advocates' recommendations themselves were not handed
-to the building bundle, and the orchestrator's ruling record holds them; advocate B's report that no code implements
+restart, is the falsified one.* **The two recommendations weighed:** quoted in the paragraph after this one (fin47, 2026-10-15;
+*until then this clause read: "the advocates' recommendations themselves were not handed to the building bundle, and the
+orchestrator's ruling record holds them"*); advocate B's report that no code implements
 REQ-SHELL-119 guard (2), "Integration in progress", anywhere in `apps/` or `packages/` was, and the builder confirmed it
 ([`the-integration-in-progress-close-guard-has-no-code.md`](../defects/fixed/the-integration-in-progress-close-guard-has-no-code.md),
 outside this ruling's repair: worktree integration is deferred from the first release, so the guard is vacuous until it is built).
@@ -14942,6 +15086,12 @@ asked, the first `false` stopping it, a renderer that cannot answer allowing und
 reaches `update.restart`'s guards there: the built-app run is owed to the Windows package (a Windows x64 host, deferred with the release pipeline under R-071; IC-3 binds Linux and macOS artifacts), as `AGENTS.md`'s
 `updater-proof` line records
 ([`../defects/fixed/an-update-restart-discards-a-windows-unsaved-settings-unasked.md`](../defects/fixed/an-update-restart-discards-a-windows-unsaved-settings-unasked.md)).
+
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "`Restart now`, and `Update now`/`Try again` on the installer flavour, are user-initiated closes. Each
+one asks REQ-SHELL-124's existing Save/Discard/Cancel in every main window that has unsaved Settings edits." **Advocate B** (the
+system's lens, change-behaviour): "Each asks REQ-SHELL-124's Save/Discard/Cancel of every open main window whose settings are
+unsaved … This needs no directive." Both followed.
 
 <a id="oq-312"></a>
 
@@ -14982,8 +15132,9 @@ knows no endpoint for (REQ-EVENTS-021/019, "No usable model is configured for th
 a loopback OpenAI-compatible stub that `scripts/package.mjs` starts itself, which the packaged launch reaches through the product's
 own model client. REQ-CONFIG-082, REQ-EVENTS-021/019, REQ-CONFIG-478 and ADR-0029/0030 govern as written, so the ruling alone
 settles it. *The as-built reading kept above — an entry naming the `scripted` provider answered by the scripted client in every
-build, in a packaged one with the fixed script alone — is the falsified one.* **The two recommendations weighed:** the advocates'
-recommendations were not handed to the building bundle, and the orchestrator's ruling record holds them. **Built 2026-10-14 by
+build, in a packaged one with the fixed script alone — is the falsified one.* **The two recommendations weighed:** quoted in the
+paragraph after this one (fin47, 2026-10-15; *until then this read: "the advocates' recommendations were not handed to the building
+bundle, and the orchestrator's ruling record holds them."*) **Built 2026-10-14 by
 fin46 (`fin46-accept1-11`):** `isScriptedProvider` (`__ROTARIS_SEAMS__ && provider === 'scripted'`) in place of every bare test in
 `apps/desktop/src/run-host/configuration.ts` (`modelRefOf`, both empty-key branches of `credentialFactory`, `prepareRun`'s
 `isScripted`); `host.ts` building the scripted client only behind the flag (off it, a function that throws, unreachable), so rollup
@@ -14997,6 +15148,13 @@ pipeline under R-071; IC-3 binds Linux and macOS artifacts)
 ([`../defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md`](../defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md)).
 Recorded beside it, outside the ruling's repair:
 [`../defects/fixed/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md`](../defects/fixed/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md) (repaired 2026-10-15, fin47).
+
+**The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
+lens, change-behaviour): "a shipped build never answers a model with the scripted client … ADR-0056 rule 4 (b) proves its terminal
+call against a loopback OpenAI-compatible stub that `scripts/package.mjs` stands up itself." **Advocate B** (the system's lens,
+change-behaviour): "Rule 'never': a packaged build answers no `provider: scripted` entry. The scripted client is compiled out of
+the packaged bundle with its seams." Both followed: A's lens on what a person who writes `scripted` meets, B's on why a middle
+reading cannot be built.
 
 <a id="oq-361"></a>
 

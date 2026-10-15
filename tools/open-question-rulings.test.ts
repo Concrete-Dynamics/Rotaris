@@ -82,13 +82,11 @@ function ruledUnderR072(text: string): Entry[] {
 }
 
 /**
- * Entries ruled under R-072 that name neither advocate, recorded in
- * `docs/defects/r-072-rulings-that-do-not-name-what-the-advocates-recommended.md` and left for the orchestrator, which
- * holds the consortium's ruling record. A listed entry that comes to name them fails the test until it leaves this list.
+ * Entries ruled under R-072 that name neither advocate. Twenty-two were listed here until fin47 wrote both advocates'
+ * recommendations into each from the consortium's ruling record
+ * (`docs/defects/fixed/r-072-rulings-that-do-not-name-what-the-advocates-recommended.md`); none is left, and a new one fails.
  */
-const UNNAMED_RECOMMENDATIONS = [
-  262, 265, 266, 267, 271, 272, 279, 280, 281, 282, 283, 284, 285, 292, 293, 294, 295, 296, 299, 300, 311, 312,
-];
+const UNNAMED_RECOMMENDATIONS: number[] = [];
 
 const RECORD = readFileSync(join(import.meta.dirname, '..', 'docs', 'architecture', 'open-questions.md'), 'utf8');
 const REQUESTS = readFileSync(join(import.meta.dirname, '..', 'docs', 'product', 'requests.md'), 'utf8');

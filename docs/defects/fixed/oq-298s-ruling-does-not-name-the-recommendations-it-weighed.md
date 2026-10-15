@@ -34,5 +34,5 @@ known gaps": every entry ruled under R-072 names advocate A and advocate B (or t
 the two as agreeing ("both advocates followed"); "both of its recommendations", which OQ-298 used of its own two record changes,
 does not count. It was red on OQ-298 alone before the paragraph (the twenty-one other entries that named no advocate then, OQ-312 a twenty-second since, are listed
 as known gaps, recorded open in
-[`../r-072-rulings-that-do-not-name-what-the-advocates-recommended.md`](../r-072-rulings-that-do-not-name-what-the-advocates-recommended.md))
+[`r-072-rulings-that-do-not-name-what-the-advocates-recommended.md`](r-072-rulings-that-do-not-name-what-the-advocates-recommended.md))
 and is green after.

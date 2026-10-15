@@ -15371,7 +15371,8 @@ cross-build the `windows-x64` artifact and run it under the operating system's x
 - **(c)** whether `win32-arm64` needs its own uv and runtime pins (`pins.json`, IC-7), given that `pnpm code-intel:bundle` refuses on
   arm64 without a uv on `PATH`, and that a bundle made there carries an arm64 runtime no published artifact would.
 
-**What the build proceeds under.** An arm64 reading measures `windows-arm64` and nothing else. It is recorded beside the obligation
+**What the build proceeds under** *(superseded 2026-10-15 for (a) and (c) by the ruling below; kept as the reading the build
+proceeded under until then, and its (b) stands)*. An arm64 reading measures `windows-arm64` and nothing else. It is recorded beside the obligation
 it bears on, labelled with its host line, and it **discharges no x64 obligation**: every passage that owes "a Windows x64 host"
 keeps owing it, and every timing taken here stands beside the x64 or Linux figure, never over it. Where the record owes "a Windows
 host" without naming an architecture, the arm64 reading is recorded as the first Windows run since the change that made it owed,
@@ -15389,3 +15390,33 @@ host exists. Pinning arm64 adds one asset to every pin change; not pinning it ke
 
 **What a live run then shows.** Nothing of the question itself: a live run on this host is a windows-arm64 reading under whatever
 the ruling decides.
+
+**Ruled 2026-10-15 under the owner's delegation ([R-072](../product/requests.md#r-072)), kind change-behaviour, with no
+directive:** (a) an obligation the record words as owed to "a Windows host" has no architecture. A native windows-arm64 reading of
+the development tree discharges it, recorded with its host line, and no "x64 half" is added to it. (b) An obligation that executes
+a shipped binary or the `windows-x64` artifact stays owed to a Windows x64 host: ADR-0056 rule 4's load, the packaged proofs and
+REQ-STARTUP-156's launch. An emulated run of that artifact informs and never discharges, consistent with REQ-STARTUP-026. Checks
+that only read the `windows-x64` artifact's bytes (naming, assets, notices, digests, the interpreter's machine field) count from
+any Windows build host, provided the artifact passed the architecture guard. (c) No `win32-arm64` pin is added. The bundle step
+builds its interpreter for the target artifact's architecture; on `win32-arm64` it uses the pinned, hash-checked `win32-x64` uv,
+which the operating system runs under its x64 emulation; and packaging refuses an interpreter whose PE machine field differs from
+the artifact's architecture. REQ-STARTUP-026, REQ-STARTUP-030, REQ-STARTUP-156 and
+[PD-STARTUP-001](../product/directives.md#pd-startup-001) are read as written: the ruling is build tooling and the record's
+reading of its own first executions, so the ruling alone settles it. *The reading kept above, an arm64 reading discharging nothing
+and every "a Windows host" obligation keeping an x64 half owed, is the falsified one for (a); for (c), `pins.json` left as it was
+with no guard beside it.*
+
+**The recommendations it weighed** (both kinds change-behaviour). **Advocate A** (the user's lens) recommended ruling "by what a
+check exercises": "(a) Obligations owed to 'a Windows host' (the suite, the dev-tree proofs, PowerShell and ConPTY behaviour, path
+rules) are architecture-free, so a native arm64 run discharges them … (c) … the bundle is built for the target artifact's
+architecture, packaging refuses an interpreter of any other architecture, and arm64 joins the uv pins as a build host." **Advocate
+B** (the system's lens) recommended taking the record's wording literally: "An obligation owed to 'a Windows host' has no
+architecture … For (b), keep the reading as built: a run of the x64 artifact under emulation informs and never discharges. For
+(c), add no arm64 pin … the bundled interpreter must report the artifact's target platform (`win-amd64`), and the package refuses
+any other." Both followed on (a). On (b), B's on execution and A's on the checks that only read bytes, which hold on any Windows
+build host once the guard proves the artifact carries an x64 interpreter. On (c) the ruling took a third way: A's arm64 uv pin
+would add an IC-7 hash to every pin change for a platform REQ-STARTUP-026 never publishes, and B's uv on `PATH` equal to the pin
+keeps a manual step that checks the version with no hash; Windows 11 ARM64 runs x64 executables, so the already-pinned `win32-x64`
+uv gives hashed provenance with no new pin, and build tooling run under emulation is never acceptance evidence. For the guard it
+took A's PE machine-field read over B's `sysconfig` platform tag: a byte read that executes nothing and depends on no unverified
+string. No earlier ruling is revised; R-071 (3) still defers the x64-host work.

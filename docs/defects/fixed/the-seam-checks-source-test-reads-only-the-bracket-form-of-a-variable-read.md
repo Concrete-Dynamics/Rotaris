@@ -20,8 +20,8 @@ bundle-level check (`seam-check.mjs`'s `seamCheck`, run by `scripts/package.mjs`
 itself and would refuse such a build, but only when a package is built: the source test exists to fail it first, and does not.
 Found by fin45's review (Task 1A, optional) and taken as acceptance finding C12 of fin46's first round.
 
-`apps/desktop/src/main/capture/seam-reads.test.ts` reads main with the same bracket-only expression; its rule over main is a
-subset of `seam-check.test.ts`'s over the three roots.
+`apps/desktop/src/main/capture/seam-reads.test.ts` reads main with the same bracket-only expression; every seam read its
+rules forbid in main, `seam-check.test.ts`'s rules over the three roots forbid too.
 
 ## Specs
 
@@ -55,5 +55,9 @@ variables it allows. A mutation check — `process.env.ROTARIS_FAKE_SEAM` append
 the off-the-flag rule naming `ROTARIS_FAKE_SEAM (intent.ts:76)`. The widened reader found no seam in the source today read in
 another form: all fifteen cases pass, and a `ROTARIS_BUILD=package` build's `out/main` passes `seam-check.mjs` (load 3.1).
 
-`main/capture/seam-reads.test.ts` keeps its bracket-only reader: its rule over main is a subset of this test's over the three
-roots, which now reads every form.
+`main/capture/seam-reads.test.ts` keeps its bracket-only reader: every seam read its rules forbid in main, this test's rules
+over the three roots forbid too, and they now read every form. Its rules are not a subset in every respect: they also forbid,
+in main, an off-the-flag read of a product variable other than ADR-0059's host switch, which this test allows as one of the
+product's seven. Such a read is no verification seam, so the guarantee the note is about (no seam off the flag, in any form)
+rests on this test alone, which is why its reader was the one widened. *(Corrected 2026-10-15 by the bundle's review: this
+read "its rule over main is a subset of this test's", which the product-variable difference makes untrue.)*

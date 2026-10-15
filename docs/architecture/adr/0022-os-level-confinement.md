@@ -277,3 +277,6 @@ gate sits in `prepareRun`, which the retrospective (ADR-0065) also used to prepa
 that opens no shell wherever the verdict was unsettled or unavailable. `prepareRun` now leaves the gate out of a retrospective's
 setup; a run start and a continuation are unchanged
 ([`../../defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`](../../defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md)).
+A continuation still reads the cached verdict without settling it first — `ConfigureDeps.confinement`'s "a continuation reads what
+that launch settled" assumes a launch came first in the run host's life; recorded, not repaired, in
+[`../../defects/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md`](../../defects/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md).

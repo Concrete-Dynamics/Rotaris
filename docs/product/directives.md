@@ -2787,6 +2787,11 @@ are not recorded, and cannot be recovered afterwards.
 
 ### PD-TOOLS-006 — a delegated child may declare a write scope that its siblings may not write into
 
+*Revision 11 (2026-10-15, [R-072](requests.md#r-072)) — **the message that resumes a wait names a reported child's item still
+open**, a section added after revision 10's; the ruling of [OQ-333](../architecture/open-questions.md#oq-333) under the owner's
+delegation, with `PD-TOOLS-008` revision 4. REQ-ORCH-063 joins the Narrows line. Nothing is replaced. The ruling named it revision
+10; [OQ-334](../architecture/open-questions.md#oq-334)'s revision 10 landed on `main` first, so it takes the next, 11.*
+
 *Revision 10 (2026-10-15, [R-072](requests.md#r-072)): the ruling of [OQ-334](../architecture/open-questions.md#oq-334), from
 finding F10 of fin46's final acceptance (the default live run's `delegation` scenario at `3c03287`). A section added after revision
 9's, "What a child is told of its report", each clause marked "— revision 10"; the dispositions stay as they were (REQ-TOOLS-152
@@ -2992,6 +2997,17 @@ A brief is neither refused nor rewritten, the routing table names no publisher, 
 ARTIFACT text stays as built. Revision 3's refusals, revision 4's three facets, revision 8's routing sentence and revision 9's
 sentences are unchanged.
 
+**What the message that resumes a wait says of a reported child's item still open (revision 11, [OQ-333](../architecture/open-questions.md#oq-333)).**
+Revision 7's mark leaves a delegated item IN_PROGRESS after its child ends, and `PD-TOOLS-008` revision 4 no longer counts it
+against the caller's next mark, so nothing but this line tells the caller to close it. When the message that resumes a wait
+(REQ-ORCH-063: a `wait_for_tasks` result, the wait of a `delegate` with `run_in_background: false`, and the orchestration pass's
+resume of a parent whose children it waited for) reports a child whose `todo_item` is still IN_PROGRESS in the caller's own plan,
+with no non-terminal child of the caller holding it, the message SHALL add, immediately after that child's result,
+`Todo item <name> (<id>) is still IN_PROGRESS: close it with update once you accept this report.` *(— revision 11, OQ-333)*. An
+item the caller has closed, one another running child holds, and a child that serves no item add nothing; an item two reported
+children serve is named once, after the first of them. The run never closes the item, and REQ-ORCH-059's completion notification
+is unchanged.
+
 **What is unchanged.** A child delegated without a `write_scope` claims nothing and is refused only where a
 live sibling's claim reaches. A `write_scope` never limits the child that declared it: that child may write
 outside its own patterns wherever no other claim reaches. A claim belongs to one run and lapses with its child, so a
@@ -3124,15 +3140,26 @@ child. The enforced bound held; the Library's record was false. What it costs:
   one, which costs little, since the report holds the findings;
 - an implementation built from the specification alone carries neither sentence nor the fourth word.
 
-> **Narrows:** REQ-TOOLS-152, REQ-TOOLS-154, REQ-LIBRARY-098, REQ-ORCH-047
+**Why revision 11, and what it costs.** Revision 7 marks a delegated item IN_PROGRESS and leaves the close to the caller, and
+until `PD-TOOLS-008` revision 4 the next mark's refusal was what told it; the default live run at `3c03287` (delegation-swarm,
+finding F9) paid four calls and about 7 s for it. With the refusal gone, a caller that never reads its plan again would leave the
+item open, and the Agent plan strip would show it active after its work was done. The resume message is where the caller reads
+the child's report, so the line goes there, beside the report it asks the caller to accept. What it costs:
+- about 25 tokens per reported child whose item is still open;
+- the line is advice: a caller may still leave the item open, which the live run's NOTE counts;
+- one more narrowing, of REQ-ORCH-063's message, which now carries more than the reports;
+- an implementation built from the specification alone resumes with the reports alone.
+
+> **Narrows:** REQ-TOOLS-152, REQ-TOOLS-154, REQ-LIBRARY-098, REQ-ORCH-047, REQ-ORCH-063
 > **Extends:** REQ-ORCH-028
 
 *Raised by the owner, 2026-09-23; logged as [R-049](requests.md#r-049). Revision 2 logged as [R-059](requests.md#r-059),
 revision 3 as [R-067](requests.md#r-067). Revision 4 ruled under the owner's delegation, [R-072](requests.md#r-072), from
 the final live runs' findings L4 and N3. Revision 5 ruled under the same delegation from OQ-221 (the consortium's question AB1), revision 6 from OQ-220, revision 7
 from OQ-249 (the consortium's question P3), revision 8 from OQ-250 (the consortium's question D3, the duress live run's finding D3),
-revision 9 from OQ-256 and OQ-257 (the consortium's questions V1 and V2, the duress live run at `552d346`), revision 10 from
-OQ-334 (finding F10 of fin46's final acceptance, the default live run at `3c03287`).*
+revision 9 from OQ-256 and OQ-257 (the consortium's questions V1 and V2, the duress live run at `552d346`), revision 11 from
+OQ-334 (finding F10 of fin46's final acceptance, the default live run at `3c03287`), revision 11 from
+OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287`).*
 
 > **First execution, 2026-09-23, the day it was ruled:** the mechanism was built as written, and one clause of
 > the disclosure proved false for one reader. The block lists "the `write_scope` of every other child of the run
@@ -4747,6 +4774,12 @@ wrong, rather than telling it so first. The result says what was read, so the mo
 
 ### PD-TOOLS-008 — a todo list that itself marks two tasks in progress is refused without naming an active task
 
+*Revision 4 (2026-10-15, [R-072](requests.md#r-072)) — **a task a delegation has served is outside the single-active count, before
+and after its child ends**, a section added after revision 3's; the ruling of [OQ-333](../architecture/open-questions.md#oq-333)
+under the owner's delegation. It replaces revision 2's "A task a running delegation holds is never counted against such a write",
+quoted below, and keeps revision 2's falsified cost line beside its replacement. Revision 3's close rules, protections and four
+kept-reasons are unchanged; the Narrows line is unchanged.*
+
 *Revision 3 (2026-10-13, [R-072](requests.md#r-072)) — **a `replace` closes a delegated item once its child has ended, and
 names every task it restores**, a section added after revision 2's; the ruling of
 [OQ-255](../architecture/open-questions.md#oq-255) under the owner's delegation. It replaces revision 2's "REQ-TOOLS-146's
@@ -4777,14 +4810,19 @@ revision's set, queued to paused. REQ-TOOLS-145's bound and REQ-TOOLS-146's prot
 holds:
 - **The bound.** At most one `IN_PROGRESS` task may be unheld, and the bound is checked only on a write that marks a task
   `IN_PROGRESS`: an `add_task` or `update` that marks one, or a `replace` whose incoming list marks `IN_PROGRESS` a task that
-  is not already a protected `IN_PROGRESS` task. A task a running delegation holds is never counted against such a write.
+  is not already a protected `IN_PROGRESS` task. A task a child of the list's owner serves, running or ended, is never counted
+  against such a write (revision 4 below).
 - **What is never refused.** A write that marks no task `IN_PROGRESS` is never refused under the rule, however many
   `IN_PROGRESS` tasks the list keeps; a protected task a `replace` restores never counts against that `replace`.
-- **REQ-TOOLS-145's sentence** names the first unheld `IN_PROGRESS` task.
-- **This directive's sentence** counts the unheld tasks the submitted list marks. For a caller whose resolved tool set holds
+- **REQ-TOOLS-145's sentence** names the first unserved `IN_PROGRESS` task (revision 4; unheld until then).
+- **This directive's sentence** counts the unserved tasks the submitted list marks (revision 4; unheld until then). For a caller whose resolved tool set holds
   `delegate`, it adds: `Leave the items you will delegate PENDING: a delegate call that names one in todo_item marks it
   IN_PROGRESS.`
 - **REQ-TOOLS-146's protection** is otherwise as revision 3 below states it.
+
+> Revision 2 said, and no longer governs since revision 4: "A task a running delegation holds is never counted against such a
+> write.", "**REQ-TOOLS-145's sentence** names the first unheld `IN_PROGRESS` task." and "**This directive's sentence** counts the
+> unheld tasks the submitted list marks."
 
 > Revision 2 said, and no longer governs since revision 3: "**REQ-TOOLS-146's protection** is otherwise unchanged: a protected
 > task is restored by id with its state intact."
@@ -4804,6 +4842,19 @@ holds:
   PENDING`. It then ends `Change a task's state with update.` This comes before the `Todo state:` summary; REQ-TOOLS-147's
   summary is unchanged. A task sent with no state, and an omitted task, differ from nothing and are not named.
 
+**A task a delegation has served is outside the count, before and after its child ends (revision 4).** REQ-TOOLS-145's bound,
+REQ-TOOLS-145's sentence, this directive's sentence and REQ-TOOLS-146's rejection SHALL count only the `IN_PROGRESS` tasks that
+are not **served**, served as revision 3 defines it: a child of the list's owner, terminal or not, records the task as its
+`todo_item`. Every held task is served, so held is a subset and revision 2's exemption is kept whole.
+- **What it means for a delegated item.** An item the run marked IN_PROGRESS when its delegation was admitted (`PD-TOOLS-006`
+  revision 7) never refuses the owner's next write that marks a task, while its child runs or after it has ended.
+- **What it does not do.** The run never closes such an item: the owner closes it, with `update` or with revision 3's closing
+  `replace`, and `PD-TOOLS-006` revision 11 tells the owner, in the message that resumes its wait, which reported child's item is
+  still IN_PROGRESS.
+- **What stays.** Revision 3's close rules, its protections and its four kept-reasons are unchanged; held still decides which
+  served task a `replace` may close and when the reason is `a running delegated agent holds it`. With no served set, the tool
+  behaves as before this revision.
+
 > Revision 1 said, and no longer governs: "Everything else REQ-TOOLS-145 fixes still governs: at most one task is
 > `IN_PROGRESS`, enforced when marking a task and on wholesale state changes".
 
@@ -4822,7 +4873,9 @@ ABANDONED, and the plan recorded the item `PENDING` while its child ran; the dur
 makes that plan the run's primary progress display. OQ-163's case, which revision 1 ruled, had no delegation. What it costs:
 - several active rows while children run;
 - a stale active row between a child's end and the coordinator closing its item, which then counts against the next write that
-  marks a task;
+  marks a task — *falsified 2026-10-15 and replaced by revision 4 ([OQ-333](../architecture/open-questions.md#oq-333)): the
+  stale row still stands until the coordinator closes it, but it counts against no write, and the resume line of `PD-TOOLS-006`
+  revision 11 names it;*
 - the `todo` tool now depends on the run's child records, read through a port at each call.
 
 **Why revision 3, and what it costs.** Revision 7 of `PD-TOOLS-006` sets a delegated item IN_PROGRESS without the coordinator
@@ -4836,12 +4889,24 @@ REQ-ORCH-075's re-queue of a met request. What it costs:
 - a longer observation on a `replace` that restores something;
 - the agent's own IN_PROGRESS task is still closed only by `update`, one step the observation now names.
 
+**Why revision 4, and what it costs.** In the default live run at `3c03287` (session `3e4b7210`, delegation-swarm, finding F9) the
+coordinator's `update verify101 IN_PROGRESS` (`#26`) was refused naming impl101, an item the run had marked at its delegation
+(`#7`) and whose child had ended about 2.5 s before; the coordinator then closed its three delegated items one by one (`#27` to
+`#29`), four calls and about 7 s, before delegating the verifier. The same refusal stood in the two default packs before it
+(requirements `#50`, crlf `#22`), against OQ-249's target of 0, and it was revision 2's accepted cost. An item a child served is
+that child's work, not the coordinator's own active task, whether or not the child still runs. What it costs:
+- a stale active row the Agent plan strip can show from a child's end until the coordinator closes its item;
+- one more narrowing of REQ-TOOLS-145, whose one-active rule now counts only the owner's unserved tasks;
+- fin38's limit (revision 3's first execution) now reaches the count too: the served set is the current iteration's ledger, so
+  after a REQ-ORCH-075 re-queue or a resume an earlier iteration's served item still counts against the next mark.
+
 > **Narrows:** REQ-TOOLS-145, REQ-TOOLS-146
 
 *Raised by the owner, 2026-10-06, ruling OQ-163 as recommended; logged as [R-071](requests.md#r-071). Revision 2 ruled under the
 owner's delegation, [R-072](requests.md#r-072), from OQ-249 (the consortium's question P3, the final live runs' findings P3 and
 D7). Revision 3 ruled under the same delegation from [OQ-255](../architecture/open-questions.md#oq-255) (the consortium's
-question RC1, from revision 7's first execution).*
+question RC1, from revision 7's first execution). Revision 4 ruled under the same delegation from
+[OQ-333](../architecture/open-questions.md#oq-333) (finding F9 of fin46's final acceptance, the default live run at `3c03287`).*
 
 > **First execution, 2026-10-06, built under [R-071](requests.md#r-071) (fin21):** the rule held as written. The case it
 > names is exactly the second of `todo`'s two `replace` checks (`packages/agent-tools/src/tools/todo.ts`): the first

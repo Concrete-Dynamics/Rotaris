@@ -12779,6 +12779,12 @@ scripted `done` step closing each item with `update`; the live run's `heldItemRe
 (`apps/desktop/scripts/lib/coordinator-todo.mjs`). Shown in the built app by `pnpm mission-proof` item 1e. The note is repaired:
 [`a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md`](../defects/fixed/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md).
 
+*Revised 2026-10-15 by [OQ-333](#oq-333)'s ruling (R-072), the bound above kept as it was ruled:* the count leaves out every task
+a child of the list's owner **serves** as its `todo_item`, terminal children included, not only the held ones, so an item whose
+child has ended no longer counts against the next write that marks a task. The single-active refusals the harness counts in
+coordinating sessions (target 0) were one a default pack at `3c03287` and the two packs before it (delegation-swarm `#26`,
+requirements `#50`, crlf `#22`). Recorded as `PD-TOOLS-008` revision 4, with `PD-TOOLS-006` revision 11's resume line.
+
 <a id="oq-228"></a>
 
 **OQ-228 — Which personas may a delegation name?** *(REQ-MCP-014, `intent-classifier` and `project-initializer` "are personas
@@ -15247,6 +15253,62 @@ its reason; `live-answers.test.ts`'s four "OQ-332 (F8)" and "scenario 3b asks on
 half by `reasoningTail` in `apps/desktop/scripts/lib/intent-reading.mjs`, which the live run's classifier NOTE prints for every cut
 (`intent-reading.test.ts`'s OQ-332 case, red on the code before). OQ-258's limb and its report-back, OQ-114's addendum and
 `PD-ORCH-011` revision 2's NOTE are written in place; the row is in [`first-executions.md`](first-executions.md).
+
+<a id="oq-333"></a>
+
+**OQ-333 — Does an item the run marked on delegation stay counted against the single-active rule after its child ends?**
+*(REQ-TOOLS-145, at most one task IN_PROGRESS, and REQ-TOOLS-146, `replace`'s protection of the active task, as
+[`PD-TOOLS-008`](../product/directives.md#pd-tools-008) narrows them: revision 2's bound over the tasks no non-terminal child
+holds, revision 3's served set and its close; [`PD-TOOLS-006`](../product/directives.md#pd-tools-006) revision 7, the run's mark
+of a delegated item at admission; REQ-ORCH-063, the message that resumes a wait, which also serves a foreground `delegate`;
+REQ-ORCH-059, the completion notification; [OQ-249](#oq-249)'s harness target of 0 single-active refusals in coordinating
+sessions. Raised 2026-10-15 from finding F9 of fin46's final acceptance (round 2 at `3c03287`); the plan's range OQ-361 to OQ-380
+does not hold it, because it is written at the number the consortium's ruling names. **Ruled 2026-10-15.**)*
+
+**What is open.** In the default live run at `3c03287` (pack `2026-10-15T03-10-08-908Z`, session `3e4b7210`, delegation-swarm)
+the coordinator wrote its plan (`#6`) and delegated three children in one step (`#7` to `#9`), each naming its item, which the run
+marked IN_PROGRESS at admission as revision 7 states ("Todo item … (impl101) is now IN_PROGRESS."). Its `wait_for_tasks` (`#14`)
+returned the three reports after 53.9 s. About 2.5 s later the coordinator marked its next item, `update verify101 IN_PROGRESS`
+(`#26`), and was refused: "Only one task can be IN_PROGRESS at a time. Active task: impl101 (addTodo refuses empty or blank title
+in src/todos.js). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS." impl101's child had ended, so the
+item was no longer held and REQ-TOOLS-145, as revision 2 bounds it, counted it. The coordinator then closed the three delegated
+items one by one (`#27` to `#29`) before delegating the verifier (`#30`): four calls and about 7 s. The live run's NOTE read "todo
+calls refused under REQ-TOOLS-145 or PD-TOOLS-008 in coordinating sessions (OQ-249; target 0) — delegation-swarm #26", and the
+same NOTE stood in the two default packs before it, requirements `#50` (the `wt-live` pack of 13:37) and crlf `#22` (15:58).
+Revision 2 accepted this as its cost ("a stale active row between a child's end and the coordinator closing its item, which then
+counts against the next write that marks a task"); OQ-249's target of 0 says the refusal should not happen.
+
+**What the build proceeds under.** REQ-TOOLS-145 binds once the child ends, as built: `TodoList.active(held)` and the
+`add_task`, `update` and `replace` checks read the held set (`packages/agent-tools/src/tools/todo.ts`).
+
+**Ruled 2026-10-15 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)), kind
+change-behaviour:** REQ-TOOLS-145's single-active bound and REQ-TOOLS-146's rejection count only IN_PROGRESS tasks that **no child
+of the list's owner serves** as its `todo_item`, terminal children included, so an item the run marked on delegation never
+refuses the coordinator's next mark, before or after its child ends. The run never closes the item; the coordinator closes it, and
+the message that resumes a wait (REQ-ORCH-063, which also serves a foreground `delegate`) names each such item still IN_PROGRESS
+with one line telling it to close the item with `update`. Recorded as [`PD-TOOLS-008`](../product/directives.md#pd-tools-008)
+**revision 4** (Narrows unchanged: REQ-TOOLS-145, REQ-TOOLS-146) and [`PD-TOOLS-006`](../product/directives.md#pd-tools-006)
+**revision 11** (REQ-ORCH-063 joins its Narrows line; the ruling named it revision 10, and [OQ-334](#oq-334)'s revision 10 landed
+on `main` first). This revises OQ-249's bound, which counted held tasks only, and revision 2's
+accepted cost, quoted beside its replacement in the directive. The completion notification of REQ-ORCH-059 is unchanged.
+
+**The two recommendations weighed.** The ruling as handed to the building bundle states its outcome and what it revises; the two
+advocates' own recommendations were not handed to it, and the orchestrator's ruling record holds them.
+
+~~A task a running delegation holds is never counted against such a write.~~ **Replaced 2026-10-15 (revision 4):** a task a child
+of the list's owner serves, running or ended, is never counted against such a write.
+
+**What it costs.** A stale active row that the Agent plan strip can show from a child's end until the coordinator closes its
+item; one more narrowing of REQ-TOOLS-145; and fin38's limit, now on the count as well as the close: the served set is the
+current iteration's ledger, so an earlier iteration's served item still counts after a REQ-ORCH-075 re-queue or a resume.
+
+**What a live run then shows.** In every coordinating default session (delegation-swarm, requirements, crlf) each `update` or
+`add_task` that marks the coordinator's next item IN_PROGRESS after a delegated child ends is accepted; the harness counts 0
+`todo` calls refused under REQ-TOOLS-145 or `PD-TOOLS-008` in coordinating sessions, and no `tool_error` issue from that cause.
+Each `wait_for_tasks` or foreground `delegate` result that reports a child whose item is still open carries the line "Todo item
+<name> (<id>) is still IN_PROGRESS: close it with update once you accept this report."; the coordinator closes those items, and
+the Agent plan strip ends with them COMPLETED. NOTEs report any served item still IN_PROGRESS when the coordinator answers, and
+the seconds from each child's end to its item's close.
 
 <a id="oq-361"></a>
 

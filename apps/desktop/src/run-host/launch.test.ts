@@ -363,6 +363,50 @@ ${retrospective === 'slot' ? 'retrospective_model: analyst\n' : ''}`);
     });
   });
 
+  /*
+   * PD-LIBRARY-002 with ADR-0030 and REQ-PROVIDER-066 (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md):
+   * the retrospective sends nothing to the entry role's model, so an entry role with no usable model does not refuse it — its
+   * setup is completed on its own model (`retrospectiveOf`). Until the repair `prepareRun`'s `no-model` refusal on the entry
+   * role became `unconfigured`, which `retrospective.capture` answered "The workspace configuration could not be loaded".
+   */
+  describe('an entry role with no usable model does not refuse a retrospective whose own model resolves', () => {
+    // `entry` names a provider this build knows no endpoint for and states no base_url, so the entry role's model does not resolve.
+    const brokenEntry = (retrospective: 'slot' | 'medium' | 'none') => writeFileSync(join(dir, '.rotaris', 'agents.yaml'), `models:
+  entry:
+    provider: acme-unknown
+    model_id: entry-model
+  analyst:
+    provider: openai-compatible
+    model_id: analyst-model
+    base_url: https://two.example/v1
+    auth_provider: provider-two
+large_model: entry
+medium_model: ${retrospective === 'medium' ? 'analyst' : 'entry'}
+small_model: entry
+${retrospective === 'slot' ? 'retrospective_model: analyst\n' : ''}`);
+
+    for (const shape of ['slot', 'medium'] as const) {
+      it(`configured on the retrospective's own model, over the bearer it leased (${shape === 'slot' ? 'retrospective_model' : 'medium_model'})`, async () => {
+        brokenEntry(shape);
+        const r = await leasedSetup(dir, deps(async () => ({ 'provider-two': 'analyst-bearer' })));
+        expect(r).toMatchObject({ kind: 'configured' });
+        if (r.kind !== 'configured') return;
+        const collector = retrospectiveOf(r.setup.cfg, r.setup.scripted);
+        expect(collector?.key).toBe('analyst');
+        expect(await r.setup.model.config.credentialFor(collector!.model)()).toBe('analyst-bearer');
+        // The run start keeps its refusal: the entry role's model is what a run calls first (REQ-WORKSPACE-137).
+        expect(await leaseForContinuation(dir, deps(async () => ({ 'provider-two': 'analyst-bearer' })))).toEqual({ kind: 'leased', bearers: {} });
+      });
+    }
+
+    it('with no resolvable retrospective model either, the pass is refused for that reason — not as an unloadable configuration — and nothing is leased', async () => {
+      brokenEntry('none');
+      const lease = vi.fn(async () => ({ 'provider-two': 'analyst-bearer' }));
+      expect(await leasedSetup(dir, deps(lease))).toMatchObject({ kind: 'no-model', reason: expect.stringMatching(/^No usable model is configured for the entry role/) });
+      expect(lease).not.toHaveBeenCalled();
+    });
+  });
+
   it('a configuration that will not load leases nothing — setupFor refuses with its real report instead', async () => {
     writeFileSync(join(dir, '.rotaris', 'agents.yaml'), 'runtime: [invalid]\n');
     const lease = vi.fn(async () => ({ 'provider-one': 'fresh-bearer' }));

@@ -316,6 +316,18 @@ describe('a retrospective authenticates as a run does: leased first, its setup c
     expect(await dispatch({ kind: 'retrospective.capture', workspaceId: 'W1', workspaceRoot: root }, host)).toEqual(refusal);
     expect(await dispatch({ kind: 'improvement.analyze', job } as unknown as RunHostRequest, host)).toEqual(refusal);
   });
+
+  /*
+   * PD-LIBRARY-002: "A workspace with no resolvable retrospective model captures no pass" — `leasedSetup` answers `no-model` only
+   * when neither the entry role's model nor the retrospective's resolves, and that is said as the missing analyst, never as an
+   * unloadable configuration or an expired job
+   * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md).
+   */
+  it('no resolvable model is answered as the missing analyst at the capture and at the analysis', async () => {
+    const host = { ...(hostFor([]) as unknown as Record<string, unknown>), retrospectiveSetup: async () => ({ kind: 'no-model', reason: 'No usable model is configured for the entry role, so the run was refused before it started: role coding-agent names no model.' }) } as unknown as RunHost;
+    expect(await dispatch({ kind: 'retrospective.capture', workspaceId: 'W1', workspaceRoot: root }, host)).toEqual({ kind: 'refused', code: 'retrospective.no-model', headline: 'No retrospective analyst is configured' });
+    expect(await dispatch({ kind: 'improvement.analyze', job } as unknown as RunHostRequest, host)).toEqual({ kind: 'refused', code: 'improvement.no-model', headline: 'No improvement analyst is configured' });
+  });
 });
 
 /**

@@ -426,6 +426,13 @@ completed over the bearers it leased (`retrospectiveSetup` → `leasedSetup`; no
 `configuredFor` setup may have been completed over no lease — the live run at `ce5f952`, F2), and answers the existing `improvement.job` event —
 carrying `pass: 'retrospective'` and a `retrospective` sources block (session digests, prior proposals, saved prompts,
 persona memory, instruction files, each entry naming its record) — or `retrospective.no-model` when nothing resolves.
+The setup is prepared as a retrospective's (`prepareRun`'s `retrospective` option): an entry role with no usable model does not
+refuse it while the retrospective's own model resolves — the setup is completed with that model in the entry model's place, and
+the log says so — and `leasedSetup` answers `no-model` only when neither resolves, which `retrospective.capture` says as
+`retrospective.no-model` and `improvement.analyze` as `improvement.no-model` (*since 2026-10-15, fin47; until then the entry
+role's `no-model` became `unconfigured`, answered `retrospective.no-configuration` "The workspace configuration could not be
+loaded" and, at the analysis, `improvement.expired`,
+`docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md`*).
 A lease that leaves the retrospective model's sign-in provider unresolved — the model its request goes to, `retrospective_model`
 then `medium_model`, never the entry role's (*since 2026-10-14, fin46; it read "the entry provider" and checked the entry role's,
 `docs/defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`*) — answers `session.provider-auth` with REQ-WORKSPACE-137's headline and the

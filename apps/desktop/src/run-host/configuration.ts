@@ -519,6 +519,15 @@ export interface PrepareOptions {
    * open iteration's root ran as, which a continue that resumes it restores. Absent means `default_persona`.
    */
   readonly entryPersona?: string | undefined;
+  /**
+   * PD-LIBRARY-002 with ADR-0030: the setup is a retrospective's (`leasedSetup`), whose one request goes to its own model
+   * (`retrospectiveOf`: `retrospective_model`, then `medium_model`) and nothing to the entry role's. An entry role with no usable
+   * model then does not refuse it: the setup is completed with the retrospective's model in the entry model's place, and the log
+   * says so. With no resolvable retrospective model either, the `no-model` refusal stands. Until 2026-10-15 the entry role's
+   * refusal stood for the retrospective too, and was answered "The workspace configuration could not be loaded"
+   * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md).
+   */
+  readonly retrospective?: boolean | undefined;
 }
 
 /**
@@ -652,13 +661,19 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
   const cfg: LoadedConfiguration = restored === undefined ? moded : { ...moded, defaultPersona: restored };
   const entryRole = personas.resolve(cfg.defaultPersona);
   if (!entryRole) return err({ reason: `default_persona '${cfg.defaultPersona}' names no role this build knows.`, cfg });
-  const entryModelName = cfg.personas[cfg.defaultPersona]?.model ?? null;
+  const statedModelName = cfg.personas[cfg.defaultPersona]?.model ?? null;
+  const stated = entryRole.persona.modelRef ?? modelRefOf(cfg, statedModelName, scripted);
+  // A retrospective's setup takes its own model where the entry role has none it could use (`PrepareOptions.retrospective`).
+  const standIn = stated === null && options?.retrospective === true ? retrospectiveOf(cfg, scripted) : null;
+  const model = stated ?? standIn?.model ?? null;
+  const why = (): string => {
+    const named = statedModelName === null ? undefined : cfg.models[statedModelName];
+    return statedModelName === null ? `role ${cfg.defaultPersona} names no model` : !named ? `model '${statedModelName}' is not a configured model` : `model '${statedModelName}' (provider ${named.provider}) has no base_url and this build knows no endpoint for that provider`;
+  };
+  if (!model) return err({ reason: `No usable model is configured for the entry role, so the run was refused before it started: ${why()}.`, cfg, code: 'no-model' });
+  if (standIn !== null) deps.log(`configuration: the entry role ${cfg.defaultPersona} has no usable model (${why()}); a retrospective sends nothing to it, so its setup is completed on its own model '${standIn.key}' (PD-LIBRARY-002)`);
+  const entryModelName = standIn?.key ?? statedModelName;
   const entry = entryModelName ? cfg.models[entryModelName] : undefined;
-  const model = entryRole.persona.modelRef ?? modelRefOf(cfg, entryModelName, scripted);
-  if (!model) {
-    const why = entryModelName === null ? `role ${cfg.defaultPersona} names no model` : !entry ? `model '${entryModelName}' is not a configured model` : `model '${entryModelName}' (provider ${entry.provider}) has no base_url and this build knows no endpoint for that provider`;
-    return err({ reason: `No usable model is configured for the entry role, so the run was refused before it started: ${why}.`, cfg, code: 'no-model' });
-  }
   const snapshotRead = readProjectSnapshot(join(deps.globalDir, PROJECT_SETTINGS_FILE), () => undefined);
   const authProviders = authProvidersOf(cfg);
   const isScripted = scripted || isScriptedProvider(model.providerId);

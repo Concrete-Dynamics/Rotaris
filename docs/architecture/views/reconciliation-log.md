@@ -80,6 +80,13 @@ Cancel starting nothing; the renderer's guard joins a question already open. The
 
 Last reconciled with the code: **2026-10-15**
 
+**A retrospective is not refused for the entry role's model (2026-10-15, fin47 `fin47-notice-and-retro`; PD-LIBRARY-002,
+REQ-PROVIDER-066).** The process view's retrospective paragraph says the setup is prepared as a retrospective's — an entry role
+with no usable model completed on the retrospective's own model — and that `leasedSetup`'s new `no-model` answer, neither model
+resolving, is said as the missing analyst; until now the entry role's refusal read "The workspace configuration could not be
+loaded" (`docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md`).
+No package, edge or process changed. The README's date stays 2026-10-15.
+
 **A refused focus-session or project-setup notice action is said on screen (2026-10-15, fin47 `fin47-notice-and-retro`;
 REQ-NOTIFY-254, REQ-NOTIFY-003).** The process view's `session.focusFromNotice` and `projectInit.open` entries and the sequences
 view's notice-action block say that the pressing renderer hands their refusal to `reportNoticeActionRefusal` as the hook review

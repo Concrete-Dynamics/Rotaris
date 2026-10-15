@@ -66,7 +66,9 @@ async function leaseOver(prepared: PreparedRun, required: string | null, deps: P
 export type LeasedSetup =
   | { readonly kind: 'configured'; readonly setup: ConfiguredRun; readonly bearers: Readonly<Record<string, string>> }
   | { readonly kind: 'refused'; readonly reply: ProcessReply }
-  | { readonly kind: 'unconfigured'; readonly reason: string };
+  | { readonly kind: 'unconfigured'; readonly reason: string }
+  /** Neither the entry role's model nor the retrospective's resolves: PD-LIBRARY-002's "no resolvable retrospective model". */
+  | { readonly kind: 'no-model'; readonly reason: string };
 
 /**
  * PD-LIBRARY-002 (ADR-0065 decision 5) with ADR-0030 and REQ-PROVIDER-066: a retrospective authenticates exactly as a run does —
@@ -77,8 +79,10 @@ export type LeasedSetup =
  * (`docs/defects/fixed/a-retrospective-sends-its-model-request-with-no-credential-when-no-run-has-leased-one.md`).
  */
 export async function leasedSetup(workspaceRoot: string, deps: ContinuationLeaseDeps): Promise<LeasedSetup> {
-  const prepared = prepareRun(workspaceRoot, deps.attended, deps.configuration);
-  if (!prepared.ok) return { kind: 'unconfigured', reason: prepared.error.reason };
+  // Prepared as a retrospective's: an entry role with no usable model does not refuse it while its own model resolves, and a
+  // `no-model` refusal then means neither does (`PrepareOptions.retrospective`).
+  const prepared = prepareRun(workspaceRoot, deps.attended, deps.configuration, undefined, { retrospective: true });
+  if (!prepared.ok) return prepared.error.code === 'no-model' ? { kind: 'no-model', reason: prepared.error.reason } : { kind: 'unconfigured', reason: prepared.error.reason };
   // The retrospective's own model's provider (`retrospectiveOf`: its slot, then medium_model), never the entry role's.
   const lease = await leaseOver(prepared.value, prepared.value.retrospectiveAuthProvider, deps, 'Authenticate at least one configured provider before running a retrospective.');
   if (lease.kind === 'refused') return lease;

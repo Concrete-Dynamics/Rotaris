@@ -46,6 +46,11 @@
  *      reason and the artifact holding no proposals in the detail, never "found nothing to propose"; the log carries a warning.
  *      Launch 5 also reads the timed-out retrospective's detail stating its limit. Once the pass has ended, no notice on
  *      screen says "found nothing to propose" (since fin45: the wait accepts either title, so it alone could read only one).
+ *  11. AN ENTRY ROLE WITH NO USABLE MODEL (since fin47, PD-LIBRARY-002) — `large_model`, the entry role's tier, names nothing
+ *      configured while `medium_model` resolves: the gesture runs the pass on the retrospective's own model and stores its
+ *      artifact, the log saying the setup took that model in the entry's place; no "could not be started" / "The workspace
+ *      configuration could not be loaded" notice, which is what it answered until fin47
+ *      (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md).
  *  10. A FAILED POST-RUN ANALYST (since fin45, PD-LIBRARY-005) — a scripted run completes and its post-run analyst's provider
  *      refuses the credential (`crash`): the run's empty artifact is stored with REQ-LIBRARY-023's notes, and the completed
  *      run's failure warning names the session, the reason and the artifact holding no proposals, with no action and no
@@ -83,9 +88,11 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /**
  * One scratch workspace: the configuration, the instruction file and the persona memory the capture reads.
  * `medium` is the model slot's target — a name that is NOT in `models:` is how a workspace with no resolvable
- * retrospective model is written, which is the fourth launch's whole subject.
+ * retrospective model is written, which is the fourth launch's whole subject. `large` is the entry role's tier (the
+ * shipped `orchestrator` runs on it); the same unconfigured name there leaves the entry role with no usable model, the
+ * eleventh launch's subject.
  */
-function workspaceAt(name, { medium = 'scripted', timeout = 120 } = {}) {
+function workspaceAt(name, { medium = 'scripted', large = 'scripted', timeout = 120 } = {}) {
   const workspace = join(output, name, 'workspace');
   mkdirSync(join(workspace, '.rotaris', 'persona_memory'), { recursive: true });
   writeFileSync(join(workspace, 'README.md'), `# retrospective proof workspace (${name})\n`);
@@ -93,7 +100,7 @@ function workspaceAt(name, { medium = 'scripted', timeout = 120 } = {}) {
   writeFileSync(join(workspace, '.rotaris', 'persona_memory', 'coding-agent.md'), 'Remember: this workspace has no build gate named anywhere.\n');
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
     'models:', '  scripted: { provider: scripted, model_id: scripted }',
-    'small_model: scripted', `medium_model: ${medium}`, 'large_model: scripted',
+    'small_model: scripted', `medium_model: ${medium}`, `large_model: ${large}`,
     'runtime:', '  permission_mode: autonomous', `  retrospective_timeout: ${timeout}`,
     'mcp_servers:', '  code_intelligence: { enabled: false }',
     /*
@@ -861,6 +868,45 @@ for (const [script, notesPrefix, reasonText] of [['crash', 'collector crashed: '
   check('post-run crash: the failure is written to the application log as a warning (REQ-LIBRARY-035(b), PD-LIBRARY-005)',
     new RegExp(`warn.*improvement analysis ${id} \\(post_run\\) stored no proposals because its collector failed: collector crashed: `).test(log),
     log.split('\n').find((line) => /collector failed/.test(line))?.trim().slice(0, 240) ?? 'no such line');
+}
+
+// ── 11. An entry role with no usable model (PD-LIBRARY-002, fin47): the retrospective sends nothing to the entry role's model, so a
+//    `large_model` naming nothing configured — the shipped entry role's tier — does not refuse the pass while `medium_model`, the
+//    retrospective's model, resolves. Until fin47 `leasedSetup` turned the entry role's `no-model` refusal into `unconfigured`, and
+//    the gesture was answered "The retrospective could not be started: The workspace configuration could not be loaded".
+{
+  const name = 'entry-no-model';
+  const workspace = workspaceAt(name, { large: 'a-model-this-workspace-does-not-have' });
+  let refused = null;
+  let indicator = false;
+  let ended = false;
+  await launch(name, workspace, {}, async (d, root) => {
+    await openProposals(d);
+    await d.click('[data-testid="library-retrospective"]', { timeoutMs: 15_000 });
+    // Either the pass starts (its title-bar indicator) or the gesture is refused (its notice): whichever comes first is read.
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline && !indicator && refused === null) {
+      indicator = (await probe(d, '[data-testid="improvement-activity-title-bar"]')).length > 0;
+      refused = (await probe(d, '[data-testid="notice"]')).find((n) => /could not be started|configuration could not be loaded|needs a model/.test(n.text)) ?? null;
+      if (!indicator && refused === null) await sleep(200);
+    }
+    ended = await until(d, '[data-testid="improvement-activity-title-bar"]', (m) => m.length === 0, 60_000);
+    await sleep(500);
+    refused ??= (await probe(d, '[data-testid="notice"]')).find((n) => /could not be started|configuration could not be loaded|needs a model/.test(n.text)) ?? null;
+    await d.screenshot(join(output, `${name}.png`));
+    return root;
+  });
+  check('an entry role with no usable model does not refuse the retrospective: no refusal notice is raised (PD-LIBRARY-002)',
+    refused === null, refused === null ? 'none' : `"${refused.text.slice(0, 200)}"`);
+  check('the pass ran on the retrospective\'s own model and ended (REQ-LIBRARY-125)', indicator && ended, `indicator seen ${indicator}, ended ${ended}`);
+  const stored = artifactsIn(join(output, name, 'app'));
+  check('the pass stored its retrospective artifact (PD-LIBRARY-002)',
+    stored.length === 1 && stored[0].source_kind === 'retrospective' && stored[0].source_session_id === null,
+    stored.length === 0 ? 'nothing was stored' : stored.map((row) => `${row.artifact_id} ${row.source_kind}`).join(', '));
+  const log = readFileSync(join(output, `${name}.log`), 'utf8');
+  check('the log says the setup took the retrospective\'s model in the entry role\'s place',
+    /configuration: the entry role \S+ has no usable model \(model 'a-model-this-workspace-does-not-have' is not a configured model\); a retrospective sends nothing to it, so its setup is completed on its own model 'scripted' \(PD-LIBRARY-002\)/.test(log),
+    log.split('\n').find((line) => /a retrospective sends nothing to it/.test(line))?.trim().slice(0, 260) ?? 'no such line');
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures, launches }, null, 2)}\n`);

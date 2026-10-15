@@ -282,6 +282,13 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       // F2 (the live run at ce5f952): leased first and completed over the bearers it leased, as a run's setup is.
       const leased = await retrospectiveSetup(s.root);
       if (leased.kind === 'refused') return leased.reply;
+      // PD-LIBRARY-002: "A workspace with no resolvable retrospective model captures no pass" — said as the configured case below
+      // says it. An entry role with no usable model no longer reaches here while the retrospective's own model resolves
+      // (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md).
+      if (leased.kind === 'no-model') {
+        log(`retrospective: ${leased.reason}`);
+        return { kind: 'refused', code: 'retrospective.no-model', headline: 'No retrospective analyst is configured' };
+      }
       if (leased.kind === 'unconfigured') {
         log(leased.reason, 'warn');
         return { kind: 'refused', code: 'retrospective.no-configuration', headline: 'The workspace configuration could not be loaded' };
@@ -324,6 +331,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
         // PD-LIBRARY-002 with ADR-0030: the analysis leases again and runs on the setup completed over that lease (F2).
         const leased = await retrospectiveSetup(req.job.workspace_root);
         if (leased.kind === 'refused') return leased.reply;
+        if (leased.kind === 'no-model') return { kind: 'refused', code: 'improvement.no-model', headline: 'No improvement analyst is configured' };
         if (leased.kind === 'unconfigured') log(leased.reason, 'warn');
         else run = leased.setup;
       }

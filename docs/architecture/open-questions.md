@@ -15120,6 +15120,67 @@ re-route; the NOTE reads "write-scope refusals over OQ-331's bound (reopens OQ-3
 in a scenario with none routed to a non-writer and a re-route after 61 s are each flagged — each red on the code before. The row is in
 [`first-executions.md`](first-executions.md).
 
+<a id="oq-334"></a>
+
+**OQ-334 — When a brief asks a child to publish an artifact its grant cannot publish, what is the coordinator, and the child,
+told?** *(REQ-LIBRARY-092, which materialises every terminal child report as a `child_report` artifact; REQ-TOOLS-152's
+description as [`PD-TOOLS-006`](../product/directives.md#pd-tools-006) narrows it — revision 4's catalogue, which states only
+REQ-TOOLS-001's three facets, and revision 8's "never write in a brief that a command or tool its entry does not show"; REQ-TOOLS-154,
+the child's payload; REQ-ORCH-028, the routing table; OQ-212, which keeps every built-in persona's
+`can_publish_artifacts` false; [OQ-250](#oq-250)'s limb "any brief offering a command or tool its target lacks", stated for a duress
+run; [OQ-256](#oq-256), whose duress run held the same false belief at request 98; [OQ-257](#oq-257). Raised 2026-10-15 from
+finding F10 of fin46's final acceptance (round 2 at `3c03287`), recorded in
+[`a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for`](../defects/a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for.md);
+written at the number the consortium's ruling names. **Ruled 2026-10-15.**)*
+
+**What is open.** In the default live run's `delegation` scenario at `3c03287` (pack `2026-10-15T03-10-08-908Z`, session
+`d0c3a7f0`) the coordinator briefed a codebase-analyst "Publish your findings as an artifact so later steps can attach it." (`#5`).
+The child's system text said "ARTIFACT: Produce no artifact beyond your report" and its grant held no `artifact_write`; it called
+`artifact_write` (`#10`), refused at the gate as an unknown tool, then `artifact_list` ("No artifacts found"). The run then kept its
+report as `art_C1ZUuJ3B`, whose summary says the tool "was unavailable, so no artifact or file was created", tagged `errors` on a
+succeeded report, and that artifact was attached whole to the docs-writer. The enforced bound held; the record a person reads in
+the Library is false, and the false claim travelled on. Neither agent is told that REQ-LIBRARY-092 keeps every ended child's report
+as an artifact, and no catalogue entry can say who publishes. OQ-250's limb is stated for a duress run, so it is not formally met.
+
+**What the build proceeds under.** The child report is the artifact, as built; `delegate`'s description, the catalogue and the
+child's payload say nothing of it.
+
+**Ruled 2026-10-15 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)), kind change-behaviour:**
+recorded as [`PD-TOOLS-006`](../product/directives.md#pd-tools-006) **revision 10** (OQ-331's ruling takes no revision, so revision
+10 is this ruling's alone). `delegate`'s description gains one fixed sentence stating that the run keeps every ended child's report
+as a `child_report` artifact. Each catalogue entry gains the computed words "publishes artifacts" wherever that child's resolved
+grant holds `artifact_write`, and every child's payload gains one fixed sentence stating that its report is kept as an artifact and
+meets a request to publish when it holds no tool that publishes artifacts. Three alternatives are rejected: refusing or rewriting
+briefs, naming publishers in the routing table, and granting codebase-analyst `artifact_write`. The playbook's ARTIFACT text stays
+as built. It narrows REQ-TOOLS-152 (the description's sentence and revision 4's fourth computed word) and REQ-TOOLS-154 (the
+payload's sentence after the workspace-root line); both gain their back-pointers in the same commit.
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended two fixed sentences: `delegate`'s description telling the coordinator that every
+  child's report is published for it as a `child_report` artifact, "never ask a child to publish its findings", and every child's
+  payload telling the child the same, so a brief asking it to publish is already met. The ruling took A's `delegate` sentence in
+  substance and A's placement in `childPayload`, which reaches every child, made conditional in its own words on the child holding
+  no publishing tool so it stays true under every grant; it declined "never ask a child to publish", which would be untrue in a
+  workspace that sets `can_publish_artifacts`.
+- **Advocate B (the system's lens)** recommended the `delegate` sentence, a computed "publishes artifacts" word on each catalogue
+  entry whose resolved grant holds `artifact_write`, and the playbook's ARTIFACT `none` text saying the report is kept. The ruling
+  took B's sentence wording and the computed word, so the catalogue stays the one computed place for facts about a persona's tools
+  (OQ-250, OQ-257) and, under OQ-212's defaults, the word appears on no entry; it declined B's playbook change, which reaches only
+  that variant, can be overridden and alters a string shown in Settings.
+
+Both advocates rejected parsing briefs (not testable, and it refuses valid briefs), granting the tool (it reverses OQ-212 and
+duplicates the findings) and per-route clauses (declined twice under OQ-250); the ruling rejects them for the same reasons.
+
+**Reopening condition:** any child call of an `artifact_write` it does not hold, or any `child_report` artifact claiming that
+publishing failed, in a default or duress run.
+
+**What a live run then shows.** Every delegating request's `delegate` description carries the report-artifact sentence, about 45
+more tokens. Default catalogue entries are unchanged, because no built-in persona publishes. Every child's first request carries
+the payload sentence, about 40 more tokens. In the default `delegation` scenario the analyst's brief asks for no publishing, the
+child makes 0 `artifact_write` calls, and `art_C1ZUuJ3B`'s successor carries no claim that publishing failed. The harness NOTE
+prints both counts — children's unknown `artifact_write` calls and briefs asking a non-publisher to publish — at 0 in default and
+duress runs.
+
 <a id="oq-400"></a>
 
 **OQ-400 — What a Windows ARM64 host's readings discharge** *(REQ-STARTUP-026, which presents a Windows-ARM64 visitor the

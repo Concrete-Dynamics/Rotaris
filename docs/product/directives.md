@@ -2787,6 +2787,12 @@ are not recorded, and cannot be recovered afterwards.
 
 ### PD-TOOLS-006 — a delegated child may declare a write scope that its siblings may not write into
 
+*Revision 10 (2026-10-15, [R-072](requests.md#r-072)): the ruling of [OQ-334](../architecture/open-questions.md#oq-334), from
+finding F10 of fin46's final acceptance (the default live run's `delegation` scenario at `3c03287`). A section added after revision
+9's, "What a child is told of its report", each clause marked "— revision 10"; the dispositions stay as they were (REQ-TOOLS-152
+and REQ-TOOLS-154 already stand on the Narrows line). Nothing is replaced. [OQ-331](../architecture/open-questions.md#oq-331), ruled
+the same day, takes no revision.*
+
 *Revision 9 (2026-10-13, [R-072](requests.md#r-072)): the rulings of [OQ-256](../architecture/open-questions.md#oq-256) (the
 consortium's question V1) and [OQ-257](../architecture/open-questions.md#oq-257) (V2), from the duress live run at `552d346`. Two
 sections added after revision 8's, "What an answer handed on carries" and "What `delegate` says of a write scope", each clause
@@ -2970,6 +2976,22 @@ started; the `write_scope` field's description in the offered schema SHALL say t
 and name no persona *(— revision 9, OQ-257)*. Revision 3's refusal, revision 4's catalogue, revision 8's routing sentence and
 REQ-ORCH-028's routes are unchanged.
 
+**What a child is told of its report (revision 10, [OQ-334](../architecture/open-questions.md#oq-334)).** REQ-LIBRARY-092 keeps
+every ended child's report as an artifact of kind `child_report`, and the agents are now told so *(— revision 10, OQ-334)*:
+- `delegate`'s description, where the caller's run holds an artifact store, SHALL carry one fixed sentence, after revision 9's
+  hand-off sentence and naming no persona, saying that the run keeps an ended child's report as a `child_report` artifact, which
+  `artifact_list` shows and `attach_artifacts` hands on, and that a caller asks a child for its findings in its report and asks it
+  to publish an artifact only where its entry says it publishes artifacts;
+- revision 4's catalogue SHALL state one further computed word, "publishes artifacts", on each entry whose child's resolved grant
+  holds `artifact_write` (the persona's own `can_publish_artifacts` with the store, OQ-212), and on no other;
+- every child's payload SHALL carry one fixed sentence immediately after REQ-TOOLS-154's workspace-root line, ahead of the write
+  scopes, saying that the run keeps its report as an artifact that later agents can list and be handed, and that, where its task
+  asks it to publish its findings and it holds no tool that publishes artifacts, its report meets that request.
+
+A brief is neither refused nor rewritten, the routing table names no publisher, no persona's grant changes, and the playbook's
+ARTIFACT text stays as built. Revision 3's refusals, revision 4's three facets, revision 8's routing sentence and revision 9's
+sentences are unchanged.
+
 **What is unchanged.** A child delegated without a `write_scope` claims nothing and is refused only where a
 live sibling's claim reaches. A `write_scope` never limits the child that declared it: that child may write
 outside its own patterns wherever no other claim reaches. A claim belongs to one run and lapses with its child, so a
@@ -3090,6 +3112,18 @@ the task the condition and never the persona. What it costs:
 - an implementation built from the specification alone caps the inherited block at 4,000 characters and words the sentence as
   before.
 
+**Why revision 10, and what it costs.** In the default live run at `3c03287` (session `d0c3a7f0`, finding F10) the coordinator
+briefed a codebase-analyst "Publish your findings as an artifact so later steps can attach it." (`#5`), because nothing it was
+offered said that the run keeps every ended child's report as an artifact, and no catalogue entry could say who publishes. The
+child, whose grant held no `artifact_write` under OQ-212, called it anyway (`#10`, refused at the gate as an unknown tool), and the
+report the run kept as `art_C1ZUuJ3B` said "no artifact or file was created", tagged `errors`, and was attached whole to the next
+child. The enforced bound held; the Library's record was false. What it costs:
+- both sentences are advice, and the gate's unknown-tool refusal stays the enforced bound;
+- about 45 more tokens on every delegating request and about 40 on every child's first request;
+- a child told its report meets a publishing request may hold back from a separate deliverable artifact where a workspace grants
+  one, which costs little, since the report holds the findings;
+- an implementation built from the specification alone carries neither sentence nor the fourth word.
+
 > **Narrows:** REQ-TOOLS-152, REQ-TOOLS-154, REQ-LIBRARY-098, REQ-ORCH-047
 > **Extends:** REQ-ORCH-028
 
@@ -3097,7 +3131,8 @@ the task the condition and never the persona. What it costs:
 revision 3 as [R-067](requests.md#r-067). Revision 4 ruled under the owner's delegation, [R-072](requests.md#r-072), from
 the final live runs' findings L4 and N3. Revision 5 ruled under the same delegation from OQ-221 (the consortium's question AB1), revision 6 from OQ-220, revision 7
 from OQ-249 (the consortium's question P3), revision 8 from OQ-250 (the consortium's question D3, the duress live run's finding D3),
-revision 9 from OQ-256 and OQ-257 (the consortium's questions V1 and V2, the duress live run at `552d346`).*
+revision 9 from OQ-256 and OQ-257 (the consortium's questions V1 and V2, the duress live run at `552d346`), revision 10 from
+OQ-334 (finding F10 of fin46's final acceptance, the default live run at `3c03287`).*
 
 > **First execution, 2026-09-23, the day it was ruled:** the mechanism was built as written, and one clause of
 > the disclosure proved false for one reader. The block lists "the `write_scope` of every other child of the run

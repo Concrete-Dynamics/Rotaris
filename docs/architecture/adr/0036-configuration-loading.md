@@ -353,6 +353,16 @@ between domains 15 and 06 that must be stated rather than discovered.
    reopen it; it does note that the amendment pass made the inversion cost something it did not cost
    before.
 
+   **Superseded by the specification, reported 2026-10-15 (fin47).** The reading above — that both keys are hard load
+   failures — **is false** and is kept here beside its replacement. `REQ-CONFIG-183`'s carve-out and `REQ-CONFIG-192`/`194`
+   now make a key the specification withdrew, or names as not a key of this domain, **reported and ignored**: a warning
+   naming the file, its scope and the key's full path (`REQ-CONFIG-233`'s warn-and-continue), and the workspace opens —
+   exactly the outcome this consequence said strictness had cost. The loader delivers it in
+   `packages/config/src/sections/requirements.ts`: `execution.worktree_subpath` since Part AP, and `delivery.store_subpath`
+   since fin47 (`WITHDRAWN_STORE_SUBPATH`; until then the opaque `delivery` block carried it unread, so it was neither
+   rejected nor reported:
+   [`../../defects/fixed/a-withdrawn-delivery-store-subpath-is-accepted-silently-rather-than-reported.md`](../../defects/fixed/a-withdrawn-delivery-store-subpath-is-accepted-silently-rather-than-reported.md)).
+
 ## Revisit if
 
 `REQ-CONFIG-477` is amended — which is now the only route by which alternative D reopens, and is

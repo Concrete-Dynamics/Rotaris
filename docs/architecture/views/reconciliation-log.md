@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A withdrawn `requirements.delivery.store_subpath` is reported and ignored (fin47, `fin47-gate-timeout-and-config`;
+REQ-CONFIG-192, REQ-CONFIG-183).** `03-runtime-view.md`'s `requirements:` paragraph names both of REQ-CONFIG-183's carved-out
+keys, where it named `execution.worktree_subpath` alone, and says `delivery.store_subpath` is now reported once and dropped
+from the opaque block. No package, edge or process changed. The README's date stays 2026-10-15.
+
 **The pane-layout carry-over takes only a version-1 object and stamps 1 (fin46, `fin46-accept1-20`; REQ-SHELL-069, REQ-SHELL-006,
 acceptance finding C17).** `02-process-view.md`'s `prefs.get/set` entry says an old `panels/<view>` object is carried over once
 only at version 1, the one stamp it sets being 1, where it read "carried over once" of any. No package, edge or process changed.

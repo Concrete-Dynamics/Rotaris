@@ -19,6 +19,8 @@ import { FieldReader, sectionMap, vocabularyString, type Problem, type ProblemSi
  *
  * REQ-CONFIG-194: `execution.worktree_subpath` is named by the specification as NOT a configuration key of this
  * domain, so a file that states it is reported and ignored rather than rejected — a warning, and the workspace opens.
+ * REQ-CONFIG-192: `delivery.store_subpath` is withdrawn, and REQ-CONFIG-183's carve-out treats it the same way: the opaque
+ * `delivery` block is read for that one key, which is reported and dropped (`WITHDRAWN_STORE_SUBPATH`).
  */
 export const SCHEDULING_MODES = ['manual', 'automatic'] as const;
 export type SchedulingMode = (typeof SCHEDULING_MODES)[number];
@@ -196,8 +198,23 @@ export function readRequirementsSection(value: unknown, sink: ProblemSink): Requ
     if (raw === undefined || raw === null) return null;
     return sectionMap(raw, `requirements.${key}`, sink);
   };
-  return { scheduling, change, human_in_the_loop, execution, personas, opaque: { evidence: opaqueOf('evidence'), delivery: opaqueOf('delivery'), board: opaqueOf('board') } };
+  // REQ-CONFIG-192 / REQ-CONFIG-183's carve-out: `delivery.store_subpath` is withdrawn, so it is reported once and ignored —
+  // never rejected, and dropped from the block so it contributes nothing — while the rest of the block is carried as before.
+  let delivery = opaqueOf('delivery');
+  if (delivery !== null && Object.prototype.hasOwnProperty.call(delivery, 'store_subpath')) {
+    new FieldReader(delivery, 'requirements.delivery', sink).warn('store_subpath', WITHDRAWN_STORE_SUBPATH);
+    const { store_subpath: _withdrawn, ...rest } = delivery;
+    delivery = rest;
+  }
+  return { scheduling, change, human_in_the_loop, execution, personas, opaque: { evidence: opaqueOf('evidence'), delivery, board: opaqueOf('board') } };
 }
+
+/**
+ * REQ-CONFIG-183's report for the withdrawn key (the file and its scope are prefixed where the load renders the warning):
+ * withdrawn rather than mistyped, what became of what it configured (REQ-CONFIG-192), and that it is ignored while the rest loads.
+ */
+export const WITHDRAWN_STORE_SUBPATH =
+  'was withdrawn from this domain, not mistyped (REQ-CONFIG-192): delivery records are no longer files in the workspace and no configuration key names a location for them; it is ignored, and the rest of the configuration loaded';
 
 function hasPlaceholder(template: string, names: readonly string[]): boolean {
   return names.some((n) => template.includes(`{${n}}`));

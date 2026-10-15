@@ -30,3 +30,23 @@ the workspace and no configuration key names a location for them; "raised once p
   as fatal; nothing pins `requirements.delivery.store_subpath`.
 - `docs/architecture/adr/0041-the-delivery-store.md`, `docs/architecture/adr/0036-configuration-loading.md` (consequence 6) —
   still describe the key as a hard load failure.
+
+## Outcome — repaired 2026-10-15 (fin47, `fin47-gate-timeout-and-config`)
+
+`readRequirementsSection` (`packages/config/src/sections/requirements.ts`) now reads one key of the otherwise opaque
+`delivery` block: when it holds `store_subpath`, one warning is raised at `requirements.delivery.store_subpath` with
+`WITHDRAWN_STORE_SUBPATH` ("was withdrawn from this domain, not mistyped (REQ-CONFIG-192): delivery records are no longer
+files in the workspace and no configuration key names a location for them; it is ignored, and the rest of the configuration
+loaded"), and the key is dropped from the carried block so it contributes nothing. It is never an error, and the block's other
+keys are carried as before. The load prefixes the file by full path and its scope as it does for `worktree_subpath`
+(`<file> at requirements.delivery.store_subpath (global scope): …`); the reader runs once over the merged document, so the
+report is raised once per load (REQ-CONFIG-183, REQ-CONFIG-233). A top-level `requirements.store_subpath` stays fatal: it is
+not the key the specification withdrew, and the carve-out does not reach a key that merely resembles one.
+
+Pinned by `requirements-section.test.ts` "REQ-CONFIG-192/183: the withdrawn delivery.store_subpath is reported once and ignored,
+never rejected, and the rest of the block loads" and `load.test.ts` "the withdrawn requirements.delivery.store_subpath is reported
+once, naming its file and scope, and the load completes", both red before (`warnings` was `[]`). The record moved with it:
+ADR-0036 consequence 6 and ADR-0041 (both "a hard load failure") are corrected in place with their readings kept beside the
+replacement, `03-runtime-view.md`'s `requirements:` paragraph names both carved-out keys, and
+`docs/architecture/first-executions.md` has the row. No proof writes the key, so the built app's showing of the warning is not
+driven.

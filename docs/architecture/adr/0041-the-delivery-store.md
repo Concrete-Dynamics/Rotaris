@@ -47,6 +47,13 @@ ADR-0036's consequence 6, which is where that rejection is delivered). `REQ-CONF
 any file granularity because it no longer names a file: "no key of this domain names a directory, a file
 or a document format for it".
 
+*(2026-10-15, fin47: "rejected as an unknown key … like any other" **is false** and is kept above beside its
+replacement. `REQ-CONFIG-192` as now written says a file that still states `store_subpath` is "**reported and ignored**
+rather than rejected", and `REQ-CONFIG-183`'s carve-out fixes what the report conveys. The loader read neither: the opaque
+`delivery` block carried the key unread, so it was neither rejected nor reported. It is now reported once and dropped
+(`WITHDRAWN_STORE_SUBPATH` in `packages/config/src/sections/requirements.ts`;
+[`../../defects/fixed/a-withdrawn-delivery-store-subpath-is-accepted-silently-rather-than-reported.md`](../../defects/fixed/a-withdrawn-delivery-store-subpath-is-accepted-silently-rather-than-reported.md)).)*
+
 `REQ-CONFIG-192` also fixes **forward-tolerant version handling**, and this is the sharpest constraint
 in the domain for a database: the reader supports exactly versions 1 through the configured value; a
 record whose version is higher is reported as unsupported and **is not interpreted**; a record whose
@@ -482,7 +489,9 @@ taken at the same time. Flagged for OQ-45 rather than decided.
    worktree half separately: `REQ-CONFIG-194` records that `worktree_subpath` was never a key of this
    domain either, and `REQ-GIT-137` fixes where requirement-unit checkouts go without a configuration
    key naming it. The user-visible consequence is a hard load failure for a workspace still stating
-   either key, which lands in ADR-0036 rather than here.
+   either key, which lands in ADR-0036 rather than here. *(2026-10-15, fin47: no longer so — the specification
+   now makes both keys reported and ignored, `REQ-CONFIG-183`'s carve-out; the hard failure is kept here as the
+   reading it replaced, and ADR-0036 consequence 6 records the replacement.)*
 3. **The blast radius is one workspace, and what it holds is operational rather than substantive.**
    SR-4 concentrates the crash domain, and that must be stated rather than assumed. The specific
    containment here is `REQ-CONFIG-192`'s own rule that this store holds operational records only and
@@ -930,7 +939,8 @@ proof passed, and the fourth and fifth failed together on one cause.
   are registered by the specification (`REQ-CONFIG-190/191/192/197`) and consumed by no part yet. Refusing a
   documented key would be the wrong refusal and validating a block nothing reads would be a second copy of a schema
   nobody executes, so they are accepted as mappings and passed through, with their inner validation owed to whoever
-  consumes them.
+  consumes them. One key of `delivery` is read now (2026-10-15, fin47): the withdrawn `store_subpath`, reported and
+  dropped as `REQ-CONFIG-192` and `REQ-CONFIG-183`'s carve-out require; the rest of the block is still carried opaque.
 
 **Not built here, stated:** decomposition into several units (above); the offers of `REQ-TRACE-409..416`, the source
 revisions of `278..280` and the graph of `322..333`, which stay where the first execution left them; the improvement

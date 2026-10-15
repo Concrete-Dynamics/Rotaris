@@ -2045,9 +2045,11 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   two persisted controls (`scheduling.mode` and `scheduling.max_concurrent_units`, REQ-TRACE-480) are written by the
   workspace service through `commitConfigFields(…, 'workspace', …)`, which loads again at once, so a change takes effect
   without a restart; the queue's stop is persisted nowhere, by requirement. REQ-CONFIG-183 makes every unknown key under
-  `requirements:` a **hard load failure** — the opposite of the top level's silent drop — with one exception:
-  `execution.worktree_subpath`, which REQ-CONFIG-194 names as not a key of this domain and which is reported and ignored
-  so the workspace still opens. `evidence`, `delivery` and `board` are accepted as mappings and carried opaque until the
+  `requirements:` a **hard load failure** — the opposite of the top level's silent drop — with REQ-CONFIG-183's two
+  carved-out keys, each reported once and ignored so the workspace still opens: `execution.worktree_subpath`, which
+  REQ-CONFIG-194 names as not a key of this domain, and the withdrawn `delivery.store_subpath` (REQ-CONFIG-192;
+  `WITHDRAWN_STORE_SUBPATH`, dropped from the block, since 2026-10-15, fin47 — until then it was carried unread and
+  reported nothing). `evidence`, `delivery` and `board` are otherwise accepted as mappings and carried opaque until the
   part that consumes them validates them. `execution.branch_template` is checked at load against REQ-GIT-138's two
   forbidden namespaces on a **rendered** example rather than a literal prefix, so a template that would collide by
   construction is refused before anything is created from it. REQ-GIT-138's directory half is the top-level

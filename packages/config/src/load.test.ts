@@ -533,6 +533,14 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
       if (!r.ok) throw new Error(r.error.lines.join(' | '));
       expect(r.value.warnings.some((w) => w.startsWith(`${join(s.globalDir, 'agents.yaml')} at personas.oracle.permission_mode (global scope): `))).toBe(true);
     });
+    it('the withdrawn requirements.delivery.store_subpath is reported once, naming its file and scope, and the load completes (REQ-CONFIG-192, REQ-CONFIG-183)', () => {
+      const s = scopes('requirements:\n  delivery:\n    store_subpath: x\n', null);
+      const r = loadConfiguration(s);
+      if (!r.ok) throw new Error(r.error.lines.join(' | '));
+      const reported = r.value.warnings.filter((w) => w.includes('requirements.delivery.store_subpath'));
+      expect(reported).toHaveLength(1);
+      expect(reported[0]!.startsWith(`${join(s.globalDir, 'agents.yaml')} at requirements.delivery.store_subpath (global scope): `)).toBe(true);
+    });
     it('a withdrawn requirements key names its file and scope (REQ-CONFIG-183)', () => {
       const s = scopes('requirements:\n  execution:\n    worktree_subpath: x\n', null);
       const r = loadConfiguration(s);

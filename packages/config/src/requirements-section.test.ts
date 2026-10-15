@@ -44,6 +44,21 @@ describe('REQ-CONFIG-183: unknown keys are fatal everywhere under requirements:,
     expect(sink.warnings.map((w) => w.path)).toEqual(['requirements.execution.worktree_subpath']);
     expect(section.execution.branch_template).toBe(REQUIREMENTS_DEFAULTS.execution.branch_template);
   });
+  it('REQ-CONFIG-192/183: the withdrawn delivery.store_subpath is reported once and ignored, never rejected, and the rest of the block loads', () => {
+    const { section, sink } = read({ delivery: { store_subpath: 'records', history_limit: 100 }, scheduling: { mode: 'automatic' } });
+    expect(sink.errors).toEqual([]);
+    expect(sink.warnings.map((w) => w.path)).toEqual(['requirements.delivery.store_subpath']);
+    const message = sink.warnings[0]!.message;
+    expect(message).toMatch(/withdrawn/);
+    expect(message).toMatch(/not mistyped/);
+    expect(message).toMatch(/delivery records are no longer files in the workspace/);
+    expect(message).toMatch(/no configuration key names a location for them/);
+    expect(message).toMatch(/ignored/);
+    expect(message).toMatch(/rest of the configuration loaded/);
+    expect(section.opaque.delivery).toEqual({ history_limit: 100 });
+    expect(section.scheduling.mode).toBe('automatic');
+    expect(read({ delivery: { store_subpath: 'records' } }).section.opaque.delivery).toEqual({});
+  });
   it('REQ-CONFIG-190/192/197: evidence, delivery and board are accepted as mappings and carried opaque', () => {
     const { section, sink } = read({ evidence: { follow_source_flags: false }, delivery: { history_limit: 100 }, board: { default_sort: 'id' } });
     expect(sink.errors).toEqual([]);

@@ -39,10 +39,20 @@ describe('REQ-CONFIG-183: unknown keys are fatal everywhere under requirements:,
     expect(sink.errors.map((e) => e.path).sort()).toEqual(['requirements.scheduling.max_parallel', 'requirements.store_subpath']);
   });
   it('REQ-CONFIG-194 / REQ-GIT-074: execution.worktree_subpath is reported and ignored, never rejected', () => {
-    const { section, sink } = read({ execution: { worktree_subpath: 'elsewhere' } });
+    const { section, sink } = read({ execution: { worktree_subpath: 'elsewhere', retry_limit: 3 }, scheduling: { mode: 'automatic' } });
     expect(sink.errors).toEqual([]);
     expect(sink.warnings.map((w) => w.path)).toEqual(['requirements.execution.worktree_subpath']);
     expect(section.execution.branch_template).toBe(REQUIREMENTS_DEFAULTS.execution.branch_template);
+    expect(section.execution.retry_limit).toBe(3);
+    expect(section.scheduling.mode).toBe('automatic');
+    // REQ-CONFIG-183's carve-out: the report conveys that the key is ignored AND that the rest of the configuration loaded, as
+    // the sibling report for delivery.store_subpath does (acceptance finding A8,
+    // docs/defects/fixed/the-worktree-subpath-report-does-not-say-the-rest-of-the-configuration-loaded.md).
+    const message = sink.warnings[0]!.message;
+    expect(message).toMatch(/is not a configuration key of this domain/);
+    expect(message).toMatch(/requirement-unit checkouts live where REQ-GIT-137 fixes them/);
+    expect(message).toMatch(/ignored/);
+    expect(message).toMatch(/rest of the configuration loaded/);
   });
   it('REQ-CONFIG-192/183: the withdrawn delivery.store_subpath is reported once and ignored, never rejected, and the rest of the block loads', () => {
     const { section, sink } = read({ delivery: { store_subpath: 'records', history_limit: 100 }, scheduling: { mode: 'automatic' } });

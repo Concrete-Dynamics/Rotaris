@@ -154,7 +154,7 @@ export function readRequirementsSection(value: unknown, sink: ProblemSink): Requ
   const ex = new FieldReader(sectionMap(top.raw('execution'), 'requirements.execution', sink), 'requirements.execution', sink);
   ex.rejectUnknown(EXECUTION_KEYS);
   // REQ-CONFIG-194 / REQ-GIT-074: reported and ignored, never rejected; the workspace opens.
-  if (ex.has('worktree_subpath')) ex.warn('worktree_subpath', 'is not a configuration key of this domain (REQ-CONFIG-194); it is ignored — requirement-unit checkouts live where REQ-GIT-137 fixes them');
+  if (ex.has('worktree_subpath')) ex.warn('worktree_subpath', NOT_A_KEY_WORKTREE_SUBPATH);
   const de = new FieldReader(sectionMap(ex.raw('decomposition'), 'requirements.execution.decomposition', sink), 'requirements.execution.decomposition', sink);
   de.rejectUnknown(DECOMPOSITION_KEYS);
   const execution: RequirementsExecutionSection = {
@@ -208,6 +208,16 @@ export function readRequirementsSection(value: unknown, sink: ProblemSink): Requ
   }
   return { scheduling, change, human_in_the_loop, execution, personas, opaque: { evidence: opaqueOf('evidence'), delivery, board: opaqueOf('board') } };
 }
+
+/**
+ * REQ-CONFIG-194 / REQ-CONFIG-183's report for `execution.worktree_subpath` (the file and its scope are prefixed where the load
+ * renders the warning): not a key of this domain, where the checkouts it would name live, and that it is ignored while the rest
+ * loads. Until 2026-10-15 it ended at "… where REQ-GIT-137 fixes them" and did not say the rest of the configuration loaded, which
+ * the carve-out's report conveys and `WITHDRAWN_STORE_SUBPATH` beside it said (acceptance finding A8,
+ * docs/defects/fixed/the-worktree-subpath-report-does-not-say-the-rest-of-the-configuration-loaded.md).
+ */
+export const NOT_A_KEY_WORKTREE_SUBPATH =
+  'is not a configuration key of this domain (REQ-CONFIG-194): requirement-unit checkouts live where REQ-GIT-137 fixes them; it is ignored, and the rest of the configuration loaded';
 
 /**
  * REQ-CONFIG-183's report for the withdrawn key (the file and its scope are prefixed where the load renders the warning):

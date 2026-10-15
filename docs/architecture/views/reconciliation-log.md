@@ -16,6 +16,10 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-15**
 
+**The `worktree_subpath` report says the rest of the configuration loaded (fin47, `fin47-accept1-6`; acceptance finding A8;
+REQ-CONFIG-183, REQ-CONFIG-194).** `03-runtime-view.md`'s `requirements:` paragraph names `NOT_A_KEY_WORKTREE_SUBPATH` beside
+`WITHDRAWN_STORE_SUBPATH`, both carved-out keys' reports now conveying that the rest loaded. No other view changed.
+
 **A todo `replace` gives its own id to a phase or task the list does not hold (fin47, `fin47-accept1-6`; acceptance finding A6;
 REQ-TOOLS-144, REQ-TOOLS-146).** `03-runtime-view.md` gains a paragraph before revision 3's: `resolveIds` resolves every incoming
 id first, every read of `replace` sees the resolved one, and the success sentence names each replacement. No other view changed.

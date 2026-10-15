@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { canonicaliseRoles, mergeLayers, overlaySection, PLAIN_OPS } from './merge.js';
 import { loadConfiguration, readDelegationStrategy, repositoryExcludeFile, replacedPrefixLength, spelledAsStated, statedPrefixLength, statingFile, type LoadedConfiguration, type ScopeFiles } from './load.js';
 import { parseConfig } from './document.js';
+import { NOT_A_KEY_WORKTREE_SUBPATH } from './sections/requirements.js';
 import { referentialMessages, renderFatal, renderProblems } from './validate.js';
 import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase, syntheticOriginOf } from './slots.js';
 import { readRuntimeSection, validateRuntimeField, RUNTIME_DEFAULTS } from './sections/runtime.js';
@@ -547,6 +548,8 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
       const r = loadConfiguration(s);
       if (!r.ok) throw new Error(r.error.lines.join(' | '));
       expect(r.value.warnings.some((w) => w.startsWith(`${join(s.globalDir, 'agents.yaml')} at requirements.execution.worktree_subpath (global scope): `))).toBe(true);
+      // The whole line a user reads, which says the rest of the configuration loaded (acceptance finding A8).
+      expect(r.value.warnings).toContain(`${join(s.globalDir, 'agents.yaml')} at requirements.execution.worktree_subpath (global scope): ${NOT_A_KEY_WORKTREE_SUBPATH}`);
     });
   });
   it('referential messages come in REQ-CONFIG-231/232\'s order and never throw', () => {

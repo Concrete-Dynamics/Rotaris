@@ -2080,7 +2080,9 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   without a restart; the queue's stop is persisted nowhere, by requirement. REQ-CONFIG-183 makes every unknown key under
   `requirements:` a **hard load failure** — the opposite of the top level's silent drop — with REQ-CONFIG-183's two
   carved-out keys, each reported once and ignored so the workspace still opens: `execution.worktree_subpath`, which
-  REQ-CONFIG-194 names as not a key of this domain, and the withdrawn `delivery.store_subpath` (REQ-CONFIG-192;
+  REQ-CONFIG-194 names as not a key of this domain (`NOT_A_KEY_WORKTREE_SUBPATH`, which says the rest of the configuration
+  loaded since 2026-10-15, fin47, finding A8 — until then it said only that the key is ignored), and the withdrawn
+  `delivery.store_subpath` (REQ-CONFIG-192;
   `WITHDRAWN_STORE_SUBPATH`, dropped from the block, since 2026-10-15, fin47 — until then it was carried unread and
   reported nothing). `evidence`, `delivery` and `board` are otherwise accepted as mappings and carried opaque until the
   part that consumes them validates them. `execution.branch_template` is checked at load against REQ-GIT-138's two

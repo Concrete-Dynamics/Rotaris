@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { millis, type MonotonicClock, type Timers } from '@rotaris/kernel';
 import { AiSdkModelClient, type ChatMessage, type ModelRequest, type StreamPart, type ToolSpec } from '@rotaris/model';
 // @ts-expect-error — plain ESM beside the scripts that run it.
+import { CLASSIFICATION_SCHEMA } from '@rotaris/engine';
+import { LOOP_SCHEMA } from '../../src/run-host/loop.js';
 import { startStubModelEndpoint, STUB_INTENT, STUB_LOOP, STUB_REPLY } from './stub-model-endpoint.mjs';
 
 interface Stub { baseUrl: string; counts: { requests: number; toolsRequests: number; terminalCalls: number; classifications: number }; close: () => Promise<void> }
@@ -62,6 +64,15 @@ describe('the loopback stub model endpoint, read through AiSdkModelClient (ADR-0
     const loop = await call({ output: { kind: 'json_schema', name: 'loop_classification', schema: { type: 'object', properties: { loop_detected: { type: 'boolean' } } } } });
     expect(JSON.parse(text(loop.parts))).toEqual(STUB_LOOP);
     expect(stub!.counts).toMatchObject({ requests: 2, classifications: 2, terminalCalls: 0 });
+  });
+
+  it('tells the two classifiers apart by the product\'s own schemas, the engine\'s intent schema and the run host\'s loop schema (accept1-11)', async () => {
+    // Built from the schemas the product sends, so a change of either that the stub no longer reads goes red here.
+    const intent = await call({ output: { kind: 'json_schema', name: 'intent_classification', schema: CLASSIFICATION_SCHEMA } });
+    expect(JSON.parse(text(intent.parts))).toEqual(STUB_INTENT);
+    const loop = await call({ output: { kind: 'json_schema', name: 'loop_classification', schema: LOOP_SCHEMA } });
+    expect(JSON.parse(text(loop.parts))).toEqual(STUB_LOOP);
+    expect(Object.keys(STUB_LOOP).sort()).toEqual([...((LOOP_SCHEMA as { required: string[] }).required)].sort());
   });
 
   it('answers a request with no terminal on offer, or no tools at all, with a short text reply', async () => {

@@ -307,9 +307,15 @@ describe('a launch\'s overrun is read from its pack: the swarm launch takes the 
     expect(overrunReading({ ...wandering, records: [] }).outcome).toBe('product');
   });
 
-  it('a launch whose log carries no timed-out line reached its result inside the wait', () => {
-    const r = overrunReading({ ...wandering, log: `[main ${at(500)}] info    capture: result\n`, endedAt: ms(504) });
+  it('a launch whose capture saw its result reached it inside the wait', () => {
+    const r = overrunReading({ ...wandering, log: `[main ${at(500)}] info    capture: wait for result satisfied after 500000 ms\n`, endedAt: ms(504) });
     expect(r.outcome).toBe('inside');
+  });
+
+  it('a launch that ended with its wait neither satisfied nor run out reads `ended`, not inside (accept1-5)', () => {
+    const r = overrunReading({ ...wandering, log: `[main ${at(0)}] info    capture: prompt submitted\n`, endedAt: ms(120) });
+    expect(r.outcome).toBe('ended');
+    expect(r.detail).toBe('the launch ended after 120 s of 840 s with its capture\'s wait neither satisfied nor run out — the application exited or crashed before the result');
   });
 
   it('live-run.mjs reads the delegation-swarm launch\'s overrun through it, not through a bare timed-out check', () => {

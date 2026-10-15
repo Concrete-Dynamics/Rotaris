@@ -504,8 +504,9 @@ export function statingFile(path: string, files: { global: ScopeFiles; workspace
  *
  * Tier B's live overlay (`tiers.ts`) calls `resolveMerged` with the load's raw documents, so a fault or warning on a value
  * the overlay supplied would be attributed to a scope file stating the same path rather than to the overlay (or, stated by
- * none, reported bare). No such case is known to be reached: each overlaid value comes from a control that offers only
- * accepted values, or is validated on assignment (REQ-CONFIG-111), before it is overlaid.
+ * none, reported bare). No such case is reached: since 2026-10-14 the run host refuses a live state holding any value the
+ * load's schema rejects, by `liveStateProblems` (`tiers.ts`, REQ-CONFIG-111) at the `config.liveState` handover, so no value
+ * reaches the overlay that the load would fault.
  */
 export function statingFileOf(path: string, files: { global: ScopeFiles; workspace: ScopeFiles }, raw: ResolveContext['raw']): { file: string; scope: ConfigScope; path: string } | null {
   let best: { file: string; scope: ConfigScope; path: string } | null = null;

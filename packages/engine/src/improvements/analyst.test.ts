@@ -381,6 +381,35 @@ describe("REQ-LIBRARY-009/016/022 the analyst is told the proposal's shape", () 
     expect(artifact.proposals[0]?.proposed_verifier_section?.checks?.[0]?.timeout).toBe(900);
   });
 
+  it("states every numeric bound the strict schemas enforce, so a bound changed there cannot leave a stale one here (accept1-19)", () => {
+    // Each "at least N" a field states: N is accepted and N - 1 refused, on the schema itself; each "(D when omitted)": D is the
+    // default the schema fills in; "or null": null is accepted. A field naming whole numbers refuses a fraction.
+    const check = (over: Record<string, unknown>) => VerifierCheckSchema.safeParse({ name: "n", command: "c", ...over });
+    const section = (over: Record<string, unknown>) => VerifierSectionSchema.safeParse(over);
+    const cases: [Readonly<Record<string, string>>, (over: Record<string, unknown>) => { success: boolean; data?: unknown }][] = [
+      [VERIFIER_CHECK_FIELDS, check],
+      [VERIFIER_SECTION_FIELDS, section],
+    ];
+    let bounds = 0;
+    for (const [fields, parse] of cases) {
+      for (const [key, text] of Object.entries(fields)) {
+        const least = /at least (\d+)/.exec(text);
+        if (least) {
+          bounds += 1;
+          const n = Number(least[1]);
+          expect(parse({ [key]: n }).success, `${key} accepts ${n}`).toBe(true);
+          expect(parse({ [key]: n - 1 }).success, `${key} refuses ${n - 1}`).toBe(false);
+          expect(parse({ [key]: n + 1_000_000 }).success, `${key} states no upper bound, so the schema has none`).toBe(true);
+        }
+        if (/whole/.test(text)) expect(parse({ [key]: 1.5 }).success, `${key} refuses a fraction`).toBe(false);
+        const omitted = /\((\d+) when omitted\)/.exec(text);
+        if (omitted) expect((parse({}).data as Record<string, unknown>)[key], `${key}'s default`).toBe(Number(omitted[1]));
+        if (/or null/.test(text)) expect(parse({ [key]: null }).success, `${key} accepts null`).toBe(true);
+      }
+    }
+    expect(bounds).toBe(4);
+  });
+
   it("describes exactly the keys the strict schemas take, so a key added there is named here", () => {
     expect(Object.keys(VERIFIER_SECTION_FIELDS).sort()).toEqual(sectionKeys);
     expect(Object.keys(VERIFIER_CHECK_FIELDS).sort()).toEqual(checkKeys);

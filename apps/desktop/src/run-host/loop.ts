@@ -1,7 +1,8 @@
 import { firstJsonObject, isRungRejection, selectSlot, type ClassifierSlots, type HelperModel, type LoopActivation, type RungMemory, type LoopClassification, type LoopClassifier, type Rung } from '@rotaris/engine';
 import type { AgentBackend, ModelRef, OutputSpec, ThinkingLevel } from '@rotaris/model';
 
-const LOOP_SCHEMA: Readonly<Record<string, unknown>> = {
+/** The structured rung's schema; exported so the stub endpoint's test answers from THIS schema, not a copy of it. */
+export const LOOP_SCHEMA: Readonly<Record<string, unknown>> = {
   type: 'object', additionalProperties: false,
   required: ['loop_detected', 'reason', 'corrective_message'],
   properties: { loop_detected: { type: 'boolean' }, reason: { type: 'string' }, corrective_message: { type: 'string' } },

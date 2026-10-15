@@ -435,6 +435,8 @@ describe('ADR-0037 Tier B — the live state over the merged document, resolved 
     expect(paths({ circuitBreakerEnabled: 'yes' })).toEqual(['circuit_breaker.enabled']);
     expect(paths({ slots: { large_model: 5 }, slotThinking: { small_model: 'extreme' } })).toEqual(['small_model_thinking', 'large_model']);
     expect(paths({ delegationStrategy: 'mob', sessionThinking: 'turbo' })).toEqual(['personas.<entry role>.thinking', 'rotaris.delegation_strategy']);
+    // The role the state names, where it names one (accept1-17).
+    expect(paths({ entryRole: 'planner', sessionThinking: 'turbo', sessionModel: 7 })).toEqual(['personas.planner.model', 'personas.planner.thinking']);
     expect(liveStateProblems({ runtime: { max_depth: 0 } })[0]?.message).toBe('must be at least 1, got 0');
   });
 

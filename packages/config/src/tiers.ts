@@ -65,8 +65,11 @@ export function liveStateProblems(live: LiveState): readonly Problem[] {
     oneOf(thinkingKeyOf(slot), live.slotThinking?.[slot], REASONING_LEVELS, true);
   }
   if (live.entryRole !== undefined && typeof live.entryRole !== 'string') problems.push({ path: 'default_persona', message: `must be a string, got ${typeName(live.entryRole)}` });
-  if (live.sessionModel !== undefined && live.sessionModel !== null && typeof live.sessionModel !== 'string') problems.push({ path: 'personas.<entry role>.model', message: `must be a string, got ${typeName(live.sessionModel)}` });
-  oneOf('personas.<entry role>.thinking', live.sessionThinking, ROLE_REASONING_LEVELS, true);
+  // The session override's path names the role the state hands over where it names one (fin46's review, accept1-17); with none,
+  // the override lands on the configured default role, which this check does not read, so the path keeps the placeholder.
+  const role = typeof live.entryRole === 'string' && live.entryRole !== '' ? live.entryRole : '<entry role>';
+  if (live.sessionModel !== undefined && live.sessionModel !== null && typeof live.sessionModel !== 'string') problems.push({ path: `personas.${role}.model`, message: `must be a string, got ${typeName(live.sessionModel)}` });
+  oneOf(`personas.${role}.thinking`, live.sessionThinking, ROLE_REASONING_LEVELS, true);
   oneOf('rotaris.delegation_strategy', live.delegationStrategy, DELEGATION_STRATEGIES, false);
   for (const key of TIER_B_RUNTIME_KEYS) {
     const value = live.runtime?.[key];

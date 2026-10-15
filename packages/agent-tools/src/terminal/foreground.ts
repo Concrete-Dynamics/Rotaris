@@ -142,7 +142,8 @@ export interface PausedEnd {
  * runs with an EMPTY argument vector of its own, one `execve`d with argc 0. No shell's `exec` makes one (`exec -a ''`
  * passes one empty argument), but a program the command `exec`s may start one in its own place before the watch's next
  * reading. On a Linux kernel before 5.18 its `cmdline` reads empty, so it reads as no identity, and the call goes
- * unwatched: it soft-pauses, as a replacement did before OQ-144's watch. From 5.18 the kernel gives an argc-0 `execve` one
+ * unwatched: it soft-pauses (or, where the call names a timeout, reaches that hard timeout), as a replacement did before OQ-144's
+ * watch. From 5.18 the kernel gives an argc-0 `execve` one
  * empty argument, its `cmdline` reads one NUL byte, and that is an identity the watch tells apart (measured on 6.18;
  * "OQ-144: a program run with an empty argument vector …" in `terminal.test.ts`).
  */

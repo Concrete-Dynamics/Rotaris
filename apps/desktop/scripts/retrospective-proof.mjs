@@ -769,7 +769,17 @@ await (async () => {
   // The other outcome the live wait may meet (live-run-1 F4: 3 of 6 real analyst calls ran past 60 s): the limit set to 10 s
   // the same way, an analyst that never answers, and the run's empty artifact with REQ-NOTIFY-100's detail naming the limit
   // and the control (PD-CONFIG-003 revision 2) — the notice its first execution left unmeasured in the built app.
-  await capture('live-shape-settings-10', runtimeFieldSteps({ id: 'improvement-timeout', value: 10 }), 90_000);
+  // The field's description names the stored value, the one a run would read (PD-CONFIG-003 revision 2): before Save it is still
+  // the value stored before the edit, after Save the saved one. Pinned in the built app since fin47 (fin46's review, accept1-22);
+  // until then the proof recorded both readings and asserted neither.
+  check('the Improvement analysis timeout\'s description names the stored value: 60 s while the edit is unsaved, 300 s once saved',
+    saved.descriptionAfterEdit === 'Stored as 60 seconds.' && saved.descriptionAtEnd === 'Stored as 300 seconds.',
+    `after the edit ${JSON.stringify(saved.descriptionAfterEdit)}, after Save ${JSON.stringify(saved.descriptionAtEnd)}`);
+  const setLog10 = await capture('live-shape-settings-10', runtimeFieldSteps({ id: 'improvement-timeout', value: 10 }), 90_000);
+  const saved10 = fieldSaveReading(setLog10, { id: 'improvement-timeout' });
+  check('set to 10 the same way: the description names 300 s while the edit is unsaved and 10 s once saved',
+    saved10.descriptionAfterEdit === 'Stored as 300 seconds.' && saved10.descriptionAtEnd === 'Stored as 10 seconds.' && saved10.atEnd === 'All changes saved',
+    JSON.stringify(saved10));
   const slowLog = await capture('live-shape-timeout', {
     ROTARIS_IMPROVEMENT_SCRIPT: 'timeout', ROTARIS_CAPTURE_PROMPT: 'tidy the workspace once more',
     ROTARIS_CAPTURE_WAIT: settledWait('post_run'), ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '2500', ROTARIS_CAPTURE_PROBE: '[data-testid="notice"]',

@@ -55,6 +55,19 @@ function importsOf(file: string): string[] {
   return found;
 }
 
+/** Every module `starts` reach through `edges`, the starts included. */
+function closure(starts: readonly string[], edges: ReadonlyMap<string, readonly string[]>): Set<string> {
+  const seen = new Set<string>();
+  const stack = [...starts];
+  while (stack.length > 0) {
+    const f = stack.pop()!;
+    if (seen.has(f)) continue;
+    seen.add(f);
+    stack.push(...(edges.get(f) ?? []));
+  }
+  return seen;
+}
+
 interface PackageLayout {
   readonly name: string;
   readonly files: string[];
@@ -62,6 +75,12 @@ interface PackageLayout {
   readonly entries: string[];
   readonly reached: Set<string>;
   readonly importedByTests: Set<string>;
+  /**
+   * Every module a test reaches, through any chain of relative imports — a module reached only through a test-support module
+   * (test -> a.test-support.ts -> b.ts) is test support too. Until fin47 only a test's direct imports were read, so `b.ts`
+   * escaped the guard (fin46's review, accept1-21).
+   */
+  readonly reachedByTests: Set<string>;
 }
 
 function layout(name: string): PackageLayout {
@@ -70,16 +89,10 @@ function layout(name: string): PackageLayout {
   const edges = new Map(files.map((f) => [f, importsOf(f)] as const));
   const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { exports: Record<string, string> };
   const entries = Object.values(manifest.exports).map((p) => resolve(dir, p));
-  const reached = new Set<string>();
-  const stack = [...entries];
-  while (stack.length > 0) {
-    const f = stack.pop()!;
-    if (reached.has(f)) continue;
-    reached.add(f);
-    stack.push(...(edges.get(f) ?? []));
-  }
+  const reached = closure(entries, edges);
   const importedByTests = new Set(files.filter(isTest).flatMap((f) => edges.get(f) ?? []));
-  return { name, files, edges, entries, reached, importedByTests };
+  const reachedByTests = closure([...importedByTests], edges);
+  return { name, files, edges, entries, reached, importedByTests, reachedByTests };
 }
 
 const packages = readdirSync(PACKAGES, { withFileTypes: true })
@@ -101,10 +114,18 @@ describe('test support is named as such in every package', () => {
 
   it('names every module only tests reach `<unit>.test-support.ts`', () => {
     const misnamed = all((p) => p.files
-      .filter((f) => !isTest(f) && !p.reached.has(f) && p.importedByTests.has(f) && !isTestSupport(f))
+      .filter((f) => !isTest(f) && !p.reached.has(f) && p.reachedByTests.has(f) && !isTestSupport(f))
       .map(rel))
       .filter((f) => !(f in PRODUCT_NOT_YET_REACHED));
     expect(misnamed).toEqual([]);
+  });
+
+  it('follows a test\'s imports through test support to what it reaches', () => {
+    // A package of three: a test imports `a.test-support.ts`, which imports `b.ts`; nothing else reaches `b.ts`.
+    const edges = new Map<string, string[]>([['x.test.ts', ['a.test-support.ts']], ['a.test-support.ts', ['b.ts']], ['b.ts', []], ['c.ts', []]]);
+    expect([...closure(edges.get('x.test.ts')!, edges)].sort()).toEqual(['a.test-support.ts', 'b.ts']);
+    // And on the real packages, every directly imported module is in the transitive set.
+    for (const p of packages) for (const f of p.importedByTests) expect(p.reachedByTests.has(f), rel(f)).toBe(true);
   });
 
   it('keeps each stated product exception true: present, and still reached by no entry', () => {

@@ -281,6 +281,16 @@ export function overrunReading({ log, startedAt, endedAt, records, calls, budget
   const traffic = (Array.isArray(records) ? records : []).map(trafficCall);
   const attribution = attributeWait({ startedAt, endedAt, quitAt: waitRanOutAt(log), requests: traffic, tools: toolIntervals(Array.isArray(calls) ? calls : []) });
   const usage = { completionTokens: traffic.reduce((t, c) => t + (c.completionTokens ?? 0), 0), reasoningTokens: traffic.reduce((t, c) => t + (c.reasoningTokens ?? 0), 0) };
-  const timedOut = /capture: wait for result timed out/.test(typeof log === 'string' ? log : '');
+  const text = typeof log === 'string' ? log : '';
+  const timedOut = /capture: wait for result timed out/.test(text);
+  /*
+   * A launch whose capture neither saw its result nor ran its wait out ended some other way — the application exited or
+   * crashed first (the capture logs `capture: wait for result satisfied after N ms` when it sees the result, `probe.ts`).
+   * Until fin47 such a launch read `inside` and passed the deadline check, leaving the crash to the other checks to find
+   * (fin46's review, accept1-5); it reads `ended` now, which the callers' `inside` check fails, saying so.
+   */
+  if (!timedOut && !/capture: wait for result satisfied/.test(text)) {
+    return { outcome: 'ended', detail: `the launch ended after ${n((endedAt - startedAt) / 1000)} s of ${n(budgetMs / 1000)} s with its capture's wait neither satisfied nor run out — the application exited or crashed before the result` };
+  }
   return deadlineReading({ timedOut, attribution, budgetMs, traffic: recorded && traffic.length > 0, usage, ...(raise === undefined ? {} : { raise }) });
 }

@@ -4,7 +4,7 @@
  * inside. Every variable main, the run host or the workspace service reads behind `__ROTARIS_SEAMS__` on the read's own line
  * must be named by the list, so a seam added under the flag and left off the list fails here, before any package is built.
  */
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -54,7 +54,8 @@ function productConstants(): Map<string, Set<string>> {
     }
   };
   add(SRC);
-  for (const pkg of readdirSync(PACKAGES, { withFileTypes: true })) if (pkg.isDirectory()) add(join(PACKAGES, pkg.name, 'src'));
+  // A package with no `src/` (one being set up, or a stray directory) has no constants to give, and is no reason to fail here.
+  for (const pkg of readdirSync(PACKAGES, { withFileTypes: true })) if (pkg.isDirectory() && existsSync(join(PACKAGES, pkg.name, 'src'))) add(join(PACKAGES, pkg.name, 'src'));
   return stringConstants(texts);
 }
 
@@ -67,6 +68,12 @@ interface EnvRead { variable: string; line: number; flagged: boolean }
  * `constants`, and a destructuring of an environment (`const { ROTARIS_X } = process.env`, across lines too). A key in
  * constant shape that `constants` cannot resolve is answered as `env[KEY]`, so the rules report it rather than pass it; a
  * lower-case key (`env[key]` in a loop) is not a constant and is not read.
+ *
+ * What it does NOT see, so the bundle check at packaging (`seamCheck`) stays the backstop: a key that is a member expression
+ * (`env[VARS.SEAM]`); a lower-case parameter resolved at a call site (`readVar('ROTARIS_X')` over `process.env[name]`); a
+ * destructuring with a type annotation (`const { ROTARIS_X }: NodeJS.ProcessEnv = process.env`) or in a parameter list; and
+ * an environment object not named `env` or `…Env`. The rules below scan the three `apps/desktop/src` roots, not
+ * `packages/<name>/src`, whose code is bundled into `out/main` as well (fin46's review, accept1-23).
  *
  * Until 2026-10-15 the three rules below found the bracket form alone, so a seam read in any other form passed them
  * (docs/defects/fixed/the-seam-checks-source-test-reads-only-the-bracket-form-of-a-variable-read.md).

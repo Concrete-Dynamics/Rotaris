@@ -541,7 +541,7 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
       expect(reported).toHaveLength(1);
       expect(reported[0]!.startsWith(`${join(s.globalDir, 'agents.yaml')} at requirements.delivery.store_subpath (global scope): `)).toBe(true);
     });
-    it('a withdrawn requirements key names its file and scope (REQ-CONFIG-183)', () => {
+    it('a requirements key the specification names as not a configuration key of this domain names its file and scope (REQ-CONFIG-194, REQ-CONFIG-183)', () => {
       const s = scopes('requirements:\n  execution:\n    worktree_subpath: x\n', null);
       const r = loadConfiguration(s);
       if (!r.ok) throw new Error(r.error.lines.join(' | '));

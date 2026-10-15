@@ -25,9 +25,11 @@ const snapshotWith = (improvementTimeout: number): ConfigSnapshot => ({
   files: { workspace: '/ws/.rotaris/agents.yaml', global: '/cfg/agents.yaml' },
 });
 const outcome = async () => ({ ok: true as const });
-function render(snapshot: ConfigSnapshot): string {
+function render(snapshot: ConfigSnapshot, edit?: number): string {
+  const saved = pendingFrom(snapshot);
+  const pending = edit === undefined ? saved : applyChange(saved, { kind: 'runtime', key: 'improvement_collector_timeout', value: edit });
   const props: ConfigSettingsProps = {
-    snapshot, pending: pendingFrom(snapshot), dirty: false, loading: false, error: null, serviceAvailable: true,
+    snapshot, pending, dirty: pending !== saved, loading: false, error: null, serviceAvailable: true,
     onChange: () => {}, onSave: outcome, onDiscard: () => {}, onSetField: outcome,
   };
   return renderToStaticMarkup(createElement(RuntimeSettings, props));
@@ -109,6 +111,20 @@ describe('the improvement analysis timeout control (PD-CONFIG-003 revision 2, RE
     const edited = applyChange(saved, { kind: 'runtime', key: 'improvement_collector_timeout', value: improvementTimeoutFromInput(120) });
     expect(savePayload(saved, edited).runtime).toEqual({ improvement_collector_timeout: 120 });
     expect(liveStateOf(edited).runtime?.['improvement_collector_timeout']).toBe(120);
+  });
+
+  it('states the stored seconds, not an unsaved edit, during an edit (REQ-CONFIG-446, REQ-CONFIG-419)', () => {
+    // A stored 5 s, shown clamped as 10, overtyped with 300: the form holds 300 s until Save, the workspace file still 5 s
+    // (docs/defects/fixed/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md). Until 2026-10-15 the
+    // description read the pending 300.
+    const card = policy(render(snapshotWith(5), improvementTimeoutFromInput(300)));
+    expect(card).toMatch(/id="improvement-timeout"[^>]*value="300"/);
+    expect(card).toContain('aria-description="Stored as 5 seconds."');
+    expect(card).not.toContain('Stored as 300 seconds');
+    expect(card).not.toContain('data-testid="improvement-timeout-stored"');
+    expect(storedImprovementTimeoutNote(5, 300)).toBeNull();
+    expect(storedImprovementTimeoutNote(5, 5)).toBe('Stored as 5 seconds; kept until you change this field.');
+    expect(policy(render(snapshotWith(300)))).toContain('aria-description="Stored as 300 seconds."');
   });
 
   it("the screen's runtime keys are exactly the desktop save's (REQ-CONFIG-256's closed list)", () => {

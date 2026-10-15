@@ -480,15 +480,29 @@ export function timeoutSecondsFromInput(value: number): number {
 
 /**
  * PD-CONFIG-003: the line beneath the control when the stored seconds are not what it shows (a value that is not a whole
- * minute, or one outside 60–14,400 s): the exact figure, kept until the field is changed. `null` when the control shows it.
+ * minute, or one outside 60–14,400 s): the exact figure, kept until the field is changed. `null` when the control shows it,
+ * and `null` once the field holds an edit (`pending` differs from `stored`): the stored value is kept only until then.
+ *
+ * `stored` is the saved configuration's value (the snapshot's), never the form's pending one, which is not stored until
+ * Save (REQ-CONFIG-419). Until 2026-10-15 both this line and the field's description read the pending value, so an unsaved
+ * edit was described as stored
+ * (`docs/defects/fixed/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md`).
  */
-export function storedTimeoutNote(seconds: number): string | null {
-  return timeoutMinutesForDisplay(seconds) * 60 === seconds ? null : storedSecondsLine(seconds);
+export function storedTimeoutNote(stored: number, pending: number = stored): string | null {
+  return pending !== stored || timeoutMinutesForDisplay(stored) * 60 === stored ? null : storedSecondsLine(stored);
 }
 
 /** REQ-CONFIG-446's stated value, one wording for both timeout controls (PD-CONFIG-003 and its revision 2). */
 function storedSecondsLine(seconds: number): string {
   return `Stored as ${seconds} seconds; kept until you change this field.`;
+}
+
+/**
+ * REQ-CONFIG-446 with REQ-CONFIG-419: the description both timeout fields carry for assistive technology — the stored seconds,
+ * read from the saved configuration and never from an unsaved edit, which the field itself already shows.
+ */
+export function storedSecondsDescription(stored: number): string {
+  return `Stored as ${stored} seconds.`;
 }
 
 /** PD-CONFIG-003 revision 2: the improvement analysis timeout control's widget clamp, in whole seconds. */
@@ -518,7 +532,10 @@ export function improvementTimeoutEdit(raw: string): { readonly commit: number }
   return clampedNumberEdit(raw, IMPROVEMENT_TIMEOUT_SECONDS);
 }
 
-/** PD-CONFIG-003 revision 2: the line beneath the control when the stored seconds lie outside 10–600; `null` when it shows them. */
-export function storedImprovementTimeoutNote(seconds: number): string | null {
-  return improvementTimeoutForDisplay(seconds) === seconds ? null : storedSecondsLine(seconds);
+/**
+ * PD-CONFIG-003 revision 2: the line beneath the control when the stored seconds lie outside 10–600; `null` when it shows them,
+ * and `null` once the field holds an edit. `stored` is the saved value, as for `storedTimeoutNote`.
+ */
+export function storedImprovementTimeoutNote(stored: number, pending: number = stored): string | null {
+  return pending !== stored || improvementTimeoutForDisplay(stored) === stored ? null : storedSecondsLine(stored);
 }

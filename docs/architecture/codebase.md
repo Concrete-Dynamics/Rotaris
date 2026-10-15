@@ -1356,7 +1356,8 @@ two scratch stores, the per-agent timeout at 3 s and every child scripted to com
 is cut off while making progress (PD-ORCH-004). `later-iteration`: one launch in which a prompt typed while the run goes is
 queued as iteration 2, whose root takes up the offer iteration 1's root left (the scripted `continue:` step); the
 continuation, cut off too, is offered none. `later-run`: the run that cut the child off; a launch that sets Settings ›
-Runtime › Per-agent timeout to 1 minute and saves (`lib/settings-runtime-field.mjs`); a relaunch whose follow-up root reads
+Runtime › Per-agent timeout to 1 minute and saves (`lib/settings-runtime-field.mjs`), the field's description reading the
+stored 3 s until Save and 60 s after it (REQ-CONFIG-446/419, since 2026-10-15); a relaunch whose follow-up root reads
 the offer in the handoff and takes it up, the continuation succeeding. Each reads the store — the cut-off report, the later
 root's first recorded message, `continuation_of`, no offer left open — and the sidebar's timed-out tag as it appears; results
 in `.proof/continuation-proof/results.json`; `--only=<scenario>`.

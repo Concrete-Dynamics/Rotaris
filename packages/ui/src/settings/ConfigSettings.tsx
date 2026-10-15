@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, REASONING_LEVEL_NAMES, ROLE_REASONING_NAMES, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
-import { CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, clampForDisplay, COMPRESSION_THRESHOLD_RANGE, DEPTH_CAP_RANGE, FAN_OUT_RANGE, ITERATION_CAP_RANGE, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutForDisplay, scopeCellOf, type NumberRange, storedImprovementTimeoutNote, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
+import { CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, clampForDisplay, COMPRESSION_THRESHOLD_RANGE, DEPTH_CAP_RANGE, FAN_OUT_RANGE, ITERATION_CAP_RANGE, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutForDisplay, scopeCellOf, type NumberRange, storedImprovementTimeoutNote, storedSecondsDescription, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
 import { SecurityPolicy } from './SecurityPolicy.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
 
@@ -281,6 +281,9 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
   if (!snapshot || !pending) return <p className="text-secondary">{props.loading ? 'Reading the configuration…' : props.error ?? 'No configuration service.'}</p>;
   if (!snapshot.loadOk) return <Fatal snapshot={snapshot} />;
   const rt = pending.runtime;
+  // REQ-CONFIG-446 / REQ-CONFIG-419: what the two timeout fields state as stored is the saved configuration's value, never the
+  // pending edit, which reaches the file only on Save.
+  const stored = snapshot.runtime;
   const raw = advancedScope === 'workspace' ? snapshot.rawRuntime.workspace : snapshot.rawRuntime.global;
   const writeDiagnostics = async (value: boolean) => {
     const r: Outcome = await onSetField(advancedScope, { runtime: { memory_diagnostics_enabled: value } });
@@ -315,9 +318,9 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
           rewritten until the field is changed (REQ-CONFIG-446, REQ-CONFIG-419). */}
       <div className="settings__action">
         <label htmlFor="child-timeout">{PER_AGENT_TIMEOUT_LABEL}</label>
-        <ClampedNumberField id="child-timeout" range={CHILD_TIMEOUT_MINUTES} description={`Stored as ${rt.child_timeout} seconds.`} shown={timeoutMinutesForDisplay(rt.child_timeout)} onCommit={(minutes) => onChange({ kind: 'runtime', key: 'child_timeout', value: timeoutSecondsFromInput(minutes) })} /><span className="text-secondary">minutes</span>
+        <ClampedNumberField id="child-timeout" range={CHILD_TIMEOUT_MINUTES} description={storedSecondsDescription(stored.child_timeout)} shown={timeoutMinutesForDisplay(rt.child_timeout)} onCommit={(minutes) => onChange({ kind: 'runtime', key: 'child_timeout', value: timeoutSecondsFromInput(minutes) })} /><span className="text-secondary">minutes</span>
         <span className="text-secondary settings__hint" data-testid="child-timeout-hint">Each delegated agent is stopped this long after it starts; the step in flight gets up to 30 s more, and an agent still making progress hands its work back to its parent. Applies to runs started from now.</span>
-        {storedTimeoutNote(rt.child_timeout) !== null && <span className="text-secondary settings__hint" data-testid="child-timeout-stored">{storedTimeoutNote(rt.child_timeout)}</span>}
+        {storedTimeoutNote(stored.child_timeout, rt.child_timeout) !== null && <span className="text-secondary settings__hint" data-testid="child-timeout-stored">{storedTimeoutNote(stored.child_timeout, rt.child_timeout)}</span>}
       </div>
       <h2 className="settings__heading">Runtime policy</h2>
       <DesignCard className="card settings__card">
@@ -330,9 +333,9 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
             REQ-CONFIG-419). */}
         <div className="settings__action">
           <label htmlFor="improvement-timeout">Improvement analysis timeout</label>
-          <ClampedNumberField id="improvement-timeout" range={IMPROVEMENT_TIMEOUT_SECONDS} description={`Stored as ${rt.improvement_collector_timeout} seconds.`} shown={improvementTimeoutForDisplay(rt.improvement_collector_timeout)} onCommit={(value) => onChange({ kind: 'runtime', key: 'improvement_collector_timeout', value })} /><span className="text-secondary">seconds</span>
+          <ClampedNumberField id="improvement-timeout" range={IMPROVEMENT_TIMEOUT_SECONDS} description={storedSecondsDescription(stored.improvement_collector_timeout)} shown={improvementTimeoutForDisplay(rt.improvement_collector_timeout)} onCommit={(value) => onChange({ kind: 'runtime', key: 'improvement_collector_timeout', value })} /><span className="text-secondary">seconds</span>
           <span className="text-secondary settings__hint" data-testid="improvement-timeout-hint">How long the background review of a finished run may take while the improvement loop is on; a review that runs longer ends with no proposals. It never holds up your work, and applies to runs started from now.</span>
-          {storedImprovementTimeoutNote(rt.improvement_collector_timeout) !== null && <span className="text-secondary settings__hint" data-testid="improvement-timeout-stored">{storedImprovementTimeoutNote(rt.improvement_collector_timeout)}</span>}
+          {storedImprovementTimeoutNote(stored.improvement_collector_timeout, rt.improvement_collector_timeout) !== null && <span className="text-secondary settings__hint" data-testid="improvement-timeout-stored">{storedImprovementTimeoutNote(stored.improvement_collector_timeout, rt.improvement_collector_timeout)}</span>}
         </div>
         <Toggle id="keep-going" label="Keep going" hint="A run holds itself open while the last verification suite still has a failing or timed-out check; no budget is extended." on={rt.keep_going} onChange={(v) => onChange({ kind: 'runtime', key: 'keep_going', value: v })} />
         <div className="settings__action">

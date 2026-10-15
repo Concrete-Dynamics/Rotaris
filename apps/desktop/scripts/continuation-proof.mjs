@@ -21,7 +21,8 @@ import { TAG_EVAL, TAG_SELECTOR, tagReading, timeoutLine } from './lib/cut-off-r
  *                        `continuation_of` (the scripted `continue:` step); the continuation is cut off too and carries the
  *                        cut-off statement and no offer of its own ("continued once and never chained").
  *   2. later-run       — three launches over one store. The first run cuts `alpha` off and completes; the second sets
- *                        Settings › Runtime › Per-agent timeout to 1 minute and saves (`lib/settings-runtime-field.mjs`);
+ *                        Settings › Runtime › Per-agent timeout to 1 minute and saves (`lib/settings-runtime-field.mjs`),
+ *                        the field's description stating the stored 3 s until Save and 60 s after it (REQ-CONFIG-446);
  *                        the third reopens the session from the Sessions browser, and a follow-up prompt starts
  *                        a new run whose root reads the open offer in the handoff's progress context (revision 4's first
  *                        limb) and takes it up; the continuation finishes `succeeded`.
@@ -215,6 +216,10 @@ await scenarioRun('later-run', async () => {
   const yaml = readFileSync(join(s.workspace, '.rotaris', 'agents.yaml'), 'utf8');
   expect(saved.afterEdit === 'Unsaved changes' && saved.atEnd === 'All changes saved' && saved.field === '1', `the Per-agent timeout control: ${JSON.stringify(saved)}`);
   expect(/^\s+child_timeout: 60\s*$/m.test(yaml), `Save did not store 60 seconds:\n${yaml}`);
+  // REQ-CONFIG-446 / REQ-CONFIG-419: between the edit and Save the file still holds 3 s, and the field's description says so;
+  // after Save it states the 60 s the file now holds. Until 2026-10-15 the first reading stated the unsaved 60 as stored
+  // (docs/defects/fixed/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md).
+  expect(saved.descriptionAfterEdit === 'Stored as 3 seconds.' && saved.descriptionAtEnd === 'Stored as 60 seconds.', `the Per-agent timeout's description before and after Save: ${JSON.stringify([saved.descriptionAfterEdit, saved.descriptionAtEnd])}`);
   const r2 = await launch('later-run-2', s, {
     ROTARIS_SCRIPT: 'continue:coding-agent:alpha-continued,answer,answer', ROTARIS_CHILD_SCRIPT: 'read,answer',
     ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_PROMPT: 'finish what was cut off',

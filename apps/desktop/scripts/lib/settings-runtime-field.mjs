@@ -20,6 +20,11 @@
  *
  * The click waits for the field (`@~`, up to `at`); every later step is an appointment after that deadline, so the steps
  * land in order whenever the click lands. `fieldSaveReading` reads the launch log back.
+ *
+ * The field's `aria-description` is read twice through `ROTARIS_CAPTURE_EVAL_AT`: after the edit and before Save, when it must
+ * still state the value the file holds (REQ-CONFIG-446, REQ-CONFIG-419), and after Save, when it states the new one. Until
+ * 2026-10-15 the description read the form's pending value, so the first reading stated the unsaved edit as stored
+ * (`docs/defects/fixed/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md`).
  */
 export function runtimeFieldSteps({ id, value, at = 8_000 }) {
   if (!/^[a-z][a-z0-9-]*$/.test(id)) throw new Error(`a Settings field id is a bare id: ${id}`);
@@ -32,14 +37,20 @@ export function runtimeFieldSteps({ id, value, at = 8_000 }) {
     ROTARIS_CAPTURE_KEYS: `Tab@${at + 1_800}`,
     ROTARIS_CAPTURE_PROBE_AT: `.save-bar__status@${at + 2_200}`,
     ROTARIS_CAPTURE_PROBE: `#${id};;.save-bar__status`,
+    ROTARIS_CAPTURE_EVAL_AT: `${describedBy(id)}@${at + 2_200};;${describedBy(id)}@${at + 4_500}`,
     ROTARIS_CAPTURE_AFTER_MS: String(at + 5_000),
   };
 }
 
+/** The renderer expression that reads one field's `aria-description` (null when the field or the attribute is absent). */
+function describedBy(id) {
+  return `document.getElementById('${id}')?.getAttribute('aria-description') ?? null`;
+}
+
 /**
  * What one `runtimeFieldSteps` launch shows: the bar's status after the edit (`Unsaved changes` when the edit reached the
- * form) and at the end (`All changes saved` when Save wrote it), and the field's value at the end. Null where the log holds
- * no such probe.
+ * form) and at the end (`All changes saved` when Save wrote it), the field's value at the end, and its `aria-description`
+ * after the edit and after Save. Null where the log holds no such probe.
  */
 export function fieldSaveReading(log, { id, at = 8_000 }) {
   const probe = (prefix, selector) => {
@@ -49,9 +60,17 @@ export function fieldSaveReading(log, { id, at = 8_000 }) {
     try { return JSON.parse(m[1]); } catch { return null; }
   };
   const status = (rows) => (rows === null ? null : rows[0]?.text ?? null);
+  const description = (ms) => {
+    const escaped = `capture: eval-at ${ms} ${describedBy(id)} → `.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m = new RegExp(`${escaped}(.*)$`, 'm').exec(log);
+    if (m === null) return null;
+    try { const value = JSON.parse(m[1].trim()); return typeof value === 'string' ? value : null; } catch { return null; }
+  };
   return {
     afterEdit: status(probe(`probe-at ${at + 2_200}`, '.save-bar__status')),
     atEnd: status(probe('probe', '.save-bar__status')),
     field: probe('probe', `#${id}`)?.[0]?.value ?? null,
+    descriptionAfterEdit: description(at + 2_200),
+    descriptionAtEnd: description(at + 4_500),
   };
 }

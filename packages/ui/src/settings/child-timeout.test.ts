@@ -25,9 +25,11 @@ const snapshotWith = (childTimeout: number): ConfigSnapshot => ({
 });
 
 const outcome = async () => ({ ok: true as const });
-function render(snapshot: ConfigSnapshot): string {
+function render(snapshot: ConfigSnapshot, edit?: number): string {
+  const saved = pendingFrom(snapshot);
+  const pending = edit === undefined ? saved : applyChange(saved, { kind: 'runtime', key: 'child_timeout', value: edit });
   const props: ConfigSettingsProps = {
-    snapshot, pending: pendingFrom(snapshot), dirty: false, loading: false, error: null, serviceAvailable: true,
+    snapshot, pending, dirty: pending !== saved, loading: false, error: null, serviceAvailable: true,
     onChange: () => {}, onSave: outcome, onDiscard: () => {}, onSetField: outcome,
   };
   return renderToStaticMarkup(createElement(RuntimeSettings, props));
@@ -97,5 +99,21 @@ describe('the per-agent timeout in minutes (PD-CONFIG-003, REQ-MONITOR-286)', ()
     const section = limits(render(snapshotWith(1250)));
     expect(section).toMatch(/id="child-timeout"[^>]*value="21"/);
     expect(section).toContain('data-testid="child-timeout-stored">Stored as 1250 seconds; kept until you change this field.</span>');
+  });
+
+  it('states the stored seconds, not an unsaved edit, during an edit (REQ-CONFIG-446, REQ-CONFIG-419)', () => {
+    // A stored 3 s, shown clamped as 1 minute, overtyped with 1: the form holds 60 s until Save, the workspace file still 3 s
+    // (docs/defects/fixed/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md). Until 2026-10-15 the
+    // description read the pending 60.
+    const section = limits(render(snapshotWith(3), timeoutSecondsFromInput(1)));
+    expect(section).toMatch(/id="child-timeout"[^>]*value="1"/);
+    expect(section).toContain('aria-description="Stored as 3 seconds."');
+    expect(section).not.toContain('Stored as 60 seconds');
+    // The field was changed, so the stored line beneath is gone: the stored value is kept only until then.
+    expect(section).not.toContain('data-testid="child-timeout-stored"');
+    expect(storedTimeoutNote(3, 60)).toBeNull();
+    expect(storedTimeoutNote(3, 3)).toBe('Stored as 3 seconds; kept until you change this field.');
+    // After Save the snapshot holds the new value, and the description follows it.
+    expect(limits(render(snapshotWith(60)))).toContain('aria-description="Stored as 60 seconds."');
   });
 });

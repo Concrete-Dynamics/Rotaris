@@ -15683,3 +15683,8 @@ launch 13 (`child-rename-cold-js`) and the live `rename` scenario's PD-MCP-004 c
 under (a) or (b), the first `rename_symbol` call says `3 changes applied` and no other tool writes `src/App.jsx` or
 `src/todos.test.js` after it; under (c), the result carries the appended sentence and the model's own edits follow; under (d), the
 three files carry the new name with the rename's one row; under (e), the scenario's check reads NOTE.
+
+*Confirmed release-blocking 2026-10-15:* fin47's acceptance round 1 at `cb6d1d5` read `code-intel-proof` launch 13 red twice
+(finding A1), and bundle `fin47-accept1-5` read it red again at `8baf9e4`, whose repair task waits on this ruling; the runs are in
+[the note](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). Still
+open.

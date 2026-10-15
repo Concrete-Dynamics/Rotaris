@@ -46,6 +46,16 @@ launch 13 red as the live run was — "(1 changes applied)", `src/cold-c.js` alo
 report and artifact listing the one file. Its instrument, shown working once by a control run not committed (the same launch with
 an empty `jsconfig.json` written into its workspace, load 3.35): "(2 changes applied)", both files, `PASSED`.
 
+**Confirmed again 2026-10-15, still waiting on OQ-362.** fin47's acceptance round 1 swept `cb6d1d5` and read launch 13 red twice
+(finding A1, release-blocking): 823 s on a stale bundle, then 821 s alone on a rebuilt one (load 0.18 to 0.76), both "(1 changes
+applied)" with `src/cold-c.js` alone. Bundle `fin47-accept1-5`, built at `8baf9e4` (no product, recipe or pin change since
+`cb6d1d5`), ran launch 13 alone (`code-intel-proof.mjs --skip-build --steps=13` under `xvfb-run`, the bundle's `--check` current,
+load 5.68 rising to 6.95 beside other lanes) and read it red the same way in 44.9 s: "Successfully renamed 'countLeft' to
+'tallyLeft' (1 changes applied)"; changed on disk, in the report's `edited_files` and in the artifact: `["src/cold-c.js"]`; and
+`src/cold-d.js` still importing and calling `countLeft`. Nothing was repaired: every measured remedy is one of OQ-362's options,
+and that question is the consortium's under R-072, not a builder's. The note stays open and launch 13 stays red until OQ-362 is
+ruled and built.
+
 *The note's original text, its specs and its first outcome follow unchanged; the outcome's "Repaired" holds for a workspace whose
 files a `tsconfig.json` or `jsconfig.json` covers, and is falsified for one with no such file.*
 

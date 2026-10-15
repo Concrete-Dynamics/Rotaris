@@ -15310,6 +15310,17 @@ Each `wait_for_tasks` or foreground `delegate` result that reports a child whose
 the Agent plan strip ends with them COMPLETED. NOTEs report any served item still IN_PROGRESS when the coordinator answers, and
 the seconds from each child's end to its item's close.
 
+*Built 2026-10-15 (fin47, `fin47-classifier-and-todo`); its first executions are reported in `PD-TOOLS-008` revision 4 and
+`PD-TOOLS-006` revision 11.* `exemptNow` and the single-active reads in `todoTool` (`packages/agent-tools/src/tools/todo.ts`);
+`openServedItems` (`packages/engine/src/children/todo-item.ts`), `openServedItemLine` and `reportBlockWithItem`
+(`packages/engine/src/children/notify.ts`), and `openServedItemsOf` in `IterationChildren` feeding `resumeMessage` and both texts
+of `waitForTasks` (`packages/engine/src/children/orchestration.ts`); the live run's `resumeLines`, `openAtAnswer` and
+`closeLatencies` (`apps/desktop/scripts/lib/coordinator-todo.mjs`). Pinned by `tools.test.ts`, `run-host/tools.test.ts`,
+`children.test.ts`, `notify.test.ts`, `todo-item.test.ts` and `coordinator-todo.test.ts`, red on the code before but for the case
+that pins the limit. Recorded beside it, outside the ruling's repair:
+[`../defects/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md`](../defects/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md).
+The row is in [`first-executions.md`](first-executions.md).
+
 <a id="oq-361"></a>
 
 **OQ-361 — Where does REQ-SHELL-119's guard (2), "Integration in progress", stand beyond a person's close of one window?**

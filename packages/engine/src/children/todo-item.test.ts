@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isTerminalChildState } from '@rotaris/contracts';
 import type { ChildRow } from '@rotaris/store';
-import { admitTodoItem, openItemsSentence, type CallerPlan } from './todo-item.js';
+import { admitTodoItem, openItemsSentence, openServedItems, type CallerPlan } from './todo-item.js';
 
 /**
  * PD-TOOLS-006 revision 6 (OQ-220, ruled 2026-10-07 under R-072): the admission of a delegation's todo item, over a plan and
@@ -65,5 +65,28 @@ describe('admitTodoItem (PD-TOOLS-006 revision 6)', () => {
   // (docs/defects/fixed/the-no-todo-item-refusal-names-add-task-only-when-the-plan-holds-no-open-item.md).
   it('a plan with open items lists them and says to add one when none of them is the work (PD-TOOLS-006 revision 6, Q3)', () => {
     expect(openItemsSentence(plan(['COMPLETED', 'PENDING']).document)).toBe('Its open items: Item 1 (00000001). If none of them is this work, add one with the todo tool (add_task) and name its id.');
+  });
+});
+
+/**
+ * PD-TOOLS-006 revision 11 (OQ-333, ruled 2026-10-15 under R-072): the reported children's items the caller has still to close —
+ * IN_PROGRESS in its plan, held by no running child — keyed by the reporting child's task id.
+ */
+describe('openServedItems (PD-TOOLS-006 revision 11)', () => {
+  const child = (task_id: string, todo_item: string | null) => ({ task_id, canonical_name: task_id, persona: 'coding-agent', state: 'succeeded', todo_item } as ChildRow);
+  const doc = plan(['IN_PROGRESS', 'COMPLETED', 'PENDING', 'IN_PROGRESS']).document;
+
+  it('names an IN_PROGRESS item a reported child served, and no other', () => {
+    const open = openServedItems(doc, [child('bg_1', '00000000'), child('bg_2', '00000001'), child('bg_3', '00000002'), child('bg_4', null), child('bg_5', 'ffffffff')], new Set());
+    expect([...open]).toEqual([['bg_1', { name: 'Item 0', id: '00000000' }]]);
+  });
+
+  it('leaves out an item a running child still holds, and names an item two reported children serve once, for the first', () => {
+    expect(openServedItems(doc, [child('bg_1', '00000000')], new Set(['00000000'])).size).toBe(0);
+    expect([...openServedItems(doc, [child('bg_1', '00000003'), child('bg_2', '00000003')], new Set())]).toEqual([['bg_1', { name: 'Item 3', id: '00000003' }]]);
+  });
+
+  it('names nothing without a plan', () => {
+    expect(openServedItems(null, [child('bg_1', '00000000')], new Set()).size).toBe(0);
   });
 });

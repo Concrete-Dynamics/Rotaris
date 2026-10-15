@@ -14,6 +14,16 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-10-15**
+
+**A served todo item is outside the single-active count, and the resume names one still open (fin47,
+`fin47-classifier-and-todo`; `PD-TOOLS-008` revision 4, `PD-TOOLS-006` revision 11, OQ-333; REQ-TOOLS-145, REQ-TOOLS-146,
+REQ-ORCH-063).** `03-runtime-view.md` gains a paragraph after revision 3's: the `todo` tool's single-active reads exempt the served
+set (`exemptNow`), held still decides closes and kept reasons, and every wait message renders its reports through
+`reportBlockWithItem` with `openServedItems`' line; revision 2's paragraph marks its "counts again" sentence as true until this
+change. `04-seams.md` §4 names where a further read of the run for the count lands and where a wait message's word about the
+caller's plan is computed. No other view changed.
+
 Last reconciled with the code: **2026-10-14**
 
 **Wording only (fin47, `fin47-rename-and-optionals`; fin46's optional findings).** `02-process-view.md`: the pane-layout

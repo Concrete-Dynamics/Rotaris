@@ -977,7 +977,7 @@ describe('PD-TOOLS-006 revision 7: an admitted delegation marks its PENDING item
    * The entry orchestrator's port over the built-in table, its plan `PLAN`; the port answers each delegation with `answer`
    * (the item the engine resolved travels back as `todoItem`) and the run's held set is `held`.
    */
-  function port(answer: (req: { todoItem?: string; continuationOf?: string; taskName: string }) => Record<string, unknown>, held: Set<string> = new Set(), served: Set<string> = new Set()) {
+  function port(answer: (req: { todoItem?: string; continuationOf?: string; taskName: string }) => Record<string, unknown>, held: Set<string> = new Set(), served: Set<string> = new Set(), plan: typeof PLAN = PLAN) {
     const written: { phases: { tasks: { id: string; state: string }[] }[] }[] = [];
     const delegation = {
       delegate: async (_parent: string, req: { todoItem?: string; continuationOf?: string; taskName: string }) => answer(req),
@@ -992,7 +992,7 @@ describe('PD-TOOLS-006 revision 7: an admitted delegation marks its PENDING item
     const p = createToolPort({
       sessionId: asSessionId('S1'), workspaceRoot: dir, writer, persona: 'orchestrator', agentName: 'orchestrator', parentId: 'root:1', depth: 0, delegation,
       requestedMode: 'autonomous', modeOverride: null, attended: () => true, warn: () => undefined, abortRun: () => undefined,
-      readTodo: () => structuredClone(PLAN), writeTodo: (d) => { written.push(structuredClone(d) as never); return true; }, heldTodoItems: () => held, servedTodoItems: () => served,
+      readTodo: () => structuredClone(plan), writeTodo: (d) => { written.push(structuredClone(d) as never); return true; }, heldTodoItems: () => held, servedTodoItems: () => served,
     }, { clocks: new FakeClock(), runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver, presenter: { present: async () => ({ ok: true }), close: () => undefined }, nextSequence: () => 1, fileStates: new Map(), terminal: null, egress: () => permissivePolicyRead });
     const call = (callId: string, name: string, args: Record<string, unknown>) => p.dispatch({ callId, name, rawArgs: JSON.stringify(args), persona: 'orchestrator', agentId: 'orchestrator', agentName: 'orchestrator' }, new AbortController().signal);
     const stateOf = (doc: (typeof written)[number] | undefined, id: string) => doc?.phases.flatMap((ph) => ph.tasks).find((t) => t.id === id)?.state;
@@ -1078,6 +1078,37 @@ describe('PD-TOOLS-006 revision 7: an admitted delegation marks its PENDING item
     const close = await e.call('t2', 'todo', { operation: 'replace', phases: all('COMPLETED') });
     expect(close.text.split('\n')[0]).toBe('Replaced the todo list: 1 phase, 5 tasks.');
     expect(e.last()!.phases.flatMap((ph) => ph.tasks).map((t) => t.state)).toEqual(['COMPLETED', 'COMPLETED', 'COMPLETED', 'COMPLETED', 'ABANDONED']);
+  });
+
+  /**
+   * PD-TOOLS-008 revision 4 (OQ-333, ruled 2026-10-15 under R-072): the default live run at 3c03287 (session 3e4b7210,
+   * delegation-swarm) delegated three children naming impl101, test101 and doc101 (#7 to #9), which the run marked; once all
+   * three had ended (#14), `update verify101 IN_PROGRESS` (#26) was refused naming impl101, and the coordinator closed the three
+   * items by hand (#27 to #29) before it could mark its own. Served items no longer count against that mark.
+   */
+  it('the swarm shape: three delegations end, then the coordinator\'s update verify101 IN_PROGRESS is ok, the delegated items still open (PD-TOOLS-008 revision 4)', async () => {
+    const SWARM = { schema_version: 1 as const, phases: [{ id: 'e40a534e', name: 'Reject empty or blank todo titles', tasks: [
+      { id: 'impl101', name: 'addTodo refuses empty or blank title in src/todos.js', description: '', state: 'PENDING' as const },
+      { id: 'test101', name: 'Test the empty/blank title rule in src/todos.test.js', description: '', state: 'PENDING' as const },
+      { id: 'doc101', name: 'Mention the rule in README.md', description: '', state: 'PENDING' as const },
+      { id: 'verify101', name: 'Run node --test and confirm the three files', description: '', state: 'PENDING' as const },
+    ] }] } as unknown as typeof PLAN;
+    const held = new Set<string>();
+    const served = new Set<string>();
+    const e = port((req) => { if (req.todoItem) { held.add(req.todoItem); served.add(req.todoItem); } return accepted(req); }, held, served, SWARM);
+    for (const [i, [persona, item]] of [['coding-agent', 'impl101'], ['tester', 'test101'], ['docs-writer', 'doc101']].entries()) {
+      const r = await e.call(`d${i}`, 'delegate', { persona, task_name: item, task: `TASK: ${item}`, todo_item: item });
+      expect(r.text).toContain(`(${item}) is now IN_PROGRESS.`);
+    }
+    // the three children end: nothing is held, all three are still served
+    held.clear();
+    const mark = await e.call('t26', 'todo', { operation: 'update', task_id: 'verify101', state: 'IN_PROGRESS' });
+    expect(mark.status).toBe('ok');
+    expect(mark.text.split('\n')[0]).toBe('Updated task Run node --test and confirm the three files (verify101): state.');
+    expect(['impl101', 'test101', 'doc101', 'verify101'].map((id) => e.stateOf(e.last(), id))).toEqual(['IN_PROGRESS', 'IN_PROGRESS', 'IN_PROGRESS', 'IN_PROGRESS']);
+    // the coordinator closes each delegated item when it accepts its report, as the resume line asks (PD-TOOLS-006 revision 11)
+    const close = await e.call('t27', 'todo', { operation: 'update', task_id: 'impl101', state: 'COMPLETED' });
+    expect(close.status).toBe('ok');
   });
 });
 

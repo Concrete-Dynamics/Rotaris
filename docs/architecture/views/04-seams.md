@@ -244,7 +244,14 @@ Invariants:
   `markItem` over the port's own `TodoList`, the instance the `todo` tool holds, so the plan the agent reads and the one stored
   agree within a turn. What the `todo` tool needs of the run (the held set, `PD-TOOLS-008` revision 2, and the served set,
   revision 3) is a live read on the port context (`ToolPortContext.heldTodoItems`, `ToolPortContext.servedTodoItems`), filled in
-  both `toolsFor` closures in `sessions.ts` from `IterationChildren`'s reads of the child ledger.
+  both `toolsFor` closures in `sessions.ts` from `IterationChildren`'s reads of the child ledger. Since revision 4 (OQ-333) the
+  single-active count reads the served set (held inside it) and `replace`'s closes still read the held one; a new read of the run
+  for the count joins `exemptNow` in `todo.ts`, not a new port field.
+- **Something the message that resumes a wait says of the caller's plan** (`PD-TOOLS-006` revision 11, OQ-333) is computed in
+  `IterationChildren` beside REQ-ORCH-059's `openTodoFor`, from the plan `todoPlanFor` already reads for admission and the ledger's
+  held set (`openServedItemsOf` → `openServedItems` in `children/todo-item.ts`), and rendered by `reportBlockWithItem`
+  (`children/notify.ts`), which every wait message uses — the orchestration pass's `resumeMessage` and `waitForTasks`'s two
+  texts — so `wait_for_tasks`, a foreground `delegate` and a pass's resume cannot disagree. No port is added.
 - **A `delegate` field the run must admit** lands in three places, as `todo_item` did (revision 6): the tool's schema and the
   `DelegationPort` request (`agent-tools/tools/delegation.ts`), `DelegateRequest` (`engine/children/delegation.ts`), and
   `IterationChildren.delegate`'s admission, before `ChildLedger.spawn`, with a refusal `rejected` and no record. A field the

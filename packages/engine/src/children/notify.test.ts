@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChildRow } from '@rotaris/store';
 import { cutOffReport } from './cut-off.js';
 import { HAND_OFF_BUDGET } from '@rotaris/kernel';
-import { childPayload, CHILD_REPORT_ARTIFACT_SENTENCE, completionNotification, inheritedContext, inheritedContextBlock, openTodoReminderLines, priorAgentContext, priorAgentContextParts, REPORT_BLOCK_CAP, reportBlock, resumeMessage } from './notify.js';
+import { childPayload, CHILD_REPORT_ARTIFACT_SENTENCE, completionNotification, inheritedContext, inheritedContextBlock, openServedItemLine, openTodoReminderLines, priorAgentContext, priorAgentContextParts, REPORT_BLOCK_CAP, reportBlock, reportBlockWithItem, resumeMessage } from './notify.js';
 
 describe('the child payload order — REQ-TOOLS-154, REQ-ORCH-035, PD-TOOLS-006, REQ-TOOLS-152', () => {
   const prior = '[Prior agent context — authoritative: rely on these findings rather than repeating the investigation]';
@@ -164,5 +164,34 @@ describe('REQ-ORCH-059: the completion notification\'s open-todo reminder lines'
     expect(completionNotification(done, 0, 1).split('\n').at(-1)).toBe('All background tasks have completed.');
     expect(openTodoReminderLines([])).toEqual([]);
     expect(openTodoReminderLines(['only'])).toEqual(['Your todo list still holds 1 open item:', '- only']);
+  });
+});
+
+/**
+ * PD-TOOLS-006 revision 11 (OQ-333, ruled 2026-10-15 under R-072): after a reported child's result, the message that resumes a
+ * wait names that child's item when the caller has still to close it. Which items those are is `openServedItems`
+ * (`todo-item.test.ts`); the run-level cases are in `children.test.ts`.
+ */
+describe('PD-TOOLS-006 revision 11: the resume line for a reported child\'s item still open', () => {
+  const row = (name: string): ChildRow => ({ task_id: `bg_${name.padStart(8, '0')}`, canonical_name: name, persona: 'coding-agent', state: 'succeeded', report: JSON.stringify({ status: 'succeeded', final_response: `${name} done` }) } as ChildRow);
+  const impl = row('impl');
+  const tests = row('tests');
+  const open = new Map([[impl.task_id, { name: 'Implement it', id: 'impl101' }]]);
+
+  it('follows the child\'s result, in the directive\'s words, for that child only', () => {
+    const msg = resumeMessage([impl, tests], 0, open);
+    expect(msg).toContain('### impl (coding-agent) — succeeded\nimpl done\nTodo item Implement it (impl101) is still IN_PROGRESS: close it with update once you accept this report.\n\n### tests (coding-agent) — succeeded\ntests done\n\nAll background tasks finished.');
+    expect(openServedItemLine({ name: 'Implement it', id: 'impl101' })).toBe('Todo item Implement it (impl101) is still IN_PROGRESS: close it with update once you accept this report.');
+    expect(reportBlockWithItem(impl, open)).toBe(`${reportBlock(impl)}\nTodo item Implement it (impl101) is still IN_PROGRESS: close it with update once you accept this report.`);
+  });
+
+  it('adds nothing with no open item: the message and the block are what they were before the revision', () => {
+    expect(resumeMessage([impl, tests], 1, new Map())).toBe(resumeMessage([impl, tests], 1));
+    expect(resumeMessage([impl], 0)).not.toContain('is still IN_PROGRESS');
+    expect(reportBlockWithItem(tests, open)).toBe(reportBlock(tests));
+  });
+
+  it('REQ-ORCH-059\'s completion notification carries no such line', () => {
+    expect(completionNotification(impl, 0, 1.5, ['Implement it'])).not.toContain('is still IN_PROGRESS');
   });
 });

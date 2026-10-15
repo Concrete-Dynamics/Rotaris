@@ -65,6 +65,38 @@ export interface TodoItemRequest {
   readonly holderOf: (item: string) => ChildRow | undefined;
 }
 
+/**
+ * `PD-TOOLS-006` revision 11 (OQ-333, ruled 2026-10-15 under R-072): a reported child's todo item that the caller still has to
+ * close — the item's name and id as the caller's plan holds them.
+ */
+export interface OpenServedItem {
+  readonly name: string;
+  readonly id: string;
+}
+
+/**
+ * `PD-TOOLS-006` revision 11 (OQ-333): for the children a wait reports (`rows`, in the order the message reports them), the
+ * `todo_item` of each that is still IN_PROGRESS in the caller's own plan with no non-terminal child of the caller holding it
+ * (`held`, `IterationChildren.heldTodoItems`), keyed by the reporting child's task id. An item two reported children serve is
+ * named once, for the first of them; a child that serves no item, an item the caller has closed or never planned, and an item a
+ * running child still holds are left out. The run marks such an item on delegation (revision 7) and never closes it; since
+ * `PD-TOOLS-008` revision 4 it no longer refuses the caller's next mark either, so the resume line is what tells the caller.
+ */
+export function openServedItems(document: AgentTodoDocument | null, rows: readonly ChildRow[], held: ReadonlySet<string>): ReadonlyMap<string, OpenServedItem> {
+  const open = new Map<string, OpenServedItem>();
+  const tasks = tasksOf(document);
+  const named = new Set<string>();
+  for (const row of rows) {
+    const item = row.todo_item;
+    if (item === null || item === undefined || held.has(item) || named.has(item)) continue;
+    const task = tasks.find((t) => t.id === item);
+    if (task === undefined || task.state !== 'IN_PROGRESS') continue;
+    named.add(item);
+    open.set(row.task_id, { name: task.name, id: task.id });
+  }
+  return open;
+}
+
 /** The admission of one delegation's todo item: the item it serves (null for none), or the refusal and the requirement it holds. */
 export function admitTodoItem(req: TodoItemRequest): TodoItemAdmission {
   const tasks = tasksOf(req.plan.document);

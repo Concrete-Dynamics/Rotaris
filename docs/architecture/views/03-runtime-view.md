@@ -1470,7 +1470,8 @@ admission resolved — named, inherited or kept. The run host's `delegateTool` i
 `toolsFor` closures fill from `Run.heldTodoItems` → `IterationChildren.heldTodoItems`: the `todo_item` of every non-terminal
 child the caller owns, of any persona. REQ-TOOLS-145's bound and REQ-TOOLS-146's protection count only tasks outside that
 set, and are checked only on a write that marks a task IN_PROGRESS; an item whose child has ended counts again at the next such
-write. `PD-TOOLS-008`'s sentence gains a hint for an agent whose resolved set holds `delegate`.
+write *(until 2026-10-15: since `PD-TOOLS-008` revision 4 the count reads the served set, below)*. `PD-TOOLS-008`'s sentence gains
+a hint for an agent whose resolved set holds `delegate`.
 
 **A `replace` closes a delegated item once its child has ended (`PD-TOOLS-008` revision 3; OQ-255 ruled 2026-10-13 under R-072;
 fin37).** Beside the held set the `todo` tool reads `ctx.servedTodoItems` at each call (`TodoToolOptions.served`), which both
@@ -1480,6 +1481,19 @@ or ABANDONED the list sends (`closes`), and is then not the `activeProtected` ta
 other protected task is restored as REQ-TOOLS-146 states. Each restored task the list sent in a different state is named, in
 list order, after the success sentence ("Kept as they were: <name> (<id>) <STATE>, <reason>; … Change a task's state with
 update.") with `keptReason`'s four reasons; a task sent with no state, and an omitted one, are not named.
+
+**A served item is outside the single-active count, and the resume names one still open (`PD-TOOLS-008` revision 4, `PD-TOOLS-006`
+revision 11; OQ-333 ruled 2026-10-15 under R-072; fin47).** The `todo` tool's single-active reads — `TodoList.active`, `add_task`'s
+and `update`'s checks, and in `replace` `newlyMarked`, `activeProtected` and `actives` — exempt the served set with the held set
+inside it (`exemptNow`), so an item the run marked on delegation never refuses the coordinator's next mark, before or after its
+child ends; the held set alone still decides `closes` and `keptReason`. The run never closes the item. Every message that resumes a
+wait renders its reports through `reportBlockWithItem` (`children/notify.ts`): `resumeMessage` for the orchestration pass's resume,
+and `IterationChildren.waitForTasks`'s text for `wait_for_tasks` and a foreground `delegate`. After a reported child's result it adds
+"Todo item <name> (<id>) is still IN_PROGRESS: close it with update once you accept this report." where `openServedItems`
+(`children/todo-item.ts`) finds the child's `todo_item` IN_PROGRESS in the caller's plan — read through the same `todoPlanFor` a
+delegation is admitted against — and held by none of the caller's non-terminal children (`heldTodoItems`); an item two reported
+children serve is named once. REQ-ORCH-059's completion notification is unchanged. The served set is the iteration's ledger, so after
+a REQ-ORCH-075 re-queue or a resume an earlier iteration's item counts again (fin38's limit, now on the count too).
 
 **The record the agent surfaces read (Part R; REQ-MONITOR-044).** Each child's `AgentRecord` carries, beside what Part B
 projected, `reasoning` (the persona's configured level, `medium` when none), `contextUsed` (the input count of its latest

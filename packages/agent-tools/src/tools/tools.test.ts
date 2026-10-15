@@ -1641,7 +1641,82 @@ describe('todo (REQ-TOOLS-144..147)', () => {
     });
 
     it('the description states the bound for the agent\'s own tasks and the marking a delegate call makes', () => {
-      expect(todoTool(new TodoList()).description).toMatch(/At most one task IN_PROGRESS of your own; a task a running delegated agent holds through todo_item is not counted, and a delegate call naming a PENDING task marks it IN_PROGRESS\.$/);
+      expect(todoTool(new TodoList()).description).toMatch(/At most one task IN_PROGRESS of your own; a task a delegated agent serves through todo_item, running or ended, is not counted, and a delegate call naming a PENDING task marks it IN_PROGRESS; close it with update once you accept that agent's report\.$/);
+    });
+  });
+
+  /**
+   * PD-TOOLS-008 revision 4 (OQ-333, ruled 2026-10-15 under R-072): the single-active bound, REQ-TOOLS-145's sentence, the
+   * directive's sentence and REQ-TOOLS-146's rejection count only the IN_PROGRESS tasks no child of the list's owner serves,
+   * running or ended. The default live run at 3c03287 (delegation-swarm #26) refused the coordinator's `update verify101
+   * IN_PROGRESS` naming impl101, an item the run had marked on delegation whose child had ended about 2.5 s before.
+   */
+  describe('a task a delegation has served (PD-TOOLS-008 revision 4)', () => {
+    /** impl, tests and docs delegated and marked by the run; verify and review the coordinator's own. */
+    const swarm = async (held: Set<string>, served: Set<string>) => {
+      const list = new TodoList();
+      const t = todoTool(list, { held: () => held, served: () => served, delegates: true });
+      await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ name: 'impl' }, { name: 'tests' }, { name: 'docs' }, { name: 'verify' }, { name: 'review' }] }] }, ctx());
+      const [impl, tests, docs, verify, review] = list.phases[0]!.tasks.map((x) => x.id) as [string, string, string, string, string];
+      for (const id of [impl, tests, docs]) { held.add(id); served.add(id); await t.execute({ operation: 'update', task_id: id, state: 'IN_PROGRESS' }, ctx()); }
+      return { list, t, impl, tests, docs, verify, review };
+    };
+    const active = (list: TodoList) => list.phases[0]!.tasks.filter((x) => x.state === 'IN_PROGRESS').map((x) => x.name);
+
+    it('update and add_task: the coordinator\'s next mark is accepted beside served items whose children have ended', async () => {
+      const held = new Set<string>();
+      const served = new Set<string>();
+      const { list, t, verify } = await swarm(held, served);
+      held.clear();
+      const r = await t.execute({ operation: 'update', task_id: verify, state: 'IN_PROGRESS' }, ctx());
+      expect(r.isError).toBe(false);
+      expect(r.text.split('\n')[0]).toBe(`Updated task verify (${verify}): state.`);
+      expect(active(list)).toEqual(['impl', 'tests', 'docs', 'verify']);
+      // a new task marked IN_PROGRESS is counted against the one unserved active task, verify, and never against the served ones
+      const add = await t.execute({ operation: 'add_task', phase_id: list.phases[0]!.id, name: 'extra', state: 'IN_PROGRESS' }, ctx());
+      expect(add.text).toBe(`Only one task can be IN_PROGRESS at a time. Active task: ${verify} (verify). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`);
+      await t.execute({ operation: 'update', task_id: verify, state: 'COMPLETED' }, ctx());
+      expect((await t.execute({ operation: 'add_task', phase_id: list.phases[0]!.id, name: 'extra', state: 'IN_PROGRESS' }, ctx())).isError).toBe(false);
+    });
+
+    it('a second unserved mark of the coordinator\'s own is still refused in REQ-TOOLS-145\'s sentence, naming the unserved task', async () => {
+      const held = new Set<string>();
+      const served = new Set<string>();
+      const { list, t, verify, review } = await swarm(held, served);
+      held.clear();
+      expect((await t.execute({ operation: 'update', task_id: verify, state: 'IN_PROGRESS' }, ctx())).isError).toBe(false);
+      const r = await t.execute({ operation: 'update', task_id: review, state: 'IN_PROGRESS' }, ctx());
+      expect(r.text).toBe(`Only one task can be IN_PROGRESS at a time. Active task: ${verify} (verify). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`);
+      expect(active(list)).toEqual(['impl', 'tests', 'docs', 'verify']);
+    });
+
+    it('replace: a list marking the next task while a served-and-ended item stays IN_PROGRESS is accepted, and the item is kept', async () => {
+      const held = new Set<string>();
+      const served = new Set<string>();
+      const { list, t, impl, tests, docs, verify, review } = await swarm(held, served);
+      held.clear();
+      const r = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: impl, name: 'impl', state: 'IN_PROGRESS' }, { id: tests, name: 'tests' }, { id: docs, name: 'docs', state: 'IN_PROGRESS' }, { id: verify, name: 'verify', state: 'IN_PROGRESS' }, { id: review, name: 'review' }] }] }, ctx());
+      expect(r.isError).toBe(false);
+      expect(r.text.split('\n')[0]).toBe('Replaced the todo list: 1 phase, 5 tasks.');
+      expect(active(list)).toEqual(['impl', 'tests', 'docs', 'verify']);
+      // REQ-TOOLS-146's rejection names the unserved active task, verify, never a served one
+      const two = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: impl, name: 'impl', state: 'IN_PROGRESS' }, { name: 'a', state: 'IN_PROGRESS' }] }] }, ctx());
+      expect(two.text).toBe(`Only one task can be IN_PROGRESS at a time. Active task: ${verify} (verify). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`);
+      // and this directive's sentence counts only the unserved tasks a list marks: a served id sent IN_PROGRESS is not one of them
+      const fresh = todoTool(new TodoList(), { held: () => new Set(), served: () => new Set([impl]) });
+      const one = await fresh.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: impl, name: 'impl', state: 'IN_PROGRESS' }, { name: 'a', state: 'IN_PROGRESS' }] }] }, ctx());
+      expect(one.isError).toBe(false);
+    });
+
+    it('the limit fin38 wrote down: an item outside the served set, as an earlier iteration\'s is after a re-queue or a resume, still counts', async () => {
+      const held = new Set<string>();
+      const served = new Set<string>();
+      const { t, impl, verify } = await swarm(held, served);
+      held.clear();
+      // the earlier iteration's children are not in this iteration's ledger, so nothing is served
+      served.clear();
+      const r = await t.execute({ operation: 'update', task_id: verify, state: 'IN_PROGRESS' }, ctx());
+      expect(r.text).toBe(`Only one task can be IN_PROGRESS at a time. Active task: ${impl} (impl). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`);
     });
   });
 

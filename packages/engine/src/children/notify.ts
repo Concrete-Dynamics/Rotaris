@@ -1,6 +1,7 @@
 import { countNoun, HAND_OFF_BUDGET } from '@rotaris/kernel';
 import type { ChildRow } from '@rotaris/store';
 import { cutOffLines, type CutOff } from './cut-off.js';
+import type { OpenServedItem } from './todo-item.js';
 
 /**
  * REQ-ORCH-055..060, REQ-ORCH-063, REQ-MONITOR-023, REQ-TOOLS-152, REQ-TOOLS-154: the messages a parent receives —
@@ -85,9 +86,31 @@ export function completionNotification(done: ChildRow, stillRunning: number, dur
   return lines.join('\n');
 }
 
-/** REQ-ORCH-057/055: the resume message — the newly terminal children's reports, and what still runs. */
-export function resumeMessage(newlyTerminal: readonly ChildRow[], stillRunning: number): string {
-  const lines = ['Child task updates are available.', ...newlyTerminal.map(reportBlock)];
+/**
+ * `PD-TOOLS-006` revision 11 (OQ-333, ruled 2026-10-15 under R-072): the line a wait's message adds after a reported child's
+ * result when that child's `todo_item` is still IN_PROGRESS in the caller's plan and no running child holds it.
+ */
+export const openServedItemLine = (item: OpenServedItem): string =>
+  `Todo item ${item.name} (${item.id}) is still IN_PROGRESS: close it with update once you accept this report.`;
+
+const NO_OPEN_ITEMS: ReadonlyMap<string, OpenServedItem> = new Map();
+
+/**
+ * REQ-ORCH-060's report block, followed — `PD-TOOLS-006` revision 11 — by the line for the child's item when `openItems` (keyed
+ * by task id, `openServedItems`) holds one. Every message that resumes a wait (REQ-ORCH-063) renders its reports through this:
+ * the orchestration pass's resume message, `wait_for_tasks`'s result and a foreground `delegate`'s.
+ */
+export function reportBlockWithItem(row: ChildRow, openItems: ReadonlyMap<string, OpenServedItem> = NO_OPEN_ITEMS): string {
+  const item = openItems.get(row.task_id);
+  return item === undefined ? reportBlock(row) : `${reportBlock(row)}\n${openServedItemLine(item)}`;
+}
+
+/**
+ * REQ-ORCH-057/055: the resume message — the newly terminal children's reports, and what still runs. `openItems`
+ * (`PD-TOOLS-006` revision 11, OQ-333) names after each report the child's item the caller has still to close.
+ */
+export function resumeMessage(newlyTerminal: readonly ChildRow[], stillRunning: number, openItems: ReadonlyMap<string, OpenServedItem> = NO_OPEN_ITEMS): string {
+  const lines = ['Child task updates are available.', ...newlyTerminal.map((row) => reportBlockWithItem(row, openItems))];
   if (stillRunning > 0) lines.push(`${countNoun(stillRunning, 'child task')} ${stillRunning === 1 ? 'is' : 'are'} still running in the background.`);
   else lines.push('All background tasks finished. Issue the next batch of delegations in parallel before ending the turn, or answer the user if the work is done.');
   return lines.join('\n\n');

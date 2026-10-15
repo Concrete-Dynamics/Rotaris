@@ -2880,6 +2880,96 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(observed[1]).toMatch(/^Task 'build': queued — Following up build/);
       expect(observed[1]).toContain('\nserves todo item 0000000a');
     });
+
+    /**
+     * PD-TOOLS-006 revision 11 (OQ-333, ruled 2026-10-15 under R-072): the message that resumes a wait (REQ-ORCH-063) adds, after
+     * each reported child's result, a line naming that child's item while it is still IN_PROGRESS in the caller's plan and no
+     * running child holds it. The default live run at 3c03287 (delegation-swarm #14) resumed with three reports whose items
+     * stayed open, and nothing told the coordinator to close them. The run marks nothing here (the run host's port does); the
+     * coordinator's plan is written IN_PROGRESS by its own `todo` call, as the mark leaves it.
+     */
+    describe('revision 11: the message that resumes a wait names a reported child\'s item still open', () => {
+      const line = (name: string, id: string) => `Todo item ${name} (${id}) is still IN_PROGRESS: close it with update once you accept this report.`;
+      const textOf = (m: ModelRequest['messages'][number]) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('');
+
+      it('a wait_for_tasks result: the line follows the report whose item is open, and not the one whose item the coordinator closed', async () => {
+        const hold = gate();
+        const { sessions } = sessionsWith((persona, turn, req) => {
+          if (persona === 'orchestrator') {
+            if (turn === 1) return toolCalls([todoCall('t1', ['IN_PROGRESS', 'IN_PROGRESS', 'PENDING'])]);
+            if (turn === 2) return toolCalls([del('d1', 'coding-agent', 'impl', { todo_item: '0000000a', task: 'TASK: HOLD impl' }), del('d2', 'tester', 'tests', { todo_item: '0000000b', task: 'TASK: HOLD tests' })]);
+            // the coordinator closes impl's item while its child still runs; tests' item stays open
+            if (turn === 3) return toolCalls([todoCall('t2', ['COMPLETED', 'IN_PROGRESS', 'PENDING'])]);
+            if (turn === 4) { hold.open(); return toolCalls([{ callId: 'w1', name: 'wait_for_tasks', args: { task_ids: [] } }]); }
+            if (turn === 5) return toolCalls([todoCall('done', ['COMPLETED', 'COMPLETED', 'COMPLETED'])]);
+            return answer('Done.');
+          }
+          if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+          return childAnswer(req, hold.p);
+        }, { tool: tools([]) });
+        const sid = (sessions.start(dal, 'C:/ws', 'build it') as { value: SessionId }).value;
+        expect((await sessions.running(sid)!).status).toBe('completed');
+        const wait = dal.residentRows(sid).find((r) => r.kind === 'tool' && r.tool_name === 'wait_for_tasks')!;
+        expect(wait.output ?? '').toMatch(/^The waited-for background tasks completed \(2\)\./);
+        expect(wait.output ?? '').toContain(`### tests (tester) — succeeded\nBuilt it.\n${line('Test it', '0000000b')}`);
+        expect(wait.output ?? '').not.toContain('(0000000a) is still IN_PROGRESS');
+        expect((wait.output ?? '').match(/is still IN_PROGRESS/g)).toHaveLength(1);
+      });
+
+      it('a foreground delegate\'s result carries the line; it is absent while another running child holds the item', async () => {
+        const hold = gate();
+        const { sessions } = sessionsWith((persona, turn, req) => {
+          if (persona === 'orchestrator') {
+            if (turn === 1) return toolCalls([todoCall('t1', ['IN_PROGRESS', 'IN_PROGRESS', 'PENDING'])]);
+            if (turn === 2) return toolCalls([del('d1', 'coding-agent', 'impl', { todo_item: '0000000a', run_in_background: false })]);
+            // a read-only survey and a running writer serve one item: the survey's report adds no line while the writer holds it
+            if (turn === 3) return toolCalls([del('d2', 'coding-agent', 'writer', { todo_item: '0000000b', task: 'TASK: HOLD writer' }), del('d3', 'codebase-analyst', 'survey', { todo_item: '0000000b', run_in_background: false })]);
+            if (turn === 4) { hold.open(); return toolCalls([{ callId: 'w1', name: 'wait_for_tasks', args: { task_ids: [] } }]); }
+            if (turn === 5) return toolCalls([todoCall('done', ['COMPLETED', 'COMPLETED', 'COMPLETED'])]);
+            return answer('Done.');
+          }
+          if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+          return childAnswer(req, hold.p);
+        }, { tool: tools([]) });
+        const sid = (sessions.start(dal, 'C:/ws', 'build it') as { value: SessionId }).value;
+        expect((await sessions.running(sid)!).status).toBe('completed');
+        const delegates = dal.residentRows(sid).filter((r) => r.kind === 'tool' && r.tool_name === 'delegate');
+        const impl = delegates.find((r) => r.output?.startsWith("Task 'impl'"))!;
+        expect(impl.output ?? '').toContain(`### impl (coding-agent) — succeeded\nBuilt it.\n${line('Implement it', '0000000a')}`);
+        const survey = delegates.find((r) => r.output?.startsWith("Task 'survey'"))!;
+        expect(survey.output ?? '').toContain('### survey (codebase-analyst) — succeeded');
+        expect(survey.output ?? '').not.toContain('is still IN_PROGRESS');
+        // once the writer has ended too, its report names the item
+        const wait = dal.residentRows(sid).find((r) => r.kind === 'tool' && r.tool_name === 'wait_for_tasks')!;
+        expect(wait.output ?? '').toContain(`### writer (coding-agent) — succeeded\nBuilt it.\n${line('Test it', '0000000b')}`);
+      });
+
+      it('the orchestration pass\'s resume message carries the line after the report, and REQ-ORCH-059\'s completion notification is unchanged', async () => {
+        const hold = gate();
+        const asked: string[] = [];
+        const { sessions } = sessionsWith((persona, turn, req) => {
+          if (persona === 'orchestrator') {
+            asked.push(textOf(req.messages[req.messages.length - 1]!));
+            if (turn === 1) return toolCalls([todoCall('t1', ['IN_PROGRESS', 'PENDING', 'PENDING'])]);
+            if (turn === 2) return toolCalls([del('d1', 'coding-agent', 'impl', { todo_item: '0000000a', task: 'TASK: HOLD impl' })]);
+            if (turn === 3) { hold.open(); return answer('Waiting for impl.'); }
+            if (turn === 4) return toolCalls([todoCall('done', ['COMPLETED', 'COMPLETED', 'COMPLETED'])]);
+            return answer('Done.');
+          }
+          if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+          return childAnswer(req, hold.p);
+        }, { tool: tools([]) });
+        const sid = (sessions.start(dal, 'C:/ws', 'build it') as { value: SessionId }).value;
+        expect((await sessions.running(sid)!).status).toBe('completed');
+        const resumed = asked[3]!;
+        const [notification, resume] = resumed.split('Child task updates are available.') as [string, string];
+        expect(notification).toMatch(/^\[Background task completed\]\n/);
+        expect(notification).not.toContain('is still IN_PROGRESS');
+        expect(resume).toContain(`### impl (coding-agent) — succeeded\nBuilt it.\n${line('Implement it', '0000000a')}`);
+        // the coordinator closed the item at turn 4: no later message names it
+        expect(asked.slice(4).some((t) => t.includes('is still IN_PROGRESS'))).toBe(false);
+      });
+    });
   });
 
   describe('PD-ORCH-004: a child cut off while making progress hands its work back', () => {

@@ -31,11 +31,12 @@ export class TodoList {
     return this.phases.find((p) => p.id === id);
   }
   /**
-   * REQ-TOOLS-145 as `PD-TOOLS-008` revision 2 bounds it: the first IN_PROGRESS task outside `held`, the tasks a non-terminal
-   * child of the list's owner holds as its `todo_item`. With no `held`, the first IN_PROGRESS task.
+   * REQ-TOOLS-145 as `PD-TOOLS-008` bounds it: the first IN_PROGRESS task outside `exempt`. Since revision 4 (OQ-333) `exempt` is
+   * the served set, the tasks any child of the list's owner records as its `todo_item`, terminal children included, with the held
+   * set inside it; under revision 2 it was the held set alone. With no `exempt`, the first IN_PROGRESS task.
    */
-  active(held?: ReadonlySet<string>): TodoTask | undefined {
-    for (const p of this.phases) for (const t of p.tasks) if (t.state === 'IN_PROGRESS' && !(held?.has(t.id) ?? false)) return t;
+  active(exempt?: ReadonlySet<string>): TodoTask | undefined {
+    for (const p of this.phases) for (const t of p.tasks) if (t.state === 'IN_PROGRESS' && !(exempt?.has(t.id) ?? false)) return t;
     return undefined;
   }
   /** REQ-TOOLS-147: the rendered summary every observation appends. */
@@ -84,7 +85,8 @@ export interface TodoToolOptions {
   /**
    * PD-TOOLS-008 revision 3 (OQ-255, ruled 2026-10-13 under R-072): the task ids any child of the list's owner records as its
    * `todo_item`, terminal children included, read at each call. A served IN_PROGRESS task outside `held` is one whose delegation
-   * has ended, and a `replace` closes it. Absent, nothing is served and `replace` restores every IN_PROGRESS task as before.
+   * has ended, and a `replace` closes it. Since revision 4 (OQ-333) every served task is also outside REQ-TOOLS-145's count.
+   * Absent, nothing is served: the count reads `held` alone and `replace` restores every IN_PROGRESS task, as before.
    */
   readonly served?: (() => ReadonlySet<string>) | undefined;
   readonly delegates?: boolean | (() => boolean) | undefined;
@@ -156,6 +158,16 @@ const fieldsFor = (op: string): string => ({
 export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecutor<z.infer<typeof todoSchema>> {
   const heldNow = (): ReadonlySet<string> => opts.held?.() ?? NONE_HELD;
   const servedNow = (): ReadonlySet<string> => opts.served?.() ?? NONE_HELD;
+  /**
+   * PD-TOOLS-008 revision 4 (OQ-333, ruled 2026-10-15 under R-072): the tasks the single-active bound, REQ-TOOLS-145's sentence,
+   * this directive's sentence and REQ-TOOLS-146's rejection leave out — every served task, held ones included (held is a subset;
+   * the union keeps a caller that passes `held` alone exactly as revision 2 left it). Until 2026-10-15 the bound read the held
+   * set alone, so an item the run had marked on delegation counted again once its child ended — "a stale active row … which then
+   * counts against the next write that marks a task", revision 2's accepted cost, falsified by the default live run at 3c03287
+   * (delegation-swarm #26). `held` still decides which served task a `replace` may close, and the kept reason.
+   */
+  const exemptNow = (held: ReadonlySet<string>, served: ReadonlySet<string>): ReadonlySet<string> =>
+    served.size === 0 ? held : held.size === 0 ? served : new Set([...served, ...held]);
   const hint = () => {
     const phases = list.phases.map((p) => `${p.name} (${p.id})`).join(', ') || '(none)';
     const tasks = list.phases.flatMap((p) => p.tasks.map((t) => `${t.name} (${t.id})`)).join(', ') || '(none)';
@@ -179,7 +191,10 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
       // PD-TOOLS-008 revision 2 (OQ-249): the bound is the agent's own tasks. It said, until 2026-10-07, "At most one task
       // IN_PROGRESS." — true of a list no delegation holds, and the reason a coordinator's second running child's item stayed
       // PENDING (the default live run at a68f121, edit #14).
-      'Phases and tasks carry stable 8-hex ids; target by id, never by name. At most one task IN_PROGRESS of your own; a task a running delegated agent holds through todo_item is not counted, and a delegate call naming a PENDING task marks it IN_PROGRESS.',
+      // PD-TOOLS-008 revision 4 (OQ-333): it said, until 2026-10-15, "a task a running delegated agent holds through todo_item is
+      // not counted" — true of the code until then, and the reason a coordinator's next mark after its children ended was refused
+      // naming an item the run itself had marked (the default live run at 3c03287, delegation-swarm #26).
+      'Phases and tasks carry stable 8-hex ids; target by id, never by name. At most one task IN_PROGRESS of your own; a task a delegated agent serves through todo_item, running or ended, is not counted, and a delegate call naming a PENDING task marks it IN_PROGRESS; close it with update once you accept that agent\'s report.',
     ].join(' '),
     schema: todoSchema,
     label: (a) => `todo ${a.operation}`,
@@ -189,6 +204,7 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
           const incoming = a.phases ?? [];
           const held = heldNow();
           const served = servedNow();
+          const exempt = exemptNow(held, served);
           const protectedTasks = list.phases.flatMap((p) => p.tasks.filter((t) => PROTECTED.has(t.state)).map((t) => ({ phaseIndex: list.phases.indexOf(p), taskIndex: p.tasks.indexOf(t), task: { ...t } })));
           /*
            * PD-TOOLS-008 revision 3 (OQ-255): a served IN_PROGRESS task no running child holds — its delegation has ended — takes
@@ -209,9 +225,10 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
            * delegation holds. Revision 1 counted every incoming IN_PROGRESS task beside the one active task, so a coordinator's
            * list could carry only one running delegation's item (OQ-249).
            */
-          const newlyMarked = incoming.flatMap((p) => p.tasks.filter((t) => t.state === 'IN_PROGRESS' && !(t.id !== undefined && (protectedActive.has(t.id) || held.has(t.id)))));
-          const activeProtected = protectedTasks.find((x) => x.task.state === 'IN_PROGRESS' && !held.has(x.task.id) && !closes.has(x.task.id));
-          // REQ-TOOLS-146: a replace that marks some OTHER task IN_PROGRESS while an unheld protected active task exists is rejected.
+          // Revision 4 (OQ-333): a served task, running or ended, is exempt where revision 2 exempted a held one.
+          const newlyMarked = incoming.flatMap((p) => p.tasks.filter((t) => t.state === 'IN_PROGRESS' && !(t.id !== undefined && (protectedActive.has(t.id) || exempt.has(t.id)))));
+          const activeProtected = protectedTasks.find((x) => x.task.state === 'IN_PROGRESS' && !exempt.has(x.task.id) && !closes.has(x.task.id));
+          // REQ-TOOLS-146: a replace that marks some OTHER task IN_PROGRESS while an unserved protected active task exists is rejected.
           if (activeProtected && newlyMarked.length > 0) {
             return errorObservation(singleActive(activeProtected.task.id, activeProtected.task.name));
           }
@@ -237,11 +254,12 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
             const phase = next[Math.min(prot.phaseIndex, Math.max(0, next.length - 1))] ?? (next.push({ id: hexId(), name: 'main', tasks: [] }), next[0]!);
             phase.tasks.splice(Math.min(prot.taskIndex, phase.tasks.length), 0, { ...prot.task });
           }
-          // An unheld protected active task can remain here only when the list newly marks nothing (the REQ-TOOLS-146 rejection
+          // An unserved protected active task can remain here only when the list newly marks nothing (the REQ-TOOLS-146 rejection
           // above answers a list that marks another beside one), and it is restored, not counted. So a second IN_PROGRESS can
-          // only come from the submitted list itself: PD-TOOLS-008's sentence, not REQ-TOOLS-145's. It counts the unheld tasks
-          // the list newly marks (revision 2); a held task and a restored protected one are not counted.
-          const actives = next.flatMap((p) => p.tasks.filter((t) => t.state === 'IN_PROGRESS' && !protectedActive.has(t.id) && !held.has(t.id)));
+          // only come from the submitted list itself: PD-TOOLS-008's sentence, not REQ-TOOLS-145's. It counts the unserved tasks
+          // the list newly marks (revision 4; the unheld ones under revision 2); a served task and a restored protected one are
+          // not counted.
+          const actives = next.flatMap((p) => p.tasks.filter((t) => t.state === 'IN_PROGRESS' && !protectedActive.has(t.id) && !exempt.has(t.id)));
           if (actives.length > 1) return errorObservation(listMarksSeveralActive(actives.map((t) => t.name), typeof opts.delegates === 'function' ? opts.delegates() : opts.delegates === true));
           list.phases.splice(0, list.phases.length, ...next);
           const keptSentence = kept.length === 0 ? '' : ` Kept as they were: ${kept.join('; ')}. Change a task's state with update.`;
@@ -262,8 +280,9 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
           const phase = list.findPhase(a.phase_id);
           if (!phase) return errorObservation(`Unknown phase id '${a.phase_id}'. ${hint()}`);
           const state = flat.state ?? 'PENDING';
-          // PD-TOOLS-008 revision 2: a new task is never held, so it counts; the active task named is the first unheld one.
-          const active = list.active(heldNow());
+          // PD-TOOLS-008 revision 2: a new task is never held (nor served), so it counts; the active task named is the first
+          // unserved one (revision 4; the first unheld one until then).
+          const active = list.active(exemptNow(heldNow(), servedNow()));
           if (state === 'IN_PROGRESS' && active) return errorObservation(singleActive(active.id, active.name));
           const task: TodoTask = { id: hexId(), name, description: flat.description ?? '', state };
           phase.tasks.push(task);
@@ -279,11 +298,11 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
           if (name !== undefined && name !== task.name) { task.name = name; changes.push('name'); }
           if (a.description !== undefined && a.description !== task.description) { task.description = a.description; changes.push('description'); }
           if (a.state !== undefined && a.state !== task.state) {
-            // PD-TOOLS-008 revision 2: marking a task a running delegation holds is never counted; marking any other is refused
-            // while another unheld task is active, naming it.
-            const held = heldNow();
-            const active = list.active(held);
-            if (a.state === 'IN_PROGRESS' && !held.has(task.id) && active && active.id !== task.id) return errorObservation(singleActive(active.id, active.name));
+            // PD-TOOLS-008 revision 4 (OQ-333): marking a task a delegation serves, running or ended, is never counted; marking
+            // any other is refused while another unserved task is active, naming it. Under revision 2 it read the held set alone.
+            const exempt = exemptNow(heldNow(), servedNow());
+            const active = list.active(exempt);
+            if (a.state === 'IN_PROGRESS' && !exempt.has(task.id) && active && active.id !== task.id) return errorObservation(singleActive(active.id, active.name));
             task.state = a.state;
             changes.push('state');
           }

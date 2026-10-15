@@ -11,14 +11,14 @@ import type { AttachmentOutcome, BackgroundOutput, DelegateOutcome, DelegateRequ
 import { FULL_CONTEXT_BUDGET, fullContextBlock, siblingIndexBlock, type AttachedResolution, type FullContextBlock } from '../artifacts/context.js';
 import type { ArtifactStore } from '../artifacts/store.js';
 import { ChildLedger, storeChildReport, userCancellation, writeCancelledTeardown, writeTeardown, type Budget } from './ledger.js';
-import { childPayload, completionNotification, parseReport, priorAgentContext, priorAgentContextParts, reportBlock, resumeMessage } from './notify.js';
+import { childPayload, completionNotification, parseReport, priorAgentContext, priorAgentContextParts, reportBlockWithItem, resumeMessage } from './notify.js';
 import { CHILD_STALL_TIMEOUT_MS, childTimedOutMessage, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
 import { resolveDelegationTarget, resolveRole, type Persona, type PersonaResolver } from './personas.js';
 import { editTierNamesOf, fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
 import { correctiveInstruction, hadCorrectiveMessage, recordCorrectiveMessage, StallWatch, stallRecords, stallRecoveryDue } from './stall.js';
 import { fileWriters, scopeWithoutWriterReason, validateWriteScope, WriteClaims, writeScopeBlock, writesFiles, type ClaimHit, type ScopeDisclosure } from './write-scope.js';
-import { admitTodoItem, type CallerPlan } from './todo-item.js';
+import { admitTodoItem, openServedItems, type CallerPlan, type OpenServedItem } from './todo-item.js';
 import type { HookPort } from '../hooks-port.js';
 import { withContextUnits, withPlaybook } from '../run/run.js';
 import { STOP_GRACE } from '../run/grace.js';
@@ -635,6 +635,17 @@ export class IterationChildren implements DelegationOps {
   }
 
   /**
+   * `PD-TOOLS-006` revision 11 (OQ-333, ruled 2026-10-15 under R-072): the reported children's items `callerId` still has to
+   * close — IN_PROGRESS in its own plan, read through the same `todoPlanFor` a delegation's item is admitted against, and held by
+   * none of its non-terminal children. Read beside REQ-ORCH-059's `openTodoFor` when a wait's message is written; no plan read,
+   * no line.
+   */
+  private openServedItemsOf(callerId: string, rows: readonly ChildRow[]): ReadonlyMap<string, OpenServedItem> {
+    const plan = this.deps.todoPlanFor?.(callerId)?.document ?? null;
+    return plan === null ? new Map() : openServedItems(plan, rows, this.heldTodoItems(callerId));
+  }
+
+  /**
    * PD-TOOLS-006: the claim that refuses the agent `callerId` (its own task id; the root's for the entry agent) a
    * write to the workspace-relative path `rel`, or null when no live claim reaches it for this caller.
    */
@@ -703,7 +714,8 @@ export class IterationChildren implements DelegationOps {
     if (already) {
       const rows = set.map((id) => this.ledger.get(id)).filter((r): r is ChildRow => r !== undefined);
       for (const r of rows) this.ledger.markObserved(r.task_id);
-      return { immediate: true, requested: set.length, text: set.length === 0 ? 'There was nothing to wait for: no task ids were given and no background children are active.' : `${set.length === 1 ? 'The 1 requested task was' : `All ${set.length} requested tasks were`} already complete.\n\n${rows.map(reportBlock).join('\n\n')}` };
+      const open = this.openServedItemsOf(parentId, rows);
+      return { immediate: true, requested: set.length, text: set.length === 0 ? 'There was nothing to wait for: no task ids were given and no background children are active.' : `${set.length === 1 ? 'The 1 requested task was' : `All ${set.length} requested tasks were`} already complete.\n\n${rows.map((r) => reportBlockWithItem(r, open)).join('\n\n')}` };
     }
     await this.scheduler.waitFor(set);
     // REQ-HOOKS-080: the settle that released the wait may not be the last to finish — another task of the set can have
@@ -716,7 +728,8 @@ export class IterationChildren implements DelegationOps {
     }
     const rows = set.map((id) => this.ledger.get(id)).filter((r): r is ChildRow => r !== undefined);
     for (const r of rows) this.ledger.markObserved(r.task_id);
-    return { immediate: false, requested: set.length, text: `The waited-for background tasks completed (${set.length}).\n\n${rows.map(reportBlock).join('\n\n')}` };
+    const open = this.openServedItemsOf(parentId, rows);
+    return { immediate: false, requested: set.length, text: `The waited-for background tasks completed (${set.length}).\n\n${rows.map((r) => reportBlockWithItem(r, open)).join('\n\n')}` };
   }
 
   // ---- PD-ORCH-005: coming to rest, and cancelling one child ------------------------------------
@@ -1044,7 +1057,7 @@ export class IterationChildren implements DelegationOps {
       const stillRunning = this.ledger.childrenOf(agentId).filter((c) => !isTerminalChildState(c.state)).length;
       const open = newly.some((c) => c.background === 1) ? this.deps.openTodoFor?.(agentId) ?? [] : [];
       const notices = newly.filter((c) => c.background === 1).map((c) => completionNotification(c, stillRunning, this.durationS(c), open));
-      const message = [...notices, resumeMessage(newly, stillRunning)].join('\n\n');
+      const message = [...notices, resumeMessage(newly, stillRunning, this.openServedItemsOf(agentId, newly))].join('\n\n');
       outcome = await turn(message, history);
       history = outcome.messages;
       toolCalls += outcome.toolCallCount;

@@ -3552,6 +3552,30 @@ OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287
 > [`a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for`](../defects/fixed/a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First execution of revision 11 (the resume line, [OQ-333](../architecture/open-questions.md#oq-333)), 2026-10-15, ruled under
+> [R-072](requests.md#r-072), built by fin47 (`fin47-classifier-and-todo`):** built as written, and the text met the code in three
+> places.
+>
+> - **Three messages resume a wait, not one.** The ruling named `resumeMessage`; a `wait_for_tasks` result and a foreground
+>   `delegate`'s wait are `IterationChildren.waitForTasks`'s own text (both branches: "already complete" and "completed"), which
+>   the live session that raised the question met (delegation-swarm `#14`). All three render their reports through
+>   `reportBlockWithItem` (`packages/engine/src/children/notify.ts`), so they cannot disagree.
+> - **The plan is read where admission reads it.** `openServedItemsOf` reads `todoPlanFor` — the root's coordinator plan or a
+>   child's stored todo — beside REQ-ORCH-059's `openTodoFor`, and the ledger's held set; `openServedItems`
+>   (`packages/engine/src/children/todo-item.ts`) picks the items. No port is added.
+> - **An item two reported children serve.** The text names each such item once; it is named after the first reporting child
+>   that serves it.
+>
+> **What was measured.** `children/children.test.ts` ("revision 11", three cases, each red on the code before): a
+> `wait_for_tasks` result carrying the line after the report whose item is open and not after the one the coordinator closed; a
+> foreground `delegate` result carrying it, and none while another running child holds the item; the orchestration pass's resume
+> carrying it after the report, with the completion notification free of it and no later message naming the closed item.
+> `notify.test.ts` and `todo-item.test.ts` pin the line's words, the empty case and the selection. **What was not measured.** No
+> live run: the next default run's coordinating sessions should show each wait result that reports a child whose item is open
+> carrying the line, and the coordinator closing those items. The harness counts the lines (`resumeLines`), the items still open
+> at the answer (`openAtAnswer`) and the seconds to each close (`closeLatencies`), NOTEs in `lib/coordinator-todo.mjs`.
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-startup-001"></a>
@@ -5019,6 +5043,31 @@ question RC1, from revision 7's first execution). Revision 4 ruled under the sam
 > [`live-552d346-duress-autopsy.md`](../architecture/live-runs/live-552d346-duress-autopsy.md),
 > [`live-0bc3eee-default-autopsy.md`](../architecture/live-runs/live-0bc3eee-default-autopsy.md).
 > The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 4, 2026-10-15, ruled under [R-072](requests.md#r-072) ([OQ-333](../architecture/open-questions.md#oq-333)),
+> built by fin47 (`fin47-classifier-and-todo`):** built as written, and the text met the code in two places.
+>
+> - **One exempt set, held inside served.** `todoTool` computes `exemptNow`, the union of the served and held reads
+>   (`packages/agent-tools/src/tools/todo.ts`), and every single-active read takes it: `TodoList.active`, `add_task`'s and
+>   `update`'s checks, and in `replace` `newlyMarked`, `activeProtected` and `actives`. The union keeps a caller that passes `held`
+>   alone exactly where revision 2 left it, so "with no served set the tool behaves as before" needs no branch. `closes` and
+>   `keptReason` still read the held set alone, as revision 3 states.
+> - **The limit reaches the count.** The served set is the iteration's ledger (`IterationChildren.servedTodoItems`), so an earlier
+>   iteration's served item counts again after a REQ-ORCH-075 re-queue or a resume; a case pins it rather than leaving it to a
+>   reader.
+>
+> **What was measured.** `packages/agent-tools/src/tools/tools.test.ts` ("a task a delegation has served", four cases): the
+> coordinator's `update` and `add_task` beside three served-and-ended items, a second unserved mark still refused naming the
+> unserved task, and a `replace` marking the next task with a served-and-ended item kept IN_PROGRESS, each red on the code before;
+> the fourth pins the limit and holds on both. The description's case changed with its sentence (red before).
+> `apps/desktop/src/run-host/tools.test.ts` replays the swarm shape through the port — three delegations naming `impl101`,
+> `test101` and `doc101` marked, all three ended, then `update verify101 IN_PROGRESS` answers `ok` (red before: "Active task:
+> impl101"). In the built app, `pnpm mission-proof` (2026-10-15, every item, exit 0, load 1.8 to 2.7 on 4 CPUs) still passes item 1e:
+> the scripted coordinator's two `todo` calls answer `ok`, its closing `replace` stores both items COMPLETED and names nothing kept.
+> No proof drives the resume line: item 1e closes its items before the run resumes it. **What was not measured.** No live run: the
+> next default run's coordinating sessions (delegation-swarm, requirements, crlf) should count 0 `todo` calls refused under
+> REQ-TOOLS-145 or this directive and record no `tool_error` issue from that cause.
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

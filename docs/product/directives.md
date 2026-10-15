@@ -2612,7 +2612,7 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > directive's reading: the pinned runtime waits for the language server's project loading before a references request and not
 > before a rename, so a rename that is a server session's first cross-file request reaches the declaring file alone (measured
 > also over the runtime's own stdio branch, a copy of the live run's `todo-app` fixture among four arrangements). Recorded as
-> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
+> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
 > and raised as [OQ-273](../architecture/open-questions.md#oq-273); launch 11 keeps the assertion and is red until it is repaired;
 > **launch 12** (`child-renamed-tool`) — the global configuration's `tool_name_map` offers the cross-file replacement as
 > `replace_across_project`, and a tester's call by that name lists both files it changed in its report and artifact, with the
@@ -9242,7 +9242,7 @@ REQ-MCP-015's EDIT-tier symbol rename reaches on the bundled server.*
 > both files renamed, report and artifact listing both, no reference-search row; red with the warm-up switched off. **What was
 > not measured.** A live run: the opt-in `rename` scenario now reads a cold rename that leaves a referencing file behind as a
 > finding against this directive, and is the orchestrator's to run. Repairs
-> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 > **Corrected 2026-10-14 (fin44, `fin44-optional-findings`):** clause 3 was not held for one failure. The search went through
@@ -9251,6 +9251,22 @@ REQ-MCP-015's EDIT-tier symbol rename reaches on the bundled server.*
 > sent quietly (`SessionConnections.call`'s `quiet`): a lost transport is released and logged as before, and only the rename
 > may warn. Repairs
 > [`a-rename-warm-up-that-loses-its-connection-raises-the-servers-unreachable-notice`](../defects/fixed/a-rename-warm-up-that-loses-its-connection-raises-the-servers-unreachable-notice.md).
+
+> **First live execution, 2026-10-15, reported back by fin47 (`fin47-rename-and-optionals`): the rule held as written, and its
+> reason is falsified for a workspace with no project file.** The opt-in live `rename` scenario at `3c03287` (pack
+> `2026-10-15T05-00-55-983Z`) failed its PD-MCP-004 check: the run host sent the search (no warning logged), the rename said
+> `(1 changes applied)` and changed `src/todos.js` alone, and the child mended `src/App.jsx` and `src/todos.test.js` by hand.
+> ~~"four arrangements over the runtime's stdio branch, a copy of the live run's `todo-app` fixture among them, each changed one
+> file, while the same rename after one referencing-symbol search reached every file"~~ — *the search was measured to help only in
+> the arrangement with a `tsconfig.json`. Where no `tsconfig.json` or `jsconfig.json` covers the files, as in the `todo-app`
+> fixture (a Vite React shape), the TypeScript language server holds only the open files in an inferred project; the runtime opens
+> the declaring file alone, so the search answers `{}` and the rename stays in that file however long the server has run
+> (measured over the bundled runtime: the search, a second search 15 s later, and overviews of both importers all left it at one
+> file; an empty `jsconfig.json`, or the importers held open, made it reach all three).* What to do there is
+> [OQ-362](../architecture/open-questions.md#oq-362), open; `code-intel-proof` launch 13 (`child-rename-cold-js`) pins it red in the
+> built app. Reopens
+> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

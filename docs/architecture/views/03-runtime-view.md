@@ -1041,7 +1041,9 @@ so the prompt section and the tool definition the model is handed both read them
 server's referencing-symbol search for the same `name_path` and `relative_path` before every symbol rename it forwards, by the
 name the server reports (so a `tool_name_map` rename is warmed and another server's same-named tool is not), and discards the
 answer: the pinned runtime answered a rename before its language server had loaded the project and renamed the declaring file
-alone. The pairing and the shared argument names are the manifest's `warmUps`, read through `codeIntelligenceWarmUp`; the
+alone. The search helps only where a `tsconfig.json` or `jsconfig.json` covers the files; in a workspace with neither (a plain
+JavaScript project, the live run's `todo-app`) the language server holds the open files alone, the search answers nothing and
+the rename still changes the declaring file only (fin47, 2026-10-15; OQ-362, open). The pairing and the shared argument names are the manifest's `warmUps`, read through `codeIntelligenceWarmUp`; the
 search is sent under the run's signal and the rename's one REQ-MCP-003 allowance, measured from the call's start, so the rename
 gets what the search left. A search that spends the allowance is the rename's timeout and a cancel during it is `interrupted`,
 neither sending the rename; any other failure is one `warn` line and the rename goes ahead. It is no tool call: no gate, no

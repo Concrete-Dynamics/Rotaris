@@ -485,6 +485,11 @@ equal); `code-intel-proof` launches 10 and 11 green at load 0.7 to 2.7 on four C
 no search row, 37.6 s), and launch 11 red with the warm-up switched off in the same build ("(1 changes applied)", the declaring
 file alone). **Revisit with every pin change:** the warm-up rests on the runtime's internals, so a later pin may make it
 unnecessary or insufficient; launch 11 is its acceptance gate and is re-run whenever `pins.json` moves.
+*Found insufficient 2026-10-15 (fin47), the same pin:* the warm-up helps only where a `tsconfig.json` or `jsconfig.json` covers the
+files. In a workspace with none (the live run's `todo-app` fixture, a Vite React shape) the TypeScript language server holds only
+the open files, the runtime opens the declaring file alone, and the search answers `{}`: the live `rename` scenario at `3c03287`
+renamed one file of three. The remedy is open as [OQ-362](../open-questions.md#oq-362); `code-intel-proof` launch 13
+(`child-rename-cold-js`) is red on it until a ruling is built, and joins launch 11 as a gate re-run on every pin change.
 
 ## The bundle is built for the artifact's architecture — 2026-10-15 (OQ-400, ruled under R-072)
 

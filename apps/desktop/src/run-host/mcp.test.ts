@@ -673,7 +673,7 @@ describe('a cross-file EDIT call is observed by the files it changed (OQ-245)', 
 /*
  * PD-MCP-004 (OQ-273, ruled 2026-10-13 under R-072): the pinned runtime answered a symbol rename before its language server had
  * loaded the project, so the first rename of a server session renamed the declaring file alone and said it succeeded
- * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). Before
+ * (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). Before
  * forwarding the rename the run host sends the referencing-symbol search of the same symbol and file and discards its answer,
  * both within the rename's one REQ-MCP-003 allowance; the search writes no record. The runtime's names and argument names come
  * from the manifest alone (REQ-MCP-116).

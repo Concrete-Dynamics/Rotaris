@@ -146,7 +146,9 @@
  *                 choose another tool. Whether the child searched for references first is noted; a cold rename that left the
  *                 importing files behind or had them mended by hand is a FINDING against PD-MCP-004, whose run-host search
  *                 before every rename must make it reach them (OQ-273, ruled 2026-10-13;
- *                 docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ *                 docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ *                 It failed at `3c03287`: the fixture has no `tsconfig.json` or `jsconfig.json`, and there the search finds
+ *                 nothing to load (the note, reopened 2026-10-15; OQ-362, open). It stays a FAIL until OQ-362 is ruled.
  *   8j. plan-open — OPT-IN (`--only=plan-open`), a few minutes (fin42, N56): `PD-ORCH-015` against a real model, two launches
  *                 whose prompt has the coordinator write a three-item plan and answer with the last item left PENDING:
  *                 `plan-open`, where it is free to record the item when corrected (one "a correction is sent" warning, the
@@ -3161,10 +3163,13 @@ if (wanted.includes('delegation')) {
  * the session's summary names the files is a NOTE. A run with no `rename_symbol` call is a NOTE, "not reached": a live model may
  * choose another tool, and the questions above are then unasked. Whether the child searched for the symbol's references before its
  * first rename is recorded beside the reading: a rename with nothing before it renamed the declaring file alone in the pinned
- * runtime (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md),
+ * runtime (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md),
  * and since PD-MCP-004 (OQ-273, ruled 2026-10-13 under R-072) the run host sends the reference search itself before every rename,
  * writing no row for it, so a cold rename whose importing files were left behind, or mended by another tool afterwards, is a
- * finding against that directive. Until the ruling it was a NOTE naming OQ-273.
+ * finding against that directive. Until the ruling it was a NOTE naming OQ-273. At `3c03287` it failed on the fixture's shape,
+ * a JavaScript workspace with no `tsconfig.json` or `jsconfig.json`, where the search answers nothing and the rename stays in the
+ * declaring file (fin47, reopening the note; OQ-362, open). The failure's detail says whether the workspace held a project file,
+ * since that, and not the search's timing, decides whether the search can help.
  *
  * It renames a symbol every later scenario's prompts may read, so it runs after the default set and the workspace's three files
  * are restored afterwards.
@@ -3211,7 +3216,8 @@ if (wanted.includes('rename')) {
       } else {
         check(r.first.status === 'ok', 'rename: the first rename_symbol call is ok', `${r.agent}: ${r.first.status} — ${JSON.stringify(r.first.result)}`);
         noted(`rename: ${r.agent} ${r.searchedFirst ? 'searched for the symbol\'s references before its first rename' : 'renamed with no reference search of its own before it (a cold rename; PD-MCP-004\'s search is the run host\'s and writes no row)'}`, `${r.renames} rename call(s); the first said ${JSON.stringify(r.first.result)}`);
-        if (r.cold) check(!r.coldLeftBehind, 'rename: the cold rename reached the importing files on its own (PD-MCP-004)', `left behind: ${r.leftBehind.join(', ') || 'none'}; written by another tool after it: ${r.mendedAfter.join(', ') || 'none'} — the run host's reference search before the rename did not make it reach them (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)`);
+        const projectFiles = ['tsconfig.json', 'jsconfig.json'].filter((f) => existsSync(join(workspace, f)));
+        if (r.cold) check(!r.coldLeftBehind, 'rename: the cold rename reached the importing files on its own (PD-MCP-004)', `left behind: ${r.leftBehind.join(', ') || 'none'}; written by another tool after it: ${r.mendedAfter.join(', ') || 'none'} — the run host's reference search before the rename did not make it reach them; the workspace root holds ${projectFiles.join(' and ') || 'no tsconfig.json or jsconfig.json'} (OQ-362; docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)`);
         check(r.leftBehind.length === 0 && r.carrying.length === RENAME_FILES.length, `rename: ${RENAME_FILES.join(', ')} call and import ${RENAME_TO} and no longer ${RENAME_FROM} (REQ-MCP-015)`, `carrying ${r.carrying.join(', ') || 'none'}; still naming ${RENAME_FROM}: ${r.leftBehind.join(', ') || 'none'}${r.cold ? ' (cold rename, PD-MCP-004)' : ''}`);
         check(r.reportFiles !== null && r.reportMissing.length === 0, 'rename: the renaming child\'s stored report lists every file the rename changed (OQ-245, PD-ORCH-004, REQ-ORCH-109)', `edited_files ${JSON.stringify(r.reportFiles)}; missing ${JSON.stringify(r.reportMissing)}`);
         check(r.artifactMissing.length === 0, 'rename: the child-report artifact lists every file the rename changed (REQ-LIBRARY-088)', `${JSON.stringify(r.artifactFiles)}; missing ${JSON.stringify(r.artifactMissing)}`);

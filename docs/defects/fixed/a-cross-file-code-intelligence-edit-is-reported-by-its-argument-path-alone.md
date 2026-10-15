@@ -89,5 +89,5 @@ report-back keeps fin32's literal reading beside its replacement; the row is in 
 "needs the TypeScript language server provisioned (IC-7)", did not hold — IC-7 was discharged on 2026-09-27 and the runtime
 provisions the server on first use (launch 4). The eleventh launch found the rename itself reaching the declaring file alone when
 nothing came before it in the server session, a separate defect:
-[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
+[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
 ([OQ-273](../../architecture/open-questions.md#oq-273)). A live run is still not shown.

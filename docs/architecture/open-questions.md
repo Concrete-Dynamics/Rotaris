@@ -12528,7 +12528,7 @@ the unrepaired build with `[]`, green with both files). The report-back is in `P
 function across two files through the language server after a reference search, and the child's report and artifact list exactly
 both; its eleventh (`child-rename-cold`), the rename alone, lists exactly the one file it changed — the observation holds — and
 finds the runtime's rename reaching the declaring file alone, recorded as
-[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
+[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
 and raised as [OQ-273](#oq-273). Not measured: a live run (the opt-in `rename` scenario, written). The report-back is in
 `PD-ORCH-004`, in place.
 
@@ -14082,7 +14082,7 @@ warm it, change the runtime, or tell the model?** *(REQ-MCP-015, the EDIT tier's
 pinned runtime the product bundles and drives as it is; REQ-MCP-116, the binding manifest, the one place the runtime's
 identifiers are written; [OQ-245](#oq-245), the reach observation that records what the call changed. Raised 2026-10-13 by
 fin42 (N59) from
-[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
 fin42 held OQ-271 to OQ-280; raised as OQ-272 (OQ-271 was taken on main by another of the plan's bundles), renumbered
 OQ-273 at its landing, `origin/main` having taken OQ-272 meanwhile. Ruled 2026-10-13 under R-072, below; it read "Open." until then.)*
 
@@ -14131,6 +14131,12 @@ yet measured; (c), advice that leaves a broken project whenever it is ignored; (
 project unbuildable. **Costs kept on record:** one server request per rename that the model did not make, part of the rename's
 allowance spent on it, and a binding resting on the runtime's internals. *The reading the build proceeded under until the ruling
 ("As built: the call is forwarded as the model made it …", above) is kept as the falsified reading.*
+
+*Corrected 2026-10-15 (fin47, `fin47-rename-and-optionals`), the old reading kept:* ~~"four arrangements over the runtime's stdio
+branch, a copy of the live run's `todo-app` fixture among them, all changed one file. The same rename after one referencing-symbol
+search of the symbol reaches every file"~~ — *the search was measured only in the arrangement with a `tsconfig.json`. With no
+project file (the `todo-app` copy among them) the search answers `{}` and the rename still changes the declaring file alone: the
+live `rename` scenario at `3c03287` failed on it. Raised as [OQ-362](#oq-362).*
 
 <a id="oq-279"></a>
 
@@ -15436,3 +15442,58 @@ packaging guard";
 2026-09-16 and 2026-10-06 amended in place, each struck reading kept; `spikes/native-load-proof.md`'s ARM64 section; ADR-0035,
 ADR-0054 and IC-7, dated notes. **Owed:** the first `pnpm package` on the Windows ARM64 host, which shows whether the emulated uv
 installs the x86_64 interpreter and takes `win_amd64` wheels.
+
+<a id="oq-362"></a>
+
+**OQ-362 — When the workspace has no TypeScript or JavaScript project file, what makes a code-intelligence symbol rename reach the
+files that import the symbol?** *(REQ-MCP-015, the EDIT tier's symbol rename, "throughout the entire codebase" as the runtime
+describes it; [`PD-MCP-004`](../product/directives.md#pd-mcp-004), which rules the reference search before every rename and
+nothing else; [OQ-273](#oq-273), whose options (b) and (c) were rejected for the case it measured; REQ-MCP-011 and ADR-0035, the
+pinned runtime driven as it is; REQ-MCP-116, the binding manifest; [OQ-245](#oq-245), the reach observation. Raised 2026-10-15 by
+fin47 (`fin47-rename-and-optionals`) from the live `rename` scenario's failure at `3c03287`, reopening
+[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md);
+the plan's range OQ-361 to OQ-380, its second number (OQ-361 was taken on main by a sibling bundle) — renumbered at landing if
+another sibling took it first.)*
+
+**What is open.** PD-MCP-004's search makes a cold rename reach the importing files when a `tsconfig.json` or `jsconfig.json`
+covers them (`code-intel-proof` launch 11), and does nothing when none does. The TypeScript language server then puts each file in
+an inferred project of the files open in it, and the pinned runtime opens only the declaring file, for the search and for the
+rename alike, so the search answers `{}` and the rename changes the declaring file alone while saying it succeeded. Measured
+2026-10-15 over the bundled runtime's stdio server and its language-server layer (the note's table): the live run's `todo-app`
+fixture (a Vite React shape, `.js`/`.jsx`, no project file) renamed `src/todos.js` alone after the search, after a second search
+15 s later, and after symbol overviews of both importers; with an empty `jsconfig.json` at its root it renamed all three files;
+with the two importers held open in the language server it renamed all three. A Vite or plain Node JavaScript project ships no
+project file, so this is the common shape of a JavaScript workspace, not a corner of it.
+
+**What the build proceeds under.** PD-MCP-004 as ruled: the search is sent and discarded, the rename is forwarded, the result is
+the runtime's, and the reach observation lists the one file it changed, which the child's report and artifact repeat. The model is
+told nothing more; a live model that greps afterwards mends the importers by hand (the run at `3c03287` did). `code-intel-proof`
+launch 13 (`child-rename-cold-js`) and the live `rename` scenario's PD-MCP-004 check both read this as a failure.
+
+**What a ruling decides.** Which of these, or none:
+
+- **(a) A project file for the call.** When no `tsconfig.json` or `jsconfig.json` stands at the workspace root or above the
+  declaring file, the run host writes a minimal `jsconfig.json` (`{}`, measured sufficient) at the workspace root before the
+  search, and removes it after the rename answers, whatever it answered. Costs: a file the person did not ask for appears in their
+  workspace for the call's duration (a watcher, a build or `git status` may see it; a crash leaves it behind until the next rename
+  or the next open removes it); the reach observation must leave it out; it changes which files the server sees for every later
+  request of that server session until the server notices the removal; and a project whose real configuration sits elsewhere
+  (a monorepo package's `tsconfig.json` not at the root) is not this case and is left as it is.
+- **(b) The runtime holds the importers open.** The bundle recipe patches the pinned distribution so that, before a rename (and a
+  references request) on a TypeScript or JavaScript file that no project file covers, it opens the workspace's files of that
+  language that mention the symbol's name, holds them for the request and closes them after. Costs: a patched third-party tree the
+  recipe and the drift check must carry (ADR-0035, ADR-0054; OQ-273 rejected (b) for that reason when the search alone sufficed),
+  one file open per candidate, and a textual pre-filter that a re-exported or aliased name can miss.
+- **(c) Tell the model.** After a rename whose reach observation lists the declaring file alone, the run host appends to the result
+  that files which may import the symbol were not renamed — naming them from a textual search of the workspace for the old name, or
+  not naming them. Costs: OQ-273 rejected the same advice as one a model may ignore; a symbol used in one file only would trip it,
+  so it needs a search to stay quiet there.
+- **(d) The run host completes the rename.** It applies the old name's replacement in the files the textual search names. Costs:
+  a textual rename the person and the model did not ask for, which can rename an unrelated identifier of the same name.
+- **(e) Nothing, recorded.** PD-MCP-004 is amended to say its search reaches only files a project file covers; the live scenario's
+  check becomes a NOTE for a workspace with no project file, and launch 13 asserts what changed rather than that both did.
+
+**What a live run then shows.** The opt-in `rename` scenario (`live-run.mjs --only=rename`) on the unchanged `todo-app` fixture:
+under (a) or (b), the first `rename_symbol` call says `3 changes applied` and no other tool writes `src/App.jsx` or
+`src/todos.test.js` after it; under (c), the result carries the appended sentence and the model's own edits follow; under (d), the
+three files carry the new name with the rename's one row; under (e), the scenario's check reads NOTE.

@@ -6,7 +6,7 @@
  * product sends first (the READ tier's referencing-symbol search) and the arguments the two share, which the product copies
  * from the warmed call. The pinned runtime answers a rename before its language server has loaded the project, so the first
  * rename of a server session renamed the declaring file alone; the search waits for that loading
- * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ * (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
  *
  * The warm-up rests on the runtime's internals, so the check is strict: a capability that is no capability of the tiers, a
  * tool the server does not list, or an argument either tool's listed input schema lacks refuses generation, and an upstream

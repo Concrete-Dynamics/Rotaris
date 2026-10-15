@@ -88,7 +88,7 @@ export function codeIntelligenceEdit(callable: string, args: Readonly<Record<str
  *
  * The pinned runtime answered a symbol rename before its language server had loaded the project, so the first rename of a
  * server session renamed the declaring file alone and said it succeeded; its referencing-symbol search waits for the loading
- * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ * (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
  */
 export interface CodeIntelligenceWarmUp {
   readonly tool: string;

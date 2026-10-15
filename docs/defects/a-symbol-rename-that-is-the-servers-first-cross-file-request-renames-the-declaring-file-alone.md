@@ -1,5 +1,51 @@
 ## A symbol rename that is the server's first cross-file request renames the declaring file alone
 
+**Reopened 2026-10-15 by fin47 (`fin47-rename-and-optionals`): PD-MCP-004's reference search does not reach a workspace with no
+TypeScript or JavaScript project file.** The opt-in live `rename` scenario at `3c03287` (pack `2026-10-15T05-00-55-983Z`, session
+`abb94646`) read "rename: the cold rename reached the importing files on its own (PD-MCP-004)" as **FAIL**: the delegated
+coding-agent's one `rename_symbol` call of `remaining` → `countRemaining` in `src/todos.js` was `ok` and answered `Successfully
+renamed 'remaining' to 'countRemaining' (1 changes applied)` in 5,320 ms (the run host's reference search included; no warning was
+logged, so the search answered); only `src/todos.js` changed, and the child then edited `src/App.jsx` and `src/todos.test.js` by
+hand with `haet_edit` (`node --test` green). The same head's `code-intel-proof` launch 11 (`child-rename-cold`) renamed in both of
+its files. **What differs is the fixture, not the warm-up's timing or the server's readiness.** Measured 2026-10-15 over the
+bundled runtime's own stdio server (`serena-agent` 1.7.0, the `--context ide` arguments the product ships, the runtime of the
+`3c03287` build), one fresh server per row, the run host's search reproduced as the same `find_referencing_symbols` call:
+
+| Workspace | Requests before the rename | The search answered | Files the rename changed |
+|---|---|---|---|
+| `cold-a.ts`/`cold-b.ts` with `tsconfig.json` (launch 11's shape) | the search | both files | both (`2 changes applied`) |
+| the live run's `todo-app` fixture (`.js`/`.jsx`, no project file) | the search | `{}` | `src/todos.js` alone (`1 changes applied`) |
+| the same fixture | none | — | `src/todos.js` alone |
+| the same fixture | the search, 15 s, the search again | `{}` twice | `src/todos.js` alone |
+| the same fixture | `get_symbols_overview` of `src/App.jsx` and of `src/todos.test.js`, then the search | `{}` | `src/todos.js` alone |
+| the same fixture with an empty `jsconfig.json` added at its root | the search | `src/App.jsx`, `src/todos.test.js` | all three (`3 changes applied`) |
+| two `.ts` files, no `tsconfig.json` | the search | `{}` | the declaring file alone |
+
+And through the runtime's language-server layer directly (`solidlsp`, the same pin), the `todo-app` fixture with no project file:
+the references request and the rename edit named `src/todos.js` alone; with `src/App.jsx` and `src/todos.test.js` held open in the
+language server for the two requests, the references named both and the rename edit touched all three files.
+
+**The reading.** The TypeScript language server places a file that no `tsconfig.json` or `jsconfig.json` covers in an *inferred*
+project made of the files open in it and what those import; a file that imports the symbol but is not open is in no project the
+server searches. The pinned runtime opens only the declaring file for the search and for the rename and closes each after its
+request (`open_file` in `solidlsp/ls.py`), so with no project file there is nothing for the search to load and nothing to wait for:
+PD-MCP-004's search answers `{}` and the rename stays in the declaring file however long the server has run. The original table
+below already held this arrangement (its fourth row, the `todo-app` copy, cold) — the search's effect was measured only on the
+third shape, with a `tsconfig.json`, and the repair's claim was generalised from it. A Vite React project, which the live fixture
+copies, ships no `jsconfig.json`, so this is the ordinary shape of a JavaScript workspace rather than a corner.
+
+**Why it is not repaired here.** PD-MCP-004 rules the search and nothing else (its clause 2: the referencing-symbol search with the
+two shared arguments). Every measured remedy is outside it: a project file written into the person's workspace, the importers held
+open by the runtime (a patch of the pinned distribution, which OQ-273 rejected as its option (b)), or the run host telling the model
+or mending the files itself (OQ-273's rejected (c), and more). The choice is raised as
+[OQ-362](../architecture/open-questions.md#oq-362) and left for the consortium (R-072). **Pinned red until then** by
+`code-intel-proof` launch 13 (`child-rename-cold-js`), the live fixture's shape in the built app, held to the proof's end as launch
+11 is; and by the live `rename` scenario's check above, which failed at `3c03287`.
+
+*The note's original text, its specs and its first outcome follow unchanged; the outcome's "Repaired" holds for a workspace whose
+files a `tsconfig.json` or `jsconfig.json` covers, and is falsified for one with no such file.*
+
+
 The code-intelligence EDIT tier's symbol rename (`rename_symbol`, REQ-MCP-015's "symbol rename"; the manifest's `renameSymbol`,
 reach `project`) renames a symbol in the file that declares it and in no other file when it is the first request of its server
 session that needs the language server's cross-file view. Its result still says it succeeded — `Successfully renamed
@@ -41,7 +87,7 @@ have to edit them one by one.
 - `REQ-ORCH-109`: a report "cannot conceal files it failed to account for" — not contradicted (the report lists the one file the
   call changed), but a report saying the rename succeeded hides that the work is broken.
 - No requirement says how the product drives the runtime's language server, or whether it may warm it, so the repair is a
-  question: [OQ-273](../../architecture/open-questions.md#oq-273).
+  question: [OQ-273](../architecture/open-questions.md#oq-273).
 
 ## Relevant files
 
@@ -60,7 +106,7 @@ have to edit them one by one.
 ## Outcome
 
 **Repaired 2026-10-14 by fin43** under OQ-273's ruling (R-072, option (a)), recorded as
-[`PD-MCP-004`](../../product/directives.md#pd-mcp-004): before the run host forwards a symbol rename to the bundled server it
+[`PD-MCP-004`](../product/directives.md#pd-mcp-004): before the run host forwards a symbol rename to the bundled server it
 sends that server's referencing-symbol search for the same `name_path` and `relative_path`, discards the answer, and then
 forwards the rename, both within the rename's one REQ-MCP-003 allowance; the search writes no record. The pairing and the
 argument names are the binding manifest's `warmUps` (`manifest.mjs`, refused by `scripts/lib/code-intelligence-warm-ups.mjs`

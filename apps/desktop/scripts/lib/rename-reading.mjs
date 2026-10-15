@@ -8,7 +8,7 @@
  * - whether the agent that renamed searched for the symbol's references first (`find_referencing_symbols` before its first
  *   rename): the pinned runtime renamed the declaring file alone when the rename was its first cross-file request, and since
  *   PD-MCP-004 (OQ-273, ruled 2026-10-13) the run host sends that search itself before every rename and records no row for it
- *   (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md), so a
+ *   (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md), so a
  *   cold rename must reach every file on its own;
  * - which of the three files still call or import the old name, which carry the new one, and which were written by another tool
  *   after the first rename (mended by hand);

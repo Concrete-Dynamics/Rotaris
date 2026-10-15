@@ -377,12 +377,15 @@ export class McpHost {
                * PD-MCP-004 (OQ-273, ruled 2026-10-13 under R-072): the bundled server's symbol rename is preceded by its
                * referencing-symbol search of the same symbol and file, whose answer is discarded — the pinned runtime answered
                * a rename before its language server had loaded the project, and renamed the declaring file alone
-               * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+               * (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
                * Asked by the reported name, so a `tool_name_map` rename (REQ-MCP-005) is still warmed, and of this server alone.
                * The search is the run host's own request, as REQ-MCP-070's and REQ-MCP-071's are: no grant applies to it, and it
                * writes no record, total or notice. The pair is held to the rename's one allowance, measured from `started`: the
                * rename is sent with what the search left, so the timeout test below covers both. Until the ruling the rename was
                * forwarded as the model made it (OQ-273's "what the build proceeds under", kept there as the falsified reading).
+               * The search helps only where a `tsconfig.json` or `jsconfig.json` covers the files: with none, the language server
+               * holds the open files alone, the search answers nothing and the rename still stays in the declaring file (the live
+               * `rename` scenario at 3c03287; the note above, reopened 2026-10-15). What to do there is OQ-362, open.
                */
               let allowance: Millis = timeoutMs;
               const warmUp = server.name === CODE_INTELLIGENCE_SERVER_NAME ? codeIntelligenceWarmUp(tool.reported, a as Record<string, unknown>) : null;

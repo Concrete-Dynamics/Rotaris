@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**A rename's reference search reaches only files a project file covers (fin47, `fin47-rename-and-optionals`; PD-MCP-004,
+OQ-362).** `03-runtime-view.md`'s PD-MCP-004 paragraph says the search helps only where a `tsconfig.json` or `jsconfig.json`
+covers the files, and that in a workspace with neither the rename still changes the declaring file alone (the live `rename`
+scenario at `3c03287`; the note reopened). No code path moved; the executor's comment says the same.
+
 **The code-intelligence bundle is built for the artifact's architecture, and packaging refuses an interpreter of another one
 (fin47, `fin47-record-and-windows-reading`; OQ-400 ruled under R-072; REQ-STARTUP-015, REQ-STARTUP-159).** `01-component-view.md`'s
 bundled-runtime section names `bundle.mjs`'s `--target`, `target.mjs` (the full uv key, the target's architecture in the marker

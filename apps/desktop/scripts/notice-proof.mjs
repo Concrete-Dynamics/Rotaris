@@ -681,7 +681,7 @@ if (want('6f')) {
   expect(!/notice from the renderer: \w+ "Could not open the selected project/.test(r.log), 'the renderer published REQ-SHELL-019\'s report a second time');
   results.actionRefused = { focus: focusRefused[1], projectInit: initRefused[1], said, png: join(output, 'action-refused.png'), elapsedMs: r.elapsedMs };
   // The refusal is handed to the report, not written to the console: before the repair both arms' `console.warn` were relayed here.
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

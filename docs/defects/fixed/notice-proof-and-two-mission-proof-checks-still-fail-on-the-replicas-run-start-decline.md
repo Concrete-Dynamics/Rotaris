@@ -4,7 +4,7 @@
 `replicaRunStartDeclines` from `apps/desktop/scripts/lib/renderer-console.mjs`; all eleven of its renderer-error checks (the
 nine the note counted grew to eleven before the repair: `advisory`, `hook-load-fault`, `global-merged-warning`, `scoping`,
 `stack`, `review-action`, `review-other`, `review-refused`, `retry-action`, `retry-image-first`, `retry-image`) read through the
-filter, and `launch` counts what it let through per launch in `results.json` → `replicaRunStartDeclines`. `mission-proof.mjs`'s
+filter, and so does the twelfth, `action-refused` (section 6f, which landed on main while this repair was built and was brought through the filter at the landing rebase, the source-shape case red on it until then), and `launch` counts what it let through per launch in `results.json` → `replicaRunStartDeclines`. `mission-proof.mjs`'s
 `unexpected` is defined once beside `results`, before the first launch, and its `painted` and `waiting` checks read through it
 as its later items did, each recording `replicaDeclines`. Pinned by two source-shape cases in
 `apps/desktop/scripts/lib/renderer-console.test.ts` ("notice-proof and every mission-proof launch read renderer errors through

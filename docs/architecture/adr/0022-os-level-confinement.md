@@ -271,3 +271,9 @@ answer the disclosure says nothing changes. Both now call `owesNoConfinementDisc
 beside the disclosure's text. `pnpm sandbox-proof` reads the dialog in the built app (scenario 2b). The build before
 this repair failed that check on Linux without `bwrap`; the build after it passes with and without `bwrap`
 ([the note](../../defects/fixed/the-launch-dialog-draws-the-no-mechanism-disclosure-where-a-mechanism-exists.md)).
+
+**Noted 2026-10-15 (fin47, `fin47-accept1-4`): the start-time gate is a run start's, and a retrospective no longer meets it.** The
+gate sits in `prepareRun`, which the retrospective (ADR-0065) also used to prepare its setup, so a requested mode refused a pass
+that opens no shell wherever the verdict was unsettled or unavailable. `prepareRun` now leaves the gate out of a retrospective's
+setup; a run start and a continuation are unchanged
+([`../../defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`](../../defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md)).

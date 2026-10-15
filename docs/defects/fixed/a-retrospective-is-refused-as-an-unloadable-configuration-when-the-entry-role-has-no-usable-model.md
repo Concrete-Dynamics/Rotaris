@@ -56,4 +56,5 @@ whole `retrospective-proof` read 71 of 71 (load average about 1).
 
 The other `prepareRun` refusals of a configuration that loaded — chiefly the confinement gate a retrospective never needs — still
 read "could not be loaded"; recorded in
-[`../a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`](../a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+[`a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`](a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md)
+(repaired 2026-10-15, fin47 `fin47-accept1-4`).

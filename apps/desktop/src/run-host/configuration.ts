@@ -526,6 +526,7 @@ export interface PrepareOptions {
    * says so. With no resolvable retrospective model either, the `no-model` refusal stands. Until 2026-10-15 the entry role's
    * refusal stood for the retrospective too, and was answered "The workspace configuration could not be loaded"
    * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md).
+   * Nor is it met by ADR-0022's start-time confinement gate, which is a run start's (see the gate in `prepareRun`).
    */
   readonly retrospective?: boolean | undefined;
 }
@@ -539,7 +540,13 @@ export interface PrepareOptions {
  * `confinement` (REQ-NOTIFY-060/061): the start-time gate refused the confinement mode the run asked for, so the run never
  * reached a started state; main reports that class in REQ-NOTIFY-061's own notice.
  */
-export type ConfigureRefusal = { readonly reason: string; readonly cfg?: LoadedConfiguration; readonly code?: 'no-model' | 'confinement' };
+/**
+ * `unloaded`: the configuration did not load, or did not apply over the current settings — the one refusal a reader may word as
+ * "the configuration could not be loaded". Every other refusal is of a configuration that loaded (REQ-NOTIFY-254: the reason is
+ * worded by the layer that determined it), which a retrospective says as such
+ * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+ */
+export type ConfigureRefusal = { readonly reason: string; readonly cfg?: LoadedConfiguration; readonly code?: 'no-model' | 'confinement' | 'unloaded' };
 
 /** Captured inputs and the credential boundary for one launch (REQ-TRACE-470/471). */
 export interface PreparedRun {
@@ -610,9 +617,9 @@ export function effectiveSandboxMode(configured: string, override: string | unde
 export function prepareRun(workspaceRoot: string, attended: boolean, deps: ConfigureDeps, boardPermissions?: 'permissive', options?: PrepareOptions): Result<PreparedRun, ConfigureRefusal> {
   const loaded = loadConfiguration({ globalDir: deps.globalDir, workspaceRoot, now: () => deps.clocks.monotonic.now(), builtinLaunch: deps.codeIntelligenceLaunch ?? null });
   // REQ-CONFIG-478 names the first problem; REQ-MCP-002 requires EVERY defect reported, so the rest follow it.
-  if (!loaded.ok) return err({ reason: `The configuration could not be loaded: ${renderFatal(loaded.error)}${loaded.error.lines.length > 1 ? ` All problems: ${loaded.error.lines.join(' | ')}` : ''}` });
+  if (!loaded.ok) return err({ reason: `The configuration could not be loaded: ${renderFatal(loaded.error)}${loaded.error.lines.length > 1 ? ` All problems: ${loaded.error.lines.join(' | ')}` : ''}`, code: 'unloaded' });
   const live = overlayLiveState(loaded.value, deps.liveState());
-  if (!live.ok) return err({ reason: `The configuration could not be applied with the current settings: ${renderFatal(live.error)}`, cfg: loaded.value });
+  if (!live.ok) return err({ reason: `The configuration could not be applied with the current settings: ${renderFatal(live.error)}`, cfg: loaded.value, code: 'unloaded' });
   // REQ-TRACE-470: this grant is confined to the launch and includes the Tier C opt-in.
   const granted: LoadedConfiguration = boardPermissions === 'permissive'
     ? { ...live.value, runtime: { ...live.value.runtime, permission_mode: 'autonomous', allow_unsandboxed_autonomous: true } }
@@ -628,18 +635,27 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
    * error, carrying the backend's own reason AND remediation as unaltered substrings
    * (REQ-EVENTS-024, REQ-SANDBOX-126). Mode `off` is not a failure (REQ-SANDBOX-092) and does no
    * probing at all (REQ-SANDBOX-074).
+   *
+   * A retrospective's setup (`PrepareOptions.retrospective`) does not pass through it: the gate protects the shell a run would
+   * open, and a retrospective is no run — it starts no session, opens no shell and runs no tool, its one request going to its own
+   * model (PD-LIBRARY-002, ADR-0065 decision 5). Its setup never reaches a run (`retrospectiveSetup` caches nothing), so no run
+   * records a confinement fact from it (REQ-SANDBOX-094), and the configured mode stays as the file states it. Until 2026-10-15 it
+   * was gated, and refused wherever the run host had not yet settled the verdict — `peek()` is null until a run start or
+   * Settings asks — or where confinement is unavailable
+   * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
    */
-  const mode = effectiveSandboxMode(granted.runtime.sandbox_mode, options?.sandboxMode);
-  if (!mode.ok) return err({ reason: mode.error, cfg: granted, code: 'confinement' });
   const verdict = deps.confinement?.() ?? null;
-  if (mode.value !== 'off' && verdict?.available !== true) {
-    return err({ reason: renderUnavailability(verdict ?? { available: false, backend: 'unavailable', reason: '', remediation: '' }), cfg: granted, code: 'confinement' });
+  let moded: LoadedConfiguration = granted;
+  if (options?.retrospective !== true) {
+    const mode = effectiveSandboxMode(granted.runtime.sandbox_mode, options?.sandboxMode);
+    if (!mode.ok) return err({ reason: mode.error, cfg: granted, code: 'confinement' });
+    if (mode.value !== 'off' && verdict?.available !== true) {
+      return err({ reason: renderUnavailability(verdict ?? { available: false, backend: 'unavailable', reason: '', remediation: '' }), cfg: granted, code: 'confinement' });
+    }
+    // The override is folded into the captured configuration, so the run, its snapshot and its audit
+    // all read one mode rather than the file's and the dialog's separately (REQ-SANDBOX-104, -122).
+    if (granted.runtime.sandbox_mode !== mode.value) moded = { ...granted, runtime: { ...granted.runtime, sandbox_mode: mode.value } };
   }
-  // The override is folded into the captured configuration, so the run, its snapshot and its audit
-  // all read one mode rather than the file's and the dialog's separately (REQ-SANDBOX-104, -122).
-  const moded: LoadedConfiguration = granted.runtime.sandbox_mode === mode.value
-    ? granted
-    : { ...granted, runtime: { ...granted.runtime, sandbox_mode: mode.value } };
   const warnings: string[] = [...moded.warnings.map((w) => `configuration: ${w}`)];
   if (moded.referential.length > 0) {
     const lines = moded.referential.map((m) => `configuration: ${m}`);

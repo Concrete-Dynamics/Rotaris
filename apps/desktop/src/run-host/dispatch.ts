@@ -289,9 +289,14 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
         log(`retrospective: ${leased.reason}`);
         return { kind: 'refused', code: 'retrospective.no-model', headline: 'No retrospective analyst is configured' };
       }
+      /*
+       * Only a configuration that did not load reaches here (`LeasedSetup`); one that loaded and refused the pass comes back as
+       * `refused` with its own reason above. REQ-NOTIFY-254: the loader's reason travels as the detail, not in the log alone
+       * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+       */
       if (leased.kind === 'unconfigured') {
         log(leased.reason, 'warn');
-        return { kind: 'refused', code: 'retrospective.no-configuration', headline: 'The workspace configuration could not be loaded' };
+        return { kind: 'refused', code: 'retrospective.no-configuration', headline: 'The workspace configuration could not be loaded', detail: leased.reason };
       }
       const setup = leased.setup;
       const collector = retrospectiveOf(setup.cfg, setup.scripted);
@@ -332,8 +337,13 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
         const leased = await retrospectiveSetup(req.job.workspace_root);
         if (leased.kind === 'refused') return leased.reply;
         if (leased.kind === 'no-model') return { kind: 'refused', code: 'improvement.no-model', headline: 'No improvement analyst is configured' };
-        if (leased.kind === 'unconfigured') log(leased.reason, 'warn');
-        else run = leased.setup;
+        // REQ-NOTIFY-254: an unloadable configuration is said as one, with the loader's reason — never as an expired job, which
+        // it read until 2026-10-15 (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+        if (leased.kind === 'unconfigured') {
+          log(leased.reason, 'warn');
+          return { kind: 'refused', code: 'improvement.no-configuration', headline: 'The workspace configuration could not be loaded', detail: leased.reason };
+        }
+        run = leased.setup;
       }
       if (!run) return { kind: 'refused', code: 'improvement.expired', headline: 'The captured improvement job is no longer available' };
       const collector = req.job.pass === 'retrospective' ? retrospectiveOf(run.cfg, run.scripted) : improvementCollectorOf(run.cfg, run.scripted);

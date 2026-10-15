@@ -51,6 +51,11 @@
  *      artifact, the log saying the setup took that model in the entry's place; no "could not be started" / "The workspace
  *      configuration could not be loaded" notice, which is what it answered until fin47
  *      (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md).
+ *  12. CONFINEMENT REQUESTED (since fin47, PD-LIBRARY-002 with REQ-SANDBOX-094/095/097) — `sandbox_mode: workspace-write` on a
+ *      launch whose PATH holds no `bwrap`, so the run host's verdict settles unavailable: the gesture runs the pass and stores its
+ *      artifact, no "could not be started" / "could not be loaded" notice, which is what it answered until fin47; a prompt
+ *      submitted after it is still refused by the gate before the run starts
+ *      (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
  *  10. A FAILED POST-RUN ANALYST (since fin45, PD-LIBRARY-005) — a scripted run completes and its post-run analyst's provider
  *      refuses the credential (`crash`): the run's empty artifact is stored with REQ-LIBRARY-023's notes, and the completed
  *      run's failure warning names the session, the reason and the artifact holding no proposals, with no action and no
@@ -59,7 +64,7 @@
  * Evidence under `.proof/retrospective-proof/`: a PNG per scenario, each launch's `app.log`, `results.json`.
  * `--skip-build` skips the build.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { buildDesktop, cleanEnvironment, evidenceDirectory, findDatabases, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
@@ -90,9 +95,9 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * `medium` is the model slot's target — a name that is NOT in `models:` is how a workspace with no resolvable
  * retrospective model is written, which is the fourth launch's whole subject. `large` is the entry role's tier (the
  * shipped `orchestrator` runs on it); the same unconfigured name there leaves the entry role with no usable model, the
- * eleventh launch's subject.
+ * eleventh launch's subject. `sandbox` is `runtime.sandbox_mode`, unset unless given: the twelfth launch's subject.
  */
-function workspaceAt(name, { medium = 'scripted', large = 'scripted', timeout = 120 } = {}) {
+function workspaceAt(name, { medium = 'scripted', large = 'scripted', timeout = 120, sandbox = null } = {}) {
   const workspace = join(output, name, 'workspace');
   mkdirSync(join(workspace, '.rotaris', 'persona_memory'), { recursive: true });
   writeFileSync(join(workspace, 'README.md'), `# retrospective proof workspace (${name})\n`);
@@ -101,7 +106,7 @@ function workspaceAt(name, { medium = 'scripted', large = 'scripted', timeout = 
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
     'models:', '  scripted: { provider: scripted, model_id: scripted }',
     'small_model: scripted', `medium_model: ${medium}`, `large_model: ${large}`,
-    'runtime:', '  permission_mode: autonomous', `  retrospective_timeout: ${timeout}`,
+    'runtime:', '  permission_mode: autonomous', `  retrospective_timeout: ${timeout}`, ...(sandbox === null ? [] : [`  sandbox_mode: ${sandbox}`]),
     'mcp_servers:', '  code_intelligence: { enabled: false }',
     /*
      * The project-initialization section as a workspace that has already been set up holds it
@@ -917,6 +922,72 @@ for (const [script, notesPrefix, reasonText] of [['crash', 'collector crashed: '
   check('the log says the setup took the retrospective\'s model in the entry role\'s place',
     /configuration: the entry role \S+ has no usable model \(model 'a-model-this-workspace-does-not-have' is not a configured model\); a retrospective sends nothing to it, so its setup is completed on its own model 'scripted' \(PD-LIBRARY-002\)/.test(log),
     log.split('\n').find((line) => /a retrospective sends nothing to it/.test(line))?.trim().slice(0, 260) ?? 'no such line');
+}
+
+// ── 12. Confinement requested where the host cannot deliver it (PD-LIBRARY-002 with REQ-SANDBOX-094/095/097, fin47): ADR-0022's
+//    start-time gate is a run start's, and a retrospective opens no shell, runs no tool and starts no session. `sandbox_mode:
+//    workspace-write` is set and the launch's PATH holds every launcher but `bwrap`, so the run host's verdict settles unavailable
+//    (REQ-SANDBOX-066's launcher lookup) — the case of every host without confinement, and the gate's reading of a verdict not yet
+//    settled. Until fin47 the gesture was answered "The retrospective could not be started: The workspace configuration could not
+//    be loaded" (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+//    The same launch then submits a prompt, which the gate still refuses before the run starts (REQ-SANDBOX-095).
+{
+  const name = 'confinement-requested';
+  const workspace = workspaceAt(name, { sandbox: 'workspace-write' });
+  // A PATH of links to every executable the host's PATH holds, `bwrap` left out. Linux only: there the launcher is `bwrap`.
+  const bin = join(output, name, 'bin');
+  mkdirSync(bin, { recursive: true });
+  if (process.platform === 'linux') {
+    for (const directory of (process.env.PATH ?? '').split(':').filter(Boolean)) {
+      let entries = [];
+      try { entries = readdirSync(directory); } catch { continue; }
+      for (const entry of entries) {
+        if (entry === 'bwrap' || existsSync(join(bin, entry))) continue;
+        try { symlinkSync(join(directory, entry), join(bin, entry)); } catch { /* a name another directory already linked */ }
+      }
+    }
+  }
+  const extra = process.platform === 'linux' ? { PATH: bin } : {};
+  let refused = null;
+  let indicator = false;
+  let ended = false;
+  let runRefusal = null;
+  await launch(name, workspace, extra, async (d, root) => {
+    await openProposals(d);
+    await d.click('[data-testid="library-retrospective"]', { timeoutMs: 15_000 });
+    // Either the pass starts (its title-bar indicator) or the gesture is refused (its notice): whichever comes first is read.
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline && !indicator && refused === null) {
+      indicator = (await probe(d, '[data-testid="improvement-activity-title-bar"]')).length > 0;
+      refused = (await probe(d, '[data-testid="notice"]')).find((n) => /could not be started|configuration could not be loaded|refused the retrospective/.test(n.text)) ?? null;
+      if (!indicator && refused === null) await sleep(200);
+    }
+    ended = await until(d, '[data-testid="improvement-activity-title-bar"]', (m) => m.length === 0, 60_000);
+    await sleep(500);
+    refused ??= (await probe(d, '[data-testid="notice"]')).find((n) => /could not be started|configuration could not be loaded|refused the retrospective/.test(n.text)) ?? null;
+    await d.screenshot(join(output, `${name}.png`));
+    // The run start keeps its gate: the same configuration and verdict refuse a run before it starts.
+    await d.click('.nav-item', { text: 'Workspace', timeoutMs: 15_000 });
+    await d.click('.composer__input', { timeoutMs: 20_000 });
+    await d.type('tidy the workspace and say so', { enter: true });
+    runRefusal = await noticeMatching(d, /The run was refused before it started/, 30_000);
+    await d.screenshot(join(output, `${name}-run.png`));
+    return root;
+  });
+  const log = readFileSync(join(output, `${name}.log`), 'utf8');
+  const verdictLine = log.split('\n').find((line) => /run host: confinement: (available|unavailable)/.test(line))?.trim() ?? null;
+  check('confinement requested: the run host\'s verdict settled unavailable in this launch (the instrument: `bwrap` left off PATH)',
+    process.platform !== 'linux' || (verdictLine !== null && /confinement: unavailable/.test(verdictLine)), verdictLine?.slice(0, 260) ?? 'no verdict line in the log');
+  check('confinement requested: the retrospective is not refused by the confinement gate — no refusal notice is raised (PD-LIBRARY-002, REQ-SANDBOX-095)',
+    refused === null, refused === null ? 'none' : `"${refused.text.slice(0, 220)}"`);
+  check('confinement requested: the pass ran and ended (REQ-LIBRARY-125)', indicator && ended, `indicator seen ${indicator}, ended ${ended}`);
+  const stored = artifactsIn(join(output, name, 'app'));
+  check('confinement requested: the pass stored its retrospective artifact (PD-LIBRARY-002)',
+    stored.length === 1 && stored[0].source_kind === 'retrospective' && stored[0].source_session_id === null,
+    stored.length === 0 ? 'nothing was stored' : stored.map((row) => `${row.artifact_id} ${row.source_kind}`).join(', '));
+  check('confinement requested: a run start is still refused before it starts, with the backend\'s reason (REQ-SANDBOX-095, REQ-NOTIFY-061)',
+    runRefusal !== null && runRefusal.data['data-severity'] === 'error' && (process.platform !== 'linux' || /`bwrap` was not found on PATH/.test(runRefusal.text)),
+    runRefusal === null ? 'no "The run was refused before it started" notice after the prompt' : `severity=${runRefusal.data['data-severity']} — "${runRefusal.text.slice(0, 260)}"`);
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures, launches }, null, 2)}\n`);

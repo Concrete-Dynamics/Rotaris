@@ -62,10 +62,14 @@ async function leaseOver(prepared: PreparedRun, required: string | null, deps: P
   return { kind: 'leased', bearers };
 }
 
-/** A run-free pass's setup: completed over the bearers it leased, the lease's refusal, or the configuration's own refusal. */
+/**
+ * A run-free pass's setup: completed over the bearers it leased, the lease's refusal or a configuration that loaded refusing it
+ * (`refused`), or a configuration that did not load (`unconfigured`).
+ */
 export type LeasedSetup =
   | { readonly kind: 'configured'; readonly setup: ConfiguredRun; readonly bearers: Readonly<Record<string, string>> }
   | { readonly kind: 'refused'; readonly reply: ProcessReply }
+  /** The configuration did not load, or did not apply over the current settings (`ConfigureRefusal` code `unloaded`). */
   | { readonly kind: 'unconfigured'; readonly reason: string }
   /** Neither the entry role's model nor the retrospective's resolves: PD-LIBRARY-002's "no resolvable retrospective model". */
   | { readonly kind: 'no-model'; readonly reason: string };
@@ -81,8 +85,19 @@ export type LeasedSetup =
 export async function leasedSetup(workspaceRoot: string, deps: ContinuationLeaseDeps): Promise<LeasedSetup> {
   // Prepared as a retrospective's: an entry role with no usable model does not refuse it while its own model resolves, and a
   // `no-model` refusal then means neither does (`PrepareOptions.retrospective`).
+  // Nor does ADR-0022's start-time confinement gate meet it: that gate is a run start's, and a retrospective opens no shell.
   const prepared = prepareRun(workspaceRoot, deps.attended, deps.configuration, undefined, { retrospective: true });
-  if (!prepared.ok) return prepared.error.code === 'no-model' ? { kind: 'no-model', reason: prepared.error.reason } : { kind: 'unconfigured', reason: prepared.error.reason };
+  if (!prepared.ok) {
+    if (prepared.error.code === 'no-model') return { kind: 'no-model', reason: prepared.error.reason };
+    if (prepared.error.code === 'unloaded') return { kind: 'unconfigured', reason: prepared.error.reason };
+    /*
+     * REQ-NOTIFY-254: a configuration that loaded and refused the pass — `default_persona` naming no role this build knows, or
+     * referential errors with no one present (REQ-CONFIG-246) — is said with the reason that layer gave, never as one that could
+     * not be loaded. Until 2026-10-15 every refusal but `no-model` became `unconfigured`
+     * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+     */
+    return { kind: 'refused', reply: { kind: 'refused', code: 'retrospective.configuration', headline: 'The workspace configuration refused the retrospective', detail: prepared.error.reason } };
+  }
   // The retrospective's own model's provider (`retrospectiveOf`: its slot, then medium_model), never the entry role's.
   const lease = await leaseOver(prepared.value, prepared.value.retrospectiveAuthProvider, deps, 'Authenticate at least one configured provider before running a retrospective.');
   if (lease.kind === 'refused') return lease;

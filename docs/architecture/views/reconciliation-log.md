@@ -16,6 +16,15 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-15**
 
+**A retrospective is not refused by the confinement gate, and a loaded configuration is never called unloadable (2026-10-15,
+fin47 `fin47-accept1-4`; PD-LIBRARY-002, REQ-SANDBOX-094/095/097, REQ-NOTIFY-254, acceptance finding A3).** The process view's
+retrospective paragraph says ADR-0022's start-time gate is a run start's and does not meet a retrospective's setup, that only a
+configuration that did not load becomes `unconfigured` (now carrying the loader's reason, and at the analysis
+`improvement.no-configuration` where it read `improvement.expired`), and that a loaded configuration's other refusals answer
+`retrospective.configuration` with their own reason (OQ-363)
+(`docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`). No package, edge
+or process changed. The README's date stays 2026-10-15.
+
 **OQ-168's Windows reading run on PowerShell and ConPTY (the Windows ARM64 session's B7).** Test cases only; no view changed.
 
 **OQ-144's shell-exit cases run on PowerShell (the Windows ARM64 session's B6).** Test cases only; no view changed.

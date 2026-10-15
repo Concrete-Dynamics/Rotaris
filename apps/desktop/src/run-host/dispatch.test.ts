@@ -328,6 +328,18 @@ describe('a retrospective authenticates as a run does: leased first, its setup c
     expect(await dispatch({ kind: 'retrospective.capture', workspaceId: 'W1', workspaceRoot: root }, host)).toEqual({ kind: 'refused', code: 'retrospective.no-model', headline: 'No retrospective analyst is configured' });
     expect(await dispatch({ kind: 'improvement.analyze', job } as unknown as RunHostRequest, host)).toEqual({ kind: 'refused', code: 'improvement.no-model', headline: 'No improvement analyst is configured' });
   });
+
+  /*
+   * REQ-NOTIFY-254 (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md):
+   * a configuration that did not load is said as one with the loader's own reason at the capture, and at the analysis as the
+   * same — never as "The captured improvement job is no longer available", which the analysis answered until the repair.
+   */
+  it('an unloadable configuration carries the loader\'s reason at the capture, and is not called an expired job at the analysis', async () => {
+    const reason = 'The configuration could not be loaded: agents.yaml line 1: runtime must be a mapping.';
+    const host = { ...(hostFor([]) as unknown as Record<string, unknown>), retrospectiveSetup: async () => ({ kind: 'unconfigured', reason }) } as unknown as RunHost;
+    expect(await dispatch({ kind: 'retrospective.capture', workspaceId: 'W1', workspaceRoot: root }, host)).toEqual({ kind: 'refused', code: 'retrospective.no-configuration', headline: 'The workspace configuration could not be loaded', detail: reason });
+    expect(await dispatch({ kind: 'improvement.analyze', job } as unknown as RunHostRequest, host)).toEqual({ kind: 'refused', code: 'improvement.no-configuration', headline: 'The workspace configuration could not be loaded', detail: reason });
+  });
 });
 
 /**

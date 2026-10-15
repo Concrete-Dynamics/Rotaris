@@ -441,6 +441,16 @@ the log says so — and `leasedSetup` answers `no-model` only when neither resol
 role's `no-model` became `unconfigured`, answered `retrospective.no-configuration` "The workspace configuration could not be
 loaded" and, at the analysis, `improvement.expired`,
 `docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md`*).
+ADR-0022's start-time confinement gate does not meet a retrospective's setup: it is a run start's, and the pass opens no shell, so
+`runtime.sandbox_mode` and the run host's verdict — settled or not — refuse nothing here, while a run start and a continuation keep
+the gate. Of `prepareRun`'s other refusals, only a configuration that did not load or apply (`ConfigureRefusal` code `unloaded`)
+becomes `unconfigured`, said as `retrospective.no-configuration` at the capture and `improvement.no-configuration` at the analysis,
+each with the loader's reason as its detail; a configuration that loaded and refused the pass (a `default_persona` naming no known
+role, REQ-CONFIG-246's referential errors with no presenter, OQ-363) answers `retrospective.configuration` with `prepareRun`'s own
+reason (*since 2026-10-15, fin47 `fin47-accept1-4`; until then a requested confinement refused the pass wherever the verdict was
+unsettled or unavailable, and every such refusal read "The workspace configuration could not be loaded" and, at the analysis,
+`improvement.expired`,
+`docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`*).
 A lease that leaves the retrospective model's sign-in provider unresolved — the model its request goes to, `retrospective_model`
 then `medium_model`, never the entry role's (*since 2026-10-14, fin46; it read "the entry provider" and checked the entry role's,
 `docs/defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`*) — answers `session.provider-auth` with REQ-WORKSPACE-137's headline and the

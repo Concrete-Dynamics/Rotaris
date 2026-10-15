@@ -8,7 +8,8 @@ import type { LiveState } from '@rotaris/config';
 import { Sessions } from '@rotaris/engine';
 import { answer, DefaultAgentBackend, ScriptedModelClient } from '@rotaris/model';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
-import { retrospectiveOf, type ConfiguredRun, type ConfigureDeps } from './configuration.js';
+import type { AvailabilityVerdict } from '@rotaris/agent-tools';
+import { prepareRun, retrospectiveOf, type ConfiguredRun, type ConfigureDeps } from './configuration.js';
 import { launchSession, leasedSetup, leaseForContinuation, LeaseReportLog, type LaunchRequest } from './launch.js';
 
 function deferred<T>() {
@@ -404,6 +405,69 @@ ${retrospective === 'slot' ? 'retrospective_model: analyst\n' : ''}`);
       const lease = vi.fn(async () => ({ 'provider-two': 'analyst-bearer' }));
       expect(await leasedSetup(dir, deps(lease))).toMatchObject({ kind: 'no-model', reason: expect.stringMatching(/^No usable model is configured for the entry role/) });
       expect(lease).not.toHaveBeenCalled();
+    });
+  });
+
+  /*
+   * PD-LIBRARY-002 (ADR-0065 decision 5) with REQ-SANDBOX-094/095/097 and REQ-NOTIFY-254
+   * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md): ADR-0022's
+   * start-time gate is a run start's — it protects the shell a run would open — and a retrospective opens none, runs no tool and
+   * starts no session. Until the repair `leasedSetup` prepared through the gate, which read the run host's verdict as unavailable
+   * before a run start or Settings had settled it (`confinement.peek()` null), and turned that refusal — like every refusal but
+   * `no-model` — into `unconfigured`, which the capture answered "The workspace configuration could not be loaded".
+   */
+  describe('a retrospective is not refused by the confinement gate, and a configuration that loaded is never called unloadable', () => {
+    const confined = (extra = '') => writeFileSync(join(dir, '.rotaris', 'agents.yaml'), `models:\n  selected:\n    provider: openai\n    model_id: m\n    auth_provider: provider-one\nlarge_model: selected\nmedium_model: selected\n${extra}runtime:\n  sandbox_mode: workspace-write\n`);
+    const withVerdict = (verdict: AvailabilityVerdict | null, lease: (providers: readonly string[]) => Promise<Readonly<Record<string, string>>>) => {
+      const base = deps(lease);
+      return { ...base, configuration: { ...base.configuration, confinement: () => verdict } };
+    };
+    const unavailable: AvailabilityVerdict = { available: false, backend: 'bubblewrap', reason: 'bwrap was not found on PATH.', remediation: 'Install bubblewrap.' };
+
+    for (const [label, verdict] of [['not yet settled (no run start, no Settings read)', null], ['settled unavailable', unavailable], ['settled available', { available: true, backend: 'bubblewrap', reason: '', remediation: '' } as AvailabilityVerdict]] as const) {
+      it(`sandbox_mode workspace-write, the verdict ${label}: configured, over the bearer it leased`, async () => {
+        confined();
+        const lease = vi.fn(async () => ({ 'provider-one': 'analyst-bearer' }));
+        const r = await leasedSetup(dir, withVerdict(verdict, lease));
+        expect(r).toMatchObject({ kind: 'configured' });
+        if (r.kind !== 'configured') return;
+        const collector = retrospectiveOf(r.setup.cfg, r.setup.scripted);
+        expect(collector?.key).toBe('selected');
+        expect(await r.setup.model.config.credentialFor(collector!.model)()).toBe('analyst-bearer');
+        // The configured mode is kept as the file states it: the retrospective reads the configuration, it does not rewrite it.
+        expect(r.setup.cfg.runtime.sandbox_mode).toBe('workspace-write');
+      });
+    }
+
+    it('the run start keeps the gate: the same configuration and verdict refuse a run as `confinement` (REQ-SANDBOX-095)', () => {
+      confined();
+      const r = prepareRun(dir, true, withVerdict(null, async () => ({})).configuration);
+      expect(r).toMatchObject({ ok: false, error: { code: 'confinement' } });
+    });
+
+    it('a configuration that loaded but names no role this build knows is refused with that reason, never as an unloadable configuration', async () => {
+      confined('default_persona: nobody-at-all\n');
+      const lease = vi.fn(async () => ({ 'provider-one': 'analyst-bearer' }));
+      const r = await leasedSetup(dir, withVerdict(null, lease));
+      expect(r).toMatchObject({ kind: 'refused', reply: { kind: 'refused', code: 'retrospective.configuration', headline: 'The workspace configuration refused the retrospective' } });
+      if (r.kind !== 'refused' || r.reply.kind !== 'refused') return;
+      expect(r.reply.detail).toMatch(/nobody-at-all/);
+      expect(r.reply.detail).not.toMatch(/could not be loaded/);
+      expect(lease).not.toHaveBeenCalled();
+    });
+
+    it('referential errors with no one present (REQ-CONFIG-246) are refused with their own reason, never as an unloadable configuration', async () => {
+      confined('default_persona: nobody-at-all\n');
+      const base = withVerdict(null, async () => ({}));
+      const r = await leasedSetup(dir, { ...base, attended: false });
+      expect(r).toMatchObject({ kind: 'refused', reply: { kind: 'refused', code: 'retrospective.configuration' } });
+      if (r.kind !== 'refused' || r.reply.kind !== 'refused') return;
+      expect(r.reply.detail).toMatch(/no one is present to correct/);
+    });
+
+    it('a configuration that will not load is still `unconfigured`, its reason the loader\'s', async () => {
+      writeFileSync(join(dir, '.rotaris', 'agents.yaml'), 'runtime: [invalid]\n');
+      expect(await leasedSetup(dir, withVerdict(null, async () => ({})))).toMatchObject({ kind: 'unconfigured', reason: expect.stringMatching(/^The configuration could not be loaded/) });
     });
   });
 

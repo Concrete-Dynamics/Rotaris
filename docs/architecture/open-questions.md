@@ -15704,3 +15704,44 @@ three files carry the new name with the rename's one row; under (e), the scenari
 (finding A1), and bundle `fin47-accept1-5` read it red again at `8baf9e4`, whose repair task waits on this ruling; the runs are in
 [the note](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). Still
 open.
+
+<a id="oq-363"></a>
+
+**OQ-363 — Should a configuration that loads but cannot start a run — a `default_persona` naming no role this build knows, or
+referential errors while no presenter is live — refuse a retrospective?** *(`PD-LIBRARY-002` with ADR-0065 decision 5, the
+retrospective as an analysis pass on its own model; REQ-CONFIG-245/246, referential errors fatal "for a run no person is watching";
+the entry role's resolution, which a run's first request needs; REQ-NOTIFY-254. Raised 2026-10-15 by fin47 (`fin47-accept1-4`) while
+repairing
+[`a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested`](../defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md),
+which asked it; the plan's range OQ-361 to OQ-380, its third number (OQ-361 and OQ-362 were taken on main) — renumbered at landing
+if a sibling took it first.)*
+
+**What is open.** A retrospective's setup is prepared by the run start's `prepareRun`. Two of its refusals concern a run and not the
+pass: the entry role (`default_persona`) must resolve, and with `presenters.attended` false — no live presenter, ADR-0019 — any
+referential error is fatal (REQ-CONFIG-246). The retrospective sends nothing to the entry role: its one request goes to
+`retrospective_model`, then `medium_model`, and an entry role with no usable *model* already does not refuse it (fin47, the
+sibling note). REQ-CONFIG-246 speaks of "a run no person is watching"; a retrospective is started by a person's gesture
+(PD-LIBRARY-002's trigger) and is no run, but its analysis can still be reached after the presenter has lapsed. Neither text says
+whether these refusals bind the pass.
+
+**What the build proceeds under.** Both refuse the retrospective, said truthfully since this repair: `leasedSetup` answers
+`refused` with code `retrospective.configuration`, headline "The workspace configuration refused the retrospective" and
+`prepareRun`'s reason as the detail; main posts "The retrospective could not be started" with it at the gesture, and the analysis
+carries it inside PD-LIBRARY-002 (c)'s failure warning. Until 2026-10-15 both read "The workspace configuration could not be
+loaded". The confinement gate no longer refuses a retrospective at all (the same note): it protects the shell a run would open.
+
+**What a ruling decides.** Which of these, or none:
+
+- **(a) Keep both refusals.** A configuration a run cannot start under is not one a retrospective reads either; the wording stays
+  as built. Cost: a workspace whose `default_persona` names a role that a newer or older build knows — or a typo — cannot run the
+  retrospective, which needs no role, until it is corrected.
+- **(b) Neither refuses the pass.** The unknown persona is completed on a stand-in as the unusable entry model is (the
+  retrospective's own model; the system text is the analyst's own and never the role's), and referential errors are warnings for
+  a retrospective whatever the presenter (it is user-started). Cost: a pass runs over a configuration that would refuse the next
+  run, and the referential messages appear only in the log.
+- **(c) The persona does not refuse; referential errors still do without a presenter.** REQ-CONFIG-246 read as binding whatever
+  is unattended, the persona as a run's concern only.
+
+**What a proof then shows.** `retrospective-proof` with a workspace whose `default_persona` is unknown: under (a) the gesture's
+error notice carries "names no role this build knows" and nothing is stored; under (b) or (c) the pass stores its artifact and
+no refusal notice is raised.

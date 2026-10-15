@@ -14706,7 +14706,7 @@ answer without bound while the renderer answers its probe, is the falsified one.
 `unsaved-sigterm` launches.
 *Ruled 2026-10-14, as the consortium's ruling record dates its sitting (10:00 to 10:14 UTC); fin45's brief and
 [R-072](../product/requests.md#r-072)'s row said 2026-10-13, the row recorded apart in
-[`../defects/the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md`](../defects/the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md)
+[`../defects/fixed/the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md`](../defects/fixed/the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md)
 (fin46, `fin46-accept1-12`).*
 
 **The recommendations it weighed** (both followed; both kinds change-behaviour). **Advocate A** (the user's lens) recommended that

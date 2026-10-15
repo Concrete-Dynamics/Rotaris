@@ -91,6 +91,36 @@ const UNNAMED_RECOMMENDATIONS = [
 ];
 
 const RECORD = readFileSync(join(import.meta.dirname, '..', 'docs', 'architecture', 'open-questions.md'), 'utf8');
+const REQUESTS = readFileSync(join(import.meta.dirname, '..', 'docs', 'product', 'requests.md'), 'utf8');
+
+/**
+ * R-072's row in `docs/product/requests.md` names the rulings made under it in clauses headed in bold by the day they were
+ * made ("**Ruled 2026-10-14, built 2026-10-14 by fin44 …:**", "**Also ruled under it on 2026-10-13 …:**"). Each question
+ * such a clause cites must carry a "Ruled <that day>" in its own entry: ten rulings of 2026-10-14 were headed 2026-10-13
+ * there after their entries were corrected (acceptance finding C1 of fin46,
+ * `docs/defects/fixed/the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md`).
+ * Returns `OQ-<n>: row <date>, entry <dates>` for each that disagrees.
+ */
+function rowDatesAgainstEntries(requests: string, record: string): string[] {
+  const row = requests.split('\n').find((l) => /^\| <a id="r-072"><\/a>R-072 \|/.test(l));
+  if (row === undefined) return ['no R-072 row'];
+  const ruled = new Map(entriesOf(record).map((e) => [e.n, ruledOn(e.text)]));
+  const parts = row.split('**');
+  const out: string[] = [];
+  for (let i = 1; i < parts.length; i += 2) {
+    const heading = parts[i];
+    const date = /\b[Rr]uled\b[^\n]*?(20\d\d-\d\d-\d\d)/.exec(heading)?.[1];
+    if (date === undefined) continue;
+    const body = parts[i + 1] ?? '';
+    // A question named in the possessive ("OQ-262's no-holder clause revised") is one the ruling refers to, not one it rules.
+    const cited = [...new Set([...body.matchAll(/\bOQ-(\d+)\b(?!'s)/g)].map((m) => Number(m[1])))];
+    for (const n of cited) {
+      const dates = ruled.get(n) ?? [];
+      if (!dates.includes(date)) out.push(`OQ-${n}: row ${date}, entry ${dates.join(', ') || 'none'}`);
+    }
+  }
+  return out;
+}
 
 describe('open-questions.md: the rulings under R-072', () => {
   it('reads the entries, and a raised date for most of them', () => {
@@ -131,6 +161,30 @@ describe('open-questions.md: the rulings under R-072', () => {
     expect(ruled.length).toBeGreaterThan(70);
     const unnamed = ruled.filter((e) => !namesItsRecommendations(e.text)).map((e) => e.n);
     expect(unnamed.sort((x, y) => x - y)).toEqual(UNNAMED_RECOMMENDATIONS);
+  });
+
+  it("R-072's row dates each ruling it names on the day its entry gives (fin46, C1)", () => {
+    expect(rowDatesAgainstEntries(REQUESTS, RECORD)).toEqual([]);
+  });
+
+  it('over fixtures: a row clause dated a day other than its entry fails; a clause with no ruling date is not read', () => {
+    const record = [
+      '**OQ-1 — One?** *(Raised 2026-10-13.)*',
+      '',
+      '**Ruled 2026-10-14 under the owner\'s delegation ([R-072](requests.md#r-072)):** as built.',
+      '',
+      '**OQ-2 — Two?** *(Raised 2026-10-12.)* **Ruled 2026-10-13 under R-072.**',
+    ].join('\n');
+    const requests = [
+      '| <a id="r-071"></a>R-071 | **Ruled 2026-01-01:** OQ-1 |',
+      '| <a id="r-072"></a>R-072 | 2026-10-07 | "…" | **standing delegation** | **Minted under it on 2026-10-13:** (OQ-1). ' +
+        '**Ruled 2026-10-13, written 2026-10-14 by fin44:** [OQ-1](x#oq-1) and [OQ-2](x#oq-2). ' +
+        '**Also ruled under it on 2026-10-14:** OQ-1, OQ-3, beside OQ-2\'s clause. |',
+    ].join('\n');
+    expect(rowDatesAgainstEntries(requests, record)).toEqual([
+      'OQ-1: row 2026-10-13, entry 2026-10-14',
+      'OQ-3: row 2026-10-14, entry none',
+    ]);
   });
 
   it('over fixtures: both advocates named, or recorded as agreeing, pass; one advocate, or the ruling\'s own two, fail', () => {

@@ -36,7 +36,7 @@ rulings files, held in the orchestrator's scratchpad, outside the repository).
   `packages/agent-tools/src/tools/files.ts`, `tools.test.ts`; `apps/desktop/src/run-host/mcp.test.ts`;
   `apps/desktop/scripts/part-h-proof.mjs`, `edits-proof.mjs`, `live-run.mjs`.
 - `docs/product/requests.md` — R-072's row carries the same dates; it is the orchestrator's to edit, recorded apart in
-  [`../the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md`](../the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md).
+  [`the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md`](the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md).
 
 ## Repaired — 2026-10-14 (fin46, `fin46-accept1-12`)
 
@@ -61,4 +61,4 @@ outside the repository, so that stays the orchestrator's to check.
 
 Not repaired here: `docs/product/requests.md`'s R-072 row, which is the orchestrator's to edit and still dates ten of these
 rulings 2026-10-13 (recorded open in
-[`../the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md`](../the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md)).
+[`the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md`](the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md)).

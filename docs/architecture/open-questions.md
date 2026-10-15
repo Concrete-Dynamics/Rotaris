@@ -7102,6 +7102,9 @@ gone while it reported `session_reinitialized` false. The build now proceeds und
   session's B3: `Write-Output 'bye'; exit 3` on one line, the same over two lines, and a bare `exit` over two lines each
   captured `bye` and read `execution_error`, `session_reset`, about 1.5 s, the next call `session_reinitialized: true`, on
   both shells. It takes the same path. The suite's OQ-144 cases are POSIX-only on Windows; their PowerShell branch is B6.)*
+  *(B6, the same day: the two cases "a command that ends the session's shell ends at once …" and "a soft-paused command that
+  ends the shell is handed over by the poll …" run on PowerShell too, three runs a shell, green; the end is reported about
+  1.5 s after the command, inside PowerShell's bound of 5 s.)*
 - **A background job the exiting command left behind keeps running** after the respawn (`sleep 8 & exit 2`, seen by
   the repair's verification on 2026-10-01). Nothing kills it, because the shell that owned it has gone and nothing was
   reset. The fresh shell does not know it, as PD-TOOLS-001 already says of background jobs. A ruling that the shell's end

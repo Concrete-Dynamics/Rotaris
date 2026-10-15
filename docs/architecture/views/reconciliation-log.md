@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-15**
 
+**OQ-144's shell-exit cases run on PowerShell (the Windows ARM64 session's B6).** Test cases only; no view changed.
+
 **M1's PowerShell half pinned, and the stream proofs run on Windows (the Windows ARM64 session's B4 and B9).** A test case and
 comments only (`terminal.test.ts`, `terminal-shapes.mjs`); no view changed.
 

@@ -72,6 +72,12 @@ const SH = {
   bracketVar: (name: string) => (PS ? `Write-Output "[$env:${name}]"` : `printf '[%s]\\n' "$${name}"`),
   /** The variable's value written to a file, so a case can see it from outside the terminal. */
   writeVar: (name: string, path: string) => (PS ? `Set-Content -NoNewline -Path '${path}' -Value $env:${name}` : `printf '%s' "$${name}" > '${path}'`),
+  /** Into a directory, by its literal path. */
+  cd: (dir: string) => (PS ? `Set-Location -LiteralPath '${dir}'` : `cd '${dir}'`),
+  /** The shell's own directory, alone on a line. */
+  pwd: () => (PS ? '(Get-Location).Path' : 'pwd'),
+  /** A command that does nothing and succeeds. */
+  noop: () => (PS ? '$null' : 'true'),
 };
 const clocks: Clocks = nodeClocks();
 const root = mkdtempSync(join(tmpdir(), 'rotaris-term-'));
@@ -1002,21 +1008,28 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
   // shell — `exit 3`, `kill -9 $$` — never prints the end frame either, because the shell that would print it is gone.
   // Before the repair the call waited out the no-output window and read as a soft pause, exit −1, "may still be running";
   // the next call ran in a fresh shell with the directory and variables gone, and reported `session_reinitialized` false.
-  it.skipIf(PS)('REQ-TOOLS-097/098/100/103 (OQ-144): a command that ends the session\'s shell ends at once as an execution_error, never a soft pause, and the next call reports the respawn with the shell state restored', async () => {
-    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 3_000 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
-    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 3_000 });
-    const sub = realpathSync(mkdtempSync(join(root, 'ends-')));
+  // PowerShell's branch since 2026-10-15 (the Windows ARM64 session's B6): `exit 3`, a bare `exit`, `Stop-Process` on the
+  // shell's own pid, and `exit` after output on one line and over two. ConPTY reports the shell's end in about 1.5 s
+  // (measured under pwsh 7.6.6 and 5.1), inside a 3 s soft-pause window, so PowerShell's bound is the window itself.
+  it('REQ-TOOLS-097/098/100/103 (OQ-144): a command that ends the session\'s shell ends at once as an execution_error, never a soft pause, and the next call reports the respawn with the shell state restored', async () => {
+    const window = PS ? 6_000 : 3_000;
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: window }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: window });
+    // The directory as the shell names it: Windows' native spelling (case, 8.3) is what `Get-Location` prints.
+    const sub = (PS ? realpathSync.native : realpathSync)(mkdtempSync(join(root, 'ends-')));
+    const enders: string[] = PS ? ['exit 3', 'exit', 'Stop-Process -Id $PID -Force', "Write-Output 'bye'\nexit 3", "Write-Output 'bye'; exit 3"] : ['exit 3', 'kill -9 $$'];
     try {
-      for (const [i, command] of ['exit 3', 'kill -9 $$'].entries()) {
+      for (const [i, command] of enders.entries()) {
         const value = `kept${i}`;
-        expect(diag((await t.execute(args({ command: `${SH.setVar('ROTARIS_ENDS', value)}; cd '${sub}'`, timeout: 15 }), ctx())).text)).toMatchObject({ exit_code: 0 });
+        expect(diag((await t.execute(args({ command: `${SH.setVar('ROTARIS_ENDS', value)}; ${SH.cd(sub)}`, timeout: 15 }), ctx())).text)).toMatchObject({ exit_code: 0 });
         // It names no timeout, so the soft pause is armed, as it is for a model's call.
         const began = clocks.monotonic.now() as number;
         const r = await t.execute(args({ command }), ctx());
         const took = (clocks.monotonic.now() as number) - began;
         // Before the repair: `soft_pause`, exit −1, after the whole 3 s window.
         expect(diag(r.text)['outcome_kind'], command).not.toBe('soft_pause');
-        expect(took, command).toBeLessThan(1_500);
+        expect(took, `${command}: ${took} ms`).toBeLessThan(PS ? 5_000 : 1_500);
+        if (command.includes('bye')) expect(r.text, command).toContain('bye');
         expect(r).toMatchObject({ isError: true, failureKind: 'execution_error', outcomeKind: 'execution_error' });
         expect(diag(r.text)).toMatchObject({ failure_kind: 'execution_error', kill_status: 'session_reset', error_class: 'ExecutionError' });
         expect(diag(r.text)).not.toHaveProperty('exit_code');
@@ -1025,21 +1038,21 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
         expect(r.text).toContain(`were restored (${sub})`);
         expect(r.text).not.toContain('__rot_');
         // The next call runs in the respawned shell, says so, and finds the directory and the variable re-applied.
-        const next = await t.execute(args({ command: `${SH.echoVar('ROTARIS_ENDS')}; pwd`, timeout: 15 }), ctx());
+        const next = await t.execute(args({ command: `${SH.echoVar('ROTARIS_ENDS')}; ${SH.pwd()}`, timeout: 15 }), ctx());
         expect(diag(next.text), command).toMatchObject({ exit_code: 0, session_reinitialized: true });
         expect((output(next.text) ?? '').split('\n').map((l) => l.trim())).toEqual([value, sub]);
         // And only that call: the one after it is in the same shell.
-        expect(diag((await t.execute(args({ command: 'true', timeout: 15 }), ctx())).text)['session_reinitialized'] ?? false).toBe(false);
+        expect(diag((await t.execute(args({ command: SH.noop(), timeout: 15 }), ctx())).text)['session_reinitialized'] ?? false).toBe(false);
       }
     } finally { await m.dispose(); }
-  }, 40_000);
-  it.skipIf(PS)('REQ-TOOLS-098/100/103 (OQ-144): a soft-paused command that ends the shell is handed over by the poll as an execution_error, and a shell that ended between calls is respawned, restored and reported', async () => {
+  }, 90_000);
+  it('REQ-TOOLS-098/100/103 (OQ-144): a soft-paused command that ends the shell is handed over by the poll as an execution_error, and a shell that ended between calls is respawned, restored and reported', async () => {
     const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_000 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
     const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_000 });
-    const sub = realpathSync(mkdtempSync(join(root, 'ends-paused-')));
+    const sub = (PS ? realpathSync.native : realpathSync)(mkdtempSync(join(root, 'ends-paused-')));
     try {
-      expect(diag((await t.execute(args({ command: `${SH.setVar('ROTARIS_ENDS', 'paused')}; cd '${sub}'`, timeout: 15 }), ctx())).text)).toMatchObject({ exit_code: 0 });
-      const paused = await t.execute(args({ command: 'sleep 2; exit 4' }), ctx());
+      expect(diag((await t.execute(args({ command: `${SH.setVar('ROTARIS_ENDS', 'paused')}; ${SH.cd(sub)}`, timeout: 15 }), ctx())).text)).toMatchObject({ exit_code: 0 });
+      const paused = await t.execute(args({ command: `${SH.sleep(2)}; exit 4` }), ctx());
       expect(diag(paused.text)['outcome_kind']).toBe('soft_pause');
       await new Promise((res) => setTimeout(res, 2_500));
       // Before the repair: −1, `soft_pause`, "The process may still be running", on every poll after the shell had gone.
@@ -1048,13 +1061,13 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(diag(poll.text)).toMatchObject({ failure_kind: 'execution_error', outcome_kind: 'execution_error' });
       expect(diag(poll.text)).not.toHaveProperty('exit_code');
       expect(poll.text).toContain('ended the session\'s shell');
-      const next = await t.execute(args({ command: `${SH.echoVar('ROTARIS_ENDS')}; pwd`, timeout: 15 }), ctx());
+      const next = await t.execute(args({ command: `${SH.echoVar('ROTARIS_ENDS')}; ${SH.pwd()}`, timeout: 15 }), ctx());
       expect(diag(next.text)).toMatchObject({ exit_code: 0, session_reinitialized: true });
       expect((output(next.text) ?? '').split('\n').map((l) => l.trim())).toEqual(['paused', sub]);
       // A shell ended between calls — keystrokes the agent wrote to it — is respawned by the next call, which says so.
       expect(diag((await t.execute(args({ command: 'exit\r', is_input: true }), ctx())).text)['exit_code']).toBe(0);
-      await new Promise((res) => setTimeout(res, 1_000));
-      const after = await t.execute(args({ command: `${SH.echoVar('ROTARIS_ENDS')}; pwd`, timeout: 15 }), ctx());
+      await new Promise((res) => setTimeout(res, PS ? 3_000 : 1_000));
+      const after = await t.execute(args({ command: `${SH.echoVar('ROTARIS_ENDS')}; ${SH.pwd()}`, timeout: 15 }), ctx());
       expect(diag(after.text)).toMatchObject({ exit_code: 0, session_reinitialized: true });
       expect((output(after.text) ?? '').split('\n').map((l) => l.trim())).toEqual(['paused', sub]);
     } finally { await m.dispose(); }

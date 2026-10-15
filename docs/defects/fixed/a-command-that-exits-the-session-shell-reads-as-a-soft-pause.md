@@ -59,4 +59,9 @@ ended by keystrokes between calls. The live run's `terminal` scenario carries th
 read `execution_error`, no exit code, `session_reset`, in 20 ms, and its next command reported `session_reinitialized`
 true.
 
-**Not reached:** Windows and macOS. Nothing here depends on `/proc`, but no such host has run it.
+**Not reached:** Windows and macOS. Nothing here depends on `/proc`, but no such host has run it. *(Windows reached
+2026-10-15, Windows 11 ARM64 under pwsh 7.6.6 and Windows PowerShell 5.1, three runs each: both cases now run with
+PowerShell's spellings, `exit 3`, a bare `exit`, `Stop-Process -Id $PID -Force`, and `exit 3` after output on one line and
+over two each ending at once as `execution_error` with `session_reset` and "were restored (<dir>)", the next call
+reinitialized with its state, the one after it not; the soft-paused `exit 4` handed over by the poll, and an `exit` typed
+as input respawned by the next call. macOS stays unreached.)*

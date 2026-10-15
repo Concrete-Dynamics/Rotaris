@@ -64,7 +64,9 @@ with the mode kept; the run start still refused as `confinement` on the same con
 said with their own reasons; an unloadable configuration still `unconfigured`), by a `dispatch.test.ts` case on the capture's
 detail and the analysis's answer (red on the code before), and by `retrospective-proof` launch 12, green after: the verdict line
 read unavailable, the pass ran and stored its `retrospective` artifact, no refusal notice was raised, and a prompt submitted in
-the same launch was still refused "The run was refused before it started" with bubblewrap's reason (REQ-SANDBOX-095).
+the same launch was still refused "The run was refused before it started" with bubblewrap's reason (REQ-SANDBOX-095). The
+whole `retrospective-proof` read 78 of 78 after the repair (2026-10-15, 13:25 to 13:35 UTC, load average 3.5 to 9 with other
+lanes running).
 
 **Left open, not ruled here:** whether a `default_persona` naming no role this build knows, or referential errors with no one
 present, should refuse a retrospective at all — the retrospective sends nothing to the entry role — raised as

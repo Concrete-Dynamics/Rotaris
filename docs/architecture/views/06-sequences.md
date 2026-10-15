@@ -164,7 +164,9 @@ guard (`RENDERER_UNSAVED_PROBE_SCRIPT`) is neither surfaced nor asked; each othe
 failed Save stops the sequence and answers `UPDATE_DECLINED_UNSAVED`, starting nothing (at the installer's hand-off, the
 declined path above); a renderer that cannot answer allows (PD-SHELL-010). One log line per asking names the action, the moment
 and each window's answer. A renderer asked again while its dialog is open joins that question
-(`apps/desktop/src/renderer/guard-question.ts`). The portable's apply and the 1,200 ms auto-close ask nothing.
+(`apps/desktop/src/renderer/guard-question.ts`), and an answer that lets the close go ahead (a Save that succeeded, a Discard)
+takes the published guard down before it is given (`settleGuard`, since fin47), so a probe at the hand-off that arrives before
+React's effect finds no stale guard to ask again. The portable's apply and the 1,200 ms auto-close ask nothing.
 
 A successor that cannot be started surfaces through `Update not installed` and nothing closes; one that never
 signals leaves this instance holding its record and its window, with no timeout (REQ-STARTUP-121, ADR-0055). A

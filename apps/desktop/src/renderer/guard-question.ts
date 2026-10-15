@@ -4,7 +4,7 @@
  * update may ask again at its hand-off, while the question is already open. A second asking joins the open question and
  * settles with its one answer: it never replaces it, which would leave the first asker waiting for an answer nobody can give.
  */
-export interface OpenQuestion {
+export interface PendingGuardQuestion {
   current: Promise<boolean> | null;
 }
 
@@ -12,7 +12,7 @@ export interface OpenQuestion {
  * Asks through `open` unless a question is already open in `slot`, in which case it returns that question. `open` receives the
  * function that answers it; the slot is cleared before the answer reaches anyone, so the next asking opens a fresh question.
  */
-export function joinOrAsk(slot: OpenQuestion, open: (answer: (proceed: boolean) => void) => void): Promise<boolean> {
+export function joinOrAsk(slot: PendingGuardQuestion, open: (answer: (proceed: boolean) => void) => void): Promise<boolean> {
   if (slot.current !== null) return slot.current;
   const question = new Promise<boolean>((resolve) => {
     let answered = false;
@@ -25,4 +25,20 @@ export function joinOrAsk(slot: OpenQuestion, open: (answer: (proceed: boolean) 
   });
   slot.current = question;
   return question;
+}
+
+/** Where the Settings screen publishes its close guard for main to ask (`RENDERER_CLOSE_GUARD_SCRIPT`, `main/main-windows.ts`). */
+export interface CloseGuardHost {
+  __rotarisCloseGuard?: (() => Promise<boolean>) | undefined;
+}
+
+/**
+ * Answers the open question. An answer that lets the close go ahead (a Save that succeeded, a Discard) takes the published close
+ * guard down FIRST, synchronously: main's hand-off probe (`RENDERER_UNSAVED_PROBE_SCRIPT`) can arrive between the answer and
+ * React's passive effect that would take it down, and the stale guard's closure still holds `dirty = true`, so the question would
+ * be put a second time (fin46's review, accept1-9). A Cancel, or a Save that failed, leaves it up: the form is still dirty.
+ */
+export function settleGuard(host: CloseGuardHost, answer: (proceed: boolean) => void, proceed: boolean): void {
+  if (proceed) host.__rotarisCloseGuard = undefined;
+  answer(proceed);
 }

@@ -22,7 +22,7 @@ import '@phosphor-icons/web/fill';
 // The window itself: the bridge, the replica and the two stacks, the terminal registry, the display preferences and
 // the theme — everything this window has before a surface mounts (`shell.ts`).
 import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, composerDraft, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, retryRun, setMode, setNextModel, setRunStartMode, settingsUnsaved, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
-import { joinOrAsk, type OpenQuestion } from './guard-question.js';
+import { joinOrAsk, settleGuard, type CloseGuardHost, type PendingGuardQuestion } from './guard-question.js';
 import { openWorkspaceFolder, useWindowWidth, useWorkspaceUsage } from './strip-facts.js';
 import { reportNoticeActionRefusal } from './notice-action-refusal.js';
 // What a transcript surface reads about the session it is following, shared with the persona window (`session-view.ts`).
@@ -704,7 +704,7 @@ function useConfiguration(workspace: string | null) {
   // REQ-CONFIG-286/287: the guard — Save (default), Discard, Cancel — on a view switch away and on a user-initiated close,
   // the update's `Restart now` and the installer's `Update now` among them (OQ-311). An asking while the question is open
   // joins it and settles with its one answer; it never replaces `guarding`, which would strand the first asker.
-  const openQuestion = useRef<OpenQuestion>({ current: null });
+  const openQuestion = useRef<PendingGuardQuestion>({ current: null });
   const guard = useCallback((): Promise<boolean> => {
     if (!dirty && openQuestion.current.current === null) return Promise.resolve(true);
     return joinOrAsk(openQuestion.current, (answer) => setGuarding({ resolve: answer }));
@@ -716,9 +716,9 @@ function useConfiguration(workspace: string | null) {
   }, [dirty, guard]);
   const guardDialog = guarding ? (
     <UnsavedGuardDialog
-      onSave={() => { void onSave().then((r) => { const g = guarding; setGuarding(null); g.resolve(r.ok); }); }}
-      onDiscard={() => { onDiscard(); const g = guarding; setGuarding(null); g.resolve(true); }}
-      onCancel={() => { const g = guarding; setGuarding(null); g.resolve(false); }}
+      onSave={() => { void onSave().then((r) => { const g = guarding; setGuarding(null); settleGuard(window as unknown as CloseGuardHost, g.resolve, r.ok); }); }}
+      onDiscard={() => { onDiscard(); const g = guarding; setGuarding(null); settleGuard(window as unknown as CloseGuardHost, g.resolve, true); }}
+      onCancel={() => { const g = guarding; setGuarding(null); settleGuard(window as unknown as CloseGuardHost, g.resolve, false); }}
     />
   ) : null;
   return { config: { snapshot, pending, dirty, loading, error, serviceAvailable: workspace !== null, onChange, onSave, onDiscard, onSetField }, guardDialog };

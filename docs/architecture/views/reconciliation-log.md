@@ -16,6 +16,16 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-14**
 
+**Wording only (fin47, `fin47-rename-and-optionals`; fin46's optional findings).** `02-process-view.md`: the pane-layout
+parenthetical in the renderer's command list states what the carry-over does now ("carried over once, only at version 1, setting
+the stamp to 1"); the history it held moves here — until fin46 (2026-10-14) the carry-over took the first stored object at any
+version and set the stamp to that object's version unchecked. `config.liveState` names its answers, the ack or since 2026-10-14
+`refused config.live-state-invalid` (the runtime view's Tier B already said so). Two lines of the quit paragraph, about 200 and
+290 characters long, are re-wrapped to the paragraph's width. No code path moved. And one renderer change:
+`06-sequences.md`'s update paragraph says an answer that lets a close go ahead takes the Settings screen's published close guard
+down before it is given (`settleGuard` in `apps/desktop/src/renderer/guard-question.ts`, whose question type is now
+`PendingGuardQuestion`), so main's hand-off probe cannot meet the stale guard React's effect has not yet removed.
+
 **A rename's reference search reaches only files a project file covers (fin47, `fin47-rename-and-optionals`; PD-MCP-004,
 OQ-362).** `03-runtime-view.md`'s PD-MCP-004 paragraph says the search helps only where a `tsconfig.json` or `jsconfig.json`
 covers the files, and that in a workspace with neither the rename still changes the declaring file alone (the live `rename`

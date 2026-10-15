@@ -122,6 +122,13 @@ const personaProbesAt = (log, at, selector) => { const m = log.match(new RegExp(
 const endProbe = (log, selector) => { const m = log.match(new RegExp(`capture: probe ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\])`)); return m ? JSON.parse(m[1]) : null; };
 const windowsAt = (log, at) => { const m = log.match(new RegExp(`capture: windows-at ${at} → (\\[.*\\])`)); return m ? JSON.parse(m[1]) : null; };
 const results = {};
+// The replica's run-start decline is REQ-SESSION-161's own recovery, read from the code and left as a diagnostic
+// (docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md, "The declined increment at run
+// start"); it met the timed-out item's first launch at a load of 15 on 4 CPUs, before any click. Every other console line still
+// fails a launch. The filter is `renderer-console.mjs`'s, shared with palette-proof since 2026-10-14, and since 2026-10-15 every
+// launch here reads through it, `painted` and `waiting` included, which start a delegating run and read the unfiltered lines
+// until then (docs/defects/fixed/notice-proof-and-two-mission-proof-checks-still-fail-on-the-replicas-run-start-decline.md).
+const unexpected = unexpectedRendererErrors;
 const expect = (cond, message) => { if (!cond) throw new Error(message); };
 const stateOf = (rowText) => (/(running|waiting|queued|done|failed|cancelled)/.exec(rowText) ?? [])[1] ?? null;
 const seconds = (label) => { const m = /(?:(\d+)m )?(\d+)s/.exec(label); return m ? Number(m[1] ?? 0) * 60 + Number(m[2]) : null; };
@@ -166,8 +173,8 @@ const s1 = scenario('painted');
   const endRows = endProbe(r.log, '.agent-table__row') ?? [];
   expect(endRows.length === 3 && endRows.every((p) => p.data['data-state'] === 'done'), `after the run the rows read ${JSON.stringify(endRows.map((p) => p.data['data-state']))}`);
   expect(endProbe(r.log, '.app-shell')?.[0]?.data?.['data-view'] === 'mission', 'the capture was not on Mission');
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
-  results.painted = { subtitle, runRow, statesAt6s: states6, elapsedAt6s: e6, elapsedAt7_5s: e75, finalStates: endRows.map((p) => p.data['data-state']), png: join(output, 'mission.png') };
+  expect(unexpected(r.errors).length === 0, `renderer errors: ${unexpected(r.errors).join(' | ')}`);
+  results.painted = { replicaDeclines: replicaRunStartDeclines(r.errors), subtitle, runRow, statesAt6s: states6, elapsedAt6s: e6, elapsedAt7_5s: e75, finalStates: endRows.map((p) => p.data['data-state']), png: join(output, 'mission.png') };
 }
 
 // 1b. A waiting agent's clock (REQ-MONITOR-107/111, resolution item 25; the note "a waiting agent's elapsed time is not
@@ -198,8 +205,8 @@ const s1b = scenario('waiting');
   const meta75 = (probesAt(r.log, 7500, '.mission__run-row + .agent-tree .agent-row__meta') ?? []).map((p) => p.text);
   expect(meta6.length === 3 && meta6.every((t) => seconds(t) !== null), `a tree meta showed its state alone although the agent holds a spawn timestamp: ${JSON.stringify(meta6)} (REQ-MONITOR-111)`);
   expect(meta6.some((t, i) => /^(waiting|queued) · /.test(t) && seconds(meta75[i] ?? '') > seconds(t)), `no waiting tree meta advanced: ${JSON.stringify(meta6)} → ${JSON.stringify(meta75)} (REQ-MONITOR-107)`);
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
-  results.waiting = { statesAt6s: states6, elapsedAt6s: cells6, elapsedAt7_5s: cells75, treeMetaAt6s: meta6, treeMetaAt7_5s: meta75, png: join(output, 'mission-waiting.png') };
+  expect(unexpected(r.errors).length === 0, `renderer errors: ${unexpected(r.errors).join(' | ')}`);
+  results.waiting = { replicaDeclines: replicaRunStartDeclines(r.errors), statesAt6s: states6, elapsedAt6s: cells6, elapsedAt7_5s: cells75, treeMetaAt6s: meta6, treeMetaAt7_5s: meta75, png: join(output, 'mission-waiting.png') };
 }
 
 // 1c. OQ-213 as ruled (R-072), REQ-ORCH-029's todo clause in the built app: a scripted coordinator that delegates twice
@@ -241,11 +248,6 @@ const s1c = scenario('todo-list-owed');
 // scrolled sideways. Before the repair every one of these read `failed` and nothing else.
 const TIMEOUT_LINE = (progress) => `Cut off at its per-agent timeout of 3 seconds${progress ? ' while making progress' : ''}. Settings › Runtime › Per-agent timeout sets this limit for runs started from now.`;
 const evalsOf = (log) => [...log.matchAll(/capture: eval-at \d+ .*? → (\{.*\})\s*$/gm)].map((m) => JSON.parse(m[1]));
-// The replica's run-start decline is REQ-SESSION-161's own recovery, read from the code and left as a diagnostic
-// (docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md, "The declined increment at run
-// start"); it met this item's first launch at a load of 15 on 4 CPUs, before any click. Every other console line still fails it.
-// The filter is `renderer-console.mjs`'s, shared with palette-proof since 2026-10-14.
-const unexpected = unexpectedRendererErrors;
 const s1d = scenario('timed-out', ['  child_timeout: 3']);
 {
   const box = 'const box = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; };';

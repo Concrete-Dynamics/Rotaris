@@ -100,3 +100,28 @@ describe('palette-proof and mission-proof read renderer errors through the share
     expect(text).not.toMatch(/declined increment on/);
   });
 });
+
+/*
+ * docs/defects/fixed/notice-proof-and-two-mission-proof-checks-still-fail-on-the-replicas-run-start-decline.md: notice-proof's
+ * launches start scripted runs and ended each with `errors.length === 0`, and mission-proof's `painted` and `waiting` launches,
+ * each starting a delegating run, did the same before its later checks read through `unexpected`. Either could go red on
+ * REQ-SESSION-161's own recovery with nothing wrong on screen, as palette-proof did.
+ */
+describe('notice-proof and every mission-proof launch read renderer errors through the shared filter', () => {
+  const read = (name: string) => readFileSync(resolve(import.meta.dirname, '..', name), 'utf8');
+  it('notice-proof fails no launch on the replica\'s run-start decline (every check goes through unexpectedRendererErrors)', () => {
+    const text = read('notice-proof.mjs');
+    expect(text).toMatch(/import \{[^}]*\bunexpectedRendererErrors\b[^}]*\} from '\.\/lib\/renderer-console\.mjs';/);
+    expect(text).not.toMatch(/\b\w+\.errors\.length === 0/);
+    const checks = text.match(/renderer errors: /g) ?? [];
+    expect(checks.length).toBeGreaterThanOrEqual(11);
+    expect((text.match(/expect\(unexpectedRendererErrors\(\w+\.errors\)\.length === 0, `renderer errors: \$\{unexpectedRendererErrors\(\w+\.errors\)\.join\(' \| '\)\}`\);/g) ?? []).length).toBe(checks.length);
+  });
+  it('mission-proof fails no launch on it either: no check reads the unfiltered lines', () => {
+    const text = read('mission-proof.mjs');
+    expect(text).not.toMatch(/\b\w+\.errors\.length === 0/);
+    const checks = text.match(/renderer errors: /g) ?? [];
+    expect(checks.length).toBeGreaterThanOrEqual(5);
+    expect((text.match(/expect\(unexpected\(\w+\.errors\)\.length === 0, `renderer errors: \$\{unexpected\(\w+\.errors\)\.join\(' \| '\)\}`\);/g) ?? []).length).toBe(checks.length);
+  });
+});

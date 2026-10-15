@@ -1,8 +1,22 @@
 ## notice-proof and two mission-proof checks still fail on the replica's run-start decline
 
+**Outcome (2026-10-15, fin47): repaired, the repair this note named.** `notice-proof.mjs` imports `unexpectedRendererErrors` and
+`replicaRunStartDeclines` from `apps/desktop/scripts/lib/renderer-console.mjs`; all eleven of its renderer-error checks (the
+nine the note counted grew to eleven before the repair: `advisory`, `hook-load-fault`, `global-merged-warning`, `scoping`,
+`stack`, `review-action`, `review-other`, `review-refused`, `retry-action`, `retry-image-first`, `retry-image`) read through the
+filter, and `launch` counts what it let through per launch in `results.json` → `replicaRunStartDeclines`. `mission-proof.mjs`'s
+`unexpected` is defined once beside `results`, before the first launch, and its `painted` and `waiting` checks read through it
+as its later items did, each recording `replicaDeclines`. Pinned by two source-shape cases in
+`apps/desktop/scripts/lib/renderer-console.test.ts` ("notice-proof and every mission-proof launch read renderer errors through
+the shared filter"): no `<x>.errors.length === 0` remains in either proof and every `renderer errors:` check is the filtered
+form; both cases failed on the proofs before the repair. Driven at the branch's build: `notice-proof` passed (load 2.50 to
+2.86 on 4 CPUs; every launch met 0 declines), and `mission-proof` passed (load 2.50 to 2.42; `painted`, `waiting` and
+`timedOut` each met 0). Neither run met the decline, so the filter's letting it through is shown by its own cases in
+`renderer-console.test.ts`, not by these runs.
+
 `palette-proof` went red on the replica's run-start diagnostic "[replica] declined increment on <session>: earliest-changed 2
 precedes oldest held 3", which is REQ-SESSION-161's own recovery and no fault
-([`fixed/palette-proof-fails-on-the-replicas-documented-run-start-decline.md`](fixed/palette-proof-fails-on-the-replicas-documented-run-start-decline.md)).
+([`fixed/palette-proof-fails-on-the-replicas-documented-run-start-decline.md`](palette-proof-fails-on-the-replicas-documented-run-start-decline.md)).
 Its repair (2026-10-14, fin46) moved the filter `mission-proof` kept to itself into
 `apps/desktop/scripts/lib/renderer-console.mjs` (`unexpectedRendererErrors`) and routed every `palette-proof` check and
 `mission-proof`'s `unexpected` through it. Two other places read the same relayed lines with no filter, found by reading the

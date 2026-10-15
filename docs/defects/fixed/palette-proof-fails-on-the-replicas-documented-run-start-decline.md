@@ -21,7 +21,7 @@ Shown by the proof that found it, on the repaired branch built from the same bas
 its start, `PART W PROOF PASSED`) and the whole `mission-proof` (load 2.32 at its start, exit 0), one after another.
 
 Two other places read the same lines with no filter and are recorded, not repaired here:
-[`../notice-proof-and-two-mission-proof-checks-still-fail-on-the-replicas-run-start-decline.md`](../notice-proof-and-two-mission-proof-checks-still-fail-on-the-replicas-run-start-decline.md).
+[`notice-proof-and-two-mission-proof-checks-still-fail-on-the-replicas-run-start-decline.md`](notice-proof-and-two-mission-proof-checks-still-fail-on-the-replicas-run-start-decline.md).
 
 
 `pnpm palette-proof`'s `persona-follows-display` section (and every other section that ends in

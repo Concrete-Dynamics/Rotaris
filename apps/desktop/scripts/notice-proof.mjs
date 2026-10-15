@@ -7,6 +7,7 @@ import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabas
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-marker.mjs';
 import { startApp, stopApp, until } from './lib/driver.mjs';
+import { replicaRunStartDeclines, unexpectedRendererErrors } from './lib/renderer-console.mjs';
 
 /**
  * ADR-0049's first execution in full (Part V), in the built application.
@@ -148,6 +149,11 @@ async function launch(name, s, extra, opts = {}) {
   // The precondition the section establishes, checked rather than assumed: a background setup's notice is not this proof's subject.
   if (backgroundSetupStarted(log)) throw new Error(`${name}: the workspace's initialization started code-intelligence-setup in the background, so its notice may stand in the slot this proof reads; see ${name}.log`);
   const errors = log.split('\n').filter((l) => /renderer console:/.test(l));
+  // The replica's run-start decline is REQ-SESSION-161's own recovery, which a launch that starts a run meets under load with
+  // nothing wrong on screen: every check reads `errors` through `unexpectedRendererErrors` (renderer-console.mjs, shared with
+  // palette-proof and mission-proof), and what it let through is counted here
+  // (docs/defects/fixed/notice-proof-and-two-mission-proof-checks-still-fail-on-the-replicas-run-start-decline.md).
+  (results.replicaRunStartDeclines ??= {})[name] = replicaRunStartDeclines(errors);
   return { log, png, elapsedMs: Date.now() - started, errors };
 }
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -217,7 +223,7 @@ if (want('1')) {
     burst: { outcomePublished: outcomeLogged, advisoryPublished: advisoryLogged, slotHeld: parsedScreen.length },
     png: r.png, elapsedMs: r.elapsedMs,
   };
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -269,7 +275,7 @@ if (want('1b')) {
   const onScreen = JSON.parse((r.log.match(/capture: probe \[data-testid="notice-title"\] → (\[.*\])/) ?? [])[1] ?? '[]');
   expect(onScreen.some((n) => n.text === 'The run was refused before it started'), `the refusal is not the notice on screen: ${JSON.stringify(onScreen)}`);
   results.hookLoadFault = { atOpen: { titles: atOpen, detail: detailAtOpen, message: messageAtOpen }, refusal: refused.slice(refused.indexOf('The configuration could not be loaded')), notice: onScreen.map((n) => n.text), sessions, hookRuns: 0, hookPortLoadLine: 'not reached (REQ-HOOKS-012 fails the configuration load first)', png: r.png, elapsedMs: r.elapsedMs };
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -362,7 +368,7 @@ if (want('1e')) {
   expect(lines.every((l) => l.includes(`configuration: ${globalFile} at compressor.bogus_key (global scope): unknown key 'bogus_key'`)), `the warning does not name the global file ${globalFile}, the key and the global scope: ${JSON.stringify(lines)}`);
   expect(!/configuration: compressor\.bogus_key: /.test(r.log), 'a warning still names the key with no file (the defect)');
   expect(/run [0-9a-f-]+ ended /.test(r.log), 'the run did not end: a warning must not stop the load (REQ-CONFIG-233) — see global-merged-warning.log');
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
   results.globalMergedWarning = { globalFile, warning: lines[0].slice(lines[0].indexOf('configuration: ')), elapsedMs: r.elapsedMs };
 }
 
@@ -437,7 +443,7 @@ if (want('2')) {
     afterDismissingTheSuperseded: after.matches[0].text.split('\n')[0], accessibleName: after.matches[0].attrs['aria-label'],
     steps: noticeSteps(r.log), png: r.png, elapsedMs: r.elapsedMs,
   };
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -494,7 +500,7 @@ if (want('4')) {
     afterViewChange: cleared.length, afterLifetime: expired.matches.length,
     png: join(output, 'stack.png'), elapsedMs: r.elapsedMs,
   };
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -541,7 +547,7 @@ if (want('6')) {
     reviewOpenedFor: opened[1], hooks: Number(opened[2]), workspaceMatched: sameRoot,
     png: join(output, 'review-action.png'), elapsedMs: r.elapsedMs,
   };
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -592,7 +598,7 @@ if (want('6b')) {
     reviewOpenedFor: opened[1], hooks: Number(opened[2]), decision: decided[1], decidedFor: decided[2].trim(),
     png: join(output, 'review-other.png'), elapsedMs: r.elapsedMs,
   };
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -632,7 +638,7 @@ if (want('6e')) {
     png: join(output, 'review-refused.png'), elapsedMs: r.elapsedMs,
   };
   // The refusal is said on screen, not on the console: before the repair its `console.warn` was relayed here.
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -963,7 +969,7 @@ if (want('7')) {
     actionLabel: action[0].text, member: action[0].attrs['data-action'], submittedPrompts: users,
     session: sessions[0], png: join(output, 'retry-action.png'), elapsedMs: r.elapsedMs,
   };
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // 7b. REQ-NOTIFY-045 with REQ-SESSION-192 and REQ-CHAT-173: the retry resubmits the session's last prompt from the store,
@@ -981,7 +987,7 @@ if (want('7b')) {
   const RESIDENT_ROW_CAP = 5000;
   const PAGE = 50;
   const first = await launch('retry-image-first', s6, { ROTARIS_SCRIPT: 'fail:401', ROTARIS_CAPTURE_PROMPT: PROMPT, ROTARIS_CAPTURE_AFTER_MS: '9000' });
-  expect(first.errors.length === 0, `renderer errors: ${first.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(first.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(first.errors).join(' | ')}`);
   const dbPath = oneDatabase(s6.local);
   const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137]);
   const digest = createHash('sha256').update(png).digest('hex');
@@ -1038,7 +1044,7 @@ if (want('7b')) {
     releasedPromptPage: users[0].page, promptRowIndex: users[0].row_index, retriedRowIndex: users[1].row_index,
     digest, retriedDigest: resent[0].digest, modelCallsWithImage: withImage.length, session, png: join(output, 'retry-image.png'), elapsedMs: r.elapsedMs,
   };
-  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

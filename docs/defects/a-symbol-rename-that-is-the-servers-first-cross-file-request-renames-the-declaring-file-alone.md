@@ -104,7 +104,10 @@ have to edit them one by one.
 - `apps/desktop/scripts/code-intelligence/pins.json`, `apps/desktop/scripts/code-intelligence/bundle.mjs` — the pin and the recipe
   a runtime-side repair would change.
 - `apps/desktop/scripts/code-intel-proof.mjs` — launch 10 (`child-rename`, after a referencing-symbol search, both files) and
-  launch 11 (`child-rename-cold`, the rename alone), which pins this note and is red until it is repaired.
+  launch 11 (`child-rename-cold`, the rename alone), which pins this note and is red until it is repaired; and since the reopening
+  launch 13 (`child-rename-cold-js`, the rename alone in a JavaScript workspace with no project file), red until OQ-362 is built.
+- `apps/desktop/scripts/fixtures/todo-app` — the live run's workspace: `.js`/`.jsx` files and no `tsconfig.json` or
+  `jsconfig.json`, the shape the reopening is about.
 - `apps/desktop/scripts/live-run.mjs` — the opt-in `rename` scenario, which names a cold rename that reached one file.
 
 ## Outcome

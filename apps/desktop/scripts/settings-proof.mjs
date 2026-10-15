@@ -4,9 +4,13 @@
  * REQ-SHELL-138..143) — plus the save bar every category now shows (REQ-CONFIG-270) and the corrected
  * `display:` keys of REQ-CONFIG-172. Scripted client, scratch profile, nine launches — 1 is three of them:
  *
- *   1. no-workspace, tools, instructions-empty — Electron started with no workspace: About carries the version, an em
- *                     dash for Build and REQ-SHELL-142's caption; the Tools inventory is fully populated (REQ-CONFIG-277
- *                     populates it unconditionally); Instructions is empty and names the file to create.
+ *   1. no-workspace, tools, instructions-empty — Electron started with no workspace argument: About carries the
+ *                     version, an em dash for Build and REQ-SHELL-142's caption; the Tools inventory is fully populated
+ *                     (REQ-CONFIG-277 populates it unconditionally); Instructions is empty and names the file to create.
+ *                     A launch with no argument opens its working directory (REQ-SHELL-010 (c)), so every such launch
+ *                     here runs in an empty directory of the proof's own, in no repository, and is asserted to have
+ *                     opened that and nothing else. Until fin47 they ran in `apps/desktop`, opened the checkout and
+ *                     indexed the product's source (`docs/defects/fixed/settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`).
  *   1′. about-present — the same About page with both of its files present (first-release-plan.md §4.4): the Build
  *                     row carries the identifier `pnpm build-id` wrote for this tree, no caption stands under the
  *                     licensing control, and the control opens the notices file where about.ts found it.
@@ -77,6 +81,7 @@ import { cleanEnvironment, configDirFor, hostSwitches, oneDatabase, proofIsolati
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { ABOUT_ASSETS } from './lib/about-assets.mjs';
 import { produce, put, restore, stage } from './lib/staged-resources.mjs';
+import { assertOpened, emptyWorkingDirectory } from './lib/working-directory.mjs';
 import { REDIRECTING } from '../../../tools/build-id/build-id.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -121,7 +126,8 @@ async function launch(name, workspace, local, preferences, extra, timeoutMs = 12
   const args = [join(app, 'out', 'main', 'index.js'), ...hostSwitches];
   if (workspace !== null) args.push(workspace);
   const result = await spawnBounded(electron, args, {
-    cwd: app, timeoutMs, windowsHide: true,
+    // With no workspace argument the app opens its working directory (REQ-SHELL-010 (c)): the empty one, never the checkout.
+    cwd: workspace === null ? workingDirectory : app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -139,6 +145,9 @@ async function launch(name, workspace, local, preferences, extra, timeoutMs = 12
   if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
+  // What the launch opened, and any setup step of it that outlived the launch until `bounded-launch` ended it: evidence, not a
+  // check, since a step left by the capture seam's immediate exit is OQ-169's ruled case (PD-WORKSPACE-006).
+  if (workspace === null) openedWithoutArgument[name] = { opened: relative(repo, assertOpened(log, workingDirectory, name)), outlivedTheLaunch: result.group?.ownGroups?.lingered ?? [] };
   const probes = {};
   for (const line of log.split('\n')) {
     const m = /capture: probe (.+?) → (\[.*\])\s*$/.exec(line);
@@ -156,6 +165,8 @@ const local = join(root, 'local');
 const preferences = join(root, 'preferences');
 const home = join(root, 'home');
 const machine = join(root, 'machine-codex');
+// Where the launches with no workspace argument run, and so what they open: new, empty, and in no repository.
+const workingDirectory = emptyWorkingDirectory(join(root, 'working-directory'));
 mkdirSync(workspace, { recursive: true });
 mkdirSync(local, { recursive: true });
 mkdirSync(home, { recursive: true });
@@ -175,6 +186,8 @@ writeFileSync(configFile, [
 // The file the scripted `read` step reads (launch 5), long enough that a cap has something to cut short.
 writeFileSync(join(workspace, 'README.md'), ['# Settings proof workspace', ...Array.from({ length: 30 }, (_, i) => `line ${i + 1}`), ''].join('\n'));
 const results = {};
+/** Each launch with no workspace argument, and the workspace it opened: the empty working directory, as `launch` asserts. */
+const openedWithoutArgument = {};
 
 /** Open Settings (Ctrl+7) on a named category, and give the view time to paint. */
 const openCategory = (label, atMs = 900) => ({ ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_VIEW_MS: String(atMs), ROTARIS_CAPTURE_SETTINGS: label });
@@ -313,10 +326,12 @@ for (const statement of [heading, ...disclosureOf(minimum.probes)]) if (!flat(se
 if (JSON.stringify(disclosureOf(minimum.probes)) !== JSON.stringify(disclosure)) throw new Error('the disclosure at the minimum size differs from the one at the default size');
 results.networkDisclosure = { heading, statements: disclosure.length, minimumSize: `${resized[1]}×${resized[2]}`, selectedAtMinimum: flat(selected).length };
 
-// The Tools inventory, and the empty Instructions, in the same launch profile (no workspace at all).
+// The Tools inventory with no workspace argument (the empty working directory), and the empty Instructions, in the same
+// launch profile.
 const tools = await launch('tools', null, local, preferences, { ...openCategory('Tools'), ROTARIS_CAPTURE_AFTER_MS: '2600' });
 const toolRows = rows(tools.probes, '[data-testid="inventory-row"]');
-// REQ-CONFIG-277: populated unconditionally — with no workspace open at all.
+// REQ-CONFIG-277: populated unconditionally — here with nothing but the empty working directory open, no configuration of
+// its own and no workspace argument.
 if (toolRows.length !== 19) throw new Error(`the Tools inventory listed ${toolRows.length} rows, not the nineteen public names`);
 const toolNames = toolRows.map((r) => r.data['data-name']);
 if (JSON.stringify(toolNames) !== JSON.stringify([...toolNames].sort((a, b) => a.localeCompare(b)))) throw new Error(`the Tools inventory was not sorted: ${toolNames.join(', ')}`);
@@ -801,6 +816,7 @@ const lYaml = readFileSync(rConfig, 'utf8');
 if (!/permission_mode: autonomous/.test(lYaml) || !/enabled: true/.test(lYaml)) throw new Error(`reload-last-write: the file does not hold the two writes' outcome:\n${lYaml}`);
 results.reloadLastWrite = { opened: l0, afterPairInOneTick: l1, afterUnsavedSelection: l2, afterWriteElsewhere: l3, pair: pairLine };
 
+results.openedWithoutArgument = openedWithoutArgument;
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 console.log(JSON.stringify(results, null, 2));
 console.log(`\nsettings proof: evidence under ${relative(repo, output)}`);

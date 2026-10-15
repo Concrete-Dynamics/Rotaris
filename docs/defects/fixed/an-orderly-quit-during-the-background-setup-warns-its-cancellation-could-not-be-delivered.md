@@ -59,8 +59,20 @@ ran, as root under Xvfb, Node 24.
 - A stand-in `code_intelligence` launch held `project create` and started a descendant. On the build before this repair,
   both were still running 5 s after the application exited, which took 169 ms. The warning was true: REQ-WORKSPACE-092's
   close clause was not met.
-- The bundled runtime, quit during `index`, left nothing running on the build before as well. It ends itself when its
-  pipes close, which is why the live runs never showed a leftover process.
+- The bundled runtime, quit during `index`, left nothing running on the build before as well. ~~It ends itself when its
+  pipes close, which is why the live runs never showed a leftover process.~~
+
+  *Corrected 2026-10-15 (fin47, acceptance finding A5,
+  [`settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`](settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md)):*
+  the struck sentence does not hold for an index that pyright serves. `settings-proof` ended two launches through the
+  capture seam's immediate exit, which kills the run host without its `shutdown`, while the runtime indexed the
+  checkout's `apps/desktop`. The serena `python3` process and `uv` / `pyright-langserver` (with pyright's `node`) were
+  still running more than 6 s after the application's group had ended, until `bounded-launch` ended them with SIGKILL.
+  That happened in both launches, at `3c03287`. The measurement above was taken before this repair, while the step was
+  spawned undetached, and through the orderly quit. It shows what happened then, and the reason it gave for that was not
+  measured. Since this repair the step leads a group and session of its own. The orderly quit still ends it through the run host's `shutdown` (`McpHost.endSetup`;
+  `workspace-proof` 8f passed at `3c03287`). A run host that ends without its `shutdown` leaves the step running, which
+  is OQ-169's ruled case (PD-WORKSPACE-006): "nothing in main ends a lost run host's step processes".
 
 **Repaired** in three places:
 

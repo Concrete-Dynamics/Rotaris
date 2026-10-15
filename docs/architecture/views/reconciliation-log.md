@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-15**
 
+**settings-proof's launches with no workspace argument run in an empty directory of their own (fin47, `fin47-accept1-3`;
+acceptance finding A5; REQ-CONFIG-277, REQ-SHELL-010, OQ-169).** `01-component-view.md` names
+`scripts/lib/working-directory.mjs` beside `staged-resources.mjs` as `settings-proof`'s, and its use of `build-id.mjs`'s
+redirecting variables. No other view changed: the product is unchanged.
+
 **A served todo item is outside the single-active count, and the resume names one still open (fin47,
 `fin47-classifier-and-todo`; `PD-TOOLS-008` revision 4, `PD-TOOLS-006` revision 11, OQ-333; REQ-TOOLS-145, REQ-TOOLS-146,
 REQ-ORCH-063).** `03-runtime-view.md` gains a paragraph after revision 3's: the `todo` tool's single-active reads exempt the served

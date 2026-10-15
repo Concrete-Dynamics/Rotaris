@@ -294,7 +294,10 @@ assets in the specification's sense, as the fonts and the icon set are; `bundled
 that carry a licence file (REQ-STARTUP-143), so this module is named for the surface it serves.
 `scripts/lib/package-verdict.mjs` holds the lines `package.mjs` closes on, each printed only when the steps that ran
 make it true. `scripts/lib/staged-resources.mjs` is `settings-proof`'s, for staging the two files and giving them back;
-the proof also takes the writer's list of git's redirecting variables from `build-id.mjs`. `package.mjs` launches the
+the proof also takes the writer's list of git's redirecting variables from `build-id.mjs`, and so does
+`scripts/lib/working-directory.mjs`, also `settings-proof`'s since fin47. That module makes the empty directory, in no
+repository, where a launch with no workspace argument runs (the app opens its working directory, REQ-SHELL-010 (c)), and
+reads from the launch's log what it opened. `package.mjs` launches the
 packaged application through `scripts/lib/bounded-launch.mjs`'s `spawnBounded`, as every proof launch a script starts
 itself does since 2026-09-29 (`fetch-proof`'s, `workspace-proof`'s hand-over and `mcp-console-spike`'s since 2026-09-30),
 so a launch that overruns its bound is ended and reported as a failure with its log tail. The driven launch is ended by

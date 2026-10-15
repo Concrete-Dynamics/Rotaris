@@ -445,8 +445,18 @@ still running 5 s after the application exited, which took 169 ms. With the repa
 - a step and descendant that both ignore SIGTERM: both were force-killed, and the quit took 2234 ms.
 
 The bundled runtime, quit during `index` on a 400-file Python project: its sentinel and Python process were gone 5 s
-later on the build before as well. The runtime ends itself when its pipes close, so the bundled runtime alone never
-showed the defect. With the repair the quit took 473 ms and nothing was left.
+later on the build before as well. ~~The runtime ends itself when its pipes close, so the bundled runtime alone never
+showed the defect.~~ With the repair the quit took 473 ms and nothing was left.
+
+*Corrected 2026-10-15 (fin47, acceptance finding A5,
+[`settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`](../../defects/fixed/settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md)):*
+the struck sentence is falsified for an index that pyright serves. Two `settings-proof` launches at `3c03287` ended
+through the capture seam's immediate exit, which kills the run host without its `shutdown`, while the runtime indexed
+`apps/desktop`. The serena `python3` process and `uv` / `pyright-langserver` were still running more than 6 s after the
+application's group had ended, until the harness ended them with SIGKILL. The measurement above was taken
+through the orderly quit, while the step was still spawned undetached. Why nothing was left then was not measured, and
+it does not show that the runtime ends itself. The orderly quit is unaffected: the run host's `shutdown` ends the setup. A run host that ends without it leaves the step,
+in its own group and session, running. That is OQ-169's ruled case (PD-WORKSPACE-006).
 
 Unit cases: two in `packages/mcp/src/setup.test.ts` (descendant ended with the step; shutdown grace shortening a
 cancellation's), both red on the code before; one in `apps/desktop/src/run-host/mcp.test.ts` for `endSetup`; one in

@@ -3084,7 +3084,9 @@ the task the condition and never the persona. What it costs:
 - a `depends_on` answer over 100,000 characters, unbounded until now, is cut;
 - the write-scope sentence is still advice, about 40 more tokens on every delegating request, and a model that drops the scope
   but still briefs a non-writer to write is caught only by OQ-257's reopening condition;
-- OQ-216's write-scope target of zero becomes a bound (at most one refusal a run, each re-routed by the next request);
+- OQ-216's write-scope target of zero becomes a bound (at most one refusal a run, each re-routed by the next request) —
+  *falsified 2026-10-15 and replaced by [OQ-331](../architecture/open-questions.md#oq-331)'s per-task bound, reported under
+  revision 9's first execution below;*
 - an implementation built from the specification alone caps the inherited block at 4,000 characters and words the sentence as
   before.
 
@@ -3447,6 +3449,21 @@ revision 9 from OQ-256 and OQ-257 (the consortium's questions V1 and V2, the dur
 >   still owed: no duress run has been made since `552d346`.
 >
 > The rows are in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **Revision 9's duress execution, reported back 2026-10-15 (fin47, `fin47-delegation-routing`), ruled under
+> [R-072](requests.md#r-072) as [OQ-331](../architecture/open-questions.md#oq-331):** the duress run at `3c03287` (fin46's final
+> acceptance, pack `2026-10-15T04-01-06-491Z`, session `2fe0a837`, finding F6) carried the write-scope sentence and the field's
+> description in every delegating request and refused two write scopes for a non-writer: `#105` (`architect`, `docs/decisions.md`,
+> refused in 7 ms before any record, re-routed 26.9 s later by `#126`, the architect without a scope, whose answer a docs-writer
+> wrote at `#204`) and `#231` (`verifier`, `docs/verification.md`, refused in 17 ms, re-routed 15.9 s later to a `tester`, `#232`). No
+> non-writer was briefed to write. The cost bullet's bound — *"at most one refusal a run, each re-routed by the next request"* — is
+> falsified there and kept beside its replacement: **at most one refusal for each task of the run's request that routes to a persona
+> writing no files (two in duress, zero elsewhere), each refused before any record and re-routed by the same agent's next `delegate`
+> within 60 s, and no task refused twice.** The directive's case and behaviour are unchanged, so no revision is written; REQ-TOOLS-152
+> and REQ-ORCH-028 keep their back-pointers as they stand. The live run's harness reads the new bound (`routingMissReading`'s
+> `nonWriterFileTasks`, `apps/desktop/scripts/lib/routing-misses.mjs`; its NOTE "write-scope refusals over OQ-331's bound (reopens
+> OQ-331)"), pinned by `lib/routing-misses.test.ts`, red on the code before. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

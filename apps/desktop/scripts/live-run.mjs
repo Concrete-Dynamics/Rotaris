@@ -1208,9 +1208,18 @@ function checkIntentClassification() {
  * PD-TOOLS-006 revision 8 (OQ-250, R-072) over every preserved session (`lib/routing-misses.mjs`): OQ-216's two counts —
  * `delegate` refused for a `write_scope` given to a persona that cannot write files, and a child's call of a tool it does not hold
  * refused at the gate (target 0). NOTEs: the enforced bounds answered each; the duress run at a68f121 had one of each. Since
- * OQ-257 (revision 9) the write-scope count is read against a bound — at most one a run, each re-routed by the coordinator's next
- * `delegate`, the seconds to it printed — and a scenario over the bound is named in a NOTE of its own, which reopens OQ-257.
+ * OQ-257 (revision 9) the write-scope count is read against a bound, each refusal re-routed by the coordinator's next `delegate`,
+ * the seconds to it printed. Since OQ-331 (ruled 2026-10-15 under R-072) the bound is counted per task — at most one refusal for
+ * each task of the scenario's request routed to a persona that writes no files (`NON_WRITER_FILE_TASKS`), no work refused twice,
+ * each re-routed within 60 s — where OQ-257's falsified "at most one a run" stood (the duress run at 2fe0a837 had two, inside the
+ * new bound). A scenario over it is named in a NOTE of its own, which reopens OQ-331.
  */
+/**
+ * OQ-331: the tasks of each scenario's request whose route (REQ-ORCH-028's routing table) names a persona that writes no files.
+ * duress's wave 2 asks for docs/decisions.md (the architect's design-decision route) and wave 3 for docs/verification.md (the
+ * verifier's route): two. No other scenario's request routes a file to a non-writer, so every other scenario reads 0.
+ */
+const NON_WRITER_FILE_TASKS = { duress: 2 };
 function checkRoutingMisses() {
   if (preservedSessions.length === 0) return;
   let r;
@@ -1218,16 +1227,16 @@ function checkRoutingMisses() {
     const Database = require('better-sqlite3');
     const db = new Database(oneDatabase(), { readonly: true });
     try {
-      r = routingMissReading(preservedSessions.map(({ scenario, sessionId }) => ({ scenario, rootNames: db.prepare('SELECT DISTINCT root_persona FROM iterations WHERE session_id = ?').all(sessionId).map((row) => row.root_persona), calls: readToolCalls(sessionId) })));
+      r = routingMissReading(preservedSessions.map(({ scenario, sessionId }) => ({ scenario, nonWriterFileTasks: NON_WRITER_FILE_TASKS[scenario] ?? 0, rootNames: db.prepare('SELECT DISTINCT root_persona FROM iterations WHERE session_id = ?').all(sessionId).map((row) => row.root_persona), calls: readToolCalls(sessionId) })));
     } finally { db.close(); }
   } catch (cause) {
     check(false, 'the delegate and child calls of every session the run kept were read for PD-TOOLS-006 revision 8', cause instanceof Error ? cause.message : String(cause));
     return;
   }
   const reroute = (x) => `${x.scenario} #${x.ordinal}: ${x.persona}, ${x.rerouted ? 're-routed' : 'NOT re-routed'} by the next delegate${x.secondsToNext === null ? '' : ` ${x.secondsToNext} s later`}`;
-  noted('write scopes given to a persona that cannot write files (PD-TOOLS-006 revision 9, OQ-257; bound: at most one a run, each re-routed by the next delegate), and child calls of a tool they do not hold (OQ-250; target 0)',
+  noted('write scopes given to a persona that cannot write files (PD-TOOLS-006 revision 9, OQ-331; bound: at most one per task routed to a non-writer — 2 in duress, 0 elsewhere — no work refused twice, each re-routed by the next delegate within 60 s), and child calls of a tool they do not hold (OQ-250; target 0)',
     `${r.scopeRefusals.length} write-scope refusal(s)${r.scopeRefusals.length === 0 ? '' : ` (${r.scopeRefusals.map(reroute).join('; ')})`}; ${r.unknownTools.length} unknown-tool call(s) by a child${r.unknownTools.length === 0 ? '' : ` (${r.unknownTools.map((x) => `${x.scenario} #${x.ordinal}: ${x.agent} ${x.tool}`).join(', ')})`}`);
-  if (r.flagged.length > 0) noted('write-scope refusals over OQ-257\'s bound (reopens OQ-257)', r.flagged.map((f) => `${f.scenario}${f.ordinal === null ? '' : ` #${f.ordinal}`}: ${f.why}`).join('; '));
+  if (r.flagged.length > 0) noted('write-scope refusals over OQ-331\'s bound (reopens OQ-331)', r.flagged.map((f) => `${f.scenario}${f.ordinal === null ? '' : ` #${f.ordinal}`}: ${f.why}`).join('; '));
 }
 
 /**

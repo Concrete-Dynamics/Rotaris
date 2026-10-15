@@ -6,13 +6,21 @@
  * 114 then call 164). The unknown-tool count's target is 0.
  *
  * Since OQ-257 (`PD-TOOLS-006` revision 9, ruled 2026-10-13 under R-072) the write-scope count is read against a bound, not a
- * target of zero: at most one refusal per run, each answered by the coordinator's next `delegate`, which re-routes the work — an
- * accepted delegation to another persona, or to the same one without a scope. Each refusal carries the seconds to that next
- * `delegate` (between the two calls' recorded ends) and whether it re-routed; `flagged` names the scenarios over the bound: more
- * than one refusal, or a refusal not re-routed. The falsified target, kept beside it: "0 write-scope refusals" — the duress run at
- * 552d346 had one (#92, `architect`), refused in 5 ms and re-routed by the next `delegate` 30.0 s later.
+ * target of zero: each refusal answered by the coordinator's next `delegate`, which re-routes the work — an accepted delegation to
+ * another persona, or to the same one without a scope. Each refusal carries the seconds to that next `delegate` (between the two
+ * calls' recorded ends) and whether it re-routed. The falsified target, kept beside it: "0 write-scope refusals" — the duress run
+ * at 552d346 had one (#92, `architect`), refused in 5 ms and re-routed by the next `delegate` 30.0 s later.
  *
- * `sessions`: `{ scenario, rootNames: string[], calls: { ordinal, tool_name, agent_name, status, result, failureKind, args?, endedAt? }[] }[]`.
+ * Since OQ-331 (ruled 2026-10-15 under R-072; revision 9 stands) the bound is counted per task: at most one refusal for each task
+ * of the scenario's request whose route names a persona that writes no files — `nonWriterFileTasks`, which live-run.mjs supplies
+ * from the scenario (2 in duress, docs/decisions.md and docs/verification.md; 0 in every other scenario, and 0 when absent). The
+ * falsified bound, kept beside it: OQ-257's "at most one refusal per duress run" — the duress run at 2fe0a837 had two (call 105,
+ * `architect`, re-routed 26.9 s later; call 231, `verifier`, re-routed 15.9 s later), every other limb holding. `flagged` names a
+ * scenario over the bound: more refusals in a run than its `nonWriterFileTasks`; the same work refused twice in one run (the same
+ * set of `write_scope` paths, or the same `task_name`); a refusal re-routed more than 60 s later; a refusal with no later
+ * `delegate` by the same agent; or one whose next `delegate` does not re-route it.
+ *
+ * `sessions`: `{ scenario, nonWriterFileTasks?: number, rootNames: string[], calls: { ordinal, tool_name, agent_name, status, result, failureKind, args?, endedAt? }[] }[]`.
  */
 export function routingMissReading(sessions) {
   const scopeRefusals = [];
@@ -21,6 +29,8 @@ export function routingMissReading(sessions) {
   for (const s of sessions) {
     const roots = new Set(s.rootNames ?? []);
     const calls = s.calls ?? [];
+    const bound = Number.isInteger(s.nonWriterFileTasks) && s.nonWriterFileTasks >= 0 ? s.nonWriterFileTasks : 0;
+    const refusedWork = [];
     let refusedHere = 0;
     for (let i = 0; i < calls.length; i += 1) {
       const c = calls[i];
@@ -35,12 +45,18 @@ export function routingMissReading(sessions) {
         scopeRefusals.push({ scenario: s.scenario, ordinal: c.ordinal, persona, secondsToNext, rerouted });
         refusedHere += 1;
         if (!rerouted) flagged.push({ scenario: s.scenario, ordinal: c.ordinal, why: next === undefined ? 'no later delegate by the same agent' : 'the next delegate did not re-route the work' });
+        const paths = Array.isArray(c.args?.write_scope) && c.args.write_scope.length > 0 ? [...new Set(c.args.write_scope.map(String))].sort().join('\n') : null;
+        const taskName = typeof c.args?.task_name === 'string' && c.args.task_name !== '' ? c.args.task_name : /^Task '([^']+)'/.exec(result)?.[1] ?? null;
+        const before = refusedWork.find((w) => (paths !== null && w.paths === paths) || (taskName !== null && w.taskName === taskName));
+        if (before !== undefined) flagged.push({ scenario: s.scenario, ordinal: c.ordinal, why: `the same work was refused before (#${before.ordinal})` });
+        refusedWork.push({ ordinal: c.ordinal, paths, taskName });
+        if (secondsToNext !== null && secondsToNext > 60) flagged.push({ scenario: s.scenario, ordinal: c.ordinal, why: `${rerouted ? 're-routed' : 'the next delegate came'} ${secondsToNext} s later, over 60 s` });
       }
       if (!roots.has(c.agent_name) && /^Unknown tool '[^']+'\./.test(result)) {
         unknownTools.push({ scenario: s.scenario, ordinal: c.ordinal, agent: c.agent_name, tool: c.tool_name });
       }
     }
-    if (refusedHere > 1) flagged.push({ scenario: s.scenario, ordinal: null, why: `${refusedHere} write-scope refusals in one run` });
+    if (refusedHere > bound) flagged.push({ scenario: s.scenario, ordinal: null, why: `${refusedHere} write-scope refusal${refusedHere === 1 ? '' : 's'} in one run, over its ${bound} task(s) routed to a persona that writes no files` });
   }
   return { read: sessions.map((s) => s.scenario), scopeRefusals, unknownTools, flagged };
 }

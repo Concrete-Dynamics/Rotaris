@@ -362,8 +362,10 @@ unasked when no coordinator sent one, `closes`, and the `edit` prompt asks for o
 over a different state is a NOTE (`namedRestores`); and (`PD-TOOLS-006` revision 8, OQ-250) a NOTE counts `delegate` calls
 refused for a `write_scope` given to a persona that cannot write files and child calls of a tool they do not hold
 (`lib/routing-misses.mjs`; OQ-216's target is 0 for each, the duress run at `a68f121` had one of each). Since fin38 (`PD-TOOLS-006`
-revision 9, OQ-257) the write-scope refusals are read against a bound — at most one a run, each re-routed by the coordinator's next
-`delegate`, the seconds to it printed — and a scenario over it is a NOTE of its own; and (OQ-256) a NOTE counts each hand-off answer
+revision 9, OQ-257) the write-scope refusals are read against a bound, each re-routed by the coordinator's next `delegate`, the
+seconds to it printed; since fin47 (OQ-331) the bound is counted per task — at most one refusal for each task of the scenario's
+request routed to a persona that writes no files (`NON_WRITER_FILE_TASKS`: 2 in duress, 0 elsewhere), no work refused twice, each
+re-routed within 60 s, where OQ-257's falsified "at most one a run" stood — and a scenario over it is a NOTE of its own; and (OQ-256) a NOTE counts each hand-off answer
 a child received cut, by the block's marker in its recorded messages (`lib/hand-off-cuts.mjs`; target 0 for answers of 100,000
 characters or fewer; the duress run at `552d346` had two, under the 4,000-character block revision 9 replaced).
 Since fin41 (item N67; OQ-258, `PD-ORCH-011` revision 2) a NOTE gives the intent classification per launch — category,

@@ -11171,6 +11171,12 @@ requests, one refusal remained (`#92`, `architect` given `docs/decisions.md`, re
 next `delegate` 30.0 s later); a target of zero for one stochastic sample is replaced by an enforced, recovered bound — at most one
 `write_scope` refusal for a non-writer per duress run, each refused before any record exists and re-routed by the coordinator's
 next request. The impossible-brief target stays at 0 (0 at `552d346`).
+~~At most one `write_scope` refusal for a non-writer per duress run.~~ **Falsified 2026-10-15 and replaced by a per-task bound
+([OQ-331](#oq-331), ruled under [R-072](../product/requests.md#r-072)):** the duress run at `2fe0a837` refused two (`#105`,
+`architect` given `docs/decisions.md`, re-routed 26.9 s later; `#231`, `verifier` given `docs/verification.md`, re-routed 15.9 s
+later), one for each task of its request that routes to a non-writer. A run may have at most one refusal for each such task (two in
+duress, zero elsewhere), each refused before any record and re-routed by the same agent's next `delegate` within 60 s, and no task
+refused twice.
 
 **OQ-217 — What is the report summariser told of how the child ended?** *(REQ-ORCH-088, a timed-out child recorded failed
 with a report of the form "Child timed out after <N>s"; REQ-ORCH-108, the report condenses what already happened;
@@ -13300,7 +13306,8 @@ The two recommendations weighed, and the ruling followed **both**:
 
 **Reopening condition:** more than one `write_scope` refusal for a non-writer in a duress run; a refusal whose work is not
 re-routed by the coordinator's next `delegate`; a non-writer child briefed to write a file, with or without a scope (its report
-says it cannot write); or at once if any enforced bound OQ-250 lists breaks. **Costs kept on record:** still advice; about 40
+says it cannot write); or at once if any enforced bound OQ-250 lists breaks. **Reopening condition met 2026-10-15 (duress
+`2fe0a837`, two refusals); ruled as [OQ-331](#oq-331)**, which keeps this bound beside its per-task replacement. **Costs kept on record:** still advice; about 40
 tokens more on every delegating request; a model that leaves out the scope but still briefs a non-writer to write is caught only
 by the reopening limb.
 
@@ -15037,6 +15044,81 @@ holds windows whose projects are idle, where a per-project one needs integration
 state that refuses leaves a close no answer can pass, where one that allows can cut an integration off.
 
 **What a live run then shows.** Nothing: no build integrates a worktree, so no live scenario reaches the guard.
+
+<a id="oq-331"></a>
+
+**OQ-331 — What bound does a duress run's write-scope refusals meet, when its request routes two file tasks to personas that write
+no files?** *(REQ-TOOLS-152's `write_scope` as [`PD-TOOLS-006`](../product/directives.md#pd-tools-006) narrows it: revision 3's
+refusal of a scope for a persona that writes no files, revision 4's catalogue, revision 8's routing sentence and revision 9's
+write-scope sentence and field description; REQ-ORCH-028, the routing table that sends design to `architect` and final acceptance to
+`verifier`; OQ-216's target of zero, falsified 2026-10-13; [OQ-257](#oq-257)'s bound of "at most one refusal per duress
+run"; [OQ-250](#oq-250)'s enforced bounds. Raised 2026-10-15 from finding F6 of fin46's final acceptance (round 2 at `3c03287`),
+whose duress live run met OQ-257's reopening condition; the plan's range OQ-361 to OQ-380 does not hold it, because the consortium
+written at the number the consortium's ruling names. **Ruled 2026-10-15.**)*
+
+**What is open.** In the duress run at `3c03287` (pack `2026-10-15T04-01-06-491Z`, session `2fe0a837`, 2,820 s, 308 calls, 7
+children all succeeded), with revision 9's write-scope sentence and field description in every delegating request, the coordinator
+gave a write scope to a persona that writes no files twice: `#105` (task `wave2-decisions`, `architect`, `docs/decisions.md`), refused
+in 7 ms before any record and re-routed by the next `delegate` 26.9 s later (`#126`, the architect without a scope, its answer then
+handed to a docs-writer at `#204` through `inherited_context`); and `#231` (task `wave3-verify`, `verifier`, `docs/verification.md`),
+refused in 17 ms and re-routed 15.9 s later to a `tester` (`#232`). The live run's NOTE read "write-scope refusals over OQ-257's bound
+(reopens OQ-257) — duress: 2 write-scope refusals in one run". Every other limb held: each refusal came before any record, each was
+re-routed by the coordinator's next request, and no non-writer child was briefed to write. Over the duress runs since OQ-216's target
+the count has read **1, 1, 1, 1, 2** (`a68f121` `#115`; `552d346` `#92`; the two `b9e3005` packs, 05:15 and 14:29, one each;
+`2fe0a837` two). The duress request itself names two file tasks whose route is a non-writer's: wave 2's decisions document (design,
+`architect`) and wave 3's verification report (final acceptance, `verifier`). A bound of one per run counts the run, not the work.
+
+**What the build proceeds under.** `PD-TOOLS-006` revision 9 as built: the sentences, the refusal and the routing table unchanged;
+the harness flags the run under OQ-257's bound of one.
+
+**Ruled 2026-10-15 by the consortium under the owner's delegation ([R-072](../product/requests.md#r-072)), with no directive:**
+`PD-TOOLS-006` revision 9 is confirmed as built — `delegate`'s write-scope sentence, the field's description, revision 3's refusal
+and the routing table do not change. OQ-257's bound is falsified at `2fe0a837` and replaced by a bound **counted per task**: a run
+may have at most one write-scope refusal for each task of its request that routes to a persona writing no files — two in the duress
+run (`docs/decisions.md` and `docs/verification.md`), none in any other scenario — each refused before any record exists and
+re-routed by the same agent's next `delegate` within 60 s; no task is refused twice, and no non-writer is briefed to write. The
+directive's case and behaviour are unchanged, so **no revision 10 is written for it**; revision 9's cost bullet is reported back in
+place under revision 9's first execution, its old bound quoted beside the new one, and REQ-TOOLS-152's and REQ-ORCH-028's
+back-pointers stand as they are.
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended confirming revision 9 as built and restating the bound as what a user meets: each
+  piece of work refused at most once, before any record, and re-routed correctly by the next `delegate` within 60 s, the duress
+  run's two documents whose route persona writes nothing allowing two refusals. Three rounds of wording (revisions 4, 8 and 9) left
+  the count at one or two a run, and a fourth would add tokens to every delegating request for no measured gain. The ruling took
+  A's 60 s re-route limb (the harness already measures the seconds, and the largest on record is 30.0 s) and A's key for repeated
+  work: the same `write_scope` paths or the same `task_name`.
+- **Advocate B (the system's lens)** recommended the same confirmation with the bound held per scenario as a constant (two for
+  duress, zero elsewhere), so any refusal in the default run is still flagged; the red-first harness cases; OQ-216's update; and no
+  directive revision, since no behaviour changes. The ruling took all four: revision 9's cost bullet is reported back in place, its
+  falsified text quoted beside its replacement, as the standing first-execution rule asks. Neither advocate argued for deferring,
+  which would leave the NOTE raising a false reopening on every duress pack.
+
+~~At most one `write_scope` refusal for a non-writer per duress run.~~ **Falsified 2026-10-15 at `2fe0a837` and replaced by:** at
+most one refusal per task of the run's request routed to a non-writer (two in duress, zero elsewhere), no work refused twice, each
+re-routed by the same agent's next `delegate` within 60 s.
+
+**Reopening condition:**
+- refusals in a run over that run's count of tasks routed to non-writers (two in duress, zero elsewhere);
+- the same work refused twice (the same set of `write_scope` paths, or the same `task_name`);
+- a refusal not re-routed by the same agent's next `delegate`, or re-routed after more than 60 s;
+- a non-writer briefed to write, with or without a scope;
+- any enforced bound OQ-250 lists broken.
+
+**What a live run then shows.** In the duress run each request carries the same `delegate` sentence and field description; at most
+two write-scope refusals for a non-writer, one for the decisions document and one for the verification report, each refused before
+any record and re-routed by the coordinator's next `delegate` within 60 s, and no task refused twice. A run shaped like `2fe0a837`
+prints the seconds to re-route and raises no reopening NOTE. Any refusal in the default run or another scenario is flagged as a
+reopening of OQ-331.
+
+*Built 2026-10-15 (fin47, `fin47-delegation-routing`), harness only — no product code changes:* `routingMissReading`
+(`apps/desktop/scripts/lib/routing-misses.mjs`) reads each session's `nonWriterFileTasks`, which `live-run.mjs` supplies from
+`NON_WRITER_FILE_TASKS` (2 for duress, 0 for every other scenario), and flags refusals over it, the same work refused twice and a
+re-route after more than 60 s, beside its existing flags for a refusal with no later `delegate` and one the next `delegate` does not
+re-route; the NOTE reads "write-scope refusals over OQ-331's bound (reopens OQ-331)". Pinned by `lib/routing-misses.test.ts`: the
+`2fe0a837` shape is not flagged, and a repeat refusal of the same paths under a new `task_name`, three refusals in duress, one refusal
+in a scenario with none routed to a non-writer and a re-route after 61 s are each flagged — each red on the code before. The row is in
+[`first-executions.md`](first-executions.md).
 
 <a id="oq-400"></a>
 

@@ -40,7 +40,11 @@ open by the runtime (a patch of the pinned distribution, which OQ-273 rejected a
 or mending the files itself (OQ-273's rejected (c), and more). The choice is raised as
 [OQ-362](../architecture/open-questions.md#oq-362) and left for the consortium (R-072). **Pinned red until then** by
 `code-intel-proof` launch 13 (`child-rename-cold-js`), the live fixture's shape in the built app, held to the proof's end as launch
-11 is; and by the live `rename` scenario's check above, which failed at `3c03287`.
+11 is; and by the live `rename` scenario's check above, which failed at `3c03287`. Launch 13's first runs, built from fin47's branch
+(`--steps=10,11,13`, load 1.98 rising to 4.26 on four CPUs): launches 10 and 11 green ("(2 changes applied)", both files each);
+launch 13 red as the live run was — "(1 changes applied)", `src/cold-c.js` alone, `src/cold-d.js` still importing `countLeft`,
+report and artifact listing the one file. Its instrument, shown working once by a control run not committed (the same launch with
+an empty `jsconfig.json` written into its workspace, load 3.35): "(2 changes applied)", both files, `PASSED`.
 
 *The note's original text, its specs and its first outcome follow unchanged; the outcome's "Repaired" holds for a workspace whose
 files a `tsconfig.json` or `jsconfig.json` covers, and is falsified for one with no such file.*

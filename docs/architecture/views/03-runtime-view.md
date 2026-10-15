@@ -1473,6 +1473,14 @@ set, and are checked only on a write that marks a task IN_PROGRESS; an item whos
 write *(until 2026-10-15: since `PD-TOOLS-008` revision 4 the count reads the served set, below)*. `PD-TOOLS-008`'s sentence gains
 a hint for an agent whose resolved set holds `delegate`.
 
+**A `replace` gives the ids (REQ-TOOLS-144; fin47, acceptance finding A6).** Before anything in `replace` reads an id,
+`resolveIds` resolves each incoming phase's and task's: kept when the list holds it and no earlier entry of the call took it,
+otherwise a generated eight-hex id unique in the list, the entry then being a new phase or task. Every read below — protection,
+`closes`, `newlyMarked`, `activeProtected`, `actives`, the held and served exemptions — sees the resolved id, and the success
+sentence names each replacement ("New ids replace the ones sent for <name> (<id>) as '<sent>', …; target them by these.") before
+any "Kept as they were". Until 2026-10-15 a task matching no protected one was stored under `t.id ?? hexId()`, so the model's own
+id (`impl101`) was kept and two tasks sent with one were stored under it.
+
 **A `replace` closes a delegated item once its child has ended (`PD-TOOLS-008` revision 3; OQ-255 ruled 2026-10-13 under R-072;
 fin37).** Beside the held set the `todo` tool reads `ctx.servedTodoItems` at each call (`TodoToolOptions.served`), which both
 `toolsFor` closures fill from `Run.servedTodoItems` → `IterationChildren.servedTodoItems`: the `todo_item` of every child the

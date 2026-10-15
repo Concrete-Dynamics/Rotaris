@@ -1628,11 +1628,14 @@ describe('todo (REQ-TOOLS-144..147)', () => {
 
     it('PD-TOOLS-008\'s sentence counts only unheld tasks, and carries the delegation hint only for a caller holding delegate', async () => {
       const held = new Set<string>(['aaaaaaaa']);
-      const t = todoTool(new TodoList(), { held: () => held, delegates: true });
+      // The list holds the held item (PENDING here, so it is this list that marks it): since A6 a replace keeps only an id the list
+      // holds, and an id it does not hold names a new task, which no delegation holds.
+      const withHeld = () => new TodoList({ phases: [{ id: 'bbbbbbbb', name: 'main', tasks: [{ id: 'aaaaaaaa', name: 'held', description: '', state: 'PENDING' }] }] });
+      const t = todoTool(withHeld(), { held: () => held, delegates: true });
       // a held id the list carries as IN_PROGRESS beside one unheld is not two
       const ok = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: 'aaaaaaaa', name: 'held', state: 'IN_PROGRESS' }, { name: 'own', state: 'IN_PROGRESS' }] }] }, ctx());
       expect(ok.isError).toBe(false);
-      const d = todoTool(new TodoList(), { held: () => held, delegates: true });
+      const d = todoTool(withHeld(), { held: () => held, delegates: true });
       const two = await d.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: 'aaaaaaaa', name: 'held', state: 'IN_PROGRESS' }, { name: 'a', state: 'IN_PROGRESS' }, { name: 'b', state: 'IN_PROGRESS' }] }] }, ctx());
       expect(two.text).toBe("Only one task can be IN_PROGRESS at a time. The submitted list marks 2 tasks IN_PROGRESS ('a', 'b'), so the replace was rejected and nothing was saved. Send it again with at most one task IN_PROGRESS. Leave the items you will delegate PENDING: a delegate call that names one in todo_item marks it IN_PROGRESS.");
       const plain = todoTool(new TodoList(), { held: () => held });
@@ -1703,7 +1706,9 @@ describe('todo (REQ-TOOLS-144..147)', () => {
       const two = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: impl, name: 'impl', state: 'IN_PROGRESS' }, { name: 'a', state: 'IN_PROGRESS' }] }] }, ctx());
       expect(two.text).toBe(`Only one task can be IN_PROGRESS at a time. Active task: ${verify} (verify). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`);
       // and this directive's sentence counts only the unserved tasks a list marks: a served id sent IN_PROGRESS is not one of them
-      const fresh = todoTool(new TodoList(), { held: () => new Set(), served: () => new Set([impl]) });
+      // The list holds the served item (PENDING here, so it is this list that marks it): since A6 a replace keeps only an id the
+      // list holds, and an id it does not hold names a new task, which no delegation serves.
+      const fresh = todoTool(new TodoList({ phases: [{ id: 'bbbbbbbb', name: 'main', tasks: [{ id: impl, name: 'impl', description: '', state: 'PENDING' }] }] }), { held: () => new Set(), served: () => new Set([impl]) });
       const one = await fresh.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: impl, name: 'impl', state: 'IN_PROGRESS' }, { name: 'a', state: 'IN_PROGRESS' }] }] }, ctx());
       expect(one.isError).toBe(false);
     });
@@ -1863,6 +1868,67 @@ describe('todo (REQ-TOOLS-144..147)', () => {
     const bare = await t.execute({ operation: 'add_phase' }, ctx());
     expect(bare.text).toContain('Available phases: main');
     expect(bare.text).not.toContain('replace');
+  });
+
+  /*
+   * Acceptance finding A6 (docs/defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md): the default live run
+   * at 3c03287 (delegation-swarm, session 3e4b7210, #6) sent four new tasks as `impl101`, `test101`, `doc101` and `verify101`,
+   * and `replace` stored each under the id the model chose. REQ-TOOLS-144: ids are stable and auto-generated, and targeting is
+   * by id, so an id the list does not hold is the tool's to give, and no two stored tasks share one.
+   */
+  describe('a replace gives its own id to a phase or task the list does not hold (REQ-TOOLS-144)', () => {
+    const HEX8 = /^[0-9a-f]{8}$/;
+    it('an unknown id is replaced by a generated one, and the result says which', async () => {
+      const list = new TodoList();
+      const t = todoTool(list);
+      const r = await t.execute({ operation: 'replace', phases: [{ id: 'plan1', name: 'main', tasks: [
+        { id: 'impl101', name: 'impl', state: 'PENDING' }, { id: 'test101', name: 'tests' }, { name: 'docs' },
+      ] }] }, ctx());
+      expect(r.isError).toBe(false);
+      const ids = [list.phases[0]!.id, ...list.phases[0]!.tasks.map((x) => x.id)];
+      for (const id of ids) expect(id).toMatch(HEX8);
+      expect(new Set(ids).size).toBe(4);
+      const [, impl, tests] = ids;
+      expect(r.text.split('\n')[0]).toBe(`Replaced the todo list: 1 phase, 3 tasks. New ids replace the ones sent for main (${ids[0]}) as 'plan1', impl (${impl}) as 'impl101' and tests (${tests}) as 'test101'; target them by these.`);
+      expect((await t.execute({ operation: 'update', task_id: 'impl101', state: 'COMPLETED' }, ctx())).text).toMatch(/^Unknown task id 'impl101'\./);
+      expect((await t.execute({ operation: 'update', task_id: impl!, state: 'COMPLETED' }, ctx())).isError).toBe(false);
+    });
+
+    it('two tasks sent with one unknown id are stored under two ids, each reachable alone', async () => {
+      const list = new TodoList();
+      const t = todoTool(list);
+      await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: 'x1', name: 'first' }, { id: 'x1', name: 'second' }] }] }, ctx());
+      const [a, b] = list.phases[0]!.tasks;
+      expect(a!.id).not.toBe(b!.id);
+      expect((await t.execute({ operation: 'update', task_id: b!.id, state: 'COMPLETED' }, ctx())).isError).toBe(false);
+      expect(list.phases[0]!.tasks.map((x) => `${x.name}:${x.state}`)).toEqual(['first:PENDING', 'second:COMPLETED']);
+    });
+
+    it('an id the list holds is kept, PENDING or protected; a second use of it in one list is a new task', async () => {
+      const list = new TodoList();
+      const t = todoTool(list);
+      await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ name: 'impl', state: 'IN_PROGRESS' }, { name: 'tests' }] }] }, ctx());
+      const phase = list.phases[0]!.id;
+      const [impl, tests] = list.phases[0]!.tasks.map((x) => x.id);
+      const r = await t.execute({ operation: 'replace', phases: [{ id: phase, name: 'main', tasks: [
+        { id: impl, name: 'impl', state: 'IN_PROGRESS' }, { id: tests, name: 'tests renamed' }, { id: tests, name: 'tests again' },
+      ] }] }, ctx());
+      expect(r.isError).toBe(false);
+      expect(list.phases[0]!.id).toBe(phase);
+      const stored = list.phases[0]!.tasks;
+      expect(stored.slice(0, 2).map((x) => `${x.id}:${x.name}:${x.state}`)).toEqual([`${impl}:impl:IN_PROGRESS`, `${tests}:tests renamed:PENDING`]);
+      expect(stored[2]!.id).toMatch(HEX8);
+      expect(stored[2]!.id).not.toBe(tests);
+      expect(r.text.split('\n')[0]).toBe(`Replaced the todo list: 1 phase, 3 tasks. New ids replace the ones sent for tests again (${stored[2]!.id}) as '${tests}'; target them by these.`);
+      // A protected id sent twice: the copy is a new task, so marking it IN_PROGRESS beside the active one is REQ-TOOLS-146's refusal.
+      const twice = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: impl, name: 'impl', state: 'IN_PROGRESS' }, { id: impl, name: 'impl copy', state: 'IN_PROGRESS' }] }] }, ctx());
+      expect(twice.text).toBe(`Only one task can be IN_PROGRESS at a time. Active task: ${impl} (impl). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`);
+      expect(list.phases[0]!.tasks).toHaveLength(3);
+    });
+
+    it('the description says the tool gives the ids', () => {
+      expect(todoTool(new TodoList()).description).toContain('Phases and tasks carry stable 8-hex ids the tool gives: a replace keeps an id the list holds and gives a new one for any other; target by id, never by name.');
+    });
   });
 
   it('the description names the fields each operation reads, which is the only per-operation guidance there is', () => {

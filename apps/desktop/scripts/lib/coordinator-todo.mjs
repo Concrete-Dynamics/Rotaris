@@ -153,8 +153,9 @@ export function todoItemReading(sessions) {
  * The task states a `Todo state:` block (REQ-TOOLS-147's rendering, `  [STATE] name (id)` and ` — description` when there is
  * one) carries, by id, or null where the text holds none.
  *
- * Any id is read, not only the eight-hex one REQ-TOOLS-144 generates: a `replace` stores a new task under the id its model sent
- * (docs/defects/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md), and until fin47 this reader matched
+ * Any id is read, not only the eight-hex one REQ-TOOLS-144 generates: until fin47 (finding A6) a `replace` stored a new task
+ * under the id its model sent (docs/defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md), so a pack
+ * recorded before it holds such ids, and until fin47 this reader matched
  * `([0-9a-f]{8})` alone, so every task of the 3c03287 swarm session (`impl101`, …) was invisible to `heldItemReading`, whose
  * checks then passed having read nothing (finding A7,
  * docs/defects/fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md). An id is a parenthesised token with

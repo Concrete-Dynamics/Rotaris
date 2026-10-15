@@ -3,8 +3,8 @@
 `todoStates` (`apps/desktop/scripts/lib/coordinator-todo.mjs`) reads the task states out of a rendered `Todo state:` block
 (REQ-TOOLS-147's `  [STATE] name (id)` lines) for `heldItemReading`, and matched a task's id with `([0-9a-f]{8})` alone. A
 `replace` stores a new task under the id its model sent
-([`../a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md`](../a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md),
-the product half, still open), so in a session whose model chose its ids every task was invisible to the reader, and the three
+([`a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md`](a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md),
+the product half, open when this note was written and repaired the same day by fin47's finding A6), so in a session whose model chose its ids every task was invisible to the reader, and the three
 checks built on it, `heldPending`, `closedWhileHeld` and `restoredOverClose`, passed having read nothing of that session.
 
 Split out 2026-10-15 by fin47 (`fin47-accept1-2`, acceptance finding A7, harness-defect) from the note above, which recorded

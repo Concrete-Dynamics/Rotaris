@@ -16,6 +16,10 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-15**
 
+**A todo `replace` gives its own id to a phase or task the list does not hold (fin47, `fin47-accept1-6`; acceptance finding A6;
+REQ-TOOLS-144, REQ-TOOLS-146).** `03-runtime-view.md` gains a paragraph before revision 3's: `resolveIds` resolves every incoming
+id first, every read of `replace` sees the resolved one, and the success sentence names each replacement. No other view changed.
+
 **A10's cases run on PowerShell (the Windows ARM64 session's B5).** Test cases and a comment in `foreground.ts` only; no view
 changed.
 

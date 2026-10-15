@@ -15363,7 +15363,8 @@ of `waitForTasks` (`packages/engine/src/children/orchestration.ts`); the live ru
 `closeLatencies` (`apps/desktop/scripts/lib/coordinator-todo.mjs`). Pinned by `tools.test.ts`, `run-host/tools.test.ts`,
 `children.test.ts`, `notify.test.ts`, `todo-item.test.ts` and `coordinator-todo.test.ts`, red on the code before but for the case
 that pins the limit. Recorded beside it, outside the ruling's repair:
-[`../defects/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md`](../defects/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md).
+[`../defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md`](../defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md)
+(repaired 2026-10-15 by fin47, finding A6).
 The row is in [`first-executions.md`](first-executions.md).
 
 <a id="oq-361"></a>

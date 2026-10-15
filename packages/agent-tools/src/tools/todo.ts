@@ -155,6 +155,36 @@ const fieldsFor = (op: string): string => ({
   remove_task: 'remove_task reads `task_id`.',
 }[op] ?? `The operations are ${OPERATIONS.join(', ')}.`);
 
+type PhaseInput = z.infer<typeof phaseInput>;
+/** A replace's incoming task or phase with the id it will be stored under; `sent` is the id the call sent in its place, if any. */
+type ResolvedTask = Omit<z.infer<typeof taskInput>, 'id'> & { readonly id: string; readonly sent?: string | undefined };
+interface ResolvedPhase { readonly id: string; readonly sent?: string | undefined; readonly name: string; readonly tasks: readonly ResolvedTask[] }
+
+/**
+ * REQ-TOOLS-144: ids are stable and auto-generated, and targeting is by id. An incoming phase or task keeps the id it was sent
+ * with only when the list holds that id and no earlier entry of the same call has taken it; any other gets a generated one, as
+ * `add_phase` and `add_task` give, and is a new phase or task. Until 2026-10-15 `replace` stored whatever id the call sent for a
+ * new task (`t.id ?? hexId()`), so a task's id was the model's word and two tasks sent with one unknown id were both stored under
+ * it (acceptance finding A6, docs/defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md).
+ */
+function resolveIds(list: TodoList, phases: readonly PhaseInput[]): ResolvedPhase[] {
+  const phaseIds = new Set(list.phases.map((p) => p.id));
+  const taskIds = new Set(list.phases.flatMap((p) => p.tasks.map((t) => t.id)));
+  const taken = new Set<string>();
+  const fresh = (): string => {
+    for (;;) { const id = hexId(); if (!phaseIds.has(id) && !taskIds.has(id) && !taken.has(id)) return id; }
+  };
+  const resolve = (sent: string | undefined, known: ReadonlySet<string>): { id: string; sent?: string } => {
+    if (sent !== undefined && known.has(sent) && !taken.has(sent)) { taken.add(sent); return { id: sent }; }
+    const id = fresh();
+    taken.add(id);
+    return sent === undefined ? { id } : { id, sent };
+  };
+  return phases.map((p) => ({ name: p.name, ...resolve(p.id, phaseIds), tasks: p.tasks.map((t) => ({ ...t, ...resolve(t.id, taskIds) })) }));
+}
+
+const listed = (items: readonly string[]): string => items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]!}`;
+
 export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecutor<z.infer<typeof todoSchema>> {
   const heldNow = (): ReadonlySet<string> => opts.held?.() ?? NONE_HELD;
   const servedNow = (): ReadonlySet<string> => opts.served?.() ?? NONE_HELD;
@@ -194,14 +224,16 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
       // PD-TOOLS-008 revision 4 (OQ-333): it said, until 2026-10-15, "a task a running delegated agent holds through todo_item is
       // not counted" — true of the code until then, and the reason a coordinator's next mark after its children ended was refused
       // naming an item the run itself had marked (the default live run at 3c03287, delegation-swarm #26).
-      'Phases and tasks carry stable 8-hex ids; target by id, never by name. At most one task IN_PROGRESS of your own; a task a delegated agent serves through todo_item, running or ended, is not counted, and a delegate call naming a PENDING task marks it IN_PROGRESS; close it with update once you accept that agent\'s report.',
+      // REQ-TOOLS-144: it said, until 2026-10-15, "Phases and tasks carry stable 8-hex ids;" — while a replace stored any id the
+      // model sent for a new task (acceptance finding A6, the default live run at 3c03287, delegation-swarm #6).
+      'Phases and tasks carry stable 8-hex ids the tool gives: a replace keeps an id the list holds and gives a new one for any other; target by id, never by name. At most one task IN_PROGRESS of your own; a task a delegated agent serves through todo_item, running or ended, is not counted, and a delegate call naming a PENDING task marks it IN_PROGRESS; close it with update once you accept that agent\'s report.',
     ].join(' '),
     schema: todoSchema,
     label: (a) => `todo ${a.operation}`,
     execute: async (a) => {
       switch (a.operation) {
         case 'replace': {
-          const incoming = a.phases ?? [];
+          const incoming = resolveIds(list, a.phases ?? []);
           const held = heldNow();
           const served = servedNow();
           const exempt = exemptNow(held, served);
@@ -215,7 +247,7 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
            */
           const closes = new Map<string, TodoState>();
           for (const p of incoming) for (const t of p.tasks) {
-            if (t.id === undefined || closes.has(t.id) || !CLOSED.has(t.state) || !served.has(t.id) || held.has(t.id)) continue;
+            if (closes.has(t.id) || !CLOSED.has(t.state) || !served.has(t.id) || held.has(t.id)) continue;
             if (protectedTasks.some((x) => x.task.id === t.id && x.task.state === 'IN_PROGRESS')) closes.set(t.id, t.state!);
           }
           const protectedActive = new Set(protectedTasks.filter((x) => x.task.state === 'IN_PROGRESS').map((x) => x.task.id));
@@ -226,7 +258,7 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
            * list could carry only one running delegation's item (OQ-249).
            */
           // Revision 4 (OQ-333): a served task, running or ended, is exempt where revision 2 exempted a held one.
-          const newlyMarked = incoming.flatMap((p) => p.tasks.filter((t) => t.state === 'IN_PROGRESS' && !(t.id !== undefined && (protectedActive.has(t.id) || exempt.has(t.id)))));
+          const newlyMarked = incoming.flatMap((p) => p.tasks.filter((t) => t.state === 'IN_PROGRESS' && !protectedActive.has(t.id) && !exempt.has(t.id)));
           const activeProtected = protectedTasks.find((x) => x.task.state === 'IN_PROGRESS' && !exempt.has(x.task.id) && !closes.has(x.task.id));
           // REQ-TOOLS-146: a replace that marks some OTHER task IN_PROGRESS while an unserved protected active task exists is rejected.
           if (activeProtected && newlyMarked.length > 0) {
@@ -236,7 +268,7 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
           // state, and an omitted one, differ from nothing.
           const kept: string[] = [];
           const next: TodoPhase[] = incoming.map((p) => ({
-            id: p.id ?? hexId(), name: p.name,
+            id: p.id, name: p.name,
             tasks: p.tasks.map((t) => {
               const prot = protectedTasks.find((x) => x.task.id === t.id);
               if (prot) {
@@ -245,7 +277,7 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
                 if (t.state !== undefined && t.state !== prot.task.state) kept.push(`${prot.task.name} (${prot.task.id}) ${prot.task.state}, ${keptReason(prot.task, t.state, held.has(prot.task.id))}`);
                 return { ...prot.task };
               }
-              return { id: t.id ?? hexId(), name: t.name ?? t.title ?? 'task', description: t.description ?? '', state: t.state ?? 'PENDING' };
+              return { id: t.id, name: t.name ?? t.title ?? 'task', description: t.description ?? '', state: t.state ?? 'PENDING' };
             }),
           }));
           // a protected task the incoming list omits is kept, in its existing position
@@ -263,7 +295,9 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
           if (actives.length > 1) return errorObservation(listMarksSeveralActive(actives.map((t) => t.name), typeof opts.delegates === 'function' ? opts.delegates() : opts.delegates === true));
           list.phases.splice(0, list.phases.length, ...next);
           const keptSentence = kept.length === 0 ? '' : ` Kept as they were: ${kept.join('; ')}. Change a task's state with update.`;
-          return done(`Replaced the todo list: ${countNoun(next.length, 'phase')}, ${countNoun(next.reduce((n, p) => n + p.tasks.length, 0), 'task')}.${keptSentence}`);
+          const given = incoming.flatMap((p) => [...(p.sent === undefined ? [] : [`${p.name} (${p.id}) as '${p.sent}'`]), ...p.tasks.flatMap((t) => (t.sent === undefined ? [] : [`${t.name ?? t.title ?? 'task'} (${t.id}) as '${t.sent}'`]))]);
+          const givenSentence = given.length === 0 ? '' : ` New ids replace the ones sent for ${listed(given)}; target them by these.`;
+          return done(`Replaced the todo list: ${countNoun(next.length, 'phase')}, ${countNoun(next.reduce((n, p) => n + p.tasks.length, 0), 'task')}.${givenSentence}${keptSentence}`);
         }
         case 'add_phase': {
           const name = a.name ?? a.title;

@@ -6,9 +6,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { millis, type MonotonicClock, type Timers } from '@rotaris/kernel';
 import { AiSdkModelClient, type ChatMessage, type ModelRequest, type StreamPart, type ToolSpec } from '@rotaris/model';
-// @ts-expect-error — plain ESM beside the scripts that run it.
 import { CLASSIFICATION_SCHEMA } from '@rotaris/engine';
 import { LOOP_SCHEMA } from '../../src/run-host/loop.js';
+// @ts-expect-error — plain ESM beside the scripts that run it.
 import { startStubModelEndpoint, STUB_INTENT, STUB_LOOP, STUB_REPLY } from './stub-model-endpoint.mjs';
 
 interface Stub { baseUrl: string; counts: { requests: number; toolsRequests: number; terminalCalls: number; classifications: number }; close: () => Promise<void> }

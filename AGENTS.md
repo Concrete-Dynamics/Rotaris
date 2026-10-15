@@ -376,7 +376,11 @@ confidence and rung, or the fallback and its reason, from each session's launch 
 its `intent:` line (`run_intent` has no elapsed field); each cut's bytes received from the recorded traffic, 0 being a queueing
 endpoint's — and counts the fallbacks and cuts, naming OQ-258's reopening limb where 3 in 10 launches were cut after bytes
 arrived (`lib/intent-reading.mjs`). Read over the `0bc3eee` pack it gives what that pack's autopsy found by hand: 10 launches,
-1 fell back, the requirements cut at 12.0 s after 91,112 bytes, the other nine 2.4 to 9.8 s on the strict rung.
+1 fell back, the requirements cut at 12.0 s after 91,112 bytes, the other nine 2.4 to 9.8 s on the strict rung. Since OQ-332's ruling
+(2026-10-15, R-072) each cut also prints the last 300 or so characters of the reasoning it had streamed (`reasoningTail`), so
+OQ-258's first reopening limb — a cut after the reasoning named its category and did not reopen it — is read from the NOTE; over
+the `3c03287` pack it shows faults-args reopening `single_file_change` against `explicit_trivial` and edit still weighing
+`moderate_feature` when the bound cut them.
 
 An endpoint that discovers no model catalogue is not a dead end. The sign-in takes the dialog's own "Continue
 anyway" (the zero-model recovery), the catalogue check is recorded as a **NOTE** rather than a silent pass, and

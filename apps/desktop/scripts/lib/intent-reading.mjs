@@ -9,7 +9,9 @@
  * from each preserved session's launch audit (`launch_audits.payload`'s `run_intent`, `IntentResultSchema`); the time from the
  * run host's own log, because `run_intent` carries no elapsed field — from the `session <id> started` line to the next
  * `intent:` line, which is how long the run waited on its classification; and, for a cut, whether the endpoint had sent anything
- * from the recorded traffic (the aborted request ending at the cut).
+ * from the recorded traffic (the aborted request ending at the cut), and, since OQ-332's ruling (2026-10-15, R-072), the tail of
+ * the reasoning it had streamed, so OQ-258's first reopening limb ("a classification cut after its reasoning has named its category
+ * and not reopened that choice") is read from the NOTE without an autopsy.
  *
  * Nothing here is product code. It runs only from the live run, and `intent-reading.test.ts` pins it.
  */
@@ -57,10 +59,40 @@ export function classificationTiming(log, sessionId) {
   return { startedAt: started, classifiedAt: classified, elapsedMs: classified - started };
 }
 
+/** How many of a cut's last reasoning characters the NOTE prints (OQ-332): enough to see a category settled or still weighed. */
+export const REASONING_TAIL_CHARS = 300;
+
+/**
+ * The last `chars` characters of the reasoning one recorded streamed response carried, whitespace collapsed to single spaces so the
+ * NOTE stays on one line, prefixed `…` where it was shortened; '' where it carried none. The stream is the OpenAI-compatible SSE
+ * the recorder kept verbatim (`data: {…}` chunks); the reasoning is each chunk's `delta.reasoning` (the registered self-hosted
+ * endpoint's field) or `delta.reasoning_content` (the other spelling endpoints use). The model's text is quoted, never interpreted:
+ * nothing here reads a category out of it (OQ-332 rejected taking the category a cut's reasoning named).
+ */
+export function reasoningTail(body, chars = REASONING_TAIL_CHARS) {
+  if (typeof body !== 'string' || body === '') return '';
+  const pieces = [];
+  for (const line of body.split('\n')) {
+    if (!line.startsWith('data:')) continue;
+    const data = line.slice(5).trim();
+    if (data === '' || data === '[DONE]') continue;
+    let chunk;
+    try { chunk = JSON.parse(data); } catch { continue; }
+    for (const choice of Array.isArray(chunk?.choices) ? chunk.choices : []) {
+      const delta = choice?.delta ?? {};
+      const piece = typeof delta.reasoning === 'string' ? delta.reasoning : typeof delta.reasoning_content === 'string' ? delta.reasoning_content : '';
+      if (piece !== '') pieces.push(piece);
+    }
+  }
+  const text = pieces.join('').replace(/\s+/g, ' ').trim();
+  return text.length <= chars ? text : `…${text.slice(-chars).trimStart()}`;
+}
+
 /**
  * For a cut: what the endpoint had sent before it, from the scenario's recorded traffic (`model-traffic.jsonl`'s records,
  * `{ at, ms, outcome, responseBody }`). The cut request is the aborted one that started inside the classification's window and
- * ended nearest its end. `bytes` is the length of what it received; 0 is OQ-258's queueing endpoint. Null where no record fits.
+ * ended nearest its end. `bytes` is the length of what it received; 0 is OQ-258's queueing endpoint. `tail` is the end of the
+ * reasoning it received (`reasoningTail`, OQ-332), '' where it received none. Null where no record fits.
  */
 export function cutTraffic(records, timing) {
   if (!Array.isArray(records) || timing === null) return null;
@@ -69,7 +101,7 @@ export function cutTraffic(records, timing) {
     .filter((r) => !Number.isNaN(r.at) && Number.isFinite(r.ms) && r.outcome === 'aborted' && r.at >= timing.startedAt - 1_000 && r.at <= timing.classifiedAt);
   if (candidates.length === 0) return null;
   const nearest = candidates.reduce((best, r) => (Math.abs(r.at + r.ms - timing.classifiedAt) < Math.abs(best.at + best.ms - timing.classifiedAt) ? r : best));
-  return { bytes: nearest.body.length, ms: nearest.ms };
+  return { bytes: nearest.body.length, ms: nearest.ms, tail: reasoningTail(nearest.body) };
 }
 
 /**
@@ -101,10 +133,16 @@ export function classifierReading(launches) {
 
 const seconds = (ms) => (ms === null ? 'time unread' : `${(ms / 1000).toFixed(1)} s`);
 
-/** One row as the NOTE's detail prints it: `edit small_feature 0.92 via json_schema, 3.4 s`. */
+/**
+ * One row as the NOTE's detail prints it: `edit small_feature 0.92 via json_schema, 3.4 s`; a cut also gives its bytes received
+ * and, where the endpoint streamed reasoning into it, that reasoning's tail (OQ-332).
+ */
 export function classifierRowText(row) {
+  const cutText = (traffic) => (traffic === null
+    ? ', traffic unread'
+    : `, ${traffic.bytes} byte(s) received before the cut${traffic.tail ? `, its reasoning ending "${traffic.tail}"` : ''}`);
   const how = row.fallback
-    ? `FALLBACK (${row.reason})${row.cut ? (row.traffic === null ? ', traffic unread' : `, ${row.traffic.bytes} byte(s) received before the cut`) : ''}`
+    ? `FALLBACK (${row.reason})${row.cut ? cutText(row.traffic) : ''}`
     : row.carriedOver ? 'carried over, unclassified' : `${row.confidence === null ? 'no confidence' : row.confidence}${row.rung === null ? '' : ` via ${row.rung}`}`;
   return `${row.scenario} ${row.category} ${how}, ${seconds(row.elapsedMs)}`;
 }

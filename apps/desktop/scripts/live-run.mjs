@@ -1177,7 +1177,8 @@ function checkCoordinatorTodo() {
  * OQ-258 and PD-ORCH-011 revision 2's live measure, over every preserved session (`lib/intent-reading.mjs`, item N67): each
  * launch's classification as its launch audit recorded it (category, confidence, rung, or the fallback and its reason), how long
  * the run waited on it (from its `session … started` line to its `intent:` line in the launch's own log, since `run_intent`
- * carries no elapsed field), and the count that fell back, with each cut's bytes received from the recorded traffic. A NOTE,
+ * carries no elapsed field), and the count that fell back, with each cut's bytes received from the recorded traffic and, since
+ * OQ-332's ruling (2026-10-15), the tail of the reasoning it had streamed, which OQ-258's first reopening limb reads. A NOTE,
  * never a FAIL: a fallback is REQ-ORCH-007 working, and whether the endpoint queued is the endpoint's. Until it existed the count
  * took one `autopsy.mjs` per session.
  */

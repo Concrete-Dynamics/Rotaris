@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { IntentResultSchema } from '@rotaris/contracts';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { auditIntent, classificationTiming, classifierNote, classifierReading, cutTraffic } from './intent-reading.mjs';
+import { auditIntent, classificationTiming, classifierNote, classifierReading, cutTraffic, reasoningTail } from './intent-reading.mjs';
 
 const EDIT = 'c691fa97-0318-4eca-8636-82b578d7ce17';
 const REQS = '691a07e9-e2c3-429f-9265-2878865e9494';
@@ -49,7 +49,7 @@ describe('the intent-classifier reading per launch (N67, OQ-258)', () => {
 
   it('finds the cut request in the traffic and how much the endpoint had sent into it (0 is a queueing endpoint)', () => {
     const timing = classificationTiming(reqsLog, REQS);
-    expect(cutTraffic(reqsTraffic, timing)).toEqual({ bytes: reqsTraffic[0]!.responseBody.length, ms: 11973 });
+    expect(cutTraffic(reqsTraffic, timing)).toEqual({ bytes: reqsTraffic[0]!.responseBody.length, ms: 11973, tail: '' });
     expect(cutTraffic([{ ...reqsTraffic[0], responseBody: '' }], timing)?.bytes).toBe(0);
     expect(cutTraffic([reqsTraffic[1]], timing)).toBeNull();
     expect(cutTraffic(null, timing)).toBeNull();
@@ -87,5 +87,40 @@ describe('the intent-classifier reading per launch (N67, OQ-258)', () => {
     expect(carried.carried).toBe(1);
     expect(classifierNote(carried).detail).toBe('resume small_feature carried over, unclassified, time unread');
     expect(classifierNote(classifierReading([])).detail).toBe('no launch audit carried an intent');
+  });
+});
+
+/**
+ * OQ-332 (ruled 2026-10-15 under R-072): the cut's reasoning tail, so OQ-258's first reopening limb — "a classification cut after
+ * its reasoning has named its category and not reopened that choice" — is read from the NOTE. The chunks are the registered
+ * endpoint's shape (`delta.reasoning`), as faults-args' record 0 in pack `2026-10-15T03-10-08-908Z` recorded them; its reasoning
+ * named `single_file_change` and then reopened the choice.
+ */
+describe('a cut\'s reasoning tail in the NOTE (OQ-332)', () => {
+  const chunk = (delta: Record<string, unknown>) => `data: ${JSON.stringify({ id: 'c', object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`;
+  const said = 'Let\'s settle: single_file_change. Confidence 0.85.\n\nBut if explicit_trivial preferred? Let\'s re-evaluate. The categories: explicit_trivial, question';
+  const stream = chunk({ role: 'assistant', content: '' }) + said.match(/.{1,9}/gs)!.map((p) => chunk({ reasoning: p })).join('');
+
+  it('joins the streamed reasoning, collapses its whitespace and keeps the last characters, marked where shortened', () => {
+    expect(reasoningTail(stream)).toBe(said.replace(/\s+/g, ' '));
+    expect(reasoningTail(stream, 40)).toBe(`…${said.replace(/\s+/g, ' ').slice(-40).trimStart()}`);
+    // The other spelling endpoints use, answer text that is not reasoning, a [DONE] line and a malformed chunk.
+    const other = chunk({ reasoning_content: 'weighing small_feature' }) + chunk({ content: '{"intent":' }) + 'data: [DONE]\n\ndata: {not json\n\n';
+    expect(reasoningTail(other)).toBe('weighing small_feature');
+    expect(reasoningTail('')).toBe('');
+    expect(reasoningTail(null)).toBe('');
+    expect(reasoningTail('data: {"choices":[]}\n')).toBe('');
+  });
+
+  it('prints the tail of each cut beside its bytes, and nothing more where the endpoint streamed no reasoning', () => {
+    const big = chunk({ reasoning: 'x'.repeat(500) }) + chunk({ reasoning: ' But if explicit_trivial preferred? Let\'s re-evaluate.' });
+    const traffic = [{ at: '2026-10-13T12:23:04.390Z', ms: 11972, outcome: 'aborted', responseBody: big }];
+    const cut = cutTraffic(traffic, classificationTiming(reqsLog, REQS));
+    expect(cut?.tail).toHaveLength(301);
+    expect(cut?.tail.endsWith('But if explicit_trivial preferred? Let\'s re-evaluate.')).toBe(true);
+    const reading = classifierReading([{ scenario: 'faults-args', sessionId: REQS, payload: reqsAudit, log: reqsLog, traffic }]);
+    expect(classifierNote(reading).detail).toBe(`faults-args moderate_feature FALLBACK (the classification call timed out after 12 s), ${big.length} byte(s) received before the cut, its reasoning ending "${cut!.tail}", 12.0 s`);
+    const quiet = classifierReading([{ scenario: 'terminal', sessionId: REQS, payload: reqsAudit, log: reqsLog, traffic: [{ ...traffic[0], responseBody: '' }] }]);
+    expect(classifierNote(quiet).detail).toBe('terminal moderate_feature FALLBACK (the classification call timed out after 12 s), 0 byte(s) received before the cut, 12.0 s');
   });
 });

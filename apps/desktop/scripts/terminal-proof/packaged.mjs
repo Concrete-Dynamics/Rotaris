@@ -39,7 +39,8 @@
  * while `pnpm notices` refuses; first-release-plan.md §4.4). Absent, this REFUSES and says so; it never passes quietly
  * and never falls back to the development build, which would not be the packaged application. `--app=<out/main/index.js>`
  * (standalone) or `app` (the export) names a SEAM-FREE `ROTARIS_BUILD=package` build to launch under Electron instead, for a
- * host without the Windows package (IC-3); it is refused unless the seam check finds that build seam-free, and the result
+ * host without the Windows package (which waits on a Windows x64 host, deferred with the release pipeline under R-071; IC-3
+ * binds Linux and macOS artifacts, and this bundle is none); it is refused unless the seam check finds that build seam-free, and the result
  * names it as `target`.
  */
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';

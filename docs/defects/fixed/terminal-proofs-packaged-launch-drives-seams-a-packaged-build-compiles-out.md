@@ -12,7 +12,8 @@ written (`autoOpenedStreams`). The checks gain a sixth, `bothCallsFromTheShipped
 needed: main's log line is the product's own output in every build, not a seam. The packaged section no longer reads the
 toolbar's session total (REQ-SHELL-108) or the preview blocks, which the development build's Electron half still reads.
 `--app=<out/main/index.js>` (and `app` on the export) launches a `ROTARIS_BUILD=package` bundle under Electron for a host without
-the Windows package (IC-3), and is refused unless the seam check passes on it.
+the Windows package (a Windows x64 host, deferred with the release pipeline under R-071; IC-3 binds Linux and macOS artifacts),
+and is refused unless the seam check passes on it.
 
 Confirmed and pinned by `apps/desktop/scripts/terminal-proof/packaged.test.ts`. Six of its seven cases failed on the launch
 before the repair, among them "each launch names an OpenAI-compatible model at its own loopback stub, the auto-open preference

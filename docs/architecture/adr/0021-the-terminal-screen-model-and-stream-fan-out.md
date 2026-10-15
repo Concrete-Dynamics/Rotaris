@@ -581,8 +581,9 @@ in part: the window is now opened under the launch, though its DOM is still not 
 preview blocks are no longer read in the packaged section, because a packaged renderer has no reading but its photograph. They
 remain read in the development build by the proof's Electron half. A sixth check, that each terminal call came from the stub
 through the shipped client, joins the five. **Measured 2026-10-15 on Linux** against a `ROTARIS_BUILD=package` bundle whose seam
-check passed, under Electron (`--app=`, the section's new option for a host without the Windows package, IC-3; it refuses a
-build the seam check fails). Load was 2.16 to 1.71 on 4 CPUs. With the key on, the terminal window auto-opened for `fg:orchestrator`;
+check passed, under Electron (`--app=`, the section's new option for a host without the Windows package, which waits on a Windows x64 host deferred with
+the release pipeline under R-071 (IC-3 binds Linux and macOS artifacts, and this bundle is none); it refuses a build the seam
+check fails). Load was 2.16 to 1.71 on 4 CPUs. With the key on, the terminal window auto-opened for `fg:orchestrator`;
 with it off, nothing opened. Both `terminal` calls were `ok`, not errors, with byte-identical observations. Both launches painted
 and exited 0, and the stub served each 2 tools requests and 1 terminal call. All six checks were true. **Not measured:** the
 Windows package itself (no Windows host in this session).*

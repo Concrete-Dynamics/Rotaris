@@ -227,8 +227,8 @@ environment, its console-script launchers trimmed — and `bundle.json`, the mar
 interpreter's own answers. `apps/desktop/scripts/code-intelligence/pins.json` is the one place the build pins the
 interpreter, the distribution and `uv` (by version and sha256; never shipped); `bundle.mjs` builds the tree
 (`pnpm code-intel:bundle`, idempotent on the marker; the build fetches, the product never does) for one target
-architecture — since OQ-400 (2026-10-15) `--target=<platform>-<arch>`, the host by default and `win32-x64` from
-`package.mjs`, the interpreter installed by its full uv key and the target's architecture in the marker and its hash
+architecture — since OQ-400 (2026-10-15) `--target=<platform>-<arch>`, the host by default (since 2026-10-16, OQ-401's
+reading, `win32-x64` on a Windows ARM64 host, `defaultTargetKey`) and `win32-x64` from `package.mjs`, the interpreter installed by its full uv key and the target's architecture in the marker and its hash
 (`target.mjs`), a Windows ARM64 host using the pinned `win32-x64` uv; `build-hooks.cjs`'s `afterPack` refuses a packaged
 interpreter whose PE machine field is not the artifact's (`peArchOf`, `checkRuntime`); `manifest.mjs`
 starts the bundled runtime, reads `tools/list` and its version and the extensions it indexes, and **generates**

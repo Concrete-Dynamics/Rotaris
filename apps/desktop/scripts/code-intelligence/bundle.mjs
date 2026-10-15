@@ -35,7 +35,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { interpreterKey, parseTarget, pinsHashInput, uvAssetFor } from './target.mjs';
+import { defaultTargetKey, interpreterKey, parseTarget, pinsHashInput, uvAssetFor } from './target.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = resolve(HERE, '..', '..');
@@ -116,7 +116,7 @@ function upToDate() {
 const hostKey = `${process.platform}-${process.arch}`;
 if (check) {
   if (upToDate()) { log(`up to date for ${target.key} (${MARKER})`); process.exit(0); }
-  fail(`the bundle is absent or stale for ${target.key} at ${TARGET}; run pnpm code-intel:bundle${target.key === hostKey ? '' : ` --target=${target.key}`}`);
+  fail(`the bundle is absent or stale for ${target.key} at ${TARGET}; run pnpm code-intel:bundle${target.key === defaultTargetKey({ platform: process.platform, arch: process.arch }) ? '' : ` --target=${target.key}`}`);
 }
 if (!force && upToDate()) { log(`up to date for ${target.key} — marker ${MARKER} carries the pins' hash; --force rebuilds`); process.exit(0); }
 if (process.platform !== 'win32' && process.platform !== 'linux') fail('only Windows and Linux bundles are currently supported');

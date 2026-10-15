@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { interpreterKey, parseTarget, pinsHashInput, uvAssetFor } from './target.mjs';
+import { defaultTargetKey, interpreterKey, parseTarget, pinsHashInput, uvAssetFor } from './target.mjs';
 
 const PINS = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'pins.json'), 'utf8')) as {
   python: string; distribution: string; version: string;
@@ -19,8 +19,18 @@ const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 
 describe('parseTarget — the artifact the bundle is for, never by default the build host', () => {
   it('names the host when no target is given: the development tree runs on it', () => {
-    expect(parseTarget([], { platform: 'win32', arch: 'arm64' })).toEqual({ platform: 'win32', arch: 'arm64', key: 'win32-arm64' });
     expect(parseTarget(['--force'], { platform: 'linux', arch: 'x64' })).toEqual({ platform: 'linux', arch: 'x64', key: 'linux-x64' });
+    expect(parseTarget([], { platform: 'win32', arch: 'x64' })).toEqual({ platform: 'win32', arch: 'x64', key: 'win32-x64' });
+    expect(parseTarget([], { platform: 'linux', arch: 'arm64' })).toEqual({ platform: 'linux', arch: 'arm64', key: 'linux-arm64' });
+  });
+  // OQ-401 (raised 2026-10-16, the build's reading): on Windows ARM64 six dependencies have no `win_arm64` wheel and an arm64
+  // bundle cannot be built without a C and a Rust compiler, so the development tree takes the artifact's `win32-x64` bundle,
+  // run under emulation (docs/defects/no-code-intelligence-bundle-can-be-built-for-a-windows-arm64-development-tree.md). It
+  // read `win32-arm64` until then.
+  it('names win32-x64 on a Windows ARM64 host when no target is given, and still takes --target=win32-arm64 where one is named', () => {
+    expect(parseTarget([], { platform: 'win32', arch: 'arm64' })).toEqual({ platform: 'win32', arch: 'x64', key: 'win32-x64' });
+    expect(defaultTargetKey({ platform: 'win32', arch: 'arm64' })).toBe('win32-x64');
+    expect(parseTarget(['--target=win32-arm64'], { platform: 'win32', arch: 'arm64' })).toEqual({ platform: 'win32', arch: 'arm64', key: 'win32-arm64' });
   });
   it('takes --target over the host: package.mjs builds win32-x64 on an ARM64 host', () => {
     expect(parseTarget(['--target=win32-x64'], { platform: 'win32', arch: 'arm64' })).toEqual({ platform: 'win32', arch: 'x64', key: 'win32-x64' });

@@ -15748,3 +15748,35 @@ loaded". The confinement gate no longer refuses a retrospective at all (the same
 **What a proof then shows.** `retrospective-proof` with a workspace whose `default_persona` is unknown: under (a) the gesture's
 error notice carries "names no role this build knows" and nothing is stored; under (b) or (c) the pass stores its artifact and
 no refusal notice is raised.
+
+<a id="oq-401"></a>
+
+**OQ-401 — Which code-intelligence bundle does a development tree on a Windows ARM64 host carry?** *([OQ-400](#oq-400)'s
+ruling, part (c), which builds the bundle's interpreter "for the target artifact's architecture" and, on `win32-arm64`, uses
+the pinned `win32-x64` uv under the operating system's x64 emulation; REQ-STARTUP-026, which publishes no `windows-arm64`
+artifact; REQ-STARTUP-015 and ADR-0035, the bundled runtime; IC-7's pins. Raised 2026-10-16 by the Windows 11 ARM64
+session (`win-arm64-measure`), the session's range OQ-400 to OQ-449, its second number; the owner chose this course in the
+session the same day.)*
+
+**What is open.** OQ-400 settled the artifact: `package.mjs` passes `--target=win32-x64`, and packaging refuses an interpreter
+of another architecture. It did not say what a development tree on an ARM64 host carries, and fin47 built the default as the
+host's own target. On Windows 11 ARM64 that is an arm64 interpreter, and six of `serena-agent` 1.7.0's dependencies publish no
+`win_arm64` wheel (`tiktoken` and `cryptography` need Rust; `psutil`, `pyyaml` and `ruamel-yaml-clib` need C), so with no
+compilers the bundle cannot be built, and every check that needs it refuses: the live run, `init-proof`,
+`code-intel-proof` ([the note](../defects/no-code-intelligence-bundle-can-be-built-for-a-windows-arm64-development-tree.md)).
+
+**What the build proceeds under.** On a `win32-arm64` host, a bundle step given no `--target` builds for `win32-x64`: the
+interpreter is the pinned x86_64 one, its dependencies the `win_amd64` wheels, and Windows runs it under its x64 emulation,
+as it runs the `win32-x64` uv already. `--check`, and every caller of it, then reads the same target, so the development
+tree's bundle is the artifact's. Any other host keeps its own target. An explicit `--target` is unchanged. The development
+tree's code intelligence on this host is therefore an emulated x64 runtime, which OQ-400 (b) counts as informing, never as
+an x64 result.
+
+**What a ruling decides.** Whether a Windows ARM64 development tree carries the `win32-x64` bundle (the reading above), or its
+own arm64 bundle built from source (which needs a C and a Rust toolchain on every such host, and a pinned build of six
+packages), or none (the checks that need it then stay unrun on such a host). **The costs:** the x64 bundle runs emulated and
+measures nothing arm64 of the runtime; an arm64 build adds two toolchains and a source build to a development host for a
+platform no release ships; none leaves the live run and three proofs unrunnable there.
+
+**What a live run then shows.** Under the reading, a live run on this host runs its code-intelligence server as the emulated
+x64 runtime, and its discovery line says whether that works.

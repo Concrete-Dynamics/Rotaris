@@ -14,6 +14,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-10-16**
+
+**A Windows ARM64 development tree's bundle is the win32-x64 one (the Windows ARM64 session; OQ-401, the build's reading).**
+`01-component-view.md`'s bundled-runtime sentence says `--target` defaults to `win32-x64` on a Windows ARM64 host
+(`defaultTargetKey` in `target.mjs`), where it read "the host by default" alone. No package, edge or process changed.
+
 Last reconciled with the code: **2026-10-15**
 
 **The `worktree_subpath` report says the rest of the configuration loaded (fin47, `fin47-accept1-6`; acceptance finding A8;

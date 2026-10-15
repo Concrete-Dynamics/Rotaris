@@ -15053,7 +15053,7 @@ refusal of a scope for a persona that writes no files, revision 4's catalogue, r
 write-scope sentence and field description; REQ-ORCH-028, the routing table that sends design to `architect` and final acceptance to
 `verifier`; OQ-216's target of zero, falsified 2026-10-13; [OQ-257](#oq-257)'s bound of "at most one refusal per duress
 run"; [OQ-250](#oq-250)'s enforced bounds. Raised 2026-10-15 from finding F6 of fin46's final acceptance (round 2 at `3c03287`),
-whose duress live run met OQ-257's reopening condition; the plan's range OQ-361 to OQ-380 does not hold it, because the consortium
+whose duress live run met OQ-257's reopening condition; the plan's range OQ-361 to OQ-380 does not hold it, because it is
 written at the number the consortium's ruling names. **Ruled 2026-10-15.**)*
 
 **What is open.** In the duress run at `3c03287` (pack `2026-10-15T04-01-06-491Z`, session `2fe0a837`, 2,820 s, 308 calls, 7

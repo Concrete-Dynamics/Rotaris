@@ -1427,14 +1427,6 @@ async function main(): Promise<void> {
     closeConfirmed: (wcId) => { quit.closeConfirmed(wcId); },
     closeGuard: (wcId, guard) => { if (guard) closeGuards.set(wcId, guard); else closeGuards.delete(wcId); },
     /*
-     * REQ-STARTUP-046 / REQ-SHELL-119 guard 3 under PD-SHELL-009: a person's close of the last main window staying asks while
-     * the run host counts a run active anywhere in the instance (`activeRunCloseBox`); the close of one of several asks while
-     * the window's own workspace has a run active (`windowCloseBox`), and its Yes stops those runs before the close is
-     * confirmed, so the stop reaches the run host before the window's presenter is revoked. The sessions it stopped are kept
-     * (`QuitState.stoppedByClose`): their waits are the stop's to withdraw and their notices are held back. The box is shown
-     * over the closing window.
-     */
-    /*
      * REQ-SHELL-119 guard 2: while a worktree integration runs, a person's close is refused by the informational "Integration
      * in progress" box over the closing window. Main reads `noWorktreeIntegration` — no binding can be `'integrating'`
      * while worktree integration is deferred (REQ-GIT-083, REQ-GIT-125..135) — so the guard holds its place and refuses nothing yet.
@@ -1444,6 +1436,14 @@ async function main(): Promise<void> {
       show: (box) => askBox(win.isDestroyed() ? null : win, box),
       log,
     }),
+    /*
+     * REQ-STARTUP-046 / REQ-SHELL-119 guard 3 under PD-SHELL-009: a person's close of the last main window staying asks while
+     * the run host counts a run active anywhere in the instance (`activeRunCloseBox`); the close of one of several asks while
+     * the window's own workspace has a run active (`windowCloseBox`), and its Yes stops those runs before the close is
+     * confirmed, so the stop reaches the run host before the window's presenter is revoked. The sessions it stopped are kept
+     * (`QuitState.stoppedByClose`): their waits are the stop's to withdraw and their notices are held back. The box is shown
+     * over the closing window.
+     */
     confirmRunsAtClose: (wcId, win) => {
       const workspaceId = mainWindows.ordered().find((m) => m.wcId === wcId)?.workspaceId;
       return confirmActiveRunClose({

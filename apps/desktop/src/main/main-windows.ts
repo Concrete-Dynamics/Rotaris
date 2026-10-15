@@ -893,7 +893,7 @@ export interface CloseGuard {
  * that allows, `integrationAllows` (a worktree integration running refuses the close unconditionally, guard 2;
  * `integration-guard.ts`), then `confirmRuns` (the active-run confirmation, guard 3; REQ-STARTUP-046,
  * `close-confirmation.ts`); guards 2 and 3 decline when they cannot answer. A declined close changes nothing. A close attempted while the guards are still being
- * asked is held and adds no second question. The application's quit asks neither: it is not a person's close of the window
+ * asked is held and adds no second question. The application's quit asks none of the three: it is not a person's close of the window
  * (PD-SHELL-009), and since OQ-298's ruling (2026-10-14, R-072) it takes only this guard's `confirm` and `close`
  * (`quitGuardsOutsideAnyWindow`, `exit.ts`), so the renderer's unsaved-settings guard is never asked and the edits stay unsaved. Under PD-SHELL-009 a `confirmRuns` that allows the close of one of several
  * windows has already stopped the window's own runs, so the stop precedes `confirmed` and the presenter's revoke.

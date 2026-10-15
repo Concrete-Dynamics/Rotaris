@@ -1,5 +1,16 @@
 ## The argc-0 identity test reads `cmdline` before the exec has set its arguments
 
+**Outcome (2026-10-15, fin47): confirmed, and repaired in the test as this note proposed; `processIdentity` is unchanged.**
+Confirmed on this host (kernel 6.18.44, load 2.59 to 2.96 on 4 CPUs) by a throwaway script that runs the case's own exec 300
+times, polls `/proc/<pid>/exe` without the case's 20 ms pause, and reads `cmdline` the moment `exe` names `cat`: 5 of 300 reads
+were empty (`''`), and each of those 5 read one empty argument (`'\0'`) on a later read. So the window is real, and a read that
+lands in it is what failed the gate. The case now waits for the arguments: `settledCmdline` (beside the case in
+`packages/agent-tools/src/terminal/terminal.test.ts`) reads `cmdline` until it is non-empty or `ARGV_SETTLE_MS` (1 s) has passed
+since `exe` named `cat`; on a kernel before 5.18 the arguments stay empty, so the bound decides there and the case still expects
+`''` and no identity. A second case, "the argc-0 case reads past an empty cmdline the exec has not yet filled", drives the wait
+with a reader that answers `''`, `''`, then `'\0'` (the interleaving above, which the single read took as its answer) and with
+one that stays empty for its bound. The OQ-144 cases pass three times in a row alone.
+
 `packages/agent-tools/src/terminal/terminal.test.ts`, case "OQ-144: a program run with an empty argument vector reads an
 identity only where the kernel gives it one empty argument (Linux 5.18 and later)", waits until `/proc/<pid>/exe` names
 `/bin/cat` and then reads `/proc/<pid>/cmdline` once, expecting one empty argument (`'\0'`) on Linux 5.18 and later. The

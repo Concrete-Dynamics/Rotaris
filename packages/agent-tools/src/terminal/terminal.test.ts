@@ -16,6 +16,25 @@ import type { ToolContext } from '../tools/types.js';
 import type { ConfinementPort } from '../confinement/index.js';
 
 /**
+ * How long the OQ-144 argc-0 case waits for an exec'd program's argument area once `/proc/<pid>/exe` names it: on a kernel before
+ * 5.18 `cmdline` stays empty, so this bound is what ends the wait there.
+ */
+const ARGV_SETTLE_MS = 1_000;
+/**
+ * `/proc/<pid>/cmdline` once the exec has laid out the new image's arguments: the first non-empty read, or the last read when
+ * `boundMs` passes with none (a program run with argc 0 before Linux 5.18 reads empty for good).
+ */
+async function settledCmdline(read: () => string, boundMs: number, pause: () => Promise<void> = () => new Promise((r) => setTimeout(r, 5))): Promise<string> {
+  const began = Date.now();
+  let value = read();
+  while (value === '' && Date.now() - began < boundMs) {
+    await pause();
+    value = read();
+  }
+  return value;
+}
+
+/**
  * ADR-0020's first execution, against a REAL shell through a REAL pseudo-terminal (REQ-TOOLS-104: the
  * PowerShell backend on Windows). Skipped where no shell is present. Time is the node clocks: the marker
  * protocol and the process tree are the things under test, and they do not run on a fake clock.
@@ -230,13 +249,33 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
         if (exe !== cat) await new Promise((r) => setTimeout(r, 20));
       }
       expect(exe).toBe(cat);
-      expect(readFileSync(`/proc/${pid}/cmdline`, 'latin1')).toBe(givesOneEmpty ? '\0' : '');
+      // `exe` switches before the new image's arguments are laid out, so a read between the two finds `cmdline` empty on any
+      // kernel: wait for the arguments, bounded, before asserting (below; on a kernel before 5.18 they stay empty).
+      expect(await settledCmdline(() => readFileSync(`/proc/${pid}/cmdline`, 'latin1'), ARGV_SETTLE_MS)).toBe(givesOneEmpty ? '\0' : '');
       expect(processIdentity(pid)).toBe(givesOneEmpty ? `${cat}\0\0` : null);
     } finally {
       child.kill();
       await exited;
     }
   }, 20_000);
+  /*
+   * docs/defects/fixed/the-argc-0-identity-test-reads-cmdline-before-the-exec-has-set-its-arguments.md: the case above read
+   * `cmdline` once, as soon as `exe` named `cat`, and failed once in a loaded gate on kernel 6.18 with `expected '' to be '\0'`.
+   * The kernel installs the new image (and with it `exe`) in `begin_new_exec`, and sets the bounds of its argument area later,
+   * when the loader lays out the new stack; a read between the two reads an empty `cmdline`. The wait reads past it.
+   */
+  it('OQ-144: the argc-0 case reads past an empty cmdline the exec has not yet filled, and stops at its bound where it stays empty', async () => {
+    const reads = ['', '', '\0'];
+    let read = 0;
+    expect(await settledCmdline(() => reads[Math.min(read++, reads.length - 1)]!, 1_000, async () => undefined)).toBe('\0');
+    // Three reads: the single read the case made until 2026-10-15 would have taken the first, the empty area in between.
+    expect(read).toBe(3);
+    let reads2 = 0;
+    const started = Date.now();
+    expect(await settledCmdline(() => { reads2 += 1; return ''; }, 60)).toBe('');
+    expect(reads2).toBeGreaterThan(1);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(55);
+  });
   it.runIf(process.platform !== 'linux')('OQ-144: off Linux there is no /proc, and no identity to watch', () => {
     expect(processIdentity(process.pid)).toBeNull();
   });

@@ -280,3 +280,7 @@ all, and the 141 lines are the measurement of it.
 `ROTARIS_APP_LOG_LEVEL` restores `debug`. The paragraph above stays as measured. A child's stderr is still
 forwarded at `debug`, and at the default threshold none of it is written; the first execution is in
 [`../../product/directives.md`](../../product/directives.md#pd-monitor-002).
+
+## Windows runner teardown — 2026-10-16 (R-074)
+
+The Windows ARM64 red on MCP scratch cleanup was a product lifecycle defect, not a cleanup retry allowance. A command runner was killed before its server could finish after stdin EOF; closing a session left the server's working directory held. The isolated runner regression failed EBUSY on an immediate directory rename after closeAll. Keeping the runner alive for graceful EOF and using the existing tree kill at the grace bound makes that rename pass. The same reading passes for a server that ignores EOF and must be tree-killed. All 22 MCP tests pass. REQ-MCP-066/067/113 govern unchanged; the earlier terminate-first description remains the POSIX path. See [the fixed note](../../defects/fixed/the-mcp-suites-scratch-directory-is-still-held-when-its-connections-have-closed-on-windows.md).

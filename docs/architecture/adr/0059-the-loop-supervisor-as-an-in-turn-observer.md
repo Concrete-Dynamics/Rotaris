@@ -82,7 +82,7 @@ next user message; "escalate" ends the turn failed with the signal. Chosen.
    constructs no registry and no classifier (`REQ-ORCH-107`); absent is enabled. The host toggle is the
    environment stopgap `ROTARIS_CIRCUIT_BREAKER=off` until Settings → Runtime exists; the status strip shows
    "● CB armed" while enabled (`REQ-SHELL-041`).
-8. **The 100-step belt stays** behind the supervisor, its warning reworded. Removing it is a later decision.
+8. **The 100-step belt stays for roots** behind the supervisor. Since 2026-10-16, [PD-ORCH-017](../../product/directives.md#pd-orch-017) removes it for every delegated child; child timeout and loop supervision still apply. The earlier decision said: "The 100-step belt stays behind the supervisor, its warning reworded. Removing it is a later decision."
 
 ## Consequences accepted
 

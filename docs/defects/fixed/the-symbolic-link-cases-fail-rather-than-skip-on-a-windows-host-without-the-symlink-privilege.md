@@ -22,3 +22,7 @@ silently unmeasured.
 
 - `packages/agent-tools/src/tools/observe.test.ts` (line 103) and `packages/agent-tools/src/tools/observe-root.test.ts`
   (line 37): the `symlinkSync` calls.
+
+## Outcome
+
+Repaired 2026-10-16 under R-074. Both fixtures use directory junctions on Windows and directory symbolic links elsewhere. The original two cases fail EPERM on this host; the repaired cases run and pass without elevated privileges or skips. The observation and exclusion assertions are unchanged.

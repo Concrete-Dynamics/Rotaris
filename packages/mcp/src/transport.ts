@@ -62,7 +62,12 @@ export function terminateTree(child: ChildProcess, timers: Timers, graceMs: Mill
       timers.after(millis(1_000), finish);
     };
     const grace = timers.after(graceMs, force);
-    try { child.kill(); } catch { force(); }
+    // REQ-MCP-066/067: on Windows kill() forcibly ends only the runner (for example cmd.exe),
+    // losing the tree before taskkill can find its server. Let the stdin EOF sent by close() end
+    // it gracefully; at the grace bound force() still addresses the intact tree.
+    if (process.platform !== 'win32') {
+      try { child.kill(); } catch { force(); }
+    }
   });
 }
 

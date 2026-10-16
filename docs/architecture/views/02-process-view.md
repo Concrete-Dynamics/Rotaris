@@ -597,7 +597,7 @@ on whichever path settles it first — the settings read or a launch.
 **The MCP child
 processes** live under the run host: one per stdio server per session (`SessionConnections`), one transient per discovery
 or probe, all through `OwnedStdioTransport` (three piped streams, hidden window, `.cmd`/`.bat` runners through
-`cmd.exe`), killed by `terminateTree` (terminate, 5 s, force, the tree). A child's stderr reaches the log redacted and
+`cmd.exe`), killed by `terminateTree` (terminate, 5 s, force, the tree). On Windows, since 2026-10-16 (R-074), closing stdin supplies the graceful EOF; the runner is kept alive until its server exits or `taskkill /T /F` ends the intact tree at the grace bound. Killing the runner first left its server holding the working directory after close returned. A child's stderr reaches the log redacted and
 at **debug** — its diagnostics are its own, and a real server writes them by the dozen per connection — while
 `REQ-MCP-107`'s tail keeps every line for the failure account. **Since 2026-09-27 debug is a filter as well as a
 label** (`PD-MONITOR-002`, the ruling of OQ-63): the application log records `info` and above unless

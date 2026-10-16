@@ -1801,7 +1801,7 @@ export class Run {
         rootRecord,
         // REQ-GIT-019: the children are told the root they work in — the worktree for an isolated run.
         sessionId: this.sessionId, workspaceRoot: this.deps.effectiveRoot ?? this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, ...(config.modelKey === undefined ? {} : { modelKey: config.modelKey }), thinking: config.thinking,
-        modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn,
+        modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, credentialFor: config.credentialFor,
         // Part Q: each child gets its own cell over the shared memory, catalogue and wait registry.
         // REQ-MONITOR-052/066: the cell carries the key its model was taken from — the override followed, else the configured
         // key the child's row records — and is kept by the child's task id, so `childModel` can name a later move.

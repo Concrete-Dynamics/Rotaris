@@ -479,6 +479,29 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
   const children = (sid: SessionId): ChildRow[] => dal.childrenOf(sid);
   const kinds = (sid: SessionId) => dal.eventsFrom(sid, 1, 10_000).map((e) => e.kind);
 
+  it('PD-ORCH-017: a productive child completes beyond 100 model steps without a partial report', async () => {
+    const { sessions, counts } = sessionsWith((persona, turn) => {
+      if (persona === 'orchestrator') return turn === 1
+        ? toolCalls([{ callId: 'delegate-long', name: 'delegate', args: { persona: 'coder', task_name: 'long-work', task: 'TASK: finish the work', run_in_background: false } }])
+        : answer('done');
+      if (persona === 'summariser') return answer('{"summary":"Finished all work."}');
+      return turn <= 105
+        ? toolCalls([{ callId: `work-${turn}`, name: 'write_file', args: { path: `part-${turn}.txt`, content: 'done' } }])
+        : answer('Finished all 105 parts.');
+    }, {
+      tool: (name, args) => name === 'write_file'
+        ? Promise.resolve({ text: 'Written.', isError: false, status: 'ok', durationMs: 1, label: name, args })
+        : undefined,
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    expect(counts.get('child')).toBe(106);
+    expect(children(sid)).toHaveLength(1);
+    expect(children(sid)[0]).toMatchObject({ state: 'succeeded', tool_calls: 105 });
+    expect(children(sid)[0]!.report).toContain('Finished all 105 parts.');
+    expect(warnings.some((line) => line.includes('final step belt fired'))).toBe(false);
+  });
+
   describe('REQ-MCP-015 (fin36): only the code-intelligence server\'s tools are its EDIT tier in a child\'s report', () => {
     // docs/defects/fixed/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md
     const name = CODE_INTELLIGENCE_MANIFEST.tiers.edit.replaceInFile;
@@ -5210,7 +5233,6 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         modelTimeoutMs: 1000,
         modelRetries: 0,
         credentialFor: () => async () => '',
-        maxStepsPerTurn: 10,
         budget: { maxDepth: 3, maxTotal: 20, maxActive: 6 },
         modelCap: () => null,
         toolsFor: () => null,
@@ -5263,7 +5285,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
           dal, writer: w.value, sessionId: sid, workspaceRoot: 'C:/ws', owner: null as unknown as ProjectionOwner,
           backend: new DefaultAgentBackend(client), clocks: clock, model: MODEL, thinking: 'unset', modelTimeoutMs: 1000, modelRetries: 0,
           // A cap of 0 holds the accepted child on its model's slot, so it never starts before the test rests it.
-          credentialFor: () => async () => '', maxStepsPerTurn: 10, budget: { maxDepth: 3, maxTotal: 20, maxActive: 6 }, modelCap: () => 0,
+          credentialFor: () => async () => '', budget: { maxDepth: 3, maxTotal: 20, maxActive: 6 }, modelCap: () => 0,
           toolsFor: () => null, summariser: null, runSignal: new AbortController().signal, warn: (m) => warned.push(m),
         }, 1);
         const accepted = await ops.delegate(ops.ledger.root.taskId, { persona: 'coding-agent', taskName: 'work', task: 'TASK: work', dependsOn: [], inheritedContext: [], category: '', runInBackground: true });
@@ -5299,7 +5321,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         dal, writer: w.value, sessionId: sid, workspaceRoot: 'C:/ws', owner: null as unknown as ProjectionOwner,
         backend: new DefaultAgentBackend(new ScriptedModelClient([])), clocks: clock, model: MODEL, thinking: 'unset', modelTimeoutMs: 1000, modelRetries: 0,
         // A cap of 0 holds an accepted child on its model's slot, so nothing starts once the test's store is closed.
-        credentialFor: () => async () => '', maxStepsPerTurn: 10, budget: { maxDepth: 3, maxTotal: 20, maxActive: 6 }, modelCap: () => 0,
+        credentialFor: () => async () => '', budget: { maxDepth: 3, maxTotal: 20, maxActive: 6 }, modelCap: () => 0,
         toolsFor: () => null, summariser: null, runSignal: new AbortController().signal, warn: () => undefined,
         planGate: { held: () => held, withholds: (t) => ['write_file', 'haet_edit', 'haet', 'terminal'].includes(t) },
       }, 1);

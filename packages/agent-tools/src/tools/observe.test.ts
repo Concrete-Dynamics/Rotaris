@@ -100,7 +100,7 @@ describe('observeReach (OQ-245)', () => {
     // docs/defects/fixed/a-siblings-native-write-is-not-subtracted-from-an-observation-taken-through-a-symlinked-workspace.md:
     // the native tools note against `realPathOf(root)`, the MCP executor passed the root unresolved.
     const link = `${root}-link`;
-    symlinkSync(root, link, 'dir');
+    symlinkSync(root, link, process.platform === 'win32' ? 'junction' : 'dir');
     try {
       const journal = new WriteJournal();
       const obs = await observeReach({ root: link, reach: { base: '' }, journal, agent: 'refactorer' }, async () => {

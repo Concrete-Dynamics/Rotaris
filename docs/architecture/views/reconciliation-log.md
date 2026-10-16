@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-16**
 
+**Windows MCP shutdown preserves the runner until its server closes (R-074, REQ-MCP-066/067/113).** `02-process-view.md` now states the Windows graceful phase: stdin EOF, then the existing grace, then taskkill of the intact tree. The immediate rename after graceful and forced runner shutdown is measured by the MCP suite. Observation fixtures use Windows junctions, preserving their existing path-alias assertions without needing symlink privileges.
+
+**Children have no fixed model-step cap (PD-ORCH-017, R-073).** `03-runtime-view.md` section 3 now distinguishes the root's 100-step bound from delegated children, which pass no limit to `runTurn`. The child composition no longer carries the root's step-bound setting. Timeout, cancellation, pause and supervision still govern children.
+
+---
+
 **A Windows ARM64 development tree's bundle is the win32-x64 one (the Windows ARM64 session; OQ-401, the build's reading).**
 `01-component-view.md`'s bundled-runtime sentence says `--target` defaults to `win32-x64` on a Windows ARM64 host
 (`defaultTargetKey` in `target.mjs`), where it read "the host by default" alone. No package, edge or process changed.

@@ -425,7 +425,35 @@ if (silentWait.after.some((n) => n === null || !n.sameAgent || n.role !== 'assis
 if (silentWait.activations.some((a) => a.trigger === 'stuck')) throw new Error(`silent-wait: the silent wait was taken as a stuck report: ${JSON.stringify(silentWait.activations)} (PD-ORCH-009 revision 5)`);
 if (silentWait.classifications !== 0) throw new Error(`silent-wait: ${silentWait.classifications} loop classification(s) were asked (PD-ORCH-009 revision 5; see silent-wait.log)`);
 
+// PD-ORCH-017: the built child's turn crosses the former 100-model-step backstop.
+// Repeated reads deliberately disable classification here; the earlier launches measure supervision.
+const longRoot = join(output, 'child-over-100');
+const longWorkspace = join(longRoot, 'workspace');
+const longLocal = join(longRoot, 'local');
+mkdirSync(longWorkspace, { recursive: true });
+mkdirSync(longLocal, { recursive: true });
+writeFileSync(join(longWorkspace, 'README.md'), '# child step-cap proof\n');
+scratchAgentsYaml(longWorkspace, null);
+const longConfig = join(longWorkspace, '.rotaris', 'agents.yaml');
+writeFileSync(longConfig, `${readFileSync(longConfig, 'utf8')}\ncircuit_breaker: { enabled: false }\n`);
+const { log: longLog } = await launch('child-over-100', longWorkspace, longLocal, join(longRoot, 'preferences'), {
+  ROTARIS_SCRIPT: 'delegate:coding-agent:long-work,answer',
+  ROTARIS_CHILD_SCRIPT: [...Array(105).fill('read'), 'answer'].join(','),
+  ROTARIS_CAPTURE_PROMPT: 'exercise a child beyond 100 model steps',
+  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '40000', ROTARIS_CAPTURE_AFTER_MS: '500',
+});
+const longDb = new Database(oneDatabase(longLocal), { readonly: true });
+let longChild;
+try {
+  longChild = longDb.prepare('SELECT state, tool_calls FROM children').all();
+  const session = longDb.prepare('SELECT execution_status FROM sessions').get();
+  if (session?.execution_status !== 'completed' || longChild.length !== 1 || longChild[0].state !== 'succeeded' || longChild[0].tool_calls !== 105 || longLog.includes('final step belt fired')) {
+    throw new Error(`child-over-100: ${JSON.stringify({ session, children: longChild })}; see child-over-100.log (PD-ORCH-017)`);
+  }
+} finally { longDb.close(); }
+
 const result = {
+  childOver100: longChild,
   planHeld: { session: heldSession, iterations: heldIterations, heldSystemRows: heldSystemRows.map((row) => row.body), corrections, heldAnswerCarried: carried !== null, screenshot: 'plan-held.png' },
   answerless: Object.fromEntries(Object.entries(answerless).map(([k, v]) => [k, { status: v.session?.execution_status, asked: v.asked, reprompts: v.reprompts, rows: v.rows, issues: v.issues.length, stuckActivations: v.stuck.length, classifications: v.classifications }])),
   followUps: Object.fromEntries(Object.entries(followUps).map(([k, v]) => [k, { status: v.session?.execution_status, sent: v.sent, next: v.next?.role ?? null, stuckActivations: v.stuck.length, classifications: v.classifications }])),

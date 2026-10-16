@@ -34,7 +34,7 @@ describe('observeReach takes its root in the spelling the native writes are note
     // docs/defects/fixed/a-siblings-native-write-is-not-subtracted-from-an-observation-taken-through-a-symlinked-workspace.md:
     // resolved with the JavaScript `realpathSync`, the alias was walked as given and nothing was observed.
     const alias = `${root}-alias`;
-    symlinkSync(root, alias, 'dir');
+    symlinkSync(root, alias, process.platform === 'win32' ? 'junction' : 'dir');
     const journal = new WriteJournal();
     const obs = await observeReach({ root: alias, reach: { base: '' }, journal, agent: 'refactorer' }, async () => {
       writeFileSync(join(root, 'src', 'a.ts'), 'export const sum = 1;\n');

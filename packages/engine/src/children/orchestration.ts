@@ -74,7 +74,6 @@ export interface ChildrenDeps {
   readonly modelTimeoutMs: number;
   readonly modelRetries: number;
   readonly credentialFor: (model: ModelRef) => () => Promise<string>;
-  readonly maxStepsPerTurn: number;
   readonly budget: Budget;
   readonly modelCap: (modelKey: string) => number | null;
   /** REQ-CONFIG-094: the slots the process's other runs hold on a key (`ModelSlots.heldElsewhere`); absent means none. */
@@ -1425,7 +1424,8 @@ export class IterationChildren implements DelegationOps {
         // REQ-WORKSPACE-060 (ADR-0063): the session's context units follow the role's instructions and its playbook,
         // read at THIS construction so a skill force-loaded since the last child reaches this one.
         systemPrompt: withContextUnits(withPlaybook(persona?.systemPrompt ?? '', deps.playbookFor?.(row.persona) ?? ''), deps.contextUnits?.() ?? []), model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking, modelTimeoutMs: deps.modelTimeoutMs, modelRetries: deps.modelRetries,
-        credentialFor: deps.credentialFor, maxStepsPerTurn: deps.maxStepsPerTurn, warn: deps.warn, dispatched,
+        // PD-ORCH-017: productive children are bounded by timeout and supervision, never by model-step count.
+        credentialFor: deps.credentialFor, maxStepsPerTurn: null, warn: deps.warn, dispatched,
         ...(deps.supervisorFor ? { supervisor: deps.supervisorFor(row.task_id) } : {}),
         // REQ-MONITOR-135: "each successful injection refreshes the agent's last-activity timestamp" — its stall watch's.
         ...(deps.steeringFor ? { steering: refreshing(deps.steeringFor(row.task_id), () => stallWatch.activity()) } : {}),

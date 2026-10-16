@@ -683,7 +683,7 @@ role the direct-work bundle and withholds `delegate`; `swarm` adds REQ-ORCH-025'
 the entry role's instructions as the last thing its prompt carries, after the MCP section, `runOverrideLayer` composed by
 `runTurn`'s `withRunOverrideLayer`, since 2026-10-06 — none on a run granted the bundle, `PD-ORCH-006` revision 3, OQ-205 as ruled under R-072); **the per-model cap** is each entry's stated `max_parallel`, else the cap its provider's catalogue entry declares (`modelCapInForce`, PD-PROVIDER-001, since fin22), counted across every session the run host holds a place for, a paused child's kept place included
 (`children/model-slots.ts`, since 2026-09-30 — acceptance A13; OQ-148, OQ-149, OQ-150). **A bound
-of 100 model steps per turn** (`RUN_CONFIG_DEFAULTS.maxStepsPerTurn`) is a final belt behind the loop supervisor
+of 100 model steps per root turn** (`RUN_CONFIG_DEFAULTS.maxStepsPerTurn`) is a final belt behind the loop supervisor; delegated children have no step cap (`PD-ORCH-017`, 2026-10-16)
 (`REQ-ORCH-099..107`, built 2026-09-05 — ADR-0059). `ROTARIS_CHILD_SCRIPT` and the
 `delegate:<persona>:<name>[:after]` and `fail` steps drive the scripted client's children for verification only. The `todo` tool's list is per session in memory; its persistence waits on the
 per-child record of Part B (`REQ-ORCH-043`). `ROTARIS_SCRIPT` drives the scripted client's tool calls for
@@ -733,7 +733,7 @@ and `session.resume` cross the boundary as commands and run-host requests; `ui/s
 surface, a window-modal overlay opened from the title bar. The host-level circuit-breaker toggle is the
 environment stopgap `ROTARIS_CIRCUIT_BREAKER=off` until Settings → Runtime (`REQ-CONFIG-323`).
 `ROTARIS_SCRIPT=loop:<tool>:<n>`, `ROTARIS_LOOP_SCRIPT` and `ROTARIS_CAPTURE_RESUME` are verification seams.
-Decisions taken here for the owner: the supervisor's shape (ADR-0059); the belt of 100 steps stays; the
+Decisions taken here for the owner: the supervisor's shape (ADR-0059); the belt of 100 steps stays for roots only (children uncapped since PD-ORCH-017); the
 browser offers **open** only; steering and todo corrections wait, and with them the consecutive counter's
 reset on anything but a real prompt.
 

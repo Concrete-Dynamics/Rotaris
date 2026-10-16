@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -292,6 +292,8 @@ describe('OwnedStdioTransport (ADR-0033, ADR-0007)', () => {
   });
   it('a .cmd runner on PATH starts through cmd.exe with its arguments intact (REQ-MCP-113 on Windows)', async () => {
     if (process.platform !== 'win32') return;
+    const runnerDir = join(dir, 'runner-workspace');
+    mkdirSync(runnerDir);
     // A batch runner like npx.cmd: it forwards its arguments to node.
     writeFileSync(join(dir, 'runner.cmd'), `@echo off\r\n"${process.execPath}" %*\r\n`);
     // The description's map is EMPTY (REQ-MCP-043's `env` holds the server's own entries only); PATH and the rest reach
@@ -300,13 +302,35 @@ describe('OwnedStdioTransport (ADR-0033, ADR-0007)', () => {
     const withPath = { ...env, PATH: `${dir};${env['PATH'] ?? ''}` };
     const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined, parentEnv: withPath });
     registries.push(s);
-    const c = await s.connect('runner', { transport: 'stdio', command: 'runner', args: [FIXTURE, '--stderr', 'via cmd'], env: {}, cwd: dir });
+    const c = await s.connect('runner', { transport: 'stdio', command: 'runner', args: [FIXTURE, '--stderr', 'via cmd'], env: {}, cwd: runnerDir });
     expect(c.tools().map((t) => t.name)).toContain('echo');
-    const r = await s.call('runner', { transport: 'stdio', command: 'runner', args: [FIXTURE], env: {}, cwd: dir }, 'echo', { text: 'through cmd.exe' }, millis(5_000));
+    const r = await s.call('runner', { transport: 'stdio', command: 'runner', args: [FIXTURE, '--stderr', 'via cmd'], env: {}, cwd: runnerDir }, 'echo', { text: 'through cmd.exe' }, millis(5_000));
     expect(r.text).toBe('through cmd.exe');
+    // REQ-MCP-066/067: close includes the runner's child, which otherwise still holds its working directory.
+    await s.closeAll();
+    const moved = `${runnerDir}-closed`;
+    renameSync(runnerDir, moved);
+    renameSync(moved, runnerDir);
   });
   it('a command that does not exist rejects start with the OS error (REQ-MCP-107 case 1)', async () => {
     const t = new OwnedStdioTransport({ command: join(dir, 'missing.exe'), args: [], cwd: dir, env, timers: clocks.timers, log, label: 'missing' });
     await expect(t.start()).rejects.toThrow(/ENOENT/);
+  });
+  it.skipIf(process.platform !== 'win32')('REQ-MCP-066/067: a runner whose server ignores EOF is closed as a tree at the grace bound', async () => {
+    const workspace = join(dir, 'stubborn-workspace');
+    mkdirSync(workspace);
+    const marker = join(workspace, 'started');
+    const script = join(dir, 'stubborn.cjs');
+    writeFileSync(script, `require('node:fs').writeFileSync(${JSON.stringify(marker)}, String(process.pid)); process.stdin.resume(); setInterval(() => {}, 1000);`);
+    const runner = join(dir, 'stubborn.cmd');
+    writeFileSync(runner, `@echo off\r\n"${process.execPath}" %*\r\n`);
+    const t = new OwnedStdioTransport({ command: runner, args: [script], cwd: workspace, env, timers: clocks.timers, log, label: 'stubborn', graceMs: millis(20) });
+    try {
+      await t.start();
+      expect(await until(() => existsSync(marker))).not.toBeNull();
+    } finally { await t.close(); }
+    const moved = `${workspace}-closed`;
+    renameSync(workspace, moved);
+    renameSync(moved, workspace);
   });
 });

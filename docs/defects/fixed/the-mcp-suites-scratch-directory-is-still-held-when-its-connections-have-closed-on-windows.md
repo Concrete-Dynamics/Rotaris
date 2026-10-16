@@ -25,3 +25,7 @@ the test's 300 ms of retries is short of the exit, none.
 - `packages/mcp/src/mcp.test.ts` — the `afterAll` (line 48) and its scratch directory.
 - `packages/mcp/src/sessions.ts`, `packages/mcp/src/discovery.ts` — the two `closeAll` implementations.
 - `packages/mcp/src/client.ts` — `openClient`'s `close`, and the `.cmd` wrap (REQ-MCP-113).
+
+## Outcome
+
+Repaired 2026-10-16 under R-074. The runner case now isolates the server's working directory and renames it immediately after closeAll returns. It failed EBUSY before the repair. Windows kill() was ending cmd.exe before its server: termination now lets stdin EOF close the tree during the existing grace and leaves taskkill /T /F to the grace bound. All 22 MCP cases pass, including the immediate rename after graceful close, a server that ignores EOF and must be tree-killed, and scratch cleanup, without added cleanup retries.

@@ -150,8 +150,8 @@ export interface TurnDeps {
   readonly modelRetries: number;
   /** ADR-0030: the credential of the model this turn calls. */
   readonly credentialFor: (model: ModelRef) => () => Promise<string>;
-  /** A final belt behind the loop supervisor. */
-  readonly maxStepsPerTurn: number;
+  /** A final belt for roots; null for children (PD-ORCH-017). */
+  readonly maxStepsPerTurn: number | null;
   readonly warn: (message: string) => void;
   /** REQ-ORCH-141: the call ids already dispatched in this run. */
   readonly dispatched: Map<string, string>;
@@ -363,7 +363,7 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
       return { report: { status: 'failed', text: lastReport.text, usage, error: { code: 'unknown', headline, transient: false } }, messages: conv.snapshot(), toolCallCount, escalation: supervision.signal };
     }
     steps += 1;
-    if (steps > deps.maxStepsPerTurn) {
+    if (deps.maxStepsPerTurn !== null && steps > deps.maxStepsPerTurn) {
       deps.warn(`the turn exceeded ${deps.maxStepsPerTurn} model steps and was ended as partial (the final step belt fired)`);
       return { report: { status: 'partial', text: lastReport.text, usage }, messages: conv.snapshot(), toolCallCount };
     }

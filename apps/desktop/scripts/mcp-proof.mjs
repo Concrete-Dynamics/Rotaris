@@ -58,7 +58,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
-import { choose, startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
+import { choose, connect, startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
 import { restatedFacts } from './lib/restated-facts.mjs';
 
 const require = createRequire(import.meta.url);
@@ -346,7 +346,8 @@ const ROUND_OVER = `(() => {
   const fileEnd = fileStart + `<!-- source: ${agentsMd} -->\n${agentsText}`.length;
   /*
    * The file is followed at once by the closing comment, and the MCP section at once by that: the live run's shape, where the
-   * workspace declares no skill. The workspace is a repository of its own (`git init` above), so the skill catalog's project
+   * workspace declares no project skill. User-level skills may still be catalogued (REQ-WORKSPACE-051).
+   * The workspace is a repository of its own (`git init` above), so the skill catalog's project
    * walk (REQ-WORKSPACE-051) stops there; until 2026-10-06 it walked up to this checkout's root and every run's prompt listed
    * the repository's own development skills (`build-ui`, …) between the two
    * (docs/defects/fixed/the-mcp-proofs-runs-list-the-repositorys-own-skills-in-their-catalog.md).
@@ -357,10 +358,13 @@ const ROUND_OVER = `(() => {
   const headingAt = system.indexOf('## MCP servers', fileEnd);
   if (headingAt < fileEnd + boundary.length) throw new Error(`the MCP section does not follow the closed instruction files in the orchestrator's prompt:\n${system}`);
   const repositorySkills = readdirSync(join(repo, '.agents', 'skills'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).filter((name) => system.includes(name));
-  if (/Portable skills available/.test(system) || repositorySkills.length > 0) throw new Error(`the orchestrator's prompt carries a skill catalog the workspace never declared (${repositorySkills.join(', ') || 'a catalog'}): the project walk left the workspace`);
-  // PD-TOOLS-012 revision 2 (OQ-230): one unit stands between them, the product statement every agent receives last — one
-  // paragraph naming the product's own directories — and nothing else.
-  const between = system.slice(fileEnd + boundary.length, headingAt);
+  if (repositorySkills.length > 0) throw new Error(`the orchestrator's prompt carries repository skills the workspace never declared (${repositorySkills.join(', ')}): the project walk left the workspace`);
+  // PD-TOOLS-012 revision 2 (OQ-230): after any user catalog, the last unit is the product statement — one
+  // paragraph naming the product's own directories — and nothing else before the MCP section.
+  // Windows retains the operator's real home (changing it prevents Electron from painting), so a legitimate
+  // user catalog may precede the product statement. Remove only that complete, line-shaped catalog block;
+  // arbitrary text, skill bodies and checkout skills still fail the surrounding assertions.
+  const between = system.slice(fileEnd + boundary.length, headingAt).replace(/^Portable skills available[^\n]*\n[^\n]*\n[^\n]*\n(?:- [^\n]+ \(SKILL\.md: [^\n]+\)\n)+\n/, '');
   if (!/^Product directories: [^\n]+\n\n$/.test(between) || !between.includes('`.rotaris/`') || !between.includes('info/exclude')) throw new Error(`something other than the product statement stands between the closed instruction files and the MCP section: ${JSON.stringify(between)}`);
   const surface = lines(r.log, /mcp: surface for orchestrator/);
   if (surface.length === 0) throw new Error(`no surface line:\n${r.log}`);
@@ -462,7 +466,8 @@ const ROUND_OVER = `(() => {
  * `interrupted` and files no outcome-driven issue. fin34 built (a) the gate's catch and (c) the MCP executor's catch and
  * pinned them by unit cases; no launch had cut an MCP call or a throwing executor in the built app. Both launches below
  * hold `slow` in flight at the fixture (`{ ms: 60000 }`, under a 120 s allowance so the allowance can never be read
- * first) and quit the application by SIGTERM once the fixture has received the call — a quit outside any window, as
+ * first) and quit once the fixture has received the call — SIGTERM on POSIX, the driver's orderly quit on Windows,
+ * where kill(SIGTERM) forcibly ends the process. This is a quit outside any window, as
  * `fetch-proof`'s `cancelled` launch does — then read the store and the session's `summary.md`:
  *
  *   cancel        — (c): the MCP executor's own catch, "The call to 'slow' on MCP server 'alpha' was cancelled by the run
@@ -489,6 +494,10 @@ async function cancelLaunch(name, extra) {
   resetPids();
   let child = null;
   let quitAt = null;
+  const endpoint = join(output, `${name}.driver.json`);
+  const quitMethod = process.platform === 'win32' ? 'the driver orderly quit' : 'SIGTERM';
+  let quitRequest = Promise.resolve();
+  let quitError = null;
   // The fixture appends each `tools/call` it receives to the call file: the quit is sent 300 ms after `slow` arrives.
   const watch = setInterval(() => {
     if (quitAt !== null || child === null) return;
@@ -496,7 +505,16 @@ async function cancelLaunch(name, extra) {
     const received = readFileSync(calls, 'utf8').split('\n').filter((l) => l.trim() !== '').flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
     if (!received.some((c) => c.name === 'slow')) return;
     quitAt = Date.now() + 300;
-    setTimeout(() => { try { process.kill(child.pid, 'SIGTERM'); } catch { /* already gone */ } }, 300);
+    setTimeout(() => {
+      if (process.platform === 'win32') {
+        // Windows kill(SIGTERM) forcibly ends Electron; it cannot run the cancellation/summary path measured here.
+        quitRequest = connect(endpoint, { timeoutMs: 5_000 }).then(async (driver) => {
+          try { await driver.quit(); } finally { driver.close(); }
+        }).catch((cause) => { quitError = String(cause); });
+      } else {
+        try { process.kill(child.pid, 'SIGTERM'); } catch { /* already gone */ }
+      }
+    }, 300);
   }, 100);
   const started = Date.now();
   let result;
@@ -510,17 +528,20 @@ async function cancelLaunch(name, extra) {
         // The capture types the prompt; the quit lands before its wait is satisfied, so no picture is taken.
         ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_PNG: join(output, `${name}.png`),
         PROOF_SHELL_VALUE: 'from-the-shell', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', ROTARIS_APP_LOG_LEVEL: 'debug',
+        ...(process.platform === 'win32' ? { ROTARIS_DRIVER: endpoint } : {}),
         ...extra,
       },
     });
   } finally {
     clearInterval(watch);
+    await quitRequest;
   }
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
   if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (quitAt === null) throw new Error(`${name}: the fixture never received slow, so no quit was sent; see ${name}.log`);
-  if (result.status !== 0) throw new Error(`${name}: the quit by SIGTERM exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
+  if (quitError !== null) throw new Error(`${name}: ${quitMethod} failed: ${quitError}; see ${name}.log`);
+  if (result.status !== 0) throw new Error(`${name}: ${quitMethod} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   const dbPath = oneDatabase();
   const db = new Database(dbPath, { readonly: true });
   const s = latestSession(db);

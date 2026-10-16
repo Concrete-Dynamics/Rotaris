@@ -595,7 +595,7 @@ and whole arguments — four calls of one tool with differing arguments are coun
 by `runtime.loop_classification_timeout` capped at what remains of REQ-NOTIFY-106's 2 s activation budget,
 `LOOP_ACTIVATION_BUDGET_MS`, since fin35 — REQ-CONFIG-467's upper bound only; the budget runs from the `observe` that armed the
 trigger, on the monotonic clock, so the triggering call and the rest of its step are spent from it, and with nothing left no
-call is dispatched and the fallback decides) → the 100-step belt → **context compression when the agent has reached
+call is dispatched and the fallback decides) → the 100-step belt for roots only (children have no fixed model-step cap, `PD-ORCH-017`) → **context compression when the agent has reached
 its threshold** (Part AH, below) → the model step (streamed into its own `agent`
 row, and — from Part Z — into a **`thinking` row** for anything the provider marks as deliberation; the sink
 discarded every reasoning delta before that, so no streamed-reasoning row had ever existed, REQ-CHAT-163).

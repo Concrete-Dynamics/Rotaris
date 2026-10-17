@@ -5,10 +5,11 @@
  */
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
-import { AREAS, NEVER_AUTOMATIC, RULES, classifyPath, formatPlan, matchingRules, narrowTests, pathMatches, planFor, proofsInMap, proofScriptOf } from './plan.mjs';
+import { AREAS, NEVER_AUTOMATIC, RULES, classifyPath, collectGitPaths, formatPlan, isMainModule, matchingRules, narrowTests, parseArgs, pathMatches, planFor, proofsInMap, proofScriptOf, resolveCompareRef } from './plan.mjs';
 
 const root = join(import.meta.dirname, '..', '..');
 
@@ -120,6 +121,53 @@ describe('verification planner — review and unknown', () => {
     expect(plan.proofs).not.toContain('live-run');
     expect(plan.notes.some((n: string) => n.includes('never automatic'))).toBe(true);
   });
+
+  it('slice-proof is never scheduled automatically', () => {
+    const plan = planFor(['apps/desktop/scripts/slice-proof.mjs']);
+    expect(plan.proofs).not.toContain('slice-proof');
+    expect(plan.notes.some((n: string) => n.includes('never automatic'))).toBe(true);
+  });
+
+  it('main.tsx is a composition root: classified, still review, no silent suite', () => {
+    const plan = planFor(['apps/desktop/src/renderer/main.tsx']);
+    expect(plan.unknown).toEqual([]);
+    expect(reviewOf(['apps/desktop/src/renderer/main.tsx'])).toEqual(['apps/desktop/src/renderer/main.tsx']);
+    expect(plan.proofs).toEqual([]);
+    expect(plan.views).toContain('docs/architecture/views/04-seams.md');
+  });
+
+  it('shell.ts is a composition root: classified, still review, no silent suite', () => {
+    const plan = planFor(['apps/desktop/src/renderer/shell.ts']);
+    expect(plan.unknown).toEqual([]);
+    expect(reviewOf(['apps/desktop/src/renderer/shell.ts'])).toEqual(['apps/desktop/src/renderer/shell.ts']);
+    expect(plan.proofs).toEqual([]);
+  });
+
+  it('display-prefs stays Theme and layout after shell was split out', () => {
+    expect(proofsOf(['apps/desktop/src/renderer/display-prefs.ts'])).toEqual([...AREAS.themeLayout.proofs].sort());
+    expect(reviewOf(['apps/desktop/src/renderer/display-prefs.ts'])).toEqual([]);
+  });
+
+  it('session-view takes transcript and mission (the persona window shares it)', () => {
+    expect(proofsOf(['apps/desktop/src/renderer/session-view.ts'])).toEqual(
+      [...new Set([...AREAS.transcript.proofs, ...AREAS.mission.proofs])].sort(),
+    );
+  });
+
+  it('a generated kernel file is skipped, not unknown', () => {
+    const plan = planFor(['packages/kernel/src/generated/requirements.ts']);
+    expect(plan.unknown).toEqual([]);
+    expect(plan.proofs).toEqual([]);
+    expect(plan.review).toEqual([]);
+    expect(plan.notes).toEqual(['skipped']);
+  });
+
+  it('a CONTEXT.md glossary file is known: no proofs, no review', () => {
+    const plan = planFor(['packages/engine/CONTEXT.md']);
+    expect(plan.unknown).toEqual([]);
+    expect(plan.proofs).toEqual([]);
+    expect(plan.review).toEqual([]);
+  });
 });
 
 describe('verification planner — architecture and tests', () => {
@@ -146,6 +194,107 @@ describe('verification planner — architecture and tests', () => {
     expect(text).toMatch(/pnpm part-h-proof/);
     expect(text).toMatch(/docs\/architecture\/views\/03-runtime-view\.md/);
     expect(text).toMatch(/unmapped path/);
+  });
+
+  it('an empty plan prints nothing to verify', () => {
+    const text = formatPlan(planFor([]));
+    expect(text).toMatch(/nothing to verify/);
+    expect(planFor([]).gate).toEqual([]);
+  });
+});
+
+describe('verification planner — argv and git', () => {
+  it('parseArgs keeps flags after --files as flags, not paths', () => {
+    const parsed = parseArgs(['--files', 'AGENTS.md', 'packages/engine/src/run/run.ts', '--json', '--strict']);
+    expect(parsed.files).toEqual(['AGENTS.md', 'packages/engine/src/run/run.ts']);
+    expect(parsed.json).toBe(true);
+    expect(parsed.strict).toBe(true);
+    expect(parsed.unknown).toEqual([]);
+  });
+
+  it('parseArgs accepts --base= and --base <ref>, and flags before --files', () => {
+    expect(parseArgs(['--base=origin/main', '--files', 'AGENTS.md']).base).toBe('origin/main');
+    expect(parseArgs(['--json', '--files', 'AGENTS.md', '--base', 'HEAD']).base).toBe('HEAD');
+    expect(parseArgs(['--base']).unknown).toEqual(['--base (missing value)']);
+  });
+
+  it('resolveCompareRef falls back to origin/<name> when the local ref is missing', () => {
+    const git = (args: string[]) => {
+      if (args.join(' ') === 'rev-parse --verify main') throw new Error('missing');
+      if (args.join(' ') === 'rev-parse --verify origin/main') return 'abc';
+      throw new Error(`unexpected git ${args.join(' ')}`);
+    };
+    expect(resolveCompareRef('main', git)).toBe('origin/main');
+  });
+
+  it('resolveCompareRef does not invent origin/ for a non-simple ref', () => {
+    const git = (args: string[]) => {
+      throw new Error(`missing ${args.join(' ')}`);
+    };
+    expect(() => resolveCompareRef('origin/main', git)).toThrow(/tried origin\/main\)$/);
+  });
+
+  it('collectGitPaths uses origin/main and throws on a git failure, never an empty plan', () => {
+    const git = (args: string[]) => {
+      const cmd = args.join(' ');
+      if (cmd === 'rev-parse --verify main') throw new Error('missing');
+      if (cmd === 'rev-parse --verify origin/main') return 'aaa';
+      if (cmd === 'merge-base HEAD origin/main') return 'deadbeef';
+      if (cmd.startsWith('diff --name-only --diff-filter=ACMRD deadbeef')) return 'packages/engine/src/run/run.ts';
+      if (cmd.startsWith('diff --name-only')) return '';
+      if (cmd.startsWith('ls-files')) return '';
+      throw new Error(`unexpected git ${cmd}`);
+    };
+    const { base, files } = collectGitPaths('/repo', 'main', { git });
+    expect(base).toBe('deadbeef');
+    expect(files).toEqual(['packages/engine/src/run/run.ts']);
+  });
+
+  it('collectGitPaths throws when merge-base fails', () => {
+    const git = (args: string[]) => {
+      if (args[0] === 'rev-parse') return 'aaa';
+      throw new Error('merge-base failed');
+    };
+    expect(() => collectGitPaths('/repo', 'main', { git })).toThrow(/merge-base failed/);
+  });
+
+  it('isMainModule resolves a relative argv path against cwd', () => {
+    const script = resolve(root, 'tools/verify-plan/plan.mjs');
+    expect(isMainModule(script, pathToFileURL(script).href)).toBe(true);
+    expect(isMainModule(join('tools', 'verify-plan', 'plan.mjs'), pathToFileURL(script).href)).toBe(true);
+    expect(isMainModule(undefined, pathToFileURL(script).href)).toBe(false);
+  });
+
+  it('CLI --files then --json does not classify --json as a path', () => {
+    const script = join(root, 'tools', 'verify-plan', 'plan.mjs');
+    const out = execFileSync(process.execPath, [script, '--files', 'AGENTS.md', '--json'], {
+      encoding: 'utf8',
+      cwd: root,
+    });
+    const plan = JSON.parse(out) as { paths: Array<{ path: string }>; unknown: string[] };
+    expect(plan.paths.map((p) => p.path)).toEqual(['AGENTS.md']);
+    expect(plan.unknown).toEqual([]);
+  });
+
+  it('CLI unknown argument and --strict unmapped path exit 2', () => {
+    const script = join(root, 'tools', 'verify-plan', 'plan.mjs');
+    const run = (args: string[]) => {
+      try {
+        execFileSync(process.execPath, [script, ...args], {
+          encoding: 'utf8',
+          cwd: root,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        throw new Error('expected exit 2');
+      } catch (err) {
+        return err as { status?: number; stderr?: string };
+      }
+    };
+    const unknown = run(['--nope']);
+    expect(unknown.status).toBe(2);
+    expect(unknown.stderr).toMatch(/unknown argument/);
+    const strict = run(['--files', 'no-such-area/mystery.ts', '--strict']);
+    expect(strict.status).toBe(2);
   });
 });
 

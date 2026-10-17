@@ -14,7 +14,7 @@ pnpm verify:plan --files packages/engine/src/run/run.ts
 pnpm verify:plan --base=main --json
 ```
 
-Default input is the working tree, index and untracked files against the merge-base with `main`.
+Default input is the working tree, index and untracked files against the merge-base with `main` (`origin/main` if `main` is missing). Git failures are errors, not an empty plan. Flags after `--files` stay flags.
 
 ## What to do with the output
 

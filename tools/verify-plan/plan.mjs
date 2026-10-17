@@ -9,8 +9,9 @@
 //
 // Usage (`pnpm verify:plan [flags]`):
 //   (none)              working tree + index + untracked against merge-base with main
-//   --base=<ref>        compare against this ref (default: main)
-//   --files <path>…     classify these paths; do not read git
+//                       (origin/main if main is missing)
+//   --base=<ref>        merge-base of HEAD and this ref (tries origin/<ref> if the ref is missing)
+//   --files <path>…     classify these paths; do not read git. Flags after --files stay flags.
 //   --json              the plan as JSON
 //   --strict            exit 2 when review is required
 //
@@ -24,8 +25,9 @@ export { AREAS, NEVER_AUTOMATIC, RULES };
 
 const USAGE = `pnpm verify:plan [flags]
   (none)              working tree + index + untracked against merge-base with main
-  --base=<ref>        compare against this ref (default: main)
-  --files <path>…     classify these paths; do not read git
+                      (origin/main if main is missing)
+  --base=<ref>        merge-base of HEAD and this ref (tries origin/<ref> if the ref is missing)
+  --files <path>…     classify these paths; do not read git. Flags after --files stay flags.
   --json              the plan as JSON
   --strict            exit 2 when review is required
 `;
@@ -351,21 +353,117 @@ export function formatPlan(plan, meta = {}) {
 }
 
 /**
- * @param {string} root
- * @param {string} base
+ * @typedef {(args: string[]) => string} GitRun
+ * @typedef {{
+ *   help: boolean,
+ *   json: boolean,
+ *   strict: boolean,
+ *   base: string | undefined,
+ *   files: string[] | null,
+ *   unknown: string[],
+ * }} ParsedArgs
  */
-export function collectGitPaths(root, base) {
+
+/**
+ * Flags after `--files` stay flags. Paths that start with `--` are not files.
+ * @param {string[]} args
+ * @returns {ParsedArgs}
+ */
+export function parseArgs(args) {
+  let help = false;
+  let json = false;
+  let strict = false;
+  /** @type {string | undefined} */
+  let base;
+  /** @type {string[] | null} */
+  let files = null;
+  /** @type {string[]} */
+  const unknown = [];
+
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (a === '--help' || a === '-h') { help = true; continue; }
+    if (a === '--json') { json = true; continue; }
+    if (a === '--strict') { strict = true; continue; }
+    if (a.startsWith('--base=')) {
+      base = a.slice('--base='.length);
+      if (!base) unknown.push('--base (missing value)');
+      continue;
+    }
+    if (a === '--base') {
+      const next = args[i + 1];
+      if (!next || next.startsWith('--')) {
+        unknown.push('--base (missing value)');
+        continue;
+      }
+      base = next;
+      i += 1;
+      continue;
+    }
+    if (a === '--files') {
+      if (files === null) files = [];
+      while (i + 1 < args.length && !args[i + 1].startsWith('--')) {
+        i += 1;
+        files.push(normalizePath(args[i]));
+      }
+      continue;
+    }
+    unknown.push(a);
+  }
+  return { help, json, strict, base, files, unknown };
+}
+
+/**
+ * `main` on a clone that only has `origin/main` is the usual miss. A simple
+ * name that is not a local ref tries `origin/<name>` next; anything else is
+ * used as given.
+ * @param {string} requested
+ * @param {GitRun} git
+ */
+export function resolveCompareRef(requested, git) {
+  const tried = [requested];
+  if (/^[A-Za-z0-9._-]+$/.test(requested)) tried.push(`origin/${requested}`);
+  /** @type {string[]} */
+  const missing = [];
+  for (const ref of tried) {
+    try {
+      git(['rev-parse', '--verify', ref]);
+      return ref;
+    } catch {
+      missing.push(ref);
+    }
+  }
+  throw new Error(`verify-plan: no ref '${requested}' (tried ${missing.join(', ')})`);
+}
+
+/** @param {string} root */
+function defaultGit(root) {
   /** @param {string[]} args */
-  const git = (args) => {
+  return (args) => {
     try {
       return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim();
-    } catch {
-      return '';
+    } catch (err) {
+      const e = /** @type {Error & { stderr?: string }} */ (err);
+      const detail = typeof e.stderr === 'string' && e.stderr.trim() ? e.stderr.trim() : e.message;
+      throw new Error(`verify-plan: git ${args.join(' ')} failed: ${detail}`);
     }
   };
-  let mergeBase = base;
-  const mb = git(['merge-base', 'HEAD', base]);
-  if (mb) mergeBase = mb;
+}
+
+/**
+ * Working tree, index and untracked against the merge-base of HEAD and `base`.
+ * A git failure throws — it is never treated as an empty plan.
+ * @param {string} root
+ * @param {string} [requested]
+ * @param {{ git?: GitRun }} [opts]
+ */
+export function collectGitPaths(root, requested = 'main', opts = {}) {
+  const git = opts.git ?? defaultGit(root);
+  const compare = resolveCompareRef(requested, git);
+  const mergeBase = git(['merge-base', 'HEAD', compare]);
+  if (!mergeBase) {
+    throw new Error(`verify-plan: git merge-base HEAD ${compare} produced no commit`);
+  }
   /** @type {Set<string>} */
   const names = new Set();
   for (const args of [
@@ -381,54 +479,50 @@ export function collectGitPaths(root, base) {
   return { base: mergeBase, files: [...names].sort() };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const root = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
-  const args = process.argv.slice(2);
-  if (args.includes('--help') || args.includes('-h')) {
-    process.stdout.write(USAGE);
-    process.exit(0);
-  }
-  const json = args.includes('--json');
-  const strict = args.includes('--strict');
-  const filesAt = args.indexOf('--files');
-  /** @type {string | undefined} */
-  let base;
-  for (const a of args) {
-    if (a.startsWith('--base=')) base = a.slice('--base='.length);
-  }
-  const baseIdx = args.indexOf('--base');
-  if (baseIdx >= 0 && args[baseIdx + 1] && !args[baseIdx + 1].startsWith('--')) base = args[baseIdx + 1];
+/**
+ * True when this module is the process entry. `resolve` so a relative
+ * `process.argv[1]` matches `import.meta.url` on Windows.
+ * @param {string | undefined} argv1
+ * @param {string} [metaUrl]
+ */
+export function isMainModule(argv1, metaUrl = import.meta.url) {
+  return argv1 !== undefined && metaUrl === pathToFileURL(resolve(argv1)).href;
+}
 
-  const known = new Set(['--json', '--strict', '--help', '-h', '--files', '--base']);
-  const unknownArgs = args.filter((a, i) => {
-    if (known.has(a) || a.startsWith('--base=')) return false;
-    if (filesAt >= 0 && i > filesAt) return false;
-    if (baseIdx >= 0 && i === baseIdx + 1) return false;
-    return true;
-  });
-  if (unknownArgs.length > 0) {
-    process.stderr.write(`verify-plan: unknown argument ${unknownArgs.join(' ')} (known: --base --files --json --strict)\n`);
+if (isMainModule(process.argv[1])) {
+  const root = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
+  try {
+    const parsed = parseArgs(process.argv.slice(2));
+    if (parsed.help) {
+      process.stdout.write(USAGE);
+      process.exit(0);
+    }
+    if (parsed.unknown.length > 0) {
+      process.stderr.write(`verify-plan: unknown argument ${parsed.unknown.join(' ')} (known: --base --files --json --strict)\n`);
+      process.exit(2);
+    }
+    /** @type {string[]} */
+    let files;
+    /** @type {string | undefined} */
+    let against;
+    if (parsed.files !== null) {
+      files = parsed.files;
+      against = undefined;
+    } else {
+      const collected = collectGitPaths(root, parsed.base ?? 'main');
+      files = collected.files;
+      against = collected.base;
+    }
+    const plan = planFor(files, { exists: (p) => existsSync(join(root, p)) });
+    if (parsed.json) {
+      process.stdout.write(`${JSON.stringify({ base: against, ...plan }, null, 2)}\n`);
+    } else {
+      process.stdout.write(`${formatPlan(plan, { base: against, count: files.length })}\n`);
+    }
+    if (parsed.strict && (plan.review.length > 0 || plan.unknown.length > 0)) process.exit(2);
+  } catch (err) {
+    const e = /** @type {Error} */ (err);
+    process.stderr.write(`${e.message}\n`);
     process.exit(2);
   }
-
-  /** @type {string[]} */
-  let files;
-  /** @type {string | undefined} */
-  let against;
-  if (filesAt >= 0) {
-    files = args.slice(filesAt + 1).map(normalizePath);
-    against = undefined;
-  } else {
-    const collected = collectGitPaths(root, base ?? 'main');
-    files = collected.files;
-    against = collected.base;
-  }
-
-  const plan = planFor(files, { exists: (p) => existsSync(join(root, p)) });
-  if (json) {
-    process.stdout.write(`${JSON.stringify({ base: against, ...plan }, null, 2)}\n`);
-  } else {
-    process.stdout.write(`${formatPlan(plan, { base: against, count: files.length })}\n`);
-  }
-  if (strict && (plan.review.length > 0 || plan.unknown.length > 0)) process.exit(2);
 }

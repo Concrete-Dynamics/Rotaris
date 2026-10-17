@@ -29,9 +29,10 @@ that moves a shared seam breaks a neighbour's proof, and that is the point of ha
 **evidence, not a test of the harness**: a red is a defect of the product until the harness is shown to be
 wrong.
 
-`pnpm verify:plan` prints that list for a diff (working tree against `main` by default): the gate, the complete
-affected proof suites, and the architecture documents. An unmapped path requires explicit review — it is never
-"no proofs". Run it before deciding which proofs to skip.
+`pnpm verify:plan` prints that list for a diff (working tree, index and untracked against the merge-base with
+`main`, or `origin/main` if `main` is missing): the gate, the complete affected proof suites, and the architecture
+documents. An unmapped path requires explicit review — it is never "no proofs". Run it before deciding which
+proofs to skip.
 
 No proof hangs on a launch that overruns. Every launch a script starts itself goes through
 `lib/bounded-launch.mjs`'s `spawnBounded`, and a driven one through the driver's `stopApp`. Two launches are neither,
@@ -134,6 +135,9 @@ A fifth, **`run-autopsy`**, is the post-run forensic skill: it reads a live run'
 transcript as evidence and writes a fixed-schema friction and defect report, and the orchestrated build's acceptance
 autopsy follows it (the profile's `autopsy.method`). Every portable skill has its thin `.claude/skills/` router, and
 `tools/skill-routers.test.ts` fails on one without (run-autopsy's was added on 2026-10-13).
+
+A sixth, **`verify-plan`**, prints the gate, the complete affected proof suites and the architecture documents for a
+diff (`pnpm verify:plan`). Unmapped paths require explicit review — never treat them as no proofs.
 
 `build-ui` and `debug-ui` may change source within the authority of the current task. `review-ui` writes only
 evidence under `.ui-review/`. Its critique is proposed evidence and reaches implementation through a separate,

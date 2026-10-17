@@ -29,5 +29,5 @@ Engine code is structural: no `electron`, and **time comes from the clock ports,
   paid-for lessons; assert against them rather than around them.
 
 Ordered edit paths: `docs/architecture/views/04-seams.md` §4 (tool), §5 (configuration key). The run
-flow itself is `03-runtime-view.md`. Evidence: `AGENTS.md` indexes the proof per area — run the suite a
-change touches, not the one script named after it.
+flow itself is `03-runtime-view.md`. Evidence: `docs/proofs/README.md` indexes each proof's area and its
+neighbours — run the suite a change touches, not the one script named after it.

@@ -22,4 +22,5 @@ collected by `vitest.config.ts` — `*.test.ts` only, so a `.tsx` suffix collect
   a row to `docs/architecture/first-executions.md`.
 - `pnpm live-run` spends the owner's money. It is never automatic; an agent asks first.
 
-The index of which proof covers what is in `AGENTS.md`.
+The index of which proof covers what is `docs/proofs/README.md`, rendered from `tools/proof-registry/registry.mjs`
+(`pnpm proofs:index` writes it; `pnpm lint` fails when it is stale).

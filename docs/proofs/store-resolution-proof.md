@@ -1,0 +1,6 @@
+# `store-resolution-proof`
+
+What this proof measures and re-verifies. The [proof registry](README.md) carries its area, prerequisites,
+platforms, flags and neighbours; the script is [`apps/desktop/scripts/store-resolution-proof.mjs`](../../apps/desktop/scripts/store-resolution-proof.mjs).
+
+A store's place holding no store resolved in Settings › Project (OQ-281, ruled 2026-10-14 under R-072; fin44): a seeded session backed up, the place emptied (`workspace.db` removed, the directory left); the next open's error notice opens Settings at Project, `session.list` answers `workspace.store-missing`, "Start a new session store…" stands beside the restore; the restore is admitted under the refusal, its first question says what was found, the backup's session is listed and the notice withdrawn, the found place kept; then, emptied again, the new store asked twice — Cancel (the default) moves nothing, "Start a new store" keeps the place at the path the question named and opens an empty store; since fin44 (launch D) a restore cut between its renames, left on disk before a launch (the journal, the displaced store, the empty target name), is put back by the open and said once in OQ-266's info notice, which names the prepared copy where it is there and none where it was deleted by hand

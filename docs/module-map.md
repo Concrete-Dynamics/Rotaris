@@ -10,7 +10,7 @@ It holds paths, entry files and test globs, and nothing that would go stale fast
 | Which files, in what order, to add a command / channel / column / tool / key / notice / preference / surface | [`architecture/views/04-seams.md`](architecture/views/04-seams.md) |
 | Which process owns a fact and who may write it | [`architecture/views/05-state-ownership.md`](architecture/views/05-state-ownership.md) |
 | What a word means, and which requirement owns it | [`../CONTEXT-MAP.md`](../CONTEXT-MAP.md) and the `CONTEXT.md` it names |
-| Which evidence re-verifies an area | [`../AGENTS.md`](../AGENTS.md) — the proof-script index |
+| Which evidence re-verifies an area | [`proofs/README.md`](proofs/README.md) — the proof registry |
 | What is owed, what stands in, what was decided | [`architecture/codebase.md`](architecture/codebase.md), the ADRs |
 
 Every package is `@rotaris/<name>` and exports through `src/index.ts`; `@rotaris/ui` also exports
@@ -64,9 +64,11 @@ build identifier, open `build-id.mjs`; tests in `build-id.test.ts`), `tools/requ
 `pnpm req-coverage` — every live shipping requirement's implementation, test and proof citations, report-only; open
 `coverage.mjs`, tests in `coverage.test.ts`), `tools/test-support-naming/` (since 2026-10-15 the one guard that a module
 only tests reach is named `<unit>.test-support.ts` in every package under `packages/` and that nothing an entry reaches
-imports one; `test-support-naming.test.ts`), `tools/verify-plan/` (`pnpm verify:plan` — given a diff, the gate,
-the complete affected proof suites and the architecture documents; an unmapped path requires explicit review;
-open `plan.mjs`, tests in `plan.test.ts`), and the standalone checks `pnpm lint` runs
+imports one; `test-support-naming.test.ts`), `tools/proof-registry/` (the proof registry behind `pnpm proofs:index` —
+`registry.mjs` holds one record per proof entry, `generate.mjs` renders `docs/proofs/README.md` and `pnpm lint` fails
+when it is stale, and `registry.test.ts` holds the registry to the tree), `tools/verify-plan/` (`pnpm verify:plan` —
+given a diff, the gate, the complete affected proof suites and the architecture documents; an unmapped path requires
+explicit review; open `plan.mjs`, tests in `plan.test.ts`), and the standalone checks `pnpm lint` runs
 before ESLint. `pnpm package` (`apps/desktop/scripts/package.mjs`) runs the notices and build-id steps before freezing;
 what the artifact must then carry is checked by `scripts/lib/about-assets.mjs`, which `afterPack` loads, and what it
 says when it ends is `scripts/lib/package-verdict.mjs`'s.

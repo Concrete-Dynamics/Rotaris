@@ -1,0 +1,6 @@
+# `terminal-proof`
+
+What this proof measures and re-verifies. The [proof registry](README.md) carries its area, prerequisites,
+platforms, flags and neighbours; the script is [`apps/desktop/scripts/terminal-proof.mjs`](../../apps/desktop/scripts/terminal-proof.mjs).
+
+The terminal grid, the pop-out window, the transcript preview (ADR-0047). Its live section spells the size probe, the motion command and the flood in the shell its harness reports (REQ-TOOLS-104). Before 2026-09-28 they were PowerShell everywhere, and off Windows four checks measured nothing (`docs/defects/fixed/terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md`). Since 2026-10-02 each key, click and wheel event waits until the page has counted it (`terminal-proof/fence.cjs`), and a fence that times out fails `harness.everyInputCounted`; the echo's 100 ms is read beside the host's load (`results.live.echoLoad`, OQ-176), and a red at a load average above the CPU count is run again alone. Since 2026-10-06 it runs a command longer than the PTY's input line through the real terminal manager and reads its status, its output and the window's grid (`live.longCommand*`; `docs/defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md`)

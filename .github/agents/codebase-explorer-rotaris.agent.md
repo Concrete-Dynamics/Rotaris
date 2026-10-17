@@ -41,7 +41,7 @@ Approved inputs are `docs/product/`, `docs/spec/`, `docs/architecture/`, `docs/c
 2. **Search narrow, then read entry files.** Use targeted symbol and text search scoped to the owning package or composition root (`apps/desktop/src/{main,preload,renderer,run-host,workspace-service}`). Read the entry file the module map names (`src/index.ts`, the seam file, the root file) before fanning out.
 3. **Confirm the seam.** For a command, channel, store column, tool, config key, notice, preference, or surface, check `docs/architecture/views/04-seams.md` for the ordered edit path and name where the requested behaviour sits on it — without walking it.
 4. **Distinguish found from absent.** A symbol with no match, a package with no edge, or a term with no citation is a finding, not a failure. Report the negative result and the closest verified neighbour.
-5. **Keep it quick by default.** Module map + targeted search + entry-file reads. Go deeper (call graphs, test globs, proof scripts from `AGENTS.md`) only when the request explicitly asks for thoroughness.
+5. **Keep it quick by default.** Module map + targeted search + entry-file reads. Go deeper (call graphs, test globs, proof scripts from `docs/proofs/README.md`) only when the request explicitly asks for thoroughness.
 
 # Output Format
 

@@ -90,7 +90,8 @@ owns, or when an entry point it names moves.
 `pnpm check` (symbols, typecheck, lint, tests, and this skill's self-test) fully green under Node 24 on the rebased
 head before every push: the reviewer runs it once per landing. Before handing over, a builder runs the quick checks
 (`pnpm symbols && pnpm typecheck && pnpm lint`) and the tests beside every unit it changed (`pnpm vitest run <paths>`).
-`pnpm build` before any proof or live run. The proof index is in `AGENTS.md`.
+`pnpm build` before any proof or live run. The proof registry — which entry measures what, its neighbours, what it
+needs and its flags — is `docs/proofs/README.md`, rendered from `tools/proof-registry/registry.mjs`.
 
 ## Records
 

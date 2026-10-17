@@ -1,0 +1,6 @@
+# `sandbox-proof`
+
+What this proof measures and re-verifies. The [proof registry](README.md) carries its area, prerequisites,
+platforms, flags and neighbours; the script is [`apps/desktop/scripts/sandbox-proof.mjs`](../../apps/desktop/scripts/sandbox-proof.mjs).
+
+OS-level confinement (ADR-0022). The proof reads the host's own verdict (`process.platform`, the launcher on `PATH`, its own trial) and asserts the product's answer for that case (`docs/defects/fixed/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md`). On `win32` and on Linux without `bwrap` it proves the refusal path. On every host it reads REQ-SANDBOX-130's disclosure on both surfaces, the settings card and the launch dialog (scenario 2b), and expects it only where no mechanism exists. **Where the backend is available it also runs REQ-SANDBOX-127's six effects (IC-8)** with `.git` present, plus a third confined launch with `.git` absent: REQ-SANDBOX-077's case (c). On Linux with `bwrap` that launch expects every command refused (`sandbox_unavailable`, 126, read from `tool_calls`) and `.git` still absent afterwards (`docs/defects/fixed/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`, OQ-140). Read `results.json` → `effects`

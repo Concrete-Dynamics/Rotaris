@@ -1,0 +1,6 @@
+# `approvals-proof`
+
+What this proof measures and re-verifies. The [proof registry](README.md) carries its area, prerequisites,
+platforms, flags and neighbours; the script is [`apps/desktop/scripts/approvals-proof.mjs`](../../apps/desktop/scripts/approvals-proof.mjs).
+
+Approval waits through real dialogs under `ask` (since fin42, 2026-10-13; the dialogs answered or left by `ROTARIS_CAPTURE_APPROVAL`'s per-tool form, `<tool>=<answer>[,…]`, `none` leaving one to its timeout): `away` drives PD-TOOLS-005 revisions 1 and 2 and PD-TOOLS-011 at a 12 s timeout — the first wait times out and writes `user_away`, a wait queued behind it ends in the same tick unshown, asks while away are denied at once with no dialog, the question tool's own approval survives the mark and is shown, and answering it writes `user_returned` (read through `lib/approval-readings.mjs`); `session` drives PD-TOOLS-004 — one `write_file` dialog answered for the session, the edit of the same path that follows allowed by the session rule with no dialog, and a terminal dialog left to time out read as `user_away` in the audit; `--only=<launch>` picks launches. The live run's `away` and `approvals` scenarios are their real-model half, and its `plan-gate` scenario the plan gate's

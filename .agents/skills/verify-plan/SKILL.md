@@ -6,7 +6,7 @@ argument-hint: '[--files paths | --base=ref]'
 
 # Verification planner
 
-AGENTS.md's rule is to **run the whole suite a part touches**, not the one script named after the file. Do not reconstruct that list by reading the proof-script table. Run the planner and follow it.
+AGENTS.md's rule is to **run the whole suite a part touches**, not the one script named after the file. Do not reconstruct that list yourself — not from forty script headers, and not from the proof registry. Run the planner and follow it.
 
 ```
 pnpm verify:plan

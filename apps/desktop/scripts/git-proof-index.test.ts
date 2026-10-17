@@ -1,13 +1,14 @@
 /**
  * `git-proof.mjs` keeps its launches listed in two places agents read before they run it: the script's own header
- * block, and its row in the proof index in `AGENTS.md`. Launch 6c (`unborn-branch`, fin22) was added to the script and
- * to neither, so the index never said that git-proof shows REQ-WORKSPACE-020's empty item for an unborn branch
+ * block, and its record in the proof registry (`docs/proofs/git-proof.md`; the row read `AGENTS.md`'s proof table
+ * until that table moved into the registry, 2026-10-18). Launch 6c (`unborn-branch`, fin22) was added to the script
+ * and to neither, so the index never said that git-proof shows REQ-WORKSPACE-020's empty item for an unborn branch
  * (REQ-WORKSPACE-029), and the header still said "six launches" where ten ran
  * (`docs/defects/fixed/agents-md-git-proof-row-omits-the-unborn-branch-launch.md`).
  *
  * The scan reads the script's text: each launch section is headed `// <label>. ` at column zero (`1`, `3b`, `6c`), and
  * its launch is the first `launch('<name>'` after that heading. It asserts that the header lists every section as
- * `<label>. <name>`, that the header's count is the number of launches, and that the AGENTS.md row names every lettered
+ * `<label>. <name>`, that the header's count is the number of launches, and that the record names every lettered
  * launch (the ones added after a numbered launch, and the ones an index forgets) as `launch <label>` and by its name.
  */
 import { describe, expect, it } from 'vitest';
@@ -16,7 +17,7 @@ import { join, resolve } from 'node:path';
 
 const REPO = resolve(import.meta.dirname, '..', '..', '..');
 const SCRIPT = readFileSync(join(REPO, 'apps', 'desktop', 'scripts', 'git-proof.mjs'), 'utf8');
-const AGENTS = readFileSync(join(REPO, 'AGENTS.md'), 'utf8');
+const RECORD = readFileSync(join(REPO, 'docs', 'proofs', 'git-proof.md'), 'utf8');
 const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen'];
 
 interface Section { label: string; name: string }
@@ -37,12 +38,6 @@ function header(text: string): string {
   return text.slice(0, close);
 }
 
-function row(text: string): string {
-  const line = text.split('\n').find((l) => l.startsWith('| | `git-proof` |'));
-  if (!line) throw new Error('AGENTS.md has no git-proof row in its proof index');
-  return line;
-}
-
 const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 describe('git-proof\'s launches are listed where agents read them (REQ-WORKSPACE-020, REQ-WORKSPACE-029)', () => {
@@ -59,11 +54,10 @@ describe('git-proof\'s launches are listed where agents read them (REQ-WORKSPACE
     expect(head).toContain(`${WORDS[found.length]} launches`);
   });
 
-  it('the AGENTS.md row names every lettered launch by its label and its name', () => {
-    const line = row(AGENTS);
+  it('its registry record names every lettered launch by its label and its name', () => {
     for (const { label, name } of found.filter((s) => /[a-z]$/.test(s.label))) {
-      expect(line, `launch ${label}`).toMatch(new RegExp(`\\blaunch ${escape(label)}\\b`));
-      expect(line, `\`${name}\``).toContain(`\`${name}\``);
+      expect(RECORD, `launch ${label}`).toMatch(new RegExp(`\\blaunch ${escape(label)}\\b`));
+      expect(RECORD, `\`${name}\``).toContain(`\`${name}\``);
     }
   });
 });

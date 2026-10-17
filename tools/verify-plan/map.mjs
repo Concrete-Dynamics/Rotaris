@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // @ts-check
-// Path → area map for the local verification planner. Areas are AGENTS.md's
-// proof-script groups: a match takes the **complete** suite, not the one script
-// named after the file. An unmapped path is not "no proofs" — the planner
-// requires explicit review (AGENTS.md, "run the whole suite a part touches").
+// Path → area map for the local verification planner. An area is one of the planner's own groups
+// of the proof suite (finer than the proof registry's, `docs/proofs/README.md`): a match takes the
+// **complete** suite, not the one script named after the file. An unmapped path is not "no proofs" —
+// the planner requires explicit review (AGENTS.md, "run the whole suite a part touches").
 //
 // Longest matching `paths` entry wins. A proof-script filename still adds that
 // one proof on top. `live-run` and `slice-proof` are listed so they cannot be

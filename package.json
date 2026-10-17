@@ -87,6 +87,7 @@
     "notices": "node tools/notices/generate.mjs",
     "build-id": "node tools/build-id/write.mjs",
     "req-coverage": "node tools/requirement-coverage/coverage.mjs",
+    "verify:plan": "node tools/verify-plan/plan.mjs",
     "check": "pnpm symbols && pnpm typecheck && pnpm lint && pnpm test"
   },
   "devDependencies": {

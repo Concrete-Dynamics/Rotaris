@@ -29,6 +29,10 @@ that moves a shared seam breaks a neighbour's proof, and that is the point of ha
 **evidence, not a test of the harness**: a red is a defect of the product until the harness is shown to be
 wrong.
 
+`pnpm verify:plan` prints that list for a diff (working tree against `main` by default): the gate, the complete
+affected proof suites, and the architecture documents. An unmapped path requires explicit review — it is never
+"no proofs". Run it before deciding which proofs to skip.
+
 No proof hangs on a launch that overruns. Every launch a script starts itself goes through
 `lib/bounded-launch.mjs`'s `spawnBounded`, and a driven one through the driver's `stopApp`. Two launches are neither,
 and `lib/launch-sites.test.ts` names them with their reasons: `code-intel-proof`'s branch, a stdio server whose RPC

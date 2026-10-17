@@ -134,6 +134,7 @@ pnpm typecheck | pnpm lint | pnpm symbols     # the pieces, when the whole gate 
 pnpm build && electron apps/desktop/out/main/index.js
 pnpm dev                                      # electron-vite, against the workspace source
 pnpm <area>-proof                             # the built app measuring one mechanism — AGENTS.md indexes all of them
+pnpm verify:plan                              # a diff → gate, complete proof suites, architecture docs; unmapped paths need review
 pnpm app:drive start|shot|inspect|stop        # drive the built app, free, no provider
 pnpm mockup                                   # the design material, before drawing a surface
 ```

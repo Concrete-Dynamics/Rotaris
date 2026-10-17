@@ -14,6 +14,10 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-10-18**
+
+**The development-time store behind `pnpm dev-time` (R-075; first execution 2026-10-18).** `01-component-view.md` gains the tool's section: measured spans of setup, build, each `pnpm check` stage, proofs, repairs and repeated rebases, one JSON record a span in `~/.rotaris/dev-time/log.jsonl`. No package, edge or process changed.
+
 Last reconciled with the code: **2026-10-16**
 
 **Windows MCP shutdown preserves the runner until its server closes (R-074, REQ-MCP-066/067/113).** `02-process-view.md` now states the Windows graceful phase: stdin EOF, then the existing grace, then taskkill of the intact tree. The immediate rename after graceful and forced runner shutdown is measured by the MCP suite. Observation fixtures use Windows junctions, preserving their existing path-alias assertions without needing symlink privileges.

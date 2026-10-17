@@ -68,7 +68,10 @@ imports one; `test-support-naming.test.ts`), `tools/proof-registry/` (the proof 
 `registry.mjs` holds one record per proof entry, `generate.mjs` renders `docs/proofs/README.md` and `pnpm lint` fails
 when it is stale, and `registry.test.ts` holds the registry to the tree), `tools/verify-plan/` (`pnpm verify:plan` —
 given a diff, the gate, the complete affected proof suites and the architecture documents; an unmapped path requires
-explicit review; open `plan.mjs`, tests in `plan.test.ts`), and the standalone checks `pnpm lint` runs
+explicit review; open `plan.mjs`, tests in `plan.test.ts`), `tools/dev-time/` (since 2026-10-18 the recorder behind
+`pnpm dev-time` (R-075) — measured spans of setup, build, each gate stage, proofs, repairs and repeated rebases, one
+JSON record a span in an append-only log, `~/.rotaris/dev-time/log.jsonl`; open `dev-time.mjs` and `cli.mjs`; tests
+in `dev-time.test.ts`), and the standalone checks `pnpm lint` runs
 before ESLint. `pnpm package` (`apps/desktop/scripts/package.mjs`) runs the notices and build-id steps before freezing;
 what the artifact must then carry is checked by `scripts/lib/about-assets.mjs`, which `afterPack` loads, and what it
 says when it ends is `scripts/lib/package-verdict.mjs`'s.

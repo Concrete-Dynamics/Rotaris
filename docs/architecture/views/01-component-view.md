@@ -327,6 +327,21 @@ before it. **Edges unchanged**: a script reaching a tool, as above.
 the product ships. **Edges unchanged**: `tools/**` is outside the boundary rule, and its test reaches the artifact through
 `@rotaris/kernel`, as `symbol-artifact`'s does.
 
+### The development-time store behind `pnpm dev-time` (2026-10-18; R-075)
+
+`tools/dev-time/` is a **development-time tool** with no `package.json`. It runs from `pnpm dev-time`
+(`cli.mjs`; the library is `dev-time.mjs`, tests in `dev-time.test.ts`) and measures spans of the work around
+the product rather than the product: setup, build, each gate stage, proofs, repairs and repeated rebases.
+Each span is one JSON record appended to an append-only log — `~/.rotaris/dev-time/log.jsonl`, or the
+directory `ROTARIS_DEV_TIME_HOME` names, so every worktree of a host shares one history and no store dies
+with a removed tree. `pnpm dev-time gate` runs the four `pnpm check` stages in `pnpm check`'s order, one
+record each and stop on the first failure as its `&&` does; `proof <script>` runs a named script of the root
+`package.json`; `run` measures one command; `start`/`stop` measure work no single command covers. A record
+carries the command as spelled, the working directory, the repository, branch and head, whether the tree was
+dirty, the host, and the exit. It imports nothing of the product and nothing in `packages/` or `apps/`
+imports it. **Edges unchanged**: `tools/**` is outside the boundary rule, and the test imports the library
+directly, as its siblings' tests do.
+
 ### The setup manifest and its schema (2026-09-28; `first-release-plan.md` §4.1, ADR-0054)
 
 `apps/desktop/resources/setup-manifest.json` is REQ-STARTUP-058's manifest: committed, not generated, and carried by

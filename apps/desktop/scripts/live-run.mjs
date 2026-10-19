@@ -712,8 +712,15 @@ const SANDBOX_ROOT = join(tmpdir(), 'rotaris-live-run');
 const dropCredentials = (dir) => rmSync(tokensDirFor(join(dir, 'local')), { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 function cleanup(keep) {
   dropCredentials(sandbox);
-  if (keep) writeFileSync(join(sandbox, KEPT_FILE), `kept by --keep at ${new Date().toISOString()}; its credential store was deleted.\n`);
-  else rmSync(sandbox, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+  // A transient Windows lock — an antivirus reading the store, a process still closing — can outlast the retries;
+  // a throw here would run through the fatal handler's second cleanup and end the process at Node's exit 7
+  // (docs/defects/fixed/the-live-runs-cleanup-crashes-the-fatal-handler-on-a-transient-windows-file-lock.md).
+  try {
+    if (keep) writeFileSync(join(sandbox, KEPT_FILE), `kept by --keep at ${new Date().toISOString()}; its credential store was deleted.\n`);
+    else rmSync(sandbox, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+  } catch (cause) {
+    console.error(`warning: the sandbox could not be removed (${cause instanceof Error ? cause.message : String(cause)}); its credentials are already deleted, and the next run's sweep removes the leftover`);
+  }
 }
 // Whatever a previous run left behind loses its credentials now, and loses everything unless it was kept on purpose.
 // A sandbox whose `OWNER` is a live process is a concurrent live run's, and is left alone with its key: the sweep
@@ -2159,9 +2166,14 @@ if (wanted.includes('shell')) {
   };
   const sessions = probe('[data-testid="overview-sessions"] .ov-session') ?? [];
   const branch = probe('[data-testid="overview-repo-branch"]') ?? [];
+  const expectedSessions = wanted.filter((name) => name === 'ask' || name === 'edit').length;
   check(probe('.app-shell')?.length === 1, 'the shell painted');
-  check(sessions.length >= wanted.filter((name) => name === 'ask' || name === 'edit').length, 'Overview lists the sessions the runs left', `${sessions.length} session row(s)`);
-  check(branch.length > 0 && /main/.test(branch[0]?.text ?? ''), 'the repository card reads the branch', branch[0]?.text ?? 'absent');
+  check(sessions.length >= expectedSessions, 'Overview lists the sessions the runs left', `${sessions.length} session row(s)`);
+  // The repository card reads the attached session, and a run that left none — `--only=shell` alone — paints no
+  // card; that is the surface's design, not a red.
+  // docs/defects/fixed/the-live-runs-shell-scenario-reds-on-a-run-that-left-no-session.md
+  if (expectedSessions === 0 && sessions.length === 0) noted('the repository card reads the branch', 'no session was attached, so the Overview paints no repository card');
+  else check(branch.length > 0 && /main/.test(branch[0]?.text ?? ''), 'the repository card reads the branch', branch[0]?.text ?? 'absent');
   results.scenarios.shell = { sessions: sessions.map((row) => row.text), branch: branch[0]?.text ?? null, toolChips: (probe('[data-testid="overview-tool-chips"] .tag') ?? []).map((tag) => tag.text) };
 }
 

@@ -25,6 +25,12 @@
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
+import { armEntryClock } from '../../../../tools/dev-time/dev-time.mjs';
+
+// Every proof whose launch goes through here records its own wall time in the development-time store (R-075),
+// under its own name; the clock never arms under vitest and never arms twice. `tools/dev-time/dev-time.mjs` states
+// the whole contract.
+armEntryClock();
 
 const POSIX = process.platform !== 'win32';
 /**

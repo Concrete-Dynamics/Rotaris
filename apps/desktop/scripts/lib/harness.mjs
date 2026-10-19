@@ -24,6 +24,13 @@ import { createHash } from 'node:crypto';
 import { join, posix, relative, resolve, sep, win32 } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { armEntryClock, entryName, entryRecordIdentity, recordSpan } from '../../../../tools/dev-time/dev-time.mjs';
+
+// Every script that imports this harness records its own wall time in the development-time store (R-075), under
+// its own name — `proof:terminal-proof`, `other:drive` — whether or not its author thought about measuring. The
+// clock never arms under vitest, never arms twice, and never arms when the capture is switched off
+// (`ROTARIS_DEV_TIME_DISABLE`); `tools/dev-time/dev-time.mjs` states the whole contract.
+armEntryClock();
 
 /** The repository root, the desktop app's directory and the Electron executable, resolved the way every proof resolves them. */
 export const repo = resolve(import.meta.dirname, '..', '..', '..', '..');
@@ -215,9 +222,22 @@ export function evidenceDirectory(name) {
 
 /** `pnpm --filter @rotaris/desktop build`, with the log written beside the evidence. Skipped by `--skip-build` in the caller. */
 export function buildDesktop(output) {
+  const began = Date.now();
   const built = process.platform === 'win32'
     ? spawnSync('cmd.exe', ['/d', '/s', '/c', 'pnpm --filter @rotaris/desktop build'], { cwd: repo, encoding: 'utf8', timeout: 300_000 })
     : spawnSync('pnpm', ['--filter', '@rotaris/desktop', 'build'], { cwd: repo, encoding: 'utf8', timeout: 300_000 });
+  // The build is measured wherever it runs (R-075), marked with the entry that asked for it.
+  recordSpan({
+    kind: 'build',
+    label: 'desktop',
+    command: 'pnpm --filter @rotaris/desktop build',
+    cwd: repo,
+    durationMs: Date.now() - began,
+    exitCode: built.status ?? null,
+    signal: built.signal ?? null,
+    error: built.error ? built.error.code ?? built.error.message : null,
+    via: entryRecordIdentity(entryName())?.label ?? null,
+  });
   if (output) {
     mkdirSync(output, { recursive: true });
     writeFileSync(join(output, 'build.log'), `${built.stdout ?? ''}\n${built.stderr ?? ''}`);

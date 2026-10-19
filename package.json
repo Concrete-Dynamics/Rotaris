@@ -9,16 +9,16 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "node tools/check-line-endings.mjs && node tools/check-conflict-markers.mjs && node tools/check-request-log.mjs && node tools/check-directive-register.mjs && node tools/check-record-links.mjs && node tools/proof-registry/generate.mjs --check && node tools/check-theme-colours.mjs && node tools/check-ui-language.mjs && node tools/check-plural-markers.mjs && node tools/check-timeline-vocabulary.mjs && node tools/check-open-question-claims.mjs && eslint .",
+    "typecheck": "node tools/dev-time/cli.mjs run --quiet gate:typecheck -- tsc -p tsconfig.json --noEmit",
+    "lint": "node tools/dev-time/cli.mjs run --quiet --shell gate:lint -- \"node tools/check-line-endings.mjs && node tools/check-conflict-markers.mjs && node tools/check-request-log.mjs && node tools/check-directive-register.mjs && node tools/check-record-links.mjs && node tools/proof-registry/generate.mjs --check && node tools/check-theme-colours.mjs && node tools/check-ui-language.mjs && node tools/check-plural-markers.mjs && node tools/check-timeline-vocabulary.mjs && node tools/check-open-question-claims.mjs && eslint .\"",
     "mockup": "node tools/mockup.mjs",
-    "test": "vitest run",
+    "test": "node tools/dev-time/cli.mjs run --quiet gate:test -- vitest run",
     "test:watch": "vitest",
-    "symbols": "node tools/symbol-artifact/generate.mjs",
+    "symbols": "node tools/dev-time/cli.mjs run --quiet gate:symbols -- node tools/symbol-artifact/generate.mjs",
     "proofs:index": "node tools/proof-registry/generate.mjs --write",
     "directive-proof": "node apps/desktop/scripts/directive-proof.mjs",
     "dev": "pnpm --filter @rotaris/desktop dev",
-    "build": "pnpm --filter @rotaris/desktop build",
+    "build": "node tools/dev-time/cli.mjs run --quiet build:desktop -- pnpm --filter @rotaris/desktop build",
     "theme-proof": "node apps/desktop/scripts/theme-proof.mjs",
     "part-h-proof": "node apps/desktop/scripts/part-h-proof.mjs",
     "config-proof": "node apps/desktop/scripts/config-proof.mjs",
@@ -94,7 +94,7 @@
     "worktree:new": "node tools/worktree/new.mjs",
     "worktree:land": "node tools/worktree/land.mjs",
     "preflight": "node apps/desktop/scripts/preflight.mjs",
-    "check": "pnpm symbols && pnpm typecheck && pnpm lint && pnpm test"
+    "check": "node tools/dev-time/cli.mjs gate"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

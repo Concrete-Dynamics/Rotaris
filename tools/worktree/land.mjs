@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { isMainModule, oneLine, seconds } from './exec.mjs';
 import * as git from './git.mjs';
-import { defaultDeps, needsSetup } from './steps.mjs';
+import { defaultDeps, measured, needsSetup } from './steps.mjs';
 
 export const USAGE = `pnpm worktree:land [--skip-proofs] [--reviewed] [--keep] [--max-attempts=<n>] [--worktree=<path>]
 
@@ -94,7 +94,7 @@ export function parseLandArgs(args) {
  * @param {{ argv: string[], cwd?: string, deps?: import('./steps.mjs').Deps }} options
  * @returns {number} the exit code
  */
-export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps() }) {
+export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps({ via: 'worktree:land' }) }) {
   const parsed = parseLandArgs(argv);
   if (parsed.help) {
     deps.log(USAGE);
@@ -243,7 +243,9 @@ export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps() }) {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     deps.log(`worktree:land: fetching origin/main (attempt ${attempt} of ${maxAttempts})`);
-    const fetch = git.git(['fetch', 'origin', 'main'], { cwd: root });
+    const fetch = measured({ kind: 'other', label: 'fetch', command: 'git fetch origin main', cwd: root, via: 'worktree:land' }, () =>
+      git.git(['fetch', 'origin', 'main'], { cwd: root }),
+    );
     if (fetch.status !== 0) {
       deps.error(`worktree:land: git fetch failed: ${oneLine(fetch.stderr)}`);
       return 1;
@@ -259,7 +261,9 @@ export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps() }) {
     }
 
     deps.log('worktree:land: rebase onto origin/main');
-    const rebase = git.git(['rebase', 'origin/main'], { cwd: root, stdio: 'inherit' });
+    const rebase = measured({ kind: 'rebase', label: 'onto-main', command: 'git rebase origin/main', cwd: root, via: 'worktree:land' }, () =>
+      git.git(['rebase', 'origin/main'], { cwd: root, stdio: 'inherit' }),
+    );
     if (rebase.status !== 0) {
       const conflicted = git
         .git(['diff', '--name-only', '--diff-filter=U'], { cwd: root })
@@ -338,10 +342,14 @@ export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps() }) {
     }
 
     deps.log('worktree:land: pushing HEAD:main (fast-forward only, never a force)');
-    const push = git.git(['push', 'origin', 'HEAD:main'], { cwd: landDir });
+    const push = measured({ kind: 'other', label: 'push', command: 'git push origin HEAD:main', cwd: landDir, via: 'worktree:land' }, () =>
+      git.git(['push', 'origin', 'HEAD:main'], { cwd: landDir }),
+    );
     if (push.status === 0) return finish(head, true);
 
-    git.git(['fetch', 'origin', 'main'], { cwd: root });
+    measured({ kind: 'other', label: 'fetch', command: 'git fetch origin main', cwd: root, via: 'worktree:land' }, () =>
+      git.git(['fetch', 'origin', 'main'], { cwd: root }),
+    );
     if (!git.isAncestor(root, 'HEAD', 'origin/main')) {
       if (attempt < maxAttempts) {
         deps.log(`worktree:land: origin/main moved under the push — rebasing, gating and pushing again (attempt ${attempt + 1} of ${maxAttempts})`);

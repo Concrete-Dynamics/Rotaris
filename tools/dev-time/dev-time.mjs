@@ -3,8 +3,23 @@
 // development time before optimizing checks. Capture time spent on setup, build, individual gate stages, proofs,
 // repairs, and repeated rebases. Establishes where time actually goes. I haven't benchmarked these, so speed gains
 // remain hypotheses." This tool is that measure: it wraps a command or a manual span around a clock, appends one
-// honest record per span, and aggregates what was recorded — nothing more. It optimizes nothing and it fails nothing
-// but itself: no gate reads the store, and the record is evidence for decisions, not a control on them.
+// honest record per span, and aggregates what was recorded — nothing more. It optimizes nothing and gates nothing:
+// no command's result depends on the store, and the record is evidence for decisions, not a control on them.
+//
+// **What records itself.** The capture is transparent where the work happens, so it needs no habit. `package.json`
+// wraps the gate's four stages and the desktop build around `pnpm dev-time run --quiet …` (so `pnpm symbols`,
+// `pnpm typecheck`, `pnpm lint`, `pnpm test` and `pnpm build` are measured however they are started) and
+// `pnpm check` is the gate runner, which records the whole run as one `gate:check` — with the stages recording
+// themselves, and only when all four ran (a `--stage=` subset gets no total). `apps/desktop/scripts/lib/harness.mjs`
+// and `lib/bounded-launch.mjs` arm `armEntryClock` at import, so the 54 of the 63 scripts under
+// `apps/desktop/scripts/` that import one of them record their own wall time under their own name —
+// `proof:terminal-proof`, `other:drive` — with the nine that import neither (`attachments-proof`, `directive-proof`,
+// `evidence`, `improvements-proof`, `preflight`, `requirements-runs-proof`, `restore-kill-proof`,
+// `terminal-stream-proof`, `todo-proof`) unmeasured when run bare; a desktop build inside one of them is recorded
+// by `buildDesktop`; and the `tools/worktree/` wrappers record their own setup, fetch, rebase and push steps.
+// A capture never fails the work it measures: a store that cannot be written is said once and the command's own
+// result stands. `ROTARIS_DEV_TIME_DISABLE` switches the whole capture off for a run that wants none of it, and
+// `ROTARIS_DEV_TIME_VIA` names the context a wrapped command ran in.
 //
 // **Where the store lives.** `~/.rotaris/dev-time/log.jsonl`, by the precedent of the live-run endpoint registry
 // (`apps/desktop/scripts/lib/endpoint-registry.mjs` reads `~/.rotaris/live-run/`). Worktrees are temporary and are
@@ -28,21 +43,22 @@
 // overwritten; a `stop` with no span open is refused, not invented.
 //
 // Usage — the CLI is `cli.mjs`; `pnpm dev-time` with no command prints it:
-//   run <kind>:<label> -- <command…>   measure one command (setup, build, repair work, a rebase…)
-//   gate [--stage=<name>]… [--keep-going]   the four `pnpm check` stages, one record each
+//   run [--quiet] [--shell] <kind>:<label> -- <command…>   measure one command (repair work, a rebase…)
+//   gate [--stage=<name>]… [--keep-going]   run the four `pnpm check` stages; each records itself, the run as gate:check
 //   proof <script> [args…]             a named pnpm script (a proof script, the live run)
 //   start <kind>:<label> / stop / cancel / pending   manual spans around work no single command covers
-//   report [--days=N] [--json]         aggregate by kind and label
+//   report [--days=N] [--json]         aggregate by kind and label, and the reds each next green closed
 //   log [--tail=N] [--all] [--json]    the recent records
 //
-// Plain JavaScript with `@ts-check`, like `tools/build-id/`: the callers are `pnpm dev-time` invocations and the
-// tests beside it, and none compiles TypeScript. `dev-time.d.mts` is the contract for those tests.
+// Plain JavaScript with `@ts-check`, like `tools/build-id/`: the callers are `pnpm dev-time` invocations, the proof
+// harness libraries that arm the entry clock, the `tools/worktree/` wrappers, and the tests beside them — none
+// compiles TypeScript. `dev-time.d.mts` is the contract for those tests.
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { cpus, homedir, totalmem } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { REDIRECTING } from '../build-id/build-id.mjs';
 
 /** The record schema this module writes and is willing to read back. */
@@ -60,6 +76,15 @@ export const HOME_ENV = 'ROTARIS_DEV_TIME_HOME';
 /** The one file records are appended to, under the store directory. */
 export const STORE_FILE = 'log.jsonl';
 
+/** The environment variable naming the context a wrapped command ran in (`check` inside a gate; `worktree:land` inside the landing). */
+export const VIA_ENV = 'ROTARIS_DEV_TIME_VIA';
+
+/** The environment variable that switches the capture off: a deliberate switch records nothing, and nothing it covers stops. */
+export const DISABLE_ENV = 'ROTARIS_DEV_TIME_DISABLE';
+
+/** The marker this tool sets on a command it measures itself, so a harness inside it does not record the same span twice. */
+export const WRAPPED_ENV = 'ROTARIS_DEV_TIME_WRAPPED';
+
 /** The exit code a child ended by this signal maps to, POSIX shell style (128 + n); an unknown signal maps to 1. */
 const SIGNAL_CODES = Object.freeze({ SIGHUP: 1, SIGINT: 2, SIGQUIT: 3, SIGABRT: 6, SIGKILL: 9, SIGSEGV: 11, SIGTERM: 15, SIGBREAK: 21 });
 
@@ -70,6 +95,16 @@ const SIGNAL_CODES = Object.freeze({ SIGHUP: 1, SIGINT: 2, SIGQUIT: 3, SIGABRT: 
 export function defaultStoreDir(env = process.env, home = homedir()) {
   const override = env[HOME_ENV];
   return override !== undefined && override !== '' ? resolve(override) : join(home, '.rotaris', 'dev-time');
+}
+
+/**
+ * Whether the capture is switched off: `ROTARIS_DEV_TIME_DISABLE` set to anything but `''`, `'0'` or `'false'`. A
+ * switch a person sets is deliberate — the commands still run and still answer their own codes, and nothing is said.
+ * @param {NodeJS.ProcessEnv} [env]
+ */
+export function disabled(env = process.env) {
+  const value = env[DISABLE_ENV];
+  return value !== undefined && value !== '' && value !== '0' && value.toLowerCase() !== 'false';
 }
 
 /**
@@ -229,6 +264,32 @@ export function appendRecord(storeDir, record) {
   return file;
 }
 
+/** One warning per process: a store that cannot be written is said once, never once per measurement. */
+let storeWarned = false;
+
+/** Say a measurement was not recorded — once per process, on stderr — and never as a failure of the measured work. */
+function warnNotRecorded(message) {
+  if (storeWarned) return;
+  storeWarned = true;
+  process.stderr.write(`[dev-time] not recorded: ${message} — the work it measured stands\n`);
+}
+
+/**
+ * Append one record with the whole write guarded: a measurement must never fail the work it measured, so a store
+ * that cannot be written is said once and answered `false`, never thrown.
+ * @param {string} storeDir @param {Record<string, unknown>} record
+ * @returns {boolean}
+ */
+export function tryAppendRecord(storeDir, record) {
+  try {
+    appendRecord(storeDir, record);
+    return true;
+  } catch (error) {
+    warnNotRecorded(`the store under ${storeDir} could not be written (${error instanceof Error ? error.message : String(error)})`);
+    return false;
+  }
+}
+
 /**
  * One command line built from tokens. Everywhere but Windows the tokens run directly (`shell: false`), so quoting
  * stays exactly as written; on Windows a `cmd` line is built, because a shim like `pnpm.cmd` is only reachable
@@ -245,6 +306,19 @@ export function shellCommand(tokens, platform = process.platform) {
     return { file: tokens.map(quote).join(' '), args: [], pretty, shell: true };
   }
   return { file: tokens[0], args: tokens.slice(1), pretty };
+}
+
+/**
+ * The tokens as one line through the platform's own shell, on both platforms (`spawn`'s `shell: true`): for a
+ * compound command — `a && b`, the lint stage's whole chain — that must be one measured span, which only a shell
+ * can run. `shellCommand` above is the platform-smart default; this is the explicit switch.
+ * @param {string[]} tokens
+ * @returns {{ file: string, args: string[], pretty: string, shell?: boolean }}
+ */
+export function shellLine(tokens) {
+  if (tokens.length === 0) throw new TypeError('shellLine needs at least one token');
+  const line = tokens.join(' ');
+  return { file: line, args: [], pretty: line, shell: true };
 }
 
 /**
@@ -274,13 +348,37 @@ export function pnpmCommand(script, args = [], env = process.env) {
 }
 
 /**
- * Run one command under the clock, append its record, and answer the child's exit code. The child's stdio is
- * inherited: the tool measures the session the person is already watching and keeps none of its output — records
- * hold the command as spelled, never a build log.
- * @param {{ storeDir: string, kind: string, label: string, command: { file: string, args: string[], pretty: string, shell?: boolean }, cwd?: string, env?: NodeJS.ProcessEnv, spawn?: typeof spawnSync }} options
- * @returns {{ record: Record<string, unknown>, code: number }}
+ * One record's shape, built in one place so the writers cannot drift apart: the identity, the command as spelled,
+ * the facts of the directory and the host, the clock, how it ended — and `via`, the context that ran it, or null.
+ * @param {{ kind: string, label: string, command: string | null, cwd: string, env: NodeJS.ProcessEnv, startedAt: Date, endedAt: Date, durationMs: number, exitCode: number | null, signal: string | null, error: string | null, via: string | null }} parts
+ * @returns {Record<string, unknown>}
  */
-export function runMeasured({ storeDir, kind, label, command, cwd = process.cwd(), env = process.env, spawn = spawnSync }) {
+function buildRecord({ kind, label, command, cwd, env, startedAt, endedAt, durationMs, exitCode, signal, error, via }) {
+  return {
+    schema: SCHEMA,
+    kind,
+    label,
+    command,
+    cwd: resolve(cwd),
+    ...gitFacts({ cwd, env }),
+    host: hostFacts(),
+    startedAt: startedAt.toISOString(),
+    endedAt: endedAt.toISOString(),
+    durationMs,
+    exitCode,
+    signal,
+    error,
+    via,
+  };
+}
+
+/**
+ * One command's child, run on the clock. The one place a spawn happens: `runMeasured` records what came back; the
+ * gate runner only needs each stage's code, because a stage records itself through its `package.json` wrapper.
+ * @param {{ file: string, args: string[], shell?: boolean }} command
+ * @param {{ cwd: string, env: NodeJS.ProcessEnv, spawn: typeof spawnSync }} how
+ */
+function runChild(command, { cwd, env, spawn }) {
   const startedAt = new Date();
   const began = process.hrtime.bigint();
   const child = spawn(command.file, command.args, { cwd, env, stdio: 'inherit', windowsHide: true, shell: command.shell ?? false });
@@ -290,32 +388,49 @@ export function runMeasured({ storeDir, kind, label, command, cwd = process.cwd(
   const signal = child.signal;
   const error = child.error ? (/** @type {NodeJS.ErrnoException} */ (child.error).code ?? child.error.message) : null;
   const code = status ?? (signal ? 128 + (SIGNAL_CODES[/** @type {keyof typeof SIGNAL_CODES} */ (signal)] ?? 1) : error ? 1 : 0);
-  const record = {
-    schema: SCHEMA,
-    kind,
-    label,
-    command: command.pretty,
-    cwd: resolve(cwd),
-    ...gitFacts({ cwd, env }),
-    host: hostFacts(),
-    startedAt: startedAt.toISOString(),
-    endedAt: endedAt.toISOString(),
-    durationMs,
-    exitCode: status ?? null,
-    signal: signal ?? null,
-    error,
-  };
-  appendRecord(storeDir, record);
-  return { record, code };
+  return { code, startedAt, endedAt, durationMs, status: status ?? null, signal: signal ?? null, error };
 }
 
 /**
- * The four `pnpm check` stages, one measured record each, in the gate's own order (R-075 names them apart on
- * purpose: "individual gate stages"). A stage that fails stops the run with its code, as `pnpm check`'s `&&` does;
- * `keepGoing` runs the rest anyway and answers the first failure's code. Nothing here re-implements a stage: each is
- * `pnpm run <stage>`, the same script `pnpm check` spells.
+ * Run one command under the clock, append its record, and answer the child's exit code. The child's stdio is
+ * inherited: the tool measures the session the person is already watching and keeps none of its output — records
+ * hold the command as spelled, never a build log. The child carries `ROTARIS_DEV_TIME_WRAPPED`, so a harness inside
+ * a command this tool measures does not record the same span a second time. A store that cannot be written answers
+ * `saved: false`; the command's own code is passed through regardless.
+ * @param {{ storeDir: string, kind: string, label: string, command: { file: string, args: string[], pretty: string, shell?: boolean }, cwd?: string, env?: NodeJS.ProcessEnv, spawn?: typeof spawnSync }} options
+ * @returns {{ record: Record<string, unknown>, code: number, saved: boolean }}
+ */
+export function runMeasured({ storeDir, kind, label, command, cwd = process.cwd(), env = process.env, spawn = spawnSync }) {
+  const child = runChild(command, { cwd, env: { ...env, [WRAPPED_ENV]: '1' }, spawn });
+  const record = buildRecord({
+    kind,
+    label,
+    command: command.pretty,
+    cwd,
+    env,
+    startedAt: child.startedAt,
+    endedAt: child.endedAt,
+    durationMs: child.durationMs,
+    exitCode: child.status,
+    signal: child.signal,
+    error: child.error,
+    via: env[VIA_ENV] ?? null,
+  });
+  const saved = disabled(env) ? false : tryAppendRecord(storeDir, record);
+  return { record, code: child.code, saved };
+}
+
+/**
+ * The gate: the four `pnpm check` stages, in the gate's own order (R-075 names them apart on purpose: "individual
+ * gate stages"). Nothing here re-implements a stage — each is `pnpm run <stage>`, the same script `pnpm check`
+ * spells — and since the transparent capture landed that script measures itself, so the stages record themselves
+ * under `ROTARIS_DEV_TIME_VIA=check` and the runner records only the run as a whole, as `gate:check`, and only
+ * when all four stages were asked for: a `--stage=` subset is not a check and gets no total. A stage that fails
+ * stops the run with its code, as the gate's `&&` does; `keepGoing` runs the rest anyway and answers the first
+ * failure's code. The total is recorded for a failed run too — the run happened, and its next green is what closes
+ * the red.
  * @param {{ storeDir: string, stages?: readonly string[], keepGoing?: boolean, cwd?: string, env?: NodeJS.ProcessEnv, commandFor?: (script: string, args: string[]) => { file: string, args: string[], pretty: string, shell?: boolean }, spawn?: typeof spawnSync }} options
- * @returns {{ code: number }}
+ * @returns {{ code: number, total: Record<string, unknown> | null, saved: boolean }}
  */
 export function runGate({
   storeDir,
@@ -326,15 +441,195 @@ export function runGate({
   commandFor = (script, args) => pnpmCommand(script, args, env),
   spawn = spawnSync,
 }) {
+  const began = process.hrtime.bigint();
+  const startedAt = new Date();
+  const stageEnv = { ...env, [VIA_ENV]: 'check' };
   let code = 0;
   for (const stage of stages) {
-    const { code: stageCode } = runMeasured({ storeDir, kind: 'gate', label: stage, command: commandFor(stage, []), cwd, env, spawn });
-    if (stageCode !== 0) {
-      if (code === 0) code = stageCode;
-      if (!keepGoing) return { code };
+    const child = runChild(commandFor(stage, []), { cwd, env: stageEnv, spawn });
+    if (child.code !== 0) {
+      if (code === 0) code = child.code;
+      if (!keepGoing) break;
     }
   }
-  return { code };
+  if (stages.length !== GATE_STAGES.length) return { code, total: null, saved: false };
+  const total = buildRecord({
+    kind: 'gate',
+    label: 'check',
+    command: 'pnpm check',
+    cwd,
+    env,
+    startedAt,
+    endedAt: new Date(),
+    durationMs: Number((process.hrtime.bigint() - began) / 1_000_000n),
+    exitCode: code,
+    signal: null,
+    error: null,
+    via: null,
+  });
+  const saved = disabled(env) ? false : tryAppendRecord(storeDir, total);
+  return { code, total, saved };
+}
+
+/**
+ * Record one span measured elsewhere: a build inside a proof, a script's own wall time, a worktree step. The same
+ * record shape the CLI writes, with the clock handed in as a duration (`startedAt` is derived from `endedAt` when
+ * it is not given) — and the same rule: it never fails the work it measures. Answers the record it built (null when
+ * the capture is switched off) and whether it was saved.
+ * @param {{ storeDir?: string, kind: string, label: string, command?: string | null, cwd?: string, env?: NodeJS.ProcessEnv, startedAt?: Date | null, durationMs: number, exitCode?: number | null, signal?: string | null, error?: string | null, via?: string | null, now?: () => Date }} options
+ * @returns {{ record: Record<string, unknown> | null, saved: boolean }}
+ */
+export function recordSpan({
+  storeDir,
+  kind,
+  label,
+  command = null,
+  cwd = process.cwd(),
+  env = process.env,
+  startedAt = null,
+  durationMs,
+  exitCode = null,
+  signal = null,
+  error = null,
+  via = null,
+  now = () => new Date(),
+}) {
+  if (disabled(env)) return { record: null, saved: false };
+  const endedAt = now();
+  const ms = Number.isFinite(durationMs) ? Math.max(0, durationMs) : durationMs;
+  const record = buildRecord({
+    kind,
+    label,
+    command,
+    cwd,
+    env,
+    startedAt: startedAt ?? new Date(endedAt.getTime() - (Number.isFinite(ms) ? ms : 0)),
+    endedAt,
+    durationMs: ms,
+    exitCode,
+    signal,
+    error,
+    via,
+  });
+  const problem = recordProblem(record);
+  if (problem !== null) {
+    warnNotRecorded(`a span was not a record this schema understands (${problem})`);
+    return { record, saved: false };
+  }
+  return { record, saved: tryAppendRecord(storeDir ?? defaultStoreDir(env), record) };
+}
+
+/**
+ * The entry script of this process — the basename of `process.argv[1]`, which is how every script under
+ * `apps/desktop/scripts/` is started. Empty when there is none (a `-e` program, a test worker).
+ * @param {string | undefined} [argv1]
+ */
+export function entryName(argv1 = process.argv[1]) {
+  return argv1 === undefined ? '' : basename(argv1);
+}
+
+/**
+ * What a script's own wall time is recorded as: a `*-proof.mjs` entry is a `proof`, every other `.mjs` entry an
+ * `other`, and the label is the file name without its extension (`terminal-proof`). A name that is no `.mjs` file
+ * name — an electron binary, a shell — answers null: only the repository's own scripts record themselves.
+ * @param {string} name
+ * @returns {{ kind: string, label: string } | null}
+ */
+export function entryRecordIdentity(name) {
+  if (!name.endsWith('.mjs')) return null;
+  const label = name.slice(0, -'.mjs'.length);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(label)) return null;
+  return { kind: name.endsWith('-proof.mjs') ? 'proof' : 'other', label };
+}
+
+/** Armed once per process; a second call (a second import of an armed library) is refused, not stacked. */
+let entryClockArmed = false;
+
+/**
+ * Arm the entry clock: at this process's exit its whole wall time is recorded as one span under the script's own
+ * name (`proof:terminal-proof`, `other:drive`). The two proof harness libraries call this at import, so the scripts
+ * that drive the application are measured whether their author thought about it or not. The clock never arms under
+ * vitest (`VITEST`), never twice, never when the capture is switched off, never for a command `pnpm dev-time` is
+ * already measuring (the marker it sets) and never for a name that is not a script this repository measures — and
+ * since the record is written at exit, a script that crashes is recorded as failed.
+ * @param {{ storeDir?: string, env?: NodeJS.ProcessEnv }} [options]
+ * @returns {{ kind: string, label: string } | null} what was armed, or null
+ */
+export function armEntryClock({ storeDir, env = process.env } = {}) {
+  if (entryClockArmed) return null;
+  if (disabled(env)) return null;
+  if (env.VITEST === 'true') return null;
+  if (env[WRAPPED_ENV] !== undefined) return null;
+  const identity = entryRecordIdentity(entryName());
+  if (identity === null) return null;
+  entryClockArmed = true;
+  const began = process.hrtime.bigint();
+  const startedAt = new Date();
+  process.on('exit', (code) => {
+    recordSpan({
+      storeDir,
+      kind: identity.kind,
+      label: identity.label,
+      env,
+      startedAt,
+      durationMs: Number((process.hrtime.bigint() - began) / 1_000_000n),
+      exitCode: code ?? process.exitCode ?? null,
+      via: env[VIA_ENV] ?? null,
+    });
+  });
+  return identity;
+}
+
+/** Where a record stands on the timeline: the instant its end can be read, `NaN` when neither end parses. */
+function recordEndMs(record) {
+  for (const at of [record.endedAt, record.startedAt]) {
+    const ms = Date.parse(at);
+    if (Number.isFinite(ms)) return ms;
+  }
+  return NaN;
+}
+
+/**
+ * The reds, and what closed them: over the records' own ends, a failed run of one kind+label opens a red (the
+ * first failure's end is when the red began), every further failed run joins it, and the next success of the same
+ * work closes the episode — from the first red's end to the green's own end, which is what a repair costs without
+ * a stopwatch a person starts. A run still red at the last record stays open and is named instead. Records whose
+ * end cannot be read are not placed on the timeline; nothing they might have closed is counted.
+ * @param {any[]} records
+ * @returns {{ closed: { kind: string, label: string, episodes: number, reds: number, durationMs: number }[], stillRed: { kind: string, label: string, reds: number }[] }}
+ */
+export function redsClosed(records) {
+  const ordered = records
+    .map((record) => ({ record, end: recordEndMs(record) }))
+    .filter((entry) => Number.isFinite(entry.end))
+    .sort((a, b) => a.end - b.end);
+  /** @type {Map<string, { kind: string, label: string, firstEnd: number, reds: number }>} */
+  const open = new Map();
+  /** @type {Map<string, { kind: string, label: string, episodes: number, reds: number, durationMs: number }>} */
+  const closed = new Map();
+  for (const { record, end } of ordered) {
+    const key = `${record.kind}:${record.label}`;
+    if (failedRecord(record)) {
+      const current = open.get(key) ?? { kind: record.kind, label: record.label, firstEnd: end, reds: 0 };
+      current.reds += 1;
+      open.set(key, current);
+    } else if (open.has(key)) {
+      const current = open.get(key);
+      if (current === undefined) continue;
+      const episode = closed.get(key) ?? { kind: record.kind, label: record.label, episodes: 0, reds: 0, durationMs: 0 };
+      episode.episodes += 1;
+      episode.reds += current.reds;
+      episode.durationMs += Math.max(0, end - current.firstEnd);
+      closed.set(key, episode);
+      open.delete(key);
+    }
+  }
+  return {
+    closed: [...closed.values()].sort((a, b) => b.durationMs - a.durationMs),
+    stillRed: [...open.values()]
+      .map((current) => ({ kind: current.kind, label: current.label, reds: current.reds }))
+      .sort((a, b) => b.reds - a.reds || a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label)),
+  };
 }
 
 /**
@@ -570,11 +865,12 @@ export function formatRecordLine(record) {
 
 /**
  * The whole report as lines. It says what it read: the store, the window, the records skipped, the spans still
- * open — and when the store is empty or the window caught nothing, it says that too rather than printing nothing.
- * @param {{ aggregate: ReturnType<typeof aggregate>, store: string, missing: boolean, skips: { unreadable: number[], unknownSchema: number[], malformed: number[] }, days: number | null, pending: ReturnType<typeof listPending>, outsideWindow?: number }} options
+ * open, the reds each next green closed — and when the store is empty or the window caught nothing, it says that
+ * too rather than printing nothing.
+ * @param {{ aggregate: ReturnType<typeof aggregate>, store: string, missing: boolean, skips: { unreadable: number[], unknownSchema: number[], malformed: number[] }, days: number | null, pending: ReturnType<typeof listPending>, outsideWindow?: number, reds?: ReturnType<typeof redsClosed> }} options
  * @returns {string[]}
  */
-export function formatReport({ aggregate: totals, store, missing, skips, days, pending, outsideWindow = 0 }) {
+export function formatReport({ aggregate: totals, store, missing, skips, days, pending, outsideWindow = 0, reds = { closed: [], stillRed: [] } }) {
   const lines = [];
   lines.push('dev-time report');
   lines.push(`  store   ${store}`);
@@ -606,6 +902,18 @@ export function formatReport({ aggregate: totals, store, missing, skips, days, p
     const pad = (cell, i) => (rightAligned.includes(i) ? cell.padStart(widths[i] ?? 0) : cell.padEnd(widths[i] ?? 0));
     lines.push(`  ${header.map(pad).join('  ')}`);
     for (const row of rows) lines.push(`  ${row.map(pad).join('  ')}`);
+  }
+  if (reds.closed.length > 0 || reds.stillRed.length > 0) {
+    lines.push('');
+    lines.push('  reds closed by their next green — a repair is the wall time between the two ends');
+    for (const episode of reds.closed) {
+      const identity = `${episode.kind}:${episode.label}`;
+      const runs = `${episode.reds} red run${episode.reds === 1 ? '' : 's'}`;
+      lines.push(`  ${identity.padEnd(24)}  ${episode.episodes} episode${episode.episodes === 1 ? '' : 's'}, ${runs}  →  ${formatDuration(episode.durationMs)}`);
+    }
+    if (reds.stillRed.length > 0) {
+      lines.push(`  still red: ${reds.stillRed.map((entry) => `${entry.kind}:${entry.label} (${entry.reds})`).join(', ')}`);
+    }
   }
   const skipped = skips.unreadable.length + skips.unknownSchema.length + skips.malformed.length;
   if (skipped > 0) {

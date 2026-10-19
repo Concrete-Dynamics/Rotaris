@@ -1,17 +1,30 @@
 // `pnpm worktree:new` — a branch in a fresh worktree beside the primary checkout, then its setup, end to end
 // against a scratch repository with only the heavy steps stubbed.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DISABLE_ENV, HOME_ENV, readRecords } from '../dev-time/dev-time.mjs';
 import { parseNewArgs, runNew } from './new.mjs';
 import { removeRepo, scratchRepo, testDeps, type ScratchRepo } from './scratch.test-support.js';
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'new.mjs');
 
 let repo: ScratchRepo | null = null;
+/**
+ * The wrappers run in this process and their steps record themselves (R-075), so the capture is switched off for
+ * the whole file — no test may append to the operator's store. The one test that reads records sets its own home.
+ */
+let priorDisable: string | undefined;
+beforeEach(() => {
+  priorDisable = process.env[DISABLE_ENV];
+  process.env[DISABLE_ENV] = '1';
+});
 afterEach(() => {
+  if (priorDisable === undefined) delete process.env[DISABLE_ENV];
+  else process.env[DISABLE_ENV] = priorDisable;
   if (repo !== null) {
     removeRepo(repo);
     repo = null;
@@ -71,6 +84,26 @@ describe('worktree:new', () => {
     expect(text).toContain('not inside a git repository');
     expect(text).toContain('is not a valid branch name');
     expect(text).toContain('is where landed work lives');
+  });
+
+  it('records its own steps in the development-time store (R-075)', () => {
+    repo = scratchRepo();
+    const store = mkdtempSync(join(tmpdir(), 'rotaris-dev-time-store-'));
+    const priorHome = process.env[HOME_ENV];
+    process.env[HOME_ENV] = store;
+    delete process.env[DISABLE_ENV];
+    try {
+      const { deps } = testDeps();
+      expect(runNew({ argv: ['tool/recorded'], cwd: repo.primary, deps })).toBe(0);
+      const { records } = readRecords(store);
+      expect(records.map((record) => `${record.kind}:${record.label}`)).toEqual(['other:fetch']);
+      expect(records[0]).toMatchObject({ command: 'git fetch origin main', via: 'worktree:new', exitCode: 0 });
+    } finally {
+      if (priorHome === undefined) delete process.env[HOME_ENV];
+      else process.env[HOME_ENV] = priorHome;
+      process.env[DISABLE_ENV] = '1'; // the file's guard again; the afterEach restores what the shell had
+      rmSync(store, { recursive: true, force: true });
+    }
   });
 
   it('answers --help through the script itself', () => {

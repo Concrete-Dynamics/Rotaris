@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { isMainModule, oneLine, seconds } from './exec.mjs';
 import * as git from './git.mjs';
-import { defaultDeps } from './steps.mjs';
+import { defaultDeps, measured } from './steps.mjs';
 
 export const USAGE = `pnpm worktree:new <branch> [--dir=<path>]
 
@@ -70,7 +70,7 @@ export function parseNewArgs(args) {
  * @param {{ argv: string[], cwd?: string, deps?: import('./steps.mjs').Deps }} options
  * @returns {number} the exit code
  */
-export function runNew({ argv, cwd = process.cwd(), deps = defaultDeps() }) {
+export function runNew({ argv, cwd = process.cwd(), deps = defaultDeps({ via: 'worktree:new' }) }) {
   const parsed = parseNewArgs(argv);
   if (parsed.help) {
     deps.log(USAGE);
@@ -123,7 +123,9 @@ export function runNew({ argv, cwd = process.cwd(), deps = defaultDeps() }) {
   }
 
   deps.log('worktree:new: fetching origin/main');
-  const fetch = git.git(['fetch', 'origin', 'main'], { cwd: root });
+  const fetch = measured({ kind: 'other', label: 'fetch', command: 'git fetch origin main', cwd: root, via: 'worktree:new' }, () =>
+    git.git(['fetch', 'origin', 'main'], { cwd: root }),
+  );
   if (fetch.status !== 0) {
     deps.error(`worktree:new: git fetch failed: ${oneLine(fetch.stderr)}`);
     return 1;

@@ -3,18 +3,25 @@ import { spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { REDIRECTING } from '../build-id/build-id.mjs';
 import {
+  DISABLE_ENV,
   GATE_STAGES,
   HOME_ENV,
   KINDS,
   SCHEMA,
   STORE_FILE,
+  VIA_ENV,
+  WRAPPED_ENV,
   aggregate,
   appendRecord,
+  armEntryClock,
   cancelSpan,
   defaultStoreDir,
+  disabled,
+  entryName,
+  entryRecordIdentity,
   failedRecord,
   filterByDays,
   formatDuration,
@@ -27,9 +34,12 @@ import {
   pendingFile,
   pnpmCommand,
   readRecords,
+  recordSpan,
+  redsClosed,
   runGate,
   runMeasured,
   shellCommand,
+  shellLine,
   startSpan,
   stopSpan,
   storePath,
@@ -47,8 +57,14 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CLI = join(dirname(fileURLToPath(import.meta.url)), 'cli.mjs');
 /** A commit needs an author, and the operator's configuration may ask for a signature this test cannot make. */
 const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@invalid', '-c', 'commit.gpgsign=false'];
-/** The fixture's git runs without the variables an enclosing git process sets (a hook running `pnpm check`). */
-const FIXTURE_ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !REDIRECTING.includes(k)));
+/**
+ * The fixture's git runs without the variables an enclosing git process sets (a hook running `pnpm check`) — and
+ * without this tool's own capture variables, which a wrapped `pnpm check` leaks into vitest: a fixture starts from
+ * a plain environment whatever ran it.
+ */
+const FIXTURE_ENV = Object.fromEntries(
+  Object.entries(process.env).filter(([k]) => !REDIRECTING.includes(k) && !k.startsWith('ROTARIS_DEV_TIME_')),
+);
 
 function gitRun(dir: string, ...args: string[]): string {
   const r = spawnSync('git', ['-C', dir, ...IDENTITY, ...args], { encoding: 'utf8', env: FIXTURE_ENV });
@@ -80,6 +96,7 @@ function sampleRecord(over: Partial<DevTimeRecord> = {}): DevTimeRecord {
     exitCode: 0,
     signal: null,
     error: null,
+    via: null,
     ...over,
   };
 }
@@ -144,8 +161,20 @@ describe('R-075: the identity of a measurement', () => {
     expect(SCHEMA).toBe(1);
     expect(STORE_FILE).toBe('log.jsonl');
     expect(HOME_ENV).toBe('ROTARIS_DEV_TIME_HOME');
+    expect(VIA_ENV).toBe('ROTARIS_DEV_TIME_VIA');
+    expect(DISABLE_ENV).toBe('ROTARIS_DEV_TIME_DISABLE');
+    expect(WRAPPED_ENV).toBe('ROTARIS_DEV_TIME_WRAPPED');
     expect(GATE_STAGES).toEqual(['symbols', 'typecheck', 'lint', 'test']);
     expect(KINDS).toEqual(['setup', 'build', 'gate', 'proof', 'repair', 'rebase', 'other']);
+  });
+
+  it('the capture switch understands its values, not just presence', () => {
+    expect(disabled({})).toBe(false);
+    expect(disabled({ [DISABLE_ENV]: '' })).toBe(false);
+    expect(disabled({ [DISABLE_ENV]: '0' })).toBe(false);
+    expect(disabled({ [DISABLE_ENV]: 'false' })).toBe(false);
+    expect(disabled({ [DISABLE_ENV]: '1' })).toBe(true);
+    expect(disabled({ [DISABLE_ENV]: 'yes' })).toBe(true);
   });
 
   it('the store directory is ~/.rotaris/dev-time unless the environment moves it', () => {
@@ -182,9 +211,19 @@ describe('R-075: one command line, built and measured', () => {
     }
   });
 
-  it('runMeasured appends one record of the command and answers its exit code', () => {
+  it('shellLine joins the tokens into one line through the platform shell, on both platforms', () => {
+    expect(shellLine(['node', 'a.mjs', '&&', 'node', 'b.mjs'])).toEqual({
+      file: 'node a.mjs && node b.mjs',
+      args: [],
+      pretty: 'node a.mjs && node b.mjs',
+      shell: true,
+    });
+    expect(() => shellLine([])).toThrow(TypeError);
+  });
+
+  it('runMeasured appends one record of the command, answers its exit code, and marks the child wrapped', () => {
     const { calls, spawn } = fakeSpawn(() => ({ status: 3, signal: null }));
-    const { record, code } = runMeasured({
+    const { record, code, saved } = runMeasured({
       storeDir: store,
       kind: 'build',
       label: 'desktop',
@@ -194,7 +233,10 @@ describe('R-075: one command line, built and measured', () => {
       spawn,
     });
     expect(code).toBe(3);
+    expect(saved).toBe(true);
     expect(calls).toMatchObject([{ file: 'fake', args: ['--watch'], options: { cwd: root, stdio: 'inherit', shell: false } }]);
+    // The marker tells a harness inside the child that this run is already measured — no double record.
+    expect(calls[0]?.options).toMatchObject({ env: { [WRAPPED_ENV]: '1' } });
     expect(record).toMatchObject({
       schema: 1,
       kind: 'build',
@@ -207,6 +249,7 @@ describe('R-075: one command line, built and measured', () => {
       exitCode: 3,
       signal: null,
       error: null,
+      via: null,
     });
     // git answers with its own separators (`C:/…`); what matters is the directory it names.
     expect(resolve(record.root ?? '')).toBe(resolve(root));
@@ -217,6 +260,40 @@ describe('R-075: one command line, built and measured', () => {
     const { records, missing } = readRecords(store);
     expect(missing).toBe(false);
     expect(records).toHaveLength(1);
+  });
+
+  it('marks a record with the context it ran in, and the child carries it on', () => {
+    const { calls, spawn } = fakeSpawn(() => ({ status: 0, signal: null }));
+    const { record, saved } = runMeasured({
+      storeDir: store,
+      kind: 'gate',
+      label: 'test',
+      command: { file: 'fake', args: [], pretty: 'fake' },
+      cwd: root,
+      env: { ...FIXTURE_ENV, [VIA_ENV]: 'check' },
+      spawn,
+    });
+    expect(saved).toBe(true);
+    expect(record.via).toBe('check');
+    expect(calls[0]?.options).toMatchObject({ env: { [VIA_ENV]: 'check', [WRAPPED_ENV]: '1' } });
+  });
+
+  it('a store that cannot be written is answered, never thrown, and the command’s own code stands', () => {
+    const blocked = join(store, 'blocked-file');
+    writeFileSync(blocked, 'a file, not a directory\n', 'utf8');
+    const { calls, spawn } = fakeSpawn(() => ({ status: 0, signal: null }));
+    const { saved, code } = runMeasured({
+      storeDir: join(blocked, 'deep'),
+      kind: 'build',
+      label: 'desktop',
+      command: { file: 'fake', args: [], pretty: 'fake' },
+      cwd: root,
+      env: FIXTURE_ENV,
+      spawn,
+    });
+    expect(calls).toHaveLength(1);
+    expect(code).toBe(0);
+    expect(saved).toBe(false);
   });
 
   it('runMeasured maps a signal POSIX-style and a spawn failure to 1', () => {
@@ -347,25 +424,39 @@ describe('R-075: the store is append-only JSONL that never silently shrinks', ()
   });
 });
 
-describe('R-075: the gate’s stages are timed apart, with the gate’s own stopping', () => {
+describe('R-075: the gate runs four stages; each records itself, the run as gate:check', () => {
   const stageCommand = (script: string): Command => ({ file: script, args: [], pretty: `pnpm run ${script}`, shell: false });
 
-  it('times the four stages in order and passes the gate on', () => {
+  it('runs the four stages in order, marks them check, and records the run as one gate:check', () => {
     const { calls, spawn } = fakeSpawn(() => ({ status: 0, signal: null }));
-    const { code } = runGate({ storeDir: store, cwd: root, env: FIXTURE_ENV, commandFor: stageCommand, spawn });
+    const { code, total, saved } = runGate({ storeDir: store, cwd: root, env: FIXTURE_ENV, commandFor: stageCommand, spawn });
     expect(code).toBe(0);
     expect(calls.map((call) => call.file)).toEqual(['symbols', 'typecheck', 'lint', 'test']);
+    // The stage records itself through its wrapper; what the runner gives it is the context it ran in.
+    expect(calls.map((call) => call.options)).toMatchObject([
+      { env: { [VIA_ENV]: 'check' } },
+      { env: { [VIA_ENV]: 'check' } },
+      { env: { [VIA_ENV]: 'check' } },
+      { env: { [VIA_ENV]: 'check' } },
+    ]);
     const { records } = readRecords(store);
-    expect(records.map((record) => `${record.kind}:${record.label}`)).toEqual(['gate:symbols', 'gate:typecheck', 'gate:lint', 'gate:test']);
-    expect(records.every((record) => record.exitCode === 0)).toBe(true);
+    expect(records.map((record) => `${record.kind}:${record.label}`)).toEqual(['gate:check']);
+    expect(records[0]).toMatchObject({ command: 'pnpm check', exitCode: 0, via: null });
+    expect(total).not.toBeNull();
+    expect(saved).toBe(true);
   });
 
-  it('a failing stage stops the run with its code, as the gate’s && does', () => {
+  it('a failing stage stops the run with its code, and the failed run is still one gate:check', () => {
     const { calls, spawn } = fakeSpawn((file) => ({ status: file === 'typecheck' ? 1 : 0, signal: null }));
-    const { code } = runGate({ storeDir: store, cwd: root, env: FIXTURE_ENV, commandFor: stageCommand, spawn });
+    const { code, total } = runGate({ storeDir: store, cwd: root, env: FIXTURE_ENV, commandFor: stageCommand, spawn });
     expect(code).toBe(1);
     expect(calls.map((call) => call.file)).toEqual(['symbols', 'typecheck']);
-    expect(readRecords(store).records.map((record) => record.label)).toEqual(['symbols', 'typecheck']);
+    const { records } = readRecords(store);
+    expect(records.map((record) => `${record.kind}:${record.label}`)).toEqual(['gate:check']);
+    const [first] = records;
+    expect(first?.exitCode).toBe(1);
+    expect(first !== undefined && failedRecord(first)).toBe(true);
+    expect(total).not.toBeNull();
   });
 
   it('keepGoing runs the rest anyway and answers the first failure', () => {
@@ -373,14 +464,161 @@ describe('R-075: the gate’s stages are timed apart, with the gate’s own stop
     const { code } = runGate({ storeDir: store, cwd: root, env: FIXTURE_ENV, keepGoing: true, commandFor: stageCommand, spawn });
     expect(code).toBe(1);
     expect(calls.map((call) => call.file)).toEqual(['symbols', 'typecheck', 'lint', 'test']);
-    expect(readRecords(store).records).toHaveLength(4);
+    const { records } = readRecords(store);
+    expect(records).toHaveLength(1);
+    expect(records[0]?.exitCode).toBe(1);
   });
 
-  it('a named subset runs alone', () => {
+  it('a named subset runs alone and gets no gate:check total — a subset is not a check', () => {
     const { calls, spawn } = fakeSpawn(() => ({ status: 0, signal: null }));
-    const { code } = runGate({ storeDir: store, cwd: root, env: FIXTURE_ENV, stages: ['test'], commandFor: stageCommand, spawn });
+    const { code, total, saved } = runGate({ storeDir: store, cwd: root, env: FIXTURE_ENV, stages: ['test'], commandFor: stageCommand, spawn });
     expect(code).toBe(0);
     expect(calls.map((call) => call.file)).toEqual(['test']);
+    expect(total).toBeNull();
+    expect(saved).toBe(false);
+    expect(readRecords(store)).toMatchObject({ missing: true, records: [] });
+  });
+});
+
+describe('R-075: what records itself — the entry clock and spans measured elsewhere', () => {
+  it('recordSpan writes one span with its context; a store that cannot be written is answered, not thrown', () => {
+    const at = new Date('2026-10-18T12:00:00.000Z');
+    const { record, saved } = recordSpan({
+      storeDir: store,
+      kind: 'build',
+      label: 'desktop',
+      command: 'pnpm build',
+      cwd: root,
+      env: FIXTURE_ENV,
+      durationMs: 12_345,
+      exitCode: 0,
+      via: 'terminal-proof',
+      now: () => at,
+    });
+    expect(saved).toBe(true);
+    expect(record).toMatchObject({
+      schema: 1,
+      kind: 'build',
+      label: 'desktop',
+      command: 'pnpm build',
+      cwd: resolve(root),
+      durationMs: 12_345,
+      exitCode: 0,
+      signal: null,
+      error: null,
+      via: 'terminal-proof',
+      endedAt: '2026-10-18T12:00:00.000Z',
+      startedAt: '2026-10-18T11:59:47.655Z',
+    });
+    expect(readRecords(store).records).toHaveLength(1);
+
+    const blocked = join(store, 'blocked-file');
+    writeFileSync(blocked, 'a file, not a directory\n', 'utf8');
+    const refused = recordSpan({
+      storeDir: join(blocked, 'deep'),
+      kind: 'other',
+      label: 'whatever',
+      durationMs: 5,
+      cwd: root,
+      env: FIXTURE_ENV,
+    });
+    expect(refused.saved).toBe(false);
+    expect(readRecords(store).records).toHaveLength(1);
+  });
+
+  it('records nothing — and says nothing — when the capture is switched off', () => {
+    const { record, saved } = recordSpan({
+      storeDir: store,
+      kind: 'other',
+      label: 'off',
+      durationMs: 5,
+      cwd: root,
+      env: { ...FIXTURE_ENV, [DISABLE_ENV]: '1' },
+    });
+    expect(record).toBeNull();
+    expect(saved).toBe(false);
+    expect(readRecords(store).missing).toBe(true);
+  });
+
+  it('names the entry script: a proof is a proof, anything else an other, and a non-script nothing', () => {
+    expect(entryName('/a/b/terminal-proof.mjs')).toBe('terminal-proof.mjs');
+    expect(entryRecordIdentity('terminal-proof.mjs')).toEqual({ kind: 'proof', label: 'terminal-proof' });
+    expect(entryRecordIdentity('drive.mjs')).toEqual({ kind: 'other', label: 'drive' });
+    expect(entryRecordIdentity('ui-audit.v2.mjs')).toEqual({ kind: 'other', label: 'ui-audit.v2' });
+    expect(entryRecordIdentity('electron.exe')).toBeNull();
+    expect(entryRecordIdentity('notes.txt')).toBeNull();
+    expect(entryRecordIdentity('.mjs')).toBeNull();
+    expect(entryRecordIdentity('has space.mjs')).toBeNull();
+    expect(entryRecordIdentity('..proof.mjs')).toBeNull();
+  });
+
+  it('the entry clock never arms for vitest, a disabled capture, or a wrapper already measuring', () => {
+    expect(armEntryClock({ env: { VITEST: 'true' } })).toBeNull();
+    expect(armEntryClock({ env: { [DISABLE_ENV]: '1' } })).toBeNull();
+    expect(armEntryClock({ env: { [WRAPPED_ENV]: '1' } })).toBeNull();
+  });
+
+  it('armed in a script of its own, the clock records the whole wall time at exit — a crash landing as failed', () => {
+    const library = pathToFileURL(join(REPO, 'tools', 'dev-time', 'dev-time.mjs')).href;
+    const script = join(bare, 'tiny-proof.mjs');
+    const env: NodeJS.ProcessEnv = { ...FIXTURE_ENV, [HOME_ENV]: store };
+    delete env.VITEST;
+    delete env[WRAPPED_ENV];
+
+    writeFileSync(script, `import { armEntryClock } from ${JSON.stringify(library)};\narmEntryClock();\n`, 'utf8');
+    const ok = spawnSync(process.execPath, [script], { cwd: bare, encoding: 'utf8', env });
+    expect(ok.status).toBe(0);
+    let { records } = readRecords(store);
+    expect(records.map((record) => `${record.kind}:${record.label}`)).toEqual(['proof:tiny-proof']);
+    expect(records[0]).toMatchObject({ exitCode: 0, command: null, via: null });
+    expect(records[0]?.durationMs).toBeGreaterThanOrEqual(0);
+
+    writeFileSync(script, `import { armEntryClock } from ${JSON.stringify(library)};\narmEntryClock();\nprocess.exit(4);\n`, 'utf8');
+    const crashed = spawnSync(process.execPath, [script], { cwd: bare, encoding: 'utf8', env });
+    expect(crashed.status).toBe(4);
+    ({ records } = readRecords(store));
+    expect(records).toHaveLength(2);
+    expect(records[1]).toMatchObject({ kind: 'proof', label: 'tiny-proof', exitCode: 4 });
+
+    for (const quieting of [{ VITEST: 'true' }, { [DISABLE_ENV]: '1' }, { [WRAPPED_ENV]: '1' }]) {
+      const skipped = spawnSync(process.execPath, [script], { cwd: bare, encoding: 'utf8', env: { ...env, ...quieting } });
+      expect(skipped.status).toBe(4);
+      expect(readRecords(store).records).toHaveLength(2);
+    }
+  });
+
+  it('reds are closed by the next green of the same work: the repair is the wall time between the two ends', () => {
+    const t = (h: number) => `2026-10-18T${String(h).padStart(2, '0')}:00:00.000Z`;
+    const records = [
+      sampleRecord({ kind: 'gate', label: 'check', startedAt: t(1), endedAt: t(2), exitCode: 1 }),
+      sampleRecord({ kind: 'gate', label: 'check', startedAt: t(3), endedAt: t(4), exitCode: 1 }),
+      sampleRecord({ kind: 'proof', label: 'layout-proof', startedAt: t(2), endedAt: t(3), exitCode: 0 }),
+      sampleRecord({ kind: 'gate', label: 'check', startedAt: t(5), endedAt: t(6), exitCode: 0 }),
+      sampleRecord({ kind: 'gate', label: 'lint', startedAt: t(7), endedAt: t(8), exitCode: 1 }),
+      sampleRecord({ kind: 'gate', label: 'torn', startedAt: 'not-a-date', endedAt: 'not-a-date', exitCode: 1 }),
+    ];
+    const { closed, stillRed } = redsClosed(records);
+    // Two reds, one episode; the clock runs from the first red's own end to the green's.
+    expect(closed).toEqual([{ kind: 'gate', label: 'check', episodes: 1, reds: 2, durationMs: 4 * 3_600_000 }]);
+    expect(stillRed).toEqual([{ kind: 'gate', label: 'lint', reds: 1 }]);
+  });
+
+  it('two reds of one work are two episodes, ordered by the wall time they held', () => {
+    const t = (h: number) => `2026-10-18T${String(h).padStart(2, '0')}:00:00.000Z`;
+    const records = [
+      sampleRecord({ kind: 'gate', label: 'test', startedAt: t(1), endedAt: t(2), exitCode: 1 }),
+      sampleRecord({ kind: 'gate', label: 'test', startedAt: t(3), endedAt: t(4), exitCode: 0 }),
+      sampleRecord({ kind: 'gate', label: 'test', startedAt: t(5), endedAt: t(6), exitCode: 1 }),
+      sampleRecord({ kind: 'gate', label: 'test', startedAt: t(7), endedAt: t(8), exitCode: 0 }),
+      sampleRecord({ kind: 'proof', label: 'flaky-proof', startedAt: t(9), endedAt: t(10), exitCode: 1 }),
+      sampleRecord({ kind: 'proof', label: 'flaky-proof', startedAt: t(11), endedAt: t(12), exitCode: 0 }),
+    ];
+    const { closed, stillRed } = redsClosed(records);
+    expect(closed).toEqual([
+      { kind: 'gate', label: 'test', episodes: 2, reds: 2, durationMs: 4 * 3_600_000 },
+      { kind: 'proof', label: 'flaky-proof', episodes: 1, reds: 1, durationMs: 2 * 3_600_000 },
+    ]);
+    expect(stillRed).toEqual([]);
   });
 });
 
@@ -552,6 +790,27 @@ describe('R-075: the report, from the records alone', () => {
     expect(report).toContain('3 lines skipped: 1 unreadable, 1 of an unknown schema, 1 malformed (log.jsonl lines 2, 4, 5)');
     expect(report).toContain('1 span still open: repair:flaky');
   });
+
+  it('reads the reds their next greens closed, and what is still red', () => {
+    const reds = {
+      closed: [{ kind: 'gate', label: 'check', episodes: 1, reds: 2, durationMs: 14_400_000 }],
+      stillRed: [{ kind: 'gate', label: 'lint', reds: 1 }],
+    };
+    const report = formatReport({
+      aggregate: aggregate([sampleRecord({ kind: 'gate', label: 'check', durationMs: 10_000 })]),
+      store: storePath(store),
+      missing: false,
+      skips: { unreadable: [], unknownSchema: [], malformed: [] },
+      days: null,
+      pending: [],
+      reds,
+    }).join('\n');
+    expect(report).toContain('reds closed by their next green');
+    expect(report).toContain('gate:check');
+    expect(report).toContain('1 episode, 2 red runs');
+    expect(report).toContain('4h00m00s');
+    expect(report).toContain('still red: gate:lint (1)');
+  });
 });
 
 describe('R-075: the CLI, end to end', () => {
@@ -560,6 +819,7 @@ describe('R-075: the CLI, end to end', () => {
     expect(usage.status).toBe(0);
     expect(usage.stdout).toContain('pnpm dev-time');
     expect(usage.stdout).toContain('gate [--stage=<name>]');
+    expect(usage.stdout).toContain('run [--quiet] [--shell]');
     expect((await cli(store, bare, ['help'])).status).toBe(0);
 
     const unknown = await cli(store, bare, ['frobnicate']);
@@ -607,6 +867,25 @@ describe('R-075: the CLI, end to end', () => {
     expect(records[0]?.host.platform).toBe(process.platform);
   });
 
+  it('measures quietly when asked, and runs a compound line through the shell with --shell', async () => {
+    const quiet = await cli(store, bare, ['run', '--quiet', 'other:quiet', '--', process.execPath, '-e', 'process.exit(0)']);
+    expect(quiet.status).toBe(0);
+    expect(quiet.stderr).toBe('');
+
+    const compound = await cli(store, bare, ['run', '--quiet', '--shell', 'other:compound', '--', 'echo', 'shell-ok']);
+    expect(compound.status).toBe(0);
+    expect(compound.stdout).toContain('shell-ok');
+    expect(compound.stderr).toBe('');
+
+    const loud = await cli(store, bare, ['run', 'build:tiny', '--', process.execPath, '-e', 'process.exit(0)']);
+    expect(loud.status).toBe(0);
+    expect(loud.stderr).toContain('appended to');
+
+    const { records } = readRecords(store);
+    expect(records.map((record) => `${record.kind}:${record.label}`)).toEqual(['other:quiet', 'other:compound', 'build:tiny']);
+    expect(records[1]?.command).toBe('echo shell-ok');
+  });
+
   it('opens, protects, lists, closes and drops a span', async () => {
     const opened = await cli(store, bare, ['start', 'repair:flaky']);
     expect(opened.status).toBe(0);
@@ -645,11 +924,12 @@ describe('R-075: the CLI, end to end', () => {
 
     const json = await cli(store, bare, ['report', '--json']);
     expect(json.status).toBe(0);
-    const report = JSON.parse(json.stdout) as { store: string; count: number; byLabel: { label: string; count: number }[]; days: number | null };
+    const report = JSON.parse(json.stdout) as { store: string; count: number; byLabel: { label: string; count: number }[]; days: number | null; reds: { closed: unknown[]; stillRed: unknown[] } };
     expect(report.store).toBe(storePath(store));
     expect(report.count).toBe(1);
     expect(report.days).toBeNull();
     expect(report.byLabel).toMatchObject([{ label: 'tiny', count: 1 }]);
+    expect(report.reds).toEqual({ closed: [], stillRed: [] });
 
     const windowed = await cli(store, bare, ['report', '--days=7']);
     expect(windowed.status).toBe(0);
@@ -670,8 +950,15 @@ describe('R-075: the CLI, end to end', () => {
     expect(honest.stdout).toContain('1 line skipped: 1 unreadable');
   });
 
-  it('finds the CLI’s own script in the root package.json, as `pnpm dev-time` does', () => {
+  it('keeps the capture wired: the gate runner and the wrapped stages are what package.json spells', () => {
     const scripts = JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8')) as { scripts: Record<string, string> };
     expect(scripts.scripts['dev-time']).toBe('node tools/dev-time/cli.mjs');
+    expect(scripts.scripts['check']).toBe('node tools/dev-time/cli.mjs gate');
+    for (const stage of GATE_STAGES) {
+      const spelled = scripts.scripts[stage] ?? '';
+      expect(spelled.startsWith('node tools/dev-time/cli.mjs run --quiet')).toBe(true);
+      expect(spelled).toContain(`gate:${stage}`);
+    }
+    expect((scripts.scripts['build'] ?? '').startsWith('node tools/dev-time/cli.mjs run --quiet build:desktop')).toBe(true);
   });
 });

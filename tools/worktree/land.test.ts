@@ -1,10 +1,12 @@
 // `pnpm worktree:land` — the landing sequence end to end against a scratch repository: real git, the heavy
 // steps stubbed, and the remote inspected after every case.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DISABLE_ENV, HOME_ENV, readRecords } from '../dev-time/dev-time.mjs';
 import { slugFor } from './git.mjs';
 import { parseLandArgs, runLand } from './land.mjs';
 import { addWorktree, gitOk, removeRepo, scratchRepo, testDeps, type ScratchRepo } from './scratch.test-support.js';
@@ -12,7 +14,18 @@ import { addWorktree, gitOk, removeRepo, scratchRepo, testDeps, type ScratchRepo
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'land.mjs');
 
 let repo: ScratchRepo | null = null;
+/**
+ * The wrappers run in this process and their steps record themselves (R-075), so the capture is switched off for
+ * the whole file — no test may append to the operator's store. The one test that reads records sets its own home.
+ */
+let priorDisable: string | undefined;
+beforeEach(() => {
+  priorDisable = process.env[DISABLE_ENV];
+  process.env[DISABLE_ENV] = '1';
+});
 afterEach(() => {
+  if (priorDisable === undefined) delete process.env[DISABLE_ENV];
+  else process.env[DISABLE_ENV] = priorDisable;
   if (repo !== null) {
     removeRepo(repo);
     repo = null;
@@ -321,6 +334,33 @@ describe('worktree:land', () => {
     expect(text).toContain('HEAD is detached');
     expect(text).toContain("'main' is where landed work lives");
     expect(text).toContain('rebase is in progress');
+  });
+
+  it('records its own steps in the development-time store, marked with the wrapper (R-075)', () => {
+    repo = scratchRepo();
+    const tree = join(repo.base, 'wt');
+    addWorktree(repo, 'tool/recorded', tree);
+    repo.commit(tree, 'the branch work', { 'b.txt': 'b\n' });
+    const store = mkdtempSync(join(tmpdir(), 'rotaris-dev-time-store-'));
+    const priorHome = process.env[HOME_ENV];
+    process.env[HOME_ENV] = store;
+    delete process.env[DISABLE_ENV];
+    try {
+      const { deps } = testDeps();
+      expect(runLand({ argv: [], cwd: tree, deps })).toBe(0);
+      const { records } = readRecords(store);
+      expect(records.map((record) => `${record.kind}:${record.label}`)).toEqual(['other:fetch', 'rebase:onto-main', 'other:push']);
+      expect(records.every((record) => record.via === 'worktree:land')).toBe(true);
+      expect(records[0]).toMatchObject({ command: 'git fetch origin main', exitCode: 0 });
+      expect(records[1]).toMatchObject({ command: 'git rebase origin/main', exitCode: 0 });
+      expect(records[2]).toMatchObject({ command: 'git push origin HEAD:main', exitCode: 0 });
+      expect(records[2]?.durationMs).toBeGreaterThanOrEqual(0);
+    } finally {
+      if (priorHome === undefined) delete process.env[HOME_ENV];
+      else process.env[HOME_ENV] = priorHome;
+      process.env[DISABLE_ENV] = '1'; // the file's guard again; the afterEach restores what the shell had
+      rmSync(store, { recursive: true, force: true });
+    }
   });
 
   it('answers --help through the script itself', () => {

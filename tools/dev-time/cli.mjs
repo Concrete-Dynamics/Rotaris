@@ -3,7 +3,9 @@
 // `pnpm dev-time` — the CLI of the development-time measure (R-075): one command around a clock, one honest record
 // appended to the per-user store. The mechanism, the record shape and the store are `dev-time.mjs`'s; this file
 // parses a command line, calls that module, and prints what happened. Nothing here gates anything: the tool
-// measures and the record is evidence.
+// measures and the record is evidence. Much of the capture is transparent and never passes through here — the
+// gate's stages, `pnpm build`, the scripts that drive the application and the `tools/worktree/` wrappers record
+// themselves; the explicit path is for everything else, and `gate` is the runner behind `pnpm check`.
 //
 // Exit codes (the build-id convention): 0 the command ran — a measured command's own code is passed through; 1 a
 // handled error, said as one `error: …` line; 2 a usage error, with a pointer at the usage.
@@ -12,11 +14,13 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  DISABLE_ENV,
   GATE_STAGES,
   KINDS,
   aggregate,
   cancelSpan,
   defaultStoreDir,
+  disabled,
   filterByDays,
   formatRecordLine,
   formatReport,
@@ -24,9 +28,11 @@ import {
   parseKindLabel,
   pnpmCommand,
   readRecords,
+  redsClosed,
   runGate,
   runMeasured,
   shellCommand,
+  shellLine,
   startSpan,
   stopSpan,
   storePath,
@@ -37,13 +43,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const USAGE = `pnpm dev-time — where development time goes (R-075). Records append to ~/.rotaris/dev-time/log.jsonl;
 ROTARIS_DEV_TIME_HOME moves that directory. The tool measures; it gates nothing.
 
-  run <kind>:<label> -- <command…>        measure one command
-  gate [--stage=<name>]… [--keep-going]   the four pnpm check stages, one record each
+  run [--quiet] [--shell] <kind>:<label> -- <command…>   measure one command
+  gate [--stage=<name>]… [--keep-going]   the four pnpm check stages; each records itself, the run as gate:check
   proof <script> [args…]                  a pnpm script by name (a proof script, the live run)
   start <kind>:<label>                    open a span around work no single command covers
   stop | cancel | pending                 close it, drop it, or list what is open
-  report [--days=N] [--json]              aggregate by kind and label
+  report [--days=N] [--json]              aggregate by kind and label, and the reds their next greens closed
   log [--tail=N] [--all] [--json]         the recent records
+
+The gate's four stages (pnpm symbols, typecheck, lint, test), pnpm build, every script that drives the
+application and the worktree wrappers' steps record themselves — the capture needs no habit.
+ROTARIS_DEV_TIME_DISABLE switches it off; ROTARIS_DEV_TIME_VIA marks the context a wrapped command ran in.
 
 kinds:  ${KINDS.join(', ')}
 stages: ${GATE_STAGES.join(', ')} — the order \`pnpm check\` runs them`;
@@ -123,15 +133,25 @@ switch (command) {
   }
 
   case 'run': {
+    let quiet = false;
+    let shell = false;
+    while (rest[0] === '--quiet' || rest[0] === '--shell') {
+      if (rest.shift() === '--quiet') quiet = true;
+      else shell = true;
+    }
     const token = rest.shift();
     if (token === undefined) usageError('run needs a <kind>:<label> and a command: `pnpm dev-time run build:desktop -- pnpm build`');
     const parsed = parseKindLabel(token);
     if ('problem' in parsed) usageError(parsed.problem);
     const tokens = rest[0] === '--' ? rest.slice(1) : rest;
     if (tokens.length === 0) usageError(`run ${token} names no command; write it after the kind: \`pnpm dev-time run ${token} -- <command>\``);
-    const { record, code } = runMeasured({ storeDir, kind: parsed.kind, label: parsed.label, command: shellCommand(tokens) });
-    process.stderr.write(`[dev-time] ${formatRecordLine(record)}\n`);
-    process.stderr.write(`[dev-time] appended to ${storePath(storeDir)}\n`);
+    const command = shell ? shellLine(tokens) : shellCommand(tokens);
+    const { record, code, saved } = runMeasured({ storeDir, kind: parsed.kind, label: parsed.label, command });
+    if (!quiet) {
+      process.stderr.write(`[dev-time] ${formatRecordLine(record)}\n`);
+      if (saved) process.stderr.write(`[dev-time] appended to ${storePath(storeDir)}\n`);
+      else if (disabled()) process.stderr.write(`[dev-time] recording is switched off (${DISABLE_ENV})\n`);
+    }
     process.exitCode = code;
     break;
   }
@@ -155,8 +175,15 @@ switch (command) {
       usageError(`"${arg}" is not understood by \`gate\`; it takes [--stage=<name>]… and [--keep-going]`);
     }
     const stages = GATE_STAGES.filter((stage) => asked.length === 0 || asked.includes(stage));
-    const { code } = runGate({ storeDir, stages, keepGoing });
-    process.stderr.write(`[dev-time] ${stages.length} stage record${stages.length === 1 ? '' : 's'} appended to ${storePath(storeDir)}\n`);
+    const { code, total, saved } = runGate({ storeDir, stages, keepGoing });
+    if (total === null) {
+      process.stderr.write(`[dev-time] ${stages.length} stage run${stages.length === 1 ? '' : 's'}; each stage records its own run — a subset gets no gate:check total\n`);
+    } else if (saved) {
+      process.stderr.write(`[dev-time] ${formatRecordLine(total)}\n`);
+      process.stderr.write(`[dev-time] appended to ${storePath(storeDir)} (each stage recorded its own run)\n`);
+    } else if (disabled()) {
+      process.stderr.write(`[dev-time] recording is switched off (${DISABLE_ENV})\n`);
+    }
     process.exitCode = code;
     break;
   }
@@ -170,9 +197,10 @@ switch (command) {
       const near = nearestScript(script, Object.keys(scripts));
       usageError(`"${script}" is not a script of the root package.json${near === null ? '' : `; did you mean "${near}"?`}`);
     }
-    const { record, code } = runMeasured({ storeDir, kind: 'proof', label: script, command: pnpmCommand(script, rest) });
+    const { record, code, saved } = runMeasured({ storeDir, kind: 'proof', label: script, command: pnpmCommand(script, rest) });
     process.stderr.write(`[dev-time] ${formatRecordLine(record)}\n`);
-    process.stderr.write(`[dev-time] appended to ${storePath(storeDir)}\n`);
+    if (saved) process.stderr.write(`[dev-time] appended to ${storePath(storeDir)}\n`);
+    else if (disabled()) process.stderr.write(`[dev-time] recording is switched off (${DISABLE_ENV})\n`);
     process.exitCode = code;
     break;
   }
@@ -243,6 +271,7 @@ switch (command) {
     const { records, skips, missing } = readRecords(storeDir);
     const kept = filterByDays(records, days);
     const totals = aggregate(kept);
+    const reds = redsClosed(kept);
     const pending = listPending(storeDir);
     const outsideWindow = records.length - kept.length;
     if (json) {
@@ -252,13 +281,14 @@ switch (command) {
         days,
         outsideWindow,
         ...totals,
+        reds,
         skips,
         pending: pending.map((entry) => ({ file: entry.file, span: entry.span })),
       };
       process.stdout.write(`${JSON.stringify(document, null, 2)}\n`);
       break;
     }
-    const lines = formatReport({ aggregate: totals, store: storePath(storeDir), missing, skips, days, pending, outsideWindow });
+    const lines = formatReport({ aggregate: totals, store: storePath(storeDir), missing, skips, days, pending, outsideWindow, reds });
     process.stdout.write(`${lines.join('\n')}\n`);
     break;
   }

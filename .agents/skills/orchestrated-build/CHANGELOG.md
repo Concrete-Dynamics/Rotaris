@@ -5,7 +5,8 @@ verified. An entry that turns out wrong is corrected by a new entry, never edite
 
 ## 2026-10-19 — the final report is the handoff the repository fixed
 
-**Prompted by** the owner's eighth infrastructure suggestion (2026-10-19), accepted in the orchestrating session: one
+**Prompted by** the owner's eighth infrastructure suggestion (2026-10-19, recorded in `.scratchpad.md`), accepted in the
+orchestrating session: one
 short handoff shape for every closing report — an agent's to the owner, a lane's to the next lane,
 `pnpm worktree:land`'s — four fixed labels (Zustand, Beweise, Offen, Nächster Schritt), canonically defined in
 `docs/clean-room/agent-workflow.md` ("The handoff") and anchored in AGENTS.md, the UI skills and here. **Changed:**

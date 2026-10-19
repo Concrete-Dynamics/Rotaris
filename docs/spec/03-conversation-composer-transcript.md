@@ -200,6 +200,15 @@ The conversation surface belongs to the single desktop application, and is backe
   > **Extended by [`PD-CHAT-002`](../product/directives.md#pd-chat-002), 2026-09-13.** Expanding
   > an `ask_questions` tool row in transcript history shows a rendered summary card of steps and
   > responses by default, with a toggle to inspect the raw untruncated JSON.
+  >
+  > **Narrowed by [`PD-CHAT-010`](../product/directives.md#pd-chat-010), 2026-10-19.** At the slider's **Compact**
+  > stop no unopened tool row draws the `⤷` preview — the most recent pair included — so that stop's rows are name and
+  > chevron alone. Every other stop, and every row the reader opens, keep the preview and the untruncated card exactly as
+  > above.
+  >
+  > **Extended by [`PD-CHAT-010`](../product/directives.md#pd-chat-010), 2026-10-19.** At the slider's **Expanded** stop
+  > every tool row that has something to reveal is drawn already open, exactly as a row the reader opened is drawn; what
+  > that card contains is still governed by the sentence above and by REQ-CHAT-166.
 - **REQ-CHAT-062** — Thinking rows MUST summarize as `▸ reasoning · <N>s · ~<T> tok`; while streaming they render `◉ reasoning… <N>s · ~<T> tok` with both numbers counting upward, where the token figure is the streamed character count divided by 4. They are collapsible by click. A live thinking row MUST stop presenting as live after 3600 seconds without completion.
   > **Narrowed by [`PD-CHAT-004`](../product/directives.md#pd-chat-004), 2026-09-15; revised 2026-09-16.** A thinking row
   > drawn **as a row** still summarizes exactly as above, and does so whenever `display/showReasoning`
@@ -242,11 +251,22 @@ The conversation surface belongs to the single desktop application, and is backe
   > revealed beneath an expanded line are **exempt**, as a folded group's members already were before this
   > directive: a reader who opened the run asked to see its steps, and taking them to name-plus-chevron in
   > the same gesture would undo what the expansion was for.
+  > **`PD-CHAT-010`, 2026-10-19.** "Both settings … still govern in full" now reads through that directive's slider:
+  > the grouping setting is on at Compact, Brief and Standard and off at Detailed and Expanded, and auto-collapse is
+  > on at Compact and Brief, off at Standard, and moot where grouping is off. Nothing above changes.
+  >
+  > **Narrowed by [`PD-CHAT-010`](../product/directives.md#pd-chat-010), 2026-10-19.** Both settings still govern as
+  > **stops** of one slider, stored as one integer (`display/toolVerbosity`) rather than two booleans: **Brief** is this
+  > requirement exactly, and **Standard** is today's default pair. The narrowed case is the slider's **Compact** stop,
+  > which collapses the most recent pair too; **Detailed** and **Expanded** are this requirement's grouping switch
+  > turned off by the reader, as it always allowed. Question rows and live terminal rows stay exempt, and the per-row
+  > override and immediate effect are untouched.
 - **REQ-CHAT-166** — Tool-row content MUST be governed by persisted settings offered in the settings surface and mirrored into the catalogue by REQ-CHAT-028: whether tool results are shown, defaulting **shown**; whether tool inputs are shown, defaulting **shown**; and a rendered-line cap for each, defaulting to **10** lines for results and **2** for inputs, offered as the values 1, 2, 5, 10, 20, 50, and unlimited. These four are workspace configuration, written to and read back from the `display` section of the workspace `agents.yaml` (REQ-CONFIG-172, REQ-CONFIG-175). The settings surface that offers them is the Display category controls of REQ-CONFIG-472, which this requirement relies on for where the four controls live and for the write path that puts their values into that section. A cap MUST affect only what is drawn: the session record MUST retain the full text (REQ-CHAT-046), so raising a cap or reopening the session shows the rest without re-running anything. Truncation MUST be marked in the drawn text, stating that the result or the input was cut short and how many further lines exist. Expanding a row per REQ-CHAT-061 MUST show the untruncated value whatever these settings say, and a change to any of them MUST take effect immediately on the rows already on screen.
 - **REQ-CHAT-167** — A persisted desktop preference MUST control whether reasoning bodies are shown, defaulting **off** so that reasoning rows summarize per REQ-CHAT-062 and reveal nothing until asked. It is global to the transcript — changing it changes every reasoning row at once — and MUST be reachable both from the settings surface and from the command palette, and therefore as a slash command (REQ-CHAT-028). Toggling MUST report the new state, MUST take effect immediately on the rows already on screen, and MUST NOT move the reader's position (REQ-CHAT-071). A row the user has expanded or collapsed by hand keeps the state the user gave it, overriding the preference for that row until its expansion state is reset (REQ-CHAT-059). The preference is stored in the desktop preference store under the registered key `display/showReasoning` (REQ-SHELL-006, which registers the key set of that store), is written user-wide like every desktop preference (REQ-CONFIG-405), and is not part of the YAML configuration surface.
-  > **Extended by [`PD-CONFIG-004`](../product/directives.md#pd-config-004), 2026-10-13.** The settings-surface control is
-  > Settings › Display › Transcript's third switch, after REQ-CONFIG-403's two, written the moment it moves and not undone by
-  > Discard.
+  > **Extended by [`PD-CONFIG-004`](../product/directives.md#pd-config-004), 2026-10-13; revised 2026-10-19.** The settings-surface control is
+  > Settings › Display › Transcript's second control, after [`PD-CHAT-010`](../product/directives.md#pd-chat-010)'s
+  > slider, written the moment it moves and not undone by Discard. *(Revision 2 of the directive replaced the three-switch
+  > heading this note first described; the switch's own key, hint and commit policy are unchanged.)*
 - **REQ-CHAT-068** — Selecting a child agent MUST place a collapsible delegation-context header row above that agent's transcript; selecting a root agent MUST NOT produce one. Expanded, the row MUST show the task name, the persona, the task category, whether the task runs in the background or blocks its parent, the full task text, the task's dependencies, and the context inherited from the parent. Collapsed, it MUST show a single summary line conveying exactly three facts — the child agent's name, its persona, and its task, the task compacted to at most **110** characters with an ellipsis where it is cut — with the arrangement, separators, and any leading marker left to the implementation. A delegation payload whose fields are missing or unreadable MUST still produce a row showing the fields that could be read, and MUST NOT surface an error to the user or prevent the rest of the transcript from rendering; a summary line that cannot name all three facts MUST name those it can rather than showing a placeholder for the rest.
   > **Extended by [`PD-CHAT-005`](../product/directives.md#pd-chat-005), 2026-09-16.** The delegation
   > header above is unchanged and stays the place the child's task is read in full. The directive

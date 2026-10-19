@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Ninety-six.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Ninety-seven.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -5522,24 +5522,37 @@ typing changes nothing, and the stored value survives all of them. Revisions 1 t
 
 <a id="pd-config-004"></a>
 
-### PD-CONFIG-004 — the Display category's Transcript heading holds three desktop-preference switches
+### PD-CONFIG-004 — the Display category's Transcript heading holds the tool-verbosity slider and the reasoning switch
 
-Settings › Display › Transcript SHALL hold three switches. The first two are REQ-CONFIG-403's, in its order: **Auto-collapse
-older tool outputs**, then **Group consecutive tool calls**. The third is REQ-CHAT-167's **Show reasoning bodies**
-(`display/showReasoning`, default off), whose hint says that reasoning rows open to show their text, that off each shows only
-its summary line, and that a row the user opened or closed keeps that choice (REQ-CHAT-059). The third is wired like the first
-two, to the stored preference and to the live re-render notification. It commits like them: it is written user-wide the moment
-it moves (REQ-CONFIG-405), needs no Save, and Discard does not undo it. The heading's sentence states that policy for all three.
-REQ-CONFIG-472's four tool-row controls and their Save policy are unchanged.
+*Revision 2 (2026-10-19, [R-076](requests.md#r-076)) — **the tool-verbosity slider replaces the two
+REQ-CONFIG-403 switches**, in the first paragraph below; revision 1's clause quoted beside it.*
 
-**Why, and what it costs.** REQ-CHAT-167 requires the switch to be reachable from the settings surface and names no category;
-Display is where its namespace (`display/`), its commit policy and the rows it governs already are. What it costs:
-REQ-CONFIG-403's count of two now reads as three on screen.
+Settings › Display › Transcript SHALL hold two controls. The first is [`PD-CHAT-010`](directives.md#pd-chat-010)'s
+five-stop **Timeline detail** slider, in place of the two switches revision 1 placed here. The second is REQ-CHAT-167's
+**Show reasoning bodies** (`display/showReasoning`, default off), whose hint says that reasoning rows open to show their
+text, that off each shows only its summary line, and that a row the user opened or closed keeps that choice
+(REQ-CHAT-059). It is wired to the stored preference and to the live re-render notification, and commits like the
+slider: it is written user-wide the moment it moves (REQ-CONFIG-405), needs no Save, and Discard does not undo it. The
+heading's sentence states that policy for both. REQ-CONFIG-472's four tool-row controls and their Save policy are
+unchanged.
 
-**As built.** `packages/ui/src/settings/DisplaySettings.tsx` (the `show-reasoning` Toggle, third under the Transcript heading,
-whose sentence reads "These three are yours, not this workspace's"); `packages/ui/src/commands/search-and-reasoning.test.ts`;
+**Why, and what it costs.** REQ-CHAT-167 requires the reasoning switch to be reachable from the settings surface and names
+no category; Display is where its namespace (`display/`), its commit policy and the rows it governs already are. The
+slider's own reason and cost are [`PD-CHAT-010`](directives.md#pd-chat-010)'s. Revision 2 costs revision 1's independent
+pair: grouping and auto-collapse were two switches a reader could set apart, and they are now one position on one
+slider; the one combination that does not survive is named in that directive.
+
+> **Revision 1 said, and no longer governs:** "Settings › Display › Transcript SHALL hold three switches. The first two
+> are REQ-CONFIG-403's, in its order: **Auto-collapse older tool outputs**, then **Group consecutive tool calls**." The
+> rest of revision 1's paragraph — the reasoning switch's key, hint, wiring and commit policy, and REQ-CONFIG-472's
+> unchanged controls — still governs, with the switch now the second control rather than the third.
+
+**As built.** `packages/ui/src/settings/DisplaySettings.tsx` (the `show-reasoning` Toggle, third under the Transcript heading
+at the time, whose sentence reads "These three are yours, not this workspace's"); `packages/ui/src/commands/search-and-reasoning.test.ts`;
 `pnpm settings-proof`. Built 2026-10-13 by fin41 (N71) before the ruling, under the reading OQ-264 recorded; the ruling
-confirmed it, so no code changed with this directive.
+confirmed it, so no code changed with this directive. **On 2026-10-19 the slider of revision 2 and
+[`PD-CHAT-010`](directives.md#pd-chat-010) is recorded and not built**: the surface still draws the two switches and the
+heading's three-control sentence. The change that builds it owes this paragraph the surface as it then is.
 
 > **The live re-render notification across windows, 2026-10-14 (fin43), reported here in place:** "wired … to the live
 > re-render notification" held for the window that moved the switch only; a persona window already open kept the value it
@@ -9413,6 +9426,64 @@ A delegated child MUST NOT end a conversation or return a partial report merely 
 **First execution, 2026-10-16.** The real-store child regression completes 105 tool calls and answers on model step 106; the focused engine, turn and back-pointer run passes 1,012 tests across 36 suites. The rebuilt application's whole `part-h-proof` passes, including `child-over-100`: one succeeded child with 105 tool calls and no step-bound warning. Its first fixture incorrectly inherited the proof helper's `single` strategy and created no child; the corrected fixture uses the ordinary delegation strategy and fails if no child runs. Lint and typecheck pass. The full gate remains red on Windows symbolic-link privileges, MCP scratch cleanup and other timeouts; continuation's later-run launch, compression startup and three resilience scenarios also failed. This is not a green landing gate or a live-model execution of the change.
 
 **Follow-up under R-074, 2026-10-16.** The full unit gate subsequently passes while awake (6,500 tests), as do the complete MCP proof and continuation proof. Windows shutdown now gives the server stdin EOF before its runner is tree-killed at the grace bound, and path-observation fixtures use junctions without skipping their assertions. Other UI-proof readings remain recorded separately; no live-model execution is claimed.
+
+---
+
+<a id="pd-chat-010"></a>
+
+### PD-CHAT-010 — the transcript's tool-rendering verbosity is one slider with five ordered stops
+
+Settings › Display › Transcript SHALL hold one slider, **Timeline detail**, with five evenly spaced ordered stops. Only
+its two ends carry a word of their own — **Compact** and **Expanded**; the selected stop's name is stated as the
+slider's value, so the three interior stops are readable as they are chosen. The stops govern what the transcript draws
+of **tool calls only**: prompt and answer messages are drawn at every stop, and REQ-CHAT-167's reasoning control is
+independent of the slider and keeps its own preference.
+
+The stops, in order, MUST be:
+
+1. **Compact** — grouping on, and every tool row drawn as a row collapsed to its name and chevron with **no `⤷` preview
+   on any unopened row**, the most recent pair included. The activity line's in-flight statement (REQ-CHAT-065) is
+   untouched.
+2. **Brief** — exactly REQ-CHAT-067 and [`PD-CHAT-004`](directives.md#pd-chat-004) as they read before this directive:
+   grouping on, and all but the most recent tool-call/result pair collapsed to name and chevron, the most recent pair
+   keeping REQ-CHAT-061's preview.
+3. **Standard**, the default — grouping on and auto-collapse off: today's default pair, so nothing on screen changes.
+4. **Detailed** — grouping off: no run folds into an activity line and every tool row is drawn as its own row, collapsed
+   with its `⤷` preview.
+5. **Expanded** — grouping off, and every tool row that has something to reveal is drawn already open, exactly as a row
+   the reader opened is drawn by REQ-CHAT-061; what the open card contains is governed by REQ-CHAT-061 and
+   REQ-CHAT-166 as it already is.
+
+A move MUST take effect immediately on the rows already on screen and MUST NOT move the reader's position
+(REQ-CHAT-071). A row the user has expanded or collapsed by hand keeps the state the user gave it, overriding the stop
+for that row until its expansion state is reset (REQ-CHAT-059).
+
+The stop is a desktop preference, stored under the registered key `display/toolVerbosity` as an integer from **1**
+(Compact) to **5** (Expanded), defaulting to **3** (Standard). It is written user-wide the moment it moves like every
+desktop preference (REQ-CONFIG-405), needs no Save, and Discard does not undo it; restoring it into the control emits
+no change (REQ-CONFIG-419). The slider **replaces** `display/autoCollapseTools` and `display/groupToolCalls`, which are
+retired from the store's key set and never written again. Where the new key is absent and either retired key is present,
+the stop is read from the pair once and nothing is written back: grouping off → **Detailed**; grouping on with
+auto-collapse on → **Brief**; grouping on with auto-collapse off → **Standard**. The retired keys are never rewritten or
+removed, and a `display/toolVerbosity` value that is absent, unreadable or not an integer from 1 to 5 reads as
+**Standard**.
+
+**Why, and what it costs.** Two independent booleans described the mechanisms and not what a reader wants: "how much of
+a tool call do I want to see" is one axis, and its ends — nothing but the call's name, everything open — were not
+reachable by any setting of the pair. The five stops order the existing two mechanisms and add those two ends, with the
+middle stop left as the product's default so that a reader who never touches the slider sees no change. What it costs:
+one combination of the retired pair, grouping off with auto-collapse on, has no stop and lands **Detailed** — the rows
+stay individual and regain the previews auto-collapse had removed. It is the only combination the slider cannot
+reproduce, and it is the direction that shows more rather than less. The four REQ-CHAT-166 content controls stay a
+separate workspace setting, so **Expanded** says what is open and not how many lines an open card draws.
+
+**Recorded, not built.** On 2026-10-19 the surface still draws the two switches; nothing in this entry describes the
+built product. The change owes its first execution, and this entry's own readings are owed with it.
+
+> **Narrows:** REQ-CHAT-061, REQ-CHAT-067, REQ-CONFIG-403, REQ-CONFIG-405, REQ-SHELL-006
+> **Extends:** REQ-CHAT-061
+
+*Raised by the owner, 2026-10-19; logged as [R-076](requests.md#r-076).*
 
 ---
 <!--

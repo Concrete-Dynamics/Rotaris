@@ -229,20 +229,32 @@ export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps({ via: '
   function finish(head, pushed, evidence) {
     const sha = head.slice(0, 7);
     const state = pushed ? `landed ${sha} on origin/main` : `HEAD ${sha} is already on origin/main — nothing pushed`;
-    const beweis = pushed ? evidence : 'none this run — nothing to push, so no gate ran';
+    const beweis = evidence !== '' ? evidence : 'none this run — nothing to push, so no gate ran';
     const primaryStep = primaryHint(head);
+    // What exists, never what a call answers: a re-run that finds the head already on origin/main never made a
+    // landing tree — and removeTree() answers true for a directory that was never there (its idempotence).
+    const landDirExists = existsSync(landDir);
     if (parsed.keep) {
-      handoff(
-        `${state}; both trees and branch ${branch} kept (--keep): ${root} and ${landDir}`,
-        beweis,
-        `the kept trees and branch ${branch} — run again without --keep to remove them`,
-        primaryStep ?? 'nothing',
-      );
+      if (landDirExists) {
+        handoff(
+          `${state}; both trees and branch ${branch} kept (--keep): ${root} and ${landDir}`,
+          beweis,
+          `the kept trees and branch ${branch} — run again without --keep to remove them`,
+          primaryStep ?? 'nothing',
+        );
+      } else {
+        handoff(
+          `${state}; the branch worktree and branch ${branch} kept (--keep): ${root}`,
+          beweis,
+          `the kept branch worktree and branch ${branch} — run again without --keep to remove them`,
+          primaryStep ?? 'nothing',
+        );
+      }
       return 0;
     }
     const open = [];
     const steps = [];
-    const landGone = removeTree(landDir);
+    const landGone = landDirExists ? removeTree(landDir) : true;
     if (!landGone) {
       open.push(`the landing worktree ${landDir}`);
       steps.push(`git -C ${primary} worktree remove --force ${landDir}`);
@@ -265,7 +277,7 @@ export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps({ via: '
       steps.unshift(`git -C ${primary} worktree remove ${root}`, `git -C ${primary} branch -D ${branch}`);
       open.push(`the branch worktree ${root}`);
       handoff(
-        `${state}; ${landGone ? 'the landing worktree removed; ' : ''}the branch worktree stays (a shell or an editor is sitting in it)`,
+        `${state}; ${landDirExists && landGone ? 'the landing worktree removed; ' : ''}the branch worktree stays (a shell or an editor is sitting in it)`,
         beweis,
         open.join('; '),
         [primaryStep, ...steps].filter(Boolean).join('; ') || 'nothing',
@@ -282,7 +294,13 @@ export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps({ via: '
       if (deleted.status === 0) branchClause = `branch ${branch} deleted`;
       else open.push(`branch ${branch} — git branch -D refused: ${oneLine(deleted.stderr)}`);
     }
-    const worked = [landGone ? 'both worktrees removed' : `the branch worktree removed; the landing worktree ${landDir} stays`];
+    const worked = [
+      landGone
+        ? landDirExists
+          ? 'both worktrees removed'
+          : 'the branch worktree removed'
+        : `the branch worktree removed; the landing worktree ${landDir} stays`,
+    ];
     if (branchClause !== null) worked.push(branchClause);
     handoff(
       `${state}; ${worked.join(', ')}`,
@@ -310,7 +328,7 @@ export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps({ via: '
         deps.error('worktree:land: cannot read HEAD');
         return 1;
       }
-      return finish(head, false, '');
+      return finish(head, false, evidence);
     }
 
     const overlap = overlapWithMain(root);

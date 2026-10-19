@@ -32,6 +32,23 @@ afterEach(() => {
   }
 });
 
+/**
+ * The handoff `docs/clean-room/agent-workflow.md` fixes: one heading, then exactly the four labelled lines, in
+ * order — and the block closes the run, so nothing follows it. Reads a recorded run's log.
+ */
+function expectHandoff(log: string[]): void {
+  const lines = log.join('\n').split('\n');
+  const at = lines.indexOf('worktree:land: handoff');
+  expect(at).toBeGreaterThanOrEqual(0);
+  expect(lines.slice(at)).toEqual([
+    'worktree:land: handoff',
+    expect.stringMatching(/^ {2}Zustand: /),
+    expect.stringMatching(/^ {2}Beweise: /),
+    expect.stringMatching(/^ {2}Offen: /),
+    expect.stringMatching(/^ {2}Nächster Schritt: /),
+  ]);
+}
+
 describe('worktree:land', () => {
   it('parses its arguments', () => {
     expect(parseLandArgs([])).toEqual({
@@ -98,6 +115,7 @@ describe('worktree:land', () => {
     expect(text).toContain(
       `Nächster Schritt: fast-forward the primary checkout: git -C ${repo.primary} merge --ff-only origin/main`,
     );
+    expectHandoff(log);
     expect(text).not.toContain('also moved since fork');
     expect(existsSync(tree)).toBe(false);
     expect(existsSync(landDir)).toBe(false);
@@ -128,15 +146,51 @@ describe('worktree:land', () => {
     addWorktree(repo, 'feat/x', tree);
     repo.commit(repo.primary, 'main moved', { 'c.txt': 'c\n' });
     repo.push(repo.primary);
+    const landDir = join(repo.base, `primary-wt-${slugFor('feat/x')}-land`);
+    const tip = repo.git(tree, 'rev-parse', 'HEAD').stdout.trim();
     const { deps, calls, log } = testDeps();
     expect(runLand({ argv: [], cwd: tree, deps })).toBe(0);
-    expect(log.join('\n')).toContain('already on origin/main');
-    expect(log.join('\n')).toContain('Beweise: none this run — nothing to push, so no gate ran');
+    const text = log.join('\n');
+    expect(text).toContain('already on origin/main');
+    expect(text).toContain('Beweise: none this run — nothing to push, so no gate ran');
+    expect(text).toContain(
+      `Zustand: HEAD ${tip.slice(0, 7)} is already on origin/main — nothing pushed; the branch worktree removed, branch feat/x deleted`,
+    );
+    // This run never made a landing tree: the block must not claim, name or remove one.
+    expect(text).not.toContain('both worktrees removed');
+    expect(text).not.toContain(landDir);
     expect(calls.gate).toEqual([]);
     expect(calls.plan).toEqual([]);
     expect(existsSync(tree)).toBe(false);
+    expect(existsSync(landDir)).toBe(false);
     expect(repo.git(repo.primary, 'branch', '--list', 'feat/x').stdout.trim()).toBe('');
     expect(repo.subjects('main')).toEqual(['main moved', 'fixture']);
+    expectHandoff(log);
+  });
+
+  it('names only the worktree that exists when --keep re-runs on a head already on origin/main', () => {
+    repo = scratchRepo();
+    const tree = join(repo.base, 'wt');
+    addWorktree(repo, 'feat/x', tree);
+    repo.commit(repo.primary, 'main moved', { 'c.txt': 'c\n' });
+    repo.push(repo.primary);
+    const landDir = join(repo.base, `primary-wt-${slugFor('feat/x')}-land`);
+    const tip = repo.git(tree, 'rev-parse', 'HEAD').stdout.trim();
+    const { deps, calls, log } = testDeps();
+    expect(runLand({ argv: ['--keep'], cwd: tree, deps })).toBe(0);
+    const text = log.join('\n');
+    expect(text).toContain(
+      `Zustand: HEAD ${tip.slice(0, 7)} is already on origin/main — nothing pushed; the branch worktree and branch feat/x kept (--keep): ${tree}`,
+    );
+    expect(text).toContain('Offen: the kept branch worktree and branch feat/x — run again without --keep to remove them');
+    // There is no landing tree to keep and no path into nothing: the plural wording and the path are absent.
+    expect(text).not.toContain('both trees');
+    expect(text).not.toContain(landDir);
+    expect(calls.gate).toEqual([]);
+    expect(existsSync(tree)).toBe(true);
+    expect(existsSync(landDir)).toBe(false);
+    expect(repo.git(repo.primary, 'branch', '--list', 'feat/x').stdout.trim()).not.toBe('');
+    expectHandoff(log);
   });
 
   it('refuses a branch tree with uncommitted changes, before any fetch or gate', () => {
@@ -334,6 +388,7 @@ describe('worktree:land', () => {
     expect(log.join('\n')).toContain(
       'Offen: the kept trees and branch feat/x — run again without --keep to remove them',
     );
+    expectHandoff(log);
     expect(existsSync(tree)).toBe(true);
     expect(existsSync(landDir)).toBe(true);
     expect(repo.git(repo.primary, 'branch', '--list', 'feat/x').stdout.trim()).not.toBe('');

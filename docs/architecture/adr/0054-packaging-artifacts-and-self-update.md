@@ -1748,7 +1748,7 @@ and REQ-STARTUP-119's auto-close stay programmatic and ask nothing, and the succ
 execution, 2026-10-14:** over fakes only — `updater.test.ts`'s OQ-311 block (ten cases, nine red against the unrepaired
 updater), `main-windows.test.ts` (`askUnsavedInTurn`) and `apps/desktop/src/renderer/guard-question.test.ts` (an asking while
 the question is open joins it); a development host's build is classified not updatable, so no launch reaches these guards, and
-their run in the built app is owed to the Windows package (a Windows x64 host, deferred with the release pipeline under R-071; IC-3 binds Linux and macOS artifacts), as `AGENTS.md`'s `updater-proof` line records.
+their run in the built app is owed to the Windows package (a Windows x64 host, deferred with the release pipeline under R-071; IC-3 binds Linux and macOS artifacts), as [`docs/proofs/updater-proof.md`](../../proofs/updater-proof.md) records.
 
 **Repaired at verification, 2026-09-28 (same item, R-062).** The independent verification found three defects in the
 build above, and writing the third's test found a fourth; each is repaired with a test beside it, and nothing in this

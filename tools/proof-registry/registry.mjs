@@ -17,8 +17,9 @@
  * The guard beside this file (`registry.test.ts`) holds the registry to the tree: every `*-proof.mjs`,
  * `live-run`, `ui-audit` and `ui-review` script has exactly one record and no record names a script that is not
  * there; every id is the pnpm script that runs it; every record opens with its id; every neighbour resolves and
- * the relation is symmetric; every recorded flag occurs in the script it belongs to. The rendered index's
- * freshness is `pnpm lint`'s check (`generate.mjs --check`), not the guard's.
+ * the relation is symmetric; every recorded flag is one the script reads, and every flag the script reads from
+ * its own argv (`flags.mjs`) is recorded, so a flag cannot hide in the script or dangle in the column. The
+ * rendered index's freshness is `pnpm lint`'s check (`generate.mjs --check`), not the guard's.
  *
  * Entry fields:
  *   id             the pnpm script name, the script's basename and the record's basename
@@ -607,7 +608,7 @@ export const PROOFS = [
     requires: [],
     platforms: ALL_HOSTS,
     platformNotes: [],
-    flags: ['--sizes=<w×h,…>', '--views=<n,…>', '--discard-critique', '--no-overlays', '--skip-build'],
+    flags: ['--sizes=<w×h,…>', '--views=<n,…>', '--theme=<name>', '--output=<dir>', '--discard-critique', '--no-overlays', '--skip-build'],
   },
   {
     id: 'ui-review',
@@ -627,7 +628,16 @@ export const PROOFS = [
     requires: ['code-intelligence bundle', 'a registered endpoint with a stored key'],
     platforms: ALL_HOSTS,
     platformNotes: [],
-    flags: ['--confirm', '--endpoint=<name>', '--only=<scenario>[,…]', '--skip-build', '--gui', '--keep', '--keep-runs=<n>', '--budget=<usd>', '--max-tokens=<n>', '--max-iterations=<n>', '--context=<tokens>', '--no-record-traffic', '--duress-fixture=<path>'],
+    flags: [
+      // The run, as `USAGE` states it.
+      '--confirm', '--help', '--endpoint=<name>', '--model=<id>', '--no-discover-model', '--base-url=<url>', '--only=<scenario>[,…]',
+      '--budget=<usd>', '--max-tokens=<n>', '--max-iterations=<n>', '--duress-fixture=<path>', '--keep-runs=<n>',
+      '--session-log-level=<lvl>', '--app-log-level=<lvl>', '--no-record-traffic', '--gui', '--keep', '--skip-build',
+      // The endpoint registry's verbs.
+      '--add-endpoint', '--endpoints', '--set-default=<name>', '--set-key', '--forget-key', '--remove-endpoint=<name>',
+      // Registration's fields, passed with `--add-endpoint`.
+      '--name=<name>', '--label=<text>', '--context=<tokens>', '--in-price=<usd>', '--out-price=<usd>', '--unmetered', '--default',
+    ],
   },
 ];
 

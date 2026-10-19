@@ -15139,8 +15139,8 @@ asked, the first `false` stopping it, a renderer that cannot answer allowing und
 `askRendererGuard` with one log line per asking; and the renderer's guard joining a question already open
 (`apps/desktop/src/renderer/guard-question.ts`). Pinned by `updater.test.ts` (the OQ-311 block), `main-windows.test.ts`
 (`askUnsavedInTurn`) and `guard-question.test.ts`. A development host's built app is classified not updatable, so no launch
-reaches `update.restart`'s guards there: the built-app run is owed to the Windows package (a Windows x64 host, deferred with the release pipeline under R-071; IC-3 binds Linux and macOS artifacts), as `AGENTS.md`'s
-`updater-proof` line records
+reaches `update.restart`'s guards there: the built-app run is owed to the Windows package (a Windows x64 host, deferred with the release pipeline under R-071; IC-3 binds Linux and macOS artifacts), as
+[`docs/proofs/updater-proof.md`](../proofs/updater-proof.md) records
 ([`../defects/fixed/an-update-restart-discards-a-windows-unsaved-settings-unasked.md`](../defects/fixed/an-update-restart-discards-a-windows-unsaved-settings-unasked.md)).
 
 **The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's

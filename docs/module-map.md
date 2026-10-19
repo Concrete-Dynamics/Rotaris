@@ -66,7 +66,8 @@ build identifier, open `build-id.mjs`; tests in `build-id.test.ts`), `tools/requ
 only tests reach is named `<unit>.test-support.ts` in every package under `packages/` and that nothing an entry reaches
 imports one; `test-support-naming.test.ts`), `tools/proof-registry/` (the proof registry behind `pnpm proofs:index` —
 `registry.mjs` holds one record per proof entry, `generate.mjs` renders `docs/proofs/README.md` and `pnpm lint` fails
-when it is stale, and `registry.test.ts` holds the registry to the tree), `tools/verify-plan/` (`pnpm verify:plan` —
+when it is stale, `flags.mjs` reads the flags a proof script takes from its own argv, and `registry.test.ts` holds
+the registry to the tree), `tools/verify-plan/` (`pnpm verify:plan` —
 given a diff, the gate, the complete affected proof suites and the architecture documents; an unmapped path requires
 explicit review; open `plan.mjs`, tests in `plan.test.ts`), `tools/dev-time/` (since 2026-10-18 the recorder behind
 `pnpm dev-time` (R-075) — measured spans of setup, build, each gate stage, proofs, repairs and repeated rebases, one

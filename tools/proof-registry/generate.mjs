@@ -10,8 +10,8 @@
  * and is never touched by this script.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { AREAS, HOSTS, INDEX_PATH, PROOFS, recordPath } from './registry.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -70,29 +70,50 @@ export function render() {
   return `${lines.join('\n')}\n`;
 }
 
-const mode = process.argv.includes('--write') ? 'write' : process.argv.includes('--check') ? 'check' : '';
-if (mode === '') {
-  process.stdout.write('usage: node tools/proof-registry/generate.mjs --write|--check\n');
-  process.exit(1);
+/**
+ * The 1-based line where `current` first differs from `rendered`, or 0 when they are equal. The shorter side
+ * running out is a difference too: the old blank `findIndex` read a file that is a prefix of the render (or
+ * differs only by a missing trailing newline) as equal at every line and reported "first difference at line 0".
+ * @param {string} current
+ * @param {string} rendered
+ * @returns {number}
+ */
+export function firstDifferingLine(current, rendered) {
+  if (current === rendered) return 0;
+  const a = current.split('\n');
+  const b = rendered.split('\n');
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    if (a[index] !== b[index]) return index + 1;
+  }
+  return Math.max(a.length, b.length);
 }
 
-const target = join(ROOT, INDEX_PATH);
-const rendered = render();
-if (mode === 'write') {
-  writeFileSync(target, rendered);
-  process.stdout.write(`proof registry written: ${INDEX_PATH} (${PROOFS.length} entries)\n`);
-} else if (!existsSync(target)) {
-  process.stderr.write(`proof registry missing: ${INDEX_PATH} — run pnpm proofs:index\n`);
-  process.exit(1);
-} else {
-  const current = readFileSync(target, 'utf8');
-  if (current === rendered) {
-    process.stdout.write(`proof registry is current: ${INDEX_PATH} (${PROOFS.length} entries)\n`);
-  } else {
-    const at = current.split('\n').findIndex((line, index) => line !== rendered.split('\n')[index]);
-    process.stderr.write(
-      `proof registry is stale: ${INDEX_PATH} (first difference at line ${at + 1}) — run pnpm proofs:index\n`,
-    );
+const runDirectly = process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+if (runDirectly) {
+  const mode = process.argv.includes('--write') ? 'write' : process.argv.includes('--check') ? 'check' : '';
+  if (mode === '') {
+    process.stdout.write('usage: node tools/proof-registry/generate.mjs --write|--check\n');
     process.exit(1);
+  }
+
+  const target = join(ROOT, INDEX_PATH);
+  const rendered = render();
+  if (mode === 'write') {
+    writeFileSync(target, rendered);
+    process.stdout.write(`proof registry written: ${INDEX_PATH} (${PROOFS.length} entries)\n`);
+  } else if (!existsSync(target)) {
+    process.stderr.write(`proof registry missing: ${INDEX_PATH} — run pnpm proofs:index\n`);
+    process.exit(1);
+  } else {
+    const current = readFileSync(target, 'utf8');
+    if (current === rendered) {
+      process.stdout.write(`proof registry is current: ${INDEX_PATH} (${PROOFS.length} entries)\n`);
+    } else {
+      const at = firstDifferingLine(current, rendered);
+      process.stderr.write(
+        `proof registry is stale: ${INDEX_PATH} (first difference at line ${at}) — run pnpm proofs:index\n`,
+      );
+      process.exit(1);
+    }
   }
 }

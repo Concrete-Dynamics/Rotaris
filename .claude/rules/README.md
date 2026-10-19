@@ -16,7 +16,7 @@ Three constraints on a rule in this directory:
    in front of them does not go here.
 2. **It points at its authority rather than restating it.** The ordered edit paths live in
    `docs/architecture/views/04-seams.md`, the allowed edges in `01-component-view.md`, the vocabulary
-   in `CONTEXT-MAP.md`, the evidence in `AGENTS.md`. A rule that copies one of those is the copy that
+   in `CONTEXT-MAP.md`, the evidence in `docs/proofs/README.md`. A rule that copies one of those is the copy that
    drifts.
 3. **It stays under roughly twenty-five lines.** A rule long enough to skim is long enough to ignore.
 

@@ -7,14 +7,20 @@
  *
  * The tests hold the registry to the tree: every `*-proof.mjs` script and `live-run`, `ui-audit` and `ui-review` has
  * exactly one record and every record names a script that is there; every id is the pnpm script that runs it and every
- * record document opens with its id; neighbours resolve, never name the entry itself, and the relation is symmetric;
- * and areas, platforms, clauses, requirements and flags are well-formed, a recorded flag's token occurring in the
- * script it belongs to. The generated index's freshness is `pnpm lint`'s check
- * (`node tools/proof-registry/generate.mjs --check`), not these tests'.
+ * record document opens with its id and names its own script; neighbours resolve, never name the entry itself, and the
+ * relation is symmetric; and areas, platforms, clauses, requirements and flags are well-formed, a recorded flag's token
+ * occurring in the script it belongs to and every flag that script reads from its own argv being recorded
+ * (`flags.mjs`), so a flag cannot hide in the script or dangle in the column. The generated index's freshness is
+ * `pnpm lint`'s check (`node tools/proof-registry/generate.mjs --check`), not these tests'.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+
+// @ts-expect-error - the tools directory is plain ESM, run by node without a build step.
+import { flagsRead } from './flags.mjs';
+// @ts-expect-error - the tools directory is plain ESM, run by node without a build step.
+import { firstDifferingLine } from './generate.mjs';
 
 // @ts-expect-error - the tools directory is plain ESM, run by node without a build step.
 import { AREAS, HOSTS, PROOFS, recordPath, scriptPath } from './registry.mjs';
@@ -47,12 +53,21 @@ describe('the proof registry covers the suite and holds its own shape', () => {
     }
   });
 
-  it('keeps a record document for each entry, opening with the entry’s id', () => {
+  it('keeps a record document for each entry, opening with the entry’s id and naming its own script', () => {
     for (const id of ids) {
       const path = join(repo, recordPath(id));
       expect(existsSync(path), recordPath(id)).toBe(true);
-      expect(readFileSync(path, 'utf8').split('\n')[0], recordPath(id)).toBe(`# \`${id}\``);
+      const text = readFileSync(path, 'utf8');
+      expect(text.split('\n')[0], recordPath(id)).toBe(`# \`${id}\``);
+      expect(text, `${recordPath(id)} does not link ${scriptPath(id)}`).toContain(scriptPath(id));
     }
+  });
+
+  it('has no record document without an entry', () => {
+    const records = readdirSync(join(repo, 'docs', 'proofs'))
+      .filter((name) => name.endsWith('.md') && name !== 'README.md')
+      .map((name) => name.slice(0, -'.md'.length));
+    expect([...records].sort(), 'a record under docs/proofs/ names no entry').toEqual([...ids].sort());
   });
 
   it('resolves every neighbour, never the entry itself, and keeps the relation symmetric', () => {
@@ -80,13 +95,54 @@ describe('the proof registry covers the suite and holds its own shape', () => {
         expect(note, proof.id).not.toMatch(/[\n|]/);
       }
       for (const requirement of proof.requires) expect(requirement.trim(), proof.id).not.toBe('');
+      const script = readFileSync(join(repo, scriptPath(proof.id)), 'utf8');
+      const read = flagsRead(script);
       for (const flag of proof.flags) {
         expect(flag.startsWith('--'), `${proof.id} records ${flag}`).toBe(true);
         const token = flag.split('=')[0] as string;
-        const script = readFileSync(join(repo, scriptPath(proof.id)), 'utf8');
-        expect(script, `${proof.id} records ${flag}, which its script never reads`).toContain(token);
+        expect(
+          read.includes(token) || script.includes(token),
+          `${proof.id} records ${flag}, which its script never reads`,
+        ).toBe(true);
+      }
+      for (const token of read) {
+        expect(
+          proof.flags.map((flag: string) => flag.split('=')[0]),
+          `${proof.id} reads ${token}, which the registry does not record`,
+        ).toContain(token);
       }
     }
+  });
+
+  it('reads a script’s flags from its own argv alone, and not from a comment, a string or a child’s cmdline', () => {
+    // The pin: live-run reads its flags through `has`/`value`, and this must keep seeing them, or the reverse check
+    // above passes vacuously (the shape `git-proof-index` once broke with). A helper that stopped being recognised
+    // would drop every flag it reads.
+    const liveRun = readFileSync(join(repo, scriptPath('live-run')), 'utf8');
+    expect(flagsRead(liveRun)).toEqual(
+      expect.arrayContaining([
+        '--confirm', '--help', '--endpoint', '--model', '--no-discover-model', '--base-url', '--budget', '--max-tokens',
+        '--max-iterations', '--keep-runs', '--session-log-level', '--app-log-level', '--no-record-traffic', '--only',
+        '--duress-fixture', '--gui', '--keep', '--skip-build', '--add-endpoint', '--endpoints', '--set-default',
+        '--set-key', '--forget-key', '--remove-endpoint', '--name', '--label', '--context', '--in-price', '--out-price',
+        '--unmetered', '--default',
+      ]),
+    );
+    // A comment is not a read, and neither is another process's command line.
+    expect(flagsRead("// argv.includes('--commented')\n")).toEqual([]);
+    expect(flagsRead("if (cmdline.includes('--type=utility')) return null;\n")).toEqual([]);
+    expect(flagsRead("if (launch.argv.includes('--call-file')) return 1;\n")).toEqual([]);
+    // A helper that passes the dashes at its call site is read too.
+    expect(flagsRead("const arg = (name) => process.argv.find((v) => v.startsWith(`${name}=`));\nconst a = arg('--theme');\n")).toEqual(['--theme']);
+    // A helper that builds the dashes from its parameter is read at every call with a literal.
+    expect(flagsRead("const value = (name, fallback) => argv.find((a) => a.startsWith(`--${name}=`)) ?? fallback;\nconst budget = value('budget', '1.00');\n")).toEqual(['--budget']);
+  });
+
+  it('reports the first line that differs between the index on disk and the render, or 0 when they agree', () => {
+    expect(firstDifferingLine('a\nb\n', 'a\nb\n')).toBe(0);
+    expect(firstDifferingLine('a\nb\n', 'a\nc\n')).toBe(2);
+    expect(firstDifferingLine('a\n', 'a\nb\n')).toBe(2);
+    expect(firstDifferingLine('a\nb\n', 'a\nb')).toBe(3);
   });
 
   it('uses every area, so an area heading never renders empty', () => {

@@ -65,9 +65,11 @@ rendered from [`tools/proof-registry/registry.mjs`](tools/proof-registry/registr
 the page and `pnpm lint` fails when it is stale — and each row names the entry's area, what it measures, the
 neighbours sharing a mechanism with it (the second script a shared seam needs), what it needs beyond the standard
 harness, the hosts it runs on, and its flags. The detail behind a row — what the proof measures, version by version —
-is the record its name links to under [`docs/proofs/`](docs/proofs/). An agent planning verification reads the
-registry, not forty script headers; `tools/proof-registry/registry.test.ts` holds it to the tree, failing when a
-proof script has no record, a neighbour does not resolve, or a recorded flag names nothing.
+is the record its name links to under [`docs/proofs/`](docs/proofs/). The registry answers what a proof covers; it is
+not how the suite a diff touches is chosen — `pnpm verify:plan` prints that plan, and it is followed rather than
+reconstructed from the registry's rows. `tools/proof-registry/registry.test.ts` holds the registry to the tree,
+failing when a proof script has no record or a record has no entry, a neighbour does not resolve, or the flags
+column and the script's own argv disagree.
 
 ## Repository UI skills
 

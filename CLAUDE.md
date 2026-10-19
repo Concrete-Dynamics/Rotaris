@@ -130,6 +130,7 @@ the only places `electron` is imported. Engine code takes time from the clock po
 pnpm install --prefer-offline                 # a fresh worktree also needs: node node_modules/electron/install.js
 pnpm worktree:new <topic>                     # that line and the ones before it, wrapped: fetch origin/main, branch, worktree, install, electron, preflight
 pnpm worktree:land                            # fetch, rebase onto origin/main, gate + affected proofs on the rebased head, fast-forward push, cleanup
+pnpm worktree:overlaps                        # what parallel work shares: each branch's files vs its fork from origin/main, the files two branches touch, and where main moved too — a report
 pnpm check                                    # symbols + typecheck + lint + tests — all four green before a commit (an orchestrated build: on each head it lands)
 pnpm vitest run <path>                        # the narrowest verification; tests sit beside the unit they cover
 pnpm typecheck | pnpm lint | pnpm symbols     # the pieces, when the whole gate is too slow

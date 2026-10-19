@@ -77,8 +77,10 @@ themselves; open `dev-time.mjs` and `cli.mjs`; tests in `dev-time.test.ts`), `to
 wrappers behind `pnpm worktree:new` and
 `pnpm worktree:land` — a branch in a worktree beside the checkout with its dependencies, electron's `dist/` and a
 preflight; and the landing sequence: rebase onto `origin/main`, the gate and the affected proof suites on the
-rebased head in a landing worktree of its own, a fast-forward push, cleanup; open `new.mjs` and `land.mjs`, tests
-in `new.test.ts` and `land.test.ts`), and the standalone checks `pnpm lint` runs
+rebased head in a landing worktree of its own, a fast-forward push, cleanup — and the report behind
+`pnpm worktree:overlaps`: every branch worktree's files against its fork from `origin/main`, the files two
+branches share, and where `origin/main` moved too; open `new.mjs`, `land.mjs` and `overlaps.mjs`, tests
+in `new.test.ts`, `land.test.ts` and `overlaps.test.ts`), and the standalone checks `pnpm lint` runs
 before ESLint. `pnpm package` (`apps/desktop/scripts/package.mjs`) runs the notices and build-id steps before freezing;
 what the artifact must then carry is checked by `scripts/lib/about-assets.mjs`, which `afterPack` loads, and what it
 says when it ends is `scripts/lib/package-verdict.mjs`'s.

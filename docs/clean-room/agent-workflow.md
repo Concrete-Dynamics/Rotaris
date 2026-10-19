@@ -65,6 +65,11 @@ them; on Windows the removal of a tree a shell sits in is printed as the command
 gate, a red proof, a plan asking for review (`--reviewed` says it was had), an unreadable plan or a dirty tree
 stops it with **nothing pushed**, naming the step to repair; the gate is never retried.
 
+Before the rebase it names the files `origin/main` has moved since the fork in which this branch also works —
+a rebase can merge those textually while both sides have rewritten them, and a conflict listing never shows
+it. `pnpm worktree:overlaps` reports the same overlap across every worktree beside `origin/main`, plus the
+files two branches both touch: parallel work knowing what it shares, before the rebase says it.
+
 - **Re-read `main` before rebasing.** It moves. A trailer-less commit on `main` authored by
   the owner is theirs — surface a collision with it, never reset it.
 - **A register identifier you took while you worked may have been taken on `main` too.** The

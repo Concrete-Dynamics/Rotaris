@@ -15,6 +15,10 @@ This file covers two checks `CLAUDE.md` does not spell out: **`pnpm app:drive`**
 debugging of the built app) and **`pnpm live-run`** (the only check that spends real money) — and states the
 rules the proof scripts obey; which proof covers what is the [proof registry](docs/proofs/README.md).
 
+A **scratchpad** outlives the conversation: `.scratchpad.md` in the primary checkout (git-ignored, so a fresh
+clone has none) carries the owner's standing asks, decisions and dead ends a compacted session would lose —
+read it when picking up work, and keep it current when something must not get lost.
+
 ## The proof scripts — the rules they obey
 
 `pnpm check` (symbols, typecheck, lint, tests) is the gate every change passes before it lands on main: an agent
@@ -93,9 +97,18 @@ fast-forward only, never a force, never a merge — re-rebasing while `main` mov
 sitting in the branch tree makes that removal the printed commands to run once out of it. `--worktree=<path>`
 names the branch's tree when the command runs from somewhere else.
 
+`pnpm worktree:overlaps` is the same tool's report over everything running beside the checkout: every
+registered worktree's branch, the files it touches against its fork from `origin/main` (committed, staged,
+unstaged and untracked — an agent's in-flight edits count), the files `origin/main` has moved since that fork
+in which the branch also works, and the files two or more branches both touch. `pnpm worktree:land` prints
+the branch-side overlap — branch ∩ `origin/main` since the fork — before the rebase: a rebase can merge
+those files textually while both sides have rewritten them, the collision no conflict listing shows. Both
+read `origin/main` as last fetched and are reports, never gates; `--json` is the machine form.
+
 A failure before the push changes nothing on the remote and names the step to repair — the conflict's files, the
-review list, the red suite, the dirty tree. Both wrappers are exercised end to end against a scratch repository
-by `tools/worktree/`'s tests: real git, only the pnpm steps stubbed (`new.test.ts`, `land.test.ts`).
+review list, the red suite, the dirty tree. Both wrappers and the report are exercised end to end against a
+scratch repository by `tools/worktree/`'s tests: real git, only the pnpm steps stubbed (`new.test.ts`,
+`land.test.ts`, `overlaps.test.ts`).
 
 ## Repository UI skills
 

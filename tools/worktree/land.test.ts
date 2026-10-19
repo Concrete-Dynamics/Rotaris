@@ -88,6 +88,16 @@ describe('worktree:land', () => {
     expect(text).toContain(`pnpm check on ${tip.slice(0, 7)}`);
     expect(text).toContain(`the gate is green on ${tip.slice(0, 7)}`);
     expect(text).toContain(`landed ${tip.slice(0, 7)} on origin/main`);
+    expect(text).toContain('worktree:land: handoff');
+    expect(text).toContain(
+      `Zustand: landed ${tip.slice(0, 7)} on origin/main; both worktrees removed, branch feat/x deleted`,
+    );
+    expect(text).toContain(`Beweise: gate green on ${tip.slice(0, 7)} (`);
+    expect(text).toContain('; no proof suite named for this diff');
+    expect(text).toContain('Offen: nothing');
+    expect(text).toContain(
+      `Nächster Schritt: fast-forward the primary checkout: git -C ${repo.primary} merge --ff-only origin/main`,
+    );
     expect(text).not.toContain('also moved since fork');
     expect(existsSync(tree)).toBe(false);
     expect(existsSync(landDir)).toBe(false);
@@ -121,6 +131,7 @@ describe('worktree:land', () => {
     const { deps, calls, log } = testDeps();
     expect(runLand({ argv: [], cwd: tree, deps })).toBe(0);
     expect(log.join('\n')).toContain('already on origin/main');
+    expect(log.join('\n')).toContain('Beweise: none this run — nothing to push, so no gate ran');
     expect(calls.gate).toEqual([]);
     expect(calls.plan).toEqual([]);
     expect(existsSync(tree)).toBe(false);
@@ -245,6 +256,7 @@ describe('worktree:land', () => {
     expect(calls.preflight).toEqual([[landDir, ['layout-proof']]]);
     expect(calls.proofs).toEqual([[landDir, ['layout-proof']]]);
     expect(log.join('\n')).toContain('verify:plan names layout-proof for this diff');
+    expect(log.join('\n')).toContain('; proofs layout-proof green (');
     expect(repo.subjects('main')).toEqual(['the branch work', 'fixture']);
   });
 
@@ -258,6 +270,7 @@ describe('worktree:land', () => {
     expect(calls.preflight).toEqual([]);
     expect(calls.proofs).toEqual([]);
     expect(log.join('\n')).toContain('have NOT run');
+    expect(log.join('\n')).toContain('; --skip-proofs: layout-proof have NOT run');
     expect(repo.subjects('main')).toEqual(['the branch work', 'fixture']);
   });
 
@@ -286,6 +299,8 @@ describe('worktree:land', () => {
     const { deps, log } = testDeps({ gate: () => ({ ok: false }) });
     expect(runLand({ argv: [], cwd: tree, deps })).toBe(1);
     expect(log.join('\n')).toContain('gate is red on the rebased head');
+    // A stopped run hands back its repair line, not a handoff: the handoff closes a landing that happened.
+    expect(log.join('\n')).not.toContain('worktree:land: handoff');
     expect(repo.subjects('main')).toEqual(['fixture']);
     expect(existsSync(tree)).toBe(true);
   });
@@ -315,6 +330,10 @@ describe('worktree:land', () => {
     const { deps, log } = testDeps();
     expect(runLand({ argv: ['--keep'], cwd: tree, deps })).toBe(0);
     expect(log.join('\n')).toContain('--keep');
+    expect(log.join('\n')).toContain('kept (--keep):');
+    expect(log.join('\n')).toContain(
+      'Offen: the kept trees and branch feat/x — run again without --keep to remove them',
+    );
     expect(existsSync(tree)).toBe(true);
     expect(existsSync(landDir)).toBe(true);
     expect(repo.git(repo.primary, 'branch', '--list', 'feat/x').stdout.trim()).not.toBe('');

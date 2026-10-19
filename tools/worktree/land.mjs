@@ -33,6 +33,9 @@ origin/main moving under the push rebases, gates and pushes again, at most --max
 runs from elsewhere (on Windows nothing can remove a tree a shell is sitting in, so the removal is
 printed as the commands to run once out of it).
 
+A run that lands — or finds the head already on origin/main — closes with the handoff of
+docs/clean-room/agent-workflow.md: Zustand, Beweise, Offen, Nächster Schritt, one line each.
+
 Exit codes: 0 landed, or already on origin/main · 1 stopped, nothing pushed · 2 usage
 `;
 
@@ -205,16 +208,44 @@ export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps({ via: '
     return git.git(['worktree', 'remove', '--force', dir], { cwd: primary }).status === 0;
   }
 
+  /** The closing report `docs/clean-room/agent-workflow.md` fixes: four labelled lines, never a fifth field. */
+  function handoff(state, beweis, open, next) {
+    deps.log('worktree:land: handoff');
+    deps.log(`  Zustand: ${state}`);
+    deps.log(`  Beweise: ${beweis}`);
+    deps.log(`  Offen: ${open}`);
+    deps.log(`  Nächster Schritt: ${next}`);
+  }
+
+  /** The one step most landings owe: moving a primary checkout that stands on main and behind the new head. */
+  function primaryHint(head) {
+    if (git.currentBranch(primary) !== 'main') return null;
+    const at = git.revParse(primary, 'HEAD');
+    if (at === null || at === head || !git.isAncestor(primary, at, 'origin/main')) return null;
+    return `fast-forward the primary checkout: git -C ${primary} merge --ff-only origin/main`;
+  }
+
   /** Announced, then cleaned up unless --keep; cleanup failing never unmakes the landing. */
-  function finish(head, pushed) {
-    if (pushed) deps.log(`worktree:land: landed ${head.slice(0, 7)} on origin/main`);
-    else deps.log(`worktree:land: HEAD ${head.slice(0, 7)} is already on origin/main — nothing to push`);
+  function finish(head, pushed, evidence) {
+    const sha = head.slice(0, 7);
+    const state = pushed ? `landed ${sha} on origin/main` : `HEAD ${sha} is already on origin/main — nothing pushed`;
+    const beweis = pushed ? evidence : 'none this run — nothing to push, so no gate ran';
+    const primaryStep = primaryHint(head);
     if (parsed.keep) {
-      deps.log(`worktree:land: --keep: ${root} (branch ${branch}) and ${landDir} stay in place`);
+      handoff(
+        `${state}; both trees and branch ${branch} kept (--keep): ${root} and ${landDir}`,
+        beweis,
+        `the kept trees and branch ${branch} — run again without --keep to remove them`,
+        primaryStep ?? 'nothing',
+      );
       return 0;
     }
-    if (!removeTree(landDir)) {
-      deps.error(`worktree:land: ${landDir} could not be removed: git -C ${primary} worktree remove --force ${landDir}`);
+    const open = [];
+    const steps = [];
+    const landGone = removeTree(landDir);
+    if (!landGone) {
+      open.push(`the landing worktree ${landDir}`);
+      steps.push(`git -C ${primary} worktree remove --force ${landDir}`);
     }
     let here = null;
     try {
@@ -229,23 +260,40 @@ export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps({ via: '
         // The printed command remains the way out.
       }
     }
-    if (!removeTree(root)) {
-      deps.error(`worktree:land: ${root} could not be removed from here (a shell or an editor is sitting in it). Once out of it:`);
-      deps.error(`  git -C ${primary} worktree remove ${root}`);
-      deps.error(`  git -C ${primary} branch -D ${branch}`);
+    const rootGone = removeTree(root);
+    if (!rootGone) {
+      steps.unshift(`git -C ${primary} worktree remove ${root}`, `git -C ${primary} branch -D ${branch}`);
+      open.push(`the branch worktree ${root}`);
+      handoff(
+        `${state}; ${landGone ? 'the landing worktree removed; ' : ''}the branch worktree stays (a shell or an editor is sitting in it)`,
+        beweis,
+        open.join('; '),
+        [primaryStep, ...steps].filter(Boolean).join('; ') || 'nothing',
+      );
       return 0;
     }
+    let branchClause = null;
     const tip = git.revParse(primary, branch);
     if (tip === null || !git.isAncestor(primary, tip, 'origin/main')) {
-      deps.log(`worktree:land: both worktrees removed; ${branch} is not an ancestor of origin/main — kept: git -C ${primary} branch -D ${branch}`);
-      return 0;
+      open.push(`branch ${branch} — not an ancestor of origin/main, kept`);
+      steps.push(`git -C ${primary} branch -D ${branch} once its extra commits are decided`);
+    } else {
+      const deleted = git.git(['branch', '-D', branch], { cwd: primary });
+      if (deleted.status === 0) branchClause = `branch ${branch} deleted`;
+      else open.push(`branch ${branch} — git branch -D refused: ${oneLine(deleted.stderr)}`);
     }
-    const deleted = git.git(['branch', '-D', branch], { cwd: primary });
-    if (deleted.status === 0) deps.log(`worktree:land: removed ${landDir} and ${root}, and deleted ${branch}`);
-    else deps.log(`worktree:land: both worktrees removed; the branch remains: git -C ${primary} branch -D ${branch} (${oneLine(deleted.stderr)})`);
+    const worked = [landGone ? 'both worktrees removed' : `the branch worktree removed; the landing worktree ${landDir} stays`];
+    if (branchClause !== null) worked.push(branchClause);
+    handoff(
+      `${state}; ${worked.join(', ')}`,
+      beweis,
+      open.join('; ') || 'nothing',
+      [primaryStep, ...steps].filter(Boolean).join('; ') || 'nothing',
+    );
     return 0;
   }
 
+  let evidence = '';
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     deps.log(`worktree:land: fetching origin/main (attempt ${attempt} of ${maxAttempts})`);
     const fetch = measured({ kind: 'other', label: 'fetch', command: 'git fetch origin main', cwd: root, via: 'worktree:land' }, () =>
@@ -262,7 +310,7 @@ export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps({ via: '
         deps.error('worktree:land: cannot read HEAD');
         return 1;
       }
-      return finish(head, false);
+      return finish(head, false, '');
     }
 
     const overlap = overlapWithMain(root);
@@ -331,11 +379,14 @@ export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps({ via: '
       );
       return 1;
     }
-    deps.log(`worktree:land: the gate is green on ${head.slice(0, 7)} (${seconds(Date.now() - started)})`);
+    const gateMs = Date.now() - started;
+    deps.log(`worktree:land: the gate is green on ${head.slice(0, 7)} (${seconds(gateMs)})`);
+    evidence = `gate green on ${head.slice(0, 7)} (${seconds(gateMs)})`;
 
     if (proofs.length > 0) {
       if (parsed.skipProofs) {
         deps.log(`worktree:land: WARNING — --skip-proofs: ${proofs.join(', ')} have NOT run against ${head.slice(0, 7)}`);
+        evidence += `; --skip-proofs: ${proofs.join(', ')} have NOT run`;
       } else {
         const pre = deps.preflight(landDir, proofs);
         if (!pre.ok) {
@@ -350,15 +401,18 @@ export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps({ via: '
           );
           return 1;
         }
+        evidence += `; proofs ${proofs.join(', ')} green (${seconds(Date.now() - startedProofs)})`;
         deps.log(`worktree:land: ${proofs.join(', ')} green (${seconds(Date.now() - startedProofs)})`);
       }
+    } else {
+      evidence += '; no proof suite named for this diff';
     }
 
     deps.log('worktree:land: pushing HEAD:main (fast-forward only, never a force)');
     const push = measured({ kind: 'other', label: 'push', command: 'git push origin HEAD:main', cwd: landDir, via: 'worktree:land' }, () =>
       git.git(['push', 'origin', 'HEAD:main'], { cwd: landDir }),
     );
-    if (push.status === 0) return finish(head, true);
+    if (push.status === 0) return finish(head, true, evidence);
 
     measured({ kind: 'other', label: 'fetch', command: 'git fetch origin main', cwd: root, via: 'worktree:land' }, () =>
       git.git(['fetch', 'origin', 'main'], { cwd: root }),

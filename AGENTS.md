@@ -121,6 +121,22 @@ diff (`pnpm verify:plan`). Unmapped paths require explicit review — never trea
 evidence under `.ui-review/`. Its critique is proposed evidence and reaches implementation through a separate,
 authorized build or debug pass. A complete review loop has at most three iterations.
 
+## Where the time went — the development-time store (R-075)
+
+`pnpm dev-time report` reads `~/.rotaris/dev-time/log.jsonl`: one JSON record per measured span. **Most spans
+record themselves**, so no habit is needed and none should be invented — don't wrap timers around what the
+store already holds. `pnpm check` runs `pnpm dev-time gate`; each stage script in `package.json` is wrapped
+in `dev-time run --quiet gate:<stage>` (the stage records itself, marked `via: check`) and the run records
+one `gate:check` total; `pnpm build` records as `build:desktop`; every proof script whose harness imports are
+in play records its whole wall time under its name (`proof:terminal-proof`); `pnpm worktree:new` /
+`pnpm worktree:land` record their steps (`fetch`, `rebase:onto-main`, `setup:*`, `push`). Everything else is
+explicit: `pnpm dev-time run <kind>:<label> -- <command>`, or a `start`/`stop` pair around work no single
+command covers. The report also computes **the reds each next green closed** — a repair is the wall time
+between the failed run's own end and the green's — and names what is still red. A measurement never fails the
+work it measures; `ROTARIS_DEV_TIME_DISABLE` (anything but `''`, `0`, `false`) switches the capture off, and
+the worktree wrappers' tests set it while the dev-time tests point `ROTARIS_DEV_TIME_HOME` at a scratch store,
+so no test ever writes the operator's store.
+
 ## Driving the built app — `pnpm app:drive`
 
 The fastest way to see what a surface actually does without editing a proof script and waiting out a

@@ -71,8 +71,10 @@ the registry to the tree), `tools/verify-plan/` (`pnpm verify:plan` —
 given a diff, the gate, the complete affected proof suites and the architecture documents; an unmapped path requires
 explicit review; open `plan.mjs`, tests in `plan.test.ts`), `tools/dev-time/` (since 2026-10-18 the recorder behind
 `pnpm dev-time` (R-075) — measured spans of setup, build, each gate stage, proofs, repairs and repeated rebases, one
-JSON record a span in an append-only log, `~/.rotaris/dev-time/log.jsonl`; open `dev-time.mjs` and `cli.mjs`; tests
-in `dev-time.test.ts`), `tools/worktree/` (since 2026-10-19 the wrappers behind `pnpm worktree:new` and
+JSON record a span in an append-only log, `~/.rotaris/dev-time/log.jsonl`; transparent since 2026-10-19 — `pnpm
+check`, `pnpm build`, the wrapped stage scripts, the proof harness libraries and the `tools/worktree/` steps record
+themselves; open `dev-time.mjs` and `cli.mjs`; tests in `dev-time.test.ts`), `tools/worktree/` (since 2026-10-19 the
+wrappers behind `pnpm worktree:new` and
 `pnpm worktree:land` — a branch in a worktree beside the checkout with its dependencies, electron's `dist/` and a
 preflight; and the landing sequence: rebase onto `origin/main`, the gate and the affected proof suites on the
 rebased head in a landing worktree of its own, a fast-forward push, cleanup; open `new.mjs` and `land.mjs`, tests

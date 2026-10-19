@@ -133,6 +133,7 @@ pnpm worktree:land                            # fetch, rebase onto origin/main, 
 pnpm check                                    # symbols + typecheck + lint + tests — all four green before a commit (an orchestrated build: on each head it lands)
 pnpm vitest run <path>                        # the narrowest verification; tests sit beside the unit they cover
 pnpm typecheck | pnpm lint | pnpm symbols     # the pieces, when the whole gate is too slow
+pnpm dev-time report                          # where the time went (R-075): the gate, builds, proofs and worktree steps record themselves — and the reds each next green closed
 pnpm build && electron apps/desktop/out/main/index.js
 pnpm dev                                      # electron-vite, against the workspace source
 pnpm <area>-proof                             # the built app measuring one mechanism — docs/proofs/README.md indexes all of them

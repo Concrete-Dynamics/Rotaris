@@ -334,13 +334,21 @@ the product ships. **Edges unchanged**: `tools/**` is outside the boundary rule,
 the product rather than the product: setup, build, each gate stage, proofs, repairs and repeated rebases.
 Each span is one JSON record appended to an append-only log — `~/.rotaris/dev-time/log.jsonl`, or the
 directory `ROTARIS_DEV_TIME_HOME` names, so every worktree of a host shares one history and no store dies
-with a removed tree. `pnpm dev-time gate` runs the four `pnpm check` stages in `pnpm check`'s order, one
-record each and stop on the first failure as its `&&` does; `proof <script>` runs a named script of the root
-`package.json`; `run` measures one command; `start`/`stop` measure work no single command covers. A record
-carries the command as spelled, the working directory, the repository, branch and head, whether the tree was
-dirty, the host, and the exit. It imports nothing of the product and nothing in `packages/` or `apps/`
-imports it. **Edges unchanged**: `tools/**` is outside the boundary rule, and the test imports the library
-directly, as its siblings' tests do.
+with a removed tree. Since 2026-10-19 nearly all of it is **transparent**: `pnpm check` is `pnpm dev-time
+gate`, and the `package.json` script of each stage is wrapped in `dev-time run --quiet gate:<stage>` — the
+stage records itself, marked `via: check`, and the run records one `gate:check` total (a `--stage=` subset run
+is not a check and gets none). `pnpm build` is wrapped the same way (`build:desktop`); every proof script
+whose harness imports are in play records its own wall time through the entry clock — arming at import, one
+record at exit under the script's own name (`proof:<name>`); and the `tools/worktree/` wrappers record their
+steps (`via: worktree:new` / `worktree:land`). The explicit verbs remain: `proof <script>` runs a named
+script of the root `package.json`; `run` measures one command; `start`/`stop` measure work no single command
+covers; `report` aggregates a window and computes the reds each next green closed — the wall time between a
+failed run's own end and the green's. A record carries the command as spelled, the working directory, the
+repository, branch and head, whether the tree was dirty, the host, the exit, and the context it ran in
+(`via`). A measurement never fails the work it measures, and `ROTARIS_DEV_TIME_DISABLE` switches the capture
+off. It imports nothing of the product; nothing the product ships imports it — the proof harness libraries
+under `apps/desktop/scripts/lib/` are the only `apps/` callers. **Edges unchanged**: `tools/**` is outside
+the boundary rule, and the test imports the library directly, as its siblings' tests do.
 
 ### The platform preflight (2026-10-19)
 

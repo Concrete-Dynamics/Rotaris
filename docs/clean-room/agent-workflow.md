@@ -1,4 +1,4 @@
-# Agent workflow — branch, worktree, rebase, line endings
+# Agent workflow — branch, worktree, rebase, line endings, the handoff
 
 How changes land on `main` in this repository. `CLAUDE.md` states the rule in one
 paragraph; this file holds the steps that are only needed while doing it.
@@ -124,3 +124,20 @@ this order: convert the files in place (`git checkout-index -f` does not rewrite
 files), then `git add --renormalize .` to refresh the index's stat cache. If a diff ever
 reports a whole file again, `git diff --ignore-cr-at-eol --numstat` separates the endings
 from the content.
+
+## The handoff — one shape for every closing report
+
+Every handoff closes in the same shape: one heading, then four labelled lines — five in all, never past eight.
+
+```
+**Übergabe**
+- Zustand: what is now true — what landed or changed, what was removed or kept
+- Beweise: what ran and what it said — the gate and its time, the proof suites, the pack or file that holds the detail
+- Offen: what remains, and why — a ruling, a platform, another lane; nothing, when nothing does
+- Nächster Schritt: the one action that follows, with its command when there is one; nothing, when none does
+```
+
+The four labels are fixed and keep their order — the owner's words — and the sentences after them are written in the
+report's own language. A handoff is a recital, not the record: detail that does not fit goes to the file that owns
+it, and the `Beweise` line names the path. The same shape closes an agent's work to the owner, a lane's report to
+the next lane, and a landed `pnpm worktree:land` run — the tool prints it under `worktree:land: handoff`.

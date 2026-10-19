@@ -19,6 +19,11 @@ A **scratchpad** outlives the conversation: `.scratchpad.md` in the primary chec
 clone has none) carries the owner's standing asks, decisions and dead ends a compacted session would lose —
 read it when picking up work, and keep it current when something must not get lost.
 
+Every closing report uses the **handoff** shape [`docs/clean-room/agent-workflow.md`](docs/clean-room/agent-workflow.md)
+fixes: a heading and four lines — **Zustand** (what is now true), **Beweise** (what ran and what it said),
+**Offen** (what remains), **Nächster Schritt** (the one action that follows). It closes an agent's work to the
+owner, a lane's report to the next lane, and every landed `pnpm worktree:land` run.
+
 ## The proof scripts — the rules they obey
 
 `pnpm check` (symbols, typecheck, lint, tests) is the gate every change passes before it lands on main: an agent

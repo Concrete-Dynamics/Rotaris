@@ -132,12 +132,14 @@ Every handoff closes in the same shape: one heading, then four labelled lines �
 ```
 **Übergabe**
 - Zustand: what is now true — what landed or changed, what was removed or kept
-- Beweise: what ran and what it said — the gate and its time, the proof suites, the pack or file that holds the detail
+- Beweise: what ran and what it said — the gate and its time, the proof suites, and the pack or file that holds the detail, when there is one
 - Offen: what remains, and why — a ruling, a platform, another lane; nothing, when nothing does
-- Nächster Schritt: the one action that follows, with its command when there is one; nothing, when none does
+- Nächster Schritt: the one action that follows, with the command (or commands) it needs; nothing, when none does
 ```
 
 The four labels are fixed and keep their order — the owner's words — and the sentences after them are written in the
 report's own language. A handoff is a recital, not the record: detail that does not fit goes to the file that owns
-it, and the `Beweise` line names the path. The same shape closes an agent's work to the owner, a lane's report to
-the next lane, and a landed `pnpm worktree:land` run — the tool prints it under `worktree:land: handoff`.
+it — the `Beweise` line names that file when there is one. The same shape closes an agent's work to the owner, a
+lane's report to the next lane, and a `pnpm worktree:land` run that lands or finds its head already on `origin/main`
+— the tool prints it under `worktree:land: handoff`; a run stopped before the push keeps its repair line and prints
+no handoff.

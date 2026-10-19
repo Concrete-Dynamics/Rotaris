@@ -368,13 +368,17 @@ describe('the poll after the interrupt shape (OQ-147)', () => {
 describe('the steady shape and its hard-cap reading (REQ-TOOLS-097, REQ-CONFIG-116)', () => {
   /*
    * `docs/defects/fixed/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`. Run for real for a few
-   * seconds, so the line it prints is measured rather than assumed; it is ended long before its 130 s.
+   * seconds, so the line it prints is measured rather than assumed; it is ended long before its 130 s. The budget
+   * covers the chain's two cold starts, `powershell.exe` then `node`: quiet on this host tick-1 arrives at 2.2 s and
+   * tick-2 at 4.2 s, and 1.5 s of room redded a landing under the full gate's load
+   * (`docs/defects/fixed/the-steady-shapes-case-is-too-tight-for-a-loaded-host.md`).
    */
   it('prints one tick line per interval, run for real', () => {
     const command = terminalShapes().find((s: Shape) => s.id === 'steady')!.command;
+    const budget = STEADY_INTERVAL_MS * 2 + 6_000;
     const run = process.platform === 'win32'
-      ? spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8', timeout: STEADY_INTERVAL_MS * 2 + 1_500 })
-      : spawnSync('sh', ['-c', command], { encoding: 'utf8', timeout: STEADY_INTERVAL_MS * 2 + 1_500 });
+      ? spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8', timeout: budget })
+      : spawnSync('sh', ['-c', command], { encoding: 'utf8', timeout: budget });
     expect(run.stdout.split('\n').filter((line) => /^tick-\d+$/.test(line)).slice(0, 2)).toEqual(['tick-1', 'tick-2']);
   }, 20_000);
 

@@ -387,7 +387,9 @@ fast-forward only, re-rebasing while `main` moves under it — and the removal o
 `overlaps.mjs` (`pnpm worktree:overlaps`) is the report beside them: every registered worktree's branch read
 against its fork from `origin/main` — the files it touches (committed, staged, unstaged and untracked), the
 files `origin/main` moved since the fork, and the files two or more branches both touch — and `land` prints
-the branch's own overlap with `origin/main` before the rebase. `exec.mjs` runs a command with its output inherited or captured and builds pnpm's own command line
+the branch's own overlap with `origin/main` before the rebase. A run that lands closes with the handoff of
+`docs/clean-room/agent-workflow.md` — `Zustand`, `Beweise`, `Offen`, `Nächster Schritt` — and a run that stops before
+the push hands back its repair line instead. `exec.mjs` runs a command with its output inherited or captured and builds pnpm's own command line
 (`dev-time.mjs`'s `npm_execpath` pattern); `git.mjs` holds the git reads, with the git-hook variables cleared so a
 read cannot land in another repository; `steps.mjs` gathers the heavy steps as seams, which is how the tests run
 the wrappers end to end against a scratch repository with git real. **Edges unchanged**: `tools/**` is outside

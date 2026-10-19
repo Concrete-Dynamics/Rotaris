@@ -23,4 +23,6 @@ collected by `vitest.config.ts` — `*.test.ts` only, so a `.tsx` suffix collect
 - `pnpm live-run` spends the owner's money. It is never automatic; an agent asks first.
 
 The index of which proof covers what is `docs/proofs/README.md`, rendered from `tools/proof-registry/registry.mjs`
-(`pnpm proofs:index` writes it; `pnpm lint` fails when it is stale).
+(`pnpm proofs:index` writes it; `pnpm lint` fails when it is stale). `pnpm preflight [proof-id …]` checks the machine
+before a suite launches — Electron, the build's freshness, the code-intelligence bundle, `.proof/`'s writability,
+exported `ROTARIS_*` variables, the display — and what each named proof's registry record needs; it launches nothing.

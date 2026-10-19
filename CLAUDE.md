@@ -135,6 +135,7 @@ pnpm build && electron apps/desktop/out/main/index.js
 pnpm dev                                      # electron-vite, against the workspace source
 pnpm <area>-proof                             # the built app measuring one mechanism — docs/proofs/README.md indexes all of them
 pnpm verify:plan                              # a diff → gate, complete proof suites, architecture docs; unmapped paths need review
+pnpm preflight [proof-id …]                   # the machine before a suite launches — node, git, Electron, the build, the bundle, the display; it launches nothing
 pnpm app:drive start|shot|inspect|stop        # drive the built app, free, no provider
 pnpm mockup                                   # the design material, before drawing a surface
 ```

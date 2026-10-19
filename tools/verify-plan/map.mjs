@@ -363,6 +363,8 @@ export const RULES = Object.freeze([
   { paths: ['apps/desktop/scripts/ui-audit.mjs', 'apps/desktop/scripts/ui-review.mjs'],
     areas: ['known'], notes: ['ui-audit / ui-review are report-only'] },
   { paths: ['apps/desktop/scripts/autopsy.mjs'], areas: ['known'] },
+  { paths: ['apps/desktop/scripts/preflight.mjs'], areas: ['known'],
+    notes: ['the platform preflight launches nothing — a red is the machine, not a proof result'] },
   { paths: ['apps/desktop/scripts/code-intelligence/'], areas: ['tools'] },
   { paths: ['apps/desktop/scripts/'], areas: ['known'] },
   { paths: ['apps/desktop/resources/'], areas: ['configStartup'] },

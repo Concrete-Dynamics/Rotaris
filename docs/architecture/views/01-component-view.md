@@ -342,6 +342,18 @@ dirty, the host, and the exit. It imports nothing of the product and nothing in 
 imports it. **Edges unchanged**: `tools/**` is outside the boundary rule, and the test imports the library
 directly, as its siblings' tests do.
 
+### The platform preflight (2026-10-19)
+
+`apps/desktop/scripts/preflight.mjs` (`pnpm preflight [proof-id …]`, tests in `preflight.test.ts`) is a **machine
+check for proof launches**: node against `engines.node`, git, the Electron binary, the desktop build's freshness
+against the app's and the packages' sources (a `generated/` tree is skipped — `pnpm symbols` rewrites it), the
+code-intelligence bundle through `scripts/lib/code-intelligence-bundle.mjs`'s `runBundleScript --check`, `.proof/`'s
+writability, an exported `ROTARIS_*` variable and the display, plus each named proof's registry record read from
+`tools/proof-registry/registry.mjs`: its hosts, its `requires` and its per-host clauses. It launches nothing and
+writes nothing but a scratch probe it removes. It sits in `scripts/` rather than `tools/` because the scripts reach
+the tools and never the reverse, and an endpoint proof's key needs `scripts/lib/endpoint-registry.mjs`.
+**Edges unchanged**: no product code imports it.
+
 ### The setup manifest and its schema (2026-09-28; `first-release-plan.md` §4.1, ADR-0054)
 
 `apps/desktop/resources/setup-manifest.json` is REQ-STARTUP-058's manifest: committed, not generated, and carried by

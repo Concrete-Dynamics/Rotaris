@@ -90,6 +90,7 @@
     "req-coverage": "node tools/requirement-coverage/coverage.mjs",
     "verify:plan": "node tools/verify-plan/plan.mjs",
     "dev-time": "node tools/dev-time/cli.mjs",
+    "preflight": "node apps/desktop/scripts/preflight.mjs",
     "check": "pnpm symbols && pnpm typecheck && pnpm lint && pnpm test"
   },
   "devDependencies": {

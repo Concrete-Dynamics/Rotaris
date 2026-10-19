@@ -34,6 +34,11 @@ wrong.
 documents. An unmapped path requires explicit review — it is never "no proofs". Run it before deciding which
 proofs to skip.
 
+`pnpm preflight [proof-id …]` checks the machine before a suite launches: node, git, Electron, the desktop build
+(and whether it is older than its sources), the code-intelligence bundle, `.proof/`'s writability, exported
+`ROTARIS_*` variables (every launch strips them) and the display — plus, for each named proof, what its registry
+record needs beyond the harness. It launches nothing; a red is the machine, not a proof result.
+
 No proof hangs on a launch that overruns. Every launch a script starts itself goes through
 `lib/bounded-launch.mjs`'s `spawnBounded`, and a driven one through the driver's `stopApp`. Two launches are neither,
 and `lib/launch-sites.test.ts` names them with their reasons: `code-intel-proof`'s branch, a stdio server whose RPC

@@ -3,6 +3,18 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-19 — the final report is the handoff the repository fixed
+
+**Prompted by** the owner's eighth infrastructure suggestion (2026-10-19), accepted in the orchestrating session: one
+short handoff shape for every closing report — an agent's to the owner, a lane's to the next lane,
+`pnpm worktree:land`'s — four fixed labels (Zustand, Beweise, Offen, Nächster Schritt), canonically defined in
+`docs/clean-room/agent-workflow.md` ("The handoff") and anchored in AGENTS.md, the UI skills and here. **Changed:**
+SKILL.md §6's final report is that shape: what merged is its Zustand, the evidence's places its Beweise, what remains
+and the decisions waiting on the owner its Offen, the owner's first action its Nächster Schritt. Nothing else: no
+script, template prompt, profile, protected invariant or self-test assertion changed. **Verified** by the self-test
+(`node .agents/skills/orchestrated-build/scripts/orchestration.mjs self-test`) and `pnpm check`; the skill-review by
+one independent agent under `references/skill-review.md`.
+
 ## 2026-10-14 — a friction survey reads past runs for what this skill should change
 
 **Prompted by** the owner, in the orchestrator's session on 2026-10-14, during fin44 (06:03 UTC): "Would it make sense

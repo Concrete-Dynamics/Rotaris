@@ -196,7 +196,9 @@ nothing but its own repairs merged after it; `"acceptance": { "fresh": true }` f
 First run a friction survey over the plans since the last one (§4); its proposals that cross a protected invariant
 go in the report as proposals to the owner. Report what merged (counts, notable repairs), what remains open and why
 (owner rulings, platform-bound, excluded), each decision waiting on the owner in one line, collisions the owner must
-know about, and where the evidence is.
+know about, and where the evidence is. That report is the handoff shape (`docs/clean-room/agent-workflow.md`): what
+merged is its Zustand, the evidence's places its Beweise, what remains and the decisions waiting on the owner its
+Offen, and the owner's first action its Nächster Schritt.
 Then remove the landing worktrees left by bundles that did not land (`<integ>-<short>`), the acceptance, live,
 survey and reference worktrees and the landed branches (`git branch -d`), stop leftover `Xvfb`, and delete the check-in.
 

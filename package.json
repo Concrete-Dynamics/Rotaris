@@ -93,6 +93,7 @@
     "dev-time": "node tools/dev-time/cli.mjs",
     "worktree:new": "node tools/worktree/new.mjs",
     "worktree:land": "node tools/worktree/land.mjs",
+    "worktree:overlaps": "node tools/worktree/overlaps.mjs",
     "preflight": "node apps/desktop/scripts/preflight.mjs",
     "check": "node tools/dev-time/cli.mjs gate"
   },

@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { isMainModule, oneLine, seconds } from './exec.mjs';
 import * as git from './git.mjs';
+import { overlapWithMain } from './overlaps.mjs';
 import { defaultDeps, measured, needsSetup } from './steps.mjs';
 
 export const USAGE = `pnpm worktree:land [--skip-proofs] [--reviewed] [--keep] [--max-attempts=<n>] [--worktree=<path>]
@@ -22,6 +23,10 @@ The landing sequence of docs/clean-room/agent-workflow.md, wrapped:
   pnpm <the affected proof suites>       # on the same head; --skip-proofs skips them loudly
   git push origin HEAD:main              # fast-forward only, never a force, never a merge
   <both worktrees removed and the branch deleted>
+
+Before the rebase the files origin/main has moved since the fork, in which this branch also works, are
+named — a rebase can merge textually while both sides have rewritten the same file. \`pnpm worktree:overlaps\`
+prints the same overlap across every worktree beside origin/main.
 
 origin/main moving under the push rebases, gates and pushes again, at most --max-attempts (3) times.
 --keep leaves both trees and the branch in place. --worktree names the branch's tree when the command
@@ -258,6 +263,14 @@ export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps({ via: '
         return 1;
       }
       return finish(head, false);
+    }
+
+    const overlap = overlapWithMain(root);
+    if (overlap !== null && overlap.both.length > 0) {
+      deps.log(
+        `worktree:land: origin/main also moved since fork ${overlap.fork.slice(0, 7)}, in ${overlap.both.length} file(s) this branch changes too — read them after the rebase (a textually clean merge can still hold two rewrites):`,
+      );
+      for (const file of overlap.both) deps.log(`  ${file}`);
     }
 
     deps.log('worktree:land: rebase onto origin/main');

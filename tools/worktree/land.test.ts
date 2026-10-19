@@ -88,10 +88,28 @@ describe('worktree:land', () => {
     expect(text).toContain(`pnpm check on ${tip.slice(0, 7)}`);
     expect(text).toContain(`the gate is green on ${tip.slice(0, 7)}`);
     expect(text).toContain(`landed ${tip.slice(0, 7)} on origin/main`);
+    expect(text).not.toContain('also moved since fork');
     expect(existsSync(tree)).toBe(false);
     expect(existsSync(landDir)).toBe(false);
     expect(repo.git(repo.primary, 'branch', '--list', 'feat/x').stdout.trim()).toBe('');
     expect(repo.git(repo.primary, 'log', '--format=%s', '-1').stdout.trim()).toBe('main moved');
+  });
+
+  it('names the files origin/main and the branch both changed, before the rebase', () => {
+    repo = scratchRepo();
+    const tree = join(repo.base, 'wt');
+    addWorktree(repo, 'tool/overlap', tree);
+    repo.commit(tree, 'the branch work', { 'a.txt': 'ONE\ntwo\nthree\n' });
+    repo.commit(repo.primary, 'main moved', { 'a.txt': 'one\ntwo\nTHREE\n' });
+    repo.push(repo.primary);
+    const { deps, log } = testDeps();
+    expect(runLand({ argv: [], cwd: tree, deps })).toBe(0);
+    const text = log.join('\n');
+    expect(text).toContain('origin/main also moved since fork');
+    expect(text).toContain('a.txt');
+    expect(text.indexOf('origin/main also moved since fork')).toBeLessThan(text.indexOf('rebase onto origin/main'));
+    expect(repo.subjects('main')).toEqual(['the branch work', 'main moved', 'fixture']);
+    expect(repo.git(repo.origin, 'show', 'main:a.txt').stdout).toBe('ONE\ntwo\nTHREE\n');
   });
 
   it('removes the branch and its worktree when HEAD is already on origin/main', () => {

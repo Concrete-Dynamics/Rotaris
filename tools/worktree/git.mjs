@@ -78,12 +78,27 @@ export function operationInProgress(cwd) {
   return null;
 }
 
+/** Every registered worktree with the branch it holds (`null` when detached). @param {string} cwd */
+export function worktrees(cwd) {
+  /** @type {Array<{ path: string, branch: string | null }>} */
+  const entries = [];
+  /** @type {{ path: string, branch: string | null } | null} */
+  let current = null;
+  for (const line of git(['worktree', 'list', '--porcelain'], { cwd }).stdout.split('\n')) {
+    if (line.startsWith('worktree ')) {
+      if (current !== null) entries.push(current);
+      current = { path: line.slice('worktree '.length).trim(), branch: null };
+    } else if (line.startsWith('branch refs/heads/') && current !== null) {
+      current.branch = line.slice('branch refs/heads/'.length).trim();
+    }
+  }
+  if (current !== null) entries.push(current);
+  return entries;
+}
+
 /** Every registered worktree's path. @param {string} cwd */
 export function worktreePaths(cwd) {
-  return git(['worktree', 'list', '--porcelain'], { cwd })
-    .stdout.split('\n')
-    .filter((line) => line.startsWith('worktree '))
-    .map((line) => line.slice('worktree '.length).trim());
+  return worktrees(cwd).map((entry) => entry.path);
 }
 
 /** @param {string} cwd @param {string} ancestor @param {string} descendant */

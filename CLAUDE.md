@@ -128,6 +128,8 @@ the only places `electron` is imported. Engine code takes time from the clock po
 
 ```
 pnpm install --prefer-offline                 # a fresh worktree also needs: node node_modules/electron/install.js
+pnpm worktree:new <topic>                     # that line and the ones before it, wrapped: fetch origin/main, branch, worktree, install, electron, preflight
+pnpm worktree:land                            # fetch, rebase onto origin/main, gate + affected proofs on the rebased head, fast-forward push, cleanup
 pnpm check                                    # symbols + typecheck + lint + tests — all four green before a commit (an orchestrated build: on each head it lands)
 pnpm vitest run <path>                        # the narrowest verification; tests sit beside the unit they cover
 pnpm typecheck | pnpm lint | pnpm symbols     # the pieces, when the whole gate is too slow
@@ -165,7 +167,8 @@ to write. Only trivially reversible, single-file documentation edits may be made
 `git status` is clean.
 
 Steps, the conflict shapes a rebase replays, and the LF line-ending rule live in
-`docs/clean-room/agent-workflow.md` — read it before the first edit, not here.
+`docs/clean-room/agent-workflow.md` — read it before the first edit, not here. `pnpm worktree:new` and
+`pnpm worktree:land` (Commands) wrap the two halves; the rules stay in that file.
 
 ## The architecture views — consult before, maintain after
 

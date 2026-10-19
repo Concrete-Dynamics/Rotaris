@@ -11,6 +11,15 @@ indistinguishable from someone else's. Only trivially reversible, single-file
 documentation edits may be made in place, and only when `git status` is clean.
 
 ```
+pnpm worktree:new <topic>                     # fetch, worktree+branch from origin/main, install, preflight
+```
+
+`pnpm worktree:new` wraps the block that stood here: it re-reads `origin/main` with a fetch, adds the worktree
+beside the checkout at `<checkout>-wt-<topic>`, runs `pnpm install --prefer-offline`, electron's `install.js`
+(its `dist/` is NOT carried into a worktree) and `pnpm preflight`. It refuses `main`, a branch that exists, or a
+taken directory. The by-hand form, when something needs it:
+
+```
 git log --oneline -1 main                     # the merge base, read before anything
 git worktree add -b <topic> ../Rotaris-crw-wt-<short> main
 cd ../Rotaris-crw-wt-<short>
@@ -44,6 +53,17 @@ is about `main`, and the rebase at landing drops those merges.
 
 Work is done when `main` is green with the branch on it — not when the branch is green.
 Abandoning a branch because the rebase is hard is not an outcome an agent may choose.
+
+`pnpm worktree:land` runs that sequence. It fetches `origin/main`, rebases onto it — a conflict **aborts the
+rebase and hands back**, its files named; resolving is the person's or the agent's reading, never the tool's —
+puts up a **landing worktree** (a sibling `<checkout>-wt-<topic>-land`, detached at the rebased head, installed
+on first use) and runs the gate on that exact head; then the proof suites `pnpm verify:plan` names for the diff
+(run as their scripts on the same head; `--skip-proofs` skips them with a warning that says so), then
+`git push origin HEAD:main` — fast-forward only, never a force — re-rebasing while `main` moves under it
+(`--max-attempts=`, 3 by default), and finally removes both worktrees and deletes the branch (`--keep` leaves
+them; on Windows the removal of a tree a shell sits in is printed as the commands to run once out of it). A red
+gate, a red proof, a plan asking for review (`--reviewed` says it was had), an unreadable plan or a dirty tree
+stops it with **nothing pushed**, naming the step to repair; the gate is never retried.
 
 - **Re-read `main` before rebasing.** It moves. A trailer-less commit on `main` authored by
   the owner is theirs — surface a collision with it, never reset it.
@@ -85,8 +105,8 @@ Abandoning a branch because the rebase is hard is not an outcome an agent may ch
   primary checkout on a directory name alone, so run them on the rebased head in another
   tree: a detached worktree at that head (an orchestrated build's landing worktree is
   one).
-- **Remove the worktree once landed**: `git worktree remove ../Rotaris-crw-wt-<short>`
-  and `git branch -d <topic>`.
+- **Remove the worktree once landed**: `pnpm worktree:land` does it (`--keep` leaves both trees and the
+  branch); by hand it is `git worktree remove ../Rotaris-crw-wt-<short>` and `git branch -d <topic>`.
 
 ## Line endings are LF
 

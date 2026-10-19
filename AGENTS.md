@@ -11,7 +11,7 @@ and prefer its word over a synonym you would otherwise reach for.
 open first, and where its tests are. Read it when the question is *where*; the
 [proof registry](docs/proofs/README.md) answers *what re-verifies it*.
 
-This file covers the two checks `CLAUDE.md` does not spell out: **`pnpm app:drive`** (free, interactive
+This file covers two checks `CLAUDE.md` does not spell out: **`pnpm app:drive`** (free, interactive
 debugging of the built app) and **`pnpm live-run`** (the only check that spends real money) — and states the
 rules the proof scripts obey; which proof covers what is the [proof registry](docs/proofs/README.md).
 
@@ -75,6 +75,27 @@ not how the suite a diff touches is chosen — `pnpm verify:plan` prints that pl
 reconstructed from the registry's rows. `tools/proof-registry/registry.test.ts` holds the registry to the tree,
 failing when a proof script has no record or a record has no entry, a neighbour does not resolve, or the flags
 column and the script's own argv disagree.
+
+## A branch, a worktree, a landing — `pnpm worktree:new` / `pnpm worktree:land`
+
+The two wrappers around the workflow `docs/clean-room/agent-workflow.md` states; that file is still the rule text,
+and it is read before the first edit. **`pnpm worktree:new <branch> [--dir=<path>]`** fetches `origin/main`, adds a
+worktree beside the primary checkout on a new branch (`<checkout>-wt-<branch>`, the same naming a person uses by
+hand) and runs the setup it replaced: `pnpm install --prefer-offline`, electron's `install.js` (its `dist/` is not
+carried into a worktree) and `pnpm preflight`. **`pnpm worktree:land`** runs the landing sequence: fetch, rebase
+onto `origin/main` — a conflict **aborts the rebase and hands back**, its files named; conflicts are resolved by
+reading both sides, never by the tool — a **landing worktree** of its own at the rebased head, `pnpm verify:plan`
+against `origin/main` and obeyed (`--reviewed` confirms the review its unmapped paths demanded), `pnpm check` on
+that exact head (a red stops it; the gate is never retried), the proof suites the plan names (`--skip-proofs`
+skips them with a warning that says so; `pnpm preflight` runs first), then `git push origin HEAD:main` —
+fast-forward only, never a force, never a merge — re-rebasing while `main` moves under it (`--max-attempts=`,
+3 by default). It then removes both worktrees and deletes the branch (`--keep` leaves them); on Windows a shell
+sitting in the branch tree makes that removal the printed commands to run once out of it. `--worktree=<path>`
+names the branch's tree when the command runs from somewhere else.
+
+A failure before the push changes nothing on the remote and names the step to repair — the conflict's files, the
+review list, the red suite, the dirty tree. Both wrappers are exercised end to end against a scratch repository
+by `tools/worktree/`'s tests: real git, only the pnpm steps stubbed (`new.test.ts`, `land.test.ts`).
 
 ## Repository UI skills
 

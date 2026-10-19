@@ -366,6 +366,22 @@ A `pnpm ui-review` pack's `manifest.json` is the critic protocol's own and is un
 tool launches nothing, no product code imports it, and `environment-facts.mjs` is the one reading the preflight's
 checks and the manifest's record are both taken from.
 
+### The worktree wrappers behind `pnpm worktree:new` / `pnpm worktree:land` (2026-10-19)
+
+`tools/worktree/` is a **process tool** with no `package.json`. `new.mjs` and `land.mjs` wrap the two halves of
+`docs/clean-room/agent-workflow.md`: a branch in a fresh worktree beside the primary checkout, cut from
+`origin/main` (fetch, `git worktree add -b`, `pnpm install --prefer-offline`, electron's `install.js` and
+`pnpm preflight`), and the landing sequence — fetch, `git rebase origin/main` (a conflict aborts the rebase and
+hands back; the tool never resolves one), a **landing worktree** detached at the rebased head and re-installed,
+`tools/verify-plan`'s plan read against `origin/main` (its `review` list demands `--reviewed`), `pnpm check` then
+the named proof suites on that exact head (`--skip-proofs` skips them loudly), `git push origin HEAD:main` —
+fast-forward only, re-rebasing while `main` moves under it — and the removal of both worktrees and the branch.
+`exec.mjs` runs a command with its output inherited or captured and builds pnpm's own command line
+(`dev-time.mjs`'s `npm_execpath` pattern); `git.mjs` holds the git reads, with the git-hook variables cleared so a
+read cannot land in another repository; `steps.mjs` gathers the heavy steps as seams, which is how the tests run
+the wrappers end to end against a scratch repository with git real. **Edges unchanged**: `tools/**` is outside
+the boundary rule, nothing here imports the product, and no product code imports it.
+
 ### The setup manifest and its schema (2026-09-28; `first-release-plan.md` §4.1, ADR-0054)
 
 `apps/desktop/resources/setup-manifest.json` is REQ-STARTUP-058's manifest: committed, not generated, and carried by

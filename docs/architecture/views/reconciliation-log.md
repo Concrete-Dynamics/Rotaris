@@ -14,6 +14,14 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-10-19**
+
+**The worktree wrappers behind `pnpm worktree:new` / `pnpm worktree:land` (2026-10-19).** `01-component-view.md` gains the tool's section: the two wrappers around the setup and landing halves of `docs/clean-room/agent-workflow.md` — a branch in a fresh worktree from `origin/main` with its dependencies, electron's `dist/` and a preflight; and the landing sequence (rebase, a landing worktree at the rebased head, `verify:plan` read against `origin/main`, `pnpm check` then the named proof suites on that exact head, a fast-forward push, cleanup). Two commands joined `CLAUDE.md`'s Commands table. No package, edge or process changed.
+
+**The platform preflight (2026-10-19; its view was updated then, the entry written here).** `01-component-view.md` gains the tool's section: `pnpm preflight [proof-id …]`, the machine checked before a proof suite launches, launching nothing. No package, edge or process changed.
+
+**The evidence manifest (2026-10-19; its view was updated then, the entry written here).** `01-component-view.md` gains the tool's section: `pnpm evidence write|verify <dir>`, the per-file sha256 manifest a live-run pack is closed with. No package, edge or process changed.
+
 Last reconciled with the code: **2026-10-18**
 
 **The development-time store behind `pnpm dev-time` (R-075; first execution 2026-10-18).** `01-component-view.md` gains the tool's section: measured spans of setup, build, each `pnpm check` stage, proofs, repairs and repeated rebases, one JSON record a span in `~/.rotaris/dev-time/log.jsonl`. No package, edge or process changed.

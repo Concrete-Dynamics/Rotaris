@@ -69,6 +69,7 @@
     "update-depth-proof": "node apps/desktop/scripts/update-depth-proof.mjs",
     "live-run": "node apps/desktop/scripts/live-run.mjs",
     "autopsy": "node apps/desktop/scripts/autopsy.mjs",
+    "evidence": "node apps/desktop/scripts/evidence.mjs",
     "app:drive": "node apps/desktop/scripts/drive.mjs",
     "driver-proof": "node apps/desktop/scripts/driver-proof.mjs",
     "updater-proof": "node apps/desktop/scripts/updater-proof.mjs",

@@ -253,6 +253,7 @@ import { runCrlfScenario } from './lib/crlf-scenario.mjs';
 import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-field.mjs';
 import { passOutcome, postRunVerdict, refusalClicks, refusalPressOrder, refusalWait, retrospectiveArtifactVerdict, retrospectiveInstructionFiles, retrospectiveRefusalVerdict, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './lib/analysis-reading.mjs';
 import { verdictLine } from './lib/verdict-line.mjs';
+import { MANIFEST_FILE, writeEvidenceManifest } from './lib/evidence-manifest.mjs';
 import { RENAME_FILES, RENAME_FROM, RENAME_TO, renameReading } from './lib/rename-reading.mjs';
 import { CLASSIFIER_MARK, DELEGATED_MARK, REPORT_MARK, ROOT_MARK, answerReading, planReading, waitReading } from './lib/plan-open-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, summaryOpeningVerdicts, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
@@ -1454,13 +1455,23 @@ function finish(code) {
   // empties the per-launch pair, and reading it here reported no fault fired in a run where three had (finding H4).
   results.traffic = proxy === null ? { recorded: false, reason: RECORD_TRAFFIC ? 'the proxy could not start' : '--no-record-traffic' } : { recorded: true, proxy: proxy.url, ...proxy.totals() };
   results.passed = code === 0 && checks.every((c) => c.passed);
+  results.manifest = MANIFEST_FILE;
   writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
+  // The pack's own identity and integrity, written LAST so `results.json` itself is covered: the machine and
+  // build that produced it and a sha256 for every file (`lib/evidence-manifest.mjs`). A manifest that cannot be
+  // written is a warning, never a failed run: the run's checks are about the product.
+  try {
+    writeEvidenceManifest(output, { kind: 'live-run', label: `${endpoint.name} · ${Object.keys(results.scenarios).join(', ')}` });
+  } catch (cause) {
+    console.error(`warning: the evidence manifest could not be written (${cause instanceof Error ? cause.message : String(cause)}); the pack holds no hashes`);
+  }
   // A red names the assertion, never the run.
   // A verdict pushed with no detail prints no dash (`lib/verdict-line.mjs`; at ce5f952 it printed "— undefined").
   for (const c of checks) console.log(verdictLine(c));
   const tokens = results.tokens ? `${results.tokens.input} in / ${results.tokens.output} out` : 'none recorded';
   console.log(`\nspend: ${typeof results.spentUsd === 'number' ? `${results.spentUsd.toFixed(4)} USD (${accountingKind === 'provider' ? "the provider's figure" : 'estimated from the registered prices'}) of the ${BUDGET.toFixed(2)} USD ceiling` : accountingKind === 'unmetered' ? `no money figure for this endpoint; ${tokens}, no ceiling (registered unmetered)` : `no money figure for this endpoint; ${tokens} of the ${MAX_TOKENS} token ceiling`}`);
   console.log(`evidence: ${output}`);
+  console.log(`manifest: ${join(output, MANIFEST_FILE)} (pnpm evidence verify re-hashes it)`);
   const packed = Object.entries(scenarioEvidence).filter(([, e]) => Array.isArray(e.wrote) && e.wrote.length > 0);
   if (packed.length > 0) console.log(`autopsy:  ${packed.map(([name, e]) => `${name} (${e.wrote.join(', ')})`).join('; ')}`);
   console.log(`          read one with \`node apps/desktop/scripts/autopsy.mjs "${join(output, 'workspace.db')}" <session-id>\`, or the run-autopsy skill over this directory`);

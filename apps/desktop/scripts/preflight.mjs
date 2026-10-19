@@ -30,20 +30,16 @@ import { pathToFileURL } from 'node:url';
 import { PROOFS } from '../../../tools/proof-registry/registry.mjs';
 import { runBundleScript } from './lib/code-intelligence-bundle.mjs';
 import { KEY_ENV, endpointStore } from './lib/endpoint-registry.mjs';
+import { app, electron, electronVersion, mainEntry, newestSourceMtime, presentSourceRoots, repo } from './lib/environment-facts.mjs';
 
-/** The repository root — `apps/desktop/scripts/` is three levels down from it. */
-export const repo = resolve(import.meta.dirname, '..', '..', '..');
-export const app = join(repo, 'apps', 'desktop');
-/** The Electron executable and the built main entry, the same expressions `lib/harness.mjs` exports and `live-run.mjs` spells for itself (a test compares them). */
-export const electron =
-  process.platform === 'win32'
-    ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe')
-    : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-export const mainEntry = join(app, 'out', 'main', 'index.js');
+// The facts live in `lib/environment-facts.mjs`, shared with `lib/evidence-manifest.mjs` so the preflight's
+// reading and the evidence pack's recording cannot drift apart. `preflight.test.ts` holds these path expressions
+// equal to `lib/harness.mjs`'s own.
+export { app, electron, mainEntry, newestSourceMtime, repo };
+
 /** The scratch root every proof's profile sits under. */
 export const proofDir = join(repo, '.proof');
 
-const electronManifest = join(repo, 'node_modules', 'electron', 'package.json');
 const BUNDLE = 'code-intelligence bundle';
 const ENDPOINT = 'a registered endpoint with a stored key';
 
@@ -118,37 +114,6 @@ export function electronCheck({ path, present, version }) {
     };
   }
   return { name: 'electron', status: 'pass', message: `electron ${version ?? '(version unreadable)'} at ${path}` };
-}
-
-/**
- * The newest non-test source file under `roots`, as `{ path, mtimeMs }`, or null.
- * Test files are not build inputs, so editing one is not a reason to rebuild.
- * @param {string[]} roots
- * @param {{ list: (dir: string) => Array<{ name: string, dir: boolean }>, mtime: (file: string) => number }} io
- */
-export function newestSourceMtime(roots, { list, mtime }) {
-  /** @type {{ path: string, mtimeMs: number } | null} */
-  let best = null;
-  /** @param {string} dir */
-  const visit = (dir) => {
-    /** @type {Array<{ name: string, dir: boolean }>} */
-    let entries;
-    try { entries = list(dir); } catch { return; }
-    for (const entry of entries) {
-      const path = join(dir, entry.name);
-      // `generated/` is a generator's output, not a source: packages/kernel/src/generated/requirements.ts
-      // is rewritten by `pnpm symbols` before every build and every test collection, so its mtime says
-      // nothing about whether the build is current.
-      if (entry.dir) { if (entry.name !== 'generated') visit(path); continue; }
-      if (/\.test(-support)?\.(ts|tsx|js|jsx)$/.test(entry.name)) continue;
-      /** @type {number} */
-      let mtimeMs;
-      try { mtimeMs = mtime(path); } catch { continue; }
-      if (best === null || mtimeMs > best.mtimeMs) best = { path, mtimeMs };
-    }
-  };
-  for (const root of roots) visit(root);
-  return best;
 }
 
 /**
@@ -352,9 +317,7 @@ export function realIo(env = process.env) {
       const r = spawnSync('git', ['rev-parse', '--short=12', 'HEAD'], { encoding: 'utf8', windowsHide: true });
       return r.status === 0 ? (r.stdout ?? '').trim() : null;
     },
-    electronVersion: () => {
-      try { return JSON.parse(readFileSync(electronManifest, 'utf8')).version ?? null; } catch { return null; }
-    },
+    electronVersion,
     bundle: () => ({ ok: runBundleScript(['--check'], 60_000).status === 0 }),
     scratch: () => {
       try {
@@ -367,15 +330,7 @@ export function realIo(env = process.env) {
         return { error: err instanceof Error ? err.message : String(err) };
       }
     },
-    sourceRoots: () => {
-      const roots = [join(app, 'src')];
-      try {
-        for (const e of readdirSync(join(repo, 'packages'), { withFileTypes: true })) {
-          if (e.isDirectory()) roots.push(join(repo, 'packages', e.name, 'src'));
-        }
-      } catch { /* no packages directory: the app's own sources are the list */ }
-      return roots;
-    },
+    sourceRoots: presentSourceRoots,
     xvfb: () => findOnPath('xvfb-run', env) !== null,
     store: () => endpointStore(),
   };

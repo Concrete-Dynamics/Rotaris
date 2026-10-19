@@ -26,3 +26,5 @@ The index of which proof covers what is `docs/proofs/README.md`, rendered from `
 (`pnpm proofs:index` writes it; `pnpm lint` fails when it is stale). `pnpm preflight [proof-id …]` checks the machine
 before a suite launches — Electron, the build's freshness, the code-intelligence bundle, `.proof/`'s writability,
 exported `ROTARIS_*` variables, the display — and what each named proof's registry record needs; it launches nothing.
+`pnpm evidence verify <dir>` re-hashes an evidence pack against its `evidence-manifest.json` (a live run writes one
+as it finishes); `pnpm evidence write <dir>` writes one for any other evidence directory.

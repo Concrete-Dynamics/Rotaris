@@ -366,8 +366,11 @@ newest and `--keep-runs` (default 10) prunes the oldest — so two runs can be c
 while each run emptied the directory.
 
 At the pack's root: `results.json` with every check, the accounting kind and the spend; `agents.yaml` as the run
-saw it; `build.log`; and **`workspace.db`, the store copied out of the sandbox before it is deleted**. Then one
-directory per scenario:
+saw it; `build.log`; **`workspace.db`, the store copied out of the sandbox before it is deleted**; and
+**`evidence-manifest.json`** — the platform, node and Electron, the git head and dirty flag, the measured build's
+freshness against its sources, and every file's size and sha256, written last so `results.json` itself is covered
+(`pnpm evidence verify <dir>` re-hashes a pack; `pnpm evidence write <dir>` writes one for any other evidence
+directory). Then one directory per scenario:
 
 | file | what it holds |
 |---|---|

@@ -354,6 +354,18 @@ writes nothing but a scratch probe it removes. It sits in `scripts/` rather than
 the tools and never the reverse, and an endpoint proof's key needs `scripts/lib/endpoint-registry.mjs`.
 **Edges unchanged**: no product code imports it.
 
+### The evidence manifest (2026-10-19)
+
+`apps/desktop/scripts/evidence.mjs` (`pnpm evidence write|verify <dir>`, tests in `evidence.test.ts`) writes and
+verifies `evidence-manifest.json` in an evidence directory (`scripts/lib/evidence-manifest.mjs`): the environment
+block `scripts/lib/environment-facts.mjs` reads — platform, node and Electron, the display, the git head and dirty
+flag, the desktop build's freshness against its sources and the build identifier — and every file with its size
+and sha256. A live run writes one into its pack as it finishes, last, so `results.json` is covered; `verify`
+re-hashes the directory and names every file that changed, went missing or arrived after the manifest was written.
+A `pnpm ui-review` pack's `manifest.json` is the critic protocol's own and is untouched. **Edges unchanged**: the
+tool launches nothing, no product code imports it, and `environment-facts.mjs` is the one reading the preflight's
+checks and the manifest's record are both taken from.
+
 ### The setup manifest and its schema (2026-09-28; `first-release-plan.md` §4.1, ADR-0054)
 
 `apps/desktop/resources/setup-manifest.json` is REQ-STARTUP-058's manifest: committed, not generated, and carried by

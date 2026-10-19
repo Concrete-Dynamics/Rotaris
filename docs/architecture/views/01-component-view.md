@@ -384,7 +384,10 @@ hands back; the tool never resolves one), a **landing worktree** detached at the
 `tools/verify-plan`'s plan read against `origin/main` (its `review` list demands `--reviewed`), `pnpm check` then
 the named proof suites on that exact head (`--skip-proofs` skips them loudly), `git push origin HEAD:main` —
 fast-forward only, re-rebasing while `main` moves under it — and the removal of both worktrees and the branch.
-`exec.mjs` runs a command with its output inherited or captured and builds pnpm's own command line
+`overlaps.mjs` (`pnpm worktree:overlaps`) is the report beside them: every registered worktree's branch read
+against its fork from `origin/main` — the files it touches (committed, staged, unstaged and untracked), the
+files `origin/main` moved since the fork, and the files two or more branches both touch — and `land` prints
+the branch's own overlap with `origin/main` before the rebase. `exec.mjs` runs a command with its output inherited or captured and builds pnpm's own command line
 (`dev-time.mjs`'s `npm_execpath` pattern); `git.mjs` holds the git reads, with the git-hook variables cleared so a
 read cannot land in another repository; `steps.mjs` gathers the heavy steps as seams, which is how the tests run
 the wrappers end to end against a scratch repository with git real. **Edges unchanged**: `tools/**` is outside

@@ -59,4 +59,9 @@ Repaired 2026-10-20 by loc1 (bundle `loc1-todo-reader`); harness only, no produc
   unread one says why": the ids `impl 1` and `tests (unit)` read in a held reading and a closing `replace` (red before: four
   `unread`, `heldReads` 0); a held item removed reads `not shown`, an id on a line of no task shape `not parsed` (red before:
   entries with no `why`); and the `README` reading counted as a key, pinned beside the comment. The A7 case's `unread` entries
-  now carry `why: 'not shown'`. The next default live run is the live measure.
+  now carry `why: 'not shown'`.
+- **First execution, 2026-10-20** (`live-run.mjs --only=delegation` in the bundle's tree at `330c3c50`, pack
+  `2026-10-20T15-24-26-159Z`; Windows 11 ARM64 (build 26200), Node 24.18.0 arm64; CPU load 100 % at launch, with Electron of
+  three other trees alive): the check passed, "4 held-item state(s) and 0 replace close(s) read in 2 coordinating session(s)"
+  (delegation, delegation-swarm), every held item read by `todoStates` itself, so neither the suffix lookup nor either `why`
+  was met live. The run passed, 44 checks, none failed.

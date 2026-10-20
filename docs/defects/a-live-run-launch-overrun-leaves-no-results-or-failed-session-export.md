@@ -15,3 +15,16 @@ No product requirement contradicted by this observation: the defect is in preser
 - `apps/desktop/scripts/live-run.mjs` — `launch` throws before final results are written.
 - `apps/desktop/scripts/lib/crlf-scenario.mjs` — preservation follows the awaited launch, so an exception skips it.
 - `apps/desktop/scripts/lib/sandbox-sweep.mjs` — temporary stores do not provide a durable substitute for an evidence export.
+
+## Addendum, 2026-10-20 — what the overrun was
+
+Read from the same pack's `crlf/model-traffic.jsonl` and the session's process snapshots. The overrun was not a stall: one
+streamed model call, begun at 15:28:52 UTC, carried reasoning deltas only (425,505 bytes, ending mid-sentence) and ran
+7,273 s, until the upstream reset it at 17:30:05 UTC; the `ENOTFOUND` records are two new requests 1–3 s later, after the
+machine had lost its network. The harness's SIGKILL at the bound (about 15:34 UTC) ended main alone, and `runElectron`,
+which resolves on `close`, returned only at 23:33 UTC, when the throw above was printed; two utility processes of the dead
+main were still running after that. Those are recorded in
+[`the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md`](the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md).
+The three earlier scenarios' checks were computed in memory and lost with the throw; their saved summaries read `terminal`
+24 tool calls (success 17, soft_pause 4, timeout 1, tool_error 1, one denial), `frictions` 9 (background_running 2,
+background_terminal 1), `frictions-cut` 1 (shell_failure 1).

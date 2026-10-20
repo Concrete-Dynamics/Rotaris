@@ -3,6 +3,18 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — merge rules for the record files agents wrote resolvers for
+
+**Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
+approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
+item F02: with several plans landing at once, reviewers lost the fast-forward and rebased into conflicts in the
+reconciliation log, R-072's row, the directive register and AGENTS.md's proof table, about 75 of them in fin42 to fin45;
+agents improvised `resolve.py` (five times), `rowmerge.py` and `keepboth.py`, and fin29's resumed review spent about 95
+of 126 minutes re-gating (`wf_11a1c118-864`). **Changed:** `references/repository.md`, Merge conflicts, gains one rule
+per shared file. It only adds to the record obligations; the gate still runs on the exact head pushed after every
+rebase. **Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check`; the skill-review by one reviewer
+agent under `references/skill-review.md`, which judged this entry with the others of 2026-10-20.
+
 ## 2026-10-20 — the final report names the acceptance round that met Done
 
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner

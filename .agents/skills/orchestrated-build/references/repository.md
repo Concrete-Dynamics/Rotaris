@@ -128,6 +128,10 @@ The same shapes hold for a merge of `origin/main` into a bundle branch and for e
   next free one, says so in its own entry, and renumbers its citations. Defect notes are named: two notes with one
   name describing one defect become one note; describing two, the branch's is renamed and its links follow.
 - `first-executions.md` rows: keep both, in date order. The views' reconciled date: the later one.
+- `docs/architecture/views/reconciliation-log.md`: keep both entries, newest first (the file's own rule). R-072's row in
+  `docs/product/requests.md`: keep every ruling clause either side appended, in date order. `docs/product/directives.md`'s
+  Count: recompute it from the entries below it, never take either side's. `AGENTS.md`'s proof table: keep both rows,
+  in the table's order.
 - Shared array or object literals: merge the entries. Store migrations: the branch's is renumbered after main's.
 - Code: keep both sides' intent; the compiler and the tests decide.
 

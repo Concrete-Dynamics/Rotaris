@@ -1345,6 +1345,11 @@ retrospective's authentication refusal**: one sentence is added at the end of "T
 REQ-WORKSPACE-152 join the Extends line. Revision 4 said nothing on a retrospective whose entry provider has no credential, so
 nothing is replaced.*
 
+*Revision 6 (2026-10-20, [R-072](requests.md#r-072), ruling [OQ-363](../architecture/open-questions.md#oq-363)) — **what a
+configuration that loads may refuse a retrospective for**: one passage, with its reason and its cost, is added at the end of
+"The model", and REQ-CONFIG-246 joins the Extends line. Revision 5 said nothing on a run's other refusals of a configuration
+that loads, so nothing is replaced.*
+
 **The rule.** Beside the per-run analyst of section 3, the improvement domain SHALL carry a second
 kind of analysis pass, the **retrospective**. A retrospective SHALL read only material this product
 already keeps for the workspace it runs in — session records, improvement artifacts and their
@@ -1457,7 +1462,20 @@ refused with REQ-WORKSPACE-137's headline "Provider authentication required" and
 configured provider before running a retrospective.": at its capture, that refusal is posted as one error notice per gesture,
 titled with the headline, with the detail as its body and the action that opens Settings at Models, which REQ-WORKSPACE-152 (2)
 gives that requirement's refusals; at its analysis, the same reason is carried inside clause (c)'s failure warning, which keeps
-no action. *(Revision 5, OQ-300.)*
+no action. *(Revision 5, OQ-300.)* Of a configuration that loads, nothing else refuses a retrospective, and none of a run's refusals does.
+A `default_persona` naming no role this build knows, or an entry role with no usable model, leaves the pass's setup completed
+on the retrospective's own model, since the pass sends nothing to the entry role. A confinement mode the host cannot deliver is
+not checked, since the pass opens no shell and runs no tool. Referential errors (REQ-CONFIG-232) never refuse it, whether or
+not a presenter is live at its capture or at its analysis: REQ-CONFIG-246 binds a run no person is watching, and a
+retrospective is no run and is started only by a person's gesture. The configuration's load warnings and referential messages
+are written to the application log when the pass is captured, one warning line each. A configuration that does not load
+refuses the pass with the loader's own reason, and every run keeps each refusal this passage names. *(Revision 6, OQ-363.)*
+*Why:* each of those refusals protects a run (its entry role, its shell, its start with no one watching), and the pass is none
+of these. Refusing on them stopped a pass the person had just asked for by name, either over a field it never reads or, at a
+queued analysis, over whether main had answered the presenter's poll within 3,000 ms (ADR-0019). The post-run pass queued
+beside it is never refused that way. *What it costs:* a pass may run, and spend its tokens, over a configuration on which the
+next run is refused; that refusal then states why. The messages reach the log and Settings › Models' "Unresolved references",
+not a notice of the retrospective's own.
 
 **Why, and what it costs.** The request drew the comparison deliberately: an insights report
 (`sessions → patterns, friction, recommendations`) and a feedback loop
@@ -1495,7 +1513,7 @@ record with evidence, review, undo, history, export and an executor behind it.
   it is paid once per gesture, names the exact field to set, and stops there.
 
 > **Narrows:** REQ-LIBRARY-011, REQ-LIBRARY-020, REQ-LIBRARY-034, REQ-LIBRARY-109, REQ-LIBRARY-124, REQ-LIBRARY-125, REQ-LIBRARY-130, REQ-NOTIFY-250
-> **Extends:** REQ-LIBRARY-003, REQ-LIBRARY-006, REQ-LIBRARY-015, REQ-LIBRARY-017, REQ-LIBRARY-126, REQ-LIBRARY-128, REQ-MONITOR-173, REQ-NOTIFY-251, REQ-WORKSPACE-041, REQ-WORKSPACE-137, REQ-WORKSPACE-152
+> **Extends:** REQ-CONFIG-246, REQ-LIBRARY-003, REQ-LIBRARY-006, REQ-LIBRARY-015, REQ-LIBRARY-017, REQ-LIBRARY-126, REQ-LIBRARY-128, REQ-MONITOR-173, REQ-NOTIFY-251, REQ-WORKSPACE-041, REQ-WORKSPACE-137, REQ-WORKSPACE-152
 
 *Until 2026-10-07 this block read `> **Extends:** REQ-LIBRARY-003, REQ-LIBRARY-006, REQ-LIBRARY-015` and beneath it
 `> **New:** no live requirement covers a cross-session analysis pass; REQ-LIBRARY-017 forbids the per-run analyst exactly
@@ -1521,6 +1539,13 @@ REQ-WORKSPACE-137 and REQ-WORKSPACE-152 join the Extends line, each with its "Ex
 for a run: the retrospective takes REQ-WORKSPACE-137's headline with a detail naming the retrospective, and REQ-WORKSPACE-152 (2)'s
 action at its capture.*
 
+*Revision 6, 2026-10-20 ([OQ-363](../architecture/open-questions.md#oq-363), ruled under [R-072](requests.md#r-072)):
+REQ-CONFIG-246 joins the Extends line with its "Extended by" back-pointer. It reads word for word for every run, the
+improvement run that applies a retrospective's proposal included. A retrospective, which is no run, decides what to do with the
+referential list it is handed, as REQ-CONFIG-229 leaves to every caller. The entry-model stand-in and the confinement gate's
+absence restate fin47's repairs (ADR-0065's report-back of 2026-10-15), which read the run start's requirements as a run's, so
+no further requirement is named.*
+
 *Raised by the owner, 2026-09-17; logged as [R-033](requests.md#r-033).*
 Revision 2 logged as [R-072](requests.md#r-072) (OQ-235 and OQ-236), ruled by the consortium under the owner's
 delegation: on OQ-235 the system-lens advocate's recommendation followed in substance and a revision taken in place of an
@@ -1537,6 +1562,10 @@ Revision 5 logged as [R-072](requests.md#r-072) (OQ-300), ruled by the consortiu
 retrospective and opens Settings at Models.
 Revisions 4 and 5 were dated as ruled 2026-10-13 (and revision 4's header 2026-10-13) until fin46 (`fin46-accept1-12`)
 corrected them from the consortium's ruling record, which dates both sittings 2026-10-14.
+Revision 6 logged as [R-072](requests.md#r-072) (OQ-363), ruled by the consortium under the owner's delegation on 2026-10-20:
+of a configuration that loads, a retrospective is refused only where no retrospective model resolves and by revision 5's lease
+refusal. A `default_persona` naming no known role leaves its setup completed on its own model, and referential errors are
+written to the log at its capture, whatever the presenter.
 
 > **First execution of revision 2, 2026-10-13, ruled by [R-072](requests.md#r-072) (OQ-235) and built in plan fin34:** the
 > clause held as written. The run host's `SkillHost.retrospectiveInstructionFiles` keeps the `workspace:` entries of the

@@ -15901,7 +15901,7 @@ the entry role's resolution, which a run's first request needs; REQ-NOTIFY-254. 
 repairing
 [`a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested`](../defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md),
 which asked it; the plan's range OQ-361 to OQ-380, its third number (OQ-361 and OQ-362 were taken on main) — renumbered at landing
-if a sibling took it first.)*
+if a sibling took it first. **Ruled 2026-10-20.**)*
 
 **What is open.** A retrospective's setup is prepared by the run start's `prepareRun`. Two of its refusals concern a run and not the
 pass: the entry role (`default_persona`) must resolve, and with `presenters.attended` false — no live presenter, ADR-0019 — any
@@ -15932,6 +15932,72 @@ loaded". The confinement gate no longer refuses a retrospective at all (the same
 **What a proof then shows.** `retrospective-proof` with a workspace whose `default_persona` is unknown: under (a) the gesture's
 error notice carries "names no role this build knows" and nothing is stored; under (b) or (c) the pass stores its artifact and
 no refusal notice is raised.
+
+**Ruled 2026-10-20 under the owner's delegation ([R-072](../product/requests.md#r-072)).** Option (b), refined; kind
+change-behaviour. Neither refusal binds a retrospective. Of a configuration that loads, a retrospective is refused only for
+what [`PD-LIBRARY-002`](../product/directives.md#pd-library-002)'s "The model" states: no resolvable retrospective model, and
+revision 5's lease refusal. None of a run's refusals refuses it:
+
+- **A `default_persona` naming no role this build knows** does not refuse the pass. Its setup is completed on the
+  retrospective's own model (`retrospective_model`, then `medium_model`) with no role's system text, as fin47 completes an
+  entry role with no usable model, and the run host logs that it did. The pass's one request goes to that model with the
+  analyst's own system text and no tools (`analystSystem`, `packages/engine/src/improvements/analyst.ts`), so nothing in it
+  reads the role. Where no retrospective model resolves either, the pass is refused as the missing retrospective model
+  (`retrospective.no-model`, "The retrospective needs a model").
+- **Referential errors (REQ-CONFIG-232)** do not refuse the pass, whether or not a presenter is live at its capture or at its
+  analysis. REQ-CONFIG-246 binds "a run no person is watching — one the board scheduled, and any other run started without a
+  person present". A retrospective is no run: it starts no session and runs no tool, and only a person's gesture starts it
+  (`PD-LIBRARY-002`'s trigger). REQ-CONFIG-198, which REQ-CONFIG-246 cites, divides runs by who started them. The pass's setup
+  therefore reads no attendedness. `presenters.attended` stays ADR-0019's test for routing an approval, and the pass raises
+  none. Until this ruling the test was taken again at the queued analysis. A pass captured with a live window was refused there
+  whenever main had not answered the presenter's poll for 3,000 ms, and the person who had pressed the gesture was told that no
+  one was present. The post-run pass beside it in REQ-LIBRARY-123's FIFO is analysed on its run's own setup and was never
+  refused this way.
+- **The configuration's load warnings and referential messages** are written to the application log at the pass's capture,
+  one `warn` line each, prefixed `retrospective: `. No retrospective path wrote them anywhere before: only a run's start and
+  continuation write a setup's warnings (`packages/engine/src/sessions.ts`). Settings › Models lists the referential messages
+  under "Unresolved references", as before.
+
+Every run start and continuation keeps both refusals word for word, the improvement run that applies a retrospective's
+proposal included. REQ-CONFIG-246's protection, that no run starts silently on a configuration the product could not validate,
+is therefore whole. Recorded as `PD-LIBRARY-002` **revision 6**: one passage, with its reason and its cost, at the end of "The
+model", and REQ-CONFIG-246 added to the Extends line with its "Extended by" back-pointer. The requirement reads word for word for
+every run, and nothing is replaced. The build's reading above, that both refuse the pass, is falsified by this ruling and kept
+as written. **What the ruling leaves open.** Nothing new. A notice of the retrospective's own naming the messages would need
+wording no text has, and is not ruled.
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended (b) refined: the pass counts as attended because a person started it; an
+  unknown `default_persona` is completed on the retrospective's own model, as the unusable entry model is; the referential
+  messages are written to the log for the pass; and runs keep both refusals. A recorded it as revision 6 in "The model", with
+  REQ-CONFIG-246 on the Extends line. The ruling took from A:
+  - the placement and the disposition;
+  - the messages written once, at the capture;
+  - the `no-model` answer where no retrospective model resolves;
+  - the finding that the entry's stated cost of (b) understated the tree.
+
+  It did not take the framing that the pass "counts as attended". REQ-TOOLS-053 and REQ-SANDBOX-101 define attendedness as the
+  capability to put a prompt before a person, which a lapsed presenter lacks. The ruling leaves attendedness unread for the
+  pass rather than redefining it.
+- **Advocate B (the system's lens)** recommended (b) with three refinements: referential errors never refuse the pass
+  whatever the presenter, the unknown persona is completed on the retrospective's model, and the messages are logged. B
+  recorded it as clause (i) of the revision-2 departures paragraph, with REQ-CONFIG-246 on the Narrows line. The ruling took
+  from B:
+  - the statement of the referential half: REQ-CONFIG-246 binds runs, and a retrospective is none;
+  - the red-first proof launch, with the run start's refusal read in the same launch;
+  - the run-start cases pinned beside the pass's;
+  - the defensive `retrospective.configuration` branch.
+
+  It did not take the Narrows placement. That paragraph narrows, for the retrospective, requirements that govern the per-run
+  pass, and REQ-CONFIG-246 never reached an analysis pass. Its text stands for every run, and Extends is the disposition
+  [`README.md`](../product/README.md) defines for that. B allowed it: "the behaviour is the same".
+
+Neither advocate recommended (a) or (c), and both found what rules them out:
+- **(a)** keeps a refusal `PD-LIBRARY-002` never states, over a field the pass never reads, beside fin47's stand-in for an
+  entry model the pass never calls. It also leaves the analysis's outcome to presenter timing.
+- **(c)** cannot be built as worded. An unknown `default_persona` is itself a referential message
+  (`packages/config/src/validate.ts`), so with no presenter REQ-CONFIG-246's branch refuses it before the persona is read.
+  `launch.test.ts`'s unattended case shows this on exactly that configuration.
 
 <a id="oq-401"></a>
 

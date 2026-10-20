@@ -95,7 +95,8 @@ Write `plan.json` in the scratchpad:
 ```bash
 # Agents read this skill from this orchestration's own detached reference worktree; the owner's checkout is never touched.
 git -C <repo> fetch origin main
-git -C <repo> worktree add --detach <repo>-wt-skillref-<id> origin/main 2>/dev/null || git -C <repo>-wt-skillref-<id> checkout -q --detach origin/main
+git -C <repo> worktree remove --force <repo>-wt-skillref-<id> 2>/dev/null   # between runs only, never under a running plan
+git -C <repo> worktree add --detach <repo>-wt-skillref-<id> origin/main
 K=<repo>-wt-skillref-<id>/.agents/skills/orchestrated-build
 S=<scratchpad>/orchestration-<id>; mkdir -p $S
 node $K/scripts/orchestration.mjs render --plan $S/plan.json --profile $K/profiles/<repo>.json --out $S/run-1.js

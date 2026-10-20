@@ -166,6 +166,9 @@ alone. It carries:
 
 - `sleep N; cmd` chains are refused: wait as Long jobs says.
 - `git branch -f main …` is refused as destructive: `git checkout main && git merge --ff-only origin/main`.
+- `git -C <repo>-wt-skillref-<id> checkout -q --detach origin/main` was refused as "[Modify Shared Resources]" (19:54
+  UTC on 2026-10-14), so a merged skill change never reached fin46's resumed run: refresh the reference worktree by
+  removing it and adding it again (SKILL.md §3), between runs only.
 - Never disable TLS verification or unset the proxy; outbound HTTPS goes through it.
 
 ## Places

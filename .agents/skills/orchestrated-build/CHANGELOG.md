@@ -3,6 +3,17 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — the reference worktree is refreshed by removing and re-adding it
+
+**Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
+approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
+item F22: at both restarts of fin46 the refresh SKILL.md §3 gives (`checkout -q --detach origin/main` in the reference
+worktree) was refused as "[Modify Shared Resources]" (19:54:30 UTC on 2026-10-14) and dropped, so the merged change
+`d1ed535` never reached fin46's second run. **Changed:** SKILL.md §3 removes the reference worktree and adds it again,
+between runs only; `references/environment.md`, Shell forms the harness blocks, records the refusal. **Verified** by
+`node scripts/orchestration.mjs self-test` and `pnpm check`; the skill-review by one reviewer agent under
+`references/skill-review.md`, which judged this entry with the others of 2026-10-20.
+
 ## 2026-10-20 — the skill review runs as one agent answered by message
 
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner

@@ -1604,7 +1604,15 @@ describe('todo (REQ-TOOLS-144..147)', () => {
       expect(list.phases[0]!.tasks.filter((x) => x.state === 'IN_PROGRESS').map((x) => x.name)).toEqual(['impl', 'tests', 'docs']);
     });
 
-    it('replace: held tasks are exempt, and a replace that marks nothing new is accepted while ended children\'s items stay IN_PROGRESS', async () => {
+    /*
+     * The no-served-set path: `plan` passes `held` alone, the caller "with no served set" for which the tool "behaves as before"
+     * (`TodoToolOptions.served`). There an item whose holder has left the held set counts again against the next mark. The
+     * product passes the served set too, under which such an item is served and exempt (revision 4, OQ-333), so the run never
+     * reaches this state; the revision-4 cases pin that path. Until 2026-10-20 this case was named for "ended children's items"
+     * and its comments for "an ended holder's item", a state the product can no longer reach (fin47's reviewers' finding,
+     * bundle `fin47-classifier-and-todo`).
+     */
+    it('replace with no served set: held tasks are exempt, a replace marking nothing new is accepted, and an item no longer held counts again', async () => {
       const held = new Set<string>();
       const { t, list, impl, tests, docs } = await plan(held);
       held.add(impl); held.add(tests);
@@ -1613,12 +1621,14 @@ describe('todo (REQ-TOOLS-144..147)', () => {
       // a replace marking one new unheld task beside two held ones is accepted
       const one = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: impl, name: 'impl' }, { id: tests, name: 'tests' }, { id: docs, name: 'docs', state: 'IN_PROGRESS' }] }] }, ctx());
       expect(one.isError).toBe(false);
-      // both holders end: three IN_PROGRESS tasks, none held — a replace that marks nothing is still accepted
+      // the held set empties, and no served set stands in for it: three IN_PROGRESS tasks, none held — a replace that marks
+      // nothing is still accepted
       held.clear();
       const none = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: impl, name: 'impl' }, { id: tests, name: 'tests' }, { id: docs, name: 'docs' }, { name: 'later' }] }] }, ctx());
       expect(none.isError).toBe(false);
       expect(list.phases[0]!.tasks.filter((x) => x.state === 'IN_PROGRESS')).toHaveLength(3);
-      // marking a fourth task now meets REQ-TOOLS-146's case, naming the first unheld active task: an ended holder's item
+      // marking a fourth task now meets REQ-TOOLS-146's case, naming the first unheld active task: with no served set, an item no
+      // longer held counts as the agent's own
       const later = list.phases[0]!.tasks.find((x) => x.name === 'later')!.id;
       const r = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: later, name: 'later', state: 'IN_PROGRESS' }] }] }, ctx());
       expect(r.text).toBe(`Only one task can be IN_PROGRESS at a time. Active task: ${impl} (impl). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`);

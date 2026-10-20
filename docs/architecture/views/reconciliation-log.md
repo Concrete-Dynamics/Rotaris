@@ -16,6 +16,9 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-20**
 
+**A revision-2 todo case is named for the no-served-set path it pins (2026-10-20; loc1, `loc1-todo-reader`; fin47's reviewers'
+finding on `fin47-classifier-and-todo`).** A test case's name and comments in `tools.test.ts` only; no view changed.
+
 **A delegated item removed from the plan comes back as a new task (2026-10-20; loc1, `loc1-todo-reader`; REQ-TOOLS-144).**
 `03-runtime-view.md`'s paragraph on the ids a `replace` gives gains a sentence: a delegated item the list no longer holds
 (`remove_task`, which protects no held item, or set back to PENDING and left out of a `replace`), sent back under its old id, is a

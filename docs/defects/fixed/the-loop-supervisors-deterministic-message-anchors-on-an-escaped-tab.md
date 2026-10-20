@@ -13,7 +13,8 @@ path anchor is read from the argument values" (six cases red on the build before
 orders, a Windows path, relative paths after escaped strings, the no-path fallback with escapes, the 200,000-character text; a
 glob-shaped value under another name green before and after) and by the OQ-364 block's PD-ORCH-016 case, which now requires
 "haet_edit around crlf-live/greet.js". Recorded in [ADR-0059](../../architecture/adr/0059-the-loop-supervisor-as-an-in-turn-observer.md)
-(decision 5 and its 2026-10-20 section on the anchor). **Not measured:** a live run since the change.
+(decision 5 and its 2026-10-20 section on the anchor). **Measured live** in the default live run's `crlf` scenario on this branch (2026-10-20, pack `2026-10-20T15-45-32-700Z`, endpoint `katalyst`, unmetered, R-068; Windows 11 ARM64, Node 24.18.0 arm64, beside three other trees' 18 Electron processes): the activation's message read
+"Pause and reassess haet_edit around crlf-live/greet.js. …" over calls written with `path` last.
 
 `REQ-ORCH-104`'s deterministic message names the circled tool and a path anchor. `pathAnchor` searches the call's serialised arguments with `(?:[A-Za-z]:[\\/]|\.{0,2}[\\/])[^"'\s,}]+`, which accepts zero dots followed by a backslash, so it matches the JSON escape `\t`. When `old_string` precedes `path` in the serialised arguments, the anchor becomes `\tconst` and the message reads "Pause and reassess haet_edit around \tconst", naming no file.
 

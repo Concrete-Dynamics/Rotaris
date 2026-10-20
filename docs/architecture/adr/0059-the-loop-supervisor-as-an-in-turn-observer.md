@@ -296,4 +296,5 @@ values; the anchor is the first one-line string within 512 characters under a ke
 file extension). Arguments that do not parse, or hold no path, keep the fallback "<tool> with <the first 80 characters>".
 The key order OQ-364 made no part of sameness is no part of the anchor either. **Pinned by** `supervisor.test.ts`'s block
 "REQ-ORCH-104: the deterministic message's path anchor is read from the argument values" (six cases red on the build before,
-one guard green before and after) and the OQ-364 block's PD-ORCH-016 case. **Not measured:** a live run since the change.
+one guard green before and after) and the OQ-364 block's PD-ORCH-016 case. **Measured live** in the default live run's `crlf` scenario on this branch (2026-10-20, pack `2026-10-20T15-45-32-700Z`, endpoint `katalyst`, unmetered, R-068; Windows 11 ARM64, Node 24.18.0 arm64, beside three other trees' 18 Electron processes): the one
+activation's message read "Pause and reassess haet_edit around crlf-live/greet.js. …", its calls written with `path` last.

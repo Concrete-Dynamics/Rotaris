@@ -11,7 +11,7 @@ key-source line named. No URL, host, key or token is quoted here.*
 The run was taken in two packs because the first attempt (`2026-10-15T15-16-50-373Z`, head `8080fbda`, all three
 scenarios) lost every verdict: its `crlf` launch overran the harness's bound, the throw ended the run before `results.json`
 was written, and the sandbox went with it
-([`a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`](../../defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md),
+([`a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`](../../defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md),
 [`the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md`](../../defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md)).
 
 | Pack | `--only` | Verdict | Tokens (in / out) |

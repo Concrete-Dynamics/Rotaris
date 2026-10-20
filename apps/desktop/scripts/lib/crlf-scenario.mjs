@@ -154,6 +154,18 @@ function readCalls(dbPath, sessionId) {
 export async function runCrlfScenario(ctx) {
   rmSync(join(ctx.workspace, CRLF_DIR), { recursive: true, force: true });
   writeCrlfFixture(ctx.workspace, CRLF_FILES);
+  /*
+   * The bytes the run left are the measurement, so they are kept in the pack whether or not the launch ended cleanly: until
+   * 2026-10-20 the copy followed the awaited launch, and a launch that overran threw past it, so the fixture was removed
+   * unread (`docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`).
+   */
+  let kept = false;
+  const keepBytes = () => {
+    if (kept) return;
+    kept = true;
+    try { cpSync(join(ctx.workspace, CRLF_DIR), join(ctx.scenarioDir('crlf'), 'files'), { recursive: true }); }
+    catch (cause) { console.error(`warning: crlf: the fixture's bytes could not be kept in the pack (${cause instanceof Error ? cause.message : String(cause)})`); }
+  };
   try {
     const log = await ctx.launch('crlf', {
       ROTARIS_CAPTURE_PROMPT: CRLF_PROMPT,
@@ -166,7 +178,7 @@ export async function runCrlfScenario(ctx) {
     const calls = readCalls(ctx.oneDatabase(), sessionId);
     const files = Object.fromEntries(Object.keys(CRLF_FILES).map((path) => { const file = join(ctx.workspace, path); return [path, existsSync(file) ? readFileSync(file, 'utf8') : null]; }));
     // The bytes the run left, kept in the pack: the endings are the measurement.
-    cpSync(join(ctx.workspace, CRLF_DIR), join(ctx.scenarioDir('crlf'), 'files'), { recursive: true });
+    keepBytes();
     for (const v of crlfVerdicts({ calls, files })) { if (v.verdict === 'note') ctx.noted(v.what, v.detail); else ctx.check(v.passed, v.what, v.detail ?? undefined); }
     ctx.check(read.session.execution_status === 'completed', 'crlf: the run completed', `${read.session.execution_status} (${read.session.stop_reason})`);
     const reading = nearMissReading([{ scenario: 'crlf', calls }]);
@@ -178,6 +190,7 @@ export async function runCrlfScenario(ctx) {
     };
     ctx.preserveRun('crlf', sessionId);
   } finally {
+    keepBytes();
     rmSync(join(ctx.workspace, CRLF_DIR), { recursive: true, force: true });
   }
   await ctx.budgetGate();

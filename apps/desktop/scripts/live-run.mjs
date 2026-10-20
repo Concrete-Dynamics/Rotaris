@@ -254,6 +254,8 @@ import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-fiel
 import { passOutcome, postRunVerdict, refusalClicks, refusalPressOrder, refusalWait, retrospectiveArtifactVerdict, retrospectiveInstructionFiles, retrospectiveRefusalVerdict, runsStarted, settledAfterMs, settledWait, unauthorizedRequests } from './lib/analysis-reading.mjs';
 import { verdictLine } from './lib/verdict-line.mjs';
 import { MANIFEST_FILE, writeEvidenceManifest } from './lib/evidence-manifest.mjs';
+import { settleLaunch } from './lib/settle-launch.mjs';
+import { createRunEnding, launchFailure } from './lib/run-ending.mjs';
 import { RENAME_FILES, RENAME_FROM, RENAME_TO, renameReading } from './lib/rename-reading.mjs';
 import { CLASSIFIER_MARK, DELEGATED_MARK, REPORT_MARK, ROOT_MARK, answerReading, planReading, waitReading } from './lib/plan-open-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, summaryOpeningVerdicts, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
@@ -740,9 +742,24 @@ mkdirSync(sandbox, { recursive: true });
 writeOwner(sandbox);
 mkdirSync(workspace, { recursive: true });
 mkdirSync(local, { recursive: true });
-// An interrupt or a crash is an exit path too: it may not strand the key in the temp directory.
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { console.error(`\n${signal}: deleting the sandbox.`); closeProxy(); cleanup(false); process.exit(130); });
-for (const fatal of ['uncaughtException', 'unhandledRejection']) process.on(fatal, (error) => { console.error(`${fatal}: ${error instanceof Error ? error.stack ?? error.message : String(error)}`); closeProxy(); cleanup(false); process.exit(1); });
+// An interrupt or a crash is an exit path too: it may not strand the key in the temp directory, and once the run's ending
+// exists (`runEnding`, set beside `finish` below) it may not cost the pack its results either. Until 2026-10-20 a launch
+// that overran threw into these handlers, which deleted the sandbox and exited: the checks every earlier scenario had
+// computed were never written, and the failed scenario's session went with the sandbox
+// (`docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`; `lib/run-ending.mjs`).
+// A signal also ends the launch in flight, which `timeout`'s SIGTERM to this process alone would otherwise leave running;
+// before its `let` is reached that read throws, and is caught.
+let runEnding = null;
+const endOnFatal = (code, error) => {
+  if (runEnding !== null) { runEnding(code, error); return; }
+  closeProxy(); cleanup(false); process.exit(typeof error?.exitCode === 'number' ? error.exitCode : code);
+};
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {
+  console.error(`\n${signal}: ending the run, then deleting the sandbox.`);
+  try { launchInFlight?.kill('SIGKILL'); } catch { /* none in flight yet */ }
+  endOnFatal(130, Object.assign(new Error(`${signal}: the run was interrupted`), { exitCode: 130 }));
+});
+for (const fatal of ['uncaughtException', 'unhandledRejection']) process.on(fatal, (error) => { console.error(`${fatal}: ${error instanceof Error ? error.stack ?? error.message : String(error)}`); endOnFatal(1, error); });
 const workspaceFixture = DURESS_FIXTURE === null ? fixture : resolve(DURESS_FIXTURE);
 if (!existsSync(workspaceFixture)) throw new Error(`--duress-fixture names no directory: ${workspaceFixture}`);
 cpSync(workspaceFixture, workspace, { recursive: true, filter: (from) => !/[\\/](?:node_modules|\.git)$/.test(from) });
@@ -762,6 +779,15 @@ function oneDatabase() {
   const databases = findDatabases(local);
   if (databases.length !== 1) throw new Error(`expected one workspace database below ${local}; found ${databases.length}`);
   return databases[0];
+}
+/** Every session id the store holds, in creation order; none before the first launch has made the store. */
+function sessionIds() {
+  try {
+    const Database = require('better-sqlite3');
+    const handle = new Database(oneDatabase(), { readonly: true });
+    try { return handle.prepare('SELECT session_id FROM sessions ORDER BY created_at, rowid').all().map((r) => r.session_id); }
+    finally { handle.close(); }
+  } catch { return []; }
 }
 
 /** What each scenario left in the pack, reported in `results.json` so a reader knows what exists without listing it. */
@@ -838,26 +864,16 @@ function assertNoCredential(what, text) {
  * `spawn` plus a promise restores that, and it is also what the fault scenario's own timers need — a press or
  * a kill scheduled DURING a run is impossible under a blocked loop, which is why no scenario had ever done one.
  * The returned shape is `spawnSync`'s (`status`, `signal`, `stdout`, `stderr`) so every caller reads unchanged.
+ *
+ * The wait ends at the launch's own bound, never at whatever still holds its pipes (`lib/settle-launch.mjs`): it settles on
+ * the main process's `exit` and drains the pipes for a few seconds, where it used to wait for `close`. On Windows the bound's
+ * SIGKILL ends main alone, and at `8080fbda` two processes of the killed main kept its pipes for eight hours, so the run's
+ * wait on the `crlf` launch did too (`docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`).
  */
 function runElectron(args, { timeout, env }) {
-  return new Promise((resolve) => {
-    const child = spawn(electron, args, { cwd: app, windowsHide: !GUI, env });
-    let stdout = '';
-    let stderr = '';
-    let timedOut = false;
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => { stdout += chunk; });
-    child.stderr.on('data', (chunk) => { stderr += chunk; });
-    const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, timeout);
-    child.on('error', (cause) => { clearTimeout(timer); resolve({ status: null, signal: null, stdout, stderr: `${stderr}\n${String(cause)}` }); });
-    child.on('close', (status, signal) => {
-      clearTimeout(timer);
-      // `spawnSync` reports a timeout as a signal with a null status; the callers all read it that way.
-      resolve({ status: timedOut ? null : status, signal: timedOut ? 'SIGKILL' : signal, stdout, stderr, pid: child.pid, timedOut });
-    });
-    launchInFlight = child;
-  });
+  const child = spawn(electron, args, { cwd: app, windowsHide: !GUI, env });
+  launchInFlight = child;
+  return settleLaunch(child, { timeoutMs: timeout });
 }
 /** The launch a scheduled fault acts on. Null between scenarios. */
 let launchInFlight = null;
@@ -884,6 +900,8 @@ async function launch(name, extra, timeoutMs = 180_000) {
    * time is added here so it no longer comes out of the margin (`lib/prompt-typing.mjs`).
    */
   const typingMs = typingAllowanceMs(extra);
+  // The sessions the store holds before this launch, so a launch that fails leaves the one it made to the pack.
+  const sessionsBefore = sessionIds();
   const result = await runElectron([join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     timeout: timeoutMs + typingMs,
     env: {
@@ -902,13 +920,21 @@ async function launch(name, extra, timeoutMs = 180_000) {
   const filtered = filterLog(log, sandbox);
   writeFileSync(join(dir, 'app.filtered.log'), `${filtered.text}\n`);
   scenarioEvidence[name] = { dir: relative(output, dir), lines: log.split('\n').length, filteredLines: filtered.text.split('\n').length, ...filtered.dropped };
+  // A process the launch started that still held its pipes when the wait let go (`lib/settle-launch.mjs`): named, never waited on.
+  if (result.pipesHeld === true) {
+    scenarioEvidence[name].pipesHeldAfterExit = true;
+    console.error(`warning: ${name}: a process the launch started still held its output when its main process had ended; the wait let go of it after the drain`);
+  }
+  // A launch that overran or exited non-zero is a FAILED check of its scenario, and its session is preserved before the
+  // throw ends the run through `runEnding`, which writes `results.json` with every check computed so far (`lib/run-ending.mjs`).
+  const failure = (message) => launchFailure({ name, message, before: sessionsBefore, sessionsAfter: sessionIds, check, preserve: preserveRun, results });
   if (result.status !== 0) {
     const limit = result.timedOut === true
       ? ` (the harness's limit of ${timeoutMs + typingMs} ms, ${typingMs} ms of it for typing the prompt)`
       : '';
-    throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}${limit}; see ${join(dir, 'app.log')}`);
+    throw failure(`${name} exited ${result.status ?? result.signal ?? 'unknown'}${limit}${result.unreaped === true ? ', and its SIGKILL was never reported as an exit' : ''}; see ${join(dir, 'app.log')}`);
   }
-  if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
+  if (!existsSync(png)) throw failure(`${name} produced no screenshot`);
   assertNoCredential(`${name}/app.log`, log);
   // PD-MONITOR-002, live-run findings a71-9 and U4: no launch's log carries one of the restatements `restated-facts.mjs`
   // knows (main's repository, Git view and lease lines, `runSetupSteps`' success, the run host's restated discovery
@@ -1441,51 +1467,67 @@ const results = {
   startedAt: new Date().toISOString(), endpoint: { name: endpoint.name, label: endpoint.label, baseUrl: endpoint.baseUrl, model: endpoint.model, contextTokens: endpoint.contextTokens ?? null, unmetered },
   qualifiedModel: QUALIFIED, accounting: accountingKind, budgetUsd: BUDGET, maxTokens: MAX_TOKENS, keySource, sandbox, codeIntelligenceBundle, scenarios: {},
 };
-function finish(code) {
+/**
+ * The run's one ending (`lib/run-ending.mjs`), which `finish`, the fatal handlers and the signal handlers all go through: a
+ * launch that overran or threw ends the run here too, with every check computed so far written into `results.json`, the
+ * store copied into the pack and the manifest written, and only then the sandbox removed.
+ */
+runEnding = createRunEnding({
   // Every session's tool-call record, read while the sandbox still holds the store (`checkToolRecord`).
-  checkToolRecord();
-  checkCoordinatorTodo();
-  checkIntentClassification();
-  checkRoutingMisses();
-  checkHandOffCuts();
-  checkNearMissEdits();
-  results.finishedAt = new Date().toISOString();
-  results.checks = checks;
-  // The store goes into the pack BEFORE `cleanup` takes the sandbox — on every exit path through `finish`,
-  // including the budget gate's early stop, because a run that stopped early is exactly the one worth reading.
-  results.store = preserveStore();
-  results.evidence = scenarioEvidence;
-  // Closed BEFORE its figures are read: a call still in flight is written `in-flight at close` into its own
-  // scenario's file as the proxy closes, and the count below includes it (live-run finding H-g).
-  closeProxy();
-  // The RUN's figures (`totals`), never the last launch's (`stats`): the `faults` scenario's closing `setFaults([])`
-  // empties the per-launch pair, and reading it here reported no fault fired in a run where three had (finding H4).
-  results.traffic = proxy === null ? { recorded: false, reason: RECORD_TRAFFIC ? 'the proxy could not start' : '--no-record-traffic' } : { recorded: true, proxy: proxy.url, ...proxy.totals() };
-  results.passed = code === 0 && checks.every((c) => c.passed);
-  results.manifest = MANIFEST_FILE;
-  writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
+  readings: [checkToolRecord, checkCoordinatorTodo, checkIntentClassification, checkRoutingMisses, checkHandOffCuts, checkNearMissEdits],
+  check,
+  allPassed: () => checks.every((c) => c.passed),
+  collect: () => {
+    // The store goes into the pack BEFORE `cleanup` takes the sandbox — on every exit path, including the budget gate's
+    // early stop and a launch that failed, because a run that stopped early is exactly the one worth reading.
+    results.store = preserveStore();
+    results.evidence = scenarioEvidence;
+    // Closed BEFORE its figures are read: a call still in flight is written `in-flight at close` into its own
+    // scenario's file as the proxy closes, and the count below includes it (live-run finding H-g).
+    closeProxy();
+    // The RUN's figures (`totals`), never the last launch's (`stats`): the `faults` scenario's closing `setFaults([])`
+    // empties the per-launch pair, and reading it here reported no fault fired in a run where three had (finding H4).
+    results.traffic = proxy === null ? { recorded: false, reason: RECORD_TRAFFIC ? 'the proxy could not start' : '--no-record-traffic' } : { recorded: true, proxy: proxy.url, ...proxy.totals() };
+  },
+  write: ({ passed, ended }) => {
+    // Every check computed so far, whatever ended the run.
+    results.finishedAt = new Date().toISOString();
+    results.checks = checks;
+    results.passed = passed;
+    results.ended = ended;
+    results.manifest = MANIFEST_FILE;
+    writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
+  },
   // The pack's own identity and integrity, written LAST so `results.json` itself is covered: the machine and
   // build that produced it and a sha256 for every file (`lib/evidence-manifest.mjs`). A manifest that cannot be
   // written is a warning, never a failed run: the run's checks are about the product.
-  try {
-    writeEvidenceManifest(output, { kind: 'live-run', label: `${endpoint.name} · ${Object.keys(results.scenarios).join(', ')}` });
-  } catch (cause) {
-    console.error(`warning: the evidence manifest could not be written (${cause instanceof Error ? cause.message : String(cause)}); the pack holds no hashes`);
-  }
-  // A red names the assertion, never the run.
-  // A verdict pushed with no detail prints no dash (`lib/verdict-line.mjs`; at ce5f952 it printed "— undefined").
-  for (const c of checks) console.log(verdictLine(c));
-  const tokens = results.tokens ? `${results.tokens.input} in / ${results.tokens.output} out` : 'none recorded';
-  console.log(`\nspend: ${typeof results.spentUsd === 'number' ? `${results.spentUsd.toFixed(4)} USD (${accountingKind === 'provider' ? "the provider's figure" : 'estimated from the registered prices'}) of the ${BUDGET.toFixed(2)} USD ceiling` : accountingKind === 'unmetered' ? `no money figure for this endpoint; ${tokens}, no ceiling (registered unmetered)` : `no money figure for this endpoint; ${tokens} of the ${MAX_TOKENS} token ceiling`}`);
-  console.log(`evidence: ${output}`);
-  console.log(`manifest: ${join(output, MANIFEST_FILE)} (pnpm evidence verify re-hashes it)`);
-  const packed = Object.entries(scenarioEvidence).filter(([, e]) => Array.isArray(e.wrote) && e.wrote.length > 0);
-  if (packed.length > 0) console.log(`autopsy:  ${packed.map(([name, e]) => `${name} (${e.wrote.join(', ')})`).join('; ')}`);
-  console.log(`          read one with \`node apps/desktop/scripts/autopsy.mjs "${join(output, 'workspace.db')}" <session-id>\`, or the run-autopsy skill over this directory`);
-  cleanup(has('keep'));
-  if (has('keep')) console.log(`sandbox kept (its credential store deleted): ${sandbox}`);
-  console.log(results.passed ? 'live-run PASSED' : 'live-run FAILED');
-  process.exit(results.passed ? 0 : 1);
+  manifest: () => {
+    try {
+      writeEvidenceManifest(output, { kind: 'live-run', label: `${endpoint.name} · ${Object.keys(results.scenarios).join(', ')}` });
+    } catch (cause) {
+      console.error(`warning: the evidence manifest could not be written (${cause instanceof Error ? cause.message : String(cause)}); the pack holds no hashes`);
+    }
+  },
+  report: ({ passed, ended }) => {
+    // A red names the assertion, never the run.
+    // A verdict pushed with no detail prints no dash (`lib/verdict-line.mjs`; at ce5f952 it printed "— undefined").
+    for (const c of checks) console.log(verdictLine(c));
+    const tokens = results.tokens ? `${results.tokens.input} in / ${results.tokens.output} out` : 'none recorded';
+    console.log(`\nspend: ${typeof results.spentUsd === 'number' ? `${results.spentUsd.toFixed(4)} USD (${accountingKind === 'provider' ? "the provider's figure" : 'estimated from the registered prices'}) of the ${BUDGET.toFixed(2)} USD ceiling` : accountingKind === 'unmetered' ? `no money figure for this endpoint; ${tokens}, no ceiling (registered unmetered)` : `no money figure for this endpoint; ${tokens} of the ${MAX_TOKENS} token ceiling`}`);
+    if (ended.by !== 'completion' && ended.by !== 'stop') console.log(`ended: ${ended.by}${ended.scenario === undefined ? '' : ` in ${ended.scenario}`} — ${ended.message}`);
+    console.log(`evidence: ${output}`);
+    console.log(`manifest: ${join(output, MANIFEST_FILE)} (pnpm evidence verify re-hashes it)`);
+    const packed = Object.entries(scenarioEvidence).filter(([, e]) => Array.isArray(e.wrote) && e.wrote.length > 0);
+    if (packed.length > 0) console.log(`autopsy:  ${packed.map(([name, e]) => `${name} (${e.wrote.join(', ')})`).join('; ')}`);
+    console.log(`          read one with \`node apps/desktop/scripts/autopsy.mjs "${join(output, 'workspace.db')}" <session-id>\`, or the run-autopsy skill over this directory`);
+    if (has('keep')) console.log(`sandbox kept (its credential store deleted): ${sandbox}`);
+    console.log(passed ? 'live-run PASSED' : 'live-run FAILED');
+  },
+  cleanup: () => cleanup(has('keep')),
+  exit: (code) => process.exit(code),
+});
+function finish(code) {
+  runEnding(code);
 }
 /** Between scenarios: whichever figure this endpoint allows, and a stop when it crosses its ceiling. */
 async function budgetGate() {

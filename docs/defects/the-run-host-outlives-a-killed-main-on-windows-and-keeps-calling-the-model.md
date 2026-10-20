@@ -16,7 +16,7 @@ about 15:34 UTC. What it had started was not:
 
 The machine was restarted before this was examined (2026-10-20), so the survivors' pids could no longer be matched to a run
 host or a workspace service, and the store went with the sandbox
-([`a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`](a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md)).
+([`a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`](fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md)).
 Not established: why the child's hard per-child timeout (REQ-ORCH-088, 1200 s) and PD-ORCH-004's 30 s bound on what is in
 flight at its expiry did not end the 7,273 s call. The run host's own timers may or may not have run on with main gone; the
 model client's bound is an idle one by design (`packages/model/src/ai-sdk-client.ts`), and a stream that never pauses does

@@ -305,7 +305,11 @@ so a launch that overruns its bound is ended and reported as a failure with its 
 ends with its whole process group: a driven launch leads a group of its own as a bounded one does, and once the main
 process has exited `bounded-launch.mjs`'s `drainGroup` gives the rest of the group three seconds, then SIGKILLs and names
 what is left; `code-intel-proof`'s branch and `live-run`'s `runElectron` keep their own bounds, for the
-reasons `scripts/lib/launch-sites.test.ts` names beside them. **Edges unchanged**:
+reasons `scripts/lib/launch-sites.test.ts` names beside them. Since 2026-10-20 `runElectron`'s wait settles on its child's
+`exit` and a bounded drain of the pipes (`scripts/lib/settle-launch.mjs`), never on a `close` a process of the killed main
+can hold off, and a live run ends through one ending (`scripts/lib/run-ending.mjs`) whatever ends it — the last scenario,
+a ceiling, a launch that overran or threw (a failed check of its scenario, its session preserved first), a fatal error or
+a signal — which writes `results.json` and the evidence manifest before the sandbox goes. **Edges unchanged**:
 `apps/desktop/scripts/**` and `tools/**` are outside the boundary rule, the scripts reach the tools and never the
 reverse, and no product code imports either.
 
@@ -368,7 +372,8 @@ the tools and never the reverse, and an endpoint proof's key needs `scripts/lib/
 verifies `evidence-manifest.json` in an evidence directory (`scripts/lib/evidence-manifest.mjs`): the environment
 block `scripts/lib/environment-facts.mjs` reads — platform, node and Electron, the display, the git head and dirty
 flag, the desktop build's freshness against its sources and the build identifier — and every file with its size
-and sha256. A live run writes one into its pack as it finishes, last, so `results.json` is covered; `verify`
+and sha256. A live run writes one into its pack as it finishes, last, so `results.json` is covered, whatever ended the
+run (`scripts/lib/run-ending.mjs`, 2026-10-20); `verify`
 re-hashes the directory and names every file that changed, went missing or arrived after the manifest was written.
 A `pnpm ui-review` pack's `manifest.json` is the critic protocol's own and is untouched. **Edges unchanged**: the
 tool launches nothing, no product code imports it, and `environment-facts.mjs` is the one reading the preflight's

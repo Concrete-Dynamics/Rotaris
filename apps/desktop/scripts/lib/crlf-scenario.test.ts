@@ -3,9 +3,12 @@
  * whether the bytes the edits left kept every `\r` (PD-TOOLS-014 to PD-TOOLS-018). The shapes below are the ones `edits-proof`
  * reads from the built app, and the ones a broken carry would leave.
  */
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the scripts that run it.
-import { CRLF_DIR, CRLF_FILES, CRLF_PROMPT, crlfVerdicts } from './crlf-scenario.mjs';
+import { CRLF_DIR, CRLF_FILES, CRLF_PROMPT, crlfVerdicts, runCrlfScenario } from './crlf-scenario.mjs';
 // @ts-expect-error — the fixture is plain ESM beside the scripts that run it.
 import { GREET_LINES, LIST_LINES, RENDER_LINES, crlf, lineEndings } from './crlf-fixture.mjs';
 
@@ -141,5 +144,33 @@ describe('the crlf scenario (PD-TOOLS-014 to PD-TOOLS-018 live)', () => {
     expect(failed(crlfVerdicts(run))).toContain('crlf: each haet_edit near miss at match level 3 with an LF old_string names the line endings (PD-TOOLS-014 revision 3, PD-TOOLS-019)');
     run.calls[1] = { ...run.calls[1]!, result: `${near3} The line endings differ too: CRLF in the file and LF in old_string. The quoted text carries the file's line endings. Your content_hash is still current and nothing was written.` };
     expect(failed(crlfVerdicts(run))).toEqual([]);
+  });
+});
+
+describe("the crlf scenario keeps the fixture's bytes when its launch fails (a live-run launch overrun)", () => {
+  it('a launch that throws still leaves the files the run wrote in the pack, and the fixture is removed from the workspace', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rotaris-crlf-scenario-'));
+    try {
+      const workspace = join(root, 'workspace');
+      const pack = join(root, 'pack');
+      mkdirSync(workspace, { recursive: true });
+      const ctx = {
+        workspace, RUN_WAIT_MS: 1_000,
+        scenarioDir: (name: string) => { const dir = join(pack, name); mkdirSync(dir, { recursive: true }); return dir; },
+        // At 8080fbda the launch overran its bound and threw past the copy that followed it.
+        launch: async () => { throw new Error("crlf exited SIGKILL (the harness's limit of 522320 ms)"); },
+        check: () => true, noted: () => {}, readSession: () => null, oneDatabase: () => '', preserveRun: () => {}, budgetGate: async () => {}, results: { scenarios: {} },
+      };
+      await expect(runCrlfScenario(ctx)).rejects.toThrow(/522320 ms/);
+      const kept = join(pack, 'crlf', 'files');
+      for (const path of Object.keys(CRLF_FILES)) {
+        const name = path.slice(CRLF_DIR.length + 1);
+        expect(existsSync(join(kept, name)), name).toBe(true);
+        expect(lineEndings(readFileSync(join(kept, name), 'utf8')).lfOnly, name).toBe(0);
+      }
+      expect(existsSync(join(workspace, CRLF_DIR))).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

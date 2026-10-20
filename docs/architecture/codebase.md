@@ -879,7 +879,7 @@ all three and deleted two of them with the sandbox — so each scenario now leav
 store is copied out before the sandbox goes. Until then every defect that skill found came from a session driven
 by hand, and the live run had found exactly one defect in its life, which was its own.
 
-*First Windows live run, 2026-10-20 (the Windows ARM64 session; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6, at `00957641`; packs `2026-10-20T07-55-35-723Z` (terminal, frictions) and `2026-10-20T08-14-16-333Z` (crlf), endpoint `katalyst`, unmetered; [`live-00957641-windows-terminal-frictions-crlf-autopsy.md`](live-runs/live-00957641-windows-terminal-frictions-crlf-autopsy.md)):* the key came from the DPAPI registry file, as the run's key-source line said; `terminal` passed every check on its 11 win32 shapes, `crlf` (its first run anywhere) passed, and `frictions` failed twice — an upstream stream reset, and a child that never sent its SIGINT ([`a-signal-sent-without-session-action-is-read-as-a-query-and-dropped-silently.md`](../defects/a-signal-sent-without-session-action-is-read-as-a-query-and-dropped-silently.md)). The first attempt (`2026-10-15T15-16-50-373Z`) lost its verdicts to a `crlf` overrun ([`a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`](../defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md)).
+*First Windows live run, 2026-10-20 (the Windows ARM64 session; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6, at `00957641`; packs `2026-10-20T07-55-35-723Z` (terminal, frictions) and `2026-10-20T08-14-16-333Z` (crlf), endpoint `katalyst`, unmetered; [`live-00957641-windows-terminal-frictions-crlf-autopsy.md`](live-runs/live-00957641-windows-terminal-frictions-crlf-autopsy.md)):* the key came from the DPAPI registry file, as the run's key-source line said; `terminal` passed every check on its 11 win32 shapes, `crlf` (its first run anywhere) passed, and `frictions` failed twice — an upstream stream reset, and a child that never sent its SIGINT ([`a-signal-sent-without-session-action-is-read-as-a-query-and-dropped-silently.md`](../defects/a-signal-sent-without-session-action-is-read-as-a-query-and-dropped-silently.md)). The first attempt (`2026-10-15T15-16-50-373Z`) lost its verdicts to a `crlf` overrun ([`a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`](../defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md)).
 
 **What the model was sent, and what came back, is recorded by a loopback proxy** the sandbox's `base_url` points
 at (`apps/desktop/scripts/lib/model-traffic.mjs`, `--no-record-traffic` to bypass). The product emits one line
@@ -911,6 +911,12 @@ from a loop that was free: the same shape as 2026-09-12's finding that a proof w
 callers read; the regression guard asserts **both legs**, that the `spawnSync` child is not served and the
 `spawn` child is, because without the first the second could pass for an unrelated reason
 (`docs/defects/fixed/the-recording-proxy-could-not-answer-while-spawnsync-blocked.md`).
+*Since 2026-10-20 it no longer resolves on `close`:* on Windows the bound's SIGKILL ends main alone, and at `8080fbda`
+two processes of the killed main kept its pipes for eight hours, so the run waited as long. It settles on the child's
+`exit` and a five-second drain of the pipes (`scripts/lib/settle-launch.mjs`), and a launch that overruns or exits
+non-zero is a failed check of its scenario, its session preserved, the run ended through `scripts/lib/run-ending.mjs`,
+which writes `results.json` and the manifest whatever ends it
+(`docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`).
 
 **A proxy in the path can also misbehave on purpose, which is the `faults` scenario.** A rule names a kind
 (`status`, `cut`, `stall`, `malformed`), the path it watches and the **1-based index** of the call it fires at,

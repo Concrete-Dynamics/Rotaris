@@ -14,6 +14,16 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-10-20**
+
+**The live run ends through one ending, and its wait on a launch ends at the launch's bound (2026-10-20; loc1).**
+`01-component-view.md`'s harness paragraph now states it: `live-run`'s `runElectron` settles on its child's `exit` and a bounded
+drain of the pipes (`scripts/lib/settle-launch.mjs`), and every way a live run ends — the last scenario, a ceiling, a launch that
+overran or threw, a fatal error, a signal — goes through `scripts/lib/run-ending.mjs`, which writes `results.json` and the
+evidence manifest before the sandbox goes; the evidence-manifest section says it is written whatever ended the run
+(`docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`). No package, edge or process
+changed.
+
 Last reconciled with the code: **2026-10-19**
 
 **The handoff — one closing shape (2026-10-19).** `docs/clean-room/agent-workflow.md` gains "The handoff": every closing report — an agent's to the owner, a lane's to the next lane, a landed `pnpm worktree:land` run — is one heading and four labelled lines (Zustand, Beweise, Offen, Nächster Schritt), fixed in their order and written in the report's own language; `01-component-view.md`'s worktree section now states that a landed run closes with it and a run stopped before the push does not. AGENTS.md points at it, the UI skills close with it, and `orchestrated-build`'s final report is the shape (its CHANGELOG entry). No package, edge or process changed.

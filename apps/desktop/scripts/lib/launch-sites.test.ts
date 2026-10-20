@@ -213,7 +213,9 @@ describe('R-062: the proof harness platform rules, kept at every script', () => 
       // close is killed and reported as `killed-after-30s`, never as a clean exit.
       'code-intel-proof.mjs': 'the branch',
       // The live run: its timeout sends SIGKILL and reports `status` null with `signal` SIGKILL, never a clean exit,
-      // and its fault scenarios act on the child in flight (`launchInFlight`), which `spawnBounded` does not hand out.
+      // and its fault scenarios act on the child in flight (`launchInFlight`). Since 2026-10-20 its wait settles on the
+      // child's `exit` and a bounded drain of the pipes (`lib/settle-launch.mjs`), never on a `close` that a process of the
+      // killed main can hold off for hours (docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md).
       'live-run.mjs': 'runElectron',
     };
     const found = all.flatMap((f) => launches(relative(SCRIPTS, f).split(sep).join('/'), readFileSync(f, 'utf8')));

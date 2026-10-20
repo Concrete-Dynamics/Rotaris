@@ -52,7 +52,12 @@ No proof hangs on a launch that overruns. Every launch a script starts itself go
 `lib/bounded-launch.mjs`'s `spawnBounded`, and a driven one through the driver's `stopApp`. Two launches are neither,
 and `lib/launch-sites.test.ts` names them with their reasons: `code-intel-proof`'s branch, a stdio server whose RPC
 client fails every request when it dies or hangs, and `live-run`'s `runElectron`, whose bound is SIGKILL reported as
-a signal, never as a clean exit. Any other bare `spawn` of Electron fails that test. At its bound the
+a signal, never as a clean exit, and whose wait settles on the main process's exit and a bounded drain of its pipes
+(`lib/settle-launch.mjs`), so a process of a killed main that keeps them open cannot hold the run past its bound. A
+live-run launch that overruns or exits non-zero is a failed check of its scenario, its session preserved, and the run
+ends through `lib/run-ending.mjs`, which writes `results.json` and the manifest whatever ends it
+([note](docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md)). Any other bare
+`spawn` of Electron fails that test. At its bound the
 application is sent SIGTERM with its pipes still open, and it answers: its quit path runs and it exits within a
 fraction of a second. SIGKILL follows a grace only if it does not. The proof then fails with the launch's last log
 lines. `lib/launch-sites.test.ts` refuses a `spawnSync` launch of Electron: its timeout closes the pipes as it signals,
@@ -420,7 +425,8 @@ Evidence lands in `.live-run/runs/<stamp>/` (gitignored). **Packs accumulate** �
 newest and `--keep-runs` (default 10) prunes the oldest — so two runs can be compared, which they could not be
 while each run emptied the directory.
 
-At the pack's root: `results.json` with every check, the accounting kind and the spend; `agents.yaml` as the run
+At the pack's root — whatever ended the run, a launch that overran or threw and a signal included (`results.json`'s
+`ended` says which, `lib/run-ending.mjs`) — `results.json` with every check, the accounting kind and the spend; `agents.yaml` as the run
 saw it; `build.log`; **`workspace.db`, the store copied out of the sandbox before it is deleted**; and
 **`evidence-manifest.json`** — the platform, node and Electron, the git head and dirty flag, the measured build's
 freshness against its sources, and every file's size and sha256, written last so `results.json` itself is covered

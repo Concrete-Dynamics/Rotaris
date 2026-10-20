@@ -41,7 +41,7 @@ and in [ADR-0035](../../architecture/adr/0035-the-bundled-code-intelligence-runt
 beside the correction.
 
 **Not repaired here:** two other proofs open the checkout the same way, and were recorded separately in
-[`workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`](../workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md).
+[`workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`](workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md).
 The capture seam's immediate exit still sends no `shutdown`. That is a verification seam, and a step it leaves is
 OQ-169's ruled case.
 

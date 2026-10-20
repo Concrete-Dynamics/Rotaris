@@ -40,6 +40,11 @@
  * rather than from `/proc/<pid>/environ`, because Chromium rewrites its processes' title over the region that file
  * reads, so it shows neither the variables a utility process started with nor their absence.
  *
+ * The first launch carries no workspace, so it opens the directory it runs in (REQ-SHELL-010 (c)): a directory of the
+ * proof's own, emptied before it and in no repository (`lib/working-directory.mjs`), which it is asserted to have opened.
+ * Until plan `loc1` it ran in `apps/desktop`, opened the checkout and set up code intelligence in the product's source
+ * (`docs/defects/fixed/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`).
+ *
  *   node apps/desktop/scripts/updater-proof.mjs [--skip-build]
  *
  * Evidence: `.proof/updater-proof/` — the application log, the proxy record, the net-log and `report.json`.
@@ -50,6 +55,7 @@ import { join } from 'node:path';
 import { startApp } from './lib/driver.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { app, buildDesktop, cleanEnvironment, electron, evidenceDirectory, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
+import { assertOpened, emptyWorkingDirectory, setupResidue } from './lib/working-directory.mjs';
 
 const output = evidenceDirectory('updater-proof');
 rmSync(output, { recursive: true, force: true });
@@ -78,8 +84,12 @@ console.log(`proxy sink listening on 127.0.0.1:${port}`);
 const INHERITED_APPIMAGE = '/tmp/SomeEditor-x86_64.AppImage';
 const INHERITED_PORTABLE = '/tmp/Rotaris-0.1.0-windows-x64-portable.exe';
 const netLog = join(output, 'netlog.json');
+// The launch carries no workspace, so it opens where it runs: here, never the checkout's `apps/desktop`.
+const workingDirectory = emptyWorkingDirectory(join(output, 'working-directory'));
+const residueBefore = setupResidue(app);
 const started = await startApp({
   root: output,
+  cwd: workingDirectory,
   electronArgs: [`--proxy-server=127.0.0.1:${port}`, `--log-net-log=${netLog}`],
   extra: { ROTARIS_APP_LOG_LEVEL: 'info', APPIMAGE: INHERITED_APPIMAGE, ROTARIS_PORTABLE_ARTIFACT: INHERITED_PORTABLE },
 });
@@ -127,6 +137,9 @@ check('no line records a request to the feed endpoint (REQ-STARTUP-150)', reques
 check('the proxy sink saw no connection for github.com — no update request left the process (REQ-STARTUP-106)', githubConnections.length === 0, `${connections.length} connection(s) in all${connections.length > 0 ? `: ${connections.map((c) => c.firstLine || '(no request line)').join(' | ')}` : ''}`);
 check('the proxy sink saw NO connection at all from launch to first paint and an orderly quit — the runtime makes no request of its own (REQ-STARTUP-160, REQ-SHELL-005)', connections.length === 0, connections.length === 0 ? `0 connections; the net-log names ${netLogUrls.length} http(s) URL(s)` : `${connections.map((c) => c.firstLine || '(no request line)').join(' | ')}; net-log URLs: ${netLogUrls.join(' | ') || '(none)'}`);
 check('the launch quit cleanly after the check (REQ-STARTUP-046: nothing was in flight to wait for)', /quit: exiting with status 0/.test(log), lines.filter((l) => l.includes('quit:')).join(' / '));
+let openedOwn;
+try { openedOwn = { ok: true, detail: assertOpened(log, workingDirectory, 'the first launch') }; } catch (cause) { openedOwn = { ok: false, detail: cause instanceof Error ? cause.message : String(cause) }; }
+check('the launch with no workspace argument opened its own empty working directory, never the checkout (REQ-SHELL-010 (c))', openedOwn.ok, openedOwn.detail);
 
 /**
  * Stage 2 — what the product's children inherit (REQ-STARTUP-106, REQ-STARTUP-147). A capture launch: the workspace's
@@ -164,6 +177,9 @@ const has = (name) => terminalEnvironment !== null && terminalEnvironment.some((
 check('the scripted run\'s terminal call wrote its shell\'s environment (the launch ran a tool through the run host)', terminalEnvironment !== null, terminalEnvironment === null ? `no ${environmentFile}; app exit ${launched.status ?? launched.signal}, see children/app.log` : `${terminalEnvironment.length} line(s)`);
 check('the tool\'s shell carries neither APPIMAGE nor ROTARIS_PORTABLE_ARTIFACT, although the launch was started with both (REQ-STARTUP-106, REQ-STARTUP-147)', terminalEnvironment !== null && !has('APPIMAGE') && !has('ROTARIS_PORTABLE_ARTIFACT'), terminalEnvironment === null ? '(not written)' : `APPIMAGE ${has('APPIMAGE') ? 'PRESENT' : 'absent'}, ROTARIS_PORTABLE_ARTIFACT ${has('ROTARIS_PORTABLE_ARTIFACT') ? 'PRESENT' : 'absent'}`);
 check('and it still carries the launch\'s other variables — the take removes those two names and nothing else', has('ROTARIS_APP_LOG_LEVEL') && has('ROTARIS_INTENT_SCRIPT'), terminalEnvironment === null ? '(not written)' : `ROTARIS_APP_LOG_LEVEL ${has('ROTARIS_APP_LOG_LEVEL') ? 'present' : 'ABSENT'}, ROTARIS_INTENT_SCRIPT ${has('ROTARIS_INTENT_SCRIPT') ? 'present' : 'ABSENT'}`);
+
+const appeared = setupResidue(app).filter((name) => !residueBefore.includes(name));
+check('no launch opened the checkout: its `apps/desktop` gained no code-intelligence setup residue while the proof ran', appeared.length === 0, appeared.length === 0 ? `before ${JSON.stringify(residueBefore)}, after the same` : `${appeared.join(' and ')} appeared in ${app}`);
 
 writeFileSync(join(output, 'proxy-record.json'), `${JSON.stringify(connections, null, 2)}\n`);
 writeFileSync(join(output, 'report.json'), `${JSON.stringify({ at: new Date().toISOString(), proxyPort: port, environment: { APPIMAGE: INHERITED_APPIMAGE, ROTARIS_PORTABLE_ARTIFACT: INHERITED_PORTABLE }, checkLines, requestLines, terminalEnvironment: terminalEnvironment === null ? null : { APPIMAGE: has('APPIMAGE'), ROTARIS_PORTABLE_ARTIFACT: has('ROTARIS_PORTABLE_ARTIFACT'), ROTARIS_APP_LOG_LEVEL: has('ROTARIS_APP_LOG_LEVEL') }, connections: connections.length, githubConnections: githubConnections.length, netLogUrls, checks }, null, 2)}\n`);

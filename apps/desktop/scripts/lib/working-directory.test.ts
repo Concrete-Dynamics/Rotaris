@@ -4,12 +4,12 @@
  * `settings-proof` ran four such launches in `apps/desktop`, and each opened the checkout and indexed it.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { app, repo } from './harness.mjs';
-import { assertOpened, emptyWorkingDirectory, enclosingRepository, openedWorkspace } from './working-directory.mjs';
+import { assertOpened, emptyWorkingDirectory, enclosingRepository, openedWorkspace, SETUP_RESIDUE, setupResidue } from './working-directory.mjs';
 
 const scratch = join(repo, '.proof', `working-directory-test-${process.pid}`);
 const elsewhere: string[] = [];
@@ -74,5 +74,23 @@ describe('openedWorkspace / assertOpened — what the launch opened, from its lo
   it('fails a log that names no opened workspace, rather than passing it', () => {
     expect(openedWorkspace('[main …] info    instance claimed\n')).toBeNull();
     expect(() => assertOpened('[main …] info    instance claimed\n', '/p', 'tools')).toThrow('tools: the log names no workspace');
+  });
+});
+
+describe('setupResidue — what the code-intelligence setup left in a directory', () => {
+  it('names `.rotaris` and `.serena` where they are, which a launch that opened the directory leaves there', () => {
+    const dir = join(scratch, 'opened');
+    mkdirSync(dir, { recursive: true });
+    expect(setupResidue(dir)).toEqual([]);
+    // What `workspace-proof`'s `cold` launch left in the checkout's `apps/desktop` before plan `loc1`'s repair.
+    mkdirSync(join(dir, '.rotaris'));
+    expect(setupResidue(dir)).toEqual(['.rotaris']);
+    mkdirSync(join(dir, '.serena'));
+    expect(setupResidue(dir)).toEqual(['.rotaris', '.serena']);
+  });
+
+  it('reads exactly the two names `apps/desktop/.gitignore` exists for', () => {
+    const ignored = readFileSync(join(app, '.gitignore'), 'utf8').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => l.replace(/\/$/, ''));
+    expect([...SETUP_RESIDUE].sort()).toEqual(ignored.sort());
   });
 });

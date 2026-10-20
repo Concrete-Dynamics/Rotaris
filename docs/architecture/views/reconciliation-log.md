@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-20**
 
+**workspace-proof's and updater-proof's launches with no workspace argument run in a directory of their own (plan `loc1`,
+`proof-cwd`; REQ-SHELL-010, REQ-WORKSPACE-007).** `01-component-view.md` names `scripts/lib/working-directory.mjs` as those
+two proofs' too, its `setupResidue`, and `lib/driver.mjs`'s `startApp` `cwd`, which runs a driven launch in the directory its
+caller names and in `apps/desktop` otherwise. No other view changed: the product is unchanged.
+
 **The live run takes the application log at `debug` or `info` only (2026-10-20; loc1).** `02-process-view.md`'s application-log
 paragraph now says the live-run harness sets `ROTARIS_APP_LOG_LEVEL` from `--app-log-level`, to `debug` or `info` only, since
 its readings read the `info` lines a higher threshold drops (`scripts/lib/app-log-level.mjs`; `duress-checks.mjs`'s

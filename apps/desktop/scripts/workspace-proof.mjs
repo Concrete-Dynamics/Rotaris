@@ -17,6 +17,13 @@
  *
  * Evidence under `.proof/workspace-proof/`: one `app.log` per launch and `results.json`. `--skip-build` skips the build.
  *
+ * The two launches that carry no workspace (`cold`, and `gone`, whose remembered folder has gone) open the directory they
+ * run in (REQ-SHELL-010 (c), REQ-WORKSPACE-007). Each runs in a directory of its own, emptied before it and in no
+ * repository (`lib/working-directory.mjs`), and is asserted to have opened that directory. Until plan `loc1` they ran in
+ * `apps/desktop`, opened the checkout and set up code intelligence in the product's source
+ * (`docs/defects/fixed/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`); the
+ * last check holds that the checkout's `apps/desktop` gained no `.rotaris` or `.serena` while the proof ran.
+ *
  * A trap this file's own first execution fell into, recorded so the next harness does not: the driver's two
  * reading ops answer in DIFFERENT shapes. `command` and `windows` resolve an already-parsed value (the client
  * returns `reply.value`), while `eval` resolves a string — which is why every `eval` here evaluates a
@@ -28,10 +35,13 @@ import { join, posix } from 'node:path';
 import { app as appDirectory, buildDesktop, cleanEnvironment, dataDirFor, electron, evidenceDirectory, findDatabases, hostSwitches, mainEntry, proofIsolationEnv, scratchHomeFor } from './lib/harness.mjs';
 import { exitWithin, overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { endLaunch, startApp } from './lib/driver.mjs';
+import { assertOpened, emptyWorkingDirectory, setupResidue } from './lib/working-directory.mjs';
 
 const output = evidenceDirectory('.workspace-proof');
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
+/** What the code-intelligence setup had left in the checkout's `apps/desktop` before this proof launched anything. */
+const residueBefore = setupResidue(appDirectory);
 if (!process.argv.includes('--skip-build')) buildDesktop(output);
 
 const results = [];
@@ -196,7 +206,7 @@ async function closeAll() {
  * One launch of the built app, with its own preference store unless `preferences` is supplied, so a scenario that
  * asserts what was remembered cannot be contaminated by the one before it.
  */
-async function launch(name, { workspace, folders = [], extra = {}, preferences } = {}) {
+async function launch(name, { workspace, folders = [], extra = {}, preferences, cwd } = {}) {
   // At most ONE app alive at a time. The first version kept every launch open until the end, which cost two
   // things: seven Electron processes competing for the machine while a 650 ms budget was being measured, and a
   // crash — a finished launch's driver socket rejects its pending promises when the app exits, and with nobody
@@ -210,6 +220,7 @@ async function launch(name, { workspace, folders = [], extra = {}, preferences }
   const started = await startApp({
     root,
     ...(workspace === undefined ? {} : { workspace }),
+    ...(cwd === undefined ? {} : { cwd }),
     timeoutMs: 90_000,
     extra: { ...(folders.length > 0 ? { ROTARIS_CAPTURE_PROJECT_FOLDER: folders.join(';;') } : {}), ...extra },
   });
@@ -277,6 +288,15 @@ const windowsOf = async (d) => {
   return Array.isArray(r?.windows) ? r.windows : [];
 };
 const logOf = (started) => (existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '');
+/**
+ * The directory a launch with no workspace argument runs in, and so opens: emptied, in no repository, its own.
+ * `openedOwn` reads from the launch's log whether it opened exactly that directory (`assertOpened`), as a verdict.
+ */
+const ownWorkingDirectory = (name) => emptyWorkingDirectory(join(output, `app-${name}`, 'working-directory'));
+const openedOwn = (started, directory, name) => {
+  try { return { ok: true, detail: `it opened its own working directory ${assertOpened(logOf(started), directory, name)}` }; }
+  catch (cause) { return { ok: false, detail: cause instanceof Error ? cause.message : String(cause) }; }
+};
 const preferenceFile = (started) => {
   const file = join(started.preferences, 'preferences.json');
   return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
@@ -329,14 +349,16 @@ try {
   // 1 / 2 — cold launch, no argv, nothing remembered: the working directory, then the deferred chooser cancelled.
   // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
   {
-    const s = await launch('cold', { folders: ['(cancel)'] });
+    const workingDirectory = ownWorkingDirectory('cold');
+    const s = await launch('cold', { folders: ['(cancel)'], cwd: workingDirectory });
     await sleep(2_500);
     const log = logOf(s);
     const hello = await s.driver.command({ kind: 'shell.hello' });
     const workspace = hello?.value?.workspace ?? '(unread)';
+    const own = openedOwn(s, workingDirectory, 'cold');
     check('REQ-SHELL-010 (c): a launch carrying nothing opens on the working directory, not on the sentinel',
-      workspace !== '(no workspace)' && workspace !== '(unread)',
-      `the window is open on ${workspace}`);
+      own.ok && workspace !== '(no workspace)' && workspace !== '(unread)',
+      `the window is open on ${workspace}; ${own.detail}`);
 
     const deferred = elapsedBetween(log, 'loaded for', 'capture: project folder chooser');
     check('REQ-SHELL-011: the first-launch chooser is deferred at least 650 ms past the window being shown',
@@ -366,12 +388,14 @@ try {
   }
   {
     const gone = join(output, 'deleted-project');
-    const s = await launch('gone', { preferences: { 'workspace/lastOpened': gone }, folders: ['(cancel)'] });
+    const workingDirectory = ownWorkingDirectory('gone');
+    const s = await launch('gone', { preferences: { 'workspace/lastOpened': gone }, folders: ['(cancel)'], cwd: workingDirectory });
     await sleep(2_500);
     const hello = await s.driver.command({ kind: 'shell.hello' });
+    const own = openedOwn(s, workingDirectory, 'gone');
     check('REQ-WORKSPACE-007: a remembered folder that no longer exists falls back and is NOT overwritten',
-      String(hello?.value?.workspace ?? '').toLowerCase() !== gone.toLowerCase() && preferenceFile(s)['workspace/lastOpened'] === gone,
-      `open on ${hello?.value?.workspace}; the stored value is still ${JSON.stringify(preferenceFile(s)['workspace/lastOpened'])}`);
+      own.ok && String(hello?.value?.workspace ?? '').toLowerCase() !== gone.toLowerCase() && preferenceFile(s)['workspace/lastOpened'] === gone,
+      `open on ${hello?.value?.workspace}; ${own.detail}; the stored value is still ${JSON.stringify(preferenceFile(s)['workspace/lastOpened'])}`);
   }
 
   // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1255,6 +1279,10 @@ try {
   check('the harness ran to the end', false, `it threw instead: ${cause instanceof Error ? cause.message : String(cause)}`);
 } finally {
   await closeAll();
+  const appeared = setupResidue(appDirectory).filter((name) => !residueBefore.includes(name));
+  check('no launch opened the checkout: its `apps/desktop` gained no code-intelligence setup residue while the proof ran',
+    appeared.length === 0,
+    appeared.length === 0 ? `before ${JSON.stringify(residueBefore)}, after the same` : `${appeared.join(' and ')} appeared in ${appDirectory}`);
   writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures }, null, 2)}\n`);
 }
 

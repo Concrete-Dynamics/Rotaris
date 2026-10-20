@@ -8,11 +8,17 @@
  * `shutdown`, so the index's serena and pyright processes were still running more than 6 s after the launch
  * (`docs/defects/fixed/settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`).
  *
+ * `workspace-proof`'s `cold` and `gone` launches and `updater-proof`'s first stage did the same through the driver's
+ * `startApp`, which ran every launch in `apps/desktop`; since plan `loc1` they name a directory of their own as its `cwd`
+ * (`docs/defects/fixed/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`).
+ *
  * `emptyWorkingDirectory` makes the directory such a launch runs in: new, empty, and in no git repository. Under the
  * checkout's `.proof/` the harness's git bar (`barEnclosingRepository`) makes that so. `openedWorkspace` reads what the
- * launch opened from its log, so a proof can assert that it opened that directory and nothing else.
+ * launch opened from its log, so a proof can assert that it opened that directory and nothing else. `setupResidue` names
+ * what the code-intelligence setup leaves in a directory it ran in, so a proof can show the checkout gained none.
  */
-import { mkdirSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { REDIRECTING } from '../../../../tools/build-id/build-id.mjs';
 
@@ -57,4 +63,14 @@ export function assertOpened(log, directory, name) {
   if (opened === null) throw new Error(`${name}: the log names no workspace its main window opened`);
   if (opened !== directory) throw new Error(`${name} opened ${opened}, not its empty working directory ${directory}`);
   return opened;
+}
+
+/**
+ * What the code-intelligence setup leaves in a workspace it ran in: the product's `.rotaris` and the tool server's
+ * `.serena`, the two names `apps/desktop/.gitignore` exists for. A proof reads it for `apps/desktop` before and after its
+ * launches: a name that appeared is a launch that opened the checkout.
+ */
+export const SETUP_RESIDUE = Object.freeze(['.rotaris', '.serena']);
+export function setupResidue(directory) {
+  return SETUP_RESIDUE.filter((name) => existsSync(join(directory, name)));
 }

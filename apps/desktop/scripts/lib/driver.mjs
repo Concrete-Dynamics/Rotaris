@@ -124,8 +124,14 @@ export async function connect(endpointFile, { timeoutMs = 60_000 } = {}) {
  *
  * `detached` keeps the app alive after the caller exits — what the CLI's `start` needs and a proof never wants.
  * The log is a file rather than a pipe because the app outlives the process that started it.
+ *
+ * `cwd` is the directory the launch runs in, `apps/desktop` unless the caller names one. A launch with no `workspace`
+ * (or a remembered one that is gone) opens it (REQ-SHELL-010 (c), REQ-WORKSPACE-007), so such a launch names a directory
+ * of its own, emptied and in no repository (`lib/working-directory.mjs`), and never runs here: here it opened the
+ * checkout's `apps/desktop` and set up code intelligence in the product's source
+ * (`docs/defects/fixed/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`).
  */
-export async function startApp({ root, workspace, extra = {}, electronArgs = [], detached = false, dialect = 'scripted', timeoutMs = 60_000 }) {
+export async function startApp({ root, workspace, cwd = appDirectory, extra = {}, electronArgs = [], detached = false, dialect = 'scripted', timeoutMs = 60_000 }) {
   mkdirSync(root, { recursive: true });
   const endpointFile = join(root, 'endpoint.json');
   const logFile = join(root, 'app.log');
@@ -150,7 +156,7 @@ export async function startApp({ root, workspace, extra = {}, electronArgs = [],
     ...extra,
   };
   const child = spawn(electron, [mainEntry, ...hostSwitches, ...electronArgs, ...(workspace ? [workspace] : [])], {
-    cwd: appDirectory,
+    cwd,
     detached: group,
     windowsHide: false,
     stdio: ['ignore', out, out],

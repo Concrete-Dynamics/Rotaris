@@ -502,6 +502,168 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     expect(warnings.some((line) => line.includes('final step belt fired'))).toBe(false);
   });
 
+  /*
+   * PD-ORCH-017 on every construction of a child's turn: "fresh, resumed, nested and continued children". Each case below
+   * gives ONE child turn more than 100 model steps (the former belt's bound) along a different route into the child's
+   * execution, so a numeric cap on any of them ends that turn `partial` at step 101 with the belt's warning, and the child
+   * settles `succeeded` with an empty `final_response` (the repair of
+   * `docs/defects/fixed/the-final-step-belt-ends-a-working-child-as-succeeded-with-no-final-response.md`).
+   */
+  describe('PD-ORCH-017 (REQ-ORCH-088, REQ-ORCH-112): no route into a child\'s turn carries a fixed model-step cap', () => {
+    /** More than the former belt's 100: the turn under test takes `LONG` working steps and answers on the next. */
+    const LONG = 105;
+    const tick = () => new Promise((r) => setTimeout(r, 10));
+    const settle = async (until: () => boolean) => { for (let i = 0; i < 400 && !until(); i += 1) await new Promise((r) => setTimeout(r, 5)); };
+    const gate = () => { let open!: () => void; const p = new Promise<void>((r) => { open = r; }); return { p, open }; };
+    const textOf = (m: ModelRequest['messages'][number]): string => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
+    /** The agent's first user message, its payload, which names its task. */
+    const payloadOf = (req: ModelRequest): string => textOf(req.messages.find((m) => m.role === 'user')!);
+    const SUMMARY = answer('{"summary":"Finished.","key_findings":[],"tags":[]}');
+    const work = (agent: string, step: number): ScriptedCall => toolCalls([{ callId: `${agent}-${step}`, name: 'write_file', args: { path: `${agent}-${step}.txt`, content: 'done' } }]);
+    const written = (name: string, args: Record<string, unknown>): Promise<PortToolResult> | undefined => (name === 'write_file' ? Promise.resolve({ text: 'Written.', isError: false, status: 'ok', durationMs: 1, label: name, args }) : undefined);
+    const byName = (sid: SessionId, name: string): ChildRow => children(sid).find((c) => c.canonical_name === name)!;
+    /** The child settled from its own words: succeeded, its last answer its final response, and the belt never fired. */
+    const expectUnbelted = (row: ChildRow, final: string) => {
+      expect(row.state).toBe('succeeded');
+      expect(JSON.parse(row.report!)).toMatchObject({ status: 'succeeded', final_response: final });
+      expect(warnings.filter((line) => line.includes('final step belt fired'))).toEqual([]);
+    };
+
+    it('a child followed up by session_id (PD-ORCH-005 clause 22) works past 100 model steps in its follow-up turn', async () => {
+      let sid = '' as SessionId;
+      let step = 0;
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'build', task: 'TASK: build', run_in_background: false } }]);
+          if (turn === 2) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'build', task: 'TASK: more', session_id: byName(sid, 'build').task_id, run_in_background: false } }]);
+          return answer('done');
+        }
+        if (persona === 'summariser') return SUMMARY;
+        step += 1;
+        // Its first execution: one call and an answer. Its follow-up: steps 3 to 107 work, 108 answers.
+        if (step === 1) return work('build', step);
+        if (step === 2) return answer('First part built.');
+        return step <= 2 + LONG ? work('build', step) : answer('Followed up and built every part.');
+      }, { tool: written });
+      sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(step).toBe(3 + LONG);
+      expect(children(sid)).toHaveLength(1);
+      expect(byName(sid, 'build').tool_calls).toBe(1 + LONG);
+      expectUnbelted(byName(sid, 'build'), 'Followed up and built every part.');
+    });
+
+    it('a nested child, and its parent\'s turn resumed with that child\'s report (REQ-ORCH-093), each work past 100 model steps', async () => {
+      let mid = 0;
+      let leaf = 0;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'mid', task: 'TASK: mid', run_in_background: false } }]) : answer('done');
+        if (persona === 'summariser') return SUMMARY;
+        if (payloadOf(req).includes('TASK: leaf')) { leaf += 1; return leaf <= LONG ? work('leaf', leaf) : answer('Leaf built every part.'); }
+        mid += 1;
+        // Its first turn delegates the leaf and ends; its turn resumed with the leaf's report works steps 3 to 107.
+        if (mid === 1) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'leaf', task: 'TASK: leaf' } }], 'Delegating.');
+        if (mid === 2) return answer('Waiting on leaf.');
+        return mid <= 2 + LONG ? work('mid', mid) : answer('Mid built every part after the leaf.');
+      }, { tool: written });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect([mid, leaf]).toEqual([3 + LONG, 1 + LONG]);
+      expect(byName(sid, 'leaf').depth).toBe(2);
+      expectUnbelted(byName(sid, 'leaf'), 'Leaf built every part.');
+      expectUnbelted(byName(sid, 'mid'), 'Mid built every part after the leaf.');
+    });
+
+    it('a child resumed from its record after a pause (PD-ORCH-005 clause 4) works past 100 model steps in its resumed turn', async () => {
+      const held = gate();
+      let step = 0;
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'long', task: 'TASK: long' } }]) : answer('done');
+        if (persona === 'summariser') return SUMMARY;
+        step += 1;
+        // The step in flight when the pause is accepted asks for a call the pause never runs; the continue resumes it.
+        if (step === 1) return { parts: [{ hold: held.p }, ...work('long', step).parts] };
+        return step <= 1 + LONG ? work('long', step) : answer('Resumed and built every part.');
+      }, { tool: written });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => step === 1);
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      held.open();
+      expect((await sessions.running(sid)!).status).toBe('interrupted');
+      expect(byName(sid, 'long')).toMatchObject({ state: 'paused', resume_state: 'running' });
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(step).toBe(2 + LONG);
+      expectUnbelted(byName(sid, 'long'), 'Resumed and built every part.');
+    });
+
+    it('a continuation of a child cut off while making progress (PD-ORCH-004) works past 100 model steps', async () => {
+      const read = gate();
+      const spoke = gate();
+      let sid = '' as SessionId;
+      let rest = 0;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'build', task: 'TASK: build' } }]);
+          if (turn === 3) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'build-rest', task: 'TASK: continue', continuation_of: byName(sid, 'build').task_id } }]);
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return SUMMARY;
+        if (payloadOf(req).includes('TASK: continue')) { rest += 1; return rest <= LONG ? work('rest', rest) : answer('Continued and built every part.'); }
+        // `build`: a write and a read that completes inside the final 90 s, then a step its limit's landing cuts off.
+        if (!req.messages.some((m) => m.role === 'assistant')) return toolCalls([{ callId: 'w1', name: 'write_file', args: { path: 'src/a.ts', content: 'a' } }, { callId: 'r1', name: 'read_file', args: { path: 'gate' } }]);
+        return { parts: [{ hold: spoke.p }, { part: { kind: 'text', delta: 'I wrote a and was reading on' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+      }, { tool: (name, args) => (name === 'read_file' ? read.p.then((): PortToolResult => ({ text: 'ok', isError: false, status: 'ok', durationMs: 1, label: name, args })) : written(name, args)) });
+      sid = (sessions.start(dal, '/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      clock.advance(1_110_000);
+      read.open();
+      await tick();
+      clock.advance(90_000);
+      spoke.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(JSON.parse(byName(sid, 'build').report!)).toMatchObject({ status: 'failed', cut_off: expect.any(Object) });
+      expect(byName(sid, 'build-rest').continuation_of).toBe(byName(sid, 'build').task_id);
+      expect(rest).toBe(1 + LONG);
+      expectUnbelted(byName(sid, 'build-rest'), 'Continued and built every part.');
+    });
+
+    it('a child re-prompted after a text-only answer (REQ-ORCH-095) works past 100 model steps in the re-prompted turn', async () => {
+      let step = 0;
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'talker', task: 'TASK: talk', run_in_background: false } }]) : answer('done');
+        if (persona === 'summariser') return SUMMARY;
+        step += 1;
+        if (step === 1) return answer('I will build it.');
+        return step <= 1 + LONG ? work('talker', step) : answer('Built every part once asked again.');
+      }, { tool: written });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(step).toBe(2 + LONG);
+      expectUnbelted(byName(sid, 'talker'), 'Built every part once asked again.');
+    });
+
+    it('a child given its corrective message after a silent failed step (REQ-NOTIFY-111) works past 100 model steps in the corrected turn', async () => {
+      const held = gate();
+      let step = 0;
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'quiet', task: 'TASK: be quiet' } }]) : answer('done');
+        if (persona === 'summariser') return SUMMARY;
+        step += 1;
+        if (step === 1) return { parts: [{ hold: held.p }, { error: modelError({ code: 'unknown', headline: 'the stream ended with no answer' }) }] };
+        return step <= 1 + LONG ? work('quiet', step) : answer('Corrected and built every part.');
+      }, { tool: written });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => step === 1);
+      clock.advance(90_000);
+      held.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toHaveLength(1);
+      expect(step).toBe(2 + LONG);
+      expectUnbelted(byName(sid, 'quiet'), 'Corrected and built every part.');
+    });
+  });
+
   describe('REQ-MCP-015 (fin36): only the code-intelligence server\'s tools are its EDIT tier in a child\'s report', () => {
     // docs/defects/fixed/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md
     const name = CODE_INTELLIGENCE_MANIFEST.tiers.edit.replaceInFile;

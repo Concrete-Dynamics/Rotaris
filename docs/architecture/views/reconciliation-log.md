@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-21**
 
+**Every route into a child's turn pinned past 100 model steps (PD-ORCH-017, REQ-ORCH-088, REQ-ORCH-112; loc1, `loc1-step-belt`; 2026-10-21).** `03-runtime-view.md` §3's step-belt clause now says where every child turn is built (`IterationChildren.execute`'s `turn` closure, `maxStepsPerTurn: null`), which routes reach it, and that only the root's turn takes `RunConfig.maxStepsPerTurn`. Tests and the record only: no code changed (`docs/defects/fixed/the-final-step-belt-ends-a-working-child-as-succeeded-with-no-final-response.md`). No package, edge or process changed.
+
 **A Windows session's end, observed simulated (2026-10-21; the Windows ARM64 session's C5).** `02-process-view.md`'s "not yet observed on a Windows host" for `SessionEndShutdown` is kept, with the simulated logoff beside it: the two end-session messages sent to the application's own windows ran the orderly shutdown, exit 0 in 0.9–1.9 s, the store as PD-ORCH-005 clause 23 wants; a real logout is still unobserved, and Windows' allowance against the 30 s bounds is OQ-402. No code changed.
 
 **A retrospective's refusals as built under PD-LIBRARY-002 revision 6 (OQ-363; 2026-10-20).** `02-process-view.md`'s retrospective

@@ -611,7 +611,7 @@ values — the first string under a path- or file-named argument, else the first
 by `runtime.loop_classification_timeout` capped at what remains of REQ-NOTIFY-106's 2 s activation budget,
 `LOOP_ACTIVATION_BUDGET_MS`, since fin35 — REQ-CONFIG-467's upper bound only; the budget runs from the `observe` that armed the
 trigger, on the monotonic clock, so the triggering call and the rest of its step are spent from it, and with nothing left no
-call is dispatched and the fallback decides) → the 100-step belt for roots only (children have no fixed model-step cap, `PD-ORCH-017`) → **context compression when the agent has reached
+call is dispatched and the fallback decides) → the 100-step belt for roots only (children have no fixed model-step cap, `PD-ORCH-017`: every child turn is built in one place, `IterationChildren.execute`'s `turn` closure, with `maxStepsPerTurn: null` — a fresh child, a follow-up by `session_id`, a nested child and its parent's resumed turn, a child resumed after a rest, a continuation, REQ-ORCH-095's re-prompt and REQ-NOTIFY-111's corrective turn alike, each pinned past 100 steps in `children.test.ts` since 2026-10-21; the root's own turn alone takes `RunConfig.maxStepsPerTurn`) → **context compression when the agent has reached
 its threshold** (Part AH, below) → the model step (streamed into its own `agent`
 row, and — from Part Z — into a **`thinking` row** for anything the provider marks as deliberation; the sink
 discarded every reasoning delta before that, so no streamed-reasoning row had ever existed, REQ-CHAT-163).

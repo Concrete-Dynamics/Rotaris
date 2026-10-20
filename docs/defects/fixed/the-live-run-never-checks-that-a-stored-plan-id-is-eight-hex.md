@@ -34,5 +34,10 @@ Repaired 2026-10-20 by loc1 (bundle `loc1-todo-reader`); harness only, no produc
   `AGENTS.md`'s paragraph on the readings over every session says so.
 - Pinned by `coordinator-todo.test.ts`'s "planIdReading (REQ-TOOLS-144, finding A6)": the 3c03287 swarm session's recorded plan
   (`impl101`, `test101`, `doc101`, `verify101` under `e40a534e`) reports its four task ids; generated ids pass, a child's own plan
-  is read, and a session that never delegated or stored no plan adds nothing (red before: `planIdReading` did not exist). Not
-  driven live here: the next default live run, whose delegation sessions store plans, is its first execution.
+  is read, and a session that never delegated or stored no plan adds nothing (red before: `planIdReading` did not exist).
+- **First execution, 2026-10-20** (`live-run.mjs --only=delegation` in the bundle's tree at `330c3c50`, pack
+  `2026-10-20T15-24-26-159Z`; Windows 11 ARM64 (build 26200), Node 24.18.0 arm64; CPU load 100 % at launch, with Electron of
+  three other trees alive): passed, "10 id(s) in 2 plan(s) of 2 coordinating session(s)" (delegation, delegation-swarm, the
+  root plans; no child kept a plan of its own). The swarm coordinator's first `replace` (`#6`) sent ids of its own, `a1` to `a3`,
+  and read "New ids replace the ones sent for …"; the plan stored generated ones, so A6 did not recur where it was first seen.
+  The run passed, 44 checks, none failed.

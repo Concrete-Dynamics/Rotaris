@@ -3,6 +3,18 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — the final report names the acceptance round that met Done
+
+**Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
+approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
+item F14: a final report on 2026-10-13 at 13:03:58 UTC said everything was done while §5's criteria were unmet: fin36 to
+fin40 each ran `"acceptance": { "rounds": 0 }`, and no proof sweep had run over 261 commits. **Changed:** SKILL.md §6:
+the report names the acceptance run and round that met Done at its head, or says Done is not met. The proposal's render
+and status warnings for a plan or journal with no acceptance are a script change with its own self-test assertions and
+are not part of this entry. **Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check`; the
+skill-review by one reviewer agent under `references/skill-review.md`, which judged this entry with the others of
+2026-10-20.
+
 ## 2026-10-20 — a recurring check-in that a refused turn cannot use up
 
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner

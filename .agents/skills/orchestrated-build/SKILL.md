@@ -197,7 +197,8 @@ nothing but its own repairs merged after it; `"acceptance": { "fresh": true }` f
 First run a friction survey over the plans since the last one (§4); its proposals that cross a protected invariant
 go in the report as proposals to the owner. Report what merged (counts, notable repairs), what remains open and why
 (owner rulings, platform-bound, excluded), each decision waiting on the owner in one line, collisions the owner must
-know about, and where the evidence is. That report is the handoff shape (`docs/clean-room/agent-workflow.md`): what
+know about, and where the evidence is. It names the acceptance run and round that met Done at the reported head (its
+sweep, live verdict and autopsy), or says plainly that Done is not met. That report is the handoff shape (`docs/clean-room/agent-workflow.md`): what
 merged is its Zustand, the evidence's places its Beweise, what remains and the decisions waiting on the owner its
 Offen, and the owner's first action its Nächster Schritt.
 Then remove the landing worktrees left by bundles that did not land (`<integ>-<short>`), the acceptance, live,

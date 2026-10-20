@@ -15381,6 +15381,8 @@ that pins the limit. Recorded beside it, outside the ruling's repair:
 (repaired 2026-10-15 by fin47, finding A6).
 The row is in [`first-executions.md`](first-executions.md).
 
+*Noted 2026-10-20:* fin47's bundle `fin47-accept1-6` settled the A6 note's open choice ("mint, or refuse the call") as mint, citing REQ-TOOLS-144's "auto-generated" ids and `add_task`'s existing behaviour, in the Outcome of `docs/defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md`; no ruling was needed and none is made here.
+
 <a id="oq-361"></a>
 
 **OQ-361 — Where does REQ-SHELL-119's guard (2), "Integration in progress", stand beyond a person's close of one window?**

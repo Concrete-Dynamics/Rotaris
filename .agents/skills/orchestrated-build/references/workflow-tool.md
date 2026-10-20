@@ -76,7 +76,10 @@ every bundle's ending, acceptance); the journal holds every agent's.
   merged, and the orchestrator holds it until then. A triage marks such a bundle with the plan it waits on, in the
   triage's own list (triage 4 wrote `after: ["fin6"]`); the mark never goes into `plan.json`, where `after` names
   bundles of the same plan only and `render` refuses any other. On 2026-10-02 fin8's `ladder-overrides` and
-  `focus-bound-recovery` were held so while fin6's `auth-recovery` bundles had yet to merge.
+  `focus-bound-recovery` were held so while fin6's `auth-recovery` bundles had yet to merge. A plan that would mix
+  such a bundle with ready ones is split: the ready bundles launch now, and the waiting one is its own later plan.
+  No prompt or brief tells a builder to wait for, or poll, another plan's landing: fin33's builder held a cap slot
+  about 3 h 35 min polling for fin29's (10:10 to 11:42 UTC on 2026-10-07, then 02:48 to 04:49 on 2026-10-13).
 - Reviews of different bundles run at once since 2026-10-07, each gating and pushing from its bundle's own landing
   worktree (`<repo>-wt-integ-<id>-<short>`); before, one integration worktree per plan served one landing at a time
   under a promise-chain lock. Proof sweeps are still serialized with such a lock. Reviewers of one run, two workflows,

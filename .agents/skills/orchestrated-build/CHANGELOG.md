@@ -3,6 +3,17 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — a plan never holds a bundle that waits on another plan
+
+**Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
+approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
+item F03: fin33 mixed a bundle that waited on fin29's landing with a ready one; its builder polled `origin/main` for
+about 3 h 35 min across two launches (`wf_b566223e-4ee`, `wf_d485c65f-ee1`), holding one of the two cap slots, and was
+relaunched once after the weekly limit took it. **Changed:** `references/workflow-tool.md`, Concurrency: such a plan is
+split, and no builder is told to wait for or poll another plan. **Verified** by `node scripts/orchestration.mjs
+self-test` and `pnpm check`; the skill-review by one reviewer agent under `references/skill-review.md`, which judged
+this entry with the others of 2026-10-20.
+
 ## 2026-10-20 — the classifier's live-run verdict, as observed
 
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner

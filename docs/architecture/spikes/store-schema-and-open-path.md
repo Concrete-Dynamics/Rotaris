@@ -138,6 +138,8 @@ and short by construction (`REQ-SESSION-198`) — so this does not reach the sto
 identifier file inside a deep workspace goes through Node's file API, whose long-path behaviour this
 spike did not measure.
 
+*2026-10-21, on Windows ARM64 (the Windows ARM64 session's E1; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, bsdtar 3.8.8, at `613ee119`, `%TEMP%` 33 characters):* the plain spelling's boundary is a database path of **251** characters (created and written at 251, refused at 252), the same under Node and under Electron as Node, and the same as the x64 measurement; the identifier file was minted and read at workspace roots of 198 to 328 characters through Node's file API, so the identifier is not where the limit bites (ADR-0058 consequence 13).
+
 ## What it settled
 
 1. The declared indexes cost **+37 % / +42 %** on the commit and shorten the checkpoint period below

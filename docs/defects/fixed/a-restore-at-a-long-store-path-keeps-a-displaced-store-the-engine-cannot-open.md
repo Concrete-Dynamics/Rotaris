@@ -48,3 +48,7 @@ its kept store opens; 239 and 240 with nothing to displace; with no limit, the c
 kept copy lands at 265) and `packages/workspace/src/workspace.test.ts`'s D11 case; every refusal case red before the
 change. Not measured on Windows by this build: the limit is ADR-0058's 2026-09-02 measurement. Reported back in ADR-0058
 consequence 18 and in `docs/architecture/first-executions.md`.
+
+## Addendum, 2026-10-21 — measured on Windows
+
+The Windows ARM64 session's E1 (Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, bsdtar 3.8.8, at `613ee119`, `%TEMP%` 33 characters) ran the D11 block on Windows (215, 230 and 251 refused untouched; 214 proceeds and its kept store opens; 239/240 with nothing to displace; the counterfactual) and measured the limit there: 251, on arm64 as on x64, under Node and under Electron. "Not measured on Windows by this build" is no longer true. A launch past the limit opens no workspace and says nothing, a note of its own (`../a-workspace-whose-store-cannot-be-opened-at-launch-is-left-unopened-without-a-word.md`).

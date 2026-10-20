@@ -50,3 +50,7 @@ store), `apps/desktop/src/workspace-service/store-open.test.ts`, and `pnpm resto
 next open puts the store back: 10 of 10 on 2026-10-14, byte-identical to the displaced `workspace.db` in 10 of 10, the
 journal gone, the staging copy kept. Reported back in OQ-266, ADR-0058 (the restore section and consequence 5) and
 `docs/architecture/first-executions.md`.
+
+## Addendum, 2026-10-21 — on Windows
+
+The Windows ARM64 session's E1 (Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, bsdtar 3.8.8, at `613ee119`, `%TEMP%` 33 characters): `pnpm restore-kill-proof` 10 of 10 and then 30 of 30, every kill in the gap (176–331 ms), the store put back byte-identical every time and never created empty. With the displaced directory held, the next open refuses with `CutRestoreError` and keeps the journal, and reverses the cut once the holder is gone (thirty of thirty across three kinds of holder).

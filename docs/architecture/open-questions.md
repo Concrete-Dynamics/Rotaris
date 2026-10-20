@@ -7801,6 +7801,10 @@ binding on one machine.
    **Also owed here:** long-path behaviour on Windows for the layout ESC-15 produces — per-user data root
    plus identifier plus session id plus artifact body name, where the body name is the part that varies
    without bound.
+   *2026-10-21 (the Windows ARM64 session's E1): measured for the store and the identifier — the engine refuses a database
+   path past 251 characters on Windows ARM64 as on x64, and the identifier file works at 328 through Node; a launch whose
+   store crosses the limit opens no workspace and says nothing (ADR-0058 consequence 18). Still owed: the session directory's
+   artifact bodies, the part that varies without bound.*
 9. ***Withdrawn 2026-08-31 under SR-4, deliberately and not by oversight.*** This was **Windows trim
    under an open writer and a concurrent follower** — the one failure mode ADR-0004's own evidence
    predicted and did not measure, and the only evidence rule 3 of ADR-0004 ever rested on. **Rule 3 is

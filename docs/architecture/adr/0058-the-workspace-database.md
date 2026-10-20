@@ -1802,6 +1802,9 @@ maintained, and is not consulted — so there is nothing for the store to disagr
     backup adds nothing to this — it writes to a destination the user chose — but the restore's staging
     and displaced directories add a suffix to the deepest path in the record, which is where a long-path
     limit would bite first.
+    *2026-10-21, the identifier file on Windows (the Windows ARM64 session's E1): `establishWorkspaceId` minted and
+    `readWorkspaceId` read it back at workspace roots of 198 to 328 characters, through Node's file API, past the
+    engine's 251; the identifier is not where a long path bites.*
 14. **Where a first-statement store failure belongs is decided by this record and by no requirement.** Rule
     3 puts the open, the pragma, the read-back and the write probe inside `REQ-EVENTS-084`'s "opening the
     store", and starts `REQ-EVENTS-088` only once the workspace service has declared the store open. The
@@ -1957,6 +1960,9 @@ maintained, and is not consulted — so there is nothing for the store to disagr
       measured on Windows by this build: the limit is the 2026-09-02 measurement's, and the refusal is exercised on
       Linux with the limit given. Note:
       [`../../defects/fixed/a-restore-at-a-long-store-path-keeps-a-displaced-store-the-engine-cannot-open.md`](../../defects/fixed/a-restore-at-a-long-store-path-keeps-a-displaced-store-the-engine-cannot-open.md).
+
+      *Measured on Windows, 2026-10-21 (the Windows ARM64 session's E1; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, bsdtar 3.8.8, at `613ee119`, `%TEMP%` 33 characters).* The D11 block ran on Windows: the assessment refuses at 215, 230 and 251 with nothing touched and nothing asked of the run host, 214 proceeds and its kept store opens, 239 proceeds and 240 is refused with nothing to displace, and the counterfactual keeps a store past the limit. A scratch sweep (never committed) of absolute database paths from 240 to 265 characters and 300: `openStore` created, migrated and wrote at 241–251 and was refused at 252–259 ("unable to open database file") and at 260 and above ("could not open …"); a raw better-sqlite3 connection from a `.cjs` file refused at 252, 255 and 260 alike under Node 24.18.0 and under Electron 44.1.1 as Node (`ELECTRON_RUN_AS_NODE`); `storePathLimit()` is 251. **The arm64 boundary is the x64 value, 251.** `openWorkspaceStore` opened a store at 250, 251 and 252 and refused at 259 and 260: a first store is made in its sibling, two characters shorter (`.<32 hex>` against `v1-<32 hex>`), and renamed in, and a store that exists in WAL mode then opened and answered reads at 252 and 253 — the built app's launch at a 253-character store logged "opened … (0 sessions, 0 rows)" — so "on any statement at 252–259" holds for a store being created and was not seen for reads of one already made; writes there were not tried. A launch whose store could not be opened there (256, 263) painted its window with no workspace and told the person nothing ([the note](../../defects/a-workspace-whose-store-cannot-be-opened-at-launch-is-left-unopened-without-a-word.md)).
+      *D5 on Windows, the same day:* `discardStaging` with a real holder on the staging directory — an SQLite connection or a `cmd /k` whose working directory it was, ten times each — returned the directory as a leftover and left it, then removed it once the holder was gone; an `fs.openSync` read handle on its `workspace.db` did not stop the removal at all (Node opens with delete sharing). With the store itself held, a restore forced to `target-exists` failed at step 8 (`EPERM` under an SQLite or `openSync` holder, `EBUSY` under a held working directory), left the store byte-identical and no staging behind, thirty of thirty.
 
     **Two rules this record owns are not defects and are owed evidence rather than a fix**, and they are
     named here so the list is the whole list: rule 6's canonical path spelling **needs a conformance test
@@ -2167,6 +2173,8 @@ OQ-265's ruling, consequence 18.)*
 > **byte-identical** to the displaced one, the journal gone and the staging copy kept. The proof now FAILs on any of those.
 > The journal-less counterfactual (`skipJournal`, `store.test.ts`) reproduces the empty store. Still not measured: a power
 > loss in the gap (the journal is flushed with its directory before step 8, which is the property such a test would weigh).
+>
+> **On Windows, 2026-10-21 (the Windows ARM64 session's E1; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, bsdtar 3.8.8, at `613ee119`, `%TEMP%` 33 characters).** `pnpm restore-kill-proof`: 10 of 10, then `--trials=30`: 30 of 30 killed in the gap (none completed), each leaving the journal beside the empty target name and both stores passing `quick_check`; the next open put the displaced store back byte-identical in 30 of 30 and created an empty store in none. Kills landed 176 to 331 ms after launch. With the displaced directory held by a real holder (an SQLite connection, an `fs.openSync` handle, a `cmd /k` working directory; ten each) the next open refused with `CutRestoreError` naming the displaced store and kept the journal, and once the holder was gone it reversed the cut and listed the sessions.
 
 **Consequence 1 confirmed under the loader, 2026-09-04** (`../spikes/native-load-proof.md`): the packaged
 Electron opened `app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node` — compiled

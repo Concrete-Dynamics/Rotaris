@@ -82,8 +82,9 @@ Write `plan.json` in the scratchpad:
   executes at most min(16, CPUs − 2) agents at a time (two on four CPUs), so lanes past that queue; to go faster,
   split the bundles over two plans, within the ceiling `references/workflow-tool.md`, Concurrency, sets.
 - **Number ranges.** The brief gives each plan its own range of open-question numbers (and directive or request numbers
-  it may need), and each bundle a disjoint sub-range of it that its reviewer raises in too; one landing on a number main
-  holds takes the next free one (`references/environment.md`, Parallel plans; repository.md, Merge conflicts).
+  it may need), and each bundle a disjoint sub-range of open questions, which its reviewer uses too; one landing on a
+  number main holds takes the next free one (`references/environment.md`, Parallel plans; repository.md, Merge
+  conflicts).
 - **A task body is self-contained**: the note or requirement to read, the evidence (file:line, proof output, pack),
   the proof or live scenario that shows the repair, and the rulings that apply. A task only the owner can close is
   no task: record it and report it. A builder that meets one inside a bundle lists it in `ownerBlocked` with the
@@ -95,7 +96,7 @@ Write `plan.json` in the scratchpad:
 ```bash
 # Agents read this skill from this orchestration's own detached reference worktree; the owner's checkout is never touched.
 git -C <repo> fetch origin main
-git -C <repo> worktree remove --force <repo>-wt-skillref-<id> 2>/dev/null   # between runs only
+git -C <repo> worktree remove <repo>-wt-skillref-<id> 2>/dev/null   # between runs only
 git -C <repo> worktree add --detach <repo>-wt-skillref-<id> origin/main
 K=<repo>-wt-skillref-<id>/.agents/skills/orchestrated-build
 S=<scratchpad>/orchestration-<id>; mkdir -p $S
@@ -109,9 +110,9 @@ that leaves a bundle unsettled. Launch with `Workflow({ scriptPath: "$S/run-1.js
 first line of `$S/RUNS.txt`. Each reviewer lands from its bundle's own landing worktree (`<integ>-<short>`: the profile's
 `integ`, a dash, the bundle's short name), which it creates when missing and removes after the landing.
 
-Schedule a recurring fallback check-in bound to this session (`create_trigger`, every two hours, minute jittered) whose
-message says: read the last run of `RUNS.txt`, run `status`, look for another writer on main
-(`references/repository.md`), recover if it stopped, else end silently. It survives restarts and a turn a limit refused
+Schedule a recurring fallback check-in bound to this session (`create_trigger`, every two hours) whose message says:
+read the last run of `RUNS.txt`, run `status`, look for another writer on main (`references/repository.md`), recover if
+it stopped, remove landed worktrees, else end silently. It survives restarts and should outlast a turn a limit refused
 (`references/environment.md`, Limits); background tasks and a one-shot `send_later` do not.
 
 ## 4. While it runs
@@ -156,11 +157,10 @@ Acceptance results are not replayed while a plan bundle still has to land.
 **A refused live scenario** in a bundle comes back as not verified, with the exact command its builder or reviewer
 sent: run that scenario yourself on merged main once the bundle has landed (`references/live-runs.md`, Running).
 
-**Reviewers' optional findings** come back per bundle (`optional`), beside what they repaired in place (`repaired`). One
-that is a real defect elsewhere is recorded (repository.md says how) on a docs-only branch merged with the gate green.
-An optional becomes a task only as a real defect (recorded first) or inside the next plan's area anyway; below five, or
-with no defect among them, they go to the final report's Offen. One about this skill is never a plan task: it goes
-through "Improving this skill" as its own change.
+**Reviewers' optional findings** come back per bundle (`optional`), beside what they repaired in place (`repaired`). A
+real defect among them is recorded (repository.md says how, on a docs-only branch merged with the gate green) and
+planned whatever the count; the rest become tasks only inside the next plan's area, and below five they go to the final
+report's Offen. One about this skill is never a plan task: it goes through "Improving this skill" as its own change.
 
 **A friction survey** every three or four plans, in a free plan slot: a report-only read of the runs since the
 last one for what cost a round, a relaunch, a workaround or a question (`references/workflow-tool.md`, A friction

@@ -40,8 +40,8 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   live-run allow rules, so for a live run it is the orchestrator's):
   `setsid nohup bash -c '<command> > <log> 2>&1; echo "exit=$?" >> <log>' > /dev/null 2>&1 < /dev/null & disown`,
   then a background `until grep -q "^exit=" <log>; do sleep 30; done; tail -5 <log>`, re-armed when it is stopped.
-- **The duress live run outlasts a background command.** At `LIVE_RUN_DURESS_MS=7800000` (AGENTS.md's recipe) its launch is
-  bounded at 8,100 s, past the 7,200,000 ms cap (runs took 2,820 to 4,219 s on 2026-10-14 and 15), so it is launched
+- **The duress live run outlasts a background command.** At `LIVE_RUN_DURESS_MS=7800000` (AGENTS.md's recipe) its launch
+  is bounded at 8,100 s, past the 7,200,000 ms cap (runs took 2,820 to 4,219 s on 2026-10-14 and 15), so it is launched
   detached (`setsid nohup … &`, the form above) and waited on only by its log's `exit=` line, in the loop shape above or
   with the Monitor tool. Never wait with `pgrep`: the waiter's own command line holds the pattern, so it finds itself
   and never ends, or finds its launching shell and ends at once (2026-10-13, then 23:40 UTC on 2026-10-13 and 05:15 on
@@ -106,9 +106,9 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   it answers, `render --runs RUNS.txt` (SKILL.md §4) and relaunch each plan, which resumes from its journal where it stopped
   (2026-10-06 to 13, every time with nothing lost).
 - **A one-shot check-in is used up by a limit.** The `send_later` check-in that fired at 16:30 UTC on 2026-10-15 met
-  "You've hit your weekly limit · resets Oct 19, 9pm (UTC)", was refused, and was never re-armed: nothing ran from
-  the reset until the owner wrote at 07:18 UTC on 2026-10-20, about ten hours later. A recurring check-in (SKILL.md
-  §3) fires again after a refused turn.
+  "You've hit your weekly limit · resets Oct 19, 9pm (UTC)", was refused, and was never re-armed: nothing ran from the
+  reset until the owner wrote at 07:18 UTC on 2026-10-20, about ten hours later. A recurring check-in (SKILL.md §3) is
+  expected to fire again after a refused turn; record what the first limit it meets shows.
 - **A reviewer lost mid-landing** (a merge agent, before 2026-10-07) leaves its bundle branch rebased but unpushed
   (the rebased head detached in its landing worktree, `<repo>-wt-integ-<id>-<short>`), or a rebase in progress in the
   bundle worktree. Nothing is lost: the re-rendered review's landing step 0, which it runs first, finds a landing that
@@ -123,11 +123,12 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   workflow's own, and both act on one worktree. Steer a plan through its workflow (a relaunch, a next round), never through
   its agents.
 - **Numbers collide when a builder takes one it was not given.** Two plans running at once each took the next free open
-  question, directive or request number from the same `origin/main`, and the second to land had to renumber its entry and
-  every citation (four entries raised as OQ-240 or OQ-241 landed as OQ-247 to OQ-250, and one OQ-254 as OQ-255, 2026-10-07 to 13). Assign every number a plan may need in its prompt,
-  as a disjoint sub-range per bundle: fin41's seven bundles shared OQ-261 to OQ-270, and four of their questions were
-  renumbered at landing (`wf_b643b682-d3c`, journal lines 20 to 27). The one that lands second renumbers, as
-  `references/repository.md` says.
+  question, directive or request number from the same `origin/main`, and the second to land had to renumber its entry
+  and every citation (four entries raised as OQ-240 or OQ-241 landed as OQ-247 to OQ-250, and one OQ-254 as OQ-255,
+  2026-10-07 to 13). Assign every number a plan may need in its prompt, as a disjoint sub-range of open questions per
+  bundle (directive numbers are assigned exactly, since the register refuses a gap, and request rows are the
+  orchestrator's): fin41's seven bundles shared OQ-261 to OQ-270, and four of their questions were renumbered at landing
+  (`wf_b643b682-d3c`, journal lines 20 to 27). The one that lands second renumbers, as `references/repository.md` says.
 
 ## Pause and backup
 
@@ -154,8 +155,9 @@ host-independent remainder on 2026-10-20) is a pause (Pause and backup, above) p
 alone. It carries:
 - its own reserved open-question, directive and request number ranges, disjoint from every other session's and plan's,
   written to the ledger too (OQ-400 to OQ-449 went to the Windows session);
-- the standing live-run authorization quoted word for word (R-068), R-072 and how the consortium rules, and the
-  clean-room boundary, which every agent the other session starts inherits;
+- the standing live-run authorization quoted word for word (R-068), which the other session's classifier may still
+  refuse until the owner confirms it there (`references/live-runs.md`, Authorization), R-072 and how the consortium
+  rules, and the clean-room boundary, which every agent the other session starts inherits;
 - the open notes and unfinished plans by name, and what each other session owns, so no two repair one note;
 - that this file's figures (the two-agent cap, `/opt/node24/bin`, the disk allowance, the classifier's refusals, the
   `xvfb-run` wrapper) describe this container, for the other host to measure and correct;

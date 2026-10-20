@@ -130,8 +130,9 @@ The same shapes hold for a merge of `origin/main` into a bundle branch and for e
 - `first-executions.md` rows: keep both, in date order. The views' reconciled date: the later one.
 - `docs/architecture/views/reconciliation-log.md`: keep both entries, newest first (the file's own rule). R-072's row in
   `docs/product/requests.md`: keep every ruling clause either side appended, in date order.
-  `docs/product/directives.md`'s Count: recompute it from the entries below it, never take either side's. `AGENTS.md`'s
-  proof table: keep both rows, in the table's order.
+  `docs/product/directives.md`'s Count: recompute it from the entries below it, never take either side's. The proof
+  registry: keep both sides' entries in `tools/proof-registry/registry.mjs` and both `docs/proofs/<id>.md` records;
+  never merge the generated `docs/proofs/README.md` by hand, regenerate it (`pnpm proofs:index`).
 - Shared array or object literals: merge the entries. Store migrations: the branch's is renumbered after main's.
 - Code: keep both sides' intent; the compiler and the tests decide.
 

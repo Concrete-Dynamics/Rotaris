@@ -113,11 +113,11 @@ skill-review by one reviewer agent under `references/skill-review.md`, which jud
 approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
 item F12: each plan's reviewers left optional findings that became the next plan's tasks, the count falling 29, 18, 10,
 3 over three extra small plans (parts of fin38, fin39, fin40; about 2 h 51 min), with fin34's 35-optional bundle taking
-54 minutes to build and 56 to review, and about eight hand extractions. **Changed:** SKILL.md §4: an optional becomes a
-task only as a real defect or inside the next plan's area; below five, or with no defect among them, they go to the
-report. Listing optionals per bundle in `status` is a script change with its own self-test assertion and is not part of
-this entry. **Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check`; the skill-review by one
-reviewer agent under `references/skill-review.md`, which judged this entry with the others of 2026-10-20.
+54 minutes to build and 56 to review, and about eight hand extractions. **Changed:** SKILL.md §4: a real defect among
+them is recorded and planned whatever the count; the rest become tasks only inside the next plan's area, and below five
+they go to the report. Listing optionals per bundle in `status` is a script change with its own self-test assertion and
+is not part of this entry. **Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check`; the skill-review
+by one reviewer agent under `references/skill-review.md`, which judged this entry with the others of 2026-10-20.
 
 ## 2026-10-20 — a plan never holds a bundle that waits on another plan
 
@@ -147,12 +147,13 @@ this entry with the others of 2026-10-20.
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
 approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
 item F02: with several plans landing at once, reviewers lost the fast-forward and rebased into conflicts in the
-reconciliation log, R-072's row, the directive register and AGENTS.md's proof table, about 75 of them in fin42 to fin45;
-agents improvised `resolve.py` (five times), `rowmerge.py` and `keepboth.py`, and fin29's resumed review spent about 95
-of 126 minutes re-gating (`wf_11a1c118-864`). **Changed:** `references/repository.md`, Merge conflicts, gains one rule
-per shared file. It only adds to the record obligations; the gate still runs on the exact head pushed after every
-rebase. **Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check`; the skill-review by one reviewer
-agent under `references/skill-review.md`, which judged this entry with the others of 2026-10-20.
+reconciliation log, R-072's row, the directive register and AGENTS.md's proof table, about 75 of them in fin42 to fin45
+(the proof table has since become the proof registry, `019998e`); agents improvised `resolve.py` (five times),
+`rowmerge.py` and `keepboth.py`, and fin29's resumed review spent about 95 of 126 minutes re-gating (`wf_11a1c118-864`).
+**Changed:** `references/repository.md`, Merge conflicts, gains one rule per shared file. It only adds to the record
+obligations; the gate still runs on the exact head pushed after every rebase. **Verified** by `node
+scripts/orchestration.mjs self-test` and `pnpm check`; the skill-review by one reviewer agent under
+`references/skill-review.md`, which judged this entry with the others of 2026-10-20.
 
 ## 2026-10-20 — the final report names the acceptance round that met Done
 

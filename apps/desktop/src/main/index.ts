@@ -59,6 +59,7 @@ import { windowCommands, windowsCommands } from './commands/windows.js';
 import { anotherMainWindowStays, confirmActiveRunClose } from './close-confirmation.js';
 import { emptyArtifactNotice, passFailureDetail, passFailureTitle } from './improvement-notice.js';
 import { answerUnderHeldRefusal, cutRestoreNotice, storeRefusalNotice, storeRefusalOf, type StoreRefusal } from './store-notice.js'; // REQ-SESSION-202, OQ-266, OQ-281
+import { handOffOpenedWorkspace } from './workspace-handoff.js'; // W-18, ADR-0002 consequence 11, OQ-386
 import { establishFlow as establishStoreFlow, restoreFlow as restoreStoreFlow, type StoreFlowDeps } from './store-resolution.js'; // OQ-281
 import { ChildrenEndedByMain, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitOutsideAnyWindow, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
@@ -429,14 +430,15 @@ async function main(): Promise<void> {
       const n = cutRestoreNotice(opened.cutRestore);
       raiseNotice(n.severity, n.headline, n.detail);
     }
-    // W-18: the run host is HANDED the resolved path; it never reads the identifier file.
-    const ack = await runHost.request({ kind: 'workspace.opened', workspaceId: opened.workspaceId, storeFile: opened.storeFile, workspaceRoot: key }, millis(5_000));
-    log(`workspace ${key} → ${opened.workspaceId} (schema v${opened.schemaVersion}); run host: ${ack.kind}`);
+    // W-18: the run host is HANDED the resolved path; it never reads the identifier file. A reply missed within the bound is a
+    // warning and an unacknowledged hand-off, never a rejection out of the launch (`workspace-handoff.ts`, OQ-386).
+    const handOff = await handOffOpenedWorkspace({ request: (r, b) => runHost.request(r, b), log }, { kind: 'workspace.opened', workspaceId: opened.workspaceId, storeFile: opened.storeFile, workspaceRoot: key }, millis(5_000));
+    log(`workspace ${key} → ${opened.workspaceId} (schema v${opened.schemaVersion}); run host: ${handOff.reply?.kind ?? 'no reply'}`);
     // Stage B, as the A2 note here promised: the window this open was performed FOR is passed in. Reading
     // `activeWindow()` instead would, with two windows open, write one project's workspace identifier onto the
     // other project's window — and every workspace-scoped command resolves its window through that field.
     // REQ-NOTIFY-224 / REQ-SHELL-016: the unreviewed-hooks notice is raised after the window exists, never a dialog by itself.
-    if (ack.kind === 'workspace.ack') {
+    if (handOff.acknowledged) {
       // REQ-WORKSPACE-141: initialization resolution takes the same slot as the hook-review notice — once
       // the window is interactive, never during its construction and never as a dialog opened unbidden.
       // REQ-WORKSPACE-013/102: this workspace's own automatic resolution, whichever window is focused when the slot comes.

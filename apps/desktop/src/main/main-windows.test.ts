@@ -61,6 +61,8 @@ function harness(options: {
   const windows = new Map<number, MemoryWindow>();
   const openResolvers = new Map<string, (opened: { workspaceId: string; storeFile: string } | undefined) => void>();
   const openFailures = new Set<string>();
+  /** Workspaces whose open rejects instead of settling (a request to a child process that got no reply in time). */
+  const openRejections = new Set<string>();
   let nextId = 1;
   let deferOpens = false;
 
@@ -128,6 +130,7 @@ function harness(options: {
     openWorkspace: async (workspace) => {
       actions.push(`open:${workspace}`);
       if (openFailures.has(workspace)) return undefined;
+      if (openRejections.has(workspace)) throw new Error('no reply to workspace.open within 10000 ms');
       if (!deferOpens) return { workspaceId: `id:${workspace}`, storeFile: `${workspace}/store.db` };
       return new Promise((resolve) => { openResolvers.set(workspace, resolve); });
     },
@@ -149,7 +152,7 @@ function harness(options: {
 
   const mainWindows = new MainWindows<MemoryWindow, string, string, string, string>(dependencies);
   return {
-    mainWindows, actions, gates, workspacesOpened, delivered, notices, folders, windows, openFailures,
+    mainWindows, actions, gates, workspacesOpened, delivered, notices, folders, windows, openFailures, openRejections,
     deferOpens: () => { deferOpens = true; },
     resolveOpen: (workspace: string, opened = true) => openResolvers.get(workspace)?.(opened ? { workspaceId: `id:${workspace}`, storeFile: `${workspace}/store.db` } : undefined),
     advanceTimers: () => { for (const timer of timers.splice(0)) if (!timer.cancelled) timer.callback(); },
@@ -758,6 +761,24 @@ describe('MainWindows', () => {
     h.mainWindows.beginStart(second.wcId, 'S7');
     h.windows.get(second.wcId)!.destroyed = true;
     expect(h.mainWindows.showingSession('S7', [])).toBeUndefined();
+  });
+
+  // docs/defects/fixed/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md: the launch's open is awaited by main's
+  // start-up itself, so an open that rejects (a request to the workspace service or the run host that got no reply within its
+  // bound) ended `main()` as an unhandled rejection: the driver seam, the hand-overs and everything after the launch never ran.
+  // The launch logs it and the window stands with no workspace open, as one whose open was refused does (OQ-386).
+  it('a launch whose workspace open rejects resolves with the window standing and no workspace id, and logs why', async () => {
+    const h = harness();
+    h.openRejections.add('C:/a');
+    const launched = await h.mainWindows.launch('C:/a');
+    expect(launched.workspaceId).toBeUndefined();
+    expect(h.mainWindows.ordered().map((w) => w.wcId)).toEqual([launched.wcId]);
+    expect(h.actions).toContain('log:the workspace open of C:/a failed: Error: no reply to workspace.open within 10000 ms; the window stands with no workspace open');
+    expect(h.workspacesOpened).toEqual([]);
+    // The readiness a view's start-time read waits on is settled: the wait answers with its 30 s bound never fired (the
+    // harness's timers fire only when told to) and cancelled.
+    await h.mainWindows.awaitWorkspace(launched.wcId);
+    expect(h.pendingDelays()).not.toContain(30_000);
   });
 
   it('destroys and cleans up a window if loading fails after registration', async () => {

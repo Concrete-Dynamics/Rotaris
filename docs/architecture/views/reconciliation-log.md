@@ -20,6 +20,14 @@ Last reconciled with the code: **2026-10-21**
 
 **A Windows session's end, observed simulated (2026-10-21; the Windows ARM64 session's C5).** `02-process-view.md`'s "not yet observed on a Windows host" for `SessionEndShutdown` is kept, with the simulated logoff beside it: the two end-session messages sent to the application's own windows ran the orderly shutdown, exit 0 in 0.9–1.9 s, the store as PD-ORCH-005 clause 23 wants; a real logout is still unobserved, and Windows' allowance against the 30 s bounds is OQ-402. No code changed.
 
+**A `workspace.opened` reply that never comes is handled, never an unhandled rejection in main (plan `loc1`,
+`main-rejection`; W-18, ADR-0002 consequence 11, REQ-WORKSPACE-141; OQ-386).** `06-sequences.md` §1 draws the hand-off to
+the run host as `handOffOpenedWorkspace`, bounded at 5 s. Its `alt` schedules the open's slot on `workspace.ack` alone. A reply
+missed within the bound is one warning line, and the window keeps its workspace. A new paragraph says why: `main()` awaits the
+launch, so a rejected open ended main's start-up. Any other rejection of the launch's open now leaves the window standing
+with no workspace open. The paragraph also names the open note on the run host's skill discovery, which runs before the reply
+is posted. No other view changed: no message kind, channel or owner moved.
+
 **A retrospective's refusals as built under PD-LIBRARY-002 revision 6 (OQ-363; 2026-10-20).** `02-process-view.md`'s retrospective
 paragraph now states them: of a configuration that loads, an unknown `default_persona` leaves the pass's setup completed on its
 own model (refused as `no-model` only where no retrospective model resolves), REQ-CONFIG-246's referential errors are its warnings

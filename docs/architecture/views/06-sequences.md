@@ -59,8 +59,12 @@ sequenceDiagram
     WS->>WS: identify workspace, open and migrate the store
     WS->>WS: starter agents.yaml if absent or blank (REQ-CONFIG-025/028), never over a file
     WS-->>MW: workspaceId, storeFile
-    MW->>RH: workspace.opened
-    Note over M: 800 ms later, the open's slot (REQ-WORKSPACE-141): initialization resolution, the board's queue,<br/>hooks.summary → the hook-review or no-provider notice, and config.read → under a fatal load<br/>"The workspace configuration did not load", raised last so it stands (OQ-279)
+    MW->>RH: workspace.opened, 5 s (handOffOpenedWorkspace)
+    alt workspace.ack
+      Note over M: 800 ms later, the open's slot (REQ-WORKSPACE-141): initialization resolution, the board's queue,<br/>hooks.summary → the hook-review or no-provider notice, and config.read → under a fatal load<br/>"The workspace configuration did not load", raised last so it stands (OQ-279)
+    else another reply, or none within 5 s (OQ-386)
+      Note over M: one warning line for a missed reply; the window keeps the workspace, and no slot is scheduled
+    end
     opt no folder was resolved
       MW->>MW: deferProjectOffer(wcId, 650 ms)
       Note over MW: abandoned unshown if the question<br/>was answered first
@@ -78,6 +82,17 @@ on it (2026-10-14, `../../defects/fixed/a-notice-action-reaching-a-window-still-
 that wait only a window that is gone is refused; one that stands with no workspace open (its store refused, OQ-281) is
 reached, and the action's surface answers in it (2026-10-14,
 `../../defects/fixed/a-notice-action-reaching-a-window-whose-store-was-refused-answers-an-unreported-failure.md`).
+
+**A reply that never comes ends no start-up.** `main()` awaits `MainWindows.launch`, so until 2026-10-20 a request of the open
+that got no reply within its bound rejected out of the launch and ended main's start-up as an unhandled rejection. The
+driver seam, the hand-overs and everything after the launch never ran (`compression-proof`'s `automatic` launch, 2026-10-16;
+`../../defects/fixed/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md`). Now the run host's missed
+`workspace.opened` reply is a warning and an unacknowledged hand-off (`main/workspace-handoff.ts`). The window keeps its
+workspace, and the open's slot is not scheduled, as for any reply that is not `workspace.ack`. Any other rejection of the
+launch's open is logged, and the window stands with no workspace open, as a refused open leaves it. What else a missed reply
+owes is OQ-386's. The run host warms its skill catalogue in a microtask that runs before its reply is posted, so under load
+a slow discovery is a slow reply
+(`../../defects/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`, open).
 
 **The update check rides the post-show activation, and so does every window built later.** `MainWindows` fires
 `postShowActivation` once per window on the window's own show event — the launch's window, a replacement's

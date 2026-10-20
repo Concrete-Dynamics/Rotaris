@@ -455,7 +455,14 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
   async launch(explicitWorkspace?: string, origin: MainWindowOrigin = 'launch'): Promise<MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>> {
     const startup = this.resolveStartup(explicitWorkspace);
     const built = await this.build({ workspace: startup.workspace, origin });
-    await this.open(built.wcId, startup.workspace);
+    // Main's start-up awaits this launch, so an open that rejects (a request to a child process that got no reply within its
+    // bound) would end the start-up as an unhandled rejection, with nothing after the launch run
+    // (docs/defects/fixed/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md). It is logged, and the window stands
+    // with no workspace open, as one whose open was refused does (OQ-386 asks what else a missed reply owes).
+    await this.open(built.wcId, startup.workspace).catch((cause: unknown) => {
+      this.dependencies.log(`the workspace open of ${startup.workspace} failed: ${String(cause)}; the window stands with no workspace open`);
+      return undefined;
+    });
     if (startup.persist) await this.dependencies.persistWorkspace(startup.workspace);
     if (startup.prompt) this.deferProjectOffer(built.wcId, 650);
     return this.forSender(built.wcId)!;

@@ -16173,3 +16173,45 @@ Windows' allowance; or holds the session's end while the shutdown runs (answerin
 which Electron's `session-end` does not offer as built); or shortens the bounds at a session's end to fit, choosing which work
 in flight is cut. **The costs:** the first is today's behaviour and rests on a timing nobody has measured; the second puts a
 blocking screen in front of a person who chose to sign out; the third loses work a longer bound would have saved.
+
+<a id="oq-386"></a>
+
+**OQ-386 — What does a workspace open owe when the run host does not acknowledge it within its bound?** *(W-18, main hands
+the run host the resolved store path; ADR-0002 consequence 11, every request bounded and expiry refusing rather than
+proceeding; REQ-WORKSPACE-141, initialization resolution in the open's slot, with REQ-TRACE-476/482's queue, REQ-NOTIFY-224's
+hook review and OQ-279's configuration load beside it; REQ-WORKSPACE-058, discovery on open; REQ-SESSION-089 and
+REQ-EVENTS-084, a store that cannot be opened refuses the run. Raised 2026-10-20 by the host-independent finish (local session),
+bundle `loc1-main-rejection`, from
+[`a-workspace-opened-timeout-is-an-unhandled-main-rejection.md`](../defects/fixed/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md);
+the bundle's range OQ-386 to OQ-387, its first number. Renumbered at landing if `main` holds it.)*
+
+**What is open.** A workspace open has two hops. The workspace service opens the store and answers `workspace.opened`. Main
+then hands the store to the run host in its own `workspace.opened` request, bounded at 5,000 ms. When that reply misses the
+bound, main cannot tell what happened. The run host may have opened the store and answered late (the likely case:
+[the run host's skill discovery runs before its reply](../defects/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md)).
+It may have refused, or it may never answer. A late reply finds no pending request and is dropped. The specification states
+what a store that cannot be opened owes (the run refused, the reason reported). It says nothing about a hand-off between
+two processes of one application whose outcome is unknown. Until 2026-10-20 the timeout was a rejection out of the launch,
+which ended main's start-up.
+
+**What the build proceeds under.** The reading of a reply that is not `workspace.ack`, which the code already had for
+`refused`. The missed reply is one warning line in the application log. The window keeps the workspace the service opened.
+The open's slot is not scheduled (initialization resolution, the board's queue, the hook review or no-provider notice, the
+configuration's load). Nothing is shown to the person. A run then started in that window meets whatever the run host holds.
+That is its store if the reply was only late, or `workspace.unknown` ("That workspace is not open in the run host") if not. A rejection of the launch's
+whole open (a `workspace.open` request to the service that gets no reply) leaves the window standing with no workspace
+open, as a refused open does.
+
+**What a ruling decides.** One of these, or another:
+- **(a) As built.** Log it, keep the workspace, skip the slot. **Costs:** after a slow hand-off, initialization, the queue and
+  the hook review do not run until the workspace is opened again, and nothing tells the person.
+- **(b) Wait for the late reply.** Main keeps listening past the bound for the late reply and schedules the slot when it comes.
+  The window is not held, and the request is still bounded, but its slot is not. **Costs:** a second state for a request (expired,
+  yet still answerable), which `ProcessLink` does not have. And it works against consequence 11's "expiry refuses rather than
+  proceeds".
+- **(c) Refuse the open.** The window stands with no workspace open, as a refused store leaves it, with a notice naming the
+  condition. **Costs:** a run host that only answered late holds a store no window addresses. A slow disk under load costs the
+  person their project until they open it again.
+- **(d) Hand off once more.** Main sends `workspace.opened` again, bounded, before deciding (a) or (c). The run host's case
+  sets its entry for the id again, but opens a second connection to the store without closing the first, so the case must change
+  too. **Costs:** a second bound's wait, up to 10 s, before the open settles.

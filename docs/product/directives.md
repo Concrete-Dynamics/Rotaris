@@ -7272,6 +7272,8 @@ the same delegation, 2026-10-14, the ruling of [OQ-298](../architecture/open-que
 > exercised by no test or proof; a Windows host (IC-3 — *corrected 2026-10-14: a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*). The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 >
+> **Follow-up, 2026-10-20, on Windows (the Windows ARM64 session's C5).** **Still not measured:** the pair stage on Windows. `part-j-proof` reached it on one run of five and stopped there, on the proof's own window name (a forward-slash suffix that never matches a Windows path: [the note](../defects/part-j-proofs-two-window-launch-names-a-window-by-a-forward-slash-suffix-that-never-matches-on-windows.md)); the other four stopped earlier, at `pause`, on a first store refused with EPERM ([the note](../defects/a-first-store-on-windows-is-refused-with-eperm-on-its-sibling-and-the-workspace-does-not-open.md)). So the idle window's close, the running window's one question, the PD-SHELL-009 log line, `approval_withdrawn` against `approval_denied` and the held-back notice were not read on Windows. What was read: a simulated logoff over an open approval dialog withdrew it (`approval_withdrawn`, no `approval_denied`) and paused the session with its iteration open by `quit` (`docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`, stage A).
+>
 > **Follow-up, 2026-10-07, fin29 (fin28 reviewers' findings on the landed build, 2631eaf).** Four claims of the first
 > execution were short of the directive, each recorded and repaired: **the hold followed statuses, not the run** — a run
 > stopped before it had saved an active status (one released from the plan gate, or continued) lost its hold at its

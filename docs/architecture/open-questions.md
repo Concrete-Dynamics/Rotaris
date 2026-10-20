@@ -16144,3 +16144,30 @@ platform no release ships; none leaves the live run and three proofs unrunnable 
 
 **What a live run then shows.** Under the reading, a live run on this host runs its code-intelligence server as the emulated
 x64 runtime, and its discovery line says whether that works.
+
+<a id="oq-402"></a>
+
+**OQ-402 — Does the orderly shutdown at a Windows session's end fit inside what Windows allows it?** *(REQ-SHELL-121, which
+asks that a logout or shutdown run the orderly shutdown and leave no run consuming a provider; PD-ORCH-005 clauses 3, 9 and
+23; `SessionEndShutdown` in `apps/desktop/src/main/exit.ts`, which starts the shutdown from a main window's `session-end`;
+the run host's and each workspace service's `shutdown` at `deadlineMs: 30_000` in `apps/desktop/src/main/index.ts`. Raised
+2026-10-20 by the Windows 11 ARM64 session (`win-arm64-measure`), item C5, the session's range OQ-400 to OQ-449, its third
+number.)*
+
+**What is open.** Windows' public documentation of `WM_ENDSESSION` says the session can end at any time after every
+application has returned from that message. In C5's simulated logoff (stage A: `WM_QUERYENDSESSION`, then `WM_ENDSESSION`
+with `ENDSESSION_LOGOFF`, sent to the application's own windows), Electron answered the query with 1 and returned from
+`WM_ENDSESSION` within 15–16 ms, while the orderly shutdown it had started ran on: the process exited 0.9 s and 1.9 s later,
+the store written as clause 23 wants (`paused`, `application_shutdown`, the iteration open by `quit`, the dialog
+`approval_withdrawn`). Those shutdowns were short because the runs were scripted. The bounds the shutdown waits on are 30 s
+for the run host and for each workspace service, so a shutdown with a run whose tools or model call take their time can
+outlast the window Windows leaves, and what Windows does then (end the process, so the store is left as a crash leaves it and
+REQ-SESSION-047's stale detection recovers it) is the outcome clause 23 rules out. Not measured: a real logout (stage B, which
+needs the owner), and how long Windows waits on this host before it ends a process still running.
+
+**What a ruling decides.** Whether the session's end keeps the 30 s bounds and accepts the crash-shaped outcome past
+Windows' allowance; or holds the session's end while the shutdown runs (answering `WM_QUERYENDSESSION` and blocking
+`WM_ENDSESSION` until done, which Windows answers with its "this app is preventing sign-out" screen after a few seconds, and
+which Electron's `session-end` does not offer as built); or shortens the bounds at a session's end to fit, choosing which work
+in flight is cut. **The costs:** the first is today's behaviour and rests on a timing nobody has measured; the second puts a
+blocking screen in front of a person who chose to sign out; the third loses work a longer bound would have saved.

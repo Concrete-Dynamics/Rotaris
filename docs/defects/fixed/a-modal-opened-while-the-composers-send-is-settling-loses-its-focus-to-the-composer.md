@@ -76,3 +76,7 @@ the reply's release, the timeline `run_start, notice, run_end` and the focus in 
 build, **10 of 10 green** (load average 3.9 to 7.4), the focus in the dialog's field at 4.4 s every time. The whole
 `part-j-proof` then passed, every scenario, with the other plan's agents and this branch's lint on the host (load average
 14.7 at its start, 19.0 at its end).
+
+## Addendum, 2026-10-20 — on Windows
+
+The Windows ARM64 session's C5 (Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, at `51d85dd7`) ran `part-j-proof` five times; its steer-early launch (scenario 2b) met every time: the steer opened inside the settling window, was submitted once and injected once, and "[Steering prompt] go left" reached the root's record. The runs went red later, on two notes of their own (`../a-first-store-on-windows-is-refused-with-eperm-on-its-sibling-and-the-workspace-does-not-open.md`, `../part-j-proofs-two-window-launch-names-a-window-by-a-forward-slash-suffix-that-never-matches-on-windows.md`).

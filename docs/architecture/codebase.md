@@ -1487,7 +1487,7 @@ launch fails by name on a step it never pressed, and the store must show the ste
 (`../defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`); a `message_limit`
 of one pauses the run, the dialog answers "double" and the doubled limit persists; a session left paused at the limit
 is resumed on relaunch through the one reap and its dialog answers "cancel"; a user-initiated close during a run
-records `application_shutdown` with the terminal pair and no lock. Its evidence lands under `.proof/part-j-proof/`. The queue
+records `application_shutdown` with the terminal pair and no lock. Its evidence lands under `.proof/part-j-proof/`. *On Windows (2026-10-20, the Windows ARM64 session's C5) it went red five times of five, none on the control channel: four runs lost `pause`'s first store to an EPERM on its sibling (`../defects/a-first-store-on-windows-is-refused-with-eperm-on-its-sibling-and-the-workspace-does-not-open.md`), and the fifth met every scenario up to the two-window launch, which names a window by a forward-slash suffix (`../defects/part-j-proofs-two-window-launch-names-a-window-by-a-forward-slash-suffix-that-never-matches-on-windows.md`).* The queue
 launch's capture sat on a knife-edge the Parts R and S merge found (2026-09-05): the launch reaches `session.start` about
 1.2 s in and the run needs about 8 s from there — a silent 4.2 s gap at the iteration boundary of a scripted run,
 identical on both branches and on main, not diagnosed — so three runs landed 100 ms either side of the 9 s capture; it

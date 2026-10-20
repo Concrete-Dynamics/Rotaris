@@ -293,7 +293,7 @@ is turned into the same path. **On Windows Electron emits no `before-quit` at a 
 2026-10-07 (fin29) each main window's `session-end` (Windows only, and not refusable) starts the same orderly shutdown
 `window-all-closed` runs — memoized, so it runs once whichever starts it — with the quit marked as the process's exit and no
 guard asked, and the process exits when it is done (`SessionEndShutdown`, `main/exit.ts`;
-`docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`; not yet observed on a Windows host). For the quits
+`docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`; not yet observed on a Windows host — *2026-10-20: observed on a Windows ARM64 host under a SIMULATED logoff (the two end-session messages sent to the application's own windows): the line logged, exit 0 in 0.9–1.9 s, the store as clause 23 wants; a real logout is still unobserved, and Windows' allowance against the 30 s bounds is [OQ-402](../open-questions.md#oq-402)*). For the quits
 that do emit it: `before-quit` is held while any main window is open, and the main windows are closed
 all or none (`closeThroughGuards`: every guard asked, every close confirmed, then every window closed). The handler is
 `QuitOutsideAnyWindow` (`main/exit.ts`, since 2026-10-14 fin46; inline in `main/index.ts` before): it holds the quit while a

@@ -135,6 +135,14 @@ nothing. You take each proposal you accept through "Improving this skill" (SKILL
 `CHANGELOG.md` entry and review; one that crosses a protected invariant goes to the owner. A transcript can quote a
 live-run pack: no finder copies a host name, URL, key or token from one.
 
+## The skill review
+
+`references/skill-review.md`'s one reviewer is started with the Agent tool (Opus, `high`) and the fixed prompt, and
+each CHANGES-NEEDED is answered with SendMessage to that agent's id, so the same reviewer judges every pass, as SKILL.md
+step 4 asks. It is no workflow agent, so `references/environment.md`'s "Never message an agent a workflow runs" does
+not touch it. A workflow re-run with `resumeFromRunId` starts a new agent for each pass: `wf_c8aa15ec-1d4`'s three
+passes on 2026-10-14 were three agents, after one lost launch and one refused for a quoting error.
+
 ## Cost and duration, as observed
 
 A bundle took one to three hours end to end with separate verify and merge stages (before 2026-10-07); most passed on

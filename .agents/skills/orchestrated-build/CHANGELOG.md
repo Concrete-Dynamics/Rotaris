@@ -3,6 +3,17 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — the skill review runs as one agent answered by message
+
+**Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
+approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
+item F08: the friction-survey change of 2026-10-14 was reviewed as a workflow (`wf_c8aa15ec-1d4`): one run lost to a
+placeholder prompt, one launch refused on a parse error, and three passes by three different agents over 26 minutes, so
+step 4's "the same reviewer" was not met. **Changed:** `references/workflow-tool.md` gains "The skill review": the Agent
+tool and SendMessage. SKILL.md step 4 and `references/skill-review.md` are unchanged. **Verified** by `node
+scripts/orchestration.mjs self-test` and `pnpm check`; the skill-review by one reviewer agent under
+`references/skill-review.md`, which judged this entry with the others of 2026-10-20.
+
 ## 2026-10-20 — how to hand an orchestration to another session or host
 
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner

@@ -7226,7 +7226,17 @@ question dock's cancellation (`apps/desktop/src/main/commands/session.ts`), the 
 relay read until the session's rest is published *(as first built; since fin29 the same day, until the stopped run's own
 `run.result`, whose outcome notice is held too — see the follow-up below)*. The run host's count and stop are keyed by the session row's
 `workspace_root` (`Sessions.activeRunCount(workspaceRoot?)`, `Sessions.stopActiveIn`, `packages/engine/src/sessions.ts`;
-`runs.active` and `runs.stopWorkspace` in `apps/desktop/src/run-host/dispatch.ts`).
+`runs.active` and `runs.stopWorkspace` in `apps/desktop/src/run-host/dispatch.ts`). *Revision 3, built 2026-10-21 (loc1,
+`loc1-guard-2`):* `integrationAllowsClose` (`apps/desktop/src/main/integration-guard.ts`) takes the closing window's
+`othersStaying` and its own `workspaceId`, asks the reader for that workspace while another main window stays (asking nothing
+for a window that holds none) and for the instance at the last, and allows with a `warn` line on a reader that rejects;
+`guardClose` (`apps/desktop/src/main/main-windows.ts`) lets a guard (2) that rejects go on to guard (3);
+`integrationDeclinesWorkspaceOpen` is asked by `MainWindows`'s workspace-open gates with the requesting window's workspace id,
+passes a window that holds none, and goes on to gate (3) with a `warn` line on a reader that rejects; the reader's type,
+`WorktreeIntegrationRunning`, takes an optional base-workspace id, and main still wires `noWorktreeIntegration` in
+`apps/desktop/src/main/index.ts`, so nothing refuses in the built app. The update's closes, which are not this directive's
+case, ask `integrationAllowsUpdate` through `UpdaterDeps.integrationAllows` (`apps/desktop/src/main/updater/updater.ts`, OQ-361
+(a)).
 
 **Why, and what it costs.** OQ-206, ruled 2026-10-07 under the owner's delegation (R-072). Before this, the close of one of
 several windows asked nothing and ended nothing: the run kept executing and spending where no window showed it, its
@@ -7359,6 +7369,23 @@ the same delegation, 2026-10-14, the ruling of [OQ-298](../architecture/open-que
 > same round
 > ([`the-quit-log-says-it-closes-through-close-guards-beside-saying-none-is-asked.md`](../defects/fixed/the-quit-log-says-it-closes-through-close-guards-beside-saying-none-is-asked.md),
 > [`no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md`](../defects/fixed/no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md)).
+
+> **First execution of revision 3, 2026-10-21 (plan loc1, `loc1-guard-2`; Windows 11 ARM64, Node 24.18.0 arm64, dev tree):**
+> built as ruled, **held over fakes and vacuous in the built app by construction**, because main still reads
+> `noWorktreeIntegration`. **What was measured.** `integration-guard.test.ts`: the close of one of several windows refused only
+> for its own workspace's integration (the reader asked with that id, the box shown once), allowed for another workspace's
+> (a reader that answers the instance-wide asking true as well), allowed without asking for a window that holds no workspace;
+> the last window asking the instance; a reader that rejects allowing with one `warn` line; the gate's sentence for the own
+> workspace, `null` for another's, for no workspace (not asked) and for a reader that rejects (one `warn` line).
+> `main-windows.test.ts`: over windows on `C:/a` and `C:/b` with `C:/a` integrating, B's chip went on through gate 3 to the
+> chooser and switched while A's was declined with the sentence; a window with no workspace passed gate 2; a guard 2 that
+> throws went on to guard 3, which decided. Of those and the update's cases, 25 were red on the unchanged source. `pnpm
+> workspace-proof` (50 passed, 0 failed, 5 skipped on Windows) and `pnpm exit-trace-proof` (36 checks) read as before: the gate 3
+> check passes through gate 2, now asked with the requesting window's workspace id, and a person's close and the quits read as
+> they did. **What was not measured.** Any refusal or decline in the built app: no build admits an integration. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md); the gap the ruling's reading of `merge_status`
+> exposed is
+> [`a-worktree-binding-left-integrating-by-a-crash-is-never-reset-and-never-offered-for-merging-again.md`](../defects/a-worktree-binding-left-integrating-by-a-crash-is-never-reset-and-never-offered-for-merging-again.md).
 
 ---
 

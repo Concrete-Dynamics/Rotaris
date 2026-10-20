@@ -16,6 +16,18 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-21**
 
+**Guard (2) and gate (2) at the window's own project, and at the update's closes (OQ-361 ruled 2026-10-20, `PD-SHELL-009`
+revision 3; REQ-SHELL-119, REQ-SHELL-021, REQ-STARTUP-053, REQ-WORKSPACE-012, REQ-NOTIFY-056, REQ-NOTIFY-057; loc1,
+`loc1-guard-2`; 2026-10-21).** `02-process-view.md`'s close-guard paragraph now says guard (2) asks about the closing window's
+own workspace while another main window stays (never refusing a window that holds none) and about the instance at the last
+window, reads main's own record of an integration — never a binding's `merge_status` or REQ-GIT-128's lock — and allows with a
+`warn` line when the record cannot be read; its `workspace.choose` paragraph says gate 2 is asked for the requesting window's
+workspace, a window holding none passing; its `update.install` / `update.restart` paragraph adds guard (2) after the
+unsaved-settings guard, at the click and at the hand-off. `06-sequences.md`'s update sequence draws `integrationAllows` between
+the unsaved-settings guard and the run box at the click, before the successor's start and in `beforeApply`, with a paragraph
+saying why. OQ-361 is named as ruled in both. Main still reads `noWorktreeIntegration`, so nothing a view draws refuses in this
+build.
+
 **The product's own project file for a rename no project file covers (PD-MCP-004 revision 2, OQ-362; loc1, `loc1-rename`).**
 `03-runtime-view.md`'s PD-MCP-004 paragraph now states clause 5 as built: for a rename whose declaring file the runtime serves
 with its TypeScript language and no `tsconfig.json` or `jsconfig.json` covers up to the executor's root, the MCP executor places a

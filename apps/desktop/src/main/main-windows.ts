@@ -82,8 +82,10 @@ export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWind
   ) => Promise<{ readonly workspaceId: string; readonly storeFile: string } | undefined>;
   readonly closeGuard: (owner: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>) => Promise<boolean>;
   /**
-   * REQ-SHELL-021 gate 2 / REQ-STARTUP-053 gate 2: whether a worktree integration is running in this instance
-   * (`integration-guard.ts`; main reads `noWorktreeIntegration` until integration is built). A rejection declines.
+   * REQ-SHELL-021 gate 2 / REQ-STARTUP-053 gate 2 / REQ-WORKSPACE-012: whether main records a worktree integration running
+   * for the requesting window's own workspace (`integration-guard.ts`; OQ-361, ruled 2026-10-20, `PD-SHELL-009` revision
+   * 3). A window that holds no workspace is not asked about and passes; a rejection goes on to gate 3 with a `warn` line.
+   * Main reads `noWorktreeIntegration` until integration is built.
    */
   readonly integrationRunning: WorktreeIntegrationRunning;
   readonly activeRunCount: (workspaceId: string) => Promise<number | null>;
@@ -719,7 +721,7 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
       this.dependencies.log('workspace open ended by the unsaved-settings guard (REQ-SHELL-021 gate 1)');
       return { ok: false, outcome: { ok: true, value: { cancelled: true } } };
     }
-    const integrating = await integrationDeclinesWorkspaceOpen(this.dependencies.integrationRunning);
+    const integrating = await integrationDeclinesWorkspaceOpen(this.dependencies.integrationRunning, requester.workspaceId, (m) => this.dependencies.log(m));
     if (integrating !== null) {
       this.dependencies.raiseTransient(requester.wcId, 'fail', integrating);
       this.dependencies.log(`workspace open declined: ${integrating} (REQ-SHELL-021 gate 2)`);
@@ -840,7 +842,9 @@ export interface ElectronMainWindowAdapterDependencies {
   readonly closeConfirmed?: ((wcId: number) => void) | undefined;
   /**
    * REQ-SHELL-119 guard 2: a person's close of this window, asked once the renderer's guard allows and before guard 3;
-   * false refuses the close ("Integration in progress", `integrationAllowsClose`, `integration-guard.ts`).
+   * false refuses the close ("Integration in progress", `integrationAllowsClose`, `integration-guard.ts`). Under OQ-361
+   * (ruled 2026-10-20, `PD-SHELL-009` revision 3) it counts the closing window's own workspace while another main window
+   * stays, and the instance at the last; a record that cannot be read allows, and so does a rejection here.
    */
   readonly integrationAllowsClose?: ((wcId: number, win: BrowserWindow) => Promise<boolean>) | undefined;
   /** REQ-STARTUP-046 / REQ-SHELL-119 guard 3: a person's close of this window, asked once guards 1 and 2 allow. */
@@ -899,7 +903,9 @@ export interface CloseGuard {
  * A person's close asks REQ-SHELL-119's guards in their order: the renderer's (unsaved settings, guard 1), then, once
  * that allows, `integrationAllows` (a worktree integration running refuses the close unconditionally, guard 2;
  * `integration-guard.ts`), then `confirmRuns` (the active-run confirmation, guard 3; REQ-STARTUP-046,
- * `close-confirmation.ts`); guards 2 and 3 decline when they cannot answer. A declined close changes nothing. A close attempted while the guards are still being
+ * `close-confirmation.ts`). Guard 3 declines when it cannot answer; guard 2 allows and the close goes on to guard 3, since a
+ * record of an integration that cannot be read refuses no close (OQ-361, ruled 2026-10-20, `PD-SHELL-009` revision 3). A
+ * declined close changes nothing. A close attempted while the guards are still being
  * asked is held and adds no second question. The application's quit asks none of the three: it is not a person's close of the window
  * (PD-SHELL-009), and since OQ-298's ruling (2026-10-14, R-072) it takes only this guard's `confirm` and `close`
  * (`quitGuardsOutsideAnyWindow`, `exit.ts`), so the renderer's unsaved-settings guard is never asked and the edits stay unsaved. Under PD-SHELL-009 a `confirmRuns` that allows the close of one of several
@@ -925,7 +931,7 @@ export function guardClose(
     if (asking) return;
     asking = true;
     void guard.ask()
-      .then((allowed) => (allowed && integrationAllows ? integrationAllows().catch(() => false) : allowed))
+      .then((allowed) => (allowed && integrationAllows ? integrationAllows().catch(() => true) : allowed))
       .then((allowed) => (allowed && confirmRuns ? confirmRuns().catch(() => false) : allowed))
       .then((allowed) => { asking = false; if (allowed) { guard.confirm(); guard.close(); } });
   });

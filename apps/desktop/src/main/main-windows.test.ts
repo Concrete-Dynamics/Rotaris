@@ -45,8 +45,11 @@ function harness(options: {
   readonly postShowActivation?: (wcId: number) => void;
   /** The run host's count for a workspace id, as REQ-SHELL-021's gate 3 asks it (PD-SHELL-009: keyed by workspace). */
   readonly runsIn?: (workspaceId: string) => number;
-  /** Whether a worktree integration is running, as REQ-SHELL-021's gate 2 asks it; also counts each asking. */
-  readonly integrating?: () => boolean;
+  /**
+   * Whether main records a worktree integration running, as REQ-SHELL-021's gate 2 asks it: for the requesting window's
+   * workspace id under OQ-361 (`undefined` would be an instance-wide asking); each asking is counted in `gates`.
+   */
+  readonly integrating?: (workspaceId?: string) => boolean;
   /** The unsaved-settings guard's answer (REQ-SHELL-021 gate 1); true when absent. */
   readonly unsavedAllows?: () => boolean;
 } = {}) {
@@ -135,7 +138,7 @@ function harness(options: {
       return new Promise((resolve) => { openResolvers.set(workspace, resolve); });
     },
     closeGuard: async () => { gates.push('unsaved'); return options.unsavedAllows?.() ?? true; },
-    integrationRunning: async () => { gates.push('integration'); return options.integrating?.() ?? false; },
+    integrationRunning: async (workspaceId) => { gates.push('integration'); return options.integrating?.(workspaceId) ?? false; },
     activeRunCount: async (workspaceId) => { gates.push('runs'); return options.runsIn?.(workspaceId) ?? 0; },
     persistWorkspace: async (workspace) => { actions.push(`persist:${workspace}`); },
     raiseTransient: (windowId, _kind, title, _body, action) => {
@@ -1301,13 +1304,37 @@ describe("REQ-SHELL-021's gate 2: the workspace-open flow is declined while a wo
     expect(h.gates).toEqual(['unsaved', 'integration', 'runs']);
   });
 
-  it('a window that holds no workspace yet is declined all the same: the gate is not the window\'s project\'s', async () => {
+  // OQ-361, ruled 2026-10-20 (PD-SHELL-009 revision 3): gate 2 counts the requesting window's own workspace; until the ruling
+  // was built a window holding no workspace was declined all the same, the gate being instance-wide.
+  it('a window that holds no workspace yet passes gate 2: the gate is the window\'s own project\'s, and it has none', async () => {
     const h = harness({ integrating: () => true });
     const window = await h.mainWindows.build({ workspace: '(no workspace)', origin: 'launch' });
     h.folders.push('C:/b');
-    const declined = await h.mainWindows.choose(window.wcId, { newWindow: false });
+    const switched = await h.mainWindows.choose(window.wcId, { newWindow: false });
+    expect(switched.ok && (switched.value as { workspace?: string }).workspace).toBe('C:/b');
+    expect(h.gates).toEqual(['unsaved']);
+    expect(h.folders).toEqual([]);
+    expect(h.notices).toEqual([]);
+  });
+
+  it('counts the requesting window\'s own workspace: an idle window opens another project while another window\'s project integrates (OQ-361)', async () => {
+    // The instance-wide asking (no id) answers true as well: a gate asked for the whole instance would decline B.
+    const h = harness({ integrating: (id) => id === undefined || id === 'id:C:/a' });
+    const integratingWindow = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    await h.mainWindows.open(integratingWindow.wcId, 'C:/a');
+    const idle = await h.mainWindows.build({ workspace: 'C:/b', origin: 'open-request' });
+    await h.mainWindows.open(idle.wcId, 'C:/b');
+    h.folders.push('C:/c');
+    const switched = await h.mainWindows.choose(idle.wcId, { newWindow: false });
+    expect(h.gates).toEqual(['unsaved', 'integration', 'runs']);
+    expect(switched.ok && (switched.value as { workspace?: string }).workspace).toBe('C:/c');
+    h.gates.length = 0;
+    h.folders.push('C:/d');
+    const declined = await h.mainWindows.choose(integratingWindow.wcId, { newWindow: false });
     expect(declined).toEqual({ ok: true, value: { cancelled: true, declined: 'Finish the worktree integration before opening another project.' } });
-    expect(h.folders).toEqual(['C:/b']);
+    expect(h.gates).toEqual(['unsaved', 'integration']);
+    expect(h.notices).toContainEqual({ windowId: integratingWindow.wcId, title: 'Finish the worktree integration before opening another project.' });
+    expect(h.mainWindows.ordered().map((w) => w.workspace).sort()).toEqual(['C:/a', 'C:/c']);
   });
 
   it("PD-SHELL-001's add route evaluates no gate, gate 2 included", async () => {
@@ -1369,13 +1396,15 @@ describe('a person\'s close asks REQ-SHELL-119\'s three guards in their fixed or
     expect(log).toEqual(['held', 'integration']);
   });
 
-  it('a guard 2 that throws keeps the window, as a guard 3 that cannot be asked does', async () => {
+  // OQ-361, ruled 2026-10-20 (PD-SHELL-009 revision 3): a guard 2 that cannot answer refuses no close. Until the ruling was
+  // built it kept the window, as a guard 3 that cannot be asked does.
+  it('a guard 2 that throws goes on to guard 3, which decides', async () => {
     const log: string[] = [];
     const win = fakeWindow(log);
     guardClose(win, async () => true, () => log.push('confirmed'), async () => { log.push('runs'); return true; }, async () => { throw new Error('no box'); });
     win.attempt();
     await settle();
-    expect(log).toEqual(['held']);
+    expect(log).toEqual(['held', 'runs', 'confirmed', 'close', 'passed']);
   });
 
   it('the application\'s quit asks none of them (OQ-298): the guard\'s ask is the renderer\'s alone', async () => {

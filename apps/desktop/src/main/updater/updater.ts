@@ -37,6 +37,10 @@ import { cleanupPortableBackup, type StrategyFiles, type StrategySpawn } from '.
  *    main window (`confirmUnsaved`) at the click, ahead of OQ-86's active-run confirmation, and again immediately before
  *    the installer or the successor starts; a Cancel, or a Save that fails, starts nothing. The portable's in-place apply
  *    and the installer's 1,200 ms auto-close are programmatic and ask nothing.
+ *  - REQ-SHELL-119 guard (2) / REQ-NOTIFY-056 (OQ-361, ruled 2026-10-20 under R-072): the same user-initiated closes ask
+ *    whether a worktree integration is running anywhere in the instance (`integrationAllows`), after the unsaved-settings
+ *    guard and before the run box, at the click and again at the hand-off; one running, or a record that cannot be read,
+ *    starts nothing. The portable's apply and the auto-close ask nothing (REQ-NOTIFY-057).
  *  - REQ-STARTUP-111: nothing here reads a configuration value, a preference other than the dismissed version, or an
  *    environment variable; the endpoint is `feed.ts`'s constant. There is no way in to turn the check off.
  */
@@ -108,10 +112,25 @@ export interface UpdaterDeps {
    * portable's in-place apply, which closes nothing, nor by the installer's auto-close, which is programmatic.
    */
   readonly confirmUnsaved: (ask: UnsavedAsk) => Promise<boolean>;
+  /**
+   * REQ-SHELL-119 guard (2) / REQ-NOTIFY-056 (OQ-361, ruled 2026-10-20 under R-072): resolves true when main records no
+   * worktree integration running anywhere in the instance — instance-wide, since every window closes — and false when one
+   * runs (main has shown "Integration in progress") or the record cannot be read. Asked at the click of `Restart now`, and of
+   * `Update now` / `Try again` on the installer flavour, AFTER `confirmUnsaved` and BEFORE OQ-86's run box, and again at the
+   * hand-off in the same place. A dependency that throws declines. Never asked by the portable's in-place apply nor by the
+   * installer's auto-close (REQ-NOTIFY-057).
+   */
+  readonly integrationAllows: (ask: IntegrationAsk) => Promise<boolean>;
 }
 
 /** One asking of the unsaved-settings guard (OQ-311): which action, and whether it is the click's or the hand-off's. */
 export interface UnsavedAsk {
+  readonly action: 'install' | 'restart';
+  readonly moment: 'click' | 'hand-off';
+}
+
+/** One asking of REQ-SHELL-119's guard (2) at an update's close (OQ-361): which action, and which moment. */
+export interface IntegrationAsk {
   readonly action: 'install' | 'restart';
   readonly moment: 'click' | 'hand-off';
 }
@@ -179,8 +198,15 @@ export const UPDATE_DECLINED = { ok: true, value: { cancelled: true, reason: 'a 
  */
 export const UPDATE_DECLINED_UNSAVED = { ok: true, value: { cancelled: true, reason: 'a window\'s unsaved settings were neither saved nor discarded, so nothing was started (REQ-SHELL-124, OQ-311)' } } as const satisfies CommandOutcome;
 
+/**
+ * OQ-361's ruling (2026-10-20, R-072): REQ-SHELL-119 guard (2) and REQ-NOTIFY-056 at the click or at the hand-off — main
+ * records a worktree integration running, or could not read its record; nothing was started and the notice is as it was
+ * (at the installer's hand-off, the verified download is discarded and the offer comes back in the same notice).
+ */
+export const UPDATE_DECLINED_INTEGRATION = { ok: true, value: { cancelled: true, reason: 'a worktree integration is running, or its state could not be read, so nothing was started (REQ-SHELL-119 guard (2), REQ-NOTIFY-056, OQ-361)' } } as const satisfies CommandOutcome;
+
 /** What the hand-off's guards answered: `null` to go on, or the declined outcome of the guard that stopped it. */
-type HandOffDecline = typeof UPDATE_DECLINED | typeof UPDATE_DECLINED_UNSAVED;
+type HandOffDecline = typeof UPDATE_DECLINED | typeof UPDATE_DECLINED_UNSAVED | typeof UPDATE_DECLINED_INTEGRATION;
 
 export type ActivationOutcome = 'not-updatable' | 'demo' | 'refused' | 'failed' | 'none' | 'dismissed' | 'already-offered' | 'already-applied' | 'offered';
 
@@ -347,7 +373,8 @@ export function createUpdater(deps: UpdaterDeps): Updater {
       onProgress, signal: abort.signal, ...(deps.keys === undefined ? {} : { keys: deps.keys }),
       // OQ-86: the installer's hand-off closes the windows, and the download ran for as long as it took — a run begun
       // meanwhile is asked about here, immediately before the installer is started. OQ-311: so is a window's unsaved
-      // settings, first, since a window may have become dirty while the download ran.
+      // settings, first, since a window may have become dirty while the download ran; OQ-361: then guard (2), since an
+      // integration may have been admitted meanwhile.
       ...(updatable.flavour === 'installer'
         ? { beforeApply: async () => { const declined = await confirmAtHandOff('install', click, true); if (declined !== null) declinedBy = declined; return declined === null; } }
         : {}),
@@ -375,15 +402,16 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     state = { kind: 'handed-off', offer, noticeId };
     deps.log('info', `update install: handed off to ${result.applied.quitRequired ? 'the installer; the window closes after the single 1200 ms delay' : 'the platform'} (REQ-STARTUP-119)`);
     if (result.applied.quitRequired && autoClose === null) {
-      // OQ-311: the auto-close is programmatic and asks nothing; both guards were asked before the installer started.
+      // OQ-311, OQ-361: all three guards (unsaved settings, guard (2)'s integration, the run box) were asked immediately
+      // before the installer started; the auto-close is programmatic and asks nothing (REQ-NOTIFY-057).
       autoClose = deps.timers.after(millis(INSTALLER_AUTO_CLOSE_MS), () => { deps.closeWindows(); });
     }
     return { ok: true, value: { outcome: 'handed-off', quitRequired: result.applied.quitRequired } };
   };
 
   const doRestart = async (offer: Offer, noticeId: number, target: string, click: ClickAnswer): Promise<CommandOutcome> => {
-    // OQ-311 then OQ-86, immediately before the successor starts: every window's unsaved settings are asked again, and
-    // the count re-read; a run past what the click's answer covered is asked about.
+    // OQ-311, OQ-361 then OQ-86, immediately before the successor starts: every window's unsaved settings are asked again,
+    // then whether an integration runs, and the count re-read; a run past what the click's answer covered is asked about.
     const declined = await confirmAtHandOff('restart', click, false);
     if (declined !== null) return declined;
     deps.log('info', `update restart: starting the updated Rotaris at ${target} as the successor (REQ-STARTUP-121)`);
@@ -434,6 +462,22 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     return proceed;
   };
 
+  /**
+   * OQ-361, at the click and again at the hand-off, after the unsaved-settings guard and before OQ-86's run box: true when
+   * no worktree integration runs in the instance. A dependency that throws declines, as `askUnsaved` does.
+   */
+  const askIntegration = async (action: 'install' | 'restart', moment: 'click' | 'hand-off'): Promise<boolean> => {
+    let proceed: boolean;
+    try {
+      proceed = await deps.integrationAllows({ action, moment });
+    } catch (cause) {
+      deps.log('warn', `update ${action}: guard (2) could not be asked at the ${moment} (${messageOf(cause)}); nothing is started (REQ-SHELL-119 (2), REQ-NOTIFY-056, OQ-361)`);
+      return false;
+    }
+    if (!proceed) deps.log('info', `update ${action}: a worktree integration is running at the ${moment}; nothing is started and the notice stays as it was (REQ-SHELL-119 (2), REQ-NOTIFY-056, OQ-361)`);
+    return proceed;
+  };
+
   /** OQ-86, at the click: no run active asks nothing; otherwise the answer, or `null` when the user returned. */
   const confirmAtClick = async (action: 'install' | 'restart'): Promise<ClickAnswer | null> => {
     const activeRuns = await readActiveRuns(action);
@@ -442,11 +486,12 @@ export function createUpdater(deps: UpdaterDeps): Updater {
   };
 
   /**
-   * Immediately before the installer or the successor starts: OQ-311's unsaved-settings guard first, then OQ-86's run count
-   * re-read. `null` to go on, or the declined outcome of the guard that stopped it.
+   * Immediately before the installer or the successor starts: OQ-311's unsaved-settings guard first, then OQ-361's guard
+   * (2), then OQ-86's run count re-read. `null` to go on, or the declined outcome of the guard that stopped it.
    */
   const confirmAtHandOff = async (action: 'install' | 'restart', click: ClickAnswer, downloadedSince: boolean): Promise<HandOffDecline | null> => {
     if (!await askUnsaved(action, 'hand-off')) return UPDATE_DECLINED_UNSAVED;
+    if (!await askIntegration(action, 'hand-off')) return UPDATE_DECLINED_INTEGRATION;
     const activeRuns = await readActiveRuns(action);
     if (!mustAskAtHandOff(click, activeRuns, downloadedSince)) return null;
     deps.log('info', `update ${action}: ${activeRuns === null ? 'the run count is unknown' : `${activeRuns} run${activeRuns === 1 ? ' is' : 's are'} active`} at the hand-off, which the click's answer did not cover; the confirmation is asked again (REQ-STARTUP-046, OQ-86)`);
@@ -486,11 +531,12 @@ export function createUpdater(deps: UpdaterDeps): Updater {
       // The confirmation is part of the one operation in flight (REQ-STARTUP-114), so a second click while its box is
       // open is refused rather than asking twice.
       return guard(async () => {
-        // OQ-86 (REQ-STARTUP-046) and OQ-311 (REQ-SHELL-124): only the installer's hand-off closes the windows
-        // (REQ-STARTUP-119), so only it asks — the unsaved-settings guard of every window, then the run box — at the
-        // click, before anything is downloaded, and again before the installer starts (`beforeApply`); the portable's
-        // in-place apply closes nothing and asks nothing.
+        // OQ-86 (REQ-STARTUP-046), OQ-311 (REQ-SHELL-124) and OQ-361 (REQ-SHELL-119 guard (2), REQ-NOTIFY-056): only the
+        // installer's hand-off closes the windows (REQ-STARTUP-119), so only it asks — the unsaved-settings guard of every
+        // window, then whether an integration runs, then the run box — at the click, before anything is downloaded, and
+        // again before the installer starts (`beforeApply`); the portable's in-place apply closes nothing and asks nothing.
         if (updatable.flavour === 'installer' && !await askUnsaved('install', 'click')) return UPDATE_DECLINED_UNSAVED;
+        if (updatable.flavour === 'installer' && !await askIntegration('install', 'click')) return UPDATE_DECLINED_INTEGRATION;
         const click = updatable.flavour === 'installer' ? await confirmAtClick('install') : NOTHING_ASKED;
         if (click === null) return UPDATE_DECLINED;
         if (state.kind !== 'offered' && state.kind !== 'failed') return { ok: false, code: 'update.none', headline: 'No update is offered' };
@@ -509,10 +555,12 @@ export function createUpdater(deps: UpdaterDeps): Updater {
       if (!classification.updatable) return { ok: false, code: 'update.notApplied', headline: 'No installed update to restart into' };
       const { target } = classification;
       return guard(async () => {
-        // OQ-311 (REQ-SHELL-119 guard (1), REQ-SHELL-124) then OQ-86 (REQ-STARTUP-046, REQ-STARTUP-121): the restart
-        // always closes the windows, so it asks first, at the click — every window's unsaved settings, then the run box —
-        // and `doRestart` asks both again immediately before the successor starts.
+        // OQ-311 (REQ-SHELL-119 guard (1), REQ-SHELL-124), OQ-361 (guard (2), REQ-NOTIFY-056) then OQ-86 (REQ-STARTUP-046,
+        // REQ-STARTUP-121): the restart always closes the windows, so it asks first, at the click — every window's unsaved
+        // settings, then whether an integration runs, then the run box — and `doRestart` asks all three again immediately
+        // before the successor starts.
         if (!await askUnsaved('restart', 'click')) return UPDATE_DECLINED_UNSAVED;
+        if (!await askIntegration('restart', 'click')) return UPDATE_DECLINED_INTEGRATION;
         const click = await confirmAtClick('restart');
         if (click === null) return UPDATE_DECLINED;
         if (state.kind !== 'applied') return { ok: false, code: 'update.notApplied', headline: 'No installed update to restart into' };

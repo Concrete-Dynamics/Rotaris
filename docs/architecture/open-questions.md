@@ -15424,7 +15424,8 @@ things the requirement does not fix, all reachable only once integration is buil
 - **(c) A state that cannot be read.** Whether an integration state main cannot read counts as one running (the close refused, with
   no answer that lets it through) or as none.
 
-**What the build proceeds under.** (a) No update path asks guard (2): the updater's closes ask guards (1) and (3) as OQ-311 and OQ-86
+**What the build proceeds under** *(superseded 2026-10-20 by the ruling below; kept as the reading the build proceeded under
+until then)*. (a) No update path asks guard (2): the updater's closes ask guards (1) and (3) as OQ-311 and OQ-86
 ruled, and an integration running would not hold them. (b) The guard and the gate are instance-wide, as the requirement is written:
 any integration running refuses every main window's close and declines every window's workspace-open flow. (c) A state that cannot
 be read counts as an integration running, as an active-run count that cannot be read counts as a run active (REQ-STARTUP-046's
@@ -15521,6 +15522,30 @@ Both advocates set deferral aside, and so does the ruling. Nothing a first-relea
 - an integration is admitted after an update's hand-off has passed its guards, in the 1,200 ms before the installer's auto-close (REQ-SHELL-120).
 
 **What a live run then shows.** Nothing. No build integrates a worktree, so no live scenario reaches guard (2), gate (2) or the update's question.
+
+*Built 2026-10-21 (plan loc1, bundle `loc1-guard-2`), over fakes, vacuous in the built app by construction:*
+- *(b) and (c) at a person's close: `integrationAllowsClose` (`apps/desktop/src/main/integration-guard.ts`) asks the reader,
+  now `WorktreeIntegrationRunning = (workspaceId?) => Promise<boolean>`, for the closing window's own workspace while
+  another main window stays, nothing for a window that holds none, and the instance at the last window; a reader that
+  rejects writes one `warn` line and allows, and `guardClose` (`main-windows.ts`) lets a guard (2) that rejects go on to
+  guard (3). Wired in `index.ts` with `anotherMainWindowStays` and the window record's `workspaceId`.*
+- *(b) and (c) at the workspace-open flow: `integrationDeclinesWorkspaceOpen` takes the requesting window's workspace id,
+  passes a window that holds none without asking, and goes on to gate (3) with a `warn` line on a reader that rejects.*
+- *(a): `integrationAllowsUpdate` asks the instance, shows the box while one runs and declines on a reader that rejects;
+  `UpdaterDeps.integrationAllows` (`updater/updater.ts`) is asked after `confirmUnsaved` and before the run box at the click
+  of `Restart now` and of the installer's `Update now` / `Try again`, and in `confirmAtHandOff` before the successor's start
+  and in `beforeApply`, a decline answering `UPDATE_DECLINED_INTEGRATION`; the portable's apply and the 1,200 ms auto-close
+  ask nothing.*
+- *The reader is still `noWorktreeIntegration`, answering false with and without an id, so nothing refuses in the built app.*
+
+*The tests: `integration-guard.test.ts` (the close's four scopes, the unreadable record, the gate's three cases and its
+unreadable record, `integrationAllowsUpdate`'s four), `main-windows.test.ts` (gate 2 over two windows, a window with no
+workspace passing it, a guard 2 that throws going on to guard 3) and `updater.test.ts`'s OQ-361 block (both refusals of each
+action, the order at both moments, the portable, the auto-close, a dependency that throws) with the OQ-311 block's order
+gaining the integration entries: 25 cases red on the unchanged source. `workspace-proof` and `exit-trace-proof` read as
+before on Windows; no proof reaches a refusal. The row is in [`first-executions.md`](first-executions.md); the defect the
+ruling's reading of `merge_status` exposed is recorded as
+[`a-worktree-binding-left-integrating-by-a-crash-is-never-reset-and-never-offered-for-merging-again.md`](../defects/a-worktree-binding-left-integrating-by-a-crash-is-never-reset-and-never-offered-for-merging-again.md).*
 
 <a id="oq-331"></a>
 

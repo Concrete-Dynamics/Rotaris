@@ -10,7 +10,7 @@ import { FEED_ACCEPT, FEED_ENDPOINT, FEED_TIMEOUT_MS, SUMMARY_FALLBACK } from '.
 import type { NetworkResponse, StagingArea, UpdateNetwork } from './install.js';
 import type { StrategyFiles, StrategySpawn } from './strategies.js';
 import { passFailedSentence } from './successor.js';
-import { createUpdater, DOWNLOAD_IN_PROGRESS, downloadingMessage, downloadingTitle, FINISH_TITLE, INSTALLED_TITLE, INSTALLER_AUTO_CLOSE_MS, NOT_INSTALLED_MESSAGE, NOT_INSTALLED_TITLE, offerTitle, RESTART_NOW, RETURN_TO_WINDOW, TRY_AGAIN, UPDATE_DECLINED, UPDATE_DECLINED_UNSAVED, UPDATE_NOW, mustAskAtHandOff, updateCloseBox, updateCloseDetail, updateCloseMessage, type UpdaterDeps } from './updater.js';
+import { createUpdater, DOWNLOAD_IN_PROGRESS, downloadingMessage, downloadingTitle, FINISH_TITLE, INSTALLED_TITLE, INSTALLER_AUTO_CLOSE_MS, NOT_INSTALLED_MESSAGE, NOT_INSTALLED_TITLE, offerTitle, RESTART_NOW, RETURN_TO_WINDOW, TRY_AGAIN, UPDATE_DECLINED, UPDATE_DECLINED_INTEGRATION, UPDATE_DECLINED_UNSAVED, UPDATE_NOW, mustAskAtHandOff, updateCloseBox, updateCloseDetail, updateCloseMessage, type UpdaterDeps } from './updater.js';
 
 const PORTABLE = 'Rotaris-0.2.0-windows-x64-portable.exe';
 const SETUP = 'Rotaris-0.2.0-windows-x64-setup.exe';
@@ -105,7 +105,7 @@ const portable: Classification = { updatable: true, flavour: 'portable', target:
 const installer: Classification = { updatable: true, flavour: 'installer', target: INSTALL_DIR };
 const dev: Classification = { updatable: false, reason: 'a development or source-tree launch, not a released standalone artifact (REQ-STARTUP-106)' };
 
-function harness(options: { classification?: Classification; feed?: FeedOptions; running?: string; dismissed?: string; keys?: 'carried' | 'empty' | 'other'; successor?: 'passes' | 'fails' | 'never' | 'refused'; volumeFiles?: Record<string, string>; confirm?: boolean | 'throws' | 'hold' | readonly boolean[]; runs?: readonly (number | null | 'throws')[]; unsaved?: boolean | 'throws' | readonly boolean[] } = {}) {
+function harness(options: { classification?: Classification; feed?: FeedOptions; running?: string; dismissed?: string; keys?: 'carried' | 'empty' | 'other'; successor?: 'passes' | 'fails' | 'never' | 'refused'; volumeFiles?: Record<string, string>; confirm?: boolean | 'throws' | 'hold' | readonly boolean[]; runs?: readonly (number | null | 'throws')[]; unsaved?: boolean | 'throws' | readonly boolean[]; integrating?: boolean | 'throws' | readonly boolean[] } = {}) {
   const srv = server(options.feed);
   const clock = new FakeClock();
   const logged: string[] = [];
@@ -129,6 +129,8 @@ function harness(options: { classification?: Classification; feed?: FeedOptions;
   const asked: string[] = [];
   /** OQ-311: each asking of every window's unsaved-settings guard, and the order of both guards' askings together. */
   const unsavedAsked: string[] = [];
+  /** OQ-361: each asking of guard (2) at an update's close. */
+  const integrationAsked: string[] = [];
   const order: string[] = [];
   const held: ((answer: boolean) => void)[] = [];
   const runs = options.runs ?? [0];
@@ -174,9 +176,19 @@ function harness(options: { classification?: Classification; feed?: FeedOptions;
       if (Array.isArray(unsaved)) return (unsaved as readonly boolean[])[unsavedAsked.length - 1] ?? true;
       return (unsaved as boolean | undefined) ?? true;
     },
+    // OQ-361: guard (2), instance-wide — no integration runs unless told otherwise; a sequence says, asking by asking,
+    // whether one is running; the answer is that none is.
+    integrationAllows: async (integrationAsk) => {
+      integrationAsked.push(`${integrationAsk.action}@${integrationAsk.moment}`);
+      order.push(`integration:${integrationAsk.action}@${integrationAsk.moment}`);
+      const integrating = options.integrating;
+      if (integrating === 'throws') throw new Error('the integration record could not be asked');
+      if (Array.isArray(integrating)) return !((integrating as readonly boolean[])[integrationAsked.length - 1] ?? false);
+      return !((integrating as boolean | undefined) ?? false);
+    },
   };
   const updater = createUpdater(deps);
-  return { updater, srv, clock, logged, recorded, broadcasts, notices, staging, vol, spawned, started, asked, unsavedAsked, order, held, reads: () => reads, closed: () => closed, dismissed: () => dismissed };
+  return { updater, srv, clock, logged, recorded, broadcasts, notices, staging, vol, spawned, started, asked, unsavedAsked, integrationAsked, order, held, reads: () => reads, closed: () => closed, dismissed: () => dismissed };
 }
 
 describe('activation — REQ-STARTUP-106, REQ-STARTUP-114, REQ-STARTUP-057, REQ-STARTUP-150', () => {
@@ -730,7 +742,7 @@ describe('the unsaved-settings guard at the update\'s closes — OQ-311, REQ-SHE
     await accepted.updater.activate({ windowId: 1 });
     await accepted.updater.install();
     expect(await accepted.updater.restart()).toEqual({ ok: true, value: { outcome: 'handed-over' } });
-    expect(accepted.order).toEqual(['unsaved:restart@click', 'runs:restart@click', 'unsaved:restart@hand-off']);
+    expect(accepted.order).toEqual(['unsaved:restart@click', 'integration:restart@click', 'runs:restart@click', 'unsaved:restart@hand-off', 'integration:restart@hand-off']);
     expect(accepted.started).toEqual([TARGET]);
     expect(accepted.closed()).toBe(1);
   });
@@ -753,7 +765,7 @@ describe('the unsaved-settings guard at the update\'s closes — OQ-311, REQ-SHE
     const accepted = harness({ classification: installer, confirm: [true, true], runs: [1, 1] });
     await accepted.updater.activate({ windowId: 1 });
     expect(await accepted.updater.install()).toMatchObject({ ok: true, value: { outcome: 'handed-off' } });
-    expect(accepted.order).toEqual(['unsaved:install@click', 'runs:install@click', 'unsaved:install@hand-off', 'runs:install@hand-off']);
+    expect(accepted.order).toEqual(['unsaved:install@click', 'integration:install@click', 'runs:install@click', 'unsaved:install@hand-off', 'integration:install@hand-off', 'runs:install@hand-off']);
     expect(accepted.spawned).toHaveLength(1);
   });
 
@@ -843,6 +855,126 @@ describe('the unsaved-settings guard at the update\'s closes — OQ-311, REQ-SHE
     expect(UPDATE_DECLINED_UNSAVED.ok).toBe(true);
     expect(UPDATE_DECLINED_UNSAVED.value.cancelled).toBe(true);
     expect(UPDATE_DECLINED_UNSAVED.value.reason).toMatch(/REQ-SHELL-124, OQ-311/);
+  });
+});
+
+/*
+ * OQ-361, ruled 2026-10-20 by the consortium under R-072 (point (a)): `Restart now`, and `Update now` / `Try again` on the
+ * installer flavour, close every main window, so REQ-SHELL-119 guard (2) ("refused unconditionally") and REQ-NOTIFY-056
+ * ("Closing the application while an isolated worktree integration is running is refused") govern them as written. Each asks
+ * whether an integration runs anywhere in the instance after the unsaved-settings guard and before OQ-86's run box, at the
+ * click and again at the hand-off; one running, or a record that cannot be read, starts nothing. The portable's apply and the
+ * 1,200 ms auto-close ask nothing (REQ-NOTIFY-057). Until the ruling was built no update path asked guard (2).
+ */
+describe('guard (2) at the update\'s closes — OQ-361, REQ-SHELL-119 guard (2), REQ-NOTIFY-056', () => {
+  it('Restart now refused at the click: nothing is started, no run box or count, nothing closed, the notice unchanged', async () => {
+    const h = harness({ runs: [1], integrating: true });
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    const notice = h.notices.current();
+    expect(notice).toMatchObject({ title: INSTALLED_TITLE, action: { label: RESTART_NOW } });
+    expect(await h.updater.restart()).toEqual(UPDATE_DECLINED_INTEGRATION);
+    expect(h.order).toEqual(['unsaved:restart@click', 'integration:restart@click']);
+    expect(h.asked).toEqual([]);
+    expect(h.reads()).toBe(0);
+    expect(h.started).toEqual([]);
+    expect(h.closed()).toBe(0);
+    expect(h.notices.current()).toEqual(notice);
+    expect(h.updater.state().kind).toBe('applied');
+    expect(h.updater.inFlight()).toBe(false);
+    expect(h.logged.some((l) => /^info: update restart: a worktree integration is running at the click; nothing is started and the notice stays as it was/.test(l))).toBe(true);
+  });
+
+  it('Restart now refused at the hand-off: no successor is started and `Update installed` stays as it was', async () => {
+    const h = harness({ integrating: [false, true] });
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    const notice = h.notices.current();
+    expect(await h.updater.restart()).toEqual(UPDATE_DECLINED_INTEGRATION);
+    expect(h.integrationAsked).toEqual(['restart@click', 'restart@hand-off']);
+    expect(h.started).toEqual([]);
+    expect(h.closed()).toBe(0);
+    expect(h.notices.current()).toEqual(notice);
+    expect(h.updater.state().kind).toBe('applied');
+  });
+
+  it('installer Update now refused at the click: nothing is downloaded and the offer stays as it was', async () => {
+    const h = harness({ classification: installer, runs: [1], integrating: true });
+    await h.updater.activate({ windowId: 1 });
+    const offer = h.notices.current();
+    const requestsBefore = h.srv.requests.length;
+    expect(await h.updater.install()).toEqual(UPDATE_DECLINED_INTEGRATION);
+    expect(h.order).toEqual(['unsaved:install@click', 'integration:install@click']);
+    expect(h.reads()).toBe(0);
+    expect(h.srv.requests.length).toBe(requestsBefore);
+    expect(h.spawned).toEqual([]);
+    expect(h.notices.current()).toEqual(offer);
+    expect(h.updater.state().kind).toBe('offered');
+    expect(h.updater.inFlight()).toBe(false);
+  });
+
+  it('installer Update now refused at the hand-off, after the download: nothing is spawned and the offer comes back in the same notice', async () => {
+    const h = harness({ classification: installer, integrating: [false, true] });
+    await h.updater.activate({ windowId: 1 });
+    expect(await h.updater.install()).toEqual(UPDATE_DECLINED_INTEGRATION);
+    expect(h.integrationAsked).toEqual(['install@click', 'install@hand-off']);
+    expect(h.srv.requests.some((r) => r.url.endsWith(SETUP))).toBe(true);
+    expect(h.spawned).toEqual([]);
+    // Stopped before the run count was re-read at the hand-off: only the click's read happened.
+    expect(h.reads()).toBe(1);
+    expect(h.staging.dirs.size).toBe(0);
+    expect(h.notices.current()).toMatchObject({ id: 1, title: offerTitle('0.2.0'), action: { label: UPDATE_NOW } });
+    expect(h.updater.state().kind).toBe('offered');
+    h.clock.advance(INSTALLER_AUTO_CLOSE_MS * 10);
+    expect(h.closed()).toBe(0);
+    expect(h.logged.some((l) => /update install: a worktree integration is running at the hand-off/.test(l))).toBe(true);
+  });
+
+  it('accepted, both moments ask unsaved, then integration, then runs', async () => {
+    const restart = harness({ runs: [1, 2], confirm: [true, true] });
+    await restart.updater.activate({ windowId: 1 });
+    await restart.updater.install();
+    expect(await restart.updater.restart()).toEqual({ ok: true, value: { outcome: 'handed-over' } });
+    expect(restart.order).toEqual(['unsaved:restart@click', 'integration:restart@click', 'runs:restart@click', 'unsaved:restart@hand-off', 'integration:restart@hand-off', 'runs:restart@hand-off']);
+
+    const install = harness({ classification: installer, runs: [1, 1], confirm: [true, true] });
+    await install.updater.activate({ windowId: 1 });
+    expect(await install.updater.install()).toMatchObject({ ok: true, value: { outcome: 'handed-off' } });
+    expect(install.order).toEqual(['unsaved:install@click', 'integration:install@click', 'runs:install@click', 'unsaved:install@hand-off', 'integration:install@hand-off', 'runs:install@hand-off']);
+  });
+
+  it('the portable\'s Update now asks nothing: its in-place apply closes no window', async () => {
+    const h = harness({ integrating: true });
+    await h.updater.activate({ windowId: 1 });
+    expect(await h.updater.install()).toEqual({ ok: true, value: { outcome: 'replaced' } });
+    expect(h.integrationAsked).toEqual([]);
+  });
+
+  it('the installer\'s 1,200 ms auto-close asks nothing (REQ-NOTIFY-057)', async () => {
+    const h = harness({ classification: installer, integrating: [false, false, true] });
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    expect(h.integrationAsked).toEqual(['install@click', 'install@hand-off']);
+    h.clock.advance(INSTALLER_AUTO_CLOSE_MS);
+    expect(h.closed()).toBe(1);
+    expect(h.integrationAsked).toEqual(['install@click', 'install@hand-off']);
+  });
+
+  it('a dependency that throws declines with a warning: nothing starts', async () => {
+    const h = harness({ integrating: 'throws' });
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    expect(await h.updater.restart()).toEqual(UPDATE_DECLINED_INTEGRATION);
+    expect(h.started).toEqual([]);
+    expect(h.closed()).toBe(0);
+    expect(h.reads()).toBe(0);
+    expect(h.logged.some((l) => /^warn: update restart: guard \(2\) could not be asked at the click \(the integration record could not be asked\); nothing is started/.test(l))).toBe(true);
+  });
+
+  it('the declined outcome cites REQ-SHELL-119 guard (2), REQ-NOTIFY-056 and OQ-361 and is a cancellation, not a failure', () => {
+    expect(UPDATE_DECLINED_INTEGRATION.ok).toBe(true);
+    expect(UPDATE_DECLINED_INTEGRATION.value.cancelled).toBe(true);
+    expect(UPDATE_DECLINED_INTEGRATION.value.reason).toMatch(/REQ-SHELL-119 guard \(2\), REQ-NOTIFY-056, OQ-361/);
   });
 });
 

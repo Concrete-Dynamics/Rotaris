@@ -2,7 +2,7 @@
 // first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
 import './sentinel.js';
 import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
-import { integrationAllowsClose, noWorktreeIntegration } from './integration-guard.js';
+import { integrationAllowsClose, integrationAllowsUpdate, noWorktreeIntegration } from './integration-guard.js';
 import { askRendererGuard, askUnsavedInTurn, createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, RENDERER_UNSAVED_PROBE_SCRIPT, type CloseGuard, type UnsavedGuardAnswer } from './main-windows.js';
 import { createNoticeStore } from './notices.js';
 import { AuthRecovery } from './auth-recovery.js'; // REQ-NOTIFY-072..080 (the 401 note's parts C and D)
@@ -580,6 +580,26 @@ async function main(): Promise<void> {
         (wcId: number, answer: UnsavedGuardAnswer) => { answers.push(`${wcId} ${answer}`); },
       );
       log(`update ${action}: unsaved-settings guard at the ${moment} (${answers.length === 0 ? 'no main window' : answers.join(', ')}) → ${proceed ? 'go on' : 'cancelled; nothing is started'} (REQ-SHELL-119 (1), REQ-SHELL-124, OQ-311)`);
+      return proceed;
+    },
+    /*
+     * REQ-SHELL-119 guard (2), REQ-NOTIFY-056 (OQ-361, ruled 2026-10-20 under R-072, point (a)): the same clicks close every
+     * main window, so the whole instance is asked — at the click and again at the hand-off, after the unsaved-settings guard
+     * and before the run box. While main records an integration running, "Integration in progress" is shown over the active
+     * main window and nothing is started; a record that cannot be read declines with a `warn` line and no box. Main reads
+     * `noWorktreeIntegration` until integration is built, so this asks and allows.
+     */
+    integrationAllows: async ({ action, moment }) => {
+      const proceed = await integrationAllowsUpdate({
+        running: noWorktreeIntegration,
+        show: (box) => {
+          const parent = mainWindows.active()?.win;
+          return askBox(parent === undefined || parent.isDestroyed() ? null : parent, box);
+        },
+        log,
+        warn: (m) => log(m, 'warn'),
+      });
+      log(`update ${action}: guard (2) at the ${moment} → ${proceed ? 'no worktree integration is running; go on' : 'declined; nothing is started'} (REQ-SHELL-119 (2), REQ-NOTIFY-056, OQ-361)`);
       return proceed;
     },
   });
@@ -1429,14 +1449,20 @@ async function main(): Promise<void> {
     closeConfirmed: (wcId) => { quit.closeConfirmed(wcId); },
     closeGuard: (wcId, guard) => { if (guard) closeGuards.set(wcId, guard); else closeGuards.delete(wcId); },
     /*
-     * REQ-SHELL-119 guard 2: while a worktree integration runs, a person's close is refused by the informational "Integration
-     * in progress" box over the closing window. Main reads `noWorktreeIntegration` — no binding can be `'integrating'`
-     * while worktree integration is deferred (REQ-GIT-083, REQ-GIT-125..135) — so the guard holds its place and refuses nothing yet.
+     * REQ-SHELL-119 guard 2 under OQ-361 (ruled 2026-10-20, PD-SHELL-009 revision 3): while main records a worktree
+     * integration running, a person's close is refused by the informational "Integration in progress" box over the closing
+     * window — for the closing window's own workspace while another main window stays (none asked for a window that holds
+     * no workspace), and for the whole instance at the last window. A record that cannot be read allows with a `warn` line,
+     * and the close goes on to guard 3. Main reads `noWorktreeIntegration` — it admits no integration while worktree
+     * integration is deferred (REQ-GIT-083, REQ-GIT-125..135) — so the guard holds its place and refuses nothing yet.
      */
-    integrationAllowsClose: (_wcId, win) => integrationAllowsClose({
+    integrationAllowsClose: (wcId, win) => integrationAllowsClose({
+      othersStaying: () => anotherMainWindowStays(mainWindows.ordered(), wcId, (id) => quit.isClosing(id)),
+      workspaceId: mainWindows.ordered().find((m) => m.wcId === wcId)?.workspaceId,
       running: noWorktreeIntegration,
       show: (box) => askBox(win.isDestroyed() ? null : win, box),
       log,
+      warn: (m) => log(m, 'warn'),
     }),
     /*
      * REQ-STARTUP-046 / REQ-SHELL-119 guard 3 under PD-SHELL-009: a person's close of the last main window staying asks while
@@ -1494,7 +1520,9 @@ async function main(): Promise<void> {
     })
       .then((proceed: unknown) => proceed !== false)
       .catch(() => true),
-    // REQ-SHELL-021 gate 2 / REQ-STARTUP-053 gate 2: no integration can run until one is built (`integration-guard.ts`).
+    // REQ-SHELL-021 gate 2 / REQ-STARTUP-053 gate 2 / REQ-WORKSPACE-012, asked for the requesting window's own workspace
+    // (OQ-361, ruled 2026-10-20, PD-SHELL-009 revision 3; an unreadable record goes on to gate 3): no integration can run
+    // until one is built (`integration-guard.ts`).
     integrationRunning: noWorktreeIntegration,
     activeRunCount: async (workspaceId) => {
       const active = await runHost.request({ kind: 'runs.active', workspaceId }, millis(5_000)).catch(() => null);

@@ -119,6 +119,10 @@ sequenceDiagram
     M->>R: askUnsavedInTurn — active window first; a window with no guard installed skipped; each other surfaced, then asked Save/Discard/Cancel
     M-->>R: Cancel or a failed Save: { cancelled } — nothing downloaded, no run box, the notice as it was
   end
+  opt installer flavour: guard (2), instance-wide (REQ-SHELL-119 (2), REQ-NOTIFY-056, OQ-361 since 2026-10-21)
+    M->>M: integrationAllows at the click — main's own record of an integration running anywhere (noWorktreeIntegration in this build)
+    M-->>R: one running ("Integration in progress" over the active window) or the record unreadable (a warn line, no box): { cancelled } — nothing downloaded, no run box, the notice as it was
+  end
   opt installer flavour, a run active (REQ-STARTUP-046, OQ-86 since 2026-10-06)
     M->>M: activeRuns — runs.active, instance-wide; confirmClose at the click, the message box "A run is still executing", Return to the window the default
     M-->>R: returned: { cancelled } — nothing downloaded or started, the offer notice stays
@@ -133,8 +137,10 @@ sequenceDiagram
     M->>M: "Update installed" + Restart now (REQ-STARTUP-119)
     R->>M: update.restart
     M->>R: confirmUnsaved at the click — every main window's Save/Discard/Cancel in turn (OQ-311); Cancel or a failed Save → { cancelled }, no run box, nothing started
+    M->>M: integrationAllows at the click — guard (2), instance-wide (OQ-361); running or unreadable → { cancelled }, no run box, nothing started
     M->>M: confirmClose next when a run is active (REQ-STARTUP-046, OQ-86); returned → { cancelled }, nothing started
     M->>R: confirmUnsaved again just before the start (OQ-311); Cancel → { cancelled }, no successor
+    M->>M: integrationAllows again just before the start (OQ-361); running or unreadable → { cancelled }, no successor
     M->>M: activeRuns re-read just before the start; a run past what the click covered is asked about again (mustAskAtHandOff)
     M->>S: spawn <artifact> builtin:update-successor -- <this endpoint>, detached
     S->>S: no claim; open its own endpoint (inheritInstance)
@@ -149,7 +155,7 @@ sequenceDiagram
     end
     M-->>S: {"ok":true,"record":"passed"} (should the connection end without it, the successor reads the record)
     M->>M: destroy the windows; the ordinary quit; close leaves a record that no longer names it
-  else installer: beforeApply — every window's unsaved settings asked again (OQ-311), then activeRuns re-read and any run active now asked about again (OQ-86); either declined → the download discarded, the offer back in place, { cancelled }
+  else installer: beforeApply — every window's unsaved settings asked again (OQ-311), then guard (2) asked again (OQ-361), then activeRuns re-read and any run active now asked about again (OQ-86); any declined → the download discarded, the offer back in place, { cancelled }
     M->>M: spawn the setup, detached (REQ-STARTUP-125)
     M->>M: "Finish the update", no action; the window closes after ONE 1200 ms delay (REQ-STARTUP-119)
   else any failure
@@ -182,6 +188,16 @@ and each window's answer. A renderer asked again while its dialog is open joins 
 (`apps/desktop/src/renderer/guard-question.ts`), and an answer that lets the close go ahead (a Save that succeeded, a Discard)
 takes the published guard down before it is given (`settleGuard`, since fin47), so a probe at the hand-off that arrives before
 React's effect finds no stale guard to ask again. The portable's apply and the 1,200 ms auto-close ask nothing.
+
+*Since 2026-10-21 (OQ-361, ruled 2026-10-20 by the consortium under R-072, point (a)):* the same clicks close the application,
+so REQ-SHELL-119 guard (2) and REQ-NOTIFY-056 govern them as written. **Between** the unsaved-settings guard and the run box, at
+the click and again at the hand-off (before the successor's start, and in `beforeApply` before the installer is spawned), main
+asks whether it records a worktree integration running anywhere in the instance (`UpdaterDeps.integrationAllows` →
+`integrationAllowsUpdate`, `main/integration-guard.ts`). While one runs, "Integration in progress" is shown over the active main
+window and the answer is `UPDATE_DECLINED_INTEGRATION`, starting nothing (at the installer's hand-off, the declined path
+above); a record that cannot be read declines the same way with a `warn` line and no box. One log line per asking names the
+action, the moment and the answer. Main reads `noWorktreeIntegration`, since worktree integration is deferred, so in this build
+the question allows every time. The portable's apply and the 1,200 ms auto-close ask nothing (REQ-NOTIFY-057).
 
 A successor that cannot be started surfaces through `Update not installed` and nothing closes; one that never
 signals leaves this instance holding its record and its window, with no timeout (REQ-STARTUP-121, ADR-0055). A

@@ -76,7 +76,7 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   23:28 UTC on 2026-10-02 and again during the owner's pause of 2026-10-03 to 04); the disk survived every time, and
   after a reboot no orphaned `Xvfb` is left (one after a container restart at 19:35 UTC on 2026-10-02 left `:111` and
   `:112`).
-- **What survives:** scheduled check-ins (`send_later`), workflow journals
+- **What survives:** scheduled check-ins, workflow journals
   (`~/.claude/projects/<project>/<session>/subagents/workflows/<run>/journal.jsonl`), and the branches agents
   committed to. An agent stopped mid-step leaves commits and sometimes an uncommitted edit.
 - **Recovery** is a `render` with `--runs RUNS.txt` (SKILL.md §4 gives the whole command, `--profile` included) and
@@ -99,6 +99,10 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
 - **On a limit's reset**, nothing resumes by itself: the limit stopped every agent mid-step. Probe with one small agent; once
   it answers, `render --runs RUNS.txt` (SKILL.md §4) and relaunch each plan, which resumes from its journal where it stopped
   (2026-10-06 to 13, every time with nothing lost).
+- **A one-shot check-in is used up by a limit.** The `send_later` check-in that fired at 16:30 UTC on 2026-10-15 met
+  "You've hit your weekly limit · resets Oct 19, 9pm (UTC)", was refused, and was never re-armed: nothing ran from
+  the reset until the owner wrote at 07:18 UTC on 2026-10-20, about ten hours later. A recurring check-in (SKILL.md
+  §3) fires again after a refused turn.
 - **A reviewer lost mid-landing** (a merge agent, before 2026-10-07) leaves its bundle branch rebased but unpushed
   (the rebased head detached in its landing worktree, `<repo>-wt-integ-<id>-<short>`), or a rebase in progress in the
   bundle worktree. Nothing is lost: the re-rendered review's landing step 0, which it runs first, finds a landing that

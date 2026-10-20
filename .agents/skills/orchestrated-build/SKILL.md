@@ -107,9 +107,10 @@ that leaves a bundle unsettled. Launch with `Workflow({ scriptPath: "$S/run-1.js
 first line of `$S/RUNS.txt`. Each reviewer lands from its bundle's own landing worktree (`<integ>-<short>`: the profile's
 `integ`, a dash, the bundle's short name), which it creates when missing and removes after the landing.
 
-Schedule a fallback check-in (`send_later`, ~120 minutes) whose message says: read the last run of `RUNS.txt`, run
-`status`, look for another writer on main (`references/repository.md`), recover if it stopped, else re-arm
-silently. Re-arm at every check-in. It survives restarts; background tasks do not.
+Schedule a recurring fallback check-in bound to this session (`create_trigger`, every two hours, its minute jittered)
+whose message says: read the last run of `RUNS.txt`, run `status`, look for another writer on main
+(`references/repository.md`), recover if it stopped, else end the turn silently. It survives restarts and a turn a
+usage limit refused (`references/environment.md`, Limits); background tasks and a one-shot `send_later` do not.
 
 ## 4. While it runs
 

@@ -3,6 +3,18 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — a recurring check-in that a refused turn cannot use up
+
+**Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
+approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
+item F21: the one-shot check-in fired at 16:30:35 UTC on 2026-10-15 into the weekly limit, was refused and never
+re-armed, so about 10 h 18 min passed idle after the 2026-10-19 21:00 reset; fin47's second acceptance round
+(`wf_6c9b5f5a-3db` lines 40 to 43) was abandoned and the rest handed to another host. **Changed:** SKILL.md §3 schedules
+a recurring check-in bound to the session in place of the re-armed `send_later`, about the same length;
+`references/environment.md`, Limits, records the one-shot's failure and Restarts no longer names `send_later` alone as
+what survives. **Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check`; the skill-review by one
+reviewer agent under `references/skill-review.md`, which judged this entry with the others of 2026-10-20.
+
 ## 2026-10-20 — at most two plans build at once on four CPUs
 
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner

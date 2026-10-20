@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { app, repo } from './harness.mjs';
-import { assertOpened, emptyWorkingDirectory, enclosingRepository, openedWorkspace, SETUP_RESIDUE, setupResidue } from './working-directory.mjs';
+import { assertOpened, emptyWorkingDirectory, enclosingRepository, openedWorkspace, sameDirectory, SETUP_RESIDUE, setupResidue } from './working-directory.mjs';
 
 const scratch = join(repo, '.proof', `working-directory-test-${process.pid}`);
 const elsewhere: string[] = [];
@@ -28,7 +28,7 @@ const OPENED_THE_CHECKOUT = [
 describe('emptyWorkingDirectory — where a launch with no workspace argument runs', () => {
   it('under `.proof/` is new, empty and in no repository: the harness\'s git bar stops discovery there', () => {
     const made = emptyWorkingDirectory(join(scratch, 'working-directory'));
-    expect(made).toBe(realpathSync(join(scratch, 'working-directory')));
+    expect(sameDirectory(made, join(scratch, 'working-directory'))).toBe(true);
     expect(enclosingRepository(made)).toBeNull();
   });
 
@@ -61,9 +61,9 @@ describe('openedWorkspace / assertOpened — what the launch opened, from its lo
     expect(openedWorkspace('[main …] info    main window 1 loaded for /tmp/a b/c (origin launch)\n')).toBe('/tmp/a b/c');
   });
 
-  it('fails the launch acceptance measured: it opened the checkout, not its empty working directory', () => {
+  it('fails the launch acceptance measured: it opened the checkout, not its own working directory', () => {
     expect(() => assertOpened(OPENED_THE_CHECKOUT, '/home/user/Rotaris-crw-wt-accept/.proof/settings-proof/profile/working-directory', 'no-workspace'))
-      .toThrow('no-workspace opened /home/user/Rotaris-crw-wt-accept/apps/desktop, not its empty working directory');
+      .toThrow('no-workspace opened /home/user/Rotaris-crw-wt-accept/apps/desktop, not its own working directory');
   });
 
   it('passes a launch that opened its working directory', () => {
@@ -92,5 +92,66 @@ describe('setupResidue — what the code-intelligence setup left in a directory'
   it('reads exactly the two names `apps/desktop/.gitignore` exists for', () => {
     const ignored = readFileSync(join(app, '.gitignore'), 'utf8').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => l.replace(/\/$/, ''));
     expect([...SETUP_RESIDUE].sort()).toEqual(ignored.sort());
+  });
+});
+
+/**
+ * Whether the logged workspace is the working directory, compared as each side writes it. The app logs
+ * `canonicalPath`'s spelling (`realpathSync.native`, an upper-case drive letter); Node's JavaScript `realpathSync` keeps
+ * the letter case and the 8.3 short names it was given. Measured on Windows 11 ARM64 on 2026-10-20 (plan `loc1`):
+ * `c:/dev/rotaris-crw-wt-loc1-proofcwd/.proof` reads back as given from `realpathSync` and as
+ * `C:/dev/Rotaris-crw-wt-loc1-proofcwd/.proof` from `realpathSync.native` (both in backslashes), and the tree's short name
+ * `C:/dev/ROA627~1` as itself and as the long name. `settings-proof` started through a path spelled in lower case failed
+ * `assertOpened` at its first launch, which had opened exactly its working directory
+ * (`docs/defects/fixed/assertopened-compares-the-working-directory-as-javascripts-realpath-spells-it.md`).
+ */
+describe('sameDirectory / assertOpened — one directory, however each side spells it', () => {
+  /** A working directory as the app logs it on Windows: `canonicalPath`'s spelling. */
+  const WD = 'C:\\dev\\Rotaris-crw-wt-x\\.proof\\settings-proof\\profile\\working-directory';
+  it('on Windows, one directory whatever the letter case, the separator or a trailing separator', () => {
+    expect(sameDirectory('c:\\users\\ganga\\appdata\\local\\temp\\wd', 'C:\\Users\\ganga\\AppData\\Local\\Temp\\wd\\', 'win32')).toBe(true);
+    expect(sameDirectory('C:/dev/Rotaris-crw-wt-x/.proof/settings-proof/profile/working-directory', WD, 'win32')).toBe(true);
+    expect(sameDirectory('C:\\dev\\Rotaris-crw-wt-x\\apps\\desktop', WD, 'win32')).toBe(false);
+  });
+
+  it('elsewhere, letter case names another directory, and only a trailing separator is folded', () => {
+    expect(sameDirectory('/p/Working-Directory', '/p/working-directory', 'linux')).toBe(false);
+    expect(sameDirectory('/p/working-directory/', '/p/working-directory', 'linux')).toBe(true);
+  });
+
+  it('passes a Windows launch whose log spells its working directory in another letter case, and still fails the checkout', () => {
+    // The pair `settings-proof` read when started as `node c:/dev/rotaris-crw-wt-loc1-proofcwd/…/settings-proof.mjs`.
+    const log = `[main …] info    main window 1 loaded for ${WD} (origin launch)\n`;
+    const asked = WD.toLowerCase();
+    expect(assertOpened(log, asked, 'no-workspace', 'win32')).toBe(WD);
+    expect(() => assertOpened(log, asked, 'no-workspace', 'linux')).toThrow('not its own working directory');
+    const checkout = '[main …] info    main window 1 loaded for C:\\dev\\Rotaris-crw-wt-x\\apps\\desktop (origin launch)\n';
+    expect(() => assertOpened(checkout, asked, 'no-workspace', 'win32'))
+      .toThrow('no-workspace opened C:\\dev\\Rotaris-crw-wt-x\\apps\\desktop, not its own working directory');
+  });
+
+  it.runIf(process.platform === 'win32')('makes the working directory in the spelling the app logs, from a path spelled in another letter case', () => {
+    const asked = join(scratch, 'working-directory').toLowerCase();
+    const made = emptyWorkingDirectory(asked);
+    const onDisk = join(realpathSync.native(scratch), 'working-directory').replace(/^[a-z]:/, (d) => d.toUpperCase());
+    expect(made).toBe(onDisk);
+    // What the JavaScript `realpathSync` answers for the same spelling, and what `assertOpened` compared until plan `loc1`.
+    expect(realpathSync(asked)).not.toBe(onDisk);
+  });
+
+  it.runIf(process.platform === 'win32')('makes it in the long name from an 8.3 short name, where the volume keeps one', (context) => {
+    // The parent in its short name, the working directory itself in its own: `emptyWorkingDirectory` removes and makes the
+    // last component, so that one is made under the name it is given.
+    const parent = join(scratch, 'a-parent-with-a-long-name');
+    mkdirSync(parent, { recursive: true });
+    // `%~sI` is cmd's short-name expansion; verbatim, since Node would otherwise escape the quotes cmd reads.
+    const shortParent = execFileSync('cmd.exe', ['/d', '/s', '/c', `"for %I in ("${parent}") do @echo %~sI"`], { encoding: 'utf8', windowsVerbatimArguments: true }).trim();
+    if (shortParent.toLowerCase() === parent.toLowerCase()) context.skip('the volume keeps no 8.3 short names');
+    const short = join(shortParent, 'working-directory');
+    const long = join(parent, 'working-directory');
+    const made = emptyWorkingDirectory(short);
+    expect(made).toBe(realpathSync.native(long).replace(/^[a-z]:/, (d) => d.toUpperCase()));
+    expect(realpathSync(short)).not.toBe(made);
+    expect(sameDirectory(short, long)).toBe(true);
   });
 });

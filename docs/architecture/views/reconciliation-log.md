@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-20**
 
+**`assertOpened` compares the working directory in the app's spelling (plan `loc1`, `proof-cwd`; fin47's review finding
+`fin47-accept1-3`; REQ-SHELL-010).** `01-component-view.md`'s sentence on `scripts/lib/working-directory.mjs` now says the
+logged workspace is compared as one directory in `canonicalPath`'s spelling, case-insensitively on Windows, and that the
+module mirrors that spelling rather than importing `@rotaris/platform`. No other view changed: the product is unchanged.
+
 **workspace-proof's and updater-proof's launches with no workspace argument run in a directory of their own (plan `loc1`,
 `proof-cwd`; REQ-SHELL-010, REQ-WORKSPACE-007).** `01-component-view.md` names `scripts/lib/working-directory.mjs` as those
 two proofs' too, its `setupResidue`, and `lib/driver.mjs`'s `startApp` `cwd`, which runs a driven launch in the directory its

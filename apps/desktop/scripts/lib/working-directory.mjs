@@ -18,7 +18,7 @@
  * what the code-intelligence setup leaves in a directory it ran in, so a proof can show the checkout gained none.
  */
 import { existsSync, mkdirSync, readdirSync, realpathSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { REDIRECTING } from '../../../../tools/build-id/build-id.mjs';
 
@@ -35,13 +35,40 @@ export function enclosingRepository(directory) {
 }
 
 /**
- * `path`, made new and empty, as its real path. It throws when the directory lies in a git repository: a launch run there
- * with no workspace argument would open that repository's tree, and index it.
+ * `path` as the app writes a workspace it opened (`canonicalPath` in `packages/platform/src/canonical.ts`): resolved under
+ * `platform`'s rule, the long real name the filesystem answers (`realpathSync.native`) when it exists on this host, no
+ * trailing separator, and on Windows an upper-case drive letter. Node's JavaScript `realpathSync` is not that spelling:
+ * on Windows it keeps the letter case and the 8.3 short names it was given
+ * (`docs/defects/fixed/assertopened-compares-the-working-directory-as-javascripts-realpath-spells-it.md`).
+ */
+export function spelledAsTheAppDoes(path, platform = process.platform) {
+  const { resolve, sep } = platform === 'win32' ? win32 : posix;
+  let spelled = resolve(path);
+  if (platform === process.platform) {
+    try { spelled = realpathSync.native(spelled); } catch { /* not on disk: the resolved spelling, as the app keeps it */ }
+  }
+  if (spelled.length > 1 && spelled.endsWith(sep)) spelled = spelled.slice(0, -1);
+  return platform === 'win32' ? spelled.replace(/^[a-z]:/, (drive) => drive.toUpperCase()) : spelled;
+}
+
+/**
+ * Whether `a` and `b` name one directory under `platform`'s rule: each spelled as the app spells it, then compared, on
+ * Windows without regard to letter case (the rule `samePath` applies), elsewhere exactly.
+ */
+export function sameDirectory(a, b, platform = process.platform) {
+  const [x, y] = [spelledAsTheAppDoes(a, platform), spelledAsTheAppDoes(b, platform)];
+  return platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
+}
+
+/**
+ * `path`, made new and empty, spelled as the app will log it once a launch opens it (`spelledAsTheAppDoes`). It throws
+ * when the directory lies in a git repository: a launch run there with no workspace argument would open that repository's
+ * tree, and index it.
  */
 export function emptyWorkingDirectory(path) {
   rmSync(path, { recursive: true, force: true });
   mkdirSync(path, { recursive: true });
-  const real = realpathSync(path);
+  const real = spelledAsTheAppDoes(path);
   const repository = enclosingRepository(real);
   if (repository !== null) {
     throw new Error(`the working directory ${real} lies in the git repository ${repository}: a launch with no workspace argument opens its working directory, and would read and index that tree`);
@@ -57,11 +84,14 @@ export function openedWorkspace(log) {
   return line ? line[1] : null;
 }
 
-/** Throws unless the launch `name` opened exactly `directory`. */
-export function assertOpened(log, directory, name) {
+/**
+ * Throws unless the launch `name` opened `directory` and nothing else, compared as one directory under `platform`'s rule
+ * (`sameDirectory`), and returns the path as the log spells it.
+ */
+export function assertOpened(log, directory, name, platform = process.platform) {
   const opened = openedWorkspace(log);
   if (opened === null) throw new Error(`${name}: the log names no workspace its main window opened`);
-  if (opened !== directory) throw new Error(`${name} opened ${opened}, not its empty working directory ${directory}`);
+  if (!sameDirectory(opened, directory, platform)) throw new Error(`${name} opened ${opened}, not its own working directory ${directory}`);
   return opened;
 }
 

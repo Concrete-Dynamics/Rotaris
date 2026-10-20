@@ -297,7 +297,9 @@ make it true. `scripts/lib/staged-resources.mjs` is `settings-proof`'s, for stag
 the proof also takes the writer's list of git's redirecting variables from `build-id.mjs`, and so does
 `scripts/lib/working-directory.mjs`, also `settings-proof`'s since fin47, and `workspace-proof`'s and `updater-proof`'s
 since plan `loc1`. That module makes the empty directory, in no repository, where a launch with no workspace argument
-runs (the app opens its working directory, REQ-SHELL-010 (c)), reads from the launch's log what it opened, and names the
+runs (the app opens its working directory, REQ-SHELL-010 (c)), reads from the launch's log what it opened (one directory
+in `canonicalPath`'s spelling, which the module mirrors since a script runs no TypeScript package; case-insensitively on
+Windows), and names the
 setup residue (`.rotaris`, `.serena`) a proof reads in `apps/desktop` before and after its launches. A driven launch runs
 in `apps/desktop` unless its caller names a directory as `lib/driver.mjs`'s `startApp` `cwd`, which those two proofs'
 launches with no workspace do. `package.mjs` launches the

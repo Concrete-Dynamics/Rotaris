@@ -27,8 +27,12 @@ works for a user, and it can spend money. Proofs pass on a product a live run st
 
 ## The permission system
 
-- The auto-mode classifier refuses a live-run launch as a "Real-World Transactions" action: for agents, which cannot
-  see the owner's words, and for the orchestrator until the owner authorized it in the conversation.
+- The auto-mode classifier judges every live-run launch, and its verdict for an agent is not predictable: the
+  profile's absolute default command and its detached duress launch passed for the live-runner four times (15:58 and
+  16:42 UTC on 2026-10-14, 03:10 and 04:01 on 2026-10-15) and were refused once as "Real-World Transactions" (12:11
+  on 2026-10-15), with no allow rule in force. The orchestrator's own launches pass once the owner has authorized
+  live runs in the conversation. Never run the live runs yourself beforehand as a hedge: the live-runner tries, and
+  a refusal reaches you through the hand-off (SKILL.md §5).
 - **A refusal is final for that action**: never retried, split, re-quoted, or handed to another agent. In order: the
   agent stops and reports what it was doing and the exact command it sent; the orchestrator, which holds the owner's
   quoted words in the conversation, runs the launch itself, and the classifier judges that launch on them (finacc's

@@ -3,6 +3,18 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — the classifier's live-run verdict, as observed
+
+**Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
+approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
+item F16: live-runs.md said the classifier refuses an agent's live-run launch, yet the identical absolute commands
+passed for the live-runner four times and were refused once; believing the sentence, the orchestrator ran the live runs
+itself beforehand as a hedge (about 1 h 45 min of duplicate runs before fin46). **Changed:** `references/live-runs.md`,
+The permission system, states the observed record and that the orchestrator never hedges by running the live runs first.
+The drafted allow rule and asking for it at planning stand unchanged. **Verified** by `node scripts/orchestration.mjs
+self-test` and `pnpm check`; the skill-review by one reviewer agent under `references/skill-review.md`, which judged
+this entry with the others of 2026-10-20.
+
 ## 2026-10-20 — merge rules for the record files agents wrote resolvers for
 
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner

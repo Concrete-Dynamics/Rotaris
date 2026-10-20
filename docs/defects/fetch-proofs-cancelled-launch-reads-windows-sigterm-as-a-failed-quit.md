@@ -12,6 +12,8 @@ then alone on each tree at a CPU load of 73 to 74 % with 15 to 20 of another tre
 readings (`interrupted`, `InterruptedError`, no issue filed) were never taken. `exit-trace-proof` met the same platform fact and
 was repaired on `main` by sending what Windows can send (`51d85dd7`); `fetch-proof` was not.
 
+Seen again by plan loc1's bundle `loc1-terminal-kill` (2026-10-20/21): its builder met the same refusal in four runs, two in `C:/dev/Rotaris-crw-wt-loc1-terminalkill` at `0c1b3641` and two at the fork point `0d89e971` (CPU load 46 to 91 % before the launches, 4 to 19 Electron processes of other trees), and its reviewer once more in the landing tree `C:/dev/Rotaris-crw-wt-integ-loc1-loc1-terminalkill` at `edd65901` (CPU 100 %, 15 others). That bundle had recorded it as `fetch-proofs-quit-by-sigterm-exits-1-on-windows.md`; the copy was folded into this note at its landing.
+
 ## Specs
 
 None contradicted by the product. The proof's quit instrument assumes a POSIX signal; PD-TOOLS-013 revision 2's reading is not

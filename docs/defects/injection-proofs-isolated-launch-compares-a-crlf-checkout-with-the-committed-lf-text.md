@@ -13,6 +13,8 @@ committed LF text fails: "isolated: PRESENCE â€” workspace:AGENTS.md's block (â€
 whole". Red on both trees, three times (a loaded sweep, then alone on each at a CPU load of 48 to 65 %). The product read the file
 the worktree holds, which is what REQ-WORKSPACE-050 asks; the proof's expectation does not allow for the checkout's line endings.
 
+Seen again by plan loc1's bundle `loc1-terminal-kill` (2026-10-20/21): its builder met the same refusal in four runs, two in `C:/dev/Rotaris-crw-wt-loc1-terminalkill` at `0c1b3641` and two at the fork point `0d89e971` (CPU load 52 to 100 %, 8 to 27 Electron processes of other trees), with Git for Windows' `core.autocrlf=true` in its system configuration (`C:/Program Files/Git/etc/gitconfig`, the installer's default), and its reviewer once more in the landing tree `C:/dev/Rotaris-crw-wt-integ-loc1-loc1-terminalkill` at `edd65901` (CPU 100 %, 12 others). That bundle had recorded it as `injection-proofs-isolated-run-reads-a-crlf-instruction-file-under-core-autocrlf.md`; the copy was folded into this note at its landing.
+
 ## Specs
 
 None contradicted by the product, as far as the reading goes; whether an injected instruction file's CRLF endings should be

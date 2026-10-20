@@ -113,10 +113,65 @@ function toolFingerprint(name: string, args: string): string {
 
 const messageFingerprint = (text: string): string => `message\0${text}`;
 
+/** The longest string the anchor takes: a path, not a document. */
+const ANCHOR_CAP = 512;
+/** The most values the anchor visits in one call's arguments. */
+const ANCHOR_VISITS = 10_000;
+const PATH_NAMED = /path|file/i;
+
+/** A path-named argument's value: one line, no tab, within the cap. Spaces are allowed: a path may hold them. */
+const namedPathValue = (text: string): boolean => text.length > 0 && text.length <= ANCHOR_CAP && !/[\r\n\t\0]/.test(text);
+
+/**
+ * A value under any other name reads as a path when it is one word (no whitespace or quote) within the cap and holds a
+ * separator or ends in a file extension holding a letter. Each test is one character class, linear in the string.
+ */
+function pathShaped(text: string): boolean {
+  if (text.length === 0 || text.length > ANCHOR_CAP || /[\s"'`]/.test(text)) return false;
+  if (/[\\/]/.test(text)) return true;
+  const extension = text.slice(text.lastIndexOf('.') + 1);
+  return text.includes('.') && /^[A-Za-z0-9]{1,8}$/.test(extension) && /[A-Za-z]/.test(extension);
+}
+
+/**
+ * REQ-ORCH-104's path anchor, read from the call's argument VALUES: the first string, in the order the members were written and
+ * depth first, under a path- or file-named argument (`path`, `file_path`, `paths[0]`, …), else the first path-shaped string
+ * anywhere; `null` when none is, or the text does not parse. The reason it replaces, kept beside it: until 2026-10-20 the anchor
+ * was the first match of `(?:[A-Za-z]:[\\/]|\.{0,2}[\\/])[^"'\s,}]+|[^"'\s,}]+\.[A-Za-z0-9]{1,8}` in the serialised text,
+ * whose `\.{0,2}[\\/]` takes zero dots and a backslash, so the JSON escape `\t` of an `old_string` written ahead of `path` read
+ * as a path: "Pause and reassess haet_edit around \tconst" (live run of 2026-10-14 04:30, session `dc1f4f1f`). A Windows path
+ * read in its escaped form (`C:\\x\\y.ts`), and the expression's second limb backtracked quadratically over a long run of
+ * path characters (200,000 held `check()` for 157 s).
+ */
+function pathIn(args: string): string | null {
+  let root: unknown;
+  try {
+    root = JSON.parse(args);
+  } catch {
+    return null;
+  }
+  let shaped: string | null = null;
+  const stack: { readonly value: unknown; readonly named: boolean }[] = [{ value: root, named: false }];
+  for (let visits = 0; stack.length > 0 && visits < ANCHOR_VISITS; visits += 1) {
+    const { value, named } = stack.pop()!;
+    if (typeof value === 'string') {
+      if (named && namedPathValue(value)) return value;
+      if (shaped === null && pathShaped(value)) shaped = value;
+    } else if (Array.isArray(value)) {
+      for (let i = value.length - 1; i >= 0; i -= 1) stack.push({ value: value[i], named });
+    } else if (value !== null && typeof value === 'object') {
+      const object = value as Record<string, unknown>;
+      const keys = Object.keys(object);
+      for (let i = keys.length - 1; i >= 0; i -= 1) stack.push({ value: object[keys[i]!], named: PATH_NAMED.test(keys[i]!) });
+    }
+  }
+  return shaped;
+}
+
 function pathAnchor(events: readonly SupervisorEvent[]): string {
   const tool = [...events].reverse().find((event): event is Extract<SupervisorEvent, { kind: 'tool' }> => event.kind === 'tool');
   if (!tool) return 'the current task';
-  const path = /(?:[A-Za-z]:[\\/]|\.{0,2}[\\/])[^"'\s,}]+|[^"'\s,}]+\.[A-Za-z0-9]{1,8}/.exec(tool.args)?.[0];
+  const path = pathIn(tool.args);
   return path ? `${tool.name} around ${path}` : `${tool.name} with ${tool.args.slice(0, 80) || 'the same arguments'}`;
 }
 

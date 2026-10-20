@@ -206,7 +206,8 @@ describe('loop supervisor (REQ-ORCH-099..107)', () => {
       watch(s, [['haet_edit', A], ['haet_edit', B], ['haet_edit', A], ['haet_edit', B]]);
       const decision = await s.check();
       expect(decision).toMatchObject({ kind: 'inject', activation: { trigger: 'raw-count' } });
-      expect(decision.kind === 'inject' ? decision.message : '').toContain('Pause and reassess haet_edit');
+      // The anchor is read from the values (the REQ-ORCH-104 path-anchor block below), so B's escapes ahead of its path do not take it.
+      expect(decision.kind === 'inject' ? decision.message : '').toContain('Pause and reassess haet_edit around crlf-live/greet.js.');
     });
 
     it('objects reordered at depth are one value', async () => {
@@ -261,6 +262,61 @@ describe('loop supervisor (REQ-ORCH-099..107)', () => {
       expect(await s.check()).toMatchObject({ kind: 'inject', activation: { trigger: 'repetition' } });
       // Whitespace after the value would not change a parsed value; compared as text, it is another action.
       await noTriggerXYYX(deep, `${deep} `, 't');
+    });
+  });
+
+  /*
+   * REQ-ORCH-104: the deterministic "pause and reassess" message names the circled tool and a path anchor. The anchor is read
+   * from the argument values, preferring a path- or file-named argument, never from the JSON text: there the escape `\t` of an
+   * `old_string` written ahead of `path` read as a path (live run of 2026-10-14 04:30, session dc1f4f1f: "Pause and reassess
+   * haet_edit around \tconst").
+   */
+  describe("REQ-ORCH-104: the deterministic message's path anchor is read from the argument values", () => {
+    const reject = classifier(async () => { throw new Error('offline'); });
+    const messageFor = async (name: string, args: string): Promise<string> => {
+      const s = new LoopSupervisor(sessionId, config(), reject, new FakeClock());
+      for (let i = 0; i < 4; i += 1) tool(s, name, args);
+      const decision = await s.check();
+      expect(decision.kind).toBe('inject');
+      return decision.kind === 'inject' ? decision.message : '';
+    };
+
+    it('an old_string holding a tab ahead of path anchors on the path, never on the escape', async () => {
+      const message = await messageFor('haet_edit', '{"old_string":"\\tconst greeting = \'Hello\';","new_string":"\\tconst greeting = \'Hi\';","path":"crlf-live/greet.js"}');
+      expect(message).toContain('Pause and reassess haet_edit around crlf-live/greet.js.');
+      expect(message).not.toContain('\\t');
+    });
+
+    it('one value anchors on its path whatever order its keys were written in', async () => {
+      for (const args of [
+        '{"path":"crlf-live/greet.js","content_hash":"h1","old_string":"a\\n\\tb","new_string":"c\\n\\td"}',
+        '{"content_hash":"h1","new_string":"c\\n\\td","old_string":"a\\n\\tb","path":"crlf-live/greet.js"}',
+      ]) expect(await messageFor('haet_edit', args)).toContain('haet_edit around crlf-live/greet.js.');
+    });
+
+    it('a Windows path anchors as the path it is, not as its JSON escape', async () => {
+      expect(await messageFor('read_file', '{"path":"C:\\\\x\\\\y.ts"}')).toContain('read_file around C:\\x\\y.ts.');
+    });
+
+    it('relative paths anchor, after a string holding escapes too', async () => {
+      expect(await messageFor('write_file', '{"content":"line\\nnext","path":"./a.js"}')).toContain('write_file around ./a.js.');
+      expect(await messageFor('write_file', '{"new_string":"\\tx","old_string":"\\ty","file_path":"src/a.js"}')).toContain('write_file around src/a.js.');
+    });
+
+    it('a path-shaped value under another name anchors where no path-named argument holds one', async () => {
+      expect(await messageFor('grep', '{"pattern":"needle","glob":"docs/*.md"}')).toContain('grep around docs/*.md.');
+    });
+
+    it('arguments with no path fall back to the arguments themselves, as before', async () => {
+      expect(await messageFor('grep', '{"q":"needle"}')).toContain('Pause and reassess grep with {"q":"needle"}.');
+      expect(await messageFor('haet_edit', '{"old_string":"\\tx = 1","new_string":"\\tx = 2"}')).toContain('Pause and reassess haet_edit with {"old_string":"\\tx = 1","new_string":"\\tx = 2"}.');
+    });
+
+    // Before the repair the text was searched with a regular expression that backtracks quadratically on a long run of
+    // path characters: 200,000 of them held `check()` past the test's 30 s bound (157 s measured on 2026-10-20).
+    it('a long argument text that does not parse is answered within the test bound', async () => {
+      const message = await messageFor('t', 'x'.repeat(200_000));
+      expect(message).toContain(`Pause and reassess t with ${'x'.repeat(80)}.`);
     });
   });
 

@@ -71,7 +71,8 @@ next user message; "escalate" ends the turn failed with the signal. Chosen.
    message is cut at 90 words.
 5. **Fallbacks are `REQ-ORCH-104`'s three rules**: repetition or cycle → always a loop, with a
    deterministic "pause and reassess" message naming the circled tool and a path anchor drawn from its
-   arguments; raw count → a loop only when the last three assistant messages are normalised-equal or the
+   arguments (*since 2026-10-20 read from their values, a path- or file-named argument first, never from the JSON
+   text; the section at the end*); raw count → a loop only when the last three assistant messages are normalised-equal or the
    last four tool calls share a name; stuck → always recover. `loop_detected: false` is a no-op.
    *Since 2026-10-07 ([`PD-ORCH-016`](../../product/directives.md#pd-orch-016), OQ-232): the last four tool
    calls must be **the same action** — the same name and the whole arguments, REQ-ORCH-101's `fingerprint` —
@@ -274,3 +275,21 @@ one `read_file` value, `{path: 'README.md', offset: 1}`, its keys in the repeati
 (`ROTARIS_SCRIPT=loop:readreorder:20`): on the build before, 20 calls and no activation, the session `completed`; after it,
 three activations, the first `trigger: repetition`, one `circuit_breaker_escalation` and stop reason `agent_session_aborted`
 (`loop-reordered-observed.json`). **Not measured:** a live run since the change.
+
+## 2026-10-20 — decision 5's path anchor read from the argument values (loc1)
+
+**Found by the live run of 2026-10-14 04:30** (session `dc1f4f1f`, the `loop_supervisor_activation` at 05:07:45.885): the
+deterministic message read "Pause and reassess haet_edit around \tconst", naming no file. The anchor was the first match of
+`(?:[A-Za-z]:[\\/]|\.{0,2}[\\/])[^"'\s,}]+|[^"'\s,}]+\.[A-Za-z0-9]{1,8}` in the serialised arguments, whose `\.{0,2}[\\/]`
+takes zero dots and a backslash, so the JSON escape `\t` of an `old_string` written ahead of `path` matched first
+([`fixed/the-loop-supervisors-deterministic-message-anchors-on-an-escaped-tab.md`](../../defects/fixed/the-loop-supervisors-deterministic-message-anchors-on-an-escaped-tab.md)).
+Two more readings of the same expression, found while repairing it: a Windows path anchored in its escaped form, and the
+second limb backtracked quadratically over a long run of path characters (200,000 held `check()` for 157 s).
+
+**The change** (`supervisor.ts`, `pathIn`): the arguments are parsed and walked in written order, depth first, bounded at 10,000
+values; the anchor is the first one-line string within 512 characters under a key naming a path or a file (`path`,
+`file_path`, an element of `paths`), else the first path-shaped string anywhere (one word, holding a separator or ending in a
+file extension). Arguments that do not parse, or hold no path, keep the fallback "<tool> with <the first 80 characters>".
+The key order OQ-364 made no part of sameness is no part of the anchor either. **Pinned by** `supervisor.test.ts`'s block
+"REQ-ORCH-104: the deterministic message's path anchor is read from the argument values" (six cases red on the build before,
+one guard green before and after) and the OQ-364 block's PD-ORCH-016 case. **Not measured:** a live run since the change.

@@ -905,3 +905,7 @@ calls or the snapshot reaches it. **Found:** PowerShell discards a line written 
 case that writes its next command at once stays POSIX-only
 ([`on-windows-a-command-written-in-the-same-tick-as-a-c-c-is-swallowed.md`](../../defects/on-windows-a-command-written-in-the-same-tick-as-a-c-c-is-swallowed.md)).
 **Not run:** a long call after C-c (`1..20000`) and the wide echo on both roads.
+
+## First live execution on Windows — 2026-10-20
+
+The win32 terminal shapes ran against a real model for the first time (the Windows ARM64 session's live run; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6, at `00957641`; pack `2026-10-20T07-55-35-723Z`; [`live-00957641-windows-terminal-frictions-crlf-autopsy.md`](../live-runs/live-00957641-windows-terminal-frictions-crlf-autopsy.md)). All 11 shapes were attempted and every check passed: the here-string's five lines and both of its output lines, all 40 long-output lines, the wedge's soft pause, `steady` capped at 100 s (exit 124, `session_reset`, the restored state named), an honest poll, OQ-164's paused end reported behind a new command, `git diff`'s exit 1 and a lower-case `failed` left `success`, the pipe-to-shell denied by the starter rule, no `__rot_` marker in any result. The interrupt shape did not go red as expected: the wedge had ended 3,609 ms before the model's interrupt arrived, so it reached nothing and was a NOTE; OQ-168's Windows C-c is still unread by a live model. `frictions`' SIGINT was not taken either (OQ-10's entry).

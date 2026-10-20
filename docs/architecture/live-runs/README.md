@@ -17,4 +17,5 @@ orchestrator's container, where the packs and the console logs stayed.
 | [`live-552d346-default-autopsy.md`](live-552d346-default-autopsy.md) | `552d346` | default, `2026-10-13T07-25-27-766Z` | the default pack; findings Q1 to Q3 |
 | [`live-552d346-duress-autopsy.md`](live-552d346-duress-autopsy.md) | `552d346` | duress, `2026-10-13T08-12-41-551Z` | the duress pack; findings V1 to V3, D8's count |
 | [`live-0bc3eee-fail-diagnosis.md`](live-0bc3eee-fail-diagnosis.md) | `0bc3eee` | default, `2026-10-13T12-18-40-282Z` | the pack's one FAIL, a harness defect |
+| [`live-00957641-windows-terminal-frictions-crlf-autopsy.md`](live-00957641-windows-terminal-frictions-crlf-autopsy.md) | `00957641` | terminal + frictions `2026-10-20T07-55-35-723Z`, crlf `2026-10-20T08-14-16-333Z` | the first Windows live run: the win32 terminal shapes, frictions' SIGINT, the first `crlf` anywhere, the DPAPI key source |
 | [`live-0bc3eee-default-autopsy.md`](live-0bc3eee-default-autopsy.md) | `0bc3eee` | default, `2026-10-13T12-18-40-282Z` | the rest of that pack: the first live execution of OQ-258, `PD-TOOLS-006` revision 9, `PD-TOOLS-008` revision 3 and the Q1 and Q3 repairs |

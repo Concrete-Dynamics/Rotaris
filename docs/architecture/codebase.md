@@ -879,6 +879,8 @@ all three and deleted two of them with the sandbox — so each scenario now leav
 store is copied out before the sandbox goes. Until then every defect that skill found came from a session driven
 by hand, and the live run had found exactly one defect in its life, which was its own.
 
+*First Windows live run, 2026-10-20 (the Windows ARM64 session; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6, at `00957641`; packs `2026-10-20T07-55-35-723Z` (terminal, frictions) and `2026-10-20T08-14-16-333Z` (crlf), endpoint `katalyst`, unmetered; [`live-00957641-windows-terminal-frictions-crlf-autopsy.md`](live-runs/live-00957641-windows-terminal-frictions-crlf-autopsy.md)):* the key came from the DPAPI registry file, as the run's key-source line said; `terminal` passed every check on its 11 win32 shapes, `crlf` (its first run anywhere) passed, and `frictions` failed twice — an upstream stream reset, and a child that never sent its SIGINT ([`a-signal-sent-without-session-action-is-read-as-a-query-and-dropped-silently.md`](../defects/a-signal-sent-without-session-action-is-read-as-a-query-and-dropped-silently.md)). The first attempt (`2026-10-15T15-16-50-373Z`) lost its verdicts to a `crlf` overrun ([`a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`](../defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md)).
+
 **What the model was sent, and what came back, is recorded by a loopback proxy** the sandbox's `base_url` points
 at (`apps/desktop/scripts/lib/model-traffic.mjs`, `--no-record-traffic` to bypass). The product emits one line
 per call — `run-host/host.ts`'s `onRequest`: a method, a URL, and whether an authorization header was set — and

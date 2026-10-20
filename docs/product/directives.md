@@ -9041,6 +9041,8 @@ added to the edit's success).*
 
 > **In the built app, 2026-10-13 (fin42, N52):** `pnpm edits-proof` drove this directive through the run host on a CRLF, tab-indented fixture it generates (`apps/desktop/scripts/lib/crlf-fixture.mjs`), the scripted coordinator's calls sent by the new step `tool:<key>`; load average 6.8 to 12.2 on four CPUs beside a sibling plan. **Held as written.** `window`: a two-line LF `old_string` matched the CRLF file at level 2 only and applied with "Match level: 2." and the CRLF sentence, the unchanged line written verbatim and the file CRLF throughout (clauses 1 to 3); `noop-window`: the same window with `new_string` already what the file holds was refused in clause 4's words, "old_string matches crlf/window.js only at match level 2 (lines 2-3), and those lines already hold new_string as this edit would write it; …" (revision 3), the bytes unchanged; `shift` carried the endings at level 3 after `PD-TOOLS-015`'s sentence. **What was not measured.** No live run. The live run's `crlf` scenario (`apps/desktop/scripts/lib/crlf-scenario.mjs`, default set) is written and unit-tested and is the orchestrator's to run; what it reads depends on the shapes the model chooses. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First live execution, 2026-10-20** (the Windows ARM64 session's live run; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6, at `00957641`; packs `2026-10-20T07-55-35-723Z` (terminal, frictions) and `2026-10-20T08-14-16-333Z` (crlf), endpoint `katalyst`, unmetered; [`live-00957641-windows-terminal-frictions-crlf-autopsy.md`](../architecture/live-runs/live-00957641-windows-terminal-frictions-crlf-autopsy.md)). `crlf` completed and passed: the `render.js` window edit kept every line's CRLF and landed at match level 2, its block at the file's depth. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-tools-017"></a>
@@ -9127,6 +9129,8 @@ refusal).*
 
 > **In the built app, 2026-10-13 (fin42, N52):** `pnpm edits-proof` drove this directive through the run host on a CRLF, tab-indented fixture it generates (`apps/desktop/scripts/lib/crlf-fixture.mjs`), the scripted coordinator's calls sent by the new step `tool:<key>`; load average 6.8 to 12.2 on four CPUs beside a sibling plan. **Held as written.** `exact`: a one-line anchor replaced by two LF lines at level 1 landed CRLF with clause 4's sentence and no match level named; `replace-all`: `alpha` replaced by two LF lines at both occurrences landed CRLF with the sentence; `noop-endings`: an exact `old_string` with CRLF and `new_string` the same with LF was refused in clause 3's words; `retry` (`haet_edit`) placed the sentence before ` content_hash:` (clause 4). **What was not measured.** No live run. The live run's `crlf` scenario (`apps/desktop/scripts/lib/crlf-scenario.mjs`, default set) is written and unit-tested and is the orchestrator's to run; what it reads depends on the shapes the model chooses. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First live execution, 2026-10-20** (the Windows ARM64 session's live run; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6, at `00957641`; packs `2026-10-20T07-55-35-723Z` (terminal, frictions) and `2026-10-20T08-14-16-333Z` (crlf), endpoint `katalyst`, unmetered; [`live-00957641-windows-terminal-frictions-crlf-autopsy.md`](../architecture/live-runs/live-00957641-windows-terminal-frictions-crlf-autopsy.md)). `crlf` completed and passed: the two-line `replace_all` on `list.txt` (#17) and the multi-line `haet_edit` on `greet.js` (#23) each kept every CRLF and said they wrote the file's CRLF endings. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-tools-018"></a>
@@ -9185,6 +9189,8 @@ Extends REQ-TOOLS-135 (fills its silence on the line endings an insert writes, a
 
 > **In the built app, 2026-10-13 (fin42, N52):** `pnpm edits-proof` drove this directive through the run host on a CRLF, tab-indented fixture it generates (`apps/desktop/scripts/lib/crlf-fixture.mjs`), the scripted coordinator's calls sent by the new step `tool:<key>`; load average 6.8 to 12.2 on four CPUs beside a sibling plan. **Held as written.** `insert`: two LF lines inserted at line 0 of a CRLF file landed CRLF with "Inserted 2 lines into crlf/exact.js at line 0." and clause 3's sentence. Red with clause 1's test forced false (the pre-directive insert): the two inserted lines LF-only and no sentence. **What was not measured.** No live run. The live run's `crlf` scenario (`apps/desktop/scripts/lib/crlf-scenario.mjs`, default set) is written and unit-tested and is the orchestrator's to run; what it reads depends on the shapes the model chooses. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+
+> **First live execution, 2026-10-20** (the Windows ARM64 session's live run; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6, at `00957641`; packs `2026-10-20T07-55-35-723Z` (terminal, frictions) and `2026-10-20T08-14-16-333Z` (crlf), endpoint `katalyst`, unmetered; [`live-00957641-windows-terminal-frictions-crlf-autopsy.md`](../architecture/live-runs/live-00957641-windows-terminal-frictions-crlf-autopsy.md)). `crlf` completed and passed: the insert into `greet.js` (#25) kept every CRLF and said "content was written with the file's CRLF line endings". The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -9252,6 +9258,8 @@ three is otherwise revised.*
 > at the file's depth and a level-3 near miss names the endings, and is the orchestrator's to run. Repairs
 > [`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3`](../defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First live execution, 2026-10-20** (the Windows ARM64 session's live run; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6, at `00957641`; packs `2026-10-20T07-55-35-723Z` (terminal, frictions) and `2026-10-20T08-14-16-333Z` (crlf), endpoint `katalyst`, unmetered; [`live-00957641-windows-terminal-frictions-crlf-autopsy.md`](../architecture/live-runs/live-00957641-windows-terminal-frictions-crlf-autopsy.md)). `crlf` completed and passed: not asked: the window edit landed at level 2, so neither the level-4 FAIL nor the level-3 depth check was reached, and the model made no level-3 near miss with an LF `old_string`. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

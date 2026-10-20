@@ -87,7 +87,7 @@ group of the PTY; Windows: the Job Object of ADR-0002) and then **restarts the s
 `kill_status: session_reset` and `reset_failed` come from.
 
 **Background.** A background call is a plain subprocess, shell-interpreted, stdout and stderr merged
-into one pipe, stdin piped, its own process group on POSIX and inside the Job Object on Windows. It
+into one pipe, stdin piped, its own process group on POSIX and inside the Job Object on Windows *(measured 2026-10-20, the Windows ARM64 session's C1: there is no Job Object of the product's; the background command ended with the run host when the run host was killed alone, at an orderly quit and when main was killed, consistent with libuv's kill-on-close job — ADR-0002, "First execution — 2026-10-20")*. It
 never touches a terminal session, so the concurrency statement holds by construction. Termination is
 SIGTERM, grace-until-exit capped at 5 s, then SIGKILL; on Windows, where signals do not exist, this
 maps onto graceful-close-then-terminate and the specification supplies no mapping (open question

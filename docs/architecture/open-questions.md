@@ -1507,6 +1507,8 @@ to terminal-tool process trees. REQ-HOOKS-033 retains its hook-descendant surviv
 exception. Hooks Settings discloses the distinction. Crash-path evidence remains
 part of platform validation.
 
+**Crash-path evidence on Windows, 2026-10-20** (the Windows ARM64 session's C1; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6, at `0fde55f2`). A background PowerShell heartbeat ended with its run host in every path measured: the run host killed alone with `taskkill /F` (the shell ended as the run host did, about 4-5 s after the kill), an orderly quit, and main killed without `/T` (within about 1 s). REQ-TOOLS-111 is met there with no Job Object of the product's; the observations fit libuv's kill-on-close job for the children it spawns, which would reach a hook's descendants too (not measured; ADR-0002, "First execution — 2026-10-20").
+
 **Historical question.** `REQ-HOOKS-033` states
 that descendants **may outlive the hook and the run**, that the run must neither track nor report them,
 and that termination must not widen to the process group. `REQ-TOOLS-111` requires that once the

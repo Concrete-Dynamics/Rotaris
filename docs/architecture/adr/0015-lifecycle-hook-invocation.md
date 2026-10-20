@@ -175,7 +175,7 @@ with a tree kill, which REQ-HOOKS-033 forbids in terms and which the terminal pa
 purpose. **The clauses of this paragraph are true and the conclusion drawn from them — that this
 is a Windows cost — is falsified; it is kept as written, and what replaces it is in the 2026-09-16 first
 execution below.** OQ-9 is reading (a) by construction: no Job Object exists in this codebase yet, so nothing reaches
-a hook's descendants at application exit; the question stays open for the day one does.
+a hook's descendants at application exit; the question stays open for the day one does. *2026-10-20 (the Windows ARM64 session's C1): still no Job Object of the product's, but on Windows a background terminal command ended with the run host in every path measured — the run host killed alone, an orderly quit, main killed — consistent with libuv's kill-on-close job for the children it spawns; a hook's descendant spawned the same way would be reached by it too. Not measured for a hook (ADR-0002, "First execution — 2026-10-20").*
 
 **Found — and it was not in this mechanism.** REQ-HOOKS-139's bound of 10 ms for a 100 KB payload exposed
 kernel's redaction pass (ADR-0007) as quadratic over a long alphanumeric run: 26 s for 100,000 characters,

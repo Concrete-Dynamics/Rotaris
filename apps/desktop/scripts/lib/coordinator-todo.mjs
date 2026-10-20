@@ -95,6 +95,52 @@ export function planItemIds(plan) {
   return plan.phases.flatMap((phase) => (Array.isArray(phase.tasks) ? phase.tasks.map((t) => t.id).filter((id) => typeof id === 'string') : []));
 }
 
+/** REQ-TOOLS-144's id: "stable auto-generated 8-hex-character ids", as the todo tool's `hexId` writes them. */
+export const EIGHT_HEX = /^[0-9a-f]{8}$/;
+
+/**
+ * REQ-TOOLS-144 over every coordinating session (one whose root delegated) the run kept: every phase and task id of the plans it
+ * stores — the root's agent plan (`rootPlan`, `sessions.todo`'s envelope) and each child's own (`children.todo`) — is eight hex
+ * characters. Until fin47's finding A6 a `replace` stored a new task under the id its model sent (`impl101` in the 3c03287 swarm
+ * session, docs/defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md), and only an autopsy reading the
+ * stored plans could see it; this reading makes a recurrence fail the run (fin47's reviewers' finding, bundle `fin47-accept1-6`,
+ * docs/defects/fixed/the-live-run-never-checks-that-a-stored-plan-id-is-eight-hex.md).
+ *
+ * `sessions`: `{ scenario, rootNames, calls: { tool_name, agent_name }[], rootPlan: { phases } | null, children: { canonical_name,
+ * todo }[] }[]`. Returns `coordinating` (the sessions read), `plans` and `ids` (how many plans and ids were read), and `foreign` —
+ * each id that is not eight-hex, `{ scenario, owner: 'root' | <child's canonical name>, kind: 'phase' | 'task', id }`.
+ */
+export function planIdReading(sessions) {
+  const coordinating = [];
+  const foreign = [];
+  let plans = 0;
+  let ids = 0;
+  for (const s of sessions) {
+    const roots = new Set(s.rootNames);
+    if (!(s.calls ?? []).some((c) => roots.has(c.agent_name) && c.tool_name === 'delegate')) continue;
+    coordinating.push(s.scenario);
+    const owned = [['root', s.rootPlan ?? null]];
+    for (const k of s.children ?? []) {
+      let plan = null;
+      try { plan = typeof k.todo === 'string' && k.todo !== '' ? JSON.parse(k.todo) : null; } catch { plan = null; }
+      owned.push([k.canonical_name, plan]);
+    }
+    for (const [owner, plan] of owned) {
+      if (!plan || !Array.isArray(plan.phases)) continue;
+      plans += 1;
+      for (const phase of plan.phases) {
+        const entries = [['phase', phase?.id], ...(Array.isArray(phase?.tasks) ? phase.tasks.map((t) => ['task', t?.id]) : [])];
+        for (const [kind, id] of entries) {
+          if (typeof id !== 'string') continue;
+          ids += 1;
+          if (!EIGHT_HEX.test(id)) foreign.push({ scenario: s.scenario, owner, kind, id });
+        }
+      }
+    }
+  }
+  return { coordinating, plans, ids, foreign };
+}
+
 /** The root's agent plan out of `sessions.todo`'s version-2 envelope, or null. */
 export function rootAgentPlan(todoJson) {
   if (typeof todoJson !== 'string' || todoJson === '') return null;

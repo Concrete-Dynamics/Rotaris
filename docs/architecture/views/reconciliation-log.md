@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-20**
 
+**The live run holds every stored plan id of a coordinating session to eight hex characters (2026-10-20; loc1,
+`loc1-todo-reader`; REQ-TOOLS-144, finding A6's guard).** Harness only (`apps/desktop/scripts/lib/coordinator-todo.mjs`'s
+`planIdReading`, `live-run.mjs`'s check;
+`docs/defects/fixed/the-live-run-never-checks-that-a-stored-plan-id-is-eight-hex.md`). No view describes the live run's
+readings, and none changed.
+
 **The live run's Todo state reader looks an item up by its rendered suffix, and says why one is unread (2026-10-20; loc1,
 `loc1-todo-reader`; REQ-TOOLS-144, REQ-TOOLS-147, finding A7's check).** Harness only (`apps/desktop/scripts/lib/coordinator-todo.mjs`'s
 `todoItemState`, `live-run.mjs`'s `unread` detail;

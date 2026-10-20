@@ -235,7 +235,7 @@ import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
 import { publishersOf, routingMissReading } from './lib/routing-misses.mjs';
 import { handOffCutReading } from './lib/hand-off-cuts.mjs';
 import { classifierNote, classifierReading } from './lib/intent-reading.mjs';
-import { agentPlanTaskCount, coordinatorTodoReading, heldItemReading, launchRunOverride, planItemIds, rootAgentPlan, todoItemReading } from './lib/coordinator-todo.mjs';
+import { agentPlanTaskCount, coordinatorTodoReading, heldItemReading, launchRunOverride, planIdReading, planItemIds, rootAgentPlan, todoItemReading } from './lib/coordinator-todo.mjs';
 import { PAUSE, pauseEvalSteps, pauseReading } from './lib/resume-pause.mjs';
 import { typingAllowanceMs } from './lib/prompt-typing.mjs';
 import { nearMissReading } from './lib/near-miss-edits.mjs';
@@ -1158,6 +1158,7 @@ function checkCoordinatorTodo() {
   let r;
   let items;
   let held;
+  let planIds;
   try {
     const Database = require('better-sqlite3');
     const db = new Database(oneDatabase(), { readonly: true });
@@ -1179,6 +1180,7 @@ function checkCoordinatorTodo() {
       r = coordinatorTodoReading(read);
       items = todoItemReading(read);
       held = heldItemReading(read);
+      planIds = planIdReading(read);
     } finally { db.close(); }
   } catch (cause) {
     check(false, 'the coordinator\'s tool calls and stored todo were read for every session the run kept', cause instanceof Error ? cause.message : String(cause));
@@ -1194,6 +1196,13 @@ function checkCoordinatorTodo() {
   check(items.unnamed.length === 0, 'every root implementation delegation after the coordinator\'s first todo list names the item it serves (PD-TOOLS-006 revision 6, OQ-220)', items.unnamed.length === 0 ? `${items.named.length} child(ren) named an item` : items.unnamed.map((c) => `${child(c)} (${c.persona})`).join(', '));
   check(items.overlaps.length === 0, 'no two implementation children of one plan held one todo item at once (REQ-ORCH-028, REQ-ORCH-029)', items.overlaps.length === 0 ? `${items.read.length} session(s) read` : items.overlaps.map((o) => `${o.scenario}: ${o.children.join(' and ')} on ${o.item}`).join('; '));
   check(items.stale.length === 0, 'every todo item a child served is one its plan still holds (PD-TOOLS-006 revision 6)', items.stale.length === 0 ? `${items.named.length} named item(s)` : items.stale.map((c) => `${child(c)} on ${c.item}`).join(', '));
+  // REQ-TOOLS-144 (fin47's reviewers' finding on A6, bundle `fin47-accept1-6`;
+  // docs/defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md,
+  // docs/defects/fixed/the-live-run-never-checks-that-a-stored-plan-id-is-eight-hex.md): every id of a coordinating session's stored
+  // plans, the root's and each child's own, is the tool's eight-hex one, so a recurrence of A6 fails the run rather than waiting
+  // on an autopsy. A run whose coordinators stored no plan id asked nothing: a NOTE, never a PASS.
+  if (planIds.ids === 0) noted('no coordinating session stored a plan id: REQ-TOOLS-144\'s eight-hex ids are unasked', `${planIds.coordinating.length} coordinating session(s): ${planIds.coordinating.join(', ') || 'none'}`);
+  else check(planIds.foreign.length === 0, 'every phase and task id in a coordinating session\'s stored plans is eight-hex (REQ-TOOLS-144, finding A6)', planIds.foreign.length === 0 ? `${planIds.ids} id(s) in ${planIds.plans} plan(s) of ${planIds.coordinating.length} coordinating session(s)` : planIds.foreign.map((f) => `${f.scenario} ${f.owner === 'root' ? 'root' : `child ${f.owner}`} ${f.kind} '${f.id}'`).join(', '));
   const itemRefusals = preservedSessions.flatMap(({ scenario, sessionId }) => readToolCalls(sessionId).filter((c) => c.tool_name === 'delegate' && /todo item|todo_item '/.test(c.result) && /rejected/.test(c.result)).map((c) => ({ scenario, ordinal: c.ordinal, tool_name: c.tool_name })));
   if (itemRefusals.length > 0) noted('delegations refused for their todo item: unnamed, unknown, finished or held (PD-TOOLS-006 revision 6; target at most one per run, each followed by a named delegation)', itemRefusals.map(at).join(', '));
   // PD-TOOLS-008 revision 2 and PD-TOOLS-006 revision 7 (OQ-249): a running child's item reads IN_PROGRESS in its coordinator's

@@ -21,3 +21,18 @@ is the live run's, which asserts nothing of it.
 - `apps/desktop/scripts/lib/coordinator-todo.mjs` — `rootAgentPlan` and `planItemIds` read the plans; nothing holds their ids to
   REQ-TOOLS-144's shape.
 - `AGENTS.md` — the paragraph on the readings over every session.
+
+## Outcome
+
+Repaired 2026-10-20 by loc1 (bundle `loc1-todo-reader`); harness only, no product code.
+
+- `planIdReading` (`coordinator-todo.mjs`) reads, over every coordinating session (one whose root delegated) the run kept, every
+  phase and task id of the root's stored agent plan and of each child's own stored plan, and reports each that is not eight
+  hex characters (`EIGHT_HEX`), with its owner (the root or the child) and its kind.
+- `checkCoordinatorTodo` fails "every phase and task id in a coordinating session's stored plans is eight-hex (REQ-TOOLS-144,
+  finding A6)" on one, naming it; a run whose coordinators stored no plan id reads a NOTE that the ids are unasked, never a PASS.
+  `AGENTS.md`'s paragraph on the readings over every session says so.
+- Pinned by `coordinator-todo.test.ts`'s "planIdReading (REQ-TOOLS-144, finding A6)": the 3c03287 swarm session's recorded plan
+  (`impl101`, `test101`, `doc101`, `verify101` under `e40a534e`) reports its four task ids; generated ids pass, a child's own plan
+  is read, and a session that never delegated or stored no plan adds nothing (red before: `planIdReading` did not exist). Not
+  driven live here: the next default live run, whose delegation sessions store plans, is its first execution.

@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { agentPlanTaskCount, coordinatorTodoReading, heldItemReading, holdingWindows, launchRunOverride, planItemIds, rootAgentPlan, todoItemReading, todoStates, WRITER_ROLES } from './coordinator-todo.mjs';
+import { agentPlanTaskCount, coordinatorTodoReading, heldItemReading, holdingWindows, launchRunOverride, planIdReading, planItemIds, rootAgentPlan, todoItemReading, todoStates, WRITER_ROLES } from './coordinator-todo.mjs';
 import { BUILT_IN_ROLE_TOOLS } from '@rotaris/contracts';
 
 const call = (ordinal: number, tool_name: string, agent_name = 'orchestrator', status = 'ok', failureKind: string | null = null) => ({ ordinal, tool_name, agent_name, status, failureKind });
@@ -445,5 +445,42 @@ describe('heldItemReading (PD-TOOLS-008 revision 2, OQ-249)', () => {
       expect(states.get('0000000c')).toBe('PENDING');
       expect(states.size).toBe(2);
     });
+  });
+});
+
+/**
+ * fin47's reviewers' finding (bundle `fin47-accept1-6`): A6's repair is pinned in `tools.test.ts`, but a live run would show a
+ * recurrence only to an autopsy reading the stored plans. `planIdReading` holds every id of a coordinating session's stored
+ * plans — the root's agent plan and each child's own — to REQ-TOOLS-144's auto-generated eight hex characters, so the live run
+ * fails on one that is not. Pinned against the shapes recorded at 3c03287 (pack `2026-10-15T03-10-08-908Z`): the swarm
+ * session's plan held `impl101`, `test101`, `doc101` and `verify101` under phase `e40a534e`.
+ */
+describe('planIdReading (REQ-TOOLS-144, finding A6)', () => {
+  const envelope = (phases: unknown[]) => JSON.stringify({ schema_version: 2, agent: { schema_version: 1, phases } });
+  const delegating = { rootNames: ['orchestrator'], calls: [{ ordinal: 6, tool_name: 'todo', agent_name: 'orchestrator', status: 'ok' }, { ordinal: 7, tool_name: 'delegate', agent_name: 'orchestrator', status: 'ok' }] };
+
+  it('the swarm session as recorded at 3c03287: every task id is the model\'s, each reported with its owner and kind', () => {
+    const plan = rootAgentPlan(envelope([{ id: 'e40a534e', name: 'main', tasks: ['impl101', 'test101', 'doc101', 'verify101'].map((id) => ({ id, name: id, description: '', state: 'PENDING' })) }]));
+    const r = planIdReading([{ scenario: 'delegation-swarm', ...delegating, rootPlan: plan, children: [] }]);
+    expect(r.coordinating).toEqual(['delegation-swarm']);
+    expect(r.ids).toBe(5);
+    expect(r.foreign).toEqual(['impl101', 'test101', 'doc101', 'verify101'].map((id) => ({ scenario: 'delegation-swarm', owner: 'root', kind: 'task', id })));
+  });
+
+  it('as built: generated ids pass; a child\'s own plan is read too; a session that never delegated, and a plan-less one, add nothing', () => {
+    const plan = rootAgentPlan(envelope([{ id: 'e40a534e', name: 'main', tasks: [{ id: '3f9c0a11', name: 'impl', description: '', state: 'COMPLETED' }] }]));
+    const childPlan = JSON.stringify({ schema_version: 1, phases: [{ id: 'main', name: 'main', tasks: [{ id: '0b1c2d3e', name: 'a', description: '', state: 'PENDING' }, { id: 'step 2', name: 'b', description: '', state: 'PENDING' }] }] });
+    const r = planIdReading([
+      { scenario: 'delegation', ...delegating, rootPlan: plan, children: [{ canonical_name: 'lead', todo: childPlan }, { canonical_name: 'quiet', todo: null }, { canonical_name: 'garbled', todo: '{' }] },
+      { scenario: 'edit', rootNames: ['orchestrator'], calls: [{ ordinal: 1, tool_name: 'todo', agent_name: 'orchestrator', status: 'ok' }], rootPlan: rootAgentPlan(envelope([{ id: 'p1', name: 'main', tasks: [] }])), children: [] },
+      { scenario: 'resume', ...delegating, rootPlan: null, children: [] },
+    ]);
+    expect(r.coordinating).toEqual(['delegation', 'resume']);
+    expect(r.plans).toBe(2);
+    expect(r.ids).toBe(5);
+    expect(r.foreign).toEqual([
+      { scenario: 'delegation', owner: 'lead', kind: 'phase', id: 'main' },
+      { scenario: 'delegation', owner: 'lead', kind: 'task', id: 'step 2' },
+    ]);
   });
 });

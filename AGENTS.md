@@ -394,7 +394,11 @@ only an eight-hex one, and a held item, or one a closing `replace` sent, that th
 since 2026-10-20 says of each whether no line of the Todo state carried it (`not shown`: the plan no longer held it, or never
 did) or a line carried it in a shape the reader does not take (`not parsed`, a gap of the reader's), after looking the item up
 by its exact rendered suffix (`todoItemState`;
-`docs/defects/fixed/the-live-runs-todo-state-reader-calls-an-item-it-was-not-shown-unparsed.md`); and (`PD-TOOLS-006` revision 8, OQ-250) a NOTE counts `delegate` calls
+`docs/defects/fixed/the-live-runs-todo-state-reader-calls-an-item-it-was-not-shown-unparsed.md`); since 2026-10-20 every phase
+and task id in a coordinating session's stored plans, the root's agent plan and each child's own, must be eight-hex
+(`planIdReading`, REQ-TOOLS-144), so a recurrence of fin47's finding A6, a `replace` storing an id its model chose
+(`docs/defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md`), fails the run, and a run whose coordinators
+stored no plan id says so in a NOTE; and (`PD-TOOLS-006` revision 8, OQ-250) a NOTE counts `delegate` calls
 refused for a `write_scope` given to a persona that cannot write files and child calls of a tool they do not hold
 (`lib/routing-misses.mjs`; OQ-216's target is 0 for each, the duress run at `a68f121` had one of each). Since fin38 (`PD-TOOLS-006`
 revision 9, OQ-257) the write-scope refusals are read against a bound, each re-routed by the coordinator's next `delegate`, the

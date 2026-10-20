@@ -46,7 +46,12 @@ export interface StreamControl {
   readonly resize?: (cols: number, rows: number) => void;
   readonly interrupt?: () => boolean;
   readonly endInput?: () => boolean;
-  readonly kill?: () => void | Promise<void>;
+  /**
+   * Terminates what drives the stream. False when it terminated nothing — the command had ended, and no paused one stood in
+   * its place — which the kill answers as `ended`, never ok (REQ-SHELL-092); nothing (a background session's `end`) is taken
+   * as done.
+   */
+  readonly kill?: () => boolean | void | Promise<boolean | void>;
 }
 
 export interface StreamSpec {
@@ -268,7 +273,10 @@ export class TerminalStreams {
     if (!s) return this.unknown();
     if (!s.meta.running) return { ok: false, error: 'ended' };
     if (!s.control.kill) return { ok: false, error: 'no-kill-capability' };
-    await s.control.kill();
+    // FALSIFIED, kept beside its replacement (the Windows ARM64 session's B7, 2026-10-15): "the control acted, so the kill
+    // answers ok". The foreground control dropped `killActive`'s false, so a kill of a soft-paused command that terminated
+    // nothing answered ok (docs/defects/fixed/the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md).
+    if ((await s.control.kill()) === false) return { ok: false, error: 'ended' };
     return { ok: true, value: undefined };
   }
 

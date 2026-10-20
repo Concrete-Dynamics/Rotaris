@@ -121,7 +121,8 @@ export class TerminalManager {
         resize: (cols, rows) => session.resize(cols, rows),
         interrupt: () => { session.interrupt(); return true; },
         endInput: () => { session.endInput(); return true; },
-        kill: () => { session.killActive(); },
+        // REQ-SHELL-092: the running command, or the soft-paused one; false when there was nothing to terminate.
+        kill: () => session.killActive(),
       },
     });
     if (!opened) return false;
@@ -226,7 +227,8 @@ export function earlierSentence(e: PausedEnd, polled: boolean): string {
   const how = e.end === 'exit' ? `with exit code ${e.exitCode}`
     : e.end === 'no-status' ? 'with no exit status of its own (the shell abandoned the rest of its line, as an interrupt (C-c) makes it do)'
       : e.end === 'shell' ? 'by ending the session\'s shell, with no exit code'
-        : 'when the terminal session was reset, with no exit code';
+        : e.end === 'killed' ? 'by a kill from the terminal window, with no exit code'
+          : 'when the terminal session was reset, with no exit code';
   if (e.end === 'running') {
     return polled
       ? `${capital(name)} ahead of the polled one is still running, so the shell has not started the polled command yet.`
@@ -391,6 +393,8 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
       let session = manager.session(key, cwd);
       let resetNote = '';
       if (a.reset) {
+        // A restore the window's kill of a paused command started is let finish first, so the reset does not cut it.
+        await session.settled();
         session.resetNow();
         // PD-TOOLS-001: an explicit reset is a request for a clean shell — the snapshot goes with it.
         session.clearSnapshot();
@@ -503,14 +507,23 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
       // OQ-164: the soft-paused commands reported beside this outcome — what this call waited behind, or what ended unreported.
       // Their sentences open the detail; what each wrote since it was last observed follows the detail, ahead of this
       // call's own output section, so the diagnostic block stays one line per sentence.
+      // REQ-SHELL-092: the window killed a soft-paused command since the previous observation. Its own sentence, from
+      // `earlier`, says so; the kill's reset follows the paused commands' sentences, stated as a hard timeout's is, with
+      // PD-TOOLS-001's restore.
+      const opening: string[] = [];
       let earlierOutput = '';
       if (r.earlier && r.earlier.length > 0) {
         const polled = a.command === '';
-        detail = `${r.earlier.map((e) => earlierSentence(e, polled)).join(' ')} ${detail}`;
+        opening.push(...r.earlier.map((e) => earlierSentence(e, polled)));
         for (const e of r.earlier) {
           if (e.output !== '') earlierOutput += `\nOutput of the soft-paused command \`${e.label}\` since it was last observed${e.truncated ? ' (truncated)' : ''}:\n${e.output}`;
         }
       }
+      if (r.killedPaused) {
+        const k = r.killedPaused;
+        opening.push(`The kill from the terminal window forcibly restarted the terminal session to terminate the process tree, and shell state (working directory, variables, aliases, background jobs) was lost${k.reset ? '' : ' — restarting the session failed'}.${restoreSentence(k.restore)}`);
+      }
+      if (opening.length > 0) detail = `${opening.join(' ')} ${detail}`;
       if (r.respawned) {
         // OQ-144 (the shell-exit case): the session's shell had ended between calls, so this call respawned it before its
         // command ran, and says what that cost; `session_reinitialized` is true below.

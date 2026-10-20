@@ -96,22 +96,31 @@ export interface ForegroundResult {
    * REQ-SHELL-092: the terminal window killed the command — while it ran (`'during'`), or during the first call's handshake,
    * before it was written, so it never ran (`'before'`). The process tree was ended and the session restarted with
    * PD-TOOLS-001's snapshot re-applied, as on a hard timeout (`restore`); the call carries exit −1 (REQ-TOOLS-179: killed)
-   * either way. Absent on every other result.
+   * either way. On a poll: the polled soft-paused command was killed (`'during'`), or it was queued behind the one killed and
+   * never ran (`'before'`, no exit code). Absent on every other result.
    */
   readonly killed?: 'before' | 'during';
+  /**
+   * REQ-SHELL-092 (`the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success`): the terminal window
+   * killed a soft-paused command since the previous observation, which restarted the session then with PD-TOOLS-001's snapshot
+   * re-applied; what the restart (`reset`) and the restore did. The killed command itself is reported in `earlier` (end
+   * `killed`). Carried by the first call after the kill, and by a poll whose own subject was not the command killed.
+   */
+  readonly killedPaused?: { readonly reset: boolean; readonly restore: RestoreOutcome };
 }
 
 /**
  * OQ-164: what an observation reports of a soft-paused command other than its own subject. `end` says how it ended: its
  * own exit status (`exit`); none of its own, the shell having abandoned its line (`no-status`, OQ-147); by ending the
- * session's shell (`shell`); by the session's reset (`reset`); never having run, the shell being gone before its line
+ * session's shell (`shell`); by the session's reset (`reset`), or by the terminal window's kill, which is that reset (`killed`,
+ * REQ-SHELL-092); never having run, the shell being gone before its line
  * (`never-ran`), the session reset before its line (`reset-before`), or its line gone unread — an interrupt discards what
  * the shell has not read (`discarded`); or not yet (`running`).
  */
 export interface PausedEnd {
   /** The command as the agent issued it. */
   readonly label: string;
-  readonly end: 'exit' | 'no-status' | 'shell' | 'reset' | 'never-ran' | 'reset-before' | 'discarded' | 'running';
+  readonly end: 'exit' | 'no-status' | 'shell' | 'reset' | 'killed' | 'never-ran' | 'reset-before' | 'discarded' | 'running';
   /**
    * True when an interrupt (`C-c`) had been sent to it before the reporting call was submitted, and it ended with no status
    * of its own (`no-status`): it ended at that interrupt or after it, and the call did not simply wait behind it.
@@ -199,6 +208,13 @@ export const REPLACED_ERROR = 'the command replaced the session\'s shell';
 const KILLED_ERROR = 'the command was killed from the terminal window';
 /** REQ-SHELL-092: the error a call carries when the window's kill landed before its command was written to the shell. */
 const KILLED_BEFORE_ERROR = 'the command was killed from the terminal window before it was written to the shell, so it never ran';
+/** REQ-SHELL-092: the error a poll carries when the soft-paused command it polls was killed from the terminal window. */
+export const PAUSED_KILLED_ERROR = 'the paused command was killed from the terminal window';
+/**
+ * REQ-SHELL-092, OQ-164: the error a poll carries for a soft-paused command queued behind the one the window killed: the kill's
+ * reset ended the session before the shell reached its line.
+ */
+export const PAUSED_KILLED_BEFORE_ERROR = 'the paused command never ran, so it has no exit code: the soft-paused command ahead of it was killed from the terminal window, which restarted the session before the shell reached its line';
 /** The error a call carries when its run cancelled it (the tool context's signal). */
 const CANCELLED_ERROR = 'the call was cancelled';
 /**
@@ -400,11 +416,12 @@ interface PausedCall {
   observedAt: number;
   /**
    * How the call closed when not by its own end frame (OQ-164): the session's shell ended while its command ran (`shell`,
-   * OQ-144's shell-exit case), or before its line ran (`never-ran`); the session was reset under it (`reset`), or before its
+   * OQ-144's shell-exit case), or before its line ran (`never-ran`); the session was reset under it (`reset`) — by the terminal
+   * window's kill of it (`killed`, REQ-SHELL-092) — or before its
    * line ran (`reset-before`); or a later line started though its own never had, its line gone unread (`discarded`,
    * `unstartedShare`). Null while open, and when it closed on its own frame or at a later line's start marker.
    */
-  endedBy: 'shell' | 'never-ran' | 'reset' | 'reset-before' | 'discarded' | null;
+  endedBy: 'shell' | 'never-ran' | 'reset' | 'killed' | 'reset-before' | 'discarded' | null;
   /** OQ-164: the command as the agent issued it, for the observation that reports its end. */
   readonly label: string;
   /** OQ-164: monotonic time the call closed; null while open. */
@@ -1097,6 +1114,12 @@ export class ForegroundSession {
    */
   private stagingDir: string | null = null;
   private staged = 0;
+  /**
+   * REQ-SHELL-092: the terminal window's kill of a soft-paused command (`killActive`), not yet reported: whether the reset
+   * succeeded, and PD-TOOLS-001's restore it started. The next observation — a poll, or a call, which the session's queue holds
+   * until the restore has answered — awaits the restore and reports both.
+   */
+  private windowKill: { readonly reset: boolean; readonly restoring: Promise<RestoreOutcome> } | null = null;
 
   constructor(private readonly deps: SessionDeps, id?: string) {
     this.id = id ?? `ts_${randomBytes(4).toString('hex')}`;
@@ -1145,16 +1168,64 @@ export class ForegroundSession {
    * REQ-SHELL-092 / REQ-TOOLS-128: the user's kill. The process tree behind the running command is terminated and
    * the session restarted — the same reset a hard timeout performs (REQ-TOOLS-099), PD-TOOLS-001's snapshot re-applied
    * after it by the call — and the running call returns exit −1 (REQ-TOOLS-179: killed) with the reason, the loss and the
-   * restore stated. False when nothing is running.
+   * restore stated.
+   *
+   * A soft-paused command is still the command running in the terminal — the window's header and preview show it running
+   * and offer Kill (REQ-SHELL-092: "confirming terminates it") — though no call is waiting on it: it and its tree go by the
+   * same reset, every paused call is closed by it (the one the shell was running `killed`, any queued behind it never having
+   * run), PD-TOOLS-001's restore starts at once, and the next observation reports the kill, the loss and the restore. False
+   * when nothing is running and nothing is paused: the kill terminated nothing.
+   *
+   * FALSIFIED, kept beside its replacement (the Windows ARM64 session's B7, 2026-10-15): "False when nothing is running" for a
+   * soft-paused command too. A paused command is not the session's active call, so the kill did nothing; the stream's control
+   * dropped the answer and the window was told ok, while the shell, the command and its grandchild ran on and the next call
+   * queued behind them to its own hard cap
+   * (docs/defects/fixed/the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md).
    */
   killActive(): boolean {
     const a = this.active;
-    if (!a || this.state !== 'running') return false;
-    this.active = null;
+    if (a && this.state === 'running') {
+      this.active = null;
+      this.state = 'resetting';
+      const reset = this.resetNow();
+      a.onKill(reset);
+      return true;
+    }
+    // The product's own round trip (a snapshot, a restore) on an idle shell is no command of the agent's; nothing to kill.
+    const chain = this.openPaused();
+    if (a !== null || this.state !== 'idle' || chain.length === 0) return false;
+    const subject = this.pausedCommand;
     this.state = 'resetting';
     const reset = this.resetNow();
-    a.onKill(reset);
+    // `resetNow` closed them as the session's reset — the line the shell was running `reset`, those queued behind it
+    // `reset-before` — and moved them to `pausedEnded`; the reset was this kill.
+    for (const paused of chain) if (paused.endedBy === 'reset') paused.endedBy = 'killed';
+    // The polled command stays the poll's own subject.
+    if (subject !== null) {
+      this.pausedEnded = this.pausedEnded.filter((p) => p !== subject);
+      this.pausedDone = subject;
+    }
+    const restoring = reset ? this.restoreState() : Promise.resolve<RestoreOutcome>({ status: 'failed' });
+    this.windowKill = { reset, restoring };
+    // The next call waits for the restore: it runs in the restored shell, and the restore's round trip is never cut by it.
+    this.chain = this.chain.then(() => restoring);
     return true;
+  }
+
+  /**
+   * The restore a window's kill of a soft-paused command started (`killActive`), awaited — before an explicit reset, whose
+   * respawn would otherwise cut the restore's round trip and leave the next call queued behind its bound.
+   */
+  async settled(): Promise<void> {
+    await this.windowKill?.restoring;
+  }
+
+  /** REQ-SHELL-092: the window's kill of a soft-paused command, taken by the observation that reports it (`killActive`). */
+  private async takeWindowKill(): Promise<{ readonly reset: boolean; readonly restore: RestoreOutcome } | null> {
+    const kill = this.windowKill;
+    if (kill === null) return null;
+    this.windowKill = null;
+    return { reset: kill.reset, restore: await kill.restoring };
   }
 
   private ensure(): PtyLike {
@@ -1428,10 +1499,14 @@ export class ForegroundSession {
    */
   private async executeReporting(command: string, opts: { timeoutMs: number | null; hardMs?: number; signal?: AbortSignal; label?: string }): Promise<ForegroundResult> {
     const submittedAt = this.deps.monotonic.now();
+    // REQ-SHELL-092: a soft-paused command the window killed since the previous observation; the queue held this call until
+    // the restore answered, so the call runs in the restored shell and reports the kill beside its own outcome.
+    const kill = await this.takeWindowKill();
     const r = await this.execute(command, opts);
     // A call that soft-paused may have closed during its own handover (`pausedDone` is then its own): it is no earlier one.
     const earlier = await this.drainEarlier(submittedAt, !r.softPaused);
-    return earlier.length === 0 ? r : { ...r, earlier };
+    const withKill = kill === null ? r : { ...r, killedPaused: kill };
+    return earlier.length === 0 ? withKill : { ...withKill, earlier };
   }
 
   /**
@@ -1770,6 +1845,17 @@ export class ForegroundSession {
    * end frame on the same unanchored terms as the capture — the anchored form left the marker here too.
    */
   async poll(): Promise<ForegroundResult> {
+    // REQ-SHELL-092: the window killed the paused command since the previous observation. The restore it started is awaited,
+    // and this poll reports the kill: its own subject when that was the command killed, beside it otherwise.
+    const kill = await this.takeWindowKill();
+    if (kill !== null) {
+      // The poll reports the reset (`session_reinitialized`), so the next call does not report it again.
+      this.reinitialized = false;
+      const earlier = await this.drainEarlier(null, false);
+      const subject = await this.pollSubject(kill);
+      const r = subject.killed === undefined ? { ...subject, killedPaused: kill } : subject;
+      return earlier.length === 0 ? r : { ...r, earlier };
+    }
     // OQ-164 (the verifier's finding on its repair): the interrupt reaches the line the shell is running — the oldest open
     // paused call's — and the polled call may be queued behind it. The no-op line goes after every open paused line, on the
     // polled one (`closer`), so its printed marker closes them all: the interrupted one with OQ-147's reading (confirmed 2026-10-06 by R-071), and any whose
@@ -1805,14 +1891,23 @@ export class ForegroundSession {
     return withEarlier(unseen && subject.softPaused ? { ...subject, interruptUnseen: true } : subject);
   }
 
-  /** REQ-TOOLS-098's poll of the paused command itself (`poll`). */
-  private async pollSubject(): Promise<ForegroundResult> {
+  /**
+   * REQ-TOOLS-098's poll of the paused command itself (`poll`). `kill` is the window's kill of it, or of the command it was
+   * queued behind (REQ-SHELL-092), when that is what ended it: the restart and the restore are this poll's to report.
+   */
+  private async pollSubject(kill: { readonly reset: boolean; readonly restore: RestoreOutcome } | null = null): Promise<ForegroundResult> {
     const done = this.pausedDone;
     if (done) {
       this.pausedDone = null;
       const out = await ForegroundSession.sincePoll(done);
       const truncated = done.screen.truncated || done.hold.dropped;
       done.screen.dispose();
+      if (kill !== null && (done.endedBy === 'killed' || done.endedBy === 'reset-before')) {
+        // Killed from the terminal window: −1 with the reason, as a running command's kill is; one queued behind the command
+        // killed never ran, so it has no exit code (OQ-164, ruled 2026-10-06 by R-071: a line the session's reset went before never ran).
+        const ran = done.endedBy === 'killed';
+        return { output: out, exitCode: ran ? -1 : null, timedOut: false, softPaused: false, killStatus: kill.reset ? 'session_reset' : 'reset_failed', sessionReinitialized: true, truncated, error: ran ? PAUSED_KILLED_ERROR : PAUSED_KILLED_BEFORE_ERROR, restore: kill.restore, killed: ran ? 'during' : 'before' };
+      }
       if (done.endedBy === 'shell' || done.endedBy === 'never-ran') {
         // OQ-144 (the shell-exit case): the paused command ended the session's shell. It has no exit status of its own, and
         // the poll that hands it over respawns the shell, as the call that was running would have; a later call that met
@@ -1930,9 +2025,13 @@ export class ForegroundSession {
     }
   }
 
-  /** PD-TOOLS-001: an explicit reset clears the snapshot — the user asked for a clean shell. */
+  /**
+   * PD-TOOLS-001: an explicit reset clears the snapshot — the user asked for a clean shell. A window's kill not yet reported
+   * loses its restore with it: what it re-applied is gone; the killed command's end is still reported (`earlier`).
+   */
   clearSnapshot(): void {
     this.lastState = null;
+    this.windowKill = null;
   }
 
   /** REQ-TOOLS-096: keystroke input, a special key or text, written to the PTY as is. */

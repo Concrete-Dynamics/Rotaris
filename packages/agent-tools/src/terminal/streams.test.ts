@@ -188,6 +188,21 @@ describe('TerminalStreams — the sampling period is a ceiling (ADR-0021 Decisio
     expect(await h.streams.kill('bg:ts_0000000a')).toEqual({ ok: false, error: 'no-kill-capability' });
   });
 
+  // docs/defects/fixed/the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md: the foreground
+  // stream's kill dropped `killActive`'s answer, so a kill that terminated nothing answered ok.
+  it('REQ-SHELL-092, REQ-TOOLS-128: a kill whose control terminated nothing answers `ended`, never ok, and leaves the stream as it was', async () => {
+    const h = harness();
+    let terminates = false;
+    h.streams.begin(h.spec({ control: { write: () => true, kill: () => terminates } }));
+    expect(await h.streams.kill('fg:orchestrator')).toEqual({ ok: false, error: 'ended' });
+    expect(h.streams.metaOf('fg:orchestrator')).toMatchObject({ running: true, canKill: true });
+    terminates = true;
+    expect(await h.streams.kill('fg:orchestrator')).toEqual({ ok: true, value: undefined });
+    // A control that answers nothing — the background session's `end`, a promise of nothing — is taken at its word.
+    h.streams.begin(h.spec({ streamId: 'bg:ts_0000000b', kind: 'background', control: { kill: async () => undefined } }));
+    expect(await h.streams.kill('bg:ts_0000000b')).toEqual({ ok: true, value: undefined });
+  });
+
   it('REQ-TOOLS-126: streaming off publishes nothing, lists nothing, and every control says so', () => {
     const h = harness({ enabled: false });
     expect(h.streams.begin(h.spec())).toBe(false);

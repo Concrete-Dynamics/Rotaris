@@ -174,6 +174,10 @@ alone. It carries:
 ## Places
 
 - **The scratchpad** holds the plan, `RUNS.txt`, rendered scripts, logs and evidence notes, outside the repository.
+- **The ledger**, `<scratchpad>/TASKS.txt`, holds one line per event (a launch, a landing, an ending, a ruling, the
+  owner's word, a survey's range), appended with its stamp in the same command:
+  `echo "$(date -u +%FT%H:%MZ) <event>" >> <scratchpad>/TASKS.txt`. A line is never stamped by estimate or inserted
+  out of order.
 - **The primary checkout** is the owner's and other sessions' merge point: never write in it, not even a
   fast-forward. Agents read this skill from the orchestration's own detached reference worktree `<repo>-wt-skillref-<id>`
   (SKILL.md §3).

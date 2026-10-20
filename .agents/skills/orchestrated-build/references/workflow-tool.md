@@ -122,7 +122,7 @@ the four stages above:
 2. **Sweep** the evidence, split by plan range, one finder per range. Agents cannot see the conversation: give every
    finder the absolute paths of its plans' scratchpad directories (`RUNS.txt`), the workflows journal directory
    (Journals, above; every run's `journal.jsonl` and agent transcripts), the completion notices, the orchestrator's
-   ledger and session transcript, and the time span of its range. A finder reads that transcript only within its span,
+   ledger (`references/environment.md`, Places) and session transcript, and the time span of its range. A finder reads that transcript only within its span,
    so no two read the same part. A finder lists what cost something: a lost or relaunched agent, a repair round past
    the first, an `unverified`, `needs-owner` or `blocked` ending, a workaround the orchestrator ran by hand, a
    question the skill should have answered, a statement in it that proved false, wall clock spent queued on the cap.

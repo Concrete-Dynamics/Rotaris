@@ -3,6 +3,17 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — the ledger is defined and stamped by the clock
+
+**Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
+approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
+item F26: about 40 lines of the orchestrator's ledger were stamped by estimate, off by up to 2 h 20 min and some out of
+order, so every survey finder and check-in had to cross-check them against the journals and the transcript. **Changed:**
+`references/environment.md`, Places, defines the ledger and its stamping command; `references/workflow-tool.md`, A
+friction survey, points at it. **Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check`; the
+skill-review by one reviewer agent under `references/skill-review.md`, which judged this entry with the others of
+2026-10-20.
+
 ## 2026-10-20 — where a run's return value sits, and how to read a survey's progress
 
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner

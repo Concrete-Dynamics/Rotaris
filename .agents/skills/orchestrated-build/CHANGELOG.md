@@ -3,6 +3,17 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — how to hand an orchestration to another session or host
+
+**Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
+approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
+item F10: two hand-overs (the Windows ARM64 session on 2026-10-14, a local session on 2026-10-20) were written ad hoc:
+the first drew a critic finding for a wrong question number and a hand edit of a 1,526-line prompt, the second about 17
+minutes of reconstruction, and fin47's round-2 acceptance must be redone on the other host. **Changed:**
+`references/environment.md` gains "Handing over"; SKILL.md §4, Pausing, points at it. **Verified** by `node
+scripts/orchestration.mjs self-test` and `pnpm check`; the skill-review by one reviewer agent under
+`references/skill-review.md`, which judged this entry with the others of 2026-10-20.
+
 ## 2026-10-20 — standing permission for cleanup, asked at planning
 
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner

@@ -146,7 +146,7 @@ The run's own `status`: `complete`; `incomplete` (a plan bundle did not settle, 
 
 **Pausing** at the owner's request: stop every task, disable the check-in and write `RESUME.md`; offer to push what
 lives only in the container, which needs the owner's word (`references/environment.md`, Pause and backup). Resuming is
-Recovering, above.
+Recovering, above; handing over to another session is Pausing plus `references/environment.md`, Handing over.
 
 **Reopening a blocked bundle** that holds good work: add `"reopen": "<the accepted outcome of the blocked task>"`
 to it in the plan and render; every later stage of it sees that scope, and it is reviewed again and lands.

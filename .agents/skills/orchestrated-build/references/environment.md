@@ -147,6 +147,21 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   everything lands. A `backup/*` branch is no landing: what it holds reaches main only through a bundle, reviewed and
   landed with the gate green.
 
+## Handing over
+
+An orchestration handed to another session or host (the Windows ARM64 session on 2026-10-14, a local session for the
+host-independent remainder on 2026-10-20) is a pause (Pause and backup, above) plus a prompt that stands
+alone. It carries:
+- its own reserved open-question, directive and request number ranges, disjoint from every other session's and plan's,
+  written to the ledger too (OQ-400 to OQ-449 went to the Windows session);
+- the standing live-run authorization quoted word for word (R-068), R-072 and how the consortium rules, and the
+  clean-room boundary, which every agent the other session starts inherits;
+- the open notes and unfinished plans by name, and what each other session owns, so no two repair one note;
+- that this file's figures (the two-agent cap, `/opt/node24/bin`, the disk allowance, the classifier's refusals, the
+  `xvfb-run` wrapper) describe this container, for the other host to measure and correct;
+- what does not travel: journals, `RUNS.txt`, the ledger, rulings' advocate texts and any list only the scratchpad holds
+  (copy those into the prompt), so an unfinished plan's acceptance is redone fresh on the merged head.
+
 ## Shell forms the harness blocks
 
 - `sleep N; cmd` chains are refused: wait as Long jobs says.

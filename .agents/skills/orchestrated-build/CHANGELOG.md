@@ -17,14 +17,17 @@ stub render gave `C:\dev\Rotaris-crw-wt-integ-zz`); a detached `nohup bash -c 'e
 `profiles/rotaris-crw-windows.json`: the base profile's keys and commands, with no `xvfb-run` wrapper on the proofs and
 live runs, and the duress launch detached by `nohup … & disown` without `setsid`. Both profiles gain a third live run,
 the opt-in scenarios (`--only=cutoff,rename,plan-open,empty-answer`): AGENTS.md lists them as first-class scenarios
-that no acceptance round ran (the `rename` scenario had been red since `3c03287` with no round reading it), and the
+that no acceptance round ran (the `rename` scenario had been red since `3c03287`, and no acceptance round ran it), and the
 brief's Done (§3 D) requires them. Adding it to the base too keeps the two profiles apart by host facts alone (the
 reviewer's blocking finding on the first draft, which gave it to the Windows profile only). The self-test gains an
-assertion over every other profile in `profiles/`: the base profile's `run` keys, its `gate`, `quickGate`, `tests`,
-`model`, `mainBranch` and `defectsDir`, a repair budget no lower, the same proof list and autopsy, and the same live
-runs, so a host profile can never narrow what the base profile holds (the reviewer's optional finding). With the
-assertion's code removed, narrowing the Windows profile's `gate` to `pnpm test`, or dropping its opt-in run, passed the
-self-test; with it, each failed. `references/environment.md` gains "A Windows host": no display wrapper, Git Bash only
+assertion over every host profile of this repository (`profiles/rotaris-crw-*.json`, the prefix taken from the base
+profile's name, so another repository's own profile is not held to this one's): the base profile's `run` keys, its
+`gate`, `quickGate`, `tests`, `model`, `mainBranch` and `defectsDir`, a repair budget no lower, the same proof list and
+autopsy, and the same live runs, each with the base's `timeout` and `LIVE_RUN_*=` figures, so a host profile can never
+narrow what the base profile holds (the reviewer's optional findings of both rounds; the scope its second round's
+blocking finding). With the assertion's code removed, narrowing the Windows profile's `gate` to `pnpm test`, or dropping
+its opt-in run, passed the self-test; with it, each failed, and so did a duress window shortened to
+`LIVE_RUN_DURESS_MS=600000` and a default run's `timeout 600`, while a profile `other-repo.json` with its own gate passed. `references/environment.md` gains "A Windows host": no display wrapper, Git Bash only
 (`timeout`), `--repo` in forward slashes, the detached form, six agents at a time, a desktop shared with another
 session (and `palette-proof`'s real input), leftover `electron.exe` at cleanup, the allow-rule form for this host, a
 sibling folder `C:/dev/Rotaris` never to be opened, and disk. `references/workflow-tool.md`'s two-agent line says where

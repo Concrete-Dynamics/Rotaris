@@ -215,6 +215,7 @@ Bash shells and Node 24.18 as the default `node` (so `{node24}` is the no-op).
   `Bash(timeout * node C:/dev/Rotaris-crw-wt-accept/apps/desktop/scripts/live-run.mjs --confirm --skip-build*)`. No
   such rule existed on 2026-10-20, and adding one stays the owner's decision.
 - **A sibling folder that is not this repository.** `C:/dev/Rotaris` sits beside the checkout and its worktrees. Never
-  list, open or search it: it may be a copy of the project CLAUDE.md seals off. Look for worktrees with
-  `git worktree list`, never by listing `C:/dev/`.
+  list, open or search it: it may be a copy of the project CLAUDE.md seals off. An agent looks for worktrees with
+  `git worktree list`, never by listing `C:/dev/` in its own commands (`render`'s id check reads only the entry names
+  there that carry the plan's worktree prefix, and opens none).
 - **Disk.** 24 GB was free of 237 GB on `C:`, and a worktree with its `node_modules` takes about 0.8 GB.

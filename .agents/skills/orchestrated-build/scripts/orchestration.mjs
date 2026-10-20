@@ -437,9 +437,12 @@ export async function selfTest({ quiet = false } = {}) {
     assert.throws(() => resolveProfile(rawProfile, {}, '/srv/repo'), /trailers/, 'a plan without trailers is refused')
     for (const k of ['quickGate', 'tests']) assert.throws(() => resolveProfile({ ...rawProfile, run: { ...rawProfile.run, [k]: undefined } }, session, '/srv/repo'), new RegExp('no `' + k + '`'), 'a profile without `' + k + '` is refused: the builder runs it')
     assert.throws(() => resolveProfile(rawProfile, { ...session, live: { authorized: true, ownerWords: '<the owner\'s authorization, quoted>' } }, '/srv/repo'), /placeholder/, 'a placeholder never authorizes a live run')
-    // A host profile (profiles/<repo>-<host>.json) differs from its repository's base by host facts alone: it never
-    // narrows the gate, lowers the repair budget or changes the review's model, and runs no less acceptance than the base.
-    for (const f of safeList(path.join(SKILL, 'profiles')).filter((x) => x.endsWith('.json') && x !== 'rotaris-crw.json')) {
+    // A host profile (profiles/<repo>-<host>.json) differs from its repository's base (profiles/<repo>.json) by host
+    // facts alone: it never narrows the gate, lowers the repair budget or changes the review's model, and runs no less
+    // acceptance than the base: the same proofs, autopsy and live runs, each run with the base's bound and windows.
+    const BASE_PROFILE = 'rotaris-crw.json'
+    const hostPrefix = BASE_PROFILE.replace(/\.json$/, '-')
+    for (const f of safeList(path.join(SKILL, 'profiles')).filter((x) => x.startsWith(hostPrefix) && x.endsWith('.json'))) {
       const host = JSON.parse(fs.readFileSync(path.join(SKILL, 'profiles', f), 'utf8')).run
       const base = rawProfile.run
       assert.deepEqual(Object.keys(host).sort(), Object.keys(base).sort(), f + ' names the base profile\'s keys')
@@ -447,8 +450,9 @@ export async function selfTest({ quiet = false } = {}) {
       assert.ok(host.maxFixRounds >= base.maxFixRounds, f + ' never lowers the repair budget')
       assert.equal(host.proofs.list, base.proofs.list, f + ' sweeps every proof the base sweeps')
       assert.equal(host.autopsy.method, base.autopsy.method, f + ' autopsies as the base does')
-      const scenarios = (runs) => runs.map((r) => (/--only=([^\s'"]+)/.exec(r.command) || [null, 'default'])[1]).sort()
-      assert.deepEqual(scenarios(host.live.runs), scenarios(base.live.runs), f + ' runs the base profile\'s live runs, no fewer')
+      // Each live run by its scenario set, with the figures that bound it: every `timeout N` and `LIVE_RUN_*=` assignment.
+      const runsOf = (runs) => runs.map((r) => [(/--only=([^\s'"]+)/.exec(r.command) || [null, 'default'])[1], [...r.command.matchAll(/\btimeout \d+|\bLIVE_RUN_\w+=\S+/g)].map((m) => m[0]).join(' ')].join(' | ')).sort()
+      assert.deepEqual(runsOf(host.live.runs), runsOf(base.live.runs), f + ' runs the base profile\'s live runs, no fewer, each with the base\'s bound and windows')
     }
     const task = (t, body = 'do ' + t) => ({ title: t, body })
     const plan = {

@@ -256,10 +256,10 @@ the sixth call, so whether one failing edit counted as a loop depended on the pa
 
 **Ruled under the owner's delegation (R-072)** as [OQ-364](../open-questions.md#oq-364), with no directive: REQ-ORCH-101's "the
 whole of their arguments" is their value read as JSON (a dated note beneath the requirement). **The change**
-(`packages/engine/src/run/supervisor.ts`): a tool event's fingerprint is `tool <name> v <encoding>` of
+(`packages/engine/src/run/supervisor.ts`): a tool event's fingerprint is `tool\0<name>\0v\0<encoding>` of
 `JSON.parse(args)`, where the encoding is a string written with every object's keys sorted at every depth, every member kept
 (`__proto__` included), arrays in order, every string quoted and a non-finite number written as itself; where the parse or the
-encoding throws (a malformed text, or a nesting past the stack), it is `tool <name> t <args>`, the text whole. It is
+encoding throws (a malformed text, or a nesting past the stack), it is `tool\0<name>\0t\0<args>`, the text whole. It is
 computed once per call in `observe()` and kept beside the window, and the repetition trigger, the cycle trigger and
 [`PD-ORCH-016`](../../product/directives.md#pd-orch-016)'s raw-count evidence all read it. Nothing else changed: the text the
 tool, the provider, the transcript, the excerpt and the path anchor see; the message limb; the thresholds.

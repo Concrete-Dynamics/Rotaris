@@ -16094,9 +16094,9 @@ The two recommendations weighed, and the ruling followed **both**:
 - an activation drawn by calls whose parsed arguments differ.
 
 **Built 2026-10-20 by `loc1` (`loc1-supervisor`).** `packages/engine/src/run/supervisor.ts`: a tool event's fingerprint is
-`tool <name> v <encoding>` of its parsed arguments — a string encoder that sorts every object's keys at every depth and
+`tool\0<name>\0v\0<encoding>` of its parsed arguments — a string encoder that sorts every object's keys at every depth and
 keeps every member (`__proto__` included), arrays in order, every string quoted, a non-finite number written as itself — or
-`tool <name> t <args>` where the parse or the encoding throws; computed once in `observe()` and kept in step with the
+`tool\0<name>\0t\0<args>` where the parse or the encoding throws; computed once in `observe()` and kept in step with the
 window, read by `trigger()` and, through the window `check()` snapshots, by `rawFallbackHasEvidence`. `SupervisorEvent`, the
 excerpt, the path anchor, the message limb and `SUPERVISOR_DEFAULTS` are unchanged. **Red first:** `supervisor.test.ts`'s
 block "OQ-364: REQ-ORCH-101's same action compares the arguments as one JSON value" — five cases red on the build before (a

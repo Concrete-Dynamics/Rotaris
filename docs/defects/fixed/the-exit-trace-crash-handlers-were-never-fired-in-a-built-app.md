@@ -47,3 +47,13 @@ Found by building it, recorded and not repaired: the application's quit after th
 renderer's close guard (`docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`). The proof
 asked that quit, bounded, and reported a held one as a NOTE naming that note; its repair (2026-10-14, fin43) made it a check:
 the quit after the crash now ends the process, exit 0, through the orderly path.
+
+## Addendum, 2026-10-20 — fired on Windows
+
+The Windows ARM64 session's C4 (Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, at `8b5b0c03`) ran `pnpm exit-trace-proof` on Windows for the first time. CIM discovery returned
+an array and found the renderer every time. The handlers fired as on Linux, with Windows' codes: `run host exited (1)` and
+`CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 1)` at `error`, then `RENDERER GONE (killed, exit 1) for
+file:///…` at `error` for a renderer ended with `TerminateProcess` (Windows cannot send SIGSEGV), and the guarded quit after
+both losses exited 0 on the orderly path. The proof expected Linux's signals and failed 10 of 37 until its win32 branch was
+repaired; after it, two quiet-window runs passed 36 of 36
+([`exit-trace-proof-expects-posix-signal-semantics-on-windows.md`](exit-trace-proof-expects-posix-signal-semantics-on-windows.md)).

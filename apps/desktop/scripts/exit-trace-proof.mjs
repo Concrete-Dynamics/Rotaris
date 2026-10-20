@@ -45,6 +45,13 @@
  *
  * Process discovery: the run host's pid from main's log; the renderer's from the launch's process tree (`/proc` on Linux,
  * `ps` on macOS, CIM on Windows). Only Linux was run when this was written (2026-10-13); the other two are written, not run.
+ * *Windows was run 2026-10-20 (the Windows ARM64 session's C4) and met every product reading, but the proof's signals were
+ * Linux's: Node on Windows sends only SIGINT, SIGTERM, SIGKILL and 0, each of the last three `TerminateProcess` with exit 1
+ * (`docs/defects/fixed/exit-trace-proof-expects-posix-signal-semantics-on-windows.md`).* So on Windows a kill from outside is
+ * expected as exit 1 (`KILL_EXIT`), the renderer's crash is `TerminateProcess` (`process.kill(pid)`), the hang is the process
+ * suspended with `NtSuspendProcess` (what Sysinternals' `pssuspend` does) and resumed after, and `unsaved-sigterm` measures
+ * what Windows does with the signal — the process terminated, not quit — since no signal there reaches a quit path. macOS
+ * is still written, not run.
  *
  *   node apps/desktop/scripts/exit-trace-proof.mjs [--skip-build]
  *
@@ -58,6 +65,30 @@ import { endLaunch, startApp, stopApp, stopOverrunMessage, until, within } from 
 import { buildDesktop, evidenceDirectory } from './lib/harness.mjs';
 
 const output = evidenceDirectory('exit-trace-proof');
+const WINDOWS = process.platform === 'win32';
+/** The exit status main is given for a process killed from outside: the signal's number on POSIX, `TerminateProcess`'s 1 on Windows. */
+const KILL_EXIT = WINDOWS ? 1 : 9;
+/**
+ * Stop (`suspended` true) or continue the given processes: SIGSTOP/SIGCONT on POSIX; on Windows, which has neither, every
+ * thread suspended or resumed through `NtSuspendProcess`/`NtResumeProcess`, so the renderer is alive and answers nothing.
+ */
+function setSuspended(pids, suspended) {
+  if (!WINDOWS) {
+    for (const pid of pids) { try { process.kill(pid, suspended ? 'SIGSTOP' : 'SIGCONT'); } catch { /* gone */ } }
+    return;
+  }
+  if (pids.length === 0) return;
+  const call = suspended ? 'NtSuspendProcess' : 'NtResumeProcess';
+  const script = [
+    "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class S {",
+    '[DllImport("kernel32.dll")] public static extern IntPtr OpenProcess(uint a, bool i, int p);',
+    '[DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);',
+    `[DllImport("ntdll.dll")] public static extern int ${call}(IntPtr h); }'`,
+    // 0x0800 is PROCESS_SUSPEND_RESUME.
+    `foreach ($p in @(${pids.join(',')})) { $h = [S]::OpenProcess(0x0800, $false, $p); if ($h -ne [IntPtr]::Zero) { [void][S]::${call}($h); [void][S]::CloseHandle($h) } }`,
+  ].join('\n');
+  try { execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { stdio: 'ignore', timeout: 30_000 }); } catch { /* gone, or not ours */ }
+}
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 if (!process.argv.includes('--skip-build')) buildDesktop(output);
@@ -129,14 +160,15 @@ const results = {};
   const runHostLines = await until(() => mainLines(logOf(started)).filter((l) => /^run host exited \(|^CHILD PROCESS GONE \(Utility rotaris-run-host:/.test(l.message)), (found) => found.length >= 2, { timeoutMs: 20_000, what: 'main\'s lines for the killed run host' }).catch(() => mainLines(logOf(started)).filter((l) => /run host exited|CHILD PROCESS GONE/.test(l.message)));
   const exited = runHostLines.find((l) => /^run host exited \(/.test(l.message));
   const gone = runHostLines.find((l) => /^CHILD PROCESS GONE \(/.test(l.message));
-  check('the run host killed from outside: main writes its exit status at error', exited?.level === 'error' && /^run host exited \(9\)/.test(exited.message), exited ? `${exited.level} ${exited.message}` : 'no line');
-  check('…and Electron\'s child-process-gone at error, as a loss main did not cause', gone?.level === 'error' && gone.message === 'CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 9)', gone ? `${gone.level} ${gone.message}` : 'no line');
+  check('the run host killed from outside: main writes its exit status at error', exited?.level === 'error' && exited.message.startsWith(`run host exited (${KILL_EXIT})`), exited ? `${exited.level} ${exited.message}` : 'no line');
+  check('…and Electron\'s child-process-gone at error, as a loss main did not cause', gone?.level === 'error' && gone.message === `CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit ${KILL_EXIT})`, gone ? `${gone.level} ${gone.message}` : 'no line');
   check('main still answers after its run host is gone', (await started.driver.eval('1 + 1').catch((e) => String(e))) === 2);
 
   const renderers = renderersOf(started.child.pid);
   check('the launch has a renderer to crash', renderers.length >= 1, renderers.map((r) => r.pid).join(', ') || 'none');
   const before = goneAtError(logOf(started)).length;
-  for (const r of renderers) { try { process.kill(r.pid, 'SIGSEGV'); } catch { /* gone already */ } }
+  // SIGSEGV on POSIX; on Windows, which cannot send it, `TerminateProcess` — a renderer lost from outside either way.
+  for (const r of renderers) { try { process.kill(r.pid, WINDOWS ? undefined : 'SIGSEGV'); } catch { /* gone already */ } }
   const rendererLine = await until(() => mainLines(logOf(started)).find((l) => /^RENDERER GONE \(/.test(l.message)) ?? null, (l) => l !== null, { timeoutMs: 20_000, what: 'main\'s RENDERER GONE line' }).catch(() => null);
   check('the renderer crashed: main writes render-process-gone with its reason, exit code and URL at error', rendererLine?.level === 'error' && /^RENDERER GONE \((crashed|killed|abnormal-exit), exit -?\d+\) for (file|app|http):/.test(rendererLine.message), rendererLine ? `${rendererLine.level} ${rendererLine.message}` : 'no line');
   check('one more GONE line at error than before the renderer crashed', goneAtError(logOf(started)).length > before);
@@ -193,7 +225,7 @@ for (const [name, how] of [['hang', 'quit'], ['hang-close', 'close']]) {
   await started.driver.waitFor('.app-shell', { timeoutMs: 60_000 });
   const renderers = renderersOf(started.child.pid);
   check(`${name}: the launch has a renderer to hang`, renderers.length >= 1, renderers.map((r) => r.pid).join(', ') || 'none');
-  for (const r of renderers) { try { process.kill(r.pid, 'SIGSTOP'); } catch { /* gone already */ } }
+  setSuspended(renderers.map((r) => r.pid), true);
   check(`${name}: the stopped renderer answers nothing`, (await within(started.driver.eval('1 + 1').catch((e) => String(e)), 2_000)) === null);
   const askedAt = Date.now();
   const asked = how === 'quit' ? await within(started.driver.quit(), 10_000) : await within(started.driver.closeWindow().catch((e) => ({ error: String(e) })), 10_000);
@@ -210,7 +242,7 @@ for (const [name, how] of [['hang', 'quit'], ['hang-close', 'close']]) {
     ended = await exitWithin(started.child, 15_000);
   }
   started.driver.close();
-  for (const r of renderers) { try { process.kill(r.pid, 'SIGCONT'); } catch { /* gone with the launch */ } }
+  setSuspended(renderers.map((r) => r.pid), false);
   if (ended === null) { await endLaunch(started.child); throw new Error(`${name}: the launch did not exit on the immediate exit either:\n${logTail(logOf(started))}`); }
   await drainGroup(started.child);
   const leftover = renderers.filter((r) => { try { process.kill(r.pid, 0); return true; } catch { return false; } });
@@ -266,8 +298,13 @@ for (const [name, how] of [['unsaved-quit', 'driver'], ['unsaved-sigterm', 'sigt
   await drainGroup(started.child);
   const lines = mainLines(logOf(started));
   const after = readFileSync(configFile);
-  check(`${name}: the quit with a guard that never answers ends the process, exit 0`, exited?.code === 0, exited === null ? 'held: no exit in 20 s' : `${JSON.stringify(exited)} after ${tookMs} ms`);
-  check(`${name}: it took the orderly path and no close guard put a question: the OQ-298 line, and \`quit: exiting with status 0\``, exited !== null && lines.some((l) => l.message === OQ298_LINE) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
+  if (how === 'sigterm' && WINDOWS) {
+    // Windows: SIGTERM is TerminateProcess — the process ends at once with exit 1 and runs no quit path, so nothing asks a guard.
+    check(`${name}: on Windows the signal terminates the process (exit 1) and runs no quit path`, exited?.code === 1 && !lines.some((l) => /^quit: /.test(l.message)), exited === null ? 'held: no exit in 20 s' : `${JSON.stringify(exited)} after ${tookMs} ms; ${lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line'}`);
+  } else {
+    check(`${name}: the quit with a guard that never answers ends the process, exit 0`, exited?.code === 0, exited === null ? 'held: no exit in 20 s' : `${JSON.stringify(exited)} after ${tookMs} ms`);
+    check(`${name}: it took the orderly path and no close guard put a question: the OQ-298 line, and \`quit: exiting with status 0\``, exited !== null && lines.some((l) => l.message === OQ298_LINE) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
+  }
   check(`${name}: no dialog was shown, and no close guard was asked of the renderer`, dialogBefore === 0 && !lines.some((l) => /close guard: the renderer|PD-SHELL-010|a close guard refused/.test(l.message)), `${dialogBefore} dialog title(s) before the quit; ${lines.filter((l) => /close guard/.test(l.message)).map((l) => l.message).join(' | ') || 'no close-guard line'}`);
   check(`${name}: the workspace configuration file is byte-identical — nothing unsaved was written`, Buffer.compare(before, after) === 0, `${before.length} bytes before, ${after.length} after`);
   results[name] = { exit: ended, tookMs, armed, dialogBefore, configUnchanged: Buffer.compare(before, after) === 0, last: lines.slice(-4).map((l) => `${l.level} ${l.message}`) };

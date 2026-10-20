@@ -6124,6 +6124,18 @@ and may leave a partly written project or index for the next setup to redo.
 > past its budget force-killed 2 s after it — each red on the code before the change (5 s, 5150 ms and 5762 ms on this
 > Linux host). **What was not measured.** The Windows `workspace-proof` that measured the misses was not re-run: this host
 > is Linux. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Windows, 2026-10-20** (the Windows ARM64 session's B8; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6, at `9f898a00`). The "not re-run" above is discharged.
+> `workspace-proof`, twice: 49 passed, 0 failed, 5 skipped each time. The outgoing step after a switch had ended 2,621 and
+> 2,513 ms after the switch answered (the log: 2.604 and 2.441 s from the cancellation's request to the stopped step); the first
+> window's step 2,612 and 2,520 ms after its Cancel answered (2.581 and 2.527 s); the orderly quit ended the app in 2,706 and
+> 2,713 ms, neither the step nor its descendant running 5 s later, and no "could not be delivered". It read 5.489 s and 5.603 s
+> under the 5 s grace on 2026-10-02. No stand-in or runtime process was left straight after either run or 10 s later.
+> `setup.test.ts` gained three Windows cases on the `family` fixture without its SIGTERM handlers (a cancel 2,433-2,665 ms, a
+> 600 ms budget 3,015-3,050 ms, a 300 ms shutdown hurry 1,119-1,315 ms, the whole case, three runs each), and the four POSIX
+> cases, run with their skips lifted in a scratch copy, passed too; `run-host/mcp.test.ts`'s shutdown case now runs there
+> (2,549-2,626 ms, under the 5000 ms). **Still not measured:** a run host killed outright, whose step is then reached by
+> nothing (OQ-169; `workspace-proof`'s host-lost case skips on Windows, having no `/proc`).
 
 ---
 

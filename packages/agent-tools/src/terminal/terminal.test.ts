@@ -3,10 +3,10 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, type Clocks } from '@rotaris/kernel';
-import { foregroundStreamId } from '@rotaris/contracts';
+import { backgroundStreamId, foregroundStreamId } from '@rotaris/contracts';
 import { findExecutable, nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, rejoinConptyWraps, stripVt } from './classify.js';
-import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, POSIX_LINE_BYTES, posixShellArgs, printsMarker, processIdentity, restoreCommand, shellHoldsTerminal, snapshotCommand, stagedScript, unstartedShare, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
+import { CommandRegion, ForegroundSession, killTree, parseSnapshot, pausedShare, POSIX_LINE_BYTES, posixShellArgs, printsMarker, processIdentity, restoreCommand, shellHoldsTerminal, snapshotCommand, stagedScript, unstartedShare, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
 import { xtermEmulatorFactory, type EmulatorFactory } from './emulator.js';
 import { endOfExit } from './background.js';
 import { execFileSync, spawn } from 'node:child_process';
@@ -2603,6 +2603,82 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     expect(diag(q.text)).toMatchObject({ session_status: 'killed', exit_code: -1, outcome_kind: 'background_terminal', outcome_severity: 'warning' });
     expect(q.isError).toBe(false);
   }, 40_000);
+  /**
+   * B8 of the Windows ARM64 session (2026-10-20): on Windows every signal `send_signal` offers, `session_action: kill` and the
+   * terminal window's interrupt end the session's own tree (OQ-10's win32 mapping): `taskkill /T`, which the pipe session's
+   * PowerShell does not answer, then `taskkill /T /F` after REQ-TOOLS-109's 5 s. The command starts a node grandchild that
+   * writes its parent's pid and its own, so both are watched until they have gone.
+   */
+  describe.runIf(PS && process.platform === 'win32')('on Windows: the background tree ends whole, whatever ends it (OQ-10, REQ-TOOLS-109, REQ-TOOLS-110)', () => {
+    const alive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code === 'EPERM'; } };
+    const startTree = async (t: Awaited<ReturnType<typeof tool>>, tag: string): Promise<{ id: string; pids: number[] }> => {
+      const file = join(mkdtempSync(join(tmpdir(), `rotaris-b8-${tag}-`)), 'pids');
+      const node = process.execPath.replace(/'/g, "''");
+      const script = `require('fs').writeFileSync(process.argv[1], process.ppid + ' ' + process.pid); setTimeout(() => {}, 60000)`;
+      const command = `Write-Output 'up'; & '${node}' -e "${script}" '${file.replace(/'/g, "''")}'`;
+      const id = /ts_[0-9a-f]{8}/.exec((await t.execute(args({ command, background: true }), ctx())).text)![0];
+      const by = (clocks.monotonic.now() as number) + 15_000;
+      while (!existsSync(file) || readFileSync(file, 'utf8').split(' ').length !== 2) {
+        expect(clocks.monotonic.now() as number).toBeLessThan(by);
+        await new Promise((res) => setTimeout(res, 50));
+      }
+      return { id, pids: readFileSync(file, 'utf8').split(' ').map(Number) };
+    };
+    const goneWithin = async (pids: readonly number[], ms: number): Promise<number> => {
+      const started = performance.now();
+      while (pids.some(alive) && performance.now() - started < ms) await new Promise((res) => setTimeout(res, 50));
+      expect(pids.filter(alive), `still running ${Math.round(performance.now() - started)} ms after`).toEqual([]);
+      return performance.now() - started;
+    };
+    const killedAtWarning = async (t: Awaited<ReturnType<typeof tool>>, id: string): Promise<void> => {
+      const by = (clocks.monotonic.now() as number) + 15_000;
+      while (!(await t.execute(args({ session_action: 'list' }), ctx())).text.includes(`✗ ${id}`)) {
+        expect(clocks.monotonic.now() as number).toBeLessThan(by);
+        await new Promise((res) => setTimeout(res, 50));
+      }
+      const q = await t.execute(args({ session_id: id, session_action: 'query' }), ctx());
+      expect(q.text).toContain(`Session ${id} is killed (exit -1).`);
+      expect(diag(q.text)).toMatchObject({ session_status: 'killed', exit_code: -1, outcome_kind: 'background_terminal', outcome_severity: 'warning' });
+      expect(q.isError).toBe(false);
+    };
+    for (const signal of ['SIGINT', 'SIGHUP', 'SIGTERM', 'SIGKILL'] as const) {
+      it(`send_signal ${signal}: sent, killed (exit -1) at warning, the shell and its grandchild gone within 6 s`, async () => {
+        const t = await tool();
+        const { id, pids } = await startTree(t, signal.toLowerCase());
+        expect(pids.every(alive)).toBe(true);
+        const sent = await t.execute(args({ session_id: id, session_action: 'send_signal', signal }), ctx());
+        expect(sent.text).toContain(`Sent ${signal} to session ${id}.`);
+        await goneWithin(pids, 6_000);
+        await killedAtWarning(t, id);
+      }, 40_000);
+    }
+    it('session_action kill: killed (exit -1) at warning, the shell and its grandchild gone within 6 s', async () => {
+      const t = await tool();
+      const { id, pids } = await startTree(t, 'kill');
+      expect((await t.execute(args({ session_id: id, session_action: 'kill' }), ctx())).text).toContain(`Session ${id} was killed.`);
+      await goneWithin(pids, 6_000);
+      await killedAtWarning(t, id);
+    }, 40_000);
+    it("the terminal window's interrupt on a background stream ends the same tree", async () => {
+      const t = await tool();
+      const { id, pids } = await startTree(t, 'interrupt');
+      expect(manager!.streams.interrupt(backgroundStreamId(id)).ok).toBe(true);
+      await goneWithin(pids, 6_000);
+      await killedAtWarning(t, id);
+    }, 40_000);
+    it("the foreground's killTree ends a PowerShell and the node it started, forced, at once", async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'rotaris-b8-killtree-'));
+      const file = join(dir, 'pids');
+      const script = `require('fs').writeFileSync(process.argv[1], process.ppid + ' ' + process.pid); setTimeout(() => {}, 60000)`;
+      const ps = spawn(shell!.file, ['-NoProfile', '-NonInteractive', '-Command', `& '${process.execPath.replace(/'/g, "''")}' -e "${script}" '${file.replace(/'/g, "''")}'`], { stdio: 'ignore', windowsHide: true });
+      const started = performance.now();
+      while ((!existsSync(file) || readFileSync(file, 'utf8').split(' ').length !== 2) && performance.now() - started < 15_000) await new Promise((res) => setTimeout(res, 50));
+      const pids = readFileSync(file, 'utf8').split(' ').map(Number);
+      expect(pids[0]).toBe(ps.pid);
+      expect(killTree(ps.pid!, true)).toBe(true);
+      expect(await goneWithin(pids, 2_000)).toBeLessThan(2_000);
+    }, 30_000);
+  });
   it.skipIf(PS)('OQ-133: a signal death the product did not send reads failed with 128 + n, never the −1 of killed', async () => {
     const t = await tool();
     // The shell ends itself by SIGTERM: a death by a signal no `send_signal` delivered.

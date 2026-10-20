@@ -153,4 +153,4 @@ REQ-WORKSPACE-092's 5 s as binding there; a ruling decides which governs.
   neither a later step nor the quit ends such a process; REQ-WORKSPACE-092's close clause covers "anything descended
   from it". Not measured: neither the bundled runtime's steps nor the stand-ins leave one behind (on the verifier's
   second round).
-- Windows was not measured.
+- Windows was not measured. *Measured 2026-10-20 (the Windows ARM64 session's B8, Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6, at `9f898a00`): `workspace-proof`'s 8f quit the app in 2,706 and 2,713 ms with the step and its descendant gone 5 s after the exit and no "could not be delivered" line, in two runs; nothing they launched was running 10 s later.*

@@ -207,6 +207,63 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
     expect(await settled(pidsIn(root))).toBe(true);
   }, 20_000);
 
+  /**
+   * The same four on Windows (the Windows ARM64 session's B8, 2026-10-15): the ask is `taskkill /T` without `/F`, which a
+   * console-less Node step never answers, so every step there ignores it without a handler of its own, and the stop is
+   * `taskkill /T /F` after the grace. The family is the same fixture without its SIGTERM handlers.
+   */
+  describe.runIf(process.platform === 'win32')('on Windows: the ask is ignored by construction, and the force-kill follows the grace (PD-MCP-003, REQ-WORKSPACE-092)', () => {
+    const familyWin = 'const a = process.argv.slice(1); const root = a[1]; const cp = require("child_process"); const g = cp.spawn(process.execPath, ["-e", "setTimeout(() => {}, 20000)"], { stdio: "ignore" }); require("fs").writeFileSync(require("path").join(root, "pids"), process.pid + " " + g.pid); setTimeout(() => {}, 20000);';
+    const familyWinInvocation = { command: process.execPath, args: ['-e', familyWin] };
+    it('a cancellation ends the step and its descendant 2 s after it, both gone', async () => {
+      const root = scratchDir('rotaris-setup-win-cancel-');
+      const abort = new AbortController();
+      let pids: number[] = [];
+      let cancelledAt = 0;
+      const r = await runSetupSteps({
+        invocation: familyWinInvocation, workspaceRoot: root, steps: [step('create', 'holds')], creationStepId: 'create', markerPresent: false, containsCode: true,
+        env: process.env as Record<string, string>, clocks: realClocks(), log, signal: abort.signal, pollMs: millis(50),
+        onStep: (s) => { if (s.id === 'create' && s.status === 'running') whenPids(root, (found) => { pids = found; cancelledAt = performance.now(); abort.abort(); }); },
+      });
+      const endedAfter = performance.now() - cancelledAt;
+      expect(r.steps[0]!.stopped).toBe('cancelled');
+      expect(endedAfter, `${Math.round(endedAfter)} ms`).toBeGreaterThanOrEqual(1_900);
+      expect(endedAfter, `${Math.round(endedAfter)} ms`).toBeLessThan(4_000);
+      expect(pids).toHaveLength(2);
+      expect(await settled(pids)).toBe(true);
+    }, 20_000);
+    it('a step past its 600 ms budget ends 2 s after it, both gone', async () => {
+      const root = scratchDir('rotaris-setup-win-budget-');
+      const started = performance.now();
+      const r = await runSetupSteps({
+        invocation: familyWinInvocation, workspaceRoot: root, steps: [step('create', 'holds', { budgetMs: 600 })], creationStepId: 'create', markerPresent: false, containsCode: true,
+        env: process.env as Record<string, string>, clocks: realClocks(), log, signal: new AbortController().signal, pollMs: millis(50), onStep: () => undefined,
+      });
+      const took = performance.now() - started;
+      expect(r.steps[0]!.stopped).toBe('budget');
+      expect(took, `${Math.round(took)} ms`).toBeGreaterThanOrEqual(2_500);
+      expect(took, `${Math.round(took)} ms`).toBeLessThan(4_600);
+      expect(await settled(pidsIn(root))).toBe(true);
+    }, 20_000);
+    it('at the host\'s shutdown a 300 ms hurry shortens a cancellation\'s 10 s grace already under way, both gone', async () => {
+      const root = scratchDir('rotaris-setup-win-shutdown-');
+      const abort = new AbortController();
+      const shutdown = new AbortController();
+      let pids: number[] = [];
+      let shutdownAt = 0;
+      const r = await runSetupSteps({
+        invocation: familyWinInvocation, workspaceRoot: root, steps: [step('create', 'holds'), step('index', 'ok')], creationStepId: 'create', markerPresent: false, containsCode: true,
+        env: process.env as Record<string, string>, clocks: realClocks(), log, signal: abort.signal, pollMs: millis(50), graceMs: millis(10_000),
+        shutdown: { signal: shutdown.signal, graceMs: millis(300) },
+        onStep: (s) => { if (s.id === 'create' && s.status === 'running') whenPids(root, (found) => { pids = found; abort.abort(); setTimeout(() => { shutdownAt = performance.now(); shutdown.abort(); }, 300); }); },
+      });
+      const endedAfter = performance.now() - shutdownAt;
+      expect(r.outcome).toBe('cancelled');
+      expect(endedAfter, `${Math.round(endedAfter)} ms`).toBeLessThan(2_000);
+      expect(await settled(pids)).toBe(true);
+    }, 20_000);
+  });
+
   it.skipIf(process.platform === 'win32')('at its host\'s shutdown, force-kills a step that ignores the ask after the shutdown\'s grace, shortening a cancellation\'s grace already under way (REQ-WORKSPACE-092, REQ-WORKSPACE-109)', async () => {
     const root = scratchDir('rotaris-setup-shutdown-');
     const abort = new AbortController();

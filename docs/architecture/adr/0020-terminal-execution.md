@@ -181,7 +181,7 @@ nonce. The reading a reviewer would reach — "the marker is unguessable, so the
 `tmux-pool` and its two kill statuses; `single-session` ships and is the only value stamped.
 
 **OQ-10, read rather than answered:** on Windows `SIGTERM` and `SIGKILL` both terminate the process tree
-(`taskkill /T`, then `/F` after the 5 s grace); `SIGINT` writes `C-c` to a foreground PTY and is refused with
+(`taskkill /T`, then `/F` after the 5 s grace; *measured 2026-10-20, the Windows ARM64 session's B8: a pipe session's PowerShell and a node grandchild gone 5,157-5,250 ms after each of the four signals, `kill` and the stream interrupt, so the ask is never answered and the 5 s is always spent; the foreground's forced `killTree` ends a PowerShell and its node at once, `terminal.test.ts`*); `SIGINT` writes `C-c` to a foreground PTY and is refused with
 `invalid_request` for a background pipe; `SIGHUP` likewise. `node-pty`'s ignored signal argument is exactly
 what made the tree kill the only kill. *(OQ-10 ruled 2026-10-06, [R-071](../../product/requests.md#r-071): the foreground scope
 confirmed as built, beside R-044's ruling for background pipe sessions.)*

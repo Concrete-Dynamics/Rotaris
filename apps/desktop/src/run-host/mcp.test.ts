@@ -116,7 +116,10 @@ describe('a persona\'s MCP lines on its first spawn (REQ-MCP-059, REQ-MCP-065, R
  * The stand-in runtime here holds `project create`, ignores the ask to terminate, and starts a descendant that ignores it too.
  */
 describe('the setup at the run host\'s shutdown (REQ-WORKSPACE-092, REQ-WORKSPACE-109)', () => {
-  it.skipIf(process.platform === 'win32')('ends the step under way and what it started, force-killing them after the shutdown\'s grace, and answers once they have gone', async () => {
+  // Run on Windows too since 2026-10-20 (the Windows ARM64 session's B8): the stand-in's SIGTERM handlers are inert there, the
+  // ask is `taskkill /T`, which neither process answers, and `/T /F` ends both after the grace: 2,549-2,626 ms in three runs,
+  // under REQ-WORKSPACE-109's 5 s.
+  it('ends the step under way and what it started, force-killing them after the shutdown\'s grace, and answers once they have gone', async () => {
     const dir = scratchDir('rotaris-setup-end-');
     const standIn = join(dir, 'stand-in.cjs');
     writeFileSync(standIn, [

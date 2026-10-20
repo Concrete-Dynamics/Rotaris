@@ -469,6 +469,11 @@ passed all five scenarios with the bundle present, and `workspace-proof` passed 
 46 passed, 0 failed, 2 skipped). **Not measured:** Windows; a run host killed by a signal, whose step's group still
 survives it (OQ-169); a step that exits by itself and leaves a process it started running in its group: `endSetup`
 reaches only a step still running, so at a quit nothing ends such a process (the fixed note's "Not reached").
+*Windows, 2026-10-20 (the Windows ARM64 session's B8; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6, at `9f898a00`): measured. Scenario 8f quit the app in 2,706 and 2,713 ms,
+both processes gone 5 s after the exit, in two `workspace-proof` runs (49 passed, 0 failed, 5 skipped each); "Windows keeps
+`taskkill /T`" holds as the ask, which neither stand-in answers, so `/T /F` after the 2 s grace is what ends them. The
+5.489 s and 5.603 s misses read 2.441-2.604 s from request to stopped step under PD-MCP-003. Still not measured there: a run
+host killed by a signal (OQ-169).*
 
 **The manifest carries the product's own words for one tool — 2026-10-06 (fin21; `PD-MCP-001`, the owner's ruling of OQ-115
 under R-071).** The manifest was the runtime's answer and nothing else; it now also carries `productDescriptions`, written by

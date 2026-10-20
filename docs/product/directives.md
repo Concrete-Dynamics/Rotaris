@@ -9553,7 +9553,12 @@ Everything else stands — revision 2: the rename's arguments, result and reach 
 > (`child-rename-cold-ts`) each "(2 changes applied)", both files on disk, report and artifact listing exactly those two, no search
 > row, the log's one placement and one removal (the file stood 2.9 s in launch 13), nothing left at the root; launch 11 green with
 > no `jsconfig.json` beside its `tsconfig.json`; launch 10 unchanged; with the clause switched off in the same build, launches 13 to
-> 15 each "(1 changes applied)", the declaring file alone. **Found:** a sibling's own EDIT call that writes inside the rename's
+> 15 each "(1 changes applied)", the declaring file alone. The whole proof then passed in one run (`--skip-build`, every launch but
+> the packaged-only seventh: launches 1 to 6 and 8 to 15 green, 980 s, CPU load 79 % at the start with eight other trees' Electron
+> alive); two earlier whole runs had stopped at launch 1, on another tree's window counted by the window sampler
+> ([`code-intel-proofs-window-sampler-counts-another-trees-windows`](../defects/code-intel-proofs-window-sampler-counts-another-trees-windows.md),
+> Windows-only), and at launch 2, whose fixed 25 s capture a load of 99 to 100 % outran (discovery 15.6 and 23.9 s;
+> [`code-intel-proofs-discovery-launch-judges-the-connection-inside-a-fixed-25-s-window`](../defects/code-intel-proofs-discovery-launch-judges-the-connection-inside-a-fixed-25-s-window.md)). **Found:** a sibling's own EDIT call that writes inside the rename's
 > window is still listed under the renaming child, as OQ-245's bound states (`mcp.test.ts`'s sibling case reads it); the product's
 > file is never listed. The tree's first proof run, in a fresh runtime home, stopped at launch 10 before any rename: on Windows the
 > run start's discovery cut the language server's first install short and the session's own install failed

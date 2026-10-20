@@ -30,7 +30,9 @@ no `tsconfig.json`) each "(2 changes applied)", both files changed on disk, the 
 no search row, the log's one placement and one removal, nothing left at the root; launch 11 green with no `jsconfig.json` beside its
 `tsconfig.json`; launch 10 unchanged. With the clause switched off in the same build (the run host's file as at `0d89e971`, CPU load
 94 % beside two other trees' Electron), launches 13, 14 and 15 each read "(1 changes applied)", the declaring file alone, and the
-proof failed on all three. Launches 11, 13, 14 and 15 are re-run on every pin change. **Not shown:** the live `rename` scenario: its
+proof failed on all three. The whole proof then passed in one run (launches 1 to 6 and 8 to 15, the seventh needing a packaged tree;
+980 s, CPU load 79 % at the start with eight other trees' Electron alive). Launches 11, 13, 14 and 15 are re-run on every pin change.
+**Not shown:** the live `rename` scenario: its
 launch (`timeout 3600 node C:/dev/Rotaris-crw-wt-loc1-rename/apps/desktop/scripts/live-run.mjs --confirm --skip-build --only=rename`)
 was refused by the session's permission classifier and is the orchestrator's to run; it now also fails when a `jsconfig.json` stands
 at the workspace root afterwards.

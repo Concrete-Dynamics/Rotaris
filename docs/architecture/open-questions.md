@@ -15910,7 +15910,8 @@ Pinned by seven cases under "PD-MCP-004 revision 2 (OQ-362)" in `apps/desktop/sr
 green before and after, and the reader's and the generator's cases. In the built app `code-intel-proof` launches 13, 14 and 15 are
 green ("(2 changes applied)", both files, report and artifact listing exactly those two, no search row, one placement and one
 removal in the log, nothing left at the root), launch 11 green with no `jsconfig.json` written, launch 10 unchanged; with the clause
-switched off in the same build, 13 to 15 renamed the declaring file alone. **Owed:** the live `rename` scenario, refused at its
+switched off in the same build, 13 to 15 renamed the declaring file alone; and the whole proof passed in one run (launches 1 to 6
+and 8 to 15; the seventh needs a packaged tree). **Owed:** the live `rename` scenario, refused at its
 launch by the session's permission classifier and the orchestrator's to run; and the noticed defect of the model's own search and
 safe deletion in such a workspace, measured (the deletion removed a symbol two files import) and raised as [OQ-378](#oq-378). The
 directive's report-back is "First execution of revision 2" under [`PD-MCP-004`](../product/directives.md#pd-mcp-004); the note is in

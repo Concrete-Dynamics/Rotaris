@@ -62,7 +62,15 @@ const SKIPPED = [/^packages\/kernel\/src\/generated\//, /^tools\/requirement-cov
  * continuation, so `REQ-X-001, 200 ms` credits no REQ-X-200 and `REQ-X-001 to 100 notices` expands no range. A tight
  * separator (`..`, `–`, `/`) only ever joins identifiers, so `REQ-X-031..033 calls` is the range whatever follows it.
  */
-const QUANTITY = String.raw`(?!\s*(?:%|(?i:(?:ms|s|sec|seconds?|minutes?|min|hours?|px|[kmg]b|bytes?|characters?|chars|lines?|tokens?|notices?|items?|calls?|files?|times|days?|rows?|entries|percent)\b)))`;
+const UNITS = ['ms', 's', 'sec', 'seconds?', 'minutes?', 'min', 'hours?', 'px', '(?:k|m|g)b', 'bytes?', 'characters?', 'chars',
+  'lines?', 'tokens?', 'notices?', 'items?', 'calls?', 'files?', 'times', 'days?', 'rows?', 'entries', 'percent'];
+/**
+ * A unit in any case, each letter spelled as its own two-case class rather than scoped with `(?i:…)`: Node 24.11's V8
+ * (13.6.233) loses a scoped `i` from alternatives that share a prefix, so `(?i:ms|min)` does not match `MS`.
+ * @param {string} unit
+ */
+const anyCase = (unit) => unit.replace(/[a-z]/g, (c) => `[${c}${c.toUpperCase()}]`);
+const QUANTITY = String.raw`(?!\s*(?:%|(?:${UNITS.map(anyCase).join('|')})\b))`;
 const IDENTIFIER = String.raw`(?:REQ|PD)-[A-Z]+-\d{3}(?!\d)`;
 const TIGHT = String.raw`(?:\.\.|–|\/)`;
 const LOOSE = String.raw`(?:,\s*(?:and\s+)?|\s+(?:and|to|through)\s+)`;

@@ -143,7 +143,9 @@ function obtainUv() {
   const got = sha256(archive);
   if (got !== asset.sha256) { rmSync(archive, { force: true }); fail(`uv download hash ${got} differs from the pinned ${asset.sha256}`); }
   mkdirSync(dir, { recursive: true });
-  run('tar', ['-xf', archive, '-C', dir]);
+  // Windows' own bsdtar, as `packages/store/src/backup.ts` names it: from Git Bash a bare `tar` is GNU tar, which reads `C:` as a host.
+  const tarCmd = process.platform === 'win32' ? 'C:\\Windows\\System32\\tar.exe' : 'tar';
+  run(tarCmd, ['-xf', archive, '-C', dir]);
   let resolvedExe = exe;
   if (!existsSync(resolvedExe)) {
     // Some archives extract into a nested folder, e.g. uv-x86_64-unknown-linux-gnu/uv

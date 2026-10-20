@@ -111,7 +111,8 @@ describe('observeReach (OQ-245)', () => {
       });
       expect(obs.observedPaths).toEqual(['src/a.ts']);
     } finally {
-      rmSync(link, { force: true });
+      // `unlinkSync`, not `rmSync`: Node 24.11's `rmSync` refuses a Windows junction ("Path is a directory").
+      unlinkSync(link);
     }
   });
 

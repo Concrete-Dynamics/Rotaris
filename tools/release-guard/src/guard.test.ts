@@ -90,7 +90,7 @@ describe('the command line — REQ-STARTUP-149\'s exit codes', () => {
     // The pin half passes on this tree (the setup manifest exists since 2026-09-28), so the version half is the one error.
     expect(r.stderr).toContain('release guard: FAILED — 1 error');
     expect(r.stderr).not.toContain('setup manifest');
-  });
+  }, 70_000); // past its spawn's own 60 s bound: under the full gate a real Node boot outlasts vitest's 30 s default
 
   it('the script passes this repository for the version it declares: both halves, exit 0 (the setup manifest exists since 2026-09-28)', () => {
     const declared = (JSON.parse(readFileSync(join(REPO, 'apps', 'desktop', 'package.json'), 'utf8')) as { version: string }).version;
@@ -100,5 +100,5 @@ describe('the command line — REQ-STARTUP-149\'s exit codes', () => {
     expect(r.stdout).toContain('release guard: passed (REQ-STARTUP-028)');
     expect(r.stdout).toContain(`package pins: @playwright/mcp 0.0.80 (server "browser") — ${SETUP_MANIFEST_LOCATION} agrees`);
     expect(spawnSync(process.execPath, [CLI], { cwd: REPO, encoding: 'utf8', timeout: 60_000 }).status).toBe(2);
-  });
+  }, 130_000); // past its two spawns' 60 s bounds
 });

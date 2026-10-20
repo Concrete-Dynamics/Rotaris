@@ -12,7 +12,7 @@ tar: Cannot connect to C: resolve failed
 
 `bundle.mjs` spawns a bare `tar`, and a shell started from Git Bash keeps Git's `/usr/bin` ahead of `C:\Windows\System32` on
 `PATH`, so the `tar` found is GNU tar, which reads the `C:` of a Windows path as a remote host — the shape
-[`fixed/two-store-cases-pack-their-artifact-with-whichever-tar-path-finds-first.md`](fixed/two-store-cases-pack-their-artifact-with-whichever-tar-path-finds-first.md)
+[`two-store-cases-pack-their-artifact-with-whichever-tar-path-finds-first.md`](two-store-cases-pack-their-artifact-with-whichever-tar-path-finds-first.md)
 repaired for two store tests (the product's own backup names `C:\Windows\System32\tar.exe`). The same command with
 `PATH=/c/Windows/System32:$PATH` before it built the bundle in 41 s. Every agent of an orchestrated build on this host works in
 Git Bash, and the brief's live-run and acceptance steps run `pnpm code-intel:bundle` there, so each fresh tree meets it.
@@ -31,3 +31,11 @@ None contradicted: a defect of the build script, not of the product (`backup.ts`
 
 - `apps/desktop/scripts/code-intelligence/bundle.mjs` — `run('tar', ['-xf', archive, '-C', dir])` in uv's extraction.
 - `packages/store/src/backup.ts` — `tarBin`, the binary the product names on Windows.
+
+## Repaired — 2026-10-20
+
+`bundle.mjs` extracts uv with `C:\Windows\System32\tar.exe` on win32, the binary `backup.ts` names, and a bare `tar`
+elsewhere. Checked on Windows 11 x64 (build 26200), Node 24.11.0, from Git Bash with `/usr/bin/tar` first on `PATH`: the
+same `-xf <zip> -C <dir>` spawn exits 128 with "Cannot connect to C: resolve failed" through the bare name and extracts
+through the named one. `pnpm code-intel:bundle` then built the bundle in 28.8 s on that host, though there the uv on `PATH`
+was the pin and the extraction step was not reached.

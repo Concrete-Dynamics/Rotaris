@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync, type PathLike } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync, writeFileSync, type PathLike } from 'node:fs';
 import type * as Fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,7 +27,11 @@ beforeEach(() => {
   writeFileSync(join(root, 'src', 'a.ts'), 'export const total = 1;\n');
   writeFileSync(join(root, 'docs', 'notes.md'), '# notes\n');
 });
-afterEach(() => { rmSync(`${root}-alias`, { force: true }); rmSync(root, { recursive: true, force: true }); });
+// `unlinkSync`, not `rmSync`: Node 24.11's `rmSync` refuses a Windows junction ("Path is a directory").
+afterEach(() => {
+  if (lstatSync(`${root}-alias`, { throwIfNoEntry: false })) unlinkSync(`${root}-alias`);
+  rmSync(root, { recursive: true, force: true });
+});
 
 describe('observeReach takes its root in the spelling the native writes are noted in (OQ-245, fin36\'s review)', () => {
   it('a workspace whose two resolutions differ is walked, and a sibling\'s noted write is left out', async () => {

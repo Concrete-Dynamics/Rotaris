@@ -3,6 +3,18 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — optional findings have a stopping rule
+
+**Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
+approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
+item F12: each plan's reviewers left optional findings that became the next plan's tasks, the count falling 29, 18, 10,
+3 over three extra small plans (parts of fin38, fin39, fin40; about 2 h 51 min), with fin34's 35-optional bundle taking
+54 minutes to build and 56 to review, and about eight hand extractions. **Changed:** SKILL.md §4: an optional becomes a
+task only as a real defect or inside the next plan's area; below five, or with no defect among them, they go to the
+report. Listing optionals per bundle in `status` is a script change with its own self-test assertion and is not part of
+this entry. **Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check`; the skill-review by one
+reviewer agent under `references/skill-review.md`, which judged this entry with the others of 2026-10-20.
+
 ## 2026-10-20 — a plan never holds a bundle that waits on another plan
 
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner

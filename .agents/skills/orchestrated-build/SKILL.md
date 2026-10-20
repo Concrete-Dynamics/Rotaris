@@ -156,6 +156,8 @@ sent: run that scenario yourself on merged main once the bundle has landed (`ref
 
 **Reviewers' optional findings** come back per bundle (`optional`), beside what they repaired in place (`repaired`). One
 that is a real defect elsewhere is recorded (repository.md says how) on a docs-only branch merged with the gate green.
+An optional becomes a task only when it is a real defect (recorded first) or touches the next plan's area anyway;
+once fewer than five remain, or none is a defect, they go to the final report's Offen and no plan is made for them.
 
 **A friction survey** every three or four plans, in a free plan slot: a report-only read of the runs since the
 last one for what cost a round, a relaunch, a workaround or a question (`references/workflow-tool.md`, A friction

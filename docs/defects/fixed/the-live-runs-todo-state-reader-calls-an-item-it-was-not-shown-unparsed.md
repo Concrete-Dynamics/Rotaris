@@ -37,3 +37,26 @@ for `replace`.
 - `apps/desktop/scripts/lib/coordinator-todo.test.ts` — no case reads an id holding a space, or tells a removed item from an
   unparsed one.
 - `packages/agent-tools/src/tools/todo.ts` — `remove_task`.
+
+## Outcome
+
+Repaired 2026-10-20 by loc1 (bundle `loc1-todo-reader`); harness only, no product code.
+
+- `todoItemState(text, id)` (`coordinator-todo.mjs`) looks an item up where `todoStates` gave it no state: the first task line
+  on which the exact rendered suffix ` (<id>)` closes the name, at the line's end or before its ` — `, gives its state, so an id
+  holding a space or a parenthesis is read. Where no task line carries it, it says why: `not shown` (no line of the block
+  carries the suffix: the plan no longer holds the item, or never did) or `not parsed` (a line other than a phase's carries it
+  in a shape the reader does not take, such as a name holding a line break: a gap of the reader's).
+- `heldItemReading` takes that lookup for every held item and every item a closing `replace` sent (so `closes`' `stored` reads
+  the suffix's state too), and each `unread` entry carries `why`. The live run's check keeps its title and target of 0; its
+  detail now lists the `not shown` items and the `not parsed` ones apart, each with what it means.
+- `todoStates`' comment says its keys are readings, not tasks: a line of several readings adds each that no single-reading line
+  claims, a key nothing looks up, so `states.size` is not the number of tasks shown.
+- On (a): no path of the product has stored a model-chosen id since A6 (`resolveIds`; `add_phase` and `add_task` mint; a
+  delegation's `todo_item` is admitted only when the plan holds it). A plan stored before A6, restored as stored, is the one
+  source left, and the lookup reads it.
+- Pinned by `coordinator-todo.test.ts`'s "an item the reader gave no state for is looked up by its rendered suffix, and an
+  unread one says why": the ids `impl 1` and `tests (unit)` read in a held reading and a closing `replace` (red before: four
+  `unread`, `heldReads` 0); a held item removed reads `not shown`, an id on a line of no task shape `not parsed` (red before:
+  entries with no `why`); and the `README` reading counted as a key, pinned beside the comment. The A7 case's `unread` entries
+  now carry `why: 'not shown'`. The next default live run is the live measure.

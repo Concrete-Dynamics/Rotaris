@@ -161,6 +161,12 @@ export function todoItemReading(sessions) {
  * docs/defects/fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md). An id is a parenthesised token with
  * no space, followed by the line's end or ` — `. A name or description holding such a token too leaves its line several
  * readings: the lines of one reading are taken first, then each reading of the others that no line has given yet.
+ *
+ * So the map's keys are readings, not tasks: a line of several readings (a description ending in a no-space parenthesised
+ * token, `Docs (0000000c) — update (README)`) adds each one no single-reading line claims, `README` included. That is harmless,
+ * since a caller only looks up an id it already holds (a child's `todo_item`, an id a `replace` sent) and none holds `README`,
+ * but `states.size` is not the number of tasks the Todo state shows, and nothing may count it as one. An id this pattern cannot
+ * take (one holding a space or a parenthesis) is `todoItemState`'s to find.
  */
 export function todoStates(text) {
   if (typeof text !== 'string') return null;
@@ -169,15 +175,43 @@ export function todoStates(text) {
   const states = new Map();
   const ambiguous = [];
   for (const line of text.slice(at).split('\n')) {
-    const task = /^ {2}\[(PENDING|IN_PROGRESS|COMPLETED|ABANDONED)\] (.+)$/.exec(line);
+    const task = TASK_LINE.exec(line);
     if (!task) continue;
     const ids = [...task[2].matchAll(TASK_ID)].map((m) => m[1]);
     if (ids.length === 1) states.set(ids[0], task[1]);
     else if (ids.length > 1) ambiguous.push([ids, task[1]]);
   }
+  // Each extra reading becomes a key nothing looks up (above): the map counts readings, never tasks.
   for (const [ids, state] of ambiguous) for (const id of ids) if (!states.has(id)) states.set(id, state);
   return states;
 }
+
+/**
+ * The state of the task `id` names in a `Todo state:` block, where `todoStates` gave none: the first task line on which the
+ * exact rendered suffix ` (<id>)` closes the name, at the line's end or before its ` — `, so an id `TASK_ID` cannot take (a space
+ * or a parenthesis in it, as a plan stored before fin47's finding A6 may hold) is still read. Where no task line carries it,
+ * `why` says which of two things the reader met: `not shown` — no line of the block carries the suffix, so the Todo state holds
+ * no task under that id (the coordinator removed it, `remove_task` protecting no held item, or never had it); `not parsed` — a
+ * line other than a phase's carries it in a shape the reader does not take (a line break in a name, a rendering it does not
+ * know), a gap of the reader's. Until 2026-10-20 both read as one `unread`, which the live run's detail could only call unread
+ * (fin47's reviewers' finding, docs/defects/fixed/the-live-runs-todo-state-reader-calls-an-item-it-was-not-shown-unparsed.md).
+ */
+export function todoItemState(text, id) {
+  const at = typeof text === 'string' ? text.indexOf('Todo state:') : -1;
+  if (at < 0) return { why: 'not shown' };
+  const suffix = ` (${id})`;
+  const closes = (rest) => rest.endsWith(suffix) || rest.includes(`${suffix} — `);
+  let shaped = false;
+  for (const line of text.slice(at).split('\n')) {
+    const task = TASK_LINE.exec(line);
+    if (task && closes(task[2])) return { state: task[1] };
+    if (!task && !line.startsWith('Phase ') && closes(line)) shaped = true;
+  }
+  return { why: shaped ? 'not parsed' : 'not shown' };
+}
+
+/** A rendered task line (REQ-TOOLS-147): `  [STATE] ` and the rest, the name, its ` (id)` and any ` — description`. */
+const TASK_LINE = /^ {2}\[(PENDING|IN_PROGRESS|COMPLETED|ABANDONED)\] (.+)$/;
 
 /** A rendered task line's id: ` (id)` closing the name, before the line's end or the description's ` — `. */
 const TASK_ID = / \(([^()\s]+)\)(?= — |$)/g;
@@ -203,9 +237,11 @@ const TASK_ID = / \(([^()\s]+)\)(?= — |$)/g;
  *   `0bc3eee` every coordinator closed with `update`: docs/defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md);
  * - `namedRestores` — each accepted root `replace` whose observation names a task it kept over a different state (a NOTE);
  * - `heldReads` — how many states of a held item those Todo states gave (`heldPending` and `closedWhileHeld` read these), and
- *   `unread` — each held item, and each item a closing `replace` sent, that the Todo state its call carried does not show
- *   (target 0): until fin47 a model-chosen id was never read, and the three checks passed over a session having read nothing
- *   of it (finding A7, docs/defects/fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md).
+ *   `unread` — each held item, and each item a closing `replace` sent, that the Todo state its call carried gave no state for
+ *   (target 0), with `why`: `not shown` or `not parsed` (`todoItemState`). Until fin47 a model-chosen id was never read, and
+ *   the three checks passed over a session having read nothing of it (finding A7,
+ *   docs/defects/fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md); until 2026-10-20 an item the Todo
+ *   state did not show read the same as one the reader could not parse.
  *
  * Since `PD-TOOLS-008` revision 4 and `PD-TOOLS-006` revision 11 (OQ-333, ruled 2026-10-15 under R-072) a served item no longer
  * counts against the coordinator's next mark (`singleActive` keeps its target of 0, now with no accepted cause), and the
@@ -240,8 +276,18 @@ export function heldItemReading(sessions) {
     }
     const kids = (s.children ?? []).filter((k) => k.depth === 1 && k.todo_item);
     const windows = new Map(kids.map((k) => [k, holdingWindows(k, s.timeline)]));
-    const missed = (c, item) => {
-      if (!unread.some((u) => u.scenario === s.scenario && u.ordinal === c.ordinal && u.item === item)) unread.push({ scenario: s.scenario, ordinal: c.ordinal, item });
+    const missed = (c, item, why) => {
+      if (!unread.some((u) => u.scenario === s.scenario && u.ordinal === c.ordinal && u.item === item)) unread.push({ scenario: s.scenario, ordinal: c.ordinal, item, why });
+    };
+    // The item's state in the call's Todo state: `todoStates`' reading, else its rendered suffix (`todoItemState`); undefined,
+    // with the item reported unread and why, where neither finds it.
+    const stateOf = (c, states, item) => {
+      const read = states.get(item);
+      if (read !== undefined) return read;
+      const found = todoItemState(c.result, item);
+      if (found.state !== undefined) return found.state;
+      missed(c, item, found.why);
+      return undefined;
     };
     for (const c of rootCalls) {
       if (c.status !== 'ok' || c.endedAt === null || c.endedAt === undefined) continue;
@@ -250,8 +296,8 @@ export function heldItemReading(sessions) {
       if (states === null) continue;
       for (const k of kids) {
         if (!holdsAt(windows.get(k), c.endedAt)) continue;
-        const state = states.get(k.todo_item);
-        if (state === undefined) { missed(c, k.todo_item); continue; }
+        const state = stateOf(c, states, k.todo_item);
+        if (state === undefined) continue;
         heldReads += 1;
         if (state === 'PENDING') heldPending.push({ scenario: s.scenario, ordinal: c.ordinal, child: k.canonical_name, item: k.todo_item });
         if (state === 'COMPLETED' && WRITER_ROLES.has(k.persona)) closedWhileHeld.push({ scenario: s.scenario, ordinal: c.ordinal, child: k.canonical_name, item: k.todo_item });
@@ -269,9 +315,9 @@ export function heldItemReading(sessions) {
         const servers = kids.filter((k) => k.todo_item === t.id && Date.parse(k.spawned_at) <= c.endedAt);
         if (servers.length === 0 || servers.some((k) => holdsAt(windows.get(k), c.endedAt))) continue;
         // The case revision 3 decides, asked: a `replace` closing an item every child serving it has ended.
-        closes.push({ scenario: s.scenario, ordinal: c.ordinal, item: t.id, sent: t.state, stored: states.get(t.id) ?? null });
-        if (!states.has(t.id)) missed(c, t.id);
-        if (states.get(t.id) === 'IN_PROGRESS') restoredOverClose.push({ scenario: s.scenario, ordinal: c.ordinal, item: t.id });
+        const stored = stateOf(c, states, t.id);
+        closes.push({ scenario: s.scenario, ordinal: c.ordinal, item: t.id, sent: t.state, stored: stored ?? null });
+        if (stored === 'IN_PROGRESS') restoredOverClose.push({ scenario: s.scenario, ordinal: c.ordinal, item: t.id });
       }
     }
     // PD-TOOLS-006 revision 11 (OQ-333): the resume line, the items left open when the coordinator answered, and how long each

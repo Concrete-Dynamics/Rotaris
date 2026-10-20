@@ -386,10 +386,64 @@ describe('heldItemReading (PD-TOOLS-008 revision 2, OQ-249)', () => {
         { ...c(20, 'todo', 'ok', `Replaced the todo list: 1 phase, 1 task.\n${state([['COMPLETED', 'tests', 'test101']])}`, '2026-10-15T03:49:50.000Z'), args: closeImpl },
       ] }]);
       expect(r.unread).toEqual([
-        { scenario: 'delegation-swarm', ordinal: 8, item: 'test101' },
-        { scenario: 'delegation-swarm', ordinal: 20, item: 'impl101' },
+        { scenario: 'delegation-swarm', ordinal: 8, item: 'test101', why: 'not shown' },
+        { scenario: 'delegation-swarm', ordinal: 20, item: 'impl101', why: 'not shown' },
       ]);
       expect(r.heldReads).toBe(1);
+    });
+  });
+
+  /**
+   * fin47's reviewers' finding (bundle `fin47-accept1-2`): `unread` could go red, reading as a gap of the reader, where the
+   * reader had read correctly. An id `TASK_ID` cannot take (a plan stored before fin47's finding A6 kept whatever id its model
+   * sent, spaces and parentheses included) was never looked up, and an item the coordinator had removed while a child held it
+   * (`remove_task` protects no held item) read the same as one the reader failed to parse. An item `todoStates` gives no state
+   * for is now looked up by its exact rendered suffix, ` (<id>)` at the line's end or before its ` — `, and one still unread
+   * says why: `not shown` (no line of the Todo state carries it) or `not parsed` (a line carries it in a shape the reader does
+   * not take, a reader gap).
+   * docs/defects/fixed/the-live-runs-todo-state-reader-calls-an-item-it-was-not-shown-unparsed.md
+   */
+  describe('an item the reader gave no state for is looked up by its rendered suffix, and an unread one says why', () => {
+    const legacy = [
+      { task_id: 'bg_1', canonical_name: 'impl', persona: 'coding-agent', depth: 1, todo_item: 'impl 1', spawned_at: '2026-10-15T03:48:47.100Z', completed_at: '2026-10-15T03:49:40.000Z' },
+      { task_id: 'bg_2', canonical_name: 'tests', persona: 'tester', depth: 1, todo_item: 'tests (unit)', spawned_at: '2026-10-15T03:48:47.150Z', completed_at: '2026-10-15T03:49:44.000Z' },
+    ];
+
+    it('an id holding a space or a parenthesis is read from its line, in a held reading and in a closing replace', () => {
+      const close = { operation: 'replace', phases: [{ name: 'main', tasks: [{ id: 'impl 1', name: 'impl', state: 'COMPLETED' }, { id: 'tests (unit)', name: 'tests', state: 'COMPLETED' }] }] };
+      const r = heldItemReading([{ scenario: 'delegation', rootNames: ['orchestrator'], children: legacy, calls: [
+        c(8, 'delegate', 'ok', `Task 'tests': queued\n\nTodo state:\nPhase main (e40a534e)\n  [IN_PROGRESS] impl (impl 1)\n  [PENDING] tests (tests (unit)) — see (README)`, '2026-10-15T03:48:47.160Z'),
+        { ...c(20, 'todo', 'ok', 'Replaced the todo list: 1 phase, 2 tasks.\nTodo state:\nPhase main (e40a534e)\n  [COMPLETED] impl (impl 1)\n  [COMPLETED] tests (tests (unit))', '2026-10-15T03:49:50.000Z'), args: close },
+      ] }]);
+      expect(r.unread).toEqual([]);
+      expect(r.heldReads).toBe(2);
+      expect(r.heldPending).toEqual([{ scenario: 'delegation', ordinal: 8, child: 'tests', item: 'tests (unit)' }]);
+      expect(r.closes).toEqual([
+        { scenario: 'delegation', ordinal: 20, item: 'impl 1', sent: 'COMPLETED', stored: 'COMPLETED' },
+        { scenario: 'delegation', ordinal: 20, item: 'tests (unit)', sent: 'COMPLETED', stored: 'COMPLETED' },
+      ]);
+    });
+
+    it('a held item the coordinator removed is not shown; one a line carries in a shape the reader does not take is not parsed', () => {
+      const r = heldItemReading([{ scenario: 'delegation', rootNames: ['orchestrator'], children: kids, calls: [
+        c(2, 'delegate', 'ok', "Task 'impl': queued\ntask_id: bg_00000001", '2026-10-07T07:00:10Z'),
+        // remove_task protects no held item: the impl child still holds 0000000a, and the Todo state no longer carries it.
+        c(9, 'todo', 'ok', `Removed task impl (0000000a).\n${state([['IN_PROGRESS', 'tests', '0000000b']])}`, '2026-10-07T07:01:00Z'),
+        // A name holding a line break puts the id on a line of no task shape.
+        c(10, 'todo', 'ok', 'Updated task tests (0000000b): name.\nTodo state:\nPhase main (e002ab7d)\n  [IN_PROGRESS] tests\n  and more (0000000b)', '2026-10-07T07:01:10Z'),
+      ] }]);
+      expect(r.unread).toEqual([
+        { scenario: 'delegation', ordinal: 9, item: '0000000a', why: 'not shown' },
+        { scenario: 'delegation', ordinal: 10, item: '0000000a', why: 'not shown' },
+        { scenario: 'delegation', ordinal: 10, item: '0000000b', why: 'not parsed' },
+      ]);
+      expect(r.heldReads).toBe(1);
+    });
+
+    it('a line of several readings adds each as a key no single-reading line claims, so the map counts readings, not tasks', () => {
+      const states = todoStates('Todo state:\nPhase main (e40a534e)\n  [PENDING] Docs (0000000c) — update (README)')!;
+      expect(states.get('0000000c')).toBe('PENDING');
+      expect(states.size).toBe(2);
     });
   });
 });

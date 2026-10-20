@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-20**
 
+**The live run's Todo state reader looks an item up by its rendered suffix, and says why one is unread (2026-10-20; loc1,
+`loc1-todo-reader`; REQ-TOOLS-144, REQ-TOOLS-147, finding A7's check).** Harness only (`apps/desktop/scripts/lib/coordinator-todo.mjs`'s
+`todoItemState`, `live-run.mjs`'s `unread` detail;
+`docs/defects/fixed/the-live-runs-todo-state-reader-calls-an-item-it-was-not-shown-unparsed.md`). No view describes the live
+run's readings, and none changed.
+
 **`assertOpened` compares the working directory in the app's spelling (plan `loc1`, `proof-cwd`; fin47's review finding
 `fin47-accept1-3`; REQ-SHELL-010).** `01-component-view.md`'s sentence on `scripts/lib/working-directory.mjs` now says the
 logged workspace is compared as one directory in `canonicalPath`'s spelling, case-insensitively on Windows, and that the

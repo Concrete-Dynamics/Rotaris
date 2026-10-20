@@ -1202,7 +1202,17 @@ function checkCoordinatorTodo() {
   // Finding A7 (docs/defects/fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md): the three checks below read
   // each item in the Todo state its coordinator's call carried. One they could not find there was passed over until fin47 (every
   // model-chosen id of the 3c03287 swarm session), so a held or closed item left unread fails here rather than passing on nothing.
-  check(held.unread.length === 0, 'every todo item a running child held, or a closing replace sent, was read in its coordinator\'s Todo state (REQ-TOOLS-144, REQ-TOOLS-147, finding A7)', held.unread.length === 0 ? `${held.heldReads} held-item state(s) and ${held.closes.length} replace close(s) read in ${held.coordinating.length} coordinating session(s)` : held.unread.map((u) => `${u.scenario} #${u.ordinal} on ${u.item}`).join(', '));
+  // An unread item says why (`todoItemState`; fin47's reviewers' finding,
+  // docs/defects/fixed/the-live-runs-todo-state-reader-calls-an-item-it-was-not-shown-unparsed.md): `not shown` is the plan's
+  // (the coordinator removed a held item, or never had it), `not parsed` the reader's own gap.
+  const unreadAs = (why, says) => {
+    const of = held.unread.filter((u) => u.why === why);
+    return of.length === 0 ? [] : [`${says}: ${of.map((u) => `${u.scenario} #${u.ordinal} on ${u.item}`).join(', ')}`];
+  };
+  check(held.unread.length === 0, 'every todo item a running child held, or a closing replace sent, was read in its coordinator\'s Todo state (REQ-TOOLS-144, REQ-TOOLS-147, finding A7)', held.unread.length === 0 ? `${held.heldReads} held-item state(s) and ${held.closes.length} replace close(s) read in ${held.coordinating.length} coordinating session(s)` : [
+    ...unreadAs('not shown', 'not shown in the Todo state (no task line carries the id: the plan no longer holds the item, or never did)'),
+    ...unreadAs('not parsed', 'not parsed (a line carries the id in a shape the reader does not take: a gap of the reader)'),
+  ].join('; '));
   check(held.heldPending.length === 0, 'no coordinator\'s plan recorded a running child\'s todo item PENDING (PD-TOOLS-008 revision 2, PD-TOOLS-006 revision 7, OQ-249)', held.heldPending.length === 0 ? `${held.heldReads} held-item state(s) read in ${held.coordinating.length} coordinating session(s): ${held.coordinating.join(', ') || 'none'}` : held.heldPending.map(heldAt).join(', '));
   check(held.closedWhileHeld.length === 0, 'no coordinator marked a todo item COMPLETED while an implementation child still held it (REQ-ORCH-029, OQ-249)', held.closedWhileHeld.length === 0 ? `${held.coordinating.length} coordinating session(s)` : held.closedWhileHeld.map(heldAt).join(', '));
   // Since PD-TOOLS-008 revision 4 (OQ-333) a served item counts against no mark, so the target of 0 has no accepted cause left.

@@ -390,7 +390,11 @@ reported child's item is still IN_PROGRESS (`resumeLines`), the delegated items 
 coordinator answered (`openAtAnswer`) and the seconds from each child's end to its item's close (`closeLatencies`), read from the
 arguments and the stored plan; since fin47 (finding A7) the Todo state those three checks read is read under any task id, not
 only an eight-hex one, and a held item, or one a closing `replace` sent, that the Todo state does not show fails a check of its own
-(`unread`, target 0; `docs/defects/fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md`); and (`PD-TOOLS-006` revision 8, OQ-250) a NOTE counts `delegate` calls
+(`unread`, target 0; `docs/defects/fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md`), whose detail
+since 2026-10-20 says of each whether no line of the Todo state carried it (`not shown`: the plan no longer held it, or never
+did) or a line carried it in a shape the reader does not take (`not parsed`, a gap of the reader's), after looking the item up
+by its exact rendered suffix (`todoItemState`;
+`docs/defects/fixed/the-live-runs-todo-state-reader-calls-an-item-it-was-not-shown-unparsed.md`); and (`PD-TOOLS-006` revision 8, OQ-250) a NOTE counts `delegate` calls
 refused for a `write_scope` given to a persona that cannot write files and child calls of a tool they do not hold
 (`lib/routing-misses.mjs`; OQ-216's target is 0 for each, the duress run at `a68f121` had one of each). Since fin38 (`PD-TOOLS-006`
 revision 9, OQ-257) the write-scope refusals are read against a bound, each re-routed by the coordinator's next `delegate`, the

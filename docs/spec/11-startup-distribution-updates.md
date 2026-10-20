@@ -248,6 +248,14 @@ That parenthetical is a closed list of the activities this requirement constrain
 
 **REQ-STARTUP-053** — Opening the workspace chooser from a live window SHALL evaluate three gates in one fixed order, the same order and the same gates a window close uses (REQ-SHELL-021, REQ-SHELL-119), and any of them SHALL end the flow. (1) **Unsaved settings**: where the Settings view is holding edits that have not been saved, the save/discard/cancel dialog of REQ-SHELL-124 SHALL be raised; Cancel ends the flow with nothing changed, a Save that fails also ends it, and a Save that succeeds or a Discard lets evaluation continue. No separate refusal message exists for this gate — the dialog is the message, and the user clears the condition by saving or discarding. (2) **Worktree integration running**: refused outright with an error toast reading `Finish the worktree integration before opening another project.` (3) **Run active**: refused outright with an error toast reading `Finish the active run before opening another project.` In each refused case no directory dialog SHALL open, no project switch SHALL occur, the persisted `workspace/lastOpened` value SHALL be unchanged, and the window SHALL go on accepting input exactly as it did before the attempt.
 
+> **Narrowed by [`PD-SHELL-009`](../product/directives.md#pd-shell-009) revision 3, 2026-10-20**
+> ([OQ-361](../architecture/open-questions.md#oq-361), ruled under [R-072](../product/requests.md#r-072)). Gates (2) and
+> (3) count the requesting window's own workspace: a window whose project runs no integration and has no run active passes
+> them while another window's project integrates or runs, and the window whose project does is refused with the toast
+> above, as before. Gate (3) has counted so since revision 1 (2026-10-07), which wrote no back-pointer here until now. A
+> window that holds no workspace passes gate (2), and a record of integration main cannot read refuses nothing: the flow
+> goes on to gate (3). Gate (1), the order and every other clause above still govern.
+
 **REQ-STARTUP-054** — Toasts used by onboarding and machine setup SHALL be the window's one transient notification surface (REQ-SHELL-112). This domain declares no acknowledgement surface, lifetime, width, or placement of its own and holds no copy of any of them: it relies on REQ-NOTIFY-013 for there being exactly one such surface and for its bounded width, on REQ-NOTIFY-011 for how long an acknowledgement stays on screen, and on REQ-NOTIFY-012 for where it is placed within its host window.
 
 ### Workspace storage

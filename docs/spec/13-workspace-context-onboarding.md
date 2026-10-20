@@ -48,6 +48,13 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 ### Workspace Switching
 
 - **REQ-WORKSPACE-012** — Opening another project SHALL be refused while work is in flight, with an error toast stating exactly "Finish the worktree integration before opening another project." while a worktree integration is running, or "Finish the active run before opening another project." while any run is active or the run state is busy.
+  > **Narrowed by [`PD-SHELL-009`](../product/directives.md#pd-shell-009) revision 3, 2026-10-20**
+  > ([OQ-361](../architecture/open-questions.md#oq-361), ruled under [R-072](../product/requests.md#r-072)). Both
+  > refusals count the requesting window's own workspace: a window whose project runs no integration and has no run active
+  > may open another project while another window's project integrates or runs, and the window whose project does is
+  > refused with the toast above, as before. The run count has been the window's own since revision 1 (2026-10-07), which
+  > wrote no back-pointer here until now. A window that holds no workspace is not refused for an integration, and a record
+  > of integration main cannot read refuses nothing. The two sentences and every other clause above still govern.
 
 - **REQ-WORKSPACE-013** — A workspace switch SHALL construct a fresh main window for the selected folder. Given construction fails, the old window SHALL remain fully usable and an error toast SHALL say "Could not open the selected project: {reason}". Given construction succeeds, the replacement window is shown, the old window is closed (and if the old window vetoes its close, the replacement is closed instead and the old window stays), `workspace/lastOpened` is updated, and the git refresh, update check, and cloud-credit polling start on the new window. A background initialization run still under way in the outgoing window SHALL NOT delay or refuse the switch: it SHALL be cancelled on exactly the terms of REQ-WORKSPACE-109 — no task that has not started begins, a task already under way reaches its own conclusion, and every process it launched is ended as REQ-WORKSPACE-092 requires — nothing SHALL be recorded for the cancelled run, so the tasks stay pending and run again the next time that workspace is opened. The replacement window SHALL resolve initialization for its own workspace independently of the outgoing one, and its resolution SHALL NOT wait on the cancellation to finish.
 

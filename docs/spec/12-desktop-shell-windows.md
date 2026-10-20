@@ -82,6 +82,13 @@ Rotaris presents a single main desktop window containing seven primary views sel
   > runs is declined with "Finish the active run before opening another project." as before. Gates (1) and (2), their order,
   > and every other clause above still govern. Its case is disjoint from `PD-SHELL-001`'s, the add-a-window gestures, on
   > which no gate is evaluated. Written under [OQ-237](../architecture/open-questions.md), as OQ-206's ruling named it.
+  > *Added 2026-10-20 ([OQ-361](../architecture/open-questions.md#oq-361), ruled under
+  > [R-072](../product/requests.md#r-072); `PD-SHELL-009` revision 3):* gate (2) on the replacement route counts the
+  > requesting window's own workspace too: a window whose project runs no integration passes gate (2) while another window's
+  > project integrates, the window whose project integrates is declined with "Finish the worktree integration before opening
+  > another project." as before, and a window that holds no workspace passes gate (2). A record of integration main cannot
+  > read lets the flow go on to gate (3). Gate (1) as `PD-SHELL-010` narrows it, the order, and every other clause above
+  > still govern.
   >
   > **Narrowed by [`PD-SHELL-010`](../product/directives.md#pd-shell-010), 2026-10-14.** Gate (1) is asked of the requesting
   > window's renderer; a renderer that cannot answer — gone, failing main's 5 s liveness probe, or reported `unresponsive` —
@@ -259,6 +266,14 @@ Rotaris presents a single main desktop window containing seven primary views sel
   > window while a run is active?" ("…while {n} runs are active?") while that window's own project has a run active,
   > states that Rotaris will stop the run(s) and that in-flight work may not finish, and its Yes stops them before the
   > window closes; with no run active in its project it asks nothing.
+  > *Added 2026-10-20 ([OQ-361](../architecture/open-questions.md#oq-361), ruled under
+  > [R-072](../product/requests.md#r-072); `PD-SHELL-009` revision 3):* guard (2) counts the whole instance at the close of
+  > the last main window, and the closing window's own workspace at a close that leaves another main window open; it never
+  > refuses a window that holds no workspace and leaves another main window open. It reads main's own record of an
+  > integration main admitted and has not seen end, never a worktree binding's `merge_status` or REQ-GIT-128's lock file. A
+  > record main cannot read refuses no close: guard (2) allows, with a `warn` line, and the close goes on to guard (3). A quit
+  > that starts outside any window asks no guard (2) (REQ-NOTIFY-057). The guard's text, its dialog and the order are
+  > unchanged.
   >
   > **Extended by [`PD-SHELL-003`](../product/directives.md#pd-shell-003), revised 2026-09-24.** The guards above and
   > their order govern in full; the close control the product draws in the main window's title bar enters this same

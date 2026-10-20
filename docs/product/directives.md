@@ -7064,18 +7064,32 @@ narrow widths and never hides this one, and a record that predates the backend's
 
 ### PD-SHELL-009 — closing a main window ends its own project's runs, and asks first
 
+*Revision 3 (2026-10-20, [R-072](requests.md#r-072), ruling [OQ-361](../architecture/open-questions.md#oq-361)): **REQ-SHELL-119's guard (2), "Integration in progress", and the workspace-open flow's gate (2) count the window's own project, as guard (3) and gate (3) do. They read main's own record of an integration, and a record main cannot read refuses no close.** What changes:*
+
+- *the opening sentence names guard (2), with its earlier text quoted beside it;*
+- *the first three cases and the gate case each end with a revision-3 sentence;*
+- *a new case, "A worktree integration running", follows the gate case;*
+- *the last case names REQ-NOTIFY-057 as the reason guard (2) is not asked there;*
+- *REQ-STARTUP-053, REQ-WORKSPACE-012 and REQ-NOTIFY-056 join the Narrows line and gain back-pointers;*
+- *REQ-SHELL-119 and REQ-SHELL-021 each gain a dated note.*
+
+*Everything else stands as revisions 1 and 2 wrote it.*
+
 *Revision 2 (2026-10-14, [R-072](requests.md#r-072), ruling [OQ-298](../architecture/open-questions.md#oq-298)) — **a quit
 that starts outside any window asks no close guard**: the last case below is revised, its revision-1 text quoted beside it.
 No requirement gains a back-pointer: the case now follows REQ-CONFIG-287 and REQ-SHELL-119 guard (1) as written. Everything
 else stands as revision 1 wrote it.*
 
-Closing a main window SHALL end the active runs of the project open in it, and SHALL ask REQ-STARTUP-046's confirmation
-first, after REQ-SHELL-119's earlier guards. Which close asks what:
+Closing a main window SHALL end the active runs of the project open in it, and SHALL ask REQ-STARTUP-046's confirmation first, after REQ-SHELL-119's earlier guards. Of those earlier guards, guard (2) refuses only a close that would end a worktree integration this instance is running (**revision 3**). Which close asks what:
+
+> Revisions 1 and 2 said, and no longer govern: "Closing a main window SHALL end the active runs of the project open in it, and SHALL ask REQ-STARTUP-046's confirmation first, after REQ-SHELL-119's earlier guards. Which close asks what:"
 
 - **The last main window.** A person's close of the main window that leaves no other main window open asks REQ-SHELL-119's
   question ("Quit while a run is active?", "Quit while {n} runs are active?") while the run host counts any run active in
   the instance (REQ-SHELL-122's count, instance-wide). Its Yes is the application's quit, whose shutdown stops every run
   (PD-ORCH-005 clause 3). This is as built before this directive.
+
+  **Revision 3:** its guard (2) counts the whole instance. While main records a worktree integration running in any workspace, REQ-SHELL-119's "Integration in progress" box ("Keep Rotaris open until the isolated worktree integration finishes.") refuses the close whatever its answer, and guard (3) is not asked. This is REQ-SHELL-119 and REQ-NOTIFY-056 as written.
 - **One of several main windows.** A person's close of a main window that leaves another main window open asks "Close this
   window while a run is active?" ("Close this window while {n} runs are active?") while the closing window's own workspace
   has a run active — REQ-SHELL-122's count taken over that workspace's sessions alone. The box conveys REQ-STARTUP-046's
@@ -7088,8 +7102,12 @@ first, after REQ-SHELL-119's earlier guards. Which close asks what:
   terminal sessions end. No notice of those runs appears on a window that stays while they come to rest (REQ-STARTUP-046's
   last sentence). Cancel, or a box that cannot be shown, aborts the close and changes nothing. A count that cannot be read
   is a run active.
+
+  **Revision 3:** its guard (2) counts the closing window's own workspace. The same box refuses the close only while main records an integration running for that workspace. An integration in another window's project neither refuses the close nor shows the box, and the close goes on to the question above.
 - **A window with no active run of its own** closes without asking, whatever runs in other projects, and touches no run.
   So does a window that holds no workspace and leaves another main window open.
+
+  **Revision 3:** guard (2) refuses such a window's close only while its own workspace has an integration running. It never refuses a window that holds no workspace and leaves another main window open.
 - **REQ-SHELL-021's gate 3** counts the requesting window's own workspace (through REQ-SHELL-122, whose test "a run is
   active" is the gate's; *since 2026-10-13 this directive narrows REQ-SHELL-021 itself as well, beside PD-SHELL-001's
   disjoint case of the add-a-window gestures, [OQ-237](../architecture/open-questions.md); the reason first given here no
@@ -7099,6 +7117,27 @@ first, after REQ-SHELL-119's earlier guards. Which close asks what:
   active run before opening another project." as before. A switch's outgoing window therefore closes asking nothing, its
   workspace's count being zero once the gate has passed; a run started in between is asked about at that close, and a
   Cancel there discards the replacement (REQ-STARTUP-047).
+
+  **Revision 3: gate 2** on the same route counts the requesting window's own workspace in the same way:
+
+  - a window whose project runs no integration may open another project while another window's project integrates;
+  - the window whose project integrates is declined with "Finish the worktree integration before opening another project.", as before;
+  - a window that holds no workspace passes gate 2.
+
+  This case and gate 3's case hold alike for REQ-STARTUP-053's chooser opened from a live window and for REQ-WORKSPACE-012's refusals, because the one workspace-open flow serves them and the chip. PD-SHELL-001's add route still evaluates no gate.
+- **A worktree integration running** (**revision 3**). An integration is running from the moment main admits its start (REQ-GIT-124's refusals passed) until main sees its end. The end is REQ-GIT-133's promotion or failure, a preparation failure (REQ-GIT-127, REQ-GIT-130), or the process carrying it reported gone.
+
+  Guard (2) and gate (2) read main's own record of it, keyed by the base workspace (REQ-GIT-128: "At most one integration runs per base workspace at a time"). They never read a worktree binding's `merge_status`: REQ-GIT-130 flushes `integrating` and only REQ-GIT-133 resets it, so a crash or a kill leaves it set. Nor do they read REQ-GIT-128's lock file.
+
+  A record main cannot read refuses no close and declines no request:
+
+  - guard (2) allows, and the close goes on to guard (3), which asks when it cannot read its count;
+  - gate (2) lets the flow go on to gate (3), and the switch's outgoing close asks the guards again;
+  - main writes at `warn` that the record could not be read.
+
+  While main records an integration running, a box that cannot be shown still refuses, as REQ-SHELL-119 writes.
+
+  The update's clicks, which close every window, are not this case. Under [OQ-361](../architecture/open-questions.md#oq-361) (a) they ask guard (2) as REQ-SHELL-119 and REQ-NOTIFY-056 write it, and they decline on a record main cannot read.
 - **A quit that starts outside any window** — a signal, the end of the desktop session where Electron emits `before-quit`,
   the driver's or the capture's quit — asks no close guard at all (**revision 2**, [OQ-298](../architecture/open-questions.md#oq-298)):
   no active-run confirmation, as built, and no unsaved-settings guard, because such a quit is no **user-initiated** close
@@ -7107,6 +7146,8 @@ first, after REQ-SHELL-119's earlier guards. Which close asks what:
   clause 9's all-or-none order, and the run host's shutdown follows at once, leaving the runs as PD-ORCH-005 clause 3 says. A
   quit a person starts outside a window that a later change adds — a tray or menu Quit, or macOS Dock Quit once IC-3 allows
   a macOS release — reopens this case, together with the active-run confirmation noted under "What it costs".
+
+  **Revision 3:** guard (2)'s text carries no "user-initiated", so for guard (2) the reason is REQ-NOTIFY-057: "A shutdown that no user gesture initiated raises no interactive dialog". Guard (2) refuses only by its dialog, and REQ-NOTIFY-056 refuses a person "closing the application".
 
   > Revision 1 said, and no longer governs: "asks no active-run confirmation, as built; it asks only the renderer's
   > unsaved-settings guard, and its shutdown leaves the runs as PD-ORCH-005 clause 3 says. *Since 2026-10-14
@@ -7139,16 +7180,39 @@ Windows Electron emits no `before-quit` at a logout or shutdown at all,
 Dock Quit is a person's quit outside any window, which asks nothing — to be reopened when a macOS release is authorized
 (IC-3, PD-STARTUP-001).
 
-> **Narrows:** REQ-STARTUP-046, REQ-SHELL-119, REQ-SHELL-122, REQ-SHELL-021
+**Why, and what it costs: revision 3.** OQ-361, ruled 2026-10-20 under the owner's delegation (R-072).
+
+As revisions 1 and 2 left them, guard (2) and gate (2) were instance-wide. One project's integration would have:
+
+- refused the close of every other project's window, under a box saying "Keep Rotaris open ...", even though that close ends nothing of Rotaris;
+- declined every other window's switch with "Finish the worktree integration ...", about a merge that window never showed.
+
+That is the harm OQ-206 repaired for runs.
+
+An integration belongs to one base workspace (REQ-GIT-124, REQ-GIT-126, REQ-GIT-128), so the window's own workspace is the key this directive already counts runs by. The integrating window can neither close nor switch while its integration runs. The last window left is therefore its own, and the instance-wide last case keeps REQ-NOTIFY-056 whole.
+
+A refusal that no answer can pass is the close [`PD-SHELL-010`](#pd-shell-010) exists to prevent. Had the guard read the durable `merge_status`, one crash would have left a window that could never close. REQ-SESSION-064 forbids that kind of permanent block for integration's own precondition check.
+
+What it costs:
+
+- if main's record were ever unreadable, a person's close could cut off an integration, leaving the base untouched (REQ-GIT-133) and the bindings `integrating`. The record is main's own, so only a defect makes it unreadable;
+- integration's builder must keep that record in main, rather than reading the stamp or the lock.
+
+> **Narrows:** REQ-STARTUP-046, REQ-SHELL-119, REQ-SHELL-122, REQ-SHELL-021, REQ-STARTUP-053, REQ-WORKSPACE-012, REQ-NOTIFY-056
 
 *REQ-SHELL-021 joined the Narrows line on 2026-10-13 under [OQ-237](../architecture/open-questions.md) (GV1,
 [R-072](requests.md#r-072)): OQ-206's ruling named it, and the one-narrowing-per-requirement rule that kept it out no longer
 holds. Its case, gate (3)'s count on the replacement route, is disjoint from `PD-SHELL-001`'s, the two add-a-window
 gestures on which no gate is evaluated.*
 
+*REQ-STARTUP-053, REQ-WORKSPACE-012 and REQ-NOTIFY-056 joined the Narrows line on 2026-10-20 under [OQ-361](../architecture/open-questions.md#oq-361) (revision 3):*
+
+- *REQ-STARTUP-053 and REQ-WORKSPACE-012 for gate (2)'s scope, and for gate (3)'s count. Revision 1 built that count for the chooser and the refusal, as for the chip, and wrote no back-pointer for it;*
+- *REQ-NOTIFY-056 for a record main cannot read.*
+
 *Raised by the consortium under the owner's delegation, 2026-10-07; logged as [R-072](requests.md#r-072), the ruling of
 [OQ-206](../architecture/open-questions.md) (advocate A, the user's lens, followed). Revision 2 ruled by the consortium under
-the same delegation, 2026-10-14, the ruling of [OQ-298](../architecture/open-questions.md#oq-298).*
+the same delegation, 2026-10-14, the ruling of [OQ-298](../architecture/open-questions.md#oq-298). Revision 3 ruled by the consortium under the same delegation, 2026-10-20, the ruling of [OQ-361](../architecture/open-questions.md#oq-361) (both advocates followed in part).*
 
 > **First execution, 2026-10-07, built under [R-072](requests.md#r-072):** the directive held as written, and one claim the
 > record carried was false. The run host's per-workspace predicate ADR-0013 names as its registry's job was not built: every
@@ -7287,7 +7351,7 @@ and an answering renderer with unsaved settings still holds a quit from outside 
 (`PD-SHELL-009` revision 2) — such a quit asks no guard, so an answering renderer no longer holds it; its unsaved settings stay
 unsaved and are not written.* This directive's cases are disjoint from
 `PD-SHELL-009`'s (guard (3) and gate (3)'s count) and from `PD-SHELL-001`'s (the add-a-window gestures, on which no gate is
-evaluated): it narrows only guard (1) and gate (1), when the renderer cannot answer.
+evaluated): it narrows only guard (1) and gate (1), when the renderer cannot answer. *Noted 2026-10-20 ([OQ-361](../architecture/open-questions.md#oq-361), `PD-SHELL-009` revision 3): since revision 3, `PD-SHELL-009`'s cases are guard (2) and gate (2) too, beside guard (3) and gate (3)'s count; this directive's stay disjoint from them.*
 
 > **Narrows:** REQ-SHELL-119, REQ-SHELL-124, REQ-SHELL-021
 

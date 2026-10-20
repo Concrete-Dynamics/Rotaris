@@ -320,6 +320,13 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-056** — Closing the application while an isolated worktree integration is running is refused, with a message asking the user to keep the application open until the integration finishes.
 
+> **Narrowed by [`PD-SHELL-009`](../product/directives.md#pd-shell-009) revision 3, 2026-10-20**
+> ([OQ-361](../architecture/open-questions.md#oq-361), ruled under [R-072](../product/requests.md#r-072)). The
+> application's close — the last main window's, the update's `Restart now` and the installer's hand-off — is refused while
+> main records a worktree integration running, as written. A record main cannot read refuses no window's close: the close
+> goes on to the active-run guard, with a `warn` line; the update declines instead and starts nothing. A shutdown that no
+> user gesture started is not refused (REQ-NOTIFY-057).
+
 **REQ-NOTIFY-057** — A shutdown that no user gesture initiated raises no interactive dialog.
 
 **REQ-NOTIFY-058** — A run starting sets its session status to running, clears any notice that is unscoped or scoped to that same session, records the sandbox verdict for that session, attaches its output streams and shows the workspace view.

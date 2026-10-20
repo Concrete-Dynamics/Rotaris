@@ -37,3 +37,11 @@ not established).
 - `apps/desktop/src/main/index.ts` — starts the run host and the workspace service as utility processes; no Job Object.
 - `apps/desktop/scripts/live-run.mjs` — `runElectron` kills main alone and resolves only once every pipe holder has gone.
 - `packages/model/src/ai-sdk-client.ts` — the model call's `timeoutMs` is an idle bound, re-armed on every streamed part.
+
+## Addendum, 2026-10-20 — C1's deliberate kill did not reproduce it
+
+The Windows ARM64 session's C1 killed main on purpose (`taskkill /F /PID`, no `/T`) on a scripted run with a background
+PowerShell heartbeat (at `0fde55f2`): the run host and the shell were gone 5 s later and the beats stopped within about 1 s
+(ADR-0002, "First execution — 2026-10-20"). That run host was waiting on a scripted `wait` step; the live run's was streaming
+a model call. Which difference let the live run's utility processes run on is not established, and the note stays open on
+the live run's evidence.

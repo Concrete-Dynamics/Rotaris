@@ -15,10 +15,16 @@ exit cut the setup during `create`, not `index`, and no process outlived a launc
   a launch with no workspace argument runs in: new, empty, and in no git repository. It refuses one that lies in a
   repository, which a launch would open and index. `openedWorkspace` / `assertOpened` read from the launch's log what
   its first main window opened.
-- `settings-proof` runs the four launches in `.proof/settings-proof/profile/working-directory`. The harness's git bar
-  puts that directory in no repository. `launch()` asserts that each such launch opened exactly that directory. Its
-  header and the Tools check now say what they measure: no workspace argument, and nothing open but that empty
-  directory. `results.json` gains `openedWithoutArgument`, each launch's opened directory and any setup process that
+- `settings-proof` runs the four launches in `.proof/settings-proof/profile/working-directory`, a directory of the
+  proof's own, emptied before launch 1. The harness's git bar puts that directory in no repository.
+  `launch()` asserts that each such launch opened exactly that directory. Its header and the Tools check now say what
+  they measure: no workspace argument, and nothing open but that directory. It is empty for the first launch alone:
+  `no-workspace` writes the configuration bootstrap (`.rotaris/agents.yaml`, `.gitignore`) and its setup's project files
+  there, and the other three open it as that launch left it. Here they logged "create succeeded — the project already
+  exists"; on Windows 11 ARM64 (plan `loc1`, 2026-10-20) the emulated setup's `create` was still running when each
+  capture exited, and the bootstrap read "exists" from the second launch on. *(Corrected 2026-10-20, plan `loc1`, `proof-cwd`, fin47's review finding `fin47-accept1-3`:
+  this read "nothing open but that empty directory", and the proof's header "runs in an empty directory of the proof's
+  own"; both were true of launch 1 only.)* `results.json` gains `openedWithoutArgument`, each launch's opened directory and any setup process that
   outlived it (evidence, not a check: a step left by the capture seam's exit is OQ-169's ruled case).
 
 **Pinned by** `apps/desktop/scripts/lib/working-directory.test.ts`, with 8 cases. `assertOpened` fails acceptance's own

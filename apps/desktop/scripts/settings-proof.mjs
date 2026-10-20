@@ -8,9 +8,14 @@
  *                     version, an em dash for Build and REQ-SHELL-142's caption; the Tools inventory is fully populated
  *                     (REQ-CONFIG-277 populates it unconditionally); Instructions is empty and names the file to create.
  *                     A launch with no argument opens its working directory (REQ-SHELL-010 (c)), so every such launch
- *                     here runs in an empty directory of the proof's own, in no repository, and is asserted to have
- *                     opened that and nothing else. Until fin47 they ran in `apps/desktop`, opened the checkout and
- *                     indexed the product's source (`docs/defects/fixed/settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`).
+ *                     here runs in a directory of the proof's own, emptied before launch 1, in no repository, and is
+ *                     asserted to have opened that and nothing else. It is empty for the first of them alone
+ *                     (`no-workspace`), which writes the configuration bootstrap (`.rotaris/agents.yaml`, `.gitignore`)
+ *                     and its setup's project files there; `about-present`, `about-minimum` and `tools` open it as that
+ *                     launch left it (on Linux fin47 read "create succeeded — the project already exists" in each; on
+ *                     Windows ARM64 the emulated setup's `create` is still running when each capture exits).
+ *                     Until fin47 they ran in `apps/desktop`, opened the checkout and indexed the product's source
+ *                     (`docs/defects/fixed/settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`).
  *   1′. about-present — the same About page with both of its files present (first-release-plan.md §4.4): the Build
  *                     row carries the identifier `pnpm build-id` wrote for this tree, no caption stands under the
  *                     licensing control, and the control opens the notices file where about.ts found it.
@@ -126,7 +131,7 @@ async function launch(name, workspace, local, preferences, extra, timeoutMs = 12
   const args = [join(app, 'out', 'main', 'index.js'), ...hostSwitches];
   if (workspace !== null) args.push(workspace);
   const result = await spawnBounded(electron, args, {
-    // With no workspace argument the app opens its working directory (REQ-SHELL-010 (c)): the empty one, never the checkout.
+    // With no workspace argument the app opens its working directory (REQ-SHELL-010 (c)): the proof's own, never the checkout.
     cwd: workspace === null ? workingDirectory : app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
@@ -165,7 +170,8 @@ const local = join(root, 'local');
 const preferences = join(root, 'preferences');
 const home = join(root, 'home');
 const machine = join(root, 'machine-codex');
-// Where the launches with no workspace argument run, and so what they open: new, empty, and in no repository.
+// Where the launches with no workspace argument run, and so what they open: the proof's own, emptied before launch 1, in no
+// repository. Launch 1's setup writes the project's marker there; the later launches find it.
 const workingDirectory = emptyWorkingDirectory(join(root, 'working-directory'));
 mkdirSync(workspace, { recursive: true });
 mkdirSync(local, { recursive: true });
@@ -186,7 +192,7 @@ writeFileSync(configFile, [
 // The file the scripted `read` step reads (launch 5), long enough that a cap has something to cut short.
 writeFileSync(join(workspace, 'README.md'), ['# Settings proof workspace', ...Array.from({ length: 30 }, (_, i) => `line ${i + 1}`), ''].join('\n'));
 const results = {};
-/** Each launch with no workspace argument, and the workspace it opened: the empty working directory, as `launch` asserts. */
+/** Each launch with no workspace argument, and the workspace it opened: the proof's working directory, as `launch` asserts. */
 const openedWithoutArgument = {};
 
 /** Open Settings (Ctrl+7) on a named category, and give the view time to paint. */
@@ -326,11 +332,11 @@ for (const statement of [heading, ...disclosureOf(minimum.probes)]) if (!flat(se
 if (JSON.stringify(disclosureOf(minimum.probes)) !== JSON.stringify(disclosure)) throw new Error('the disclosure at the minimum size differs from the one at the default size');
 results.networkDisclosure = { heading, statements: disclosure.length, minimumSize: `${resized[1]}×${resized[2]}`, selectedAtMinimum: flat(selected).length };
 
-// The Tools inventory with no workspace argument (the empty working directory), and the empty Instructions, in the same
+// The Tools inventory with no workspace argument (the proof's working directory), and the empty Instructions, in the same
 // launch profile.
 const tools = await launch('tools', null, local, preferences, { ...openCategory('Tools'), ROTARIS_CAPTURE_AFTER_MS: '2600' });
 const toolRows = rows(tools.probes, '[data-testid="inventory-row"]');
-// REQ-CONFIG-277: populated unconditionally — here with nothing but the empty working directory open, no configuration of
+// REQ-CONFIG-277: populated unconditionally — here with nothing but the proof's working directory open, no configuration of
 // its own and no workspace argument.
 if (toolRows.length !== 19) throw new Error(`the Tools inventory listed ${toolRows.length} rows, not the nineteen public names`);
 const toolNames = toolRows.map((r) => r.data['data-name']);

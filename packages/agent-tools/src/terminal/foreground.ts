@@ -96,8 +96,9 @@ export interface ForegroundResult {
    * REQ-SHELL-092: the terminal window killed the command — while it ran (`'during'`), or during the first call's handshake,
    * before it was written, so it never ran (`'before'`). The process tree was ended and the session restarted with
    * PD-TOOLS-001's snapshot re-applied, as on a hard timeout (`restore`); the call carries exit −1 (REQ-TOOLS-179: killed)
-   * either way. On a poll: the polled soft-paused command was killed (`'during'`), or it was queued behind the one killed and
-   * never ran (`'before'`, no exit code). Absent on every other result.
+   * either way — except a call waiting behind a soft-paused command, whose line the shell had not reached when the kill ended
+   * that command: it never ran (`'before'`, no exit code, OQ-164). On a poll: the polled soft-paused command was killed
+   * (`'during'`), or it was queued behind the one killed and never ran (`'before'`, no exit code). Absent on every other result.
    */
   readonly killed?: 'before' | 'during';
   /**
@@ -215,6 +216,11 @@ export const PAUSED_KILLED_ERROR = 'the paused command was killed from the termi
  * reset ended the session before the shell reached its line.
  */
 export const PAUSED_KILLED_BEFORE_ERROR = 'the paused command never ran, so it has no exit code: the soft-paused command ahead of it was killed from the terminal window, which restarted the session before the shell reached its line';
+/**
+ * REQ-SHELL-092, OQ-164: the error a call carries when it was waiting behind a soft-paused command the window killed: the
+ * kill's reset ended the session before the shell reached the call's line.
+ */
+const KILLED_BEHIND_ERROR = 'the command never ran, so it has no exit code: the soft-paused command ahead of it was killed from the terminal window, which restarted the session before the shell reached its line';
 /** The error a call carries when its run cancelled it (the tool context's signal). */
 const CANCELLED_ERROR = 'the call was cancelled';
 /**
@@ -1185,9 +1191,13 @@ export class ForegroundSession {
   killActive(): boolean {
     const a = this.active;
     if (a && this.state === 'running') {
+      // A call waiting behind soft-paused commands (OQ-164): the line the shell is running is the paused one, and the kill
+      // ends it — reported to the waiting call as killed from the window, not as a reset the session did by itself.
+      const ahead = this.openPaused();
       this.active = null;
       this.state = 'resetting';
       const reset = this.resetNow();
+      for (const paused of ahead) if (paused.endedBy === 'reset') paused.endedBy = 'killed';
       a.onKill(reset);
       return true;
     }
@@ -1787,8 +1797,16 @@ export class ForegroundSession {
       // after `$env:ROTARIS_KEPT = 'kept'` and a kill from the window, the next call read the variable empty and stood in the
       // spawn directory, while the kill's detail named neither the loss nor a restore
       // (docs/defects/fixed/a-kill-from-the-terminal-window-resets-the-session-without-restoring-its-state.md).
+      // A call that waited behind a soft-paused command the kill ended never ran when the shell had not reached its line
+      // (`ranLine`): no exit code, as OQ-164 reads a line the session's reset went before. FALSIFIED, kept beside its
+      // replacement (the review of `loc1-terminal-kill`, 2026-10-21): "−1, killed while it ran" for every call the kill
+      // returned — such a call read as killed with a status of −1 though its line never ran, and the paused command the kill
+      // had ended read as reset by the session, not killed from the window.
       const restore: RestoreOutcome = outcome.reset ? await this.restoreState() : { status: 'failed' };
-      const r: ForegroundResult = { ...finish({ exitCode: -1, timedOut: false, softPaused: false, killStatus: outcome.reset ? 'session_reset' : 'reset_failed', error: KILLED_ERROR }), restore, killed: 'during' };
+      const killStatus = outcome.reset ? 'session_reset' as const : 'reset_failed' as const;
+      const r: ForegroundResult = ranLine
+        ? { ...finish({ exitCode: -1, timedOut: false, softPaused: false, killStatus, error: KILLED_ERROR }), restore, killed: 'during' }
+        : { ...finish({ exitCode: null, timedOut: false, softPaused: false, killStatus, error: KILLED_BEHIND_ERROR }), restore, killed: 'before' };
       screen.dispose();
       return r;
     }

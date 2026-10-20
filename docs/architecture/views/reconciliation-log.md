@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-21**
 
+**The window's kill of a soft-paused command with a call waiting behind it (REQ-SHELL-092, OQ-164; 2026-10-21, loc1's review).** `02-process-view.md`'s live-terminal paragraph now states that a call waiting behind the killed soft-paused command reports the kill and reads as never having run, with no exit code. No package, edge, process, message or channel changed.
+
 **The claim over a named pipe, pinned on Windows (2026-10-21; the Windows ARM64 session's C6).** `06-sequences.md`'s launch sequence names the Windows endpoint and the test that now pins its order there: `instance-order.test.ts` gained four `it.runIf(win32)` cases. No product code changed.
 
 **Every route into a child's turn pinned past 100 model steps (PD-ORCH-017, REQ-ORCH-088, REQ-ORCH-112; loc1, `loc1-step-belt`; 2026-10-21).** `03-runtime-view.md` §3's step-belt clause now says where every child turn is built (`IterationChildren.execute`'s `turn` closure, `maxStepsPerTurn: null`), which routes reach it (REQ-ORCH-088's retry on the role's fallback among them, pinned in `ladder.test.ts`), and that only the root's turn takes `RunConfig.maxStepsPerTurn`. Tests and the record only: no code changed (`docs/defects/fixed/the-final-step-belt-ends-a-working-child-as-succeeded-with-no-final-response.md`). No package, edge or process changed.

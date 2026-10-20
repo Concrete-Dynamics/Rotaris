@@ -53,3 +53,14 @@ All five were red on this branch before the change (Windows 11 ARM64, pwsh 7.6.6
 
 Not changed, and raised as [OQ-370](../../architecture/open-questions.md#oq-370): between the kill and the agent's next
 observation the live stream still reads `running`, as it does for a paused command that ends on its own.
+
+**The review's repair (2026-10-21).** One ordering was left on the running path: a timed call issued while the command is
+soft-paused waits behind it as the session's running call, so a kill then took `killActive`'s running branch, which marked the
+paused command as ended by the session's reset (not killed from the window) and returned the waiting call as killed with exit
+−1, though the shell never reached its line. The running branch now closes the paused commands it ends as `killed`, and the
+kill branch of `execute` returns a call whose line had not started as never run (no exit code, `killed: 'before'`, "the command
+never ran, so it has no exit code: the soft-paused command ahead of it was killed from the terminal window …"), with the reset
+and PD-TOOLS-001's restore as before. Pinned by "a kill while a timed call waits behind the soft-paused command ends the paused
+one, which the call reports as killed from the window, and the call never ran (OQ-164)" in the same block of `terminal.test.ts`,
+red before this repair (the call carried `exit_code` −1) on Windows 11 ARM64, pwsh 7.6.6. The queued-behind poll case above,
+added after the first repair, was run red on the pre-repair code by the review too ([true, true] where both pids should be gone).

@@ -1252,6 +1252,32 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
         expect(next.text).not.toContain('queued-ran');
       } finally { await m.dispose(); }
     }, 90_000);
+    // The review of `loc1-terminal-kill` (2026-10-21): with a timed call waiting behind the paused command, the call is the
+    // session's running one, so the kill took the running path, which reported neither the paused command's kill nor that the
+    // waiting call's line was never reached.
+    it('a kill while a timed call waits behind the soft-paused command ends the paused one, which the call reports as killed from the window, and the call never ran (OQ-164)', async () => {
+      const { m, t } = await backendSession(shell!);
+      try {
+        const sub = await setUp(t, 'killed-paused-waiting');
+        const pids = await pausedWithGrandchild(t, 'killed-paused-waiting');
+        setTimeout(() => { void m.streams.kill(foregroundStreamId('orchestrator')); }, 2_000);
+        const began = Date.now();
+        const waiting = await t.execute(args({ command: SH.echo('waiting-ran'), timeout: 30 }), ctx());
+        expect(Date.now() - began).toBeLessThan(15_000);
+        expect(await goneWithin(pids, 5_000)).toEqual([false, false]);
+        expect(diag(waiting.text)).toMatchObject({ failure_kind: 'execution_error', kill_status: 'session_reset' });
+        expect(diag(waiting.text)).not.toHaveProperty('exit_code');
+        const detail = String(diag(waiting.text)['detail']);
+        // Before the repair: exit −1 "killed … so it has no exit status of its own" for a line the shell never reached, and
+        // the paused command reported as ended "when the terminal session was reset".
+        expect(detail).toMatch(/waited behind it: that command ended .* by a kill from the terminal window, with no exit code/);
+        expect(detail).toContain('the command never ran, so it has no exit code: the soft-paused command ahead of it was killed from the terminal window');
+        expect(detail).toMatch(/The working directory and \d+ exported variables? were restored/);
+        expect(output(waiting.text) ?? '').not.toContain('waiting-ran');
+        const next = await t.execute(args({ command: `${SH.bracketVar('ROTARIS_PAUSED_KEPT')}; ${SH.pwd()}`, timeout: 15 }), ctx());
+        expect((output(next.text) ?? '').split('\n').map((l) => l.trim())).toEqual(['[kept]', sub]);
+      } finally { await m.dispose(); }
+    }, 90_000);
     it('a kill after the paused command ended on its own terminates nothing and answers `ended`; the poll reports the command\'s own end', async () => {
       const { m, t } = await backendSession(shell!);
       try {

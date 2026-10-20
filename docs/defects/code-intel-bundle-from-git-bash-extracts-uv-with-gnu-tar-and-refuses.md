@@ -17,6 +17,12 @@ repaired for two store tests (the product's own backup names `C:\Windows\System3
 `PATH=/c/Windows/System32:$PATH` before it built the bundle in 41 s. Every agent of an orchestrated build on this host works in
 Git Bash, and the brief's live-run and acceptance steps run `pnpm code-intel:bundle` there, so each fresh tree meets it.
 
+**Seen again** the same day in `C:/dev/Rotaris-crw-wt-loc1-proofcwd` at `0d89e971` (plan `loc1`'s `proof-cwd` bundle,
+which recorded it as a second note; its reviewer folded that note into this one when the rebase met both): the same
+refusal, and with `C:\Windows\System32` first on `PATH` the bundle built in 39,977 ms. The path is reached only when the
+cache holds no pinned uv and the uv on `PATH` is not the pin (0.11.29 on `PATH` there, the pin 0.12.5), which is the case
+on a fresh worktree of this host.
+
 ## Specs
 
 None contradicted: a defect of the build script, not of the product (`backup.ts` names the Windows binary).

@@ -16,6 +16,7 @@ that ends before its result reads FAIL with "the application exited or crashed b
 
 The reading depends on the capture's `info` lines, as the scenario checks that look for `capture: clicked …` or `capture: probe …`
 already do: a live run started with `--app-log-level=warning` or `error` hides them, and both deadline checks then read `ended`.
+*(2026-10-20: repaired in [`a-live-run-at-app-log-level-warning-or-error-misreads-its-missing-info-lines-as-outcomes.md`](a-live-run-at-app-log-level-warning-or-error-misreads-its-missing-info-lines-as-outcomes.md): the live run refuses those two thresholds, and a log with no `info` line reads `unread`.)*
 
 This note was written by the bundle's reviewer: the builder carried the finding as an optional one and repaired it without a note,
 which the task's "record a defect note before code" required.

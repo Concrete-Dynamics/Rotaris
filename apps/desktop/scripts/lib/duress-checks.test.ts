@@ -318,6 +318,18 @@ describe('a launch\'s overrun is read from its pack: the swarm launch takes the 
     expect(r.detail).toBe('the launch ended after 120 s of 840 s with its capture\'s wait neither satisfied nor run out — the application exited or crashed before the result');
   });
 
+  it('a launch whose log holds no info line reads `unread`, never `ended`: its threshold dropped the capture\'s lines (--app-log-level=warning or error)', () => {
+    // What the duress launch's log holds at `--app-log-level=warning`: main's warnings, and none of the capture's `info` lines.
+    const warningsOnly = `[main ${at(1)}] warn    run host: mcp code-intelligence slow to start\n[main ${at(830)}] warn    workspace service: a slow scan\n`;
+    for (const log of [warningsOnly, `[main ${at(830)}] error   run host: exited 1\n`, '']) {
+      const r = overrunReading({ ...wandering, log, endedAt: ms(846) });
+      expect(r.outcome).toBe('unread');
+      expect(r.detail).toBe('the launch\'s application log holds no info line, so its threshold was above info (--app-log-level=warning or error) and the capture\'s wait lines were never recorded: the deadline cannot be read');
+    }
+    // A log at info or debug still reads as before, whichever line its capture wrote.
+    expect(overrunReading({ ...wandering, log: `[main ${at(0)}] debug   capture: prompt typed\n[main ${at(0)}] info    capture: prompt submitted\n`, endedAt: ms(120) }).outcome).toBe('ended');
+  });
+
   it('live-run.mjs reads the delegation-swarm launch\'s overrun through it, not through a bare timed-out check', () => {
     const script = readFileSync(join(import.meta.dirname, '..', 'live-run.mjs'), 'utf8');
     const swarm = script.slice(script.indexOf('// ── delegation-swarm:'), script.indexOf("results.scenarios['delegation-swarm']"));

@@ -277,6 +277,9 @@ export function deadlineReading({ timedOut, attribution: a, budgetMs, traffic, u
  * coordinator that invented work for itself ran out its wait with the product clean (acceptance finding L8 at b9e3005,
  * `docs/defects/fixed/a-swarm-run-the-model-kept-working-past-its-wait-fails-the-live-run.md`).
  */
+/** Whether an application log holds a line at `info` (PD-MONITOR-002's level field, `[main <at>] info    …`). */
+export const hasInfoLine = (log) => /^\[main [^\]]*\] info\b/m.test(String(log ?? ''));
+
 export function overrunReading({ log, startedAt, endedAt, records, calls, budgetMs, recorded, raise }) {
   const traffic = (Array.isArray(records) ? records : []).map(trafficCall);
   const attribution = attributeWait({ startedAt, endedAt, quitAt: waitRanOutAt(log), requests: traffic, tools: toolIntervals(Array.isArray(calls) ? calls : []) });
@@ -289,6 +292,15 @@ export function overrunReading({ log, startedAt, endedAt, records, calls, budget
    * Until fin47 such a launch read `inside` and passed the deadline check, leaving the crash to the other checks to find
    * (fin46's review, accept1-5); it reads `ended` now, which the callers' `inside` check fails, saying so.
    */
+  /*
+   * Both lines are `info` (`probe.ts`'s `host.log`). A log that holds no `info` line at all was written at a threshold above
+   * it (`--app-log-level=warning` or `error`, which `live-run.mjs` refuses since 2026-10-20, `lib/app-log-level.mjs`), so
+   * neither line could be there whatever the launch did: that is `unread`, never `ended`
+   * (`docs/defects/fixed/a-live-run-at-app-log-level-warning-or-error-misreads-its-missing-info-lines-as-outcomes.md`).
+   */
+  if (!timedOut && !hasInfoLine(text)) {
+    return { outcome: 'unread', detail: 'the launch\'s application log holds no info line, so its threshold was above info (--app-log-level=warning or error) and the capture\'s wait lines were never recorded: the deadline cannot be read' };
+  }
   if (!timedOut && !/capture: wait for result satisfied/.test(text)) {
     return { outcome: 'ended', detail: `the launch ended after ${n((endedAt - startedAt) / 1000)} s of ${n(budgetMs / 1000)} s with its capture's wait neither satisfied nor run out — the application exited or crashed before the result` };
   }

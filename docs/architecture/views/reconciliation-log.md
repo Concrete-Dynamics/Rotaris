@@ -16,6 +16,13 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-20**
 
+**The live run takes the application log at `debug` or `info` only (2026-10-20; loc1).** `02-process-view.md`'s application-log
+paragraph now says the live-run harness sets `ROTARIS_APP_LOG_LEVEL` from `--app-log-level`, to `debug` or `info` only, since
+its readings read the `info` lines a higher threshold drops (`scripts/lib/app-log-level.mjs`; `duress-checks.mjs`'s
+`overrunReading` reads a log with no `info` line as `unread`, never `ended`;
+`docs/defects/fixed/a-live-run-at-app-log-level-warning-or-error-misreads-its-missing-info-lines-as-outcomes.md`). No package,
+edge, process or message changed.
+
 **The live run ends through one ending, and its wait on a launch ends at the launch's bound (2026-10-20; loc1).**
 `01-component-view.md`'s harness paragraph now states it: `live-run`'s `runElectron` settles on its child's `exit` and a bounded
 drain of the pipes (`scripts/lib/settle-launch.mjs`), and every way a live run ends — the last scenario, a ceiling, a launch that

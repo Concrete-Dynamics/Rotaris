@@ -255,6 +255,7 @@ import { passOutcome, postRunVerdict, refusalClicks, refusalPressOrder, refusalW
 import { verdictLine } from './lib/verdict-line.mjs';
 import { MANIFEST_FILE, writeEvidenceManifest } from './lib/evidence-manifest.mjs';
 import { settleLaunch } from './lib/settle-launch.mjs';
+import { appLogLevelRefusal } from './lib/app-log-level.mjs';
 import { createRunEnding, launchFailure } from './lib/run-ending.mjs';
 import { RENAME_FILES, RENAME_FROM, RENAME_TO, renameReading } from './lib/rename-reading.mjs';
 import { CLASSIFIER_MARK, DELEGATED_MARK, REPORT_MARK, ROOT_MARK, answerReading, planReading, waitReading } from './lib/plan-open-reading.mjs';
@@ -323,13 +324,17 @@ const SESSION_LOG_LEVEL = value('session-log-level', 'INFO');
  * The APPLICATION log's threshold, the one `session_log_level` never reaches (PD-MONITOR-002). The product reads it
  * from `ROTARIS_APP_LOG_LEVEL` alone, and `cleanEnvironment()` strips that name from every launch, so an exported
  * variable never gets through: this flag is how a live run asks for `debug` — a child MCP server's stderr among it.
- * Unnamed, nothing is set and the launch keeps the product's default, `info`. The value is checked against the
- * directive's four words here, because the product answers a word it does not know by recording `info` and
- * writing one warning line, which a pack read afterwards would show as a run that quietly did not ask.
+ * Unnamed, nothing is set and the launch keeps the product's default, `info`. The value is checked here, because the
+ * product answers a word it does not know by recording `info` and writing one warning line, which a pack read afterwards
+ * would show as a run that quietly did not ask. Since 2026-10-20 only `debug` and `info` are taken: above `info` the log
+ * drops the `info` lines every scenario reads (the capture's wait, click and probe lines among them), and each reading took
+ * their absence for an outcome (`lib/app-log-level.mjs`,
+ * `docs/defects/fixed/a-live-run-at-app-log-level-warning-or-error-misreads-its-missing-info-lines-as-outcomes.md`).
  */
 const APP_LOG_LEVEL = value('app-log-level', null);
-if (APP_LOG_LEVEL !== null && !/^(?:debug|info|warning|error)$/i.test(APP_LOG_LEVEL)) {
-  console.error(`--app-log-level=${APP_LOG_LEVEL}: expected debug, info, warning or error (PD-MONITOR-002)`);
+const appLogRefusal = appLogLevelRefusal(APP_LOG_LEVEL);
+if (appLogRefusal !== null) {
+  console.error(appLogRefusal);
   process.exit(2);
 }
 /**
@@ -519,8 +524,8 @@ const USAGE = `pnpm live-run — the application against a real model endpoint, 
   --duress-fixture=<dir>  the workspace duress opens (default: the same small todo-app the others use)
   --keep-runs=<n>      evidence packs to keep under .live-run/runs (default 10; the oldest are pruned)
   --session-log-level=<lvl>  the sandbox's session_log_level (default INFO; WARNING is the product's own default)
-  --app-log-level=<lvl>      the application log's threshold, ROTARIS_APP_LOG_LEVEL (debug|info|warning|error;
-                             default: unset, the product's own info)
+  --app-log-level=<lvl>      the application log's threshold, ROTARIS_APP_LOG_LEVEL (debug|info; default: unset, the
+                             product's own info). warning and error are refused: they drop the info lines the run reads
   --no-record-traffic  talk to the endpoint directly; do not record request and response bodies
   --gui                show the window each scenario drives, to watch it (hidden by default; nothing else changes)
   --keep               keep the sandbox workspace instead of deleting it

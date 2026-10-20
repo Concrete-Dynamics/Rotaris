@@ -819,7 +819,9 @@ logs to the same stream without end, which had starved the quit and REQ-MONITOR-
 line below the threshold is not written. The threshold is `info`, and the environment variable `ROTARIS_APP_LOG_LEVEL`,
 read once when main's module is evaluated, is the only thing that moves it; no message kind, command, configuration key
 or setting reaches it, and it is a different thing from the per-session `session.log`, whose level is
-`session_log_level` (REQ-CONFIG-121). The per-session log is the run host's file; the application log is not a file the
+`session_log_level` (REQ-CONFIG-121). The live-run harness sets the variable from its `--app-log-level` flag, and since
+2026-10-20 to `debug` or `info` only: its readings read the `info` lines a higher threshold drops
+(`apps/desktop/scripts/lib/app-log-level.mjs`). The per-session log is the run host's file; the application log is not a file the
 product writes — whoever launched the process keeps it or does not. The sentinel (`main/sentinel.ts`) is not main and
 does not write this log itself: its two diagnostics — the bundled runtime absent, or present and unable to start — go to
 its own stderr. The token process is an MCP stdio child, so that stderr reaches this log through the run host like any

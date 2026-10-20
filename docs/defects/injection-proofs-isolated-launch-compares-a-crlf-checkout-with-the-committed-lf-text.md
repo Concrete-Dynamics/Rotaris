@@ -15,6 +15,12 @@ the worktree holds, which is what REQ-WORKSPACE-050 asks; the proof's expectatio
 
 Seen again by plan loc1's bundle `loc1-terminal-kill` (2026-10-20/21): its builder met the same refusal in four runs, two in `C:/dev/Rotaris-crw-wt-loc1-terminalkill` at `0c1b3641` and two at the fork point `0d89e971` (CPU load 52 to 100 %, 8 to 27 Electron processes of other trees), with Git for Windows' `core.autocrlf=true` in its system configuration (`C:/Program Files/Git/etc/gitconfig`, the installer's default), and its reviewer once more in the landing tree `C:/dev/Rotaris-crw-wt-integ-loc1-loc1-terminalkill` at `edd65901` (CPU 100 %, 12 others). That bundle had recorded it as `injection-proofs-isolated-run-reads-a-crlf-instruction-file-under-core-autocrlf.md`; the copy was folded into this note at its landing.
 
+**Also seen 2026-10-20 by loc1's `rename` bundle (`loc1-rename`)**, `C:/dev/Rotaris-crw-wt-loc1-rename` at `983a6baf`, running the
+suites `pnpm verify:plan` named for its diff: `node apps/desktop/scripts/injection-proof.mjs --skip-build` failed at its fourth launch
+with the same "isolated: PRESENCE" message (CPU load 62 % at the start, thirteen other trees' Electron alive). There the conversion
+came from Git for Windows' own system configuration (`core.autocrlf=true` in `C:/Program Files/Git/etc/gitconfig`). That bundle
+recorded it under another name, which its review folded into this note at landing (one defect, one note).
+
 ## Specs
 
 None contradicted by the product, as far as the reading goes; whether an injected instruction file's CRLF endings should be

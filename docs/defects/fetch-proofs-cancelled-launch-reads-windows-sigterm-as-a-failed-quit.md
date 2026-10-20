@@ -14,6 +14,13 @@ was repaired on `main` by sending what Windows can send (`51d85dd7`); `fetch-pro
 
 Seen again by plan loc1's bundle `loc1-terminal-kill` (2026-10-20/21): its builder met the same refusal in four runs, two in `C:/dev/Rotaris-crw-wt-loc1-terminalkill` at `0c1b3641` and two at the fork point `0d89e971` (CPU load 46 to 91 % before the launches, 4 to 19 Electron processes of other trees), and its reviewer once more in the landing tree `C:/dev/Rotaris-crw-wt-integ-loc1-loc1-terminalkill` at `edd65901` (CPU 100 %, 15 others). That bundle had recorded it as `fetch-proofs-quit-by-sigterm-exits-1-on-windows.md`; the copy was folded into this note at its landing.
 
+**Also seen 2026-10-20 by loc1's `rename` bundle (`loc1-rename`)**, `C:/dev/Rotaris-crw-wt-loc1-rename` at `3731418b`, running the
+suites `pnpm verify:plan` named for its diff: `node apps/desktop/scripts/fetch-proof.mjs --skip-build`, re-run alone after a first run
+that failed at the start on "no reply to hello within 5000 ms" at a CPU load of 100 %, passed its first eight scenarios and failed
+the ninth with the same "cancelled: the quit by SIGTERM exited 1" (load 42 % at the start, twelve other trees' Electron alive).
+`mcp-proof`'s scenario 2c measures the same kind of quit and sends the driver's orderly quit on win32 for this reason (its
+`quitMethod`). That bundle recorded it under another name, which its review folded into this note at landing (one defect, one note).
+
 ## Specs
 
 None contradicted by the product. The proof's quit instrument assumes a POSIX signal; PD-TOOLS-013 revision 2's reading is not

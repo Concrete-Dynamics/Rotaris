@@ -274,7 +274,11 @@ turn red under the encoder it guards against. And by `pnpm part-h-proof`'s `loop
 one `read_file` value, `{path: 'README.md', offset: 1}`, its keys in the repeating order A, A, B
 (`ROTARIS_SCRIPT=loop:readreorder:20`): on the build before, 20 calls and no activation, the session `completed`; after it,
 three activations, the first `trigger: repetition`, one `circuit_breaker_escalation` and stop reason `agent_session_aborted`
-(`loop-reordered-observed.json`). **Not measured:** a live run since the change.
+(`loop-reordered-observed.json`). **Measured live** in the default live run's `crlf` scenario on this branch (2026-10-20, pack `2026-10-20T15-45-32-700Z`, endpoint `katalyst`, unmetered, R-068; Windows 11 ARM64, Node 24.18.0 arm64, beside three other trees' 18 Electron processes): the child serving greet.js sent four `haet_edit` calls of
+one value, the first written `{path, content_hash, old_string, new_string}` and the next three `{content_hash, new_string,
+old_string, path}` (as the next request replays them), so as text no run reached four; the `loop_supervisor_activation`
+(`trigger: repetition`) followed the fourth, the child's next call was another value, and the scenario passed, the run
+completed inside its wait.
 
 ## 2026-10-20 — decision 5's path anchor read from the argument values (loc1)
 

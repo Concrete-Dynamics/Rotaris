@@ -11,7 +11,8 @@ the build before, seven guards green before and after) and by `pnpm part-h-proof
 `read_file` value in key orders A, A, B: no activation in 20 calls before, three activations — the first `repetition` — one
 `circuit_breaker_escalation` and `agent_session_aborted` after). Recorded in
 [ADR-0059](../../architecture/adr/0059-the-loop-supervisor-as-an-in-turn-observer.md) (decision 3 and its 2026-10-20 section).
-**Not measured:** a live run since the change (the default live run's `crlf` scenario).
+**Measured live** in the default live run's `crlf` scenario on this branch (2026-10-20, pack `2026-10-20T15-45-32-700Z`, endpoint `katalyst`, unmetered, R-068; Windows 11 ARM64, Node 24.18.0 arm64, beside three other trees' 18 Electron processes): four `haet_edit` calls of one value in the key orders A, B, B, B drew the activation
+(`trigger: repetition`) after the fourth, and the scenario passed.
 
 `REQ-ORCH-101` fires "repeated action" when the same action is observed four times in a row, and two actions are the same when their tool name and whole arguments are identical. The supervisor compares `tool\0<name>\0<args>`, where `<args>` is the text `JSON.stringify(part.input)` produced in the order the model emitted the keys. A model that sends one object with its keys in different orders therefore reads as different actions.
 

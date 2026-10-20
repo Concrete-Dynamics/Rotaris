@@ -16108,7 +16108,10 @@ nesting), each guard shown red under the encoder it guards against. **The proof 
 20 calls, no activation, the session `completed`; after, three activations (the first `trigger: repetition`), one
 `circuit_breaker_escalation` and stop reason `agent_session_aborted` after 12 calls. Recorded in
 [ADR-0059](adr/0059-the-loop-supervisor-as-an-in-turn-observer.md) (decision 3 in place, and its 2026-10-20 section) and in
-[`first-executions.md`](first-executions.md). **Not measured:** a live run.
+[`first-executions.md`](first-executions.md). **Measured live** in the default live run's `crlf` scenario on this branch (2026-10-20, pack `2026-10-20T15-45-32-700Z`, endpoint `katalyst`, unmetered, R-068; Windows 11 ARM64, Node 24.18.0 arm64, beside three other trees' 18 Electron processes): four `haet_edit` calls of one value,
+written in two key orders (A, B, B, B), drew a `loop_supervisor_activation` with `trigger: repetition` after the fourth, and
+the scenario passed — the reopening condition's first limb not met. Its second limb (an activation drawn by calls whose parsed
+arguments differ) was not seen: the pack's one activation followed four calls of one value.
 
 <a id="oq-401"></a>
 

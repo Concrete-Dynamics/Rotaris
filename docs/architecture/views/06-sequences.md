@@ -33,7 +33,7 @@ sequenceDiagram
 
   OS->>M: launch (argv may carry a folder)
   Note over M: Phase 0 — BEFORE app.whenReady(),<br/>before any window, before any write
-  M->>M: claimInstance(...) — the endpoint listens first, then the record naming it is written (ADR-0055)
+  M->>M: claimInstance(...) — the endpoint listens first, then the record naming it is written (ADR-0055; a named pipe on Windows, pinned there by instance-order.test.ts since 2026-10-21)
   alt handed over
     M-->>OS: app.exit(0) — shows nothing, leaves nothing behind: its endpoint (opened first) and its per-attempt directory removed (OQ-248)
   else refused (both claims lost, or no directory could hold the endpoint — no record written)

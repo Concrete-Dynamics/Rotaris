@@ -861,6 +861,8 @@ important thing not to simplify away.
     the requirement fixes — the 5 s wait, the one reclaim, the two attempts — become ours to *test*,
     which is the property whose absence the measurement exposed. What is genuinely new is a cross-platform
     hand-over endpoint, and it is the piece with no Windows measurement behind it at all.
+    *2026-10-21: measured on Windows (the claim over a named pipe, "The claim over a named pipe, measured" below): the order,
+    the loser's close, a terminated holder's reclaim and the probe, in unit cases and in the built app.*
     **This consequence replaces the previous one**, which recorded that
     `app.releaseSingleInstanceLock()` — written here as "exists and is never called" — had acquired a
     single exception on the update-restart path. There is no such call now, the absolute-with-one-exception
@@ -898,6 +900,8 @@ important thing not to simplify away.
     must therefore re-read the record before acting as one, and where it finds a record naming another
     process it must stop behaving as the instance rather than compete — which is a rule this record
     states and which has no measurement behind it.
+    *2026-10-21, measured on Windows: it does not hold. A primary suspended past the 5 s wait and then resumed answered the
+    hand-over queued on its pipe and surfaced its window beside the instance that had reclaimed the record ([the note](../../defects/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md)).*
 15. **The frequency of consequence 14 is governed by a rule in another record.** A synchronous
     platform-native dialog on main runs no main-process JavaScript at all for as long as it is open —
     measured across timers, renderer IPC and the utility-process channel alike — and the product
@@ -912,6 +916,8 @@ important thing not to simplify away.
     `REQ-STARTUP-152` makes this release-checkable per platform, and `REQ-STARTUP-156`'s gate is where a
     failure would be caught — but that gate observes a *single* launch to first paint, so **launching
     twice is the specific thing it must be made to do**, or the whole of SR-1 goes untested by it.
+    *2026-10-21: the replacement is now measured on Windows as well (below); macOS and Linux still are not, and the release
+    gate still launches once.*
 
 ## Open question
 
@@ -1153,3 +1159,11 @@ the row of that date; windows-arm64 only, OQ-400).* `instance.test.ts` passed 18
 `posixHost` gate (the unix socket's directories and reclaim); the successor hand-over cases and the candidate list ran here.
 `instance-order.test.ts` skipped all 3 (`it.skipIf(process.platform === 'win32')`), so the named pipe's claim, loser and
 reclaim order has no unit case on Windows yet; the session's C6 adds the win32 counterparts and reports them here.
+
+## The claim over a named pipe, measured — 2026-10-21 (the Windows ARM64 session's C6)
+
+*Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, the built app at `51d85dd7`, tests at `c9ebc8cf`; [first-executions](../first-executions.md), the row of that date, citing the fin34 and fin36 rows of 2026-10-13.* `instance-order.test.ts` gained four `it.runIf(win32)` cases, each shown red against a deliberate break of its own property and green once restored (no case went red against another's break): **(a)** the pipe the record names accepts a connection at the instant the record is written, named `\\.\pipe\rotaris-<16 hex>-<pid>-<8 hex>` (red when the record was written before the listen); **(b)** a launch that loses the claim closes its own pipe, the directory holds only `instance.json`, and the instance's pipe goes when it closes (red with the loser's `closeEndpoint` removed); **(c)** a holder in a process of its own, ended with `TerminateProcess`, leaves no pipe, and the next claim takes the record (red with the reclaim's removal of the record taken out); **(d)** `probePid` reads `dead` after an exit and after a `TerminateProcess` while another process held the target's handle — Windows answered **ESRCH** both times, never EINVAL (red with ESRCH read as alive). No case calls `existsSync` on a pipe; they ask by connecting. Three runs of `instance.test.ts`, `instance-order.test.ts` and `platform.test.ts` before them: 57 passed, 11 skipped each time, every skip a POSIX socket case or a POSIX permission case.
+
+In the built app, with a scratch `LOCALAPPDATA`, `APPDATA`, `USERPROFILE` and `ROTARIS_PREFERENCES_ROOT`: **(i)** a second launch exited 0 in 379 ms, and the profile's only change against an 8 s control interval was the instance's own log line for the hand-over; this run's pipes went 1 → 1 → 0 at the quit (one more rotaris pipe, another launch's on the host, was there throughout). **(ii)** After `taskkill /F /T`, three relaunches claimed at once — no hand-over wait, the dead record's process probed gone — and loaded their window 0.81–1.01 s after their claim; without `/T`, one of main's five children was still alive 0.5 s after main was gone (ended by the driver after). **(iii)** With the primary suspended, a second launch logged `instance claimed` 5,263 ms after it started — the 5 s wait and one reclaim — and the resumed primary then went on acting as the instance ([the note](../../defects/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md)); the second launch's CPU while it waited was not read (the sampler returned nothing). **(iv)** 100 connections to the instance's pipe and 10 handed-over launches (each exit 0, 343–872 ms) left the primary answering, its record unchanged. **(v)** `LOCALAPPDATA` set to `rel`, `\rel` and `C:rel` each put the data directory under `<USERPROFILE>\AppData\Local\rotaris\data`, and nothing under the launch's working directory or the drive's root.
+
+`pnpm workspace-proof`: 50 passed, 0 failed, 5 skipped; scenario 13's hand-over checks passed (REQ-STARTUP-162/163, both workspaces), and 13b and 13c skipped as written for win32 (no socket directory, no XDG variable). Beside Spike 16's figures: its observation 1 (+187 ms to reacquire after `taskkill /F`, a window at +345/+373 ms, a harness's trivial one) is now a product launch claiming at once and loading its window under 1.1 s after the claim; its observation 2 (the platform primitive blocking 20.0 s and dropping the hand-over) is now this claim's 5.26 s and one reclaim. These are development-host figures on an ARM64 machine (OQ-400) and carry no REQ-STARTUP-156 gate weight.

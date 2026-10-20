@@ -2122,6 +2122,8 @@ to publish and marks the surface **unanchored**, so the condition is visible rat
 asks about is now OURS rather than the platform's (2026-09-02).*** *(ADR-0042, ADR-0053, ADR-0055;
 constraints P-16, P-17, W-14.)*
 
+*2026-10-21 (the Windows ARM64 session's C6): the gate this question asks about was measured on Windows — the named pipe's claim, hand-over and reclaim (ADR-0055, "The claim over a named pipe, measured"). A benchmark iteration's admission was not exercised; nothing here changes the ruling.*
+
 **Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the exception is stated as built in [`PD-STARTUP-002`](../product/directives.md#pd-startup-002), which narrows REQ-STARTUP-161: a launch the product starts itself under a reserved token — the code-intelligence child, the update-restart successor and a benchmark iteration child — is neither the instance nor handed to it. The first two are built; the benchmark harness and its marker (W-14) are not.
 
 ***What changed and what did not.*** ADR-0055's claim moved from the platform's single-instance primitive
@@ -12705,6 +12707,7 @@ private directory, which replaces the shared `rotaris-<uid>` one — is removed 
 endpoint of a dead recorded process along with the record file. No directive: no requirement is contradicted, so the
 specification keeps its text; the ruling is recorded here and in ADR-0055. On Windows (the released platform, `PD-STARTUP-001`)
 the endpoint is a named pipe and nothing touches disk.
+*Measured 2026-10-21 (the Windows ARM64 session's C6): on Windows a handed-over launch left nothing — the profile unchanged but for the instance's log, its pipe closed, the directory holding only `instance.json` — and a holder ended with `TerminateProcess` left no pipe for the reclaim to remove (`instance-order.test.ts`'s win32 cases; ADR-0055, "The claim over a named pipe, measured").*
 
 **The two recommendations weighed.** *Advocate A (the user's lens)*: confirm as built, reading the endpoint as the record's own
 write; record it in ADR-0055 and the sequence view; repair the open denial note with a per-attempt `mkdtemp` directory removed

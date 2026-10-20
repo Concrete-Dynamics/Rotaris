@@ -2273,6 +2273,39 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(timeline(sid2)).not.toContain('fallback_model');
   });
 
+  it('PD-ORCH-017 (REQ-ORCH-088, REQ-ORCH-112): a child retried on the role\'s fallback after its hard timeout works past 100 model steps in the retry', async () => {
+    // docs/defects/fixed/the-final-step-belt-ends-a-working-child-as-succeeded-with-no-final-response.md: REQ-ORCH-088's
+    // retry is a route into the child's turn too, so a numeric cap on it would end the retry `partial` at step 101 and
+    // settle the child `succeeded` with an empty `final_response`.
+    const LONG = 105;
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    const glob: TestTool = (name, args) => (name === 'glob' ? Promise.resolve({ text: 'README.md', isError: false, status: 'ok', durationMs: 1, label: 'glob', args }) : undefined);
+    let retried = 0;
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow' } }]) : answer('finished');
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      if (turn === 1) return hanging(NEVER);
+      retried += 1;
+      // The retry on f1: steps 1 to 105 work, 106 answers.
+      return retried <= LONG ? toolCalls([{ callId: `g${retried}`, name: 'glob', args: { pattern: `${retried}/*` } }]) : answer('Retried on the fallback and built every part.');
+    };
+    const { sessions, client } = sessionsWith(script, { catalogue, roleFallback: F1, childTimeoutMs: 10_000, delegation: true, tool: glob });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    clock.advance(10_000);
+    await tick();
+    clock.advance(30_000);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(issues(sid)).toContain('timeout_fallback');
+    expect(retried).toBe(LONG + 1);
+    const childRequests = client.requests.filter((r) => !/^You are the orchestrator|summarise/i.test(r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? ''));
+    expect(childRequests.slice(1).every((r) => r.model.modelId === 'f1')).toBe(true);
+    const child = dal.childrenOf(sid)[0]!;
+    expect(child.state).toBe('succeeded');
+    expect(JSON.parse(child.report!)).toMatchObject({ status: 'succeeded', final_response: 'Retried on the fallback and built every part.' });
+    expect(warnings.filter((line) => line.includes('final step belt fired'))).toEqual([]);
+  });
+
   it('OQ-116 as ruled (PD-ORCH-008): a call the attempt the fallback retry replaced completed stays counted — in the child\'s count and the session\'s total', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
     const script = (persona: string, turn: number): ScriptedCall => {

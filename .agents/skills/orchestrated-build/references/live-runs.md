@@ -78,7 +78,8 @@ works for a user, and it can spend money. Proofs pass on a product a live run st
   `--skip-build` launch refuses at once without it, and before that the duress run at `1763f7f` ran in a tree without it
   and never exercised code intelligence (its autopsy's U5, 2026-10-03).
 - The orchestrator sends the profile's commands as they are, from any directory, as a background task with the Bash
-  tool's `timeout` (`references/environment.md`, Long jobs). The default run takes about sixteen minutes: at `1763f7f`,
+  tool's `timeout` (`references/environment.md`, Long jobs). The default run took sixteen minutes at `1763f7f`, and 40
+  to 50 minutes with every scenario since fin42 (2026-10-14 and 15). At `1763f7f`,
   `timeout 5400 xvfb-run -a -s "-screen 0 1600x1000x24" /opt/node24/bin/node /home/user/Rotaris-crw-wt-accept/apps/desktop/scripts/live-run.mjs --confirm --skip-build`
   ran from 05:56 to 06:15 UTC on 2026-10-03 and passed.
 - Duress needs a window the endpoint can fill. AGENTS.md sets it at `LIVE_RUN_DURESS_MS=7800000` (130 minutes) since the

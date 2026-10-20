@@ -40,10 +40,12 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   live-run allow rules, so for a live run it is the orchestrator's):
   `setsid nohup bash -c '<command> > <log> 2>&1; echo "exit=$?" >> <log>' > /dev/null 2>&1 < /dev/null & disown`,
   then a background `until grep -q "^exit=" <log>; do sleep 30; done; tail -5 <log>`, re-armed when it is stopped.
-- **The duress live run outlasts a background command.** At `LIVE_RUN_DURESS_MS=7800000` (AGENTS.md's recipe) the run needs
-  about 8,000 s, past the 7,200,000 ms cap, so it is launched detached (`setsid nohup … &`, the form above) and waited on by
-  its own pid (`kill -0 <pid>` from the Monitor tool) or by its log's `exit=` line in the loop shape above. Never wait with
-  `pgrep -f <pattern>`: the waiter's own command line holds the pattern, so it finds itself and never ends (2026-10-13).
+- **The duress live run outlasts a background command.** At `LIVE_RUN_DURESS_MS=7800000` (AGENTS.md's recipe) its launch is
+  bounded at 8,100 s, past the 7,200,000 ms cap (runs took 2,820 to 4,219 s on 2026-10-14 and 15), so it is launched
+  detached (`setsid nohup … &`, the form above) and waited on only by its log's `exit=` line, in the loop shape above or
+  with the Monitor tool. Never wait with `pgrep`: the waiter's own command line holds the pattern, so it finds itself
+  and never ends, or finds its launching shell and ends at once (2026-10-13, then 23:40 UTC on 2026-10-13 and 05:15 on
+  2026-10-14, after this sentence had landed).
 
 ## Load
 

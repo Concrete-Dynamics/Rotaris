@@ -3,6 +3,19 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — live-run durations and the duress waiter, as measured
+
+**Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
+approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
+item F15: the references said the default run takes about sixteen minutes and duress about 8,000 s, and offered a pid
+waiter; measured runs took 40 to 50 and 2,820 to 4,219 s, and pid and `pgrep` waiters misfired three times (a waiter
+that matched itself, a false completion at 05:15 UTC on 2026-10-14, a stray 40-minute waiter), one finished duress going
+unseen for 39 minutes. **Changed:** `references/environment.md`, Long jobs, and `references/live-runs.md`, Running, give
+the measured durations; duress is waited on only by its log's `exit=` line. A `live` subcommand that prints the
+profile's commands for another tree is a script change with its own self-test assertion and is not part of this entry.
+**Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check`; the skill-review by one reviewer agent
+under `references/skill-review.md`, which judged this entry with the others of 2026-10-20.
+
 ## 2026-10-20 — each bundle raises open questions in its own sub-range
 
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner

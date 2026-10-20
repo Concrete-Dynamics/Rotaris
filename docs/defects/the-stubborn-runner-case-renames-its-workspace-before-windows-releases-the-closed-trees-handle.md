@@ -15,6 +15,12 @@ earlier full gates of the same day on that bundle (one green, three red on other
 `close()` ever resolves before the tree has really gone, rather than only before Windows has released its handles, is not decided
 by this reading.
 
+
+*Seen again 2026-10-21* (the Windows ARM64 session, the full gate on `af692eea`, a documentation-only head, with another
+worktree's tests running beside it): the same case was the gate's one red of 6,934. Alone on a quiet host straight after it
+passed three times of three. The gate's red was pushed by the session's own landing script, which did not then check the
+gate's result (it does now).
+
 ## Specs
 
 None contradicted on the evidence: REQ-MCP-066 and REQ-MCP-067 ask that a close end the server's process tree, which the passing

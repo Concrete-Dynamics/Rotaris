@@ -8671,6 +8671,12 @@ live run at `a68f121`); logged as [R-072](requests.md#r-072).*
 > `summary.md`'s `interrupted` bucket with Timeouts 0. It is written and unit-tested, and is the orchestrator's to run. A fetch
 > or MCP call cut live stays unmeasured: the scenario cuts the terminal, the case the record has never seen live. The row is
 > in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **On Windows, 2026-10-21 (the Windows ARM64 session's F1; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, built at `af692eea`).** The 2c launches' "quit the application by SIGTERM" above is POSIX only: on Windows they quit through the driver's orderly quit, since 2026-10-16, because `kill(SIGTERM)` there is
+> TerminateProcess and the cancellation path never ran ([the fixed note](../defects/fixed/mcp-proofs-cancellation-launch-kills-electron-on-windows.md)). The 2c red the
+> session's brief predicted did not happen and no harness note was owed. Both launches held: `cancel` failed / `interrupted`
+> with the MCP executor's sentence (550 ms), `cancel-throw` failed / `interrupted` with the gate's (591 ms), no issue, the
+> session `paused`, and `summary.md`'s "interrupted 1" with "Tool errors: 0"; the quit came 2.8 s into each launch.
 
 ---
 

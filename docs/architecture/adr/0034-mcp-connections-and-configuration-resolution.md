@@ -352,6 +352,8 @@ the mask and the scope all read as the first execution recorded them. The steps 
 3 to 5 s (launch 7), against the 14 s and 19 s the offsets had reserved. **Could not show:** the loaded-host red itself
 on demand, and anything on Windows (IC-3 — *corrected 2026-10-14: a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).
 
+*On Windows, 2026-10-21 (the Windows ARM64 session's F1; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, built at `af692eea`).* `pnpm mcp-proof --skip-build` ran whole twice on an idle host, every launch, exit 0 (about 3 minutes each). Launch 6: the override's wording "Overridden for this session — not persistent." appeared and was gone after the relaunch, the fates were `connected`, `disabled` (two), `unavailable`, `not-configured` and `discovery-failed`, and the inspector drew `broken` as dropped — discovery-failed. Launch 7: no "not applicable" (the `.cmd` runner check applies and reads healthy), `browser` healthy through `runner.cmd`, two contacts per server for two probes, the mask `***`, the scope Global and `ALPHA_KEY:yes`, `FROM_SHELL:no`. Launch 9: discovery 35.0 s, the quit at 40 s, exit 1.08 to 1.13 s after it. A sampler took `cmd`, `node` and `conhost` started during the second run every 250 ms (676 samples, 263 processes): every `MainWindowHandle` was 0, so no server, runner or shell drew a console window. **Found nothing new about the mechanism.** `packages/mcp/src/mcp.test.ts` (22 passed, the `.cmd` runner case among them) and `platform.test.ts`'s PATHEXT case ran on the same host.
+
 **The sink's severities gain `debug` — 2026-09-29, R-067 (acceptance finding A41).** "Every diagnostic is a value
 carrying its severity" held, and the severities stopped at `info`: `DiagnosticSeverity` was `info | warning | error`, and
 `McpHost.deliver` wrote `info` at `info` and everything else at `warn`. REQ-MCP-059 calls its grant count "a debug log",
@@ -362,6 +364,7 @@ persona's first spawn whose `mcp_tools` narrows a server. `DiagnosticSeverity` n
 restores it. No other diagnostic changed level. Pinned by "REQ-MCP-059 (A41): …" in `config/src/mcp/mcp.test.ts` and
 "REQ-MCP-059, PD-MONITOR-002 (A41): …" in `run-host/mcp.test.ts`, both red on the unrepaired code
 ([note](../../defects/fixed/the-mcp-grant-count-is-logged-at-info-not-debug.md)).
+*On Windows, 2026-10-21 (the Windows ARM64 session's F1; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, built at `af692eea`):* every mcp-proof launch whose configuration narrows `beta` wrote "persona orchestrator: 2 of 5 tools granted on server 'beta' (REQ-MCP-059)" at `debug` once, beside one "surface for orchestrator" line; launch 6, which narrows nothing, wrote none. Orchestrator is the one persona the proof narrows, so "once per persona" reads once. A scratch launch over a copy of the proof's profile without `ROTARIS_APP_LOG_LEVEL` wrote no grant line and no `debug` line at all (the surface line stayed); the same launch at `debug` wrote the grant line again.
 
 **A sixth fate in launch 6 — 2026-10-03 (fin13; the counts above kept as they were measured).** "The five fates" above
 is what launch 6 recorded until 2026-10-03. Since then it also declares a server `broken` that exits before initialize,

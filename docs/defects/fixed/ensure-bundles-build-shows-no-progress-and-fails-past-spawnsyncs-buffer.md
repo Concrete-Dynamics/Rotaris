@@ -8,8 +8,12 @@ now with a buffer it cannot outgrow (`maxBuffer: Number.MAX_SAFE_INTEGER`, as `m
 three cases under "the bundle step's output" in `apps/desktop/scripts/lib/code-intelligence-bundle.test.ts`, red on the helper
 before (a stand-in for `bundle.mjs` printing 2 MiB: the build runs to its end with its output written through and none held, the
 check reads all 2 MiB back, and `ensureBundle` builds through the streamed step and says where a streamed failure's output went).
-Not run here: a real first build from an empty cache through `ensureBundle` (this tree's bundle was already built by
-`pnpm code-intel:bundle`, so every proof found it present).
+A real build through the streamed runner (`runBundleScript(['--force'], 900_000, { stream: true })` in
+`C:/dev/Rotaris-crw-wt-loc1-rename`, Windows 11 ARM64, 2026-10-20) wrote its lines as they came — uv's interpreter download 5 s
+after the runner started, the installed packages 36 s after — and answered `{ status: 0, output: '', streamed: true }` (the step's own
+measure: built in 31 s); `--check` then read the
+bundle current and the manifest's `--check` equal. Not run: a first build from an empty cache through `ensureBundle` itself (this
+tree's bundle was already built by `pnpm code-intel:bundle`, so every proof found it present).
 
 Found by fin47's review of `accept1-1` (finding 1). fin47 (A4) made `code-intel-proof`, `init-proof` and `live-run` ask
 `bundle.mjs --check` through `ensureBundle` and build the bundle through it when absent or stale. Its build ran

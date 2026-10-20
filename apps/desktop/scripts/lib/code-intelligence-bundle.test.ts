@@ -8,10 +8,11 @@
  * builds, refuses at once naming `pnpm code-intel:bundle` when it does not, and quotes the app log's own setup failure
  * beside every "not recorded" message.
  */
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { ensureBundle, setupFailureOf, withSetupFailure } from './code-intelligence-bundle.mjs';
+import { closeSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { buildBundle, ensureBundle, runBundleScript, setupFailureOf, withSetupFailure } from './code-intelligence-bundle.mjs';
 
 const PROOF = resolve(import.meta.dirname, '..', 'init-proof.mjs');
 
@@ -168,5 +169,59 @@ describe('live-run states the same precondition, and says in every launch whethe
     const body = text.slice(text.indexOf('async function launch('), text.indexOf('/** The store as the run left it'));
     expect(body).toMatch(/codeIntelligenceStatement\(name, log\)/);
     expect(body).toMatch(/check\(intelligence\.verdict === 'pass', intelligence\.label, intelligence\.detail\)/);
+  });
+});
+
+/*
+ * fin47's review of `accept1-1`, finding (1): `ensureBundle`'s build captured `bundle.mjs`'s output through `spawnSync`'s defaults,
+ * where the call before it had inherited the streams. A first build from an empty cache (uv's interpreter and install) then
+ * printed nothing for up to fifteen minutes, and a build printing more than `spawnSync`'s default `maxBuffer` of 1 MiB would have
+ * been ended with ENOBUFS and read as a failed build
+ * (docs/defects/fixed/ensure-bundles-build-shows-no-progress-and-fails-past-spawnsyncs-buffer.md). The build now streams its output
+ * through as it runs and holds none; the check, whose output is short and is quoted in a refusal, is read back whole with a buffer
+ * it cannot outgrow. A stand-in for `bundle.mjs` prints 2 MiB here, past that default.
+ */
+describe('the bundle step\'s output: the build streamed, the check read back whole (fin47 accept1-1)', () => {
+  const dirs: string[] = [];
+  afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 3 }); });
+  /** A stand-in for `bundle.mjs` printing 2 MiB to its standard output in lines, then `done` to its standard error, then exiting `exit`. */
+  const loud = (exit = 0): { dir: string; script: string } => {
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-bundle-output-'));
+    dirs.push(dir);
+    const script = join(dir, 'loud.mjs');
+    writeFileSync(script, `const line = 'x'.repeat(1023) + '\\n';\nfor (let i = 0; i < 2048; i += 1) process.stdout.write(line);\nprocess.stderr.write('done\\n');\nprocess.exitCode = ${exit};\n`);
+    return { dir, script };
+  };
+  const MIB = 1024 * 1024;
+
+  it('the build streams: a step printing 2 MiB runs to its end, its output written through where the caller\'s goes, none held here', () => {
+    const { dir, script } = loud();
+    const log = join(dir, 'streamed.log');
+    const fd = openSync(log, 'w');
+    let r: ReturnType<typeof buildBundle>;
+    try { r = buildBundle(120_000, { script, stdio: ['ignore', fd, fd] }); } finally { closeSync(fd); }
+    expect(r).toEqual({ status: 0, output: '', streamed: true });
+    expect(statSync(log).size).toBeGreaterThan(2 * MIB);
+    expect(readFileSync(log, 'utf8').trimEnd().endsWith('done')).toBe(true);
+  });
+
+  it('the check reads its output back whole, past spawnSync\'s default buffer', () => {
+    const { script } = loud();
+    const r = runBundleScript([], 120_000, { script });
+    expect(r.status).toBe(0);
+    expect(r.output.length).toBeGreaterThan(2 * MIB);
+    expect(r.output.endsWith('done')).toBe(true);
+  });
+
+  it('ensureBundle builds through the streamed step unless told otherwise, and a streamed failure says where its output went', () => {
+    const { dir, script } = loud(3);
+    const fd = openSync(join(dir, 'failed.log'), 'w');
+    let failed: ReturnType<typeof buildBundle>;
+    try { failed = buildBundle(120_000, { script, stdio: ['ignore', fd, fd] }); } finally { closeSync(fd); }
+    expect(failed).toEqual({ status: 3, output: '', streamed: true });
+    expect(() => ensureBundle({ skipBuild: false, check: () => absent, build: () => failed }))
+      .toThrow(/bundle step \(pnpm code-intel:bundle\) exited 3:\n\(its output is above, streamed as it ran\)/);
+    const helper = readFileSync(resolve(import.meta.dirname, 'code-intelligence-bundle.mjs'), 'utf8');
+    expect(helper).toMatch(/build = \(\) => buildBundle\(\) \}\)/);
   });
 });

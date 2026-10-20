@@ -19,13 +19,37 @@ import { INITIALIZATION_TASK_ID } from './initialization-marker.mjs';
 const APP = resolve(import.meta.dirname, '..', '..');
 export const BUNDLE_SCRIPT = join(APP, 'scripts', 'code-intelligence', 'bundle.mjs');
 
-/** `bundle.mjs` run by this Node, with its arguments; the outcome as `{ status, output }`. */
-export function runBundleScript(args, timeoutMs) {
-  const r = spawnSync(process.execPath, [BUNDLE_SCRIPT, ...args], { encoding: 'utf8', windowsHide: true, timeout: timeoutMs });
+/**
+ * `bundle.mjs` (or `script`, for a test) run by this Node, with its arguments; the outcome as `{ status, output }`.
+ *
+ * - Captured (the default, for `--check`): the output is read back whole into `output`, with a buffer it cannot outgrow.
+ * - Streamed (`stream: true`, for the build): the child writes to this process's own standard output and error (`stdio`, the
+ *   parent's by default) as it runs, so a long first build — uv's interpreter download and install, up to fifteen minutes from
+ *   an empty cache — shows its progress, and nothing is held here, so no amount of output can stop it; `output` is then empty
+ *   and `streamed` true, the output being where the caller's own is.
+ *
+ * The reason the build streams, kept beside it: fin47's `ensureBundle` captured the build through `spawnSync`'s defaults (the
+ * call before it had inherited the streams), so a first build printed nothing for minutes, and one printing more than
+ * `spawnSync`'s default `maxBuffer` of 1 MiB would have been ended with ENOBUFS and read as a failed build (fin47's review of
+ * `accept1-1`; docs/defects/fixed/ensure-bundles-build-shows-no-progress-and-fails-past-spawnsyncs-buffer.md).
+ */
+export function runBundleScript(args, timeoutMs, { script = BUNDLE_SCRIPT, stream = false, stdio = ['ignore', 'inherit', 'inherit'] } = {}) {
+  if (stream) {
+    const r = spawnSync(process.execPath, [script, ...args], { stdio, windowsHide: true, timeout: timeoutMs });
+    return { status: r.status ?? (r.signal ? `signal ${r.signal}` : r.error?.message ?? 'unknown'), output: '', streamed: true };
+  }
+  const r = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8', windowsHide: true, timeout: timeoutMs, maxBuffer: Number.MAX_SAFE_INTEGER });
   return { status: r.status ?? (r.signal ? `signal ${r.signal}` : r.error?.message ?? 'unknown'), output: `${r.stdout ?? ''}${r.stderr ?? ''}`.trim() };
 }
 
+/** The bundle step itself (`pnpm code-intel:bundle`), streamed: `ensureBundle`'s build unless a caller names its own. */
+export function buildBundle(timeoutMs = 900_000, opts = {}) {
+  return runBundleScript([], timeoutMs, { ...opts, stream: true });
+}
+
 const tail = (text) => String(text ?? '').trim().split('\n').slice(-6).join('\n');
+/** A failed step's own words for a message: the captured tail, or where a streamed step's output already went. */
+const outputOf = (r) => (r.streamed === true ? '(its output is above, streamed as it ran)' : tail(r.output));
 
 /** What `init-proof` loses without the bundle — the refusal's second sentence unless the caller names its own. */
 const PROOF_CONSEQUENCE = 'Without it code-intelligence-setup fails and records nothing (REQ-WORKSPACE-084), so every scenario that expects it recorded would fail on a cause outside this proof.';
@@ -37,7 +61,7 @@ const PROOF_CONSEQUENCE = 'Without it code-intelligence-setup fails and records 
  * The live run has the same precondition since 2026-10-03
  * (`docs/defects/fixed/the-live-run-runs-without-the-code-intelligence-bundle-and-passes-without-saying-so.md`).
  */
-export function ensureBundle({ skipBuild, consequence = PROOF_CONSEQUENCE, check = () => runBundleScript(['--check'], 60_000), build = () => runBundleScript([], 900_000) }) {
+export function ensureBundle({ skipBuild, consequence = PROOF_CONSEQUENCE, check = () => runBundleScript(['--check'], 60_000), build = () => buildBundle() }) {
   const first = check();
   if (first.status === 0) return 'present';
   if (skipBuild) {
@@ -45,7 +69,7 @@ export function ensureBundle({ skipBuild, consequence = PROOF_CONSEQUENCE, check
       + `${consequence}\n${tail(first.output)}`);
   }
   const built = build();
-  if (built.status !== 0) throw new Error(`the code-intelligence bundle step (pnpm code-intel:bundle) exited ${built.status}:\n${tail(built.output)}`);
+  if (built.status !== 0) throw new Error(`the code-intelligence bundle step (pnpm code-intel:bundle) exited ${built.status}:\n${outputOf(built)}`);
   const again = check();
   if (again.status !== 0) throw new Error(`the code-intelligence bundle step succeeded but bundle.mjs --check still refuses:\n${tail(again.output)}`);
   return 'built';

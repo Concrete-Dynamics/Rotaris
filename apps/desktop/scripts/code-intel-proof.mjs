@@ -1,7 +1,9 @@
 /**
  * The code-intelligence proof (Part T): ADR-0035's first execution behind the real run host — the bundled runtime
- * (`pnpm code-intel:bundle`, run here when `bundle.mjs --check` finds it absent or stale), the pre-bootstrap branch, the generated manifest, the
- * client's owed halves and the project setup, in seven launches against one scratch profile:
+ * (`pnpm code-intel:bundle`, run here when `bundle.mjs --check` finds it absent or stale, its output streamed as it builds), the pre-bootstrap
+ * branch, the generated manifest, the client's owed halves and the project setup, in fifteen numbered launches against one scratch profile
+ * (launches 2 and 3 share one app launch, launch 5 is five, launch 6 starts no app, launch 7 runs only packaged; this read "seven launches",
+ * the count before fin32's eighth):
  *
  *   1. branch     — the development entry with the token → JSON-RPC only on standard output (the bytes before the
  *                   first `{` recorded and asserted to be Electron's CR LF and nothing else), no window, the runtime's

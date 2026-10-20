@@ -1409,11 +1409,14 @@ also asserts that A's agent record (`iterations`, `agent_messages`, `agent_termi
 leaves with it (PD-ORCH-005 clause 12); the scripted runs start no background terminal, so A's `agent_terminals` row is
 planted, as its `plan_cycles` row is.
 
-**What `pnpm code-intel-proof` does.** It first asks `bundle.mjs --check` and builds the git-ignored bundle when it is
-absent or stale for the host, under `--skip-build` too (since fin47, A4: it used to build only an absent one and ran a
+**What `pnpm code-intel-proof` does.** Once it has set the runtime's home aside and wiped its previous evidence, and before it
+reads the bundle's marker, builds the app or makes any launch, it asks `bundle.mjs --check` and builds the git-ignored bundle when it is
+absent or stale for the host, under `--skip-build` too, the build's output streamed as it runs (since 2026-10-20) (since fin47, A4: it used to build only an absent one and ran a
 superseded recipe-3 bundle without a word, [note](../defects/fixed/code-intel-proof-uses-a-stale-code-intelligence-bundle-without-checking-it.md);
 `results.json`'s `bundle` now names the recipe, pins hash and target). It then
-launches the app seven times: the branch guard on the dev entry and, under `ROTARIS_CODE_INTEL_PACKAGED=1`, on
+runs fifteen numbered launches (`--steps` picks among them; launches 2 and 3 share one app launch, launch 5 is five, launch 6
+starts no app, and launch 7 runs only against the packaged binary; *corrected 2026-10-20: this read "launches the app seven
+times", the count before fin32*): the branch guard on the dev entry and, under `ROTARIS_CODE_INTEL_PACKAGED=1`, on
 `win-unpacked` (JSON-RPC and nothing but a tolerated blank line on standard output, no window, the exit status
 propagated); discovery of the real runtime through the token with the tier's names in the prompt and the memories
 block; the workspace binding on the launch line; a real `get_symbols_overview` call; the three-step project setup —

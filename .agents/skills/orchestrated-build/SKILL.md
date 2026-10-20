@@ -79,7 +79,7 @@ Write `plan.json` in the scratchpad:
   `render` sorts each lane by its dependencies, moves a bundle waiting on another lane (and what waits on it) to the
   end of its lane, and balances lanes. A `pins` set (bundles editing the same file) must sit in one lane. A run
   executes at most min(16, CPUs − 2) agents at a time (two on four CPUs), so lanes past that queue; to go faster,
-  split the bundles over two plans (`references/workflow-tool.md`, Concurrency).
+  split the bundles over two plans, within the ceiling `references/workflow-tool.md`, Concurrency, sets.
 - **Number ranges.** The brief gives each plan its own range of open-question numbers (and directive or request
   numbers where it may need them), so parallel plans do not collide; one that lands on a number main already holds
   takes the next free one (`references/environment.md`, Parallel plans; `references/repository.md`, Merge conflicts).

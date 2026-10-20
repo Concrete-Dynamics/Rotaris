@@ -53,7 +53,15 @@ every bundle's ending, acceptance); the journal holds every agent's.
   the cap only queue, and one lane runs one agent at a time: plan duration on the cap per run.
 - **Two runs at once each run two**: on 2026-09-29 `wf_4da43d03-b3a` and `wf_f722534f-88d` overlapped from 05:27 to
   11:29 UTC with four workflow agents at once, and every merge either made then had its gate green.
-- **To run more, split the bundles over two plans** that share no bundle, no file and no `after`:
+- **At most two plans build at once on a 4-CPU host**, and nothing else runs beside more than one of them: no live
+  run, proof sweep or autopsy agent. A third plan waits for one of the two to settle. Two plans' reviewers gating at
+  once already put the load at 10 to 17 (`references/environment.md`, Load). Five plans at once, with live runs and
+  autopsies beside them, put it at 12 to 25 (fin29 to fin33, 09:33 to 11:39 UTC on 2026-10-07): a review took 2 h 46
+  min, a fix agent's test timed out on load (`wf_ef97319a-344`, journal line 11), and a builder returned a task
+  owner-blocked on load alone (`wf_4ade4086-c7a`, journal line 10). It came back with five plans on 2026-10-13, 03:08
+  to 04:49 UTC.
+- **To run more, split the bundles over two plans** that share no bundle, no file and no `after`, within the
+  ceiling above:
   - each has its own `id`, so its own branches and landing worktrees (`<repo>-wt-integ-<id>-<short>`), and its own
     scratchpad directory (SKILL.md §3: `plan.json`, `RUNS.txt`, rendered scripts) and check-in;
   - each takes `"acceptance": { "rounds": 0 }`, because every plan shares the profile's acceptance worktree;

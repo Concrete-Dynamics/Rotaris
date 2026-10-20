@@ -3,6 +3,19 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — at most two plans build at once on four CPUs
+
+**Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
+approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
+item F01 and F18: five plans with live runs and autopsies beside them put the load at 12 to 25 on 2026-10-07 (reviews of
+2 h 46 min and over 3 h, one lost to the limit, about 10 extra proof runs and 3 extra gates in one review, a task
+owner-blocked on load alone in `wf_4ade4086-c7a` line 10) and again on 2026-10-13, while the skill set no upper bound on
+"split the bundles over two plans". **Changed:** `references/workflow-tool.md`, Concurrency, sets the ceiling (two
+building plans, nothing beside more than one) with its evidence, and SKILL.md §2 points at it. The proposal's render
+warning for lanes past the cap is a script change with its own self-test assertion and is not part of this entry.
+**Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check`; the skill-review by one reviewer agent
+under `references/skill-review.md`, which judged this entry with the others of 2026-10-20.
+
 ## 2026-10-19 — the final report is the handoff the repository fixed
 
 **Prompted by** the owner's eighth infrastructure suggestion (2026-10-19, recorded in `.scratchpad.md`), accepted in the

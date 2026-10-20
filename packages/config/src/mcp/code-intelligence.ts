@@ -88,7 +88,7 @@ export function codeIntelligenceEdit(callable: string, args: Readonly<Record<str
  *
  * The pinned runtime answered a symbol rename before its language server had loaded the project, so the first rename of a
  * server session renamed the declaring file alone and said it succeeded; its referencing-symbol search waits for the loading
- * (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
  */
 export interface CodeIntelligenceWarmUp {
   readonly tool: string;
@@ -107,6 +107,58 @@ export function codeIntelligenceWarmUp(reported: string, args: Readonly<Record<s
   if (warmUp === undefined) return null;
   return { tool: warmUp.tool, args: Object.fromEntries(warmUp.arguments.filter((a) => args !== null && Object.prototype.hasOwnProperty.call(args, a)).map((a) => [a, args![a]])) };
 }
+
+/**
+ * PD-MCP-004 revision 2 (OQ-362, ruled 2026-10-20 under R-072), clause 5: the project file the run host places at the project root
+ * for a call of `reported` — the runtime's name for the tool, as the server reports it, so a `tool_name_map` rename (REQ-MCP-005)
+ * still matches — or null when the manifest records no project file for that tool, or when the call's declaring file is not a
+ * string whose extension the runtime serves with the clause's language (its TypeScript language). `relativePath` is the declaring
+ * file as the call names it (the argument the manifest's `editArguments` names for the tool); `covering` the names that count as a
+ * project file; `written` the one the product writes. The manifest's `projectFiles` is read here and nowhere else. Only the
+ * code-intelligence server's tools are asked: the caller matches the server first, and decides the root, the walk and the file.
+ *
+ * In a workspace no `tsconfig.json` or `jsconfig.json` covers, the TypeScript language server holds the files open in it alone, the
+ * pinned runtime opens the declaring file alone, and a rename stayed in that file after clause 2's search
+ * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ */
+export interface CodeIntelligenceProjectFile {
+  readonly relativePath: string;
+  readonly covering: readonly string[];
+  readonly written: string;
+}
+const PROJECT_FILES: ReadonlyMap<string, { readonly path: string; readonly extensions: ReadonlySet<string>; readonly covering: readonly string[]; readonly written: string }> = new Map(
+  Object.entries(CODE_INTELLIGENCE_MANIFEST.projectFiles).flatMap(([capability, spec]) => {
+    const name = Object.values(CODE_INTELLIGENCE_MANIFEST.tiers).map((tier) => (tier as Record<string, string>)[capability]).find((n) => n !== undefined);
+    const path = (CODE_INTELLIGENCE_MANIFEST.editArguments as Record<string, { readonly path: string } | undefined>)[capability]?.path;
+    return name === undefined || path === undefined ? [] : [[name, { path, extensions: new Set<string>(spec.extensions), covering: spec.covering, written: spec.written }] as const];
+  }),
+);
+export function codeIntelligenceProjectFile(reported: string, args: Readonly<Record<string, unknown>> | null): CodeIntelligenceProjectFile | null {
+  const spec = PROJECT_FILES.get(reported);
+  if (spec === undefined) return null;
+  const raw = args?.[spec.path];
+  if (typeof raw !== 'string') return null;
+  // The trailing extension of the file's name, as `hasIndexableExtension` reads one; a name that only begins with a dot has none.
+  const name = raw.slice(Math.max(raw.lastIndexOf('/'), raw.lastIndexOf('\\')) + 1);
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0) return null;
+  const ext = name.slice(dot);
+  if (!spec.extensions.has(ext) && !spec.extensions.has(ext.toLowerCase())) return null;
+  return { relativePath: raw, covering: spec.covering, written: spec.written };
+}
+/**
+ * The names the product writes as a project file (`written`, from the same map), for the one place that needs them without a call:
+ * the run host's removal of a file left behind at a root, at each run start (PD-MCP-004 revision 2, "a file left behind").
+ */
+export const CODE_INTELLIGENCE_PROJECT_FILE_NAMES: readonly string[] = Object.freeze([...new Set([...PROJECT_FILES.values()].map((p) => p.written))]);
+
+/**
+ * PD-MCP-004 revision 2, clause 5's "never a person's file": the bytes of the project file the product places, one constant of the
+ * build — a comment line naming the product and saying the file is temporary, was written for one symbol rename and is safe to
+ * delete, then the empty object, LF only. The run host removes a file at the root only while its bytes are these, and keeps one
+ * whose bytes differ: equality is how the product knows its own file, with no second record that could itself be left stale.
+ */
+export const CODE_INTELLIGENCE_PROJECT_FILE_BYTES = '// Rotaris wrote this temporary file for one code-intelligence symbol rename; it is safe to delete.\n{}\n';
 
 /** The files a call of the EDIT tier names in its arguments (`codeIntelligenceEdit`'s `paths`), or null outside the tier. */
 export function codeIntelligenceEditPaths(callable: string, args: Readonly<Record<string, unknown>> | null): readonly string[] | null {

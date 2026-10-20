@@ -1058,8 +1058,17 @@ server's referencing-symbol search for the same `name_path` and `relative_path` 
 name the server reports (so a `tool_name_map` rename is warmed and another server's same-named tool is not), and discards the
 answer: the pinned runtime answered a rename before its language server had loaded the project and renamed the declaring file
 alone. The search helps only where a `tsconfig.json` or `jsconfig.json` covers the files; in a workspace with neither (a plain
-JavaScript project, the live run's `todo-app`) the language server holds the open files alone, the search answers nothing and
-the rename still changes the declaring file only (fin47, 2026-10-15; OQ-362, open). The pairing and the shared argument names are the manifest's `warmUps`, read through `codeIntelligenceWarmUp`; the
+JavaScript project, the live run's `todo-app`) the language server holds the open files alone, the search answered nothing and
+the rename changed the declaring file only (fin47, 2026-10-15). So since `PD-MCP-004` revision 2 (OQ-362, ruled 2026-10-20),
+clause 5, a rename whose declaring file the runtime serves with its TypeScript language (the manifest's `projectFiles`, read
+through `codeIntelligenceProjectFile`) and which no `tsconfig.json` or `jsconfig.json` covers — in its directory or any up to
+the executor's root, none above — gets a `jsconfig.json` of the product's own at that root (`CODE_INTELLIGENCE_PROJECT_FILE_BYTES`:
+one comment line naming Rotaris, then `{}`), created exclusively after `connect` and before the search, and removed in the
+call's `finally`, before the reach observation looks again, only while its bytes are still the product's. A per-root count on
+`McpHost` (process-wide, every session's executors) lets overlapping renames share one file; a file with the product's bytes
+that no rename keeps is adopted by the next rename and removed at each run start at the root (`prepare`, outside its memo).
+Each placement and removal is noted in OQ-245's write journal under a name no agent bears, so no observation lists the file,
+and written to the application log at `info`; nothing else records it. The pairing and the shared argument names are the manifest's `warmUps`, read through `codeIntelligenceWarmUp`; the
 search is sent under the run's signal and the rename's one REQ-MCP-003 allowance, measured from the call's start, so the rename
 gets what the search left. A search that spends the allowance is the rename's timeout and a cancel during it is `interrupted`,
 neither sending the rename; any other failure is one `warn` line and the rename goes ahead. It is no tool call: no gate, no

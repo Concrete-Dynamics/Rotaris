@@ -146,9 +146,12 @@
  *                 choose another tool. Whether the child searched for references first is noted; a cold rename that left the
  *                 importing files behind or had them mended by hand is a FINDING against PD-MCP-004, whose run-host search
  *                 before every rename must make it reach them (OQ-273, ruled 2026-10-13;
- *                 docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ *                 docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
  *                 It failed at `3c03287`: the fixture has no `tsconfig.json` or `jsconfig.json`, and there the search finds
- *                 nothing to load (the note, reopened 2026-10-15; OQ-362, open). It stays a FAIL until OQ-362 is ruled.
+ *                 nothing to load (the note, reopened 2026-10-15). Since PD-MCP-004 revision 2 (OQ-362, ruled 2026-10-20) the run
+ *                 host places a `jsconfig.json` of the product's own at the root for the search and the rename and removes it when
+ *                 the rename has answered: a further check FAILS when one stands at the workspace root after the run, and the
+ *                 application log's placements and removals of it are noted.
  *   8j. plan-open — OPT-IN (`--only=plan-open`), a few minutes (fin42, N56): `PD-ORCH-015` against a real model, two launches
  *                 whose prompt has the coordinator write a three-item plan and answer with the last item left PENDING:
  *                 `plan-open`, where it is free to record the item when corrected (one "a correction is sent" warning, the
@@ -3263,13 +3266,17 @@ if (wanted.includes('delegation')) {
  * the session's summary names the files is a NOTE. A run with no `rename_symbol` call is a NOTE, "not reached": a live model may
  * choose another tool, and the questions above are then unasked. Whether the child searched for the symbol's references before its
  * first rename is recorded beside the reading: a rename with nothing before it renamed the declaring file alone in the pinned
- * runtime (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md),
+ * runtime (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md),
  * and since PD-MCP-004 (OQ-273, ruled 2026-10-13 under R-072) the run host sends the reference search itself before every rename,
  * writing no row for it, so a cold rename whose importing files were left behind, or mended by another tool afterwards, is a
  * finding against that directive. Until the ruling it was a NOTE naming OQ-273. At `3c03287` it failed on the fixture's shape,
  * a JavaScript workspace with no `tsconfig.json` or `jsconfig.json`, where the search answers nothing and the rename stays in the
- * declaring file (fin47, reopening the note; OQ-362, open). The failure's detail says whether the workspace held a project file,
- * since that, and not the search's timing, decides whether the search can help.
+ * declaring file (fin47, reopening the note). The failure's detail says whether the workspace held a project file, since that,
+ * and not the search's timing, decides whether the search can help. Since PD-MCP-004 revision 2 (OQ-362, ruled 2026-10-20 under
+ * R-072) the run host places a `jsconfig.json` of the product's own at the workspace root for the search and the rename where no
+ * project file covers the declaring file, and removes it when the rename has answered; the fixture has none, so a `jsconfig.json`
+ * standing at its root after the run is a FAIL ("the product's project file was removed"), and the application log's placements
+ * and removals of the file are a NOTE beside it. The reading it replaces, kept beside it: "(OQ-362, open)".
  *
  * It renames a symbol every later scenario's prompts may read, so it runs after the default set and the workspace's three files
  * are restored afterwards.
@@ -3317,7 +3324,14 @@ if (wanted.includes('rename')) {
         check(r.first.status === 'ok', 'rename: the first rename_symbol call is ok', `${r.agent}: ${r.first.status} — ${JSON.stringify(r.first.result)}`);
         noted(`rename: ${r.agent} ${r.searchedFirst ? 'searched for the symbol\'s references before its first rename' : 'renamed with no reference search of its own before it (a cold rename; PD-MCP-004\'s search is the run host\'s and writes no row)'}`, `${r.renames} rename call(s); the first said ${JSON.stringify(r.first.result)}`);
         const projectFiles = ['tsconfig.json', 'jsconfig.json'].filter((f) => existsSync(join(workspace, f)));
-        if (r.cold) check(!r.coldLeftBehind, 'rename: the cold rename reached the importing files on its own (PD-MCP-004)', `left behind: ${r.leftBehind.join(', ') || 'none'}; written by another tool after it: ${r.mendedAfter.join(', ') || 'none'} — the run host's reference search before the rename did not make it reach them; the workspace root holds ${projectFiles.join(' and ') || 'no tsconfig.json or jsconfig.json'} (OQ-362; docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)`);
+        if (r.cold) check(!r.coldLeftBehind, 'rename: the cold rename reached the importing files on its own (PD-MCP-004)', `left behind: ${r.leftBehind.join(', ') || 'none'}; written by another tool after it: ${r.mendedAfter.join(', ') || 'none'} — the run host's reference search before the rename, and the product's own jsconfig.json for it where no project file covers the files (PD-MCP-004 revision 2, OQ-362, ruled 2026-10-20), did not make it reach them; the workspace root holds ${projectFiles.join(' and ') || 'no tsconfig.json or jsconfig.json'} after the run (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)`);
+        // PD-MCP-004 revision 2 (OQ-362): the fixture has no project file, so the run host placed a jsconfig.json of the product's
+        // own at the root for each rename's search and rename, and removed it when the rename had answered; none may be left.
+        const placements = log.split('\n').filter((l) => /mcp: (placed|adopted) the product's project file /.test(l)).length;
+        const removals = log.split('\n').filter((l) => /mcp: removed the product's project file /.test(l)).length;
+        const productFileLeft = existsSync(join(workspace, 'jsconfig.json'));
+        check(!productFileLeft, 'rename: the product\'s project file was removed (PD-MCP-004 revision 2)', `the workspace root ${productFileLeft ? 'holds a' : 'holds no'} jsconfig.json after the run (the fixture has none); the application log holds ${placements} placement(s) and ${removals} removal(s) of the product's project file`);
+        noted('rename: the application log\'s placements and removals of the product\'s project file (PD-MCP-004 revision 2, written at info)', `${placements} placement(s), ${removals} removal(s) for ${r.renames} rename call(s)`);
         check(r.leftBehind.length === 0 && r.carrying.length === RENAME_FILES.length, `rename: ${RENAME_FILES.join(', ')} call and import ${RENAME_TO} and no longer ${RENAME_FROM} (REQ-MCP-015)`, `carrying ${r.carrying.join(', ') || 'none'}; still naming ${RENAME_FROM}: ${r.leftBehind.join(', ') || 'none'}${r.cold ? ' (cold rename, PD-MCP-004)' : ''}`);
         check(r.reportFiles !== null && r.reportMissing.length === 0, 'rename: the renaming child\'s stored report lists every file the rename changed (OQ-245, PD-ORCH-004, REQ-ORCH-109)', `edited_files ${JSON.stringify(r.reportFiles)}; missing ${JSON.stringify(r.reportMissing)}`);
         check(r.artifactMissing.length === 0, 'rename: the child-report artifact lists every file the rename changed (REQ-LIBRARY-088)', `${JSON.stringify(r.artifactFiles)}; missing ${JSON.stringify(r.artifactMissing)}`);

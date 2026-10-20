@@ -40,7 +40,9 @@
  *                   exactly the files that changed on disk (OQ-245), the rename must reach the calling file, and the session must
  *                   hold the rename's one row and no row for the reference search the run host sends before it (PD-MCP-004:
  *                   the pinned runtime renamed the declaring file alone when the rename was its first cross-file request,
- *                   docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ *                   docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ *                   Since PD-MCP-004 revision 2 (OQ-362) it also asserts that no `jsconfig.json` was written beside its
+ *                   `tsconfig.json`: a project file covers this workspace, so clause 5 does not apply.
  *                   PD-MCP-004's acceptance gate: it rests on the runtime's internals, so it is RE-RUN ON EVERY PIN CHANGE.
  *                   Its failure is held: the launches after it run, results.json is written, and the proof fails at its end.
  *  12. renamed tool — (fin42, N59; REQ-MCP-005, REQ-ORCH-109) the global configuration's own `tool_name_map` on the
@@ -48,12 +50,22 @@
  *                   calls it by that name → both files changed on disk in the child's stored report and its child-report artifact.
  *                   The shipped entry renames nothing, so only a doctored entry reaches fin38's repair
  *                   (docs/defects/fixed/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
- *  13. child rename, cold, JavaScript — (fin47, OQ-362; PD-MCP-004) launch 11's rename in a workspace of its own holding two
- *                   JavaScript ES modules and no `tsconfig.json` or `jsconfig.json`, the live run's `todo-app` shape: the rename
- *                   must reach the calling file. The live `rename` scenario at 3c03287 renamed the declaring file alone there,
- *                   PD-MCP-004's search notwithstanding
- *                   (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
- *                   RED until OQ-362 is ruled and built; held, as launch 11's failure is; re-run on every pin change.
+ *  13. child rename, cold, JavaScript — (fin47, OQ-362; PD-MCP-004 revision 2) launch 11's rename in a workspace of its own
+ *                   holding two JavaScript ES modules and no `tsconfig.json` or `jsconfig.json`, the live run's `todo-app` shape:
+ *                   the rename must reach the calling file. The live `rename` scenario at 3c03287 renamed the declaring file alone
+ *                   there, PD-MCP-004's search notwithstanding
+ *                   (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md);
+ *                   since revision 2 (OQ-362, ruled 2026-10-20) the run host places a `jsconfig.json` of the product's own at the
+ *                   root for the search and the rename, so the launch also asserts the log's one placement and one removal and
+ *                   that no `jsconfig.json` or `tsconfig.json` stands at the root afterwards. Held, as launch 11's failure is.
+ *  14. child rename, opened, JavaScript — (OQ-362; PD-MCP-004 revision 2) launch 13's shape in a workspace of its own, the child
+ *                   taking a symbol overview of the declaring file before the rename, so the server has opened that file before
+ *                   the product's file is placed; the same assertions. Held.
+ *  15. child rename, cold, TypeScript — (OQ-362; PD-MCP-004 revision 2) launch 11's two TypeScript files in a workspace of its
+ *                   own with no `tsconfig.json`; the same assertions. Held.
+ *
+ *   Launches 11, 13, 14 and 15 rest on the runtime's internals and the language server's project discovery: they are RE-RUN ON
+ *   EVERY PIN CHANGE (ADR-0035; docs/proofs/code-intel-proof.md).
  *
  * Evidence under `.proof/code-intel-proof/`: one log and PNG per launch, `results.json` (its `bundle` names the recipe, pins
  * hash and target the launches ran on, and whether this run built it). `--skip-build` skips the desktop build only: the
@@ -83,7 +95,7 @@ if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === 
 const TOKEN = 'builtin:code-intelligence';
 // `--steps=1,2` runs a subset (the launches are long); `--keep` leaves the previous evidence and merges results.json.
 const stepsArg = process.argv.find((a) => a.startsWith('--steps='));
-const wanted = new Set((stepsArg ? stepsArg.slice('--steps='.length) : '1,2,3,4,5,6,7,8,9,10,11,12,13').split(',').map((s) => s.trim()));
+const wanted = new Set((stepsArg ? stepsArg.slice('--steps='.length) : '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15').split(',').map((s) => s.trim()));
 const want = (n) => wanted.has(String(n));
 const keepOutput = process.argv.includes('--keep');
 
@@ -582,29 +594,68 @@ if (want(9)) {
 // before it. The first launch of this pair as built was launch 11's shape, and its rename changed the declaring file alone while
 // saying "Successfully renamed … (1 changes applied)": the pinned runtime waits for the language server's project loading before
 // a references request and not before a rename
-// (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273).
+// (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273).
 // PD-MCP-004 (ruled 2026-10-13 under R-072) repairs it in the run host: every rename is preceded by the reference search of the
 // same symbol and file, its answer discarded and no row written. Launch 11 is that directive's acceptance gate, re-run on every pin
 // change: both files renamed, and the child's only rows the rename's. Its failure is held — it records what it read, the launches
 // after it still run, and the proof fails at its end.
 /** Failures a launch records and the proof raises only at its end, after every later launch has run (launch 11). */
 const heldFailures = [];
+/** The names that count as a project file of the TypeScript language server (PD-MCP-004 revision 2's `covering`); the product writes the second. */
+const PROJECT_FILE_NAMES = ['tsconfig.json', 'jsconfig.json'];
+/**
+ * PD-MCP-004 revision 2 (OQ-362): the application log's lines for the product's project file at `ws`'s root — each placement,
+ * adoption and removal, written at `info` and naming the file's path — and every `warn` line naming the clause.
+ */
+function projectFileLines(log, ws) {
+  const file = join(ws, 'jsconfig.json').toLowerCase();
+  const at = (re) => lines(log, re).filter((l) => l.toLowerCase().includes(file)).length;
+  return {
+    placed: at(/mcp: placed the product's project file /),
+    adopted: at(/mcp: adopted the product's project file /),
+    removed: at(/mcp: removed the product's project file /),
+    warned: lines(log, /PD-MCP-004 revision 2/).filter((l) => /\]\s+warn\s/.test(l)).length,
+  };
+}
+/** Launches 13 to 15: the product's file was placed once and removed once at the root, said at `info`, and no project file is left. */
+function projectFileFailures(name, reading) {
+  const out = [];
+  const { placed, adopted, removed, warned } = reading.projectFileLog;
+  if (placed !== 1 || adopted !== 0 || removed !== 1 || warned !== 0) out.push(`${name}: the application log holds ${placed} placement(s), ${adopted} adoption(s), ${removed} removal(s) and ${warned} warn line(s) for the product's project file at the root, not one placement and one removal (PD-MCP-004 revision 2, OQ-362)`);
+  if (reading.projectFilesAfter.length !== 0) out.push(`${name}: ${reading.projectFilesAfter.join(' and ')} stands at the workspace root after the launch; the product's project file must be removed when the rename has answered and no other is written (PD-MCP-004 revision 2, OQ-362)`);
+  return out;
+}
+/** Launches 13 to 15 each open a workspace of their own: a package with `src/`, a git repository, nothing else. */
+function ownWorkspace(dir, packageName) {
+  const ws = join(root, dir);
+  rmSync(ws, { recursive: true, force: true });
+  mkdirSync(join(ws, '.rotaris'), { recursive: true });
+  mkdirSync(join(ws, 'src'), { recursive: true });
+  writeFileSync(join(ws, 'package.json'), `${JSON.stringify({ name: packageName, private: true, type: 'module' }, null, 2)}\n`);
+  spawnSync('git', ['init', '-q'], { cwd: ws, stdio: 'ignore' });
+  return ws;
+}
 /**
  * `ws` is the workspace the launch opens (launches 10 and 11: the shared TypeScript one, which gains a `tsconfig.json`); `js` writes
  * the two files as JavaScript ES modules and no project file at all — launch 13's shape, the live run's `todo-app`
- * (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-362).
+ * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-362); `bare`
+ * writes the two TypeScript files with no `tsconfig.json` — launch 15's shape. `mcpArgs` adds scripted arguments for the child's
+ * other calls (launch 14's symbol overview). The reading also says which project files stand at the root after the launch and how
+ * many of PD-MCP-004 revision 2's placement, adoption, removal and warn lines the application log holds for that root.
  */
-async function childRename({ name, symbol, renamed, files, childScript, ws = workspace, js = false }) {
+async function childRename({ name, symbol, renamed, files, childScript, ws = workspace, js = false, bare = false, mcpArgs = {} }) {
   const [declaringRel, callingRel] = files;
   const declaring = join(ws, declaringRel);
   const calling = join(ws, callingRel);
+  if (js || bare) {
+    for (const f of PROJECT_FILE_NAMES) if (existsSync(join(ws, f))) throw new Error(`${name}: ${f} stands in ${ws}; this launch is the shape with no project file`);
+  }
   if (js) {
-    for (const f of ['tsconfig.json', 'jsconfig.json']) if (existsSync(join(ws, f))) throw new Error(`${name}: ${f} stands in ${ws}; this launch is the shape with no project file`);
     writeFileSync(declaring, `export function ${symbol}(items) {\n  return items.length;\n}\n\nexport const none = ${symbol}([]);\n`);
     writeFileSync(calling, `import { ${symbol} } from './${declaringRel.replace(/^src\//, '')}';\n\nexport function report(items) {\n  return \`\${${symbol}(items)} item(s)\`;\n}\n`);
   } else {
     const module = `./${declaringRel.replace(/^src\//, '').replace(/\.ts$/, '')}`;
-    writeFileSync(join(ws, 'tsconfig.json'), `${JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'ES2022', moduleResolution: 'bundler', strict: true, noEmit: true }, include: ['src/**/*.ts'] }, null, 2)}\n`);
+    if (!bare) writeFileSync(join(ws, 'tsconfig.json'), `${JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'ES2022', moduleResolution: 'bundler', strict: true, noEmit: true }, include: ['src/**/*.ts'] }, null, 2)}\n`);
     writeFileSync(declaring, `export function ${symbol}(items: readonly string[]): number {\n  return items.length;\n}\n\nexport const none = ${symbol}([]);\n`);
     writeFileSync(calling, `import { ${symbol} } from '${module}';\n\nexport function report(items: readonly string[]): string {\n  return \`\${${symbol}(items)} item(s)\`;\n}\n`);
   }
@@ -616,7 +667,7 @@ async function childRename({ name, symbol, renamed, files, childScript, ws = wor
     ROTARIS_CAPTURE_PROMPT: `delegate one refactorer that renames ${symbol} to ${renamed}`, ROTARIS_INTENT_SCRIPT: 'moderate_feature',
     ROTARIS_SCRIPT: 'delegate:refactorer:rename-a-symbol-across-files,wait:20000,answer',
     ROTARIS_CHILD_SCRIPT: childScript,
-    ROTARIS_SCRIPT_MCP_ARGS: JSON.stringify({ find_referencing_symbols: { name_path: symbol, relative_path: declaringRel }, rename_symbol: { name_path: symbol, relative_path: declaringRel, new_name: renamed } }),
+    ROTARIS_SCRIPT_MCP_ARGS: JSON.stringify({ find_referencing_symbols: { name_path: symbol, relative_path: declaringRel }, rename_symbol: { name_path: symbol, relative_path: declaringRel, new_name: renamed }, ...mcpArgs }),
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '360000', ROTARIS_CAPTURE_AFTER_MS: '3000',
   }, { ws, workspaceConfig: delegating, timeout: 480_000 });
   const { db, session: s } = sessionFrom(r);
@@ -634,7 +685,7 @@ async function childRename({ name, symbol, renamed, files, childScript, ws = wor
   const listed = Array.isArray(report?.edited_files) ? [...report.edited_files].sort() : [];
   const artifactFiles = artifacts.map((a) => JSON.parse(a.edited_files ?? '[]').map((f) => (typeof f === 'string' ? f : f?.path)).sort());
   const fetched = lines(r.log, /Running command 'npm install|Installing\.\.\./).map((l) => l.replace(/^.*? - /, '').slice(0, 200));
-  const reading = { call: calls[0].status, result: resultText.slice(0, 300), searchedFirst: searches.length > 0 && searches[0].ordinal < calls[0].ordinal, searchRows: searches.length, child: children[0].canonical_name, persona: children[0].persona, state: children[0].state, changedOnDisk, reportEditedFiles: listed, artifactEditedFiles: artifactFiles[0] ?? null, elapsedMs: r.elapsedMs, languageServerProvisioned: fetched };
+  const reading = { call: calls[0].status, result: resultText.slice(0, 300), searchedFirst: searches.length > 0 && searches[0].ordinal < calls[0].ordinal, searchRows: searches.length, child: children[0].canonical_name, persona: children[0].persona, state: children[0].state, changedOnDisk, reportEditedFiles: listed, artifactEditedFiles: artifactFiles[0] ?? null, elapsedMs: r.elapsedMs, languageServerProvisioned: fetched, projectFilesAfter: PROJECT_FILE_NAMES.filter((f) => existsSync(join(ws, f))), projectFileLog: projectFileLines(r.log, ws) };
   console.log(`[code-intel-proof] ${name}: ${children[0].persona} ${children[0].state}, ${reading.searchedFirst ? 'references searched first' : 'nothing before the rename'}, the call said ${JSON.stringify(resultText.slice(0, 80))}, changed on disk ${JSON.stringify(changedOnDisk)}, report edited_files ${JSON.stringify(listed)}, artifact ${JSON.stringify(artifactFiles[0])} (${r.elapsedMs} ms; ${fetched.length} provisioning line(s))`);
   // OQ-245: the report and the artifact list exactly what the call changed on disk, and only files — whatever it changed.
   if (JSON.stringify(listed) !== JSON.stringify(changedOnDisk)) throw new Error(`${name}: the child's report lists ${JSON.stringify(listed)}, not exactly the files the rename changed on disk ${JSON.stringify(changedOnDisk)} (OQ-245, PD-ORCH-004, REQ-ORCH-109, REQ-ORCH-108)`);
@@ -644,7 +695,7 @@ async function childRename({ name, symbol, renamed, files, childScript, ws = wor
   const called = readFileSync(calling, 'utf8');
   const both = [declaringRel, callingRel].sort();
   const reached = new RegExp(`function ${renamed}\\(`).test(declared) && !declared.includes(symbol) && new RegExp(`import \\{ ${renamed} \\}`).test(called) && !called.includes(symbol);
-  return { reading: { ...reading, reachedBoth: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) }, failure: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) ? null : `${name}: the rename of ${symbol} changed ${JSON.stringify(changedOnDisk)}, not both ${JSON.stringify(both)} — ${callingRel} still reads ${JSON.stringify(called)} (the call said ${JSON.stringify(resultText.slice(0, 200))}; REQ-MCP-015, PD-MCP-004; docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273)` };
+  return { reading: { ...reading, reachedBoth: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) }, failure: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) ? null : `${name}: the rename of ${symbol} changed ${JSON.stringify(changedOnDisk)}, not both ${JSON.stringify(both)} — ${callingRel} still reads ${JSON.stringify(called)} (the call said ${JSON.stringify(resultText.slice(0, 200))}; REQ-MCP-015, PD-MCP-004; docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273)` };
 }
 if (want(10)) {
   const { reading, failure } = await childRename({ name: 'child-rename', symbol: 'countItems', renamed: 'tallyItems', files: ['src/rename-a.ts', 'src/rename-b.ts'], childScript: 'mcp:code_intelligence.find_referencing_symbols,mcp:code_intelligence.rename_symbol,answer' });
@@ -659,6 +710,9 @@ if (want(11)) {
   if (failure !== null) heldFailures.push(failure);
   // PD-MCP-004 clause 3: the search the run host sends before the rename writes no tool-call row; the model made one call.
   if (reading.searchRows !== 0) heldFailures.push(`child-rename-cold: the session holds ${reading.searchRows} reference-search row(s) beside the rename; the run host's warm-up must write none (PD-MCP-004)`);
+  // PD-MCP-004 revision 2 (OQ-362): a `tsconfig.json` covers this workspace, so clause 5 does not apply: no `jsconfig.json` beside it.
+  const { placed, adopted } = reading.projectFileLog;
+  if (reading.projectFilesAfter.includes('jsconfig.json') || placed !== 0 || adopted !== 0) heldFailures.push(`child-rename-cold: a jsconfig.json was written beside the workspace's tsconfig.json (${placed} placement(s), ${adopted} adoption(s) in the log; at the root afterwards: ${reading.projectFilesAfter.join(', ')}); clause 5 applies only where no project file covers the declaring file (PD-MCP-004 revision 2)`);
 }
 
 // ---- 12. an EDIT tool renamed by the entry's tool_name_map is still read as a write --------------------------------
@@ -703,25 +757,43 @@ if (want(12)) {
   console.log(`[code-intel-proof] 12 renamed tool: ${children[0].persona} ${children[0].state} called ${RENAMED}, evidence ${JSON.stringify(granted?.renamed ?? null)}, report edited_files ${JSON.stringify(listed)}, artifact ${JSON.stringify(artifactFiles[0])} (${r.elapsedMs} ms)`);
 }
 
-// ---- 13. the cold rename in a JavaScript workspace with no project file (the live run's shape) ----------------------
+// ---- 13 to 15. the rename where no project file covers the files (the live run's shape) -------------------------------
 // fin47 (OQ-362): PD-MCP-004's search made launch 11's rename reach both files because a `tsconfig.json` covers them. The live
 // `rename` scenario at 3c03287 renamed in the `todo-app` fixture — `.js`/`.jsx` and no `tsconfig.json` or `jsconfig.json`, as a
 // Vite React project ships — and the rename changed the declaring file alone after the search: there the TypeScript language
 // server holds only the files open in it, the runtime opens the declaring file alone, and the search answers nothing
-// (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, reopened).
-// This launch is that shape in the built app: its own workspace, two ES modules, no project file, the rename as the child's only
-// call. It is red until OQ-362 is ruled and built, and held as launch 11's failure is, so the proof fails at its end; like launch
-// 11 it rests on the runtime's internals and is re-run on every pin change.
+// (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, reopened).
+// Launch 13 is that shape in the built app: its own workspace, two ES modules, no project file, the rename as the child's only
+// call. It was red until OQ-362 was ruled and built. PD-MCP-004 revision 2 (ruled 2026-10-20 under R-072), clause 5: the run host
+// places a `jsconfig.json` of the product's own at the root for the search and the rename and removes it when the rename has
+// answered, so each of these launches asserts the rename reached the calling file, exactly those two files in the report and the
+// artifact, no search row, the application log's one placement and one removal of the product's file, and no project file left at
+// the root. Launch 14 takes a symbol overview of the declaring file first, so the server has opened it before the file is placed;
+// launch 15 is launch 11's two TypeScript files with no `tsconfig.json`. Each failure is held as launch 11's is, so the proof fails
+// at its end; like launch 11 they rest on the runtime's internals and are re-run on every pin change.
+const coldRenameFailures = (name, { reading, failure }, shape) => [
+  ...(failure === null ? [] : [`${failure} — ${shape} (OQ-362, PD-MCP-004 revision 2)`]),
+  ...(reading.searchRows === 0 ? [] : [`${name}: the session holds ${reading.searchRows} reference-search row(s) beside the rename; the run host's warm-up must write none (PD-MCP-004)`]),
+  ...projectFileFailures(name, reading),
+];
 if (want(13)) {
-  const jsWorkspace = join(root, 'workspace-js');
-  mkdirSync(join(jsWorkspace, '.rotaris'), { recursive: true });
-  mkdirSync(join(jsWorkspace, 'src'), { recursive: true });
-  writeFileSync(join(jsWorkspace, 'package.json'), `${JSON.stringify({ name: 'rename-js', private: true, type: 'module' }, null, 2)}\n`);
-  spawnSync('git', ['init', '-q'], { cwd: jsWorkspace, stdio: 'ignore' });
-  const { reading, failure } = await childRename({ name: 'child-rename-cold-js', symbol: 'countLeft', renamed: 'tallyLeft', files: ['src/cold-c.js', 'src/cold-d.js'], childScript: 'mcp:code_intelligence.rename_symbol,answer', ws: jsWorkspace, js: true });
-  results.childRenameColdJs = { ...reading, projectFile: 'none' };
-  if (failure !== null) heldFailures.push(`${failure} — a JavaScript workspace with no tsconfig.json or jsconfig.json, the live run's shape (OQ-362)`);
-  if (reading.searchRows !== 0) heldFailures.push(`child-rename-cold-js: the session holds ${reading.searchRows} reference-search row(s) beside the rename; the run host's warm-up must write none (PD-MCP-004)`);
+  const outcome = await childRename({ name: 'child-rename-cold-js', symbol: 'countLeft', renamed: 'tallyLeft', files: ['src/cold-c.js', 'src/cold-d.js'], childScript: 'mcp:code_intelligence.rename_symbol,answer', ws: ownWorkspace('workspace-js', 'rename-js'), js: true });
+  results.childRenameColdJs = { ...outcome.reading, projectFile: 'none' };
+  heldFailures.push(...coldRenameFailures('child-rename-cold-js', outcome, 'a JavaScript workspace with no tsconfig.json or jsconfig.json, the live run\'s shape'));
+}
+if (want(14)) {
+  const outcome = await childRename({
+    name: 'child-rename-opened-js', symbol: 'countOpen', renamed: 'tallyOpen', files: ['src/opened-e.js', 'src/opened-f.js'], ws: ownWorkspace('workspace-js-opened', 'rename-js-opened'), js: true,
+    childScript: 'mcp:code_intelligence.get_symbols_overview,mcp:code_intelligence.rename_symbol,answer',
+    mcpArgs: { get_symbols_overview: { relative_path: 'src/opened-e.js' } },
+  });
+  results.childRenameOpenedJs = { ...outcome.reading, projectFile: 'none', before: 'a symbol overview of the declaring file' };
+  heldFailures.push(...coldRenameFailures('child-rename-opened-js', outcome, 'a JavaScript workspace with no project file, the declaring file opened by a symbol overview first'));
+}
+if (want(15)) {
+  const outcome = await childRename({ name: 'child-rename-cold-ts', symbol: 'sumBare', renamed: 'totalBare', files: ['src/bare-g.ts', 'src/bare-h.ts'], childScript: 'mcp:code_intelligence.rename_symbol,answer', ws: ownWorkspace('workspace-ts-bare', 'rename-ts-bare'), bare: true });
+  results.childRenameColdTs = { ...outcome.reading, projectFile: 'none' };
+  heldFailures.push(...coldRenameFailures('child-rename-cold-ts', outcome, 'two TypeScript files with no tsconfig.json'));
 }
 
 // ---- 7. self-containment (packaged only) ---------------------------------------------------------------------------

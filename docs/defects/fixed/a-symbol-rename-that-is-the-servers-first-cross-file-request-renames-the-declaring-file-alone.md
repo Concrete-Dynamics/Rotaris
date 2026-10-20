@@ -1,5 +1,40 @@
 ## A symbol rename that is the server's first cross-file request renames the declaring file alone
 
+**Repaired again 2026-10-20 by loc1 (`loc1-rename`) under OQ-362's ruling (R-072, option (a) refined), recorded as
+[`PD-MCP-004`](../../product/directives.md#pd-mcp-004) revision 2, clause 5.** For a rename whose declaring file the runtime serves
+with its TypeScript language and which no `tsconfig.json` or `jsconfig.json` covers — in its directory or any up to the root the
+server was launched for, none above — the run host places a `jsconfig.json` of the product's own at that root after `connect` and
+before clause 2's search (its bytes one constant, `CODE_INTELLIGENCE_PROJECT_FILE_BYTES`: a comment line naming Rotaris, then `{}`,
+LF; created exclusively, never over a person's file), keeps it while the search and the rename are answered, and removes it in the
+observed call's `finally`, before the reach observation looks again, only while its bytes are still the constant. Renames
+overlapping at one root share one file through a per-root count on `McpHost`; a file with the constant's bytes that no rename keeps
+is removed at each run start at the root (`prepare`) and adopted, then removed, by the next rename there; each placement and removal
+is noted in OQ-245's write journal under a name no agent bears, so no observation lists it, and logged at `info`. The manifest
+records the clause by capability (`projectFiles`, the `typescript` language's twelve extensions read from the runtime, refused by
+`projectFileRefusals` in `apps/desktop/scripts/lib/code-intelligence-warm-ups.mjs`), read by `codeIntelligenceProjectFile` in
+`packages/config/src/mcp/code-intelligence.ts`; the executor is `apps/desktop/src/run-host/mcp.ts`. OQ-362's spike came first:
+its four rows (the table below, dated 2026-10-20) each reached every importer.
+
+**Pinned by** seven cases under "PD-MCP-004 revision 2 (OQ-362)" in `apps/desktop/src/run-host/mcp.test.ts`, all red on the code
+before (the file placed for the search and the rename and gone at the return; removed after an error result, a thrown fault, a
+cancel during the search and a spent allowance; one file for two overlapping renames; a leftover removed at a run's preparation and
+adopted then removed by a rename, a person's file kept; changed bytes kept with a warn line; no observation listing the file, the
+renaming child's or a sibling's across the placement or the removal) and four guards green before and after (a covering file in the
+declaring file's directory, between it and the root, or at the root; a `.py` file; another EDIT tool, the model's own search, another
+server's same-named tool; a declaring file outside the root); by the reader's cases in
+`packages/config/src/mcp/code-intelligence.test.ts` and the generator's in `code-intelligence-warm-ups.test.ts`, red before.
+**Shown in the built app** by `code-intel-proof` (`--skip-build --steps=10,11,13,14,15`, Windows 11 ARM64, the emulated `win32-x64`
+bundle, CPU load 50 % with another tree's Electron alive at the start): launch 13 (`child-rename-cold-js`), launch 14
+(`child-rename-opened-js`, a symbol overview of the declaring file first) and launch 15 (`child-rename-cold-ts`, two `.ts` files and
+no `tsconfig.json`) each "(2 changes applied)", both files changed on disk, the report and the artifact listing exactly those two,
+no search row, the log's one placement and one removal, nothing left at the root; launch 11 green with no `jsconfig.json` beside its
+`tsconfig.json`; launch 10 unchanged. With the clause switched off in the same build (the run host's file as at `0d89e971`, CPU load
+94 % beside two other trees' Electron), launches 13, 14 and 15 each read "(1 changes applied)", the declaring file alone, and the
+proof failed on all three. Launches 11, 13, 14 and 15 are re-run on every pin change. **Not shown:** the live `rename` scenario: its
+launch (`timeout 3600 node C:/dev/Rotaris-crw-wt-loc1-rename/apps/desktop/scripts/live-run.mjs --confirm --skip-build --only=rename`)
+was refused by the session's permission classifier and is the orchestrator's to run; it now also fails when a `jsconfig.json` stands
+at the workspace root afterwards.
+
 **Reopened 2026-10-15 by fin47 (`fin47-rename-and-optionals`): PD-MCP-004's reference search does not reach a workspace with no
 TypeScript or JavaScript project file.** The opt-in live `rename` scenario at `3c03287` (pack `2026-10-15T05-00-55-983Z`, session
 `abb94646`) read "rename: the cold rename reached the importing files on its own (PD-MCP-004)" as **FAIL**: the delegated
@@ -20,6 +55,24 @@ bundled runtime's own stdio server (`serena-agent` 1.7.0, the `--context ide` ar
 | the same fixture | `get_symbols_overview` of `src/App.jsx` and of `src/todos.test.js`, then the search | `{}` | `src/todos.js` alone |
 | the same fixture with an empty `jsconfig.json` added at its root | the search | `src/App.jsx`, `src/todos.test.js` | all three (`3 changes applied`) |
 | two `.ts` files, no `tsconfig.json` | the search | `{}` | the declaring file alone |
+| 2026-10-20, control: the fixture, no project file (revision 1 as built) | the search | `{}` | `src/todos.js` alone (`1 changes applied`) |
+| 2026-10-20, row 1: the fixture; the product's `jsconfig.json` placed once `tools/list` had answered, before any file was opened | the search | `src\App.jsx`, `src\todos.test.js` | all three (`3 changes applied`) |
+| 2026-10-20, row 2: the fixture; `get_symbols_overview` of `src/todos.js` first, then the product's file placed | the overview, the search | `src\App.jsx`, `src\todos.test.js` | all three (`3 changes applied`) |
+| 2026-10-20, row 3: row 2's server, its file removed after row 2's rename and placed again at once; `filterTodos` → `selectTodos` | the search | `src\App.jsx`, `src\todos.test.js` | all three (`3 changes applied`) |
+| 2026-10-20, row 4: two `.ts` files, one importing the other, no `tsconfig.json`; the product's file placed once `tools/list` had answered | the search | `src\cold-a.ts`, `src\cold-b.ts` | both (`2 changes applied`) |
+
+**OQ-362's spike, 2026-10-20 (loc1, `loc1-rename`; the first act of building the ruling, as CLAUDE.md asks).** The five rows dated
+2026-10-20 were measured on Windows 11 ARM64 (build 26200), Node 24.18.0 arm64, over the bundled runtime's own stdio server —
+`serena-agent` 1.7.0 on Python 3.13.15, the `win32-x64` bundle that host builds and runs under its x64 emulation (OQ-401), built at
+`0d89e971` — with the shipped arguments (`start-mcp-server --transport stdio --context ide --project <copy>`), one fresh server per
+row except rows 2 and 3, which share one as the ruling asks, each in a fresh copy of `apps/desktop/scripts/fixtures/todo-app` (row
+4 in a workspace of two TypeScript files), the search being the run host's own `find_referencing_symbols` call. The file was the
+product's exact bytes (`CODE_INTELLIGENCE_PROJECT_FILE_BYTES`: one `//` comment line naming Rotaris, then `{}`, LF), created
+exclusively before the search and removed after the rename answered; its bytes were unchanged at every removal. Times: the
+control's search 23.0 s (the TypeScript language server provisioned in it), the rename 0.13 s; row 1's search 2.16 s, rename
+0.14 s; row 2's overview 1.19 s, search 1.11 s, rename 0.14 s; row 3's search 0.18 s, rename 0.14 s (the runtime sent the language
+server three file-change events before it); row 4's search 1.59 s, rename 0.13 s. CPU load 76 % at the start, one other tree's
+Electron alive. **No row left an importer behind**, so the clause was built as ruled.
 
 And through the runtime's language-server layer directly (`solidlsp`, the same pin), the `todo-app` fixture with no project file:
 the references request and the rename edit named `src/todos.js` alone; with `src/App.jsx` and `src/todos.test.js` held open in the
@@ -38,7 +91,7 @@ copies, ships no `jsconfig.json`, so this is the ordinary shape of a JavaScript 
 two shared arguments). Every measured remedy is outside it: a project file written into the person's workspace, the importers held
 open by the runtime (a patch of the pinned distribution, which OQ-273 rejected as its option (b)), or the run host telling the model
 or mending the files itself (OQ-273's rejected (c), and more). The choice is raised as
-[OQ-362](../architecture/open-questions.md#oq-362) and left for the consortium (R-072). **Pinned red until then** by
+[OQ-362](../../architecture/open-questions.md#oq-362) and left for the consortium (R-072). **Pinned red until then** by
 `code-intel-proof` launch 13 (`child-rename-cold-js`), the live fixture's shape in the built app, held to the proof's end as launch
 11 is; and by the live `rename` scenario's check above, which failed at `3c03287`. Launch 13's first runs, built from fin47's branch
 (`--steps=10,11,13`, load 1.98 rising to 4.26 on four CPUs): launches 10 and 11 green ("(2 changes applied)", both files each);
@@ -101,7 +154,7 @@ have to edit them one by one.
 - `REQ-ORCH-109`: a report "cannot conceal files it failed to account for" — not contradicted (the report lists the one file the
   call changed), but a report saying the rename succeeded hides that the work is broken.
 - No requirement says how the product drives the runtime's language server, or whether it may warm it, so the repair is a
-  question: [OQ-273](../architecture/open-questions.md#oq-273).
+  question: [OQ-273](../../architecture/open-questions.md#oq-273).
 
 ## Relevant files
 
@@ -115,15 +168,19 @@ have to edit them one by one.
   a runtime-side repair would change.
 - `apps/desktop/scripts/code-intel-proof.mjs` — launch 10 (`child-rename`, after a referencing-symbol search, both files) and
   launch 11 (`child-rename-cold`, the rename alone), which pins this note and is red until it is repaired; and since the reopening
-  launch 13 (`child-rename-cold-js`, the rename alone in a JavaScript workspace with no project file), red until OQ-362 is built.
+  launch 13 (`child-rename-cold-js`, the rename alone in a JavaScript workspace with no project file), red until OQ-362 was built;
+  since PD-MCP-004 revision 2 launches 14 (`child-rename-opened-js`) and 15 (`child-rename-cold-ts`) beside it.
 - `apps/desktop/scripts/fixtures/todo-app` — the live run's workspace: `.js`/`.jsx` files and no `tsconfig.json` or
   `jsconfig.json`, the shape the reopening is about.
 - `apps/desktop/scripts/live-run.mjs` — the opt-in `rename` scenario, which names a cold rename that reached one file.
 
 ## Outcome
 
+*Repaired again 2026-10-20 (PD-MCP-004 revision 2, OQ-362): the outcome is at the head of this note. The first outcome, below,
+holds for a workspace a `tsconfig.json` or `jsconfig.json` covers.*
+
 **Repaired 2026-10-14 by fin43** under OQ-273's ruling (R-072, option (a)), recorded as
-[`PD-MCP-004`](../product/directives.md#pd-mcp-004): before the run host forwards a symbol rename to the bundled server it
+[`PD-MCP-004`](../../product/directives.md#pd-mcp-004): before the run host forwards a symbol rename to the bundled server it
 sends that server's referencing-symbol search for the same `name_path` and `relative_path`, discards the answer, and then
 forwards the rename, both within the rename's one REQ-MCP-003 allowance; the search writes no record. The pairing and the
 argument names are the binding manifest's `warmUps` (`manifest.mjs`, refused by `scripts/lib/code-intelligence-warm-ups.mjs`

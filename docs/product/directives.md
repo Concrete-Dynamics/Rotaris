@@ -2663,7 +2663,7 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > directive's reading: the pinned runtime waits for the language server's project loading before a references request and not
 > before a rename, so a rename that is a server session's first cross-file request reaches the declaring file alone (measured
 > also over the runtime's own stdio branch, a copy of the live run's `todo-app` fixture among four arrangements). Recorded as
-> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
+> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
 > and raised as [OQ-273](../architecture/open-questions.md#oq-273); launch 11 keeps the assertion and is red until it is repaired;
 > **launch 12** (`child-renamed-tool`) — the global configuration's `tool_name_map` offers the cross-file replacement as
 > `replace_across_project`, and a tester's call by that name lists both files it changed in its report and artifact, with the
@@ -9503,7 +9503,7 @@ Everything else stands — revision 2: the rename's arguments, result and reach 
 > both files renamed, report and artifact listing both, no reference-search row; red with the warm-up switched off. **What was
 > not measured.** A live run: the opt-in `rename` scenario now reads a cold rename that leaves a referencing file behind as a
 > finding against this directive, and is the orchestrator's to run. Repairs
-> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 > **Corrected 2026-10-14 (fin44, `fin44-optional-findings`):** clause 3 was not held for one failure. The search went through
@@ -9526,8 +9526,47 @@ Everything else stands — revision 2: the rename's arguments, result and reach 
 > file; an empty `jsconfig.json`, or the importers held open, made it reach all three).* What to do there is
 > [OQ-362](../architecture/open-questions.md#oq-362), open; `code-intel-proof` launch 13 (`child-rename-cold-js`) pins it red in the
 > built app. Reopens
-> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 2, 2026-10-20, built under [R-072](requests.md#r-072) (loc1, `loc1-rename`): the rule held as
+> written.** *The spike, as the first act of building:* over the bundled runtime's own stdio server on Windows 11 ARM64 (build
+> 26200; the `win32-x64` bundle under the x64 emulation, OQ-401; the shipped `--context ide` arguments), copies of the `todo-app`
+> fixture, the product's exact bytes for the file, the file placed inside a live server session in each of the four cases the
+> ruling names — once `tools/list` had answered and before any file was opened; after a symbol overview had opened the declaring
+> file; a second time in one session after one removal; and two `.ts` files with no `tsconfig.json` — the search named the
+> importers and the rename said "3 changes applied" (the `.ts` pair "2 changes applied") in every row, where the control without
+> the file renamed `src/todos.js` alone; no row left an importer behind, so nothing reopened. *Built:* the manifest's
+> `projectFiles` (`manifest.mjs`, the runtime's `typescript` language with the twelve extensions the runtime serves with it,
+> `.cjs` to `.tsx`; refused by `projectFileRefusals` unless the capability is a tier's and the runtime names the language with an
+> extension; `--check` equal); `codeIntelligenceProjectFile` and `CODE_INTELLIGENCE_PROJECT_FILE_BYTES`
+> (`packages/config/src/mcp/code-intelligence.ts`); and in the MCP executor (`apps/desktop/src/run-host/mcp.ts`) the clause after
+> `connect` and before the search (`holdProjectFile`: a root count above 0 keeps, a root file holding the constant is adopted, a
+> covering file in the chain up to the root means nothing is placed, otherwise an exclusive create), the removal in the observed
+> call's `finally` (`releaseProjectFile`, only while the bytes are the constant), the leftover removal at every `prepare`, outside
+> its memo, and each placement and removal noted in `McpHost.writes` under a name no agent bears and logged at `info`. **What was
+> measured.** Seven cases under "PD-MCP-004 revision 2 (OQ-362)" in `apps/desktop/src/run-host/mcp.test.ts`, red on the code
+> before, and four guards green before and after; the reader's cases in `code-intelligence.test.ts` and the generator's refusal
+> cases in `code-intelligence-warm-ups.test.ts`, red before; revision 1's cases unchanged (their rig now holds a `tsconfig.json`, so
+> clause 5 does not apply there). In the built app, `code-intel-proof --steps=10,11,13,14,15`: launches 13
+> (`child-rename-cold-js`), 14 (`child-rename-opened-js`, a symbol overview of the declaring file first) and 15
+> (`child-rename-cold-ts`) each "(2 changes applied)", both files on disk, report and artifact listing exactly those two, no search
+> row, the log's one placement and one removal (the file stood 2.9 s in launch 13), nothing left at the root; launch 11 green with
+> no `jsconfig.json` beside its `tsconfig.json`; launch 10 unchanged; with the clause switched off in the same build, launches 13 to
+> 15 each "(1 changes applied)", the declaring file alone. **Found:** a sibling's own EDIT call that writes inside the rename's
+> window is still listed under the renaming child, as OQ-245's bound states (`mcp.test.ts`'s sibling case reads it); the product's
+> file is never listed. The tree's first proof run, in a fresh runtime home, stopped at launch 10 before any rename: on Windows the
+> run start's discovery cut the language server's first install short and the session's own install failed
+> ([`on-windows-discovery-cuts-the-first-language-server-install-short-and-the-sessions-install-fails`](../defects/on-windows-discovery-cuts-the-first-language-server-install-short-and-the-sessions-install-fails.md),
+> Windows-only, recorded for the Windows session; and
+> [`the-code-intelligence-server-provisions-its-language-servers-at-discovery-before-any-symbol-tool-is-used`](../defects/the-code-intelligence-server-provisions-its-language-servers-at-discovery-before-any-symbol-tool-is-used.md));
+> the runs above are on a home provisioned by the spike's runtime. The model's own search and safe deletion in such a workspace are
+> left as they were and are raised as [OQ-378](../architecture/open-questions.md#oq-378). **What was not measured.** The live
+> `rename` scenario: its launch (`timeout 3600 node C:/dev/Rotaris-crw-wt-loc1-rename/apps/desktop/scripts/live-run.mjs --confirm
+> --skip-build --only=rename`) was refused by the session's permission classifier and is the orchestrator's; it now also fails
+> when a `jsconfig.json` stands at the workspace root afterwards. Off Windows nothing of revision 2 was run. Repairs
+> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
+> again. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

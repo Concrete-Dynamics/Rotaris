@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
-import { CODE_INTELLIGENCE_MANIFEST, type LoadedConfiguration } from '@rotaris/config';
+import { CODE_INTELLIGENCE_MANIFEST, CODE_INTELLIGENCE_PROJECT_FILE_BYTES, type LoadedConfiguration } from '@rotaris/config';
 import { nodeClocks } from '@rotaris/platform';
-import { buildPolicy, Gate, PendingApprovals, PolicyContext } from '@rotaris/agent-tools';
+import { buildPolicy, Gate, PendingApprovals, PolicyContext, realPathOf } from '@rotaris/agent-tools';
 import { sessionMetrics } from '@rotaris/engine';
 import type { SessionRow } from '@rotaris/store';
 import { configurationForExecutionRoot, grantEvidence, McpHost } from './mcp.js';
@@ -676,7 +676,7 @@ describe('a cross-file EDIT call is observed by the files it changed (OQ-245)', 
 /*
  * PD-MCP-004 (OQ-273, ruled 2026-10-13 under R-072): the pinned runtime answered a symbol rename before its language server had
  * loaded the project, so the first rename of a server session renamed the declaring file alone and said it succeeded
- * (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). Before
+ * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). Before
  * forwarding the rename the run host sends the referencing-symbol search of the same symbol and file and discards its answer,
  * both within the rename's one REQ-MCP-003 allowance; the search writes no record. The runtime's names and argument names come
  * from the manifest alone (REQ-MCP-116).
@@ -697,6 +697,10 @@ describe('a symbol rename is preceded by the referencing-symbol search of the sa
     const root = scratchDir('rotaris-pdmcp004-');
     mkdirSync(join(root, 'src'));
     writeFileSync(join(root, 'src', 'todos.js'), 'export const remaining = 1;\n');
+    // A project file covers the workspace, so revision 2's clause 5 (the product's own project file) does not apply here: these
+    // cases are clauses 1 to 4 as fin43 built them. Clause 5's cases, with each of these exits, are under "PD-MCP-004 revision 2
+    // (OQ-362)" below.
+    writeFileSync(join(root, 'tsconfig.json'), '{}\n');
     const lines: { message: string; level: string }[] = [];
     const hostClock = new FakeClock();
     const mcp = new McpHost({ clocks: hostClock, log: (message, level = 'info') => { lines.push({ message, level }); }, acknowledge: () => undefined, parentEnv: {}, productVersion: '0.0.0' });
@@ -848,5 +852,297 @@ describe('a symbol rename is preceded by the referencing-symbol search of the sa
     expect(r.settles).toHaveLength(1);
     expect(r.settles[0]).toMatchObject({ status: 'ok' });
     expect(r.issues).toEqual([]);
+  });
+});
+
+/*
+ * PD-MCP-004 revision 2 (OQ-362, ruled 2026-10-20 under R-072), clause 5: in a workspace no `tsconfig.json` or `jsconfig.json`
+ * covers, the TypeScript language server holds the open files alone, so clause 2's search answered `{}` and the rename changed the
+ * declaring file alone while saying it succeeded
+ * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). For a rename whose
+ * declaring file the runtime serves with its TypeScript language and no project file covers, the run host places a `jsconfig.json`
+ * of the product's own at the root before the search and removes it when the call ends, whatever ended it; renames overlapping at
+ * one root share it; a leftover is removed at the next run start and adopted by the next rename; a file whose bytes are not the
+ * product's is never removed; and no observation lists the file. A real scratch root and a stubbed server, as the rig above; the
+ * runtime's names, the argument names and the file's name come from the manifest alone (REQ-MCP-116).
+ */
+describe('PD-MCP-004 revision 2 (OQ-362)', () => {
+  const { read, edit } = CODE_INTELLIGENCE_MANIFEST.tiers;
+  const [NAME_PATH, RELATIVE_PATH] = CODE_INTELLIGENCE_MANIFEST.warmUps.renameSymbol.arguments as readonly [string, string];
+  const { written } = CODE_INTELLIGENCE_MANIFEST.projectFiles.renameSymbol;
+  const BYTES = CODE_INTELLIGENCE_PROJECT_FILE_BYTES;
+  const SCHEMA = { type: 'object', properties: { [NAME_PATH]: { type: 'string' }, [RELATIVE_PATH]: { type: 'string' }, new_name: { type: 'string' }, body: { type: 'string' }, needle: { type: 'string' }, repl: { type: 'string' }, mode: { type: 'string' } } };
+  const RENAME = { [NAME_PATH]: 'remaining', [RELATIVE_PATH]: 'src/todos.js', new_name: 'countRemaining' };
+  const TODOS = 'export function remaining(todos) {\n  return todos.length;\n}\n';
+  const APP = "import { remaining } from './todos.js';\n\nexport const left = remaining([]);\n";
+  type Reply = { isError: boolean; text: string };
+  /** What the stubbed server saw at each request: the tool, its arguments, and the bytes of `<root>/jsconfig.json` (null when absent). */
+  type Seen = { tool: string; args: Record<string, unknown>; projectFile: string | null };
+  type Answer = (tool: string, at: { root: string; signal: AbortSignal; hostClock: FakeClock; args: Record<string, unknown> }) => Reply | Promise<Reply>;
+  /** The rename's own edits, as the runtime makes them where the language server sees the whole project. */
+  const renamesBoth: Answer = (tool, { root }) => {
+    if (tool !== edit.renameSymbol) return { isError: false, text: '{"src/App.jsx": {}}' };
+    writeFileSync(join(root, 'src', 'todos.js'), TODOS.replace(/remaining/g, 'countRemaining'));
+    writeFileSync(join(root, 'src', 'App.jsx'), APP.replace(/remaining/g, 'countRemaining'));
+    return { isError: false, text: "Successfully renamed 'remaining' to 'countRemaining' (2 changes applied)" };
+  };
+  /** A promise and the function that settles it, for ordering two calls under way at once. */
+  const latch = (): { wait: Promise<void>; open: () => void } => {
+    let open!: () => void;
+    const wait = new Promise<void>((resolve) => { open = resolve; });
+    return { wait, open };
+  };
+
+  function rig(answer: Answer = renamesBoth, opts: { server?: string; files?: Record<string, string> } = {}) {
+    const serverName = opts.server ?? 'code_intelligence';
+    const root = scratchDir('rotaris-pdmcp004r2-');
+    for (const [path, text] of Object.entries({ 'src/todos.js': TODOS, 'src/App.jsx': APP, ...opts.files })) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), text);
+    }
+    const productFile = join(root, written);
+    const lines: { message: string; level: string }[] = [];
+    const hostClock = new FakeClock();
+    const mcp = new McpHost({ clocks: hostClock, log: (message, level = 'info') => { lines.push({ message, level }); }, acknowledge: () => undefined, parentEnv: {}, productVersion: '0.0.0' });
+    vi.spyOn(mcp.discovery, 'peek').mockReturnValue({ tools: [edit.renameSymbol, edit.replaceSymbolBody, edit.replaceAcrossFiles, read.referencingSymbols].map((name) => ({ name, description: 'x', inputSchema: SCHEMA })), failed: false } as unknown as ReturnType<typeof mcp.discovery.peek>);
+    vi.spyOn(mcp.discovery, 'discover').mockResolvedValue({ tools: [], failed: false, memoised: true, elapsedMs: 0 } as unknown as Awaited<ReturnType<typeof mcp.discovery.discover>>);
+    const seen: Seen[] = [];
+    vi.spyOn(mcp, 'connectionsFor').mockReturnValue({
+      connect: async () => ({ onToolsChanged: () => undefined }),
+      call: async (_server: string, _d: unknown, tool: string, args: Record<string, unknown>, _timeoutMs: number, signal: AbortSignal) => {
+        seen.push({ tool, args, projectFile: existsSync(productFile) ? readFileSync(productFile, 'utf8') : null });
+        return answer(tool, { root, signal, hostClock, args });
+      },
+    } as unknown as ReturnType<typeof mcp.connectionsFor>);
+    const entry = { type: 'stdio', enabled: true, disabled_tools: [], tool_name_map: {}, command: 'ci' };
+    const cfg = {
+      personas: { refactorer: { mcp_servers: [serverName], tools: [] } },
+      mcp: { servers: { [serverName]: { name: serverName, entry, origin: 'workspace', availability: { available: true }, description: {}, resolved: { command: 'ci', args: [] } } }, origins: { [serverName]: 'workspace' }, diagnostics: [] },
+    } as unknown as LoadedConfiguration;
+    const surface = mcp.surfaceFor(cfg, root, 'refactorer', null);
+    const executors = mcp.executorsFor({ cfg, workspaceRoot: root, role: 'refactorer', surface, ctx: { sessionId: 'S1', writer: null }, remove: () => undefined, log: () => undefined });
+    const clock = new FakeClock();
+    const issues: Record<string, unknown>[] = [];
+    const settles: Record<string, unknown>[] = [];
+    let seq = 0;
+    let calls = 0;
+    const gate = new Gate({
+      sessionId: 'S1', workspaceRoot: root, policy: new PolicyContext(buildPolicy({ preset: 'autonomous', workspaceRoot: root })), approvals: new PendingApprovals(clock),
+      attended: () => true, presenter: null, headlessPolicy: 'deny', abortHook: null, approvalTimeoutMs: 300_000,
+      executors: new Map(executors.map((e) => [e.name, e])), resolvePath: (p) => p, publicTool: () => false,
+      monotonic: clock, wall: clock, timers: clock, nextSequence: () => ++seq,
+      sink: {
+        decision: () => null, approvalRequested: () => undefined, pendingChanged: () => undefined, issue: (i) => { issues.push(i as Record<string, unknown>); },
+        timeline: () => undefined, toolOpen: () => ++seq, toolSettle: (_o, _open, s) => { settles.push(s as Record<string, unknown>); }, warn: () => undefined,
+      },
+    });
+    const dispatch = (name: string, args: Record<string, unknown>, signal: AbortSignal = new AbortController().signal, agentName = 'Refactorer 1') => gate.dispatch({ callId: `c${++calls}`, name, rawArgs: args, persona: 'refactorer', agentId: agentName, agentName }, signal);
+    /** The application log's lines that name the clause. */
+    const revision2 = () => lines.filter((l) => l.message.includes('PD-MCP-004 revision 2'));
+    return { mcp, cfg, root, productFile, placedAt: join(realPathOf(root), written), dispatch, seen, issues, settles, lines, revision2 };
+  }
+  const verbOf = (message: string): string => /\b(placed|adopted|removed)\b/.exec(message)?.[1] ?? message;
+
+  it('(a) a .js declaring file no project file covers: the product\'s file stands for the search and the rename, and is gone when the call returns', async () => {
+    const r = rig();
+    const result = await r.dispatch(edit.renameSymbol, RENAME);
+    expect(r.seen.map((s) => [s.tool, s.projectFile])).toEqual([[read.referencingSymbols, BYTES], [edit.renameSymbol, BYTES]]);
+    expect(existsSync(r.productFile)).toBe(false);
+    expect(result).toMatchObject({ status: 'ok', isError: false, text: "Successfully renamed 'remaining' to 'countRemaining' (2 changes applied)" });
+    expect(r.settles).toHaveLength(1);
+    expect(r.settles[0]).toMatchObject({ status: 'ok' });
+    expect(r.issues).toEqual([]);
+    expect(r.revision2().map((l) => [l.level, verbOf(l.message)])).toEqual([['info', 'placed'], ['info', 'removed']]);
+    for (const l of r.revision2()) expect(l.message).toContain(r.placedAt);
+  });
+
+  it('(b) the file is removed whatever ends the call: an error result, a thrown fault, a cancel during the search, a search that spends the allowance', async () => {
+    const erred = rig((tool) => (tool === edit.renameSymbol ? { isError: true, text: 'Error: no symbol named remaining' } : { isError: false, text: '{}' }));
+    expect(await erred.dispatch(edit.renameSymbol, RENAME)).toMatchObject({ status: 'failed', isError: true, text: 'Error: no symbol named remaining' });
+
+    const thrown = rig((tool) => { if (tool === edit.renameSymbol) throw new Error('the server went away'); return { isError: false, text: '{}' }; });
+    expect(await thrown.dispatch(edit.renameSymbol, RENAME)).toMatchObject({ status: 'failed', isError: true });
+    expect(thrown.settles[0]).toMatchObject({ failure_kind: 'execution_error' });
+
+    const run = new AbortController();
+    const cancelled = rig((tool, { signal }) => (tool === read.referencingSymbols
+      ? new Promise<Reply>((_resolve, reject) => { signal.addEventListener('abort', () => reject(new Error('This operation was aborted')), { once: true }); queueMicrotask(() => run.abort()); })
+      : { isError: false, text: 'Successfully renamed' }));
+    expect(await cancelled.dispatch(edit.renameSymbol, RENAME, run.signal)).toMatchObject({ status: 'failed', isError: true, interrupted: true });
+    expect(cancelled.seen.map((s) => s.tool)).toEqual([read.referencingSymbols]);
+
+    const spent = rig((tool, { hostClock }) => { if (tool === read.referencingSymbols) { hostClock.advance(300_000); throw new Error('MCP error -32001: Request timed out'); } return { isError: false, text: 'Successfully renamed' }; });
+    expect(await spent.dispatch(edit.renameSymbol, RENAME)).toMatchObject({ status: 'failed', isError: true });
+    expect(spent.settles[0]).toMatchObject({ failure_kind: 'timeout' });
+    expect(spent.seen.map((s) => s.tool)).toEqual([read.referencingSymbols]);
+
+    for (const [name, r] of Object.entries({ erred, thrown, cancelled, spent })) {
+      expect(r.seen[0]!.projectFile, name).toBe(BYTES);
+      expect(existsSync(r.productFile), name).toBe(false);
+      expect(r.revision2().map((l) => [l.level, verbOf(l.message)]), name).toEqual([['info', 'placed'], ['info', 'removed']]);
+    }
+  });
+
+  it('(c) two renames overlapping at one root share one file: placed once, standing for both, removed once the second to end has ended', async () => {
+    const firstRename = latch();
+    const releaseFirst = latch();
+    let renames = 0;
+    const r = rig(async (tool) => {
+      if (tool !== edit.renameSymbol) return { isError: false, text: '{}' };
+      renames += 1;
+      if (renames === 1) { firstRename.open(); await releaseFirst.wait; }
+      return { isError: false, text: 'Successfully renamed (2 changes applied)' };
+    });
+    const first = r.dispatch(edit.renameSymbol, RENAME, undefined, 'Refactorer 1');
+    await firstRename.wait;
+    expect(await r.dispatch(edit.renameSymbol, { ...RENAME, [NAME_PATH]: 'left', new_name: 'stillLeft' }, undefined, 'Refactorer 2')).toMatchObject({ status: 'ok' });
+    // The second has ended and the first still keeps the file.
+    expect(readFileSync(r.productFile, 'utf8')).toBe(BYTES);
+    releaseFirst.open();
+    expect(await first).toMatchObject({ status: 'ok' });
+    expect(existsSync(r.productFile)).toBe(false);
+    expect(r.seen.map((s) => s.projectFile)).toEqual([BYTES, BYTES, BYTES, BYTES]);
+    expect(r.revision2().filter((l) => l.level !== 'debug').map((l) => [l.level, verbOf(l.message)])).toEqual([['info', 'placed'], ['info', 'removed']]);
+  });
+
+  it('(d) a leftover with the product\'s bytes is removed at a run\'s preparation, and adopted and then removed by a rename; a file with other bytes is kept', async () => {
+    const r = rig();
+    writeFileSync(r.productFile, BYTES);
+    await r.mcp.prepare(r.cfg, r.root);
+    expect(existsSync(r.productFile)).toBe(false);
+    expect(r.revision2().map((l) => [l.level, verbOf(l.message)])).toEqual([['info', 'removed']]);
+    expect(r.revision2()[0]!.message).toContain(r.placedAt);
+    // Left behind again (a run host that ended during a rename): the next rename adopts it, and removes it when it has answered.
+    writeFileSync(r.productFile, BYTES);
+    expect(await r.dispatch(edit.renameSymbol, RENAME)).toMatchObject({ status: 'ok' });
+    expect(r.seen.map((s) => s.projectFile)).toEqual([BYTES, BYTES]);
+    expect(existsSync(r.productFile)).toBe(false);
+    expect(r.revision2().map((l) => [l.level, verbOf(l.message)])).toEqual([['info', 'removed'], ['info', 'adopted'], ['info', 'removed']]);
+
+    // A person's jsconfig.json is never removed, at the preparation or by a rename, and its bytes stay as they were.
+    const theirs = '{ "compilerOptions": { "checkJs": true } }\n';
+    const p = rig();
+    writeFileSync(p.productFile, theirs);
+    await p.mcp.prepare(p.cfg, p.root);
+    expect(await p.dispatch(edit.renameSymbol, RENAME)).toMatchObject({ status: 'ok' });
+    expect(readFileSync(p.productFile, 'utf8')).toBe(theirs);
+    expect(p.seen.map((s) => s.projectFile)).toEqual([theirs, theirs]);
+    expect(p.revision2()).toEqual([]);
+  });
+
+  it('(e) a file whose bytes changed while the rename ran is left where it stands, and a warn line says so', async () => {
+    const changed = '{ "compilerOptions": { "allowJs": true } }\n';
+    const r = rig((tool, at) => { if (tool === edit.renameSymbol) writeFileSync(join(at.root, written), changed); return renamesBoth(tool, at); });
+    expect(await r.dispatch(edit.renameSymbol, RENAME)).toMatchObject({ status: 'ok' });
+    expect(r.seen[0]!.projectFile).toBe(BYTES);
+    expect(readFileSync(r.productFile, 'utf8')).toBe(changed);
+    expect(r.revision2().map((l) => [l.level, verbOf(l.message)])).toEqual([['info', 'placed'], ['warn', expect.stringContaining('left where it stands')]]);
+    expect(r.revision2()[1]!.message).toContain(r.placedAt);
+  });
+
+  it('(f) the rename\'s observedPaths never list the file, also when it is left behind', async () => {
+    const r = rig();
+    const result = await r.dispatch(edit.renameSymbol, RENAME);
+    expect(r.seen[0]!.projectFile).toBe(BYTES);
+    expect(result.observation?.observedPaths).toEqual(['src/App.jsx', 'src/todos.js']);
+
+    const left = rig((tool, at) => { if (tool === edit.renameSymbol) writeFileSync(join(at.root, written), '{}\n'); return renamesBoth(tool, at); });
+    const leftResult = await left.dispatch(edit.renameSymbol, RENAME);
+    expect(left.seen[0]!.projectFile).toBe(BYTES);
+    expect(existsSync(left.productFile)).toBe(true);
+    expect(leftResult.observation?.observedPaths).toEqual(['src/App.jsx', 'src/todos.js']);
+  });
+
+  it('(f) a sibling\'s cross-file replacement observed across the placement, or across the removal, does not list the file', async () => {
+    const REPLACE = { needle: 'nothing', repl: 'else', mode: 'literal' };
+    const pair = () => {
+      const siblingCalled = latch(); const releaseSibling = latch(); const searchReached = latch(); const releaseSearch = latch();
+      const r = rig(async (tool, at) => {
+        if (tool === edit.replaceAcrossFiles) {
+          siblingCalled.open();
+          await releaseSibling.wait;
+          writeFileSync(join(at.root, 'README.md'), 'a sibling wrote this\n');
+          return { isError: false, text: 'Replaced 1 occurrence(s)' };
+        }
+        if (tool === read.referencingSymbols) { searchReached.open(); await releaseSearch.wait; }
+        return renamesBoth(tool, at);
+      });
+      return { r, siblingCalled, releaseSibling, searchReached, releaseSearch };
+    };
+    // Across the placement: the sibling looks before the rename places the file, and again while it stands.
+    {
+      const { r, siblingCalled, releaseSibling, searchReached, releaseSearch } = pair();
+      const sibling = r.dispatch(edit.replaceAcrossFiles, REPLACE, undefined, 'Tester 1');
+      await siblingCalled.wait;
+      const rename = r.dispatch(edit.renameSymbol, RENAME, undefined, 'Refactorer 1');
+      await searchReached.wait;
+      expect(readFileSync(r.productFile, 'utf8')).toBe(BYTES);
+      releaseSibling.open();
+      expect((await sibling).observation?.observedPaths).toEqual(['README.md']);
+      releaseSearch.open();
+      // The rename's window held the sibling's write, which no journal names (the bound OQ-245 states); never the product's file.
+      expect((await rename).observation?.observedPaths).toEqual(['README.md', 'src/App.jsx', 'src/todos.js']);
+      expect(existsSync(r.productFile)).toBe(false);
+    }
+    // Across the removal: the sibling looks while the file stands, and again once the rename has removed it.
+    {
+      const { r, siblingCalled, releaseSibling, searchReached, releaseSearch } = pair();
+      const rename = r.dispatch(edit.renameSymbol, RENAME, undefined, 'Refactorer 1');
+      await searchReached.wait;
+      const sibling = r.dispatch(edit.replaceAcrossFiles, REPLACE, undefined, 'Tester 1');
+      await siblingCalled.wait;
+      releaseSearch.open();
+      expect((await rename).observation?.observedPaths).toEqual(['src/App.jsx', 'src/todos.js']);
+      expect(existsSync(r.productFile)).toBe(false);
+      releaseSibling.open();
+      // Its window saw the file stand and then go: it lists its own file and the rename's (the bound OQ-245 states), never the product's.
+      expect((await sibling).observation?.observedPaths).toEqual(['README.md', 'src/App.jsx', 'src/todos.js']);
+      expect(r.seen.find((s) => s.tool === read.referencingSymbols)?.projectFile).toBe(BYTES);
+    }
+  });
+
+  it('guard: nothing is placed where a tsconfig.json or jsconfig.json stands in the declaring file\'s directory, a directory between it and the root, or the root; the person\'s bytes stay as they were', async () => {
+    const cases: { files: Record<string, string>; declaring: string }[] = [
+      { files: { 'src/tsconfig.json': '{ "include": ["*.js"] }\n' }, declaring: 'src/todos.js' },
+      { files: { 'src/jsconfig.json': '{}\n', 'src/lib/deep.js': 'export function remaining() { return 0; }\n' }, declaring: 'src/lib/deep.js' },
+      { files: { 'tsconfig.json': '{ "compilerOptions": { "allowJs": true } }\n' }, declaring: 'src/todos.js' },
+      { files: { [written]: '{ "compilerOptions": {} }\n' }, declaring: 'src/todos.js' },
+    ];
+    for (const c of cases) {
+      const r = rig(renamesBoth, { files: c.files });
+      expect(await r.dispatch(edit.renameSymbol, { ...RENAME, [RELATIVE_PATH]: c.declaring }), c.declaring).toMatchObject({ status: 'ok' });
+      for (const [path, text] of Object.entries(c.files)) expect(readFileSync(join(r.root, path), 'utf8'), path).toBe(text);
+      expect(r.seen.map((s) => s.projectFile), JSON.stringify(c.files)).toEqual(r.seen.map(() => c.files[written] ?? null));
+      if (!(written in c.files)) expect(existsSync(r.productFile)).toBe(false);
+      expect(r.revision2()).toEqual([]);
+    }
+  });
+
+  it('guard: nothing is placed for a .py declaring file, another EDIT tool, the model\'s own reference search, or another server\'s tool of the same name', async () => {
+    const py = rig(renamesBoth, { files: { 'tool.py': 'def remaining():\n    return 0\n' } });
+    await py.dispatch(edit.renameSymbol, { ...RENAME, [RELATIVE_PATH]: 'tool.py' });
+    const body = rig();
+    await body.dispatch(edit.replaceSymbolBody, { [NAME_PATH]: 'remaining', [RELATIVE_PATH]: 'src/todos.js', body: 'export function remaining() { return 0; }' });
+    const search = rig();
+    await search.dispatch(read.referencingSymbols, { [NAME_PATH]: 'remaining', [RELATIVE_PATH]: 'src/todos.js' });
+    const other = rig(renamesBoth, { server: 'notes' });
+    await other.dispatch(edit.renameSymbol, RENAME);
+    for (const [name, r] of Object.entries({ py, body, search, other })) {
+      expect(r.seen.length, name).toBeGreaterThan(0);
+      expect(r.seen.map((s) => s.projectFile), name).toEqual(r.seen.map(() => null));
+      expect(existsSync(r.productFile), name).toBe(false);
+      expect(r.revision2(), name).toEqual([]);
+    }
+  });
+
+  it('guard: nothing is placed for a declaring file outside the root', async () => {
+    for (const declaring of ['../outside.js', join(tmpdir(), 'rotaris-elsewhere', 'outside.js')]) {
+      const r = rig();
+      await r.dispatch(edit.renameSymbol, { ...RENAME, [RELATIVE_PATH]: declaring });
+      expect(r.seen.length, declaring).toBeGreaterThan(0);
+      expect(r.seen.map((s) => s.projectFile), declaring).toEqual(r.seen.map(() => null));
+      expect(existsSync(r.productFile), declaring).toBe(false);
+      expect(r.revision2(), declaring).toEqual([]);
+    }
   });
 });

@@ -16,6 +16,17 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-21**
 
+**The product's own project file for a rename no project file covers (PD-MCP-004 revision 2, OQ-362; loc1, `loc1-rename`).**
+`03-runtime-view.md`'s PD-MCP-004 paragraph now states clause 5 as built: for a rename whose declaring file the runtime serves
+with its TypeScript language and no `tsconfig.json` or `jsconfig.json` covers up to the executor's root, the MCP executor places a
+`jsconfig.json` of the product's own at that root before the search and removes it in the call's `finally`, under a per-root count
+on `McpHost`, with leftovers removed at each run start (`prepare`) or adopted by the next rename, and every placement and removal
+noted in the write journal under a name no agent bears; the paragraph's "OQ-362, open" is replaced. `04-seams.md`'s bullet on
+requests the run host makes on its own gains the file's path through the manifest's `projectFiles` (`projectFileRefusals`,
+`codeIntelligenceProjectFile`). `02-process-view.md`'s files-on-disk table gains `<project root>/jsconfig.json`, written and removed
+by the run host's MCP executor and read by the bundled runtime's TypeScript language server. `01-component-view.md`'s manifest
+paragraph gains `projectFiles` and the bytes constant beside `warmUps`; no edge changed.
+
 **The window's kill of a soft-paused command with a call waiting behind it (REQ-SHELL-092, OQ-164; 2026-10-21, loc1's review).** `02-process-view.md`'s live-terminal paragraph now states that a call waiting behind the killed soft-paused command reports the kill and reads as never having run, with no exit code. No package, edge, process, message or channel changed.
 
 **The claim over a named pipe, pinned on Windows (2026-10-21; the Windows ARM64 session's C6).** `06-sequences.md`'s launch sequence names the Windows endpoint and the test that now pins its order there: `instance-order.test.ts` gained four `it.runIf(win32)` cases. No product code changed.

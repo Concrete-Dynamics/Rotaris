@@ -505,6 +505,22 @@ files. In a workspace with none (the live run's `todo-app` fixture, a Vite React
 the open files, the runtime opens the declaring file alone, and the search answers `{}`: the live `rename` scenario at `3c03287`
 renamed one file of three. The remedy is open as [OQ-362](../open-questions.md#oq-362); `code-intel-proof` launch 13
 (`child-rename-cold-js`) is red on it until a ruling is built, and joins launch 11 as a gate re-run on every pin change.
+*Revision 2, built 2026-10-20 (loc1, `loc1-rename`; `PD-MCP-004` revision 2, OQ-362 ruled 2026-10-20 under R-072), the same pin:*
+the manifest also carries `projectFiles`, a product choice keyed by capability beside `warmUps` — the symbol rename's project file:
+the runtime's `typescript` language, the twelve extensions the runtime serves with it (read from the runtime's own file-name
+matcher, as the indexed extensions are), the two names that count as a project file (`tsconfig.json`, `jsconfig.json`) and the one
+the product writes (`jsconfig.json`) — checked by `projectFileRefusals` beside `warmUpRefusals` (a capability of the tiers, a
+language the runtime names with an extension, or no module is written; regenerated here, `--check` equal). **The run host now
+writes into the person's workspace for one call:** for a rename whose declaring file that language serves and no project file
+covers up to the project root, the MCP executor places a `jsconfig.json` of the product's own there (one constant of the build,
+`CODE_INTELLIGENCE_PROJECT_FILE_BYTES`, created exclusively) for the search and the rename and removes it when the call ends, only
+while its bytes are still the constant — the measured remedy that leaves the pinned runtime unpatched (OQ-273 and OQ-362 rejected a
+patched distribution), so "the pinned release is the tree that runs" stays true. Measured over the bundled runtime's stdio server
+(the file placed inside a live server session, four cases, every importer reached) and in the built app: `code-intel-proof`
+launches 13, 14 (`child-rename-opened-js`) and 15 (`child-rename-cold-ts`) green, launch 11 green with no `jsconfig.json` written,
+red without the clause in the same build. **Revisit with every pin change:** the clause rests on the TypeScript language server's
+project discovery and the runtime's language names, so launches 11, 13, 14 and 15 are its gates and are re-run whenever
+`pins.json` moves.
 
 ## The bundle is built for the artifact's architecture — 2026-10-15 (OQ-400, ruled under R-072)
 

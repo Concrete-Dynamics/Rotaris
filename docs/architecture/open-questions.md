@@ -12559,7 +12559,7 @@ the unrepaired build with `[]`, green with both files). The report-back is in `P
 function across two files through the language server after a reference search, and the child's report and artifact list exactly
 both; its eleventh (`child-rename-cold`), the rename alone, lists exactly the one file it changed — the observation holds — and
 finds the runtime's rename reaching the declaring file alone, recorded as
-[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
+[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
 and raised as [OQ-273](#oq-273). Not measured: a live run (the opt-in `rename` scenario, written). The report-back is in
 `PD-ORCH-004`, in place.
 
@@ -14141,7 +14141,7 @@ warm it, change the runtime, or tell the model?** *(REQ-MCP-015, the EDIT tier's
 pinned runtime the product bundles and drives as it is; REQ-MCP-116, the binding manifest, the one place the runtime's
 identifiers are written; [OQ-245](#oq-245), the reach observation that records what the call changed. Raised 2026-10-13 by
 fin42 (N59) from
-[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
 fin42 held OQ-271 to OQ-280; raised as OQ-272 (OQ-271 was taken on main by another of the plan's bundles), renumbered
 OQ-273 at its landing, `origin/main` having taken OQ-272 meanwhile. Ruled 2026-10-13 under R-072, below; it read "Open." until then.)*
 
@@ -15758,7 +15758,7 @@ describes it; [`PD-MCP-004`](../product/directives.md#pd-mcp-004), which rules t
 nothing else; [OQ-273](#oq-273), whose options (b) and (c) were rejected for the case it measured; REQ-MCP-011 and ADR-0035, the
 pinned runtime driven as it is; REQ-MCP-116, the binding manifest; [OQ-245](#oq-245), the reach observation. Raised 2026-10-15 by
 fin47 (`fin47-rename-and-optionals`) from the live `rename` scenario's failure at `3c03287`, reopening
-[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md);
+[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md);
 the plan's range OQ-361 to OQ-380, its second number (OQ-361 was taken on main by a sibling bundle) — renumbered at landing if
 another sibling took it first. **Ruled 2026-10-20.**)*
 
@@ -15807,7 +15807,7 @@ three files carry the new name with the rename's one row; under (e), the scenari
 
 *Confirmed release-blocking 2026-10-15:* fin47's acceptance round 1 at `cb6d1d5` read `code-intel-proof` launch 13 red twice
 (finding A1), and bundle `fin47-accept1-5` read it red again at `8baf9e4`, whose repair task waits on this ruling; the runs are in
-[the note](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). Ruled
+[the note](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). Ruled
 2026-10-20, below.
 
 **Ruled 2026-10-20 under the owner's delegation ([R-072](../product/requests.md#r-072)).** The ruling is option (a), refined, of kind change-behaviour. It is recorded as [`PD-MCP-004`](../product/directives.md#pd-mcp-004) **revision 2**: clause 5, "the project file", and the sentence after it. Revision 2 extends REQ-MCP-116 and REQ-MCP-015 further, and both back-pointers are amended in place.
@@ -15896,6 +15896,25 @@ Any case in which the clause leaves an importing file behind is recorded here, r
 - The opt-in `rename` scenario on the unchanged `todo-app` fixture: the first `rename_symbol` says `3 changes applied`, no other tool writes `src/App.jsx` or `src/todos.test.js` after it, `node --test` is green, and no `jsconfig.json` stands at the workspace root afterwards.
 
 *The reading the build proceeded under until this ruling ("PD-MCP-004 as ruled: the search is sent and discarded …", above) is kept as the falsified reading for a workspace no project file covers.*
+
+**Built 2026-10-20 by loc1 (`loc1-rename`).** The spike first, over the bundled runtime's own stdio server on Windows 11 ARM64
+(the emulated `win32-x64` bundle, OQ-401; the shipped arguments; the product's exact bytes; copies of the `todo-app` fixture): in
+the four cases above — the file placed after `tools/list` with no file opened, after a symbol overview had opened the declaring
+file, a second time in one session after one removal, and two `.ts` files with no `tsconfig.json` — the search named the importers
+and the rename reached every one ("3 changes applied", the `.ts` pair "2"); the control without the file renamed `src/todos.js`
+alone. No case left an importer behind, so nothing reopens. Then the build: the manifest's `projectFiles` and its refusals
+(`manifest.mjs`, `projectFileRefusals`), the reader and the bytes constant (`codeIntelligenceProjectFile`,
+`CODE_INTELLIGENCE_PROJECT_FILE_BYTES`), and the MCP executor's clause (`holdProjectFile`, `releaseProjectFile` in the observed
+call's `finally`, the per-root count, the leftover removal at every `prepare`, the journal under a name no agent bears; `run-host/mcp.ts`).
+Pinned by seven cases under "PD-MCP-004 revision 2 (OQ-362)" in `apps/desktop/src/run-host/mcp.test.ts`, red before, four guards
+green before and after, and the reader's and the generator's cases. In the built app `code-intel-proof` launches 13, 14 and 15 are
+green ("(2 changes applied)", both files, report and artifact listing exactly those two, no search row, one placement and one
+removal in the log, nothing left at the root), launch 11 green with no `jsconfig.json` written, launch 10 unchanged; with the clause
+switched off in the same build, 13 to 15 renamed the declaring file alone. **Owed:** the live `rename` scenario, refused at its
+launch by the session's permission classifier and the orchestrator's to run; and the noticed defect of the model's own search and
+safe deletion in such a workspace, measured (the deletion removed a symbol two files import) and raised as [OQ-378](#oq-378). The
+directive's report-back is "First execution of revision 2" under [`PD-MCP-004`](../product/directives.md#pd-mcp-004); the note is in
+[`fixed/`](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
 
 <a id="oq-363"></a>
 
@@ -16250,3 +16269,43 @@ own; the window's kill answers ok at once.
   would carry a text the observation has not yet given, and a later poll's text could differ from it by what arrived between.
 - **(c) As (b), and the same for a paused command that ends on its own**, the stream ended when the session sees its end
   frame. Cost: as (b), on every soft-paused command that ends unobserved.
+
+<a id="oq-378"></a>
+
+**OQ-378 — Where no project file covers the workspace, what do the model's own reference search and safe symbol deletion do?**
+*(REQ-MCP-015, the READ tier's referencing-symbol search and the EDIT tier's safe symbol deletion; [`PD-MCP-004`](../product/directives.md#pd-mcp-004)
+revision 2, whose clause 5 gives the symbol rename alone a project file of the product's own; [OQ-362](#oq-362), whose ruling
+asked that this be recorded and raised, not ruled there; REQ-MCP-011 and ADR-0035, the pinned runtime driven as it is;
+REQ-MCP-116, the binding manifest. Raised 2026-10-20 by loc1's `rename` bundle (`loc1-rename`) with
+[`with-no-project-file-a-safe-delete-removes-a-symbol-its-importers-still-use`](../defects/with-no-project-file-a-safe-delete-removes-a-symbol-its-importers-still-use.md);
+the bundle's range OQ-378 to OQ-379, its first number — renumbered at landing if `main` holds it.)*
+
+**What is open.** In a workspace no `tsconfig.json` or `jsconfig.json` covers (a Vite or plain Node JavaScript project, the live
+run's `todo-app`), the TypeScript language server holds only the files open in it, and the pinned runtime opens the declaring file
+alone. PD-MCP-004 revision 2 places a `jsconfig.json` of the product's own for the rename's call, so the rename reaches the
+importers; the model's own calls are left as they were. Measured 2026-10-20 over the bundled runtime's stdio server (the note's
+table): the model's `find_referencing_symbols` of `remaining` in `src/todos.js` answered `{}`, and its `safe_delete_symbol` of the
+same symbol answered `OK` and deleted it, while `src/App.jsx` and `src/todos.test.js` still import and call it; with the product's
+file placed for the two calls, the search named both importers and the deletion refused, naming them.
+
+**What the build proceeds under.** PD-MCP-004 as revised: the product's file is placed for the symbol rename alone; the model's
+search and its safe deletion are forwarded as the model made them, and their results are the runtime's.
+
+**What a ruling decides.** Which of these, or none:
+
+- **(a) Clause 5 for both calls.** The manifest's `projectFiles` gains the two capabilities, and the run host places and removes its
+  file for them as it does for the rename. Costs: the file stands in the person's workspace for every such search, which a model
+  makes far more often than a rename, and a READ-tier call then writes into the workspace, which no read-only persona's call did.
+- **(b) The safe deletion alone.** The deletion gets clause 5's file; the search stays as it is. Costs: a model that looks before it
+  edits is still told nothing uses the symbol; the destructive call is the one made safe.
+- **(c) Refuse the deletion there.** The run host answers the deletion, where no project file covers the declaring file, with an
+  error saying its reference check cannot see the project. Costs: a product refusal of a granted tool; the model's search is left
+  wrong.
+- **(d) Tell the model.** The run host appends to the search's empty answer, and to the deletion's result, that references outside
+  the open file are not seen in such a workspace. Costs: advice a model may ignore, the reason OQ-273 and OQ-362 rejected telling
+  the model.
+- **(e) Nothing, recorded.** REQ-MCP-015's two tools are read as reaching only what a project file covers.
+
+**What a live run then shows.** No scenario asks either call today. Under (a) or (b), a deletion of a symbol two files import is
+refused, naming them, and under (a) the search names them; under (c) the deletion's result is the product's refusal; under (d) the
+results carry the appended sentence; under (e) the deletion succeeds and the project no longer loads.

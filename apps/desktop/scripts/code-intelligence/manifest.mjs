@@ -22,7 +22,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { warmUpRefusals } from '../lib/code-intelligence-warm-ups.mjs';
+import { projectFileRefusals, warmUpRefusals } from '../lib/code-intelligence-warm-ups.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = resolve(HERE, '..', '..');
@@ -121,6 +121,20 @@ const PRODUCT_DESCRIPTIONS = {
 const WARM_UPS = {
   renameSymbol: { tool: 'referencingSymbols', arguments: ['name_path', 'relative_path'] },
 };
+/**
+ * PD-MCP-004 revision 2 (OQ-362, ruled 2026-10-20 under R-072), clause 5: by capability, the project file the product places at the
+ * project root for a call whose declaring file no project file covers — the runtime's language whose language server reads it, the
+ * names that count as a project file of that server, and the name the product writes. In a workspace with no `tsconfig.json` or
+ * `jsconfig.json` (a Vite or plain Node JavaScript project) the TypeScript language server holds the open files alone, the pinned
+ * runtime opens the declaring file alone, and the rename stayed in that file after clause 2's search. The extensions the language
+ * serves are the runtime's answer (step 1c below), recorded beside the entry, so the run host asks the clause only of a file that
+ * language serves. Checked by `projectFileRefusals`: a capability of the tiers, a language the runtime names with at least one
+ * extension, or no module is written. Rests on the language server's project discovery: `code-intel-proof`'s launches 13, 14 and 15
+ * join launch 11 as gates re-run on every pin change.
+ */
+const PROJECT_FILES = {
+  renameSymbol: { language: 'typescript', covering: ['tsconfig.json', 'jsconfig.json'], written: 'jsconfig.json' },
+};
 const CARDINALITY = { read: 10, edit: 7, memoryWrite: 2, onboard: 1 };
 
 function fail(m) { process.stderr.write(`[code-intel:manifest] REFUSED — ${m}\n`); process.exit(1); }
@@ -207,6 +221,19 @@ const extRun = spawnSync(PYTHON, ['-c', extScript], { encoding: 'utf8', env, win
 if (extRun.status !== 0) fail(`the extension listing failed: ${(extRun.stderr ?? '').slice(-800)}`);
 const { languages, extensions } = JSON.parse(extRun.stdout.trim().split('\n').at(-1));
 if (!extensions.includes('.ts') || !extensions.includes('.py')) fail(`the extension list looks wrong: ${extensions.join(' ')}`);
+// ---- 1c. the extensions each project file's language serves (PD-MCP-004 revision 2, OQ-362) ------------------------------
+// The language's own file-name matcher, as step 1 unites them, asked by its name whatever its priority: null where the runtime
+// names no such language, which `projectFileRefusals` refuses with an empty answer.
+const servedScript = [
+  'import json, sys',
+  'from solidlsp.ls_config import LanguageServerId',
+  'known = {l.value: l for l in LanguageServerId}',
+  'wanted = json.loads(sys.argv[1])',
+  'print(json.dumps({name: (sorted(known[name].get_source_fn_matcher()._file_extensions) if name in known else None) for name in wanted}))',
+].join('\n');
+const servedRun = spawnSync(PYTHON, ['-c', servedScript, JSON.stringify([...new Set(Object.values(PROJECT_FILES).map((p) => p.language))])], { encoding: 'utf8', env, windowsHide: true, timeout: 120_000, cwd: APP });
+if (servedRun.status !== 0) fail(`the project files' languages could not be read from the runtime: ${(servedRun.stderr ?? '').slice(-800)}`);
+const served = JSON.parse(servedRun.stdout.trim().split('\n').at(-1));
 
 // ---- 2. the runtime's whole vocabulary, then the server's listing under the shipped arguments ------------------
 const vocabulary = py(['tools', 'list', '--all']).split(/\r?\n/).map((l) => /^\s*\*\s*`([^`]+)`/.exec(l)?.[1]).filter(Boolean).sort();
@@ -280,6 +307,7 @@ for (const [cap, args] of Object.entries(EDIT_ARGUMENTS)) {
   if (args.scope === 'argument' && args.reach !== undefined) fail(`edit tier: '${cap}' has argument scope and names a reach (OQ-245)`);
 }
 for (const refusal of warmUpRefusals(WARM_UPS, CAPABILITIES, server)) fail(refusal);
+for (const refusal of projectFileRefusals(PROJECT_FILES, CAPABILITIES, served)) fail(refusal);
 for (const [cap, text] of Object.entries(PRODUCT_DESCRIPTIONS)) {
   if (!Object.values(CAPABILITIES).some((map) => Object.prototype.hasOwnProperty.call(map, cap))) fail(`a product description names '${cap}', which is no capability of the tiers (PD-MCP-001)`);
   if (typeof text !== 'string' || text.trim() === '') fail(`the product description for '${cap}' is empty (PD-MCP-001)`);
@@ -333,6 +361,8 @@ const lines = [
   `  productDescriptions: { ${Object.entries(PRODUCT_DESCRIPTIONS).map(([cap, text]) => `${cap}: ${q(text)}`).join(', ')} },`,
   '  /** PD-MCP-004: by capability, the request sent first and discarded — a capability whose tool goes first, and the arguments the two share, copied from the call; both tools and both arguments checked against the server\'s listing. */',
   `  warmUps: { ${Object.entries(WARM_UPS).map(([cap, w]) => `${cap}: { tool: ${q(w.tool)}, arguments: ${arr(w.arguments)} }`).join(', ')} },`,
+  '  /** PD-MCP-004 revision 2: by capability, the project file the product places at the project root for a call no project file covers — the runtime\'s language and the file-name extensions it serves with it (the runtime\'s answer), the names that count as a project file, and the name the product writes. */',
+  `  projectFiles: { ${Object.entries(PROJECT_FILES).map(([cap, p]) => `${cap}: { language: ${q(p.language)}, extensions: ${arr(served[p.language])}, covering: ${arr(p.covering)}, written: ${q(p.written)} }`).join(', ')} },`,
   '  /** What the server listed under the shipped arguments, and the runtime\'s whole vocabulary, as generated. */',
   `  reportedByServer: ${arr(server.names)},`,
   `  vocabulary: ${arr(vocabulary)},`,

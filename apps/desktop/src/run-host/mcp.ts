@@ -1,15 +1,15 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { compareCodePoints, millis, REDACTION_MARK, redact, toIsoUtc, type Clocks, type Millis } from '@rotaris/kernel';
 import type { McpHealth, McpListing, McpProvisioning, McpSecretRow, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
 import { resolveUserDirs, WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
 import {
-  AGENTS_FILE_NAME, classifyWorkspaceRoot, CODE_INTELLIGENCE_LANGUAGE_SERVERS, CODE_INTELLIGENCE_MARKER_SEGMENTS, CODE_INTELLIGENCE_MEMORY_LISTING_TOOL, CODE_INTELLIGENCE_SERVER_NAME,
-  CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceEdit, codeIntelligenceLanguageServerStore, codeIntelligenceWarmUp,
-  deriveSetupInvocation, DiagnosticSink, launchedProjectOf, mcpConfigurationForExecutionRoot, narrowAfterUpdate, renderMcpSection, resolvePersonaMcp,
-  type Diagnostic, type DropReason, type LoadedConfiguration, type McpResolvedServer, type PersonaMcpSurface,
+  AGENTS_FILE_NAME, classifyWorkspaceRoot, CODE_INTELLIGENCE_LANGUAGE_SERVERS, CODE_INTELLIGENCE_MARKER_SEGMENTS, CODE_INTELLIGENCE_MEMORY_LISTING_TOOL, CODE_INTELLIGENCE_PROJECT_FILE_BYTES,
+  CODE_INTELLIGENCE_PROJECT_FILE_NAMES, CODE_INTELLIGENCE_SERVER_NAME, CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceEdit, codeIntelligenceLanguageServerStore, codeIntelligenceProjectFile,
+  codeIntelligenceWarmUp, deriveSetupInvocation, DiagnosticSink, launchedProjectOf, mcpConfigurationForExecutionRoot, narrowAfterUpdate, renderMcpSection, resolvePersonaMcp,
+  type CodeIntelligenceProjectFile, type Diagnostic, type DropReason, type LoadedConfiguration, type McpResolvedServer, type PersonaMcpSurface,
 } from '@rotaris/config';
-import { advertisedSchemaCheck, errorObservation, INTERRUPTED_FAILURE_KIND, observation, observeReach, WriteJournal, type AdvertisedSchemaCheck, type ToolExecutor } from '@rotaris/agent-tools';
+import { advertisedSchemaCheck, errorObservation, INTERRUPTED_FAILURE_KIND, observation, observeReach, realPathOf, WriteJournal, type AdvertisedSchemaCheck, type ToolExecutor } from '@rotaris/agent-tools';
 import type { McpGrantEvidence, SessionWriter } from '@rotaris/engine';
 import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, runSetupSteps, SETUP_SHUTDOWN_GRACE_MS, SessionConnections, ToolDiscovery, type Connected, type McpLog, type ServerDescription } from '@rotaris/mcp';
 
@@ -118,6 +118,26 @@ export function workspaceContainsCode(root: string, agentsFile: string): boolean
   return classifyWorkspaceRoot(root, agentsFile) === 'code';
 }
 
+/**
+ * PD-MCP-004 revision 2 (OQ-362): the name under which the run host notes its project file's placements and removals in OQ-245's
+ * write journal. No agent can bear it — an agent's name never holds a NUL — so `WriteJournal.since` reads every one of those notes as
+ * another's, and every observation whose window holds one leaves the path out, the renaming child's own included.
+ */
+const PROJECT_FILE_WRITER = '\u0000rotaris:pd-mcp-004:project-file';
+
+/** One rename's keep of the product's project file at a root: the per-root count's key and the file's path, both as `realPathOf` spells them. */
+interface ProjectFileHold { readonly root: string; readonly path: string }
+
+/** A regular file stands at `path` (a symbolic link to one counts); a directory of that name does not, and an unreadable entry does not. */
+function isFile(path: string): boolean {
+  try { return statSync(path, { throwIfNoEntry: false })?.isFile() === true; } catch { return false; }
+}
+
+/** The file at `path` holds exactly the product's bytes; false for no file, another file, or one that cannot be read. */
+function holdsProductBytes(path: string): boolean {
+  try { return readFileSync(path, 'utf8') === CODE_INTELLIGENCE_PROJECT_FILE_BYTES; } catch { return false; }
+}
+
 export class McpHost {
   readonly discovery: ToolDiscovery;
   readonly probe: HealthProbe;
@@ -146,6 +166,13 @@ export class McpHost {
    * native write that returned `ok`), so an observed cross-file EDIT call leaves out what another agent wrote meanwhile.
    */
   readonly writes = new WriteJournal();
+  /**
+   * PD-MCP-004 revision 2 (OQ-362), "one file per root": per project root (as `realPathOf` spells it), the symbol renames that keep
+   * the product's project file there now. Process-wide — one run host per instance, and every session's executors share it — so
+   * renames overlapping at one root share one file whichever session they belong to: the first places it, each keeps it, and the
+   * last to end removes it.
+   */
+  private readonly projectFileHolds = new Map<string, number>();
 
   constructor(private readonly deps: McpHostDeps) {
     // `debug` reached the log as `info` here, so a child's stderr burst was indistinguishable from the product's
@@ -227,6 +254,9 @@ export class McpHost {
    * and awaited by the first tool port's `ready()`. Memoised per configuration version and override version.
    */
   prepare(cfg: LoadedConfiguration, workspaceRoot: string): Promise<void> {
+    // PD-MCP-004 revision 2 (OQ-362), "a file left behind": at each run start at a root — every caller of this, outside the memo
+    // below — the product's project file standing there with no rename keeping it is removed.
+    this.removeLeftoverProjectFile(workspaceRoot);
     const key = `${workspaceRoot}|${this.configurationVersion}|${this.overrideVersion}`;
     const known = this.preparing.get(key);
     if (known) return known;
@@ -369,6 +399,7 @@ export class McpHost {
             const started = this.deps.clocks.monotonic.now();
             const timedOut = () => errorObservation(`MCP server '${server.name}' did not answer '${tool.callable}' within its allowance of ${timeoutMs / 1_000} s; the call failed and was not retried (REQ-MCP-003).`, { failureKind: 'timeout' });
             const cancelled = () => errorObservation(`The call to '${tool.callable}' on MCP server '${server.name}' was cancelled by the run before it completed; it was not retried.`, { failureKind: INTERRUPTED_FAILURE_KIND });
+            let projectFile: ProjectFileHold | null = null;
             try {
               // PD-MCP-002: REQ-MCP-070's `lsp_init` names the root this port's run executes in.
               const c = await connections.connect(server.name, description, workspaceRoot);
@@ -377,7 +408,7 @@ export class McpHost {
                * PD-MCP-004 (OQ-273, ruled 2026-10-13 under R-072): the bundled server's symbol rename is preceded by its
                * referencing-symbol search of the same symbol and file, whose answer is discarded — the pinned runtime answered
                * a rename before its language server had loaded the project, and renamed the declaring file alone
-               * (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+               * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
                * Asked by the reported name, so a `tool_name_map` rename (REQ-MCP-005) is still warmed, and of this server alone.
                * The search is the run host's own request, as REQ-MCP-070's and REQ-MCP-071's are: no grant applies to it, and it
                * writes no record, total or notice. The pair is held to the rename's one allowance, measured from `started`: the
@@ -385,10 +416,18 @@ export class McpHost {
                * forwarded as the model made it (OQ-273's "what the build proceeds under", kept there as the falsified reading).
                * The search helps only where a `tsconfig.json` or `jsconfig.json` covers the files: with none, the language server
                * holds the open files alone, the search answers nothing and the rename still stays in the declaring file (the live
-               * `rename` scenario at 3c03287; the note above, reopened 2026-10-15). What to do there is OQ-362, open.
+               * `rename` scenario at 3c03287; the note above, reopened 2026-10-15). Since PD-MCP-004 revision 2 (OQ-362, ruled
+               * 2026-10-20 under R-072), clause 5, a rename whose declaring file the runtime serves with its TypeScript language,
+               * which no project file covers up to this executor's root, is given a `jsconfig.json` of the product's own at that
+               * root before the search (`holdProjectFile`), kept while the search and the rename are answered and removed in the
+               * `finally` below, before the reach observation looks again — whatever ended the call. Measured over the bundled
+               * runtime, the file placed inside a live server session made the search name the importers and the rename reach
+               * them. The reading this replaces, kept beside it: "What to do there is OQ-362, open."
                */
               let allowance: Millis = timeoutMs;
               const warmUp = server.name === CODE_INTELLIGENCE_SERVER_NAME ? codeIntelligenceWarmUp(tool.reported, a as Record<string, unknown>) : null;
+              const placing = server.name === CODE_INTELLIGENCE_SERVER_NAME ? codeIntelligenceProjectFile(tool.reported, a as Record<string, unknown>) : null;
+              if (placing !== null) projectFile = this.holdProjectFile(workspaceRoot, placing, `the symbol rename '${tool.callable}' on MCP server '${server.name}'`);
               if (warmUp !== null) {
                 try {
                   // Quiet (clause 3): a transport the search loses raises no unreachable notice; the rename, sent next, is the call that may.
@@ -423,12 +462,122 @@ export class McpHost {
               // `execution_error` and filed a `tool_error` warning.
               if (tctx.signal.aborted) return cancelled();
               return errorObservation(`The call to '${tool.callable}' on MCP server '${server.name}' failed: ${redact(text)}`, { failureKind: 'execution_error' });
+            } finally {
+              // PD-MCP-004 revision 2: inside the observed call, so the file is gone before `observeReach` takes its second look.
+              if (projectFile !== null) this.releaseProjectFile(projectFile);
             }
           }),
         } as ToolExecutor);
       }
     }
     return out;
+  }
+
+  // ---- PD-MCP-004 revision 2 (OQ-362): the product's project file for a rename no project file covers --------------
+
+  /**
+   * Clause 5's decision for one symbol rename whose declaring file the runtime serves with its TypeScript language (`spec`, from
+   * `codeIntelligenceProjectFile`), at `workspaceRoot` — the executor's root, the one its observation walks: REQ-MCP-034's bound
+   * root, an isolated run's tree root included. Answers the keep to release when the call ends, or null when the clause does not
+   * apply or the file could not be placed. Synchronous from the count's read to its write, so no other call of this process can
+   * come between them. In order:
+   *
+   * 0. a declaring file named by an absolute path, or one that resolves outside the root, is not this clause's case;
+   * 1. a root whose count is above 0 keeps the file standing there: the count goes up;
+   * 2. a file at the root that holds the product's bytes, which no rename keeps (a run host that ended during a rename, a removal
+   *    that failed), is adopted: the count becomes 1, and this rename removes it when it ends;
+   * 3. a covering name (`tsconfig.json`, `jsconfig.json`) standing as a file in the declaring file's directory or any directory up
+   *    to and including the root — none above it — means the person's own configuration decides, and nothing is placed;
+   * 4. otherwise the file is created exclusively (`wx`, so a file of that name is never overwritten) with the product's bytes, and
+   *    the count becomes 1. A create that fails is one `warn` line, and clause 2 proceeds as it did before revision 2.
+   *
+   * Every placement (adoptions included) is noted in the write journal under `PROJECT_FILE_WRITER` and written to the log at
+   * `info`; nothing else records it.
+   */
+  private holdProjectFile(workspaceRoot: string, spec: CodeIntelligenceProjectFile, what: string): ProjectFileHold | null {
+    if (isAbsolute(spec.relativePath)) return null;
+    const root = realPathOf(workspaceRoot);
+    const declaring = resolve(root, spec.relativePath);
+    const inside = relative(root, declaring);
+    if (inside === '' || inside === '..' || inside.startsWith(`..${sep}`) || isAbsolute(inside)) return null;
+    const path = join(root, spec.written);
+    const held = this.projectFileHolds.get(root) ?? 0;
+    if (held > 0) {
+      this.projectFileHolds.set(root, held + 1);
+      this.deps.log(`mcp: ${what} keeps the product's project file ${path} beside ${held} rename(s) under way at this root (PD-MCP-004 revision 2)`, 'debug');
+      return { root, path };
+    }
+    if (holdsProductBytes(path)) {
+      this.projectFileHolds.set(root, 1);
+      this.writes.note(PROJECT_FILE_WRITER, [path]);
+      this.deps.log(`mcp: adopted the product's project file ${path}, which stood at the root with no rename keeping it, for ${what}; it is removed when the rename has answered (PD-MCP-004 revision 2)`);
+      return { root, path };
+    }
+    for (let dir = dirname(declaring); ; dir = dirname(dir)) {
+      if (spec.covering.some((name) => isFile(join(dir, name)))) return null;
+      if (dir === root || dirname(dir) === dir) break;
+    }
+    try {
+      writeFileSync(path, CODE_INTELLIGENCE_PROJECT_FILE_BYTES, { flag: 'wx' });
+    } catch (cause) {
+      this.deps.log(`mcp: the product's project file ${path} could not be placed for ${what} (${redact(String(cause instanceof Error ? cause.message : cause))}); the reference search and the rename are sent without it (PD-MCP-004 revision 2)`, 'warn');
+      return null;
+    }
+    this.projectFileHolds.set(root, 1);
+    this.writes.note(PROJECT_FILE_WRITER, [path]);
+    this.deps.log(`mcp: placed the product's project file ${path} for ${what}: no ${spec.covering.join(' or ')} covers ${spec.relativePath}; it is removed when the rename has answered (PD-MCP-004 revision 2)`);
+    return { root, path };
+  }
+
+  /** The end of one rename's keep: the count goes down, and at zero the file is removed while it still holds the product's bytes. */
+  private releaseProjectFile(hold: ProjectFileHold): void {
+    const left = (this.projectFileHolds.get(hold.root) ?? 1) - 1;
+    if (left > 0) { this.projectFileHolds.set(hold.root, left); return; }
+    this.projectFileHolds.delete(hold.root);
+    this.removeProjectFile(hold.path, 'once the rename had ended');
+  }
+
+  /**
+   * Removes the product's project file at `path` only while its bytes are the product's: a file whose bytes differ is left where it
+   * stands, a file already gone is said so, and a removal that fails waits for the next run start or rename at the root — each one
+   * `warn` line. A removal is noted in the write journal under `PROJECT_FILE_WRITER` and written to the log at `info`.
+   */
+  private removeProjectFile(path: string, when: string): void {
+    let bytes: string;
+    try {
+      bytes = readFileSync(path, 'utf8');
+    } catch (cause) {
+      const gone = (cause as NodeJS.ErrnoException | undefined)?.code === 'ENOENT';
+      this.deps.log(gone
+        ? `mcp: the product's project file ${path} was gone ${when}; nothing was removed (PD-MCP-004 revision 2)`
+        : `mcp: the product's project file ${path} could not be read ${when} (${redact(String(cause instanceof Error ? cause.message : cause))}), so it was left where it stands (PD-MCP-004 revision 2)`, 'warn');
+      return;
+    }
+    if (bytes !== CODE_INTELLIGENCE_PROJECT_FILE_BYTES) {
+      this.deps.log(`mcp: the product's project file ${path} no longer held the product's bytes ${when}, so it was left where it stands (PD-MCP-004 revision 2)`, 'warn');
+      return;
+    }
+    try {
+      unlinkSync(path);
+    } catch (cause) {
+      this.deps.log(`mcp: the product's project file ${path} could not be removed ${when} (${redact(String(cause instanceof Error ? cause.message : cause))}); it is removed at the next run start or rename at this root (PD-MCP-004 revision 2)`, 'warn');
+      return;
+    }
+    this.writes.note(PROJECT_FILE_WRITER, [path]);
+    this.deps.log(`mcp: removed the product's project file ${path} ${when} (PD-MCP-004 revision 2)`);
+  }
+
+  /**
+   * "A file left behind" at a run start (`prepare`): the product's project file standing at the root with no rename keeping it — the
+   * run host ended during a rename, or a removal failed — is removed. A file of that name with other bytes is a person's and is left.
+   */
+  private removeLeftoverProjectFile(workspaceRoot: string): void {
+    const root = realPathOf(workspaceRoot);
+    if ((this.projectFileHolds.get(root) ?? 0) > 0) return;
+    for (const name of CODE_INTELLIGENCE_PROJECT_FILE_NAMES) {
+      const path = join(root, name);
+      if (holdsProductBytes(path)) this.removeProjectFile(path, 'at a run start, with no rename keeping it');
+    }
   }
 
   /** REQ-MCP-101 / REQ-TOOLS-010: the section from the same surface. */

@@ -55,7 +55,7 @@ changes applied") and no search row was written. Launches 1 to 10 and 12 were gr
 was red, as the proof's header says it stays until [OQ-362](../../architecture/open-questions.md#oq-362) is ruled and built.
 Only `src/cold-c.js` was renamed ("1 changes applied"), and the proof exited 1 at its end with that one held failure. That
 failure belongs to
-[the open rename note](../a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md),
+[the open rename note](a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md),
 not to this one.
 
 **Not changed here.** The sweep's setup recipe lives in the orchestrated-build skill's profile, which this bundle does not

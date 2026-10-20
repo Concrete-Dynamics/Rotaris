@@ -245,7 +245,11 @@ cross-file replacement), validated by generation — and `codeIntelligenceEdit` 
 reader, an edge it already had) and the run host's `mcp.ts` executor around a reach call. Since `PD-MCP-004` (OQ-273,
 2026-10-13) it also writes `warmUps` (the symbol rename warmed by the referencing-symbol search, with the two arguments they
 share), refused by `scripts/lib/code-intelligence-warm-ups.mjs` unless the server lists both tools with both arguments, and read
-by `codeIntelligenceWarmUp` for the run host's executor; no edge changed. `config/src/mcp/code-intelligence.ts`
+by `codeIntelligenceWarmUp` for the run host's executor; no edge changed. Since `PD-MCP-004` revision 2 (OQ-362, 2026-10-20) it
+also writes `projectFiles` (the symbol rename's project file: the runtime's `typescript` language with the extensions the runtime
+serves with it, the two names that count as a project file and the one the product writes), refused by the same module's
+`projectFileRefusals` unless the runtime names the language with an extension, and read by `codeIntelligenceProjectFile`, beside
+the bytes constant `CODE_INTELLIGENCE_PROJECT_FILE_BYTES`, for the run host's executor; no edge changed. `config/src/mcp/code-intelligence.ts`
 is the typed reader every consumer goes through (a test greps the tree for a runtime tool name anywhere else).
 **Edges unchanged**: `config` still imports nothing new; `mcp` gains `setup.ts` (REQ-MCP-099's step runner over
 `platform`'s spawn helper and the clock ports); the run host's `mcp.ts` reads `agent-tools`' gitignore reader for the

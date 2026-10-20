@@ -1425,12 +1425,17 @@ project read back with both files it changed, observed by the run host around th
 `agent-tools/src/tools/observe.ts`; OQ-245); and, since fin42 (N59), a refactorer's symbol rename across two TypeScript
 files through the runtime's TypeScript language server after a reference search, both files read back, the same rename with
 nothing before it — red until
-[the note](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
+[the note](../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
 it found was repaired (OQ-273): the pinned runtime renamed the declaring file alone; since fin43 (`PD-MCP-004`) the run host
 sends the reference search itself before every rename, writing no row, and the eleventh launch is green with both files renamed
 and no search row, `PD-MCP-004`'s acceptance gate, re-run on every pin change; since fin47 a thirteenth launch,
 `child-rename-cold-js`, makes the same cold rename in a JavaScript workspace with no `tsconfig.json` or `jsconfig.json`, the live
-run's shape, and is red there until [OQ-362](open-questions.md#oq-362) is ruled (the note reopened) — and a cross-file replacement renamed by
+run's shape, which was red there until [OQ-362](open-questions.md#oq-362) was ruled and built (the note reopened); since
+`PD-MCP-004` revision 2 (2026-10-20, loc1) the run host places a `jsconfig.json` of the product's own at the root for such a rename
+and removes it when the rename has answered, so launch 13 is green, joined by a fourteenth (`child-rename-opened-js`, a symbol
+overview of the declaring file first) and a fifteenth (`child-rename-cold-ts`, two TypeScript files and no `tsconfig.json`), each
+asserting the log's one placement and one removal and no project file left at the root, and launch 11 asserts none was written
+beside its `tsconfig.json`; launches 11, 13, 14 and 15 are re-run on every pin change — and a cross-file replacement renamed by
 the global configuration's `tool_name_map`, read back with both files (REQ-MCP-005). Evidence under
 `.proof/code-intel-proof/`. The runtime's home, which it keeps across runs, is the product's own on the running platform
 (`join(dataDirFor(local), 'code-intelligence')`, as `main/sentinel.ts` joins it) since 2026-09-29 (R-067; the Windows

@@ -7,7 +7,7 @@ import { builtInDefaults } from '../defaults.js';
 import {
   CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS, CODE_INTELLIGENCE_HOME_SEGMENT, CODE_INTELLIGENCE_LANGUAGE_SERVER_STORE, CODE_INTELLIGENCE_LANGUAGE_SERVERS,
   CODE_INTELLIGENCE_MANIFEST, CODE_INTELLIGENCE_MEMORY_GATE, CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceEdit,
-  codeIntelligenceEditPaths, codeIntelligenceLanguageServerStore, codeIntelligenceWarmUp,
+  codeIntelligenceEditPaths, codeIntelligenceLanguageServerStore, CODE_INTELLIGENCE_PROJECT_FILE_BYTES, codeIntelligenceProjectFile, codeIntelligenceWarmUp,
   deriveSetupInvocation, grantForTiers, hasIndexableExtension, memoriesBlockApplies, neverGrantNames, PROJECT_MEMORIES_BLOCK, tierNames,
 } from './code-intelligence.js';
 import { CODE_INTELLIGENCE_TOKEN, resolveCommand } from './commands.js';
@@ -287,5 +287,60 @@ describe('the warm-up before a symbol rename (PD-MCP-004, REQ-MCP-116)', () => {
       if (capability !== 'renameSymbol') expect(codeIntelligenceWarmUp(name, call)).toBeNull();
     }
     expect(codeIntelligenceWarmUp('renamed_by_the_user', call)).toBeNull();
+  });
+});
+
+/**
+ * PD-MCP-004 revision 2 (OQ-362, ruled 2026-10-20 under R-072): in a workspace no `tsconfig.json` or `jsconfig.json` covers, the
+ * TypeScript language server holds the open files alone, and a cold rename stayed in its declaring file after clause 2's search
+ * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). The run host places
+ * a `jsconfig.json` of the product's own at the project root for the search and the rename. The manifest records the clause by
+ * capability; the reader answers by the name the server reports, and only for a declaring file the runtime's TypeScript language
+ * serves.
+ */
+describe('the project file before a symbol rename (PD-MCP-004 revision 2, REQ-MCP-116, REQ-MCP-015)', () => {
+  const { read, edit } = CODE_INTELLIGENCE_MANIFEST.tiers;
+  const at = CODE_INTELLIGENCE_MANIFEST.editArguments.renameSymbol.path;
+  const call = (path: unknown) => ({ name_path: 'remaining', [at]: path, new_name: 'countRemaining' });
+
+  it('records the rename\'s project file by capability: the runtime\'s TypeScript language, its extensions, the two covering names and the one written', () => {
+    const spec = CODE_INTELLIGENCE_MANIFEST.projectFiles.renameSymbol;
+    expect(Object.keys(CODE_INTELLIGENCE_MANIFEST.projectFiles)).toEqual(['renameSymbol']);
+    expect(spec.language).toBe('typescript');
+    expect(CODE_INTELLIGENCE_LANGUAGE_SERVERS.map((l) => l.language)).toContain(spec.language);
+    for (const ext of ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs']) expect(spec.extensions).toContain(ext);
+    expect(spec.extensions).not.toContain('.py');
+    expect(spec.covering).toEqual(['tsconfig.json', 'jsconfig.json']);
+    expect(spec.covering).toContain(spec.written);
+  });
+
+  it('answers the rename by its reported name for a .js, .jsx or .ts declaring file, with the covering names and the name written', () => {
+    for (const path of ['src/todos.js', 'src/App.jsx', 'src/cold-a.ts', 'src\nested\deep.ts', 'todos.js']) {
+      expect(codeIntelligenceProjectFile(edit.renameSymbol, call(path)), path).toEqual({ relativePath: path, covering: ['tsconfig.json', 'jsconfig.json'], written: 'jsconfig.json' });
+    }
+  });
+
+  it('is null for a .py declaring file, another EDIT tool, the search, an unknown name and a path that is not a string', () => {
+    expect(codeIntelligenceProjectFile(edit.renameSymbol, call('src/tool.py'))).toBeNull();
+    expect(codeIntelligenceProjectFile(edit.renameSymbol, call('README'))).toBeNull();
+    expect(codeIntelligenceProjectFile(edit.renameSymbol, call('src/.js'))).toBeNull();
+    for (const [capability, name] of Object.entries(edit)) if (capability !== 'renameSymbol') expect(codeIntelligenceProjectFile(name, call('src/todos.js')), name).toBeNull();
+    expect(codeIntelligenceProjectFile(read.referencingSymbols, call('src/todos.js'))).toBeNull();
+    expect(codeIntelligenceProjectFile('renamed_by_the_user', call('src/todos.js'))).toBeNull();
+    expect(codeIntelligenceProjectFile(edit.renameSymbol, call(7))).toBeNull();
+    expect(codeIntelligenceProjectFile(edit.renameSymbol, { name_path: 'remaining' })).toBeNull();
+    expect(codeIntelligenceProjectFile(edit.renameSymbol, null)).toBeNull();
+  });
+
+  it('the product\'s bytes: one comment line naming Rotaris and saying the file is temporary, written for one rename and safe to delete, then {} — LF only', () => {
+    const bytes = CODE_INTELLIGENCE_PROJECT_FILE_BYTES;
+    expect(bytes).not.toContain('\r');
+    const lines = bytes.split('\n');
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatch(/^\/\/ /);
+    for (const word of ['Rotaris', 'temporary', 'one code-intelligence symbol rename', 'safe to delete']) expect(lines[0]).toContain(word);
+    expect(lines.slice(1)).toEqual(['{}', '']);
+    // The language server reads a project file as JSON with comments: without its comment line it is the empty object.
+    expect(JSON.parse(lines.slice(1).join('\n'))).toEqual({});
   });
 });

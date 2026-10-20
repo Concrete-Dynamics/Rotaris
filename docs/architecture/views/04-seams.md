@@ -218,7 +218,12 @@ Invariants:
   rename go through no gate and write no record, total or notice. A new one of the last kind is a `warmUps` entry of the binding
   manifest, keyed by capability and checked by `manifest.mjs` (`warmUpRefusals`, `scripts/lib/code-intelligence-warm-ups.mjs`:
   both tools listed, both arguments in both schemas), resolved by `codeIntelligenceWarmUp` and sent by the MCP executor in
-  `run-host/mcp.ts` inside the warmed call's own allowance; no file restates the runtime's argument names.
+  `run-host/mcp.ts` inside the warmed call's own allowance; no file restates the runtime's argument names. The one file the run
+  host writes into the workspace for such a call — since `PD-MCP-004` revision 2 (OQ-362), the `jsconfig.json` of the product's
+  own for a symbol rename no project file covers — follows the same path: a `projectFiles` entry of the manifest, keyed by
+  capability, its language's extensions read from the runtime (`projectFileRefusals` beside `warmUpRefusals`: a capability of the
+  tiers, a language the runtime names with an extension), resolved by `codeIntelligenceProjectFile`, placed and removed by the
+  executor inside the call's observation and noted in `McpHost.writes` under a name no agent bears, so no observation lists it.
 - **The gate's refusals before the schema parse run in one order**: REQ-ORCH-153's plan gate, then OQ-213's todo list
   owed before a task's second work item (`GateDeps.todoList`, the entry port's only, where its resolved set holds `todo`).
   A tool whose `DECLARATIONS` entry writes workspace files or runs commands is a **work item** on a direct-work grant

@@ -10010,6 +10010,8 @@ sentences are REQ-SHELL-041's word for word; the file-access pair is REQ-WORKSPA
 
 **What a ruling decides.** Which domain's statement stands for each of the five, and an amendment to the other.
 
+*2026-10-21 (the Windows ARM64 session's D2): the ruled strip measured on Windows — its workspace link opened Explorer on the workspace in 622–1,402 ms against the 5 s bound, and logged the opening (PD-WORKSPACE-007, "As built").*
+
 **OQ-192 — The sessions card's rows carry a token label, a duration label and a detail caption, which the listing
 record's closed field set does not hold.** *(REQ-MONITOR-171, each sessions-card row carries "a detail caption, … the
 branch, a token label, and a duration label"; REQ-SESSION-030, the listing record "MUST hold exactly these fields" and

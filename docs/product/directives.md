@@ -5825,7 +5825,7 @@ the filter `{ name: 'Skill document', extensions: ['md'] }` (`apps/desktop/src/m
 dialog therefore offers every Markdown file, `README.md` included. The name check is `loadManualSkill`'s
 (`packages/config/src/skills/manual.ts`), pinned by `packages/config/src/skills/skills.test.ts` (`/ws/notes.md` refused
 with `skillPathNotAcceptable`). OQ-59's own entry described the filter as "filtered to `SKILL.md`"; the build never had
-that, and this text states what it has.
+that, and this text states what it has. *On Windows (2026-10-21, the Windows ARM64 session's D2) the real dialog showed exactly that: "Load a skill file", opening on the workspace, one entry "Skill document", `README` listed and `notes.txt` not; `README.md` was then refused by the name check, and a lower-case `skill.md` was refused too ([the note](../defects/a-hand-loaded-skill-md-in-lower-case-is-refused-on-a-case-insensitive-file-system.md)).*
 
 **Why, and what it costs.** OQ-59: REQ-WORKSPACE-151 asks for a chooser "restricted to selecting a `SKILL.md` file or a
 directory containing one", which no platform dialog but macOS's offers, and REQ-SHELL-164 holds the product answerable only
@@ -7013,7 +7013,7 @@ their conditions, the mode flag's value vocabulary, the file-access pair's fixed
 both its tooltip and its accessible description.
 
 **As built.** `workspace.openFolder` (`apps/desktop/src/main/commands/workspace.ts`, `apps/desktop/src/main/open-folder.ts`),
-`apps/desktop/src/renderer/strip-facts.ts` and `statusStripSafetyFlags` (`packages/ui/src/composer.ts`).
+`apps/desktop/src/renderer/strip-facts.ts` and `statusStripSafetyFlags` (`packages/ui/src/composer.ts`). *On Windows (2026-10-21, the Windows ARM64 session's D2, the window 1,440 CSS px wide): the strip's workspace link opened an Explorer window on the workspace 653, 622 and 1,402 ms after the click, against the 5 s bound, and main logged "opened the workspace folder: <path>". The negative case (the folder renamed away) was not run.*
 
 **Why, and what it costs.** OQ-191: the two domains disagree in five statements, two of them opposite claims (a silent
 failure against a reported one, the values on screen against the last saved values; the product's runs read the saved

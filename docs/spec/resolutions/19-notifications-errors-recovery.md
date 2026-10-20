@@ -7,6 +7,24 @@ status: resolved
 
 # Resolution Record — Domain 19, Notifications, Error Handling, and Recovery
 
+> ## Amendment, 2026-10-20 — disposition 27's signature, and the key ordering that stands (OQ-364)
+>
+> Disposition **27** below is recorded as **replaced**. On 2026-08-31 (`eb31f379`) `REQ-NOTIFY-108` was rewritten to
+> defer to `REQ-ORCH-101`, which is the product's single definition of when two actions are the same action, and to state
+> no comparison rule of its own. The disposition's signature collapsed whitespace runs, trimmed string values and cut every
+> string at 200 characters; each of those disregards part of an action's content, and they are what `REQ-NOTIFY-108` now
+> forbids ("no truncation and no normalisation of the compared text may make them the same").
+>
+> Its **key ordering** stands, as `REQ-ORCH-101`'s reading under OQ-364: the arguments are compared as one JSON value,
+> and the order in which an object's members were written is no part of it, so the comparison is independent of
+> serialisation order as the disposition said. That reading is recorded in a dated note beneath `REQ-ORCH-101`, whose
+> text is unchanged, and `REQ-NOTIFY-108`'s "no normalisation of the compared text" is read the same way.
+>
+> **Why this is a note and not a directive.** The clauses written on 2026-08-31 forbid the cut, the collapse and the
+> trim, and nothing in the round's text addresses key order; an encoding that keeps every member whole makes no two
+> different actions the same. Ruled under the owner's delegation ([R-072](../../product/requests.md#r-072)) with no directive; the ruling is in
+> [`open-questions.md`](../../architecture/open-questions.md#oq-364).
+
 This record disposes of every open question raised in the draft of
 [`../19-notifications-errors-recovery.md`](../19-notifications-errors-recovery.md) (requirement
 prefix `REQ-NOTIFY`). The body of that specification has been amended so that each decision below is

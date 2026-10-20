@@ -7,6 +7,25 @@ status: resolved
 
 # Resolution Record — Domain 01, Multi-Agent Run Orchestration
 
+> ## Amendment, 2026-10-20 — the same action compares the arguments as one JSON value (OQ-364)
+>
+> `REQ-ORCH-101` gains a dated note beneath its text, which is kept unchanged. "The whole of their arguments" is their
+> value read as JSON: every member of every object at every depth, arrays in order, nothing trimmed, cased, cut or
+> disregarded. The order in which an object's members were written is no part of that value, so one argument object sent
+> with its keys in another order is the same action, and two calls whose values differ anywhere stay two actions, the two
+> long edits differing near their end among them. Arguments that do not parse as JSON are compared whole as text and never
+> equal a parsed value. The repetition trigger, the cycle trigger and `PD-ORCH-016`'s raw-count evidence take the one
+> comparison together; the thresholds of `REQ-ORCH-100`, the fallbacks of `REQ-ORCH-104`, the comparison of assistant
+> messages and the text forwarded to a tool are unchanged.
+>
+> **Why this is a note and not a directive.** The requirement's ban on "a normalized rendering" states its own reason:
+> each such rendering "makes the two long edits above compare equal". An encoding that keeps every member whole cannot
+> make two different values equal, so the reading builds `REQ-ORCH-101` as written and departs from nothing; the build's
+> comparison of the text in its emitted key order was the defect
+> [`the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies`](../../defects/the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md)
+> records. Ruled under the owner's delegation ([R-072](../../product/requests.md#r-072)) with no directive; the ruling, its
+> evidence and its reopening condition are in [`open-questions.md`](../../architecture/open-questions.md#oq-364).
+
 > ## Amendment, 2026-09-14 — one persisted run vocabulary
 >
 > The two-value `task` / `maintenance` clause in disposition 31 and REQ-ORCH-137 is superseded by

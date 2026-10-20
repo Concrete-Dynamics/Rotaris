@@ -267,6 +267,14 @@ A run takes one top-level user task and executes it through an autonomous, itera
   > and the sameness rule above are untouched. The directive narrows *when* they are evaluated: no event of a
   > run held at REQ-ORCH-153's plan gate is an observed event for the entry agent, because the hold withholds
   > every writing tool and the reading a plan requires trips trigger (1) on the gate's own side effect.
+
+  > *Noted 2026-10-20 ([OQ-364](../architecture/open-questions.md#oq-364), ruled under
+  > [R-072](../product/requests.md#r-072)):* "the whole of their arguments" is their value read as JSON — every member of
+  > every object at every depth, arrays in order, nothing trimmed, cased, cut or disregarded. The order in which an object's
+  > members were written is no part of it, so one argument object sent with its keys in another order is the same action.
+  > The normalized rendering this requirement forbids is one that disregards part of that value, as its stated reason says;
+  > an encoding that keeps every member whole is not one. Arguments that do not parse as JSON are compared whole as text.
+  > REQ-NOTIFY-108's "no normalisation of the compared text" is read the same way. The requirement's text is unchanged.
 - **REQ-ORCH-102** — On trigger, the supervisor MUST snapshot the pending activation, increment the consecutive-activation counter, and pause the child. If the counter exceeds 2 (the third activation without an intervening user instruction), it MUST escalate regardless of classification, with an escalation signal carrying session id, activation count, and a repeated-loop reason. Otherwise an LLM classifier judges whether a loop exists over the recent transcript tail (bounded by the event window and character cap).
 - **REQ-ORCH-103** — The classifier contract is JSON `{loop_detected: bool, reason, corrective_message}` where the corrective message is at most 90 words, in natural user voice, and redirects to a different concrete approach or asks for a viability assessment, drawing on the transcript (dynamic, never templated). `loop_detected = false` MUST result in an invisible no-op resume.
 - **REQ-ORCH-104** — Classifier failure or timeout MUST fall back on evidence: for repetition/cycle triggers, always declare a loop with a deterministic "pause and reassess" message naming the circled tool and a path anchor; for raw-count triggers, declare a loop only from repeated identical assistant messages (last 3 normalized-equal) or ≥ 4 consecutive same-tool calls — never from counts alone; for stuck-mode triggers, ALWAYS recover with a deterministic corrective message, overriding even a classifier that declined recovery.

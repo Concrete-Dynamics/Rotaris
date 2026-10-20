@@ -92,6 +92,13 @@ export interface ForegroundResult {
    * respawned it, re-applied PD-TOOLS-001's snapshot, and ran in the fresh shell; what the restore did.
    */
   readonly respawned?: RestoreOutcome;
+  /**
+   * REQ-SHELL-092: the terminal window killed the command — while it ran (`'during'`), or during the first call's handshake,
+   * before it was written, so it never ran (`'before'`). The process tree was ended and the session restarted with
+   * PD-TOOLS-001's snapshot re-applied, as on a hard timeout (`restore`); the call carries exit −1 (REQ-TOOLS-179: killed)
+   * either way. Absent on every other result.
+   */
+  readonly killed?: 'before' | 'during';
 }
 
 /**
@@ -190,6 +197,8 @@ export const REPLACED_WATCH_MS = 200;
 export const REPLACED_ERROR = 'the command replaced the session\'s shell';
 /** REQ-SHELL-092: the error a call carries when the user killed it from the terminal window. */
 const KILLED_ERROR = 'the command was killed from the terminal window';
+/** REQ-SHELL-092: the error a call carries when the window's kill landed before its command was written to the shell. */
+const KILLED_BEFORE_ERROR = 'the command was killed from the terminal window before it was written to the shell, so it never ran';
 /** The error a call carries when its run cancelled it (the tool context's signal). */
 const CANCELLED_ERROR = 'the call was cancelled';
 /**
@@ -1134,8 +1143,9 @@ export class ForegroundSession {
   }
   /**
    * REQ-SHELL-092 / REQ-TOOLS-128: the user's kill. The process tree behind the running command is terminated and
-   * the session restarted — the same reset a hard timeout performs (REQ-TOOLS-099) — and the running call returns
-   * exit −1 (REQ-TOOLS-179: killed) with the reason stated. False when nothing is running.
+   * the session restarted — the same reset a hard timeout performs (REQ-TOOLS-099), PD-TOOLS-001's snapshot re-applied
+   * after it by the call — and the running call returns exit −1 (REQ-TOOLS-179: killed) with the reason, the loss and the
+   * restore stated. False when nothing is running.
    */
   killActive(): boolean {
     const a = this.active;
@@ -1473,8 +1483,10 @@ export class ForegroundSession {
     if (this.deps.backend.kind === 'posix' && this.shellIdentity === null && this.pausedCommand === null && !opts.signal?.aborted && processIdentity(p.pid) !== null) {
       const trip = await this.runRaw(':', SNAPSHOT_TIMEOUT_MS, opts.signal).catch(() => null);
       if (trip?.cut?.kind === 'kill') {
-        // `killActive` has ended the tree and restarted the session; the command was never written.
-        return withRespawn({ output: '', exitCode: -1, timedOut: false, softPaused: false, killStatus: trip.cut.reset ? 'session_reset' : 'reset_failed', error: KILLED_ERROR, sessionReinitialized: reinit, truncated: false, restore: { status: 'none' } });
+        // `killActive` has ended the tree and restarted the session; the command was never written. PD-TOOLS-001's snapshot
+        // is re-applied as on every other reset path (`a-kill-from-the-terminal-window-resets-the-session-without-restoring-its-state`).
+        const restore: RestoreOutcome = trip.cut.reset ? await this.restoreState() : { status: 'failed' };
+        return withRespawn({ output: '', exitCode: -1, timedOut: false, softPaused: false, killStatus: trip.cut.reset ? 'session_reset' : 'reset_failed', error: KILLED_BEFORE_ERROR, sessionReinitialized: reinit, truncated: false, restore, killed: 'before' });
       }
       p = this.ensure();
     }
@@ -1692,8 +1704,16 @@ export class ForegroundSession {
       return finish({ exitCode: -1, timedOut: false, softPaused: true, killStatus: null, error: null });
     }
     if (outcome.kind === 'kill') {
-      // Part AL / REQ-SHELL-092: killed from the terminal window; the tree is gone and the session was restarted by `killActive`.
-      const r = finish({ exitCode: -1, timedOut: false, softPaused: false, killStatus: outcome.reset ? 'session_reset' : 'reset_failed', error: KILLED_ERROR });
+      // Part AL / REQ-SHELL-092: killed from the terminal window; the tree is gone and the session was restarted by `killActive`
+      // — the reset a hard timeout performs (REQ-TOOLS-099), and so PD-TOOLS-001's snapshot is re-applied after it, as on
+      // every other reset path, and the outcome names what was restored.
+      // FALSIFIED, kept beside its replacement (the Windows ARM64 session's B7, 2026-10-15): "the call is finished; the
+      // session was restarted by `killActive`" — and nothing more. The kill was the one reset path that re-applied nothing:
+      // after `$env:ROTARIS_KEPT = 'kept'` and a kill from the window, the next call read the variable empty and stood in the
+      // spawn directory, while the kill's detail named neither the loss nor a restore
+      // (docs/defects/fixed/a-kill-from-the-terminal-window-resets-the-session-without-restoring-its-state.md).
+      const restore: RestoreOutcome = outcome.reset ? await this.restoreState() : { status: 'failed' };
+      const r: ForegroundResult = { ...finish({ exitCode: -1, timedOut: false, softPaused: false, killStatus: outcome.reset ? 'session_reset' : 'reset_failed', error: KILLED_ERROR }), restore, killed: 'during' };
       screen.dispose();
       return r;
     }

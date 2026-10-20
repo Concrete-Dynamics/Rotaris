@@ -1131,6 +1131,30 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(existsSync(marker)).toBe(false);
     } finally { await m.dispose(); rmSync(dir, { recursive: true, force: true }); }
   }, 30_000);
+  // docs/defects/fixed/a-kill-from-the-terminal-window-resets-the-session-without-restoring-its-state.md: every reset path
+  // re-applied PD-TOOLS-001's snapshot except the window's kill, which only finished the call; the next call read the
+  // variable empty and stood in the spawn directory, and the kill's detail named no restore and no loss.
+  it('PD-TOOLS-001, REQ-SHELL-092: a kill from the terminal window re-applies the directory and the exported variables, and the observation names the loss and the restore', async () => {
+    const { m, t } = await backendSession(shell!);
+    const sub = (PS ? realpathSync.native : realpathSync)(mkdtempSync(join(root, 'killed-running-')));
+    try {
+      expect(diag((await t.execute(args({ command: `${SH.setVar('ROTARIS_KILL_KEPT', 'kept')}; ${SH.cd(sub)}`, timeout: 15 }), ctx())).text)).toMatchObject({ exit_code: 0 });
+      setTimeout(() => { void m.streams.kill(foregroundStreamId('orchestrator')); }, 2_000);
+      const r = await t.execute(args({ command: `${SH.echo('before-kill')}; ${SH.sleep(20)}; ${SH.echo('late')}`, timeout: 30 }), ctx());
+      expect(diag(r.text)).toMatchObject({ exit_code: -1, failure_kind: 'execution_error', kill_status: 'session_reset' });
+      expect(r.text).toContain('killed from the terminal window');
+      // Before the repair: "Terminal execution failed before completion: the command was killed from the terminal window",
+      // and nothing more — no loss, no restore.
+      expect(String(diag(r.text)['detail'])).toContain('shell state (working directory, variables, aliases, background jobs) was lost');
+      expect(String(diag(r.text)['detail'])).toMatch(/The working directory and \d+ exported variables? were restored/);
+      expect(output(r.text)).toContain('before-kill');
+      expect(output(r.text)).not.toContain('late');
+      // The next call runs in the restarted session, says so, and finds the directory and the variable re-applied.
+      const next = await t.execute(args({ command: `${SH.bracketVar('ROTARIS_KILL_KEPT')}; ${SH.pwd()}`, timeout: 15 }), ctx());
+      expect(diag(next.text)).toMatchObject({ exit_code: 0, session_reinitialized: true });
+      expect((output(next.text) ?? '').split('\n').map((l) => l.trim())).toEqual(['[kept]', sub]);
+    } finally { await m.dispose(); }
+  }, 60_000);
   it.skipIf(PS)('PD-TOOLS-013 (OQ-226): a call its run cancels mid-command reads `interrupted`, names the restore and no timeout, and the next call runs in the restarted session', async () => {
     const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 20_000 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
     const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 20_000 });

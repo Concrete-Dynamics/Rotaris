@@ -488,6 +488,13 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
         detail = r.shellEnded === 'before'
           ? `Terminal execution failed before completion: ${r.error} (a soft-paused command ahead of it ended the shell), so the command never ran and has no exit code.${restarted}`
           : `Terminal execution failed before completion: ${r.error} (as \`exit\` or a signal to the shell does), so the command never returned and has no exit code.${restarted}`;
+      } else if (r.killed) {
+        // REQ-SHELL-092: the window's kill is the reset a hard timeout performs (REQ-TOOLS-099), so its detail states the loss
+        // as REQ-TOOLS-099 does and, beside it, what PD-TOOLS-001's restore re-applied. Until 2026-10-20 it read "Terminal
+        // execution failed before completion: the command was killed from the terminal window" and nothing more, while
+        // nothing had been restored either
+        // (docs/defects/fixed/a-kill-from-the-terminal-window-resets-the-session-without-restoring-its-state.md).
+        detail = `Terminal execution failed before completion: ${r.error}${r.killed === 'during' ? ', so it has no exit status of its own' : ''}; the terminal session was forcibly restarted to terminate the process tree, and shell state (working directory, variables, aliases, background jobs) was lost${r.killStatus === 'reset_failed' ? ' — restarting the session failed' : ''}.${restoreNote}`;
       } else if (r.error) {
         detail = `Terminal execution failed before completion: ${r.error}`;
       } else {

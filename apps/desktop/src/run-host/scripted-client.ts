@@ -748,6 +748,19 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         yield finished('other');
         return;
       }
+      // readreorder — OQ-364's proof (`part-h-proof`'s `loop-reordered` launch, REQ-ORCH-101): one `read_file` value,
+      // `{ path: 'README.md', offset: 1 }`, its keys written path first on two calls and offset first on the third, repeating
+      // (A, A, B) by this agent's position in its script. Never a strict alternation: the build before OQ-364 already read one
+      // as a width-2 cycle at the sixth call. Driven by `ROTARIS_SCRIPT=loop:readreorder:20`. Verification only.
+      if (step === 'readreorder' && (req.tools ?? []).some((t) => t.name === 'read_file')) {
+        const position = (calls[counterKey] ?? 1) - 1;
+        const argsText = position % 3 === 2 ? JSON.stringify({ offset: 1, path: 'README.md' }) : JSON.stringify({ path: 'README.md', offset: 1 });
+        yield ok<StreamPart>({ kind: 'text', delta: 'Calling read_file. ' });
+        yield ok<StreamPart>({ kind: 'tool-call', callId, name: 'read_file', argsDelta: argsText });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
+        yield finished('other');
+        return;
+      }
       // plan:<n> — PD-TOOLS-006 revision 6 (OQ-220): a todo list of n open items, which the delegations after it name in turn;
       // `done` completes every open item of the latest list, so REQ-ORCH-075 holds the task by none of them. Since PD-TOOLS-006
       // revision 7 (OQ-249) an admitted delegation marks its item IN_PROGRESS, and REQ-TOOLS-146 restored an IN_PROGRESS task

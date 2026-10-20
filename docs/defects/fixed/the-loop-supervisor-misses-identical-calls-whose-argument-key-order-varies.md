@@ -1,5 +1,18 @@
 ## The loop supervisor misses identical calls whose argument key order varies
 
+**Outcome: repaired 2026-10-20 by `loc1-supervisor` under [OQ-364](../../architecture/open-questions.md#oq-364)** (ruled
+2026-10-20 under R-072, no directive; a dated note beneath `REQ-ORCH-101`). A tool event's fingerprint in
+`packages/engine/src/run/supervisor.ts` is now the tool name and the whole argument **value**: `JSON.parse(args)` written out
+with every object's keys sorted at every depth, every member kept, arrays in order and strings quoted, tagged `v`; a text that
+does not parse (or nests past the stack) is compared whole as text, tagged `t`. It is computed once per call in `observe()`,
+and the repetition trigger, the cycle trigger and `PD-ORCH-016`'s raw-count evidence all read it. Pinned by
+`supervisor.test.ts`'s block "OQ-364: REQ-ORCH-101's same action compares the arguments as one JSON value" (five cases red on
+the build before, seven guards green before and after) and by `pnpm part-h-proof`'s `loop-reordered` launch (one
+`read_file` value in key orders A, A, B: no activation in 20 calls before, three activations — the first `repetition` — one
+`circuit_breaker_escalation` and `agent_session_aborted` after). Recorded in
+[ADR-0059](../../architecture/adr/0059-the-loop-supervisor-as-an-in-turn-observer.md) (decision 3 and its 2026-10-20 section).
+**Not measured:** a live run since the change (the default live run's `crlf` scenario).
+
 `REQ-ORCH-101` fires "repeated action" when the same action is observed four times in a row, and two actions are the same when their tool name and whole arguments are identical. The supervisor compares `tool\0<name>\0<args>`, where `<args>` is the text `JSON.stringify(part.input)` produced in the order the model emitted the keys. A model that sends one object with its keys in different orders therefore reads as different actions.
 
 Seen in the default live run at `cb6d1d5` (2026-10-15, self-hosted reasoning endpoint), scenario `crlf`, session `4dad81df`. A child made 18 failed `haet_edit` calls on one step of `greet.js` (ordinals 14 to 29, 31 and 38). Its argument objects alternated between `{path, content_hash, old_string, new_string}` and `{content_hash, new_string, old_string, path}`. Compared as emitted, the longest run of identical calls was 2; compared with sorted keys it was 5, twice (#14 to #18 and #23 to #27). The trigger should have fired at #17 and never fired: the pack holds no `loop_supervisor_activation` and no classifier request. The loop held the child 179 s of the scenario's 420 s wait, the run did not reach its result inside the wait, and the live run's two `crlf` FAILs ("the run reached its result inside the wait", "the run completed — paused (application_shutdown)") follow from it. On the same loop in the pack of 2026-10-14 04:30 the trigger fired and the run completed in 191 s.

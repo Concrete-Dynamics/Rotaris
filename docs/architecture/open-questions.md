@@ -16010,7 +16010,7 @@ REQ-NOTIFY-108, "no truncation and no normalisation of the compared text may mak
 threshold 4 and cycle threshold 3; REQ-ORCH-104 and [`PD-ORCH-016`](../product/directives.md#pd-orch-016), the classification
 a trigger leads to; ADR-0059, the supervisor as an in-turn observer. Raised 2026-10-20 by the host-independent finish (local
 session) from
-[`the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md`](../defects/the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md),
+[`the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md`](../defects/fixed/the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md),
 which asks for a question before code if REQ-NOTIFY-108 reads against comparing sorted keys; the session's range OQ-364 to
 OQ-399, its first number. **Ruled 2026-10-20.**)*
 
@@ -16067,7 +16067,7 @@ This builds REQ-ORCH-101 and REQ-NOTIFY-108 as written; it does not depart from 
 - **The clause replaced an older signature.** The closing round of 2026-08-31 (`eb31f379`) replaced a REQ-NOTIFY-108 signature that ordered keys, collapsed whitespace, trimmed strings and cut every string at 200 characters. Its disposition ([domain 19's resolution record](../spec/resolutions/19-notifications-errors-recovery.md), OQ 27) gave the 200-character cut as the signature's point, and gave key ordering a separate purpose: "independent of serialisation order". The cut, the collapse and the trim disregard content, and they are what the two clauses now forbid. Nothing in the round's text addresses key order.
 - **The build never compared the model's text.** The model client hands on `JSON.stringify(part.input)`, which is the SDK's parsed value written out again (`packages/model/src/ai-sdk-client.ts`; `ai-sdk-client.test.ts` pins `JSON.stringify(JSON.parse(…))`). Whitespace, escapes, number forms and duplicate keys were therefore already folded. The only thing left to decide sameness was the written order of non-integer keys. The gate parses the same text before any tool runs, so two texts with one parsed value give the tool one input. The tool-call record stores the arguments with sorted keys (`session-writer.ts`'s `sortKeys`), so a reader of the record saw one value where the supervisor saw two. REQ-MONITOR-289 requires that the trip can be checked from the run's own records.
 
-The build's reading is the defect that [`the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md`](../defects/the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md) records, and repairing it mints nothing.
+The build's reading is the defect that [`the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md`](../defects/fixed/the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md) records, and repairing it mints nothing.
 
 "A normalized rendering" can still be read past its stated reason. So a dated note beneath REQ-ORCH-101 ([`01-run-orchestration.md`](../spec/01-run-orchestration.md)) records this reading and keeps the requirement's text, in the form [OQ-263](#oq-263) used, and the resolution records of domains 01 and 19 log it. In [ADR-0059](adr/0059-the-loop-supervisor-as-an-in-turn-observer.md), decision 3's "the whole argument string" is amended in place to the whole argument value, with the replaced words kept beside it.
 
@@ -16092,6 +16092,23 @@ The two recommendations weighed, and the ruling followed **both**:
 **Reopening condition:** either of these reopens the ruling:
 - a live pack in which supervision is active, four consecutive tool calls of one agent carry one tool name and one parsed argument value, and no `loop_supervisor_activation` follows the fourth;
 - an activation drawn by calls whose parsed arguments differ.
+
+**Built 2026-10-20 by `loc1` (`loc1-supervisor`).** `packages/engine/src/run/supervisor.ts`: a tool event's fingerprint is
+`tool <name> v <encoding>` of its parsed arguments — a string encoder that sorts every object's keys at every depth and
+keeps every member (`__proto__` included), arrays in order, every string quoted, a non-finite number written as itself — or
+`tool <name> t <args>` where the parse or the encoding throws; computed once in `observe()` and kept in step with the
+window, read by `trigger()` and, through the window `check()` snapshots, by `rawFallbackHasEvidence`. `SupervisorEvent`, the
+excerpt, the path anchor, the message limb and `SUPERVISOR_DEFAULTS` are unchanged. **Red first:** `supervisor.test.ts`'s
+block "OQ-364: REQ-ORCH-101's same action compares the arguments as one JSON value" — five cases red on the build before (a
+repetition across the key orders A, B, B, A; a width-2 cycle of reordered values; PD-ORCH-016's evidence limb on A, B, A, B;
+reordering at depth; whitespace between tokens) and seven guards green before and after (array order, a 9,000-character value
+differing at its end, string whitespace and case, `"1"` against `1`, `__proto__`, the tag on unparseable text, a 100,000-deep
+nesting), each guard shown red under the encoder it guards against. **The proof launch:** `pnpm part-h-proof`'s
+`loop-reordered` (`ROTARIS_SCRIPT=loop:readreorder:20`, one `read_file` value in the key orders A, A, B): on the build before,
+20 calls, no activation, the session `completed`; after, three activations (the first `trigger: repetition`), one
+`circuit_breaker_escalation` and stop reason `agent_session_aborted` after 12 calls. Recorded in
+[ADR-0059](adr/0059-the-loop-supervisor-as-an-in-turn-observer.md) (decision 3 in place, and its 2026-10-20 section) and in
+[`first-executions.md`](first-executions.md). **Not measured:** a live run.
 
 <a id="oq-401"></a>
 

@@ -96,6 +96,37 @@ if (loopSession?.stop_reason !== 'agent_session_aborted') throw new Error(`loop 
 if (loopActivations.length !== 3) throw new Error(`expected three supervisor activations; found ${loopActivations.length}`);
 if (loopIssues.length !== 1) throw new Error(`expected one circuit_breaker_escalation issue; found ${loopIssues.length}`);
 
+// OQ-364 (ruled 2026-10-20 under R-072, no directive; REQ-ORCH-101): one argument value is one action whatever order its keys
+// were written in. The scripted root sends one `read_file` value, `{ path: 'README.md', offset: 1 }`, with its keys in the
+// repeating order A, A, B (`readreorder`), so as text no run is longer than two and no strict alternation makes a cycle. Before
+// the build the twenty calls stayed under the raw threshold of 60 and drew no activation; the default live run at cb6d1d5
+// (scenario crlf, session 4dad81df) met the same miss on 18 failing haet_edit calls.
+const reorderedRoot = join(output, 'loop-reordered');
+const reorderedWorkspace = join(reorderedRoot, 'workspace');
+const reorderedLocal = join(reorderedRoot, 'local');
+mkdirSync(reorderedWorkspace, { recursive: true });
+mkdirSync(reorderedLocal, { recursive: true });
+writeFileSync(join(reorderedWorkspace, 'README.md'), '# loop proof\n');
+scratchAgentsYaml(reorderedWorkspace);
+await launch('loop-reordered', reorderedWorkspace, reorderedLocal, join(reorderedRoot, 'preferences'), {
+  ROTARIS_SCRIPT: 'loop:readreorder:20',
+  ROTARIS_LOOP_SCRIPT: 'detected',
+  ROTARIS_CAPTURE_PROMPT: 'exercise the loop supervisor with reordered arguments',
+  ROTARIS_CAPTURE_AFTER_MS: '10000',
+});
+const reorderedDb = new Database(oneDatabase(reorderedLocal), { readonly: true });
+const reorderedSession = reorderedDb.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed FROM sessions').get();
+const reorderedActivations = reorderedDb.prepare("SELECT name, message, metadata FROM timeline WHERE name = 'loop_supervisor_activation' ORDER BY ordinal").all();
+const reorderedIssues = reorderedDb.prepare("SELECT kind, severity, actor, message FROM issues WHERE kind = 'circuit_breaker_escalation'").all();
+const reorderedCalls = reorderedDb.prepare('SELECT tool_name, status FROM tool_calls ORDER BY ordinal').all();
+reorderedDb.close();
+writeFileSync(join(output, 'loop-reordered-observed.json'), `${JSON.stringify({ reorderedSession, reorderedActivations, reorderedIssues, reorderedCalls }, null, 2)}\n`);
+const firstReorderedTrigger = JSON.parse(reorderedActivations[0]?.metadata ?? '{}').trigger ?? null;
+if (reorderedActivations.length !== 3) throw new Error(`loop-reordered: expected three supervisor activations; found ${reorderedActivations.length} (OQ-364; see loop-reordered-observed.json)`);
+if (firstReorderedTrigger !== 'repetition') throw new Error(`loop-reordered: the first activation's trigger was ${firstReorderedTrigger}, not repetition (OQ-364)`);
+if (reorderedIssues.length !== 1) throw new Error(`loop-reordered: expected one circuit_breaker_escalation issue; found ${reorderedIssues.length}`);
+if (reorderedSession?.stop_reason !== 'agent_session_aborted') throw new Error(`loop-reordered: stop reason was ${reorderedSession?.stop_reason ?? 'absent'}`);
+
 // PD-ORCH-016 (OQ-232, ruled 2026-10-07 under R-072; fin32): when the classification is cut on a raw-count trigger, four
 // consecutive calls are evidence only when they are the same action. The duress live run at a68f121 (finding D6) told a child
 // reading two files of its own to "Pause and reassess". Two launches, the tool threshold at 4 and the repetition and cycle
@@ -460,6 +491,7 @@ const result = {
   silentWait: { status: silentWait.session?.execution_status, stopReason: silentWait.session?.stop_reason, reports: silentWait.reports, nextAfterReport: silentWait.after.map((n) => n?.role ?? null), stuckActivations: silentWait.activations.filter((a) => a.trigger === 'stuck').length, escalations: silentWait.escalations.length, classifications: silentWait.classifications },
   planCorrection: { session: correctionSessionShown, iterations: correctionIterations, heldRows: heldRows.length, todoCalls: todoCalls.length, agentStates, screenshot: 'plan-correction.png' },
   loop: { session: loopSession, activations: loopActivations.length, issues: loopIssues, toolCalls: loopCalls.length, screenshot: 'loop-supervisor.png' },
+  loopReordered: { session: reorderedSession, activations: reorderedActivations.length, firstTrigger: firstReorderedTrigger, issues: reorderedIssues, toolCalls: reorderedCalls.length, screenshot: 'loop-reordered.png' },
   rawCountFallback: Object.fromEntries(Object.entries(rawObserved).map(([k, v]) => [k, { status: v.session?.execution_status, activations: v.activations.length }])),
   resume: { before, after, userRows, continuationRows: continuationRows.length, staleChild, locks: locks.length, ordinals, iterationEnds: iterationEnds.map((entry) => entry.message), screenshots: ['resume-before.png', 'resume-after.png'] },
 };

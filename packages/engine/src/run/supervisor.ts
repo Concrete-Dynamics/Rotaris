@@ -76,9 +76,42 @@ export type SupervisorDecision =
 type Trigger = Pick<LoopActivation, 'trigger' | 'reason'>;
 
 const normaliseMessage = (text: string): string => text.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-US');
-const fingerprint = (event: SupervisorEvent): string => event.kind === 'tool'
-  ? `tool\0${event.name}\0${event.args}`
-  : `message\0${event.text}`;
+
+/**
+ * One parsed JSON value written out whole, its keys sorted at every depth (OQ-364). Every member is kept, `__proto__`
+ * included, because the text is built as a string and no intermediate object is assigned to (`export.ts`'s `sortKeys` loses
+ * `__proto__` that way). Arrays keep their order. A string is always quoted, so `"1"` never equals `1`, which is why
+ * `policy.ts`'s `canonicalArgument`, writing strings bare, is not reused. A non-finite number (`1e400` parses to Infinity) is
+ * written as `String(v)`, so it never equals `null`. A nesting deep enough to exhaust the stack throws; the caller then
+ * compares the text.
+ */
+function encode(value: unknown): string {
+  if (value === null || typeof value === 'boolean') return JSON.stringify(value);
+  if (typeof value === 'number') return Number.isFinite(value) ? JSON.stringify(value) : String(value);
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(encode).join(',')}]`;
+  const object = value as Record<string, unknown>;
+  return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${encode(object[key])}`).join(',')}}`;
+}
+
+/**
+ * REQ-ORCH-101's same action (OQ-364, ruled 2026-10-20 under R-072 with no directive; a dated note beneath the requirement):
+ * the tool name and the whole arguments, compared as one JSON value — every member of every object at every depth, arrays in
+ * order, nothing trimmed, cased, cut or disregarded — so the order in which an object's keys were written is no part of it.
+ * Argument text that does not parse, or nests past the stack, is compared whole as text under its own tag, so it never equals
+ * a parsed value. The reading it replaces, kept beside it: until 2026-10-20 the supervisor compared the text the model client
+ * rendered (`tool\0<name>\0<args>`), so one value with its keys in another order was another action. Evidence: the default
+ * live run at `cb6d1d5`, scenario crlf, session `4dad81df`, whose 18 failing `haet_edit` calls drew no activation.
+ */
+function toolFingerprint(name: string, args: string): string {
+  try {
+    return `tool\0${name}\0v\0${encode(JSON.parse(args))}`;
+  } catch {
+    return `tool\0${name}\0t\0${args}`;
+  }
+}
+
+const messageFingerprint = (text: string): string => `message\0${text}`;
 
 function pathAnchor(events: readonly SupervisorEvent[]): string {
   const tool = [...events].reverse().find((event): event is Extract<SupervisorEvent, { kind: 'tool' }> => event.kind === 'tool');
@@ -98,6 +131,11 @@ function atMostNinetyWords(message: string): string {
 /** REQ-ORCH-099..107: one invisible observer for one agent conversation. */
 export class LoopSupervisor {
   private events: SupervisorEvent[] = [];
+  /**
+   * Each event's fingerprint, computed once in `observe()` and kept in step with `events` (OQ-364: one parse per call). It is
+   * no field of `SupervisorEvent`, which `LoopActivation.events` carries out.
+   */
+  private prints: string[] = [];
   private toolCount = 0;
   private messageCount = 0;
   private consecutiveActivations = 0;
@@ -118,7 +156,11 @@ export class LoopSupervisor {
 
   observe(event: SupervisorEvent): void {
     this.events.push(event);
-    if (this.events.length > this.config.eventWindow) this.events.shift();
+    this.prints.push(event.kind === 'tool' ? toolFingerprint(event.name, event.args) : messageFingerprint(event.text));
+    if (this.events.length > this.config.eventWindow) {
+      this.events.shift();
+      this.prints.shift();
+    }
     if (event.kind === 'tool') this.toolCount += 1;
     else this.messageCount += 1;
     if (this.pending === null) this.arm(this.trigger());
@@ -168,6 +210,7 @@ export class LoopSupervisor {
       excerpt: this.excerpt(),
       activationCount: this.consecutiveActivations,
     };
+    const prints = this.prints;
     this.resetWindow();
 
     if (this.consecutiveActivations > 2) {
@@ -184,7 +227,7 @@ export class LoopSupervisor {
       return { kind: 'inject', activation, message: message ? atMostNinetyWords(message) : deterministicMessage(activation) };
     }
 
-    if (trigger.trigger === 'repetition' || trigger.trigger === 'cycle' || this.rawFallbackHasEvidence(activation.events)) {
+    if (trigger.trigger === 'repetition' || trigger.trigger === 'cycle' || this.rawFallbackHasEvidence(activation.events, prints)) {
       return { kind: 'inject', activation, message: deterministicMessage(activation) };
     }
     return { kind: 'continue' };
@@ -195,7 +238,7 @@ export class LoopSupervisor {
     // calls neither breaks "in a row" nor makes a (text, call) pair a cycle. Messages count toward the raw
     // thresholds and REQ-ORCH-104's evidence only. (First execution: with messages in the fingerprint
     // series a pure repetition fired "repeated cycle", and a repetition with varying text fired nothing.)
-    const prints = this.events.filter((event) => event.kind === 'tool').map(fingerprint);
+    const prints = this.prints.filter((_, index) => this.events[index]?.kind === 'tool');
     const n = this.config.repetitionThreshold;
     if (prints.length >= n && new Set(prints.slice(-n)).size === 1) return { trigger: 'repetition', reason: 'repeated action' };
 
@@ -226,17 +269,17 @@ export class LoopSupervisor {
    * `tool-only-steps-read-as-three-identical-messages.md`). The last three messages are the last three with text.
    *
    * PD-ORCH-016 (OQ-232, ruled 2026-10-07 under R-072) narrows the tool limb: the last four tool calls are evidence only when
-   * they are the same action by REQ-ORCH-101's comparison — the tool name and the whole arguments (`fingerprint`), none of
-   * them disregarded. Calls of one tool with differing arguments are counts alone, whatever the tool's facet; assistant text
+   * they are the same action by REQ-ORCH-101's comparison — the tool name and the whole argument value (`toolFingerprint`,
+   * OQ-364: read as JSON, key order no part of it, an unparseable text compared whole as text), none of it disregarded. Calls of one tool with differing arguments are counts alone, whatever the tool's facet; assistant text
    * between the calls still does not break the run. The reason it compared names, kept beside its replacement: ADR-0059
    * decision 5 read "same-tool" as the tool's name, and its first live firing, at the duress run at `a68f121` (finding D6),
    * was four reads of two files by a child checking its own document, told to "Pause and reassess".
    */
-  private rawFallbackHasEvidence(events: readonly SupervisorEvent[]): boolean {
+  private rawFallbackHasEvidence(events: readonly SupervisorEvent[], prints: readonly string[]): boolean {
     const messages = events.flatMap((event) => (event.kind === 'message' && normaliseMessage(event.text) !== '' ? [normaliseMessage(event.text)] : []));
     if (messages.length >= 3 && new Set(messages.slice(-3)).size === 1) return true;
-    const tools = events.filter((event) => event.kind === 'tool');
-    return tools.length >= 4 && new Set(tools.slice(-4).map(fingerprint)).size === 1;
+    const tools = prints.filter((_, index) => events[index]?.kind === 'tool');
+    return tools.length >= 4 && new Set(tools.slice(-4)).size === 1;
   }
 
   private excerpt(): string {
@@ -248,6 +291,7 @@ export class LoopSupervisor {
 
   private resetWindow(): void {
     this.events = [];
+    this.prints = [];
     this.toolCount = 0;
     this.messageCount = 0;
     this.pending = null;

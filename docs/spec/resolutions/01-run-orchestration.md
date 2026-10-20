@@ -22,7 +22,7 @@ status: resolved
 > each such rendering "makes the two long edits above compare equal". An encoding that keeps every member whole cannot
 > make two different values equal, so the reading builds `REQ-ORCH-101` as written and departs from nothing; the build's
 > comparison of the text in its emitted key order was the defect
-> [`the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies`](../../defects/the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md)
+> [`the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies`](../../defects/fixed/the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md)
 > records. Ruled under the owner's delegation ([R-072](../../product/requests.md#r-072)) with no directive; the ruling, its
 > evidence and its reopening condition are in [`open-questions.md`](../../architecture/open-questions.md#oq-364).
 

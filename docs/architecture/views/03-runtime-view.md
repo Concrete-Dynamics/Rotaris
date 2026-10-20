@@ -589,9 +589,13 @@ Before every model step, in this order: `shouldPause()` (a rest, a landing or RE
 pending **steering** injected as a marked user message (`steering_injected`, the supervisor's counter reset) →
 the **loop supervisor**'s `check()` (`continue` | `inject` a corrective user message | `escalate` — the turn
 fails with `circuit_breaker_escalation`; no supervisor is attached at all for the turn a plan-gate hold covers,
-`PD-ORCH-001`; when the classification fails or is cut on a raw-count trigger, the fallback's evidence is the last three
-messages with text normalised-equal or, since `PD-ORCH-016` (OQ-232, fin32), the last four tool calls identical in name
-and whole arguments — four calls of one tool with differing arguments are counts alone; the classification call is bounded
+`PD-ORCH-001`; two tool calls are the same action — for the repetition and cycle triggers and `PD-ORCH-016`'s evidence
+alike — when their tool names are equal and their whole argument values are one (OQ-364, since 2026-10-20: the arguments
+read as JSON, the order an object's keys were written in no part of it, an argument text that does not parse compared whole
+as text; each call's fingerprint computed once in `observe()`; until then the text the model client rendered was compared, so
+one value with its keys reordered was another action); when the classification fails or is cut on a raw-count trigger, the
+fallback's evidence is the last three messages with text normalised-equal or, since `PD-ORCH-016` (OQ-232, fin32), the last
+four tool calls that are one action by that comparison — four calls of one tool with differing arguments are counts alone; the classification call is bounded
 by `runtime.loop_classification_timeout` capped at what remains of REQ-NOTIFY-106's 2 s activation budget,
 `LOOP_ACTIVATION_BUDGET_MS`, since fin35 — REQ-CONFIG-467's upper bound only; the budget runs from the `observe` that armed the
 trigger, on the monotonic clock, so the triggering call and the rest of its step are spent from it, and with nothing left no

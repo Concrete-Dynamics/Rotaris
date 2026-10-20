@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-20**
 
+**The loop supervisor's same action compared by argument value (OQ-364, loc1; 2026-10-20).** `03-runtime-view.md` §3 now states that two tool calls are the same action — for the repetition and cycle triggers and `PD-ORCH-016`'s raw-count evidence alike — when their tool names are equal and their arguments, read as JSON, are one value: the order an object's keys were written in is no part of it, and an argument text that does not parse is compared whole as text. Each call's fingerprint is computed once in `observe()`. No package, edge or process changed.
+
 **A revision-2 todo case is named for the no-served-set path it pins (2026-10-20; loc1, `loc1-todo-reader`; fin47's reviewers'
 finding on `fin47-classifier-and-todo`).** A test case's name and comments in `tools.test.ts` only; no view changed.
 

@@ -592,7 +592,8 @@ in `configuration.ts`'s header.)
 
 14. **the loop supervisor and `continue` (2026-09-05):** one hidden observer per agent conversation, fed by the turn
    after every assistant message and tool call and asked before every model step; triggers in `REQ-ORCH-101`'s
-   order over actions (whole-argument sameness), a small-model classifier on the intent ladder bounded by
+   order over actions (whole-argument sameness; since 2026-10-20 the arguments compared as one JSON value, key order no part
+   of it, OQ-364), a small-model classifier on the intent ladder bounded by
    `runtime.loop_classification_timeout` (capped at what remains of `REQ-NOTIFY-106`'s 2 s budget, counted from the activity that satisfied the trigger, since fin35, `REQ-CONFIG-467`), `REQ-ORCH-104`'s fallbacks, escalation at the third consecutive
    activation — the child failed with `circuit_breaker_escalation`, the root's run ended `agent_session_aborted`;
    `circuit_breaker:` in `agents.yaml`; "● CB armed" in the status strip. A stored session is listed and opened
@@ -750,7 +751,9 @@ scripted `silent` step (`answerless`, `answer-when-asked`), with loop supervisio
 (OQ-282), no loop classification and no stuck activation for the re-prompted turn; since revision 4 (fin44, OQ-283 and OQ-284)
 its `silent-correction` and `silent-child` launches show the same for a plan correction and a child's re-prompt, and since
 revision 5 (fin45, OQ-296) its `silent-wait` launch for a root that waits silently on three background delegations in turn,
-resumed each time with the child's report alone and never escalated. Its evidence lands
+resumed each time with the child's report alone and never escalated; since 2026-10-20 (OQ-364, loc1) its `loop-reordered`
+launch (`ROTARIS_SCRIPT=loop:readreorder:20`, one `read_file` value with its keys in the repeating order A, A, B) requires three
+activations, the first `repetition`, one escalation and `agent_session_aborted` (`loop-reordered-observed.json`). Its evidence lands
 under `.proof/part-h-proof/`.
 
 **Configuration.** `packages/config/src/` — `load.ts` (the one entry point, no database handle), `merge.ts` (the four

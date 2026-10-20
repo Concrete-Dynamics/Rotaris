@@ -53,7 +53,12 @@ next user message; "escalate" ends the turn failed with the signal. Chosen.
    feedback takes — and records one timeline entry `loop_supervisor_activation`; it is not a transcript
    row, because `REQ-ORCH-099` asks for invisibility and no requirement asks for a row.
 3. **Triggers are evaluated in `REQ-ORCH-101`'s order over ACTIONS.** The repetition and cycle triggers
-   fingerprint tool calls only — tool name plus the whole argument string, never a prefix or a cap. The
+   fingerprint tool calls only — tool name plus the whole argument value, read as JSON and compared whole (every
+   member at every depth, arrays in order, never a prefix or a cap), the order an object's keys were written in no
+   part of it, and an argument text that does not parse compared whole as text.
+   *Until 2026-10-20 this read "tool name plus the whole argument string, never a prefix or a cap"; the string kept
+   the model client's key order, so one value with its keys reordered was another action
+   ([OQ-364](../open-questions.md#oq-364); the section at the end).* The
    assistant's text between two calls neither breaks "in a row" nor pairs with a call to form a cycle.
    Messages count toward the raw thresholds and are `REQ-ORCH-104`'s evidence (the last three
    normalised-equal). See the first execution for why this sentence is here.
@@ -235,3 +240,37 @@ fell silent and taken only when the report came, seconds later, so no classifica
 corrective was sent. Pinned by `children.test.ts`'s revision-5 cases (four red on `ee586d3`, a raw-count guard green before and
 after) and `pnpm part-h-proof`'s `silent-wait` launch (0 stuck activations, 0 escalations, the session `completed`).
 **Not measured:** a live run since the change.
+
+## 2026-10-20 — decision 3's same action compared by argument value (OQ-364, loc1)
+
+**Found by the default live run at `cb6d1d5`** (2026-10-15, scenario `crlf`, session `4dad81df`): a child made 18 failing
+`haet_edit` calls on one step of `greet.js` whose argument objects were written in two key orders,
+`{path, content_hash, old_string, new_string}` and `{content_hash, new_string, old_string, path}`, in no regular pattern.
+Compared as emitted, the longest run of identical texts was 2; compared as values it was 5, twice. Decision 3's fingerprint
+compared the text, so the repetition trigger never fired, no `loop_supervisor_activation` was written, and the loop held the
+child 179 s of the scenario's 420 s wait
+([`fixed/the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md`](../../defects/fixed/the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md)).
+The record already stored those arguments with sorted keys (`session-writer.ts`), so a reader saw five identical calls where
+the supervisor saw five different ones. The build also read a strict alternation of two key orders as a two-action cycle at
+the sixth call, so whether one failing edit counted as a loop depended on the pattern of its key orders.
+
+**Ruled under the owner's delegation (R-072)** as [OQ-364](../open-questions.md#oq-364), with no directive: REQ-ORCH-101's "the
+whole of their arguments" is their value read as JSON (a dated note beneath the requirement). **The change**
+(`packages/engine/src/run/supervisor.ts`): a tool event's fingerprint is `tool <name> v <encoding>` of
+`JSON.parse(args)`, where the encoding is a string written with every object's keys sorted at every depth, every member kept
+(`__proto__` included), arrays in order, every string quoted and a non-finite number written as itself; where the parse or the
+encoding throws (a malformed text, or a nesting past the stack), it is `tool <name> t <args>`, the text whole. It is
+computed once per call in `observe()` and kept beside the window, and the repetition trigger, the cycle trigger and
+[`PD-ORCH-016`](../../product/directives.md#pd-orch-016)'s raw-count evidence all read it. Nothing else changed: the text the
+tool, the provider, the transcript, the excerpt and the path anchor see; the message limb; the thresholds.
+
+**Pinned by** `supervisor.test.ts`'s block "OQ-364: REQ-ORCH-101's same action compares the arguments as one JSON value": five
+cases red on the build before (a repetition across key orders A, B, B, A; a width-2 cycle of two values each written in two
+orders; PD-ORCH-016's evidence limb on A, B, A, B; reordering at depth; whitespace between tokens) and seven guards green before
+and after (array order; two 9,000-character values differing at their end; string whitespace and case; `"1"` against `1`;
+`__proto__`; the tag on unparseable text, with `1e400` against `Infinity` and `null`; a 100,000-deep nesting), each shown to
+turn red under the encoder it guards against. And by `pnpm part-h-proof`'s `loop-reordered` launch: the scripted root sends
+one `read_file` value, `{path: 'README.md', offset: 1}`, its keys in the repeating order A, A, B
+(`ROTARIS_SCRIPT=loop:readreorder:20`): on the build before, 20 calls and no activation, the session `completed`; after it,
+three activations, the first `trigger: repetition`, one `circuit_breaker_escalation` and stop reason `agent_session_aborted`
+(`loop-reordered-observed.json`). **Not measured:** a live run since the change.

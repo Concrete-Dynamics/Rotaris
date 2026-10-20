@@ -626,3 +626,5 @@ root. The whole proof exited 0. The same proof on the code before the repair exi
 configuration lives there. It takes the same code path as `.git`, which the unit tests pin with both names absent.
 A configured additional root was not measured either. Under this repair such a root refuses every command, and OQ-140
 names that.
+
+*2026-10-21 (the Windows ARM64 session's D3; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, built at `dbf6a514`): `pnpm sandbox-proof`'s win32 path was re-run and passed — the outside verdict, the refusal before start, the disabled launch control, `effects.applicable` false. **IC-8 stays undischarged**: it needs the six effects on a real macOS and a real Linux host, and Windows has no confinement to measure (ADR-0022, its last paragraph).*

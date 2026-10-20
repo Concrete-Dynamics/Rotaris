@@ -81,7 +81,8 @@ record already decides, and every ruling it needs is named as the owner's rather
   It is green on Linux without `bwrap`. On Linux with `bwrap` it was red on a **product** defect that IC-8's first Linux
   execution found ([absent-subpath residue](../defects/fixed/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md)).
   That defect was repaired 2026-09-29 under R-067: the renderer now refuses the command. The proof is green there too,
-  and OQ-140 carries the cost of that repair on Linux.
+  and OQ-140 carries the cost of that repair on Linux. On Windows it was re-run on 2026-10-21 (the Windows ARM64 session's D3) and
+  passed on the outside path, which leaves IC-8 where it was.
   Measured red there on 2026-09-29, beside REQ-CHAT-055's CPU-profile round: ~~`terminal-proof` (112 of 116; its
   live section's commands are PowerShell's,
   [note](../defects/fixed/terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md))~~ *(measured at `fa377e6`, before `ef1540e`'s repair of the same defect on `main`)* and

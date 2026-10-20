@@ -15755,7 +15755,7 @@ pinned runtime driven as it is; REQ-MCP-116, the binding manifest; [OQ-245](#oq-
 fin47 (`fin47-rename-and-optionals`) from the live `rename` scenario's failure at `3c03287`, reopening
 [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md);
 the plan's range OQ-361 to OQ-380, its second number (OQ-361 was taken on main by a sibling bundle) — renumbered at landing if
-another sibling took it first.)*
+another sibling took it first. **Ruled 2026-10-20.**)*
 
 **What is open.** PD-MCP-004's search makes a cold rename reach the importing files when a `tsconfig.json` or `jsconfig.json`
 covers them (`code-intel-proof` launch 11), and does nothing when none does. The TypeScript language server then puts each file in
@@ -15802,8 +15802,95 @@ three files carry the new name with the rename's one row; under (e), the scenari
 
 *Confirmed release-blocking 2026-10-15:* fin47's acceptance round 1 at `cb6d1d5` read `code-intel-proof` launch 13 red twice
 (finding A1), and bundle `fin47-accept1-5` read it red again at `8baf9e4`, whose repair task waits on this ruling; the runs are in
-[the note](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). Still
-open.
+[the note](../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). Ruled
+2026-10-20, below.
+
+**Ruled 2026-10-20 under the owner's delegation ([R-072](../product/requests.md#r-072)).** The ruling is option (a), refined, of kind change-behaviour. It is recorded as [`PD-MCP-004`](../product/directives.md#pd-mcp-004) **revision 2**: clause 5, "the project file", and the sentence after it. Revision 2 extends REQ-MCP-116 and REQ-MCP-015 further, and both back-pointers are amended in place.
+
+The case is a symbol rename on the bundled server where both of these hold:
+- the declaring file has an extension that the pinned runtime serves with its TypeScript language server;
+- no `tsconfig.json` or `jsconfig.json` stands in that file's directory, or in any directory between it and the project root the server was launched for, the root included. That root is REQ-MCP-034's appended path, which is an isolated run's tree root for an isolated run.
+
+In that case the run host places a `jsconfig.json` of its own at that root before clause 2's search. It keeps the file while the search and the rename are answered. It removes the file once the rename has answered or the call has ended in another way: an error result, a thrown fault, or clause 4's spent allowance or cancel. The removal happens inside the call's reach observation.
+
+The refinements:
+- **Never a person's file.** The file is created only where no file of that name exists, and never overwrites one. Its bytes are one constant of the build: a comment line that names the product and says the file is temporary, was written for one rename and is safe to delete, then `{}`, with LF endings. It is removed only while its bytes are still that constant. Otherwise it is left in place and a `warn` line is logged. A create that fails also logs a `warn` line, and clause 2 then proceeds as it did before this ruling.
+- **One file per root.** Renames that overlap at one root share one file. The run host counts them across all its sessions: the first places the file, each keeps it, and the last to end removes it.
+- **A file left behind.** This covers a run host that ended during a rename, or a removal that failed. Such a file is removed at the next run start at that root and before the next rename there, provided its bytes are the constant and no rename keeps it.
+- **The record.** As with clause 3's search, the file writes no tool-call record, total, histogram bucket or notice. No child's report or child-report artifact lists it, the renaming child's included. To achieve this, the run host notes each placement and removal in OQ-245's write journal under a name no agent bears, so every observation whose window holds one of them leaves the path out. One `info` line is logged for each placement and each removal. The model is told nothing, and the rename's result is the runtime's.
+- **The manifest.** The binding manifest records the clause beside `warmUps`, keyed by capability. It records the rename, the runtime's `typescript` language, the extensions that language serves (read from the runtime as the indexed extensions are), the two names that count as a project file, and the one name written. The generator refuses a runtime that does not name the language.
+- **The walk stops at the project root.** No directory above the root is consulted. The evidence for this bound is launch 13. Its workspace sits inside the repository checkout, below a `tsconfig.json` that does not include it, so a walk past the root would place nothing there. The launch's uncommitted control run, with an empty `jsconfig.json` at the workspace root, renamed both files.
+
+**Measured, and owed before the work is reported complete.** So far the file has been measured only when present before a fresh server: the note's table says "one fresh server per row", and launch 13's control run wrote the file before the launch. The clause places it inside a live server session, and that has not been measured.
+
+The builder measures first over the bundled runtime's stdio server, as the note's table was measured, in four cases:
+1. the file placed after the server is up and before any file is opened;
+2. the file placed after the server has opened the declaring file;
+3. the file placed a second time, after one removal;
+4. two `.ts` files with no project file.
+
+Then the builder measures in the built app, with `code-intel-proof` launches:
+- launch 13;
+- a new launch 14 (`child-rename-opened-js`), which takes a symbol overview of the declaring file before the rename;
+- a new launch 15 (`child-rename-cold-ts`), with two TypeScript files and no project file.
+
+Each of these launches also asserts that no `jsconfig.json` remains afterwards. Launch 11 also asserts that none was written beside its `tsconfig.json`.
+
+Any case in which the clause leaves an importing file behind is recorded here, reopens this question for that case, and stays a held failure; no other remedy is improvised. Launches 11, 13, 14 and 15 are re-run on every pin change.
+
+**The two recommendations weighed.** Both advocates recommended (a), refined, of kind change-behaviour, and the ruling followed **both**.
+
+- **Advocate A (the user's lens).** A argued that in the ordinary JavaScript workspace the tool says it succeeded and leaves every importer naming a removed symbol. A further argued that only (a) and (b) make the rename itself true, and that only (a) gives the language server the whole project while leaving the runtime untouched.
+  - The ruling took from A:
+    - the exclusive create, the distinctive bytes and removal only while the bytes are unchanged;
+    - the per-root count;
+    - the `info` line, with no row, total or notice;
+    - the explicit subtraction of the file from every observation, preferred over B's reading that none is needed. `snapshotChanges` names created and removed paths, so three cases would otherwise list the file: a sibling's call observed across the placement or the removal, a leftover removed inside another call's window, and a failed removal;
+    - the mid-session and TypeScript-only measurements;
+    - the live check that no file remains;
+    - the noticed defect of the model's own reference search and safe deletion in such a workspace, to be recorded and raised, not ruled here.
+  - The ruling declined A's numbering, "revision 1": the register counts the minted text as revision 1. It also moved A's cleanup at each connection to the next run start at the root, which runs whether or not a session reaches the server.
+- **Advocate B (the system's lens).** B argued three things: (a) is the one measured remedy that no earlier ruling refused; it composes with clause 2 in the executor every code-intelligence call goes through; and it keeps literally true both REQ-MCP-011's "one exact release" and ADR-0035's evidence about the artifact.
+  - The ruling took from B:
+    - revision 2 as the vehicle, with revision 1's "the search changes nothing in the workspace" quoted beside its replacement;
+    - the walk bounded at the root the server is bound to;
+    - the manifest record keyed by capability;
+    - the count shared across sessions;
+    - the fallback when the create fails;
+    - the unit cases under PD-MCP-004 in `apps/desktop/src/run-host/mcp.test.ts`;
+    - the launches, and the new assertion in launch 11;
+    - B's reasons against (b).
+  - The ruling declined B's pending marker under `.rotaris/`. The product's bytes are a constant, so equality identifies its file without a second record that could itself be left stale.
+
+**Rejected:**
+- **(b), a patched distribution.** OQ-273's reason stands unanswered. `bundle.mjs` (recipe 4) has no patch stage, and `--check` compares only the pins' hash, so a drift check of the runtime's contents would have to be built. The pinned release would no longer be the tree that runs (REQ-MCP-011). Every pin change would have to re-apply the patch for each target the recipe builds (OQ-400).
+- **(c), telling the model.** This is advice that leaves a broken project whenever the model ignores it, behind a success that stays false.
+- **(d), a textual rename.** Nobody asked for it, and it can rename an unrelated identifier.
+- **(e), doing nothing.** This is a success reported for a rename that left the project unbuildable, in the ordinary shape of a JavaScript workspace.
+- **Deferral.** A first-release user meets this at the first rename in such a project.
+
+**Costs kept on record:**
+- A file the person did not ask for stands at their workspace root while the search and the rename run. A watcher, a dev server, an editor's language service or `git status` may see it. A commit made in that window may capture it, and so may a checkpoint that includes untracked files (REQ-GIT-034, REQ-GIT-051).
+- A leftover stays until the next run start or rename at that root.
+- On a large workspace the search loads the whole project, which spends the rename's allowance and the language server's memory.
+- The server keeps seeing that project for later requests of its session until it notices the removal.
+- A configuration above the root is not consulted. Where the language server would read one, the product's file is the nearer one for the call.
+- A workspace whose project file stands in the chain but does not include the declaring file or its importers is left as built.
+- One more product behaviour rests on the language server's project discovery.
+
+**Reopening condition:** any of the following.
+- In a workspace no project file covers, a rename by the bundled server leaves behind a file that imports the symbol. This applies to a cold rename, a rename after the server has opened the declaring file, and a second rename in one session.
+- The product's file is found at a root where no rename keeps it, other than after a run host that ended during a rename.
+- A person's file is overwritten or removed.
+- The product's file appears in any child's report or artifact.
+- Launch 11, 13, 14 or 15 turns red after a pin change.
+
+**What a proof and a live run then show.**
+- `code-intel-proof` launches 13, 14 and 15: "(2 changes applied)", both files changed on disk, the report and the artifact listing exactly those two, no reference-search row, and no `jsconfig.json` at the root afterwards.
+- Launch 11: as before, with no `jsconfig.json` written.
+- The opt-in `rename` scenario on the unchanged `todo-app` fixture: the first `rename_symbol` says `3 changes applied`, no other tool writes `src/App.jsx` or `src/todos.test.js` after it, `node --test` is green, and no `jsconfig.json` stands at the workspace root afterwards.
+
+*The reading the build proceeded under until this ruling ("PD-MCP-004 as ruled: the search is sent and discarded …", above) is kept as the falsified reading for a workspace no project file covers.*
 
 <a id="oq-363"></a>
 

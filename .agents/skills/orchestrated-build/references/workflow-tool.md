@@ -32,8 +32,9 @@ interrupted merge at `review`, a failed verification or a refused merge at `fix`
 
 `~/.claude/projects/<project>/<session>/subagents/workflows/<run>/journal.jsonl`, one JSON object per line:
 `{"type":"started","key":…,"label":…}` and `{"type":"result","key":…,"result":…}`. A `started` without a
-`result` is an agent the run lost. The completion notice's output file holds the script's return value (`status`,
-every bundle's ending, acceptance); the journal holds every agent's.
+`result` is an agent the run lost. The completion notice's output file is a JSON object whose `result` holds the
+script's return value (`result.status`, every bundle's ending, acceptance), with `summary`, `logs` and usage beside
+it; the journal holds every agent's.
 
 ## Resuming
 
@@ -100,7 +101,9 @@ report, nothing is built or landed. It is a workflow of its own, outside `workfl
    an item done when the tree shows it done. This replaces one verifier per item, which took most of a survey's wall
    clock on the two-agent cap (above); the owner asked for the single verifier on 2026-10-14 ("give all results to a
    single verifier? This will Speed Things up …", then "Yes add that to the skill."). Only a list too long for one
-   agent to read every source of is split, into the fewest batches that fit, and `log()` says so.
+   agent to read every source of is split, into the fewest batches that fit, and `log()` says so. Read a survey's
+   progress against its merge stage's logged item count, never against the labels started: "40 of 42 done" on
+   2026-10-14 counted verifiers of 85 merged items.
 4. **Draft and critic.** One agent writes the deliverable from the verified list; one critic checks it against the
    tree (every command, script, flag and path exists at the pinned commit; nothing is claimed that was not
    verified); the drafter applies the corrections it confirms.

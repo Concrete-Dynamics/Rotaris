@@ -3,6 +3,18 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — where a run's return value sits, and how to read a survey's progress
+
+**Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
+approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
+item F24 and F25: reading completion notices failed on a `KeyError: 'status'` (04:59 UTC on 2026-10-15), since the
+return value sits under `result`; and the owner's single-verifier request was answered from a misread progress count
+("40 of 42" against 85 merged items, 2026-10-14). **Changed:** `references/workflow-tool.md`, Journals and A read-only
+survey. The proposal's `status` progress lines and `dry-run` usage error are script changes with their own self-test
+assertions and are not part of this entry. **Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check`;
+the skill-review by one reviewer agent under `references/skill-review.md`, which judged this entry with the others of
+2026-10-20.
+
 ## 2026-10-20 — the reference worktree is refreshed by removing and re-adding it
 
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner

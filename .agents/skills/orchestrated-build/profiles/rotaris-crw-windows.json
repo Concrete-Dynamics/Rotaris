@@ -1,6 +1,6 @@
 {
   "name": "rotaris-crw-windows",
-  "about": "This repository's commands and places on a Windows host with a display (Git Bash shells, Node 24 the default `node`, no `xvfb-run`): the same commands as profiles/rotaris-crw.json with the Linux display wrapper removed, and duress detached without `setsid`, which Git Bash lacks. Render with `--repo` in forward slashes (`--repo C:/dev/Rotaris-crw`): the default reads the checkout as `C:\\dev\\Rotaris-crw`, whose backslashes an agent's Git Bash reads as escapes. {repo} is the primary checkout; {id} is the plan id; agents read this skill from the orchestration's own detached reference worktree {repo}-wt-skillref-{id}; {node24} becomes the PATH export a host needs for Node 24, or a no-op where Node 24 is already the default; {node} becomes the Node 24 binary for a command that takes no shell prefix (the live runs: one absolute command each, since an agent's shell starts every command in the primary checkout and an allow rule matches only the command as sent). Session-specific values (trailers, extra push targets, model) come from the plan.",
+  "about": "This repository's commands and places on a Windows host with a display (Git Bash shells, Node 24 the default `node`, no `xvfb-run`): the same commands as profiles/rotaris-crw.json with the Linux display wrapper removed, and duress detached without `setsid`, which Git Bash lacks. They are Git Bash commands: `timeout` is GNU coreutils' there, and Windows' pause command under PowerShell or cmd. Render with `--repo` in forward slashes (`--repo C:/dev/Rotaris-crw`): the default reads the checkout as `C:\\dev\\Rotaris-crw`, whose backslashes an agent's Git Bash reads as escapes. {repo} is the primary checkout; {id} is the plan id; agents read this skill from the orchestration's own detached reference worktree {repo}-wt-skillref-{id}; {node24} becomes the PATH export a host needs for Node 24, or a no-op where Node 24 is already the default; {node} becomes the Node 24 binary for a command that takes no shell prefix (the live runs: one absolute command each, since an agent's shell starts every command in the primary checkout and an allow rule matches only the command as sent). Session-specific values (trailers, extra push targets, model) come from the plan.",
   "run": {
     "repo": "{repo}",
     "skillDir": "{repo}-wt-skillref-{id}/.agents/skills/orchestrated-build",
@@ -35,7 +35,7 @@
           "command": "nohup bash -c 'mkdir -p {repo}-wt-accept/.live-run; LIVE_RUN_DURESS_MS=7800000 timeout 8100 {node} {repo}-wt-accept/apps/desktop/scripts/live-run.mjs --confirm --skip-build --only=duress > {repo}-wt-accept/.live-run/duress-launch.log 2>&1; echo \"exit=$?\" >> {repo}-wt-accept/.live-run/duress-launch.log' > /dev/null 2>&1 < /dev/null & disown"
         },
         {
-          "what": "the opt-in scenarios: cutoff, rename, plan-open and empty-answer (empty-answer runs empty-answer, empty-once and empty-wait)",
+          "what": "the opt-in scenarios cutoff, rename, plan-open and empty-answer (empty-answer runs empty-answer, empty-once and empty-wait)",
           "command": "timeout 5400 {node} {repo}-wt-accept/apps/desktop/scripts/live-run.mjs --confirm --skip-build --only=cutoff,rename,plan-open,empty-answer"
         }
       ]

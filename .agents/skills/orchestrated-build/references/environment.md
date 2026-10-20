@@ -192,14 +192,29 @@ Bash shells and Node 24.18 as the default `node` (so `{node24}` is the no-op).
 
 - **No display wrapper.** `xvfb-run` does not exist here and is not needed: `pnpm preflight` reads "no display server is
   needed on win32", and every Electron launch opens real windows on the desktop. Render with
-  `profiles/rotaris-crw-windows.json`, which holds the same commands unwrapped.
+  `profiles/rotaris-crw-windows.json`, which holds the base profile's commands unwrapped (the self-test holds it to the
+  base's gate, budget, model, proofs, autopsy and live runs).
+- **Git Bash only.** The profile's commands are Git Bash commands: there `timeout` is GNU coreutils' (`/usr/bin/timeout`
+  comes before `C:\Windows\System32` on its `PATH`), while under PowerShell or `cmd` it is Windows' pause command.
 - **`--repo` in forward slashes.** `render`'s default reads the checkout as `C:\dev\Rotaris-crw`, and an agent's Git Bash
   reads those backslashes as escapes. Pass `--repo C:/dev/Rotaris-crw`.
 - **No `setsid`.** `nohup bash -c '…' > /dev/null 2>&1 < /dev/null & disown` outlives the shell that sent it: a 25 s job
   wrote its `exit=0` line after the Bash call had returned. The profile's duress launch takes that form.
 - **Six agents at a time** (`references/workflow-tool.md`, Concurrency).
-- **A shared desktop.** Another session (the Windows session) runs proofs and live runs on the same machine; one was live
-  in its own tree while this was measured. Before a proof sweep or a live run, list the running `electron.exe` processes
-  with their paths (PowerShell `Get-Process electron | Select-Object Id, StartTime, Path`). While one runs from another
-  tree, wait for it, or record its load beside every timing.
+- **A shared desktop.** Another Claude session works on the same machine in its own trees and runs proofs and live runs
+  there; one was live while this was measured. Before a proof sweep or a live run, list the running `electron.exe`
+  processes with their paths (from Git Bash: `powershell -NoProfile -Command "Get-Process electron -ErrorAction
+  SilentlyContinue | Select-Object Id, StartTime, Path"`). While one runs from
+  another tree, wait for it, or record its load beside every timing. `palette-proof`'s win32 reading sends real Win32
+  clicks and keystrokes (`docs/proofs/README.md`), so another tree's windows can take them.
+- **Leftovers.** Whether GNU `timeout` ending `node` also ends Electron's child processes on Windows is not measured. At
+  cleanup (SKILL.md §6, where the container stops leftover `Xvfb`), list `electron.exe` and stop only those whose path
+  lies in one of the run's own trees.
+- **Allow rules.** The allow-rule text in `references/live-runs.md` is the container's form (`xvfb-run`,
+  `/opt/node24/bin/node`), which matches none of this profile's commands. Here the default and opt-in launches read
+  `Bash(timeout * node C:/dev/Rotaris-crw-wt-accept/apps/desktop/scripts/live-run.mjs --confirm --skip-build*)`. No
+  such rule existed on 2026-10-20, and adding one stays the owner's decision.
+- **A sibling folder that is not this repository.** `C:/dev/Rotaris` sits beside the checkout and its worktrees. Never
+  list, open or search it: it may be a copy of the project CLAUDE.md seals off. Look for worktrees with
+  `git worktree list`, never by listing `C:/dev/`.
 - **Disk.** 24 GB was free of 237 GB on `C:`, and a worktree with its `node_modules` takes about 0.8 GB.

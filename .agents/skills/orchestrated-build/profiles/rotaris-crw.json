@@ -24,7 +24,7 @@
       "run": "timeout 1500 xvfb-run -a -s \"-screen 0 1600x1000x24\" node apps/desktop/scripts/<name>.mjs --skip-build (drop --skip-build only where the script's header says it takes none; docs/proofs/README.md says what each needs)"
     },
     "live": {
-      "note": "Each command names its own Node 24 binary, and the script judges the tree it sits in, whatever your directory. That tree needs the code-intelligence bundle, which the build does not make and without which a `--skip-build` launch refuses at once: run `pnpm code-intel:bundle` in it first (seconds when it is already there).",
+      "note": "Each command names its own Node 24 binary, and the script judges the tree it sits in, whatever your directory. That tree needs the code-intelligence bundle, which the build does not make and without which a `--skip-build` launch refuses at once: run `pnpm code-intel:bundle` in it first (seconds when it is already there). The third run is the opt-in scenarios, which the default run leaves out.",
       "runs": [
         {
           "what": "the default live run, every scenario",
@@ -33,6 +33,10 @@
         {
           "what": "duress, with the window the endpoint needs (AGENTS.md sets LIVE_RUN_DURESS_MS=7800000, and the launch's own bound is the wait plus 180 s). It outlives the Bash tool's 7,200,000 ms background cap, so it is launched DETACHED. Send the command as written (it returns at once), then wait with the Monitor tool until {repo}-wt-accept/.live-run/duress-launch.log holds a line starting exit=, re-arming the Monitor each time it stops (it is capped at thirty minutes); the pack is the one {repo}-wt-accept/.live-run/latest.txt names once that line is there",
           "command": "setsid nohup bash -c 'mkdir -p {repo}-wt-accept/.live-run; LIVE_RUN_DURESS_MS=7800000 timeout 8100 xvfb-run -a -s \"-screen 0 1600x1000x24\" {node} {repo}-wt-accept/apps/desktop/scripts/live-run.mjs --confirm --skip-build --only=duress > {repo}-wt-accept/.live-run/duress-launch.log 2>&1; echo \"exit=$?\" >> {repo}-wt-accept/.live-run/duress-launch.log' > /dev/null 2>&1 < /dev/null & disown"
+        },
+        {
+          "what": "the opt-in scenarios cutoff, rename, plan-open and empty-answer (empty-answer runs empty-answer, empty-once and empty-wait)",
+          "command": "timeout 5400 xvfb-run -a -s \"-screen 0 1600x1000x24\" {node} {repo}-wt-accept/apps/desktop/scripts/live-run.mjs --confirm --skip-build --only=cutoff,rename,plan-open,empty-answer"
         }
       ]
     },

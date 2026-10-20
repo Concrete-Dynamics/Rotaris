@@ -1479,7 +1479,9 @@ otherwise a generated eight-hex id unique in the list, the entry then being a ne
 `closes`, `newlyMarked`, `activeProtected`, `actives`, the held and served exemptions — sees the resolved id, and the success
 sentence names each replacement ("New ids replace the ones sent for <name> (<id>) as '<sent>', …; target them by these.") before
 any "Kept as they were". Until 2026-10-15 a task matching no protected one was stored under `t.id ?? hexId()`, so the model's own
-id (`impl101`) was kept and two tasks sent with one were stored under it.
+id (`impl101`) was kept and two tasks sent with one were stored under it. A delegated item the list no longer holds — removed by
+`remove_task`, which protects no held item, or set back to PENDING and left out of a `replace` — is sent back under its old id
+as a new task under a new id, so the `todo_item` its child stored no longer names an item of the plan.
 
 **A `replace` closes a delegated item once its child has ended (`PD-TOOLS-008` revision 3; OQ-255 ruled 2026-10-13 under R-072;
 fin37).** Beside the held set the `todo` tool reads `ctx.servedTodoItems` at each call (`TodoToolOptions.served`), which both

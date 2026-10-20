@@ -1926,6 +1926,33 @@ describe('todo (REQ-TOOLS-144..147)', () => {
       expect(list.phases[0]!.tasks).toHaveLength(3);
     });
 
+    // fin47's reviewers' finding (bundle `fin47-accept1-6`): a delegated item the list no longer holds — removed, or set back to
+    // PENDING and left out of a replace — is unknown to the list, so sent back under its old id it is a new task under a new id,
+    // and the id a child stored as its `todo_item` names nothing the list holds. REQ-TOOLS-144's ids, as A6's repair gives them.
+    it('a delegated item removed from the list, then sent back under its old id, is a new task with a new id', async () => {
+      const list = new TodoList();
+      const held = new Set<string>();
+      const t = todoTool(list, { held: () => held, served: () => held });
+      await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ name: 'impl' }, { name: 'tests' }] }] }, ctx());
+      const [impl, tests] = list.phases[0]!.tasks.map((x) => x.id) as [string, string];
+      held.add(impl); held.add(tests);
+      expect((await t.execute({ operation: 'update', task_id: impl, state: 'IN_PROGRESS' }, ctx())).isError).toBe(false);
+      // remove_task protects no held item, and a PENDING task is not protected, so a replace that leaves it out drops it.
+      expect((await t.execute({ operation: 'remove_task', task_id: impl }, ctx())).isError).toBe(false);
+      expect((await t.execute({ operation: 'update', task_id: tests, state: 'IN_PROGRESS' }, ctx())).isError).toBe(false);
+      expect((await t.execute({ operation: 'update', task_id: tests, state: 'PENDING' }, ctx())).isError).toBe(false);
+      expect((await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ name: 'other' }] }] }, ctx())).isError).toBe(false);
+      expect(list.findTask(impl)).toBeUndefined();
+      expect(list.findTask(tests)).toBeUndefined();
+      const back = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: impl, name: 'impl' }, { id: tests, name: 'tests' }] }] }, ctx());
+      expect(back.isError).toBe(false);
+      const ids = list.phases[0]!.tasks.map((x) => x.id);
+      expect(ids).toHaveLength(2);
+      for (const id of ids) { expect(id).toMatch(HEX8); expect([impl, tests]).not.toContain(id); }
+      expect(back.text.split('\n')[0]).toContain(`as '${impl}'`);
+      expect(back.text.split('\n')[0]).toContain(`as '${tests}'`);
+    });
+
     it('the description says the tool gives the ids', () => {
       expect(todoTool(new TodoList()).description).toContain('Phases and tasks carry stable 8-hex ids the tool gives: a replace keeps an id the list holds and gives a new one for any other; target by id, never by name.');
     });

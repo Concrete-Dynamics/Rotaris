@@ -16,6 +16,12 @@ asking the model for an id would not make them, and `add_task` already mints for
 older cases that sent a held or served id over an empty list now seed the list with that item, since an id the list does not hold
 names a new task no delegation serves. A live run shows it on the default pack's delegation-swarm: a coordinator that sends ids of
 its own reads "New ids replace the ones sent for …" on its first `replace`, and every later call targets eight-hex ids.
+*Added 2026-10-20 (loc1, `loc1-todo-reader`, fin47's reviewers' findings on `fin47-accept1-6`):* a delegated item the list no
+longer holds (removed with `remove_task`, or set back to PENDING and left out of a `replace`) is, sent back under its old id, a
+new task under a new id, so the `todo_item` its child stored no longer names it — REQ-TOOLS-144 as built, pinned by
+`tools.test.ts`'s "a delegated item removed from the list, then sent back under its old id, is a new task with a new id". The live
+run now fails a run whose coordinating sessions store a plan id that is not eight-hex (`planIdReading`,
+`apps/desktop/scripts/lib/coordinator-todo.mjs`), so a recurrence no longer waits on an autopsy.
 
 
 Found 2026-10-15 by fin47 (`fin47-classifier-and-todo`) while building OQ-333, reading the default live pack at `3c03287`

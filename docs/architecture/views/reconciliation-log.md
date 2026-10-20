@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-20**
 
+**A delegated item removed from the plan comes back as a new task (2026-10-20; loc1, `loc1-todo-reader`; REQ-TOOLS-144).**
+`03-runtime-view.md`'s paragraph on the ids a `replace` gives gains a sentence: a delegated item the list no longer holds
+(`remove_task`, which protects no held item, or set back to PENDING and left out of a `replace`), sent back under its old id, is a
+new task under a new id, and the `todo_item` its child stored no longer names it. Behaviour as built since A6, described from
+fin47's reviewers' finding on `fin47-accept1-6` and pinned in `tools.test.ts`; no code changed. No other view changed.
+
 **The live run holds every stored plan id of a coordinating session to eight hex characters (2026-10-20; loc1,
 `loc1-todo-reader`; REQ-TOOLS-144, finding A6's guard).** Harness only (`apps/desktop/scripts/lib/coordinator-todo.mjs`'s
 `planIdReading`, `live-run.mjs`'s check;

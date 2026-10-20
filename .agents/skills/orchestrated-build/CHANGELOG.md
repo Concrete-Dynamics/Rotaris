@@ -3,6 +3,17 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — standing permission for cleanup, asked at planning
+
+**Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
+approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
+item F05: the disk filled during an unattended run on 2026-10-07; the classifier refused the cleanup as "[Shared Scratch
+Sweep]" (09:39 and 09:40 UTC), about 28 minutes passed with no disk, 24 of them waiting on the owner, and red runs
+followed across four plans. **Changed:** SKILL.md §1.3's one planning message asks for standing cleanup of the
+orchestration's own worktrees and scratch, and `references/environment.md`, Load, records the refusal and the check-in's
+cleanup. **Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check`; the skill-review by one reviewer
+agent under `references/skill-review.md`, which judged this entry with the others of 2026-10-20.
+
 ## 2026-10-20 — live-run durations and the duress waiter, as measured
 
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner

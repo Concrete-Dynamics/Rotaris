@@ -69,6 +69,10 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   first. Every worktree shares the one allowance, so remove each landed plan's worktrees (bundle and landing) and the stale
   `.proof/` and `.live-run/` directories of trees no one is judging. Unit tests' temporary directories add up as well
   (about 29,900 `rotaris-*` directories, 360 MB, in `/tmp` on 2026-10-13, until fin38 made the tests remove theirs).
+- **Cleanup needs the owner's standing word.** During the full disk of 2026-10-07 the classifier refused a `/tmp` sweep
+  and even a plain `git worktree list` as "[Shared Scratch Sweep]" (09:39 and 09:40 UTC), and the run waited about 24
+  minutes on the owner. Ask for it at planning (SKILL.md §1.3); then each check-in removes the landed bundles'
+  worktrees and reads `df -h /`.
 
 ## Restarts
 

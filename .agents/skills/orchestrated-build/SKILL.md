@@ -42,8 +42,9 @@ as a rebase and a fast-forward push, never a merge commit (`references/repositor
    landed before the plan that builds it. An escalation, or reversing a clause the owner ruled personally, stays the
    owner's; the consortium's own recommendation goes with it.
 3. Ask the owner, in ONE message, everything that would stop the run later: may live runs happen, against which
-   endpoint, and may you add the permission rules for agents (`references/live-runs.md`); model and effort (default:
-   Opus, `high`); what is excluded. Settle from the code, the record or a default anything that can be settled so.
+   endpoint, and may you add the permission rules for agents (`references/live-runs.md`); may you remove this
+   orchestration's own landed worktrees and scratch without asking each time; model and effort (default: Opus,
+   `high`); what is excluded. Settle from the code, the record or a default anything that can be settled so.
    An authorization the owner made standing is quoted in every later plan and asked about no further; what its
    words leave out (another endpoint, a metered one) is asked (`references/live-runs.md`, Authorization).
 4. Record the owner's requests and rulings where the repository requires (`references/repository.md`, Owner

@@ -107,3 +107,7 @@ in a row exited 0 in 168 s, 170 s and 169 s, each with all twelve scenarios thro
 
 **Not shown:** the new check failing on the built app. The window closed with `459e7c8`, and it was not reopened
 to watch the check fire. Its failure path is shown only by the unit cases above.
+
+## Addendum, 2026-10-20 — on Windows
+
+The Windows ARM64 session's C2 (Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, at `30d35b3c`) ran `checkpoint-proof` three times. The check this repair added held each time: the `live` launch's lock holder was dead at the first probe, and `repaired` read `interrupted` with the lock released and the notice raised. The runs stopped later, at `loaded-restore` and `isolated-restore`, on steps placed at fixed offsets a slower Git outran ([`checkpoint-and-sessions-proofs-time-their-steps-by-fixed-offsets-a-slower-git-outruns.md`](../checkpoint-and-sessions-proofs-time-their-steps-by-fixed-offsets-a-slower-git-outruns.md)).

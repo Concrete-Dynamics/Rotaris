@@ -45,3 +45,20 @@ PowerShell heartbeat (at `0fde55f2`): the run host and the shell were gone 5 s l
 (ADR-0002, "First execution — 2026-10-20"). That run host was waiting on a scripted `wait` step; the live run's was streaming
 a model call. Which difference let the live run's utility processes run on is not established, and the note stays open on
 the live run's evidence.
+
+## Addendum, 2026-10-20 — the evidence lines up with the machine's Modern Standby
+
+The host's System event log (Kernel-Power 506, entering Modern Standby; 507, leaving it) puts the machine in standby from
+15:29:45 to 17:30:02 UTC on 2026-10-15, out of it for about a millisecond, and in it again until 23:33:31 UTC. Every
+reading this note rests on falls on those edges: the streamed call began at 15:28:52, 53 s before the first entry, and was
+reset at 17:30:05, 3 s after the exit; the two new requests (17:30:06, 17:30:08) failed name resolution in the seconds
+around a resume, before the network was back; `runElectron` returned at 23:33, at the second exit, and the process snapshot
+that found the two `NodeService` processes was taken then. A connection frozen across standby and reset at resume accounts
+for the 7,273 s call without any process running on with main gone, and wall-clock spans across standby measure the sleep,
+not the processes.
+
+What is left of the note is therefore unsupported, not falsified: whether the two `NodeService` processes would have ended
+had the machine stayed awake was not observed, and C1's path C, on an awake machine, saw the run host and its shell gone
+within about 1 s of main's kill. The same host put a `sessions-proof` launch into standby on 2026-10-20 (its `seed` launch
+reported "SIGTERM ended it after 9152074 ms", standby 09:09:10 to 12:37:14 UTC, broken only for a moment at 10:04:41), so a long stall read on this machine is
+checked against 506/507 first. The note is kept open as written; closing it is not this session's to rule.

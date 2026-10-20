@@ -515,6 +515,8 @@ repair was logged 1.48 to 1.81 s after the previous main's exit. All twelve scen
 **What it could not show:** the check firing on the built app. It would need the window `459e7c8` closed, and that
 was not reopened; the failing path is pinned by `lock-holder.test.ts` only. Windows and macOS were not run (IC-3 — *corrected 2026-10-14: for the Windows half, a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).
 
+*On Windows, 2026-10-20* (the Windows ARM64 session's C2; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, at `30d35b3c`). In three runs the `live` launch's lock holder was dead at the first probe each time and `repaired` read `interrupted`, lock released, notice raised, the repair logged 1.45–2.09 s after the `live` launch's last log line (the Linux figure counts from main's exit, which that line precedes by a few milliseconds). No run passed whole: two stopped at `loaded-restore`'s 15 000 ms planting guard (planted at 22 622 and 17 432 ms, the refusal itself in the log both times) and one at `isolated-restore`, whose 6 617 ms confirm-time preview left the restore running when the capture ended ([`checkpoint-and-sessions-proofs-time-their-steps-by-fixed-offsets-a-slower-git-outruns.md`](../../defects/checkpoint-and-sessions-proofs-time-their-steps-by-fixed-offsets-a-slower-git-outruns.md)). The check firing on the built app is still not shown. `hookCapture` is skipped on Windows until C3.
+
 ## The listing record's `checkpoint_count` is this record's derived count — 2026-10-03 (fin11)
 
 A defect note asked whether `Sessions.list`, which fills each row's count with `StoreDal.checkpointCount` (a `count(*)`

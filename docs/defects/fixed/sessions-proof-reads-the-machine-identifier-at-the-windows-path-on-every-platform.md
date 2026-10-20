@@ -101,3 +101,7 @@ In run 2 the pid counter wrapped between launch 2 and `repair-all` (32 021, then
 when the product probed it. On Linux only the `linux` branch runs; the `win32` branch is pinned by the unit case.
 
 **Not shown:** Windows and macOS (IC-3). The macOS path is measured by the unit test only.
+
+## Addendum, 2026-10-20 — on Windows
+
+The Windows ARM64 session's C2 (Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, at `30d35b3c`) ran `sessions-proof` three times. The third passed whole ("11 scenarios passed"); the identifier was at `profile\local\rotaris\data\machine-id` and nowhere else under the profile, and the planted locks named this machine through it: repair-all named B-nolock and C-deadlock (pid 4242) and left D-live out. The first run stopped at `delete` on a probe placed before a slower Git finished, the second on the machine entering Modern Standby; neither is this note's.

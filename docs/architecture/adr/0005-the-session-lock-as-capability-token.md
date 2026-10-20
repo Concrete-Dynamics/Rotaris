@@ -624,7 +624,7 @@ On Linux as root under Xvfb, three consecutive runs passed all ten launches. The
 repaired, D untouched, then "Nothing was stale") and everything after it, which had never run on Linux.
 
 **What it could not show:** Windows and macOS were not run (IC-3 — *corrected 2026-10-14: for the Windows half, a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*). The macOS spelling is measured only by the unit
-test against `dataLayout`.
+test against `dataLayout`. *2026-10-20, the Windows ARM64 session's C2 (Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, at `30d35b3c`): the Windows half ran. `sessions-proof` passed whole on its third run and wrote the machine identifier at `profile\local\rotaris\data\machine-id`, nowhere else under the profile, and its planted locks named this machine through it (repair-all named B-nolock and C-deadlock and left D-live). macOS stays unrun.*
 
 ## First execution — 2026-09-29, the lock a continue takes back
 

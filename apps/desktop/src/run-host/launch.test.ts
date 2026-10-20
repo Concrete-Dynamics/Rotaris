@@ -445,24 +445,70 @@ ${retrospective === 'slot' ? 'retrospective_model: analyst\n' : ''}`);
       expect(r).toMatchObject({ ok: false, error: { code: 'confinement' } });
     });
 
-    it('a configuration that loaded but names no role this build knows is refused with that reason, never as an unloadable configuration', async () => {
+    /*
+     * PD-LIBRARY-002 revision 6 (OQ-363, ruled 2026-10-20 under R-072): of a configuration that loads, a retrospective is refused
+     * only where no retrospective model resolves (`no-model`) and by revision 5's lease refusal. A `default_persona` naming no role
+     * this build knows leaves the pass's setup completed on its own model, with no role's system text, and the log says so; and
+     * referential errors are warnings for the pass whatever the presenter (REQ-CONFIG-246 binds a run, and the pass is none).
+     * Until 2026-10-20 both refused it, answered `retrospective.configuration`.
+     */
+    const logged = (base: ReturnType<typeof withVerdict>, lines: string[]) => ({ ...base, configuration: { ...base.configuration, log: (m: string) => { lines.push(m); } } });
+
+    it('a default_persona naming no role this build knows is completed on the retrospective\'s own model, over the bearer it leased (revision 6)', async () => {
       confined('default_persona: nobody-at-all\n');
+      const lines: string[] = [];
       const lease = vi.fn(async () => ({ 'provider-one': 'analyst-bearer' }));
-      const r = await leasedSetup(dir, withVerdict(null, lease));
-      expect(r).toMatchObject({ kind: 'refused', reply: { kind: 'refused', code: 'retrospective.configuration', headline: 'The workspace configuration refused the retrospective' } });
-      if (r.kind !== 'refused' || r.reply.kind !== 'refused') return;
-      expect(r.reply.detail).toMatch(/nobody-at-all/);
-      expect(r.reply.detail).not.toMatch(/could not be loaded/);
+      const r = await leasedSetup(dir, logged(withVerdict(null, lease), lines));
+      expect(r).toMatchObject({ kind: 'configured' });
+      if (r.kind !== 'configured') return;
+      expect(lease).toHaveBeenCalledWith(['provider-one']);
+      const collector = retrospectiveOf(r.setup.cfg, r.setup.scripted);
+      expect(collector?.key).toBe('selected');
+      expect(await r.setup.model.config.credentialFor(collector!.model)()).toBe('analyst-bearer');
+      // No role's system text: the pass sends the analyst's own, and nothing of a role it does not know.
+      expect(r.setup.model.config.systemPrompt).toBe('');
+      expect(r.setup.model.config.persona).toBe('nobody-at-all');
+      expect(lines).toContain("configuration: default_persona 'nobody-at-all' names no role this build knows; a retrospective sends nothing to it, so its setup is completed on its own model 'selected' (PD-LIBRARY-002)");
+    });
+
+    it('referential errors with no one present (REQ-CONFIG-246) do not refuse a retrospective: they are its warnings (revision 6)', async () => {
+      confined('default_persona: nobody-at-all\n');
+      const base = withVerdict(null, async () => ({ 'provider-one': 'analyst-bearer' }));
+      const r = await leasedSetup(dir, { ...base, attended: false });
+      expect(r).toMatchObject({ kind: 'configured' });
+      if (r.kind !== 'configured') return;
+      expect(r.setup.warnings).toContainEqual(expect.stringContaining("configuration: default_persona 'nobody-at-all' names no existing role"));
+    });
+
+    it('referential errors alone, the entry role known, do not refuse an unattended retrospective (revision 6)', async () => {
+      confined('small_model: nothing-configured\n');
+      const base = withVerdict(null, async () => ({ 'provider-one': 'analyst-bearer' }));
+      const r = await leasedSetup(dir, { ...base, attended: false });
+      expect(r).toMatchObject({ kind: 'configured' });
+      if (r.kind !== 'configured') return;
+      expect((r.setup.warnings ?? []).some((w) => w.startsWith('configuration: ') && w.includes('nothing-configured'))).toBe(true);
+    });
+
+    it('an unknown default_persona with no resolvable retrospective model is refused as `no-model`, and nothing is leased', async () => {
+      // `medium_model` stated and naming nothing: an unset one resolves to the shipped default.
+      writeFileSync(join(dir, '.rotaris', 'agents.yaml'), 'default_persona: nobody-at-all\nmodels:\n  selected:\n    provider: openai\n    model_id: m\n    auth_provider: provider-one\nlarge_model: selected\nmedium_model: nothing-configured\nruntime:\n  sandbox_mode: workspace-write\n');
+      const lease = vi.fn(async () => ({ 'provider-one': 'analyst-bearer' }));
+      expect(await leasedSetup(dir, withVerdict(null, lease))).toEqual({ kind: 'no-model', reason: "default_persona 'nobody-at-all' names no role this build knows, and no retrospective model resolves (retrospective_model, then medium_model)." });
       expect(lease).not.toHaveBeenCalled();
     });
 
-    it('referential errors with no one present (REQ-CONFIG-246) are refused with their own reason, never as an unloadable configuration', async () => {
-      confined('default_persona: nobody-at-all\n');
-      const base = withVerdict(null, async () => ({}));
-      const r = await leasedSetup(dir, { ...base, attended: false });
-      expect(r).toMatchObject({ kind: 'refused', reply: { kind: 'refused', code: 'retrospective.configuration' } });
-      if (r.kind !== 'refused' || r.reply.kind !== 'refused') return;
-      expect(r.reply.detail).toMatch(/no one is present to correct/);
+    it('the run start keeps both refusals word for word: the unknown persona, and referential errors with no one present', async () => {
+      // No sandbox_mode, so the confinement gate does not answer first.
+      writeFileSync(join(dir, '.rotaris', 'agents.yaml'), 'default_persona: nobody-at-all\nmodels:\n  selected:\n    provider: openai\n    model_id: m\n    auth_provider: provider-one\nlarge_model: selected\nmedium_model: selected\n');
+      for (const [attended, detail] of [[true, /names no role this build knows/], [false, /no one is present to correct/]] as const) {
+        const lease = vi.fn(async () => ({ 'provider-one': 'bearer' }));
+        const start = vi.fn(() => { throw new Error('a refused run was started'); });
+        const r = await launchSession({ kind: 'session.start', workspaceId: dir, prompt: 'answer' }, { ...deps(lease), attended, start });
+        expect(r).toMatchObject({ kind: 'refused', code: 'session.configuration', headline: 'The run was refused before it started' });
+        expect(r.kind === 'refused' ? r.detail : '').toMatch(detail);
+        expect(lease).not.toHaveBeenCalled();
+        expect(start).not.toHaveBeenCalled();
+      }
     });
 
     it('a configuration that will not load is still `unconfigured`, its reason the loader\'s', async () => {

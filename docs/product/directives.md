@@ -1656,6 +1656,28 @@ written to the log at its capture, whatever the presenter.
 > on four CPUs, shows the other warnings `passFailureDetail` builds unchanged: a crashed collector's reason ending in ")" still
 > gains its one period. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First execution of revision 6, 2026-10-20 (loc1, `loc1-confinement-retro`), ruled by [R-072](requests.md#r-072)
+> (OQ-363):** the passage held as written; nothing in it met a build it could not describe. `prepareRun`
+> (`apps/desktop/src/run-host/configuration.ts`), preparing a retrospective, completes the setup on the pass's own model where
+> `default_persona` names no role this build knows — the configured name kept, no role's system text, the log saying so — and
+> refuses it as `no-model` only where no retrospective model resolves either; it reads no attendedness for the pass, so
+> REQ-CONFIG-246's referential messages are its warnings; and `retrospective.capture` writes each warning of the setup to the log
+> once, at `warn`, prefixed `retrospective: `, the analysis none. Every run start and continuation keeps both refusals word for
+> word. **What was measured.** Four `launch.test.ts` cases and one `dispatch.test.ts` case, each red before the change, with the
+> run start's two refusals pinned beside them (green before and after); and `pnpm retrospective-proof` launch 13
+> (`unknown-persona`: `default_persona: a-role-this-build-does-not-know`, `medium_model: scripted`), red on its first five checks
+> on the base — the gesture answered "The retrospective could not be started" with "The workspace configuration refused the
+> retrospective: default_persona 'a-role-this-build-does-not-know' names no role this build knows.", nothing stored — and green on
+> all six after: no refusal notice, the indicator seen then gone, one `retrospective` artifact with no source session, the
+> stand-in line, one `warning` line "retrospective: configuration: default_persona 'a-role-this-build-does-not-know' names no
+> existing role", and a prompt in the same launch refused "The run was refused before it started" with "names no role this build
+> knows". The whole proof read 83 of 84 on Windows 11 ARM64 (8 CPUs, CPU load 68 to 100 % with another tree's Electron running);
+> its one red, launch 1's machine-wide-base check, is Windows-only and recorded
+> ([`../defects/retrospective-proofs-instruction-file-check-requires-a-machine-wide-base-windows-never-reads.md`](../defects/retrospective-proofs-instruction-file-check-requires-a-machine-wide-base-windows-never-reads.md)).
+> **What was not measured.** The analysis reached with the presenter lapsed: the gesture is always attended in the built app, so
+> `launch.test.ts` carries the unattended case; no live run was owed. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-shell-002"></a>

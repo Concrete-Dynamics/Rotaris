@@ -445,12 +445,20 @@ ADR-0022's start-time confinement gate does not meet a retrospective's setup: it
 `runtime.sandbox_mode` and the run host's verdict — settled or not — refuse nothing here, while a run start and a continuation keep
 the gate. Of `prepareRun`'s other refusals, only a configuration that did not load or apply (`ConfigureRefusal` code `unloaded`)
 becomes `unconfigured`, said as `retrospective.no-configuration` at the capture and `improvement.no-configuration` at the analysis,
-each with the loader's reason as its detail; a configuration that loaded and refused the pass (a `default_persona` naming no known
-role, REQ-CONFIG-246's referential errors with no presenter, OQ-363) answers `retrospective.configuration` with `prepareRun`'s own
-reason (*since 2026-10-15, fin47 `fin47-accept1-4`; until then a requested confinement refused the pass wherever the verdict was
-unsettled or unavailable, and every such refusal read "The workspace configuration could not be loaded" and, at the analysis,
-`improvement.expired`,
-`docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`*).
+each with the loader's reason as its detail. Of a configuration that loads, nothing else refuses the pass (`PD-LIBRARY-002`
+revision 6, OQ-363): a `default_persona` naming no role this build knows leaves its setup completed on the retrospective's own
+model — the configured name kept, no role's system text, the log saying so — and refused as `no-model` only where no
+retrospective model resolves either; REQ-CONFIG-246's referential errors are the setup's warnings whatever the presenter, since
+the setup reads no attendedness; and `retrospective.capture` writes every warning of the setup — the load's and the referential
+messages — to the log once, at `warn`, prefixed `retrospective: `, before the collector is resolved, while `improvement.analyze`,
+which repeats the preparation, writes none. `retrospective.configuration`, `leasedSetup`'s answer for a loaded configuration that
+refuses the pass, is reached by no current refusal and stays as the truthful answer for one that ever does (*since 2026-10-20,
+loc1; from 2026-10-15 (fin47 `fin47-accept1-4`) the unknown persona and the referential errors with no presenter answered
+`retrospective.configuration` with `prepareRun`'s reason, and until then a requested confinement refused the pass wherever the
+verdict was unsettled or unavailable, and every such refusal read "The workspace configuration could not be loaded" and, at the
+analysis, `improvement.expired`,
+`docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`*). Every run
+start and continuation keeps both refusals word for word.
 A lease that leaves the retrospective model's sign-in provider unresolved — the model its request goes to, `retrospective_model`
 then `medium_model`, never the entry role's (*since 2026-10-14, fin46; it read "the entry provider" and checked the entry role's,
 `docs/defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`*) — answers `session.provider-auth` with REQ-WORKSPACE-137's headline and the

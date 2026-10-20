@@ -56,6 +56,15 @@
  *      artifact, no "could not be started" / "could not be loaded" notice, which is what it answered until fin47; a prompt
  *      submitted after it is still refused by the gate before the run starts
  *      (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+ *      Where the run host's verdict reads available (a host this launch cannot take `bwrap` from: macOS), that last check is
+ *      inverted — the prompt's run is not refused — and the check names which the host read (since loc1).
+ *  13. AN UNKNOWN PERSONA (since loc1, PD-LIBRARY-002 revision 6, OQ-363) — `default_persona` names a role this build does not
+ *      know, `medium_model` resolving: the gesture raises no refusal notice, the pass runs and stores its retrospective artifact,
+ *      the log says the setup was completed on the retrospective's own model and carries the configuration's referential
+ *      message as a `retrospective: ` warning; a prompt submitted afterwards in the same launch is still refused before its run
+ *      starts, "names no role this build knows". Until loc1 the gesture was answered "The retrospective could not be started"
+ *      with "The workspace configuration refused the retrospective", and nothing was stored. The unattended branch (no live
+ *      presenter at the analysis) cannot be reached here — the gesture is always attended — so `launch.test.ts` carries it.
  *  10. A FAILED POST-RUN ANALYST (since fin45, PD-LIBRARY-005) — a scripted run completes and its post-run analyst's provider
  *      refuses the credential (`crash`): the run's empty artifact is stored with REQ-LIBRARY-023's notes, and the completed
  *      run's failure warning names the session, the reason and the artifact holding no proposals, with no action and no
@@ -95,15 +104,17 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * `medium` is the model slot's target — a name that is NOT in `models:` is how a workspace with no resolvable
  * retrospective model is written, which is the fourth launch's whole subject. `large` is the entry role's tier (the
  * shipped `orchestrator` runs on it); the same unconfigured name there leaves the entry role with no usable model, the
- * eleventh launch's subject. `sandbox` is `runtime.sandbox_mode`, unset unless given: the twelfth launch's subject.
+ * eleventh launch's subject. `sandbox` is `runtime.sandbox_mode`, unset unless given: the twelfth launch's subject. `persona` is
+ * `default_persona`, unset unless given: the thirteenth launch's subject.
  */
-function workspaceAt(name, { medium = 'scripted', large = 'scripted', timeout = 120, sandbox = null } = {}) {
+function workspaceAt(name, { medium = 'scripted', large = 'scripted', timeout = 120, sandbox = null, persona = null } = {}) {
   const workspace = join(output, name, 'workspace');
   mkdirSync(join(workspace, '.rotaris', 'persona_memory'), { recursive: true });
   writeFileSync(join(workspace, 'README.md'), `# retrospective proof workspace (${name})\n`);
   writeFileSync(join(workspace, 'AGENTS.md'), '# House rules\n\nRun the suite before claiming a change is done.\n');
   writeFileSync(join(workspace, '.rotaris', 'persona_memory', 'coding-agent.md'), 'Remember: this workspace has no build gate named anywhere.\n');
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
+    ...(persona === null ? [] : [`default_persona: ${persona}`]),
     'models:', '  scripted: { provider: scripted, model_id: scripted }',
     'small_model: scripted', `medium_model: ${medium}`, `large_model: ${large}`,
     'runtime:', '  permission_mode: autonomous', `  retrospective_timeout: ${timeout}`, ...(sandbox === null ? [] : [`  sandbox_mode: ${sandbox}`]),
@@ -976,8 +987,15 @@ for (const [script, notesPrefix, reasonText] of [['crash', 'collector crashed: '
   });
   const log = readFileSync(join(output, `${name}.log`), 'utf8');
   const verdictLine = log.split('\n').find((line) => /run host: confinement: (available|unavailable)/.test(line))?.trim() ?? null;
-  check('confinement requested: the run host\'s verdict settled unavailable in this launch (the instrument: `bwrap` left off PATH)',
-    process.platform !== 'linux' || (verdictLine !== null && /confinement: unavailable/.test(verdictLine)), verdictLine?.slice(0, 260) ?? 'no verdict line in the log');
+  const verdictAvailable = verdictLine !== null && /confinement: available/.test(verdictLine);
+  /*
+   * The instrument. On Linux `bwrap` is left off PATH, so the verdict must read unavailable. Elsewhere this launch removes no
+   * launcher and the host decides: native Windows has no mechanism (REQ-SANDBOX-073) and reads unavailable, macOS reads available.
+   * Until loc1 the check passed off Linux without reading anything (fin47's reviewers); it now requires the verdict line on every
+   * host and says which the host read.
+   */
+  check(`confinement requested: the run host settled its verdict in this launch, read ${verdictLine === null ? 'nothing' : verdictAvailable ? 'available' : 'unavailable'} (${process.platform === 'linux' ? 'the instrument: `bwrap` left off PATH, so unavailable is required' : `${process.platform}: the host's own verdict`})`,
+    verdictLine !== null && (process.platform !== 'linux' || !verdictAvailable), verdictLine?.slice(0, 260) ?? 'no verdict line in the log');
   check('confinement requested: the retrospective is not refused by the confinement gate — no refusal notice is raised (PD-LIBRARY-002, REQ-SANDBOX-095)',
     refused === null, refused === null ? 'none' : `"${refused.text.slice(0, 220)}"`);
   check('confinement requested: the pass ran and ended (REQ-LIBRARY-125)', indicator && ended, `indicator seen ${indicator}, ended ${ended}`);
@@ -985,9 +1003,72 @@ for (const [script, notesPrefix, reasonText] of [['crash', 'collector crashed: '
   check('confinement requested: the pass stored its retrospective artifact (PD-LIBRARY-002)',
     stored.length === 1 && stored[0].source_kind === 'retrospective' && stored[0].source_session_id === null,
     stored.length === 0 ? 'nothing was stored' : stored.map((row) => `${row.artifact_id} ${row.source_kind}`).join(', '));
-  check('confinement requested: a run start is still refused before it starts, with the backend\'s reason (REQ-SANDBOX-095, REQ-NOTIFY-061)',
-    runRefusal !== null && runRefusal.data['data-severity'] === 'error' && (process.platform !== 'linux' || /`bwrap` was not found on PATH/.test(runRefusal.text)),
-    runRefusal === null ? 'no "The run was refused before it started" notice after the prompt' : `severity=${runRefusal.data['data-severity']} — "${runRefusal.text.slice(0, 260)}"`);
+  // Inverted where the verdict reads available: the gate then admits the run, and a refusal would be the defect (since loc1).
+  if (verdictAvailable) {
+    check('confinement requested and AVAILABLE on this host (the refusal check inverted): a run start is not refused by the gate (REQ-SANDBOX-094)',
+      runRefusal === null, runRefusal === null ? 'no "The run was refused before it started" notice after the prompt' : `"${runRefusal.text.slice(0, 260)}"`);
+  } else {
+    check('confinement requested and unavailable on this host: a run start is still refused before it starts, with the backend\'s reason (REQ-SANDBOX-095, REQ-NOTIFY-061)',
+      runRefusal !== null && runRefusal.data['data-severity'] === 'error' && (process.platform !== 'linux' || /`bwrap` was not found on PATH/.test(runRefusal.text)),
+      runRefusal === null ? 'no "The run was refused before it started" notice after the prompt' : `severity=${runRefusal.data['data-severity']} — "${runRefusal.text.slice(0, 260)}"`);
+  }
+}
+
+// ── 13. An unknown persona (PD-LIBRARY-002 revision 6, OQ-363, ruled 2026-10-20 under R-072): a `default_persona` naming no role this
+//    build knows refuses a run and not a retrospective, which sends nothing to the entry role: the pass's setup is completed on its
+//    own model (`medium_model` here), and the configuration's referential message is written to the log at the capture as a
+//    `retrospective: ` warning. Until loc1 the gesture was answered "The retrospective could not be started" with "The workspace
+//    configuration refused the retrospective: default_persona '…' names no role this build knows.", and nothing was stored. The
+//    same launch then submits a prompt, which the run start still refuses word for word (REQ-EVENTS-021).
+{
+  const name = 'unknown-persona';
+  const persona = 'a-role-this-build-does-not-know';
+  const workspace = workspaceAt(name, { persona, medium: 'scripted' });
+  const refusing = /could not be started|refused the retrospective|could not be loaded|needs a model/;
+  let refused = null;
+  let indicator = false;
+  let ended = false;
+  let runRefusal = null;
+  await launch(name, workspace, {}, async (d, root) => {
+    await openProposals(d);
+    await d.click('[data-testid="library-retrospective"]', { timeoutMs: 15_000 });
+    // Either the pass starts (its title-bar indicator) or the gesture is refused (its notice): whichever comes first is read.
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline && !indicator && refused === null) {
+      indicator = (await probe(d, '[data-testid="improvement-activity-title-bar"]')).length > 0;
+      refused = (await probe(d, '[data-testid="notice"]')).find((n) => refusing.test(n.text)) ?? null;
+      if (!indicator && refused === null) await sleep(200);
+    }
+    ended = await until(d, '[data-testid="improvement-activity-title-bar"]', (m) => m.length === 0, 60_000);
+    await sleep(500);
+    refused ??= (await probe(d, '[data-testid="notice"]')).find((n) => refusing.test(n.text)) ?? null;
+    await d.screenshot(join(output, `${name}.png`));
+    // The run start keeps its refusal: the same configuration refuses a run before it starts.
+    await d.click('.nav-item', { text: 'Workspace', timeoutMs: 15_000 });
+    await d.click('.composer__input', { timeoutMs: 20_000 });
+    await d.type('tidy the workspace and say so', { enter: true });
+    runRefusal = await noticeMatching(d, /The run was refused before it started/, 30_000);
+    await d.screenshot(join(output, `${name}-run.png`));
+    return root;
+  });
+  check('an unknown default_persona does not refuse the retrospective: no refusal notice is raised (PD-LIBRARY-002 revision 6)',
+    refused === null, refused === null ? 'none' : `"${refused.text.slice(0, 260)}"`);
+  check('unknown persona: the pass ran and ended — the title-bar indicator seen, then gone (REQ-LIBRARY-125)', indicator && ended, `indicator seen ${indicator}, ended ${ended}`);
+  const stored = artifactsIn(join(output, name, 'app'));
+  check('unknown persona: the pass stored exactly one retrospective artifact with no source session (PD-LIBRARY-002)',
+    stored.length === 1 && stored[0].source_kind === 'retrospective' && stored[0].source_session_id === null,
+    stored.length === 0 ? 'nothing was stored' : stored.map((row) => `${row.artifact_id} ${row.source_kind} ${row.source_session_id}`).join(', '));
+  const log = readFileSync(join(output, `${name}.log`), 'utf8');
+  const standInLine = `configuration: default_persona '${persona}' names no role this build knows; a retrospective sends nothing to it, so its setup is completed on its own model 'scripted' (PD-LIBRARY-002)`;
+  check('unknown persona: the log says the setup was completed on the retrospective\'s own model',
+    log.includes(standInLine), log.split('\n').find((line) => /a retrospective sends nothing to it/.test(line))?.trim().slice(0, 280) ?? 'no such line');
+  // The log writes the level as `warning` in its level column (`[main <instant>] warning run host: …`); once per pass, at the capture.
+  const warnLines = log.split('\n').filter((line) => line.includes(`retrospective: configuration: default_persona '${persona}' names no existing role`));
+  check('unknown persona: the capture writes the referential message to the log once, as a `retrospective: ` warning (PD-LIBRARY-002 revision 6)',
+    warnLines.length === 1 && /^\[main [^\]]+\] warning /.test(warnLines[0]), warnLines.length === 0 ? 'no such line' : `${warnLines.length} line(s): ${warnLines[0].trim().slice(0, 280)}`);
+  check('unknown persona: a run start is still refused before it starts, "names no role this build knows" (REQ-EVENTS-021)',
+    runRefusal !== null && /names no role this build knows/.test(runRefusal.text),
+    runRefusal === null ? 'no "The run was refused before it started" notice after the prompt' : `"${runRefusal.text.slice(0, 260)}"`);
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures, launches }, null, 2)}\n`);

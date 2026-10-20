@@ -95,18 +95,25 @@ export type LeasedSetup =
  * (`docs/defects/fixed/a-retrospective-sends-its-model-request-with-no-credential-when-no-run-has-leased-one.md`).
  */
 export async function leasedSetup(workspaceRoot: string, deps: ContinuationLeaseDeps): Promise<LeasedSetup> {
-  // Prepared as a retrospective's: an entry role with no usable model does not refuse it while its own model resolves, and a
-  // `no-model` refusal then means neither does (`PrepareOptions.retrospective`).
+  // Prepared as a retrospective's: an entry role with no usable model, or a `default_persona` naming no role this build knows,
+  // does not refuse it while its own model resolves, and a `no-model` refusal then means neither does; referential errors are its
+  // warnings whatever `deps.attended` holds (`PrepareOptions.retrospective`, PD-LIBRARY-002 revision 6).
   // Nor does ADR-0022's start-time confinement gate meet it: that gate is a run start's, and a retrospective opens no shell.
+  // Nor does it settle the confinement verdict (`deps.settleConfinement`), which nothing here reads as a gate.
   const prepared = prepareRun(workspaceRoot, deps.attended, deps.configuration, undefined, { retrospective: true });
   if (!prepared.ok) {
     if (prepared.error.code === 'no-model') return { kind: 'no-model', reason: prepared.error.reason };
     if (prepared.error.code === 'unloaded') return { kind: 'unconfigured', reason: prepared.error.reason };
     /*
-     * REQ-NOTIFY-254: a configuration that loaded and refused the pass — `default_persona` naming no role this build knows, or
-     * referential errors with no one present (REQ-CONFIG-246) — is said with the reason that layer gave, never as one that could
-     * not be loaded. Until 2026-10-15 every refusal but `no-model` became `unconfigured`
+     * REQ-NOTIFY-254: a configuration that loaded and refused the pass is said with the reason that layer gave, never as one that
+     * could not be loaded. Until 2026-10-15 every refusal but `no-model` became `unconfigured`
      * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+     *
+     * Since PD-LIBRARY-002 revision 6 (OQ-363, 2026-10-20) no refusal of a loaded configuration reaches here: the two that did —
+     * `default_persona` naming no role this build knows, and referential errors with no one present (REQ-CONFIG-246) — no longer
+     * refuse a retrospective's setup. The branch stays as the truthful answer for one that ever does. The analysis passes this
+     * reply on under its `retrospective.configuration` code too, beside its own `improvement.*` codes; with the branch unreached
+     * that code is left as it stands.
      */
     return { kind: 'refused', reply: { kind: 'refused', code: 'retrospective.configuration', headline: 'The workspace configuration refused the retrospective', detail: prepared.error.reason } };
   }

@@ -58,3 +58,5 @@ The other `prepareRun` refusals of a configuration that loaded — chiefly the c
 read "could not be loaded"; recorded in
 [`a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`](a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md)
 (repaired 2026-10-15, fin47 `fin47-accept1-4`).
+
+*2026-10-20: the stand-in now covers a `default_persona` naming no role this build knows as well — the pass's setup completed on its own model with no role's system text, refused as `no-model` only where no retrospective model resolves — ruled as [OQ-363](../../architecture/open-questions.md#oq-363) ((b) refined, `PD-LIBRARY-002` revision 6) and built by loc1 (`loc1-confinement-retro`), pinned by `launch.test.ts` and `retrospective-proof` launch 13 (`unknown-persona`).*

@@ -348,6 +348,28 @@ describe('a retrospective authenticates as a run does: leased first, its setup c
     expect(await dispatch({ kind: 'retrospective.capture', workspaceId: 'W1', workspaceRoot: root }, host)).toEqual({ kind: 'refused', code: 'retrospective.no-configuration', headline: 'The workspace configuration could not be loaded', detail: reason });
     expect(await dispatch({ kind: 'improvement.analyze', job } as unknown as RunHostRequest, host)).toEqual({ kind: 'refused', code: 'improvement.no-configuration', headline: 'The workspace configuration could not be loaded', detail: reason });
   });
+
+  /*
+   * PD-LIBRARY-002 revision 6 (OQ-363, ruled 2026-10-20 under R-072): "The configuration's load warnings and referential messages
+   * are written to the application log when the pass is captured, one warning line each." No retrospective path wrote them
+   * anywhere before: only a run's start and continuation write a setup's warnings. The analysis repeats the capture's
+   * preparation, so it writes none.
+   */
+  it('the capture writes each warning of the setup once, at warn, prefixed `retrospective: `; the analysis writes none', async () => {
+    const lines: [string, string | undefined][] = [];
+    const warned = { ...run('leased-analyst', 'leased-bearer'), warnings: ['configuration: one', 'configuration: two'] };
+    const host = {
+      ...(hostFor([]) as unknown as Record<string, unknown>),
+      log: (m: string, level?: string) => { lines.push([m, level]); },
+      retrospectiveSetup: async () => ({ kind: 'configured', setup: warned, bearers: { p: 'leased-bearer' } }),
+    } as unknown as RunHost;
+    expect(await dispatch({ kind: 'retrospective.capture', workspaceId: 'W1', workspaceRoot: root }, host)).toMatchObject({ kind: 'retrospective.captured' });
+    expect(lines.filter(([m]) => m === 'retrospective: configuration: one')).toEqual([['retrospective: configuration: one', 'warn']]);
+    expect(lines.filter(([m]) => m === 'retrospective: configuration: two')).toEqual([['retrospective: configuration: two', 'warn']]);
+    lines.length = 0;
+    expect(await dispatch({ kind: 'improvement.analyze', job } as unknown as RunHostRequest, host)).toMatchObject({ kind: 'improvement.analyzed' });
+    expect(lines.filter(([m]) => m.startsWith('retrospective: configuration:'))).toEqual([]);
+  });
 });
 
 /**

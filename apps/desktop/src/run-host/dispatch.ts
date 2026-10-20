@@ -313,6 +313,14 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
         return { kind: 'refused', code: 'retrospective.no-configuration', headline: 'The workspace configuration could not be loaded', detail: leased.reason };
       }
       const setup = leased.setup;
+      /*
+       * PD-LIBRARY-002 revision 6 (OQ-363, ruled 2026-10-20 under R-072): "The configuration's load warnings and referential
+       * messages are written to the application log when the pass is captured, one warning line each." The setup reads no
+       * attendedness, so its referential messages are among its warnings whatever the presenter. Only a run's start and
+       * continuation wrote a setup's warnings before; no retrospective path did. The analysis repeats this preparation and
+       * writes none, so each line is written once per pass.
+       */
+      for (const warning of setup.warnings ?? []) log(`retrospective: ${warning}`, 'warn');
       const collector = retrospectiveOf(setup.cfg, setup.scripted);
       if (collector === null) return { kind: 'refused', code: 'retrospective.no-model', headline: 'No retrospective analyst is configured' };
       // REQ-LIBRARY-019/030: the prior proposals are evidence, and a history that could not be read is a source

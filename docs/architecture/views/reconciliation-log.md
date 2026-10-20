@@ -18,6 +18,13 @@ Last reconciled with the code: **2026-10-21**
 
 **A Windows session's end, observed simulated (2026-10-21; the Windows ARM64 session's C5).** `02-process-view.md`'s "not yet observed on a Windows host" for `SessionEndShutdown` is kept, with the simulated logoff beside it: the two end-session messages sent to the application's own windows ran the orderly shutdown, exit 0 in 0.9–1.9 s, the store as PD-ORCH-005 clause 23 wants; a real logout is still unobserved, and Windows' allowance against the 30 s bounds is OQ-402. No code changed.
 
+**A retrospective's refusals as built under PD-LIBRARY-002 revision 6 (OQ-363; 2026-10-20).** `02-process-view.md`'s retrospective
+paragraph now states them: of a configuration that loads, an unknown `default_persona` leaves the pass's setup completed on its
+own model (refused as `no-model` only where no retrospective model resolves), REQ-CONFIG-246's referential errors are its warnings
+whatever the presenter, `retrospective.capture` writes every warning of the setup to the log once at `warn` prefixed
+`retrospective: ` (the analysis none), and `retrospective.configuration` is reached by no current refusal; with the dated history
+of the fin47 shape it replaces. No package, edge, process or message kind changed.
+
 **A continuation settles the confinement verdict before its run is configured (REQ-SANDBOX-097; 2026-10-20).** `03-runtime-view.md`
 §1 gains the paragraph after the continuation lease: every run-launching continuation (`session.continue`, `session.prompt`,
 `session.planDecision`, `session.retry`, `session.restartOnFallback`, `session.authRestart`) awaits the run host's

@@ -15913,7 +15913,7 @@ sibling note). REQ-CONFIG-246 speaks of "a run no person is watching"; a retrosp
 (PD-LIBRARY-002's trigger) and is no run, but its analysis can still be reached after the presenter has lapsed. Neither text says
 whether these refusals bind the pass.
 
-**What the build proceeds under.** Both refuse the retrospective, said truthfully since this repair: `leasedSetup` answers
+**What the build proceeded under, and no longer does (falsified by the ruling below).** Both refuse the retrospective, said truthfully since this repair: `leasedSetup` answers
 `refused` with code `retrospective.configuration`, headline "The workspace configuration refused the retrospective" and
 `prepareRun`'s reason as the detail; main posts "The retrospective could not be started" with it at the gesture, and the analysis
 carries it inside PD-LIBRARY-002 (c)'s failure warning. Until 2026-10-15 both read "The workspace configuration could not be
@@ -16000,6 +16000,8 @@ Neither advocate recommended (a) or (c), and both found what rules them out:
 - **(c)** cannot be built as worded. An unknown `default_persona` is itself a referential message
   (`packages/config/src/validate.ts`), so with no presenter REQ-CONFIG-246's branch refuses it before the persona is read.
   `launch.test.ts`'s unattended case shows this on exactly that configuration.
+
+*Built 2026-10-20 by loc1 (`loc1-confinement-retro`).* `prepareRun` (`apps/desktop/src/run-host/configuration.ts`) completes a retrospective's setup on its own model where `default_persona` names no role this build knows (refused as `no-model` where none resolves), and reads no attendedness for it, so REQ-CONFIG-246's referential messages are its warnings; `retrospective.capture` writes each warning of the setup once at `warn`, prefixed `retrospective: `, and `improvement.analyze` none. Every run start and continuation keeps both refusals word for word. Pinned by four `launch.test.ts` cases and a `dispatch.test.ts` case, each red before, beside the run start's two refusals; and by `retrospective-proof` launch 13 (`unknown-persona`), red on five checks on the base and green after (the whole proof 83 of 84 on Windows 11 ARM64, the one red Windows-only and recorded). Reported back in [ADR-0065](adr/0065-the-retrospective-pass.md) and [`PD-LIBRARY-002`](../product/directives.md#pd-library-002)'s "First execution of revision 6".
 
 <a id="oq-364"></a>
 

@@ -88,7 +88,11 @@ export function runtimeFromConfiguration(cfg: LoadedConfiguration, verdict: Avai
      * to permission-mode resolution requires both, and selection alone must never count as present
      * — treating it as present would remove the tightening while commands executed unconfined.
      * A run that asked for confinement this host cannot deliver never reaches here at all: the gate
-     * in `prepareRun` refuses it before the session exists (REQ-SANDBOX-095).
+     * in `prepareRun` refuses it before the session exists (REQ-SANDBOX-095). A retrospective's setup,
+     * which meets no gate (`PrepareOptions.retrospective`), does reach here with `requested` true and
+     * `available` false where the verdict is unsettled or unavailable — and still no run: that setup
+     * is never cached into `configured` nor handed to a run, so no run records this pair from it
+     * (REQ-SANDBOX-094).
      */
     sandbox: { requested: r.sandbox_mode !== 'off', available: verdict?.available ?? false, backend: verdict?.available === true ? verdict.backend : '' },
     confinement: { mode: r.sandbox_mode, writableRoots: r.sandbox_writable_roots, allowNetwork: r.sandbox_allow_network, verdict },
@@ -534,6 +538,14 @@ export interface PrepareOptions {
    * refusal stood for the retrospective too, and was answered "The workspace configuration could not be loaded"
    * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md).
    * Nor is it met by ADR-0022's start-time confinement gate, which is a run start's (see the gate in `prepareRun`).
+   *
+   * PD-LIBRARY-002 revision 6 (OQ-363, ruled 2026-10-20 under R-072): nor by a run's other refusals of a configuration that loads.
+   * A `default_persona` naming no role this build knows is completed on the retrospective's own model as an unusable entry model
+   * is — no role's system text, the configured name kept, the log saying so — and referential errors are the setup's warnings
+   * whatever `attended` holds (REQ-CONFIG-246 binds a run, and a retrospective is none). A retrospective's setup is therefore
+   * refused only as `unloaded` (the configuration did not load or apply) and as `no-model` (no retrospective model resolves), and
+   * `leasedSetup` adds the lease's refusal (revision 5). Until 2026-10-20 a default_persona naming no known role, and referential
+   * errors with no presenter, refused a retrospective's setup, answered `retrospective.configuration`.
    */
   readonly retrospective?: boolean | undefined;
 }
@@ -542,16 +554,22 @@ export interface PrepareOptions {
  * The load, the overlay, the refusals: a fatal file refuses the run with REQ-CONFIG-478's report; referential
  * errors are warnings while a person is present and fatal otherwise (REQ-CONFIG-245/246); an entry model
  * with no reachable endpoint refuses (REQ-EVENTS-021, one result of status error).
- */
-/**
- * `confinement` (REQ-NOTIFY-060/061): the start-time gate refused the confinement mode the run asked for, so the run never
- * reached a started state; main reports that class in REQ-NOTIFY-061's own notice.
- */
-/**
- * `unloaded`: the configuration did not load, or did not apply over the current settings — the one refusal a reader may word as
- * "the configuration could not be loaded". Every other refusal is of a configuration that loaded (REQ-NOTIFY-254: the reason is
- * worded by the layer that determined it), which a retrospective says as such
- * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+ *
+ * The codes:
+ * - `confinement` (REQ-NOTIFY-060/061): the start-time gate refused the confinement mode the run asked for, so the run never
+ *   reached a started state; main reports that class in REQ-NOTIFY-061's own notice.
+ * - `unloaded`: the configuration did not load, or did not apply over the current settings — the one refusal a reader may word
+ *   as "the configuration could not be loaded". Every other refusal is of a configuration that loaded (REQ-NOTIFY-254: the
+ *   reason is worded by the layer that determined it), which a retrospective says as such
+ *   (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+ * - `no-model`: no usable model for the entry role; for a retrospective, no resolvable retrospective model either.
+ * - none: a run's other refusals (an unknown `default_persona`, referential errors with no one present), which a retrospective
+ *   never meets since PD-LIBRARY-002 revision 6.
+ *
+ * A retrospective's setup (`PrepareOptions.retrospective`) is refused only as `unloaded` and `no-model`, and `leasedSetup` adds
+ * the lease's refusal. Until 2026-10-20 a default_persona naming no known role, and referential errors with no presenter, refused
+ * a retrospective's setup, answered `retrospective.configuration`. *(Until 2026-10-20 these were three doc comments in a row, and
+ * TypeScript attached only the last.)*
  */
 export type ConfigureRefusal = { readonly reason: string; readonly cfg?: LoadedConfiguration; readonly code?: 'no-model' | 'confinement' | 'unloaded' };
 
@@ -666,8 +684,10 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
   const warnings: string[] = [...moded.warnings.map((w) => `configuration: ${w}`)];
   if (moded.referential.length > 0) {
     const lines = moded.referential.map((m) => `configuration: ${m}`);
-    // REQ-CONFIG-246: with no person present, referential errors are always fatal to the run.
-    if (!attended) return err({ reason: `The configuration has ${countNoun(moded.referential.length, 'unresolved reference')} and no one is present to correct ${moded.referential.length === 1 ? 'it' : 'them'}: ${moded.referential.join('; ')}`, cfg: moded });
+    // REQ-CONFIG-246: with no person present, referential errors are always fatal to the run. A retrospective is no run, and
+    // its setup reads no attendedness: the lines are its warnings whatever `attended` holds, written to the log at its capture
+    // (PD-LIBRARY-002 revision 6, OQ-363). Until 2026-10-20 they refused it with no presenter.
+    if (!attended && options?.retrospective !== true) return err({ reason: `The configuration has ${countNoun(moded.referential.length, 'unresolved reference')} and no one is present to correct ${moded.referential.length === 1 ? 'it' : 'them'}: ${moded.referential.join('; ')}`, cfg: moded });
     warnings.push(...lines);
   }
   const scripted = scriptedDialect(deps.env);
@@ -683,20 +703,34 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
   if (wanted !== undefined && restored === undefined) warnings.push(`configuration: the open iteration's root ran as '${wanted}', which this configuration no longer knows; it resumes as the entry role '${moded.defaultPersona}' (PD-ORCH-005).`);
   const cfg: LoadedConfiguration = restored === undefined ? moded : { ...moded, defaultPersona: restored };
   const entryRole = personas.resolve(cfg.defaultPersona);
-  if (!entryRole) return err({ reason: `default_persona '${cfg.defaultPersona}' names no role this build knows.`, cfg });
-  const statedModelName = cfg.personas[cfg.defaultPersona]?.model ?? null;
-  const stated = entryRole.persona.modelRef ?? modelRefOf(cfg, statedModelName, scripted);
+  /*
+   * PD-LIBRARY-002 revision 6 (OQ-363, ruled 2026-10-20 under R-072): a `default_persona` naming no role this build knows refuses
+   * a run (word for word below) and not a retrospective, which sends nothing to the entry role. Its setup is completed on the
+   * retrospective's own model (`retrospectiveOf`) as an entry role with no usable model is: the configured persona name kept, no
+   * role's system text, that model's `models:` entry for the credential, timeout and retries. Where no retrospective model
+   * resolves either, the pass is refused as `no-model`. Until 2026-10-20 the run's refusal stood for the retrospective too.
+   */
+  let personaStandIn: ReturnType<typeof retrospectiveOf> = null;
+  if (!entryRole) {
+    if (options?.retrospective !== true) return err({ reason: `default_persona '${cfg.defaultPersona}' names no role this build knows.`, cfg });
+    personaStandIn = retrospectiveOf(cfg, scripted);
+    if (personaStandIn === null) return err({ reason: `default_persona '${cfg.defaultPersona}' names no role this build knows, and no retrospective model resolves (retrospective_model, then medium_model).`, cfg, code: 'no-model' });
+    deps.log(`configuration: default_persona '${cfg.defaultPersona}' names no role this build knows; a retrospective sends nothing to it, so its setup is completed on its own model '${personaStandIn.key}' (PD-LIBRARY-002)`);
+  }
+  const statedModelName = entryRole ? cfg.personas[cfg.defaultPersona]?.model ?? null : null;
+  const stated = entryRole ? entryRole.persona.modelRef ?? modelRefOf(cfg, statedModelName, scripted) : null;
   // A retrospective's setup takes its own model where the entry role has none it could use (`PrepareOptions.retrospective`).
-  const standIn = stated === null && options?.retrospective === true ? retrospectiveOf(cfg, scripted) : null;
+  const standIn = personaStandIn ?? (stated === null && options?.retrospective === true ? retrospectiveOf(cfg, scripted) : null);
   const model = stated ?? standIn?.model ?? null;
   const why = (): string => {
     const named = statedModelName === null ? undefined : cfg.models[statedModelName];
     return statedModelName === null ? `role ${cfg.defaultPersona} names no model` : !named ? `model '${statedModelName}' is not a configured model` : `model '${statedModelName}' (provider ${named.provider}) has no base_url and this build knows no endpoint for that provider`;
   };
   if (!model) return err({ reason: `No usable model is configured for the entry role, so the run was refused before it started: ${why()}.`, cfg, code: 'no-model' });
-  if (standIn !== null) deps.log(`configuration: the entry role ${cfg.defaultPersona} has no usable model (${why()}); a retrospective sends nothing to it, so its setup is completed on its own model '${standIn.key}' (PD-LIBRARY-002)`);
+  if (standIn !== null && personaStandIn === null) deps.log(`configuration: the entry role ${cfg.defaultPersona} has no usable model (${why()}); a retrospective sends nothing to it, so its setup is completed on its own model '${standIn.key}' (PD-LIBRARY-002)`);
   const entryModelName = standIn?.key ?? statedModelName;
   const entry = entryModelName ? cfg.models[entryModelName] : undefined;
+  const roleModelKey = entryRole ? entryRole.persona.modelKey : undefined;
   const snapshotRead = readProjectSnapshot(join(deps.globalDir, PROJECT_SETTINGS_FILE), () => undefined);
   const authProviders = authProvidersOf(cfg);
   const isScripted = scripted || isScriptedProvider(model.providerId);
@@ -721,11 +755,12 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
       config: {
         ...RUN_CONFIG_DEFAULTS,
         persona: cfg.defaultPersona,
-        systemPrompt: entryRole.persona.systemPrompt,
+        // A retrospective completed on its own model for an unknown persona (revision 6) carries no role's system text.
+        systemPrompt: entryRole ? entryRole.persona.systemPrompt : '',
         model,
         // REQ-CONFIG-094 (live-run finding D5): the run's model's `models:` key, which a child on the run's model is recorded under.
-        ...(entryRole.persona.modelKey !== undefined ? { modelKey: entryRole.persona.modelKey } : entryModelName !== null ? { modelKey: syntheticOriginOf(entryModelName, cfg.syntheticOrigins) } : {}),
-        thinking: entryRole.persona.thinking ?? thinkingOf(entry),
+        ...(roleModelKey !== undefined ? { modelKey: roleModelKey } : entryModelName !== null ? { modelKey: syntheticOriginOf(entryModelName, cfg.syntheticOrigins) } : {}),
+        thinking: entryRole ? entryRole.persona.thinking ?? thinkingOf(entry) : personaStandIn?.thinking ?? thinkingOf(entry),
         modelTimeoutMs: Math.round((entry?.timeout ?? runtime.modelTimeoutS) * 1000),
         modelRetries: entry?.num_retries ?? RUN_CONFIG_DEFAULTS.modelRetries,
         iterationLimit: runtime.iterationLimit,

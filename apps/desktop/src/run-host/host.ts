@@ -339,6 +339,9 @@ export function createRunHost() {
    * PD-LIBRARY-002 with ADR-0030: the retrospective's setup, leased and completed as a run's is (`leasedSetup`), at its capture
    * and again at its analysis — never the workspace's cached `configuredFor`, which may have been completed over no lease
    * (the live run at `ce5f952`, F2). It is not cached: a run start's `configure` owns `configured` and the MCP reload.
+   * The setup it returns may be completed on a stand-in entry — the retrospective's own model in place of an entry role with no
+   * usable model or a `default_persona` naming no known role, with no role's system text (PD-LIBRARY-002 revision 6, OQ-363) —
+   * so it is never cached into `configured` nor handed to a run; only the pass reads it.
    */
   const retrospectiveSetup = async (workspaceRoot: string): Promise<LeasedSetup> => {
     const r = await leasedSetup(workspaceRoot, leaseDepsFor(workspaceRoot));

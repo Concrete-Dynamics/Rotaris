@@ -81,8 +81,8 @@ Write `plan.json` in the scratchpad:
   executes at most min(16, CPUs − 2) agents at a time (two on four CPUs), so lanes past that queue; to go faster,
   split the bundles over two plans, within the ceiling `references/workflow-tool.md`, Concurrency, sets.
 - **Number ranges.** The brief gives each plan its own range of open-question numbers (and directive or request
-  numbers where it may need them), so parallel plans do not collide; one that lands on a number main already holds
-  takes the next free one (`references/environment.md`, Parallel plans; `references/repository.md`, Merge conflicts).
+  numbers where it may need them), and each bundle a disjoint sub-range of it that its reviewer raises in too, so
+  neither plans nor sibling bundles collide; one that lands on a number main already holds takes the next free one (`references/environment.md`, Parallel plans; `references/repository.md`, Merge conflicts).
 - **A task body is self-contained**: the note or requirement to read, the evidence (file:line, proof output, pack),
   the proof or live scenario that shows the repair, and the rulings that apply. A task only the owner can close is
   no task: record it and report it. A builder that meets one inside a bundle lists it in `ownerBlocked` with the

@@ -3,6 +3,18 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — each bundle raises open questions in its own sub-range
+
+**Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner
+approved on 2026-10-14: "yes. do that."; finders by plan range, one merge-and-verify agent, a drafter and a critic),
+item F09: plans had their own number ranges, but sibling bundles shared one: about nine renumber events followed, each
+an extra rebase or commit with every citation rewritten (one across 33 files), four of them in fin41 (`wf_b643b682-d3c`
+lines 20 to 27). **Changed:** SKILL.md §2 gives each bundle a disjoint sub-range of its plan's, and
+`references/environment.md`, Parallel plans, says the same with the evidence. A per-bundle `numbers` field checked by
+`render` is left for when the text alone proves not enough. **Verified** by `node scripts/orchestration.mjs self-test`
+and `pnpm check`; the skill-review by one reviewer agent under `references/skill-review.md`, which judged this entry
+with the others of 2026-10-20.
+
 ## 2026-10-20 — a finding about this skill is never a plan task
 
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner

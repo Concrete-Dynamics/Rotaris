@@ -119,7 +119,9 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
 - **Numbers collide when a builder takes one it was not given.** Two plans running at once each took the next free open
   question, directive or request number from the same `origin/main`, and the second to land had to renumber its entry and
   every citation (four entries raised as OQ-240 or OQ-241 landed as OQ-247 to OQ-250, and one OQ-254 as OQ-255, 2026-10-07 to 13). Assign every number a plan may need in its prompt,
-  and let the plan that lands second renumber, as `references/repository.md` says.
+  as a disjoint sub-range per bundle: fin41's seven bundles shared OQ-261 to OQ-270, and four of their questions were
+  renumbered at landing (`wf_b643b682-d3c`, journal lines 20 to 27). The one that lands second renumbers, as
+  `references/repository.md` says.
 
 ## Pause and backup
 

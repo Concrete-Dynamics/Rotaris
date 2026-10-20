@@ -11,13 +11,13 @@ which exists only on Linux. On a host with a display and no `xvfb-run`, add a ho
 else about this host the skill states wrongly the same way."). Measured on that host the same day: `which xvfb-run` and
 `which setsid` find nothing; `pnpm preflight` reads "no display server is needed on win32"; Node 24.18.0 is the default
 `node`; `render`'s default `{repo}` is `C:\dev\Rotaris-crw`, whose backslashes reach an agent's Git Bash as escapes (a
-stub render gave `C:\dev\Rotaris-crw-wt-integ-zz`); a detached `nohup bash -c 'echo started > L; sleep 25; echo exit=0 >> L'
-> /dev/null 2>&1 < /dev/null & disown` wrote both lines with the sending Bash call long returned; and run
+stub render gave `C:\dev\Rotaris-crw-wt-integ-zz`); a detached `nohup bash -c 'echo started > L; sleep 25; echo
+exit=0 >> L' > /dev/null 2>&1 < /dev/null & disown` wrote both lines with the sending Bash call long returned; and run
 `wf_68d2abb8-296` started six of its eight first-stage agents between 08:05:49 and 08:05:51 UTC on 8 CPUs. **Changed:**
 `profiles/rotaris-crw-windows.json`: the base profile's keys and commands, with no `xvfb-run` wrapper on the proofs and
 live runs, and the duress launch detached by `nohup … & disown` without `setsid`. Both profiles gain a third live run,
-the opt-in scenarios (`--only=cutoff,rename,plan-open,empty-answer`): AGENTS.md lists them as first-class scenarios
-that no acceptance round ran (the `rename` scenario had been red since `3c03287`, and no acceptance round ran it), and the
+the opt-in scenarios (`--only=cutoff,rename,plan-open,empty-answer`): AGENTS.md lists them as first-class scenarios that
+no acceptance round ran (the `rename` scenario had been red since `3c03287`, and no acceptance round ran it), and the
 brief's Done (§3 D) requires them. Adding it to the base too keeps the two profiles apart by host facts alone (the
 reviewer's blocking finding on the first draft, which gave it to the Windows profile only). The self-test gains an
 assertion over every host profile of this repository (`profiles/rotaris-crw-*.json`, the prefix taken from the base
@@ -27,15 +27,16 @@ autopsy, and the same live runs, each with the base's `timeout` and `LIVE_RUN_*=
 narrow what the base profile holds (the reviewer's optional findings of both rounds; the scope its second round's
 blocking finding). With the assertion's code removed, narrowing the Windows profile's `gate` to `pnpm test`, or dropping
 its opt-in run, passed the self-test; with it, each failed, and so did a duress window shortened to
-`LIVE_RUN_DURESS_MS=600000` and a default run's `timeout 600`, while a profile `other-repo.json` with its own gate passed. `references/environment.md` gains "A Windows host": no display wrapper, Git Bash only
-(`timeout`), `--repo` in forward slashes, the detached form, six agents at a time, a desktop shared with another
-session (and `palette-proof`'s real input), leftover `electron.exe` at cleanup, the allow-rule form for this host, a
-sibling folder `C:/dev/Rotaris` never to be opened, and disk. `references/workflow-tool.md`'s two-agent line says where
-it holds and adds the six measured here. SKILL.md's file table names the host profile. No template prompt, protected
-invariant or existing assertion changed. **Verified** by resolving the new profile with `resolveProfile` (the same `run`
-keys as the base profile, `{node24}` the no-op, every command free of `xvfb-run`), rendering a stub plan with it and
-dry-running it (three live runs in the live-runner's prompt), `node scripts/orchestration.mjs self-test` and
-`pnpm check`; the skill-review by one independent agent under `references/skill-review.md`.
+`LIVE_RUN_DURESS_MS=600000` and a default run's `timeout 600`, while a profile `other-repo.json` with its own gate
+passed. `references/environment.md` gains "A Windows host": no display wrapper, Git Bash only (`timeout`), `--repo` in
+forward slashes, the detached form, six agents at a time, a desktop shared with another session (and `palette-proof`'s
+real input), leftover `electron.exe` at cleanup, the allow-rule form for this host, a sibling folder `C:/dev/Rotaris`
+never to be opened, and disk. `references/workflow-tool.md`'s two-agent line says where it holds and adds the six
+measured here. SKILL.md's file table names the host profile. No template prompt, protected invariant or existing
+assertion changed. **Verified** by resolving the new profile with `resolveProfile` (the same `run` keys as the base
+profile, `{node24}` the no-op, every command free of `xvfb-run`), rendering a stub plan with it and dry-running it
+(three live runs in the live-runner's prompt), `node scripts/orchestration.mjs self-test` and `pnpm check`; the
+skill-review by one independent agent under `references/skill-review.md`.
 
 ## 2026-10-20 — the ledger is defined and stamped by the clock
 

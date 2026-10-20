@@ -16,7 +16,7 @@ as a rebase and a fast-forward push, never a merge commit (`references/repositor
 | --- | --- |
 | `scripts/workflow.template.js` | The one workflow every run uses: lanes → build → review (repair in place, land) → repair, then acceptance |
 | `scripts/orchestration.mjs` | `render` a plan (fresh, or resumed from journals), `status`, `dry-run`, `self-test` |
-| `profiles/<repo>.json` | One repository's commands and places (gate, setup, proofs, live runs, worktrees) |
+| `profiles/<repo>.json` | One repository's commands and places (gate, setup, proofs, live runs, worktrees); `<repo>-windows.json` for a Windows host |
 | `references/environment.md` | The host: toolchain, long jobs, load, restarts, limits, pause and backup, blocked shell forms |
 | `references/workflow-tool.md` | The Workflow tool as it behaves: journals, labels, resume, concurrency, surveys |
 | `references/live-runs.md` | Live runs: authorization, permission rules, refusals, running them |

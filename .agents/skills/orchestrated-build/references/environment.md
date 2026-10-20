@@ -184,3 +184,22 @@ alone. It carries:
   fast-forward. Agents read this skill from the orchestration's own detached reference worktree `<repo>-wt-skillref-<id>`
   (SKILL.md §3).
   The local permission file `.claude/settings.local.json` is git-ignored, so it leaves the checkout clean.
+
+## A Windows host
+
+Measured on 2026-10-20 on the owner's Windows 11 ARM64 machine, where the host-independent finish ran. It has 8 CPUs, Git
+Bash shells and Node 24.18 as the default `node` (so `{node24}` is the no-op).
+
+- **No display wrapper.** `xvfb-run` does not exist here and is not needed: `pnpm preflight` reads "no display server is
+  needed on win32", and every Electron launch opens real windows on the desktop. Render with
+  `profiles/rotaris-crw-windows.json`, which holds the same commands unwrapped.
+- **`--repo` in forward slashes.** `render`'s default reads the checkout as `C:\dev\Rotaris-crw`, and an agent's Git Bash
+  reads those backslashes as escapes. Pass `--repo C:/dev/Rotaris-crw`.
+- **No `setsid`.** `nohup bash -c '…' > /dev/null 2>&1 < /dev/null & disown` outlives the shell that sent it: a 25 s job
+  wrote its `exit=0` line after the Bash call had returned. The profile's duress launch takes that form.
+- **Six agents at a time** (`references/workflow-tool.md`, Concurrency).
+- **A shared desktop.** Another session (the Windows session) runs proofs and live runs on the same machine; one was live
+  in its own tree while this was measured. Before a proof sweep or a live run, list the running `electron.exe` processes
+  with their paths (PowerShell `Get-Process electron | Select-Object Id, StartTime, Path`). While one runs from another
+  tree, wait for it, or record its load beside every timing.
+- **Disk.** 24 GB was free of 237 GB on `C:`, and a worktree with its `node_modules` takes about 0.8 GB.

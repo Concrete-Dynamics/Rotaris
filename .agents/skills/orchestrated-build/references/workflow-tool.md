@@ -46,8 +46,10 @@ it; the journal holds every agent's.
 
 ## Concurrency and serialization
 
-- **A run executes at most two agents at a time here.** The tool's own reference caps concurrent `agent()` calls at
-  min(16, available CPUs − 2) per workflow, a nested `workflow()` sharing its parent's cap: two on a 4-CPU host.
+- **A run executes at most two agents at a time on the 4-CPU container.** The tool's own reference caps concurrent
+  `agent()` calls at min(16, available CPUs − 2) per workflow, a nested `workflow()` sharing its parent's cap: two on a
+  4-CPU host, and six on the 8-CPU Windows host (run `wf_68d2abb8-296`, 2026-10-20, started six of its eight first-stage
+  agents between 08:05:49 and 08:05:51 UTC and queued the other two).
   None of the sixteen runs of the session this skill came from exceeded two (fourteen peaked at two; measured from
   each agent transcript's first and last timestamps), whatever their lanes or `parallel()` width; a four-lane run
   started two lanes and queued the other two. Agents you start yourself (the Agent tool) run beside it. Lanes past

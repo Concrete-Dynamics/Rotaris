@@ -3,6 +3,29 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-20 — a profile for a Windows host
+
+**Prompted by** the hand-over of the host-independent finish to a local session on the owner's Windows 11 ARM64 machine
+(the owner's brief, 2026-10-20, §5: "`profiles/rotaris-crw.json` wraps every Electron proof and live run in `xvfb-run`,
+which exists only on Linux. On a host with a display and no `xvfb-run`, add a host profile beside it … Record anything
+else about this host the skill states wrongly the same way."). Measured on that host the same day: `which xvfb-run` and
+`which setsid` find nothing; `pnpm preflight` reads "no display server is needed on win32"; Node 24.18.0 is the default
+`node`; `render`'s default `{repo}` is `C:\dev\Rotaris-crw`, whose backslashes reach an agent's Git Bash as escapes (a
+stub render gave `C:\dev\Rotaris-crw-wt-integ-zz`); a detached `nohup bash -c 'echo started > L; sleep 25; echo exit=0 >> L'
+> /dev/null 2>&1 < /dev/null & disown` wrote both lines with the sending Bash call long returned; and run
+`wf_68d2abb8-296` started six of its eight first-stage agents between 08:05:49 and 08:05:51 UTC on 8 CPUs. **Changed:**
+`profiles/rotaris-crw-windows.json`: the base profile's keys and commands, with no `xvfb-run` wrapper on the proofs and
+live runs, and the duress launch detached by `nohup … & disown` without `setsid`. It also carries a third live run, the
+opt-in scenarios (`--only=cutoff,rename,plan-open,empty-answer`), which the brief's Done (§3 D) requires and the base
+profile's acceptance never runs. `references/environment.md` gains "A Windows host": no display wrapper, `--repo` in
+forward slashes, the detached form, six agents at a time, a desktop shared with another session, and disk.
+`references/workflow-tool.md`'s two-agent line says where it holds and adds the six measured here. SKILL.md's file table
+names the host profile. No script, template prompt, protected invariant or self-test assertion changed, and the base
+profile is unchanged. **Verified** by resolving the new profile with `resolveProfile` (the same `run` keys as the base
+profile, `{node24}` the no-op, every command free of `xvfb-run`), rendering a stub plan with it and dry-running it (three
+live runs in the live-runner's prompt), `node scripts/orchestration.mjs self-test` and `pnpm check`; the skill-review by
+one independent agent under `references/skill-review.md`.
+
 ## 2026-10-20 — the ledger is defined and stamped by the clock
 
 **Prompted by** the friction survey over fin29 to fin47 (run `wf_bd8bdf7f-f09`, 2026-10-20, the procedure the owner

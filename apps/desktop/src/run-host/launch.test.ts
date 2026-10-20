@@ -471,6 +471,49 @@ ${retrospective === 'slot' ? 'retrospective_model: analyst\n' : ''}`);
     });
   });
 
+  /*
+   * REQ-SANDBOX-097 with REQ-SANDBOX-095/071
+   * (docs/defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md): the
+   * continuation's lease prepares the run through ADR-0022's start-time gate, which reads the cached verdict synchronously, so
+   * it settles that verdict first, as `launchSession` does. Until 2026-10-20 it did not: before any run start or Settings read
+   * had settled it, the gate read `null`, the preparation was refused, nothing was leased, and the engine's `configure` then
+   * refused the continuation "No OS-level confinement can be used on this host." with no reason and no remediation.
+   */
+  describe('the continuation lease settles the confinement verdict before it prepares the run (REQ-SANDBOX-097)', () => {
+    const slowConfinement = (settled: AvailabilityVerdict) => {
+      let cached: AvailabilityVerdict | null = null;
+      return {
+        peek: () => cached,
+        settle: async (): Promise<AvailabilityVerdict> => {
+          if (cached === null) { await new Promise((done) => setTimeout(done, 15)); cached = settled; }
+          return cached;
+        },
+      };
+    };
+    const confinedDeps = (confinement: ReturnType<typeof slowConfinement>, lease: (providers: readonly string[]) => Promise<Readonly<Record<string, string>>>) => {
+      writeFileSync(join(dir, '.rotaris', 'agents.yaml'), 'models:\n  selected:\n    provider: openai\n    model_id: m\n    auth_provider: provider-one\nlarge_model: selected\nruntime:\n  sandbox_mode: workspace-write\n');
+      const base = deps(lease);
+      return { ...base, configuration: { ...base.configuration, confinement: () => confinement.peek() }, settleConfinement: confinement.settle };
+    };
+
+    it('a verdict that settles available after a delay: the continuation is prepared and leased', async () => {
+      const lease = vi.fn(async () => ({ 'provider-one': 'fresh-bearer' }));
+      const d = confinedDeps(slowConfinement({ available: true, backend: 'bubblewrap', reason: '', remediation: '' }), lease);
+      expect(await leaseForContinuation(dir, d)).toEqual({ kind: 'leased', bearers: { 'provider-one': 'fresh-bearer' } });
+      expect(lease).toHaveBeenCalledWith(['provider-one']);
+      expect(prepareRun(dir, true, d.configuration)).toMatchObject({ ok: true });
+    });
+
+    it('a verdict that settles unavailable: nothing is leased, and the run\'s configure refuses with the reason and the remediation', async () => {
+      const lease = vi.fn(async () => ({ 'provider-one': 'fresh-bearer' }));
+      const d = confinedDeps(slowConfinement({ available: false, backend: 'bubblewrap', reason: 'bwrap was not found on PATH.', remediation: 'Install bubblewrap.' }), lease);
+      expect(await leaseForContinuation(dir, d)).toEqual({ kind: 'leased', bearers: {} });
+      expect(lease).not.toHaveBeenCalled();
+      const r = prepareRun(dir, true, d.configuration);
+      expect(r).toMatchObject({ ok: false, error: { code: 'confinement', reason: 'bwrap was not found on PATH.\nInstall bubblewrap.' } });
+    });
+  });
+
   it('a configuration that will not load leases nothing — setupFor refuses with its real report instead', async () => {
     writeFileSync(join(dir, '.rotaris', 'agents.yaml'), 'runtime: [invalid]\n');
     const lease = vi.fn(async () => ({ 'provider-one': 'fresh-bearer' }));

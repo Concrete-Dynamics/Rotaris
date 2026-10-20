@@ -501,9 +501,16 @@ export interface ConfigureDeps {
   readonly bearers: (workspaceRoot: string) => Readonly<Record<string, string>>;
   /**
    * ADR-0022 / REQ-SANDBOX-067: the CACHED availability verdict, owned at application lifetime by the
-   * run host's one `ConfinementService`. Read synchronously and never probed from here — the launch
-   * has already awaited the probe, and a continuation reads what that launch settled. `null` — no
-   * probe has completed — is read as unavailable, the fail-closed side of REQ-SANDBOX-068.
+   * run host's one `ConfinementService`. Read synchronously and never probed from here: every path
+   * that prepares a run awaits the probe first (REQ-SANDBOX-097) — a run start in `launchSession`, and
+   * every continuation (`session.continue`, `session.prompt`, `session.planDecision`, `session.retry`,
+   * the restarts of REQ-NOTIFY-070/074) in `dispatch` before its lease and again in
+   * `leaseForContinuation`. `null` — no probe has completed — is read as unavailable, the fail-closed
+   * side of REQ-SANDBOX-068; only a retrospective's setup, which meets no gate, reads it unsettled.
+   * FALSIFIED 2026-10-20, kept beside its replacement: "the launch has already awaited the probe, and a
+   * continuation reads what that launch settled" — no continuation settled it, so one reached before any
+   * launch or Settings read was refused as unavailable with no reason
+   * (docs/defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md).
    */
   readonly confinement?: (() => AvailabilityVerdict | null) | undefined;
   /** PD-PROVIDER-001: the shared-quota caps the provider catalogue declares, by provider id, as main handed them. */

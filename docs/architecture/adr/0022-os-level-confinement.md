@@ -279,4 +279,17 @@ setup; a run start and a continuation are unchanged
 ([`../../defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`](../../defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md)).
 A continuation still reads the cached verdict without settling it first — `ConfigureDeps.confinement`'s "a continuation reads what
 that launch settled" assumes a launch came first in the run host's life; recorded, not repaired, in
-[`../../defects/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md`](../../defects/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md).
+[`../../defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md`](../../defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md).
+*(Repaired 2026-10-20; the next paragraph.)*
+
+**Reported back 2026-10-20 (loc1, `loc1-confinement-retro`): every run-launching continuation settles the verdict before its run is
+configured.** `REQ-SANDBOX-097` — the availability decision settled before the run does anything else — was met by the run start
+alone: `launchSession` awaited `settleConfinement`, and a continuation (`session.continue`, `session.prompt`,
+`session.planDecision`, `session.retry`, the restarts of `REQ-NOTIFY-070` and `REQ-NOTIFY-074`) reached the gate through the engine's
+`configure` reading `peek()`. Before a run start or a `confinement.status` read, that was `null`, and the continuation was refused
+with `renderUnavailability`'s placeholder — "No OS-level confinement can be used on this host." — with neither reason nor
+remediation (`REQ-SANDBOX-095`, `REQ-SANDBOX-071`), even where confinement was available. The run host's dispatch now awaits the
+one cached probe before each continuation's lease, and `leaseForContinuation` settles before it prepares, so the gate reads a
+settled verdict on every path that launches a run; the fail-closed reading of `null` (`REQ-SANDBOX-068`) is unchanged. Unit cases in
+`apps/desktop/src/run-host/dispatch.test.ts` and `launch.test.ts` pin it, red on `0d89e971`; the built app does not reach the window
+between startup and the main window's own read. `ConfigureDeps.confinement`'s falsified sentence is kept beside its replacement.

@@ -22,8 +22,12 @@ export interface LaunchDeps {
 /** What a continuation's lease refresh resolved to: the fresh bearers, or the refusal that stands in the run's place. */
 export type ContinuationLease = { readonly kind: 'leased'; readonly bearers: Readonly<Record<string, string>> } | { readonly kind: 'refused'; readonly reply: ProcessReply };
 
-/** What the lease refresh needs: the capture inputs and the one bounded ask — no `start`, it launches nothing itself. */
-export type ContinuationLeaseDeps = Pick<LaunchDeps, 'workspaceRoot' | 'attended' | 'configuration' | 'leaseCredentials'>;
+/**
+ * What the lease refresh needs: the capture inputs, the one bounded ask and the settling of the confinement verdict — no
+ * `start`, it launches nothing itself. `leasedSetup` takes the same deps and never settles: a retrospective meets no
+ * confinement gate (`PrepareOptions.retrospective`), so it waits on no probe.
+ */
+export type ContinuationLeaseDeps = Pick<LaunchDeps, 'workspaceRoot' | 'attended' | 'configuration' | 'leaseCredentials' | 'settleConfinement'>;
 
 /**
  * ADR-0030 / REQ-PROVIDER-066 for the CONTINUATION paths (`session.continue`, `session.prompt`,
@@ -36,8 +40,16 @@ export type ContinuationLeaseDeps = Pick<LaunchDeps, 'workspaceRoot' | 'attended
  * per-request resolvers read it. The user notices nothing. One refusal: an entry provider main
  * cannot resolve — including a lease main did not answer, the same outcome a launch gives
  * (REQ-WORKSPACE-137) — worded as that requirement's sentence.
+ *
+ * REQ-SANDBOX-097: a continuation launches a run, so the preparation below — which passes ADR-0022's start-time gate and
+ * reads the cached verdict synchronously — comes after the verdict is settled, as in `launchSession`. Until 2026-10-20 it
+ * read whatever a run start or a `confinement.status` request had settled, `null` before either, and a confinement mode
+ * other than `off` was then refused as unavailable with no reason and no remediation, leasing nothing
+ * (docs/defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md).
  */
 export async function leaseForContinuation(workspaceRoot: string, deps: ContinuationLeaseDeps): Promise<ContinuationLease> {
+  // Guarded, as in `launchSession`: with no service wired the gate reads a null verdict as unavailable, the fail-closed side.
+  if (deps.settleConfinement) await deps.settleConfinement();
   const prepared = prepareRun(workspaceRoot, deps.attended, deps.configuration);
   // A configuration that will not load is refused by `setupFor` with its real report; lease nothing here.
   if (!prepared.ok) return { kind: 'leased', bearers: {} };

@@ -79,6 +79,20 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     sessionActions,
     terminalHost,
   } = h;
+  /*
+   * REQ-SANDBOX-097 for every run-launching continuation (`session.continue`, `session.prompt`, `session.planDecision`,
+   * `session.retry`, and the restarts of REQ-NOTIFY-070 and REQ-NOTIFY-074): the availability decision is settled before the
+   * run does anything else — before the continuation lease (REQ-PROVIDER-066) and before the engine's `configure`, whose
+   * ADR-0022 gate reads the cached verdict synchronously — exactly as `launchSession` settles it for a run start. One probe
+   * per process, cached (REQ-SANDBOX-067), so a settled verdict costs nothing here. A refusal then carries the backend's
+   * reason and remediation (REQ-SANDBOX-095/071). Until 2026-10-20 no continuation settled it: one reached before a run start
+   * or a `confinement.status` read was refused "No OS-level confinement can be used on this host." even where confinement
+   * was available (docs/defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md).
+   */
+  const settledContinuationLease = async (sessionId: string): Promise<ProcessReply | null> => {
+    await settleConfinement();
+    return continuationLeaseForSession(sessionId);
+  };
   switch (req.kind) {
     case 'hello':
       // PD-PROVIDER-001: main reads the provider catalogue, which this process cannot; the caps arrive with the handshake.
@@ -374,7 +388,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       // iteration (PD-ORCH-003 revision 2, OQ-104), or `paused_message_limit` by a limit reached as the iteration that
       // finished it closed — takes that request up again as a task (OQ-103).
       // REQ-PROVIDER-066 (the continuation lease): refresh the bearers before the run resolves its setup.
-      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      const leaseRefusal = await settledContinuationLease(req.sessionId);
       if (leaseRefusal) return leaseRefusal;
       // PD-ORCH-005 clause 6: resuming the open iteration is the default; `withoutPaused` declines it.
       const r = sessions.continueSession(asSessionId(req.sessionId), req.action, { withoutPaused: req.withoutPaused === true });
@@ -384,7 +398,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     }
     case 'session.restartOnFallback': {
       // REQ-NOTIFY-070: the restart launches a run — refresh the bearers first (REQ-PROVIDER-066's continuation lease).
-      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      const leaseRefusal = await settledContinuationLease(req.sessionId);
       if (leaseRefusal) return leaseRefusal;
       const r = sessions.restartOnFallback(asSessionId(req.sessionId));
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The run could not restart on the fallback model', detail: r.error.reason };
@@ -406,7 +420,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     case 'session.authRestart': {
       // REQ-NOTIFY-074/076: the restart launches a run — refresh the bearers first (REQ-PROVIDER-066's continuation lease),
       // which is also how a key just stored by a re-authentication reaches the restarted run (REQ-NOTIFY-068: new credentials).
-      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      const leaseRefusal = await settledContinuationLease(req.sessionId);
       if (leaseRefusal) return leaseRefusal;
       const r = sessions.restartAfterAuthFailure(asSessionId(req.sessionId), req.modelKey);
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The run could not be restarted', detail: r.error.reason };
@@ -423,7 +437,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     case 'session.planDecision': {
       // REQ-ORCH-153: the three answers, exactly; approve and revise launch the next segment, cancel launches nothing.
       // REQ-PROVIDER-066 (the continuation lease): an approve or revise launches a segment — refresh first.
-      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      const leaseRefusal = await settledContinuationLease(req.sessionId);
       if (leaseRefusal) return leaseRefusal;
       const r = sessions.planDecision(asSessionId(req.sessionId), req.decision, req.changes ?? '');
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The plan decision could not be applied', detail: r.error.reason };
@@ -447,7 +461,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     }
     case 'session.prompt': {
       // REQ-PROVIDER-066 (the continuation lease): a prompt on a resumed session launches a run — refresh first.
-      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      const leaseRefusal = await settledContinuationLease(req.sessionId);
       if (leaseRefusal) return leaseRefusal;
       const r = sessions.prompt(asSessionId(req.sessionId), req.prompt, req.attachments ?? []);
       // REQ-SANDBOX-120 / REQ-NOTIFY-061: a refused confinement mode reads as a start's refusal does.
@@ -456,7 +470,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     }
     case 'session.retry': {
       // REQ-NOTIFY-045 (OQ-178): a retry launches a run as a prompt does, so the continuation lease is refreshed first.
-      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      const leaseRefusal = await settledContinuationLease(req.sessionId);
       if (leaseRefusal) return leaseRefusal;
       const r = sessions.retry(asSessionId(req.sessionId));
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: r.error.code === 'run-active' ? r.error.reason : r.error.code === 'confinement' ? 'The run was refused before it started' : 'The prompt could not be retried', detail: r.error.reason };

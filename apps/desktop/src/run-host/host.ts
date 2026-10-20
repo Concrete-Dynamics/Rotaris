@@ -319,6 +319,8 @@ export function createRunHost() {
    */
   const leaseDepsFor = (workspaceRoot: string) => ({
     workspaceRoot, attended: presenters.attended, configuration: configurationDeps,
+    // REQ-SANDBOX-097: the continuation's lease prepares through the start-time gate, so it settles first; `leasedSetup` does not.
+    settleConfinement,
     leaseCredentials: async (providers: readonly string[]) => {
       const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credentials: main did not answer the lease (${e.message})`, 'warn'); return null; });
       const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};

@@ -1,6 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { RunHostRequest } from '@rotaris/contracts';
 import type { LoadedConfiguration } from '@rotaris/config';
+import { FakeClock } from '@rotaris/kernel';
+import type { AvailabilityVerdict } from '@rotaris/agent-tools';
+import { configureRun, type ConfigureDeps } from './configuration.js';
 import { dispatch } from './dispatch.js';
 import type * as Engine from '@rotaris/engine';
 import type * as Configuration from './configuration.js';
@@ -40,6 +46,7 @@ vi.mock('./configuration.js', async (importOriginal) => ({
  */
 describe('session.continue carries the decline to the engine (PD-ORCH-005 clause 6)', () => {
   const hostFor = (seen: unknown[]) => ({
+    settleConfinement: async () => null,
     continuationLeaseForSession: async () => null,
     log: () => undefined,
     sessions: { continueSession: (...args: unknown[]) => { seen.push(args); return { ok: true, value: { resumed: true, messageLimit: null } }; } },
@@ -66,6 +73,7 @@ describe('session.continue carries the decline to the engine (PD-ORCH-005 clause
  */
 describe('session.retry refreshes the lease, then asks the engine, and passes its refusals through (REQ-NOTIFY-045)', () => {
   const hostFor = (order: string[], lease: unknown, answer: unknown) => ({
+    settleConfinement: async () => null,
     continuationLeaseForSession: async (sid: string) => { order.push(`lease ${sid}`); return lease; },
     log: () => undefined,
     sessions: { retry: (sid: string) => { order.push(`retry ${sid}`); return answer; } },
@@ -422,4 +430,83 @@ describe('config.liveState installs only a live state the load\'s schema accepts
     expect(host.liveState).toEqual({ runtime: { max_depth: 3 } });
     expect(lines).toEqual([expect.stringContaining('config: the live settings were refused, the ones held before stay — runtime.max_depth: must be at least 1, got 0')]);
   });
+});
+
+/**
+ * REQ-SANDBOX-097 with REQ-SANDBOX-095/071 and REQ-SANDBOX-067/068 for the CONTINUATION paths
+ * (docs/defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md): a
+ * continuation launches a run, so the availability decision is settled before the engine's per-run `configure` reads the
+ * cached verdict. Until 2026-10-20 only a run start (`launchSession`) and a `confinement.status` request settled it, and a
+ * continuation reached first — after an application restart, the window's own read still in flight — read `peek()` as null
+ * and was refused "No OS-level confinement can be used on this host." with no reason and no remediation, even where
+ * confinement is available. The engine stands in here as the gate it meets: `configureRun` over the real configuration
+ * load, reading the verdict the way `host.ts` hands it (`confinement: () => confinement.peek()`).
+ */
+describe('a continuation settles the confinement verdict before the engine configures its run (REQ-SANDBOX-097)', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-continuation-confinement-'));
+    mkdirSync(join(dir, '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, '.rotaris', 'agents.yaml'), 'models:\n  selected:\n    provider: openai\n    model_id: m\n    api_key: k\nlarge_model: selected\nmedium_model: selected\nsmall_model: selected\nruntime:\n  sandbox_mode: workspace-write\n');
+  });
+  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  /** A `ConfinementService`'s two faces: `peek()` null until the probe answers, which it does only after a delay. */
+  const slowConfinement = (settled: AvailabilityVerdict) => {
+    let cached: AvailabilityVerdict | null = null;
+    return {
+      peek: () => cached,
+      settle: async (): Promise<AvailabilityVerdict> => {
+        if (cached === null) { await new Promise((done) => setTimeout(done, 15)); cached = settled; }
+        return cached;
+      },
+    };
+  };
+  const available: AvailabilityVerdict = { available: true, backend: 'bubblewrap', reason: '', remediation: '' };
+  const unavailable: AvailabilityVerdict = { available: false, backend: 'bubblewrap', reason: 'bwrap was not found on PATH.', remediation: 'Install bubblewrap from your distribution.' };
+
+  type Path = { readonly name: string; readonly req: RunHostRequest; readonly method: string; readonly value: unknown; readonly proceeded: Record<string, unknown> };
+  const paths: readonly Path[] = [
+    { name: 'session.continue', req: { kind: 'session.continue', sessionId: 'S1', action: 'continue' }, method: 'continueSession', value: { resumed: true, messageLimit: null }, proceeded: { kind: 'session.continued' } },
+    { name: 'session.prompt', req: { kind: 'session.prompt', sessionId: 'S1', prompt: 'more' }, method: 'prompt', value: { index: 3 }, proceeded: { kind: 'ack' } },
+    { name: 'session.planDecision', req: { kind: 'session.planDecision', sessionId: 'S1', decision: 'approve' }, method: 'planDecision', value: { cycle: 1, relaunched: true }, proceeded: { kind: 'session.planResolved' } },
+    { name: 'session.retry', req: { kind: 'session.retry', sessionId: 'S1' }, method: 'retry', value: { index: 3 }, proceeded: { kind: 'ack' } },
+    { name: 'session.restartOnFallback (REQ-NOTIFY-070)', req: { kind: 'session.restartOnFallback', sessionId: 'S1' }, method: 'restartOnFallback', value: { failed: { provider: 'openai', model: 'm' }, fallback: { key: 'selected', provider: 'openai', model: 'm' } }, proceeded: { kind: 'session.fallbackRestarted' } },
+    { name: 'session.authRestart', req: { kind: 'session.authRestart', sessionId: 'S1', modelKey: null }, method: 'restartAfterAuthFailure', value: { pinned: null }, proceeded: { kind: 'session.authRestarted' } },
+  ];
+
+  const hostFor = (confinement: ReturnType<typeof slowConfinement>, path: Path, order: string[]) => {
+    const deps: ConfigureDeps = {
+      clocks: new FakeClock(), globalDir: join(dir, 'global'), env: {}, scriptedClient: () => { throw new Error('not scripted'); },
+      onRequest: () => undefined, log: () => undefined, liveState: () => ({}), bearers: () => ({}), confinement: () => confinement.peek(),
+    };
+    return {
+      log: () => undefined,
+      settleConfinement: async () => { const v = await confinement.settle(); order.push('settled'); return v; },
+      continuationLeaseForSession: async () => { order.push('lease'); return null; },
+      // The engine's continuation: its run's setup through the run host's `configure`, refused as `confinement` by the gate.
+      sessions: { [path.method]: () => {
+        order.push('configure');
+        const r = configureRun(dir, true, deps);
+        return r.ok ? { ok: true, value: path.value } : { ok: false, error: { code: r.error.code ?? 'configuration', reason: r.error.reason } };
+      } },
+    } as unknown as RunHost;
+  };
+
+  for (const path of paths) {
+    it(`${path.name}: a verdict that settles available after a delay lets the continuation proceed, settled before the lease and the configure`, async () => {
+      const order: string[] = [];
+      expect(await dispatch(path.req, hostFor(slowConfinement(available), path, order))).toMatchObject(path.proceeded);
+      expect(order).toEqual(['settled', 'lease', 'configure']);
+    });
+
+    it(`${path.name}: a verdict that settles unavailable refuses with its reason and its remediation (REQ-SANDBOX-095/071)`, async () => {
+      const r = await dispatch(path.req, hostFor(slowConfinement(unavailable), path, []));
+      expect(r).toMatchObject({ kind: 'refused', code: 'session.confinement' });
+      const detail = r.kind === 'refused' ? r.detail ?? '' : '';
+      expect(detail).toContain('bwrap was not found on PATH.');
+      expect(detail).toContain('Install bubblewrap from your distribution.');
+      expect(detail).not.toContain('No OS-level confinement can be used on this host.');
+    });
+  }
 });

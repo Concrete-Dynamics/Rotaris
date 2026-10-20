@@ -18,6 +18,12 @@ Last reconciled with the code: **2026-10-21**
 
 **A Windows session's end, observed simulated (2026-10-21; the Windows ARM64 session's C5).** `02-process-view.md`'s "not yet observed on a Windows host" for `SessionEndShutdown` is kept, with the simulated logoff beside it: the two end-session messages sent to the application's own windows ran the orderly shutdown, exit 0 in 0.9–1.9 s, the store as PD-ORCH-005 clause 23 wants; a real logout is still unobserved, and Windows' allowance against the 30 s bounds is OQ-402. No code changed.
 
+**A continuation settles the confinement verdict before its run is configured (REQ-SANDBOX-097; 2026-10-20).** `03-runtime-view.md`
+§1 gains the paragraph after the continuation lease: every run-launching continuation (`session.continue`, `session.prompt`,
+`session.planDecision`, `session.retry`, `session.restartOnFallback`, `session.authRestart`) awaits the run host's
+`settleConfinement()` in the dispatch before its lease and the engine's `configure`, and `leaseForContinuation` settles before it
+prepares. No package, edge, process or message kind changed.
+
 **The deterministic message's path anchor read from the argument values (REQ-ORCH-104, loc1; 2026-10-20).** `03-runtime-view.md` §3 now states that the supervisor's fallback message names the circled tool and a path anchor read from the call's argument values — the first string under a path- or file-named argument, else the first path-shaped one — never from the JSON text, where an escaped `\t` written ahead of `path` had read as the anchor. No package, edge or process changed.
 
 **The loop supervisor's same action compared by argument value (OQ-364, loc1; 2026-10-20).** `03-runtime-view.md` §3 now states that two tool calls are the same action — for the repetition and cycle triggers and `PD-ORCH-016`'s raw-count evidence alike — when their tool names are equal and their arguments, read as JSON, are one value: the order an object's keys were written in is no part of it, and an argument text that does not parse is compared whole as text. Each call's fingerprint is computed once in `observe()`. No package, edge or process changed.

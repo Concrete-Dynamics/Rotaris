@@ -250,6 +250,15 @@ an entry provider main cannot resolve refuses with REQ-WORKSPACE-137's sentence,
 A session this process never started or resumed leases nothing — the engine's own `not-live` / `no-session`
 refusals answer it.
 
+**The continuation settles the confinement verdict first (2026-10-20, REQ-SANDBOX-097).** Every one of those commands, and the
+restarts of REQ-NOTIFY-070 (`session.restartOnFallback`) and REQ-NOTIFY-074 (`session.authRestart`), runs in this order in the run
+host's dispatch: `settleConfinement()` (the one cached probe, as at a run start), then the continuation lease (which settles again
+before it prepares, a cached read), then the engine, whose `configure` meets ADR-0022's gate reading that settled verdict. A refused
+mode then carries the backend's reason and remediation under `session.confinement`. Until then only a run start and a
+`confinement.status` read settled it, and a continuation reached first read `null` and was refused "No OS-level confinement can be
+used on this host." even where confinement was available
+([the note](../../defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md)).
+
 ## 2. The loop and one iteration
 
 ```mermaid

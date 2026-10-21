@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
-import { lstatSync, statSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { lstatSync, readdirSync, statSync } from 'node:fs';
+import { isAbsolute, join, resolve } from 'node:path';
 
 /**
  * The one place a child process is started with the product's fixed flags:
@@ -82,10 +82,48 @@ export function findExecutable(command: string, env: Readonly<Record<string, str
   const pathKey = win ? Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH' : 'PATH';
   for (const dir of (env[pathKey] ?? '').split(delimiter)) {
     if (dir === '') continue;
-    for (const c of candidates(join(dir, command))) if (isFile(c)) return c;
+    const names = directoryNames(dir, win);
+    for (const c of candidates(command)) {
+      // A name the directory's listing lacks is not there: one `stat` of the directory instead of one per extension.
+      if (names !== null && !names.has(win ? c.toLowerCase() : c)) continue;
+      if (isFile(join(dir, c))) return join(dir, c);
+    }
   }
   return null;
 }
+
+/**
+ * The names a PATH directory holds, kept while its modification time holds (lower-cased on win32, where a name matches
+ * without regard to case), or null when it cannot be listed and the lookup must `stat` each candidate. Until 2026-10-20
+ * the lookup `stat`ed every directory under every PATHEXT extension: 1,105 calls on a Windows 11 host with 85 PATH
+ * entries and 13 extensions, about 880 ms a lookup at that host's 0.8 ms a `stat`, paid on every configuration load
+ * (docs/defects/fixed/a-configuration-load-costs-about-half-a-second-on-a-windows-host-with-a-long-path.md). A directory
+ * gains a new modification time when an entry is added, removed or renamed in it, so a kept listing costs one `stat`.
+ * A listing is kept only when the directory's time did not move while it was read, and only when that time carries a
+ * fraction of a millisecond: a coarse filesystem (FAT's two seconds, exFAT's ten milliseconds) can take an entry in
+ * the same tick as the read and leave the time unchanged, and its listing is read afresh at each lookup instead.
+ */
+function directoryNames(dir: string, win: boolean): ReadonlySet<string> | null {
+  const key = resolve(dir);
+  try {
+    const before = statSync(key, { bigint: true, throwIfNoEntry: false });
+    const kept = listings.get(key);
+    if (before !== undefined && kept !== undefined && kept.mtimeNs === before.mtimeNs) return kept.names;
+    listings.delete(key);
+    // An entry naming nothing, or naming a file, holds no executable: nothing under it can be `stat`ed either.
+    if (before === undefined || !before.isDirectory()) return NOTHING;
+    const names = new Set(readdirSync(key).map((n) => (win ? n.toLowerCase() : n)));
+    const after = statSync(key, { bigint: true, throwIfNoEntry: false });
+    if (after !== undefined && after.mtimeNs === before.mtimeNs && !String(before.mtimeNs).endsWith('000000')) listings.set(key, { mtimeNs: before.mtimeNs, names });
+    return names;
+  } catch {
+    // A directory that refuses to be listed (`EACCES`, `EPERM`) may still let a named file be `stat`ed.
+    listings.delete(key);
+    return null;
+  }
+}
+const NOTHING: ReadonlySet<string> = new Set();
+const listings = new Map<string, { readonly mtimeNs: bigint; readonly names: ReadonlySet<string> }>();
 
 /**
  * The Windows script-file wrap (Part S's first-execution finding, recorded in the ADR-0033 note): a package runner on

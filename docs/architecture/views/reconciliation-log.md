@@ -16,6 +16,13 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-21**
 
+**A PATH lookup lists each directory once and keeps the listing while the directory's time holds (REQ-MCP-037; 2026-10-20).**
+`findExecutable` (`packages/platform/src/spawn.ts`) no longer `stat`s every PATH directory under every PATHEXT extension: it
+reads each directory's names, keeps them in memory in whichever process asks while the directory's modification time is
+unchanged, and `stat`s only a name the listing holds. The lookup's answer is unchanged, so no view states anything new: none
+of them described the lookup's cost, and the cache is the calling process's own memory, not a fact another process owns.
+No package, edge, process, message or channel changed. The README's date stays 2026-10-21.
+
 **Guard (2) and gate (2) at the window's own project, and at the update's closes (OQ-361 ruled 2026-10-20, `PD-SHELL-009`
 revision 3; REQ-SHELL-119, REQ-SHELL-021, REQ-STARTUP-053, REQ-WORKSPACE-012, REQ-NOTIFY-056, REQ-NOTIFY-057; loc1,
 `loc1-guard-2`; 2026-10-21).** `02-process-view.md`'s close-guard paragraph now says guard (2) asks about the closing window's

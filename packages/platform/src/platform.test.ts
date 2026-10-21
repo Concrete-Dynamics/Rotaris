@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, readdirSync, mkdirSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, readdirSync, mkdirSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, win32 } from 'node:path';
 import { millis, mintMachineId, FakeClock, type MachineId } from '@rotaris/kernel';
@@ -514,6 +514,51 @@ describe('findExecutable on Windows (REQ-MCP-037; the merge of Parts R and S, 20
       // the platform parameter's, so the leg runs where the host can spell an input it accepts.
       if (!dir.includes(':')) expect(findExecutable('npx', env, 'linux')).toBe(join(dir, 'npx'));
       expect(findExecutable('nothing-here', env, 'win32')).toBeNull();
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // A PATH directory's listing is kept while its modification time holds (the half-second configuration load, 2026-10-20).
+  // The cases set a directory's time back after adding an entry, which no installer does: it is how a test can see
+  // which listing the lookup answered from.
+  const host = process.platform;
+  const PAST = 1_700_000_000.123456; // seconds, with a fraction of a millisecond
+  it('a listing is kept while the directory\'s time holds, and read afresh once the time moves', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-listing-'));
+    try {
+      const env = { PATH: dir, PATHEXT: '.EXE;.CMD' };
+      writeFileSync(join(dir, 'npx.cmd'), '@echo off');
+      utimesSync(dir, PAST, PAST);
+      expect(findExecutable('npx.cmd', env, host)).toBe(join(dir, 'npx.cmd'));
+      writeFileSync(join(dir, 'uvx.cmd'), '@echo off');
+      utimesSync(dir, PAST, PAST);
+      expect(findExecutable('uvx.cmd', env, host)).toBeNull(); // the kept listing, taken before `uvx.cmd` was written
+      utimesSync(dir, PAST + 1, PAST + 1);
+      expect(findExecutable('uvx.cmd', env, host)).toBe(join(dir, 'uvx.cmd'));
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('a directory whose time has no fraction of a millisecond is listed afresh at each lookup (FAT\'s two-second tick)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-listing-'));
+    try {
+      const env = { PATH: dir, PATHEXT: '.EXE;.CMD' };
+      utimesSync(dir, 1_700_000_000, 1_700_000_000);
+      expect(findExecutable('uvx.cmd', env, host)).toBeNull();
+      writeFileSync(join(dir, 'uvx.cmd'), '@echo off');
+      utimesSync(dir, 1_700_000_000, 1_700_000_000);
+      expect(findExecutable('uvx.cmd', env, host)).toBe(join(dir, 'uvx.cmd'));
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('a PATH entry naming a file or nothing is passed over, and a directory named like the command is not the answer', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-listing-'));
+    try {
+      writeFileSync(join(dir, 'a-file'), '');
+      mkdirSync(join(dir, 'first', 'npx.cmd'), { recursive: true });
+      mkdirSync(join(dir, 'second'));
+      writeFileSync(join(dir, 'second', 'npx.cmd'), '@echo off');
+      const sep = host === 'win32' ? ';' : ':';
+      const env = { PATH: [join(dir, 'a-file'), join(dir, 'missing'), join(dir, 'first'), join(dir, 'second')].join(sep), PATHEXT: '.EXE;.CMD' };
+      expect(findExecutable('npx.cmd', env, host)).toBe(join(dir, 'second', 'npx.cmd'));
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 });

@@ -29,3 +29,13 @@ REQ-MCP-037 fixes the lookup's outcome, not its cost, and no requirement bounds 
 - `packages/config/src/mcp/commands.ts` — `resolveCommand`, the caller during a configuration load.
 - `apps/desktop/src/run-host/configuration.ts` — `egressReader`, a full `loadConfiguration` per call.
 - `apps/desktop/src/run-host/configuration.test.ts` — the case whose 250 ms bound this host exceeds.
+
+## Repaired — 2026-10-20
+
+`findExecutable` lists each PATH directory once and keeps the listing while the directory's modification time holds, so
+a lookup costs one `stat` of each directory it walks plus one of a name the listing holds; the `stat` under every PATHEXT
+extension is gone. A listing is not kept when the directory's time moved while it was read, nor when that time has no
+fraction of a millisecond (a coarse filesystem), and a directory that cannot be listed falls back to the old `stat` of each
+candidate. The answer is unchanged (REQ-MCP-037). On the same host the egress reader's median read fell from 367–455 ms
+run alone to 13 ms. `packages/platform/src/platform.test.ts` holds the kept listing, its renewal when the time moves, the
+coarse-time case, and a PATH entry naming a file, nothing, or a directory spelled like the command.

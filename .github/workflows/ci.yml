@@ -1,0 +1,179 @@
+# Continuous integration — R-079 (docs/product/requests.md#r-079).
+#
+# Every push to a branch and every pull request runs two jobs on a Windows x64 runner:
+#
+#   gate     `pnpm check` — symbols, typecheck, lint, tests: the commit gate of CLAUDE.md
+#   package  `pnpm package` — the code-intelligence runtime for win32-x64 (ADR-0035), the native bindings rebuilt and
+#            load-proved under the shipped Electron, the installer named by tools/release-naming (REQ-STARTUP-031), and
+#            the packaged app launched once against a loopback stub model (ADR-0056 rule 4 (b)); the installer is
+#            uploaded as a WORKFLOW ARTIFACT
+#
+# What this workflow is NOT:
+#   - not the tag workflow of docs/architecture/first-release-plan.md §4.2 (`release.yml`, still owed): it never runs
+#     on a tag, never runs `pnpm release:guard`, never creates a GitHub release of any kind. A published release is what
+#     the in-app updater offers every install (apps/desktop/src/main/updater/feed.ts), so this file holds no write
+#     permission at all.
+#   - not releasable output: the package is a DEVELOPMENT package (ROTARIS_PACKAGE_WITHOUT_NOTICES=1) while O-3, O-11
+#     and OQ-74 keep `pnpm notices` refusing (REQ-STARTUP-037, REQ-STARTUP-143); its About page says it has no notices
+#     file. It carries no SHA256SUMS.txt and no signature (REQ-STARTUP-032, REQ-STARTUP-167, O-2).
+#   - not REQ-STARTUP-156's release gate: a hosted runner is a build machine with a toolchain and a network.
+#   - not a proof runner: R-079 put no proof suite in CI. `pnpm live-run` and `slice-proof` may never run here
+#     (AGENTS.md).
+#
+# One platform key, windows-x64 (PD-STARTUP-001, OQ-400): no arm64 runner, no macOS or Linux job (IC-3).
+#
+# Hardening for a public repository: third-party actions pinned by full commit SHA (the tag in the comment), the token
+# read-only, `pull_request` and never `pull_request_target`, no secret referenced anywhere, checkout without persisted
+# credentials, and a superseded run of the same branch or pull request cancelled.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The tests' git fixtures and electron-builder's caches stay inside the job.
+  GIT_TERMINAL_PROMPT: '0'
+  ELECTRON_CACHE: ${{ github.workspace }}\.ci-cache\electron
+  ELECTRON_BUILDER_CACHE: ${{ github.workspace }}\.ci-cache\electron-builder
+
+jobs:
+  gate:
+    name: gate (pnpm check)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Git settings for this tree
+        shell: pwsh
+        run: |
+          git config --global core.longpaths true
+          git config --global core.autocrlf false
+          git config --global user.name 'Rotaris CI'
+          git config --global user.email 'ci@rotaris.invalid'
+          git config --global init.defaultBranch main
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # No version input: pnpm/action-setup reads `packageManager` from the root package.json.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Electron runtime
+        run: node node_modules/electron/install.js
+
+      - name: pnpm check
+        run: pnpm check
+
+  package:
+    name: package (windows-x64, development)
+    runs-on: windows-latest
+    timeout-minutes: 75
+    env:
+      # R-079: a development package until the notices inputs exist (see the header).
+      ROTARIS_PACKAGE_WITHOUT_NOTICES: '1'
+    steps:
+      - name: Git settings for this tree
+        shell: pwsh
+        run: |
+          git config --global core.longpaths true
+          git config --global core.autocrlf false
+          git config --global user.name 'Rotaris CI'
+          git config --global user.email 'ci@rotaris.invalid'
+          git config --global init.defaultBranch main
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `pnpm build-id` reads the commit and the tree's state (REQ-SHELL-140).
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Electron runtime
+        run: node node_modules/electron/install.js
+
+      # The bundle step extracts the pinned uv with the first `tar` on PATH, and Git for Windows' GNU tar cannot read a
+      # zip (docs/defects/the-bundle-step-extracts-the-pinned-uv-with-whatever-tar-is-first-on-path.md): say which one
+      # this runner resolves, before the step that depends on it.
+      - name: Which tar the bundle step will run
+        shell: pwsh
+        run: |
+          Get-Command tar -All | Format-Table -AutoSize Source
+          tar --version
+
+      # `pnpm package` builds the same bundle itself and skips it when the marker matches; running it first gives the
+      # fetch-heavy step its own line and its own time.
+      - name: Code-intelligence runtime (win32-x64)
+        run: pnpm code-intel:bundle --target=win32-x64
+
+      # electron-vite build with the seams compiled out, the seam check, electron-builder --win with ADR-0056's hooks,
+      # and the packaged app's launch. It writes apps/desktop/release/load-proof.json either way.
+      - name: pnpm package
+        run: pnpm package
+
+      - name: Name, size and digest of what was produced
+        if: success()
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem apps/desktop/release -File -Filter 'Rotaris-*-windows-x64-*.exe'
+          if ($files.Count -ne 1) { throw "expected one installer under apps/desktop/release, found $($files.Count)" }
+          '| artifact | bytes | sha256 |' >> $env:GITHUB_STEP_SUMMARY
+          '|---|---|---|' >> $env:GITHUB_STEP_SUMMARY
+          foreach ($f in $files) {
+            $h = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()
+            "| ``$($f.Name)`` | $($f.Length) | ``$h`` |" >> $env:GITHUB_STEP_SUMMARY
+          }
+          '' >> $env:GITHUB_STEP_SUMMARY
+          'A development package (no notices file), not a release: R-079.' >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload the installer
+        if: success()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-x64-development-installer
+          path: apps/desktop/release/Rotaris-*-windows-x64-setup.exe
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload the package evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-x64-package-evidence
+          path: |
+            apps/desktop/release/load-proof.json
+            apps/desktop/release/load-proof.afterpack.json
+            apps/desktop/release/load-proof.app.log
+            apps/desktop/release/load-proof.png
+            apps/desktop/release/electron-builder.package.yml
+            apps/desktop/resources/code-intelligence/bundle.json
+          if-no-files-found: warn
+          retention-days: 14

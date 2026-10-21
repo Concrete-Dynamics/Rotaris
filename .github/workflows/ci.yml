@@ -60,6 +60,11 @@ jobs:
           git config --global user.name 'Rotaris CI'
           git config --global user.email 'ci@rotaris.invalid'
           git config --global init.defaultBranch main
+          # The hosted runner's TEMP is an 8.3 short name (C:\Users\RUNNER~1\...), and the tests compare the paths the
+          # code canonicalises against os.tmpdir()'s spelling (docs/defects/tests-that-compare-a-path-with-os-tmpdir-fail-where-temp-is-an-8-3-short-name.md).
+          # RUNNER_TEMP, on the work drive, has no short form.
+          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -99,6 +104,11 @@ jobs:
           git config --global user.name 'Rotaris CI'
           git config --global user.email 'ci@rotaris.invalid'
           git config --global init.defaultBranch main
+          # The hosted runner's TEMP is an 8.3 short name (C:\Users\RUNNER~1\...), and the tests compare the paths the
+          # code canonicalises against os.tmpdir()'s spelling (docs/defects/tests-that-compare-a-path-with-os-tmpdir-fail-where-temp-is-an-8-3-short-name.md).
+          # RUNNER_TEMP, on the work drive, has no short form.
+          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -118,6 +128,11 @@ jobs:
 
       - name: Electron runtime
         run: node node_modules/electron/install.js
+
+      # The generated requirement symbols are git-ignored, and `pnpm package` does not write them
+      # (docs/defects/pnpm-package-on-a-fresh-checkout-fails-for-the-requirement-symbols-it-never-generates.md).
+      - name: Requirement symbols
+        run: pnpm symbols
 
       # The bundle step extracts the pinned uv with the first `tar` on PATH, and Git for Windows' GNU tar cannot read a
       # zip (docs/defects/the-bundle-step-extracts-the-pinned-uv-with-whatever-tar-is-first-on-path.md): say which one

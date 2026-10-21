@@ -22,6 +22,15 @@ where acceptance read this stage green. Two likely repairs, neither ruled here: 
 `code_intelligence` (`mcp_servers: code_intelligence: { enabled: false }`, as `workspace-proof`'s fixture does), which it
 does not need; or the capture waits for the terminal call's file rather than a fixed 9 s.
 
+**Also on Windows x64 (2026-10-21).** Windows 11 x64 (build 26200), Node 24.11.0, a host with 87 PATH entries; the same
+stage failed one check of 15 twice, at `fe0b6c7b`'s tree in the morning and at `e233267b` in the evening: "and it still
+carries the launch's other variables … ROTARIS_APP_LOG_LEVEL ABSENT, ROTARIS_INTENT_SCRIPT ABSENT". The race is the one above
+with a later finish. In the evening run the session started at 18:54:36.109, the discovery of `code_intelligence` finished
+at 18:54:42.263 and the capture came at 18:54:43.999; `terminal-environment.txt` existed with 0 bytes, so `set >` had opened
+the file and not yet written it. The two checks that only need the file to exist passed on that empty file, and the check
+reading its names failed. The bundle here runs natively (no emulation), so the emulation reading above is not needed for
+the race.
+
 ## Specs
 
 None is contradicted: REQ-STARTUP-106 and REQ-STARTUP-147 are what the stage measures, and it reads nothing because the

@@ -63,6 +63,21 @@ export function parseDacl(sddl: string): Dacl | null {
   return { protected: flags.includes('P'), aces };
 }
 
+/**
+ * An ACE's trustee as a SID. SDDL writes a few well-known accounts as two-letter aliases: SYSTEM as `SY`, and the
+ * machine's built-in Administrator and Guest (relative identifiers 500 and 501) as `LA` and `LG` — so on that account
+ * the owner's own entry reads back as `LA`, never as its SID, and every save was refused
+ * (docs/defects/fixed/on-the-built-in-administrator-account-every-credential-save-is-refused-at-the-read-back.md).
+ * An alias is read as the owner only when the owner's SID carries that relative identifier. A domain account with
+ * identifier 500 is written as its SID, not `LA`, so for it an `LA` entry (the machine's Administrator) is read as the
+ * owner too: the one reading the alias leaves open, and an account that can take ownership of the file regardless.
+ */
+function trusteeSid(sid: string, ownerSid: string): string {
+  if (sid === 'SY') return SYSTEM_SID;
+  if ((sid === 'LA' && /^S-1-5-21-\d+-\d+-\d+-500$/.test(ownerSid)) || (sid === 'LG' && /^S-1-5-21-\d+-\d+-\d+-501$/.test(ownerSid))) return ownerSid;
+  return sid;
+}
+
 /** REQ-PROVIDER-016's exact check: protected, two allow ACEs, full access, the two trustees, nothing inherited. */
 export function isExactDacl(dacl: Dacl | null, ownerSid: string): string | null {
   if (!dacl) return 'no DACL could be read back';
@@ -73,7 +88,7 @@ export function isExactDacl(dacl: Dacl | null, ownerSid: string): string | null 
     if (a.type !== 'A') return `an entry is not an allow entry (${a.type})`;
     if (a.rights !== 'FA') return `an entry grants ${a.rights || 'nothing'} rather than full control`;
     if (/ID/.test(a.flags)) return 'an inherited entry survived';
-    trustees.add(a.sid === 'SY' ? SYSTEM_SID : a.sid);
+    trustees.add(trusteeSid(a.sid, ownerSid));
   }
   if (!trustees.has(SYSTEM_SID) || !trustees.has(ownerSid)) return `the trustees are ${[...trustees].join(', ')}`;
   return null;

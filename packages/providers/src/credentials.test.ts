@@ -142,6 +142,12 @@ describe('the protection adapter (REQ-PROVIDER-016; spikes/credential-protection
     expect(isExactDacl(parseDacl(`D:PAI(A;;FR;;;${me})(A;;FA;;;SY)`), me)).toMatch(/full control/);
     expect(isExactDacl(parseDacl(`D:PAI(A;;FA;;;${me})(A;;FA;;;BA)`), me)).toMatch(/trustees/);
     expect(isExactDacl(parseDacl('O:BAG:BA'), me)).toMatch(/no DACL/);
+    // The built-in Administrator and Guest read back as SDDL's `LA` / `LG`, and are the owner only for that account.
+    const admin = 'S-1-5-21-4159254826-2043646976-2705649753-500';
+    expect(isExactDacl(parseDacl('D:PAI(A;OICI;FA;;;LA)(A;OICI;FA;;;SY)'), admin)).toBeNull();
+    expect(isExactDacl(parseDacl('D:PAI(A;;FA;;;LG)(A;;FA;;;SY)'), 'S-1-5-21-1-2-3-501')).toBeNull();
+    expect(isExactDacl(parseDacl('D:PAI(A;;FA;;;LA)(A;;FA;;;SY)'), me)).toMatch(/trustees/);
+    expect(isExactDacl(parseDacl('D:PAI(A;;FA;;;LG)(A;;FA;;;SY)'), admin)).toMatch(/trustees/);
     expect(parseDacl(`D:PAI(A;;FA;;;${SYSTEM_SID})`)?.aces[0]?.sid).toBe(SYSTEM_SID);
   });
   it('the Windows adapter runs /reset, then /inheritance:r /grant:r with SID literals, then reads back — and refuses when the read-back is not exact', async () => {

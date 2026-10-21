@@ -446,6 +446,11 @@ lives in `tools/release-naming`. What the build decided and found:
 - Two readings were raised rather than taken silently: **OQ-69**, whether the switched-off `browser` default counts
   (built: it does), and **OQ-70**, whether tag numbers are canonical decimals (built: they are).
 
+*2026-10-21 ([R-079](../product/requests.md#r-079)): `.github/workflows/ci.yml` exists — `pnpm check` and a development
+`pnpm package` (`ROTARIS_PACKAGE_WITHOUT_NOTICES=1`) on every branch push and pull request, on `windows-latest` x64, the
+installer uploaded as a workflow artifact. It is not this section's workflow: it never runs on a tag, runs no guard,
+writes no manifest and creates no release, and holds a read-only token. Everything below stays owed as written.*
+
 **4.2 The tag workflow.** `.github/workflows/release.yml` does not exist yet. It is triggered only by tags
 matching REQ-STARTUP-027's grammar. Channel classification follows REQ-STARTUP-029. The stages, each failing
 the release on its own:

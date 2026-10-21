@@ -7,6 +7,28 @@ status: resolved
 
 # Resolution Record — Domain 05, Agent Tooling, Terminal Execution, Permissions, and Approvals
 
+> ## Amendment, 2026-10-21 — a soft-paused command's stream ends when the session closes the command (OQ-370)
+>
+> `REQ-TOOLS-127` gains a dated note beneath its text, which is kept unchanged. The requirement fixes the closing frame's
+> text and its exit code, not its instant. A soft-paused command's live stream ends when the session itself closes that
+> command, while no later call holds the stream: at the terminal window's kill, the command's own end frame, the end of the
+> session's shell, or the agent's `reset`. It does not wait for the agent's next observation, and a stream a later call has
+> re-opened is ended by that call's own result. An end the session does not know of (an interrupt's, until a poll or the
+> next command finds it; a queued line a command took as input) leaves the stream open until that observation, as built.
+> The closing frame carries the paused command's screen so far — all of its retained output as plain text, capped at
+> `REQ-TOOLS-097`'s 100,000 characters and truncated from the oldest end, empty for a queued command that never ran — and
+> the stream closes carrying −1 for a command the window killed, no exit code for one that never ran, ended the shell or was
+> ended by the agent's reset, its own status for one that ended on its own frame, and −1 where an interrupt left it none.
+> Every observation the agent receives is unchanged, and OQ-164's ruling stands.
+>
+> **Why this is a note and not a directive.** `REQ-SHELL-091` binds the window "once the process exits", and the window
+> learns of the exit only from the stream's meta; `REQ-TOOLS-127`'s closing frame is "the one emitted after it has exited",
+> and its "rather than on a partial capture" excludes the since-poll text on which the build closed a polled command's
+> stream. The reading builds `REQ-SHELL-091`, `REQ-SHELL-087`, `REQ-TOOLS-127` and `REQ-TOOLS-128` as written and departs
+> from none of them. Ruled under the owner's delegation ([R-072](../../product/requests.md#r-072)) with no directive; the
+> ruling, its evidence and its corrections of the entry are in
+> [`open-questions.md`](../../architecture/open-questions.md#oq-370).
+
 
 > ## Superseded by the storage rulings (2026-09-01)
 >

@@ -435,6 +435,21 @@ Independently of exit code, a pipeline check adds the warning `Pipeline command 
 
 **REQ-TOOLS-127** — A foreground command's live output is published on a stream named `fg:<scope>`, where `<scope>` is the identifier of the run the command belongs to, or the literal `root` when the command belongs to no run. A background session publishes on `bg:<session_id>` using its `ts_XXXXXXXX` id. Frames are typed `delta` (the text appended since the previous frame), `screen` (a complete replacement of the displayed text), or `meta`. Streaming changes nothing the agent sees: with or without a consumer attached, and whether or not publishing succeeds, the command still runs to completion and the observation returned is identical — the only detectable difference is whether a live preview existed. A completed stream — foreground and background alike — ends with a `screen` frame whose text equals the observation's final output text, so the live view finishes on the same text the observation reports rather than on a partial capture, and the stream is then closed carrying the command's exit code. That closing frame is a **literal replacement of the displayed text and carries an explicit marker saying that it is one**: its text is plain on the terms this requirement already fixes — capped, and truncated from the oldest end — and it is the only frame of a stream of which any of that is true. Every earlier frame stays faithful to what the command actually wrote, which is what REQ-SHELL-095 and REQ-SHELL-098 need in order to present a character grid with cursor addressing, alternate-screen fidelity, per-cell attributes and sixteen colours. **The two bind different instants and therefore do not conflict**: those requirements govern the stream while the process is running, and this frame is the one emitted after it has exited — when there is no cursor to paint (REQ-SHELL-098), no alternate screen left to be in, and no further output to attribute to a cell.
 
+> *Noted 2026-10-21 ([OQ-370](../architecture/open-questions.md#oq-370), ruled under
+> [R-072](../product/requests.md#r-072)):* this requirement fixes the closing frame's text and its exit code, not its
+> instant. A soft-paused command's stream ends when the session itself closes that command — at the terminal window's kill,
+> the command's own end frame, the end of the session's shell, or the agent's `reset` — while no later call holds the
+> stream; it does not wait for the agent's next observation, and a stream a later call has re-opened is ended by that call's
+> own result. An end the session does not know of (an interrupt's, until a poll or the next command finds it; a queued line
+> a command took as input) leaves the stream open until that observation. The closing frame carries the paused command's
+> screen so far: all of its output the session retains, as plain text, capped at REQ-TOOLS-097's 100,000 characters and
+> truncated from the oldest end, and empty for a queued command that never ran. That is the text its observations hand over
+> end to end, which "rather than on a partial capture" asks for in place of the text since the last poll. The stream closes
+> carrying −1 for a command the window killed; no exit code for one that never ran, ended the shell or was ended by the
+> agent's reset; its own status for one that ended on its own frame; and −1 where an interrupt left it none. Where nothing
+> closed the stream first, a poll that hands such a command over closes it with the same text and code. "Streaming changes
+> nothing the agent sees" holds: every observation reads as before. The requirement's text is unchanged.
+
 **REQ-TOOLS-128** — Displays can talk back through a registered stream-control channel — send-keys, resize, and interrupt for foreground; send-keys, interrupt (SIGINT), and kill for background — without knowing what drives the stream. A stream info record carries the command, a running flag, start time, exit code, and a `truncated` flag set once replay frames were dropped.
 
 > **Extended by [`PD-TOOLS-010`](../product/directives.md#pd-tools-010), 2026-10-06.** The stream-control

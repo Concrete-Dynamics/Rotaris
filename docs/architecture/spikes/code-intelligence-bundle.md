@@ -82,3 +82,7 @@ binds the release.
 proof keeps the runtime's home), and, on the packaged binary, the self-containment launch (launch 7: a fresh home,
 outbound blocked, an empty npm cache — what the runtime tried to fetch is IC-7's evidence). The packaged artifact's
 growth is ADR-0054's note.
+
+## Windows 11 ARM64 — 2026-10-21 (the Windows ARM64 session's F2)
+
+Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, uv 0.12.5 aarch64, built at `af692eea`. The bundle, as built today, is the `win32-x64` tree on this host (Python 3.13.15 x64, PE machine `0x8664`), built in 20.6 s from published `win_amd64` wheels only, and it runs under the x64 emulation: `tools/list` at 4.0 to 5.5 s in the proof's launch 1 (ADR-0035 consequence 1 recorded 5.5 to 5.6 s on x64), and the first symbol call provisioned the TypeScript language servers as section 3 found. The emulated interpreter reports `platform.machine()` as `ARM64`. ADR-0035, "The proof on Windows 11 ARM64", holds the readings.

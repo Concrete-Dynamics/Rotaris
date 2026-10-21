@@ -287,7 +287,7 @@ runtime's (the dashboard, the partial-configuration refusal, the auto-created ma
 fetched language servers). The tally stands.
 
 **Not built, said so:** the language servers beyond what the runtime provisions itself (IC-7); macOS and Linux bundles
-(IC-3; `bundle.mjs` refuses off Windows); ~~the notices generator's section for the runtime (`REQ-STARTUP-142`)~~
+(IC-3; `bundle.mjs` refuses off Windows *(corrected 2026-10-21: since OQ-400's target work it refuses off Windows and Linux — "only Windows and Linux bundles are currently supported" — and builds a Linux x64 tree; macOS stays refused)*); ~~the notices generator's section for the runtime (`REQ-STARTUP-142`)~~
 **built 2026-09-27** (IC-7 discharged, above); the
 machine-setup half of `REQ-MCP-112` and `REQ-MCP-095/096`; the ONBOARDING tier's persona; the dashboard and
 project-switching tools (never granted by design); the isolated-tree binding; nested `.gitignore` files in the
@@ -346,6 +346,7 @@ after) the runtime received `-c <entry> start-mcp-server --transport stdio` — 
 propagated. **Unmeasured on Windows (IC-3 — *corrected 2026-10-14: a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*):** the 2026-09-06 spike's quirk is a scheme-looking positional FOLLOWED BY
 another positional exiting before JavaScript; `--no-sandbox` is a switch, not a positional, and a packaged Windows
 parent does not normally carry it, but `Rotaris.exe builtin:code-intelligence --no-sandbox --` has not been run.
+*Reported back 2026-10-21, development half (the Windows ARM64 session's F2; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, uv 0.12.5 aarch64, built at `af692eea`):* `electron.exe out\main\index.js builtin:code-intelligence --no-sandbox -- start-mcp-server --transport stdio --context ide` with an `initialize` line on standard input answered it (preamble `0d0a`, then the JSON result) and exited 0 in 3.5 s once standard input ended — not the quirk's early exit; `-- no-such-subcommand` exited 2 from the runtime's parser; with standard input held open the runtime's `python.exe` line read `-c "from serena.cli import top_level; top_level()" start-mcp-server --transport stdio --context ide`, no `--no-sandbox` and no `--`. `Rotaris.exe` is still not run: no Windows package exists on this host.
 
 **The proof's branch client — 2026-09-28 (R-062).** Consequence 1's observables are read by `code-intel-proof`'s launch 1
 through a raw JSON-RPC client, and that client resolved a request only when its answer arrived: a branch that exited
@@ -378,6 +379,7 @@ off Windows, because its sampler is `Get-Process` and this host has no window li
 consequence 1 as surely as one on Windows; the instrument is what is missing. The packaged half of section 1 and section 7
 need `win-unpacked`, and no Linux artifact may be produced (IC-3), so IC-7's contained run is untouched. Nothing on
 Windows was run.
+*Reported back 2026-10-21 (the Windows ARM64 session's F2):* on Windows the no-window check ran — "sampled 12", "sampled 16" and "sampled 14 time(s)" in three whole runs, the windowed list empty each time (section "The proof on Windows 11 ARM64").
 
 **The fix round, 2026-09-29.** The whole proof was run three more times, and run 2 went red in section 5's
 `setup-again`. The product was not at fault. The open's `No model provider is authenticated yet` notice, raised at
@@ -410,6 +412,7 @@ launches pressed Cancel while `create` ran and read `Cancelled`. Then three whol
 all three: Start 41 to 128 ms after the notice in all 15 setup launches, Cancel pressed and `Cancelled` read in each
 `setup-cancel`, the window check recorded not measured on linux, and the drift refused. **What it could not show:** anything on
 Windows; the packaged branch and section 7 (IC-3 — *corrected 2026-10-13: a Windows x64 host, deferred with the pipeline under R-071; IC-3 binds Linux and macOS artifacts*), as before.
+*"Not measured: Windows" reported back 2026-10-21 (the Windows ARM64 session's F2):* the development half ran there, three whole runs green, the setup launches among them (below, "The proof on Windows 11 ARM64"); the packaged branch and section 7 are still owed.
 
 **The setup at the run host's shutdown, and what a step started (2026-10-01).** REQ-MCP-099's termination (ask, 5 s
 grace, force-kill) reached only the step itself on POSIX. `child.kill` signals one process, and the step was spawned
@@ -538,3 +541,9 @@ shipped, so this is build provenance, never acceptance evidence. The packaging g
 rule). First run on Linux x64, recorded in [first-executions](../first-executions.md) (the row of 2026-10-15, "The
 bundle's target architecture and the packaging guard"): the full key installed `cpython-3.13.15-linux-x86_64-gnu` and
 the tree answered as before; the first run on an ARM64 host is owed to its first `pnpm package`.
+
+## The proof on Windows 11 ARM64 — 2026-10-21 (the Windows ARM64 session's F2)
+
+Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, uv 0.12.5 aarch64, built at `af692eea`. **The bundle.** `pnpm code-intel:bundle --force` from PowerShell 7.6.6 with uv 0.12.5 aarch64 first on PATH exited 0 and logged "uv 0.12.5 on PATH equals the pin; used". With no `--target` it built for `win32-x64` on the `win32-arm64` host (`cpython-3.13.15-windows-x86_64-none`), as the 2026-10-16 repair makes a Windows ARM64 development tree do: `bundle.json` reads `target` `win32-x64`, `targetArch` `x64`, Python 3.13.15, `serena-agent` 1.7.0, 20,584 ms, 167.6 MiB in 10,607 files (137.3 MiB before trimming). All 75 packages installed in 3.1 s and none was built: PyYAML, psutil, tiktoken, ruamel.yaml.clib, pillow, cryptography, pydantic_core, regex, rpds_py, jiter, markupsafe, cffi, charset_normalizer and pywin32 each came as a published `win_amd64` wheel (their `WHEEL` tags read). The interpreter's PE machine field is `0x8664` (x64) for `python.exe`, `pythonw.exe` and `python313.dll`, and under the x64 emulation it answers `platform.machine()` with **`ARM64`**: only the bytes tell the architecture, which is why the packaging guard reads them ([note](../../defects/fixed/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md)). The step also tried to put a `python3.13.exe` on the user's PATH, and failed only because one was there ([note](../../defects/the-bundle-steps-python-install-tries-to-place-an-interpreter-on-the-users-path.md)).
+
+**The proof.** three whole runs of `pnpm code-intel-proof --skip-build`, each green (888 s, 880 s, 877 s, each on a host read idle first). Launch 1: `tools/list` at 3,967, 5,501 and 4,584 ms, 22 tools, the preamble `0d0a` and no non-JSON line, exit 0 on stdin's end, 2 for an unknown subcommand, the window check "sampled 12/16/14 time(s)" with nothing windowed. Launches 2 and 3: 22 listed, 12 granted, two launch lines carrying `--project`. Launch 4: `Greeter`, `greet` and `Counter`, with five provisioning lines in the first run (TypeScript 5.9.3 and typescript-language-server 5.1.3 fetched into the profile) and none after; the call took about 241 s each run. Launch 5: the disclosure true to the runtime, the store under the profile's `local\rotaris\data\code-intelligence`, nothing new under the person's own `%USERPROFILE%\.serena` (which a Serena of the owner's own uses; untouched since before the runs), the setup's five launches as on Linux and `setup-cancel` "Cancelled" with creation failed and the rest not attempted. Launch 6: the doctored manifest refused. Launches 8 to 15 listed exactly the files each changed. **Found nothing new about the mechanism.** **Not shown:** that `setup-cancel` leaves no `python.exe` behind — the proof does not look, and the host had another worktree's runtime running when this session looked; the packaged branch and section 7 (no Windows package on this host). With the runtime renamed aside the proof's bundle check rebuilt it before any launch, and from Git Bash that rebuild fetched the pinned x64 uv and could not extract it ([note](../../defects/the-bundle-step-extracts-the-pinned-uv-with-whatever-tar-is-first-on-path.md)); the sentinel's exit 127 was not reached.

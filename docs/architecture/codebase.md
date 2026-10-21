@@ -1451,7 +1451,9 @@ product's order, which `lib/launch-sites.test.ts` holds for every token launch; 
 with `pnpm` and records the no-window check not measured; its setup launches open Settings with the Ctrl+7 chord rather than
 the shared category seam, and press the category, Start and Cancel only once the open's notice has drawn and the
 control is there (2026-09-28, R-062; repaired again 2026-09-29 after the fix round's verifier found `setup-cancel` red
-three times in seven runs: four `--steps=5` runs and then three whole runs in a row green as root on Linux).
+three times in seven runs: four `--steps=5` runs and then three whole runs in a row green as root on Linux). On Windows it
+samples for windows and has run whole there (2026-10-21, a Windows ARM64 development tree, three runs green; ADR-0035, "The
+proof on Windows 11 ARM64").
 
 **What `pnpm config-proof` does.** It builds Electron and launches the app five times against commented files at
 both scopes: Settings → Runtime toggles "Allow outside workspace" through its confirmation and saves (every other

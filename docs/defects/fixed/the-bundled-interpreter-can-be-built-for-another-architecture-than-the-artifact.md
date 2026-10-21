@@ -50,3 +50,7 @@ refuses an interpreter whose PE machine field differs from the artifact's. Not o
   target; `obtainUv`'s refusal on a host key with no pinned asset (`win32-arm64`).
 - `apps/desktop/scripts/build-hooks.cjs` — `checkRuntime`, which spawns the interpreter and never reads what it was built for.
 - `apps/desktop/scripts/package.mjs` — runs the bundle step with no target.
+
+## Addendum, 2026-10-21 — measured on an ARM64 host
+
+The Windows ARM64 session's F2 (Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, uv 0.12.5 aarch64, built at `af692eea`) built the bundle on that host: `target` `win32-x64`, and the interpreter's PE machine field is `0x8664` for `python.exe`, `pythonw.exe` and `python313.dll`. The interpreter, run under the x64 emulation, answers `platform.machine()` with `ARM64`, so a check that asked the interpreter would have been misled where reading the bytes is not. Still not observed in a produced artifact: no `pnpm package` has run on this host.

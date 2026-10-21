@@ -425,6 +425,7 @@ signing, `REQ-STARTUP-156`'s gate, an icon, and the per-runner half (IC-3 item 3
 > file into the artifact, and `afterPack`'s "assets" rule compares it byte for byte with the one in the source tree. No
 > Windows package has run since, so the first one to pass validation freezes this section for the first time and runs
 > that rule for the first time too (ADR-0054, "The two bundled assets").*
+> *2026-10-21 (the Windows ARM64 session's F2): `code-intel-proof` ran three times on a Windows ARM64 development tree, launch 4 provisioning TypeScript 5.9.3 and typescript-language-server 5.1.3 into the profile on the first run — a declared package at its declared version, as on Linux. This changes nothing in the condition: the release pipeline's evidence is still owed, and launch 7 (the packaged, outbound-blocked run) did not run.*
 
 > **ADOPTED 2026-09-06 by the owner — option 2, ESC-32 (`owner-decisions.md`).** The language servers are tools
 > provisioned after installation, like Git and ripgrep. **Shown so far, the same day:** `REQ-STARTUP-159`, `058`,

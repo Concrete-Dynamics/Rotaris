@@ -3623,6 +3623,8 @@ skipping the switch to find the token. The verifier found that a reinterpretatio
 reading where it is silent, and measured the placement above; it replaced the first on the same branch. **A ruling the other way** — the launch carries nothing of the parent's — leaves the
 product unable to host its own tool server on a host that needs the switch, and would want REQ-MCP-033 to say so.
 
+*2026-10-21, Windows ARM64, development entry (the Windows ARM64 session's F2):* the ruled line `electron.exe out\main\index.js builtin:code-intelligence --no-sandbox -- start-mcp-server --transport stdio --context ide` answered `initialize` and exited 0; the runtime's command line carried neither `--no-sandbox` nor `--`; an unknown subcommand exited 2. The packaged `Rotaris.exe` line is still not run (ADR-0035).*
+
 **OQ-83 — Should the record fix the manifest signature's algorithm and the forms of the key and the signature?** *(REQ-STARTUP-032, REQ-STARTUP-167, REQ-STARTUP-168; ADR-0054 "The updater". Raised 2026-09-28 by building the updater, first-release-plan.md §4.6, under R-062. Raised as OQ-76 on its branch; renumbered OQ-83 at the merge, because OQ-76 to OQ-82 were already on `main`.)*
 
 **Deferred 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)).**
@@ -16200,6 +16202,11 @@ platform no release ships; none leaves the live run and three proofs unrunnable 
 
 **What a live run then shows.** Under the reading, a live run on this host runs its code-intelligence server as the emulated
 x64 runtime, and its discovery line says whether that works.
+
+*Measured 2026-10-21 under the reading (the session's F2; not a ruling): the bundle step with no `--target` built the `win32-x64`
+tree on this host from published `win_amd64` wheels alone (20.6 s, none built), the interpreter's PE machine `0x8664`, and
+`code-intel-proof` ran whole three times green against it (ADR-0035, "The proof on Windows 11 ARM64"). The live run's discovery
+line is still to be read.*
 
 <a id="oq-402"></a>
 

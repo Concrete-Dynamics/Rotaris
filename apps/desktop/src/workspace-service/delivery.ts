@@ -6,7 +6,7 @@ import { assertWriterDeclares, createDeliveryReader, createDeliveryWriter, creat
 // Part AP — runs from the board, the queue and the source write (spec 08 §Runs Started from the Board, §Delivery Queue, §Editing and Creating Requirements; ADR-0041's second execution).
 import { ACTION_CLASS, appendEpicIndexRow, checkRepositoryForRuns, composeRequirementDocument, createLocation, documentWritable, editRequirementDocument, epicIndexLink, invokeGit, nextIdentifier, probeSourceWritability, provisionUnitWorktree, readOnlySentence, readSourceText, renderBranch, requirementWorktreePath, runPromptFor, scheduleQueue, slugOf, takeOverUnitWorktree, unconfiguredReason, unitIdFor, WAITING_ON_PERSON, writeSourceDocument, type ProvisionArgs, type ProvisionedWorktree, type RepositoryForRuns, type TakeOverArgs } from '@rotaris/workspace';
 import type { Result } from '@rotaris/kernel';
-import { loadConfiguration, commitConfigFields, renderFatal, REQUIREMENTS_DEFAULTS, validateRequirementsPatch, type RequirementsSection } from '@rotaris/config';
+import { readSavedConfiguration, commitConfigFields, renderFatal, REQUIREMENTS_DEFAULTS, validateRequirementsPatch, type RequirementsSection } from '@rotaris/config';
 import { resolveUserDirs } from '@rotaris/platform';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -123,7 +123,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
   /** Reads the configuration; answers whether it moved between loading and not, so a caller can republish the queue. */
   const loadConfig = (): boolean => {
     const before = configFault;
-    const r = loadConfiguration({ globalDir: configDir, workspaceRoot, keepIgnored: false, now: () => clocks.monotonic.now() });
+    const r = readSavedConfiguration({ globalDir: configDir, workspaceRoot, now: () => clocks.monotonic.now() });
     if (!r.ok) {
       configFault = renderFatal(r.error);
       if (before !== configFault) log(`requirements: the configuration did not load (${configFault}); nothing starts from the queue until it loads (OQ-279, REQ-CONFIG-478)`, 'warn');

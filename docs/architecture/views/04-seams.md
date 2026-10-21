@@ -264,7 +264,9 @@ Invariants:
 - The gate decides; the executor never asks. An approval travels `gate → presenter → main → dialog` — see
   [`06-sequences.md` §2](06-sequences.md#2-a-permission-approval-end-to-end).
 - A tool that reaches the filesystem states its read roots; a tool that reaches the network reads the egress
-  policy **from the saved configuration at every call**, not from a value captured at run start.
+  policy **from the saved configuration at every call**, not from a value captured at run start — through
+  `readSavedConfiguration`, which loads again only when a file it read has changed, rather than a bare
+  `loadConfiguration` per call.
 
 ---
 

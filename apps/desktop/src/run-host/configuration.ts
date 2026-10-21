@@ -3,7 +3,7 @@ import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
 import { countNoun, err, ok } from '@rotaris/kernel';
 import { declaredToolsOf, isDelegationTarget, NOT_DELEGATION_TARGETS, resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
-import { compressionTrigger, effectivePricing, isPlainMap, modelCapInForce, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
+import { compressionTrigger, effectivePricing, isPlainMap, modelCapInForce, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, readSavedConfiguration, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type HelperModel, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
@@ -139,13 +139,13 @@ export type EgressRead = PolicyRead & { readonly loadMs: number };
  * the owning run's CURRENT SAVED configuration at each call — the files and the discovery snapshot only, never
  * the live state main holds for the settings surface (an unsaved edit reaches nothing). A saved edit to the host
  * lists therefore takes effect on the next fetch with no restart, and two runs in one process each read their own
- * workspace's lists. A fatal load refuses the call (fail closed, REQ-SANDBOX-032). The cost is a YAML parse of
- * two files plus the snapshot per call; a fetch is network-bound, so that is acceptable and it is logged.
+ * workspace's lists. A fatal load refuses the call (fail closed, REQ-SANDBOX-032). The read is `readSavedConfiguration`'s:
+ * a full load when any file it reads has changed since the last, otherwise one `stat` of each; the cost is logged.
  */
 export function egressReader(globalDir: string, workspaceRoot: string, clocks: Clocks): () => Promise<EgressRead> {
   return async () => {
     const started = clocks.monotonic.now();
-    const loaded = loadConfiguration({ globalDir, workspaceRoot, keepIgnored: false, now: () => clocks.monotonic.now() });
+    const loaded = readSavedConfiguration({ globalDir, workspaceRoot, now: () => clocks.monotonic.now() });
     const loadMs = clocks.monotonic.now() - started;
     if (!loaded.ok) return { ok: false, reason: renderFatal(loaded.error), loadMs };
     const r = loaded.value.runtime;

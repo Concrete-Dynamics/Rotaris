@@ -16,6 +16,14 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-21**
 
+**A reader of the saved configuration keeps its answer while every file it read is unchanged (REQ-SANDBOX-038/118;
+2026-10-21).** `03-runtime-view.md`'s `fetch` paragraph, its "one per-call read" item and the requirements reader's sentence
+now say that the egress reader and the queue's reader go through `readSavedConfiguration` (`packages/config/src/saved-read.ts`):
+a full load when a file the last load opened or looked for has changed (modification time, size, file id) or the environment
+has, otherwise that load's answer after one `stat` of each, so a saved edit still reaches the next read. The answer carries no
+tool servers. `04-seams.md`'s tool-seam rule names the reader a per-call read goes through. The kept answer is each process's own memory, not a fact another process owns, so no ownership, package, edge,
+process, message or channel changed. The README's date stays 2026-10-21.
+
 **A PATH lookup lists each directory once and keeps the listing while the directory's time holds (REQ-MCP-037; 2026-10-20).**
 `findExecutable` (`packages/platform/src/spawn.ts`) no longer `stat`s every PATH directory under every PATHEXT extension: it
 reads each directory's names, keeps them in memory in whichever process asks while the directory's modification time is

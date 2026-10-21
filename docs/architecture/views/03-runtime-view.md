@@ -757,9 +757,12 @@ identical whether or not it is present. The search tools filter by workspace-rel
 reader answers in git's order (`ignoredBy`, `packages/config/src/init/gitignore.ts`): what lies beneath an ignored
 directory is ignored, otherwise the last rule matching the path itself decides, so `gen/*` then `!gen/keep/` keeps
 `gen/keep/` and what it holds; the pruning walks ask only an entry's own verdict (`ignoredHere`); `read_file`
-remains the route to a named file. `fetch` is the one executor that **reads configuration per call**: each call loads
+remains the route to a named file. `fetch` is the one executor that **reads configuration per call**: each call reads
 the workspace's **saved** files and the discovery snapshot (`egressReader`, no live state — REQ-SANDBOX-038/118,
-REQ-TOOLS-089; measured at 1.7–2.5 ms behind the run host, 3–4 ms median in the unit test), maps
+REQ-TOOLS-089) through `readSavedConfiguration` (`packages/config/src/saved-read.ts`), which loads again only when a
+file the last load read has changed and otherwise returns that load's answer after one `stat` of each (about 1 ms
+against a load's 4 ms on a Windows x64 host with 87 PATH entries, 2026-10-21; a load was measured at 1.7–2.5 ms behind
+the run host and 3–4 ms median in the unit test before that), maps
 `runtime.network_*` to the egress policy and `runtime.tool_call_timeout` to the run-level deadline, classifies the
 named host and every redirect target before a connection is opened, and reports one of REQ-TOOLS-092's eight
 failure kinds; the `ask` disposition was resolved by the gate's `{mode}:fetch-remote-host` rule before execution.
@@ -2008,7 +2011,8 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   (the `Fatal` card Models, Personas and Runtime draw) and the composer registers no skill command; an agent built while the
   file does not load gets the sections its run was configured with (`configuredRuns`), or no skill and no instruction file
   where no run of that session is known, and nothing read that way is cached for the workspace. The workspace service's
-  requirements reader holds the report (`configFault`, `workspace-service/delivery.ts`), re-reads the file at each claim,
+  requirements reader holds the report (`configFault`, `workspace-service/delivery.ts`), re-reads the file at each claim
+  (`readSavedConfiguration`, which loads again only when a file it read has changed),
   launch preview and run-starting board action, and while it does not load the queue starts nothing — every candidate
   deferred with "The workspace configuration did not load, so nothing starts from the queue until it is corrected: <report>"
   (`scheduleQueue`'s `unconfigured`), the claim takes nothing, a run-starting action is refused and provisions nothing.
@@ -2151,7 +2155,11 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   `project_init.source_extensions` is read from the same file and decides classification (REQ-WORKSPACE-099).
 - **The one per-call read** — the `fetch` tool's egress policy and `tool_call_timeout` are loaded from the saved
   files at every call, without the live state (REQ-SANDBOX-038/118): a saved edit to the host lists reaches the
-  next fetch of a running session with no restart, an unsaved settings edit reaches nothing.
+  next fetch of a running session with no restart, an unsaved settings edit reaches nothing. The read is
+  `readSavedConfiguration`'s, which the requirements queue's reader shares: each process keeps the last answer per
+  global directory and workspace beside a fingerprint (modification time, size, file id) of every file the load
+  opened or looked for and of the environment, and returns it only while all are unchanged. The answer carries no
+  tool servers, whose availability is a PATH lookup no fingerprint covers; a reader that needs them loads afresh.
 
 ### Post-run improvement state
 

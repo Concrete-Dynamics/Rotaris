@@ -31,6 +31,14 @@ the file and not yet written it. The two checks that only need the file to exist
 reading its names failed. The bundle here runs natively (no emulation), so the emulation reading above is not needed for
 the race.
 
+**Once more on Windows x64 (2026-10-21, later).** The same host, at `f1ea1743` (R-078's head, whose only product change
+is the feed's repository in `FEED_REPOSITORY`, which this stage never asks); the same one check of 15 failed with the same
+"ROTARIS_APP_LOG_LEVEL ABSENT, ROTARIS_INTENT_SCRIPT ABSENT". This time the discovery of `code_intelligence` was quick:
+the session started at 19:42:48.309, the discovery finished in 2,800 ms at 19:42:51.074, the scripted model call came at
+19:42:51.100 and the capture at 19:42:56.204, about 5.1 s after that call; `terminal-environment.txt` again existed with
+0 bytes. So a quick discovery does not leave the call enough of the 9 s bound either: what remains is the terminal's own
+start and `set >`'s write, not measured here.
+
 ## Specs
 
 None is contradicted: REQ-STARTUP-106 and REQ-STARTUP-147 are what the stage measures, and it reads nothing because the

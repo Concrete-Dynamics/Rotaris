@@ -7,7 +7,7 @@ const release = (over: Partial<{ tag_name: unknown; draft: unknown; prerelease: 
   prerelease: false,
   body: '## Changes\n\n- Faster startup\n',
   assets: [
-    { name: 'Rotaris-0.2.0-windows-x64-setup.exe', browser_download_url: 'https://github.com/theUpsider/Rotaris-crw/releases/download/v0.2.0/Rotaris-0.2.0-windows-x64-setup.exe', size: 125_000_000 },
+    { name: 'Rotaris-0.2.0-windows-x64-setup.exe', browser_download_url: 'https://github.com/Concrete-Dynamics/Rotaris/releases/download/v0.2.0/Rotaris-0.2.0-windows-x64-setup.exe', size: 125_000_000 },
     { name: 'Rotaris-0.2.0-windows-x64-portable.exe', browser_download_url: 'https://github.com/x/portable', size: 190_000_000 },
     { name: 'SHA256SUMS.txt', browser_download_url: 'https://github.com/x/sums', size: 200 },
     { name: 'SHA256SUMS.txt.sig', browser_download_url: 'https://github.com/x/sig', size: 64 },
@@ -23,7 +23,7 @@ const parsed = (text: string): LatestRelease => {
 
 describe('the release feed — REQ-STARTUP-105', () => {
   it('is exactly one fixed endpoint, the latest-release API of the product repository, with the fixed Accept header and a 10.0 s timeout', () => {
-    expect(FEED_ENDPOINT).toBe('https://api.github.com/repos/theUpsider/Rotaris-crw/releases/latest');
+    expect(FEED_ENDPOINT).toBe('https://api.github.com/repos/Concrete-Dynamics/Rotaris/releases/latest');
     expect(FEED_ACCEPT).toBe('application/vnd.github+json');
     expect(FEED_TIMEOUT_MS).toBe(10_000);
   });

@@ -65,7 +65,7 @@ flowchart LR
   M -- "update check: GET releases/latest, 10 s, once per window shown<br/>then SHA256SUMS.txt · .sig · the one asset, redirects followed" --> FEED
   RHst --> MODEL
   RHst --> PTY
-  FEED(("the release feed<br/>api.github.com/repos/theUpsider/Rotaris-crw/releases/latest<br/>and the release's asset URLs (302 → a storage host)"))
+  FEED(("the release feed<br/>api.github.com/repos/Concrete-Dynamics/Rotaris/releases/latest<br/>and the release's asset URLs (302 → a storage host)"))
 ```
 
 **The runtime's own requests: none (REQ-STARTUP-160, REQ-SHELL-005; 2026-09-28).** Electron and Chromium add no host

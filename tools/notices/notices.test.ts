@@ -614,7 +614,7 @@ describe('the readers, on their own', () => {
     expect(addressProblem('Rotaris Maintainers <corresponding-sources@rotaris-maintainers.org>')).toBeNull();
     expect(addressProblem(undefined)).toBe('is empty');
     expect(addressProblem('  ')).toBe('is empty');
-    expect(addressProblem('https://github.com/theUpsider/Rotaris-crw')).toBe('is a web page reference, not an address');
+    expect(addressProblem('https://github.com/Concrete-Dynamics/Rotaris')).toBe('is a web page reference, not an address');
     expect(addressProblem('<address>')).toBe('is a template placeholder');
     expect(addressProblem('TODO')).toBe('is a placeholder');
     expect(addressProblem('your email here')).toBe('is a placeholder');

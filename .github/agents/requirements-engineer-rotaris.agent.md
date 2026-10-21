@@ -51,10 +51,15 @@ Your edits land in documentation. The one artifact you regenerate rather than ed
 
 `CLAUDE.md` states it and it is not negotiable. Do **not** read, clone, fetch, search or quote:
 
-- `https://github.com/Concrete-Dynamics/Rotaris`, or any mirror, fork or package of it
+- `https://github.com/Concrete-Dynamics/Rotaris-legacy` (the reference, renamed 2026-10-21) and
+  `https://github.com/theUpsider/Rotaris` (an earlier home of the same reference), or any mirror, fork or
+  package of either
+- the reference commit `e7093dda` and its ancestors, wherever they appear
 - `D:\Development\Apps\Rotaris`
 - `D:\Development\Apps\Rotaris-cleanroom-sealed\`
 - any transcript or report produced by an agent that read the above
+
+`https://github.com/Concrete-Dynamics/Rotaris` is, since 2026-10-21, this repository itself, not the reference.
 
 This is why you carry no web-search tool. The behavioural target is a public repository; a search for
 a product name, a screenshot, a changelog or a "how does X do this" comparison is the exact failure

@@ -8,10 +8,15 @@ documentation, or approved design material.
 
 Do **not** read, clone, fetch, search, or quote from any of the following, for any reason:
 
-- `https://github.com/Concrete-Dynamics/Rotaris` or any mirror, fork, or package of it
+- `https://github.com/Concrete-Dynamics/Rotaris-legacy` (the reference, renamed 2026-10-21) and
+  `https://github.com/theUpsider/Rotaris` (an earlier home of the same reference), or any mirror, fork, or
+  package of either
+- the reference commit `e7093dda` and its ancestors, wherever they appear
 - `D:\Development\Apps\Rotaris` (a local checkout of that project)
 - `D:\Development\Apps\Rotaris-cleanroom-sealed\` (the sealed reference clone and raw analysis)
 - any transcript, scratchpad, or report produced by an agent that read the above
+
+`https://github.com/Concrete-Dynamics/Rotaris` is, since 2026-10-21, this repository itself, not the reference.
 
 If a task seems to require one of those sources, it does not. Raise the gap as an open question
 against the relevant requirement instead. Convenience, speed, and implementation difficulty are

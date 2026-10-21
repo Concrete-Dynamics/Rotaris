@@ -15,6 +15,11 @@ Tracked files:  1889
 Acquisition:    fresh git clone from the public repository
 ```
 
+*Noted 2026-10-21 ([R-078](../product/requests.md#r-078)): the identification fields above stand exactly as
+captured. On 2026-10-21 the reference repository was renamed to `https://github.com/Concrete-Dynamics/Rotaris-legacy`
+and archived; the reference commit `e7093dda0a44ff9f926dedcc782c4d0c30b73e3d` is unchanged. Since then
+`https://github.com/Concrete-Dynamics/Rotaris` is this repository, the clean-room rewrite, and not the reference.*
+
 ## Behavioral target
 
 All RED analysis, gateway specifications, and black-box oracle comparisons refer to this exact

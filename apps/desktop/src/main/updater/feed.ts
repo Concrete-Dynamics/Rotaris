@@ -6,11 +6,12 @@ import { ARTIFACT_KIND_BY_FLAVOUR, type Flavour } from './classify.js';
  * the check consumes of its answer, the offer rule, and the banner summary. Pure functions over the body a fetch
  * returned; the fetch itself is `electron.ts`'s.
  *
- * REQ-STARTUP-105 names the endpoint's shape and O-5 (R-053) named the repository: the product's releases are GitHub
- * releases of `theUpsider/Rotaris-crw`. REQ-STARTUP-111 forbids any surface that moves this value, and the four
- * closed enumerations it names carry no entry for it: it is a constant here and a constant nowhere else.
+ * REQ-STARTUP-105 names the endpoint's shape and O-5 names the repository: the product's releases are GitHub releases
+ * of `Concrete-Dynamics/Rotaris`, this repository's public home since R-078 re-ruled O-5 (2026-10-21), superseding
+ * R-053's `theUpsider/Rotaris-crw`. REQ-STARTUP-111 forbids any surface that moves this value, and the four closed
+ * enumerations it names carry no entry for it: it is a constant here and a constant nowhere else.
  */
-export const FEED_REPOSITORY = { owner: 'theUpsider', repo: 'Rotaris-crw' } as const;
+export const FEED_REPOSITORY = { owner: 'Concrete-Dynamics', repo: 'Rotaris' } as const;
 export const FEED_ENDPOINT = `https://api.github.com/repos/${FEED_REPOSITORY.owner}/${FEED_REPOSITORY.repo}/releases/latest`;
 export const FEED_ACCEPT = 'application/vnd.github+json';
 /** REQ-STARTUP-105: the request timeout, 10.0 seconds. */

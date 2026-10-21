@@ -2,7 +2,7 @@
   "name": "rotaris-crw",
   "private": true,
   "description": "Rotaris — one Electron desktop application. Clean-room rewrite.",
-  "license": "UNLICENSED",
+  "license": "GPL-3.0-only",
   "type": "module",
   "packageManager": "pnpm@11.9.0",
   "engines": {

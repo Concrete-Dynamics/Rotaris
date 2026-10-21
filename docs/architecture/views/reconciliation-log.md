@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-21**
 
+**The release feed names `Concrete-Dynamics/Rotaris` (O-5 re-ruled by R-078, REQ-STARTUP-105; 2026-10-21).**
+`02-process-view.md`'s FEED node now reads `api.github.com/repos/Concrete-Dynamics/Rotaris/releases/latest`, the endpoint
+`FEED_REPOSITORY` (`apps/desktop/src/main/updater/feed.ts`) names since this repository became the product's public home.
+The request, its timeout, its header and who makes it are unchanged, so no package, edge, process, message, channel or
+ownership changed. The README's date stays 2026-10-21.
+
 **A reader of the saved configuration keeps its answer while every file it read is unchanged (REQ-SANDBOX-038/118;
 2026-10-21).** `03-runtime-view.md`'s `fetch` paragraph, its "one per-call read" item and the requirements reader's sentence
 now say that the egress reader and the queue's reader go through `readSavedConfiguration` (`packages/config/src/saved-read.ts`):

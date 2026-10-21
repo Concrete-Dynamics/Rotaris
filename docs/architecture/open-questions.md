@@ -16250,7 +16250,7 @@ hook review and OQ-279's configuration load beside it; REQ-WORKSPACE-058, discov
 REQ-EVENTS-084, a store that cannot be opened refuses the run. Raised 2026-10-20 by the host-independent finish (local session),
 bundle `loc1-main-rejection`, from
 [`a-workspace-opened-timeout-is-an-unhandled-main-rejection.md`](../defects/fixed/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md);
-the bundle's range OQ-386 to OQ-387, its first number. Renumbered at landing if `main` holds it.)*
+the bundle's range OQ-386 to OQ-387, its first number. Renumbered at landing if `main` holds it. **Ruled 2026-10-21.**)*
 
 **What is open.** A workspace open has two hops. The workspace service opens the store and answers `workspace.opened`. Main
 then hands the store to the run host in its own `workspace.opened` request, bounded at 5,000 ms. When that reply misses the
@@ -16282,6 +16282,76 @@ open, as a refused open does.
 - **(d) Hand off once more.** Main sends `workspace.opened` again, bounded, before deciding (a) or (c). The run host's case
   sets its entry for the id again, but opens a second connection to the store without closing the first, so the case must change
   too. **Costs:** a second bound's wait, up to 10 s, before the open settles.
+
+**Ruled 2026-10-21 under the owner's delegation ([R-072](../product/requests.md#r-072)).** Kind change-behaviour, classified **covered**, no directive. A workspace open owes its slot whenever the run host takes the workspace within a bound, however late inside that bound. When the run host does not take it, the open owes the person a notice. The window keeps its workspace throughout, as built. The ruling is (d), refined in five points.
+
+1. **The run host answers before it warms the skill catalogue, and the warm-up never holds its event loop.** The `workspace.opened` case starts the warm-up from a zero-delay timer on its clock port. That timer runs after `run-host/index.ts` has posted the reply. Until now, `queueMicrotask` ran the synchronous walk before the reply's `.then` reaction, so the comment "Warmed off the reply so it cannot delay the open" was false. That comment is kept beside its replacement. The warm-up now:
+   - reads the tree asynchronously, with the same result as `discoverSkills`;
+   - keeps only a few reads in flight at once;
+   - stores its catalogue only if no rescan or session creation has cleared that root since it began.
+
+   `skills.read`, `skills.forceLoad`, `skills.loadFile` and `skills.list` wait for a warm-up in flight instead of walking the tree a second time.
+
+   Moving the warm-up past the reply would not have been enough. The walk (`readdirSync`, `statSync`, `readFileSync`) holds every request queued behind it. That includes the window's start-time reads and the slot's own `hooks.summary`. `hooks.summary` is sent 800 ms after the acknowledgement under a 10,000 ms bound, and when it misses, neither the hook review nor the no-provider notice is raised. A hold of more than 3,000 ms also trips ADR-0019's presenter lapse, which cancels every waiting approval (`run-host/host.ts`). The launch of 2026-10-16 logged that lapse beside its 8,201.5 ms discovery. REQ-WORKSPACE-058 asks that discovery run on open with no user action. It does not ask anything to wait on it. The repair takes the shape fin38 gave the cross-file edit's tree walk ([`a-cross-file-edit-calls-tree-walk-blocks-the-run-hosts-event-loop.md`](../defects/fixed/a-cross-file-edit-calls-tree-walk-blocks-the-run-hosts-event-loop.md)).
+
+2. **The case is idempotent.** The lease refusal stays first. After it:
+   - A `workspace.opened` for an identifier the run host already holds under the same store file, with its connection open, is acknowledged without a second connection.
+   - If a restore closed that connection and never released it (the lease expired), the request reopens it, as `workspace.release` does.
+   - If the request names another file, the earlier connection is closed first. While a run of that workspace is active, such a request is refused.
+
+   This is owed as built, not only for point 3. Main never sends `workspace.closing`. So a project opened again in one instance (for example, a window switched to another project and back) is handed the same identifier and file. Today the case then opens a second connection and drops the first (`dispatch.ts`), and no `workspace.closeStore` ever closes the dropped one.
+
+3. **A missed reply is asked once more, outside the open's path.** When the first reply misses its 5,000 ms bound, main writes its warning line. It then sends `workspace.opened` once more, with the same identifier, file and root, bounded at 25,000 ms. The outcome is therefore known within 30 s of the first send, which is the bound `awaitWorkspace` already gives a read waiting on an open. The open settles at the first outcome, as now, so the window gets none of the extra 10 s the entry counted as (d)'s cost.
+
+   The run host takes its port's messages in order, and this case has no await. A run host that was only late therefore answers the second request right after the first. A run start sent meanwhile is served after the store is opened.
+
+   On that acknowledgement, main schedules the open's slot. It is the same slot, one function for both paths. Main schedules it only if a main window still holds that workspace and no later open of its root has begun; otherwise it schedules nothing. Every request stays bounded, and nothing proceeds on an expiry. ADR-0002 consequence 11 (b) is stated for the restore's exchange and kept by `ProcessLink` for every request. It is not narrowed here, and `ProcessLink` gains no state for a request that has expired yet can still be answered.
+
+4. **A hand-off that never comes is reported to the person.** The final outcome may be something other than `workspace.ack`: the second reply missed, the link closed, or a refusal (a refusal is not asked again). In each case main raises one persistent `warning` notice titled `The project did not finish opening: <project name>`, built on [OQ-293](#oq-293)'s pattern. The notice:
+   - says that Rotaris could not confirm the project is ready to run sessions;
+   - says that the project-setup check, the board's queue and the hook review did not run, and that a run started in the project may be refused;
+   - names the step "Quit Rotaris and open the project again.";
+   - carries the project's folder and the cause in its detail.
+
+   It carries no action, for two reasons. REQ-NOTIFY-044's closed vocabulary has no member that hands a workspace off again. And choosing the folder the window already holds offers a new session rather than reopening it ([PD-WORKSPACE-001](../product/directives.md#pd-workspace-001)). Quitting is the one step that works both when the run host was late past the bound and when it never answers.
+
+   The notice is keyed per project and is not raised while the application quits. It is withdrawn compare-and-clear (REQ-NOTIFY-026) when a later hand-off of that project is acknowledged, or when no main window holds the project any more. Opening a workspace is a workflow a user starts (REQ-CONFIG-478, read so by [OQ-279](#oq-279)), so REQ-NOTIFY-001's "failed with one concrete next step named" is owed. The window keeps its workspace, as OQ-279 keeps a window whose configuration did not load.
+
+5. **The log levels.** `MainWindows.launch`'s line for an open that rejected is now written at `warn`, beside the hand-off's own warning. It was written at `info`, through a `log` port that carries no level. The chooser's two paths (`#addWindow`, `#replace`) already report the failure on screen. They now also write its cause at `warn`; until now they wrote nothing about it ([PD-MONITOR-002](../product/directives.md#pd-monitor-002): the level is a field).
+
+**Classification.** Covered by REQ-WORKSPACE-141, REQ-TRACE-476, REQ-TRACE-482, REQ-NOTIFY-224, REQ-NOTIFY-001 with REQ-CONFIG-478, REQ-WORKSPACE-058 and REQ-NOTIFY-026. No requirement text is departed from. REQ-SESSION-089 and REQ-EVENTS-084 are untouched.
+
+**The options not taken.**
+- (a) is rejected: it loses four obligations without a word, and draws a partly failed open as a successful one.
+- (c) is rejected: a run host that was only late would hold a store no window addresses, and a slow disk would cost the person their project.
+- (b)'s mechanism is not built, because a second ordinary request gives the same late acknowledgement.
+
+**Corrected in the entry.** A run started where the run host holds no store is refused with `workspace.not-open`, "No store is open for this workspace" (`session.start`). It is not refused with `workspace.unknown`; that code is the hooks, MCP and circuit-breaker refusal.
+
+**Recorded beside it, not decided here:**
+- The synchronous re-discovery after a session creation or a rescan, which still holds the run host's loop.
+- ADR-0019's lapse is judged from the last reply, so a run host that held its own loop judges main absent.
+- `forgetSpelling` is handed the store file where it takes the directory.
+- A launch's `workspace.open` that gets no reply in its 10,000 ms bound leaves the window with no workspace and no word, as [`a-workspace-whose-store-cannot-be-opened-at-launch-is-left-unopened-without-a-word.md`](../defects/a-workspace-whose-store-cannot-be-opened-at-launch-is-left-unopened-without-a-word.md) records for a refused open.
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended (b), refined:
+  - the acknowledgement posted before the warm-up, and the warm-up made asynchronous;
+  - a late `workspace.ack` listened for within a bounded window (60 s suggested), with the slot scheduled on it while a window holds the workspace and no newer open has begun;
+  - a persistent warning notice when none comes;
+  - the launch's failed-open line at `warn`.
+
+  The ruling took the repair of the cause whole (with its generation guard), the late slot and its guard, the notice, and the log levels. It declined the late window inside `ProcessLink`, and a notice action that opens the project again, which no member of REQ-NOTIFY-044 performs.
+- **Advocate B (the system's lens)** recommended (d), refined:
+  - the acknowledgement before the warm-up;
+  - the run host's case made idempotent;
+  - one more hand-off, bounded at 5,000 ms;
+  - a persistent warning notice on a second miss, cleared compare-and-clear;
+  - `warn` on the launch's line;
+  - the event-loop hold recorded as its own defect;
+  - the classification covered, with no directive.
+
+  The ruling took the mechanism (a second ordinary bounded request), the idempotent case (owed as built, because of the reopen), the classification and the separate notes. It moved the second request off the open's path and bounded it at 25,000 ms, so the window waits no longer and a run host late by up to 30 s needs nothing from the person. It also repaired the open's own warm-up here rather than in a later note. A warm-up that still holds the loop after the acknowledgement would only move the lost slot from the hand-off to the slot's `hooks.summary`.
 
 <a id="oq-370"></a>
 

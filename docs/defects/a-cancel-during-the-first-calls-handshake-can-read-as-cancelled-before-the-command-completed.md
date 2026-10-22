@@ -10,6 +10,11 @@ code; its process tree was ended …" where the case expects "cancelled by the r
 never ran" (line 1105). The file passed alone three times, and a full `pnpm check` on each head with the host quiet was
 green.
 
+*2026-10-22 (branch `platform-targets`, a packaging-configuration change that touches no `agent-tools` file):* red in
+two consecutive full `pnpm check` runs on Linux (4 CPUs, load about 2.5), each 1 failed and 6,987 passed, with the same
+text at line 1105. **It also went red with the file run alone**, once in three consecutive runs, so the full suite's load is not
+needed to reach it.
+
 Read from the code, not confirmed: `ForegroundSession` runs the first call's handshake only when the fresh shell's
 process identity can be read (`processIdentity(p.pid) !== null`, `foreground.ts` about line 1474). If it cannot be read
 yet under load, the handshake is skipped, the command is written to a shell still in its three-second startup, and the

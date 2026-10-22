@@ -168,6 +168,11 @@ for being written here.
    measured on one. `REQ-STARTUP-156`'s release gate does not require launching the entry point twice on one
    user account, which is the check that would catch a failure.
 
+*2026-10-22 ([R-080](../product/requests.md#r-080)): the Linux and macOS packaging configuration is prepared and not wired
+(`apps/desktop/scripts/lib/platform-targets.mjs`; ADR-0054, "Linux and macOS configuration prepared"). This discharges
+none of the four items. Item 1's choice between ESC-11's options now has a configuration to measure (`toolsets.appimage`
+"1.0.3" on the stable line), and the hooks still refuse every platform but win32.*
+
 **What deferral is not.** It is not a judgement that these will pass. Every one of them is in the class of
 things this record has never executed, and every mechanism this record has taken from paper to first
 execution has held a defect no reading caught — three for three. **An implementation that reaches a Linux or

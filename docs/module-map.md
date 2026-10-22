@@ -56,7 +56,9 @@ Listed foundation-first, which is also dependency order. "Root" is the compositi
 and its siblings), `tools/symbol-artifact/` (the generator behind `pnpm symbols`), `tools/release-naming/` (the
 artifact names and the release-tag grammar), `tools/release-guard/` (`pnpm release:guard <tag>`, the pre-build version
 and package-pin guard; `cli.mjs` boots `src/guard.ts` through Vite's module runner because it reads `@rotaris/config`'s
-source), `tools/notices/` (the generator behind
+source), `tools/release-pipeline/` (since 2026-10-22 `pnpm release:pipeline` — the tag workflow's stages after the
+guard: the checksum manifest, its signature, the key record `key-record.json` and the release body; open `cli.mjs`; its
+`verify` reads the updater's own `apps/desktop/src/main/updater/keys.ts`; tests in `*.test.ts` beside it), `tools/notices/` (the generator behind
 `pnpm notices` — `THIRD-PARTY-LICENSES.txt` and its validation, open
 `notices.mjs`; the three tables beside it are the reviewed exceptions, the release inputs and the bundled fonts;
 tests in `notices.test.ts`), `tools/build-id/` (the writer behind `pnpm build-id` — `build-id.txt`, REQ-SHELL-140's

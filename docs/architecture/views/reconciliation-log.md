@@ -14,7 +14,14 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
-Last reconciled with the code: **2026-10-21**
+Last reconciled with the code: **2026-10-22**
+
+**The release pipeline's stages after the build (R-080; first-release-plan.md §4.2, §4.7, §4.8; 2026-10-22).**
+`01-component-view.md` gains "The release pipeline's stages after the build": `tools/release-pipeline/`, a build-time
+tool outside the boundary rule, and its one reach into an application root, `apps/desktop/src/main/updater/keys.ts`,
+so the pipeline verifies with the updater's own verifier and key set. `.github/workflows/release.yml` runs it; the
+process view is unchanged, because nothing the product runs, sends or stores moved. No package, edge, process,
+message, channel or ownership changed.
 
 **The release feed names `Concrete-Dynamics/Rotaris` (O-5 re-ruled by R-078, REQ-STARTUP-105; 2026-10-21).**
 `02-process-view.md`'s FEED node now reads `api.github.com/repos/Concrete-Dynamics/Rotaris/releases/latest`, the endpoint

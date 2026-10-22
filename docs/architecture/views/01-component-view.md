@@ -427,6 +427,19 @@ which imports both, holds the two lists equal and every shipped archive under on
 fallback key is refused as an archive key. The notices generator reads it as its manifest since 2026-09-28, by a copy of the field names rather than an import. **Edges
 unchanged**: `config` gains the `zod` dependency `contracts` already carries; no package edge moves.
 
+### The release pipeline's stages after the build (2026-10-22; R-080, `first-release-plan.md` §4.2, §4.7, §4.8)
+
+`tools/release-pipeline/` is the build-id writer's kind of tool: plain JavaScript with no `package.json`, typed for its
+tests by `.d.mts` files, run as `pnpm release:pipeline <command>` (`cli.mjs`) by `.github/workflows/release.yml`.
+`assets.mjs` holds the published set (`PUBLISHED_PLATFORMS`, `windows-x64` alone under `PD-STARTUP-001`) and writes and
+verifies `SHA256SUMS.txt` through the naming authority's `formatChecksumManifest`; `signing.mjs` signs it and keeps the
+key record (`key-record.json`); `body.mjs` writes the release body and name. It reaches exactly two TypeScript files,
+both of erasable syntax and loaded by Node's type stripping: `tools/release-naming/src/index.ts`, as the packaging
+scripts do, and **`apps/desktop/src/main/updater/keys.ts`** — the updater's key set and verifier — so the pipeline's
+"the signature verifies against a key the build carries" is the updater's own answer. That second import is the one
+reach from `tools/` into an application root's source; it reads a leaf module that imports only `node:crypto`, and
+nothing in `apps/` or `packages/` imports the tool. **Edges unchanged**: `tools/**` is outside the boundary rule.
+
 ### `agent-tools`' JSON Schema validator (2026-10-06; fin18, live-run finding G3)
 
 `agent-tools/advertised-schema.ts` checks an MCP call against the input schema its server advertised (REQ-TOOLS-032), and

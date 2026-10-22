@@ -25,7 +25,7 @@ record already decides, and every ruling it needs is named as the owner's rather
 | Skills — ESC-37, ESC-38, ESC-39 | **ruled 2026-09-27** as recommended ([R-052](../product/requests.md#r-052)); amended | §2 |
 | Workspace-context injection, REQ-WORKSPACE-041..050 | built 2026-09-22 under `PD-WORKSPACE-002` | §3 |
 | Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **built 2026-09-27** (`pnpm injection-proof`); the bound **met on Linux**, the Windows gate-class reading **owed**; OQ-64 **ruled 2026-09-27**; OQ-68 raised | §3 |
-| The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); **the version guard built 2026-09-27** (§4.1), ~~and the setup manifest it checks is owed~~ **the setup manifest built 2026-09-28** (§4.1; the guard passes both halves; its consumer, machine setup, is not built and not in this plan); **the notices generator built 2026-09-27** (§4.3), its validation refusing until O-3, O-11 and OQ-74; **the two bundled assets wired into `pnpm package` 2026-09-27** (§4.4), so a package refuses with it | §4 |
+| The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | **the tag workflow, the manifest, the signature step, the key record and the release body built 2026-10-22** ([R-080](../product/requests.md#r-080); §4.2, §4.7, §4.8; not yet run on a tag); the installer built once (ADR-0054, 2026-09-04); **the version guard built 2026-09-27** (§4.1), ~~and the setup manifest it checks is owed~~ **the setup manifest built 2026-09-28** (§4.1; the guard passes both halves; its consumer, machine setup, is not built and not in this plan); **the notices generator built 2026-09-27** (§4.3), its validation refusing until O-3, O-11 and OQ-74; **the two bundled assets wired into `pnpm package` 2026-09-27** (§4.4), so a package refuses with it | §4 |
 | The updater, REQ-STARTUP-107..124 | ~~**not built** — no module in `apps/desktop/src/main/`~~; **in the first release**, ruled 2026-09-27; **built 2026-09-28** (`apps/desktop/src/main/updater/`, `pnpm updater-proof`; the compiled-in key set empty until O-2; the apply and the restart unit-tested over fakes, their run against a real artifact owed to the next Windows package, IC-3 — *corrected 2026-10-13: a Windows x64 host, deferred with the pipeline under R-071; IC-3 binds Linux and macOS artifacts*); OQ-83, OQ-84, OQ-85 raised; repaired at verification the same day (classification order, the record pass, the re-offer, the launch-time cleanup), OQ-86 raised (ruled 2026-10-06, R-071, and built: the active-run confirmation at the click and before the hand-off); and at the second verification (a refused record pass now fails the restart); OQ-311 ruled 2026-10-14 under R-072 and built by fin46 (every main window's unsaved-settings guard asked ahead of the run box at the click and at the hand-off; unit-tested over fakes, its built-app run owed with the rest) | §4.6 |
 
 **Deferred by "thats it".** Each item stays owed where the record already carries it:
@@ -468,6 +468,44 @@ the release on its own:
 The workflow creates the GitHub release as a **draft**. It becomes public only when §5's gate passes. Where the
 release is published is the owner's choice (§6).
 
+> **First execution, 2026-10-22 — built under [R-080](../product/requests.md#r-080); not yet run on a tag.** Reported here,
+> in ADR-0054 ("The tag workflow, the manifest, the signature and the key record") and in `first-executions.md`.
+>
+> **What landed.** `.github/workflows/release.yml`, triggered by a tag push alone, its filter admitting REQ-STARTUP-027's
+> shape and the guard parsing it exactly. Five jobs, each failing the release on its own:
+>
+> 1. `guard` — `pnpm symbols`, `pnpm release:guard <tag>`, then `pnpm release:pipeline preflight <tag>`, which this plan did
+>    not name and the build added: **a build carrying no verification key is refused before anything is built**, because
+>    every installation of it could never verify an update (§4.6: "the release still compiles the key in"), and the key
+>    record's row for the version must be exactly the set the build carries (§4.7);
+> 2. `build`, a matrix of one entry, `windows-x64` on `windows-latest` (`PD-STARTUP-001`), `fail-fast: false` for
+>    REQ-STARTUP-030 — the symbols, the code-intelligence runtime, `pnpm package` with no development flag (the notices
+>    step inside it is REQ-STARTUP-037's), the installer copied by its authority name into a release directory, then the
+>    portable's stage, which **refuses until §4.5's stub exists** and so stops the release there;
+> 3. `sign`, in the `release` environment — `SHA256SUMS.txt`, `SHA256SUMS.txt.sig` from the environment's secret, and §5's
+>    four pipeline rows (§4.7 below). It installs no dependency: `tools/release-pipeline` runs on bare Node, so no
+>    package's install script runs beside the key;
+> 4. `draft` — the body and the name (§4.8), `gh release create --draft --verify-tag`, flagged prerelease by the channel.
+>    The only job with a write token, and it holds no secret. Nothing here publishes; the draft is made public by the
+>    owner once §5's gate passes;
+> 5. `status` — REQ-STARTUP-030's separate overall status, red when any job was not green.
+>
+> **What was executed.** The stages' code, not the workflow: 64 unit cases in `tools/release-pipeline/` (the manifest
+> against `sha256sum -c`, the signature against `openssl pkeyutl -sign -rawin` byte for byte, the key record, the body
+> element by element, the CLI's exit codes, the bare-Node launch the signing job depends on, and a release the pipeline
+> wrote and signed installed by the updater's own `runInstall`); `actionlint` 1.7.7 over both workflows, clean; and the CLI
+> by hand over a stand-in installer. **Not executed:** the workflow itself. No tag was pushed — R-080 forbids publishing,
+> and on `main` it would stop at `guard` anyway. **On today's tree a tag stops at `guard`** (no key, no row: O-2); past it,
+> `build` stops at the notices step (O-3, O-11, OQ-74) and at the portable (§4.5), and `sign` stops on the absent secret
+> (O-2). Its first run is owed to the first prerelease tag after O-2 (§7 step 5).
+>
+> **Readings taken, stated rather than left in code.** The key record's row is committed **before** the tag, so the
+> pipeline holds what ships against what is recorded rather than writing the record after the fact. electron-builder
+> writes `<installer>.blockmap` beside the installer even with publishing off (the naming hook admits it); the release
+> directory takes the installer by its authority name alone, so the block map is never published, and a directory holding
+> any file the naming scheme does not name is refused (REQ-STARTUP-152). Element (4)'s `<platform labels>` are written as
+> REQ-STARTUP-030's platform keys.
+
 **4.3 The notices generator.** REQ-STARTUP-141..143 and IC-7 cover it:
 
 - It writes `THIRD-PARTY-LICENSES.txt`, including the "Tools provisioned after installation" section that IC-7's
@@ -701,9 +739,39 @@ so that the next release can add the updater without stranding anyone.
 - the key record, meaning which verification keys each shipped build carries, committed to the repository with
   each release so that REQ-STARTUP-168 (b) can be decided before publishing.
 
+*Built 2026-10-22 under [R-080](../product/requests.md#r-080) (§4.2's first-execution note; ADR-0054).*
+`tools/release-pipeline` — `pnpm release:pipeline manifest | sign | verify`:
+
+- **The manifest** is written over the release directory through the naming authority's `formatChecksumManifest`, the
+  text the updater parses: never itself, never the signature, any earlier signature removed. `verify` refuses a missing
+  asset of the published set, an asset left out, a listed file not published, a digest that does not match, and any byte
+  of the manifest that is not the writer's own rendering.
+- **The signature** is raw Ed25519 over the manifest's bytes, from the PKCS#8 PEM in `ROTARIS_RELEASE_SIGNING_KEY`, held
+  in memory and never written to disk. Ed25519 is deterministic, so it is byte for byte what `openssl pkeyutl -sign -rawin`
+  makes (tested where `openssl` exists). OQ-83 is not ruled by this: the form is still the updater's reading, and it is now
+  tied to the pipeline by the next point rather than by a second reading of it.
+- **The verification hook.** `verify` runs the updater's own `verifyDetachedSignature` against the updater's own
+  `RELEASE_SIGNING_KEYS`, imported by path from `apps/desktop/src/main/updater/keys.ts`, so §5's "the signature verifies"
+  is decided by the code an installed build runs. `updater-agreement.test.ts` closes the loop: a release the pipeline
+  wrote and signed is installed by `runInstall`; one signed with a key the build does not carry fails `verify` and is
+  refused by `runInstall` at the signature with nothing downloaded.
+- **The key record** is `tools/release-pipeline/key-record.json`, schema version 1: one row per release, its version and
+  the `sha256:` fingerprints (of the SPKI DER) of the keys its build carries. Empty, because no build has carried a key.
+  `preflight` holds the release's own row equal to what its build carries; `verify` holds the signing key in every
+  **older** recorded row, every one of which REQ-STARTUP-107 may offer this release to (the reading: older in
+  REQ-STARTUP-109's order, prereleases included, so a row for a tag never published can only make it stricter).
+  `pnpm release:pipeline keys` prints the row to commit.
+
 **4.8 The release body.** A generator writes REQ-STARTUP-035's seven elements, narrowed by `PD-STARTUP-001`, and
 REQ-STARTUP-033's changelog. The first release reads "First release — no previous tag to compare against." The
 release is named "Rotaris &lt;version&gt;" (REQ-STARTUP-034). The generator is unit-tested per element.
+
+*Built 2026-10-22 under [R-080](../product/requests.md#r-080).* `pnpm release:pipeline body <dir> <tag> <out>` writes
+`release-body.md` and `release.json` (`name`, `prerelease`) from the verified directory's manifest, so each table digest is
+the manifest's. The changelog compares against the newest tag of REQ-STARTUP-027's grammar sorting before this one in
+REQ-STARTUP-109's order (`v0.2.0` after `v0.2.0rc2`), merge commits excluded. `PD-STARTUP-001`'s line, "This release
+publishes Windows builds only.", stands between elements (3) and (5). `body.test.ts` reads each of the seven elements
+on its own and the three changelog forms against a fixture repository.
 
 **4.9 The icon.** The owner supplies it (§6). `apps/desktop/resources/` is created for it, and
 `electron-builder.yml` names it.
@@ -745,7 +813,7 @@ cannot be the gate.
 | # | What | Needed by |
 |---|---|---|
 | O-1 | ~~Rule ESC-37, ESC-38, ESC-39 and OQ-64~~ **ruled 2026-09-27** as recommended (R-052) | §2.2, §3.3 |
-| O-2 | Generate the manifest signing key pair and store the private half as a repository secret. The public half is committed. **Where and how (2026-09-28, §4.6's first execution):** the pair is Ed25519 (`openssl genpkey -algorithm ed25519 -out release-signing.pem`); the public half (`openssl pkey -in release-signing.pem -pubout`) is written as one element of `RELEASE_SIGNING_KEYS` in `apps/desktop/src/main/updater/keys.ts`, the SPKI PEM block verbatim, `-----BEGIN PUBLIC KEY-----` to `-----END PUBLIC KEY-----`; the pipeline signs `SHA256SUMS.txt`'s exact bytes with `openssl pkeyutl -sign -inkey release-signing.pem -rawin -in SHA256SUMS.txt -out SHA256SUMS.txt.sig` (a raw 64-byte signature). Until the element exists every install refuses at the signature step and downloads nothing | §4.6, §4.7 |
+| O-2 | Generate the manifest signing key pair and store the private half as a repository secret. The public half is committed. **Where and how (2026-09-28, §4.6's first execution):** the pair is Ed25519 (`openssl genpkey -algorithm ed25519 -out release-signing.pem`); the public half (`openssl pkey -in release-signing.pem -pubout`) is written as one element of `RELEASE_SIGNING_KEYS` in `apps/desktop/src/main/updater/keys.ts`, the SPKI PEM block verbatim, `-----BEGIN PUBLIC KEY-----` to `-----END PUBLIC KEY-----`; the pipeline signs `SHA256SUMS.txt`'s exact bytes with `openssl pkeyutl -sign -inkey release-signing.pem -rawin -in SHA256SUMS.txt -out SHA256SUMS.txt.sig` (a raw 64-byte signature). Until the element exists every install refuses at the signature step and downloads nothing. **Step by step since the pipeline exists (2026-10-22, [R-080](../product/requests.md#r-080)): §6.1** — the pipeline now signs the manifest itself from a secret of the `release` environment, so the `openssl pkeyutl` line above describes the bytes it makes rather than a command the owner runs | §4.6, §4.7 |
 | O-3 | Give the literal contact address for the LGPL source request (REQ-STARTUP-142). It must be a single address, reachable without an account and monitored by the maintainers. **Written in `tools/notices/release-inputs.json`, key `lgplCorrespondingSourcesAddress`**, in one of the two shapes §4.3 states; validation fails naming that key until it is | §4.3 |
 | O-4 | Supply an icon, with the `.ico` sizes `electron-builder` asks for | §4.9 |
 | O-5 | ~~Choose where releases are published~~ **ruled 2026-09-27** (R-053): GitHub releases of `theUpsider/Rotaris-crw`, the product repository REQ-STARTUP-038 names. **Re-ruled 2026-10-21** ([R-078](../product/requests.md#r-078)): GitHub releases of `Concrete-Dynamics/Rotaris`, which is this repository from that day, transferred and renamed and public on `main`. R-078 supersedes R-053's choice, which is kept above as what was ruled; `FEED_REPOSITORY` names the new repository | §4.2 |
@@ -760,6 +828,44 @@ cannot be the gate.
 O-2, O-3, O-4, O-7 and O-8 carry no recommendation to take: each is a value or an act only the owner can
 supply, and each stays owed (R-053). O-11 is the same kind of item: a review only a maintainer may sign. O-12 is a
 choice only the owner can make about their own repository, and it un-defers with the first release.
+
+### 6.1 O-2, step by step
+
+*Written 2026-10-22 under [R-080](../product/requests.md#r-080), when §4.2 and §4.7 were built. No key exists, and
+none was made by the build: every step below is the owner's. Steps 1 to 4 happen once; step 5 with every release.*
+
+1. **Make the key pair, on a machine you trust, never in CI.**
+   `openssl genpkey -algorithm ed25519 -out release-signing.pem`. The file is the private half (PKCS#8 PEM). Keep it
+   out of every repository and keep an offline backup. A lost key cannot be recovered: installations that carry only
+   its public half can then never verify another release and stop updating themselves (REQ-STARTUP-168 (c)); they
+   keep working otherwise.
+2. **Put the public half into the build.** `openssl pkey -in release-signing.pem -pubout` prints a block from
+   `-----BEGIN PUBLIC KEY-----` to `-----END PUBLIC KEY-----`. Paste it, verbatim, as the one element of
+   `RELEASE_SIGNING_KEYS` in `apps/desktop/src/main/updater/keys.ts`. Two test cases pin the empty set on purpose and
+   must change in the same commit: `keys.test.ts`'s "ships EMPTY on this tree" and `install.test.ts`'s "with the
+   compiled-in set EMPTY" (both in `apps/desktop/src/main/updater/`). `pnpm vitest run apps/desktop/src/main/updater
+   tools/release-pipeline` is the narrow check, `pnpm check` the gate.
+3. **Make the secret available to the signing job, and to nothing else.** In the repository's settings, *Environments →
+   New environment* named exactly `release`. Under its deployment protection, add yourself as a required reviewer, and
+   restrict its deployment branches and tags to the tag rule `v*`. Add the environment secret
+   `ROTARIS_RELEASE_SIGNING_KEY` holding the whole of `release-signing.pem`, both marker lines included:
+   `gh secret set ROTARIS_RELEASE_SIGNING_KEY --env release --repo Concrete-Dynamics/Rotaris < release-signing.pem`.
+   Only `release.yml`'s `sign` job names that environment. It installs no dependency and holds a read-only token.
+   If an organisation policy caps workflow tokens at read, allow the `draft` job's `contents: write`, or the draft
+   cannot be created.
+4. **Check before the first tag.** `pnpm release:pipeline keys` prints the row the next step commits. Its `sha256:`
+   fingerprint is the SHA-256 of the key's SPKI DER, so `openssl pkey -in release-signing.pem -pubout -outform DER |
+   sha256sum` must print the same hexadecimal digits.
+5. **With every release, before its tag.** Set the version in `apps/desktop/package.json` to the tag's text (for example
+   `0.1.0rc1` for `v0.1.0rc1`). Append the row `pnpm release:pipeline keys` prints to `releases` in
+   `tools/release-pipeline/key-record.json`. Land both on `main`, then push the tag. `preflight` refuses a build whose
+   row is missing or differs from what it carries. `verify` refuses a signing key that any older recorded release does
+   not carry (REQ-STARTUP-168 (b)).
+
+**Rotating and withdrawing** follow REQ-STARTUP-168 and change nothing above. To rotate, add the incoming public key
+beside the outgoing one in `RELEASE_SIGNING_KEYS` and keep signing with the outgoing key until every recorded release
+that may still be offered an update carries the incoming one. `verify` names each build the incoming key would strand.
+To withdraw a compromised key, remove it from the set and from the secret, so that no later build or release carries it.
 
 ## 7. Order of work
 
@@ -785,8 +891,12 @@ choice only the owner can make about their own repository, and it un-defers with
 3. **The portable stub (§4.5).** Spike first, and report the result into ADR-0054.
 4. ~~**The updater (§4.6)** if O-10 includes it~~ **built 2026-09-28** (§4.6's first-execution note; its apply and
    restart steps owed a real Windows artifact), then the manifest and signature (§4.7) against O-2's key.
+   *The manifest, the signature step, the verification hook and the key record built 2026-10-22 (R-080; §4.7); O-2's key
+   is still owed (§6.1).*
 5. **Assembly.** The release body (§4.8), the icon (§4.9) and the tag workflow (§4.2), run end to end against a
    prerelease tag (for example `v0.1.0rc1`) as a draft.
+   *The release body and the tag workflow built 2026-10-22 (R-080; §4.2, §4.8). Their end-to-end run against a prerelease tag
+   is owed, after O-2, O-3, O-11, OQ-74 and §4.5, each of which stops the workflow at a named stage today.*
 6. **The gate (§5)** on O-6's machine, with the §2.3 and §3.4 live runs. When the gate is green, the owner
    publishes `v0.1.0`.
 

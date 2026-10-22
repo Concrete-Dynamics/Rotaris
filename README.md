@@ -27,12 +27,17 @@ is built from source. The version it declares is `0.1.0` (`apps/desktop/package.
 [`docs/architecture/first-release-plan.md`](docs/architecture/first-release-plan.md). In short:
 
 - **The manifest signing key (O-2).** A release is verified through a signed checksum manifest. The key pair has not
-  been generated, so the updater carries no verification key and refuses every install at the signature step.
+  been generated, so the updater carries no verification key and refuses every install at the signature step, and the
+  tag workflow refuses to build a release that carries none. [§6.1](docs/architecture/first-release-plan.md#61-o-2-step-by-step)
+  of the plan lists the owner's steps.
 - **The release inputs (O-3, O-4, O-11).** The contact address for LGPL source requests, the application icon, and a
   maintainer's review of the shipped components that carry no licence text. Until O-3 and O-11 are supplied, notices
   validation refuses, and `pnpm package` refuses with it.
-- **The rest of the release pipeline** ([§4](docs/architecture/first-release-plan.md#4-the-windows-release-pipeline)).
-  The portable build's launcher stub, the signed `SHA256SUMS.txt` and the release body are not built yet.
+- **The portable build's launcher stub**
+  ([§4.5](docs/architecture/first-release-plan.md#4-the-windows-release-pipeline)). The tag workflow
+  (`.github/workflows/release.yml`), the checksum manifest, its signing step and the release body are built, and have not
+  been run on a tag yet. The workflow stops at the portable stage until the stub exists, and its spike needs a Windows x64
+  machine.
 - **The release gate** (`REQ-STARTUP-156`, narrowed to Windows x64;
   [§5](docs/architecture/first-release-plan.md#5-the-release-gate)). Before a release is made public, the installer and
   the portable are each launched to first paint on a clean Windows x64 machine with no development runtimes and no

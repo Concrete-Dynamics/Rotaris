@@ -9,8 +9,8 @@
 #            uploaded as a WORKFLOW ARTIFACT
 #
 # What this workflow is NOT:
-#   - not the tag workflow of docs/architecture/first-release-plan.md §4.2 (`release.yml`, still owed): it never runs
-#     on a tag, never runs `pnpm release:guard`, never creates a GitHub release of any kind. A published release is what
+#   - not the tag workflow of docs/architecture/first-release-plan.md §4.2 (`release.yml`, R-080): it never runs on a
+#     tag, never runs `pnpm release:guard`, never creates a GitHub release of any kind. A published release is what
 #     the in-app updater offers every install (apps/desktop/src/main/updater/feed.ts), so this file holds no write
 #     permission at all.
 #   - not releasable output: the package is a DEVELOPMENT package (ROTARIS_PACKAGE_WITHOUT_NOTICES=1) while O-3, O-11

@@ -1,0 +1,291 @@
+# The tag workflow — docs/architecture/first-release-plan.md §4.2 (R-080, docs/product/requests.md#r-080).
+#
+# Triggered ONLY by a tag of REQ-STARTUP-027's grammar: v<major>.<minor>.<patch>, optionally a<N>, b<N> or rc<N>. The
+# filter below admits that shape; the guard parses it exactly (canonical decimals, OQ-70) and refuses anything else with
+# the tag named. No branch push, pull request or manual dispatch runs this file.
+#
+# The stages, each failing the release on its own (§4.2):
+#
+#   guard     pnpm symbols, then `pnpm release:guard <tag>` (REQ-STARTUP-028: the tag against the declared version, the
+#             setup manifest's pins) and `pnpm release:pipeline preflight <tag>` (the build carries a verification key,
+#             and tools/release-pipeline/key-record.json's row for this version is what it carries — REQ-STARTUP-167,
+#             REQ-STARTUP-168 (b)). Exit 1 stops every platform's build.
+#   build     per platform key: `pnpm package` — the notices step first (REQ-STARTUP-037/143: no development flag on a
+#             tag), the code-intelligence runtime, the native bindings rebuilt and load-proved, the installer named by
+#             tools/release-naming — then the portable's assembly (§4.5).
+#   sign      SHA256SUMS.txt over the assets (REQ-STARTUP-032), SHA256SUMS.txt.sig with the release environment's secret
+#             (O-2), and §5's pipeline checks: every digest matches, the signature verifies through the updater's own
+#             verifier against the keys the build carries, and that key is carried by every recorded release this one may
+#             be offered to (REQ-STARTUP-038, 167, 168 (b)).
+#   draft     the body and the name (REQ-STARTUP-033..035, PD-STARTUP-001) and a DRAFT GitHub release holding exactly
+#             the verified directory. Never published here: a draft becomes public only when §5's gate passes on the gate
+#             machine (O-6), by the owner's own act.
+#   status    REQ-STARTUP-030's separate overall status: red when any stage of any platform failed.
+#
+# What stops a release on main today, each named by the stage it stops (first-release-plan.md §6):
+#   - preflight: RELEASE_SIGNING_KEYS is empty and the key record has no row (O-2);
+#   - build: `pnpm notices` refuses until O-3, O-11 and OQ-74 are settled; the portable's launcher stub (§4.5) is not
+#     built;
+#   - sign: the ROTARIS_RELEASE_SIGNING_KEY secret of the `release` environment does not exist (O-2).
+#
+# One platform key, windows-x64 (PD-STARTUP-001): the matrix has one entry and no macOS or Linux job is attempted
+# (IC-3, IC-8). Withdrawing the directive adds `macos-arm64` and `linux-x86_64` entries here and to
+# tools/release-pipeline's PUBLISHED_PLATFORMS together, and is a directive of its own.
+#
+# Hardening, as in ci.yml: actions pinned by full commit SHA (the tag in the comment); no permission at the top, each
+# job granted only what it uses; checkout without persisted credentials. The signing key reaches one job, `sign`, which
+# runs in the `release` environment (whose protection rules are the owner's), holds a read-only token and installs NO
+# dependency — it runs tools/release-pipeline with bare Node. The one job with a write token, `draft`, holds no secret.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+a[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+b[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+rc[0-9]+'
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.ref_name }}
+  GIT_TERMINAL_PROMPT: '0'
+
+jobs:
+  guard:
+    name: guard (REQ-STARTUP-028, key set and key record)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      # The guard reads configuration and the naming authority; it launches nothing.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # The guard reads @rotaris/config, whose kernel re-exports the generated symbols; without them it fails closed.
+      - name: Requirement symbols
+        run: pnpm symbols
+
+      - name: pnpm release:guard
+        run: pnpm release:guard "$TAG"
+
+      - name: The verification key and the key record
+        run: pnpm release:pipeline preflight "$TAG"
+
+  build:
+    name: build (${{ matrix.platform }})
+    needs: guard
+    strategy:
+      # REQ-STARTUP-030: a failure on one platform does not cancel the others.
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x64
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      ELECTRON_CACHE: ${{ github.workspace }}\.ci-cache\electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}\.ci-cache\electron-builder
+    steps:
+      - name: Git settings for this tree
+        shell: pwsh
+        run: |
+          git config --global core.longpaths true
+          git config --global core.autocrlf false
+          # The hosted runner's TEMP is an 8.3 short name; RUNNER_TEMP has none (see ci.yml).
+          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `pnpm build-id` reads the commit and the tree's state (REQ-SHELL-140).
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Electron runtime
+        run: node node_modules/electron/install.js
+
+      - name: Requirement symbols
+        run: pnpm symbols
+
+      - name: Code-intelligence runtime (win32-x64)
+        run: pnpm code-intel:bundle --target=win32-x64
+
+      # The notices step runs first inside it and fails the platform's release while validation refuses
+      # (REQ-STARTUP-037); ROTARIS_PACKAGE_WITHOUT_NOTICES is refused on a tag, so no development package can be made here.
+      - name: pnpm package
+        run: pnpm package
+
+      - name: The release directory
+        shell: pwsh
+        run: |
+          $version = $env:TAG.Substring(1)
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          Copy-Item "apps/desktop/release/Rotaris-$version-windows-x64-setup.exe" release-assets/
+
+      # REQ-STARTUP-031's second Windows artifact: assembled from win-unpacked around the project's launcher stub
+      # (ADR-0054 P4). Refuses until §4.5 builds the stub, which stops this platform's release.
+      - name: The portable (first-release-plan.md §4.5)
+        run: pnpm release:pipeline portable release-assets "$env:TAG"
+
+      - name: Upload the release directory
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-assets-${{ matrix.platform }}
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      - name: Upload the package evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-evidence-${{ matrix.platform }}
+          path: |
+            apps/desktop/release/load-proof.json
+            apps/desktop/release/load-proof.afterpack.json
+            apps/desktop/release/load-proof.app.log
+            apps/desktop/release/load-proof.png
+            apps/desktop/release/electron-builder.package.yml
+            apps/desktop/resources/code-intelligence/bundle.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  sign:
+    name: manifest, signature and verification (REQ-STARTUP-032, 167, 168)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The owner's protection rules on this environment (required reviewers, tag rule) gate the one job that reads the key.
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No pnpm and no install: tools/release-pipeline needs Node's own modules and two TypeScript files of erasable
+      # syntax, so no dependency's install script runs beside the key.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+
+      - name: Download every platform's release directory
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-assets-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: SHA256SUMS.txt
+        run: node tools/release-pipeline/cli.mjs manifest release-assets "$TAG"
+
+      - name: SHA256SUMS.txt.sig
+        env:
+          ROTARIS_RELEASE_SIGNING_KEY: ${{ secrets.ROTARIS_RELEASE_SIGNING_KEY }}
+        run: node tools/release-pipeline/cli.mjs sign release-assets
+
+      - name: Verify (first-release-plan.md §5, the pipeline's rows)
+        run: node tools/release-pipeline/cli.mjs verify release-assets "$TAG"
+
+      - name: Upload the verified release directory
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-verified
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  draft:
+    name: draft release (REQ-STARTUP-033..035)
+    needs: sign
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # REQ-STARTUP-033's changelog reads the tags and the commits since the previous one.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+
+      - name: Download the verified release directory
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-verified
+          path: release-assets
+
+      # The directory is verified again where it is published from: what the draft receives is what `sign` verified.
+      - name: Verify again
+        run: node tools/release-pipeline/cli.mjs verify release-assets "$TAG"
+
+      - name: The body and the name
+        run: node tools/release-pipeline/cli.mjs body release-assets "$TAG" release-meta
+
+      - name: Create the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          name="$(node -p "require('./release-meta/release.json').name")"
+          prerelease="$(node -p "require('./release-meta/release.json').prerelease")"
+          flags=(--draft --verify-tag --title "$name" --notes-file release-meta/release-body.md)
+          if [ "$prerelease" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "$TAG" "${flags[@]}" release-assets/*
+
+  status:
+    name: overall status (REQ-STARTUP-030)
+    needs: [guard, build, sign, draft]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Every stage passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | node -e '
+            const needs = JSON.parse(require("fs").readFileSync(0, "utf8"));
+            const failed = Object.entries(needs).filter(([, v]) => v.result !== "success");
+            for (const [job, v] of Object.entries(needs)) console.log(`${job}: ${v.result}`);
+            if (failed.length > 0) { console.error(`the release failed at ${failed.map(([j]) => j).join(", ")}`); process.exit(1); }
+          '

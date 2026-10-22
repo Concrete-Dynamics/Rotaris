@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-22**
 
+**Dependency patches for 47 Dependabot alerts (R-081; 2026-10-22).** `01-component-view.md`'s `mcp` section and its `ajv`
+paragraph name `@modelcontextprotocol/client` 2.3.0, pinned in place of 2.0.0. The SDK's `http` and `sse` transports now refuse
+a redirect to another origin (OQ-451). `undici` 7.29.1, `vite` 8.2.4 and the build-time copies moved inside their ranges. No package,
+edge, process, message, channel or ownership changed.
+
 **The Linux and macOS packaging configuration, prepared and not wired (R-080; ADR-0054; 2026-10-22).**
 `apps/desktop/scripts/lib/platform-targets.mjs` holds the two configurations a macOS and a Linux host would merge over
 `electron-builder.yml`; nothing that builds imports it and the hooks refuse both platforms (IC-3). It is a packaging

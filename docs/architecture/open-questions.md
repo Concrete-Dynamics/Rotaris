@@ -16640,3 +16640,16 @@ Launches 10, 11 and 13 to 15 are re-run. Launches 16 and 17 join launches 11 and
 **What the preparation proceeds under.** For (a), electron-builder's default: the bundle is named after `productName` (`Rotaris.app`), which departs from REQ-STARTUP-014's spelling, and the identifier is `ai.rotaris.app` as the requirement says. For (b), `identity: null`, the requirement's literal reading. Both are inert. No macOS artifact may be produced under IC-3 or `PD-STARTUP-001`, and `build-hooks.cjs` refuses the platform.
 
 **What decides it.** A ruling on each reading. Then a macOS ARM64 host (IC-3, spike 17) must show that a bundle built under the ruling launches from the disk image on an unmodified machine, and what the user sees on first launch.
+
+<a id="oq-451"></a>
+
+**OQ-451 — Where may a remote MCP entry's `headers` go when its server answers with a redirect to another origin?** *(REQ-MCP-001, REQ-MCP-020, REQ-MCP-043; ADR-0033. Raised 2026-10-22 by the dependency patch of [R-081](../product/requests.md#r-081), which moves `@modelcontextprotocol/client` from 2.0.0 to 2.3.0 for GHSA-6prh-2h8m-c8cw. OQ-400 to OQ-449 are the Windows ARM64 session's range and OQ-450 is taken, so this takes the next number.)*
+
+**What is open.** REQ-MCP-001 and REQ-MCP-020 give a remote entry a `url` and optional `headers`. REQ-MCP-043 hands both to the connection. None of them says what happens when the server at `url` answers with a redirect. Until this patch the SDK's transports followed any redirect and sent the request again, configured headers and body included, to whatever origin the server named; a credential in `headers` reached a host the person never configured. From 2.3.0 the SDK follows a redirect only when it keeps the request's origin (same scheme, host and port, or http to https on the same host with default ports) and its method. Any other redirect fails the request with an error naming the target. Two things are therefore unspecified:
+
+- **(a) Whether a cross-origin redirect is ever followed.** A person whose server's address moved to another host now meets a connection failure where before they met a working connection. The SDK offers `redirectPolicy: 'follow'` to restore the old behaviour, and the product does not set it.
+- **(b) What the person is told.** The SDK's error names the target. The product reports it as it reports any other connection failure (REQ-MCP-042's discovery warning, REQ-MCP-092's `unreachable`, REQ-MCP-107's diagnostic), and nothing in the specification says the redirect is named as a redirect or that the configured `url` should be changed to the target.
+
+**What the build proceeds under.** The SDK's default. A remote entry's `headers` go to the origin of its `url` and nowhere else. A cross-origin redirect is not followed, and the connection fails with the SDK's message. `packages/mcp/src/client.test.ts` holds it for both transports: a second origin receives nothing. On 2.0.0 the same cases fail, with the second origin receiving `x-auth`.
+
+**What decides it.** A ruling on (a) and (b). If the ruling keeps (a), a person moved off a redirecting address needs to read the target from the failure, so (b) may want the notice to name it.

@@ -202,7 +202,7 @@ edge, no new message, nothing reaches a model.
 ### `mcp` (Part S, 2026-09-05)
 
 No longer a placeholder: ADR-0033's `OwnedStdioTransport` over `platform`'s one spawn helper, the client factory over
-`@modelcontextprotocol/client` 2.0.0 (pinned; the SDK's own transports for `http` and `sse`), and ADR-0034's three
+`@modelcontextprotocol/client` 2.3.0 (pinned, 2.0.0 until R-081; the SDK's own transports for `http` and `sse`), and ADR-0034's three
 paths. **Edges unchanged** — `mcp → kernel, platform`. The code-point comparator both `mcp` and `config` order by
 lives in `kernel` (`order.ts`), so neither package needed a new edge. The configuration pipeline of ADR-0034 lives in
 `config` (`src/mcp/`, `sections/mcp-servers.ts`); the run host composes the two (`run-host/mcp.ts`, `McpHost`) and
@@ -445,7 +445,7 @@ nothing in `apps/` or `packages/` imports the tool. **Edges unchanged**: `tools/
 `agent-tools/advertised-schema.ts` checks an MCP call against the input schema its server advertised (REQ-TOOLS-032), and
 validates with **`ajv` 8.20.0**, pinned exactly and declared by `agent-tools`, which imports it, and by `apps/desktop` beside
 the app's other node-side runtime dependencies (`zod`, the MCP client); the build bundles it into `out/main/run-host.js`,
-as it does those. It is the engine `@modelcontextprotocol/client` 2.0.0
+as it does those. It is the engine `@modelcontextprotocol/client` (2.3.0 since R-081)
 bundles and validates with (ADR-0033 leaves schema validation to the SDK), declared directly because the SDK's validator
 returns one flattened error string and does not export its 2020-12 engine, and the gate needs each violation's location.
 The lockfile already carried 8.20.0 (beneath electron-builder). **Edges unchanged**: a third-party dependency; no package

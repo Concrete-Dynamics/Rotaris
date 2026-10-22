@@ -12,7 +12,7 @@ import { z } from 'zod';
  * docs/defects/fixed/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md).
  *
  * **The validator is ajv 8, the JSON Schema engine the MCP SDK itself bundles and validates with.** ADR-0033 leaves schema
- * validation to the SDK; `@modelcontextprotocol/client` 2.0.0 carries ajv 8 inside its own bundle (its
+ * validation to the SDK; `@modelcontextprotocol/client` (2.3.0 since R-081) carries ajv 8 inside its own bundle (its
  * `AjvJsonSchemaValidator`), but that validator hands back one flattened error string and the SDK does not export its
  * 2020-12 engine — its documentation says to declare `ajv` to construct one. The gate needs each violation's location (the
  * refusal names it, and REQ-TOOLS-032's array repair asks whether the schema refuses one field), so this package declares

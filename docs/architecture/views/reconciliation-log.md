@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-22**
 
+**The Linux and macOS packaging configuration, prepared and not wired (R-080; ADR-0054; 2026-10-22).**
+`apps/desktop/scripts/lib/platform-targets.mjs` holds the two configurations a macOS and a Linux host would merge over
+`electron-builder.yml`; nothing that builds imports it and the hooks refuse both platforms (IC-3). It is a packaging
+script, outside the boundary rule, so no view changed: no package, edge, process, message, channel or ownership moved.
+
 **The release pipeline's stages after the build (R-080; first-release-plan.md §4.2, §4.7, §4.8; 2026-10-22).**
 `01-component-view.md` gains "The release pipeline's stages after the build": `tools/release-pipeline/`, a build-time
 tool outside the boundary rule, and its one reach into an application root, `apps/desktop/src/main/updater/keys.ts`,

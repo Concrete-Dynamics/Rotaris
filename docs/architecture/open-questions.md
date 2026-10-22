@@ -16627,3 +16627,16 @@ Launches 10, 11 and 13 to 15 are re-run. Launches 16 and 17 join launches 11 and
 - No live scenario asks the deletion. The opt-in `rename` scenario is unchanged. Its reading also prints the answer of each search the model made. An empty answer in that workspace is read as this ruling's recorded limit, a NOTE.
 
 *The reading the build proceeded under until this ruling ("PD-MCP-004 as revised: the product's file is placed for the symbol rename alone …", above) is kept as the falsified reading for the safe deletion. It still stands for the model's own search.*
+
+<a id="oq-450"></a>
+
+**OQ-450 — What do REQ-STARTUP-014's bundle name and REQ-STARTUP-023's "no code signature" mean for the macOS ARM64 bundle?** *(REQ-STARTUP-014, REQ-STARTUP-022, REQ-STARTUP-023; `PD-STARTUP-001`, IC-3; ADR-0054, "Linux and macOS configuration prepared". Raised 2026-10-22 by preparing the macOS configuration under [R-080](../product/requests.md#r-080), `apps/desktop/scripts/lib/platform-targets.mjs`. OQ-400 to OQ-449 are the Windows ARM64 session's range, so this takes the next number after it.)*
+
+**What is open.** Two things.
+
+- **(a) The bundle's name.** REQ-STARTUP-014 names the bundle `rotaris.app`, in lower case. electron-builder names a bundle after the product name, and the product name is `Rotaris` (`electron-builder.yml`'s `productName`, which also names the Windows artifacts' installed tree and what the platform shows). The only way to get a lower-case bundle is a macOS-only product name. That also changes the name the running application reports to the platform, and possibly the per-user directories REQ-STARTUP-145 derives from it. Neither effect is measured. Display keys such as `CFBundleDisplayName` could restore `Rotaris` where the user reads it.
+- **(b) "No code signature" on Apple silicon.** REQ-STARTUP-023 says that no code signature is applied to the macOS artifacts. On ARM64 the platform refuses to run native code that carries no signature at all. An ad-hoc signature carries no identity and no notarization, so it is what an unsigned build has in practice. electron-builder's `identity: null` skips signing outright, while `identity: "-"` signs ad hoc. Whether an ad-hoc signature counts as "a code signature" under the requirement decides which of the two the build uses. It also decides whether REQ-STARTUP-023's disclosed Gatekeeper confirmation is the only obstacle on first launch, or whether the platform reports the bundle as damaged.
+
+**What the preparation proceeds under.** For (a), electron-builder's default: the bundle is named after `productName` (`Rotaris.app`), which departs from REQ-STARTUP-014's spelling, and the identifier is `ai.rotaris.app` as the requirement says. For (b), `identity: null`, the requirement's literal reading. Both are inert. No macOS artifact may be produced under IC-3 or `PD-STARTUP-001`, and `build-hooks.cjs` refuses the platform.
+
+**What decides it.** A ruling on each reading. Then a macOS ARM64 host (IC-3, spike 17) must show that a bundle built under the ruling launches from the disk image on an unmodified machine, and what the user sees on first launch.

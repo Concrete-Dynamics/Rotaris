@@ -101,6 +101,8 @@ jobs:
         include:
           - platform: windows-x64
             runner: windows-latest
+          # Prepared, not attempted (PD-STARTUP-001, IC-3): apps/desktop/scripts/lib/platform-targets.mjs names the runners
+          # a withdrawal adds here — macos-arm64 on macos-15, linux-x86_64 on ubuntu-24.04 (REQ-STARTUP-025).
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     permissions:

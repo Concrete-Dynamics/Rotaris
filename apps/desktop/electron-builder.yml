@@ -2,6 +2,8 @@
 # the macOS and Linux targets are DELIBERATELY absent, not defaulted, because
 # an artifact for a platform nobody has measured is shipping on an untested
 # platform (implementation-conditions.md, IC-3).
+# The two configurations a macOS and a Linux host would merge over this file are PREPARED, not wired, in
+# scripts/lib/platform-targets.mjs (R-080, ADR-0054 "Linux and macOS configuration prepared"); nothing here reads them.
 #
 # Artifact names come from tools/release-naming (REQ-STARTUP-031) and are
 # composed nowhere else — and NOT from electron-builder's `${version}` macro, which

@@ -21,10 +21,27 @@ them.
 
 ## Specs
 
-None in `docs/spec/`: the boundary is process ([`../clean-room/`](../clean-room/)), not product behaviour.
+None in `docs/spec/`: the boundary is process ([`../../clean-room/`](../../clean-room/)), not product behaviour.
 
 ## Relevant files
 
 - `CLAUDE.md` — the "Hard boundary" list, the `D:\Development\Apps\Rotaris` entry.
 - `.github/agents/codebase-explorer-rotaris.agent.md`, `.github/agents/requirements-engineer-rotaris.agent.md` — the
   same entry, repeated.
+
+## Resolution — 2026-10-22
+
+The owner decided that the obsolete checkout-path prohibition is removed: the clean-room rewrite is
+complete and this checkout is now used for regular development. The prohibition was removed from
+`CLAUDE.md` and both agent definitions, without replacing it with another path restriction. The
+remaining reference-repository, reference-commit and sealed-material boundaries are unchanged.
+
+The description above records the pre-repair state. This repair changes repository instructions only;
+it neither inspected nor modified the external harness auto-memory mentioned there, and does not
+claim that memory was cleaned or that the remaining reference-derived-material rule was waived.
+
+**Verification:** a tracked-file search found the obsolete checkout-path prohibition only in those
+three instruction files; after the repair no such prohibition remains. The similarly prefixed sealed
+reference path stays forbidden. Historical mentions of the checkout path remain as history in this
+note, not as instructions. `node tools/check-record-links.mjs` verifies the moved note's links and
+any pointers to it.

@@ -55,7 +55,6 @@ Your edits land in documentation. The one artifact you regenerate rather than ed
   `https://github.com/theUpsider/Rotaris` (an earlier home of the same reference), or any mirror, fork or
   package of either
 - the reference commit `e7093dda` and its ancestors, wherever they appear
-- `D:\Development\Apps\Rotaris`
 - `D:\Development\Apps\Rotaris-cleanroom-sealed\`
 - any transcript or report produced by an agent that read the above
 

@@ -12,7 +12,6 @@ Do **not** read, clone, fetch, search, or quote from any of the following, for a
   `https://github.com/theUpsider/Rotaris` (an earlier home of the same reference), or any mirror, fork, or
   package of either
 - the reference commit `e7093dda` and its ancestors, wherever they appear
-- `D:\Development\Apps\Rotaris` (a local checkout of that project)
 - `D:\Development\Apps\Rotaris-cleanroom-sealed\` (the sealed reference clone and raw analysis)
 - any transcript, scratchpad, or report produced by an agent that read the above
 

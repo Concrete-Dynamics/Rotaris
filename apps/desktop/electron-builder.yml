@@ -17,8 +17,9 @@
 # other name (scripts/build-hooks.cjs, `checkNaming`; scripts/lib/artifact-names.mjs).
 # The installer's OWN version metadata (VERSION define → DisplayVersion,
 # ProductVersion) still carries electron-builder's normalised value — OQ-80.
-# The portable is NOT the tool's `portable` target (refused, ADR-0054 P1); it is
-# assembled by the release pipeline from win-unpacked around our own stub, later.
+# The portable is NOT the tool's `portable` target (refused, ADR-0054 P1): `pnpm package` assembles it from win-unpacked
+# around the project's own launcher stub (apps/desktop/launcher, scripts/lib/portable.mjs; ADR-0054 P4, first-release-plan
+# §4.5) into release/portable/, which is why no `portable` target appears below.
 appId: dev.rotaris.desktop
 productName: Rotaris
 directories:
@@ -74,10 +75,21 @@ win:
   target:
     - target: nsis
       arch: [x64]
+  # O-4 (first-release-plan.md §4.9): the owner's icon, seven sizes 16–256 px at 32 bits. electron-builder writes it into
+  # Rotaris.exe and, as MUI_ICON/MUI_UNICON, into the installer and its uninstaller; the launcher stub carries it too
+  # (launcher/build.rs). `pnpm package` reads every image back out of the three executables (scripts/lib/pe-icons.mjs).
+  icon: resources/icon.ico
   # no artifactName here: supplied by pnpm package from the declared version (see the header)
+# REQ-STARTUP-016/017 (docs/defects/fixed/the-windows-installer-is-one-click-with-no-pages-and-no-directory-choice.md): the
+# ASSISTED per-user installer — Welcome → Directory → Install → Finish, the directory the user's to choose, strictly
+# per-user with no elevation. electron-builder alone remembers the directory as `HKCU\Software\<APP_GUID>\InstallLocation`;
+# the updater reads REQ-STARTUP-016's `HKCU\Software\Rotaris\InstallDir`, which the include writes beside it (it says
+# why both exist), together with the per-user forcing, the `%LOCALAPPDATA%\Rotaris` default and the Welcome page.
 nsis:
-  oneClick: true
+  oneClick: false
   perMachine: false
+  allowToChangeInstallationDirectory: true
+  include: resources/installer.nsh
 # ADR-0056 rule 1: every native binding is rebuilt from source against the
 # shipped Electron, configured explicitly even where it is the default.
 npmRebuild: true

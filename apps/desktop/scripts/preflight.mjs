@@ -42,6 +42,8 @@ export const proofDir = join(repo, '.proof');
 
 const BUNDLE = 'code-intelligence bundle';
 const ENDPOINT = 'a registered endpoint with a stored key';
+/** `portable-proof` builds the launcher stub (ADR-0054 P4) with Cargo before it launches anything. */
+const CARGO = 'a Rust toolchain (`cargo`)';
 
 const USAGE = `pnpm preflight [proof-id …] [flags]
   (none)              the checks every proof shares: node, git, electron, the desktop
@@ -271,7 +273,7 @@ export function endpointCheck({ id, store, env = process.env }) {
  * @param {string} id
  * @param {{ platform?: string, bundle?: { ok: boolean }, getStore?: () => any, env?: NodeJS.ProcessEnv, needing?: string[] }} [opts]
  */
-export function proofChecks(id, { platform = process.platform, bundle = { ok: true }, getStore = () => endpointStore(), env = process.env, needing = [] } = {}) {
+export function proofChecks(id, { platform = process.platform, bundle = { ok: true }, getStore = () => endpointStore(), env = process.env, needing = [], cargo = () => spawnSync('cargo', ['--version'], { encoding: 'utf8', shell: process.platform === 'win32' }) } = {}) {
   const entry = PROOFS.find((p) => p.id === id);
   if (!entry) {
     const guesses = suggestIds(id);
@@ -289,6 +291,12 @@ export function proofChecks(id, { platform = process.platform, bundle = { ok: tr
   for (const requirement of entry.requires) {
     if (requirement === BUNDLE) checks.push(bundleCheck({ ok: bundle.ok, requiredBy: [id], needing }));
     else if (requirement === ENDPOINT) checks.push(endpointCheck({ id, store: getStore(), env }));
+    else if (requirement === CARGO) {
+      const r = cargo();
+      checks.push(r.status === 0
+        ? { name: id, status: 'pass', message: `requires a Rust toolchain — ${String(r.stdout).trim()}` }
+        : { name: id, status: 'fail', message: 'requires a Rust toolchain — `cargo --version` did not answer: install Rust (rustup) and put cargo on PATH' });
+    }
     else if (requirement.startsWith('a packaged build for ')) checks.push({ name: id, status: 'note', message: `${requirement} — needed only when the run passes that flag (pnpm package builds it)` });
     else checks.push({ name: id, status: 'note', message: `no check exists for this record's requirement: "${requirement}"` });
   }

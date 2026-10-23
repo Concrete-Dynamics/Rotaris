@@ -6,8 +6,9 @@
  *
  *   preflight <tag>             before any build: the build carries a verification key, and the key record's row for
  *                               the tag's version is exactly the set it carries (REQ-STARTUP-167, REQ-STARTUP-168 (b))
- *   portable <dir> <tag>        the portable's assembly (REQ-STARTUP-031, ADR-0054 P4) — refuses: its launcher stub is
- *                               not built (§4.5)
+ *   portable <dir> <tag>        the portable (REQ-STARTUP-031, ADR-0054 P4): the artifact `pnpm package` assembled around
+ *                               the launcher stub (apps/desktop/release/portable/), read back and copied into <dir> —
+ *                               refused when it is absent, not an assembled portable, or of another version (§4.5)
  *   manifest <dir> <tag>        writes SHA256SUMS.txt over the release directory's assets (REQ-STARTUP-032)
  *   sign <dir>                  writes SHA256SUMS.txt.sig with the key in ROTARIS_RELEASE_SIGNING_KEY (O-2)
  *   verify <dir> <tag>          §5's pipeline checks: the manifest covers every asset and every digest matches, the
@@ -20,10 +21,11 @@
  * Exit codes are the pipeline's (REQ-STARTUP-149): 0 done, 1 a handled refusal (every line `error: …`), 2 a usage
  * error. No command reaches the network, and none needs `pnpm install`: the signing job runs this file bare.
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CHECKSUM_MANIFEST_NAME, CHECKSUM_SIGNATURE_NAME, parseChecksumManifest, parseReleaseTag } from '../release-naming/src/index.ts';
+import { artifactName, CHECKSUM_MANIFEST_NAME, CHECKSUM_SIGNATURE_NAME, parseChecksumManifest, parseReleaseTag } from '../release-naming/src/index.ts';
+import { readPortable } from '../../apps/desktop/scripts/lib/portable.mjs';
 import { readReleaseDirectory, verifyReleaseDirectory, writeChecksumManifest } from './assets.mjs';
 import { changelogFromGit, releaseBody, releaseMetadata } from './body.mjs';
 import { checkBuildAgainstRecord, keyFingerprint, keyRecordRow, readKeyRecord, signManifest, SIGNING_KEY_VARIABLE, verifyReleaseSignature } from './signing.mjs';
@@ -31,6 +33,8 @@ import { checkBuildAgainstRecord, keyFingerprint, keyRecordRow, readKeyRecord, s
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO = resolve(HERE, '..', '..');
 export const KEY_RECORD = join(HERE, 'key-record.json');
+/** Where `pnpm package` writes the portable it assembled (apps/desktop/scripts/package.mjs, step 2′). */
+export const PACKAGED_PORTABLE_DIR = join(REPO, 'apps', 'desktop', 'release', 'portable');
 
 const USAGE = 'usage: pnpm release:pipeline preflight <tag> | portable <dir> <tag> | manifest <dir> <tag> | sign <dir> | verify <dir> <tag> | body <dir> <tag> <out> | keys [<version>]';
 
@@ -48,7 +52,7 @@ function arity(args, n) {
 /**
  * Runs one command. `env` is where the signing key is read from; `out`/`err` receive whole lines. Returns the exit code.
  * @param {string[]} argv
- * @param {{ env?: NodeJS.ProcessEnv, out?: (line: string) => void, err?: (line: string) => void, keyRecord?: string, repo?: string, keys?: readonly string[] }} [options]
+ * @param {{ env?: NodeJS.ProcessEnv, out?: (line: string) => void, err?: (line: string) => void, keyRecord?: string, repo?: string, keys?: readonly string[], portableDir?: string }} [options]
  */
 export function runPipelineCommand(argv, options = {}) {
   const env = options.env ?? process.env;
@@ -80,15 +84,24 @@ export function runPipelineCommand(argv, options = {}) {
       case 'portable': {
         arity(args, 2);
         const { version } = tagOf(args[1]);
-        const { assets } = readReleaseDirectory(args[0], version);
-        const portable = assets.find((a) => a.kind === 'portable');
-        if (portable !== undefined) {
-          out(`portable: ${portable.name} is present`);
-          return 0;
+        const name = artifactName(version, 'portable');
+        const target = join(args[0], name);
+        const source = existsSync(target) ? target : join(options.portableDir ?? PACKAGED_PORTABLE_DIR, name);
+        if (!existsSync(source)) {
+          return refuse([`REQ-STARTUP-031: the windows-x64 portable of ${version} is not in ${args[0]} and \`pnpm package\` assembled none at ${source} (ADR-0054 P4, first-release-plan.md §4.5). A release publishes both Windows artifacts (PD-STARTUP-001), so this release stops here`]);
         }
-        return refuse([
-          `REQ-STARTUP-031: the windows-x64 portable of ${version} cannot be assembled: its launcher stub (ADR-0054 P4, first-release-plan.md §4.5) is not built, and electron-builder's own portable target is refused (ADR-0054 P1). A release publishes both Windows artifacts (PD-STARTUP-001), so this release stops here`,
-        ]);
+        let read;
+        try {
+          read = readPortable(source);
+        } catch (e) {
+          return refuse([`REQ-STARTUP-031: ${source} is not an assembled portable: ${e instanceof Error ? e.message : String(e)}`]);
+        }
+        if (!read.token.startsWith(`${version}-`) || read.entry !== 'Rotaris.exe') {
+          return refuse([`REQ-STARTUP-031: ${source} carries ${read.token} with entry point ${read.entry}; the release of ${version} needs ${version}'s payload starting Rotaris.exe (REQ-STARTUP-158)`]);
+        }
+        if (source !== target) copyFileSync(source, target);
+        out(`portable: ${name}, ${read.bytes} B, token ${read.token}, ${read.files.length} files${source !== target ? ` (from ${source})` : ''}`);
+        return 0;
       }
       case 'manifest': {
         arity(args, 2);

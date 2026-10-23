@@ -20,6 +20,7 @@
     "dev": "pnpm --filter @rotaris/desktop dev",
     "build": "node tools/dev-time/cli.mjs run --quiet build:desktop -- pnpm --filter @rotaris/desktop build",
     "theme-proof": "node apps/desktop/scripts/theme-proof.mjs",
+    "portable-proof": "node apps/desktop/scripts/portable-proof.mjs",
     "part-h-proof": "node apps/desktop/scripts/part-h-proof.mjs",
     "config-proof": "node apps/desktop/scripts/config-proof.mjs",
     "plan-gate-proof": "node apps/desktop/scripts/plan-gate-proof.mjs",

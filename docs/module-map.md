@@ -83,7 +83,10 @@ rebased head in a landing worktree of its own, a fast-forward push, cleanup — 
 `pnpm worktree:overlaps`: every branch worktree's files against its fork from `origin/main`, the files two
 branches share, and where `origin/main` moved too; open `new.mjs`, `land.mjs` and `overlaps.mjs`, tests
 in `new.test.ts`, `land.test.ts` and `overlaps.test.ts`), and the standalone checks `pnpm lint` runs
-before ESLint. `pnpm package` (`apps/desktop/scripts/package.mjs`) runs the notices and build-id steps before freezing;
+before ESLint. `apps/desktop/launcher/` (since 2026-10-23) is the portable's launcher stub — a Rust crate with no dependency, built by
+`cargo build --release` from `pnpm package` and `pnpm portable-proof`; open `src/main.rs`, its unit tests run with `cargo test
+--release` there — and `apps/desktop/scripts/lib/portable.mjs` assembles the portable around it (ADR-0054 P4).
+`pnpm package` (`apps/desktop/scripts/package.mjs`) runs the notices and build-id steps before freezing;
 what the artifact must then carry is checked by `scripts/lib/about-assets.mjs`, which `afterPack` loads, and what it
 says when it ends is `scripts/lib/package-verdict.mjs`'s.
 

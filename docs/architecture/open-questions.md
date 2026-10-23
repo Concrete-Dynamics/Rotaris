@@ -16684,3 +16684,33 @@ Launches 10, 11 and 13 to 15 are re-run. Launches 16 and 17 join launches 11 and
 **What the build proceeds under.** The SDK's default. A remote entry's `headers` go to the origin of its `url` and nowhere else. A cross-origin redirect is not followed, and the connection fails with the SDK's message. `packages/mcp/src/client.test.ts` holds it for both transports: a second origin receives nothing. On 2.0.0 the same cases fail, with the second origin receiving `x-auth`.
 
 **What decides it.** A ruling on (a) and (b). If the ruling keeps (a), a person moved off a redirecting address needs to read the target from the failure, so (b) may want the notice to name it.
+
+<a id="oq-452"></a>
+
+**OQ-452 — Does the Rust standard library compiled into the portable's launcher stub owe an entry in the notices file?** *(REQ-STARTUP-142, REQ-STARTUP-143, IC-7; ADR-0054 P4, consequence 5. Raised 2026-10-23 by building the stub under the packaging brief of that day. OQ-450 and OQ-451 are taken, so this takes the next number.)*
+
+**What is open.** The portable is the stub (`apps/desktop/launcher`) with the payload appended. The stub links no crate, but every Rust binary carries the compiler's standard library — `std`, `core`, `alloc` and the compiler builtins, licensed MIT OR Apache-2.0 — statically. REQ-STARTUP-142 asks for "one entry for every dependency present in the shipped artifact" and excludes "any component of the product's own build". The standard library is present in the artifact and is not the product's own code, so the literal reading lists it; the notices generator (`tools/notices/`) reads `node_modules` and the code-intelligence runtime and knows nothing of a Rust toolchain. The installer does not carry the stub, so the question is the portable's alone.
+
+**What the build proceeds under.** No entry: the generator is unchanged. The stub depends on nothing else, on purpose, so the standard library is the whole of the question.
+
+**What decides it.** A ruling on whether the standard library is a dependency in REQ-STARTUP-142's sense. If it is, the generator gains an entry naming the toolchain's version (`rustc --version` on the packaging host) with both licence texts, and REQ-STARTUP-143's validation must fail a portable built without it.
+
+<a id="oq-453"></a>
+
+**OQ-453 — Where are superseded preparations reclaimed: by the application after its window is shown, or by the stub after it has started the application?** *(REQ-STARTUP-165 (b), REQ-STARTUP-043; ADR-0054, "Reclaiming superseded preparations". Raised 2026-10-23 by building the stub.)*
+
+**What is open.** ADR-0054 places reclamation in "a run started from a preparation … after the window is shown and off the critical path". The application has no code for it, and the brief that built the stub excluded product logic outside packaging. The stub reclaims instead, right after it has started the application and before it exits: every directory of another token that carries a marker and that nothing runs from, and every `.stale-…` displacement; `.incomplete-…` and `.run-…` trees only when a day old, since another launch may be writing or running one. "Nothing runs from it" is decided on Windows by renaming the tree aside first — the rename fails while any of its files is open — and on Linux by reading `/proc/*/exe`. Both placements keep it off the paint path, but the stub's competes with the application's own start for the disk for the ~90 ms ADR-0054 measured per deleted payload, and the record's reading put it after the window.
+
+**What the build proceeds under.** The stub reclaims, as above. `pnpm portable-proof` A3 and A5 measure it: no `.stale-…` left after a redo, and a superseded preparation removed after the next artifact starts.
+
+**What decides it.** A ruling on the placement. If the record's placement stands, the stub's `reclaim` moves to a post-show step of main (ADR-0055's order), which must then also read the marker for clause (c)'s notice.
+
+<a id="oq-454"></a>
+
+**OQ-454 — Does an update through the assisted installer show its pages, or install silently?** *(REQ-STARTUP-017, REQ-STARTUP-125, REQ-STARTUP-120; ADR-0054. Raised 2026-10-23 by making the installer assisted.)*
+
+**What is open.** The installer strategy starts the verified setup with no argument and quits (`applyInstaller`, `apps/desktop/src/main/updater/strategies.ts`). With the one-click installer that was a silent install into the same place. The assisted installer instead opens its pages — Welcome, Directory (pre-filled with the installed directory), Install, Finish with "Run Rotaris" checked — so a user who pressed `Update now` meets a setup wizard and could move the installation. REQ-STARTUP-017 states both forms, interactive and silent (`/S`, no pages, never auto-launch), and REQ-STARTUP-125 says only that the installer is started as a process that survives the application. Neither says which form an update takes; a silent update would also need the application restarted by something, since `/S` never auto-launches.
+
+**What the build proceeds under.** Unchanged: the setup is started with no argument, so an update shows the assisted installer's pages, its directory page offering the installed directory.
+
+**What decides it.** A ruling on the form. Silent would mean `applyInstaller` passing `/S` (and `/D=` the installed directory) and a decision on who starts the updated application afterwards.

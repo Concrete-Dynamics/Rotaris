@@ -442,6 +442,22 @@ scripts do, and **`apps/desktop/src/main/updater/keys.ts`** — the updater's ke
 reach from `tools/` into an application root's source; it reads a leaf module that imports only `node:crypto`, and
 nothing in `apps/` or `packages/` imports the tool. **Edges unchanged**: `tools/**` is outside the boundary rule.
 
+### The portable's launcher stub and its assembly (2026-10-23; ADR-0054 P4, `first-release-plan.md` §4.5)
+
+**`apps/desktop/launcher/`** is the product's second build technology: a Rust crate with **no dependency**
+(`Cargo.toml`, `Cargo.lock`), built by `cargo build --release --locked` on the host that packages. It is not a package
+of the workspace and no TypeScript imports it; it shares nothing with the application but two spellings it must agree
+with — the per-user data directory of `packages/platform/src/dirs.ts` (`%LOCALAPPDATA%\rotaris\data`, `$XDG_DATA_HOME/rotaris`)
+and `PORTABLE_ARTIFACT_VARIABLE` (`ROTARIS_PORTABLE_ARTIFACT`), both written in `src/main.rs` as literals with the source
+named. `src/inflate.rs` is raw deflate written from RFC 1951; `src/payload.rs` reads the appended payload; `src/icon_res.rs`
+and `build.rs` link the owner's icon as a `.res` on the MSVC target. **`apps/desktop/scripts/lib/portable.mjs`** is the
+assembler — the payload layout, the identity token written into the stub's slot, `readPortable` for the checks — loaded by
+`scripts/package.mjs`, `scripts/portable-proof.mjs` and **`tools/release-pipeline/cli.mjs`** (its `portable` stage reads the
+artifact back before copying it into the release directory), which is the pipeline's one import from `apps/desktop/scripts/`;
+it imports only Node's own modules, so the stage still runs bare. **`scripts/lib/pe-icons.mjs`** reads an icon back out of a
+PE file's resources for `pnpm package`. **Edges unchanged**: `apps/desktop/launcher/**`, `apps/desktop/scripts/**` and
+`tools/**` are outside the boundary rule.
+
 ### `agent-tools`' JSON Schema validator (2026-10-06; fin18, live-run finding G3)
 
 `agent-tools/advertised-schema.ts` checks an MCP call against the input schema its server advertised (REQ-TOOLS-032), and

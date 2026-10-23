@@ -60,7 +60,7 @@ export const AREAS = Object.freeze({
     title: 'Configuration and startup',
     proofs: [
       'config-proof', 'init-proof', 'workspace-proof', 'settings-proof',
-      'updater-proof', 'exit-trace-proof',
+      'updater-proof', 'exit-trace-proof', 'portable-proof',
     ],
     views: [
       'docs/architecture/views/06-sequences.md',
@@ -371,6 +371,11 @@ export const RULES = Object.freeze([
   { paths: ['apps/desktop/scripts/'], areas: ['known'] },
   { paths: ['apps/desktop/resources/'], areas: ['configStartup'] },
   { paths: ['apps/desktop/scripts/package.mjs'], areas: ['configStartup'] },
+  { paths: ['apps/desktop/launcher/', 'apps/desktop/scripts/lib/portable.mjs', 'apps/desktop/scripts/lib/pe-icons.mjs'],
+    areas: ['configStartup'], proofs: ['portable-proof'],
+    notes: ['the Windows artifact is assembled and launched by `pnpm package` on the Windows runner (ADR-0054 P4); `cargo test --release` in apps/desktop/launcher is the stub\'s unit gate'] },
+  { paths: ['apps/desktop/electron-builder.yml'], areas: ['configStartup'],
+    notes: ['the installer and the packaged tree are measured by `pnpm package` on the Windows runner'] },
 
   // --- tools / docs / repo meta ---
   { paths: ['tools/symbol-artifact/', 'tools/check-directive-register'], areas: ['record'] },

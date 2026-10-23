@@ -217,6 +217,12 @@ describe('R-062: the proof harness platform rules, kept at every script', () => 
       // child's `exit` and a bounded drain of the pipes (`lib/settle-launch.mjs`), never on a `close` that a process of the
       // killed main can hold off for hours (docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md).
       'live-run.mjs': 'runElectron',
+      // The portable on Windows (step 3′, ADR-0054 P4): its launcher stub EXITS once it has started the application, so a
+      // bound on the spawned process ends at the stub. The launch is followed past it instead: the stub is killed and
+      // reported after 120 s, the application's processes are read from the preparation root, and any still running
+      // 150 s after the start are ended with Stop-Process and fail the step — never a clean exit. The application writes
+      // its log to a file handle the stub hands on, not to a pipe `spawnBounded` would close under it.
+      'package.mjs': 'the portable',
     };
     const found = all.flatMap((f) => launches(relative(SCRIPTS, f).split(sep).join('/'), readFileSync(f, 'utf8')));
     const bare = found.filter((l) => l.call.startsWith('spawn(') && !/ELECTRON_RUN_AS_NODE/.test(l.call));

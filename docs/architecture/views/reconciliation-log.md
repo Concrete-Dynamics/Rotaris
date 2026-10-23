@@ -24,6 +24,14 @@ package an entry names — and still writes one file. No package, edge, process,
 `05-state-ownership.md`'s key-set row reads "one key since 2026-10-23" where it read "empty until O-2". The fact's owner,
 its writer and its reader are unchanged: the build alone writes it, main reads it at every install. No package, edge,
 process, message, channel or ownership changed.
+**The portable's launcher stub, the assisted installer and the icon (the 2026-10-23 packaging brief; ADR-0054 P4,
+`first-release-plan.md` §4.5, §4.9).** `01-component-view.md` gains "The portable's launcher stub and its assembly":
+`apps/desktop/launcher/` (Rust, no dependency), `scripts/lib/portable.mjs`, `scripts/lib/pe-icons.mjs`, and
+`tools/release-pipeline/cli.mjs`'s import of the assembler. `02-process-view.md` gains the stub as the process before
+main on the portable, the preparation root under the per-user data directory, and the run-scoped placement. The
+installer's include (`apps/desktop/resources/installer.nsh`) writes `HKCU\Software\Rotaris\InstallDir`, the value
+`classify.ts` already read; no product process, message, channel or ownership moved.
+
 
 **Dependency patches for 47 Dependabot alerts (R-081; 2026-10-22).** `01-component-view.md`'s `mcp` section and its `ajv`
 paragraph name `@modelcontextprotocol/client` 2.3.0, pinned in place of 2.0.0. The SDK's `http` and `sse` transports now refuse

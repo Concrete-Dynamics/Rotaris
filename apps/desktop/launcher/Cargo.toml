@@ -1,0 +1,22 @@
+# ADR-0054 P4 / first-release-plan.md §4.5 — the portable's launcher stub (REQ-STARTUP-013, 031, 165).
+#
+# No dependency at all, on purpose: the stub runs before the application runtime exists (ADR-0054 consequence 5), and
+# every crate it linked would be a shipped component the notices file owes (REQ-STARTUP-142). Raw deflate is decoded by
+# `src/inflate.rs`, written from RFC 1951. `scripts/lib/portable.mjs` builds it and appends the payload.
+[package]
+name = "rotaris-portable-launcher"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "GPL-3.0-only"
+
+[[bin]]
+name = "rotaris-portable-launcher"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

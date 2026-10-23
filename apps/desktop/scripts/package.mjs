@@ -10,14 +10,24 @@
  *                                           step runs with — never electron-builder's `${version}` macro, which is the
  *                                           version normalised (`0.1.0rc1` → `0.1.0-rc1`)
  *   2. electron-builder --win               rebuild → pack → hooks (rule 1a, rule 4a, the assets, the naming) → installer
+ *   2′. the portable                         the launcher stub (apps/desktop/launcher) built by Cargo and assembled around
+ *                                           win-unpacked into release/portable/Rotaris-{v}-windows-x64-portable.exe
+ *                                           (ADR-0054 P4, first-release-plan.md §4.5; lib/portable.mjs) — a subdirectory, so
+ *                                           release/ holds one installer at its top as the CI job counts it
+ *   2″. the icon                             every image of resources/icon.ico read back, byte for byte, out of the
+ *                                           installer, win-unpacked/Rotaris.exe and the portable (O-4; lib/pe-icons.mjs)
  *   3. the packaged app, launched           rule 4 (b): the product's own path opens a store in a real
  *                                           utilityProcess and runs a terminal call; both settle in the store. The model
  *                                           is a loopback OpenAI-compatible stub this script starts
  *                                           (lib/stub-model-endpoint.mjs), reached through the shipped model client (OQ-312)
+ *   3′. the portable, launched twice       REQ-STARTUP-165: it prepares itself under a scratch LOCALAPPDATA and paints;
+ *                                           then starts from that preparation and paints; its directory is unchanged; the
+ *                                           application classifies itself portable from ROTARIS_PORTABLE_ARTIFACT; and the
+ *                                           artifact can be renamed aside while the application runs (REQ-STARTUP-125)
  *   4. release/load-proof.json              the merged report; a non-zero exit on any miss
  *
  * ROTARIS_PACKAGE_DIR_ONLY=1   stop at win-unpacked (no installer)
- * ROTARIS_PACKAGE_SKIP_APP=1   skip step 3
+ * ROTARIS_PACKAGE_SKIP_APP=1   skip steps 3 and 3′
  * ROTARIS_PACKAGE_WITHOUT_NOTICES=1
  *                              go on after the notices step's exit 1: a development package with no notices file (any
  *                              earlier one is removed), which its About page states and which is not releasable; refused
@@ -29,18 +39,21 @@
  *                              was not exercised, when the package ended before electron-builder ran (while `pnpm notices`
  *                              refuses, that needs ROTARIS_PACKAGE_WITHOUT_NOTICES=1 as well)
  */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
+import { dataDirFor, hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { closingLines, reached, STEPS } from './lib/package-verdict.mjs';
 import { FORBIDDEN, KEPT, seamCheck } from './lib/seam-check.mjs';
 import { startStubModelEndpoint, STUB_TERMINAL_COMMAND } from './lib/stub-model-endpoint.mjs';
 import { ABOUT_ASSETS, flagUsage, settleNoticesStep, WITHOUT_NOTICES } from './lib/about-assets.mjs';
-import { declaredProductVersion, namedConfigurationText, packagingArtifactNames } from './lib/artifact-names.mjs';
+import { declaredProductVersion, namedConfigurationText, packagingArtifactNames, portableArtifactName } from './lib/artifact-names.mjs';
+import { assemblePortable, buildLauncher, MARKER, readPortable } from './lib/portable.mjs';
+import { iconCarried } from './lib/pe-icons.mjs';
 
 // A flag value this script does not understand is a usage error (REQ-STARTUP-149's 2), reported before any step runs.
 const usage = flagUsage(process.env);
@@ -205,6 +218,42 @@ try {
     return { declared, names, from: config, configuration: named };
   });
   step(`${STEPS.builder} --win${process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ' --dir' : ''}`, () => run('pnpm', ['exec', 'electron-builder', '--win', ...(process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ['--dir'] : []), '--config', naming.configuration], { env: builderEnv }));
+  /*
+   * REQ-STARTUP-031's second Windows artifact (ADR-0054 P4, first-release-plan.md §4.5): NOT electron-builder's `portable`
+   * target, which cannot start inside REQ-STARTUP-155's budget at any bundle weight (P1), but the project's launcher stub
+   * with win-unpacked appended. Named by the authority from the declared text, like the installer; written below
+   * release/portable/ because release/'s top holds the one installer the CI job counts and uploads.
+   */
+  report.portable = await stepAsync('the portable: the launcher stub built and win-unpacked assembled around it (ADR-0054 P4)', async () => {
+    const stub = buildLauncher(APP);
+    const dir = join(RELEASE, 'portable');
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    const out = join(dir, portableArtifactName(naming.declared));
+    const made = await assemblePortable({ stub, tree: join(RELEASE, 'win-unpacked'), entry: 'Rotaris.exe', version: naming.declared, out });
+    const read = readPortable(out);
+    if (read.token !== made.token || read.entry !== 'Rotaris.exe') throw new Error(`the assembled portable does not read back as assembled (${read.token}, ${read.entry})`);
+    process.stdout.write(`[package] ${made.path}: ${made.bytes} B (stub ${made.stubBytes} B, payload ${made.payloadBytes} B in ${made.files} files and ${made.chunks} chunks), token ${made.token}\n`);
+    return { ...made, sha256: createHash('sha256').update(readFileSync(out)).digest('hex') };
+  });
+  // O-4: the icon the owner supplied, read back out of each executable's own resources — not "the file exists".
+  report.icon = step('the installer, the packaged executable and the portable carry the icon (O-4)', () => {
+    const ico = readFileSync(join(APP, 'resources', 'icon.ico'));
+    const carriers = {
+      ...(process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? {} : { installer: join(RELEASE, naming.names.setup) }),
+      executable: join(RELEASE, 'win-unpacked', 'Rotaris.exe'),
+      portable: report.portable.path,
+    };
+    const found = {};
+    for (const [what, path] of Object.entries(carriers)) {
+      const r = iconCarried(readFileSync(path), ico);
+      found[what] = { path, carried: r.carried, group: r.group, images: r.images.map((i) => `${i.width}x${i.height}@${i.bitCount}${i.iconId === null ? ' MISSING' : `#${i.iconId}`}`).join(' '), why: r.why };
+      process.stdout.write(`[package] icon in the ${what}: ${r.carried ? `group ${r.group}, ${r.images.length} images byte for byte` : r.why}\n`);
+    }
+    const missing = Object.entries(found).filter(([, f]) => !f.carried).map(([what, f]) => `${what}: ${f.why}`);
+    if (missing.length) throw new Error(`the icon is not carried — ${missing.join('; ')}`);
+    return found;
+  });
 } catch (e) {
   finish(false, String(e.message));
 }
@@ -284,4 +333,103 @@ appRun = await stepAsync('the packaged app opens a store and runs a terminal cal
   finish(false, String(e.message));
 }
 process.stdout.write(`[package] packaged app: session ${appRun.sessions[0].execution_status}, terminal call ${appRun.calls.find((c) => c.tool_name === 'terminal').status}, store v${appRun.userVersion}, stub model ${appRun.stub.requests} request(s), ${appRun.stub.terminalCalls} terminal call(s)\n`);
+
+/*
+ * Step 3′: the portable on the platform it ships for (REQ-STARTUP-165; `pnpm portable-proof` drives every other outcome on a
+ * POSIX host). The stub exits once it has started the application (ADR-0054: it never stays as a parent), so the launch is
+ * followed past the stub: the capture's file, then the application's own exit, read from the processes running out of the
+ * preparation root. The application's lines reach the log file through the handles the stub hands on.
+ */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** How many processes run from below `root` — the application started out of the preparation. */
+function runningFrom(root) {
+  const quoted = root.replace(/'/g, "''");
+  const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `@(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith('${quoted}', [System.StringComparison]::OrdinalIgnoreCase) }).Count`], { encoding: 'utf8', windowsHide: true });
+  return Number.parseInt(String(r.stdout).trim(), 10) || 0;
+}
+function endRunningFrom(root) {
+  const quoted = root.replace(/'/g, "''");
+  spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith('${quoted}', [System.StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force`], { windowsHide: true });
+}
+const snapshotOf = (dir) => readdirSync(dir).sort().map((name) => { const st = statSync(join(dir, name)); return { name, size: st.size, mtimeMs: st.mtimeMs, ctimeMs: st.ctimeMs }; });
+try {
+report.portableRun = await stepAsync('the portable prepares itself, starts and paints — then starts from its preparation (REQ-STARTUP-165)', async () => {
+  const exe = report.portable.path;
+  const media = dirname(exe);
+  const scratch = join(RELEASE, 'scratch-portable');
+  rmSync(scratch, { recursive: true, force: true });
+  const local = join(scratch, 'LocalAppData');
+  const ws = join(scratch, 'workspace');
+  mkdirSync(ws, { recursive: true });
+  writeFileSync(join(ws, 'README.md'), '# scratch\n');
+  // The stub's preparation root: the per-user data directory (REQ-STARTUP-145), as the product resolves it, and `prepared`.
+  const root = join(dataDirFor(local), 'prepared');
+  const tokenDir = join(root, report.portable.token);
+  const before = snapshotOf(media);
+  const digest = () => createHash('sha256').update(readFileSync(exe)).digest('hex');
+  const runs = [];
+  for (const [i, label] of ['preparing', 'from-the-preparation'].entries()) {
+    const png = join(RELEASE, `load-proof.portable.${label}.png`);
+    const logPath = join(RELEASE, `load-proof.portable.${label}.log`);
+    rmSync(png, { force: true });
+    const env = { ...process.env, ...proofIsolationEnv({ profileRoot: scratch, local }), ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_AFTER_MS: '6000' };
+    for (const k of Object.keys(env)) if (k.startsWith('ROTARIS_CAPTURE_') && !(k in { ROTARIS_CAPTURE_PNG: 1, ROTARIS_CAPTURE_AFTER_MS: 1 })) delete env[k];
+    delete env.ROTARIS_PORTABLE_ARTIFACT;
+    const markerBefore = i === 1 ? statSync(join(tokenDir, MARKER)) : null;
+    const fd = openSync(logPath, 'w');
+    const started = Date.now();
+    const stubExit = await new Promise((resolve) => {
+      const child = spawn(exe, [...hostSwitches, ws], { env, stdio: ['ignore', fd, fd], windowsHide: true });
+      const timer = setTimeout(() => { child.kill(); resolve({ code: null, error: 'the stub did not exit within 120 s' }); }, 120_000);
+      child.once('error', (e) => { clearTimeout(timer); resolve({ code: null, error: String(e.message) }); });
+      child.once('exit', (code) => { clearTimeout(timer); resolve({ code }); });
+    });
+    const stubMs = Date.now() - started;
+    // REQ-STARTUP-125: the artifact is renamed aside and back while the application it started is running.
+    let renameAside = null;
+    if (i === 1 && stubExit.code === 0) {
+      const alive = runningFrom(root);
+      try {
+        renameSync(exe, `${exe}.rename-probe`);
+        renameSync(`${exe}.rename-probe`, exe);
+        renameAside = { ok: true, applicationRunning: alive > 0, processes: alive };
+      } catch (e) {
+        renameAside = { ok: false, applicationRunning: alive > 0, error: String(e.message) };
+      }
+    }
+    let paintedMs = null;
+    while (Date.now() - started < 120_000) {
+      if (existsSync(png)) { paintedMs = Date.now() - started; break; }
+      await sleep(200);
+    }
+    while (Date.now() - started < 150_000 && runningFrom(root) > 0) await sleep(250);
+    const leftRunning = runningFrom(root);
+    if (leftRunning > 0) endRunningFrom(root);
+    closeSync(fd);
+    const log = readFileSync(logPath, 'utf8');
+    const marker = existsSync(join(tokenDir, MARKER)) ? readFileSync(join(tokenDir, MARKER), 'utf8') : '';
+    const markerAfter = existsSync(join(tokenDir, MARKER)) ? statSync(join(tokenDir, MARKER)) : null;
+    const flavour = /update check: window \d+, (\S+) flavour/.exec(log)?.[1] ?? null;
+    runs.push({ label, stubExit, stubMs, paintedMs, leftRunning, flavour, outcome: /^outcome (\S+)$/m.exec(marker)?.[1] ?? null, reused: markerBefore && markerAfter ? markerBefore.mtimeMs === markerAfter.mtimeMs : null, renameAside });
+    if (stubExit.code !== 0) throw new Error(`the ${label} launch: the stub exited ${stubExit.code ?? stubExit.error} (see ${logPath})`);
+    if (paintedMs === null) throw new Error(`the ${label} launch did not paint within 120 s (see ${logPath})`);
+    if (leftRunning > 0) throw new Error(`the ${label} launch: the application was still running 150 s after the start and was ended`);
+    if (runs.at(-1).outcome !== 'prepared') throw new Error(`the ${label} launch left no preparation marker at ${tokenDir}`);
+    if (flavour !== 'portable') throw new Error(`the ${label} launch classified itself ${flavour ?? '(no update check line)'}, not portable: ROTARIS_PORTABLE_ARTIFACT did not reach main (REQ-STARTUP-165 (e))`);
+    if (i === 1 && runs.at(-1).reused !== true) throw new Error('the second launch prepared again instead of starting from the preparation (REQ-STARTUP-165 (b))');
+    if (i === 1 && !(renameAside?.ok && renameAside.applicationRunning)) throw new Error(`the artifact could not be renamed aside while the application ran (REQ-STARTUP-125): ${JSON.stringify(renameAside)}`);
+    if (i === 0) {
+      const after = snapshotOf(media);
+      if (JSON.stringify(after) !== JSON.stringify(before)) throw new Error(`the preparing launch changed the artifact's directory (REQ-STARTUP-165 (a)): ${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+    }
+  }
+  // The rename-aside probe renames the artifact, which moves its change time; everything else must be as it was.
+  const after = snapshotOf(media).map(({ ctimeMs, ...rest }) => rest);
+  if (JSON.stringify(after) !== JSON.stringify(before.map(({ ctimeMs, ...rest }) => rest)) || digest() !== report.portable.sha256) throw new Error('the artifact or its directory changed across the two launches (REQ-STARTUP-165 (a))');
+  for (const r of runs) process.stdout.write(`[package] portable ${r.label}: stub exited ${r.stubExit.code} after ${r.stubMs} ms, painted by ${r.paintedMs} ms, classified ${r.flavour}${r.renameAside ? `, renamed aside while running: ${r.renameAside.ok}` : ''}\n`);
+  return { token: report.portable.token, root, runs };
+});
+} catch (e) {
+  finish(false, String(e.message));
+}
 finish(true);

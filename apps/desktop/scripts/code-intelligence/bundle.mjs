@@ -7,9 +7,19 @@
  *
  *   runtime/               a self-contained CPython of the pinned version (python-build-standalone, obtained through uv)
  *                          with `serena-agent==<pin>` and its dependencies installed into its own site-packages — no
- *                          virtual environment, so nothing in the tree records the path it was built at
- *   bundle.json            the marker: the pins' hash (a rebuild is skipped when it matches), what was trimmed, the
- *                          measured size, the runtime's own answers for the version of Python and of the distribution
+ *                          virtual environment, so nothing in the tree records the path it was built at — exactly as
+ *                          `closure.lock` names them: every distribution of the closure at one version, by hash, from
+ *                          wheels only but for `proxy-tools`, which publishes none and is built with the setuptools
+ *                          `closure-build.lock` pins by hash; nothing resolved at build time
+ *   bundle.json            the marker: the hash of the pins and the lock (a rebuild is skipped when it matches), what
+ *                          was trimmed, the measured size, the runtime's own answers for the version of Python, of the
+ *                          distribution and of every distribution installed beside it
+ *
+ * The closure is frozen in `closure.lock` (2026-10-23): a release built the same commit's tree with three `certifi`s on three
+ * hosts, and REQ-STARTUP-143's reviewed-exceptions table, which names exact versions, cannot cover a tree resolved on the day
+ * (`docs/defects/fixed/the-code-intelligence-bundle-pins-serena-agent-and-not-its-dependencies.md`). `--lock` rewrites the
+ * lock from the pins with `uv pip compile --universal` (one resolution for every target) — a reviewed change, since every
+ * version it moves is a version the notices step reads anew.
  *
  * The pins live in `pins.json` and nowhere else on the build side; the generated manifest module carries the same
  * distribution and version for the product side and a test refuses a drift (REQ-MCP-116). `uv` is obtained by version
@@ -22,6 +32,7 @@
  * the distribution's version from inside the tree — never a step's exit status.
  *
  *   --force                      rebuild even when the marker matches
+ *   --lock                       rewrite `closure.lock` from the pins (`pnpm code-intel:lock`); build nothing
  *   --check                      exit 1 when the tree is absent or stale; build nothing
  *   --target=<platform>-<arch>   the artifact's architecture (OQ-400, ruled 2026-10-15 under R-072): the interpreter is
  *                                installed by its full uv key for it, the marker and its hash carry it, and a tree built
@@ -35,7 +46,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defaultTargetKey, interpreterKey, parseTarget, pinsHashInput, uvAssetFor } from './target.mjs';
+import { defaultTargetKey, interpreterKey, parseClosureLock, parseTarget, pinsHashInput, uvAssetFor } from './target.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = resolve(HERE, '..', '..');
@@ -44,11 +55,19 @@ const RUNTIME = join(TARGET, 'runtime');
 const MARKER = join(TARGET, 'bundle.json');
 const CACHE = join(APP, '.cache', 'code-intelligence');
 /** Bumped when the recipe below changes in a way that must rebuild an existing tree. */
-const RECIPE = 4;
+const RECIPE = 5;
 const PINS = JSON.parse(readFileSync(join(HERE, 'pins.json'), 'utf8'));
+const LOCK = join(HERE, 'closure.lock');
+const BUILD_LOCK = join(HERE, 'closure-build.lock');
+/** The closure's one distribution that publishes no wheel (an sdist with a bare setup.py); built from the locked sdist. */
+const BUILT_FROM_SOURCE = ['proxy-tools'];
 const target = parseTarget(process.argv.slice(2), { platform: process.platform, arch: process.arch });
 if (target.error) { process.stderr.write(`[code-intel:bundle] REFUSED — ${target.error}\n`); process.exit(1); }
-const pinsHash = createHash('sha256').update(pinsHashInput(PINS, RECIPE, target)).digest('hex');
+const relock = process.argv.includes('--lock');
+const lockText = !relock && existsSync(LOCK) ? readFileSync(LOCK, 'utf8') : null;
+const buildLockText = !relock && existsSync(BUILD_LOCK) ? readFileSync(BUILD_LOCK, 'utf8') : null;
+const locksHash = lockText === null || buildLockText === null ? null : createHash('sha256').update(lockText).update('\0').update(buildLockText).digest('hex');
+const pinsHash = createHash('sha256').update(pinsHashInput(PINS, RECIPE, target, locksHash)).digest('hex');
 const force = process.argv.includes('--force');
 const check = process.argv.includes('--check');
 const t0 = Date.now();
@@ -114,11 +133,20 @@ function upToDate() {
 }
 
 const hostKey = `${process.platform}-${process.arch}`;
+if (!relock) {
+  if (lockText === null || buildLockText === null) fail(`the closure lock ${lockText === null ? LOCK : BUILD_LOCK} is absent; pnpm code-intel:lock writes it from the pins`);
+  const lock = parseClosureLock(lockText);
+  if (lock.error) fail(`${lock.error} (${LOCK})`);
+  const buildLock = parseClosureLock(buildLockText);
+  if (buildLock.error) fail(`${buildLock.error} (${BUILD_LOCK})`);
+  const own = lock.entries.find((e) => e.name === PINS.distribution);
+  if (own?.version !== PINS.version) fail(`the closure lock pins ${PINS.distribution} ${own?.version ?? 'not at all'}, pins.json ${PINS.version}; pnpm code-intel:lock rewrites it`);
+}
 if (check) {
   if (upToDate()) { log(`up to date for ${target.key} (${MARKER})`); process.exit(0); }
   fail(`the bundle is absent or stale for ${target.key} at ${TARGET}; run pnpm code-intel:bundle${target.key === defaultTargetKey({ platform: process.platform, arch: process.arch }) ? '' : ` --target=${target.key}`}`);
 }
-if (!force && upToDate()) { log(`up to date for ${target.key} — marker ${MARKER} carries the pins' hash; --force rebuilds`); process.exit(0); }
+if (!force && !relock && upToDate()) { log(`up to date for ${target.key} — marker ${MARKER} carries the pins' hash; --force rebuilds`); process.exit(0); }
 if (process.platform !== 'win32' && process.platform !== 'linux') fail('only Windows and Linux bundles are currently supported');
 
 // ---- uv: the machine's own when its version equals the pin, else the pinned release by hash ---------------------
@@ -161,6 +189,35 @@ function obtainUv() {
 let uv;
 try { uv = obtainUv(); } catch (e) { fail(`uv could not be obtained: ${e.message}. The build fetches; the product never does.`); }
 
+// ---- --lock: the closure, resolved once for every target and committed ------------------------------------------
+if (relock) {
+  mkdirSync(CACHE, { recursive: true });
+  const compile = (requirement, out, extra, header) => {
+    const input = join(CACHE, `${requirement.split('=')[0]}.in`);
+    writeFileSync(input, `${requirement}\n`);
+    log(`uv pip compile ${requirement} --universal --python-version ${PINS.python} --generate-hashes → ${out}`);
+    try {
+      // --universal: one version per distribution for every target, each requirement guarded by its environment marker.
+      run(uv, ['pip', 'compile', input, '--universal', '--python-version', PINS.python, '--generate-hashes', ...extra,
+        '--no-header', '--annotation-style', 'line', '-o', out, '--quiet']);
+    } catch (e) { fail(`the closure could not be resolved: ${e.message}`); }
+    const text = `${header}${readFileSync(out, 'utf8').replace(/\r\n/g, '\n').replace(/-r \S*?([\w-]+\.in)\b/g, '-r $1')}`;
+    writeFileSync(out, text);
+    const lock = parseClosureLock(text);
+    if (lock.error) fail(lock.error);
+    log(`${lock.entries.length} distributions locked in ${out}`);
+  };
+  const by = `# Written by \`pnpm code-intel:lock\` (uv ${PINS.uv.version}, Python ${PINS.python}); bundle.mjs installs exactly this and resolves\n# nothing. A changed version is a change the notices step reviews (REQ-STARTUP-143).\n`;
+  // --only-binary: the lock names wheels, so nothing is built — but for the one distribution that publishes none.
+  compile(`${PINS.distribution}==${PINS.version}`, LOCK, ['--only-binary', ':all:', ...BUILT_FROM_SOURCE.flatMap((d) => ['--no-binary', d])],
+    `# The bundled code-intelligence runtime's closure: ${PINS.distribution}==${PINS.version} and every distribution it needs, for every\n# target, each at one version and by hash.\n${by}`);
+  // What building proxy-tools takes: a bare setup.py, so the PEP 517 fallback's setuptools — pinned too, so the
+  // built wheel's metadata does not move with the day's setuptools.
+  compile('setuptools', BUILD_LOCK, ['--only-binary', ':all:'],
+    `# The build constraints for the closure's distributions built from source (${BUILT_FROM_SOURCE.join(', ')}): the setuptools their\n# setup.py builds with, at one version and by hash.\n${by}`);
+  process.exit(0);
+}
+
 // ---- the interpreter and the distribution ----------------------------------------------------------------------
 const install = join(TARGET, '.python-install');
 try {
@@ -177,10 +234,17 @@ try {
   if (dirs[0] !== pythonKey) throw new Error(`uv installed ${dirs[0]}, not the ${pythonKey} the target ${target.key} asks for`);
   renameSync(join(install, dirs[0]), RUNTIME);
   rmSync(install, { recursive: true, force: true });
-  log(`uv pip install ${PINS.distribution}==${PINS.version} into the interpreter's own site-packages`);
+  log(`uv pip install -r closure.lock (${PINS.distribution}==${PINS.version} and its locked closure) into the interpreter's own site-packages`);
   // No virtual environment: a venv's pyvenv.cfg records the base interpreter's absolute path, which the move into the
   // artifact would falsify; installing into the interpreter itself leaves nothing path-bound in the tree.
-  run(uv, ['pip', 'install', '--python', python(), '--break-system-packages', `${PINS.distribution}==${PINS.version}`], { stdio: ['ignore', 'inherit', 'inherit'] });
+  // The lock, not a resolution: --no-deps installs what it names for this target's markers and nothing else,
+  // --require-hashes refuses any file the lock does not hash, --only-binary refuses to build all but the sdist-only
+  // distributions, whose build backend --build-constraints pins; `uv pip check` then
+  // refuses a closure the lock left incomplete.
+  run(uv, ['pip', 'install', '--python', python(), '--break-system-packages', '--no-deps', '--require-hashes',
+    '--only-binary', ':all:', ...BUILT_FROM_SOURCE.flatMap((d) => ['--no-binary', d]), '--build-constraints', BUILD_LOCK, '--no-cache', '-r', LOCK],
+  { stdio: ['ignore', 'inherit', 'inherit'] });
+  run(uv, ['pip', 'check', '--python', python()], { stdio: ['ignore', 'inherit', 'inherit'] });
 } catch (e) {
   fail(`${e.message}\nThe build fetches the interpreter and the wheels; the product never does. Is the network reachable?`);
 }
@@ -205,7 +269,7 @@ let answers;
 try {
   const env = { PYTHONUTF8: '1' };
   if (process.platform === 'win32') env.SYSTEMROOT = process.env['SYSTEMROOT'] ?? 'C:\\Windows';
-  const r = run(python(), ['-I', '-c', 'import importlib.metadata as m, sys, json; print(json.dumps({"python": sys.version.split()[0], "distribution": m.version("serena-agent"), "executable": sys.executable}))'], { env });
+  const r = run(python(), ['-I', '-c', 'import importlib.metadata as m, sys, json; print(json.dumps({"python": sys.version.split()[0], "distribution": m.version("serena-agent"), "executable": sys.executable, "installed": sorted(d.metadata["Name"] + "==" + d.version for d in m.distributions())}))'], { env });
   answers = JSON.parse(r.stdout.trim());
 } catch (e) {
   fail(`the interpreter under runtime/ does not answer: ${e.message}`);

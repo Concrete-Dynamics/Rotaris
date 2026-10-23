@@ -3,7 +3,7 @@
  * written here as owed until 2026-10-13 and has been built since 2026-09-06, Part T: `setup.ts` and the probe).
  *
  * Protocol behaviour — handshake, negotiation, request correlation, notification dispatch, schema
- * validation — is the official SDK's 2.x line (`@modelcontextprotocol/client` 2.0.0, pinned). Process
+ * validation — is the official SDK's 2.x line (`@modelcontextprotocol/client` 2.3.0, pinned; 2.0.0 until R-081). Process
  * behaviour — who spawns, with which stdio, which environment, hidden window, how it is killed — is ours,
  * through `@rotaris/platform`'s spawn helper (`OwnedStdioTransport`). Three connection paths over that one
  * factory: `ToolDiscovery` (memoised per process by the nine-value identity), `HealthProbe` (never cached),

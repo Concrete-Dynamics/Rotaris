@@ -284,3 +284,27 @@ forwarded at `debug`, and at the default threshold none of it is written; the fi
 ## Windows runner teardown — 2026-10-16 (R-074)
 
 The Windows ARM64 red on MCP scratch cleanup was a product lifecycle defect, not a cleanup retry allowance. A command runner was killed before its server could finish after stdin EOF; closing a session left the server's working directory held. The isolated runner regression failed EBUSY on an immediate directory rename after closeAll. Keeping the runner alive for graceful EOF and using the existing tree kill at the grace bound makes that rename pass. The same reading passes for a server that ignores EOF and must be tree-killed. All 22 MCP tests pass. REQ-MCP-066/067/113 govern unchanged; the earlier terminate-first description remains the POSIX path. See [the fixed note](../../defects/fixed/the-mcp-suites-scratch-directory-is-still-held-when-its-connections-have-closed-on-windows.md).
+
+## The pin moves to 2.3.0 — 2026-10-22 (R-081)
+
+`@modelcontextprotocol/client` is pinned exactly at **2.3.0**, with `@modelcontextprotocol/core` 2.3.0 beneath it, in
+`packages/mcp/package.json` and `apps/desktop/package.json`. 2.0.0 above stays as the version this record's first
+execution measured. The move answers two advisories against 2.0.0 (Dependabot alerts #1, #2, #14, #15, #43, #47;
+[`../dependency-alerts/2026-10-22-dependabot-triage.md`](../dependency-alerts/2026-10-22-dependabot-triage.md)):
+
+- **GHSA-6prh-2h8m-c8cw reached this product.** The SDK's own `http` and `sse` transports, which this record chose,
+  followed a redirect to another origin and sent the request again there, with an entry's configured `headers`.
+  `packages/mcp/src/client.test.ts` shows it: on 2.0.0 a second loopback origin received `x-auth` on the streamable-HTTP
+  POST and the SSE GET, and on 2.3.0 it receives nothing. The transports now refuse a cross-origin redirect. What the
+  product does about that is unspecified, and is raised as [OQ-451](../open-questions.md#oq-451).
+- **GHSA-6qxp-vccf-f47h did not.** It needs an OAuth `authProvider`, and the client factory passes none.
+
+What else moved between 2.0.0 and 2.3.0, as each release's notes state it and as it touches this record: the client
+stops sending `notifications/cancelled` for `initialize`; `listTools()` follows `nextCursor` to the end; transport-managed
+headers (`mcp-protocol-version`, `mcp-session-id`, and `Authorization` when an `authProvider` yields a token) win over the
+same names in `requestInit.headers`; a `server/discover` probe answered with an unusable 2xx reads "the server answered
+with an unusable reply"; and the client needs `eventsource-parser` 3.0.8 or later (3.1.1 is resolved). The package's
+declared licence is now Apache-2.0. The `LICENSE` it ships carries those terms with the MIT text of earlier contributions,
+and Apache-2.0 is compatible with this product's GPL-3.0-only. The negotiation of Spike 3 (`'auto'`, the pre-2026 offered
+list) and the owned stdio transport are untouched: `packages/mcp`'s suites, including `negotiation.test.ts`, pass on
+2.3.0.

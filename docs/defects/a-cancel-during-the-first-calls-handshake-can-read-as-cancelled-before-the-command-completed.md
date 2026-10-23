@@ -22,6 +22,14 @@ run's cancel at 300 ms takes the "after written" branch. The command itself like
 written command and an ended process tree, and the case's own premise (the cancel lands inside the handshake) did not
 hold.
 
+*2026-10-22, later (R-081's two dependency branches, `deps-security-patches` and `deps-electron-44-3`, neither touching
+`agent-tools`' code):* red in four of seven full `pnpm check` runs on Linux (4 CPUs, Node 26.8.1). Each failed 1 case with
+the same assertion ("expected 'Terminal execution was cancelled by t…' to contain 'cancelled by the run before the
+comma…'"), at loads from about 4.9 down to 1.3 at the run's start. It went red alone on untouched `b0d1b3ff` once more
+(1 failed, 116 passed). Two of the three runs that passed this case were red on something else: another case in this file,
+and a wording check the branch then fixed. On the Electron branch, two
+consecutive gates of one unchanged tree were red here, so that branch stopped uncommitted under its brief's one-repeat rule.
+
 ## Specs
 
 `REQ-TOOLS-097` and `REQ-TOOLS-099` with OQ-144's ruling (a cancel that lands before the command is written ends the

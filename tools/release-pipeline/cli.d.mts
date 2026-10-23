@@ -2,6 +2,7 @@
 
 export declare const REPO: string;
 export declare const KEY_RECORD: string;
+export declare const PACKAGED_PORTABLE_DIR: string;
 export declare function runPipelineCommand(
   argv: string[],
   options?: {
@@ -11,5 +12,6 @@ export declare function runPipelineCommand(
     keyRecord?: string;
     repo?: string;
     keys?: readonly string[];
+    portableDir?: string;
   },
 ): 0 | 1 | 2;

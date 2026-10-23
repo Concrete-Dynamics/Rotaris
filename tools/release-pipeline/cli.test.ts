@@ -5,6 +5,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runPipelineCommand } from './cli.mjs';
+// @ts-expect-error — plain ESM beside the scripts that run it.
+import { assemblePortable, TOKEN_SLOT_BYTES, TOKEN_SLOT_MAGIC } from '../../apps/desktop/scripts/lib/portable.mjs';
 import { keyFingerprint, keyRecordRow } from './signing.mjs';
 
 /**
@@ -46,15 +48,32 @@ function release() {
   return assets;
 }
 
+/** A portable assembled the way `pnpm package` assembles one, around a stand-in stub, into `<dir>/packaged/`. */
+async function packagedPortable(version = '0.2.0', entry = 'Rotaris.exe') {
+  const payload = join(dir, 'payload');
+  mkdirSync(join(payload, 'resources'), { recursive: true });
+  writeFileSync(join(payload, entry), 'MZ the application');
+  writeFileSync(join(payload, 'resources', 'app.asar'), 'asar');
+  const stub = join(dir, 'stub');
+  writeFileSync(stub, Buffer.concat([Buffer.from('MZ stand-in stub '), TOKEN_SLOT_MAGIC, Buffer.alloc(TOKEN_SLOT_BYTES - TOKEN_SLOT_MAGIC.length)]));
+  const packaged = join(dir, 'packaged');
+  mkdirSync(packaged, { recursive: true });
+  await assemblePortable({ stub, tree: payload, entry, version, out: join(packaged, `Rotaris-${version}-windows-x64-portable.exe`) });
+  return packaged;
+}
+
 describe('the stages in the workflow\'s order', () => {
-  it('preflight → portable → manifest → sign → verify, end to end with a generated key', () => {
+  it('preflight → portable → manifest → sign → verify, end to end with a generated key', async () => {
     const key = pair();
     const keys = [key.publicPem];
     const fp = keyFingerprint(key.publicPem);
     const keyRecord = recordFile([{ version: '0.1.0', keys: [fp] }, { version: '0.2.0', keys: [fp] }]);
     const assets = release();
+    rmSync(join(assets, PORTABLE));
+    const portableDir = await packagedPortable();
     expect(run(['preflight', 'v0.2.0'], { keyRecord, keys })).toBe(0);
-    expect(run(['portable', assets, 'v0.2.0'])).toBe(0);
+    expect(run(['portable', assets, 'v0.2.0'], { portableDir })).toBe(0);
+    expect(readFileSync(join(assets, PORTABLE)).equals(readFileSync(join(portableDir, PORTABLE)))).toBe(true);
     expect(run(['manifest', assets, 'v0.2.0'])).toBe(0);
     expect(run(['sign', assets], { env: { ROTARIS_RELEASE_SIGNING_KEY: key.privatePem } })).toBe(0);
     expect(readFileSync(join(assets, 'SHA256SUMS.txt.sig')).byteLength).toBe(64);
@@ -87,11 +106,25 @@ describe('each stage refuses on its own', () => {
     expect(lines.err).toEqual(['error: "v0.2.0-rc1" is not a release tag: expected v<major>.<minor>.<patch>, optionally followed by a prerelease suffix a<N>, b<N> or rc<N> (for example v1.2.3 or v1.2.3rc1).']);
   });
 
-  it('portable refuses while the launcher stub is not built (§4.5)', () => {
+  it('portable refuses when pnpm package assembled none (§4.5)', () => {
     const assets = release();
     rmSync(join(assets, PORTABLE));
+    expect(run(['portable', assets, 'v0.2.0'], { portableDir: join(dir, 'nowhere') })).toBe(1);
+    expect(lines.err[0]).toMatch(/is not in .* and `pnpm package` assembled none at .*Rotaris-0\.2\.0-windows-x64-portable\.exe \(ADR-0054 P4/);
+  });
+
+  it('portable refuses a file by the portable\'s name that is not an assembled portable, and one of another version', async () => {
+    const assets = release();
     expect(run(['portable', assets, 'v0.2.0'])).toBe(1);
-    expect(lines.err[0]).toMatch(/launcher stub \(ADR-0054 P4, first-release-plan\.md §4\.5\) is not built/);
+    expect(lines.err[0]).toMatch(/is not an assembled portable: .*no portable footer/);
+    rmSync(join(assets, PORTABLE));
+    const other = await packagedPortable('0.1.9');
+    const renamed = join(dir, 'renamed');
+    mkdirSync(renamed);
+    writeFileSync(join(renamed, PORTABLE), readFileSync(join(other, 'Rotaris-0.1.9-windows-x64-portable.exe')));
+    expect(run(['portable', assets, 'v0.2.0'], { portableDir: renamed })).toBe(1);
+    expect(lines.err[1]).toMatch(/carries 0\.1\.9-[0-9a-f]{16} with entry point Rotaris\.exe; the release of 0\.2\.0 needs/);
+    expect(existsSync(join(assets, PORTABLE))).toBe(false);
   });
 
   it('sign refuses without the secret, naming O-2, and writes nothing', () => {

@@ -1,5 +1,17 @@
 ## The Windows installer is one-click, with no pages and no directory choice
 
+**Repaired 2026-10-23** (the packaging brief of that day; ADR-0054, "The portable, the assisted installer and the icon").
+`nsis.oneClick: false` with `allowToChangeInstallationDirectory: true`, and the project include
+`apps/desktop/resources/installer.nsh` (`nsis.include`): the install-mode page forced to the current user (no elevation),
+a Welcome page before the Directory page, the abort warning, `%LOCALAPPDATA%\Rotaris` as the default where no earlier
+installation is remembered, and REQ-STARTUP-016's `HKCU\Software\Rotaris\InstallDir` written beside electron-builder's own
+`InstallLocation` (the include says why both exist). **Measured:** the installer configuration and the uninstaller
+configuration both compile under makensis with warnings as errors (a local build on Linux, the uninstaller extracted
+without wine). **Not measured:** an interactive or silent install on Windows, the pages as drawn, the registry values as
+written, `/S` and `/D=` — REQ-STARTUP-156's gate on O-6's machine, as this note said. REQ-STARTUP-018's details are a
+separate note (`../the-installer-names-its-uninstall-entry-and-uninstaller-and-shortcuts-otherwise-than-req-startup-018.md`).
+
+
 Noticed during R-079's smoke check of the CI installer (2026-10-21), from the configuration and from an earlier install on
 the owner's machine; **this build's installer was not run** (the smoke check extracted its payload instead, to leave that
 install untouched).

@@ -79,6 +79,21 @@ prevents the download. `pnpm updater-proof` holds the built application to zero 
 to first paint and an orderly quit — that interval is measured; later in a session is not. Whether a text field is
 spell-checked at all is OQ-93.
 
+**Before main, on the portable alone: the launcher stub (ADR-0054 P4, REQ-STARTUP-165; 2026-10-23).** The Windows
+portable is `apps/desktop/launcher`'s stub with the `win-unpacked` tree appended, so its launch is one process more than
+an installed launch, and that process runs before any of ours exists. It reads nothing but its own identity token, the
+per-user data directory and the marker of `<data>\prepared\<token>\` — `%LOCALAPPDATA%\rotaris\data\prepared\` on
+Windows, never the roaming profile and never beside the artifact — and on any doubt places the payload there again
+(`.incomplete-…`, committed by displacing a damaged tree to `.stale-…` and renaming). It then starts
+`<token>\Rotaris.exe` with every argument it was given and `ROTARIS_PORTABLE_ARTIFACT` naming the artifact, removes
+preparations of other tokens that nothing runs from, and **exits**: main is no child of a process that waits, and nothing
+holds the artifact, so REQ-STARTUP-125's rename-aside works while the application runs. Where no preparation can be made,
+the stub places the payload for that run (`<data>\prepared\.run-…`, else the temporary directory), records
+`outcome run-scoped` and the root in that tree's marker, waits for the application and removes the tree — the one case it
+stays. The application does not yet read that marker
+(`../../defects/a-portable-that-could-make-no-preparation-starts-without-the-notice-req-startup-165-c-requires.md`). Off
+Windows the stub (`pnpm portable-proof`) waits for the application in every case and returns its status.
+
 ## What each process owns
 
 | Process | Owns | Never does |

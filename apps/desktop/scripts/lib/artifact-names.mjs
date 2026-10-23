@@ -48,6 +48,14 @@ export function packagingArtifactNames(version) {
 }
 
 /**
+ * The portable's name (REQ-STARTUP-031), from the same declared text. electron-builder never produces it: `pnpm package`
+ * assembles it around the launcher stub (`lib/portable.mjs`, ADR-0054 P4) under this name.
+ */
+export function portableArtifactName(version) {
+  return artifactName(parseReleaseVersion(version).version, 'portable');
+}
+
+/**
  * Every configuration key electron-builder reads an installer's `artifactName` from on this configuration: the
  * platform's (`win`) and the target's (`nsis`; the target's wins when both are set, so both are set to the one name).
  */

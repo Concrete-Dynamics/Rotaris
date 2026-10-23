@@ -647,6 +647,17 @@ the first release. Its name is `artifactName(declared, 'portable')` from the sam
 unknown in this plan, so its spike is taken as the first act of building it (CLAUDE.md), and the result goes
 back into ADR-0054. Dropping the portable would need a further directive. This plan does not propose one.
 
+> **First execution, 2026-10-23 — built under the owner's packaging brief of that day; executed on Linux, the Windows
+> artifact owed to the CI run.** Reported in ADR-0054 ("The portable, the assisted installer and the icon") and in
+> `first-executions.md`. The stub is `apps/desktop/launcher/` (Rust, no crate); `pnpm package` builds it with Cargo,
+> assembles `release/portable/Rotaris-{v}-windows-x64-portable.exe` around `win-unpacked` (`scripts/lib/portable.mjs`), and
+> launches it twice (step 3′); the pipeline's `portable` stage reads it back and copies it into the release directory
+> instead of refusing. `pnpm portable-proof` drives every preparation outcome on a POSIX host. Both obligations §4.6 left
+> the stub are met: it publishes `ROTARIS_PORTABLE_ARTIFACT` and forwards its arguments. **Owed:** the application's
+> notice for a run that could make no preparation (REQ-STARTUP-165 (c); a defect note); OQ-452, OQ-453, OQ-454; the
+> gate's two runs on O-6's machine. The packaging host now needs a Rust toolchain (`cargo`), which the hosted Windows
+> runner carries.
+
 **4.6 The updater.** The updater is the one part of this plan the owner did not name. A release that carries no
 updater can never update itself: each of its users would have to download every later release by hand. The key
 record of REQ-STARTUP-168 (b) starts with whichever build first carries a key. *Recommended: build it into the
@@ -786,6 +797,11 @@ on its own and the three changelog forms against a fixture repository.
 **4.9 The icon.** The owner supplies it (§6). `apps/desktop/resources/` is created for it, and
 `electron-builder.yml` names it.
 
+*Built 2026-10-23: the owner supplied `icon.ico` (seven images, 16–256 px, 32-bit), committed as
+`apps/desktop/resources/icon.ico` and named by `win.icon`; the stub links it too. `pnpm package` reads every image back out
+of the installer, the packaged executable and the portable, byte for byte, and fails otherwise (ADR-0054, "The portable,
+the assisted installer and the icon"). O-4 is discharged.*
+
 ## 5. The release gate
 
 This is REQ-STARTUP-156 narrowed to one key. Each check is recorded as pass, fail, or "not performed". A check
@@ -826,6 +842,8 @@ cannot be the gate.
 | O-2 | Generate the manifest signing key pair and store the private half as a repository secret. The public half is committed. **Where and how (2026-09-28, §4.6's first execution):** the pair is Ed25519 (`openssl genpkey -algorithm ed25519 -out release-signing.pem`); the public half (`openssl pkey -in release-signing.pem -pubout`) is written as one element of `RELEASE_SIGNING_KEYS` in `apps/desktop/src/main/updater/keys.ts`, the SPKI PEM block verbatim, `-----BEGIN PUBLIC KEY-----` to `-----END PUBLIC KEY-----`; the pipeline signs `SHA256SUMS.txt`'s exact bytes with `openssl pkeyutl -sign -inkey release-signing.pem -rawin -in SHA256SUMS.txt -out SHA256SUMS.txt.sig` (a raw 64-byte signature). Until the element exists every install refuses at the signature step and downloads nothing. **Step by step since the pipeline exists (2026-10-22, [R-080](../product/requests.md#r-080)): §6.1** — the pipeline now signs the manifest itself from a secret of the `release` environment, so the `openssl pkeyutl` line above describes the bytes it makes rather than a command the owner runs | §4.6, §4.7 |
 | O-3 | Give the literal contact address for the LGPL source request (REQ-STARTUP-142). It must be a single address, reachable without an account and monitored by the maintainers. **Written in `tools/notices/release-inputs.json`, key `lgplCorrespondingSourcesAddress`**, in one of the two shapes §4.3 states; validation fails naming that key until it is. *Given 2026-10-23 on the owner's delegation: `davidvfischer+rotaris-lgpl@gmail.com`; the check passes it (`notices.test.ts`)* | §4.3 |
 | O-4 | Supply an icon, with the `.ico` sizes `electron-builder` asks for | §4.9 |
+| O-3 | Give the literal contact address for the LGPL source request (REQ-STARTUP-142). It must be a single address, reachable without an account and monitored by the maintainers. **Written in `tools/notices/release-inputs.json`, key `lgplCorrespondingSourcesAddress`**, in one of the two shapes §4.3 states; validation fails naming that key until it is | §4.3 |
+| O-4 | ~~Supply an icon, with the `.ico` sizes `electron-builder` asks for~~ **supplied 2026-10-23**: `apps/desktop/resources/icon.ico`, seven sizes 16–256 px (§4.9) | §4.9 |
 | O-5 | ~~Choose where releases are published~~ **ruled 2026-09-27** (R-053): GitHub releases of `theUpsider/Rotaris-crw`, the product repository REQ-STARTUP-038 names. **Re-ruled 2026-10-21** ([R-078](../product/requests.md#r-078)): GitHub releases of `Concrete-Dynamics/Rotaris`, which is this repository from that day, transferred and renamed and public on `main`. R-078 supersedes R-053's choice, which is kept above as what was ruled; `FEED_REPOSITORY` names the new repository | §4.2 |
 | O-6 | Provide the gate machine of §5. **Form ruled 2026-09-27** (R-053): a snapshot-restored Windows x64 virtual machine, restored between releases. The owner still provides it | §5 |
 | O-7 | IC-4 half 2: rename the machine and reboot (`ROTARIS_IC4_PHASE=prepare`, then `verify`) | the restore's sign-off |
@@ -836,7 +854,7 @@ cannot be the gate.
 | O-12 | **Make the release feed reachable** (recorded 2026-10-13, deferred under R-071 with the release pipeline). O-5 chose GitHub releases of `theUpsider/Rotaris-crw`, and `apps/desktop/src/main/updater/feed.ts` asks `https://api.github.com/repos/theUpsider/Rotaris-crw/releases/latest` without credentials; the repository is **private** (checked 2026-10-13: `private: true`, 0 releases, and that request answers HTTP 404). An installed build's check would fail silently, as REQ-STARTUP-110 says a 404 must (an internal log line, never an offer), and REQ-STARTUP-038's artifacts could not be downloaded from it. The owner's choice: **(a)** make this repository public before the first release, after an audit of its history and branches for anything not meant to be public; or **(b)** publish releases to a separate public repository, which needs a new request, a revision of O-5 and a change of `FEED_REPOSITORY`, the one place REQ-STARTUP-111 lets it be written. Either way the product states itself GPL-3.0-only (REQ-SHELL-140, REQ-SHELL-142), so whoever receives a published binary is owed its corresponding source; (a) offers it by the same act, (b) has to offer it beside the release. Nothing works on this path before O-2 either: with no signing key every install refuses at the signature step. **Chosen 2026-10-21** ([R-078](../product/requests.md#r-078)): **(a)** — this repository is transferred to `Concrete-Dynamics` and renamed `Rotaris`, public on `main`, and `FEED_REPOSITORY` names `Concrete-Dynamics/Rotaris` (O-5 re-ruled). The 2026-10-13 facts above were read against `theUpsider/Rotaris-crw` and are kept as they were read. R-078 cuts no release: until one is published the latest-release request still answers 404, and O-2 still binds. The audit of history and branches that (a) names is not recorded by R-078 | §4.2, §4.6, the first release |
 
 O-2, O-3, O-4, O-7 and O-8 carry no recommendation to take: each is a value or an act only the owner can
-supply, and each stays owed (R-053). O-11 is the same kind of item: a review only a maintainer may sign. O-12 is a
+supply, and each stays owed (R-053). *(O-4 was supplied on 2026-10-23, §4.9.)* O-11 is the same kind of item: a review only a maintainer may sign. O-12 is a
 choice only the owner can make about their own repository, and it un-defers with the first release.
 
 ### 6.1 O-2, step by step

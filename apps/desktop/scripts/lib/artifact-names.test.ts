@@ -107,7 +107,10 @@ describe('what electron-builder is handed — the written configuration through 
     expect(config.beforeBuild).toBe('./scripts/build-hooks.cjs');
     expect(config.publish).toBeNull();
     expect(config.win.target).toEqual([{ target: 'nsis', arch: ['x64'] }]);
-    expect(config.nsis).toMatchObject({ oneClick: true, perMachine: false });
+    // REQ-STARTUP-016/017: the assisted per-user installer, its directory the user's to choose, with the project include
+    // that writes REQ-STARTUP-016's InstallDir; the icon the owner supplied (O-4).
+    expect(config.nsis).toMatchObject({ oneClick: false, perMachine: false, allowToChangeInstallationDirectory: true, include: 'resources/installer.nsh' });
+    expect(config.win.icon).toBe('resources/icon.ico');
     const source = yaml.load(YML);
     expect(config.extraResources).toHaveLength(source.extraResources.length);
     expect(config.files[0].filter).toEqual(source.files);

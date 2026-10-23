@@ -88,3 +88,5 @@ apps/desktop/.cache/
 rtk/
 .workspace-proof/
 .rotaris/
+# ADR-0054 P4 (first-release-plan.md §4.5): the portable launcher's Cargo build output.
+apps/desktop/launcher/target/

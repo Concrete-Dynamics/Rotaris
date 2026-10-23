@@ -1,4 +1,6 @@
 {
   "schemaVersion": 1,
-  "releases": []
+  "releases": [
+    {"version":"0.1.0rc1","keys":["sha256:e0f3d7e80e046a5d3aad59ecbc6feda255fc65e841be21237f500e0d117d1d07"]}
+  ]
 }

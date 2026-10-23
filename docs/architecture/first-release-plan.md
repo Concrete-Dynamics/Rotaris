@@ -683,7 +683,9 @@ so that the next release can add the updater without stranding anyone.
 > **The key set is empty.** `RELEASE_SIGNING_KEYS` in `apps/desktop/src/main/updater/keys.ts` ships with no member
 > because O-2 is owed. On this tree every install refuses at the signature step with one sentence saying the build
 > carries no verification key, and nothing is downloaded — the mechanism whole, its trust anchor absent. **O-2 writes
-> the public half there, as an SPKI PEM block** (§6). The signature is Ed25519, raw, over the manifest's exact bytes;
+> the public half there, as an SPKI PEM block** (§6). *Written 2026-10-23 ([R-082](../product/requests.md#r-082)): the set
+> carries one key, `sha256:e0f3d7e80e046a5d3aad59ecbc6feda255fc65e841be21237f500e0d117d1d07`; an injected empty set is still refused `no-key`, as a withdrawal
+> of every key would leave it (`keys.test.ts`, `install.test.ts`).* The signature is Ed25519, raw, over the manifest's exact bytes;
 > §4.7's pipeline signs with `openssl pkeyutl -sign -rawin` or its equivalent, and OQ-83 asks whether the record
 > should fix that form.
 >
@@ -763,6 +765,8 @@ so that the next release can add the updater without stranding anyone.
   refused by `runInstall` at the signature with nothing downloaded.
 - **The key record** is `tools/release-pipeline/key-record.json`, schema version 1: one row per release, its version and
   the `sha256:` fingerprints (of the SPKI DER) of the keys its build carries. Empty, because no build has carried a key.
+  *Since 2026-10-23 ([R-082](../product/requests.md#r-082)) it holds one row, `0.1.0rc1` carrying `sha256:e0f3d7e80e046a5d3aad59ecbc6feda255fc65e841be21237f500e0d117d1d07`,
+  printed by `pnpm release:pipeline keys`; `pnpm release:pipeline preflight v0.1.0rc1` passes against it.*
   `preflight` holds the release's own row equal to what its build carries; `verify` holds the signing key in every
   **older** recorded row, every one of which REQ-STARTUP-107 may offer this release to (the reading: older in
   REQ-STARTUP-109's order, prereleases included, so a row for a tag never published can only make it stricter).
@@ -862,11 +866,15 @@ none was made by the build: every step below is the owner's. Steps 1 to 4 happen
 4. **Check before the first tag.** `pnpm release:pipeline keys` prints the row the next step commits. Its `sha256:`
    fingerprint is the SHA-256 of the key's SPKI DER, so `openssl pkey -in release-signing.pem -pubout -outform DER |
    sha256sum` must print the same hexadecimal digits.
+   *Steps 2 and 4 taken 2026-10-23 ([R-082](../product/requests.md#r-082)): the owner supplied the public half; its SPKI
+   DER fingerprint is `sha256:e0f3d7e80e046a5d3aad59ecbc6feda255fc65e841be21237f500e0d117d1d07`, and `pnpm release:pipeline keys` printed the same.*
 5. **With every release, before its tag.** Set the version in `apps/desktop/package.json` to the tag's text (for example
    `0.1.0rc1` for `v0.1.0rc1`). Append the row `pnpm release:pipeline keys` prints to `releases` in
    `tools/release-pipeline/key-record.json`. Land both on `main`, then push the tag. `preflight` refuses a build whose
    row is missing or differs from what it carries. `verify` refuses a signing key that any older recorded release does
    not carry (REQ-STARTUP-168 (b)).
+   *Taken for `0.1.0rc1` on 2026-10-23 ([R-082](../product/requests.md#r-082)): version and row on a branch, put up as a
+   pull request; landing it and pushing the tag stay the owner's acts.*
 
 **Rotating and withdrawing** follow REQ-STARTUP-168 and change nothing above. To rotate, add the incoming public key
 beside the outgoing one in `RELEASE_SIGNING_KEYS` and keep signing with the outgoing key until every recorded release
@@ -898,7 +906,9 @@ To withdraw a compromised key, remove it from the set and from the secret, so th
 4. ~~**The updater (§4.6)** if O-10 includes it~~ **built 2026-09-28** (§4.6's first-execution note; its apply and
    restart steps owed a real Windows artifact), then the manifest and signature (§4.7) against O-2's key.
    *The manifest, the signature step, the verification hook and the key record built 2026-10-22 (R-080; §4.7); O-2's key
-   is still owed (§6.1).*
+   is still owed (§6.1).* *2026-10-23 ([R-082](../product/requests.md#r-082)): O-2's public half is in the build and its
+   row in the key record, for `0.1.0rc1` (§6.1 steps 2, 4 and 5); the `release` environment's secret (step 3) is the
+   owner's and is not read or checked from the repository.*
 5. **Assembly.** The release body (§4.8), the icon (§4.9) and the tag workflow (§4.2), run end to end against a
    prerelease tag (for example `v0.1.0rc1`) as a draft.
    *The release body and the tag workflow built 2026-10-22 (R-080; §4.2, §4.8). Their end-to-end run against a prerelease tag

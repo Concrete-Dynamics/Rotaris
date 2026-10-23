@@ -20,6 +20,10 @@ Last reconciled with the code: **2026-10-23**
 notices section names the table's identifier entries and its `licenseText` and `embedded` parts, and the licence texts
 `tools/notices/licenses/` now holds for them. The tool reads one input more — the vendored licence file inside an installed
 package an entry names — and still writes one file. No package, edge, process, message, channel or ownership changed.
+**The compiled-in key set carries O-2's public half (R-082; first-release-plan.md §6.1; 2026-10-23).**
+`05-state-ownership.md`'s key-set row reads "one key since 2026-10-23" where it read "empty until O-2". The fact's owner,
+its writer and its reader are unchanged: the build alone writes it, main reads it at every install. No package, edge,
+process, message, channel or ownership changed.
 
 **Dependency patches for 47 Dependabot alerts (R-081; 2026-10-22).** `01-component-view.md`'s `mcp` section and its `ajv`
 paragraph name `@modelcontextprotocol/client` 2.3.0, pinned in place of 2.0.0. The SDK's `http` and `sse` transports now refuse

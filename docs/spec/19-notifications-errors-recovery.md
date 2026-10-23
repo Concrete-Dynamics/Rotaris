@@ -162,6 +162,9 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 ### A9. What a notice can offer the user
 
 **REQ-NOTIFY-044** — A notice action comes from a fixed vocabulary, and activating one produces the stated result: focus a named session; open the project-initialization surface for a named workspace; install a pending update; open a named view; open settings at a named category; open the hosted-cloud account surface; open the library at a named tab; open the hook review for a named workspace, which REQ-NOTIFY-224's unreviewed-hooks notice offers; start the guided provider setup of REQ-WORKSPACE-152, at its catalog step or, where the action names a provider, at the authentication step for that provider; restart after an update has been installed; retry the failed run under REQ-NOTIFY-045; revert a recorded proposal review decision; save settings. No action in this vocabulary writes into the user's project: the project action navigates only, and initialization itself is started from the surface it opens, per REQ-NOTIFY-047; the hook-review action opens the review and allows nothing, the decision being taken in the review dialog of REQ-HOOKS-106; and the provider-setup action opens a flow that acts on the application's own credential store and on nothing in the project. The named view is one of the primary views fixed by REQ-SHELL-023, the named settings category is one of the identifiers fixed by REQ-CONFIG-269, the named library tab is one of the tab names fixed by REQ-LIBRARY-103, and the named provider is one the runtime provider catalog of REQ-NOTIFY-210 declares; this document adds no view, category or tab of its own, and an action naming a value outside the owning domain's vocabulary is not dispatched. An action concerning a particular object — a session, a workspace, a settings category, a library tab, a provider, a proposal decision — carries that object's identity, and activating it acts on that object without asking the user anything further. *Amended 2026-09-06 under ESC-34: the vocabulary named eleven actions and could express neither the review the notice of REQ-NOTIFY-224 must offer nor the guided setup the first-launch notice of REQ-WORKSPACE-152 (3) must start — the nearest member, opening settings at a category, reaches the surface beside each and not the surface itself, and REQ-WORKSPACE-152 draws that distinction deliberately between its clause (2), which leads to Settings, and its clause (3), which starts the flow. The notice pipeline's first execution (ADR-0049, Part V) built both actions and found the list closed against them. Ruled on the precedent of resolution 12, where this vocabulary was corrected to match REQ-NOTIFY-047 rather than the other way round: the enumeration had fallen behind the behaviour. Neither member weakens the closed property above.*
+
+> **Narrowed by [`PD-STARTUP-008`](../product/directives.md#pd-startup-008), 2026-10-22.** The vocabulary gains one action: cancel the running update download
+> (REQ-STARTUP-170). No other action is added, and the closed property and every other clause still govern.
   > **Extended by [`PD-SHELL-001`](../product/directives.md#pd-shell-001) revision 2, 2026-10-13.** An action naming a
   > workspace surfaces the main window holding it, else adds one for it on PD-SHELL-001's add terms (no gate, nothing
   > asked, nothing closed), and opens its surface there.
@@ -636,6 +639,10 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-215** — Where a newer version is found, a non-blocking persistent info notice offers it once the main window is visible, naming the version, carrying the release summary or, where none exists, directing the user to the full release notes, and offering an action that installs it.
 
+> **Narrowed by [`PD-STARTUP-008`](../product/directives.md#pd-startup-008), 2026-10-22.** On a build that downloads in the background (REQ-STARTUP-169) the
+> notice for a newer version is the download's notice, and it offers no install action before the download. The
+> non-blocking persistent offer, its version and its summary still govern where an offer is shown.
+
 **REQ-NOTIFY-216** — Closing the update notice without choosing is itself the answer that the user is to be reminded at the next launch. The dismissed version is persisted, and only that version is suppressed; a newer version is offered again.
 
 **REQ-NOTIFY-217** — The update notice's identifier is retained, so dismissing an unrelated notice never records a dismissed version. The dismissed version is recorded before the notice is cleared.
@@ -649,6 +656,10 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 **REQ-NOTIFY-221** — A failed update publishes a persistent error notice stating that the update was not installed, that the application is unchanged, and that the user can try again or download the release manually, with copyable detail and a retry action.
 
 **REQ-NOTIFY-222** — A completed update publishes a persistent success notice. Where the application can restart itself, that notice offers a restart action. Where an external installer must take over, the notice states instead that the installer will finish the update, and the window closes on its own 1200 ms after the notice appears, with no user action. Where a restart the user asked for does not happen, the failure notice of REQ-NOTIFY-221 is published in its place.
+
+> **Narrowed by [`PD-STARTUP-008`](../product/directives.md#pd-startup-008), 2026-10-22.** Where an external installer must take over, the downloaded update
+> publishes REQ-STARTUP-174's persistent notice with the restart action, and the window does not close on its own; the
+> installer runs at the next start or when the user restarts. The in-place case and the failed-restart case still govern.
 
 ### G2. Window chrome and attention state
 

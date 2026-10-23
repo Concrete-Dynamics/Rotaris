@@ -27,10 +27,18 @@ What this build's installer writes in the registry (REQ-STARTUP-016's `HKCU\Soft
 uninstall entry and Start Menu folder) and whether it honours `/S` and `/D=` as REQ-STARTUP-017 states was not measured;
 the installer's own run is REQ-STARTUP-156's gate, on O-6's machine.
 
+**What it does to the updater (added 2026-10-22, read while planning R-084; read again 2026-10-23).** The updater
+classifies a packaged Windows build as installed only when `HKCU\Software\Rotaris\InstallDir` exists and contains the artifact
+(REQ-STARTUP-106, `classify.ts`). Until the repair above nothing wrote that value, so every build this installer installed
+classified itself not updatable (`PD-STARTUP-004`) and never checked for an update. The assisted installer now writes it from
+`apps/desktop/resources/installer.nsh`; no install has read the value back, so that half is configuration and not measurement.
+The plan's PR-1a (`docs/architecture/background-update-plan.md` §5) reads it back.
+
 ## Specs
 
 - REQ-STARTUP-016: "default install location `%LOCALAPPDATA%\Rotaris`, with the chosen directory remembered" under
   `HKCU\Software\Rotaris` — the one-click installer's default is `%LOCALAPPDATA%\Programs\…`, and nothing is chosen.
+- REQ-STARTUP-106: the installed classification reads `InstallDir`, which this installer wrote nothing of before the 2026-10-23 repair and which no install has yet read back.
 - REQ-STARTUP-017: "Interactive installation SHALL flow Welcome → Directory → Install → Finish, warn on abort, and offer a
   checked-by-default "Launch Rotaris" checkbox" — a one-click installer has none of those pages.
 

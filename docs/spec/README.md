@@ -17,13 +17,17 @@ how any other implementation achieves it.
 - Behavioral target: `ROTARIS-CRW-001` (see [`../clean-room/reference-record.md`](../clean-room/reference-record.md))
 - Status: **draft — gate decisions recorded, awaiting the sufficiency statement**
 - Open questions: resolved per domain; decisions recorded in [`resolutions/`](resolutions/)
-- Requirements: **3,956** identifiers across the 19 shipping domains, of which **258** are withdrawn
-  in place, leaving **3,698** that carry live behavior. The two retired domains (17 and 18) hold a
+- Requirements: **3,969** identifiers across the 19 shipping domains, of which **258** are withdrawn
+  in place, leaving **3,711** that carry live behavior. The two retired domains (17 and 18) hold a
   further **444** identifiers, **10** of them withdrawn in place; those are counted separately and
-  are not part of the shipping total — **4,400** identifiers in all, **268** of them withdrawn.
+  are not part of the shipping total — **4,413** identifiers in all, **268** of them withdrawn.
   *(Corrected 2026-10-13: this read 3,954, 3,696 and 4,398, with REQ-TOOLS at 192 and REQ-MCP at 117 below. REQ-MCP-118
   of the code-intelligence round and REQ-TOOLS-193 of the OQ-61 round were minted and never counted;
   `tools/symbol-artifact/spec-readme-counts.test.ts` now holds every figure here to the generated artifact.)*
+  *(2026-10-22: 3,956, 3,698 and 4,400 became 3,969, 3,711 and 4,413 when REQ-STARTUP-169 to REQ-STARTUP-181 were minted
+  at the owner's explicit ask under [R-084](../product/requests.md#r-084). Unlike every other identifier counted here they
+  are **decided, not derived**, and say so at their heading; `PD-STARTUP-008` carries what they displace. The amendment is
+  in [`resolutions/11-startup-distribution-updates.md`](resolutions/11-startup-distribution-updates.md).)*
   Every figure here counts identifiers, not behaviors: an identifier is never removed, so a
   withdrawn requirement keeps its number and keeps being counted. A total that rose while behavior
   was being removed rose because resolution minted new identifiers to carry rescued capabilities,
@@ -140,7 +144,7 @@ never renumbered or reused. A changed requirement gets a new revision, not a new
 | 08 | [Requirements Board and Traceability](08-requirements-traceability.md) | `REQ-TRACE` | 515 | 16 | core |
 | 09 | [User-Defined Lifecycle Hook Commands](09-lifecycle-hooks.md) | `REQ-HOOKS` | 139 | 1 | core |
 | 10 | [Command Sandboxing and Network Egress Policy](10-sandbox-network-egress.md) | `REQ-SANDBOX` | 130 | 1 | core |
-| 11 | [Application Startup, Distribution, and Updates](11-startup-distribution-updates.md) | `REQ-STARTUP` | 168 | 11 | secondary |
+| 11 | [Application Startup, Distribution, and Updates](11-startup-distribution-updates.md) | `REQ-STARTUP` | 181 | 11 | secondary |
 | 12 | [Desktop Shell, Navigation, and Window Management](12-desktop-shell-windows.md) | `REQ-SHELL` | 169 | 4 | secondary |
 | 13 | [Workspace Handling, Context Injection, and Project Onboarding](13-workspace-context-onboarding.md) | `REQ-WORKSPACE` | 153 | 17 | secondary |
 | 14 | [Library, Artifacts, and Improvement Proposals](14-library-artifacts-improvements.md) | `REQ-LIBRARY` | 176 | 14 | secondary |

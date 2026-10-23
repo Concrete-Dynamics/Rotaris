@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Ninety-eight.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Ninety-nine.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -5729,13 +5729,25 @@ real one.
 
 ### PD-SHELL-005 — while an update downloads, its notice carries Distribution's words
 
+*Revision 2 (2026-10-22, [R-084](requests.md#r-084)) — **the download notice cancels, and a verified download waits for the
+next start or `Restart now`**: the action and the apply sentences are replaced, and `REQ-SHELL-115` joins the Narrows list
+for the one action it gains. `PD-STARTUP-008` carries the rest of the request.*
+
 While the download of an update runs, the update notice SHALL keep its identity and be updated in place, never replaced,
 as REQ-SHELL-118 states, and SHALL carry REQ-STARTUP-118's words: the title `Downloading Rotaris {version}` and the
 message `{measured} — verifying against the published checksum when it finishes.` It SHALL NOT be persistent while the
 download runs, so no dismissal can wave off a version whose install is in flight, and its action SHALL be disabled with an
-accessible description stating why. The apply SHALL follow the verified download in one sequence (REQ-STARTUP-122), with no
-second activation of the action, so a "ready to install" state stands only for the length of the apply. A failure SHALL
-turn the same notice into REQ-STARTUP-120's `Update not installed`, in place. The notice that offers the update before the
+accessible description stating why — revision 2: the action SHALL instead cancel the download, enabled for the whole of the
+transfer and the verification (REQ-STARTUP-170). A verified download SHALL NOT lead into the apply: the same notice SHALL
+become REQ-STARTUP-174's persistent ready notice with `Restart now` — revision 2 — and the apply follows at the next start or
+at `Restart now` (`PD-STARTUP-008`). `REQ-SHELL-115`'s closed list gains that one action, cancel the running update download,
+and no other — revision 2.
+
+> **Revision 1 said, and no longer governs:** "and its action SHALL be disabled with an accessible description stating why.
+> The apply SHALL follow the verified download in one sequence (REQ-STARTUP-122), with no second activation of the action,
+> so a "ready to install" state stands only for the length of the apply."
+
+A failure SHALL turn the same notice into REQ-STARTUP-120's `Update not installed`, in place. The notice that offers the update before the
 download — its title `Rotaris {version} is available`, its persistence and its `Update now` — and REQ-SHELL-118's
 waved-off rule are unchanged.
 
@@ -5748,9 +5760,14 @@ words from the one and the identity from the other, and ran the apply on from th
 has it. The owner confirmed that reading. What it costs: no second click before the install, and REQ-SHELL-118's
 percentage-only message gives way to Distribution's sentence.
 
-> **Narrows:** REQ-SHELL-118
+**Why revision 2, and what it costs.** R-084: the download starts by itself, so the one action left on its notice is
+the one that stops it, and the apply waits for the next start or the user's restart. What it costs: one more member of a
+closed action list.
 
-*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-85.*
+> **Narrows:** REQ-SHELL-118, REQ-SHELL-115
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-85. Revision 2 raised by the owner,
+2026-10-22; logged as [R-084](requests.md#r-084).*
 
 ---
 
@@ -6066,6 +6083,74 @@ as the entry stands; and a licence the validation cannot check stays blocked unt
 
 *Decided 2026-10-23 by the owner's delegate (Augustus), on David Fischer's delegation; logged as
 [R-083](requests.md#r-083), the ruling of [OQ-74](../architecture/open-questions.md).*
+
+---
+
+<a id="pd-startup-008"></a>
+
+### PD-STARTUP-008 — an update downloads by itself and takes effect at the next start or by `Restart now`
+
+**The directive.** On a supported standalone build, an update the release feed offers SHALL be downloaded in the background
+with no click, shown with its progress and a cancel action, verified, kept as the pending update, verified again from the
+retained bytes, and applied at the next start or when the user chooses `Restart now` — never by a restart, a close, an
+installer or a modal the product starts on its own while it runs, and never at quit. REQ-STARTUP-169 to REQ-STARTUP-181
+carry that behaviour; they were minted with this directive at the owner's ask and are marked *decided, not derived* at their
+heading. This directive states which derived requirements they displace, and the case in which each is displaced:
+
+1. **REQ-STARTUP-114** — a cancel of the running download is not a second update operation and is never refused.
+2. **REQ-STARTUP-116** — an offered version that is neither waved off nor cancelled is not presented with `Update now`
+   before its download; the notice that appears is the download's (REQ-STARTUP-169, REQ-STARTUP-170).
+3. **REQ-STARTUP-119** — after a verified download the installed flavour shows REQ-STARTUP-174's ready notice with
+   `Restart now`, not `Finish the update`, and no window closes on its own; the 1200 ms auto-close no longer governs there.
+4. **REQ-STARTUP-121** — `Restart now` is also offered on the installed flavour's ready notice, where it starts the verified
+   installer and the updated installation follows it. The portable's hand-over is unchanged.
+5. **REQ-STARTUP-122** — the sequence pauses after the digest comparison: the download is kept as the pending update in
+   per-user storage rather than a fresh temporary directory (REQ-STARTUP-171), verified again before the apply
+   (REQ-STARTUP-172), and applied at the next start or by `Restart now`. The order up to the digest is unchanged.
+6. **REQ-STARTUP-125** — the installed flavour's installer is started without its pages, at the next start or by `Restart
+   now`, and the updated installation is started when it completes (REQ-STARTUP-173). The portable's path names a complete
+   executable at every instant (REQ-STARTUP-176); the order "renamed to `<name>.old`, then moved in" no longer governs where
+   it leaves the path empty.
+7. **REQ-STARTUP-127** — the installed flavour's ready notice does tell the user to restart before its hand-off.
+8. **REQ-STARTUP-155** — the launch that applies a pending installed-flavour update is exempt from the first-paint bound for
+   that apply alone (REQ-STARTUP-173).
+9. **REQ-STARTUP-017** — a silent installation the updater starts launches the updated application when it completes; one
+   started any other way still never does.
+10. **REQ-NOTIFY-044** — the action vocabulary gains exactly one member: cancel the running update download.
+11. **REQ-NOTIFY-215** — the notice for a newer version is the download's, with no install action before the download.
+12. **REQ-NOTIFY-222** — an installed-flavour update that has downloaded publishes the ready notice with the restart action;
+    the window does not close on its own.
+
+The notice surface's own case — REQ-SHELL-118's download notice and REQ-SHELL-115's action list — is
+[`PD-SHELL-005`](#pd-shell-005)'s, revised for this request rather than narrowed a second time.
+
+**Reserved to the owner.** The decisions UD-1 to UD-12 of
+[`../architecture/background-update-plan.md`](../architecture/background-update-plan.md) §6 are not taken here, and no
+build implements a clause that names one before it is. A ruling that departs from a requirement this directive does not
+name — REQ-STARTUP-117, REQ-SHELL-114 and REQ-NOTIFY-216 on dismissing (UD-3), REQ-STARTUP-146 and REQ-SHELL-006 should a
+preference be wanted (UD-1) — revises this directive and names it.
+
+**What is unchanged.** REQ-STARTUP-105 to REQ-STARTUP-113, REQ-STARTUP-123, REQ-STARTUP-124, REQ-STARTUP-126,
+REQ-STARTUP-167 and REQ-STARTUP-168: one endpoint and no way to disable the check; exact names and the order; the signature
+verified before the manifest is parsed and before any asset byte is fetched; the 1 MiB bound on the small reads and the
+chunked digest; no override. ADR-0054's bespoke updater (Alternative B) stays, and `electron-updater` stays rejected; its
+install-at-quit pattern is not this directive. `PD-STARTUP-001`, IC-3 and IC-8 stand: Windows x64 alone.
+
+**Why, and what it costs.** The owner wants Rotaris installable from a release and kept current the way current desktop
+assistants are: the new build arrives by itself and is used the next time the application starts, or at once when the user
+asks, and work in progress is never cut off by it. The derived requirements put a click before the download and the apply
+straight after it, which on the installed flavour closes every window within 1200 ms of a download the user may have
+forgotten starting. What it costs: bandwidth spent without asking (UD-1); one installer's worth of disk held between the
+download and the next start; a new per-user record; on the installed flavour, a first start after an update that is slower
+by the installer's run; and a never-bricks guarantee for that flavour that rests on the installer's own over-install
+behaviour, which nobody has measured (UD-12).
+
+**Recorded, not built.** Scheduled after the dependency remediation in the stages of the plan; the first execution is owed
+to the stage that builds it.
+
+> **Narrows:** REQ-STARTUP-017, REQ-STARTUP-114, REQ-STARTUP-116, REQ-STARTUP-119, REQ-STARTUP-121, REQ-STARTUP-122, REQ-STARTUP-125, REQ-STARTUP-127, REQ-STARTUP-155, REQ-NOTIFY-044, REQ-NOTIFY-215, REQ-NOTIFY-222
+
+*Raised by the owner, 2026-10-22; logged as [R-084](requests.md#r-084).*
 
 ---
 

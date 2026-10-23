@@ -8,6 +8,28 @@ status: resolved
 # Resolution Record — Domain 11, Application Startup, Distribution, and Updates
 
 
+
+> ## Amendment, 2026-10-22 — the background download and the next-start apply (R-084): thirteen identifiers decided, not derived
+>
+> `REQ-STARTUP-169` to `REQ-STARTUP-181` are minted under a new subsection of domain 11, "Background download, the pending
+> update, and the next-start apply". **They are not a resolution of anything derived.** The owner asked for behaviour the
+> specification does not have — the update downloaded with no click, kept as a pending update, verified again from the
+> retained bytes and applied at the next start or by `Restart now` — and asked, explicitly, for new requirement
+> identifiers for it rather than a directive's narrative alone ([R-084](../../product/requests.md#r-084)).
+>
+> **Why this departs from the layer rule, and how the departure is bounded.** [`../../product/README.md`](../../product/README.md)
+> keeps owner-decided behaviour out of this corpus so that `REQ-` keeps meaning "derived". The owner's ask is honoured
+> without spending that distinction: the subsection opens with a note saying that every identifier in it is decided, not
+> derived, and is no evidence about the behavioural target; [`PD-STARTUP-008`](../../product/directives.md#pd-startup-008)
+> and [`PD-SHELL-005`](../../product/directives.md#pd-shell-005) revision 2 carry every displacement of a derived requirement,
+> each with its back-pointer; and no derived requirement's text is rewritten. A reader separating the derived corpus from
+> the decided additions reads the subsection's heading note. Whether later owner requests may mint identifiers the same
+> way is not settled by this amendment.
+>
+> Clauses marked *reserved* name decisions UD-1 to UD-12 of
+> [`../../architecture/background-update-plan.md`](../../architecture/background-update-plan.md) §6, which are the owner's and
+> are not taken. **Recorded, not built.**
+
 > ## Amendment, 2026-10-13 — the platform-convention directory variables (OQ-247)
 >
 > `REQ-STARTUP-147`'s list of the environment variables this domain reads gains a class: the platform-convention directory

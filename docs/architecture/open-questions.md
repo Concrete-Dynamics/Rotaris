@@ -3354,7 +3354,9 @@ text, "Copyright (c) 2018 Pedro Burón"; `METADATA` says `License: UNKNOWN` besi
 `license` is null. **Owed, and not this lane's to write:** the ruling departs from REQ-STARTUP-143 as worded ("a
 dependency in the shipped closure declares no license identifier" fails), so the directive that governs over it, the
 requirement's back-pointer and the request row in `docs/product/requests.md` are the orchestrator's. The SPDX half of
-this question is not decided: identifiers are still copied as declared.
+this question is not decided: identifiers are still copied as declared. *Written down 2026-10-23 on the orchestrator's brief:*
+the directive is [`PD-STARTUP-007`](../product/directives.md#pd-startup-007), which narrows REQ-STARTUP-143 and carries
+its back-pointer there, logged as [R-083](../product/requests.md#r-083).
 
 **OQ-75 — When does a component carry "its full license text"?** *(REQ-STARTUP-142, REQ-STARTUP-143. Raised 2026-09-27 by the notices generator's gate review; raised as OQ-69 and renumbered OQ-75 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71.)*
 

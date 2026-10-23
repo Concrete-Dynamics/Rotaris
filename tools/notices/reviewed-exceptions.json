@@ -1,4 +1,192 @@
 {
-  "$comment": "REQ-STARTUP-143: the maintainer-review table of reviewed exceptions, read by tools/notices/notices.mjs. An entry lets a shipped dependency that carries no license text pass notices validation; a licence file that only names the licence, only points elsewhere for it (Apache-2.0's per-file notice, MPL-2.0's Exhibit A, 'See the LICENSE file'), or only attributes (NOTICE, AUTHORS) is not license text, and is still reproduced beside the entry (OQ-75). Each entry carries: component (the name as the notices file prints it), versions (an exact version, or space-separated comparators such as \">=1.0.0 <2.0.0\"), license (the identifier claimed for it), whyNoText (why no license text is obtainable), reviewer (the maintainer who reviewed it), reviewedOn and expires (YYYY-MM-DD, the review not after the day the generator runs, the expiry at most 365 days after the review). An entry covers a dependency only while its version is inside the range and the expiry has not passed; otherwise it is treated as no entry at all. Adding an entry is a reviewed change made by a maintainer, never by the generator or an agent.",
-  "exceptions": []
+  "$comment": "REQ-STARTUP-143: the maintainer-review table of reviewed exceptions, read by tools/notices/notices.mjs. An entry lets a shipped dependency that carries no license text pass notices validation; a licence file that only names the licence, only points elsewhere for it (Apache-2.0's per-file notice, MPL-2.0's Exhibit A, 'See the LICENSE file'), or only attributes (NOTICE, AUTHORS) is not license text, and is still reproduced beside the entry (OQ-75). Each entry carries: component (the name as the notices file prints it), versions (an exact version, or space-separated comparators such as \">=1.0.0 <2.0.0\"), license (the identifier claimed for it), whyNoText (why no license text is obtainable), reviewer (the maintainer who reviewed it), reviewedOn and expires (YYYY-MM-DD, the review not after the day the generator runs, the expiry at most 365 days after the review). An entry covers a dependency only while its version is inside the range and the expiry has not passed; otherwise it is treated as no entry at all. Adding an entry is a reviewed change made by a maintainer, never by the generator or an agent. Two optional parts of such an entry (OQ-75, 2026-10-23): licenseText, {file, source}, the claimed licence's text as the reviewer obtained it outside the component, kept under tools/notices/licenses/ verbatim and held to the identifier by LICENSE_TEXT_CHECKS in notices.mjs; and embedded, a list of {work, license, file}, the licence of a separately licensed work the component vendors, read from the installed component at file. Both are reproduced under their own heading and neither counts as the component's own licence text. A second kind of entry (OQ-74, 2026-10-23), with covers \"identifier\", supplies the identifier of a dependency that ships its licence text and declares none: it carries whyNoIdentifier and licenseFile (the shipped file, as the component's licence files name it, which must be that licence's text) in place of whyNoText, and covers neither a missing text nor a declared identifier. The entries reviewed 2026-10-23 were written by an agent on the owner's delegation, as their reviewer field says (docs/architecture/open-questions.md, OQ-74 and OQ-75; first-release-plan.md section 6, O-11).",
+  "exceptions": [
+    {
+      "component": "@ai-sdk/gateway",
+      "versions": "4.0.74",
+      "license": "Apache-2.0",
+      "whyNoText": "The published tarball carries only the 552-byte Apache-2.0 notice, which points to http://www.apache.org/licenses/LICENSE-2.0; the project's repository carries the same notice at the release commit (https://github.com/vercel/ai/blob/34f3b7991f16451e6fd84ba5dc39f9c0b20b0514/LICENSE) and no copy of the full license text.",
+      "licenseText": {
+        "file": "tools/notices/licenses/Apache-2.0.txt",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+      },
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
+      "component": "@ai-sdk/openai",
+      "versions": "4.0.58",
+      "license": "Apache-2.0",
+      "whyNoText": "The published tarball carries only the 552-byte Apache-2.0 notice, which points to http://www.apache.org/licenses/LICENSE-2.0; the project's repository carries the same notice at the release commit (https://github.com/vercel/ai/blob/34f3b7991f16451e6fd84ba5dc39f9c0b20b0514/LICENSE) and no copy of the full license text.",
+      "licenseText": {
+        "file": "tools/notices/licenses/Apache-2.0.txt",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+      },
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
+      "component": "@ai-sdk/openai-compatible",
+      "versions": "3.0.43",
+      "license": "Apache-2.0",
+      "whyNoText": "The published tarball carries only the 552-byte Apache-2.0 notice, which points to http://www.apache.org/licenses/LICENSE-2.0; the project's repository carries the same notice at the release commit (https://github.com/vercel/ai/blob/8a09c78c039e2c092468eaeff97faaabf3b77366/LICENSE) and no copy of the full license text.",
+      "licenseText": {
+        "file": "tools/notices/licenses/Apache-2.0.txt",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+      },
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
+      "component": "@ai-sdk/provider",
+      "versions": "4.0.10",
+      "license": "Apache-2.0",
+      "whyNoText": "The published tarball carries only the 552-byte Apache-2.0 notice, which points to http://www.apache.org/licenses/LICENSE-2.0; the project's repository carries the same notice at the release commit (https://github.com/vercel/ai/blob/3bd0fcf4603ac34511a8e742cff47d3e868549f7/LICENSE) and no copy of the full license text.",
+      "licenseText": {
+        "file": "tools/notices/licenses/Apache-2.0.txt",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+      },
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
+      "component": "@ai-sdk/provider-utils",
+      "versions": "5.0.36",
+      "license": "Apache-2.0",
+      "whyNoText": "The published tarball carries no license file of its own, and Apache-2.0 is declared in package.json only; its only license-named file, src/to-json-schema/zod3-to-json-schema/LICENSE, is the ISC license of the vendored zod3-to-json-schema code (Copyright (c) 2020 Stefan Terdell, 2025 Vercel Inc.), which is compiled into the package's dist and is reproduced below as that embedded work's license, not as this package's.",
+      "licenseText": {
+        "file": "tools/notices/licenses/Apache-2.0.txt",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+      },
+      "embedded": [
+        {
+          "work": "zod3-to-json-schema",
+          "license": "ISC",
+          "file": "src/to-json-schema/zod3-to-json-schema/LICENSE"
+        }
+      ],
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
+      "component": "@workflow/serde",
+      "versions": "4.1.0",
+      "license": "Apache-2.0",
+      "whyNoText": "The published tarball's LICENSE.md is 73 bytes and reads 'Apache License 2.0 / See the LICENSE file in the root of this repository'; it carries no license text, and the repository's root LICENSE.md, which holds the full Apache-2.0 text, is not part of the package. Reservation: no tag and no gitHead identify the commit 4.1.0 was published from (the history of packages/serde/package.json goes from 4.1.0-beta.2 to 5.0.0-beta.0), so the identifier rests on the package's own declaration and on the repository's root LICENSE.md at later commits, not on a commit-exact reading of the published tree.",
+      "licenseText": {
+        "file": "tools/notices/licenses/Apache-2.0.txt",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+      },
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
+      "component": "@xterm/addon-serialize",
+      "versions": "0.14.0",
+      "license": "MIT",
+      "whyNoText": "The published tarball carries no license file at all; MIT is declared in package.json only, and the full text lives in the root LICENSE of the xterm.js repository at the release commit f447274f430fd22513f6adbf9862d19524471c04, which the package does not include.",
+      "licenseText": {
+        "file": "tools/notices/licenses/xterm.js-LICENSE.txt",
+        "source": "https://raw.githubusercontent.com/xtermjs/xterm.js/f447274f430fd22513f6adbf9862d19524471c04/LICENSE"
+      },
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
+      "component": "@xterm/headless",
+      "versions": "6.0.0",
+      "license": "MIT",
+      "whyNoText": "The published tarball carries no license file at all; MIT is declared in package.json only, and the full text lives in the root LICENSE of the xterm.js repository at the release commit f447274f430fd22513f6adbf9862d19524471c04, which the package does not include.",
+      "licenseText": {
+        "file": "tools/notices/licenses/xterm.js-LICENSE.txt",
+        "source": "https://raw.githubusercontent.com/xtermjs/xterm.js/f447274f430fd22513f6adbf9862d19524471c04/LICENSE"
+      },
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
+      "component": "ai",
+      "versions": "7.0.92",
+      "license": "Apache-2.0",
+      "whyNoText": "The published tarball carries only the 552-byte Apache-2.0 notice, which points to http://www.apache.org/licenses/LICENSE-2.0; the project's repository carries the same notice at the release commit (https://github.com/vercel/ai/blob/34f3b7991f16451e6fd84ba5dc39f9c0b20b0514/LICENSE) and no copy of the full license text.",
+      "licenseText": {
+        "file": "tools/notices/licenses/Apache-2.0.txt",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+      },
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
+      "component": "certifi",
+      "versions": "2026.7.22",
+      "license": "MPL-2.0",
+      "whyNoText": "The wheel's license file (989 bytes) describes the bundled ca-bundle.crt and quotes MPL-2.0's Exhibit A, pointing to http://mozilla.org/MPL/2.0/; neither the wheel nor the project's repository (tag 2026.07.22) carries a copy of the MPL-2.0 text.",
+      "licenseText": {
+        "file": "tools/notices/licenses/MPL-2.0.txt",
+        "source": "https://www.mozilla.org/media/MPL/2.0/index.txt"
+      },
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
+      "component": "certifi",
+      "versions": "2026.10.19",
+      "license": "MPL-2.0",
+      "whyNoText": "The wheel's license file (989 bytes) describes the bundled ca-bundle.crt and quotes MPL-2.0's Exhibit A, pointing to http://mozilla.org/MPL/2.0/; neither the wheel nor the project's repository (tag 2026.07.22) carries a copy of the MPL-2.0 text. The 2026.10.19 wheel's license file is byte-identical to 2026.7.22's (sha256 e93716da6b9c0d5a4a1df60fe695b370f0695603d21f6f83f053e42cfc10caf7).",
+      "licenseText": {
+        "file": "tools/notices/licenses/MPL-2.0.txt",
+        "source": "https://www.mozilla.org/media/MPL/2.0/index.txt"
+      },
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
+      "covers": "identifier",
+      "component": "dotenv",
+      "versions": "0.9.9",
+      "license": "MIT",
+      "whyNoIdentifier": "Its metadata declares none (License: UNKNOWN, no license classifier, and no license on PyPI), while the wheel ships dotenv-0.9.9.dist-info/LICENSE, 1,069 bytes, the full MIT License text, Copyright (c) 2018 Pedro Burón; the identifier is that file's.",
+      "licenseFile": "LICENSE",
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
+      "component": "mslex",
+      "versions": "1.3.0",
+      "license": "Apache-2.0",
+      "whyNoText": "The wheel's LICENSE (587 bytes) names Apache-2.0 and points to http://www.apache.org/licenses/LICENSE-2.0, and its AUTHORS.rst only attributes; neither the wheel nor the upstream v1.3.0 tree carries the license text itself.",
+      "licenseText": {
+        "file": "tools/notices/licenses/Apache-2.0.txt",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+      },
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
+      "component": "proxy_tools",
+      "versions": "0.1.0",
+      "license": "BSD-2-Clause",
+      "whyNoText": "The wheel ships no license file. Its metadata declares MIT (License: MIT; Classifier: License :: OSI Approved :: MIT License), but the project's only license file, LICENSE.txt in https://github.com/jtushman/proxy_tools at commit db43f1e35d4f90a65c5a4d56d9e9af88212ec6e6, is a two-clause BSD text, Copyright (c) 2013 Armin Ronacher and Copyright (c) 2014 Jonathan Tushman; the identifier follows that file, not the metadata. The file is reproduced below as published, including its unfilled '<COPYRIGHT HOLDER>' and a stray fragment of the MIT disclaimer after its last sentence.",
+      "licenseText": {
+        "file": "tools/notices/licenses/proxy_tools-LICENSE.txt",
+        "source": "https://raw.githubusercontent.com/jtushman/proxy_tools/db43f1e35d4f90a65c5a4d56d9e9af88212ec6e6/LICENSE.txt"
+      },
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    }
+  ]
 }

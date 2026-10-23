@@ -14,7 +14,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
-Last reconciled with the code: **2026-10-22**
+Last reconciled with the code: **2026-10-23**
+
+**The notices generator's reviewed exceptions resolved (O-3, O-11, OQ-74, OQ-75; 2026-10-23).** `01-component-view.md`'s
+notices section names the table's identifier entries and its `licenseText` and `embedded` parts, and the licence texts
+`tools/notices/licenses/` now holds for them. The tool reads one input more — the vendored licence file inside an installed
+package an entry names — and still writes one file. No package, edge, process, message, channel or ownership changed.
 
 **Dependency patches for 47 Dependabot alerts (R-081; 2026-10-22).** `01-component-view.md`'s `mcp` section and its `ajv`
 paragraph name `@modelcontextprotocol/client` 2.3.0, pinned in place of 2.0.0. The SDK's `http` and `sse` transports now refuse

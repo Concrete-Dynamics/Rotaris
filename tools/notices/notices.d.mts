@@ -20,10 +20,24 @@ export declare function normalize(text: string): string;
 /** OQ-75: only `text` is the component's licence text; a `reference` or an `attribution` is reproduced beside it. */
 export type LicenseTextKind = 'text' | 'reference' | 'attribution';
 export interface LicenseText { readonly file: string; readonly text: string; readonly kind?: LicenseTextKind }
+/** OQ-75: the claimed licence's text as the reviewer obtained it outside the component, read from `tools/notices/licenses/`. */
+export interface SuppliedLicenseText { readonly file: string; readonly source: string; readonly text?: string }
+/** A separately licensed work the component vendors; `file` is relative to the installed component. */
+export interface EmbeddedWork { readonly work: string; readonly license: string; readonly file: string }
+/** REQ-STARTUP-143's entry, for a dependency that carries no licence text. */
 export interface ReviewedException {
+  readonly covers?: 'text';
   readonly component: string; readonly versions: string; readonly license: string; readonly whyNoText: string;
   readonly reviewer: string; readonly reviewedOn: string; readonly expires: string;
+  readonly licenseText?: SuppliedLicenseText; readonly embedded?: readonly EmbeddedWork[];
 }
+/** OQ-74's entry, for a dependency that ships its licence text in `licenseFile` and declares no identifier. */
+export interface ReviewedIdentifierException {
+  readonly covers: 'identifier';
+  readonly component: string; readonly versions: string; readonly license: string; readonly whyNoIdentifier: string;
+  readonly licenseFile: string; readonly reviewer: string; readonly reviewedOn: string; readonly expires: string;
+}
+export type ReviewedEntry = ReviewedException | ReviewedIdentifierException;
 export interface Component {
   readonly section: 'application' | 'runtime' | 'assets';
   readonly ecosystem: 'npm' | 'compiled' | 'interpreter' | 'python' | 'asset';
@@ -35,6 +49,8 @@ export interface Component {
   readonly files?: readonly string[];
   readonly textRequired?: boolean;
   exception?: ReviewedException;
+  identifierException?: ReviewedIdentifierException;
+  embedded?: readonly (EmbeddedWork & { readonly text: string })[];
 }
 export interface Credit { readonly title: string; readonly homepage: string | null; readonly text: string }
 export interface ElectronComponent extends Component { readonly credits: readonly Credit[] }
@@ -90,9 +106,11 @@ export declare function woff2Names(buffer: Buffer): Record<number, string>;
 export declare function declaredFontFiles(css: string): string[];
 export declare function bundledAssetComponents(root: string, problems: string[]): Component[];
 export declare function setupManifest(root: string, problems: string[]): SetupManifest | null;
+/** The identifiers a reviewed exception may pair with a text, each with what that licence's text must match (OQ-74, OQ-75). */
+export declare const LICENSE_TEXT_CHECKS: Readonly<Record<string, readonly RegExp[]>>;
 /** Given `today` (YYYY-MM-DD, UTC), an entry reviewed after it is refused. */
-export declare function reviewedExceptions(root: string, problems: string[], today?: string): ReviewedException[];
-export declare function exceptionFor(component: Pick<Component, 'name' | 'version'>, exceptions: readonly ReviewedException[], today: string): { entry: ReviewedException | null; reason: string | null };
+export declare function reviewedExceptions(root: string, problems: string[], today?: string): ReviewedEntry[];
+export declare function exceptionFor<E extends ReviewedEntry>(component: Pick<Component, 'name' | 'version'>, exceptions: readonly E[], today: string): { entry: E | null; reason: string | null };
 /** Why an address may not stand in the header (REQ-STARTUP-142), or null when it may. */
 export declare function addressProblem(address: unknown): string | null;
 export declare function releaseInputs(root: string, problems: string[]): { address: string };

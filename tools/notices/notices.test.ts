@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -458,6 +459,145 @@ describe('REQ-STARTUP-143: validation fails naming the component or path, one co
     expect(ahead).toEqual([`${PATHS.exceptions} entry 1 (gamma): reviewedOn 2030-01-01 is after today, ${TODAY}`]);
   });
 
+  /** A text LICENSE_TEXT_CHECKS reads as each licence's: the fixtures' MIT stand-in is too short to be one. */
+  const FULL_MIT = `${MIT}\n\nTHE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.`;
+  const APACHE_TEXT = 'Apache License\nVersion 2.0, January 2004\n\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n1. Definitions, as the fixture carries them.';
+  const ISC_TEXT = 'ISC License\n\nCopyright (c) 2020, Fixture Vendor\n\nPermission to use, copy, modify, and/or distribute this software for any\npurpose with or without fee is hereby granted, provided that the above\ncopyright notice and this permission notice appear in all copies.';
+  const reviewed = { reviewer: 'A Maintainer', reviewedOn: '2026-09-01', expires: '2027-08-31' };
+  /** dotenv 0.9.9's shape: the full MIT text in its dist-info, and `License: UNKNOWN`. */
+  const dotenv = (license = FULL_MIT): void => {
+    put(`${SITE}/dotenv-0.9.9.dist-info/METADATA`, 'Metadata-Version: 2.1\nName: dotenv\nVersion: 0.9.9\nLicense: UNKNOWN\nLicense-File: LICENSE\n');
+    put(`${SITE}/dotenv-0.9.9.dist-info/LICENSE`, license);
+  };
+  const identifierEntry = { covers: 'identifier', component: 'dotenv', versions: '0.9.9', license: 'MIT', whyNoIdentifier: 'Its metadata says License: UNKNOWN.', licenseFile: 'LICENSE', ...reviewed };
+
+  it('OQ-74: an identifier entry supplies the identifier of a dependency that ships its licence text and declares none, and the file says so', () => {
+    dotenv();
+    expect(generate().problems).toEqual(['dotenv 0.9.9 (code-intelligence runtime): declares no license identifier']);
+    put(PATHS.exceptions, json({ exceptions: [identifierEntry] }));
+    const covered = generate();
+    expect(covered.problems).toEqual([]);
+    expect(covered.text).toContain('Component: dotenv\nVersion:   0.9.9\nLicense:   MIT (none declared; identified by a maintainer-reviewed exception, reviewed 2026-09-01, expires 2027-08-31)\n');
+    expect(flat(covered.text)).toContain(`This component declares no license identifier; the license text it ships, LICENSE, is reproduced below. Its metadata says License: UNKNOWN. ${flat(FULL_MIT)}`);
+    // It is no text exception: the component's own file is its text, and nothing is said to be missing.
+    expect(flat(covered.text)).not.toContain('No license text is distributed with this component. Its metadata');
+    // The expiry and the range bind it like a text entry, and the failure says which kind of entry it was.
+    expect(generate('linux', '2027-09-01').problems).toEqual([`dotenv 0.9.9 (code-intelligence runtime): declares no license identifier and its reviewed identifier exception expired on 2027-08-31 (${PATHS.exceptions})`]);
+    put(PATHS.exceptions, json({ exceptions: [{ ...identifierEntry, versions: '>=1.0.0' }] }));
+    expect(generate().problems).toEqual([`dotenv 0.9.9 (code-intelligence runtime): declares no license identifier and its reviewed identifier exception covers >=1.0.0, not 0.9.9 (${PATHS.exceptions})`]);
+  });
+
+  it('OQ-74: an identifier entry stands only while the file it names is shipped as the claimed licence\'s text', () => {
+    put(PATHS.exceptions, json({ exceptions: [identifierEntry] }));
+    const failure = (why: string) => [`dotenv 0.9.9 (code-intelligence runtime): declares no license identifier, and its reviewed identifier exception names LICENSE, which ${why} (${PATHS.exceptions})`];
+    // The file is gone, or another one is shipped.
+    put(`${SITE}/dotenv-0.9.9.dist-info/METADATA`, 'Metadata-Version: 2.1\nName: dotenv\nVersion: 0.9.9\nLicense: UNKNOWN\n');
+    put(`${SITE}/dotenv-0.9.9.dist-info/COPYING`, FULL_MIT);
+    expect(generate().problems).toEqual(failure('it does not ship'));
+    rmSync(join(root, SITE, 'dotenv-0.9.9.dist-info'), { recursive: true });
+    // The file only refers to a licence: the component then also carries no text, which the identifier entry never excuses.
+    dotenv(APACHE_NOTICE);
+    expect(generate().problems).toEqual([
+      ...failure('only names its license or points elsewhere for it'),
+      `dotenv 0.9.9 (code-intelligence runtime): carries no license text — LICENSE only names its license or points elsewhere for it — and no reviewed exception covers it (${PATHS.exceptions})`,
+    ]);
+    // The file is a licence, and not the one claimed.
+    dotenv(ISC_TEXT);
+    expect(generate().problems).toEqual(failure('is not its license text: it is not the text of MIT'));
+  });
+
+  it('OQ-74: neither kind of entry stands in for the other, and an identifier entry cannot claim what the generator cannot check', () => {
+    dotenv();
+    // REQ-STARTUP-143's text entry never excuses a missing identifier (the case above keeps it so for any text entry).
+    put(PATHS.exceptions, json({ exceptions: [{ component: 'dotenv', versions: '0.9.9', license: 'MIT', whyNoText: 'n/a', ...reviewed }] }));
+    expect(generate().problems).toEqual(['dotenv 0.9.9 (code-intelligence runtime): declares no license identifier']);
+    // An identifier entry never excuses missing text.
+    rmSync(join(root, 'node_modules/gamma/LICENSE'));
+    put(PATHS.exceptions, json({ exceptions: [identifierEntry, { ...identifierEntry, component: 'gamma', versions: '1.2.0' }] }));
+    expect(generate().problems).toEqual([`gamma 1.2.0 (npm): carries no license text and no reviewed exception covers it (${PATHS.exceptions})`]);
+    // A malformed identifier entry is no entry, and names what it lacks or carries.
+    const problems: string[] = [];
+    put(PATHS.exceptions, json({ exceptions: [
+      { ...identifierEntry, licenseFile: undefined },
+      { ...identifierEntry, whyNoText: 'a text entry\'s field' },
+      { ...identifierEntry, license: 'WTFPL' },
+      { ...identifierEntry, covers: 'everything' },
+    ] }));
+    expect(reviewedExceptions(root, problems, TODAY)).toEqual([]);
+    expect(problems).toEqual([
+      `${PATHS.exceptions} entry 1 (dotenv) has no licenseFile`,
+      `${PATHS.exceptions} entry 2 (dotenv): an identifier exception supplies no text, and carries whyNoText`,
+      `${PATHS.exceptions} entry 3 (dotenv): the generator holds no check for WTFPL's text, so it cannot supply that identifier`,
+      `${PATHS.exceptions} entry 4 (dotenv): covers is "everything", not "text" or "identifier"`,
+    ]);
+  });
+
+  it('OQ-75: a text entry may carry the claimed licence\'s text from outside the component, reproduced under its own heading and held to the identifier', () => {
+    rmSync(join(root, 'node_modules/gamma/LICENSE'));
+    put('node_modules/gamma/LICENSE', APACHE_NOTICE);
+    put('tools/notices/licenses/Apache-2.0.txt', APACHE_TEXT);
+    const licenseText = { file: 'tools/notices/licenses/Apache-2.0.txt', source: 'https://www.apache.org/licenses/LICENSE-2.0.txt' };
+    const entry = { component: 'gamma', versions: '1.2.0', license: 'Apache-2.0', whyNoText: 'It ships the notice only.', licenseText, ...reviewed };
+    put(PATHS.exceptions, json({ exceptions: [entry] }));
+    const covered = generate();
+    expect(covered.problems).toEqual([]);
+    const gamma = covered.text.slice(covered.text.indexOf('Component: gamma\nVersion:   1.2.0\n'), covered.text.indexOf('Component: gamma\nVersion:   2.0.0\n'));
+    expect(flat(gamma)).toContain('No license text is distributed with this component. It ships the notice only. The Apache-2.0 text reproduced below under its own heading is not part of this component: the reviewer obtained it from https://www.apache.org/licenses/LICENSE-2.0.txt.');
+    // The shipped notice keeps its own heading, and the supplied text follows under one that says where it came from.
+    expect(gamma).toContain(`----- LICENSE -----\n\n${APACHE_NOTICE}\n\n----- Apache-2.0, from https://www.apache.org/licenses/LICENSE-2.0.txt (not shipped with this component) -----\n\n${APACHE_TEXT}\n`);
+    const refused = (licenseTextValue: unknown, license = 'Apache-2.0'): string[] => {
+      put(PATHS.exceptions, json({ exceptions: [{ ...entry, license, licenseText: licenseTextValue }] }));
+      const problems: string[] = [];
+      expect(reviewedExceptions(root, problems, TODAY)).toEqual([]);
+      return problems;
+    };
+    const at = `${PATHS.exceptions} entry 1 (gamma):`;
+    expect(refused(licenseText, 'MPL-2.0')).toEqual([`${at} licenseText tools/notices/licenses/Apache-2.0.txt: it is not the text of MPL-2.0`]);
+    expect(refused(licenseText, 'Fixture-1.0')).toEqual([`${at} licenseText tools/notices/licenses/Apache-2.0.txt: the generator holds no check for Fixture-1.0's text (Apache-2.0, MPL-2.0, MIT, BSD-2-Clause, ISC)`]);
+    expect(refused({ ...licenseText, file: 'node_modules/gamma/LICENSE' })).toEqual([`${at} licenseText node_modules/gamma/LICENSE is not under tools/notices/licenses/`]);
+    expect(refused({ ...licenseText, file: 'tools/notices/licenses/Absent.txt' })).toEqual([`${at} licenseText tools/notices/licenses/Absent.txt is missing`]);
+    expect(refused({ ...licenseText, source: 'http://www.apache.org/licenses/LICENSE-2.0.txt' })).toEqual([`${at} licenseText's source http://www.apache.org/licenses/LICENSE-2.0.txt is not an https URL`]);
+    expect(refused({ file: licenseText.file })).toEqual([`${at} licenseText must carry a file and a source`]);
+  });
+
+  it('OQ-75: a vendored work\'s licence travels with the component under its own heading, apart from the component\'s licence and never as its text (@ai-sdk/provider-utils\' ISC part)', () => {
+    rmSync(join(root, 'node_modules/gamma/LICENSE'));
+    const vendored = 'src/vendored-thing/LICENSE';
+    put(`node_modules/gamma/${vendored}`, ISC_TEXT);
+    // A nested licence file is not the package's: it still carries no text, and still needs its review.
+    expect(generate().problems).toEqual([`gamma 1.2.0 (npm): carries no license text and no reviewed exception covers it (${PATHS.exceptions})`]);
+    put('tools/notices/licenses/Apache-2.0.txt', APACHE_TEXT);
+    const entry = {
+      component: 'gamma', versions: '1.2.0', license: 'Apache-2.0', whyNoText: 'It ships no licence file of its own.',
+      licenseText: { file: 'tools/notices/licenses/Apache-2.0.txt', source: 'https://www.apache.org/licenses/LICENSE-2.0.txt' },
+      embedded: [{ work: 'vendored-thing', license: 'ISC', file: vendored }], ...reviewed,
+    };
+    put(PATHS.exceptions, json({ exceptions: [entry] }));
+    const covered = generate();
+    expect(covered.problems).toEqual([]);
+    const gamma = covered.text.slice(covered.text.indexOf('Component: gamma\nVersion:   1.2.0\n'), covered.text.indexOf('Component: gamma\nVersion:   2.0.0\n'));
+    // The component's licence stays Apache-2.0, its exception stands, and the ISC text sits after the Apache text under its own heading.
+    expect(gamma).toContain('License:   Apache-2.0 (a maintainer-reviewed exception, reviewed 2026-09-01, expires 2027-08-31)\n');
+    const heading = `----- Embedded work: vendored-thing, licensed under ISC (${vendored}) -----`;
+    expect(gamma.indexOf(APACHE_TEXT)).toBeLessThan(gamma.indexOf(heading));
+    expect(gamma.slice(gamma.indexOf(heading))).not.toContain('Apache License');
+    expect(flat(gamma.slice(gamma.indexOf(heading)))).toContain(`This component contains vendored-thing, which is licensed separately under ISC. Its license, as this component ships it at ${vendored}, follows; it is not the license of gamma. ${flat(ISC_TEXT)}`);
+    expect(covered.model.application.find((c) => c.name === 'gamma' && c.version === '1.2.0')?.texts).toEqual([]);
+    // The file must be there, and be the licence claimed for the work.
+    put(`node_modules/gamma/${vendored}`, FULL_MIT);
+    expect(generate().problems).toEqual([`gamma 1.2.0 (npm): the license of its embedded work vendored-thing, ${vendored}, is not its license text: it is not the text of ISC`]);
+    rmSync(join(root, 'node_modules/gamma/src'), { recursive: true });
+    expect(generate().problems).toEqual([`gamma 1.2.0 (npm): the license of its embedded work vendored-thing, ${vendored}, is missing`]);
+    // A path that leaves the component, and a licence the generator cannot check, are refused in the table itself.
+    const problems: string[] = [];
+    put(PATHS.exceptions, json({ exceptions: [{ ...entry, embedded: [{ work: 'w', license: 'ISC', file: '../alpha/LICENSE' }] }, { ...entry, embedded: [{ work: 'w', license: 'Fixture-1.0', file: vendored }] }] }));
+    expect(reviewedExceptions(root, problems, TODAY)).toEqual([]);
+    expect(problems).toEqual([
+      `${PATHS.exceptions} entry 1 (gamma): embedded work w: ../alpha/LICENSE is not a path inside the component`,
+      `${PATHS.exceptions} entry 2 (gamma): embedded work w: the generator holds no check for Fixture-1.0's text`,
+    ]);
+  });
+
   it('the setup manifest cannot be read, cannot be parsed, or declares a package without one of its four fields', () => {
     rmSync(join(root, PATHS.setupManifest));
     expect(generate().problems).toEqual([`the setup manifest ${PATHS.setupManifest} cannot be read: ENOENT`]);
@@ -756,5 +896,24 @@ describe('the real repository: what `pnpm check` can say without the bundled run
     expect(problems).toEqual([]);
     const inputs = JSON.parse(readFileSync(join(REPO, PATHS.releaseInputs), 'utf8'));
     expect(Object.keys(inputs)).toContain('lgplCorrespondingSourcesAddress');
+  });
+
+  it('O-3: the address the owner gave stands (REQ-STARTUP-142)', () => {
+    const inputs = JSON.parse(readFileSync(join(REPO, PATHS.releaseInputs), 'utf8'));
+    expect(addressProblem(inputs.lgplCorrespondingSourcesAddress)).toBeNull();
+  });
+
+  it('every licence text the table reproduces from outside a component is the file its source published, byte for byte', () => {
+    // Measured 2026-10-23 when each was fetched from the source its entries name; a changed byte is a new review.
+    const published: Record<string, string> = {
+      'tools/notices/licenses/Apache-2.0.txt': 'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30',
+      'tools/notices/licenses/MPL-2.0.txt': '3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04',
+      'tools/notices/licenses/xterm.js-LICENSE.txt': 'b569f629d00f2626a8100df2a1798210535621e42164dfd426a6fe5aac7b0ccd',
+      'tools/notices/licenses/proxy_tools-LICENSE.txt': 'a428fb8a2e762af3eb0a6edbbb88e9b42ccfee80fd9b423958bcacf9b9abbfe4',
+    };
+    const table = JSON.parse(readFileSync(join(REPO, PATHS.exceptions), 'utf8')) as { exceptions: { licenseText?: { file: string } }[] };
+    const named = [...new Set(table.exceptions.flatMap((e) => (e.licenseText ? [e.licenseText.file] : [])))].sort();
+    expect(named).toEqual(Object.keys(published).sort());
+    for (const [file, sha256] of Object.entries(published)) expect(createHash('sha256').update(readFileSync(join(REPO, file))).digest('hex'), file).toBe(sha256);
   });
 });

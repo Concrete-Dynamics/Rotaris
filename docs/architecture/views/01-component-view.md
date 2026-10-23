@@ -271,9 +271,11 @@ the runtime's name only. It writes one file,
 `apps/desktop/resources/THIRD-PARTY-LICENSES.txt`, only when REQ-STARTUP-143's validation passes. Three
 version-controlled tables sit beside it, as REQ-STARTUP-143 asks of the first:
 
-- `reviewed-exceptions.json`, the maintainer-review table;
+- `reviewed-exceptions.json`, the maintainer-review table — since 2026-10-23 with OQ-74's identifier entries and
+  OQ-75's `licenseText` and `embedded` parts;
 - `release-inputs.json`, O-3's LGPL address;
-- `bundled-assets.json`, the fonts and the icon set, with their licence texts under `licenses/`.
+- `bundled-assets.json`, the fonts and the icon set, with their licence texts under `licenses/`, which also holds the
+  licence texts reviewed exceptions reproduce from outside their components (Apache-2.0, MPL-2.0, two upstream files).
 
 The product meets the tool at one literal: `main/about.ts`'s `THIRD_PARTY_LICENSES_ASSET` equals the generator's
 `NOTICES_FILE`, and `about.test.ts` holds them equal. **Edges unchanged**: `tools/**` is outside the boundary rule, and

@@ -3339,6 +3339,23 @@ normalised. The runtime's distributions declare `BSD License` (`itsdangerous`, `
 `BSD License` names a family rather than one licence. Whether an identifier must be an SPDX expression, and who
 supplies one where the component does not, belongs to the same ruling.
 
+*Decided 2026-10-23 by the owner's delegate, as a binding decision of the brief for the licence lane — not by the
+consortium of [R-072](../product/requests.md#r-072):* a table entry may supply the identifier of a dependency that declares
+none, for `dotenv` 0.9.9 as MIT, and the rule is implemented in the generator, not only written as an entry. **What was
+built** (`tools/notices/notices.mjs`, `notices.test.ts`, 3 cases): a second kind of entry, `"covers": "identifier"`,
+carrying `whyNoIdentifier` and `licenseFile` in place of `whyNoText`. It stands only for a dependency (never Electron,
+the interpreter or a compiled-in library), only while the version is in range and the expiry has not passed, and only
+while the component ships `licenseFile` as licence text (OQ-75's `text` kind) that `LICENSE_TEXT_CHECKS` reads as the
+claimed licence's — so it cannot be claimed for an identifier the generator holds no check for (Apache-2.0, MPL-2.0,
+MIT, BSD-2-Clause and ISC today). A text entry still never excuses a missing identifier, and an identifier entry never
+excuses missing text. The file prints `License: MIT (none declared; identified by a maintainer-reviewed exception, …)`,
+the reason, and the shipped text. The evidence for `dotenv`: `dotenv-0.9.9.dist-info/LICENSE`, 1,069 bytes, the full MIT
+text, "Copyright (c) 2018 Pedro Burón"; `METADATA` says `License: UNKNOWN` beside `License-File: LICENSE`; PyPI's
+`license` is null. **Owed, and not this lane's to write:** the ruling departs from REQ-STARTUP-143 as worded ("a
+dependency in the shipped closure declares no license identifier" fails), so the directive that governs over it, the
+requirement's back-pointer and the request row in `docs/product/requests.md` are the orchestrator's. The SPDX half of
+this question is not decided: identifiers are still copied as declared.
+
 **OQ-75 — When does a component carry "its full license text"?** *(REQ-STARTUP-142, REQ-STARTUP-143. Raised 2026-09-27 by the notices generator's gate review; raised as OQ-69 and renumbered OQ-75 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71.)*
 
 **Deferred 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)).**
@@ -3381,6 +3398,20 @@ dependency" in general, so this is stricter than the requirement. It is recorded
 exists in the first release.
 
 Over this tree the rule leaves 12 shipped components without licence text. The first run counted 4.
+
+*Added 2026-10-23 by the licence lane, on the owner's delegation (O-11; OQ-74):* the twelve are reviewed, and
+for each the declared licence's text is reproduced beside the entry rather than left out. A text entry may carry
+`licenseText` — a file under `tools/notices/licenses/`, kept as its source published it, and that source's https URL
+— which the generator holds to the claimed identifier (`LICENSE_TEXT_CHECKS`) and prints under its own heading, "not
+shipped with this component". The sources: Apache-2.0 from apache.org for the six `vercel/ai` packages, `@workflow/serde`
+and `mslex`; MPL-2.0 from mozilla.org for `certifi`; the xterm.js repository's root `LICENSE` at the release commit
+`f447274f` for the two `@xterm` packages; `proxy_tools`' own `LICENSE.txt` at `db43f1e3`, a two-clause BSD text, where
+its metadata says MIT — the identifier follows the file. A text entry may also carry `embedded`, the licence of a work
+the component vendors under another licence, read from the installed package and printed after the component's texts
+under an "Embedded work" heading: `@ai-sdk/provider-utils` 5.0.36 ships the ISC licence of its vendored
+`zod3-to-json-schema` (777 bytes, "Stefan Terdell 2020 / Vercel Inc. 2025"), whose code its `dist/index.js` carries.
+Neither part counts as the component's own text, so a reviewed exception is still what lets each pass. Whether the
+generator should instead supply a declared licence's standard text by itself, without a review, is not decided here.
 
 Three limits are stated here, so that none is read as coverage:
 

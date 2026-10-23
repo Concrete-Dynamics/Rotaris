@@ -1466,6 +1466,9 @@ Discard scenario is seeded as a workspace already initialized, because a never-i
 initialization record written into the same file during the launch wherever the code-intelligence bundle is present.
 Its Runtime steps wait for their controls and are read back from the log (2026-09-28, R-062;
 [the note](../defects/fixed/config-proofs-discard-scenario-counts-the-initialization-record-as-a-discard-write.md)).
+Since 2026-10-23 that scenario alone is driven (`startApp`, `clickLanded`) rather than captured: a capture press measured
+before the provider notice filled its slot met the banner instead of Discard
+([the note](../defects/fixed/config-proofs-discard-leaves-the-save-status-unsaved.md)).
 
 **The control channel.** `contracts/src/control.ts` (the twenty-two operations, the pause payload), store v6
 (`queued_prompts`, `sessions.message_limit`, `sessions.paused_at_count`), the writer's units, `engine/src/run/run.ts`

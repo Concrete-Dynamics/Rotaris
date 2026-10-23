@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { formatChecksumManifest } from '@rotaris/release-naming';
 import type { DownloadProgress, DownloadSink } from './download.js';
 import type { Offer } from './feed.js';
+import { RELEASE_SIGNING_KEYS } from './keys.js';
 import { hashMismatchSentence, noHashSentence, noManifestSentence, noSignatureSentence, runInstall, untrustedSignatureSentence, type InstallContext, type NetworkResponse, type StagingArea, type UpdateNetwork } from './install.js';
 import type { StrategyFiles, StrategySpawn } from './strategies.js';
 
@@ -162,7 +163,19 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     expect(staging.dirs.size).toBe(0);
   });
 
-  it('with the compiled-in set EMPTY (O-2 owed) every manifest is refused with one sentence saying so, and nothing is downloaded', async () => {
+  it('with no keys injected the compiled-in set governs: a release signed by a key the build does not carry is refused, nothing downloaded', async () => {
+    expect(RELEASE_SIGNING_KEYS).toHaveLength(1);
+    const release = published();
+    const staging = stagingArea();
+    const { ctx } = context(release, staging, targetVolume());
+    const { keys: _injected, ...production } = ctx;
+    const result = await runInstall(offer(), production);
+    expect(result).toEqual({ ok: false, stage: 'signature', sentence: untrustedSignatureSentence('0.2.0', false) });
+    expect(release.requests).toEqual(['https://github.com/x/sums', 'https://github.com/x/sig']);
+    expect(staging.dirs.size).toBe(0);
+  });
+
+  it('with an injected EMPTY set (every key withdrawn) every manifest is refused with one sentence saying so, and nothing is downloaded', async () => {
     const release = published();
     const staging = stagingArea();
     const { ctx } = context(release, staging, targetVolume(), { keys: [] });

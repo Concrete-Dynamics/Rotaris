@@ -8,12 +8,13 @@ import { createPublicKey, verify, type KeyObject } from 'node:crypto';
  * control and nothing the product downloads. There is no key file to ship, because a key file would be the very
  * surface REQ-STARTUP-167 forbids.
  *
- * THE SET IS EMPTY ON THIS TREE. O-2 (first-release-plan.md §6) — generating the signing key pair — is the owner's
- * act and is still owed. With no key, `verifyDetachedSignature` answers `no-key` for every manifest, the install
- * step refuses with one sentence, and nothing is downloaded (REQ-STARTUP-122/123). That is the intended outcome
- * of an empty set, not a stub: the mechanism is whole and its trust anchor is absent.
+ * THE SET CARRIES ONE KEY SINCE 2026-10-23. O-2 (first-release-plan.md §6) — generating the signing key pair — is
+ * the owner's act; its public half is the one element below, SPKI DER fingerprint
+ * `sha256:e0f3d7e80e046a5d3aad59ecbc6feda255fc65e841be21237f500e0d117d1d07`, the row the key record holds for
+ * 0.1.0rc1. An empty set (every key withdrawn) still answers `no-key` for every manifest: the install step refuses
+ * with one sentence and nothing is downloaded (REQ-STARTUP-122/123).
  *
- * WHAT O-2 ADDS, AND WHERE. One element in `RELEASE_SIGNING_KEYS` below: the public half of the release signing
+ * WHAT O-2 ADDED, AND WHERE. One element in `RELEASE_SIGNING_KEYS` below: the public half of the release signing
  * key as an SPKI PEM text block (`-----BEGIN PUBLIC KEY-----` … `-----END PUBLIC KEY-----`), which is exactly what
  * `openssl pkey -in <private.pem> -pubout` prints for a key made with `openssl genpkey -algorithm ed25519`. The
  * private half never enters the repository: it is the release pipeline's secret (§4.7). A rotation appends the
@@ -32,8 +33,13 @@ export const SIGNATURE_ALGORITHM = 'Ed25519' as const;
 /** The raw Ed25519 signature is exactly this long; anything else is not a signature of this format. */
 export const SIGNATURE_BYTES = 64;
 
-/** The compiled-in set. Empty until O-2; see the module comment for what goes here and in which encoding. */
-export const RELEASE_SIGNING_KEYS: readonly string[] = [];
+/** The compiled-in set: O-2's public half, verbatim; see the module comment for what goes here and in which encoding. */
+export const RELEASE_SIGNING_KEYS: readonly string[] = [
+  `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAmMdME4nmi1zsXtUhPAfxPoabI65CowRXBAhSf5rPxAQ=
+-----END PUBLIC KEY-----
+`,
+];
 
 export type SignatureVerdict =
   | { readonly verified: true; readonly keyIndex: number }

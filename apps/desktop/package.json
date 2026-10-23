@@ -1,7 +1,7 @@
 {
   "name": "@rotaris/desktop",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.0rc1",
   "description": "Rotaris \u2014 the one Electron desktop application. Five composition roots: main, preload, renderer, run-host, workspace-service.",
   "type": "module",
   "main": "./out/main/index.js",

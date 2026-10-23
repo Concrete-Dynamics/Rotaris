@@ -1,4 +1,4 @@
-import { generateKeyPairSync, sign } from 'node:crypto';
+import { createHash, createPublicKey, generateKeyPairSync, sign } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { RELEASE_SIGNING_KEYS, SIGNATURE_ALGORITHM, SIGNATURE_BYTES, verifyDetachedSignature } from './keys.js';
 
@@ -10,11 +10,28 @@ function pair() {
 const MANIFEST = Buffer.from(`${'a'.repeat(64)}  Rotaris-0.2.0-windows-x64-setup.exe\n`);
 
 describe('the compiled-in key set — REQ-STARTUP-167, REQ-STARTUP-168 (a), REQ-STARTUP-159', () => {
-  it('ships EMPTY on this tree (O-2 is owed), and an empty set refuses every manifest as unverifiable', () => {
-    expect(RELEASE_SIGNING_KEYS).toEqual([]);
+  it('ships O-2\'s one public key, an Ed25519 SPKI PEM block whose DER is the recorded fingerprint', () => {
+    expect(RELEASE_SIGNING_KEYS).toHaveLength(1);
+    const pem = RELEASE_SIGNING_KEYS[0]!;
+    expect(pem).toBe('-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAmMdME4nmi1zsXtUhPAfxPoabI65CowRXBAhSf5rPxAQ=\n-----END PUBLIC KEY-----\n');
+    const key = createPublicKey(pem);
+    expect(key.asymmetricKeyType).toBe('ed25519');
+    const der = key.export({ type: 'spki', format: 'der' });
+    expect(createHash('sha256').update(der).digest('hex')).toBe('e0f3d7e80e046a5d3aad59ecbc6feda255fc65e841be21237f500e0d117d1d07');
+  });
+
+  it('the compiled-in set is what a call without keys verifies against: a key it does not carry, a forged 64-byte signature and a malformed one are all refused', () => {
     const { privateKey } = pair();
     const signature = sign(null, MANIFEST, privateKey);
-    expect(verifyDetachedSignature(MANIFEST, signature)).toEqual({ verified: false, reason: 'no-key' });
+    expect(verifyDetachedSignature(MANIFEST, signature)).toEqual({ verified: false, reason: 'not-verified' });
+    expect(verifyDetachedSignature(MANIFEST, Buffer.alloc(SIGNATURE_BYTES))).toEqual({ verified: false, reason: 'not-verified' });
+    expect(verifyDetachedSignature(MANIFEST, Buffer.from('not a signature'))).toEqual({ verified: false, reason: 'malformed-signature' });
+  });
+
+  it('an injected EMPTY set (every key withdrawn) refuses every manifest as unverifiable, even one a valid key signed', () => {
+    const { privateKey } = pair();
+    const signature = sign(null, MANIFEST, privateKey);
+    expect(verifyDetachedSignature(MANIFEST, signature, [])).toEqual({ verified: false, reason: 'no-key' });
   });
 
   it('is Ed25519, a raw 64-byte detached signature over the manifest\'s exact bytes', () => {

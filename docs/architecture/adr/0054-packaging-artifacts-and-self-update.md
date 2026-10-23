@@ -1650,7 +1650,11 @@ carries it (168 (d)); the pipeline's key record (§4.7, 168 (b)) starts with the
 this build carries none. **The set ships EMPTY on this tree.** With no key, `verifyDetachedSignature` answers `no-key`,
 the install step refuses every manifest with one sentence saying the build carries no verification key, and nothing is
 downloaded — measured in `install.test.ts`: the manifest and its signature fetched, no third request, no staging
-directory. That is REQ-STARTUP-122/123's outcome for an unverifiable release, not a stub.
+directory. That is REQ-STARTUP-122/123's outcome for an unverifiable release, not a stub. *Amended 2026-10-23
+([R-082](../../product/requests.md#r-082)): O-2's public half is the set's one element, SPKI DER fingerprint
+`sha256:e0f3d7e80e046a5d3aad59ecbc6feda255fc65e841be21237f500e0d117d1d07`, and the key record's row for `0.1.0rc1` names it. The empty set's outcome above
+is kept as the reading of an injected empty set (every key withdrawn), which `keys.test.ts` and `install.test.ts` still
+measure beside the production set's.*
 
 **2. The launcher's variable is named.** The record decided the launcher "publishes its own declared variable" and did
 not name it. It is **`ROTARIS_PORTABLE_ARTIFACT`** (`classify.ts`), the variable REQ-STARTUP-147 admits as "the variable

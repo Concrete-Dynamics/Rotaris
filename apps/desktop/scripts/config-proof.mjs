@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { unpressedClicks } from './lib/capture-clicks.mjs';
+import { clickLanded, startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
 
 /**
  * ADR-0036 / ADR-0037's first execution in the built app (Part I step 5): hand-authored, commented files at
@@ -163,19 +164,63 @@ results.modelsSave = { workspaceFile: ws2 };
 
 // 3. Discard: a toggle changed, then Discard; nothing written (REQ-CONFIG-279, REQ-CONFIG-281, REQ-CONFIG-282).
 // Seeded as a workspace already initialized, so no other writer of this file is due during the launch (see INITIALIZED).
+// Driven, not captured: the capture seam presses each control at a box measured once, and the "No model provider is
+// authenticated yet" notice can fill the shell's notice slot between that measurement and the press, moving the save bar
+// down under it, so Discard was reported clicked while the press met the banner
+// (docs/defects/fixed/config-proofs-discard-leaves-the-save-status-unsaved.md). The driver's settled click presses a box
+// only once it has held still and is the element at its own centre, and says whether the press met it (`clickLanded`);
+// every step below waits for the state the one before it produced.
 const s3 = scenario('discard', { global: GLOBAL, workspace: WORKSPACE + INITIALIZED });
-const log3 = await launch('discard', s3, {
-  ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
-  ROTARIS_CAPTURE_CLICKS: `${RUNTIME_CATEGORY};;.toggle[aria-labelledby="keep-going-label"]@~7000;;.save-bar .btn-secondary>>Discard@~8000`,
-  ROTARIS_CAPTURE_PROBE: '.save-bar__status',
-  ROTARIS_CAPTURE_AFTER_MS: '9000',
-});
-clicked('discard', log3, ['Runtime', '.toggle[aria-labelledby="keep-going-label"]', 'Discard']);
+const driven3 = await startApp({ root: s3.root, workspace: s3.workspace, timeoutMs: 90_000 });
+const d3 = driven3.driver;
+const KEEP_GOING = '.toggle[aria-labelledby="keep-going-label"]';
+const DISCARD = '.save-bar .btn-secondary';
+const readBar = () => d3.eval(`(() => {
+  const toggle = document.querySelector(${JSON.stringify(KEEP_GOING)});
+  const discard = [...document.querySelectorAll(${JSON.stringify(DISCARD)})].find((b) => b.textContent.trim() === 'Discard');
+  const slot = document.querySelector('.notice-slot');
+  const box = discard ? discard.getBoundingClientRect() : null;
+  return {
+    status: document.querySelector('.save-bar__status')?.textContent.trim() ?? null,
+    keepGoing: toggle ? toggle.getAttribute('aria-checked') : null,
+    discard: box ? { x: box.x, y: box.y, width: box.width, height: box.height } : null,
+    noticeSlotHeight: slot ? slot.getBoundingClientRect().height : null,
+  };
+})()`);
+let discard3;
+let stopped3;
+try {
+  await d3.chord('Ctrl+7');
+  const category = await clickLanded(d3, '.settings__categories .nav-list__item', { text: 'Runtime', timeoutMs: 15_000 });
+  const before = await until(readBar, (b) => b?.keepGoing === 'true' || b?.keepGoing === 'false', { timeoutMs: 15_000, what: 'the Keep going toggle on Runtime' });
+  if (before.status !== 'All changes saved') throw new Error(`the Runtime category opened with the save status ${JSON.stringify(before.status)}, not settled`);
+  const toggle = await clickLanded(d3, KEEP_GOING, { timeoutMs: 15_000 });
+  const changed = await until(readBar, (b) => b?.keepGoing !== before.keepGoing && b?.status === 'Unsaved changes' && b?.discard !== null, { timeoutMs: 15_000, what: 'the toggle changed and the save bar offering Discard' });
+  const press = await clickLanded(d3, DISCARD, { text: 'Discard', timeoutMs: 15_000 });
+  const after = await until(readBar, (b) => b?.status === 'All changes saved', { timeoutMs: 15_000, what: 'the save status settled after Discard (REQ-CONFIG-280)' });
+  if (after.keepGoing !== before.keepGoing) throw new Error(`Discard left Keep going at ${after.keepGoing}; it was ${before.keepGoing} before the change`);
+  if (after.discard !== null) throw new Error('Discard is still offered after the form settled');
+  discard3 = {
+    presses: { runtime: category, toggle, discard: press },
+    keepGoing: { before: before.keepGoing, changed: changed.keepGoing, after: after.keepGoing },
+    // What moved: the Discard box when the save bar first offered it, and the notice slot then and at the end.
+    discardBoxFirstOffered: changed.discard,
+    noticeSlotHeight: { whenOffered: changed.noticeSlotHeight, atEnd: after.noticeSlotHeight },
+  };
+} finally {
+  stopped3 = await stopApp(driven3, { screenshot: join(output, 'discard.png') });
+  // The launch's log is the scenario's evidence whatever ended it, a failed step included.
+  writeFileSync(join(output, 'discard.log'), readFileSync(driven3.logFile, 'utf8'));
+}
+const log3 = readFileSync(driven3.logFile, 'utf8');
+if (stopped3.overran) throw new Error(`${stopOverrunMessage('discard', stopped3, log3)}\n(see discard.log)`);
+if (stopped3.screenshot !== 'taken') throw new Error(`discard produced no screenshot: ${stopped3.screenshot}`);
+for (const [step, receipt] of Object.entries(discard3.presses)) {
+  if (receipt.landed !== true) throw new Error(`discard: the press "${step}" was not confirmed landed (${JSON.stringify(receipt)}); see discard.log`);
+}
 if (/initialization: running/.test(log3)) throw new Error('an initialization run started on a seed that records it resolved, so the byte check below would not isolate Discard; see discard.log');
 if (readFileSync(s3.workspaceFile, 'utf8') !== WORKSPACE + INITIALIZED) throw new Error(`Discard wrote the file:\n${readFileSync(s3.workspaceFile, 'utf8')}`);
-const status3 = /capture: probe \.save-bar__status → (.*)$/m.exec(log3)?.[1] ?? '';
-if (!status3.includes('"text":"All changes saved"')) throw new Error(`after Discard the save status is not settled (REQ-CONFIG-280): ${status3 || 'no probe'}`);
-results.discard = 'the file is byte-identical; the save status reads "All changes saved"';
+results.discard = { verdict: 'the file is byte-identical; the save status reads "All changes saved"', ...discard3 };
 
 // 4. The composer's permission-mode control writes its one key through the per-field path, with no run active (REQ-CONFIG-288).
 const s4 = scenario('composer-mode');

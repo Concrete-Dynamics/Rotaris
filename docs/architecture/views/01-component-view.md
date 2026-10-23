@@ -225,7 +225,9 @@ Not a package — a **resources tree** and three build scripts. `apps/desktop/re
 holds `runtime/` — a self-contained CPython 3.13.15 with `serena-agent==1.7.0` in its own site-packages, no virtual
 environment, its console-script launchers trimmed — and `bundle.json`, the marker with the pins' hash and the
 interpreter's own answers. `apps/desktop/scripts/code-intelligence/pins.json` is the one place the build pins the
-interpreter, the distribution and `uv` (by version and sha256; never shipped); `bundle.mjs` builds the tree
+interpreter, the distribution and `uv` (by version and sha256; never shipped), and since 2026-10-23 `closure.lock` and
+`closure-build.lock` beside it pin the distribution's whole dependency closure by version and hash for every target
+(`pnpm code-intel:lock` writes them; the marker's hash covers them); `bundle.mjs` builds the tree
 (`pnpm code-intel:bundle`, idempotent on the marker; the build fetches, the product never does) for one target
 architecture — since OQ-400 (2026-10-15) `--target=<platform>-<arch>`, the host by default (since 2026-10-16, OQ-401's
 reading, `win32-x64` on a Windows ARM64 host, `defaultTargetKey`) and `win32-x64` from `package.mjs`, the interpreter installed by its full uv key and the target's architecture in the marker and its hash

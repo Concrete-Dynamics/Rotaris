@@ -39,6 +39,7 @@
     "mission-proof": "node apps/desktop/scripts/mission-proof.mjs",
     "continuation-proof": "node apps/desktop/scripts/continuation-proof.mjs",
     "code-intel:bundle": "node apps/desktop/scripts/code-intelligence/bundle.mjs",
+    "code-intel:lock": "node apps/desktop/scripts/code-intelligence/bundle.mjs --lock",
     "code-intel:manifest": "node apps/desktop/scripts/code-intelligence/manifest.mjs",
     "code-intel-proof": "node apps/desktop/scripts/code-intel-proof.mjs",
     "notice-proof": "node apps/desktop/scripts/notice-proof.mjs",

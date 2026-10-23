@@ -25,3 +25,15 @@ outright.
   whose hash input is the pins.
 - `apps/desktop/scripts/code-intelligence/pins.json` — the pins: Python, serena-agent and uv, no dependency lock.
 - `tools/notices/reviewed-exceptions.json` — the two `certifi` entries this forced.
+
+## Fixed, 2026-10-23
+
+The release run 39948115668 (`build (windows-x64)`, `v0.1.0rc1`) met it on the runner: `certifi` 2026.10.23, a third
+version from the same commit, and `clr_loader` 0.3.1, a Windows-only dependency, both refused by `pnpm notices`. The
+closure is now committed: `apps/desktop/scripts/code-intelligence/closure.lock` (84 distributions, every target,
+`uv pip compile --universal --generate-hashes`) and `closure-build.lock` (the setuptools `proxy-tools`' sdist builds
+with). `bundle.mjs` installs them with `--no-deps --require-hashes --only-binary :all:` (but for `proxy-tools`) and
+`--build-constraints`, runs `uv pip check`, and hashes both locks into the marker, so a tree installed from another lock
+is stale. `parseClosureLock` refuses a range, a bare name or an unhashed pin (`target.test.ts`). The reviewed-exceptions
+table gained one exact entry for each of the two versions the lock pins; no existing entry was widened. ADR-0035,
+"Added 2026-10-23 — the closure frozen", and a row in `docs/architecture/first-executions.md` record the run.

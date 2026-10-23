@@ -152,6 +152,30 @@
       "expires": "2027-10-23"
     },
     {
+      "component": "certifi",
+      "versions": "2026.10.23",
+      "license": "MPL-2.0",
+      "whyNoText": "The wheel's licenses/LICENSE (989 bytes, sha256 e93716da6b9c0d5a4a1df60fe695b370f0695603d21f6f83f053e42cfc10caf7, byte-identical to 2026.7.22's and 2026.10.19's) describes the bundled ca-bundle.crt and quotes MPL-2.0's Exhibit A, pointing to http://mozilla.org/MPL/2.0/; the project's repository at tag 2026.10.23 (tag object a79ed76041c98c3eca6c5bfa3d09d9382e059b83) holds the same 989-byte LICENSE at its root and no copy of the MPL-2.0 text. This is the version closure.lock pins (apps/desktop/scripts/code-intelligence/closure.lock).",
+      "licenseText": {
+        "file": "tools/notices/licenses/MPL-2.0.txt",
+        "source": "https://www.mozilla.org/media/MPL/2.0/index.txt"
+      },
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
+      "covers": "identifier",
+      "component": "clr_loader",
+      "versions": "0.3.1",
+      "license": "MIT",
+      "whyNoIdentifier": "Its metadata declares none: METADATA (Metadata-Version 2.4) carries no License or License-Expression field and no license classifier, only License-File: LICENSE, and PyPI's record names no license; the project's pyproject.toml at tag v0.3.1 (commit b9497f6bf2544ae103caae3b8d4a8786c53ba4e4) declares license-files = [\"LICENSE\"] and no license. The py3-none-any wheel (installed on Windows only, as pythonnet's dependency) ships clr_loader-0.3.1.dist-info/licenses/LICENSE, 1,079 bytes, sha256 dd6bdca10cdc3b24c6b0b6cef5fd611b7feb6917f127833283ddcdb310d3b453, the full MIT License text, Copyright (c) 2019-2026 Benedikt Reinartz, byte-identical to the repository's LICENSE at that commit; the identifier is that file's.",
+      "licenseFile": "licenses/LICENSE",
+      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
+      "reviewedOn": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
       "covers": "identifier",
       "component": "dotenv",
       "versions": "0.9.9",

@@ -234,6 +234,22 @@ licence text. `certifi` 2026.7.22 carries only MPL-2.0's Exhibit A. `mslex` 1.3.
 notice, beside an `AUTHORS.rst`. Each file only refers to the licence. The first run had counted any non-empty licence
 file as the text (OQ-75). Both now wait on a maintainer's review (O-11), as `proxy_tools` does.
 
+*Added 2026-10-23 — the closure frozen.* "Built from committed pins" held for the interpreter, the distribution and uv
+only: every dependency below `serena-agent` was resolved on the day of the build, and the release run 39948115668
+(`build (windows-x64)`, `v0.1.0rc1`) refused notices validation on `certifi` 2026.10.23 — the third `certifi` the same
+commit had built on three hosts — and on `clr_loader` 0.3.1, a Windows-only dependency no Linux bundle had carried
+([note](../../defects/fixed/the-code-intelligence-bundle-pins-serena-agent-and-not-its-dependencies.md)). The closure is
+now committed beside `pins.json`: `closure.lock`, 84 distributions resolved once for every target
+(`uv pip compile --universal`), each at one version with the sha256 of every file the index offers, and
+`closure-build.lock`, the setuptools that builds `proxy-tools` (the one distribution that publishes no wheel).
+`bundle.mjs` installs exactly that (`--no-deps --require-hashes --only-binary :all:` but for `proxy-tools`,
+`--build-constraints`), checks it with `uv pip check`, hashes both locks into the marker (recipe 5), and writes the
+interpreter's own list of installed distributions into the marker's answers. `pnpm code-intel:lock` rewrites the locks
+from the pins. Two fresh Linux bundles installed the same 73 distributions; a Windows-x64 tree assembled on Linux from the
+pinned interpreter and the lock, 75 distributions besides `pip`, met the runner's two refusals exactly, and both trees
+pass `pnpm notices` byte-identically twice after one exact review each (`reviewed-exceptions.json`: `certifi` 2026.10.23,
+and `clr_loader` 0.3.1 as an identifier entry).
+
 REQ-STARTUP-015's "exactly one copy" of the tool server's licence text meets a second copy when first-release-plan.md
 §4.4 carries the notices file into the artifact. That step decides which copy stands. *Decided 2026-09-27 by §4.4: the
 notices file's copy stands, because REQ-STARTUP-142 requires it there, and the copy under `serena_agent`'s dist-info is

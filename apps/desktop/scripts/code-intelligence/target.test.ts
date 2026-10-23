@@ -9,9 +9,10 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { defaultTargetKey, interpreterKey, parseTarget, pinsHashInput, uvAssetFor } from './target.mjs';
+import { defaultTargetKey, interpreterKey, parseClosureLock, parseTarget, pinsHashInput, uvAssetFor } from './target.mjs';
 
-const PINS = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'pins.json'), 'utf8')) as {
+const HERE = dirname(fileURLToPath(import.meta.url));
+const PINS = JSON.parse(readFileSync(join(HERE, 'pins.json'), 'utf8')) as {
   python: string; distribution: string; version: string;
   uv: { version: string; assets: Record<string, { file: string; sha256: string }> };
 };
@@ -49,15 +50,46 @@ describe('interpreterKey — the full uv key, so uv never picks the interpreter 
   });
 });
 
-describe("pinsHashInput — the marker's hash changes with the target's architecture", () => {
+describe("pinsHashInput — the marker's hash changes with the target's architecture and the closure lock", () => {
   it('two targets of one system hash apart, so a tree built for the other is stale and --check says so', () => {
-    const x64 = hash(pinsHashInput(PINS, 4, { arch: 'x64' }));
-    const arm64 = hash(pinsHashInput(PINS, 4, { arch: 'arm64' }));
+    const x64 = hash(pinsHashInput(PINS, 5, { arch: 'x64' }, 'a'));
+    const arm64 = hash(pinsHashInput(PINS, 5, { arch: 'arm64' }, 'a'));
     expect(x64).not.toBe(arm64);
-    expect(hash(pinsHashInput(PINS, 4, { arch: 'x64' }))).toBe(x64);
+    expect(hash(pinsHashInput(PINS, 5, { arch: 'x64' }, 'a'))).toBe(x64);
   });
-  it('carries every pin it hashed before, and the recipe', () => {
-    expect(JSON.parse(pinsHashInput(PINS, 4, { arch: 'x64' }))).toEqual({ python: PINS.python, distribution: PINS.distribution, version: PINS.version, uv: PINS.uv.version, recipe: 4, targetArch: 'x64' });
+  it('two locks hash apart, so a tree installed from the other lock is stale', () => {
+    expect(hash(pinsHashInput(PINS, 5, { arch: 'x64' }, 'a'))).not.toBe(hash(pinsHashInput(PINS, 5, { arch: 'x64' }, 'b')));
+  });
+  it('carries every pin it hashed before, the recipe and the lock', () => {
+    expect(JSON.parse(pinsHashInput(PINS, 5, { arch: 'x64' }, 'a'))).toEqual({ python: PINS.python, distribution: PINS.distribution, version: PINS.version, uv: PINS.uv.version, recipe: 5, targetArch: 'x64', closure: 'a' });
+  });
+});
+
+// REQ-STARTUP-143: the reviewed-exceptions table names exact versions, so the closure it reviews must not be resolved on the
+// day of the build (docs/defects/fixed/the-code-intelligence-bundle-pins-serena-agent-and-not-its-dependencies.md).
+describe('parseClosureLock — every distribution of the closure at one exact version, by hash', () => {
+  const H = 'a'.repeat(64);
+  it('reads name, version, marker and hashes over continuation lines, and skips comments', () => {
+    const text = `# header\nclr-loader==0.3.1 ; sys_platform == 'win32' \\\n    --hash=sha256:${H} \\\n    --hash=sha256:${'b'.repeat(64)}\n    # via pythonnet\nRuamel.Yaml==0.18.14 \\\n    --hash=sha256:${H}\n`;
+    expect(parseClosureLock(text)).toEqual({ entries: [
+      { name: 'clr-loader', version: '0.3.1', marker: "sys_platform == 'win32'", hashes: [H, 'b'.repeat(64)] },
+      { name: 'ruamel-yaml', version: '0.18.14', marker: null, hashes: [H] },
+    ] });
+  });
+  it('refuses a range, a bare name and an unhashed pin: each would let the build resolve again', () => {
+    expect(parseClosureLock(`certifi>=2026.7.22 --hash=sha256:${H}\n`)).toEqual({ error: expect.stringMatching(/not an exact, hashed pin: certifi>=2026\.7\.22/) });
+    expect(parseClosureLock('certifi\n')).toEqual({ error: expect.stringMatching(/not an exact, hashed pin/) });
+    expect(parseClosureLock('certifi==2026.10.23\n')).toEqual({ error: 'the closure lock pins certifi==2026.10.23 without a hash' });
+    expect(parseClosureLock('# nothing\n')).toEqual({ error: 'the closure lock holds no requirement' });
+  });
+  it('the committed locks parse, and closure.lock pins the distribution at the pinned version, once', () => {
+    const lock = parseClosureLock(readFileSync(join(HERE, 'closure.lock'), 'utf8'));
+    if ('error' in lock) throw new Error(lock.error);
+    expect(lock.entries.filter((e) => e.name === PINS.distribution)).toEqual([expect.objectContaining({ version: PINS.version, marker: null })]);
+    expect(new Set(lock.entries.map((e) => e.name)).size).toBe(lock.entries.length);
+    const build = parseClosureLock(readFileSync(join(HERE, 'closure-build.lock'), 'utf8'));
+    if ('error' in build) throw new Error(build.error);
+    expect(build.entries.map((e) => e.name)).toEqual(['setuptools']);
   });
 });
 

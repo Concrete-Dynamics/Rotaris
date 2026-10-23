@@ -51,9 +51,36 @@ export function interpreterKey(pythonPin, target) {
   return `cpython-${pythonPin}-${TARGETS[target.key]}`;
 }
 
-/** What the marker's hash is over: the pins, the recipe and the target's architecture, so a tree built for another one is stale. */
-export function pinsHashInput(pins, recipe, target) {
-  return JSON.stringify({ python: pins.python, distribution: pins.distribution, version: pins.version, uv: pins.uv.version, recipe, targetArch: target.arch });
+/**
+ * What the marker's hash is over: the pins, the recipe, the target's architecture and the closure lock's sha256, so a tree
+ * built for another architecture, or from another lock, is stale.
+ */
+export function pinsHashInput(pins, recipe, target, closureSha256) {
+  return JSON.stringify({ python: pins.python, distribution: pins.distribution, version: pins.version, uv: pins.uv.version, recipe, targetArch: target.arch, closure: closureSha256 });
+}
+
+/**
+ * The closure lock (`closure.lock`, written by `pnpm code-intel:lock`, read by `bundle.mjs`): every distribution of the
+ * runtime's dependency closure, for every target at once (`uv pip compile --universal`), each at one exact version with
+ * the sha256 of every file the index offers for it. Returns `{ entries: [{ name, version, marker, hashes }] }`, or
+ * `{ error }` for a requirement that is not `name==version` or carries no hash — a range, a URL or an unhashed pin would
+ * let the build resolve again, which is what the lock exists to prevent (REQ-STARTUP-143: the reviewed-exceptions table
+ * can never disagree with the build it covers;
+ * `docs/defects/fixed/the-code-intelligence-bundle-pins-serena-agent-and-not-its-dependencies.md`).
+ */
+export function parseClosureLock(text) {
+  const entries = [];
+  // A requirement continues over `\`-ended lines; comments (uv's `# via` annotations, the header) are not requirements.
+  const logical = text.replace(/\r\n/g, '\n').replace(/\\\n/g, ' ').split('\n').map((l) => l.replace(/(^|\s)#.*$/, '').trim()).filter(Boolean);
+  for (const line of logical) {
+    const m = /^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s;]+)\s*(?:;\s*(.*?))?\s*((?:--hash=sha256:[0-9a-f]{64}\s*)*)$/.exec(line);
+    if (!m) return { error: `the closure lock holds a requirement that is not an exact, hashed pin: ${line.slice(0, 120)}` };
+    const hashes = [...m[4].matchAll(/--hash=sha256:([0-9a-f]{64})/g)].map((h) => h[1]);
+    if (hashes.length === 0) return { error: `the closure lock pins ${m[1]}==${m[2]} without a hash` };
+    entries.push({ name: m[1].toLowerCase().replace(/[._-]+/g, '-'), version: m[2], marker: m[3]?.trim() || null, hashes });
+  }
+  if (entries.length === 0) return { error: 'the closure lock holds no requirement' };
+  return { entries };
 }
 
 /**

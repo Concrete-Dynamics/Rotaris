@@ -1,0 +1,8 @@
+# The build constraints for the closure's distributions built from source (proxy-tools): the setuptools their
+# setup.py builds with, at one version and by hash.
+# Written by `pnpm code-intel:lock` (uv 0.12.5, Python 3.13.15); bundle.mjs installs exactly this and resolves
+# nothing. A changed version is a change the notices step reviews (REQ-STARTUP-143).
+setuptools==84.2.1 \
+    --hash=sha256:3ff8b3b5492a0aa66960f4419365a86b84e013070d4313e4d4a6894f5d64d6bc \
+    --hash=sha256:ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2
+    # via -r setuptools.in

@@ -24,9 +24,17 @@
 //    servers, with the same four fields.
 //  - OQ-74: a component that carries licence text but declares no licence identifier fails validation outright; the
 //    reviewed-exceptions table covers a component with no licence text only, as REQ-STARTUP-143 words it.
+//    *Resolved 2026-10-23 on the owner's delegation:* a second kind of entry, `"covers": "identifier"`, may supply the
+//    identifier of a dependency that declares none, and only while the dependency ships, as license text, the file the
+//    entry names and that file is the claimed licence's text (LICENSE_TEXT_CHECKS). A text entry still never excuses a
+//    missing identifier, and an identifier entry never excuses missing text.
 //  - OQ-75: "its full license text" is a file that carries the licence. A file that only names it, only sends the
 //    reader elsewhere for it, or only attributes (NOTICE, AUTHORS) is reproduced with the component and never counted
 //    as its text, so a component that ships nothing else takes the reviewed route like one that ships no file at all.
+//    *Added 2026-10-23:* a text entry may carry `licenseText`, the claimed licence's text as the reviewer obtained it
+//    outside the component (a file under tools/notices/licenses/ and the URL it came from), and `embedded`, the licence
+//    of a separately licensed work the component vendors, read from the installed component. Both are reproduced
+//    beside the component under their own heading and neither is counted as the component's own licence text.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { brotliDecompressSync } from 'node:zlib';
@@ -82,6 +90,26 @@ const REFERENCE_MAX = 2000;
 const SHORT_LICENSE_GRANT = /permission\s+is\s+hereby\s+granted|permission\s+to\s+use,\s+copy,\s+modify|redistribution\s+and\s+use\s+in\s+source\s+and\s+binary\s+forms|this\s+software\s+is\s+provided\s+['‘]as-is['’]|free\s+and\s+unencumbered\s+software|disclaims\s+copyright\s+to\s+this\s+source\s+code/i;
 /** Values that declare nothing: setuptools' default and npm's pointer to a file. */
 const NO_IDENTIFIER = /^(unknown|none|)$|^see licen[cs]e in /i;
+/**
+ * The identifiers a reviewed exception may pair with a text, each with what that licence's text must say (OQ-74,
+ * OQ-75). A text the reviewer supplies, a vendored work's licence and a file an identifier entry names are held to the
+ * identifier claimed for them; an identifier with no check here cannot be paired with a text at all.
+ */
+export const LICENSE_TEXT_CHECKS = Object.freeze({
+  'Apache-2.0': [/Apache License Version 2\.0, January 2004/, /TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION/],
+  'MPL-2.0': [/Mozilla Public License Version 2\.0/, /Exhibit A - Source Code Form License Notice/],
+  MIT: [/Permission is hereby granted, free of charge, to any person obtaining a copy/, /THE SOFTWARE IS PROVIDED "AS IS"/],
+  // Two conditions and no third: the clause the three-clause BSD adds is the endorsement one.
+  'BSD-2-Clause': [/Redistribution and use in source and binary forms/, /^(?!.*endorse or promote)/],
+  ISC: [/Permission to use, copy, modify, and\/or distribute this software for any purpose with or without fee is hereby granted/],
+});
+/** Why a text is not the named licence's, or null when it is. Line breaks and indentation are not the licence's. */
+function licenseTextMismatch(license, text) {
+  const checks = Object.hasOwn(LICENSE_TEXT_CHECKS, license) ? LICENSE_TEXT_CHECKS[/** @type {keyof typeof LICENSE_TEXT_CHECKS} */ (license)] : null;
+  if (!checks) return `the generator holds no check for ${license}'s text (${Object.keys(LICENSE_TEXT_CHECKS).join(', ')})`;
+  const flat = text.replace(/\s+/g, ' ');
+  return checks.every((c) => c.test(flat)) ? null : `it is not the text of ${license}`;
+}
 
 // ---- small readers ---------------------------------------------------------------------------------------------
 
@@ -706,29 +734,84 @@ function dayNumber(date) {
   return Number.isNaN(t) || new Date(t).toISOString().slice(0, 10) !== date ? null : t / 86_400_000;
 }
 
+/** The two kinds of entry: REQ-STARTUP-143's, for a dependency with no licence text, and OQ-74's, for one with no identifier. */
+const ENTRY_FIELDS = Object.freeze({
+  text: ['component', 'versions', 'license', 'whyNoText', 'reviewer', 'reviewedOn', 'expires'],
+  identifier: ['component', 'versions', 'license', 'whyNoIdentifier', 'licenseFile', 'reviewer', 'reviewedOn', 'expires'],
+});
+/** Where a text the reviewer obtained outside the component is kept: beside the generator, like the fonts' texts. */
+const SUPPLIED_TEXT_DIR = 'tools/notices/licenses/';
+const nonEmpty = (v) => typeof v === 'string' && v.trim() !== '';
+
+/**
+ * A text entry's two optional parts (OQ-75): `licenseText`, the claimed licence's text from outside the component, read
+ * here and held to the identifier; `embedded`, a vendored work's licence, whose file is read with the component.
+ * Answers the entry with its supplied text read in, or why it cannot be read.
+ */
+function textEntryParts(root, e) {
+  if (e.licenseText !== undefined) {
+    const t = e.licenseText;
+    if (!isObject(t) || !nonEmpty(t.file) || !nonEmpty(t.source)) return 'licenseText must carry a file and a source';
+    if (!t.file.startsWith(SUPPLIED_TEXT_DIR) || t.file.includes('..')) return `licenseText ${t.file} is not under ${SUPPLIED_TEXT_DIR}`;
+    if (!/^https:\/\/\S+$/.test(t.source)) return `licenseText's source ${t.source} is not an https URL`;
+    let text;
+    try { text = normalize(readFileSync(join(root, t.file), 'utf8')); } catch { return `licenseText ${t.file} is missing`; }
+    if (text === '' || licenseTextKind(t.file, text) !== 'text') return `licenseText ${t.file} carries no license text`;
+    const mismatch = licenseTextMismatch(e.license, text);
+    if (mismatch) return `licenseText ${t.file}: ${mismatch}`;
+    e = { ...e, licenseText: { file: t.file, source: t.source, text } };
+  }
+  if (e.embedded !== undefined) {
+    if (!Array.isArray(e.embedded) || e.embedded.length === 0) return 'embedded must be a non-empty list';
+    for (const w of e.embedded) {
+      if (!isObject(w) || !nonEmpty(w.work) || !nonEmpty(w.license) || !nonEmpty(w.file)) return 'each embedded work must carry a work, a license and a file';
+      if (w.file.startsWith('/') || w.file.split('/').includes('..')) return `embedded work ${w.work}: ${w.file} is not a path inside the component`;
+      if (!Object.hasOwn(LICENSE_TEXT_CHECKS, w.license)) return `embedded work ${w.work}: the generator holds no check for ${w.license}'s text`;
+    }
+  }
+  return e;
+}
+
 /**
  * REQ-STARTUP-143's maintainer-review table. An entry carries the seven fields; its expiry is at most
  * MAX_EXCEPTION_DAYS after its review, and given `today`, its review is not dated after it — a review dated ahead
  * would otherwise stand from now until a year past that date. A malformed entry fails validation naming it — a
- * reviewed exception that cannot be read is not one.
+ * reviewed exception that cannot be read is not one. An entry with `"covers": "identifier"` is OQ-74's kind: it
+ * carries `whyNoIdentifier` and `licenseFile` instead of `whyNoText`, and no text of its own.
  */
 export function reviewedExceptions(root, problems, today) {
   const table = readJson(root, PATHS.exceptions, problems, 'the reviewed-exceptions table');
   if (!table) return [];
   if (!Array.isArray(table.exceptions)) { problems.push(`the reviewed-exceptions table ${PATHS.exceptions} carries no exceptions list`); return []; }
   const out = [];
-  for (const [i, e] of table.exceptions.entries()) {
+  for (const [i, raw] of table.exceptions.entries()) {
+    let e = raw;
     const label = `${PATHS.exceptions} entry ${i + 1}${typeof e?.component === 'string' ? ` (${e.component})` : ''}`;
-    const missing = ['component', 'versions', 'license', 'whyNoText', 'reviewer', 'reviewedOn', 'expires'].filter((k) => typeof e?.[k] !== 'string' || e[k].trim() === '');
+    const covers = e?.covers ?? 'text';
+    if (covers !== 'text' && covers !== 'identifier') { problems.push(`${label}: covers is ${JSON.stringify(covers)}, not "text" or "identifier"`); continue; }
+    const missing = ENTRY_FIELDS[covers].filter((k) => !nonEmpty(e?.[k]));
     if (missing.length > 0) { problems.push(`${label} has no ${missing.join(', ')}`); continue; }
     const reviewed = dayNumber(e.reviewedOn), expires = dayNumber(e.expires);
     if (reviewed === null || expires === null) { problems.push(`${label}: reviewedOn and expires must be YYYY-MM-DD dates`); continue; }
     if (expires < reviewed || expires - reviewed > MAX_EXCEPTION_DAYS) { problems.push(`${label}: expires ${e.expires} is not within ${MAX_EXCEPTION_DAYS} days after the review on ${e.reviewedOn}`); continue; }
     if (today !== undefined && e.reviewedOn > today) { problems.push(`${label}: reviewedOn ${e.reviewedOn} is after today, ${today}`); continue; }
+    if (covers === 'identifier') {
+      // The component's own file is its text; an identifier entry has nothing to add to it.
+      const extra = ['whyNoText', 'licenseText', 'embedded'].filter((k) => e[k] !== undefined);
+      if (extra.length > 0) { problems.push(`${label}: an identifier exception supplies no text, and carries ${extra.join(', ')}`); continue; }
+      if (!Object.hasOwn(LICENSE_TEXT_CHECKS, e.license)) { problems.push(`${label}: the generator holds no check for ${e.license}'s text, so it cannot supply that identifier`); continue; }
+    } else {
+      const parts = textEntryParts(root, e);
+      if (typeof parts === 'string') { problems.push(`${label}: ${parts}`); continue; }
+      e = parts;
+    }
     out.push(e);
   }
   return out;
 }
+
+/** An entry's kind: REQ-STARTUP-143's for missing text, unless it says it covers a missing identifier (OQ-74). */
+const coversIdentifier = (e) => e.covers === 'identifier';
 
 /** The exception covering one component, or why none does: an expired entry and an out-of-range one are no entry. */
 export function exceptionFor(component, exceptions, today) {
@@ -839,22 +922,47 @@ export function collectNotices({ root, platform, today }) {
   const interpreter = runtime.filter((c) => c.ecosystem === 'interpreter');
   const distributions = runtime.filter((c) => c.ecosystem !== 'interpreter').sort(order);
 
+  const textEntries = exceptions.filter((e) => !coversIdentifier(e));
+  const identifierEntries = exceptions.filter(coversIdentifier);
   for (const c of [...application, ...interpreter, ...distributions]) {
     const where = c.section === 'runtime' ? 'code-intelligence runtime' : c.containedIn ? `compiled into ${c.containedIn}` : c.ecosystem;
-    if (!c.license) problems.push(`${c.name} ${c.version} (${where}): declares no license identifier`);
     // An empty licence file is no licence text, and neither is one that only names the licence, points elsewhere for
     // it or attributes (OQ-75); those are kept, for the notices they carry. Electron, the interpreter and a
     // compiled-in library have one named file each, which their readers already reported missing or empty; only a
     // dependency takes the reviewed route.
     c.texts = c.texts.filter((t) => t.text !== '').map((t) => ({ ...t, kind: licenseTextKind(t.file, t.text) }));
+    if (!c.license) {
+      // OQ-74: only a dependency, only by an identifier entry, and only while the file it names is the claimed text.
+      const named = c.textRequired ? [] : identifierEntries.filter((e) => e.component === c.name);
+      const { entry, reason } = exceptionFor(c, named, today);
+      const file = entry ? c.texts.find((t) => t.file === entry.licenseFile) : undefined;
+      const mismatch = entry && file?.kind === 'text' ? licenseTextMismatch(entry.license, file.text) : null;
+      if (entry && file?.kind === 'text' && !mismatch) c.identifierException = entry;
+      else if (named.length === 0) problems.push(`${c.name} ${c.version} (${where}): declares no license identifier`);
+      else if (!entry) problems.push(`${c.name} ${c.version} (${where}): declares no license identifier and ${reason.replace('reviewed exception', 'reviewed identifier exception')} (${PATHS.exceptions})`);
+      else problems.push(`${c.name} ${c.version} (${where}): declares no license identifier, and its reviewed identifier exception names ${entry.licenseFile}, which ${!file ? 'it does not ship' : file.kind !== 'text' ? `${KIND_SAYS[file.kind]}` : `is not its license text: ${mismatch}`} (${PATHS.exceptions})`);
+    }
     if (!c.texts.some((t) => t.kind === 'text')) {
       const instead = c.texts.map((t) => `${t.file} ${KIND_SAYS[t.kind]}`).join('; ');
       const what = `${c.name} ${c.version} (${where}): carries no license text${instead ? ` — ${instead}` : ''}`;
       if (!c.textRequired) {
-        const { entry, reason } = exceptionFor(c, exceptions, today);
+        const { entry, reason } = exceptionFor(c, textEntries, today);
         if (entry) c.exception = entry;
         else problems.push(`${what}${instead ? ' —' : ''} and ${reason} (${PATHS.exceptions})`);
       } else if (instead) problems.push(what);
+    }
+    // A vendored work's licence travels with the component under its own heading, never as the component's text.
+    if (c.exception?.embedded) {
+      c.embedded = [];
+      for (const w of c.exception.embedded) {
+        const at = `${c.name} ${c.version} (${where}): the license of its embedded work ${w.work}, ${w.file},`;
+        if (!c.dir) { problems.push(`${at} cannot be read: an embedded work is read from an installed npm package only`); continue; }
+        let text;
+        try { text = normalize(readFileSync(join(c.dir, w.file), 'utf8')); } catch { problems.push(`${at} is missing`); continue; }
+        const mismatch = text === '' ? 'it is empty' : licenseTextMismatch(w.license, text);
+        if (mismatch) { problems.push(`${at} is not its license text: ${mismatch}`); continue; }
+        c.embedded.push({ work: w.work, license: w.license, file: w.file, text });
+      }
     }
     delete c.dir;
   }
@@ -880,14 +988,23 @@ function wrap(text, width = 78, indent = '') {
 
 function entry(c, extra = []) {
   const lines = [THIN, `Component: ${c.name}`, `Version:   ${c.version ?? 'not stated'}`];
-  const license = c.license ?? 'none declared';
+  const id = c.identifierException;
+  const license = id ? `${id.license} (none declared; identified by a maintainer-reviewed exception, reviewed ${id.reviewedOn}, expires ${id.expires})` : c.license ?? 'none declared';
   lines.push(`License:   ${c.exception ? `${c.exception.license} (a maintainer-reviewed exception, reviewed ${c.exception.reviewedOn}, expires ${c.exception.expires})` : license}`);
   lines.push(...extra, THIN, '');
+  if (id) lines.push(wrap(`This component declares no license identifier; the license text it ships, ${id.licenseFile}, is reproduced below. ${id.whyNoIdentifier}`), '');
   if (c.exception) lines.push(wrap(`No license text is distributed with this component. ${c.exception.whyNoText}`), '');
+  const supplied = c.exception?.licenseText;
+  if (supplied) lines.push(wrap(`The ${c.exception.license} text reproduced below under its own heading is not part of this component: the reviewer obtained it from ${supplied.source}.`), '');
   const shown = c.texts.filter((t) => t.text !== '');
   for (const t of shown) {
-    if (shown.length > 1) lines.push(`----- ${t.file} -----`, '');
+    if (shown.length > 1 || supplied) lines.push(`----- ${t.file} -----`, '');
     lines.push(t.text, '');
+  }
+  if (supplied) lines.push(`----- ${c.exception.license}, from ${supplied.source} (not shipped with this component) -----`, '', supplied.text, '');
+  for (const w of c.embedded ?? []) {
+    lines.push(`----- Embedded work: ${w.work}, licensed under ${w.license} (${w.file}) -----`, '');
+    lines.push(wrap(`This component contains ${w.work}, which is licensed separately under ${w.license}. Its license, as this component ships it at ${w.file}, follows; it is not the license of ${c.name}.`), '', w.text, '');
   }
   return lines.join('\n');
 }
@@ -905,7 +1022,7 @@ function subheading(title) {
 export function renderNotices(model) {
   const { product, application, interpreter, distributions, assets, manifest, electron } = model;
   const credits = electron?.credits ?? [];
-  const lgpl = [...application, ...interpreter, ...distributions, ...assets].filter((c) => /LGPL|Lesser General Public/i.test(c.license ?? ''));
+  const lgpl = [...application, ...interpreter, ...distributions, ...assets].filter((c) => /LGPL|Lesser General Public/i.test(c.license ?? c.identifierException?.license ?? ''));
   // The credits carry no identifier, so the sentence about them stands only when one of their texts is the LGPL's.
   const lgplCredits = credits.some((c) => /GNU LESSER GENERAL PUBLIC LICENSE/i.test(c.text));
   const title = `${product.name} ${product.version} — third-party software notices`;

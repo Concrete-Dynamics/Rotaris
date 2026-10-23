@@ -127,32 +127,6 @@
     },
     {
       "component": "certifi",
-      "versions": "2026.7.22",
-      "license": "MPL-2.0",
-      "whyNoText": "The wheel's license file (989 bytes) describes the bundled ca-bundle.crt and quotes MPL-2.0's Exhibit A, pointing to http://mozilla.org/MPL/2.0/; neither the wheel nor the project's repository (tag 2026.07.22) carries a copy of the MPL-2.0 text.",
-      "licenseText": {
-        "file": "tools/notices/licenses/MPL-2.0.txt",
-        "source": "https://www.mozilla.org/media/MPL/2.0/index.txt"
-      },
-      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
-      "reviewedOn": "2026-10-23",
-      "expires": "2027-10-23"
-    },
-    {
-      "component": "certifi",
-      "versions": "2026.10.19",
-      "license": "MPL-2.0",
-      "whyNoText": "The wheel's license file (989 bytes) describes the bundled ca-bundle.crt and quotes MPL-2.0's Exhibit A, pointing to http://mozilla.org/MPL/2.0/; neither the wheel nor the project's repository (tag 2026.07.22) carries a copy of the MPL-2.0 text. The 2026.10.19 wheel's license file is byte-identical to 2026.7.22's (sha256 e93716da6b9c0d5a4a1df60fe695b370f0695603d21f6f83f053e42cfc10caf7).",
-      "licenseText": {
-        "file": "tools/notices/licenses/MPL-2.0.txt",
-        "source": "https://www.mozilla.org/media/MPL/2.0/index.txt"
-      },
-      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
-      "reviewedOn": "2026-10-23",
-      "expires": "2027-10-23"
-    },
-    {
-      "component": "certifi",
       "versions": "2026.10.23",
       "license": "MPL-2.0",
       "whyNoText": "The wheel's licenses/LICENSE (989 bytes, sha256 e93716da6b9c0d5a4a1df60fe695b370f0695603d21f6f83f053e42cfc10caf7, byte-identical to 2026.7.22's and 2026.10.19's) describes the bundled ca-bundle.crt and quotes MPL-2.0's Exhibit A, pointing to http://mozilla.org/MPL/2.0/; the project's repository at tag 2026.10.23 (tag object a79ed76041c98c3eca6c5bfa3d09d9382e059b83) holds the same 989-byte LICENSE at its root and no copy of the MPL-2.0 text. This is the version closure.lock pins (apps/desktop/scripts/code-intelligence/closure.lock).",

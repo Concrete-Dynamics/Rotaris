@@ -24,7 +24,8 @@ outright.
 - `apps/desktop/scripts/code-intelligence/bundle.mjs` — the `uv pip install … serena-agent==<pin>` call, and the marker
   whose hash input is the pins.
 - `apps/desktop/scripts/code-intelligence/pins.json` — the pins: Python, serena-agent and uv, no dependency lock.
-- `tools/notices/reviewed-exceptions.json` — the two `certifi` entries this forced.
+- `tools/notices/reviewed-exceptions.json` — the two `certifi` entries this forced, both dropped once the
+  closure pinned one version.
 
 ## Fixed, 2026-10-23
 

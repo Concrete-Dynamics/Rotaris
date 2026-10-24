@@ -17,10 +17,10 @@ how any other implementation achieves it.
 - Behavioral target: `ROTARIS-CRW-001` (see [`../clean-room/reference-record.md`](../clean-room/reference-record.md))
 - Status: **draft — gate decisions recorded, awaiting the sufficiency statement**
 - Open questions: resolved per domain; decisions recorded in [`resolutions/`](resolutions/)
-- Requirements: **3,969** identifiers across the 19 shipping domains, of which **258** are withdrawn
-  in place, leaving **3,711** that carry live behavior. The two retired domains (17 and 18) hold a
+- Requirements: **3,973** identifiers across the 19 shipping domains, of which **258** are withdrawn
+  in place, leaving **3,715** that carry live behavior. The two retired domains (17 and 18) hold a
   further **444** identifiers, **10** of them withdrawn in place; those are counted separately and
-  are not part of the shipping total — **4,413** identifiers in all, **268** of them withdrawn.
+  are not part of the shipping total — **4,417** identifiers in all, **268** of them withdrawn.
   *(Corrected 2026-10-13: this read 3,954, 3,696 and 4,398, with REQ-TOOLS at 192 and REQ-MCP at 117 below. REQ-MCP-118
   of the code-intelligence round and REQ-TOOLS-193 of the OQ-61 round were minted and never counted;
   `tools/symbol-artifact/spec-readme-counts.test.ts` now holds every figure here to the generated artifact.)*
@@ -136,7 +136,7 @@ never renumbered or reused. A changed requirement gets a new revision, not a new
 |---|--------|--------|-----:|----------:|----------|
 | 01 | [Multi-Agent Run Orchestration](01-run-orchestration.md) | `REQ-ORCH` | 156 | 1 | core |
 | 02 | [Run Monitoring and Steering](02-run-monitoring-steering.md) | `REQ-MONITOR` | 306 | 12 | core |
-| 03 | [Conversation, Composer, and Transcript](03-conversation-composer-transcript.md) | `REQ-CHAT` | 174 | 49 | core |
+| 03 | [Conversation, Composer, and Transcript](03-conversation-composer-transcript.md) | `REQ-CHAT` | 178 | 49 | core |
 | 04 | [Model Providers, Sign-In, and Model Routing](04-model-providers-auth.md) | `REQ-PROVIDER` | 152 | 18 | core |
 | 05 | [Agent Tooling, Terminal Execution, Permissions, and Approvals](05-tools-permissions-approvals.md) | `REQ-TOOLS` | 193 | 0 | core |
 | 06 | [Git Integration, Worktrees, and Checkpoints](06-git-worktrees-checkpoints.md) | `REQ-GIT` | 161 | 8 | core |

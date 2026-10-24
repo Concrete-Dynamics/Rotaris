@@ -6,6 +6,7 @@ import { markMotionStart } from '../motion.js';
 import { TerminalPreviewBlock } from '../terminal/TerminalPreviewBlock.js';
 import type { TerminalPreview } from '../terminal/streams.js';
 import { FACT_SEPARATOR, activitySpanMs, activitySummary, groupSeverity, groupSummary, isLive, isReasoningRow, reasoningChars, rowKey, segmentFacts, type Severity } from './project.js';
+import { describeToolCall } from './tool-description.js';
 
 /**
  * Part AA — **the ONE row renderer** (ADR-0051's second execution). What one row looks like once a slot is
@@ -791,7 +792,11 @@ export function Row(p: RowProps) {
     const blockedReason = row.blockedReason ?? row.output ?? 'the call was not executed';
     const description = outcome.state === 'blocked' ? `Blocked: ${blockedReason}` : undefined;
     const stream = streamIdOf(row);
-    const header = stripOutcomeGlyph(row.body);
+    // REQ-CHAT-175..178: the header is the call's derived description — what the agent is doing, in words — and the
+    // tool's own name is the fallback for a call this build derives none for. It is drawn at every stop of
+    // `display/toolVerbosity`; the stop decides what ELSE the row draws, never whether this line is drawn.
+    const derived = describeToolCall(row.toolName ?? '', row.input);
+    const header = derived !== '' ? derived : stripOutcomeGlyph(row.body);
     // Part AM — REQ-SHELL-079 / REQ-CHAT-066: the live preview block, drawn whenever this renderer retains a screen
     // for the row's stream, expanded or not, so it stays visible; the card's INPUT/OUTPUT sit beneath it when open.
     const preview = stream !== null && !row.settled ? (surface.terminalPreview?.(stream) ?? null) : null;
@@ -810,7 +815,7 @@ export function Row(p: RowProps) {
               data-testid="tool-header"
             >
               <span className="tool__chevron" aria-hidden="true">{expanded ? '▾' : '▸'}</span>
-              <span className="tool__name"><Highlighted text={header} match={match} /></span>
+              <span className="tool__name tool__description"><Highlighted text={header} match={match} /></span>
               {outcome.text !== '' && (
                 <span ref={(element) => { if (element && outcome.state === 'running') markMotionStart(element); }} className={`tool__outcome tool__outcome--${outcome.state}`}>{outcome.text}</span>
               )}

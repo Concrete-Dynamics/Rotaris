@@ -5,4 +5,5 @@ export * from './pool.js';
 export * from './cache.js';
 export * from './search.js';
 export * from './Row.js';
+export * from './tool-description.js';
 export * from './TranscriptPane.js';

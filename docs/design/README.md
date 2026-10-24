@@ -524,10 +524,11 @@ per-tab banner states of `REQ-SHELL-089` – `REQ-SHELL-094`. `LogPanel` serves 
 truncation line "… +N more lines, diff truncated".
 
 **G7 — Transcript row and virtualised transcript.** `REQ-CHAT-046` (twelve row categories),
-`REQ-CHAT-055` – `REQ-CHAT-067`, `REQ-CHAT-163` – `REQ-CHAT-165`. Timestamp column 52 px, role column
+`REQ-CHAT-055` – `REQ-CHAT-067`, `REQ-CHAT-163` – `REQ-CHAT-165`, `REQ-CHAT-175` – `REQ-CHAT-178`. Timestamp column 52 px, role column
 112 px, minimum row height 30 px, timestamps in the monospace stack at 8 pt, attribution drawn only
 on the first row of a block, continuation rows showing a 2 px persona-coloured bar in the role
-gutter, row margins 10 px horizontal and 5 px vertical. Plus the tool row (`▸ toolname args` with
+gutter, row margins 10 px horizontal and 5 px vertical. Plus the tool row (`▸ <description>` — `Runs npm test`,
+`Reads src/app.ts`, the tool's own name where the build derives no line (REQ-CHAT-175) — with
 `ok · 3.2s` / `failed` / `blocked · Ns` / pulsing `◉ running…`), its expansion into an INPUT/OUTPUT
 card, the thinking row, and the folded group header carrying per-outcome counts and taking its colour
 from the most severe member. This is the densest single piece of undesigned component work in the
@@ -776,3 +777,26 @@ each from the material rather than inventing one.
    transcript drew the same tree flat. The indent is `var(--rt-space-4)` per level, capped at two, applied as
    padding inside the row box — `REQ-CHAT-057`'s 52 px and 112 px columns and its margins are untouched, which
    is why `PD-CHAT-005` extends that requirement rather than narrowing it.
+
+### 7.4 A tool row says what it is doing — 2026-10-24 (`REQ-CHAT-175` – `REQ-CHAT-178`)
+
+The header of a tool row read `▸ read_file` — the mechanism's name and nothing about the work, so a reader
+following a long transcript had to open each row to learn what the agent was doing. The header is now the call's
+**description**: `▸ Reads src/app.ts`, `▸ Runs npm test`, `▸ Searches for release.yml`, and the tool's own name
+where the build derives no line. The change follows the material rather than adding to it:
+
+1. **The one-liner stays a one-liner.** The description takes the place the tool's name held in the same
+   `▸`-prefixed header, in the same tool-axis colour, at the same scale, with the outcome still pushed to the
+   right of the same line — `REQ-CHAT-060`'s drawing, with a sentence where a name was. It is drawn at every stop
+   of the transcript's verbosity slider (`REQ-CHAT-177`), so no stop is a stop at which the row goes back to a
+   bare tool name.
+2. **One line, ellipsized.** The description is capped at 120 code points in the derivation and drawn
+   `nowrap` with an ellipsis in a narrow window, so a long command cannot turn a 30 px row into a paragraph. The
+   untruncated arguments remain where the material puts them: in the card `REQ-CHAT-061` opens, under `INPUT`.
+   The rule is scoped to `.tool__description` so the activity line's and the thinking row's own `.tool__name`
+   keep the wrapping they had.
+3. **Nothing else moved.** The chevron, the timestamp and role columns, the persona bar, the row margins, the
+   preview line and the card are untouched; `rows-proof`'s 52 px, 112 px and 30 px still measure from the live
+   layout. What the reader gained is a line of text the material always had room for, and what the change cost
+   is that a header can now be cut — which is why the card is still the place a call is read in full.
+

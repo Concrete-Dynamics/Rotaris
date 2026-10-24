@@ -936,3 +936,11 @@ To withdraw a compromised key, remove it from the set and from the secret, so th
 
 Each step owes what CLAUDE.md states for any change: `pnpm check` green, the affected view updated, and a
 mechanism's first execution reported into its record and into `first-executions.md`.
+
+### Published-asset verification — T3, 2026-10-24
+
+`node tools/release-pipeline/update-path-proof.mjs` checks the actual public v0.1.0rc1 assets with the
+updater's compiled-in public keys: a digest-character mutation refuses signature verification; the original
+verifies before parsing and both executable downloads must match the signed digests. The method, execution
+and limits are in [the T3 record](../research/update-path-proof.md). No installer is run and the Windows
+apply/restart evidence remains owed.

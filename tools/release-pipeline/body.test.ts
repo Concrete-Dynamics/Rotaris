@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { changelog, changelogFromGit, FIRST_RELEASE_CHANGELOG, previousReleaseTag, releaseBody, releaseMetadata, WINDOWS_ONLY_LINE } from './body.mjs';
+import { changelog, changelogFromGit, draftReleaseArguments, FIRST_RELEASE_CHANGELOG, previousReleaseTag, releaseBody, releaseMetadata, releaseStateProblems, WINDOWS_ONLY_LINE } from './body.mjs';
 
 /**
  * The release's name and body (REQ-STARTUP-033, REQ-STARTUP-034, REQ-STARTUP-035 narrowed by PD-STARTUP-001;
@@ -159,5 +159,45 @@ describe('REQ-STARTUP-034 — the name and the prerelease flag', () => {
     expect(releaseMetadata('v0.1.0a2').prerelease).toBe(true);
     expect(releaseMetadata('v0.1.0b3').prerelease).toBe(true);
     expect(() => releaseMetadata('v0.1.0-rc1')).toThrow(/is not a release tag/);
+  });
+});
+
+describe('REQ-STARTUP-034 at the release host — the draft\'s flag, both ways, and read back', () => {
+  it('creates an rc tag\'s draft with --prerelease=true', () => {
+    expect(draftReleaseArguments(releaseMetadata('v0.2.0rc1'), 'meta/release-body.md')).toEqual([
+      '--draft', '--verify-tag', '--title', 'Rotaris 0.2.0rc1', '--notes-file', 'meta/release-body.md', '--prerelease=true',
+    ]);
+    expect(draftReleaseArguments(releaseMetadata('v0.2.0a1'), 'b.md')).toContain('--prerelease=true');
+    expect(draftReleaseArguments(releaseMetadata('v0.2.0b2'), 'b.md')).toContain('--prerelease=true');
+  });
+
+  it('creates a stable tag\'s draft with --prerelease=false, never the host\'s default', () => {
+    const args = draftReleaseArguments(releaseMetadata('v0.2.0'), 'meta/release-body.md');
+    expect(args).toEqual(['--draft', '--verify-tag', '--title', 'Rotaris 0.2.0', '--notes-file', 'meta/release-body.md', '--prerelease=false']);
+    expect(args).not.toContain('--prerelease');
+  });
+
+  it('accepts the host\'s record when it carries the channel\'s flag, at either stage', () => {
+    expect(releaseStateProblems(releaseMetadata('v0.2.0rc1'), { tagName: 'v0.2.0rc1', name: 'Rotaris 0.2.0rc1', isDraft: true, isPrerelease: true }, 'draft')).toEqual([]);
+    expect(releaseStateProblems(releaseMetadata('v0.2.0'), { tagName: 'v0.2.0', name: 'Rotaris 0.2.0', isDraft: false, isPrerelease: false }, 'published')).toEqual([]);
+  });
+
+  it('refuses an rc release the host records as stable — v0.1.0rc1\'s published state', () => {
+    expect(releaseStateProblems(releaseMetadata('v0.1.0rc1'), { tagName: 'v0.1.0rc1', name: 'Rotaris 0.1.0rc1', isDraft: false, isPrerelease: false }, 'published')).toEqual([
+      'REQ-STARTUP-034: v0.1.0rc1 is of the prerelease channel (REQ-STARTUP-029), but the release host records prerelease=false',
+    ]);
+  });
+
+  it('refuses a stable release flagged prerelease, a wrong name, a wrong tag and a wrong stage, one sentence each', () => {
+    const problems = releaseStateProblems(releaseMetadata('v0.2.0'), { tagName: 'v0.2.1', name: 'Rotaris', isDraft: false, isPrerelease: true }, 'draft');
+    expect(problems).toEqual([
+      'the release host\'s release is for v0.2.1, not v0.2.0',
+      'REQ-STARTUP-034: the release is named "Rotaris", not "Rotaris 0.2.0"',
+      'REQ-STARTUP-034: v0.2.0 is of the stable channel (REQ-STARTUP-029), but the release host records prerelease=true',
+      'the release is published, where the draft stage expects a draft',
+    ]);
+    expect(releaseStateProblems(releaseMetadata('v0.2.0rc1'), { tagName: 'v0.2.0rc1', name: 'Rotaris 0.2.0rc1', isPrerelease: true }, 'draft')).toEqual([
+      'the release is published, where the draft stage expects a draft',
+    ]);
   });
 });

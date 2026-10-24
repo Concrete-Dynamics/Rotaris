@@ -1534,8 +1534,13 @@ Windows.
 **OQ-11 — Resolved by dissolution.** See *Resolved, and closed with the reason* above, and **OQ-44**,
 which the closure opened.
 
+<a id="oq-12"></a>
+
 **OQ-12 — The WORDING is CLOSED as a policy decision, 2026-09-06 and applied 2026-09-13; the MEASUREMENT
 stays open as evidence debt.** *(ADR-0004, ADR-0058.)*
+
+*Pointer, 2026-10-24 (owner request T7; rules nothing): a test concept — the invariants after a cut, which checks
+an agent can run and what each proves, and the owner's half — is [`power-loss-test-concept.md`](../research/power-loss-test-concept.md).*
 
 The accepted review answers the question this entry actually asked — what "atomic", "durable" and "flushed"
 each promise — and `REQ-SESSION-034` is now the product's single definition, in **three levels** that may not

@@ -94,6 +94,58 @@ describe('the stages in the workflow\'s order', () => {
   });
 });
 
+describe('the draft\'s channel flag (REQ-STARTUP-029, REQ-STARTUP-034)', () => {
+  function meta(tag: string) {
+    const version = tag.slice(1);
+    const assets = join(dir, 'assets');
+    mkdirSync(assets);
+    writeFileSync(join(assets, `Rotaris-${version}-windows-x64-setup.exe`), 'setup');
+    writeFileSync(join(assets, `Rotaris-${version}-windows-x64-portable.exe`), 'portable');
+    run(['manifest', assets, tag]);
+    spawnSync('git', ['init', '-q', dir]);
+    const out = join(dir, 'out');
+    expect(run(['body', assets, tag, out], { repo: dir })).toBe(0);
+    lines.out.length = 0;
+    return out;
+  }
+  function view(record: object) {
+    const path = join(dir, 'view.json');
+    writeFileSync(path, JSON.stringify(record));
+    return path;
+  }
+
+  it('an rc tag: release.json says prerelease, the draft is created --prerelease=true, and the host\'s record is held to it', () => {
+    const out = meta('v0.2.0rc1');
+    expect(JSON.parse(readFileSync(join(out, 'release.json'), 'utf8'))).toEqual({ tag: 'v0.2.0rc1', version: '0.2.0rc1', name: 'Rotaris 0.2.0rc1', prerelease: true });
+    expect(run(['draft-args', out])).toBe(0);
+    expect(lines.out).toEqual(['--draft', '--verify-tag', '--title', 'Rotaris 0.2.0rc1', '--notes-file', join(out, 'release-body.md'), '--prerelease=true']);
+    expect(run(['release-state', out, view({ tagName: 'v0.2.0rc1', name: 'Rotaris 0.2.0rc1', isDraft: true, isPrerelease: true }), 'draft'])).toBe(0);
+    expect(run(['release-state', out, view({ tagName: 'v0.2.0rc1', name: 'Rotaris 0.2.0rc1', isDraft: false, isPrerelease: false }), 'published'])).toBe(1);
+    expect(lines.err).toEqual(['error: REQ-STARTUP-034: v0.2.0rc1 is of the prerelease channel (REQ-STARTUP-029), but the release host records prerelease=false']);
+  });
+
+  it('a stable tag: the draft is created --prerelease=false, and a host record flagging it prerelease is refused', () => {
+    const out = meta('v0.2.0');
+    expect(run(['draft-args', out])).toBe(0);
+    expect(lines.out.at(-1)).toBe('--prerelease=false');
+    expect(run(['release-state', out, view({ tagName: 'v0.2.0', name: 'Rotaris 0.2.0', isDraft: true, isPrerelease: false }), 'draft'])).toBe(0);
+    expect(run(['release-state', out, view({ tagName: 'v0.2.0', name: 'Rotaris 0.2.0', isDraft: true, isPrerelease: true }), 'draft'])).toBe(1);
+    expect(lines.err).toEqual(['error: REQ-STARTUP-034: v0.2.0 is of the stable channel (REQ-STARTUP-029), but the release host records prerelease=true']);
+  });
+
+  it('the channel is re-derived from the recorded tag, never taken from release.json\'s own flag', () => {
+    const out = meta('v0.2.0rc1');
+    writeFileSync(join(out, 'release.json'), JSON.stringify({ tag: 'v0.2.0rc1', version: '0.2.0rc1', name: 'Rotaris 0.2.0rc1', prerelease: false }));
+    expect(run(['draft-args', out])).toBe(0);
+    expect(lines.out.at(-1)).toBe('--prerelease=true');
+  });
+
+  it('a stage other than draft or published is a usage error', () => {
+    const out = meta('v0.2.0');
+    expect(run(['release-state', out, view({}), 'final'])).toBe(2);
+  });
+});
+
 describe('each stage refuses on its own', () => {
   it('preflight refuses a build that carries no key (O-2) and a record with no row for the version', () => {
     expect(run(['preflight', 'v0.1.0'], { keyRecord: recordFile([]), keys: [] })).toBe(1);

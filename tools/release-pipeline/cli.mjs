@@ -16,10 +16,16 @@
  *                               recorded release this one may be offered to (REQ-STARTUP-032, 038, 167, 168 (b))
  *   body <dir> <tag> <out>      writes <out>/release-body.md and <out>/release.json — the body, the name, the
  *                               prerelease flag (REQ-STARTUP-033..035, PD-STARTUP-001)
+ *   draft-args <out>            prints, one per line, the `gh release create` arguments the draft is created with —
+ *                               the name, the body file and the channel's flag both ways (REQ-STARTUP-029, 034)
+ *   release-state <out> <view> <draft|published>
+ *                               holds what the release host recorded (`gh release view --json tagName,name,isDraft,
+ *                               isPrerelease`, saved to <view>) to <out>/release.json: the name, the stage, and
+ *                               prerelease exactly when the tag is of the prerelease channel (REQ-STARTUP-034)
  *   keys [<version>]            prints the key-record row this tree's build would commit (REQ-STARTUP-168 (b))
  *
  * Exit codes are the pipeline's (REQ-STARTUP-149): 0 done, 1 a handled refusal (every line `error: …`), 2 a usage
- * error. No command reaches the network, and none needs `pnpm install`: the signing job runs this file bare.
+ * error. No command reaches the network (`release-state` reads what the workflow fetched), and none needs `pnpm install`: the signing job runs this file bare.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -27,7 +33,7 @@ import { fileURLToPath } from 'node:url';
 import { artifactName, CHECKSUM_MANIFEST_NAME, CHECKSUM_SIGNATURE_NAME, parseChecksumManifest, parseReleaseTag } from '../release-naming/src/index.ts';
 import { readPortable } from '../../apps/desktop/scripts/lib/portable.mjs';
 import { readReleaseDirectory, verifyReleaseDirectory, writeChecksumManifest } from './assets.mjs';
-import { changelogFromGit, releaseBody, releaseMetadata } from './body.mjs';
+import { changelogFromGit, draftReleaseArguments, releaseBody, releaseMetadata, releaseStateProblems } from './body.mjs';
 import { checkBuildAgainstRecord, keyFingerprint, keyRecordRow, readKeyRecord, signManifest, SIGNING_KEY_VARIABLE, verifyReleaseSignature } from './signing.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -36,7 +42,7 @@ export const KEY_RECORD = join(HERE, 'key-record.json');
 /** Where `pnpm package` writes the portable it assembled (apps/desktop/scripts/package.mjs, step 2′). */
 export const PACKAGED_PORTABLE_DIR = join(REPO, 'apps', 'desktop', 'release', 'portable');
 
-const USAGE = 'usage: pnpm release:pipeline preflight <tag> | portable <dir> <tag> | manifest <dir> <tag> | sign <dir> | verify <dir> <tag> | body <dir> <tag> <out> | keys [<version>]';
+const USAGE = 'usage: pnpm release:pipeline preflight <tag> | portable <dir> <tag> | manifest <dir> <tag> | sign <dir> | verify <dir> <tag> | body <dir> <tag> <out> | draft-args <out> | release-state <out> <view> <draft|published> | keys [<version>]';
 
 class Usage extends Error {}
 
@@ -47,6 +53,12 @@ function tagOf(text) {
 
 function arity(args, n) {
   if (args.length !== n) throw new Usage(USAGE);
+}
+
+/** `body`'s metadata, re-derived from the tag it records: the channel is the grammar's, never the file's say-so. */
+function metadataIn(out) {
+  const recorded = JSON.parse(readFileSync(join(out, 'release.json'), 'utf8'));
+  return releaseMetadata(String(recorded.tag));
 }
 
 /**
@@ -155,6 +167,21 @@ export function runPipelineCommand(argv, options = {}) {
         writeFileSync(join(args[2], 'release-body.md'), body);
         writeFileSync(join(args[2], 'release.json'), `${JSON.stringify(meta, null, 2)}\n`);
         out(`body: "${meta.name}"${meta.prerelease ? ', prerelease' : ''}, ${entries.length} asset row${entries.length === 1 ? '' : 's'}`);
+        return 0;
+      }
+      case 'draft-args': {
+        arity(args, 1);
+        for (const a of draftReleaseArguments(metadataIn(args[0]), join(args[0], 'release-body.md'))) out(a);
+        return 0;
+      }
+      case 'release-state': {
+        arity(args, 3);
+        const stage = args[2];
+        if (stage !== 'draft' && stage !== 'published') throw new Usage(USAGE);
+        const meta = metadataIn(args[0]);
+        const problems = releaseStateProblems(meta, JSON.parse(readFileSync(args[1], 'utf8')), stage);
+        if (problems.length > 0) return refuse(problems);
+        out(`release-state: "${meta.name}" is ${stage === 'draft' ? 'a draft' : 'published'}, prerelease=${meta.prerelease}, as its channel says`);
         return 0;
       }
       case 'keys': {

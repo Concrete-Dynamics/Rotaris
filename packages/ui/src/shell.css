@@ -678,6 +678,11 @@
 .tool__chevron, .tool__name { color: var(--rt-accent-300); }
 .row--tool > .row__grid > .row__main > .tool__header > .tool__chevron,
 .row--tool > .row__grid > .row__main > .tool__header > .tool__name { color: var(--rt-axis-y-300); }
+/* REQ-CHAT-175/177: a tool row's header is the call's derived DESCRIPTION, so it is longer than the tool name it used
+   to carry. One line, ellipsized when the window is narrow — the header's height is a row's, never a paragraph's, and
+   the untruncated arguments stay in the card REQ-CHAT-061 opens. Scoped to the description so the activity line's and
+   the thinking row's own `.tool__name` keep wrapping as they did. */
+.tool__description { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tool__outcome { margin-left: auto; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
 .tool__outcome--running { color: var(--rt-accent-300); animation: rt-pulse var(--rt-duration-slow, 900ms) ease-in-out infinite; }
 /* REQ-CHAT-060: `blocked` in the theme's fail state text colour. `--rt-fail` is the state's BOUNDARY token, checked at

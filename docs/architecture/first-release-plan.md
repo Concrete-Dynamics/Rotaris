@@ -488,7 +488,7 @@ release is published is the owner's choice (§6).
 > 4. `draft` — the body and the name (§4.8), `gh release create --draft --verify-tag`, flagged prerelease by the channel.
 >    The only job with a write token, and it holds no secret. Nothing here publishes; the draft is made public by the
 >    owner once §5's gate passes;
->    *2026-10-24 ([R-085](../product/requests.md#r-085)): the flag is passed both ways, `--prerelease=true` for an
+>    *2026-10-24 ([R-086](../product/requests.md#r-086)): the flag is passed both ways, `--prerelease=true` for an
 >    `a`/`b`/`rc` tag and `--prerelease=false` for a plain one, from `release:pipeline draft-args` rather than a shell
 >    branch, and the draft is read back (`gh release view --json tagName,name,isDraft,isPrerelease`) and refused by
 >    `release:pipeline release-state … draft` when the release host's record disagrees with REQ-STARTUP-034. Why:
@@ -866,8 +866,13 @@ choice only the owner can make about their own repository, and it un-defers with
 
 ### 6.1 O-2, step by step
 
-*Written 2026-10-22 under [R-080](../product/requests.md#r-080), when §4.2 and §4.7 were built. No key exists, and
-none was made by the build: every step below is the owner's. Steps 1 to 4 happen once; step 5 with every release.*
+*Written 2026-10-22 under [R-080](../product/requests.md#r-080), when §4.2 and §4.7 were built. No key existed and
+none was made by the build: every step below was the owner's. Steps 1 to 4 happen once; step 5 with every release.*
+
+*State on 2026-10-24: steps 1 to 4 are done. The public half is the element of `RELEASE_SIGNING_KEYS` in
+`apps/desktop/src/main/updater/keys.ts`; `tools/release-pipeline/key-record.json` carries the `0.1.0rc1`
+row; the `ROTARIS_RELEASE_SIGNING_KEY` secret exists in the `release` environment; and the pipeline signed and
+published `0.1.0rc1` on 2026-10-23. The steps stay written as the record of what was asked.*
 
 1. **Make the key pair, on a machine you trust, never in CI.**
    `openssl genpkey -algorithm ed25519 -out release-signing.pem`. The file is the private half (PKCS#8 PEM). Keep it
@@ -943,3 +948,11 @@ To withdraw a compromised key, remove it from the set and from the secret, so th
 
 Each step owes what CLAUDE.md states for any change: `pnpm check` green, the affected view updated, and a
 mechanism's first execution reported into its record and into `first-executions.md`.
+
+### Published-asset verification — T3, 2026-10-24
+
+`node tools/release-pipeline/update-path-proof.mjs` checks the actual public v0.1.0rc1 assets with the
+updater's compiled-in public keys: a digest-character mutation refuses signature verification; the original
+verifies before parsing and both executable downloads must match the signed digests. The method, execution
+and limits are in [the T3 record](../research/update-path-proof.md). No installer is run and the Windows
+apply/restart evidence remains owed.

@@ -9868,6 +9868,13 @@ separate workspace setting, so **Expanded** says what is open and not how many l
 **Recorded, not built.** On 2026-10-19 the surface still draws the two switches; nothing in this entry describes the
 built product. The change owes its first execution, and this entry's own readings are owed with it.
 
+*Revision 2, 2026-10-24 ([R-085](requests.md#r-085)): stops 1 and 2 say a tool row is "collapsed to its name and
+chevron". `REQ-CHAT-175` – `REQ-CHAT-177` make the row's header the call's derived description at every stop, so read
+"name" there as that description — the tool's own name only where the build derives none. The stop still governs
+grouping, the `⤷` preview and openness; on a tool row it draws it never hides, shortens or replaces the description,
+and Compact is the stop this reading matters most at, since it is the one that draws the least. A run the stop folds
+into an activity line draws no tool row; its members' descriptions are drawn when the run is opened.*
+
 > **Narrows:** REQ-CHAT-061, REQ-CHAT-067, REQ-CONFIG-403, REQ-CONFIG-405, REQ-SHELL-006
 > **Extends:** REQ-CHAT-061
 

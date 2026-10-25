@@ -1,0 +1,62 @@
+{
+  "tag": "v0.1.0rc1",
+  "source": "/tmp/rotaris-update-assets",
+  "publishedSource": "https://github.com/Concrete-Dynamics/Rotaris/releases/download/v0.1.0rc1/",
+  "at": "2026-10-24T13:06:44.062Z",
+  "node": "v26.8.1",
+  "platform": "linux",
+  "keys": [
+    "sha256:e0f3d7e80e046a5d3aad59ecbc6feda255fc65e841be21237f500e0d117d1d07"
+  ],
+  "checks": [
+    {
+      "name": "tampered manifest rejected by the updater verifier",
+      "pass": true,
+      "detail": {
+        "verified": false,
+        "reason": "not-verified"
+      }
+    },
+    {
+      "name": "published manifest accepted with the compiled-in keys",
+      "pass": true,
+      "detail": {
+        "verified": true,
+        "keyIndex": 0
+      }
+    },
+    {
+      "name": "canonical manifest and exact published asset set",
+      "pass": true,
+      "detail": [
+        {
+          "name": "Rotaris-0.1.0rc1-windows-x64-portable.exe",
+          "sha256": "0bfd6ae0f3167bce424205035b4915126e74fb1e09df77bc41119b0cf82f0c59"
+        },
+        {
+          "name": "Rotaris-0.1.0rc1-windows-x64-setup.exe",
+          "sha256": "e824e1fc4ee7f824fe876742664cad19a55c0a4521c68611b3700399cdbb30c6"
+        }
+      ]
+    },
+    {
+      "name": "published asset digest: Rotaris-0.1.0rc1-windows-x64-portable.exe",
+      "pass": true,
+      "detail": {
+        "bytes": 256913226,
+        "expected": "0bfd6ae0f3167bce424205035b4915126e74fb1e09df77bc41119b0cf82f0c59",
+        "actual": "0bfd6ae0f3167bce424205035b4915126e74fb1e09df77bc41119b0cf82f0c59"
+      }
+    },
+    {
+      "name": "published asset digest: Rotaris-0.1.0rc1-windows-x64-setup.exe",
+      "pass": true,
+      "detail": {
+        "bytes": 182561441,
+        "expected": "e824e1fc4ee7f824fe876742664cad19a55c0a4521c68611b3700399cdbb30c6",
+        "actual": "e824e1fc4ee7f824fe876742664cad19a55c0a4521c68611b3700399cdbb30c6"
+      }
+    }
+  ],
+  "passed": true
+}

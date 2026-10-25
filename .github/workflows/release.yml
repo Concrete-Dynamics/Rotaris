@@ -2,7 +2,7 @@
 #
 # Triggered ONLY by a tag of REQ-STARTUP-027's grammar: v<major>.<minor>.<patch>, optionally a<N>, b<N> or rc<N>. The
 # filter below admits that shape; the guard parses it exactly (canonical decimals, OQ-70) and refuses anything else with
-# the tag named. No branch push, pull request or manual dispatch runs this file.
+# the tag named. Pull requests run only the isolated macOS source-build probe below.
 #
 # The stages, each failing the release on its own (§4.2):
 #
@@ -32,9 +32,8 @@
 # Still absent from a release: a second platform (see the matrix note below) and automatic prerelease marking for
 # a/b/rc tags, which is a request of its own.
 #
-# One platform key, windows-x64 (PD-STARTUP-001): the matrix has one entry and no macOS or Linux job is attempted
-# (IC-3, IC-8). Withdrawing the directive adds `macos-arm64` and `linux-x86_64` entries here and to
-# tools/release-pipeline's PUBLISHED_PLATFORMS together, and is a directive of its own.
+# Published platform: windows-x64 alone (PD-STARTUP-001). The separate macos-arm64 probe compiles source only,
+# never packages or uploads release assets. IC-3 and IC-8 remain owed; PUBLISHED_PLATFORMS stays unchanged.
 #
 # Hardening, as in ci.yml: actions pinned by full commit SHA (the tag in the comment); no permission at the top, each
 # job granted only what it uses; checkout without persisted credentials. The signing key reaches one job, `sign`, which
@@ -43,6 +42,9 @@
 name: Release
 
 on:
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
@@ -61,7 +63,42 @@ env:
   GIT_TERMINAL_PROMPT: '0'
 
 jobs:
+  build-probe:
+    name: source build probe (${{ matrix.platform }})
+    if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: pnpm
+      - name: Native Apple-silicon runner
+        run: node -e "if (process.platform !== 'darwin' || process.arch !== 'arm64') process.exit(1)"
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Electron runtime
+        run: node node_modules/electron/install.js
+      - name: Requirement symbols
+        run: pnpm symbols
+      # Source bundles only: pnpm package still refuses non-Windows release artifacts under IC-3.
+      - name: Build the five application entries
+        run: pnpm build
+
   guard:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     name: guard (REQ-STARTUP-028, key set and key record)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -281,7 +318,7 @@ jobs:
   status:
     name: overall status (REQ-STARTUP-030)
     needs: [guard, build, sign, draft]
-    if: always()
+    if: always() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions: {}
     steps:

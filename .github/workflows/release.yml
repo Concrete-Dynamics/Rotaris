@@ -22,11 +22,15 @@
 #             machine (O-6), by the owner's own act.
 #   status    REQ-STARTUP-030's separate overall status: red when any stage of any platform failed.
 #
-# What stops a release on main today, each named by the stage it stops (first-release-plan.md §6):
-#   - preflight: RELEASE_SIGNING_KEYS is empty and the key record has no row (O-2);
-#   - build: `pnpm notices` refuses until O-3, O-11 and OQ-74 are settled; the portable's launcher stub (§4.5) is not
-#     built;
-#   - sign: the ROTARIS_RELEASE_SIGNING_KEY secret of the `release` environment does not exist (O-2).
+# State as read on 2026-10-24, when the list of blockers that stood here was found to be stale. The stages below have
+# since run end to end: the tag v0.1.0rc1 passed guard, build, sign and draft on 2026-10-23 (run 39962292417) and
+# published a Windows x64 release. What the earlier note listed as blocking is delivered:
+#   - preflight: RELEASE_SIGNING_KEYS carries the public half of the release key (O-2), and
+#     tools/release-pipeline/key-record.json has a row for the released version;
+#   - sign: the ROTARIS_RELEASE_SIGNING_KEY secret exists in the `release` environment;
+#   - build: the notices step and the portable's launcher stub (§4.5) produce a release directory.
+# Still absent from a release: a second platform (see the matrix note below) and automatic prerelease marking for
+# a/b/rc tags, which is a request of its own.
 #
 # One platform key, windows-x64 (PD-STARTUP-001): the matrix has one entry and no macOS or Linux job is attempted
 # (IC-3, IC-8). Withdrawing the directive adds `macos-arm64` and `linux-x86_64` entries here and to

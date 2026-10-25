@@ -859,8 +859,13 @@ choice only the owner can make about their own repository, and it un-defers with
 
 ### 6.1 O-2, step by step
 
-*Written 2026-10-22 under [R-080](../product/requests.md#r-080), when §4.2 and §4.7 were built. No key exists, and
-none was made by the build: every step below is the owner's. Steps 1 to 4 happen once; step 5 with every release.*
+*Written 2026-10-22 under [R-080](../product/requests.md#r-080), when §4.2 and §4.7 were built. No key existed and
+none was made by the build: every step below was the owner's. Steps 1 to 4 happen once; step 5 with every release.*
+
+*State on 2026-10-24: steps 1 to 4 are done. The public half is the element of `RELEASE_SIGNING_KEYS` in
+`apps/desktop/src/main/updater/keys.ts`; `tools/release-pipeline/key-record.json` carries the `0.1.0rc1`
+row; the `ROTARIS_RELEASE_SIGNING_KEY` secret exists in the `release` environment; and the pipeline signed and
+published `0.1.0rc1` on 2026-10-23. The steps stay written as the record of what was asked.*
 
 1. **Make the key pair, on a machine you trust, never in CI.**
    `openssl genpkey -algorithm ed25519 -out release-signing.pem`. The file is the private half (PKCS#8 PEM). Keep it

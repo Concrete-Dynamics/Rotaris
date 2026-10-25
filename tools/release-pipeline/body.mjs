@@ -59,6 +59,32 @@ export function releaseMetadata(tag) {
 }
 
 /**
+ * REQ-STARTUP-034 at the release host: the `gh release create` arguments the draft is created with. The channel's flag
+ * is passed in both directions (`--prerelease=true` for an `a`/`b`/`rc` tag, `--prerelease=false` for a plain one), so
+ * the flag the release carries is the channel's and never the host's default.
+ */
+export function draftReleaseArguments(meta, bodyFile) {
+  return ['--draft', '--verify-tag', '--title', meta.name, '--notes-file', bodyFile, `--prerelease=${meta.prerelease === true}`];
+}
+
+/**
+ * REQ-STARTUP-034 read back: what the release host recorded (`gh release view <tag> --json tagName,name,isDraft,isPrerelease`)
+ * against the metadata the release was created from. `stage` is `draft` right after the draft job created it, `published`
+ * once the owner has made it public (first-release-plan.md §5). One sentence per disagreement; none when they agree.
+ */
+export function releaseStateProblems(meta, view, stage) {
+  const problems = [];
+  if (view.tagName !== meta.tag) problems.push(`the release host's release is for ${String(view.tagName)}, not ${meta.tag}`);
+  if (view.name !== meta.name) problems.push(`REQ-STARTUP-034: the release is named "${String(view.name)}", not "${meta.name}"`);
+  if (view.isPrerelease !== meta.prerelease) {
+    problems.push(`REQ-STARTUP-034: ${meta.tag} is of the ${meta.prerelease ? 'prerelease' : 'stable'} channel (REQ-STARTUP-029), but the release host records prerelease=${String(view.isPrerelease)}`);
+  }
+  const draft = stage === 'draft';
+  if (view.isDraft !== draft) problems.push(`the release is ${view.isDraft === true ? 'still a draft' : 'published'}, where the ${stage} stage expects ${draft ? 'a draft' : 'a published release'}`);
+  return problems;
+}
+
+/**
  * REQ-STARTUP-035's body. `entries` is the release's manifest, parsed (`parseChecksumManifest`): the table is its rows,
  * so a digest in the body is the digest the manifest lists. `platformsWithAssets` names the published platforms that
  * contributed at least one asset; a published platform missing from it is element (4)'s.

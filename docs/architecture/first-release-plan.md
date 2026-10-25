@@ -488,6 +488,13 @@ release is published is the owner's choice (§6).
 > 4. `draft` — the body and the name (§4.8), `gh release create --draft --verify-tag`, flagged prerelease by the channel.
 >    The only job with a write token, and it holds no secret. Nothing here publishes; the draft is made public by the
 >    owner once §5's gate passes;
+>    *2026-10-24 ([R-086](../product/requests.md#r-086)): the flag is passed both ways, `--prerelease=true` for an
+>    `a`/`b`/`rc` tag and `--prerelease=false` for a plain one, from `release:pipeline draft-args` rather than a shell
+>    branch, and the draft is read back (`gh release view --json tagName,name,isDraft,isPrerelease`) and refused by
+>    `release:pipeline release-state … draft` when the release host's record disagrees with REQ-STARTUP-034. Why:
+>    v0.1.0rc1's draft was created flagged prerelease (run 39962292417) and the published release reads
+>    `prerelease=false` — the flag was lost at publication. Publishing with `gh release edit <tag> --draft=false` changes
+>    nothing else, and `release-state … published` over the same view checks it afterwards;*
 > 5. `status` — REQ-STARTUP-030's separate overall status, red when any job was not green.
 >
 > **What was executed.** The stages' code, not the workflow: 64 unit cases in `tools/release-pipeline/` (the manifest

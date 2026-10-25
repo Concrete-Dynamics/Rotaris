@@ -18,8 +18,13 @@
 #             verifier against the keys the build carries, and that key is carried by every recorded release this one may
 #             be offered to (REQ-STARTUP-038, 167, 168 (b)).
 #   draft     the body and the name (REQ-STARTUP-033..035, PD-STARTUP-001) and a DRAFT GitHub release holding exactly
-#             the verified directory. Never published here: a draft becomes public only when §5's gate passes on the gate
-#             machine (O-6), by the owner's own act.
+#             the verified directory, flagged prerelease=true for an a/b/rc tag and prerelease=false for a plain one
+#             (REQ-STARTUP-029, REQ-STARTUP-034), then read back from the release host and refused when it disagrees.
+#             Never published here: a draft becomes public only when §5's gate passes on the gate machine (O-6), by the
+#             owner's own act. Publishing keeps the flag only if the act does: `gh release edit <tag> --draft=false`
+#             changes nothing else, and `release-state <out> <view> published` checks the result. v0.1.0rc1's draft
+#             was created flagged prerelease (run 39962292417's draft log: `body: "Rotaris 0.1.0rc1", prerelease`) and
+#             the published release reads prerelease=false — the flag was lost at publication, outside this file.
 #   status    REQ-STARTUP-030's separate overall status: red when any stage of any platform failed.
 #
 # State as read on 2026-10-24, when the list of blockers that stood here was found to be stale. The stages below have
@@ -29,8 +34,9 @@
 #     tools/release-pipeline/key-record.json has a row for the released version;
 #   - sign: the ROTARIS_RELEASE_SIGNING_KEY secret exists in the `release` environment;
 #   - build: the notices step and the portable's launcher stub (§4.5) produce a release directory.
-# Still absent from a release: a second platform (see the matrix note below) and automatic prerelease marking for
-# a/b/rc tags, which is a request of its own.
+# Still absent from a release: a second platform (see the matrix note below). Automatic prerelease marking for a/b/rc
+# tags was the other item here and is a request of its own, R-086: the draft stage above passes the flag both ways and
+# reads it back; the published v0.1.0rc1 still reads prerelease=false, which only a publication act changes.
 #
 # Published platform: windows-x64 alone (PD-STARTUP-001). The separate macos-arm64 probe compiles source only,
 # never packages or uploads release assets. IC-3 and IC-8 remain owed; PUBLISHED_PLATFORMS stays unchanged.
@@ -305,15 +311,24 @@ jobs:
       - name: The body and the name
         run: node tools/release-pipeline/cli.mjs body release-assets "$TAG" release-meta
 
+      # REQ-STARTUP-034: the channel's flag is passed both ways (--prerelease=true for a/b/rc, =false for a plain tag),
+      # from the arguments the pipeline computed and tested, never from a branch written here.
       - name: Create the draft
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          name="$(node -p "require('./release-meta/release.json').name")"
-          prerelease="$(node -p "require('./release-meta/release.json').prerelease")"
-          flags=(--draft --verify-tag --title "$name" --notes-file release-meta/release-body.md)
-          if [ "$prerelease" = "true" ]; then flags+=(--prerelease); fi
+          node tools/release-pipeline/cli.mjs draft-args release-meta > release-meta/draft-args.txt
+          mapfile -t flags < release-meta/draft-args.txt
           gh release create "$TAG" "${flags[@]}" release-assets/*
+
+      # Read back what the release host recorded: a draft, named for the version, prerelease exactly for the prerelease
+      # channel. A disagreement fails the release here rather than at publication.
+      - name: The draft carries the channel's flag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" --json tagName,name,isDraft,isPrerelease > release-meta/release-view.json
+          node tools/release-pipeline/cli.mjs release-state release-meta release-meta/release-view.json draft
 
   status:
     name: overall status (REQ-STARTUP-030)

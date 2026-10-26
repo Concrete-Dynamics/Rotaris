@@ -78,3 +78,19 @@ listed file back within the budget fails until its line is removed.
 | [`architecture/proposals/data.md`](architecture/proposals/data.md) | 2,324 lines, 162 KiB | an index and 25 parts by section |
 | [`architecture/views/02-process-view.md`](architecture/views/02-process-view.md) | 916 lines, 155 KiB | an index and 8 parts by section |
 | [`architecture/views/03-runtime-view.md`](architecture/views/03-runtime-view.md) | 2,260 lines, 299 KiB | an index and 16 parts by section |
+| 32 ADRs in [`architecture/adr/`](architecture/adr/) (0002 to 0065), the four other proposals, eight spike reports, two live-run autopsies, `background-update-plan.md`, the component, seams and sequences views, [`design/README.md`](design/README.md) | 39,504 lines, 3.3 MB | each an index and 2 to 22 parts by section |
+| 19 files of [`spec/resolutions/`](spec/resolutions/) | 5,409 lines, 0.8 MB | each an index and 2 to 8 parts by section |
+
+**Not split, and why** — each listed in `tools/doc-budget-baseline.json`:
+
+- `AGENTS.md` (724 lines, 83 KiB): a governance document, and the place agents look first; moving its live-run chapter
+  out is a restructuring for its owner to approve, not a verbatim split.
+- `product/requests.md`: the request log is one table that `tools/check-request-log.mjs` reads and every change
+  appends to; splitting it is a change to that gate and to every lane's habit, worth its own request.
+- `spec/17-terminal-ui.md` and `spec/18-cli-headless.md`: the retired domains. They stay single files so that their
+  444 identifiers stay counted ([`spec/README.md`](spec/README.md), "Domains 17 and 18 are retired"); no agent works
+  in them.
+- Four directives (`PD-LIBRARY-002`, `PD-ORCH-004`, `PD-ORCH-005`, `PD-TOOLS-006`), one open-questions part and two
+  defect notes: each is one entry, which is not cut in two.
+- `architecture/implementation-conditions.md` and the two `clean-room/` records: owned by other work at the time of
+  the split.

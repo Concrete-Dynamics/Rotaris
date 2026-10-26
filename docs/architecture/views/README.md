@@ -24,7 +24,7 @@ the *picture* — what exists, how it is cut, how it runs, and where an addition
 | change the run loop, a turn, the controls or teardown | [`03-runtime-view.md`](03-runtime-view.md) |
 | decide where a piece of state belongs | [`05-state-ownership.md`](05-state-ownership.md) |
 | change startup, the approval round trip or the requirements board | [`06-sequences.md`](06-sequences.md) |
-| draw, redraw or restyle a surface | [`04-seams.md` §8](04-seams.md#8-a-drawn-surface), then `docs/design/README.md` §7 |
+| draw, redraw or restyle a surface | [`04-seams.md` §8](04-seams/08-8-a-drawn-surface.md#8-a-drawn-surface), then `docs/design/README.md` §7 |
 | find the evidence that re-verifies an area | [`docs/proofs/README.md`](../../proofs/README.md) — the proof registry |
 
 Each view carries its own section router at the top, so consulting one is a page rather than a chapter.

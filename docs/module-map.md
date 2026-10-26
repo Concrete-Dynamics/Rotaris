@@ -115,6 +115,16 @@ Each of these was decided; the authority is in brackets, and none of them is saf
   with the gate (`run-host/tools.ts`).
 - **Theme data the main process needs before first paint is in `contracts/src/theme/`**, because `main`
   cannot import `ui`.
+- **`apps/desktop/` is the application, not a copy of `packages/`** — the one member of `apps/`, the
+  `@rotaris/desktop` workspace package that depends on every `@rotaris/*` package and holds the five
+  composition roots, which nothing under `packages/` duplicates. Its `node_modules/` is pnpm's per-package link
+  folder (`@rotaris/*` symlinks), ignored and never tracked. The application's own manifest holds only `dev`,
+  `build`, `preview` and `package`; `packages/*` hold no scripts.
+- **The proof scripts are root `package.json` scripts whose files sit in `apps/desktop/scripts/`** — each id
+  is `node apps/desktop/scripts/<id>.mjs`, because a proof launches the built application
+  (`apps/desktop/out`), and `tools/proof-registry/registry.test.ts` and `tools/verify-plan/plan.test.ts` pin
+  every proof id as a root script by name. `pnpm <id>` is how `pnpm verify:plan`, `pnpm worktree:land` and
+  `tools/dev-time/` reach them, so the entries do not move without those three.
 
 ## The largest files, and what they are
 

@@ -48,8 +48,9 @@ bound alone would admit a file of several hundred kilobytes, it also takes Codex
   cited one at a time. A part that cannot be cut without cutting an entry in two keeps the entry whole and is listed
   as debt.
 - **The original path becomes the index**, so every link and every mention of the file still lands on it. The parts
-  sit beside it in a folder of the same name (`open-questions.md` and `open-questions/`), each a file whose name
-  sorts in the document's order. An index states what each part holds, and where a new entry goes.
+  sit beside it in a folder of the same name (`open-questions.md` and `open-questions/`; `README.md` and `README/`),
+  each a file whose name sorts in the document's order. A part that begins inside a table repeats the table's
+  header rows. An index states what each part holds, and where a new entry goes.
 - **The text moves verbatim.** No requirement, ruling or entry is reworded, renumbered or dropped; an anchor moves with
   its text, and every link to it in the repository is rewritten to the part in the same commit
   (`tools/check-record-links.mjs` fails `pnpm lint` on one left behind).
@@ -68,3 +69,12 @@ listed file back within the budget fails until its line is removed.
 | [`product/directives.md`](product/directives.md) | 9,904 lines, 0.9 MB | an index by domain and one file per directive |
 | [`architecture/views/reconciliation-log.md`](architecture/views/reconciliation-log.md) | 3,697 lines, 0.4 MB | the newest entries and 12 archived parts |
 | The 19 live domains of [`spec/`](spec/), `01` to `16` and `19` to `21` | 12,148 lines, 2.9 MB | each an index (frontmatter, overview, parts table) and 5 to 13 parts by subtopic |
+| [`architecture/README.md`](architecture/README.md) | 2,386 lines, 224 KiB | an index and 13 parts by section |
+| [`architecture/codebase.md`](architecture/codebase.md) | 2,596 lines, 352 KiB | an index and 22 parts by section |
+| [`architecture/first-executions.md`](architecture/first-executions.md) | 586 lines, 918 KiB | an index and 34 parts, the register's table cut between rows |
+| [`architecture/first-release-plan.md`](architecture/first-release-plan.md) | 958 lines, 89 KiB | an index and 8 parts by section, its `§` numbers listed |
+| [`architecture/owner-decisions.md`](architecture/owner-decisions.md) | 1,789 lines, 130 KiB | an index and 15 parts by section |
+| [`architecture/constraints.md`](architecture/constraints.md) | 767 lines, 239 KiB | an index and 22 parts by section |
+| [`architecture/proposals/data.md`](architecture/proposals/data.md) | 2,324 lines, 162 KiB | an index and 25 parts by section |
+| [`architecture/views/02-process-view.md`](architecture/views/02-process-view.md) | 916 lines, 155 KiB | an index and 8 parts by section |
+| [`architecture/views/03-runtime-view.md`](architecture/views/03-runtime-view.md) | 2,260 lines, 299 KiB | an index and 16 parts by section |

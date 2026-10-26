@@ -28,24 +28,24 @@ is built from source. The version it declares is `0.1.0` (`apps/desktop/package.
 
 - **The manifest signing key (O-2).** A release is verified through a signed checksum manifest. The key pair has not
   been generated, so the updater carries no verification key and refuses every install at the signature step, and the
-  tag workflow refuses to build a release that carries none. [§6.1](docs/architecture/first-release-plan.md#61-o-2-step-by-step)
+  tag workflow refuses to build a release that carries none. [§6.1](docs/architecture/first-release-plan/07-6-what-only-the-owner-can-do.md#61-o-2-step-by-step)
   of the plan lists the owner's steps.
 - **The release inputs (O-3, O-4, O-11).** The contact address for LGPL source requests, the application icon, and a
   maintainer's review of the shipped components that carry no licence text. Until O-3 and O-11 are supplied, notices
   validation refuses, and `pnpm package` refuses with it.
 - **The portable build's launcher stub**
-  ([§4.5](docs/architecture/first-release-plan.md#4-the-windows-release-pipeline)). The tag workflow
+  ([§4.5](docs/architecture/first-release-plan/04-4-the-windows-release-pipeline.md#4-the-windows-release-pipeline)). The tag workflow
   (`.github/workflows/release.yml`), the checksum manifest, its signing step and the release body are built, and have not
   been run on a tag yet. The workflow stops at the portable stage until the stub exists, and its spike needs a Windows x64
   machine.
 - **The release gate** (`REQ-STARTUP-156`, narrowed to Windows x64;
-  [§5](docs/architecture/first-release-plan.md#5-the-release-gate)). Before a release is made public, the installer and
+  [§5](docs/architecture/first-release-plan/06-5-the-release-gate.md#5-the-release-gate)). Before a release is made public, the installer and
   the portable are each launched to first paint on a clean Windows x64 machine with no development runtimes and no
   network (O-6). The gate has not been run.
 
 On 2026-10-06 the owner deferred this release work and counted the product work as finished without it
 ([R-071](docs/product/requests.md#r-071)). Each item stays recorded as owed, under
-[§6](docs/architecture/first-release-plan.md#6-what-only-the-owner-can-do) of the plan.
+[§6](docs/architecture/first-release-plan/07-6-what-only-the-owner-can-do.md#6-what-only-the-owner-can-do) of the plan.
 
 ## What it does
 

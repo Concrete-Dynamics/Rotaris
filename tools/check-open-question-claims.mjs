@@ -35,7 +35,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { readRecord } from './record-parts.mjs';
+import { partsOf, readRecord } from './record-parts.mjs';
 
 // ---------------------------------------------------------------- the questions
 
@@ -227,14 +227,18 @@ function walk(dir, keep, out = []) {
   return out;
 }
 
+/** @param {string} file */
+const withParts = (file) => [file, ...partsOf(file)];
+
 /** The files read: the code under the three roots, and the record that describes the build as it stands. */
 export function filesOf(root) {
   const code = CODE_ROOTS.flatMap((r) => walk(join(root, r), (n) => CODE_EXT.test(n)));
   const record = [
     ...walk(join(root, 'docs', 'architecture', 'views'), (n) => n.endsWith('.md')),
-    join(root, 'docs', 'architecture', 'codebase.md'),
-    join(root, 'docs', 'architecture', 'first-release-plan.md'),
-    join(root, 'docs', 'architecture', 'README.md'),
+    // Each with the parts it indexes, where it was split (`record-parts.mjs`).
+    ...withParts(join(root, 'docs', 'architecture', 'codebase.md')),
+    ...withParts(join(root, 'docs', 'architecture', 'first-release-plan.md')),
+    ...withParts(join(root, 'docs', 'architecture', 'README.md')),
     join(root, 'AGENTS.md'),
     join(root, 'CONTEXT-MAP.md'),
     join(root, 'docs', 'module-map.md'),

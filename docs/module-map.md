@@ -114,10 +114,11 @@ Each of these was decided; the authority is in brackets, and none of them is saf
   fails `pnpm lint` on one written anywhere else in `ui/src` or `apps/desktop/src/renderer`.
 - **The engine and the tools do not import each other** — the run-host root fills the engine's `ToolPort`
   with the gate (`run-host/tools.ts`).
-- **Three records are folders behind their own file** — [`docs/README.md`](README.md), "The document budget".
-  `architecture/open-questions.md`, `product/directives.md` and `architecture/views/reconciliation-log.md` are
-  indexes; their text is in `open-questions/`, `directives/` (one file per directive) and `reconciliation-log/`
-  beside them. A gate that reads one whole reads it through `tools/record-parts.mjs`.
+- **A long record is a folder behind its own file** — [`docs/README.md`](README.md), "The document budget", lists
+  them. `spec/NN-<domain>.md`, `product/directives.md`, `architecture/open-questions.md`, `architecture/codebase.md`,
+  `architecture/README.md` and the others it names are indexes; their text is in the folder of the same name beside
+  each (`directives/` holds one file per directive). A gate that reads one whole reads it through
+  `tools/record-parts.mjs`.
 - **Theme data the main process needs before first paint is in `contracts/src/theme/`**, because `main`
   cannot import `ui`.
 

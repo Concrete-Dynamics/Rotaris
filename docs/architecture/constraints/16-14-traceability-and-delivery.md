@@ -1,0 +1,32 @@
+# Architectural constraints extracted from the specification — 14. Traceability and delivery
+
+Part 16 of 22 of [the constraints](../constraints.md), which indexes every part.
+
+## 14. Traceability and delivery
+
+| # | Constraint | Label | Requirements |
+|---|---|---|---|
+| Y-01 | **No result is ever carried over between invocations and no stored summary is consulted in place of reading the files**; two invocations over an unchanged repository report the same thing; the cost of N single-requirement queries being N full scans is a documented cost. | HARD | REQ-TRACE-089, REQ-TRACE-173, REQ-TRACE-203 |
+| Y-02 | The toolchain writes **only** under two named actions, so there is nowhere an index could legally live. | HARD | REQ-TRACE-152 |
+| Y-03 | **Peak memory is bounded by the largest single document plus the accumulated metadata records, never by the total prose**; no phase may require every document's text resident at once. | HARD | REQ-TRACE-501 |
+| Y-04 | Cost budgets with stated reference conditions, of which **the linear-growth clause is binding**; a board on screen within 100 ms that **does not grow with the size of the store**. | HARD | REQ-TRACE-088, REQ-TRACE-239, REQ-TRACE-367, REQ-TRACE-501 |
+| Y-05 | Board virtualisation is **mandatory and its shape is fixed**, and spreading construction across successive turns of the event loop is explicitly **not** accepted as satisfying it. | HARD | REQ-TRACE-358 – REQ-TRACE-367 |
+| Y-06 | **Exactly one requirement parser**, self-contained, depending on **no third-party YAML, TOML or validation library**; the frontmatter grammar is line-oriented and **is not YAML**; an unterminated block yields **no diagnostic of any kind**. | HARD | REQ-TRACE-008 – REQ-TRACE-013, REQ-TRACE-197 |
+| Y-07 | The generated symbol artifact is a source module in the product's **own implementation language**, whose single source extension the built-in convention claims; a deleted symbol must become a **build error** and a deprecated one must carry **the language's deprecation marker**. | HARD | REQ-TRACE-039, REQ-TRACE-053, REQ-TRACE-059, REQ-TRACE-075, REQ-TRACE-181 |
+| Y-08 | Two checks require a **parsed syntax tree** and a syntax error must yield an empty list rather than a failure; the **test session itself** regenerates the artifact before collecting tests. | HARD | REQ-TRACE-104, REQ-TRACE-109, REQ-TRACE-110, REQ-TRACE-182 |
+| Y-09 | Annotation recognition is a **static text scan** with fixed, documented limitations, reporting exact lines and character spans, with offset-to-line mapping verified exhaustively at every boundary. | HARD | REQ-TRACE-077 – REQ-TRACE-079, REQ-TRACE-084, REQ-TRACE-087 |
+| Y-10 | Project-declared conventions are a **regex-driven language seam** whose patterns are compiled and run over repository files, registered in a single ordered sequence with the built-in convention first. | HARD | REQ-TRACE-073, REQ-TRACE-074 |
+| Y-11 | Ratchets **shrink only**; the tombstone log **grows only** and never loses an entry; an update run twice over an unchanged repository leaves all three files byte-identical; the retirement date comes from an **injectable clock**. | HARD | REQ-TRACE-116, REQ-TRACE-124 – REQ-TRACE-140 |
+| Y-12 | A verification run judges every check against **one reading** of the store and one of the repository, with a fixed finding order, and any parse error short-circuits; the diagnostic prefix is **a de facto public contract**. | HARD | REQ-TRACE-091, REQ-TRACE-092, REQ-TRACE-100 |
+| Y-13 | A sweep for a consuming surface uses **the project's own layout, never built-in defaults**; where the layout cannot be read it carries on with an **empty sweep result**. | HARD | REQ-TRACE-207, REQ-TRACE-208 |
+| Y-14 | **One write path, asserted by a guard test**, and **reading and writing separately grantable**, asserted by a second guard test that a read-only composition offers no state-changing operation at all. | HARD | REQ-TRACE-382, REQ-TRACE-399, REQ-TRACE-403 |
+| Y-15 | Every state-changing action records who, when, which requirement and **that requirement's hash at that instant**, and the application **refuses to start** if assembled with a writer that does not make the comparison. | HARD | REQ-TRACE-401, REQ-TRACE-402, REQ-TRACE-405 |
+| Y-16 | **What counts as a person** is fixed and is not asserted by the caller: an action from an agent, a hook, a scheduled or unattended run, or a replay is never a person, whatever it claims. | HARD | REQ-CONFIG-198 |
+| Y-17 | Delivery records are **operational records only; requirement text is never written there**; version handling is forward-tolerant and **never destructive**, with an unsupported record reported in exactly three places while the workspace still opens. | HARD | REQ-CONFIG-192 |
+| Y-18 | Restart rebuilds delivery state, units, queued and running runs and worktrees from what was persisted; a dead run is reported **interrupted with its work retained**; the queue resumes **without re-running completed units**; **no requirement is silently reset**. | HARD | REQ-TRACE-464, REQ-TRACE-476, REQ-TRACE-497 |
+| Y-19 | A board pass is held in **one value** so a reader can never observe half an update, and the projection-to-display mapping is **pure with every input supplied including the current time**. | HARD | REQ-TRACE-348, REQ-TRACE-380 |
+| Y-20 | The file granularity of the delivery record store. *The specification is still silent and the row stands. The architecture no longer needs an answer: the store is rows (ADR-0041), and OQ-27's stated stakes — that the choice "is observable to anyone who opens the workspace directory" — no longer obtain. OQ-27 is closed by dissolution.* | Silence | REQ-CONFIG-192 |
+| Y-21 | The ordering between the delivery state write and the audit append. *Still silent, and the silence is now harmless: state, history, the `REQ-CONFIG-192` prune and the audit record are one transaction, so there is no "between them" for a crash to fall into (ADR-0041). OQ-26 is closed. `REQ-TRACE-133`'s opposite precedent — the tombstone log written before the generated artifact — is untouched, because it orders one file write against another in a store that stays files (ADR-0040).* | Silence | REQ-TRACE-405, REQ-CONFIG-192 |
+| Y-22 | Whether an artifact history version, and an artifact mutation losing a concurrent decision, should be reported to the user. | ESCALATION | REQ-LIBRARY-042, REQ-LIBRARY-116, REQ-LIBRARY-173 |
+
+---

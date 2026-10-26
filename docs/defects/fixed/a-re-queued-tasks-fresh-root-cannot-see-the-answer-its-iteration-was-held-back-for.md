@@ -29,7 +29,7 @@ run reached its result inside the wait").
 
 No requirement is contradicted by the code: the gap is in what the specification gives the re-queued root. Raised as
 [OQ-225](../../architecture/open-questions.md) and ruled the same day under the owner's delegation (R-072), recorded as
-[`PD-ORCH-015`](../../product/directives.md#pd-orch-015) and `PD-ORCH-009` revision 2.
+[`PD-ORCH-015`](../../product/directives/pd-orch-015.md#pd-orch-015) and `PD-ORCH-009` revision 2.
 
 ## Evidence
 
@@ -61,7 +61,7 @@ endpoint), session `5df89df3` (terminal):
 
 ## Repaired (2026-10-07, fin31)
 
-Under [`PD-ORCH-015`](../../product/directives.md#pd-orch-015) and `PD-ORCH-009` revision 2 (OQ-225, ruled under R-072):
+Under [`PD-ORCH-015`](../../product/directives/pd-orch-015.md#pd-orch-015) and `PD-ORCH-009` revision 2 (OQ-225, ruled under R-072):
 
 - `Run.turn`'s correction closure (`packages/engine/src/run/run.ts`) sends the root that answers with its plan open
   `max(1, validationRetries)` corrections in its own conversation, so at the default configuration one. The correction

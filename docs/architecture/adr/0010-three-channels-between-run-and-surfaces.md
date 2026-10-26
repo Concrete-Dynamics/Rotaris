@@ -530,7 +530,7 @@ retry and returns the status to `running`" in both variants. The reading stands 
 recorded in [`keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md`](../../defects/fixed/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md),
 with what a retry must then count as since the ladder reads the exclusion before every call (REQ-MONITOR-194).
 
-*Ruled 2026-10-06 (OQ-188, [R-071](../../product/requests.md#r-071), [`PD-MONITOR-004`](../../product/directives.md#pd-monitor-004) revision 2),
+*Ruled 2026-10-06 (OQ-188, [R-071](../../product/requests.md#r-071), [`PD-MONITOR-004`](../../product/directives/pd-monitor-004.md#pd-monitor-004) revision 2),
 reported back in place:* reading (a) now holds for the timed wait alone — the header acknowledges, sends nothing, and the timer
 retries. In the wait that never auto-resumes, keep waiting is read onto (b): the header sends `setModel` with the waiting
 pair's key, which the record's `wait` now carries (`modelKey`), and the run's existing quota-retry branch resolves the wait as a

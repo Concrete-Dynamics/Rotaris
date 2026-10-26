@@ -62,4 +62,4 @@ is ruled for this path.
 
 ## Ruled as built — 2026-10-06 ([R-071](../../product/requests.md#r-071)); closed
 
-The owner accepted the built reading (OQ-154, ruled in [`open-questions.md`](../../architecture/open-questions.md)), and [`PD-HOOKS-001`](../../product/directives.md#pd-hooks-001) narrows REQ-HOOKS-003 to say it: `child_completed` fires only while a run's lifecycle hooks are live, so the cancel of a paused child accepted while `session_end` runs ends the child `cancelled` and fires no hook. The repair above is the behaviour ruled, pinned by the `children.test.ts` case it names; nothing is changed in the code.
+The owner accepted the built reading (OQ-154, ruled in [`open-questions.md`](../../architecture/open-questions.md)), and [`PD-HOOKS-001`](../../product/directives/pd-hooks-001.md#pd-hooks-001) narrows REQ-HOOKS-003 to say it: `child_completed` fires only while a run's lifecycle hooks are live, so the cancel of a paused child accepted while `session_end` runs ends the child `cancelled` and fires no hook. The repair above is the behaviour ruled, pinned by the `children.test.ts` case it names; nothing is changed in the code.

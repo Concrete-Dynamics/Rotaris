@@ -1,7 +1,7 @@
 ## The live run's retrospective checks pass a crashed collector
 
 **Outcome: repaired 2026-10-14 by fin43 (`fin43-live-findings`).** `passOutcome` reads REQ-LIBRARY-023's "collector crashed: <exc>"
-as its own outcome, `crashed`, which no notice matches (which notice it owes is [OQ-285](../../architecture/open-questions.md#oq-285)'s),
+as its own outcome, `crashed`, which no notice matches (which notice it owes is [OQ-285](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-285)'s),
 so the notice check fails on it and `postRunVerdict` returns `fail`; the retrospective's artifact check requires a collector that did
 not crash. Two log readers join it: `unauthorizedRequests` (the run host's "model request … (no authorization header)" line) and
 `runsStarted` (its "session <id> started;" line), from which `ask-retrospective` now FAILs a launch that started a run before the
@@ -11,7 +11,7 @@ two new cases (red before: the crashed artifact read `empty`, the readers did no
 
 *Since 2026-10-14 (fin44, `fin44-improvement-failures`), OQ-285 ruled:* the sentence above that no notice matches a crashed
 collector, so that the notice check fails on it, held only until the ruling. Under
-[`PD-LIBRARY-005`](../../product/directives.md#pd-library-005) a crashed collector owes its pass's failure warning naming the
+[`PD-LIBRARY-005`](../../product/directives/pd-library-005.md#pd-library-005) a crashed collector owes its pass's failure warning naming the
 artifact, and `passOutcome`'s notice check passes on that warning alone (a new `parse-failed` outcome owes the same). The
 retrospective's artifact check (`retrospectiveArtifactVerdict`) and `postRunVerdict` still fail a crashed collector, as this
 repair made them.

@@ -11,7 +11,7 @@ status: approved (Specification Gate closed 2026-08-31; amendments land as dated
 
 After every completed task run the product may perform an optional, strictly non-blocking background analysis that stores an "improvement artifact" containing evidence-backed improvement proposals authored by a dedicated analysis model. Users review, edit, approve, reject, defer, reset, or delete those proposals from two desktop surfaces — a Library view and a dashboard card — both of which read and mutate the same workspace-scoped artifacts in the one store. Approved proposals are applied only by a separately started improvement run whose workspace effects are checkpointed and reversible. The same domain covers the per-session store of agent-published reports and deliverables (browsable and editable in the Library and via agent-facing tools), per-persona memory files re-injected into future runs, and the saved-prompt stash and prompt history.
 
-> **This domain carries a second analysis pass under [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The domain
+> **This domain carries a second analysis pass under [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002), 2026-09-17.** The domain
 > carries a second kind of analysis pass beside the per-run one: a user-started **retrospective** that
 > reads the workspace's own session history across runs and authors proposals in this domain's own
 > vocabulary and lifecycle. Nothing below is changed for the per-run analyst; where the retrospective
@@ -27,7 +27,7 @@ After every completed task run the product may perform an optional, strictly non
 
 **REQ-LIBRARY-003** — Deterministic, non-model parts of the product may gather evidence but MUST never author user-reviewable proposals. Proposals are authored exclusively by the model-backed post-run analyst; each artifact records the authoring model identifier (`collector_model`, nullable).
 
-  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The
+  > **Extended by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002), 2026-09-17.** The
   > rule — only a model-backed pass authors proposals, deterministic parts gather evidence only —
   > now covers two passes: this requirement's per-run analyst, and the directive's user-started
   > retrospective. A retrospective artifact records its own authoring slot (`retrospective_model`)
@@ -41,7 +41,7 @@ After every completed task run the product may perform an optional, strictly non
 
 **REQ-LIBRARY-006** — The proposal category vocabulary MUST be closed with exactly 10 values: `documentation_update`, `agents_md_update`, `workspace_note`, `config_change`, `tool_enablement`, `dependency_install`, `persona_or_prompt_adjustment`, `persona_memory_update`, `preflight_check`, `verifier_gate_update`.
 
-  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The set
+  > **Extended by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002), 2026-09-17.** The set
   > is untouched — the directive's retrospective authors proposals from this same closed vocabulary
   > and no other, and this requirement remains its single definition. No value is added and none is
   > redefined; a retrospective proposal is distinguishable from a per-run one by its artifact, not by
@@ -56,7 +56,7 @@ After every completed task run the product may perform an optional, strictly non
 **REQ-LIBRARY-010** — An evidence entry MUST carry `kind` (non-empty once surrounding whitespace is stripped), `text` (non-empty), the nullable ids `source_task_id`, `source_artifact_id`, and `source_session_id`, and an optional `excerpt`. `kind` is an open vocabulary: `transcript_observation`, `repeated_tool_failure`, `missing_resource`, `child_report_finding`, `repeated_search`, and `other` label analyst-authored evidence, while `verifier_gate_state` is reserved for the entry the product stamps onto a gate proposal (REQ-LIBRARY-029) and MUST NOT be the only entry a proposal carries (REQ-LIBRARY-159). What `excerpt` holds depends on the entry: quoted source text where the entry cites a transcript or a document, and the dedupe key on a `verifier_gate_state` entry. No consumer may assume `excerpt` is verbatim source text.
 
 **REQ-LIBRARY-011** — The run-level artifact container MUST carry: `artifact_id` (format `impart_` + 8 base62 characters), `source_session_id` (the legacy input key `session_id` MUST be accepted as an alias), `source_run_type` (default `task_run`), `generated_at` (UTC), `collector_model` (nullable), `proposals` (list, may be empty), `considered_session_ids` (order-preserving, deduplicated), `notes` (nullable), `checkpoints` (list of rollback checkpoint records; may be absent on older artifacts), `rolled_back_at` (nullable timestamp).
-  > **Narrowed by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions.md#oq-236)). For a retrospective artifact: every artifact carries `source_kind` (`post_run` or
+  > **Narrowed by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236)). For a retrospective artifact: every artifact carries `source_kind` (`post_run` or
   > `retrospective`), and a retrospective artifact stores `source_session_id` null and names the sessions it read in
   > `considered_session_ids` (clause (a)). A post-run artifact is governed by the text above unchanged.
 
@@ -70,7 +70,7 @@ After every completed task run the product may perform an optional, strictly non
 
 **REQ-LIBRARY-015** — The post-run analyst is a dedicated model-backed pass invoked at most once per terminal task run, with a configurable wall-clock timeout defaulting to 60 seconds. The analyst MUST never raise into its caller: every failure path yields an empty artifact whose `notes` field explains the failure.
 
-  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The
+  > **Extended by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002), 2026-09-17.** The
   > no-raise discipline and the two-outcome shape of an analysis pass govern a second pass now: the
   > user-started cross-session retrospective, bounded by its own timeout (default 120 seconds) on the
   > same recovery paths. This requirement's own scope — at most once per terminal task run — is
@@ -80,7 +80,7 @@ After every completed task run the product may perform an optional, strictly non
 
 **REQ-LIBRARY-017** — Analysis MUST draw only on material belonging to the run that triggered it: that run's progress, its todo state, its child reports, its gate evidence, its transcript, and the bounded prior-artifact history of REQ-LIBRARY-034. Data from another run, another session, or another workspace MUST NOT inform it. Every proposal in an artifact MUST therefore be attributable to material that existed in the session named by that artifact's `source_session_id` at the moment the run reached its terminal state, and every prior artifact that informed it MUST be named through `considered_session_ids` (REQ-LIBRARY-025).
 
-  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The
+  > **Extended by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002), 2026-09-17.** The
   > fence above governs the per-run analyst and still governs it exactly as written — it is the
   > reason that pass cannot meet a cross-session request, and the reason the corpus needed a new
   > mechanism rather than a widened one. The directive's retrospective is a different pass, scoped to
@@ -93,7 +93,7 @@ After every completed task run the product may perform an optional, strictly non
 **REQ-LIBRARY-019** — Of the six evidence sources named in REQ-LIBRARY-017, one that could not be obtained MUST NOT be treated as one that was obtained and reported nothing; in particular a gate report that failed to run MUST NOT be indistinguishable from a gate that ran and found nothing. Neither case may cause the analysis to fail (REQ-LIBRARY-033). Where the difference reaches a stored artifact it MUST be visible there: a gate proposal made without a known gate state or configuration fingerprint records the literal `unknown` in place of the missing value (REQ-LIBRARY-029) instead of asserting a state nobody observed. The distinction MUST also be observable to a reader of the stored artifact: every one of the six sources that could not be obtained MUST be named in the produced artifact's `notes`, so an analysis made without the transcript is distinguishable from one made over an empty transcript. A source that was obtained and reported nothing MUST NOT be named there, and naming an unavailable source MUST NOT by itself make the analysis fail or the artifact invalid.
 
 **REQ-LIBRARY-020** — Analyst output parsing MUST: strip one leading/trailing Markdown code fence if present; require a JSON object containing a `proposals` list of objects; assign a fresh proposal id when the model omits one; backfill each evidence entry's `source_session_id` with the current session id; and stringify a non-string `notes` value.
-  > **Narrowed by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions.md#oq-236)). For a retrospective the parser keeps an evidence entry's
+  > **Narrowed by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236)). For a retrospective the parser keeps an evidence entry's
   > `source_session_id` only when it names a session in the job's `considered_session_ids`, and otherwise stores null; it
   > never backfills one, since a retrospective has no current session (clause (b)).
 
@@ -130,7 +130,7 @@ After every completed task run the product may perform an optional, strictly non
 **REQ-LIBRARY-033** — Evidence MUST be frozen at capture time by taking independent snapshots of run progress, todo state, transcript events, child reports, workspace history, and gate evidence, so that subsequent work cannot mutate what is reviewed. A failing transcript-context supplier degrades to empty context; child-report coercion failures degrade to an empty list.
 
 **REQ-LIBRARY-034** — Workspace history supplied to the analyst MUST be bounded and filtered: prior artifacts whose `source_run_type` is not `task_run` are excluded, the current session's own artifact is excluded, and at most 5 prior artifacts are included, newest first.
-  > **Narrowed by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 3, 2026-10-13** ([OQ-271](../architecture/open-questions.md#oq-271)). The
+  > **Narrowed by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002) revision 3, 2026-10-13** ([OQ-271](../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-271)). The
   > history also excludes every prior artifact whose `source_kind` is `retrospective`, and that exclusion is applied before
   > the five-artifact bound, so every artifact supplied has a source session (clause (h)). The rest is as stated.
 
@@ -139,7 +139,7 @@ After every completed task run the product may perform an optional, strictly non
 **REQ-LIBRARY-036** — Session snapshots MUST persist the session's `run_type` and the list of improvement artifact ids produced for the session, so artifacts re-associate with a session across resumes.
 
 **REQ-LIBRARY-037** — Post-run analysis MUST use the model named by `improvement_collector_model` when that setting holds a value, and the configured medium-tier model otherwise. An explicit request to enable the feature while neither resolves MUST be refused with the message `medium_model must be configured to enable the post-run improvement collector.` and MUST leave `runtime.improvement_collector_enabled` as it was. The refusal covers only an explicit enable: a workspace running on the default-on setting of REQ-LIBRARY-038 with no resolvable model MUST NOT fail — it takes the no-analyst path of REQ-LIBRARY-032, captures no job, and writes no artifact. That path MUST NOT be silent. The first time a task run in that workspace reaches a terminal state while `runtime.improvement_collector_enabled` reads true and no model resolves, the product MUST post one informational notice conveying that improvement analysis is switched on, that no model is configured for it, and that no proposals will be produced until one is; the notice MUST offer an action that opens the Settings view at the improvement-collector model slot, and its wording is left to the implementation. It MUST be posted at most once per workspace per application session, so a misconfiguration cannot become a notice after every run. A startup failure is expressly refused: an optional analysis that is not configured MUST never stop a user from working. The wall-clock bound on the pass is `runtime.improvement_collector_timeout` (REQ-LIBRARY-039).
-  > **Narrowed by [`PD-MONITOR-007`](../product/directives.md#pd-monitor-007), 2026-10-06.** The named or medium-tier model
+  > **Narrowed by [`PD-MONITOR-007`](../product/directives/pd-monitor-007.md#pd-monitor-007), 2026-10-06.** The named or medium-tier model
   > is followed through the session's override, and where the pair it reaches is held out of quota for the session the
   > analysis is skipped — no job captured, no artifact written — with a line in the application log saying why. The rest
   > is as stated.
@@ -153,7 +153,7 @@ After every completed task run the product may perform an optional, strictly non
 **REQ-LIBRARY-040** — `improvement_collector_model` (nullable string, default null) is a first-class startup model slot with an independent thinking-mode override, persisted and round-tripped like other model slots; the minimal bootstrap configuration template includes both keys as null. When unset it falls back to the medium-tier model.
 
 **REQ-LIBRARY-041** — The desktop Settings view MUST expose the master switch as a runtime toggle row labelled "Improvement loop", loading from and saving back to `runtime.improvement_collector_enabled`, and participating in unsaved-changes detection.
-  > **Extended by [`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 2, 2026-10-07.** Beside the toggle
+  > **Extended by [`PD-CONFIG-003`](../product/directives/pd-config-003.md#pd-config-003) revision 2, 2026-10-07.** Beside the toggle
   > row, Settings exposes "Improvement analysis timeout" over `runtime.improvement_collector_timeout`, in seconds clamped
   > 10–600, loading from and saving back to the key and participating in unsaved-changes detection.
 
@@ -270,7 +270,7 @@ After every completed task run the product may perform an optional, strictly non
 **REQ-LIBRARY-087** — The per-session artifact store MUST hold, for each artifact, one full record together with a metadata entry in an index ordered by creation time, both kept in the durable store the application keeps for the workspace. A record and its index entry MUST be written together as one indivisible step, so no reader ever finds a record without its index entry or an index entry without its record. Each artifact's Markdown document — the rendered form REQ-LIBRARY-090 fixes, carrying that artifact's body — MUST be kept **on disk as a file the record references and never holds inside itself**: a body may be arbitrarily large, and the document exists so that a person or another tool can read the artifact without this application. That file is one of the artifact bodies REQ-SESSION-002 places beside the session's stored record, which is the single definition of where those files live and of what may live there; this domain names no location of its own and adds no fourth kind of per-session file. Every write MUST be atomic as seen by a reader on the terms of REQ-LIBRARY-043, mutations MUST be serialized within the application (REQ-LIBRARY-158), and the store MUST outlive loop iterations so earlier-phase findings remain available to later children.
 
 **REQ-LIBRARY-088** — An artifact record MUST carry: `id`, formed as `art_` followed by 8 base62 characters; `slug`, kebab-case, at most 64 characters, made unique within the session by appending `-2`, `-3`, and so on; `title`; `kind`, one of `child_report`, `agent_published`, `system`; `source_task_id`; `canonical_name`; `source_persona`; `status`, which is `succeeded` unless set otherwise, `published` for an agent publish, and the report's own status for a materialised child report; `summary`; `key_findings`; `highlight_paths[]`; `snippets[]`; `edited_files[]`; `created_files[]`; `tags[]`; `supersedes` and `superseded_by`; `created_by`; `consumed_by[]`; the ids linking the record to its timeline entry and to its conversation, carried as `timeline_event_id` and `conversation_id`, both nullable and both null until the link exists; `importance`, which MUST be `high` when the record is a child report whose status is anything other than `succeeded` and `normal` in every other case; `created_at`; `edited_at`, null until a person edits the body; and `body_markdown`. `status` MUST hold a value from a closed set formed in exactly one way and in no other: every member of the child-report status vocabulary REQ-ORCH-112 defines, which is the product's single definition of that vocabulary and which this requirement does not restate and does not narrow — a materialised child report carries the report's own status unchanged, so every value a report can carry is a value an artifact record can carry — together with `published`, which only an agent publish produces (REQ-LIBRARY-093) and which no child report ever carries. The artifact status set is therefore that vocabulary plus one, it widens exactly when REQ-ORCH-112's widens, and a value outside it MUST fail validation and be skipped by hydration (REQ-LIBRARY-091). The "ready" of REQ-LIBRARY-136 is exactly `succeeded` or `published`; every other member is the unsuccessful group the sibling-index ordering of REQ-LIBRARY-097 places first.
-  > **Narrowed by [`PD-LIBRARY-001`](../product/directives.md#pd-library-001), 2026-09-12.** The
+  > **Narrowed by [`PD-LIBRARY-001`](../product/directives/pd-library-001.md#pd-library-001), 2026-09-12.** The
   > inventory above gains one key, `commands[]`, on a record whose `kind` is `child_report`. The
   > closure this requirement states is what makes that an amendment rather than an addition made
   > quietly, and it is the only thing the directive moves: every key listed here keeps its name, its
@@ -281,7 +281,7 @@ After every completed task run the product may perform an optional, strictly non
 **REQ-LIBRARY-089** — Artifact tags MUST come from a closed vocabulary of exactly six values: `research`, `planning`, `implementation`, `review`, `verification`, `errors`. A publish carrying any other tag MUST be refused whole — no record is created, no file is written, and no partial state is left behind — with an error that begins `Invalid tag(s): `, names the rejected tags, and continues `Valid tags are: ` followed by the six permitted values in the order given here. A supplied tag MUST be normalised before it is matched: surrounding whitespace is stripped and the remainder is compared case-insensitively, so ` Research ` is the tag `research` and is accepted. A tag that does not match after that normalisation is rejected, and the error MUST name it as the user supplied it rather than in its normalised form. A tag supplied more than once MUST be collapsed to one occurrence rather than rejected — a duplicate expresses no ambiguity, so refusing the publish over it would be gratuitous — and the record MUST store each tag in its normalised form, preserving the order of first occurrence. This requirement is the product's single definition of the artifact tag vocabulary and of the normalisation, duplicate collapsing and refusal that go with it: a document that publishes or accepts artifact tags cites this identifier rather than restating the set. A surface needing a new tag extends this list rather than admitting a value elsewhere.
 
 **REQ-LIBRARY-090** — Each artifact MUST have a Markdown sidecar that opens with YAML frontmatter carrying `id`, `slug`, `title` (JSON-quoted), `kind`, `status`, the record's timestamps, and — only when the record has them — its source ids, its tags, and its supersession links. The frontmatter is followed by `# <title>` and then by these sections in this order: Summary; Key Findings; Highlight Paths, one line per path formatted `` - `path` — reason ``; Snippets, one fenced code block per path; Edited Files, one line per file formatted `` - `path` (change_type) ``; Created Files. A section with no content MUST be omitted entirely — no heading, no placeholder line — so a reader never has to tell an empty section from an absent one, and a record carrying only a body renders as frontmatter, title, and nothing else. The order of the sections that are present MUST still be the order given here. The frontmatter's optional members follow the same rule: `timeline_event_id`, `conversation_id`, the other source ids, `tags`, and the supersession links are written only when the record holds them.
-  > **Narrowed by [`PD-LIBRARY-001`](../product/directives.md#pd-library-001), 2026-09-12.** Every
+  > **Narrowed by [`PD-LIBRARY-001`](../product/directives/pd-library-001.md#pd-library-001), 2026-09-12.** Every
   > sentence above still governs, the omit-an-empty-section rule included. The directive adds one
   > section, **Commands**, placed immediately before Edited Files, so the order this requirement fixes
   > is unchanged for every section it names and a reader meets the new one between Snippets and Edited
@@ -293,7 +293,7 @@ After every completed task run the product may perform an optional, strictly non
 **REQ-LIBRARY-092** — Materializing a child report MUST be idempotent keyed on the task id (falling back to the canonical agent name only for a record that carries no task id, so two children with different task ids never share or overwrite one artifact — accepted amendment 2026-09-29, OQ-113): a re-materialization updates in place, preserving id, slug, title, creation time, supersession links, consumers, and edit timestamp, instead of duplicating. Every terminal child report is materialized (kind `child_report`), and a timeline diagnostic event of kind `artifact_published` is recorded with the artifact id linked back onto the record.
 
 **REQ-LIBRARY-093** — Publishing MUST create a record whose `kind` is `agent_published` and whose `status` is `published`, whose `body_markdown` is the submitted body unchanged, whose `key_findings` is that same body, and whose `summary` is the body's first line truncated to at most 280 characters. `created_by` MUST name the publishing agent instance by its canonical name rather than by its persona, so two instances sharing a persona stay distinguishable in every artifact listing. A publish that names a supersedes target by id or by slug MUST mark that target superseded by the new record and MUST record the reverse link on the new record (REQ-LIBRARY-095).
-  > **Narrowed by [`PD-LIBRARY-003`](../product/directives.md#pd-library-003), 2026-10-07.** The record's
+  > **Narrowed by [`PD-LIBRARY-003`](../product/directives/pd-library-003.md#pd-library-003), 2026-10-07.** The record's
   > `body_markdown` is the Markdown document REQ-LIBRARY-087 keeps on disk, created as REQ-LIBRARY-090's rendering, not
   > the submitted body by itself. The submitted body is kept unchanged twice, in `key_findings` and as the document's Key
   > Findings section, which drops only the blank lines around it.
@@ -301,7 +301,7 @@ After every completed task run the product may perform an optional, strictly non
 **REQ-LIBRARY-094** — Body editing MUST overwrite only the Markdown body and stamp `edited_at`; everything else on the record — its slug, its title, its tags, its snippets, and its source ids — stays immutable through every editing surface. An unknown reference fails with `Unknown artifact: '<ref>'`.
 
 **REQ-LIBRARY-095** — Supersession MUST link both directions, re-render both sidecars, and refuse self-supersession (`An artifact cannot supersede itself`) and unknown ids.
-  > **Narrowed by [`PD-LIBRARY-003`](../product/directives.md#pd-library-003), 2026-10-07.** The re-render of a sidecar
+  > **Narrowed by [`PD-LIBRARY-003`](../product/directives/pd-library-003.md#pd-library-003), 2026-10-07.** The re-render of a sidecar
   > a person edited rewrites only its leading frontmatter block from the record, or puts a fresh block in front when none
   > remains, and keeps everything after it as saved; one that cannot be read is left as it is.
 
@@ -310,18 +310,18 @@ After every completed task run the product may perform an optional, strictly non
 **REQ-LIBRARY-097** — A newly created agent MUST be given a `PRIOR SIBLING ARTIFACT INDEX` context block listing the session's existing artifacts, one artifact per line, each line carrying that artifact's slug, id, persona, status, and its summary truncated to at most 160 characters. The block MUST NOT exceed 10,000 characters; when not every artifact fits, the block MUST end with a marker stating how many were left out and naming the `artifact_list` tool as the way to reach them. Artifacts whose status is neither `succeeded` nor `published` — every unsuccessful member of the set REQ-LIBRARY-088 forms, which this requirement does not enumerate — MUST be ordered ahead of artifacts whose status is `succeeded` or `published`, so a failure is never the entry elided while a success survives. Within each of those two groups the ordering MUST be newest first by creation time, ties broken by ascending artifact id, so the ordering is total and two readings of the same session produce the same block. Artifacts are dropped from the tail of that total order until the block fits. The elision marker MUST state how many artifacts were left out and MUST name the `artifact_list` tool as the way to reach them; its wording is left to the implementation.
 
 **REQ-LIBRARY-098** — Explicitly attached artifacts MUST be injected as a `PRIOR AGENT CONTEXT (FULL)` block within a 48,000-character budget, reporting unresolvable references and elided ids; both injection paths record a context-selection diagnostic.
-  > **Narrowed by [`PD-TOOLS-006`](../product/directives.md#pd-tools-006), 2026-10-07 (revision 5).** The block's budget is
+  > **Narrowed by [`PD-TOOLS-006`](../product/directives/pd-tools-006.md#pd-tools-006), 2026-10-07 (revision 5).** The block's budget is
   > REQ-TOOLS-152's 100,000 characters, not 48,000: attachments are considered in the caller's order, each body carried whole
   > or not at all, an overflowing one left out and every later one still considered. The heading, the in-block reports of
   > unresolvable references and elided ids, and the context-selection diagnostic still govern.
 
 **REQ-LIBRARY-099** — The agent-facing `artifact_read(id_or_slug, sections=[])` tool MUST return the full Markdown body by default, or a filtered view of sections from {`summary`, `key_findings`, `snippets`, `highlights`, `files`}; a miss returns the error observation `Artifact not found: <ref>`; every successful read marks the reading persona as a consumer.
-  > **Narrowed by [`PD-LIBRARY-001`](../product/directives.md#pd-library-001), 2026-09-12.** The set
+  > **Narrowed by [`PD-LIBRARY-001`](../product/directives/pd-library-001.md#pd-library-001), 2026-09-12.** The set
   > above gains one member, `commands`, and nothing else about this requirement moves: the default is
   > still the full body, a miss still returns the same observation, and a read still marks the persona
   > a consumer. An agent asking for a section name outside the widened set is refused as before.
   > *(Labelled* Extended by *until 2026-10-13; relabelled under [OQ-237](../architecture/open-questions.md), the directive's disposition corrected.)*
-  > **Narrowed by [`PD-LIBRARY-004`](../product/directives.md#pd-library-004), 2026-10-07.** The consumer a successful
+  > **Narrowed by [`PD-LIBRARY-004`](../product/directives/pd-library-004.md#pd-library-004), 2026-10-07.** The consumer a successful
   > read marks is the reading agent INSTANCE by its canonical name (a child's canonical name, a root's
   > `root_canonical_name`), not its persona, so two instances of one persona that read one artifact are two consumers.
   > The note above's "marks the persona a consumer" reads as that instance. The section filter, the default and the miss
@@ -348,7 +348,7 @@ After every completed task run the product may perform an optional, strictly non
 **REQ-LIBRARY-108** — The Artifacts tab MUST show one accented card "Session artifacts" with the note "Everything agents published or reported in the loaded session.", a flat table (accessible name "Session artifacts") with columns Title, Producer, Persona, Kind, Status, Created; the status cell appends ` · edited` when the record has been hand-edited; columns auto-size to contents on every refresh; the empty label is "No artifacts have been published in this session."; and a primary "Inspect / edit selected" button. Double-clicking a row or clicking the button requests opening the inspector for that artifact.
 
 **REQ-LIBRARY-109** — The Proposals tab MUST show, beside the improvement-artifact list of REQ-LIBRARY-166, an accented card "Improvement proposals" with the note "Evidence-backed suggestions from the improvement collector after each run.", a flat table (accessible name "Improvement proposals") with columns Summary, Category, Risk, Status, Created; category is displayed with underscores replaced by spaces; status displays `pending_review` as `pending` and other statuses verbatim; the empty label is "No proposals yet. They appear here after a run's improvement collector finds signals."; below the table a word-wrapped detail label reads "Select a proposal to see its recommended action." with no selection and `Recommended action: <text>` otherwise.
-  > **Narrowed by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions.md#oq-236)). The note reads "Evidence-backed suggestions from the improvement
+  > **Narrowed by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236)). The note reads "Evidence-backed suggestions from the improvement
   > collector after each run, and from retrospectives over this workspace's history." and the empty label "No proposals yet.
   > They appear here after a run's improvement collector finds signals, or after a retrospective over this workspace's
   > history." (clause (g)); the rest of the requirement governs unchanged.
@@ -410,13 +410,13 @@ Exporting MUST write nothing to the store, MUST NOT create, restore or repair a 
 **REQ-LIBRARY-123** — Analyses MUST be performed one at a time and in the order in which the runs that produced them finished, so their artifacts and their completion notices appear in that same order and never interleave. A run's terminal state MUST already be readable from its persisted session state before that run's analysis begins, so an analysis interrupted part-way can never leave the run itself looking unfinished. A job captured while the application is shutting down MUST be cancelled rather than started, producing no artifact and no notice (REQ-LIBRARY-127).
 
 **REQ-LIBRARY-124** — On job completion: a result carrying an artifact id causes the proposal list to be re-read. A non-cancelled result with one or more proposals publishes a persistent success notice titled `<N> improvement proposal ready` / `<N> improvement proposals ready` (singular/plural) with action label "Review proposals" that opens the Library on the proposals tab; a result with zero proposals publishes an info notice "Improvement analysis complete — no proposals" with no action; a cancelled result publishes nothing, cancellation being something the user asked for (REQ-LIBRARY-127). A worker failure MUST NOT be silent: a job that ended without producing an artifact for any reason other than cancellation MUST publish a warning notice conveying that the completed run could not be reviewed for improvements, naming the run it belonged to, and carrying the failure's reason; it offers no action, because there is nothing for the user to review. This is the case REQ-LIBRARY-035(b) records in the application log, and the log entry stays in addition to the notice. The notice's wording is left to the implementation. It changes nothing about the run itself (REQ-LIBRARY-161).
-  > **Narrowed by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions.md#oq-236)). A retrospective's completion posts "<N> retrospective proposal ready"
+  > **Narrowed by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236)). A retrospective's completion posts "<N> retrospective proposal ready"
   > / "<N> retrospective proposals ready" with "Review proposals", zero proposals the info notice "The retrospective found
   > nothing to propose", and a failure the warning "The retrospective could not be completed", naming no run (clause (c)). The
   > post-run pass's notices are governed by the text above unchanged.
-  > *Added 2026-10-14 (revision 4, [OQ-285](../architecture/open-questions.md#oq-285)):* clause (c) hands an empty artifact whose
+  > *Added 2026-10-14 (revision 4, [OQ-285](../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-285)):* clause (c) hands an empty artifact whose
   > collector failed, and a timed-out retrospective, to `PD-LIBRARY-005` below.
-  > **Narrowed by [`PD-LIBRARY-005`](../product/directives.md#pd-library-005), 2026-10-14** ([OQ-285](../architecture/open-questions.md#oq-285)). For both passes, an
+  > **Narrowed by [`PD-LIBRARY-005`](../product/directives/pd-library-005.md#pd-library-005), 2026-10-14** ([OQ-285](../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-285)). For both passes, an
   > empty artifact whose notes begin "collector crashed: " or "collector parse failed: " posts the pass's failure warning ("The
   > completed run could not be reviewed for improvements" / "The retrospective could not be completed"), with no action, its
   > detail carrying the reason and saying the named artifact holds no proposals, in place of the zero-proposal info notice. A
@@ -424,14 +424,14 @@ Exporting MUST write nothing to the store, MUST NOT create, restore or repair a 
   > other case is governed by the text above, and by `PD-LIBRARY-002` (c) for a retrospective.
 
 **REQ-LIBRARY-125** — While analysis is running, two activity indicators MUST be visible: one in the application title bar and one in the workspace run header. Both MUST carry the label "Reviewing run for improvements…". The title-bar indicator MUST expose the accessible name "Improvement analysis status" and the accessible description "Reviewing the completed run for improvements in the background. You can continue working."; the run-header indicator MUST expose an accessible description conveying the same three facts as the title-bar one — that a completed run is being reviewed for improvements, that the review is happening in the background, and that the user can continue working — its wording left to the implementation. Both MUST be present only while analysis is active and MUST be gone once it ends. Neither may change the completed run's own status chip, and no control — the send button included — may be disabled while analysis runs. What is contractual about the indicators is exactly this: when each is present and absent, its label, its accessible name and description, that the activity is never conveyed by colour or animation alone but always carries the label in words (REQ-SHELL-149), that any animation obeys the reduced-motion rule of REQ-SHELL-135, and that adding them leaves every control of the affected views reachable and fully labelled at the minimum window size (REQ-SHELL-022). Their size, colour, pulse cadence, and rendered appearance, and the layout of the Library's tables at varying window sizes, are presentation choices governed by the shell's own theming and responsiveness requirements and are not contractual here.
-  > **Narrowed by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions.md#oq-236)). While a retrospective runs both indicators carry "Reviewing workspace
+  > **Narrowed by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236)). While a retrospective runs both indicators carry "Reviewing workspace
   > history for improvements…" and the descriptions clause (d) fixes. The retrospective's start gesture stays available while
   > a post-run analysis is queued or running and queues behind it; while a retrospective is queued or running in the
   > workspace it is unavailable with the reason "A retrospective is already queued or running.", and the palette entry posts
   > one info notice with that reason (clause (e)). Every other control stays enabled.
 
 **REQ-LIBRARY-126** — With several sessions running at once, the indicators of REQ-LIBRARY-125 MUST be visible whenever at least one session's analysis is in progress and hidden only when none is. One session's analysis finishing MUST NOT hide them while another session's analysis is still running. Once the application is shutting down they MUST be hidden regardless of what any session last reported (REQ-LIBRARY-127).
-  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions.md#oq-236)). The indicators are also visible while a retrospective runs, which
+  > **Extended by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236)). The indicators are also visible while a retrospective runs, which
   > is no session's analysis; the rule above is untouched.
 
 **REQ-LIBRARY-127** — Shutting the application down MUST leave nothing of analysis behind: a job that had not yet started MUST NOT start, an analysis in progress MUST be cancelled so that no artifact is written for it, no completion notice may be posted for any cancelled job, and the activity indicators MUST end hidden. No analysis may continue past the process's exit, and none may be handed to anything that outlives it (REQ-LIBRARY-122). Shutdown MUST NOT wait for an in-flight provider call to return: the call is abandoned, whatever it eventually answers is discarded unread, and no artifact, notice, or log entry attributable to it may appear afterwards. There is consequently no wait to bound. The time from the user asking to quit to the process exiting MUST NOT depend on whether an analysis was in flight, so an unreachable provider can never hold a quit open.
@@ -439,13 +439,13 @@ Exporting MUST write nothing to the store, MUST NOT create, restore or repair a 
 ### 17. Dashboard proposals card
 
 **REQ-LIBRARY-128** — The overview dashboard's right column MUST contain a card "Improvement proposals" with an accent-styled header tag `<N> new` counting `pending_review` proposals and a link-style header button "Open in Library →" that opens the Library on the proposals tab with no specific row focused.
-  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions.md#oq-236)). The retrospective's start gesture sits in this card's header beside
+  > **Extended by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236)). The retrospective's start gesture sits in this card's header beside
   > the tag and "Open in Library →"; the requirement is untouched.
 
 **REQ-LIBRARY-129** — Each dashboard proposal row MUST render: the summary as a clickable link (theme text color, no underline, tooltip "Open in Library → Improvement proposals") that opens the Library with that row selected and scrolled into view; a status tag (label `pending` for `pending_review`, others verbatim; tag styles: pending → outline, approved → accent, rejected/deferred → neutral); a caption with the category (underscores replaced by spaces); and inline Approve/Reject/Defer/Reset-to-pending buttons (REQ-LIBRARY-175) where the button matching the current status is hidden. Actions behave identically to the Library's (same confirmation, persistence, and notices).
 
 **REQ-LIBRARY-130** — The dashboard card's empty state reads "No proposals" with the hint "Run improvement analysis to produce reviewable suggestions.", and the card updates live as proposals change (with its own hidden-panel deferral).
-  > **Narrowed by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions.md#oq-236)). The hint reads "Run improvement analysis, or a retrospective over
+  > **Narrowed by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236)). The hint reads "Run improvement analysis, or a retrospective over
   > this workspace's history, to produce reviewable suggestions." (clause (f)); the rest governs unchanged.
 
 ### 18. Desktop artifact inspector/editor
@@ -453,14 +453,14 @@ Exporting MUST write nothing to the store, MUST NOT create, restore or repair a 
 **REQ-LIBRARY-131** — The artifact inspector MUST be modeless (multiple may be open); opening the same artifact id again re-raises the existing visible dialog instead of duplicating it. Size 720×560; window title `Artifact · <slug>`; header shows the artifact title in heading style and a monospace metadata line `<id> · <kind> · <status>[ · by <producer-or-persona>][ · edited]`.
 
 **REQ-LIBRARY-132** — The body MUST offer two tabs — "Preview" (rendered Markdown) first and "Markdown" (plain-text editor) second — where the preview re-renders on every editor keystroke and the editor uses a measured monospace font so tables and fenced blocks stay aligned while typing.
-  > **Extended by [`PD-LIBRARY-003`](../product/directives.md#pd-library-003), 2026-10-07.** The Preview renders the
+  > **Extended by [`PD-LIBRARY-003`](../product/directives/pd-library-003.md#pd-library-003), 2026-10-07.** The Preview renders the
   > document from below its leading frontmatter block; the Markdown tab shows and edits the whole document.
-  > *Revision 2, 2026-10-13 ([OQ-272](../architecture/open-questions.md#oq-272)):* the Markdown tab shows the whole document —
+  > *Revision 2, 2026-10-13 ([OQ-272](../architecture/open-questions/57-spikes-and-later-questions-24.md#oq-272)):* the Markdown tab shows the whole document —
   > its leading frontmatter block read-only, and the text below it in the editor — and Save sends the block as loaded
   > followed by the edited text (clause (f)). The sentence before this one is revision 1's.
 
 **REQ-LIBRARY-133** — Save MUST persist only the Markdown body (metadata immutable per REQ-LIBRARY-094), after which the listing shows the ` · edited` marker. The footer status shows "Saved." on success and `Save failed: <err>` on failure.
-  > **Extended by [`PD-LIBRARY-003`](../product/directives.md#pd-library-003) revision 2, 2026-10-13** ([OQ-272](../architecture/open-questions.md#oq-272)). The
+  > **Extended by [`PD-LIBRARY-003`](../product/directives/pd-library-003.md#pd-library-003) revision 2, 2026-10-13** ([OQ-272](../architecture/open-questions/57-spikes-and-later-questions-24.md#oq-272)). The
   > body a save persists carries the record's frontmatter, with the new `edited_at`, in place of the document's leading block,
   > or in front of the text when none is found (clause (c)); the metadata stays immutable and the rest is as stated.
 
@@ -570,7 +570,7 @@ Held per session in the workspace store: one full record per artifact plus a met
 
 - `PRIOR SIBLING ARTIFACT INDEX` — every artifact rendered on its own single line carrying slug, id, persona, status and a ≤ 160-character summary; 10,000-char budget, unsuccessful statuses ordered ahead of `succeeded` (REQ-LIBRARY-097), elision marker naming the omitted count and the `artifact_list` tool.
 - `PRIOR AGENT CONTEXT (FULL)` — full bodies of explicitly attached artifacts, 48,000-char budget, missing references and elided ids reported.
-  > *Note, 2026-10-07:* the budget is 100,000 characters with skip-and-continue, by [`PD-TOOLS-006`](../product/directives.md#pd-tools-006) revision 5 (REQ-LIBRARY-098's back-pointer); the line above is kept as written.
+  > *Note, 2026-10-07:* the budget is 100,000 characters with skip-and-continue, by [`PD-TOOLS-006`](../product/directives/pd-tools-006.md#pd-tools-006) revision 5 (REQ-LIBRARY-098's back-pointer); the line above is kept as written.
 - `persona_memory_<persona>` — the persona's memory file content (≤ 200 lines), injected at agent creation only.
 
 ### Saved prompts

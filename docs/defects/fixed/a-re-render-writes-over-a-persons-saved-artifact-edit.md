@@ -33,7 +33,7 @@ Noticed 2026-10-07 by both advocates of the R-072 consortium on OQ-210 and confi
 
 ## Outcome
 
-Repaired 2026-10-07 by bundle `fin28-artifacts`, building [`PD-LIBRARY-003`](../../product/directives.md#pd-library-003)
+Repaired 2026-10-07 by bundle `fin28-artifacts`, building [`PD-LIBRARY-003`](../../product/directives/pd-library-003.md#pd-library-003)
 (OQ-210's ruling under R-072). `ArtifactStore.rerender` now reads a document whose record carries `edited_at` and rewrites only
 its leading frontmatter block (`renderFrontmatter`, split out of `renderSidecar`; `splitFrontmatter` in
 `packages/contracts/src/artifacts.ts`), or puts a fresh block in front when none remains; a document it cannot read is left as

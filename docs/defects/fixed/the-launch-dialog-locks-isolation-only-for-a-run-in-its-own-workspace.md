@@ -33,7 +33,7 @@ classified here.
 ## Repaired — 2026-10-07, fin29 (PD-GIT-001, OQ-224; REQ-GIT-119, REQ-GIT-120, REQ-MONITOR-251)
 
 Classified by the R-072 consortium as its question GI1, ruled as [OQ-224](../../architecture/open-questions.md) and recorded
-as [`PD-GIT-001`](../../product/directives.md#pd-git-001): the per-workspace reading, with a workspace folder nested inside
+as [`PD-GIT-001`](../../product/directives/pd-git-001.md#pd-git-001): the per-workspace reading, with a workspace folder nested inside
 or around another counted as sharing it. The dialog and main now read one count. The run host answers `runs.active` with
 `scope: 'sharing'` from `Sessions.activeRunsSharing` (`packages/engine/src/sessions.ts`): the workspace's own active runs,
 whatever tree they run in, and any active run whose effective tree is the workspace's folder, lies inside it or contains it

@@ -25,7 +25,7 @@ belief at an earlier duress run (request 98, "believed the architect had publish
   forbids a brief offering a tool the entry does not show — which cannot cover publishing while no entry can show it.
 - REQ-TOOLS-154: the child's payload, which carries nothing about its report.
 - OQ-250's limb "any brief offering a command or tool its target lacks", stated for a duress run; here met in a default run.
-- Ruled as [OQ-334](../../architecture/open-questions.md#oq-334) under [R-072](../../product/requests.md#r-072): `PD-TOOLS-006`
+- Ruled as [OQ-334](../../architecture/open-questions/64-spikes-and-later-questions-31.md#oq-334) under [R-072](../../product/requests.md#r-072): `PD-TOOLS-006`
   revision 10.
 
 ## Relevant files
@@ -39,7 +39,7 @@ belief at an earlier duress run (request 98, "believed the architect had publish
 
 ## Outcome — repaired 2026-10-15 (fin47, `fin47-delegation-routing`)
 
-Built as [OQ-334](../../architecture/open-questions.md#oq-334) ruled, `PD-TOOLS-006` revision 10:
+Built as [OQ-334](../../architecture/open-questions/64-spikes-and-later-questions-31.md#oq-334) ruled, `PD-TOOLS-006` revision 10:
 - `REPORT_ARTIFACT_SENTENCE` (`packages/agent-tools/src/tools/delegation.ts`) follows `HAND_OFF_SENTENCE` in `delegate`'s
   description wherever the caller's run holds an artifact store (`DelegateToolOptions.artifactStore`, which `createToolPort` sets
   from the prerequisite the catalogue's grants are resolved under);

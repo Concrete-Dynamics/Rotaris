@@ -1,7 +1,7 @@
 # Background updates — installable from a release, downloaded by itself, applied at the next start
 
 *Drafted 2026-10-22 from [R-084](../product/requests.md#r-084). A plan, not a decision: it schedules work the record
-decides in [`PD-STARTUP-008`](../product/directives.md#pd-startup-008), [`PD-SHELL-005`](../product/directives.md#pd-shell-005)
+decides in [`PD-STARTUP-008`](../product/directives/pd-startup-008.md#pd-startup-008), [`PD-SHELL-005`](../product/directives/pd-shell-005.md#pd-shell-005)
 revision 2 and REQ-STARTUP-169 to REQ-STARTUP-181 ([`../spec/11-startup-distribution-updates.md`](../spec/11-startup-distribution-updates.md)),
 and every product decision it needs is named as the owner's (§6) rather than taken here. **Recorded, not built.** No
 mechanism below has run; nothing here is a first execution, and no row is owed to [`first-executions.md`](first-executions.md)

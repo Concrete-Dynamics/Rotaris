@@ -13,7 +13,7 @@ bundle refuses at once (`pnpm live-run`, `init-proof`, `code-intel-proof`), and 
 Before OQ-400's ruling the same host built the bundle in 14 s: uv picked the x86_64 interpreter by itself, and every
 dependency came as a `win_amd64` wheel.
 
-Not repaired by itself: the session raises [OQ-401](../architecture/open-questions.md#oq-401) and proceeds under its stated
+Not repaired by itself: the session raises [OQ-401](../architecture/open-questions/66-spikes-and-later-questions-33.md#oq-401) and proceeds under its stated
 reading, which is a tooling change.
 
 ## Specs

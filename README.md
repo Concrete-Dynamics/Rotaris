@@ -17,7 +17,7 @@ is built from source. The version it declares is `0.1.0` (`apps/desktop/package.
 **Platforms.**
 
 - **Windows x64** is the one platform the first release will publish for
-  ([`PD-STARTUP-001`](docs/product/directives.md#pd-startup-001)). `pnpm package` builds its installer, and runs on
+  ([`PD-STARTUP-001`](docs/product/directives/pd-startup-001.md#pd-startup-001)). `pnpm package` builds its installer, and runs on
   Windows only.
 - **Linux and macOS** have no build host yet, so no release artifact is produced for either
   ([IC-3](docs/architecture/implementation-conditions.md#ic-3--the-linux-and-macos-build-host-obligations-deferred-to-hardware)).

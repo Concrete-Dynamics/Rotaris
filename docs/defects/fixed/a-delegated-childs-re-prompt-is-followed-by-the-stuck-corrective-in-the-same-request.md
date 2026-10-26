@@ -5,9 +5,9 @@ now, using your tools where the task needs them, then answer with what you did."
 report (`runTurn` calls `observeStuck()`), so the re-prompt's turn takes the stuck trigger at its first `check()` and appends the
 loop supervisor's corrective message after the re-prompt: the child's request ends [task, empty turn, re-prompt, corrective], two
 instructions in one request. It is the shape the live run at `ce5f952` found for the entry role (finding F1), which
-[`PD-ORCH-009`](../../product/directives.md#pd-orch-009) revision 3 removed for the root alone ([OQ-282](../../architecture/open-questions.md#oq-282)),
+[`PD-ORCH-009`](../../product/directives/pd-orch-009.md#pd-orch-009) revision 3 removed for the root alone ([OQ-282](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-282)),
 naming every delegated child as unchanged. Noticed 2026-10-14 by fin43 (`fin43-live-findings`) while building revision 3; raised as
-[OQ-283](../../architecture/open-questions.md#oq-283). Not repaired: which message stands is the ruling's.
+[OQ-283](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-283). Not repaired: which message stands is the ruling's.
 
 ## Specs
 
@@ -24,8 +24,8 @@ same empty turn.
 
 ## Outcome
 
-**Repaired 2026-10-14 by fin44 (`fin44-supervision-and-match`)** under [OQ-283](../../architecture/open-questions.md#oq-283)'s
-ruling (R-072), recorded as [`PD-ORCH-009`](../../product/directives.md#pd-orch-009) revision 4: the child's re-prompted empty
+**Repaired 2026-10-14 by fin44 (`fin44-supervision-and-match`)** under [OQ-283](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-283)'s
+ruling (R-072), recorded as [`PD-ORCH-009`](../../product/directives/pd-orch-009.md#pd-orch-009) revision 4: the child's re-prompted empty
 turn is no stuck report. `IterationChildren.execute` (`packages/engine/src/children/orchestration.ts`) calls
 `withdrawStuck()` on the child's supervisor immediately before it sends "Carry out the task now, …", so the re-prompt is the last
 message of its request. **Pinned by** `children.test.ts`, "PD-ORCH-009 revision 4 (OQ-283): …", two cases red on `a3be56c`: silent

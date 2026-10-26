@@ -322,7 +322,7 @@ now appends `.rotaris/` alone, and writes the marker's directory to the reposito
 the repository's common directory), which Git honours and nobody tracks, so the Git proof's base tree stays clean without
 the user's `.gitignore` changing. OQ-161 holds the owner's ruling (*ruled 2026-10-06, [R-071](../../product/requests.md#r-071): the current behaviour is accepted*); the proofs still seed both lines in their own
 fixtures. *Revised 2026-10-07 under OQ-215 ([R-072](../../product/requests.md#r-072)):* the marker's directory is also a
-hard-coded search and listing ignore component ([`PD-TOOLS-012`](../../product/directives.md#pd-tools-012), the name read from the
+hard-coded search and listing ignore component ([`PD-TOOLS-012`](../../product/directives/pd-tools-012.md#pd-tools-012), the name read from the
 manifest), so the file tools no longer list the runtime's files as the user's; the exclude line and the marker's place in the
 workspace root are unchanged. *Revised again 2026-10-07 under OQ-230 ([R-072](../../product/requests.md#r-072)):* the duress
 run at `a68f121` found the file tools clean and the terminal carrying both directories into the user's report, answer and a
@@ -449,7 +449,7 @@ REQ-WORKSPACE-092's 5 s as binding there, a conflict between the requirements ra
 [OQ-172](../open-questions.md) (2026-10-01, on the verifier's finding).
 
 *Ruled 2026-10-06 ([R-071](../../product/requests.md#r-071)): the owner took OQ-172's recommendation, and
-[`PD-MCP-003`](../../product/directives.md#pd-mcp-003) gives every stop of a step the same 2 s grace — a Cancel, a
+[`PD-MCP-003`](../../product/directives/pd-mcp-003.md#pd-mcp-003) gives every stop of a step the same 2 s grace — a Cancel, a
 workspace switch's cancellation and an exhausted budget as well as the close. `SETUP_TERMINATE_GRACE_MS` is 2 s and
 `SETUP_SHUTDOWN_GRACE_MS` equals it, so the 5 s cancellation grace this round kept outside a close is gone; it had left a
 switch's step running 5.489 s and a Cancel's 5.603 s on Windows (`workspace-proof`, 2026-10-02). Pinned in
@@ -522,7 +522,7 @@ unnecessary or insufficient; launch 11 is its acceptance gate and is re-run when
 *Found insufficient 2026-10-15 (fin47), the same pin:* the warm-up helps only where a `tsconfig.json` or `jsconfig.json` covers the
 files. In a workspace with none (the live run's `todo-app` fixture, a Vite React shape) the TypeScript language server holds only
 the open files, the runtime opens the declaring file alone, and the search answers `{}`: the live `rename` scenario at `3c03287`
-renamed one file of three. The remedy is open as [OQ-362](../open-questions.md#oq-362); `code-intel-proof` launch 13
+renamed one file of three. The remedy is open as [OQ-362](../open-questions/65-spikes-and-later-questions-32.md#oq-362); `code-intel-proof` launch 13
 (`child-rename-cold-js`) is red on it until a ruling is built, and joins launch 11 as a gate re-run on every pin change.
 *Revision 2, built 2026-10-20 (loc1, `loc1-rename`; `PD-MCP-004` revision 2, OQ-362 ruled 2026-10-20 under R-072), the same pin:*
 the manifest also carries `projectFiles`, a product choice keyed by capability beside `warmUps` — the symbol rename's project file:
@@ -547,7 +547,7 @@ project discovery and the runtime's language names, so launches 11, 13, 14 and 1
 so uv picked a CPython for the build host's architecture, and the marker recorded none: on a Windows ARM64 host an arm64
 `python.exe` would have entered the `windows-x64` artifact and answered every packaging check, since it runs there
 ([`../../defects/fixed/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md`](../../defects/fixed/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md)).
-[OQ-400](../open-questions.md#oq-400) ruled the repair: `bundle.mjs` takes `--target=<platform>-<arch>` (the host by
+[OQ-400](../open-questions/64-spikes-and-later-questions-31.md#oq-400) ruled the repair: `bundle.mjs` takes `--target=<platform>-<arch>` (the host by
 default, for the development tree; `package.mjs` passes `win32-x64`), installs the interpreter by its full uv key
 (`cpython-3.13.15-windows-x86_64-none`, `cpython-3.13.15-linux-x86_64-gnu`; `target.mjs`), writes `target` and
 `targetArch` into `bundle.json` and `targetArch` into the pins' hash (recipe 4), so a tree built for another

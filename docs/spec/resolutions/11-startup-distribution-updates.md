@@ -20,8 +20,8 @@ status: resolved
 > **Why this departs from the layer rule, and how the departure is bounded.** [`../../product/README.md`](../../product/README.md)
 > keeps owner-decided behaviour out of this corpus so that `REQ-` keeps meaning "derived". The owner's ask is honoured
 > without spending that distinction: the subsection opens with a note saying that every identifier in it is decided, not
-> derived, and is no evidence about the behavioural target; [`PD-STARTUP-008`](../../product/directives.md#pd-startup-008)
-> and [`PD-SHELL-005`](../../product/directives.md#pd-shell-005) revision 2 carry every displacement of a derived requirement,
+> derived, and is no evidence about the behavioural target; [`PD-STARTUP-008`](../../product/directives/pd-startup-008.md#pd-startup-008)
+> and [`PD-SHELL-005`](../../product/directives/pd-shell-005.md#pd-shell-005) revision 2 carry every displacement of a derived requirement,
 > each with its back-pointer; and no derived requirement's text is rewritten. A reader separating the derived corpus from
 > the decided additions reads the subsection's heading note. Whether later owner requests may mint identifiers the same
 > way is not settled by this amendment.
@@ -44,7 +44,7 @@ status: resolved
 > `%LOCALAPPDATA%\rotaris\rotaris\`, and `REQ-UIBENCH-039` requires `XDG_CONFIG_HOME` to be honoured. Live requirements
 > disagreed, and nothing the product does changes. Ruled under the owner's delegation
 > ([R-072](../../product/requests.md#r-072)); the ruling is in
-> [`open-questions.md`](../../architecture/open-questions.md#oq-247).
+> [`open-questions.md`](../../architecture/open-questions/52-spikes-and-later-questions-19.md#oq-247).
 
 
 > ## Superseded by the storage rulings (2026-09-01)

@@ -715,7 +715,7 @@ is green — 226 slots, the bound rows covering the viewport with no gap at the 
 empty containers allocated at construction, which the memory tripwire subtracts away; nothing else this record decided
 moved (`docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`; OQ-166 asks whether
 PD-CHAT-003's cost paragraph, which describes the capacity arithmetic as keeping 30 px, needs a revision; ruled 2026-10-06,
-[R-071](../../product/requests.md#r-071): [`PD-CHAT-003`](../../product/directives.md#pd-chat-003) revision 2 names the 20 px unit, and the code is unchanged).
+[R-071](../../product/requests.md#r-071): [`PD-CHAT-003`](../../product/directives/pd-chat-003.md#pd-chat-003) revision 2 names the 20 px unit, and the code is unchanged).
 
 **A row that grows, 2026-10-01 (R-067, acceptance finding A37).** "Heights are measured" held for every row the observer had
 reached, and a row whose content changed was placed by the height its identity drew last until the observer's delivery

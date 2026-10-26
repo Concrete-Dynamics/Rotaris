@@ -109,7 +109,7 @@ owner's.
 ## Repaired — 2026-10-06, under the owner's ruling of OQ-139 (fin21)
 
 The owner ruled [OQ-139](../../architecture/open-questions.md) on 2026-10-06 as recommended
-([R-071](../../product/requests.md#r-071)), minted as [`PD-TOOLS-007`](../../product/directives.md#pd-tools-007), which
+([R-071](../../product/requests.md#r-071)), minted as [`PD-TOOLS-007`](../../product/directives/pd-tools-007.md#pd-tools-007), which
 extends REQ-TOOLS-032 with this one repair. A `write_file` call with a path and content, no `operation` and no field only
 another operation reads is read as a `create` when its file does not exist, and its result says so: `No operation was
 given, so this call was read as 'create': <path> did not exist. Name the operation on every write_file call.` A call

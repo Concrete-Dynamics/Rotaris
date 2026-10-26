@@ -51,4 +51,6 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 ## Last reconciled with the code: **2026-10-23**
 
 What each change did to the views, newest first, is in [`reconciliation-log.md`](reconciliation-log.md): every entry
-from the first change on, the ones written here between 2026-09-16 and 2026-10-13 included.
+from the first change on, the ones written here between 2026-09-16 and 2026-10-13 included. Since 2026-10-26 the log
+holds the newest entries and indexes the older ones, archived verbatim in numbered parts under
+[`reconciliation-log/`](reconciliation-log/) ([the document budget](../../README.md#the-document-budget)).

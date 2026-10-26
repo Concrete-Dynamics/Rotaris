@@ -109,7 +109,7 @@ proceeds under the current behaviour.
 
 The owner ruled OQ-114 as recommended on 2026-10-06 ([R-071](../../product/requests.md#r-071)): every figure that question
 names is kept for this release, and the parent is told that a continuation starts with no memory, so that it writes a
-complete brief. Written as [`PD-ORCH-004`](../../product/directives.md#pd-orch-004) revision 5 ("What the parent is told
+complete brief. Written as [`PD-ORCH-004`](../../product/directives/pd-orch-004.md#pd-orch-004) revision 5 ("What the parent is told
 of a continuation") and built on branch `fin20-continue-and-continuation`:
 
 - **The continuation offer** (`cutOffReport` in `packages/engine/src/children/cut-off.ts`) now reads, after the

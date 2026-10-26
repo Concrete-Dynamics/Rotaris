@@ -49,7 +49,7 @@ changing behaviour a live requirement states exactly, which `docs/product/README
 an implementer may not mint. The request is logged with the requirements a directive would have to name,
 so the decision is in front of the owner rather than waiting in a defect note.
 
-**Ruled 2026-09-23 — [`PD-TOOLS-004`](../../product/directives.md#pd-tools-004), [R-048](../../product/requests.md#r-048).** The approval-per-retry
+**Ruled 2026-09-23 — [`PD-TOOLS-004`](../../product/directives/pd-tools-004.md#pd-tools-004), [R-048](../../product/requests.md#r-048).** The approval-per-retry
 half is decided: a session approval of a `write_file` or `haet_edit` call now covers later calls from the same
 persona on the same set of paths, whatever their other arguments, so one "approve for session" covers a retry
 loop like this one. The MCP edit tool (`replace_content`) is outside the directive, because its arguments
@@ -58,7 +58,7 @@ the directive is built.
 
 ## Repaired 2026-09-27 ([R-057](../../product/requests.md#r-057))
 
-[`PD-TOOLS-004`](../../product/directives.md#pd-tools-004) is built. A grant made by "approve for session" on a call
+[`PD-TOOLS-004`](../../product/directives/pd-tools-004.md#pd-tools-004) is built. A grant made by "approve for session" on a call
 of the public `write_file` or `haet_edit` (`haet` folded into `haet_edit`) now stores the set of paths its REQ-TOOLS-018 path
 arguments resolved to — each joined to the workspace root, then through the gate's real-path resolver — when the grant
 is made. A later call of the same tool from the same persona whose own set is exactly that one is allowed by the grant

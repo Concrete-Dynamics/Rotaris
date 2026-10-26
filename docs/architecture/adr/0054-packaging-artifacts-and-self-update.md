@@ -1744,7 +1744,7 @@ download — minutes in which the window accepts input — be ended by the auto-
 immediately before the installer is spawned or the successor started (`UpdaterDeps.activeRuns`, `runInstall`'s
 `beforeApply`, `mustAskAtHandOff`): after a download, any run active then is asked about again; for `Restart now`, a run
 past the count the click covered. Declined there, the verified download is discarded and the offer returns in place.
-*Falsified again 2026-10-14 for the unsaved-settings guard, by [OQ-311](../open-questions.md#oq-311) (ruled that day by the
+*Falsified again 2026-10-14 for the unsaved-settings guard, by [OQ-311](../open-questions/61-spikes-and-later-questions-28.md#oq-311) (ruled that day by the
 consortium under [R-072](../../product/requests.md#r-072), no directive), and built by fin46 (`fin46-accept1-9`): "rather than
 asking the close guard" no longer stands for these clicks.* `Restart now`, and `Update now` / `Try again` on the installer
 flavour, are user-initiated closes (REQ-SHELL-119 guard (1), REQ-CONFIG-287), so `UpdaterDeps.confirmUnsaved` asks

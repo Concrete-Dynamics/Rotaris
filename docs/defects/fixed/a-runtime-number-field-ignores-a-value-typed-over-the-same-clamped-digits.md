@@ -17,7 +17,7 @@ field is changed"; whether typing the digits it already shows is a change of the
 (`#child-timeout`, minutes over seconds) and the Improvement analysis timeout (`#improvement-timeout`, 10–600 s) are the two
 fields where a stored value the field cannot show is reachable by a hand-edited file.
 
-*Added 2026-10-14 (fin45):* that reading is now ruled — [OQ-301](../../architecture/open-questions.md#oq-301), confirmed as built
+*Added 2026-10-14 (fin45):* that reading is now ruled — [OQ-301](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-301), confirmed as built
 under [R-072](../../product/requests.md#r-072): an entry the person types or steps into the field is a change of it, the digits
 shown included, and opening, repopulating, focus and blur change nothing (`PD-CONFIG-003`'s ruling note).
 
@@ -39,7 +39,7 @@ clamps), and so is every other path through the six fields.
 
 The reading taken: PD-CONFIG-003 stores "a user's entry", and a value the person typed into the field is one whether or
 not it reads as the digits already shown; "never rewritten until the user changes the field" is kept, since nothing but an
-entry reaches `onCommit`. The reading was raised as [OQ-301](../../architecture/open-questions.md#oq-301) by fin44 and confirmed as
+entry reaches `onCommit`. The reading was raised as [OQ-301](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-301) by fin44 and confirmed as
 built under [R-072](../../product/requests.md#r-072) on 2026-10-14; nothing changed.
 
 Pinned by `packages/ui/src/settings/number-field-retype.test.ts` (three cases, red on the code before: a stored 3 s shown

@@ -9,9 +9,9 @@ either, or carrying them in the other order, passed. Noted by fin43's reviewer o
 
 ## Specs
 
-- [`PD-TOOLS-019`](../../product/directives.md#pd-tools-019) and [`PD-TOOLS-015`](../../product/directives.md#pd-tools-015) clause 2:
+- [`PD-TOOLS-019`](../../product/directives/pd-tools-019.md#pd-tools-019) and [`PD-TOOLS-015`](../../product/directives/pd-tools-015.md#pd-tools-015) clause 2:
   a level-3 match lands `new_string` shifted to the file's indentation and says so.
-- [`PD-TOOLS-016`](../../product/directives.md#pd-tools-016): the CRLF sentence, after the shift sentence where both apply.
+- [`PD-TOOLS-016`](../../product/directives/pd-tools-016.md#pd-tools-016): the CRLF sentence, after the shift sentence where both apply.
 
 ## Relevant files
 

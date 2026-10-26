@@ -574,11 +574,11 @@ the wait was still counted; `execute` now marks such an execution between turns 
 
 *(2026-10-06, [R-071](../../product/requests.md#r-071): OQ-127 ruled as recommended, and two statements of the verifier's
 rounds above, kept as they were written, no longer describe the build. The issue:
-[`PD-MONITOR-005`](../../product/directives.md#pd-monitor-005) revision 2 (narrowing REQ-MONITOR-119) writes the `stall`
+[`PD-MONITOR-005`](../../product/directives/pd-monitor-005.md#pd-monitor-005) revision 2 (narrowing REQ-MONITOR-119) writes the `stall`
 issue only beside the throttled warning — at entry, then no sooner than REQ-MONITOR-120's throttle — so the reason the
 first round kept as falsified, the eviction from REQ-SESSION-133's ring, is now the owner's rule; the callback still
 fires at every evaluation. The three facts: the wait on tools, the recovery and the corrective message are the `waiting_on_tools`,
-`stall_recovered` and `corrective_message` timeline entries, words of [`PD-ORCH-014`](../../product/directives.md#pd-orch-014)
+`stall_recovered` and `corrective_message` timeline entries, words of [`PD-ORCH-014`](../../product/directives/pd-orch-014.md#pd-orch-014)
 given under OQ-157, each beside its session-log line; the wait on tools and the recovery are intended states logged at
 `INFO` through the run's `info`, and only the stall warning and the corrective-message line stay at `WARNING`.
 `stallRecords` and `recordCorrectiveMessage` in `children/stall.ts` are the one writer for a child's watch and the

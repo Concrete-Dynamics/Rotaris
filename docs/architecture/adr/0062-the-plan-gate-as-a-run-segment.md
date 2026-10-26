@@ -63,7 +63,7 @@ the listing and the callable set would diverge — the model would be told it ma
 `Run.planHeld` is settled once, after the pre-flight (so the answer group is known) and before the first
 thing the gate withholds, and is never cleared in place.
 
-> **Amended by [`PD-ORCH-003`](../../product/directives.md#pd-orch-003) revision 2, 2026-09-28.** A run that resumes
+> **Amended by [`PD-ORCH-003`](../../product/directives/pd-orch-003.md#pd-orch-003) revision 2, 2026-09-28.** A run that resumes
 > an iteration a rest left open (`PD-ORCH-005` clause 4) — or, by OQ-104's reading, one a crash left open once the
 > crash is recorded (clause 18) — runs it unheld, and when the gate would hold the run it holds once that iteration
 > has closed and the stop conditions found work left, before the first new iteration. So a segment boundary can now
@@ -172,7 +172,7 @@ it is what survives a restart, on the same terms as `paused_at_count` does for `
 launch, and cleared only by the next user prompt — because `REQ-ORCH-154` says a mode change made while a
 run is in flight takes effect only for the next run, and a fresh prompt **is** the next run.
 
-> **Superseded by [`PD-ORCH-003`](../../product/directives.md#pd-orch-003), 2026-09-17 — the clearing rule
+> **Superseded by [`PD-ORCH-003`](../../product/directives/pd-orch-003.md#pd-orch-003), 2026-09-17 — the clearing rule
 > alone.** The sentence above is kept because its reasoning was sound and is why the flag is written the way
 > it is. What it got wrong is not the mechanism but **the unit**. A fresh prompt is indeed the next run; the
 > directive's point is that the next run is the wrong thing to re-gate, because the unit a person plans is
@@ -249,7 +249,7 @@ looks the root up by name. The defect stands and keeps its own commit, where `ba
    dialog's both write `runtime.run_start_mode` through the scoped per-field path, so the setting is
    persistent and one value governs whichever surface the user next starts from.
 
-   > **Amended by [`PD-ORCH-003`](../../product/directives.md#pd-orch-003), 2026-09-17.** The composer's
+   > **Amended by [`PD-ORCH-003`](../../product/directives/pd-orch-003.md#pd-orch-003), 2026-09-17.** The composer's
    > control now writes session state as well: choosing `plan` on a session holding an approved release
    > sends `session.planRearm` after the field write, because under the directive the setting alone no
    > longer decides whether that session's next run is held. The start dialog's control does not — it opens

@@ -14,7 +14,7 @@ That is the likely trigger of the timeout repaired in
 open still loses its slot (initialization resolution, the board's queue, the hook review, the configuration's load) whenever
 discovery takes longer than the bound. Recorded by bundle `loc1-main-rejection`, not repaired: that repair was the
 unhandled rejection alone. Moving the warm-up past the reply (a macrotask, or after `reply` is called) is the obvious repair.
-Whether it is wanted, and what a late reply owes, is [OQ-386](../architecture/open-questions.md#oq-386)'s.
+Whether it is wanted, and what a late reply owes, is [OQ-386](../architecture/open-questions/67-spikes-and-later-questions-34.md#oq-386)'s.
 
 ## Specs
 

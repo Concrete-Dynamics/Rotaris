@@ -197,7 +197,7 @@ stated in the test rather than argued about.
 > kept because the schedule it states — the emulator arriving with streaming — is exactly the assumption that
 > failed silently: streaming arrived and nobody moved the capture.
 
-> **Narrowed 2026-09-27 — [`PD-TOOLS-003`](../../product/directives.md#pd-tools-003).** "The `FAILED ` marker of
+> **Narrowed 2026-09-27 — [`PD-TOOLS-003`](../../product/directives/pd-tools-003.md#pd-tools-003).** "The `FAILED ` marker of
 > `REQ-TOOLS-113` fires on a test-runner banner's own `failed `" no longer holds: the directive matches that
 > marker in capitals only, so a banner's lower-case `failed ` warns through the banner check alone. The assertion
 > that stated the old reading now uses a capital `==== 1 FAILED ====` banner, which still raises both warnings,

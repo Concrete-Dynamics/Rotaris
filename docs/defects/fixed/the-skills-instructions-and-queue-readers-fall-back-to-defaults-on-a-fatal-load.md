@@ -1,6 +1,6 @@
 ## The skills, instructions and queue readers fall back to defaults on a fatal configuration load
 
-Raised by an advocate of the consortium that ruled [OQ-279](../../architecture/open-questions.md#oq-279) (2026-10-13, under
+Raised by an advocate of the consortium that ruled [OQ-279](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-279) (2026-10-13, under
 [R-072](../../product/requests.md#r-072)) and recorded on 2026-10-14 by fin43 (`fin43-notices-and-config`), which built that
 ruling; confirmed by reading the three readers on that branch. The ruling does not decide it.
 

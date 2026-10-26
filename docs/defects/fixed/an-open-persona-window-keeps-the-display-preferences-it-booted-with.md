@@ -22,7 +22,7 @@ push message on the seams view's channel path, not a change inside the writer.
   toggling "MUST take effect immediately on the rows already on screen"; a persona window's reasoning rows are on screen.
 - `REQ-CONFIG-403` — the Display category's two toggles are each wired to the stored preference and to "a live
   re-render notification"; the notification reaches only the window that wrote.
-- [`PD-CONFIG-004`](../../product/directives.md#pd-config-004) (2026-10-13, the ruling of OQ-264) — makes the live re-render
+- [`PD-CONFIG-004`](../../product/directives/pd-config-004.md#pd-config-004) (2026-10-13, the ruling of OQ-264) — makes the live re-render
   clause explicit for the reasoning switch: Display › Transcript's third switch is wired "like the first two, to the stored
   preference and to the live re-render notification". The note stays open; the directive authorizes no repair, and the gap
   is owed its own repair before release. *Closed 2026-10-14 (fin43): that repair is the outcome below, and PD-CONFIG-004

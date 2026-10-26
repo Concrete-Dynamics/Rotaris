@@ -14,7 +14,8 @@
 // read, so the pair agrees with itself whatever the prose above them says. The
 // prose is the only independent side, which is why this gate reads it.
 //
-// It holds five things about `docs/product/directives.md`:
+// It holds five things about `docs/product/directives.md` — the index, and since
+// 2026-10-26 one file per entry under `docs/product/directives/` (`tools/record-parts.mjs`):
 //   1. every entry's anchor agrees with the identifier its heading prints;
 //   2. no identifier appears twice;
 //   3. identifiers run contiguously from 001 WITHIN EACH DOMAIN — the register's
@@ -23,16 +24,18 @@
 //      entries. A revision keeps its number and adds no entry, so the total is
 //      the number of headings and never the highest identifier — the shortcut
 //      the request log is allowed to take does not hold here;
-//   5. every `directives.md#pd-…` link anywhere in `docs/` resolves to a real
-//      entry.
+//   5. every `directives/pd-….md#pd-…` link anywhere in `docs/` resolves to a real
+//      entry, in the file named for it.
 //
 // Runs as part of `pnpm lint`. Reads `docs/`; costs no subprocess.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { partsOf } from './record-parts.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const registerPath = join(root, 'docs', 'product', 'directives.md');
+const registerDir = join(root, 'docs', 'product', 'directives');
 
 /**
  * An HTML comment does not render, so an entry inside one is not an entry. The
@@ -45,7 +48,21 @@ const registerPath = join(root, 'docs', 'product', 'directives.md');
 const uncommented = (text) =>
   text.replace(/<!--[\s\S]*?-->/g, (comment) => comment.replace(/[^\n]/g, ' '));
 
-const source = uncommented(readFileSync(registerPath, 'utf8'));
+// The register whole: the index, then each entry's file, in name order. `where` turns an offset into the
+// file and line it came from, so that a problem still names the place to repair.
+const files = [registerPath, ...partsOf(registerPath)].map((path) => ({ path, text: uncommented(readFileSync(path, 'utf8')) }));
+const source = files.map((f) => f.text).join('\n');
+/** @param {number} offset */
+const where = (offset) => {
+  let start = 0;
+  for (const f of files) {
+    if (offset <= start + f.text.length) {
+      return `${relative(root, f.path).split(sep).join('/')}:${f.text.slice(0, offset - start).split('\n').length}`;
+    }
+    start += f.text.length + 1;
+  }
+  return `offset ${offset}`;
+};
 
 const problems = [];
 /** @param {string} message */
@@ -93,7 +110,7 @@ const ENTRY = /^<a id="pd-([a-z]+)-(\d+)"><\/a>\s*\n\s*\n###\s+PD-([A-Z]+)-(\d+)
 /** @type {{ anchor: string, domain: string, number: number, printed: string, line: number }[]} */
 const entries = [];
 for (const match of source.matchAll(ENTRY)) {
-  const line = source.slice(0, match.index).split('\n').length;
+  const line = where(match.index);
   entries.push({
     anchor: `pd-${match[1]}-${match[2]}`,
     domain: match[3],
@@ -103,9 +120,20 @@ for (const match of source.matchAll(ENTRY)) {
   });
   if (match[1].toUpperCase() !== match[3] || match[2] !== match[4]) {
     fail(
-      `line ${line}: the anchor says pd-${match[1]}-${match[2]} and the heading prints ` +
+      `${line}: the anchor says pd-${match[1]}-${match[2]} and the heading prints ` +
         `PD-${match[3]}-${match[4]}. A link to one reaches the other.`,
     );
+  }
+}
+
+// Each entry's file holds that entry and no other: a link names the file by the
+// anchor, so a second entry in it, or a file named for another, is a citation that
+// reaches the wrong text.
+for (const f of files.slice(1)) {
+  const name = relative(registerDir, f.path).split(sep).join('/');
+  const held = [...f.text.matchAll(ENTRY)].map((m) => `pd-${m[1]}-${m[2]}`);
+  if (held.length !== 1 || `${held[0]}.md` !== name) {
+    fail(`docs/product/directives/${name} holds ${held.length === 0 ? 'no entry' : held.join(', ')}; an entry's file holds that entry alone and is named for its anchor.`);
   }
 }
 
@@ -117,8 +145,8 @@ const anchored = new Set(entries.map((e) => e.printed));
 for (const match of source.matchAll(HEADING)) {
   const printed = `PD-${match[1]}-${match[2]}`;
   if (anchored.has(printed)) continue;
-  const line = source.slice(0, match.index).split('\n').length;
-  fail(`line ${line}: ${printed} has no \`<a id="${printed.toLowerCase()}"></a>\` anchor above it, so nothing can cite it.`);
+  const line = where(match.index);
+  fail(`${line}: ${printed} has no \`<a id="${printed.toLowerCase()}"></a>\` anchor above it, so nothing can cite it.`);
 }
 
 if (entries.length === 0) {
@@ -141,7 +169,7 @@ for (const entry of entries) {
 for (const [printed, group] of byId) {
   if (group.length > 1) {
     fail(
-      `${printed} appears ${group.length} times, at lines ${group.map((e) => e.line).join(', ')}. ` +
+      `${printed} appears ${group.length} times, at ${group.map((e) => e.line).join(', ')}. ` +
         'A changed directive gets a new REVISION in place, not a second heading; two branches that ' +
         'minted the same number settle it by the one that reached `main` first keeping it.',
     );
@@ -215,21 +243,24 @@ function markdownUnder(dir) {
   return found;
 }
 
-// 5 — every citation reaches an entry. Inside the register itself a citation is
-// a bare `#pd-…`; everywhere else it carries the filename.
-const CITATION = /(?:directives\.md)?#(pd-[a-z]+-\d+)\)/g;
+// 5 — every citation reaches an entry. Inside the register itself a citation may be
+// a bare `#pd-…` or name a sibling entry's file; everywhere else it carries the
+// entry's file, `directives/pd-….md`, which must be the one named for the anchor.
+const CITATION = /(?:(?:directives\/)?(pd-[a-z]+-\d+)\.md)?#(pd-[a-z]+-\d+)\)/g;
 const defined = new Set(entries.map((e) => e.anchor));
 for (const file of markdownUnder(join(root, 'docs'))) {
   const text = uncommented(readFileSync(file, 'utf8'));
-  const isRegister = file === registerPath;
+  const isRegister = file === registerPath || dirname(file) === registerDir;
   for (const match of text.matchAll(CITATION)) {
-    if (!isRegister && !match[0].startsWith('directives.md')) continue;
-    if (defined.has(match[1])) continue;
+    if (!isRegister && match[1] === undefined) continue;
     const line = text.slice(0, match.index).split('\n').length;
-    fail(
-      `${relative(root, file).split(sep).join('/')}:${line} cites ${match[1].toUpperCase()}, ` +
-        'which the directive register does not define.',
-    );
+    const at = `${relative(root, file).split(sep).join('/')}:${line}`;
+    if (match[1] !== undefined && match[1] !== match[2]) {
+      fail(`${at} cites #${match[2]} in ${match[1]}.md, which holds ${match[1].toUpperCase()} alone.`);
+      continue;
+    }
+    if (defined.has(match[2])) continue;
+    fail(`${at} cites ${match[2].toUpperCase()}, which the directive register does not define.`);
   }
 }
 

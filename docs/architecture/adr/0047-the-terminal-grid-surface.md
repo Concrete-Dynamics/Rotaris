@@ -358,7 +358,7 @@ in flight at a time, and a fence that times out is recorded rather than passed. 
 has been parsed. No product code changed, and no assertion was weakened. `live.echoUnder100ms` keeps REQ-SHELL-166's 100 ms
 and the page's own timestamps, and records the host's load beside it (`results.live.echoLoad`). In the eighty runs on the
 repair no input check went red and no fence timed out. The echo was red six times, at load averages of 9.3 to 13.5, each
-time one keystroke of three missing the bound by 0 to 44 ms. Whether the bound holds on an oversubscribed host is OQ-176. *(Ruled 2026-10-06, [R-071](../../product/requests.md#r-071): it holds on a host whose CPUs other programs do not oversubscribe, [`PD-SHELL-007`](../../product/directives.md#pd-shell-007).)*
+time one keystroke of three missing the bound by 0 to 44 ms. Whether the bound holds on an oversubscribed host is OQ-176. *(Ruled 2026-10-06, [R-071](../../product/requests.md#r-071): it holds on a host whose CPUs other programs do not oversubscribe, [`PD-SHELL-007`](../../product/directives/pd-shell-007.md#pd-shell-007).)*
 
 **Found along the way.** A closing `screen` frame resets each emulator and rewrites the final screen, which the library
 parses over several tasks; one read in that window saw the row preview empty while the grid showed the flood's last line

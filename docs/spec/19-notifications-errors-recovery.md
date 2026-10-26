@@ -56,7 +56,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 ### A4. Choosing a channel
 
 **REQ-NOTIFY-003** — A transient acknowledgement on its own is sufficient reporting only for an event that is none of the following: a failure, a refusal, an outcome carrying a recovery action. Each of those three is additionally published as a persistent notice and so stays readable after the acknowledgement lifetime of REQ-NOTIFY-011 has elapsed. This obligation is discharged at publication: the notice surface holds one notice, and a later publication may replace it under REQ-NOTIFY-024. Retrievability afterwards is carried by the record REQ-NOTIFY-268 requires, not by the notice surface. Any other event may be acknowledged transiently and reported nowhere else.
-  > **Extended by [`PD-WORKSPACE-001`](../product/directives.md#pd-workspace-001), 2026-09-12.** This still
+  > **Extended by [`PD-WORKSPACE-001`](../product/directives/pd-workspace-001.md#pd-workspace-001), 2026-09-12.** This still
   > governs every other event. The directive's own offer — choosing the project folder a window already has
   > open — carries a recovery action and is nevertheless reported transiently and nowhere else, because what it
   > offers is reachable at any time from the window it appears in and there is nothing for a reader to come back
@@ -74,7 +74,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 **REQ-NOTIFY-012** — A transient acknowledgement is placed with respect to its host window rather than the screen. It anchors to the bottom-right corner of the host window's content area, keeping a 16 px margin from that window's right edge and a 16 px margin from its bottom edge, clears the title bar, and is drawn over all other content of that window so that nothing covers it. Where the host is narrower than the bounded width of REQ-NOTIFY-013 plus those margins, the width is reduced and the margins are kept. Moving or resizing the window restores the same position relative to the window with no user action. This requirement is the product's single definition of where a transient acknowledgement is placed — the corner it anchors to, the margins it keeps, the fact that it is drawn over all other content of its host, and the narrowing that happens where the host is too narrow: a document that shows acknowledgements cites this identifier rather than restating any of them, contributing only which window is the host. No surface anchors an acknowledgement to a corner of its own.
 
 **REQ-NOTIFY-013** — There is one acknowledgement surface, the stacked one of REQ-NOTIFY-016 through REQ-NOTIFY-022; a lone acknowledgement is that stack holding one member, and no separate single-acknowledgement surface exists. A transient acknowledgement wraps its text within a bounded width: at most 520 px while exactly one is visible, and at most 360 px while two or three are, in each case reduced to the host width less its margins where the host is narrower. A stack growing from one member to two narrows the acknowledgement already standing rather than replacing it or reordering it. This requirement is the product's single definition of the transient acknowledgement surface itself: there is one such surface in the product, its structure and its bounded widths are stated here, and a document that raises a transient acknowledgement cites this identifier rather than declaring a surface, a stack, or a width of its own. A surface that needs different behaviour extends this requirement rather than adding a second acknowledgement surface beside it.
-  > **Extended by [`PD-WORKSPACE-001`](../product/directives.md#pd-workspace-001), 2026-09-12.** Taken up on this
+  > **Extended by [`PD-WORKSPACE-001`](../product/directives/pd-workspace-001.md#pd-workspace-001), 2026-09-12.** Taken up on this
   > requirement's own terms — the sentence above is the instruction the directive followed, and no second
   > acknowledgement surface exists. A transient acknowledgement may now carry **at most one action**, drawn as a
   > control inside the one surface this requirement defines. Its widths, its stack, its lifetime, its focus
@@ -116,7 +116,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-268** — Every persistent notice of severity `warning` or `error` is, at publication, additionally recorded as an entry carrying its title, its message body and its technical detail unchanged. Where the notice carries a session identifier, or is unscoped while a run is focused, the entry is written to that session's timeline; where no session applies, it is written to the application diagnostics. Recording precedes rendering, so a notice replaced within the same event-loop turn is still recorded. The entry is therefore what a user reads after a notice was superseded before it could be acted on, and no failure or refusal becomes unreachable through replacement alone. Notices of severity `info` and `success` are not recorded by this requirement.
 
-> **Extended by [`PD-ORCH-014`](../product/directives.md#pd-orch-014), 2026-10-06.** The timeline entry this requirement
+> **Extended by [`PD-ORCH-014`](../product/directives/pd-orch-014.md#pd-orch-014), 2026-10-06.** The timeline entry this requirement
 > writes is named `notice`, a word of domain 01's timeline vocabulary, and carries the notice's own severity.
 
 ### A7. Persistent notices: where and how they are drawn
@@ -150,25 +150,25 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 **REQ-NOTIFY-030** — Changing the focused session moves every recovery affordance with it. Afterwards, a retry resubmits the newly focused session's draft, or that session's last submitted prompt where the draft is empty, and never the previously focused session's; the newly focused session still has its first automatic authentication fallback available under REQ-NOTIFY-070, whether or not the previously focused session spent one; the sandbox indicator describes the newly focused session; and the live output on screen belongs to that session alone.
 
 **REQ-NOTIFY-031** — A run other than the focused one reaching a terminal state that is not a failure raises a persistent notice naming that session and the state it reached, with severity `success` where the state normalises to `completed` and `info` for every other non-failure terminal state. Its body states that the session on screen is unaffected and that the finished session can be opened for review, and it offers an action focusing that session. Publishing it changes neither the focused session nor what the focused view shows, and the session list shows the finished session's new state. A failure of a non-focused run is reported under REQ-NOTIFY-032 and raises nothing under this requirement.
-  > **Extended by [`PD-SHELL-001`](../product/directives.md#pd-shell-001) revision 3, 2026-10-14.** The action focusing the
+  > **Extended by [`PD-SHELL-001`](../product/directives/pd-shell-001.md#pd-shell-001) revision 3, 2026-10-14.** The action focusing the
   > session carries that session's workspace and reaches it: the main window holding it is surfaced, else one is added for it
-  > on PD-SHELL-001's add terms, and the session is focused there ([OQ-292](../architecture/open-questions.md#oq-292)).
+  > on PD-SHELL-001's add terms, and the session is focused there ([OQ-292](../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-292)).
 
 **REQ-NOTIFY-032** — A run other than the focused one that fails raises a persistent notice of severity `warning` naming that session, carrying in its copyable detail the failure text exactly as the run reported it, and offering an action focusing that session. It replaces the completion notice of REQ-NOTIFY-031 rather than accompanying it. It is the only notice such a failure raises: the classification of REQ-NOTIFY-060 still runs, setting the session's status and fixing the recovery that session will offer, but the classification's own error notice is not published while that session is not focused. Focusing that session publishes the classification notice for it, so the recovery affordances arrive with the focus change under REQ-NOTIFY-030 and two notices about one failure are never on screen at once. This notice's severity is `warning`, not `error`, because the work the user is looking at is unaffected; REQ-NOTIFY-065 governs error notices and does not reach this one.
-  > **Extended by [`PD-SHELL-001`](../product/directives.md#pd-shell-001) revision 3, 2026-10-14.** The action focusing the
+  > **Extended by [`PD-SHELL-001`](../product/directives/pd-shell-001.md#pd-shell-001) revision 3, 2026-10-14.** The action focusing the
   > session carries that session's workspace and reaches it: the main window holding it is surfaced, else one is added for it
-  > on PD-SHELL-001's add terms, and the session is focused there ([OQ-292](../architecture/open-questions.md#oq-292)).
+  > on PD-SHELL-001's add terms, and the session is focused there ([OQ-292](../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-292)).
 
 ### A9. What a notice can offer the user
 
 **REQ-NOTIFY-044** — A notice action comes from a fixed vocabulary, and activating one produces the stated result: focus a named session; open the project-initialization surface for a named workspace; install a pending update; open a named view; open settings at a named category; open the hosted-cloud account surface; open the library at a named tab; open the hook review for a named workspace, which REQ-NOTIFY-224's unreviewed-hooks notice offers; start the guided provider setup of REQ-WORKSPACE-152, at its catalog step or, where the action names a provider, at the authentication step for that provider; restart after an update has been installed; retry the failed run under REQ-NOTIFY-045; revert a recorded proposal review decision; save settings. No action in this vocabulary writes into the user's project: the project action navigates only, and initialization itself is started from the surface it opens, per REQ-NOTIFY-047; the hook-review action opens the review and allows nothing, the decision being taken in the review dialog of REQ-HOOKS-106; and the provider-setup action opens a flow that acts on the application's own credential store and on nothing in the project. The named view is one of the primary views fixed by REQ-SHELL-023, the named settings category is one of the identifiers fixed by REQ-CONFIG-269, the named library tab is one of the tab names fixed by REQ-LIBRARY-103, and the named provider is one the runtime provider catalog of REQ-NOTIFY-210 declares; this document adds no view, category or tab of its own, and an action naming a value outside the owning domain's vocabulary is not dispatched. An action concerning a particular object — a session, a workspace, a settings category, a library tab, a provider, a proposal decision — carries that object's identity, and activating it acts on that object without asking the user anything further. *Amended 2026-09-06 under ESC-34: the vocabulary named eleven actions and could express neither the review the notice of REQ-NOTIFY-224 must offer nor the guided setup the first-launch notice of REQ-WORKSPACE-152 (3) must start — the nearest member, opening settings at a category, reaches the surface beside each and not the surface itself, and REQ-WORKSPACE-152 draws that distinction deliberately between its clause (2), which leads to Settings, and its clause (3), which starts the flow. The notice pipeline's first execution (ADR-0049, Part V) built both actions and found the list closed against them. Ruled on the precedent of resolution 12, where this vocabulary was corrected to match REQ-NOTIFY-047 rather than the other way round: the enumeration had fallen behind the behaviour. Neither member weakens the closed property above.*
 
-> **Narrowed by [`PD-STARTUP-008`](../product/directives.md#pd-startup-008), 2026-10-22.** The vocabulary gains one action: cancel the running update download
+> **Narrowed by [`PD-STARTUP-008`](../product/directives/pd-startup-008.md#pd-startup-008), 2026-10-22.** The vocabulary gains one action: cancel the running update download
 > (REQ-STARTUP-170). No other action is added, and the closed property and every other clause still govern.
-  > **Extended by [`PD-SHELL-001`](../product/directives.md#pd-shell-001) revision 2, 2026-10-13.** An action naming a
+  > **Extended by [`PD-SHELL-001`](../product/directives/pd-shell-001.md#pd-shell-001) revision 2, 2026-10-13.** An action naming a
   > workspace surfaces the main window holding it, else adds one for it on PD-SHELL-001's add terms (no gate, nothing
   > asked, nothing closed), and opens its surface there.
-  > *Amended in place 2026-10-14 (revision 3, [OQ-292](../architecture/open-questions.md#oq-292)):* "focus a named session"
+  > *Amended in place 2026-10-14 (revision 3, [OQ-292](../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-292)):* "focus a named session"
   > carries the session's workspace as well — in Data & Formats, "parameterised by session identifier and its workspace" —
   > taken from the run host's record of the session's root, and takes the same reach; the session is focused in the window
   > surfaced or added. A notice whose session's workspace is not known carries no action.
@@ -242,7 +242,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 **REQ-NOTIFY-108** — Whether two of an agent's actions count as the same action, and the repetition, cycle and volume triggers that fire from that comparison together with the order they are evaluated in, are fixed by REQ-ORCH-101. This domain relies on that requirement and states no comparison rule, no trigger, no threshold and no evaluation order of its own. What it relies on in particular is that no part of an action's content is disregarded when two actions are compared: two long tool calls differing only near the end of their arguments are different actions, and no truncation and no normalisation of the compared text may make them the same. An agent's assistant messages count as actions for this purpose alongside its tool calls, compared by their full text on those same terms. The default figures behind the triggers — the repetition and cycle counts, the volume backstop, the two combination modes and their weights, the recent-event window and the length of transcript examined — are REQ-ORCH-100's, and this document holds no copy of any of them. Where supervision reads a session's recent activity it reads it on those terms and on no others.
 
 **REQ-NOTIFY-109** — Where the classifier call fails, the decision is made from the collected signals alone: a repetition trigger declares a loop; a volume trigger declares a loop only where repeated assistant messages or back-to-back invocations of the same tool corroborate it, and never from the counts by themselves.
-  > **Narrowed by [`PD-ORCH-016`](../product/directives.md#pd-orch-016), 2026-10-07.** "Back-to-back invocations of
+  > **Narrowed by [`PD-ORCH-016`](../product/directives/pd-orch-016.md#pd-orch-016), 2026-10-07.** "Back-to-back invocations of
   > the same tool" corroborate a volume trigger only when they are the same action by REQ-ORCH-101's comparison — the same
   > tool name and identical whole arguments. The rest of the requirement governs as written.
 
@@ -285,7 +285,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 **REQ-NOTIFY-088** — A structured provider quota-exhaustion error — `insufficient_quota` or `insufficient-quota`, or plain-language exhaustion such as an exceeded current quota or a direction to check plan and billing — marks that provider and model exhausted for the rest of the session. Auto-resume onto it is refused, and recovery requires a different eligible model or an explicit choice by the user.
 
 **REQ-NOTIFY-089** — A model chosen by hand during a wait is kept for the rest of the session and overrides the tier whose quota was exhausted, so later calls in that session do not return to the exhausted model.
-  > **Narrowed by [`PD-ORCH-013`](../product/directives.md#pd-orch-013), 2026-10-06.** The model chosen during a wait
+  > **Narrowed by [`PD-ORCH-013`](../product/directives/pd-orch-013.md#pd-orch-013), 2026-10-06.** The model chosen during a wait
   > is kept for the rest of the session unless the user later chooses the exhausted model explicitly for the entry agent;
   > that choice takes the override back, and later calls may then return to the model chosen.
 
@@ -299,7 +299,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-263** — A run suspended in the quota wait of REQ-NOTIFY-083 is presented as waiting, never as failed and never as idle. Its normalised lifecycle state stays `running`, so the run stays busy under REQ-NOTIFY-050 and the composer stays locked under REQ-NOTIFY-051. The run header states that the run is waiting on a provider limit; names the provider and the model whose limit was reached; states whether that provider is marked exhausted under REQ-NOTIFY-088; and, where a resume time is known under REQ-NOTIFY-084 or REQ-NOTIFY-085, counts the remaining time down continuously rather than only when a new event arrives. Where auto-resume is not permitted it states instead that the run resumes only when the user decides. Exactly three choices are offered, as controls in that header and on no other surface: keep waiting, change model, and cancel the run. Changing model opens the model list of REQ-NOTIFY-074 and pins the chosen model for the session under REQ-NOTIFY-089. This holds for every session and not only the focused one, so a background run in a quota wait is visibly waiting without being focused first.
 
-> **Narrowed by [`PD-MONITOR-004`](../product/directives.md#pd-monitor-004), 2026-10-06.** Changing model opens the
+> **Narrowed by [`PD-MONITOR-004`](../product/directives/pd-monitor-004.md#pd-monitor-004), 2026-10-06.** Changing model opens the
 > quota wait's own list, every configured model key alphabetically with an out-of-quota pair annotated, not
 > REQ-NOTIFY-074's list. Every other clause above still governs.
 
@@ -323,8 +323,8 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-056** — Closing the application while an isolated worktree integration is running is refused, with a message asking the user to keep the application open until the integration finishes.
 
-> **Narrowed by [`PD-SHELL-009`](../product/directives.md#pd-shell-009) revision 3, 2026-10-20**
-> ([OQ-361](../architecture/open-questions.md#oq-361), ruled under [R-072](../product/requests.md#r-072)). The
+> **Narrowed by [`PD-SHELL-009`](../product/directives/pd-shell-009.md#pd-shell-009) revision 3, 2026-10-20**
+> ([OQ-361](../architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361), ruled under [R-072](../product/requests.md#r-072)). The
 > application's close — the last main window's, the update's `Restart now` and the installer's hand-off — is refused while
 > main records a worktree integration running, as written. A record main cannot read refuses no window's close: the close
 > goes on to the active-run guard, with a `warn` line; the update declines instead and starts nothing. A shutdown that no
@@ -373,7 +373,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 **REQ-NOTIFY-120** — Where a loaded snapshot's session status states that no run can still be active, agents still marked running are settled: `completed`, `succeeded` and `done` become done; `failed` and `error` become failed; every other value becomes cancelled. Their activity text states that they ended with the run, and their active tools are cleared. A session status of `idle` leaves agents untouched. A stale or older-format snapshot therefore never renders a finished run above a live activity indicator.
 
 **REQ-NOTIFY-121** — Once a process holds a session's `lock`, no child record left by an earlier occupant of that session reads as unfinished: every such record reads `cancelled`, carries a completion time, and shows no tool call in progress. Performing this again on the same session changes nothing further.
-  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005), 2026-09-27 (revision 2).** The settle still runs, and no longer touches a `paused` agent: that agent is resumed with its iteration instead of being cancelled.
+  > **Narrowed by [`PD-ORCH-005`](../product/directives/pd-orch-005.md#pd-orch-005), 2026-09-27 (revision 2).** The settle still runs, and no longer touches a `paused` agent: that agent is resumed with its iteration instead of being cancelled.
 
 ### C2. Child reports and re-delegation
 
@@ -639,7 +639,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-215** — Where a newer version is found, a non-blocking persistent info notice offers it once the main window is visible, naming the version, carrying the release summary or, where none exists, directing the user to the full release notes, and offering an action that installs it.
 
-> **Narrowed by [`PD-STARTUP-008`](../product/directives.md#pd-startup-008), 2026-10-22.** On a build that downloads in the background (REQ-STARTUP-169) the
+> **Narrowed by [`PD-STARTUP-008`](../product/directives/pd-startup-008.md#pd-startup-008), 2026-10-22.** On a build that downloads in the background (REQ-STARTUP-169) the
 > notice for a newer version is the download's notice, and it offers no install action before the download. The
 > non-blocking persistent offer, its version and its summary still govern where an offer is shown.
 
@@ -657,7 +657,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-222** — A completed update publishes a persistent success notice. Where the application can restart itself, that notice offers a restart action. Where an external installer must take over, the notice states instead that the installer will finish the update, and the window closes on its own 1200 ms after the notice appears, with no user action. Where a restart the user asked for does not happen, the failure notice of REQ-NOTIFY-221 is published in its place.
 
-> **Narrowed by [`PD-STARTUP-008`](../product/directives.md#pd-startup-008), 2026-10-22.** Where an external installer must take over, the downloaded update
+> **Narrowed by [`PD-STARTUP-008`](../product/directives/pd-startup-008.md#pd-startup-008), 2026-10-22.** Where an external installer must take over, the downloaded update
 > publishes REQ-STARTUP-174's persistent notice with the restart action, and the window does not close on its own; the
 > installer runs at the next start or when the user restarts. The in-place case and the failed-restart case still govern.
 
@@ -666,13 +666,13 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 **REQ-NOTIFY-249** — The title bar carries session status as a single tag-styled chip combining the status indicator and the status word, never as a free-floating dot beside a word.
 
 **REQ-NOTIFY-250** — A subordinate indicator one size step smaller than the status chip reports background post-run improvement analysis, labelled to state that a review is in progress and describing that the user can continue working. It is shown only while that analysis is in flight.
-  > **Narrowed by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions.md#oq-236)). The indicator is also
+  > **Narrowed by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236)). The indicator is also
   > shown while a user-started retrospective is in flight, labelled "Reviewing workspace history for improvements…"
   > (clause (d)); for the post-run pass the text above governs unchanged.
 
 **REQ-NOTIFY-251** — Post-run improvement analysis never blocks or alters a run. On failure, or on exceeding `runtime.improvement_collector_timeout`, default 60 seconds, it yields an empty artifact.
 
-  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The
+  > **Extended by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002), 2026-09-17.** The
   > same non-blocking discipline governs the directive's user-started retrospective: it runs off
   > everything the user is waiting on, is bounded by its own timeout with the empty-artifact
   > outcome, and never blocks or alters a run — it is not attached to a run at all, so there is

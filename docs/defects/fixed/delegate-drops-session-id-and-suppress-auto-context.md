@@ -29,8 +29,8 @@ OQ-66's open part is ruled ([R-067](../../product/requests.md#r-067)): `session_
 the caller — a direct child that reached a terminal state and that its `child_timeout` did not cut off (a cut-off child
 keeps `continuation_of`). The follow-up resumes that child from its recorded conversation under its own task id, with the
 call's `task` appended as its next user message; a `session_id` naming no such child is refused `rejected` with no record.
-[`PD-ORCH-005`](../../product/directives.md#pd-orch-005) revision 5 (clause 22) and
-[`PD-TOOLS-006`](../../product/directives.md#pd-tools-006) revision 3 carry it. `suppress_auto_context` needed no ruling:
+[`PD-ORCH-005`](../../product/directives/pd-orch-005.md#pd-orch-005) revision 5 (clause 22) and
+[`PD-TOOLS-006`](../../product/directives/pd-tools-006.md#pd-tools-006) revision 3 carry it. `suppress_auto_context` needed no ruling:
 REQ-TOOLS-152 and REQ-TOOLS-154 (3) already say what it does. This note stays open until both fields are built.
 
 ## `suppress_auto_context` repaired 2026-09-29 under R-067 — `session_id` still open

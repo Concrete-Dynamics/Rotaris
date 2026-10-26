@@ -46,4 +46,4 @@ OQ-158's second reading, rows that carry an identity the surfaces match instead 
 
 ## Ruled as built — 2026-10-06 ([R-071](../../product/requests.md#r-071)); closed
 
-The owner accepted the current renaming and left this edge, a root named like an earlier child, until after the first release (OQ-158, ruled in [`open-questions.md`](../../architecture/open-questions.md); [`PD-ORCH-010`](../../product/directives.md#pd-orch-010) narrows REQ-ORCH-044 and states the edge as accepted). The surfaces' share described above stays as it is for the first release, and the autopsy reader's two untold cases with it. Nothing is changed in the code.
+The owner accepted the current renaming and left this edge, a root named like an earlier child, until after the first release (OQ-158, ruled in [`open-questions.md`](../../architecture/open-questions.md); [`PD-ORCH-010`](../../product/directives/pd-orch-010.md#pd-orch-010) narrows REQ-ORCH-044 and states the edge as accepted). The surfaces' share described above stays as it is for the first release, and the autopsy reader's two untold cases with it. Nothing is changed in the code.

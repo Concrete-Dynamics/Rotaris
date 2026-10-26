@@ -31,7 +31,7 @@ third control departs from — a directive's to decide).
 ## Outcome
 
 **Repaired 2026-10-07 (fin28, bundle `fin28-window-gate-timeout`), under [OQ-218](../../architecture/open-questions.md)'s
-ruling ([`PD-CONFIG-003`](../../product/directives.md#pd-config-003)).** The snapshot carries `child_timeout`; Delegation
+ruling ([`PD-CONFIG-003`](../../product/directives/pd-config-003.md#pd-config-003)).** The snapshot carries `child_timeout`; Delegation
 limits draws a third control, "Per-agent timeout", in whole minutes (1–240) with a "minutes" suffix and a hint, reading 20
 on a default install; an entry is stored as minutes × 60 seconds, committed by Save and laid on the next run start by Tier B
 (`TIER_B_RUNTIME_KEYS`); a stored value it cannot show (1250 s, 36000 s) is shown clamped with "Stored as N seconds; kept

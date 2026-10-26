@@ -10,15 +10,15 @@ the record disagree; the code is the reading the minutes clause already takes. R
 consortium's ruling TS1 before the record is revised.
 
 
-**Repaired 2026-10-13 (fin36), in the record:** [`PD-CONFIG-003`](../../product/directives.md#pd-config-003) revision 4
-([OQ-253](../../architecture/open-questions.md#oq-253), ruled under R-072) writes the bullet "1 second" or "<N> seconds",
+**Repaired 2026-10-13 (fin36), in the record:** [`PD-CONFIG-003`](../../product/directives/pd-config-003.md#pd-config-003) revision 4
+([OQ-253](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-253), ruled under R-072) writes the bullet "1 second" or "<N> seconds",
 revision 3's text quoted beside it; the back-pointers under REQ-MONITOR-052 and REQ-MONITOR-069 name revision 4. No code
 changed: `agent-timeout.test.ts` already pinned "1 second" and was run again, green.
 
 ## Specs
 
 - `PD-CONFIG-003` revision 3, "Where a cut-off agent shows", the `<limit>` bullet; REQ-MONITOR-052 and REQ-MONITOR-069 carry
-  its back-pointers. Raised as [OQ-253](../../architecture/open-questions.md#oq-253). REQ-ORCH-088's error form "Child timed out
+  its back-pointers. Raised as [OQ-253](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-253). REQ-ORCH-088's error form "Child timed out
   after <N>s" is a different text and is not affected.
 
 ## Relevant files

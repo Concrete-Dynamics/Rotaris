@@ -123,7 +123,7 @@ the next step sees the new one. Chosen.
    informational level. What the requirement asks for is delivered; where it is delivered is what OQ-53 asks. *(2026-10-06,
    [R-071](../../product/requests.md#r-071): OQ-53 ruled as recommended — the session's event stream is read as its
    timeline, so the `context_compressed` entry is the event and the interim above stands as the decision; its name is a
-   word of [`PD-ORCH-014`](../../product/directives.md#pd-orch-014).)*
+   word of [`PD-ORCH-014`](../../product/directives/pd-orch-014.md#pd-orch-014).)*
 
 8. **The capacity is the model's, not a constant.** `REQ-MONITOR-078` resolves capacity from the model's
    `context_compression_threshold`, else the smaller of its `max_input_tokens` and `default_threshold`.
@@ -511,7 +511,7 @@ then compresses on the model chosen at its trigger; a manual pass in the span ca
 `compression-proof`'s `excluded-before-pass` scenario (red before: a pass at alpha's 600-token trigger; after: none, the root
 on beta, whose trigger is 60,000).
 
-*Ruled 2026-10-06 (OQ-189, [R-071](../../product/requests.md#r-071), [`PD-MONITOR-007`](../../product/directives.md#pd-monitor-007)),
+*Ruled 2026-10-06 (OQ-189, [R-071](../../product/requests.md#r-071), [`PD-MONITOR-007`](../../product/directives/pd-monitor-007.md#pd-monitor-007)),
 reported back in place; the sentence above that a configured `compressor.model` "is still called as configured" is kept as it
 was written and no longer holds.* A configured compressing model is now a helper call: it is resolved through the session's
 overrides at each pass (`Run.helperModel`, `helperChoiceOf`), and where the pair it ends on is held out of quota the pass

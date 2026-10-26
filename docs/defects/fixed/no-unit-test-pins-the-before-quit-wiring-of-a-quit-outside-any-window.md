@@ -14,7 +14,7 @@ dropping the once-only flag) would pass `pnpm check` and show only in a proof. F
 
 ## Specs
 
-None contradicted: the product does what `PD-SHELL-009` revision 2 ([OQ-298](../../architecture/open-questions.md#oq-298)) and
+None contradicted: the product does what `PD-SHELL-009` revision 2 ([OQ-298](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298)) and
 `PD-ORCH-005` clause 9 require, as `exit-trace-proof` shows. The gap is that what keeps it so is measured only after a build.
 
 ## Relevant files

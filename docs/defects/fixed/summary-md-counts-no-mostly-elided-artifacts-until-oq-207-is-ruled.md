@@ -34,7 +34,7 @@ which extends REQ-SESSION-140.
 
 Repaired 2026-10-07 by fin28 (bundle `fin28-session-records`), on OQ-207's ruling under the owner's delegation
 ([R-072](../../product/requests.md#r-072)), which followed advocate A and minted
-[`PD-SESSION-002`](../../product/directives.md#pd-session-002): a mostly-elided artifact is an artifact a delegating agent
+[`PD-SESSION-002`](../../product/directives/pd-session-002.md#pd-session-002): a mostly-elided artifact is an artifact a delegating agent
 attached to a delegated agent that the agent's `PRIOR AGENT CONTEXT (FULL)` block left out because it did not fit its budget
 (REQ-LIBRARY-098), each agent-and-artifact pair counted once, from the timeline's `context_selection` entries. The line now
 reads `- Mostly-elided artifacts: N (attached artifacts a delegated agent was not given because they did not fit its context

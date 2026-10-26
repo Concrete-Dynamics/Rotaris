@@ -321,14 +321,14 @@ the right one for a pass with no run **was false for its gate**, and is kept her
 leaves the gate out of a retrospective's setup (`PrepareOptions.retrospective`) — the pass opens no shell and its setup never
 reaches a run — and only an unloadable configuration is said as one, with the loader's reason; a loaded configuration's other
 refusals answer `retrospective.configuration` with their own reason, and whether they should refuse the pass at all is
-[OQ-363](../open-questions.md#oq-363). *(Ruled 2026-10-20 under R-072, (b) refined: neither refuses the pass — `PD-LIBRARY-002`
+[OQ-363](../open-questions/65-spikes-and-later-questions-32.md#oq-363). *(Ruled 2026-10-20 under R-072, (b) refined: neither refuses the pass — `PD-LIBRARY-002`
 revision 6; built the same day, the next section.)* Pinned by `launch.test.ts`'s seven cases and a `dispatch.test.ts` case, and by
 `retrospective-proof` launch 12 (`confinement-requested`), red on three checks on the base `7c9182c` and green after
 ([`../../defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`](../../defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md)).
 
 ## Decision 5's refusal set, built and measured — 2026-10-20 (`PD-LIBRARY-002` revision 6, OQ-363, R-072; loc1)
 
-**Reported back.** The question the previous section left as [OQ-363](../open-questions.md#oq-363) was ruled (b), refined, on
+**Reported back.** The question the previous section left as [OQ-363](../open-questions/65-spikes-and-later-questions-32.md#oq-363) was ruled (b), refined, on
 2026-10-20 under R-072 *(the ruling in that entry; `PD-LIBRARY-002` revision 6)*, and built the same day by loc1
 (`loc1-confinement-retro`). Of a configuration that loads, decision 5's pass is now refused for exactly what the directive's "The
 model" states, and the run's refusals reach it no longer:

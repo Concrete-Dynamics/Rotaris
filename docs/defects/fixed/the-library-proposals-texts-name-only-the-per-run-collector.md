@@ -21,7 +21,7 @@ bundle that builds that ruling.
 ## Outcome
 
 Repaired 2026-10-13 (plan fin34) under `PD-LIBRARY-002` revision 2's clause (g), ruled as
-[OQ-236](../../architecture/open-questions.md#oq-236), which narrows REQ-LIBRARY-109: the note reads "Evidence-backed
+[OQ-236](../../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236), which narrows REQ-LIBRARY-109: the note reads "Evidence-backed
 suggestions from the improvement collector after each run, and from retrospectives over this workspace's history." and the
 empty label "No proposals yet. They appear here after a run's improvement collector finds signals, or after a retrospective
 over this workspace's history." (`PROPOSALS_NOTE`, `PROPOSALS_EMPTY_LABEL`). Pinned by

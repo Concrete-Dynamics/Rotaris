@@ -8,7 +8,7 @@ record already decides, and every ruling it needs is named as the owner's rather
 **What the plan does with them:**
 
 - **Windows only** narrows what a release publishes. That is a change to four live requirements, so it is a
-  directive: [`PD-STARTUP-001`](../product/directives.md#pd-startup-001). It narrows REQ-STARTUP-026, 030, 035 and 156.
+  directive: [`PD-STARTUP-001`](../product/directives/pd-startup-001.md#pd-startup-001). It narrows REQ-STARTUP-026, 030, 035 and 156.
 - **Skills** and **workspace-context injection** are already specified (REQ-CHAT-034, REQ-CHAT-162,
   REQ-WORKSPACE-041..073). They are mostly built. The plan finishes them and proves them in the built app.
 - **"thats it"** defers everything else on the go-live gap list from the first release. Deferring is scheduling

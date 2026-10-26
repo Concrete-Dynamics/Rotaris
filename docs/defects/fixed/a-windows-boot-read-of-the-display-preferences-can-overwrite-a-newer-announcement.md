@@ -10,7 +10,7 @@ window's boot. Noted by fin43's reviewer of `fin43-transcript-and-prefs`.
 
 ## Specs
 
-- `REQ-CHAT-167` and `REQ-CONFIG-403` (with [`PD-CONFIG-004`](../../product/directives.md#pd-config-004)): a display preference
+- `REQ-CHAT-167` and `REQ-CONFIG-403` (with [`PD-CONFIG-004`](../../product/directives/pd-config-004.md#pd-config-004)): a display preference
   takes effect immediately on the rows already on screen, in every window.
 
 ## Relevant files

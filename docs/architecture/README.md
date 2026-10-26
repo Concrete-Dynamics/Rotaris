@@ -1639,7 +1639,7 @@ leftover kinds), D8 (the three gates are not read-only at the filesystem level �
 suffix's +35 characters against the store engine's path thresholds, not reachable at the shipped location),
 and the two carried-over architecture items at 10 and 11. **None is in the build-wrong class**, and each is
 stated above with what it costs. *(Since 2026-10-13/14: D8 and D11 are repaired, and D5's staging half is repaired
-under [OQ-265](open-questions.md#oq-265)'s ruling; its obstruction half stays deferred with OQ-48 — ADR-0058 consequence 18.)*
+under [OQ-265](open-questions/57-spikes-and-later-questions-24.md#oq-265)'s ruling; its obstruction half stays deferred with OQ-48 — ADR-0058 consequence 18.)*
 
 #### B. MEASUREMENTS STILL OWED — and whether any of them is a gate condition
 
@@ -1680,7 +1680,7 @@ absorbed, because a sub-case folded into a discharged spike is a gap nobody can 
   only route to an absent store directory that the corrections do **not** close. ***Measured 2026-10-13
   (fin41), `pnpm restore-kill-proof`:*** killed 10 of 10 times between the renames, the disk was always the
   model's (target empty, displaced and staging stores whole), and the next open always created an empty store
-  there and listed no session — finish, reverse or report is [OQ-266](open-questions.md#oq-266)'s (ADR-0058,
+  there and listed no session — finish, reverse or report is [OQ-266](open-questions/57-spikes-and-later-questions-24.md#oq-266)'s (ADR-0058,
   the restore section's report). ***Repaired 2026-10-14 (fin43; OQ-266 ruled 2026-10-13 under R-072: reverse, at the
   next open):*** the restore journals the cut (`<identifier>.restore-pending`, before step 8), and the next open puts the
   displaced store back before creating anything — 10 of 10 in the same proof, byte-identical, the journal gone. A power loss

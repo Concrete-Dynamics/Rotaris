@@ -23,7 +23,7 @@ status: resolved
 > **Why this is a note and not a directive.** The clauses written on 2026-08-31 forbid the cut, the collapse and the
 > trim, and nothing in the round's text addresses key order; an encoding that keeps every member whole makes no two
 > different actions the same. Ruled under the owner's delegation ([R-072](../../product/requests.md#r-072)) with no directive; the ruling is in
-> [`open-questions.md`](../../architecture/open-questions.md#oq-364).
+> [`open-questions.md`](../../architecture/open-questions/66-spikes-and-later-questions-33.md#oq-364).
 
 This record disposes of every open question raised in the draft of
 [`../19-notifications-errors-recovery.md`](../19-notifications-errors-recovery.md) (requirement

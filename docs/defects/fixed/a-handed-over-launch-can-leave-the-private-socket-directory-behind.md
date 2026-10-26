@@ -7,7 +7,7 @@ its socket (`closeEndpoint`) but leaves the directory it made: the one thing a h
 Read from the code by both advocates of OQ-248's ruling (R-072, 2026-10-13); recorded by fin36 before the repair.
 
 
-**Repaired 2026-10-13 (fin36), under [OQ-248](../../architecture/open-questions.md#oq-248)'s ruling (R-072).** The
+**Repaired 2026-10-13 (fin36), under [OQ-248](../../architecture/open-questions/53-spikes-and-later-questions-20.md#oq-248)'s ruling (R-072).** The
 private directory is made per attempt (`placeSocket`) and removed by `closeEndpoint` (`rmdirSync`, never recursive) when the
 attempt loses, so a handed-over launch leaves nothing behind; the instance's closer removes its own the same way. Pinned by
 `instance-order.test.ts`'s "on the temporary-directory fallback a handed-over launch leaves nothing behind" (red on the code

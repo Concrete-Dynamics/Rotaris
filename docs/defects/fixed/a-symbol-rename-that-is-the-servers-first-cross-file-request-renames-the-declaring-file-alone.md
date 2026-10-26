@@ -1,7 +1,7 @@
 ## A symbol rename that is the server's first cross-file request renames the declaring file alone
 
 **Repaired again 2026-10-20 by loc1 (`loc1-rename`) under OQ-362's ruling (R-072, option (a) refined), recorded as
-[`PD-MCP-004`](../../product/directives.md#pd-mcp-004) revision 2, clause 5.** For a rename whose declaring file the runtime serves
+[`PD-MCP-004`](../../product/directives/pd-mcp-004.md#pd-mcp-004) revision 2, clause 5.** For a rename whose declaring file the runtime serves
 with its TypeScript language and which no `tsconfig.json` or `jsconfig.json` covers — in its directory or any up to the root the
 server was launched for, none above — the run host places a `jsconfig.json` of the product's own at that root after `connect` and
 before clause 2's search (its bytes one constant, `CODE_INTELLIGENCE_PROJECT_FILE_BYTES`: a comment line naming Rotaris, then `{}`,
@@ -93,7 +93,7 @@ copies, ships no `jsconfig.json`, so this is the ordinary shape of a JavaScript 
 two shared arguments). Every measured remedy is outside it: a project file written into the person's workspace, the importers held
 open by the runtime (a patch of the pinned distribution, which OQ-273 rejected as its option (b)), or the run host telling the model
 or mending the files itself (OQ-273's rejected (c), and more). The choice is raised as
-[OQ-362](../../architecture/open-questions.md#oq-362) and left for the consortium (R-072). **Pinned red until then** by
+[OQ-362](../../architecture/open-questions/65-spikes-and-later-questions-32.md#oq-362) and left for the consortium (R-072). **Pinned red until then** by
 `code-intel-proof` launch 13 (`child-rename-cold-js`), the live fixture's shape in the built app, held to the proof's end as launch
 11 is; and by the live `rename` scenario's check above, which failed at `3c03287`. Launch 13's first runs, built from fin47's branch
 (`--steps=10,11,13`, load 1.98 rising to 4.26 on four CPUs): launches 10 and 11 green ("(2 changes applied)", both files each);
@@ -156,7 +156,7 @@ have to edit them one by one.
 - `REQ-ORCH-109`: a report "cannot conceal files it failed to account for" — not contradicted (the report lists the one file the
   call changed), but a report saying the rename succeeded hides that the work is broken.
 - No requirement says how the product drives the runtime's language server, or whether it may warm it, so the repair is a
-  question: [OQ-273](../../architecture/open-questions.md#oq-273).
+  question: [OQ-273](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-273).
 
 ## Relevant files
 
@@ -182,7 +182,7 @@ have to edit them one by one.
 holds for a workspace a `tsconfig.json` or `jsconfig.json` covers.*
 
 **Repaired 2026-10-14 by fin43** under OQ-273's ruling (R-072, option (a)), recorded as
-[`PD-MCP-004`](../../product/directives.md#pd-mcp-004): before the run host forwards a symbol rename to the bundled server it
+[`PD-MCP-004`](../../product/directives/pd-mcp-004.md#pd-mcp-004): before the run host forwards a symbol rename to the bundled server it
 sends that server's referencing-symbol search for the same `name_path` and `relative_path`, discards the answer, and then
 forwards the rename, both within the rename's one REQ-MCP-003 allowance; the search writes no record. The pairing and the
 argument names are the binding manifest's `warmUps` (`manifest.mjs`, refused by `scripts/lib/code-intelligence-warm-ups.mjs`

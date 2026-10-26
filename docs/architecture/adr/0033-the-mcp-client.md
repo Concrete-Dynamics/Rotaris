@@ -279,7 +279,7 @@ all, and the 141 lines are the measurement of it.
 2026-09-27: the application log carries each line's level as a field and records `info` and above unless
 `ROTARIS_APP_LOG_LEVEL` restores `debug`. The paragraph above stays as measured. A child's stderr is still
 forwarded at `debug`, and at the default threshold none of it is written; the first execution is in
-[`../../product/directives.md`](../../product/directives.md#pd-monitor-002).
+[`../../product/directives.md`](../../product/directives/pd-monitor-002.md#pd-monitor-002).
 
 ## Windows runner teardown — 2026-10-16 (R-074)
 
@@ -296,7 +296,7 @@ execution measured. The move answers two advisories against 2.0.0 (Dependabot al
   followed a redirect to another origin and sent the request again there, with an entry's configured `headers`.
   `packages/mcp/src/client.test.ts` shows it: on 2.0.0 a second loopback origin received `x-auth` on the streamable-HTTP
   POST and the SSE GET, and on 2.3.0 it receives nothing. The transports now refuse a cross-origin redirect. What the
-  product does about that is unspecified, and is raised as [OQ-451](../open-questions.md#oq-451).
+  product does about that is unspecified, and is raised as [OQ-451](../open-questions/68-spikes-and-later-questions-35.md#oq-451).
 - **GHSA-6qxp-vccf-f47h did not.** It needs an OAuth `authProvider`, and the client factory passes none.
 
 What else moved between 2.0.0 and 2.3.0, as each release's notes state it and as it touches this record: the client

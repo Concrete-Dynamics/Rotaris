@@ -1412,7 +1412,7 @@ ordinary state and not an error. So the worst observable in the gap is an empty 
 store is closed anyway; it is not a corrupt store and not a half-restored one, which is what the requirement
 actually forbids.
 
-**A process cut in the gap, and the journal that names it.** *(Added 2026-10-14, [OQ-266](../open-questions.md#oq-266)
+**A process cut in the gap, and the journal that names it.** *(Added 2026-10-14, [OQ-266](../open-questions/57-spikes-and-later-questions-24.md#oq-266)
 ruled 2026-10-13 under R-072; the paragraph above holds for a restore that reaches step 9, and the 2026-10-13 measurement in
 "Not exercised" below is what it did not cover.)* The gap is milliseconds for a restore that runs on, and indefinite for a
 process that dies in it: the next open met an empty target name and created a fresh store there, 10 of 10. So the restore
@@ -1468,7 +1468,7 @@ reached a store directory holding no database in **0 of 30**. R1 cost 3.15–3.7
 6.43–7.36 ms. The counterfactual was run in the same harness: the single-rename reversal failed `EPERM` in
 10 of 10 and reached the forbidden end state in 10 of 10, with the error naming both paths each time. **Two
 leftovers, not one, were observed on every corrected run**: the `.obstruction-` aside this reversal mints,
-which is intended and kept, and the staging copy, which is defect D5 and is still open. *(2026-10-14, [OQ-265](../open-questions.md#oq-265)
+which is intended and kept, and the staging copy, which is defect D5 and is still open. *(2026-10-14, [OQ-265](../open-questions/57-spikes-and-later-questions-24.md#oq-265)
 as ruled under R-072: a reversal that puts the store back now deletes the staging copy; only the `.obstruction-` aside is left,
 and E2 asserts both. A reversal that fails keeps the copy and lists it.)*
 
@@ -1734,9 +1734,9 @@ maintained, and is not consulted — so there is nothing for the store to disagr
    > | `<identifier>.displaced-<stamp>` | a restore, displacing the store it replaces | nothing — kept on purpose |
    > | `<identifier>.displaced-<stamp>` | the corruption ladder | nothing — kept on purpose |
    > | the old identifier's whole store | ESC-26's confirmed establishment | nothing — kept on purpose, and it is the undo |
-   > | `<identifier>.restoring-<n>` | **every** restore, staging the artifact | **since 2026-10-14 ([OQ-265](../open-questions.md#oq-265), ruled 2026-10-13 under R-072): deleted by the restore on every failure that leaves the store as it was; kept and reported after a failed reversal; left by a killed process ([OQ-266](../open-questions.md#oq-266)); cleared by the next restore's step 6.** *Until then: nothing, and nothing knows it exists.* |
+   > | `<identifier>.restoring-<n>` | **every** restore, staging the artifact | **since 2026-10-14 ([OQ-265](../open-questions/57-spikes-and-later-questions-24.md#oq-265), ruled 2026-10-13 under R-072): deleted by the restore on every failure that leaves the store as it was; kept and reported after a failed reversal; left by a killed process ([OQ-266](../open-questions/57-spikes-and-later-questions-24.md#oq-266)); cleared by the next restore's step 6.** *Until then: nothing, and nothing knows it exists.* |
    > | `<identifier>.obstruction-<stamp>` | the R1/R2 reversal, displacing whatever occupied the target | ***nothing, and nothing knows it exists*** |
-   > | `<identifier>.restore-pending` *(added 2026-10-14, [OQ-266](../open-questions.md#oq-266))* | every restore that reaches step 8, its journal, a file of a few dozen bytes | step 9, the in-process reversal, or the next open (`recoverCutRestore`); kept after a failed R2 until the next open retries the rename |
+   > | `<identifier>.restore-pending` *(added 2026-10-14, [OQ-266](../open-questions/57-spikes-and-later-questions-24.md#oq-266))* | every restore that reaches step 8, its journal, a file of a few dozen bytes | step 9, the in-process reversal, or the next open (`recoverCutRestore`); kept after a failed R2 until the next open retries the rename |
    >
    > **The last two are defect D5 and it is open.** The staging copy was left behind in every measured
    > failure of spike 22 — 30 of 30 on the literal reading, 30 of 30 with a file manager holding the store
@@ -1746,7 +1746,7 @@ maintained, and is not consulted — so there is nothing for the store to disagr
    > The first three are kept deliberately and are the reclamation surface's business; the last two are not
    > kept deliberately by anybody, which is the difference this table exists to show.
    >
-   > *2026-10-14: the staging copy's half of D5 is repaired ([OQ-265](../open-questions.md#oq-265)); the paragraph above is
+   > *2026-10-14: the staging copy's half of D5 is repaired ([OQ-265](../open-questions/57-spikes-and-later-questions-24.md#oq-265)); the paragraph above is
    > kept as what was measured. A copy is now kept only after a reversal that failed, where it sits beside the displaced store
    > the error names, or where its delete failed, which the failure's error names in one sentence; the obstruction aside's row
    > stands as it was, deferred with OQ-48.*
@@ -1771,7 +1771,7 @@ maintained, and is not consulted — so there is nothing for the store to disagr
    occupied-name failures. That state is now excluded by the reversal's displace step rather than by luck,
    and the exclusion is a correctness property of the reversal and not a nicety of it. *(2026-10-14: a process cut in
    the gap is the case the 20 observations did not cover — the absence then lasts until the next open, which now
-   reverses it from the restore's journal, [OQ-266](../open-questions.md#oq-266); and a store directory present and
+   reverses it from the restore's journal, [OQ-266](../open-questions/57-spikes-and-later-questions-24.md#oq-266); and a store directory present and
    empty, whatever reaches it, is refused at the open rather than created over, REQ-SESSION-202 and W-31.)*
 8. **Restoring on a machine other than the one that took the backup changes which sessions need repair.**
    Foreign-host lock rows are dropped on the way in (ADR-0005), so every session that was live when the
@@ -1883,7 +1883,7 @@ maintained, and is not consulted — so there is nothing for the store to disagr
       exist.** The full table is in consequence 5 above. Each is the size of a store. What is owed is
       OQ-48's inspect-and-delete surface, which the specification still does not have.
 
-      ***The staging half, repaired 2026-10-14 (fin43; [OQ-265](../open-questions.md#oq-265) ruled under R-072); the
+      ***The staging half, repaired 2026-10-14 (fin43; [OQ-265](../open-questions/57-spikes-and-later-questions-24.md#oq-265) ruled under R-072); the
       bullet above is kept as what stood.*** On every failure return that leaves the store as it was — a failed
       expansion, a staging store that fails `quick_check` or does not open, a failed step-8 displacement, a step-9
       failure with no previous store, and a step-9 failure whose R1/R2 reversal put the store back — `restoreStore`
@@ -2160,7 +2160,7 @@ OQ-265's ruling, consequence 18.)*
 > and the workspace listed no session, saying nothing — REQ-SESSION-201's "no reader may observe" a partly restored store,
 > met by a reader observing a third, empty one. REQ-SESSION-202 declines this case by name (an absent place "is an absence
 > and not this condition, including while a restore is under way"), so finishing, reversing or reporting it is a question:
-> [OQ-266](../open-questions.md#oq-266), with the defect note
+> [OQ-266](../open-questions/57-spikes-and-later-questions-24.md#oq-266), with the defect note
 > [`../../defects/fixed/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md`](../../defects/fixed/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md).
 > `store.test.ts` pins the gap state in-process, as built. Not measured: a power loss in the gap (R-071's O-8 is the
 > power-loss test, a different fault), and the run host's side (its refusal lease expires by itself, 3b, untouched here).

@@ -11,7 +11,7 @@ quit: started outside any window; no close guard is asked, and unsaved settings,
 Read in sequence they contradict each other: the first says the windows close through their close guards, the second that no
 close guard is asked. Both are true of different things. The windows do close through their own `CloseGuard`s' `confirm` and
 `close` (PD-ORCH-005 clause 9's all-or-none order, whose line fin45 kept as its brief required), but since
-[OQ-298](../../architecture/open-questions.md#oq-298)'s ruling each guard allows at once: neither the renderer's unsaved-settings
+[OQ-298](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298)'s ruling each guard allows at once: neither the renderer's unsaved-settings
 question nor PD-SHELL-009's active-run confirmation is put. The second line says "no close guard is asked" where it means
 "no question is put". Every live run's quit block shows the pair. Found as a fin45 reviewer's optional finding
 (supervision-and-quit, Task 2) and carried by fin46's acceptance round 1 (C4).

@@ -38,7 +38,7 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 - **REQ-WORKSPACE-009** — Choosing a project folder SHALL use the operating system's native folder chooser, titled "Open a project folder", restricted to directories, starting at the given initial directory or else the user's home directory. The product SHALL be answerable only for what it hands the host dialog — the title, the restriction to directories, and the initial location — and for interpreting every answer that dialog can return (REQ-SHELL-164); keyboard traversal, localization of platform-supplied button text and screen-reader behavior inside a native dialog are inherited and are not requirements on this product. A dismissal by any means the host offers — Cancel, Escape, the window close control, or a platform gesture — SHALL be treated identically: no selection is returned and nothing changes. When the cancelled chooser was the first-launch prompt, a toast SHALL say: "Open a project folder when you're ready by selecting the workspace path in the title bar."
 
 - **REQ-WORKSPACE-010** — Selecting the folder that is already the current workspace SHALL be a no-op.
-  > **Superseded by [`PD-WORKSPACE-001`](../product/directives.md#pd-workspace-001), 2026-09-12.** The
+  > **Superseded by [`PD-WORKSPACE-001`](../product/directives/pd-workspace-001.md#pd-workspace-001), 2026-09-12.** The
   > text above states the behavioural target and is kept for that reason; it no longer states what this
   > product does. Choosing the folder a window already has open now raises a transient notice in that
   > window offering to start a new session in it.
@@ -48,8 +48,8 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 ### Workspace Switching
 
 - **REQ-WORKSPACE-012** — Opening another project SHALL be refused while work is in flight, with an error toast stating exactly "Finish the worktree integration before opening another project." while a worktree integration is running, or "Finish the active run before opening another project." while any run is active or the run state is busy.
-  > **Narrowed by [`PD-SHELL-009`](../product/directives.md#pd-shell-009) revision 3, 2026-10-20**
-  > ([OQ-361](../architecture/open-questions.md#oq-361), ruled under [R-072](../product/requests.md#r-072)). Both
+  > **Narrowed by [`PD-SHELL-009`](../product/directives/pd-shell-009.md#pd-shell-009) revision 3, 2026-10-20**
+  > ([OQ-361](../architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361), ruled under [R-072](../product/requests.md#r-072)). Both
   > refusals count the requesting window's own workspace: a window whose project runs no integration and has no run active
   > may open another project while another window's project integrates or runs, and the window whose project does is
   > refused with the toast above, as before. The run count has been the window's own since revision 1 (2026-10-07), which
@@ -71,12 +71,12 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 - **REQ-WORKSPACE-018** — The bottom status bar SHALL keep one fixed height taken from the active theme (it never grows or shrinks with its contents) and lay out, left to right: workspace path (a link), git branch, flexible space, safety flags, model, token count, cost, cloud-credit balance, and background-session count. Of these, only the workspace path and the cloud balance SHALL be activatable; all other readings are non-interactive.
 
 - **REQ-WORKSPACE-019** — The status-bar workspace path SHALL be a link with accessible name "Workspace folder" and tooltip/description "Workspace folder: {path}. Opens it in your file manager."; activating it opens the folder in the OS file manager, and a failure to open SHALL be silent.
-  > **Narrowed by [`PD-WORKSPACE-007`](../product/directives.md#pd-workspace-007), 2026-10-06.** A failure to open the
+  > **Narrowed by [`PD-WORKSPACE-007`](../product/directives/pd-workspace-007.md#pd-workspace-007), 2026-10-06.** A failure to open the
   > folder is not silent: REQ-SHELL-040's transient error names the path attempted. The link's name and tooltip are
   > unchanged.
 
 - **REQ-WORKSPACE-020** — The status-bar branch item SHALL be non-clickable text with accessible name "Checked-out branch". It SHALL render a branch icon followed by the branch name, and — only when the ahead count of REQ-WORKSPACE-029 is greater than zero — a trailing ` ↑{n}`; the behind count SHALL never appear on this item. Its tooltip and accessible description SHALL be one and the same string: "Branch this workspace is on: {branch}, 1 commit ahead." for an ahead count of exactly one, "Branch this workspace is on: {branch}, {n} commits ahead." for a count above one, and "Branch this workspace is on: {branch}." for a count of zero. The item SHALL render as empty text — no icon, no arrow, no tooltip — exactly when the snapshot's branch name is empty, which per REQ-WORKSPACE-029 covers git being unavailable, the folder not being a repository, a detached HEAD, and an unborn branch. While the active run executes in an isolated worktree, the item SHALL show that worktree's own branch name — the generated branch of REQ-GIT-007 where the run accepted the generated default, or the name the user supplied — rendered exactly as any other branch name is, with the ahead count and the ` ↑{n}` suffix computed against that branch's upstream rather than the base checkout's. A worktree carrying no branch of its own SHALL render as empty text under the rule already stated. Only the accessible description differs: it SHALL additionally convey that the branch belongs to the isolated worktree the active run is using rather than to the folder the window is open on, in wording of the implementation's choosing. No identifier other than a branch name — not the run's identifier, not the worktree's path — SHALL appear on this item.
-  > **Narrowed by [`PD-WORKSPACE-008`](../product/directives.md#pd-workspace-008), 2026-10-06.** On a detached HEAD,
+  > **Narrowed by [`PD-WORKSPACE-008`](../product/directives/pd-workspace-008.md#pd-workspace-008), 2026-10-06.** On a detached HEAD,
   > outside a repository, with Git unavailable and before the first read, the item is not empty text: it reads
   > `detached HEAD`, `no git repository`, `no git`, or `—` before the first read, each with its tooltip, no icon, the
   > absent states in italics, as REQ-GIT-161 asks. An unborn branch, and a branch that could not be read, keep the empty
@@ -92,7 +92,7 @@ The product operates on a user-selected workspace folder: the desktop app resolv
   - an `unsaved settings` flag, present only while settings hold edits not yet written to disk (REQ-WORKSPACE-039).
 
   The two file-access explanations above are fixed strings because they are the pair a reader compares. The other four explanations are human-readable message text whose wording is left to the implementation, and each SHALL convey exactly the following and no more: for the mode flag, which permission mode is in force and that it decides whether a tool call is allowed outright, put to the user, or refused; for the redaction flag, that secrets are removed from what is recorded and displayed and that this cannot be turned off; for the circuit-breaker flag, that the circuit breaker is armed and will halt a run that trips it; for the unsaved-settings flag, that the Settings view is holding edits which have not been saved and that runs use the values on screen rather than the values on disk. Every one of the five flags SHALL be distinguishable without relying on colour (REQ-SHELL-149), and each SHALL expose its explanation both as its tooltip and as its accessible description.
-  > **Narrowed by [`PD-WORKSPACE-007`](../product/directives.md#pd-workspace-007), 2026-10-06.** The unsaved-settings
+  > **Narrowed by [`PD-WORKSPACE-007`](../product/directives/pd-workspace-007.md#pd-workspace-007), 2026-10-06.** The unsaved-settings
   > flag's explanation says runs keep using the last saved values until the edits are saved, and the mode, redaction and
   > circuit-breaker explanations are REQ-SHELL-041's sentences word for word, not bounded by "exactly the following and
   > no more". The five flags, their conditions and the file-access pair are unchanged.
@@ -162,7 +162,7 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 
 - **REQ-WORKSPACE-039** — Saving desktop settings SHALL read `<workspace>/.rotaris/agents.yaml`, change it, and put the result back through an atomic replace. Top-level keys the application does not itself manage SHALL survive the round trip verbatim. The keys the save writes are exactly those REQ-CONFIG-256 enumerates — the model slots and their reasoning companions, the runtime keys including `runtime.allow_outside_workspace` (REQ-WORKSPACE-148) and `runtime.permission_mode`, the six confinement and egress fields, `circuit_breaker.enabled`, `compressor.threshold_percentage`, the delegation strategy, and `skills.enabled`, `skills.overrides` and `skills.invocation_overrides` — and this domain SHALL NOT name a key that requirement does not. A persona edit whose chosen scope is global SHALL be written to the global `agents.yaml` instead of the workspace one. Validation SHALL happen before any file is opened for writing, on the terms of REQ-CONFIG-260: where the schema rejects any of the six confinement or egress values the save SHALL be abandoned, every configuration file SHALL be left byte-for-byte as it was and still loadable, and the user SHALL be shown a single sentence carrying the first complaint. A save that completes SHALL be followed by a configuration reload and by re-projecting the skill list from a freshly discovered catalog.
 
-  > **Extended by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The
+  > **Extended by [`PD-WORKSPACE-002`](../product/directives/pd-workspace-002.md#pd-workspace-002), 2026-09-21.** The
   > save additionally writes the `instructions.overrides` per-file policy into the workspace file, on
   > the same sparse terms as the skill maps; the keys the save writes are otherwise exactly those named
   > above.
@@ -173,36 +173,36 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 
 - **REQ-WORKSPACE-041** — Context-file discovery SHALL be workspace-root-only: in the resolved workspace root, `AGENTS.override.md` is used when present, otherwise `AGENTS.md`; nothing else. Those two names are the whole vocabulary. No other directory SHALL be consulted — not an ancestor, not the enclosing repository root, not an intermediate directory, not a user-global location — and no other file name SHALL be read or injected, user-global context files, `CLAUDE.md`, `GEMINI.md`, and any product-named alternative such as a root-level `ROTARIS.md` included, even when such a file is present at the workspace root. This is a closed rule rather than an omission: a multi-level scheme would make what an agent was given depend on where the folder happens to sit in a tree the user did not choose, and the override file already provides the one thing a second level would be for. A broader scheme, if ever wanted, requires its own requirement and is not implied by anything here.
 
-  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The
+  > **Extended by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002), 2026-09-17.** The
   > directive's retrospective pass reads the file this requirement discovers, as one of the
   > workspace-held materials it may cite evidence from, and may propose an `agents_md_update`
   > against it — which is applied, like every proposal, only through the improvement lifecycle, and
   > never written back directly by an analysis. This requirement's discovery rule — the two names,
   > the workspace root, nothing else — governs that read unchanged; the injection behaviour of this
   > section is untouched. *Added 2026-10-07 ([OQ-222](../architecture/open-questions.md)):* since
-  > [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002) narrowed this requirement, the retrospective
+  > [`PD-WORKSPACE-002`](../product/directives/pd-workspace-002.md#pd-workspace-002) narrowed this requirement, the retrospective
   > reads the set injection reads, the per-file switches and REQ-WORKSPACE-048's master switch included (OQ-65,
   > ruled under [R-071](../product/requests.md#r-071)), so the sentence above no longer states that set.
-  > *Amended 2026-10-13 ([OQ-235](../architecture/open-questions.md#oq-235), ruled under
+  > *Amended 2026-10-13 ([OQ-235](../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-235), ruled under
   > [R-072](../product/requests.md#r-072); `PD-LIBRARY-002` revision 2):* the retrospective reads the workspace-root
   > part of the set injection reads — the files discovered at the workspace root, the per-file switches and
   > REQ-WORKSPACE-048's master switch applied — and no file under the global, home-relative or machine-wide bases,
   > which reach agents through injection alone.
 
-  > **Narrowed by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The
+  > **Narrowed by [`PD-WORKSPACE-002`](../product/directives/pd-workspace-002.md#pd-workspace-002), 2026-09-21.** The
   > discovery rule above no longer states what this product does: the workspace root holds the
   > `AGENTS` pair and the `CLAUDE` pair, and instruction files are additionally read from the global
   > directory, the three home-relative bases and the machine-wide base, in the directive's order, each
   > switchable per file. The text above states the behavioural target and is kept for that reason.
 
 - **REQ-WORKSPACE-042** — Given both `AGENTS.override.md` and `AGENTS.md` exist at the workspace root, only the override file's content SHALL appear in the merged output; the regular file's content SHALL be absent.
-  > **Narrowed by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The
+  > **Narrowed by [`PD-WORKSPACE-002`](../product/directives/pd-workspace-002.md#pd-workspace-002), 2026-09-21.** The
   > suppression is pairwise: `AGENTS.override.md` suppresses `AGENTS.md` alone and
   > `CLAUDE.override.md` suppresses `CLAUDE.md` alone. The text above states the behavioural target
   > and is kept for that reason.
 
 - **REQ-WORKSPACE-043** — Merged-output format: each contributing file's content SHALL be preceded by a one-line HTML comment `<!-- source: {absolute path} -->` on its own line; blocks SHALL be separated by one blank line; concatenation follows discovery order.
-  > **Extended by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The
+  > **Extended by [`PD-WORKSPACE-002`](../product/directives/pd-workspace-002.md#pd-workspace-002), 2026-09-21.** The
   > format is unchanged and now covers every enabled file in the directive's discovery order; a file
   > switched off contributes nothing, not even its source comment.
 
@@ -215,12 +215,12 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 - **REQ-WORKSPACE-047** — Given context injection is enabled and the merged content is non-empty, each agent built for that session SHALL receive the content as its own permanently active context block, ordered ahead of the skill catalog, ahead of any always-on skill bodies, and ahead of persona memory. With no context files, or injection disabled, no such unit SHALL be constructed.
 
 - **REQ-WORKSPACE-048** — The per-workspace configuration key `inject_agents_md` (boolean, default `true`) SHALL control injection; when false, no context file is read at all.
-  > **Extended by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The
+  > **Extended by [`PD-WORKSPACE-002`](../product/directives/pd-workspace-002.md#pd-workspace-002), 2026-09-21.** The
   > master switch stands above the per-file `instructions.overrides` policy: while false nothing is
   > read, whatever the per-file policies say; while true only the files switched on are read.
 
 - **REQ-WORKSPACE-049** — Discovering and merging workspace context files SHALL complete within 200 ms for a workspace holding up to 20 context files totalling 1 MiB on local storage. It SHALL NOT delay the moment the interface first accepts input, and the window SHALL keep responding to input for as long as it runs. For an unchanged filesystem state, running it again in a separate process SHALL yield byte-identical output: the merged text SHALL carry no timestamp, no process identifier, and no ordering that varies from run to run. The 200 ms figure SHALL be measured under these reference conditions and no others: the workspace on local, non-removable storage; the filesystem cache **cold** for the files concerned, so the figure covers the first read after a workspace is opened rather than a repeat of it; up to 20 context files totalling 1 MiB; and the reported figure being the 95th percentile of at least 20 consecutive cold measurements taken in separate processes, rather than a mean or a best case. Conformance is assessed per machine: a build meets this requirement on a machine when it meets the figure there under those conditions. The determinism and responsiveness guarantees stated here hold unconditionally, on every machine and under every load.
-  > **Narrowed by [`PD-WORKSPACE-004`](../product/directives.md#pd-workspace-004), 2026-10-06.** "Up to 20 context
+  > **Narrowed by [`PD-WORKSPACE-004`](../product/directives/pd-workspace-004.md#pd-workspace-004), 2026-10-06.** "Up to 20 context
   > files totalling 1 MiB" reads "every instruction file discovery can reach, totalling up to 1 MiB" — fourteen
   > files, or twelve on Windows — in both places it appears. The figure and every other reference condition are
   > unchanged.
@@ -254,7 +254,7 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 ### Skill Catalog Injection and Load Policies
 
 - **REQ-WORKSPACE-060** — At agent construction a compact skill catalog SHALL be injected as its own always-active context unit, distinct from the persona prompt, the workspace context unit, and persona memory. Ordering of injected context units SHALL be: workspace context → skill catalog → force-loaded skill bodies → persona memory.
-  > **Extended by [`PD-TOOLS-012`](../product/directives.md#pd-tools-012) revision 2, 2026-10-07.** The four units above
+  > **Extended by [`PD-TOOLS-012`](../product/directives/pd-tools-012.md#pd-tools-012) revision 2, 2026-10-07.** The four units above
   > keep their order; every agent also receives one product statement, naming the product's own workspace directories, as a
   > fifth always-active unit after them, whatever its persona's prompt and whether or not context files are injected.
 
@@ -301,7 +301,7 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 - **REQ-WORKSPACE-077** — *Withdrawn.* There is no terminal steering payload; REQ-WORKSPACE-073 and REQ-WORKSPACE-062 carry what invoking a skill does — its body becomes a force-loaded, always-active context block for the session, and the typed command text is not submitted to the model as a prompt.
 
 - **REQ-WORKSPACE-151** — Loading a `SKILL.md` by hand SHALL be reachable through the desktop interface and from nowhere else. The Settings Skills tab SHALL carry a header action "Load skill file…" whose accessible description states that it loads a skill file for this session only. Activating it SHALL open the platform's own file chooser, restricted to selecting a `SKILL.md` file or a directory containing one, on the native-dialog terms of REQ-SHELL-164 and REQ-WORKSPACE-009 — a dismissal by any host-offered means returns no selection and changes nothing. A selection SHALL be loaded exactly as REQ-WORKSPACE-057 specifies: it carries the scope label `manual`, overrides a discovered skill of the same normalized name, applies to the current session only, and persists nothing. On success the skill list SHALL be re-projected, the composer's slash commands SHALL be re-registered (REQ-WORKSPACE-072), and a toast SHALL convey that the named skill was loaded. A failure SHALL be reported with the reason REQ-WORKSPACE-057 gives for it and SHALL leave the catalog unchanged.
-  > **Narrowed by [`PD-WORKSPACE-003`](../product/directives.md#pd-workspace-003), 2026-10-06.** The chooser is a
+  > **Narrowed by [`PD-WORKSPACE-003`](../product/directives/pd-workspace-003.md#pd-workspace-003), 2026-10-06.** The chooser is a
   > file chooser filtered to Markdown files (`.md`) on Windows and Linux, and offers a file or a directory on macOS;
   > a chosen file not named `SKILL.md` is refused with REQ-WORKSPACE-057's message, and the directory form of
   > REQ-WORKSPACE-057 stays reachable through `/skill <path>`. Everything else above still governs.
@@ -346,13 +346,13 @@ The product operates on a user-selected workspace folder: the desktop app resolv
   What each stage appends after the prefix derived in REQ-WORKSPACE-096 SHALL be that stage's own subcommand as the configured code-intelligence tool documents it, together with the resolved workspace root passed explicitly, so that no stage depends on the working directory the process happens to have. The product SHALL NOT synthesize a substitute for a subcommand the configured installation does not offer: where a stage's subcommand is unavailable, that stage SHALL fail and be reported under REQ-WORKSPACE-093 as any other stage failure is, retryable, with the stages after it not started — never guessed at. The exact argument vector each stage ran, its return code, and its output SHALL be recorded in the audit trail of REQ-WORKSPACE-095, which is the observable contract for what was invoked.
 
 - **REQ-WORKSPACE-092** — A setup step's captured output SHALL be interpreted as UTF-8, and non-ASCII characters in it SHALL survive into that step's reported detail instead of causing the step to fail. When a step exhausts its time budget, when setup is cancelled, or when the application is closed while setup is running, nothing the step launched SHALL still be running 5 s later — neither the command the step itself started nor anything descended from it. A step that was stopped before finishing SHALL be reported distinguishably from one that ran to completion and returned a non-zero exit code: the detail for an exhausted budget SHALL read "This step did not finish within its time budget."; the detail for a cancelled step SHALL read "Setup was stopped before this step finished."; every other step's detail SHALL be the last 400 bytes of its combined standard output and standard error.
-  > **Narrowed by [`PD-WORKSPACE-006`](../product/directives.md#pd-workspace-006), 2026-10-06.** A step not attempted,
+  > **Narrowed by [`PD-WORKSPACE-006`](../product/directives/pd-workspace-006.md#pd-workspace-006), 2026-10-06.** A step not attempted,
   > or one that wrote nothing, has an empty detail; a step whose command could not be started reads in the launch's own
   > error text; and the last 400 bytes are taken of the output once trimmed of its leading and trailing blank space. The
   > fixed sentences and the 5 s above are unchanged.
 
 - **REQ-WORKSPACE-093** — Failure reporting SHALL be "{reason}: {detail}" with per-stage reasons "Code intelligence could not create this project's configuration" / "Code intelligence could not index this project's symbols" / "Code intelligence could not seed this project's memory layout"; the result is retryable, and cancelling leaves the task in exactly the same retryable condition a failure would, with summary "Code intelligence setup did not complete for this project. It runs again the next time this workspace is opened."
-  > **Narrowed by [`PD-WORKSPACE-006`](../product/directives.md#pd-workspace-006), 2026-10-06.** A failed stage whose
+  > **Narrowed by [`PD-WORKSPACE-006`](../product/directives/pd-workspace-006.md#pd-workspace-006), 2026-10-06.** A failed stage whose
   > detail is empty takes "A step failed, so the workspace is only partly set up." as its detail; a setup that began no
   > stage, or whose finished status never arrives, fails retryably under the reason "Code intelligence could not
   > complete this project's setup" (or the running stage's) with the directive's details, a refused start at once. The
@@ -379,25 +379,25 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 ### Initialization UI, Consent, and Run Gating (Desktop)
 
 - **REQ-WORKSPACE-102** — Initialization SHALL be resolved automatically exactly once per workspace open, and SHALL NOT begin before the window is on screen and accepting input, so that the window paints and answers input no matter how the resolution goes. A resolution that fails SHALL leave the window fully usable: the error surface SHALL read "Project setup could not be checked" / "Rotaris could not work out whether this workspace still needs setting up. Runs are not blocked; you can check again.", SHALL offer a "Check again" action, and the composer gate of REQ-WORKSPACE-112 SHALL stay off. Activating "Check again" SHALL resolve initialization once more, producing the outcomes of REQ-WORKSPACE-083 when it succeeds and this same error surface when it fails again; such a user-requested check is additional to, and does not consume, the one automatic resolution per workspace open.
-  > **Narrowed by [`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005), 2026-10-06.** The banner a failed
+  > **Narrowed by [`PD-WORKSPACE-005`](../product/directives/pd-workspace-005.md#pd-workspace-005), 2026-10-06.** The banner a failed
   > resolution raises, shown in every window, reads "Project setup could not be checked: " followed by the project's name, the
   > project's folder heading its detail area; its message is the sentence above, unchanged. The window's own surface keeps
   > the headline as stated.
-  > *Amended in place 2026-10-13 (revision 2, [OQ-262](../architecture/open-questions.md#oq-262)):* the banner carries
+  > *Amended in place 2026-10-13 (revision 2, [OQ-262](../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-262)):* the banner carries
   > `open-project-init` naming the project's folder, labelled "Open Project settings"; it opens Settings › Project in the
   > window holding the project, or says the project is not open in any window.
-  > *Amended in place 2026-10-14 (revision 3, [OQ-294](../architecture/open-questions.md#oq-294)):* where no window holds the
+  > *Amended in place 2026-10-14 (revision 3, [OQ-294](../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-294)):* where no window holds the
   > project, a main window is added for it on PD-SHELL-001's add terms and Settings › Project opens there; the "not open in any
   > window" notice is gone.
 
 - **REQ-WORKSPACE-103** — Background tasks SHALL start immediately, without any dialog and without blocking the interface; nothing renders their progress live; the recorded outcome is visible in Settings Project. Success is silent. No estimate of how long such a task will take, no completion percentage, no progress bar, and no elapsed-time reading SHALL be presented for a background task while it runs: a task the user did not ask for and cannot be blocked by has nothing to report until it has a result. Its only timing contract is the per-stage wall-clock budgets of REQ-WORKSPACE-091, a stage exceeding its budget being a retryable failure. A failed background run SHALL reach an error banner "Project setup did not finish" carrying the task's own summary (fallback "Rotaris could not finish setting this workspace up for code search.") and a "Try again" action; a run that broke down entirely additionally states "Runs are not blocked; you can try again."
-  > **Narrowed by [`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005), 2026-10-06.** The banner stays an
+  > **Narrowed by [`PD-WORKSPACE-005`](../product/directives/pd-workspace-005.md#pd-workspace-005), 2026-10-06.** The banner stays an
   > application notice shown in every window, and its title reads "Project setup did not finish: " followed by the project's name,
   > the project's folder heading its detail area; its message is the sentence above, unchanged.
-  > *Amended in place 2026-10-13 (revision 2, [OQ-262](../architecture/open-questions.md#oq-262)):* its "Try again" is
+  > *Amended in place 2026-10-13 (revision 2, [OQ-262](../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-262)):* its "Try again" is
   > `open-project-init` naming the project's folder; it opens Settings › Project in the window holding the project, or
   > says the project is not open in any window.
-  > *Amended in place 2026-10-14 (revision 3, [OQ-294](../architecture/open-questions.md#oq-294)):* where no window holds the
+  > *Amended in place 2026-10-14 (revision 3, [OQ-294](../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-294)):* where no window holds the
   > project, a main window is added for it on PD-SHELL-001's add terms and Settings › Project opens there; the "not open in any
   > window" notice is gone.
 
@@ -489,13 +489,13 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 
 - **REQ-WORKSPACE-152** — The guided provider setup flow of REQ-WORKSPACE-135 SHALL be reachable through the desktop interface and from nowhere else, from exactly these places. (1) The Settings Models category (`models`, REQ-CONFIG-269) SHALL offer an action that starts the flow with the catalog step showing, and, per already-configured provider, an action that starts it in re-authenticate mode for that provider — beginning at the authentication step for it, and replacing that provider's stored credential on success while leaving every other provider's snapshot entry untouched. (2) The refusals of REQ-WORKSPACE-137 SHALL carry an action leading to that same Settings surface. (3) On a first launch at which no authenticated provider exists, the window SHALL publish a persistent INFO notice, once the window is interactive and never as a dialog opened unbidden, conveying that no model provider is authenticated yet and that runs cannot start until one is, and carrying an action that starts the flow. That notice SHALL NOT gate any view, SHALL NOT block navigation, and SHALL be dismissible; the only run-time consequence of having no provider is the refusal REQ-WORKSPACE-137 already states. Where a provider's authentication step hands off to an external browser, the interface SHALL say so before the hand-off and SHALL remain usable while it is outstanding.
 
-  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 5, 2026-10-14** ([OQ-300](../architecture/open-questions.md#oq-300)). A
+  > **Extended by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002) revision 5, 2026-10-14** ([OQ-300](../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-300)). A
   > retrospective's authentication refusal at its capture is one of the refusals clause (2) names: its error notice carries the
   > action that opens Settings at Models. Clauses (1) to (3) are untouched.
 
 - **REQ-WORKSPACE-137** — Desktop equivalents: submitting a prompt with no model configured SHALL yield "No model configured" / "Choose a model in Settings before starting a run." with an "Open Settings" action; with providers configured but none connected, "Provider authentication required" / "Authenticate at least one configured provider before starting a run." Provider health and authentication management live in Settings.
 
-  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002) revision 5, 2026-10-14** ([OQ-300](../architecture/open-questions.md#oq-300)). A
+  > **Extended by [`PD-LIBRARY-002`](../product/directives/pd-library-002.md#pd-library-002) revision 5, 2026-10-14** ([OQ-300](../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-300)). A
   > retrospective whose lease leaves its entry provider unresolved is refused with this requirement's headline "Provider
   > authentication required" and the detail "Authenticate at least one configured provider before running a retrospective.".
   > The refusal of a submitted prompt is untouched.

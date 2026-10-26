@@ -982,7 +982,7 @@ fallback replaced never hides the retry's unfinished call behind the calls it co
 that raised loses none of its own. (fin22's first repair read a raised attempt's calls from `onToolStarted`, which a replay
 never fires, and an attempt with an outcome from that outcome alone; both lost a call.) It is the
 agent's own count (REQ-MONITOR-044/052), not REQ-MONITOR-101's aggregate run count for the synthetic root; which of the two
-the run-level agent shows was **OQ-159**, ruled 2026-10-06 as built ([`PD-MONITOR-003`](../../product/directives.md#pd-monitor-003)):
+the run-level agent shows was **OQ-159**, ruled 2026-10-06 as built ([`PD-MONITOR-003`](../../product/directives/pd-monitor-003.md#pd-monitor-003)):
 the figure is the agent's own, and the run's aggregate is REQ-MONITOR-102's displayed total. **`SessionRecord.compressions`**
 (2026-10-02) is the run-wide compression count (REQ-MONITOR-086): the live run's maintained aggregate (`Run.compressions`,
 ADR-0008) while a run is live, else the stored `sessions.compressions` (`runCompressionsOf`, `toSessionRecord`) — raised at

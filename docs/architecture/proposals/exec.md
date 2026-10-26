@@ -178,7 +178,7 @@ produce), **strong hint** (not fixed, but one design makes several requirements 
   (REQ-TOOLS-023). Their ids are `session:allow:<n>`, numbered from 1 in grant order, and a grant
   matches only the same tool name (case-insensitive), same persona, and either a byte-identical
   pre-redaction command facet or the same exact argument set (REQ-TOOLS-024).
-  *Narrowed 2026-09-27 by [`PD-TOOLS-004`](../../product/directives.md#pd-tools-004): for the public `write_file`
+  *Narrowed 2026-09-27 by [`PD-TOOLS-004`](../../product/directives/pd-tools-004.md#pd-tools-004): for the public `write_file`
   and `haet_edit` a grant matches the same resolved set of paths from the same persona, whatever the other arguments;
   the text above is kept as proposed.*
 - **C-27 (hard).** Loop-control names `finish`, `finishtool`, `think`, `thinktool` are never gated,

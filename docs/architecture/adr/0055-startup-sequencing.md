@@ -486,8 +486,8 @@ anywhere, and that is OQ-43.** It is left open rather than closed by this record
   its private directory below the temporary directory), which it closes and unlinks before it hands over (`closeEndpoint`,
   `packages/platform/src/instance.ts`). On Windows the endpoint is a named pipe and nothing is written. Whether that
   transient socket is a write `REQ-STARTUP-164` forbids, and which of the two decisions gives way if it is, is
-  [OQ-248](../open-questions.md#oq-248).
-  **Ruled 2026-10-13 under the owner's delegation ([R-072](../../product/requests.md#r-072), [OQ-248](../open-questions.md#oq-248)):
+  [OQ-248](../open-questions/53-spikes-and-later-questions-20.md#oq-248).
+  **Ruled 2026-10-13 under the owner's delegation ([R-072](../../product/requests.md#r-072), [OQ-248](../open-questions/53-spikes-and-later-questions-20.md#oq-248)):
   neither gives way, and the decision reads _a launch that is handed over leaves nothing behind_.** The record is the file and
   the endpoint it names, with whatever a claim attempt creates to hold that endpoint — "the record itself" of
   `REQ-STARTUP-164`, since `REQ-STARTUP-161` makes "how a launch reaches it" part of what the record is. A handed-over launch's
@@ -1117,7 +1117,7 @@ Since fin30 the socket goes in the first of `socketDirectoryCandidates` (`packag
 leaves the whole path inside the platform's limit, and can hold a file: `XDG_RUNTIME_DIR`, the data directory beside the record,
 then a private `rotaris-<uid>` directory (`0700`, owned by this user, refused otherwise) below the temporary directory and below
 `/tmp` — the replacement directory the XDG Base Directory Specification tells an application without a runtime directory to fall
-back to. *Since fin36 (2026-10-13, [OQ-248](../open-questions.md#oq-248)) that private directory is made per claim attempt
+back to. *Since fin36 (2026-10-13, [OQ-248](../open-questions/53-spikes-and-later-questions-20.md#oq-248)) that private directory is made per claim attempt
 (`mkdtemp`, `rotaris-XXXXXX`, `0700`) and removed with the socket; the shared `rotaris-<uid>` above, which another local user
 could take first and which nothing removed, no longer governs.* The record still lives in the data directory, as `REQ-STARTUP-161` requires; only the address it names moves, and the
 record's `endpoint` field is what every later launch reads, so nothing has to guess it. A claim whose listen still fails gives its
@@ -1139,7 +1139,7 @@ record names at the instant the record is written, and fails on the old order
 both become the instance needed launches started within one `listen` of each other; it was read from the code, never
 measured, and is closed by construction rather than by a measured bound. The order has a cost this record did not price: a launch that loses
 the claim has opened, and then removes, an endpoint of its own, which on a platform whose endpoint is a file contradicts "a
-launch that is handed over writes nothing" above (corrected there; [OQ-248](../open-questions.md#oq-248), ruled 2026-10-13:
+launch that is handed over writes nothing" above (corrected there; [OQ-248](../open-questions/53-spikes-and-later-questions-20.md#oq-248), ruled 2026-10-13:
 the endpoint is part of the record, and a handed-over launch leaves nothing behind).
 
 **Since fin36 (2026-10-13), OQ-248's ruling as built.** `placeSocket` (`packages/platform/src/instance.ts`) makes each

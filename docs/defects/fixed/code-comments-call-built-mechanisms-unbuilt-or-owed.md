@@ -74,7 +74,7 @@ Two adjacent questions were checked, not reworded:
   which was false, was corrected.
 - **The dead `open-project-init` action.** Nothing raises it, so routing the arm would add a path no notice reaches. Which
   notice should offer it, and what it opens for a workspace another window holds, is raised as
-  [OQ-262](../../architecture/open-questions.md#oq-262). The renderer's comment now says the surface exists and nothing
+  [OQ-262](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-262). The renderer's comment now says the surface exists and nothing
   raises the action.
 
 Noticed while doing this and recorded, not repaired:

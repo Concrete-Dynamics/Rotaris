@@ -130,7 +130,7 @@ The listing half of the ruling above is revised by OQ-215 (in [`open-questions.m
 on the evidence of the two duress runs after `27a5127`: findings L3 at `c2fdd6a` (41 calls by 5 agents, 112 rows, 1,142.5 s of
 the failed child d2's generation) and N6 at `c2a9444` (28 calls, 96 rows, a memory written into the tree, runtime files in the
 delivered overview). The runtime's marker directory is now a hard-coded ignore component
-([`PD-TOOLS-012`](../../product/directives.md#pd-tools-012)), its name read from the binding manifest, so glob, grep and
+([`PD-TOOLS-012`](../../product/directives/pd-tools-012.md#pd-tools-012)), its name read from the binding manifest, so glob, grep and
 `read_file`'s listings skip it as they skip `.rotaris`, and a file in it named by its path is still served. The version-control
 half stands as repaired: `.rotaris/` alone in `.gitignore`, the marker's directory in the repository's `info/exclude`. Pinned by
 the case "the code-intelligence marker directory is a hard-coded ignore component, named by the manifest" in

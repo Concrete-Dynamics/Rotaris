@@ -458,7 +458,7 @@ proof read the view switch to Workspace and the caret in the search field 600 ms
 slash routes acknowledge the state the key now holds (`REQ-CHAT-167`). The proof read "Reasoning bodies shown" and
 `display/showReasoning: true` in the preference file; `settings-proof` read the switch on after a relaunch. Placing the
 switch in Display, which `REQ-CONFIG-403` says "holds two transcript toggles", is a reading taken and raised as
-[OQ-264](../open-questions.md#oq-264).
+[OQ-264](../open-questions/56-spikes-and-later-questions-23.md#oq-264).
 
 **Still not built.** "Open demo window" (`REQ-SHELL-162`, no demo mode). The search panel's Escape slot (the note linked
 above), and `REQ-CHAT-074`'s toolbar control for search

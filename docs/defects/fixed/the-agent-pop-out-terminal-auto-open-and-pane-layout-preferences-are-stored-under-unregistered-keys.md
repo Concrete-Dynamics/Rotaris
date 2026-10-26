@@ -42,7 +42,7 @@ read against REQ-SHELL-069; this note does not decide it.
 
 ## Outcome — repaired 2026-10-14 (fin45, `fin45-retro-and-record`)
 
-[OQ-302](../../architecture/open-questions.md#oq-302), ruled under [R-072](../../product/requests.md#r-072), confirms
+[OQ-302](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-302), ruled under [R-072](../../product/requests.md#r-072), confirms
 REQ-SHELL-006's table as the store's one complete registry. The specification names each of the three preferences and the
 table registers a key for each, so no directive was owed: each is now stored under the key the table lists, and a value stored
 under the old name is read once and carried over (`RENAMED_KEYS` and `carryOverRenamedKeys`, `packages/platform/src/preferences.ts`;

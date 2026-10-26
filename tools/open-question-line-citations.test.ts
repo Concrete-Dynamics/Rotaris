@@ -13,6 +13,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
+import { readRecord } from './record-parts.mjs';
 
 const root = join(import.meta.dirname, '..');
 
@@ -75,7 +77,7 @@ const oq302: readonly Citation[] = [
 ];
 
 describe("OQ-302's line citations stand where the preference table's lines stand", () => {
-  const record = readFileSync(join(root, 'docs', 'architecture', 'open-questions.md'), 'utf8');
+  const record = readRecord(join(root, 'docs', 'architecture', 'open-questions.md'));
   const spec = readFileSync(join(root, 'docs', 'spec', '12-desktop-shell-windows.md'), 'utf8');
 
   it('reads the ruling', () => {

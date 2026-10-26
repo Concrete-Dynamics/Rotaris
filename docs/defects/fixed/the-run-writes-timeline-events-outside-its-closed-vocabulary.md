@@ -60,11 +60,11 @@ routine facts as warnings or drop them. This note stayed open until that ruling 
 
 The owner ruled OQ-157 as recommended, with OQ-53, OQ-54, OQ-76 and OQ-127: the specification gains the words, and
 nothing in the store moved or was renamed. One amendment adds every name the gate's `AWAITING` held and the five raised
-beside it: [`PD-ORCH-014`](../../product/directives.md#pd-orch-014) extends REQ-ORCH-139 with fifteen run facts, OQ-127's
+beside it: [`PD-ORCH-014`](../../product/directives/pd-orch-014.md#pd-orch-014) extends REQ-ORCH-139 with fifteen run facts, OQ-127's
 three watchdog words (`waiting_on_tools`, `stall_recovered`, `corrective_message`, written since the commit before this
 one) and the three issue kinds (`model_wait`, `validation_llm_error`, `compression_failed`), and names REQ-NOTIFY-268's
-entry `notice`; [`PD-CHAT-009`](../../product/directives.md#pd-chat-009) gives the chat domain its thirteen words for the
-user's chat controls; [`PD-TOOLS-011`](../../product/directives.md#pd-tools-011) gives domain 05 OQ-76's `user_away` and
+entry `notice`; [`PD-CHAT-009`](../../product/directives/pd-chat-009.md#pd-chat-009) gives the chat domain its thirteen words for the
+user's chat controls; [`PD-TOOLS-011`](../../product/directives/pd-tools-011.md#pd-tools-011) gives domain 05 OQ-76's `user_away` and
 `user_returned`, now written by `UserPresence`, and the audit's `user-input` and `user` (OQ-54).
 `tools/check-timeline-vocabulary.mjs` cites each name to its directive in `VOCABULARY`, and its `AWAITING` is empty, so a
 name in no vocabulary fails `pnpm lint` again. Pinned by `tools/check-timeline-vocabulary.test.ts` (the empty `AWAITING`,

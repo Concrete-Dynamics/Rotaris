@@ -378,10 +378,10 @@ export const RULES = Object.freeze([
     notes: ['the installer and the packaged tree are measured by `pnpm package` on the Windows runner'] },
 
   // --- tools / docs / repo meta ---
-  { paths: ['tools/symbol-artifact/', 'tools/check-directive-register'], areas: ['record'] },
+  { paths: ['tools/symbol-artifact/', 'tools/check-directive-register', 'tools/record-parts.mjs'], areas: ['record'] },
   { paths: ['tools/verify-plan/'], areas: ['known'] },
   { paths: ['tools/'], areas: ['known'] },
-  { paths: ['docs/spec/', 'docs/product/directives.md'], areas: ['record'] },
+  { paths: ['docs/spec/', 'docs/product/directives.md', 'docs/product/directives/'], areas: ['record'] },
   { paths: ['docs/design/'], areas: ['themeLayout'] },
   { paths: ['docs/architecture/views/'], areas: ['known'],
     notes: ['architecture views: consult before, maintain after — no product proof'] },

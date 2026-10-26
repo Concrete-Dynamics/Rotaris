@@ -25,7 +25,7 @@ None contradicted word for word: REQ-TOOLS-136's level 3 reads "exact after one 
 to or removed from every line of the candidate", which as built includes a blank line, and is silent on whether a line with no
 visible character takes part. `PD-TOOLS-015` already reads a blank `new_string` line as never padded nor stripped; whether level
 3 reads `old_string`'s and the window's blank lines the same way is a question, raised as
-[OQ-295](../../architecture/open-questions.md#oq-295).
+[OQ-295](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295).
 
 ## Relevant files
 
@@ -35,8 +35,8 @@ visible character takes part. `PD-TOOLS-015` already reads a blank `new_string` 
 
 ## Outcome
 
-**Repaired 2026-10-14 by fin44 (`fin44-supervision-and-match`)** under [OQ-295](../../architecture/open-questions.md#oq-295)'s
-ruling (R-072), recorded as [`PD-TOOLS-020`](../../product/directives.md#pd-tools-020) with `PD-TOOLS-014` revision 4 and
+**Repaired 2026-10-14 by fin44 (`fin44-supervision-and-match`)** under [OQ-295](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295)'s
+ruling (R-072), recorded as [`PD-TOOLS-020`](../../product/directives/pd-tools-020.md#pd-tools-020) with `PD-TOOLS-014` revision 4 and
 `PD-TOOLS-016` revision 4. `matchEdit`'s level 3 (`packages/agent-tools/src/tools/files.ts`) compares a blank line of `old_string`
 with a blank window line as equal at any shift and never with a visible one, measures the prefix on `old_string`'s first visible
 line, and shifts the visible lines only; `carryWindow` writes a `new_string` line paired with a blank `old_string` line as the

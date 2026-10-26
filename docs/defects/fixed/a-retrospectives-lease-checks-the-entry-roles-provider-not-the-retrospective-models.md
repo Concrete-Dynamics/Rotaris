@@ -20,7 +20,7 @@ and does not repair which provider it checks; not seen in the built app. Recorde
 
 `PD-LIBRARY-002` (with ADR-0030 and REQ-PROVIDER-066): "a retrospective authenticates exactly as a run does" — a run's lease
 refuses on the provider its own first request needs; the retrospective's first and only request goes to the retrospective
-model's provider. `PD-LIBRARY-002` revision 5 ([OQ-300](../../architecture/open-questions.md#oq-300)) gives the refusal "a
+model's provider. `PD-LIBRARY-002` revision 5 ([OQ-300](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-300)) gives the refusal "a
 retrospective whose lease leaves its entry provider unresolved" its wording; which provider is the retrospective's "entry
 provider" is the question this note records.
 

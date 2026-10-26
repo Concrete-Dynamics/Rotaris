@@ -99,10 +99,10 @@ discovery prices, OQ-62's first half (proposed: deferred).
 **Ruled 2026-09-23 — [R-049](../../product/requests.md#r-049).** The design above is approved with both forks as
 recommended: a mixed run reads `configured`, and discovery pricing is deferred. The block is lifted: OQ-21 is
 answered and applied by amendment, ADR-0031 is accepted in narrowed form, and the behaviour is
-[`PD-MONITOR-001`](../../product/directives.md#pd-monitor-001) revision 2. The note stays open until that
+[`PD-MONITOR-001`](../../product/directives/pd-monitor-001.md#pd-monitor-001) revision 2. The note stays open until that
 revision is built.
 
-## Repaired — 2026-09-23 ([`PD-MONITOR-001`](../../product/directives.md#pd-monitor-001) revision 2 built)
+## Repaired — 2026-09-23 ([`PD-MONITOR-001`](../../product/directives/pd-monitor-001.md#pd-monitor-001) revision 2 built)
 
 `effectivePricing()` has callers. `catalogueOf` puts each model's two prices on its catalogue entry, and the
 ladder prices every completed request at the entry of the model it was sent to. A reported figure is kept; else

@@ -54,6 +54,6 @@ agent made 54 calls against the threshold of 60, the recorded traffic holds no l
 written:* the unchanged limb reached live at the final duress run at `a68f121` (session `e6747bd0`, finding D6; timeline
 entry 43, `trigger: raw-count`). With the classification cut at 1,915 ms it read four `read_file` calls over two files of a
 child checking its own document as a loop and told the child to "Pause and reassess read_file around docs/decisions.md …".
-OQ-232's ruling narrowed the limb by [`PD-ORCH-016`](../../product/directives.md#pd-orch-016): four calls are evidence only
+OQ-232's ruling narrowed the limb by [`PD-ORCH-016`](../../product/directives/pd-orch-016.md#pd-orch-016): four calls are evidence only
 when they are the same action, name and whole arguments
 ([`the-raw-count-fallback-declares-a-loop-on-four-reads-of-different-files.md`](the-raw-count-fallback-declares-a-loop-on-four-reads-of-different-files.md)).

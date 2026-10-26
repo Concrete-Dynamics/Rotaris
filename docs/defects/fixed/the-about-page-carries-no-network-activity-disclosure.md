@@ -45,10 +45,10 @@ blocked. Nothing in it is a modal, a disclosure control, a checkbox, a button or
 The setup statement names a third moment beside the requirement's two, "the first time a tool is needed", because that is
 when this build makes such a request: machine setup and cache warm-up are not built (OQ-73), while a pinned tool-server
 package and the code-intelligence runtime's language servers are fetched at first use. Raised as
-[OQ-261](../../architecture/open-questions.md#oq-261) with that reading; the wording follows its ruling.
+[OQ-261](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-261) with that reading; the wording follows its ruling.
 
 *Reported in place 2026-10-14 (fin43, `fin43-notices-and-config`):* OQ-261 was ruled 2026-10-13 under
-[R-072](../../product/requests.md#r-072) as [`PD-STARTUP-006`](../../product/directives.md#pd-startup-006), and the setup
+[R-072](../../product/requests.md#r-072) as [`PD-STARTUP-006`](../../product/directives/pd-startup-006.md#pd-startup-006), and the setup
 wording now follows it: "The first time a tool is needed, such as a tool server or a language's code intelligence, it may be
 downloaded from the package registry that serves it, and only when this machine does not already have it." It no longer
 names first launch, cache warm-up or the tool-archive hosts, which this build does not carry, and so no longer disagrees with

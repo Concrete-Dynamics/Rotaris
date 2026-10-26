@@ -10,12 +10,14 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { AWAITING, checkProduct, FORBIDDEN, specVocabulary, timelineWritesIn, VOCABULARY } from './check-timeline-vocabulary.mjs';
+// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
+import { readRecord } from './record-parts.mjs';
 
 const repo = join(import.meta.dirname, '..');
 
-/** A directive's entry in `docs/product/directives.md`, from its anchor to the next. */
+/** A directive's entry in `docs/product/directives.md` and its entries' files, from its anchor to the next. */
 function entryOf(id: string): string | undefined {
-  const directives = readFileSync(join(repo, 'docs', 'product', 'directives.md'), 'utf8');
+  const directives = readRecord(join(repo, 'docs', 'product', 'directives.md'));
   const at = directives.indexOf(`<a id="${id.toLowerCase()}"></a>`);
   if (at < 0) return undefined;
   const end = directives.indexOf('<a id="pd-', at + 1);

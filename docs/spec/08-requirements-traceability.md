@@ -1211,7 +1211,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 ### Runs Started from the Board
 
 - **REQ-TRACE-464** — A unit run launched from the board SHALL be driven by the **same run coordinator** that drives a session the user starts by hand. From the instant it begins it SHALL have a **live handle**, so that the workspace's stop, pause and steer controls operate on it. Approvals and questions it raises SHALL be routed to a person. Closing the application SHALL **cancel** the run rather than leave it orphaned. While the run is still executing, its **session identifier SHALL already have been stored on the run record kept for that requirement** — that being the window in which the board actually needs to be able to open the session — and the identifier SHALL survive an application restart. The run SHALL take over the worktree already provisioned for it and SHALL never provision a second one. A composition assembled without a coordinator — a test supplying its own agent, which is the case this clause exists for — SHALL nonetheless execute the unit and report on it exactly as before. The clause formerly also named a programmatic embedding of the engine; that is withdrawn, because the product offers no embedding surface (REQ-EVENTS-178). The guarantee is unchanged: it is about a composition lacking a coordinator, and it holds for any such composition whether or not this document names it.
-  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, 2026-10-06.** Clause 30: closing
+  > **Narrowed by [`PD-ORCH-005`](../product/directives/pd-orch-005.md#pd-orch-005) revision 6, 2026-10-06.** Clause 30: closing
   > the application ends a board run as every quit ends a run — it comes to rest by `quit`, never orphaned, and a
   > later continue resumes it — rather than cancelling it.
 
@@ -1226,7 +1226,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 - **REQ-TRACE-469** — **An unlimited wait SHALL remain cancellable.** Stopping the run SHALL immediately release whatever it was blocked on, rather than leaving the caller to sit out the remaining budget.
 
 - **REQ-TRACE-470** — A run started from the board SHALL receive the permissive permission preset **and** the unsandboxed opt-in **together, and both SHALL be confined to that run**. Granting only the preset SHALL NOT count as satisfying this: a run so configured still stops at the first tool that needs approval. The grant SHALL leave the workspace's stored configuration as it stands, and **any other run started from the same process — before it, alongside it or after it — SHALL receive exactly the permissions its own configuration specifies**, the composer's next run included.
-  > **Narrowed by [`PD-TOOLS-002`](../product/directives.md#pd-tools-002), 2026-09-21.** The confinement above still governs; the preset alone now satisfies the elevation — the opt-in is retained but inert.
+  > **Narrowed by [`PD-TOOLS-002`](../product/directives/pd-tools-002.md#pd-tools-002), 2026-09-21.** The confinement above still governs; the preset alone now satisfies the elevation — the opt-in is retained but inert.
 
 - **REQ-TRACE-471** — The elevation SHALL apply **exclusively to runs launched from the board**. A run begun from the composer, or from any other surface of the application, SHALL retain whichever permission mode its own configuration specifies, and the workspace's stored agent configuration SHALL be left unmodified.
 

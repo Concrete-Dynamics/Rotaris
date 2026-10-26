@@ -1229,8 +1229,8 @@ a surface in each case and erases a distinction one of them draws on purpose.
   window holding another workspace. The renderer now hands the action's workspace to main (`hooks.review {workspace}`),
   and main reaches it — the window holding it surfaced (REQ-STARTUP-163), else one added for it with no gate and no close
   — then opens that workspace's review in that window and stores the decision against it. Where no window holds the
-  workspace, adding one is ~~the build's reading and not a ruling~~ the ruled reading since 2026-10-13: [OQ-267](open-questions.md#oq-267),
-  ruled under [R-072](../product/requests.md#r-072) as [`PD-SHELL-001`](../product/directives.md#pd-shell-001) revision 2. `pnpm notice-proof`'s
+  workspace, adding one is ~~the build's reading and not a ruling~~ the ruled reading since 2026-10-13: [OQ-267](open-questions/57-spikes-and-later-questions-24.md#oq-267),
+  ruled under [R-072](../product/requests.md#r-072) as [`PD-SHELL-001`](../product/directives/pd-shell-001.md#pd-shell-001) revision 2. `pnpm notice-proof`'s
   `review-other` launch drives it; before the repair it logged "… which is not the open workspace" and opened nothing
   ([`../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md`](../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md)).
   The provider-named sign-in branch stays a logged no-op: no notice names a provider, so nothing reaches it.
@@ -1274,7 +1274,7 @@ that false. The configuration key is **not rejected** — it remains available o
 rows the rebuilt providers card may draw. The two requirements state disjoint populations and no document
 between them narrows either.
 
-**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the built behaviour is kept. REQ-PROVIDER-140 governs: the Settings provider list shows every provider its union lists, authenticated or not. REQ-CONFIG-389 is amended to match by [`PD-CONFIG-002`](../product/directives.md#pd-config-002), which narrows its first sentence and keeps the managed-cloud quick-start rule and the rule that a reference by a model slot alone causes no row. The amendment is carried as a directive with its back-pointer, the specification not being edited in place by this round.
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the built behaviour is kept. REQ-PROVIDER-140 governs: the Settings provider list shows every provider its union lists, authenticated or not. REQ-CONFIG-389 is amended to match by [`PD-CONFIG-002`](../product/directives/pd-config-002.md#pd-config-002), which narrows its first sentence and keeps the managed-cloud quick-start rule and the rule that a reference by a model slot alone causes no row. The amendment is carried as a directive with its back-pointer, the specification not being edited in place by this round.
 
 - **REQ-PROVIDER-140** (domain 04) fixes the listed set: "the union of the ids holding a stored credential,
   the built-in catalog ids, and the snapshot ids, each appearing exactly once, ordered by id." Every
@@ -1429,7 +1429,7 @@ carrying the payload the caller asked for, and the observation classified it `sh
 the conventions predate the corpus: `git diff` exits 1 when differences were found, `diff` exits 1 on
 a difference, `grep` exits 1 on no match. Each is an answer, not a failure.
 
-**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** REQ-TOOLS-112's test 4 is amended with the carve-out as built: exit code 1 from `diff`, `git … diff …`, `grep`, `egrep`, `fgrep`, `rg` — and `findstr`, which the built list also names — classifies `success` / `info`, and every other non-zero exit is unchanged. [`PD-TOOLS-009`](../product/directives.md#pd-tools-009) states it and narrows REQ-TOOLS-112, carrying the amendment with its back-pointer.
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** REQ-TOOLS-112's test 4 is amended with the carve-out as built: exit code 1 from `diff`, `git … diff …`, `grep`, `egrep`, `fgrep`, `rg` — and `findstr`, which the built list also names — classifies `success` / `info`, and every other non-zero exit is unchanged. [`PD-TOOLS-009`](../product/directives/pd-tools-009.md#pd-tools-009) states it and narrows REQ-TOOLS-112, carrying the amendment with its back-pointer.
 
 **What the build proceeds under.** The narrowed reading: exit 1 from a command whose leading tokens
 name one of those conventions (`git … diff …`, `diff`, `grep`/`egrep`/`fgrep`/`rg`, head matched

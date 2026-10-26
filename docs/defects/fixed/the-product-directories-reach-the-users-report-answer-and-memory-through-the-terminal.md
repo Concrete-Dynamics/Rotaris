@@ -26,7 +26,7 @@ cost.
 
 - None contradicted as written: OQ-161 (R-071) ruled that "the agents are not told that the product wrote the exclude line",
   and OQ-215 kept "the agents' instructions are unchanged" pending this measurement. Ruled 2026-10-07 under R-072 as OQ-230:
-  [`PD-TOOLS-012`](../../product/directives.md#pd-tools-012) revision 2 extends REQ-WORKSPACE-060 with a product statement every
+  [`PD-TOOLS-012`](../../product/directives/pd-tools-012.md#pd-tools-012) revision 2 extends REQ-WORKSPACE-060 with a product statement every
   agent receives as its last always-active context unit.
 - REQ-TOOLS-140 and PD-TOOLS-012 (the file tools hide both); REQ-MCP-099 and REQ-MCP-102 (memories persist across runs);
   REQ-WORKSPACE-060 (the context units); REQ-CONFIG-100 (a configured persona's prompt).

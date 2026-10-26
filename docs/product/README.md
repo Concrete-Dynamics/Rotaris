@@ -146,7 +146,7 @@ repairing it quietly, and the same discipline applies here:
 
 ```markdown
 - **REQ-CHAT-004** — The composer placeholder MUST be one of exactly these four strings …
-  > **Superseded by [`PD-CHAT-001`](../product/directives.md#pd-chat-001), 2026-09-12.** The text
+  > **Superseded by [`PD-CHAT-001`](../product/directives/pd-chat-001.md#pd-chat-001), 2026-09-12.** The text
   > above states the behavioural target and is kept for that reason; it no longer states what this
   > product does.
 ```
@@ -209,7 +209,9 @@ until somebody noticed while writing `PD-ORCH-003`.
 [`tools/check-directive-register.mjs`](../../tools/check-directive-register.mjs) runs in `pnpm lint` beside
 its sibling and refuses a duplicate, a heading with no anchor above it, an anchor disagreeing with the
 identifier its heading prints, a `directives.md#pd-…` citation reaching no entry, and a declared total that
-is not the total. Two rules are this register's own rather than the request log's, and the gate reads both:
+is not the total. Since 2026-10-26, when each entry moved into its own file under [`directives/`](directives/)
+([`../README.md`](../README.md), "The document budget"), a citation reads `directives/pd-….md#pd-…` and must
+name the file of the entry it cites, and an entry's file must hold that entry alone. Two rules are this register's own rather than the request log's, and the gate reads both:
 identifiers are contiguous from 001 **within each domain**, not across one sequence; and the total is the
 number of **headings**, because a revision keeps its number and adds no entry. The count stays written in
 words — that is the register's voice, and the gate carries the number table rather than asking the document
@@ -220,7 +222,8 @@ to change form for a machine.
 - **Consult before building.** A request is classified against the table above *before* code is
   written. Work that implements a directive cites its `PD` ids the way other work cites `REQ` ids.
 - **Maintain after building.** A commit that adds, revises or withdraws a directive updates
-  [`directives.md`](directives.md), the back-pointer in `docs/spec/`, and the row in
+  the directive's own file in [`directives/`](directives/) and its row in [`directives.md`](directives.md), the
+  back-pointer in `docs/spec/`, and the row in
   [`requests.md`](requests.md) **in the same commit**. A directive whose back-pointer is missing is a
   defect of the change that wrote it, on the same terms as a stale architecture view.
 - **`pnpm check` enforces what it can.** `pnpm symbols` regenerates

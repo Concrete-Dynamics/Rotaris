@@ -51,7 +51,7 @@ one killed reading as never run; and a kill after the paused command ended on it
 its own exit 0. Beside the registry, "a kill whose control terminated nothing answers `ended`, never ok" in `streams.test.ts`.
 All five were red on this branch before the change (Windows 11 ARM64, pwsh 7.6.6): `{ ok: true }`, both pids alive, 16,234 ms.
 
-Not changed, and raised as [OQ-370](../../architecture/open-questions.md#oq-370): between the kill and the agent's next
+Not changed, and raised as [OQ-370](../../architecture/open-questions/67-spikes-and-later-questions-34.md#oq-370): between the kill and the agent's next
 observation the live stream still reads `running`, as it does for a paused command that ends on its own.
 
 **The review's repair (2026-10-21).** One ordering was left on the running path: a timed call issued while the command is

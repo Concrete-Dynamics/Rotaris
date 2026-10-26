@@ -16,6 +16,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-23**
 
+**Four views, and this log, split under the document budget (`docs/README.md`; 2026-10-26).** `01-component-view.md`,
+`02-process-view.md`, `03-runtime-view.md`, `04-seams.md` and `06-sequences.md` each keep their path as an index and
+hold their sections, verbatim and in order, in the folder of the same name; every link to a section names its part. The
+entries before 2026-10-16 moved, verbatim, into the numbered parts this log indexes at its foot. No view's content
+changed, so the date above stays: no package, edge, process, message, channel or ownership changed.
 **The notices generator's reviewed exceptions resolved (O-3, O-11, OQ-74, OQ-75; 2026-10-23).** `01-component-view.md`'s
 notices section names the table's identifier entries and its `licenseText` and `embedded` parts, and the licence texts
 `tools/notices/licenses/` now holds for them. The tool reads one input more — the vendored licence file inside an installed

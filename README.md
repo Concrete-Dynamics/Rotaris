@@ -19,9 +19,13 @@ is built from source. The version it declares is `0.1.0` (`apps/desktop/package.
 - **Windows x64** is the one platform the first release will publish for
   ([`PD-STARTUP-001`](docs/product/directives/pd-startup-001.md#pd-startup-001)). `pnpm package` builds its installer, and runs on
   Windows only.
-- **Linux and macOS** have no build host yet, so no release artifact is produced for either
-  ([IC-3](docs/architecture/implementation-conditions.md#ic-3--the-linux-and-macos-build-host-obligations-deferred-to-hardware)).
-  Nothing in the application is removed or disabled there. The proofs are run from source on Windows and on Linux.
+- **Linux** may be built on a developer's Linux host
+  ([ADR-0066](docs/architecture/adr/0066-the-linux-artifact-is-built-on-a-developer-host.md)); the artifact is
+  accepted only against that record's criteria and is not yet published. The packaging hooks still refuse it until
+  that record's wiring lands ([the defect note](docs/defects/the-build-hooks-refuse-a-linux-artifact-in-the-name-of-ic-3.md)). **macOS** has no build host yet, so no
+  release artifact is produced for it
+  ([IC-3](docs/architecture/implementation-conditions/ic-3-the-build-host-obligations.md)).
+  Nothing in the application is removed or disabled on either. The proofs are run from source on Windows and on Linux.
 
 **What still stands between `main` and a first release** is recorded in
 [`docs/architecture/first-release-plan.md`](docs/architecture/first-release-plan.md). In short:

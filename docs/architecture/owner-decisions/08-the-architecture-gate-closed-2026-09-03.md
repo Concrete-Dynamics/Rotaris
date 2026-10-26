@@ -21,6 +21,12 @@ process topology, the store, the run flow, the event stream, settings, permissio
 restore. **IC-2 and IC-3 are not advice**: no screen before the approved visual design reference exists, no
 Linux or macOS artifact before the build hosts do.
 
+> **Amended 2026-10-26 by the owner ([R-087](../../product/requests.md#r-087)), and the ruling stands for macOS.** "No
+> Linux or macOS artifact before the build hosts do" now reads **no macOS artifact before its build host does**: IC-3
+> was narrowed to macOS and the Linux artifact may be built, accepted against
+> [ADR-0066](../adr/0066-the-linux-artifact-is-built-on-a-developer-host.md)'s criteria (GD-5's amendment). IC-3 is still
+> not advice.
+
 > **Corrected 2026-09-03, hours after the ruling, and the ruling stands.** The sentence above says *no
 > screen before the approved visual design reference exists*. **It exists**, and it has been in this
 > repository since 2026-09-01 — `docs/design/`, commit `1ad8fee`. The owner said so; nothing in this record

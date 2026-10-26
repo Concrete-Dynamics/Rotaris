@@ -101,7 +101,7 @@ Part 1 of 8 of [the first-release plan](../first-release-plan.md), which indexes
   it now builds the bundle when it builds, refuses under `--skip-build` naming `pnpm code-intel:bundle`, and quotes the app
   log's setup failure; green as root on Linux built from nothing and again with `--skip-build`.
 - The unbuilt directives `PD-TOOLS-003` (**built 2026-09-27**, R-055), `PD-TOOLS-004` (**built 2026-09-27**, R-057), `PD-TOOLS-005` (**built 2026-09-28**, R-062), `PD-ORCH-004` (**built 2026-09-27**, R-057) and `PD-MONITOR-002` (**built 2026-09-27**, R-055). *Annotated 2026-10-13: all five are built; their first executions are in `../product/directives.md`.*
-- The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`.
+- The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`. *(2026-10-26, [R-087](../../product/requests.md#r-087): IC-3 binds macOS alone; the Linux artifact may be built and is accepted against [ADR-0066](../adr/0066-the-linux-artifact-is-built-on-a-developer-host.md)'s criteria. Its publication is still `PD-STARTUP-001`'s.)*
 
 **One deferral the owner should look at twice.** Persona memory is a named empty slot in REQ-WORKSPACE-060's
 ordered unit list, and REQ-WORKSPACE-050 decides where it is discovered. It is outside "workspace injection" as

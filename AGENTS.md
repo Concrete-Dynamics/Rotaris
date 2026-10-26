@@ -93,7 +93,7 @@ where the two disagree the specification governs. `docs/design/README.md` §2 is
 
 **One bound is not waived and no agent may treat it as advice:**
 
-- **No Linux or macOS release artifact may be produced** until the build hosts exist (**IC-3**).
+- **No macOS release artifact may be produced** until its build host exists (**IC-3**). *(2026-10-26, [R-087](docs/product/requests.md#r-087): Linux may be built; must meet ADR-0066.)*
 
 *Corrected 2026-10-13: this read "Two bounds", the other being "`REQ-SHELL-128`'s three built-in themes cannot
 yet be met (IC-2): `nocturne` and `high-contrast` have no palette, and the token set declares no theme metadata or
@@ -101,7 +101,7 @@ native-surface mapping". IC-2 was discharged on 2026-09-04 by `pnpm theme-proof`
 three themes carry a palette, a label, a description and a dark flag (`packages/contracts/src/theme/themes.ts`);
 only the different-scale multi-monitor drag remains, the owner's measurement.*
 
-`docs/architecture/implementation-conditions.md` holds **IC-1 to IC-8** *(this read "IC-1 to IC-7")*. A condition binds the work it
+`docs/architecture/implementation-conditions.md` holds **IC-1 to IC-8**, an index *(this read "IC-1 to IC-7")*. A condition binds the work it
 names: that work may not be reported complete until the condition is discharged, discharging means
 recording the result in the record whether or not it passed, and **no condition may be downgraded by
 the person doing the work**.

@@ -39,3 +39,10 @@ ADR-0056's load proof is not a configuration change. `build-hooks.cjs`'s rule 1a
 The dmg and AppImage apply strategies of "The updater" also wait for the directive's withdrawal, as `PD-STARTUP-001` says. The icon is O-4's.
 
 **Wiring it**, once IC-3 and IC-8 are discharged and a directive withdraws `PD-STARTUP-001`, means three changes made together. First, `package.mjs` gains the platform switch and renders the configuration through `preparedConfiguration`. Second, `release.yml`'s matrix gains one entry per key on the runners above. Third, `tools/release-pipeline`'s `PUBLISHED_PLATFORMS` gains the same keys.
+
+*Note 2026-10-26 ([R-087](../../../product/requests.md#r-087)), and the paragraph above is kept as written: for the Linux
+key it no longer holds. The owner narrowed IC-3 to macOS, and
+[ADR-0066](../0066-the-linux-artifact-is-built-on-a-developer-host.md) authorises building the Linux artifact now. The
+first change above, plus the hooks' rules 1a and 4 written for Linux, is that build's wiring (ADR-0066 point 5, AC-3).
+The second and third are publication and still wait on a directive revising `PD-STARTUP-001`. IC-3 items 1 to 4 above
+are, for Linux, ADR-0066's AC-1 to AC-4.*

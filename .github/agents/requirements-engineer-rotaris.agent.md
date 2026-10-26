@@ -88,7 +88,7 @@ Two corollaries you will need often:
 - **Information architecture comes from `docs/spec/`** (`REQ-SHELL-023` is canonical), never from
   `docs/design/mockup/`, which is read for craft only.
 - **`docs/architecture/implementation-conditions.md` holds IC-1 to IC-8.** A condition binds the work
-  it names, and **no agent may downgrade one**. If a request runs into IC-3 (no Linux/macOS artifact)
+  it names, and **no agent may downgrade one**. If a request runs into IC-3 (no macOS artifact; since 2026-10-26 a Linux artifact may be built and is accepted under ADR-0066, R-087)
   or IC-8, say so in the row; do not quietly relax it.
 
 ---

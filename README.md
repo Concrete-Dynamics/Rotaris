@@ -207,7 +207,7 @@ through a persona's `mcp_servers` key.
 | `haet_read` / `haet_edit` (alias `haet`) | Read a file with its content hash, then edit it anchored to that hash | ✓ | ✓ (`haet_edit`) | |
 | `grep`, `glob` | Search file contents and names | ✓ | | |
 | `git_read` | Read the HEAD commit and branch, or a named ref | ✓ | | |
-| `git_commit` | Record a commit | ✓ | ✓ | |
+| `git_commit` | Declared, **not built**: it has no executor, so it is never granted | ✓ | ✓ | |
 | `terminal` | Run a command in a terminal, foreground or background | | | ✓ |
 | `fetch` | Fetch a URL under the egress policy | | | |
 | `todo` | The run's task list | | | |
@@ -215,7 +215,8 @@ through a persona's `mcp_servers` key.
 | `delegate`, `wait_for_tasks`, `background_output` | Hand work to a child agent and collect it | | | |
 | `artifact_write`, `artifact_read`, `artifact_list` | Publish and read Library artifacts | | | |
 
-The capability columns are the declarations of `REQ-TOOLS-001`; the executors are in `packages/agent-tools/src/`.
+The capability columns are the declarations of `REQ-TOOLS-001`. The executors are in `packages/agent-tools/src/`; a
+declared tool with no executor is removed from the persona rather than offered (`apps/desktop/src/run-host/tools.ts`).
 
 ## Permissions
 
@@ -224,10 +225,13 @@ written to the session's audit trail (spec [05](docs/spec/05-tools-permissions-a
 
 | Mode | Default when no rule matches | In short |
 |---|---|---|
-| `restricted` | deny | Read-only tools are allowed, but a read outside the workspace asks; `fetch` to another host asks; network commands and destructive commands are denied |
-| `ask` *(default)* | ask | Read-only tools are allowed wherever they read; `fetch` to another host asks; network commands ask; destructive commands are denied |
-| `autonomous` | allow | Allowed, except five destructive-command rules that deny; it never asks, and a path outside the workspace fails the path fence instead |
+| `restricted` | deny | Read-only tools are allowed, but a read outside the workspace asks; `fetch` to another host asks; network commands are denied; the nine starter command rules apply |
+| `ask` *(default)* | ask | Read-only tools are allowed wherever they read; `fetch` to another host asks; network commands ask; the nine starter command rules apply |
+| `autonomous` | allow | Allowed, except the five starter deny rules; it never asks, and a path outside the workspace fails the path fence instead |
 
+- The **nine starter command rules** (`REQ-TOOLS-039`): five **deny** — recursive delete, privilege escalation, force
+  push, package publish, piping into a shell — and four **ask** — a command that cannot be read statically, history
+  rewrites, dependency installs, container and service control.
 - The modes, their rules and the default are `REQ-TOOLS-041` to `REQ-TOOLS-046`; an unrecognised mode name resolves
   to `restricted`.
 - You choose the mode in the desktop selector, which lists the modes strictest first, asks you to confirm

@@ -282,7 +282,7 @@ was run here (IC-3 — *corrected 2026-10-13: a Windows x64 host, deferred with 
 **4.5 The portable and its launcher stub.** REQ-STARTUP-031 names two Windows artifacts, so the portable is part of
 the first release. Its name is `artifactName(declared, 'portable')` from the same declared text `pnpm package` reads
 (`scripts/lib/artifact-names.mjs`, `declaredProductVersion`), never a version electron-builder has normalised (2026-09-28). The stub is ADR-0054's second build technology and has never been built. It is the largest
-unknown in this plan, so its spike is taken as the first act of building it (CLAUDE.md), and the result goes
+unknown in this plan, so its spike is taken as the first act of building it (AGENTS.md), and the result goes
 back into ADR-0054. Dropping the portable would need a further directive. This plan does not propose one.
 
 > **First execution, 2026-10-23 — built under the owner's packaging brief of that day; executed on Linux, the Windows

@@ -163,7 +163,7 @@ suites a given change needs.
   the [reference record](docs/clean-room/reference-record.md), the [provenance record](docs/clean-room/provenance.md),
   the [specification gate](docs/clean-room/specification-gate.md), the
   [architecture gate](docs/clean-room/architecture-gate.md) and the [agent workflow](docs/clean-room/agent-workflow.md).
-- **Working in the repository:** [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](AGENTS.md).
+- **Working in the repository:** [`AGENTS.md`](AGENTS.md) — the rules, for every agent and harness; the skills are under `.agents/skills/`.
 
 ## Contributing
 
@@ -177,7 +177,7 @@ suites a given change needs.
   identifiers it satisfies.
 - **A defect noticed along the way** is written up in `docs/defects/` in the shape
   [`docs/defects/README.md`](docs/defects/README.md) gives, whether or not it is in scope to fix.
-- **The clean-room boundary binds every contribution.** Work here draws only on the approved inputs `CLAUDE.md` lists,
+- **The clean-room boundary binds every contribution.** Work here draws only on the approved inputs `AGENTS.md` lists,
   and never on the earlier implementation (below).
 
 ## Clean-room provenance

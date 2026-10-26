@@ -17,7 +17,7 @@ It holds paths, entry files and test globs, and nothing that would go stale fast
 Every package is `@rotaris/<name>` and exports through `src/index.ts`; `@rotaris/ui` also exports
 `./design-system`. Tests are **co-located** with the unit they cover (`<unit>.test.ts` beside
 `<unit>.ts`), so a package's test glob is `packages/<name>/src/**/*.test.ts` and the narrowest
-verification is `pnpm vitest run <path>` (see [`../CLAUDE.md`](../CLAUDE.md) for the command set).
+verification is `pnpm vitest run <path>` (see [`../AGENTS.md`](../AGENTS.md) for the command set).
 
 ## Composition roots — `apps/desktop/src/`
 

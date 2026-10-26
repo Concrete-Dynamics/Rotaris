@@ -1,6 +1,6 @@
 # Agent workflow — branch, worktree, rebase, line endings, the handoff
 
-How changes land on `main` in this repository. `CLAUDE.md` states the rule in one
+How changes land on `main` in this repository. `AGENTS.md` states the rule in one
 paragraph; this file holds the steps that are only needed while doing it.
 
 ## Work on a temporary branch in a temporary worktree
@@ -69,6 +69,15 @@ Before the rebase it names the files `origin/main` has moved since the fork in w
 a rebase can merge those textually while both sides have rewritten them, and a conflict listing never shows
 it. `pnpm worktree:overlaps` reports the same overlap across every worktree beside `origin/main`, plus the
 files two branches both touch: parallel work knowing what it shares, before the rebase says it.
+
+The rest of the wrappers' surface (it stood in `AGENTS.md` until 2026-10-26): `pnpm worktree:new <branch>
+[--dir=<path>]` places the tree elsewhere; `pnpm worktree:land --worktree=<path>` names the branch's tree when the
+command runs from somewhere else; the landing obeys `pnpm verify:plan` against `origin/main`, and `pnpm preflight`
+runs before the proof suites it names. The overlap report counts committed, staged, unstaged and untracked files
+(an agent's in-flight edits count); both it and the landing's overlap line read `origin/main` as last fetched and are
+reports, never gates; `--json` is the machine form. Both wrappers and the report are exercised end to end against a
+scratch repository by `tools/worktree/`'s tests: real git, only the pnpm steps stubbed (`new.test.ts`, `land.test.ts`,
+`overlaps.test.ts`).
 
 - **Re-read `main` before rebasing.** It moves. A trailer-less commit on `main` authored by
   the owner is theirs — surface a collision with it, never reset it.

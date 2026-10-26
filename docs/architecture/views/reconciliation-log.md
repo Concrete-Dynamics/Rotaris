@@ -32,6 +32,12 @@ over an existing one. No channel or store table changed.
 
 (Add the composer's microphone: dictation inserted as prompt text)
 
+**The agent configuration consolidated into `AGENTS.md` (2026-10-26).** `CLAUDE.md` is folded into `AGENTS.md` and
+reduced to the import `@AGENTS.md`, so the maintenance rule this README cites is stated in `AGENTS.md`; the README's pointer moves with it. The
+live run's manual moved from `AGENTS.md` to `docs/proofs/live-run.md`, and the proof-launch mechanics to the proof
+registry's page. `tools/skill-routers.test.ts` became `tools/agent-config.test.ts`. No package, edge, process, message,
+channel or ownership changed.
+
 **Four views, and this log, split under the document budget (`docs/README.md`; 2026-10-26).** `01-component-view.md`,
 `02-process-view.md`, `03-runtime-view.md`, `04-seams.md` and `06-sequences.md` each keep their path as an index and
 hold their sections, verbatim and in order, in the folder of the same name; every link to a section names its part. The

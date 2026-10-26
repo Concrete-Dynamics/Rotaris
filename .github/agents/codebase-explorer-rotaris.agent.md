@@ -18,7 +18,7 @@ You are **read-only**. You never edit code, docs, or configuration. You never ru
 
 # The hard boundary — binds you before anything else
 
-`CLAUDE.md` states it and it is not negotiable. Do **not** read, clone, fetch, search, or quote:
+`AGENTS.md` states it and it is not negotiable. Do **not** read, clone, fetch, search, or quote:
 
 - `https://github.com/Concrete-Dynamics/Rotaris-legacy` (the reference, renamed 2026-10-21) and `https://github.com/theUpsider/Rotaris` (an earlier home of the same reference), or any mirror, fork, or package of either
 - the reference commit `e7093dda` and its ancestors, wherever they appear

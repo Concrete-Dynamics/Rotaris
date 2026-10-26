@@ -3554,7 +3554,7 @@ if (wanted.includes('empty-answer')) {
  *
  * Its wall clock is `LIVE_RUN_DURESS_MS` (default 40 minutes, the owner's figure of 2026-09-22). An overrun says where
  * the time went, and one the endpoint held while the run was still progressing is a NOTE that the window was the bound,
- * not a failure of the product (live-run finding H-h; `lib/duress-checks.mjs`, AGENTS.md "`LIVE_RUN_DURESS_MS`").
+ * not a failure of the product (live-run finding H-h; `lib/duress-checks.mjs`, docs/proofs/live-run.md "`LIVE_RUN_DURESS_MS`").
  *
  * **The fixture question, ruled rather than left open (2026-09-22, delegated by the owner): the default stays
  * `todo-app`, and the LENGTH comes from the work asked for rather than from the tree's weight.** A bigger
@@ -3631,7 +3631,7 @@ if (wanted.includes('duress')) {
    * an overrun says whose it was (live-run finding H-h). The first execution failed at 2,406 s of 2,400 s with nothing
    * beside the two figures, and a request was open at the endpoint for all but seven seconds of it. An overrun while
    * the run was still progressing and the product held almost none of the wait is the WINDOW's bound — a NOTE, and
-   * `LIVE_RUN_DURESS_MS` is what asks the longer question; the owner's forty minutes stay the default (AGENTS.md).
+   * `LIVE_RUN_DURESS_MS` is what asks the longer question; the owner's forty minutes stay the default (docs/proofs/live-run.md).
    * "Still progressing" is read only from what ENDED ON ITS OWN before the wait ran out — a request the quit cut off
    * ends at the quit whatever it was doing, so a stream hung from early in the wait would otherwise read as progress.
    */

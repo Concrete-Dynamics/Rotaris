@@ -74,11 +74,11 @@ describe('check-record-links — a dangling link fails, a good anchor passes', (
     writeFileSync(join(root, 'packages', 'engine', 'CONTEXT.md'), '[bad](nope.md)\n');
     writeFileSync(join(root, 'packages', 'engine', 'src', 'artifacts', 'CONTEXT.md'), '[bad](nope.md)\n');
     writeFileSync(join(root, 'packages', 'engine', 'README.md'), '[ignored](nope.md)\n');
-    writeFileSync(join(root, 'CLAUDE.md'), '[bad](nope.md)\n');
+    writeFileSync(join(root, 'AGENTS.md'), '[bad](nope.md)\n');
     writeFileSync(join(root, 'README.md'), '[ignored](nope.md)\n');
     const { problems } = checkRecord(root);
     expect(problems.map((p: { file: string }) => p.file.slice(root.length + 1).replaceAll('\\', '/')).sort()).toEqual([
-      'CLAUDE.md',
+      'AGENTS.md',
       'packages/engine/CONTEXT.md',
       'packages/engine/src/artifacts/CONTEXT.md',
     ]);

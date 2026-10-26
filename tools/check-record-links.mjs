@@ -12,7 +12,7 @@
 // are skipped; so is anything inside an HTML comment, which does not render.
 //
 // The record, for this gate, is: every `.md` under `docs/`, `CONTEXT-MAP.md`,
-// `AGENTS.md`, `CLAUDE.md`, and every `CONTEXT.md` under `packages/` (the
+// `AGENTS.md`, and every `CONTEXT.md` under `packages/` (the
 // glossaries the context map names, nested ones included).
 //
 // A second pass reads the code. Comments, tests and proof scripts under `apps/`,
@@ -260,7 +260,7 @@ export function recordFiles(root) {
     }
   };
   walk(join(root, 'docs'), (name) => name.endsWith('.md'));
-  for (const top of ['CONTEXT-MAP.md', 'AGENTS.md', 'CLAUDE.md']) {
+  for (const top of ['CONTEXT-MAP.md', 'AGENTS.md']) {
     const full = join(root, top);
     if (existsSync(full)) files.push(full);
   }
@@ -532,10 +532,10 @@ if (invokedDirectly) {
     console.error(`check-record-links: ${problems.length} dangling link(s) in the record:`);
     for (const problem of problems) console.error(`  - ${formatProblem(root, problem)}`);
     console.error('');
-    console.error('A relative link in docs/, CONTEXT-MAP.md, AGENTS.md, CLAUDE.md or a packages/**/CONTEXT.md must');
+    console.error('A relative link in docs/, CONTEXT-MAP.md, AGENTS.md or a packages/**/CONTEXT.md must');
     console.error('reach an existing file or directory, and a `#fragment` must name a heading or an explicit anchor');
     console.error('in that file. A defect note moved to docs/defects/fixed/ takes every link to it along, in the');
-    console.error('same commit (CLAUDE.md, "Defects noticed along the way").');
+    console.error('same commit (AGENTS.md, "Defects noticed along the way").');
   }
   if (code.problems.length > 0) {
     if (problems.length > 0) console.error('');

@@ -17,7 +17,7 @@ template.
   agent was lost. `model: 'opus'`; `effort: 'medium' | 'high' | 'max'`. The template wraps it in `call()`, which
   halts the run after three empty results in a row.
 - Agents cannot see the conversation. Everything they need is in the prompt, the brief, the files the prompt names,
-  and `CLAUDE.md`.
+  and `AGENTS.md`.
 
 ## Labels are the resume keys
 

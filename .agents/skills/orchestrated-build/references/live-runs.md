@@ -82,7 +82,7 @@ works for a user, and it can spend money. Proofs pass on a product a live run st
   to 50 minutes with every scenario since fin42 (2026-10-14 and 15). At `1763f7f`,
   `timeout 5400 xvfb-run -a -s "-screen 0 1600x1000x24" /opt/node24/bin/node /home/user/Rotaris-crw-wt-accept/apps/desktop/scripts/live-run.mjs --confirm --skip-build`
   ran from 05:56 to 06:15 UTC on 2026-10-03 and passed.
-- Duress needs a window the endpoint can fill. AGENTS.md sets it at `LIVE_RUN_DURESS_MS=7800000` (130 minutes) since the
+- Duress needs a window the endpoint can fill. `docs/proofs/live-run.md` sets it at `LIVE_RUN_DURESS_MS=7800000` (130 minutes) since the
   Per-agent timeout of a duress launch was raised to 45 minutes (OQ-214, 2026-10-07), and the launch's own bound is the wait
   plus 180 s, so its `timeout` sits above 7,980 s (`timeout 8100`). That is past the Bash tool's 7,200,000 ms background cap,
   so the profile launches duress **detached** (`setsid nohup bash -c '…; echo "exit=$?" >> <log>' > /dev/null 2>&1 < /dev/null

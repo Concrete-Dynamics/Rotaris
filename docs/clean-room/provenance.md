@@ -1351,7 +1351,7 @@ None. One identifier minted, five amended in place, every amended sentence quoti
 
 Implementation agents will receive the approved specifications, approved architecture decisions,
 public documentation, and approved design material. They will not receive the reference, the sealed
-area, RED findings, or raw audit reports. The repository's `CLAUDE.md` states this boundary so it
+area, RED findings, or raw audit reports. The repository's `AGENTS.md` (its `CLAUDE.md` until 2026-10-26) states this boundary so it
 applies to every session opened here.
 
 Implementation commits should cite the requirement IDs they satisfy, so the chain from requirement

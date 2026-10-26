@@ -1,7 +1,7 @@
 /**
  * `pnpm mockup` serves the design material from the repository on every platform. Until 2026-10-02 its two roots were
  * URL pathnames with the leading slash stripped, which on Linux and macOS made them relative to the working directory, so
- * started from the repository (as `CLAUDE.md` and `docs/design/README.md` §7 say) every request answered `not found: /`
+ * started from the repository (as `AGENTS.md` and `docs/design/README.md` §7 say) every request answered `not found: /`
  * (docs/defects/fixed/pnpm-mockup-serves-not-found-on-linux-unless-started-from-the-root.md). The server here is started
  * with the repository as the working directory, which is where vitest runs.
  */

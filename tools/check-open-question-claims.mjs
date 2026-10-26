@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // An open question is the owner's: the build raises it and proceeds under a stated reading until the owner rules
-// (`CLAUDE.md`, "A question the specification leaves open is raised, never ruled by you"). Two kinds of sentence
+// (`AGENTS.md`, "When the owner asks for something"; until R-072 "A question the specification leaves open is raised, never ruled by you"). Two kinds of sentence
 // outlived that rule's bookkeeping, and nothing read either (acceptance finding F16 of finacc3, 2026-10-06,
 // `docs/defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`),
 // and its first repair found a third:
@@ -240,6 +240,7 @@ export function filesOf(root) {
     ...withParts(join(root, 'docs', 'architecture', 'first-release-plan.md')),
     ...withParts(join(root, 'docs', 'architecture', 'README.md')),
     join(root, 'AGENTS.md'),
+    join(root, 'docs', 'proofs', 'live-run.md'),
     join(root, 'CONTEXT-MAP.md'),
     join(root, 'docs', 'module-map.md'),
     ...walk(join(root, '.claude', 'rules'), (n) => n.endsWith('.md')),

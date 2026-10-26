@@ -4,7 +4,7 @@
  * moves in the README. From 2026-09-16 to 2026-10-13 every change wrote its entry under that heading instead, until the
  * README was 2,658 lines (`docs/defects/fixed/the-views-reconciliation-entries-pile-up-in-the-readme-the-log-was-split-from.md`);
  * the move then dropped the maintenance rule's sentence that a view disagreeing with the code is the change's defect,
- * which `CLAUDE.md` states too. This holds both.
+ * which `AGENTS.md` states too. This holds both.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

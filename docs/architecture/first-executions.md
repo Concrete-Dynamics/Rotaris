@@ -1,6 +1,6 @@
 # First executions
 
-**What this register is for.** `CLAUDE.md` carries a standing policy: *a mechanism's first execution reports
+**What this register is for.** `AGENTS.md` carries a standing policy (in `CLAUDE.md` until 2026-10-26): *a mechanism's first execution reports
 back into the record that decided it, in place, including when it found nothing.* The policy is justified by a
 ratio — how many mechanisms have been executed for the first time, and how many of those held a defect no reading
 had caught. This file is where that ratio is **read**, not where it is asserted.

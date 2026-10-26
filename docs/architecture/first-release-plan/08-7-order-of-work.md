@@ -37,7 +37,7 @@ Part 8 of 8 of [the first-release plan](../first-release-plan.md), which indexes
 6. **The gate (§5)** on O-6's machine, with the §2.3 and §3.4 live runs. When the gate is green, the owner
    publishes `v0.1.0`.
 
-Each step owes what CLAUDE.md states for any change: `pnpm check` green, the affected view updated, and a
+Each step owes what AGENTS.md states for any change: `pnpm check` green, the affected view updated, and a
 mechanism's first execution reported into its record and into `first-executions.md`.
 
 ### Published-asset verification — T3, 2026-10-24

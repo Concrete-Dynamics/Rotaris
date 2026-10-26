@@ -226,7 +226,7 @@ answered; a statement in it proved false; a measured alternative proved better.
 5. Land it like any change (`references/repository.md`); mention it in one line in your next status update.
 
 **Protected invariants**: an improvement never weakens them without the owner's explicit approval:
-- `CLAUDE.md`'s hard boundary binds every agent the skill starts;
+- `AGENTS.md`'s hard boundary binds every agent the skill starts;
 - the reviewer never built what it reviews, reads the full diff and the requirement texts itself, may repair
   blocking findings in place in its own commits, and lands only with zero blocking findings remaining and the gate,
   which it runs itself, green on the exact head it pushes; the builder runs the quick checks, and the full gate runs

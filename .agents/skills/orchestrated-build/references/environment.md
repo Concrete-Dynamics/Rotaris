@@ -40,7 +40,7 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   live-run allow rules, so for a live run it is the orchestrator's):
   `setsid nohup bash -c '<command> > <log> 2>&1; echo "exit=$?" >> <log>' > /dev/null 2>&1 < /dev/null & disown`,
   then a background `until grep -q "^exit=" <log>; do sleep 30; done; tail -5 <log>`, re-armed when it is stopped.
-- **The duress live run outlasts a background command.** At `LIVE_RUN_DURESS_MS=7800000` (AGENTS.md's recipe) its launch
+- **The duress live run outlasts a background command.** At `LIVE_RUN_DURESS_MS=7800000` (`docs/proofs/live-run.md`'s recipe) its launch
   is bounded at 8,100 s, past the 7,200,000 ms cap (runs took 2,820 to 4,219 s on 2026-10-14 and 15), so it is launched
   detached (`setsid nohup … &`, the form above) and waited on only by its log's `exit=` line, in the loop shape above or
   with the Monitor tool. Never wait with `pgrep`: the waiter's own command line holds the pattern, so it finds itself
@@ -215,7 +215,7 @@ Git Bash shells and Node 24.18 as the default `node` (so `{node24}` is the no-op
   `Bash(timeout * node C:/dev/Rotaris-crw-wt-accept/apps/desktop/scripts/live-run.mjs --confirm --skip-build*)`. No
   such rule existed on 2026-10-20, and adding one stays the owner's decision.
 - **A sibling folder that is not this repository.** `C:/dev/Rotaris` sits beside the checkout and its worktrees. Never
-  list, open or search it: it may be a copy of the project CLAUDE.md seals off. An agent looks for worktrees with
+  list, open or search it: it may be a copy of the project AGENTS.md seals off. An agent looks for worktrees with
   `git worktree list`, never by listing `C:/dev/` in its own commands (`render`'s id check reads only the entry names
   there that carry the plan's worktree prefix, and opens none).
 - **Disk.** 24 GB was free of 237 GB on `C:`, and a worktree with its `node_modules` takes about 0.8 GB.

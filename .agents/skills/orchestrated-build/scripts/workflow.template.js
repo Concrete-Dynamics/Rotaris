@@ -101,7 +101,7 @@ function grounding() {
     '## Read before anything else (binding)',
     '- `' + ref('repository.md') + '`: this repository\'s process (worktrees, the gate, records, commits, numbering collisions, what an agent never edits or decides). It points at the authorities; read the ones your work touches.',
     '- `' + ref('environment.md') + '`: the host (toolchain, headless launches, load, what a restart or a refusal looks like).',
-    'CLAUDE.md is in your context; its hard boundaries bind every step, every command and every file you open.',
+    'AGENTS.md is in your context; its hard boundaries bind every step, every command and every file you open.',
     'In EVERY shell, first: `' + R.shellPrefix + '`. A command that can run longer than ten minutes runs in the background with the Bash tool\'s own `timeout` parameter (milliseconds, up to 7,200,000) set to cover the longest it may run, its own `timeout` wrapper included (a background task given none is stopped after thirty minutes). Wait for it with the completion notice or the Monitor tool. A polling loop in the shell takes the shape environment.md (Long jobs) gives, alone with nothing before it (the shell prefix does not apply to it): any other `sleep` loop may stop on a permission prompt only the owner can answer.',
     'Never `git stash`: every worktree of the repository shares one stash, so a `pop` can take another agent\'s entry and give yours away. To set a change aside, `git diff -- <files> > <scratchpad>/<name>.patch && git checkout -- <files>`, then `git apply` that patch; or read the base in a throwaway detached worktree.',
     R.live

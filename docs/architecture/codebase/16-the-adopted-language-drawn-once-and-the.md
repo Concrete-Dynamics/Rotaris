@@ -12,7 +12,7 @@ one** — `packages/ui/src/design-system/` (twenty-seven briefs, twenty-nine typ
 migrated onto it), `tools/check-ui-language.mjs` in `pnpm lint`, `pnpm ui-review`'s evidence pack, `theme-proof` moved
 onto the driver, and three portable skills under `.agents/skills/` with thin `.claude/skills/` routers. *(Three then;
 five since — `orchestrated-build` and `run-autopsy` came later, and run-autopsy's router on 2026-10-13, which
-`tools/skill-routers.test.ts` now pins for every portable skill.)*
+`tools/skill-routers.test.ts` now pins for every portable skill; since 2026-10-26 `tools/agent-config.test.ts`, which also holds each router's description to the canonical file's.)*
 
 **Eight defects, the ninety-first to the ninety-eighth, and six of the eight were in the measuring code.** That ratio
 is the finding, not a coincidence: this delivery is almost entirely measurement, and measurement is where this project

@@ -1,6 +1,6 @@
 # The codebase — how the architecture is laid out in code
 
-> The picture of what this map describes — packages and edges, processes and messages, a run's lifecycle — is [`views/`](views/README.md), kept in step with the code by the rule in `CLAUDE.md`.
+> The picture of what this map describes — packages and edges, processes and messages, a run's lifecycle — is [`views/`](views/README.md), kept in step with the code by the rule in `AGENTS.md`.
 
 - **Created:** 2026-09-03, with the walking skeleton (the first production code in this repository).
 - **Governs:** where a thing goes, what it may import, and which lint proves it.

@@ -46,7 +46,13 @@ const WITHDRAWN = /\*Withdrawn\.?\*/i;
 
 /** @type {Map<string, {domain: string, file: string, line: number, withdrawn: boolean}>} */
 const ids = new Map();
-for (const file of readdirSync(specDir).filter((f) => /^\d\d-.*\.md$/.test(f)).sort()) {
+// A domain over the document budget is an index at `NN-<domain>.md` and its parts in `NN-<domain>/` (since 2026-10-26,
+// tools/record-parts.mjs); each is read in order, and `file` names the one that defines the identifier.
+const specFiles = readdirSync(specDir)
+  .filter((f) => /^\d\d-.*\.md$/.test(f))
+  .sort()
+  .flatMap((f) => [f, ...partsOf(join(specDir, f)).map((p) => relative(specDir, p).split(sep).join('/'))]);
+for (const file of specFiles) {
   // A checkout under core.autocrlf=true (a git worktree on Windows) carries CRLF; `.` never matches `\r`, so a
   // split on `\n` alone left every definition unmatched and wrote an EMPTY artifact without a word (Part N found it).
   const lines = readFileSync(join(specDir, file), 'utf8').split(/\r?\n/);

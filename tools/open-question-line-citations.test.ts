@@ -10,7 +10,6 @@
  * the table's block, which the specification never edits in place. This reads the cited lines from the ruling and requires their
  * spacing to be the spacing of the lines that hold what each one names: a citation off by two from its neighbours is red.
  */
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
@@ -78,7 +77,7 @@ const oq302: readonly Citation[] = [
 
 describe("OQ-302's line citations stand where the preference table's lines stand", () => {
   const record = readRecord(join(root, 'docs', 'architecture', 'open-questions.md'));
-  const spec = readFileSync(join(root, 'docs', 'spec', '12-desktop-shell-windows.md'), 'utf8');
+  const spec = readRecord(join(root, 'docs', 'spec', '12-desktop-shell-windows.md'));
 
   it('reads the ruling', () => {
     expect(entryOf(record, 302)).toMatch(/^\*\*OQ-302\b/);

@@ -22,9 +22,11 @@
  * (docs/defects/fixed/a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md).
  */
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EXTENDED_BY, NARROWED_BY, SUPERSEDED_BY } from '@rotaris/kernel';
+// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
+import { partsOf } from '../record-parts.mjs';
 
 const repo = join(import.meta.dirname, '..', '..');
 const specDir = join(repo, 'docs', 'spec');
@@ -53,22 +55,27 @@ interface BackPointer {
 
 function backPointers(): BackPointer[] {
   const found: BackPointer[] = [];
-  for (const file of readdirSync(specDir).filter((f) => /^\d\d-.*\.md$/.test(f)).sort()) {
+  for (const domain of readdirSync(specDir).filter((f) => /^\d\d-.*\.md$/.test(f)).sort()) {
     let requirement: string | null = null;
-    readFileSync(join(specDir, file), 'utf8')
-      .split(/\r?\n/)
-      .forEach((line, i) => {
-        for (const shape of DEFINITION) {
-          const m = shape.exec(line);
-          if (m) {
-            requirement = m[1] ?? null;
-            break;
+    // A split domain's index, then its parts (docs/README.md, "The document budget"): a note follows its requirement
+    // across them as it did in the single file.
+    for (const path of [join(specDir, domain), ...(partsOf(join(specDir, domain)) as string[])]) {
+      const file = relative(specDir, path).split(sep).join('/');
+      readFileSync(path, 'utf8')
+        .split(/\r?\n/)
+        .forEach((line, i) => {
+          for (const shape of DEFINITION) {
+            const m = shape.exec(line);
+            if (m) {
+              requirement = m[1] ?? null;
+              break;
+            }
           }
-        }
-        for (const m of line.matchAll(BACK_POINTER)) {
-          found.push({ where: `${file}:${i + 1}`, requirement, verb: m[1] as Verb, directive: m[2] ?? '' });
-        }
-      });
+          for (const m of line.matchAll(BACK_POINTER)) {
+            found.push({ where: `${file}:${i + 1}`, requirement, verb: m[1] as Verb, directive: m[2] ?? '' });
+          }
+        });
+    }
   }
   return found;
 }

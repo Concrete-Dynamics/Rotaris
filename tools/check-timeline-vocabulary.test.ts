@@ -70,7 +70,7 @@ describe('check-timeline-vocabulary (REQ-ORCH-139)', () => {
   });
 
   it('REQ-ORCH-139: each word another domain fixes is stated, in backticks, by the requirement VOCABULARY cites for it — or, for a directive\'s word, by that directive\'s entry', () => {
-    const spec = readdirSync(join(repo, 'docs', 'spec')).filter((f) => f.endsWith('.md')).flatMap((f) => readFileSync(join(repo, 'docs', 'spec', f), 'utf8').split('\n'));
+    const spec = readdirSync(join(repo, 'docs', 'spec')).filter((f) => f.endsWith('.md')).flatMap((f) => readRecord(join(repo, 'docs', 'spec', f)).split('\n'));
     const unstated = Object.entries(VOCABULARY as Record<string, string>).filter(([, cite]) => cite !== 'REQ-ORCH-139').filter(([word, cite]) => {
       const text = cite.startsWith('PD-') ? entryOf(cite) : spec.find((l) => l.startsWith(`**${cite}**`) || l.startsWith(`- **${cite}**`));
       return text === undefined || !text.includes(`\`${word}\``);

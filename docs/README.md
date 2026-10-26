@@ -67,3 +67,4 @@ listed file back within the budget fails until its line is removed.
 | [`architecture/open-questions.md`](architecture/open-questions.md) | 16,723 lines, 1.7 MB | an index and 68 parts by section |
 | [`product/directives.md`](product/directives.md) | 9,904 lines, 0.9 MB | an index by domain and one file per directive |
 | [`architecture/views/reconciliation-log.md`](architecture/views/reconciliation-log.md) | 3,697 lines, 0.4 MB | the newest entries and 12 archived parts |
+| The 19 live domains of [`spec/`](spec/), `01` to `16` and `19` to `21` | 12,148 lines, 2.9 MB | each an index (frontmatter, overview, parts table) and 5 to 13 parts by subtopic |

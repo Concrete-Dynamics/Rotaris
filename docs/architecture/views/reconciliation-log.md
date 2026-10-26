@@ -16,6 +16,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-30**
 
+**The clean-room process records removed (2026-10-26).** At the owner's request of 2026-10-26 five of `docs/clean-room/`'s
+six files — `architecture-gate.md`, `provenance.md`, `reference-record.md`, `specification-gate.md`, `zone-policy.md` —
+and the two root specification-review files are gone, kept in history and marked *(removed 2026-10-26)* where the live
+record cites them. `agent-workflow.md` stays: it is the rule text `AGENTS.md` points the workflow and the handoff at.
+No package, edge, process, message, channel or ownership changed.
+
 **Dictation (OQ-455 to OQ-459, R-089; 2026-10-30).** `02-process-view.md`: the renderer → main list gains `dictation.transcribe`, and main spawns `whisper` for a press. `04-seams.md` §1 (the `dictation` facet) and §5 (a section no run reads). `docs/module-map.md`: main's row. No package, edge, channel or store change.
 
 **The queue's rest and end repaired (REQ-CHAT-035/037/038/040, R-089; 2026-10-30).** `03-runtime-view.md` §5: a resting session's queued prompts stay editable (`editQueuedAtRest`), `createQueuedPrompt` is refused once the run stops stepping, and a completed task moves its prompt to COMPLETED.

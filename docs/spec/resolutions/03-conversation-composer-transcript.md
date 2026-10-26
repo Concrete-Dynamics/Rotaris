@@ -137,7 +137,7 @@ controls and the artifact library).
 Of the 35 open questions raised in the draft: **25 resolved**, **1 omitted**, and **9 moot** (they
 existed only because of the terminal frontend). The one question escalated by this pass — OQ 2,
 image attachments in the composer — was answered by the product owner on 2026-08-30 and the answer
-is recorded in [`../../clean-room/specification-gate.md`](../../clean-room/specification-gate.md);
+is recorded in `docs/clean-room/specification-gate.md` *(removed 2026-10-26)*;
 it is carried below as resolved. No question raised against this document remains open.
 
 ## Parts

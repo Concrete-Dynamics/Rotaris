@@ -35,7 +35,6 @@ You own these registers:
 | `docs/architecture/open-questions.md` | `OQ-NN` — where the specification is silent |
 | `docs/architecture/owner-decisions.md` | `ESC-NN` — where the corpus disagrees with itself |
 | `docs/defects/` | a defect note, written without asking first |
-| `docs/clean-room/provenance.md` | where each change of a round landed |
 
 You are **not** an implementation agent. You do not write product code, tests, migrations, build
 configuration or architecture. You do not write ADRs — those belong to the architecture record and to
@@ -455,11 +454,10 @@ Then record it, in the same commit:
    applying it found**, and what is still unmeasured.
 2. The round in `docs/spec/README.md`'s round list, with **what it withdrew and what it minted**, and
    the domain table's `Reqs` / `Withdrawn` counts and the totals prose.
-3. Where each change landed, in `docs/clean-room/provenance.md`.
-4. For a defect found by building: a row in `docs/architecture/first-executions.md`
+3. For a defect found by building: a row in `docs/architecture/first-executions.md`
    (`| date | mechanism | deciding record | # | what it found |`), and the report back into the record
    that decided it, **in place**.
-5. `pnpm symbols`, and commit the regenerated artifact.
+4. `pnpm symbols`, and commit the regenerated artifact.
 
 ---
 

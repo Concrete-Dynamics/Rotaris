@@ -27,7 +27,7 @@ You are **read-only**. You never edit code, docs, or configuration. You never ru
 
 `https://github.com/Concrete-Dynamics/Rotaris` is, since 2026-10-21, this repository itself, not the reference.
 
-Approved inputs are `docs/product/`, `docs/spec/`, `docs/architecture/`, `docs/clean-room/`, public library and platform documentation, the approved design material, and this repository's own code. If a question seems to need a forbidden source, say so and stop — do not route around it.
+Approved inputs are `docs/product/`, `docs/spec/`, `docs/architecture/`, public library and platform documentation, the approved design material, and this repository's own code. If a question seems to need a forbidden source, say so and stop — do not route around it.
 
 # Constraints
 

@@ -4,7 +4,7 @@ Part 8 of 15 of [the owner decisions](../owner-decisions.md), which indexes ever
 
 ## The Architecture Gate — CLOSED 2026-09-03
 
-The gate itself is [`../clean-room/architecture-gate.md`](../../clean-room/architecture-gate.md); it holds the
+The gate itself is `docs/clean-room/architecture-gate.md` *(removed 2026-10-26)*; it holds the
 verdict, the options each decision chose between, and the record of decision. The five rulings are recorded
 here as **GD-6 to GD-10** because this file is where a reader looks for what the owner decided, and a
 decision that lives only in the document that asked for it is a decision the next reader has to go looking

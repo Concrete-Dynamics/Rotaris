@@ -34,7 +34,7 @@ in the spec's Open Questions section).
 
 | OQ # | Disposition | Decision taken | Requirements touched |
 | --- | --- | --- | --- |
-| 1 | RESOLVED | Answered by the product owner on 2026-08-30 and recorded in [`../../clean-room/specification-gate.md`](../../clean-room/specification-gate.md): detaching a live run is **not specified here**. REQ-TUI-152 states stop-persist-and-notify and nothing more, and this domain is retired, so nothing further is owed against a `REQ-TUI` identifier. The desktop action that does detach a live run — the run continuing in the same process, `execution_status` persisted as `background` at the hand-off, and the refusal when there is no run to send — is carried by REQ-SESSION-190, and is domain 07's to state, not this document's. | REQ-TUI-152 (unchanged); carried on the desktop by REQ-SESSION-190 |
+| 1 | RESOLVED | Answered by the product owner on 2026-08-30 and recorded in `docs/clean-room/specification-gate.md` *(removed 2026-10-26)*: detaching a live run is **not specified here**. REQ-TUI-152 states stop-persist-and-notify and nothing more, and this domain is retired, so nothing further is owed against a `REQ-TUI` identifier. The desktop action that does detach a live run — the run continuing in the same process, `execution_status` persisted as `background` at the hand-off, and the refusal when there is no run to send — is carried by REQ-SESSION-190, and is domain 07's to state, not this document's. | REQ-TUI-152 (unchanged); carried on the desktop by REQ-SESSION-190 |
 | 2 | RESOLVED | The right rail is 3:2:2 (agents:info:todo), matching the drafted REQ-TUI-016; 2:1:1 is rejected because the info and todo panels each need more than a quarter of the rail once metric rows, MCP, tools, artifacts, and warnings share the info panel. Both the 7:3 column split and the 3:2:2 rail split are fixed and not configurable. | REQ-TUI-016 |
 | 3 | RESOLVED | The quit grace period is 2.0 s, not 5.0 s: it is the value the user-facing shutdown message, the agent activity text, the countdown of REQ-TUI-129, and the constants list all already state, so 2.0 s is the only reading that leaves the document self-consistent. | REQ-TUI-128, REQ-TUI-129, REQ-TUI-206 (confirmed; no text change) |
 | 4 | RESOLVED | The info panel shows no todo summary block. Todos appear in exactly one place, the todo panel. REQ-TUI-102 now closes the info panel's section list so a future block cannot be added silently. | REQ-TUI-102 |
@@ -84,7 +84,7 @@ in the spec's Open Questions section).
 
 One question was escalated: whether `/background` should detach a live run into a background process,
 or remain a save-and-notify convenience. It was answered by the product owner on 2026-08-30 and the
-answer is recorded in [`../../clean-room/specification-gate.md`](../../clean-room/specification-gate.md):
+answer is recorded in `docs/clean-room/specification-gate.md` *(removed 2026-10-26)*:
 detaching is not specified here, REQ-TUI-152 states stop-persist-and-notify and nothing more, and this
 domain is retired. No question raised against this document remains open.
 

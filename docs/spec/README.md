@@ -14,7 +14,8 @@ how any other implementation achieves it.
 > is for. See [`../product/README.md`](../product/README.md) for the precedence rule and the
 > classification that decides whether a change lands there or as an amendment here.
 
-- Behavioral target: `ROTARIS-CRW-001` (see [`../clean-room/reference-record.md`](../clean-room/reference-record.md))
+- Behavioral target: `ROTARIS-CRW-001`, the earlier implementation, which the boundary in `CLAUDE.md` forbids
+  reading (its reference record, `docs/clean-room/reference-record.md`, was removed 2026-10-26)
 - Status: **draft — gate decisions recorded, awaiting the sufficiency statement**
 - Open questions: resolved per domain; decisions recorded in [`resolutions/`](resolutions/)
 - Requirements: **4,003** identifiers across the 20 shipping domains, of which **258** are withdrawn
@@ -39,7 +40,7 @@ how any other implementation achieves it.
   each file, re-taken after the **platform-defect round**, which followed the measurement round,
   the defect-correction round, the ruling-application round, the storage-ruling round, the
   structural-ruling round and the sixth
-  post-resolution reconciliation round (see [`../clean-room/provenance.md`](../clean-room/provenance.md)); each
+  post-resolution reconciliation round (see `docs/clean-room/provenance.md` *(removed 2026-10-26)*); each
   domain's identifiers run contiguously from 1 to its total, with no gap, no duplicate, and no
   number defined in more than one place.
   - The **structural-ruling round** applied SR-1 to SR-3 — one running instance, no session
@@ -53,7 +54,7 @@ how any other implementation achieves it.
     the identifier space grew by 7 and live behavior grew by 1 — the first round in this
     specification's history in which live behavior did not fall. Nothing behavioural was withdrawn
     with a mechanism: every guarantee carried by a withdrawn layout was re-homed to a named
-    requirement first, and the re-homings are enumerated in `provenance.md`.
+    requirement first, and the re-homings are enumerated in `provenance.md` *(removed 2026-10-26)*.
   - The **ruling-application round** applied every ruling that had been recorded and never made:
     ESC-1, ESC-2, ESC-5, ESC-6, ESC-7, ESC-8, ESC-13's withheld half, ESC-19, ESC-20, ESC-21 and
     SR-9, plus the ESC-11 gate follow-through. It **withdrew no identifier and minted 7**, so live
@@ -115,7 +116,7 @@ how any other implementation achieves it.
     token from warm-up was qualified in place rather than replaced, the falsified half kept beside its
     qualification. Every amended sentence quotes what it previously read. The ruling and its alternatives
     are in `../architecture/owner-decisions.md`; where each change landed is in
-    `../clean-room/provenance.md`.
+    `../clean-room/provenance.md` *(removed 2026-10-26)*.
   - The **board-parse round** (2026-09-11) answered the first execution of the requirements board against a
     real model, which found that a store the engine had rejected wholesale read on the board exactly like a
     store nobody had written to. It **withdrew no identifier and minted one** — `REQ-TRACE-515`, what the
@@ -129,7 +130,7 @@ how any other implementation achieves it.
     `git_read`'s two operations, `head` and `read_ref` — so live behavior grew by 1. *(Recorded here 2026-10-13; the
     table and totals above had not counted it, nor REQ-MCP-118.)*
 - Clean-room audit: 6 domains clean, 15 with minor concerns, 0 contaminated — see
-  [`../clean-room/specification-gate.md`](../clean-room/specification-gate.md)
+  `docs/clean-room/specification-gate.md` *(removed 2026-10-26)*
 
 Requirement identifiers are stable and permanent: `REQ-<DOMAIN>-<NNN>`. Once assigned, an ID is
 never renumbered or reused. A changed requirement gets a new revision, not a new number.

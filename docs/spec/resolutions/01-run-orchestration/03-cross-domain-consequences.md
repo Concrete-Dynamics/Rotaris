@@ -28,7 +28,7 @@ Part 3 of 4 of [domain 01's resolutions](../01-run-orchestration.md), which inde
   these three read. The sixth round put it in REQ-TOOLS-001, which now declares the three facets —
   reads workspace files, writes workspace files, runs commands — as part of the registry it owns.
   These three requirements have not yet been re-pointed at it and still cite REQ-CONFIG-231; that
-  belongs to the next round and is recorded as open in `../../clean-room/provenance.md`.
+  belongs to the next round and is recorded as open in `docs/clean-room/provenance.md` *(removed 2026-10-26)*.
   **Executed in A4's round, 2026-09-13.** All three now cite REQ-TOOLS-001 for the classification they
   read. REQ-CONFIG-231 keeps the referential-validation rule it does own and is no longer cited here for
   a capability it never carried. The round that did it was the one amending REQ-ORCH-153 anyway, which is

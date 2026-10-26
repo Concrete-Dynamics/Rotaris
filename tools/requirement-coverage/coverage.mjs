@@ -4,7 +4,7 @@
 // implementation, tests, and the built-app proofs and live-run scenarios — so that the specification's map onto the
 // code can be read rather than guessed (whats-next item N90, 2026-10-13).
 //
-// `AGENTS.md` ("Traceability") and `docs/clean-room/provenance.md` ask that implementation work cite the requirement
+// `AGENTS.md` ("Traceability") asks that implementation work cite the requirement
 // ids it satisfies; nothing measured whether it did. `pnpm symbols` writes the typed identifier artifact and the
 // directive back-pointers only, and the product's own traceability engine (ADR-0040) serves a user's repository, not
 // `docs/spec/`. This report is that measure, and it is **report-only**: it never fails, and an uncited requirement is

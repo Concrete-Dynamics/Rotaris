@@ -53,7 +53,7 @@ for a statement no store was obliged to make; `REQ-TOOLS-081`'s unresolvable evi
 discharges ADR-0045's reservation; `REQ-STARTUP-163`'s directory identity, closing **OQ-49**; and
 `REQ-SESSION-069`'s abandoned-write log line. **`REQ-SESSION-201`'s two new defects, found by running it,
 are closed by the amendment recorded in
-[`../clean-room/specification-gate.md`](../../clean-room/specification-gate.md) and by the new
+`docs/clean-room/specification-gate.md` *(removed 2026-10-26)* and by the new
 `REQ-SESSION-202`.**
 
 **What remains on the specification side is one real gap and a bundle of surface silences.**

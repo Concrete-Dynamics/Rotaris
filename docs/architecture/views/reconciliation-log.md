@@ -32,9 +32,21 @@ over an existing one. No channel or store table changed.
 
 (Add the composer's microphone: dictation inserted as prompt text)
 
+**The ancestor `CLAUDE.md` removed, and the eager-import crutch dropped (2026-10-27).** The entry below left a host-side
+condition: a `CLAUDE.md` above the checkout (`/home/glados/CLAUDE.md`) shadowed `AGENTS.md` from Claude Code. That file
+has been moved aside (`~/.CLAUDE.md.removed-20261027`), so no `CLAUDE.md` stands in or above a checkout and Claude Code's
+own discovery reaches `AGENTS.md` again — measured in this branch's checkout, Claude Code 2.1.310, every tool disabled,
+3 of 3 sessions holding the repository `AGENTS.md`. The `.claude/rules/repository-rules.md` eager import (`bd46f85a`)
+that worked around the condition was dropped with it: a `paths:`-less rule file is a second, silent route to the rules,
+and the branch carries one rules file alone. `tools/agent-config.test.ts` now fails any `.claude/rules/` file without
+`paths:` frontmatter instead of pinning that import; `AGENTS.md` and
+`docs/defects/claude-code-sessions-under-an-ancestor-claude-md-load-no-repository-rules.md` state the closure. No
+package, edge, process, message, channel or ownership changed.
+
 **The repository's `CLAUDE.md` deleted (the owner's option (a); 2026-10-27).** The import `@AGENTS.md` the entry below
 left is gone and `AGENTS.md` is the rules alone; a Claude session under an ancestor `CLAUDE.md` loads none of them, an
-accepted gap recorded in `docs/defects/claude-code-sessions-under-an-ancestor-claude-md-load-no-repository-rules.md`.
+accepted gap recorded in `docs/defects/claude-code-sessions-under-an-ancestor-claude-md-load-no-repository-rules.md`
+and closed the same day by removing that ancestor file (the entry above).
 No package, edge, process, message, channel or ownership changed.
 
 **The agent configuration consolidated into `AGENTS.md` (2026-10-26).** `CLAUDE.md` is folded into `AGENTS.md` and

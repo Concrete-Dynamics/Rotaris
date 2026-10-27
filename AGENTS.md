@@ -5,9 +5,10 @@ traceable to approved behavioral specifications, approved architecture decisions
 documentation, or approved design material.
 
 **This file is the repository's rules, for every agent and every harness.** It is the one copy, and the repository
-has no `CLAUDE.md` (the owner, 2026-10-27). Claude Code reads this file only when no `CLAUDE.md` stands in or above the
-checkout; where one does, as on the Linux agent host, a Claude session starts without these rules — a risk the owner
-accepted, recorded in `docs/defects/claude-code-sessions-under-an-ancestor-claude-md-load-no-repository-rules.md`.
+has no `CLAUDE.md` (the owner, 2026-10-27). Claude Code loads it by discovery, which needs no `CLAUDE.md` standing in
+or above the checkout — the one ancestor `CLAUDE.md` that shadowed it (the Linux agent host's) was removed on
+2026-10-27, and with it gone Claude Code reads this file natively (measured 3 of 3 sessions). The constraint and its
+history are recorded in `docs/defects/claude-code-sessions-under-an-ancestor-claude-md-load-no-repository-rules.md`.
 Where the rules, the skills and the path-scoped rules live, and which harness reads which, is
 [Agent harnesses](#agent-harnesses--one-set-of-files) below.
 
@@ -246,7 +247,7 @@ harness is the copy that drifts, so a harness that cannot read a canonical file 
 
 | What | Canonical home | Claude Code | Codex, and any harness reading `AGENTS.md` and `.agents/skills/` |
 | --- | --- | --- | --- |
-| the rules | this file | loaded at session start, whole, only where no `CLAUDE.md` stands in or above the checkout | loaded at session start — Codex reads the first 32 KiB, so this file stays under that |
+| the rules | this file | loaded at session start, whole, by discovery — nothing stands in or above the checkout to shadow it (2026-10-27) | loaded at session start — Codex reads the first 32 KiB, so this file stays under that |
 | the skills | `.agents/skills/<name>/` | through `.claude/skills/<name>/SKILL.md`, a router | discovered there |
 | the rules that bind one subtree | `.claude/rules/<area>.md` | loaded when a file its `paths:` names is read | read by hand, from the index below |
 | GitHub Copilot's agents | `.github/agents/*.agent.md` | — | Copilot; each defers to this file |
@@ -257,7 +258,14 @@ When Claude Code discovers `.agents/skills/` itself, the routers go.
 **A router is a pointer, not a skill.** It carries the skill's `name`, its canonical `description` and
 `argument-hint`, and one line sending the reader to `.agents/skills/<name>/SKILL.md`; an instruction written in a router
 is in the wrong file. `tools/agent-config.test.ts` fails a skill with no router, a router whose fields differ from the
-canonical file's, a root `CLAUDE.md`, a rule file this index does not name, and this file at 32 KiB or more.
+canonical file's, a root `CLAUDE.md`, a `.claude/rules/` file without `paths:` frontmatter, a rule file this index does
+not name, and this file at 32 KiB or more.
+
+**Every `.claude/rules/` file is path-scoped, and this file is the only route to the rules.** A file there without
+`paths:` frontmatter loads eagerly at session start — a second, silent route to the rules, and it was tried and dropped
+on 2026-10-27: the host-side gap it worked around (an ancestor `CLAUDE.md` shadowing this file) is closed at the host
+instead, by removing that file. The test fails any eager rule file, so the route cannot return unnoticed. What is left
+is one rules file, `AGENTS.md`, reached by every harness by discovery.
 
 **The path-scoped rules, by path.** A harness that does not load them reads the rule before editing a file it names:
 

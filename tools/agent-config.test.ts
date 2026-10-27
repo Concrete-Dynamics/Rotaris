@@ -12,9 +12,12 @@
  *   until 2026-10-26, which pinned the router but let its description differ);
  * - a router carries no instructions of its own, and no router stands without a canonical skill;
  * - the repository has no root `CLAUDE.md` (the owner, 2026-10-27): one beside `AGENTS.md` is what Claude Code reads
- *   instead of it, so any text there is a second copy of the rules. The cost, that a `CLAUDE.md` above the checkout (the
- *   Linux agent host's) hides `AGENTS.md` from Claude Code, is accepted and recorded in
- *   `docs/defects/claude-code-sessions-under-an-ancestor-claude-md-load-no-repository-rules.md`;
+ *   instead of it, so any text there is a second copy of the rules, and the one `CLAUDE.md` above the checkout that hid
+ *   `AGENTS.md` from Claude Code (the Linux agent host's) was removed on 2026-10-27, so discovery reaches it again
+ *   (`docs/defects/claude-code-sessions-under-an-ancestor-claude-md-load-no-repository-rules.md`);
+ * - every file in `.claude/rules/` is path-scoped: one there without `paths:` frontmatter loads eagerly at session
+ *   start and would be a second, silent route to the rules — the shape measured and dropped on 2026-10-27, and not
+ *   kept;
  * - every path-scoped rule is named in `AGENTS.md`'s index, for the harnesses that do not load them;
  * - `AGENTS.md` stays under 32 KiB, the part of it Codex reads (`project_doc_max_bytes`'s default).
  */
@@ -89,5 +92,14 @@ describe('the rules have one home', () => {
     const files = readdirSync(rules).filter((f) => f.endsWith('.md'));
     expect(files.length).toBeGreaterThan(1);
     for (const file of files) expect(text, `AGENTS.md does not index .claude/rules/${file}`).toContain(`\`.claude/rules/${file}\``);
+  });
+
+  it('keeps every .claude/rules/ file path-scoped, so none is a second route to the rules', () => {
+    const files = readdirSync(rules).filter((f) => f.endsWith('.md'));
+    for (const file of files) {
+      const text = readFileSync(join(rules, file), 'utf8');
+      expect(/^---\n[\s\S]*?\n---\n/.test(text), `.claude/rules/${file} carries no frontmatter`).toBe(true);
+      expect(text, `.claude/rules/${file} has no paths: frontmatter, so it would load eagerly`).toContain('paths:');
+    }
   });
 });

@@ -1,7 +1,8 @@
 /**
  * The agent configuration has one copy of everything (AGENTS.md, "Agent harnesses — one set of files"). The rules are
- * the root `AGENTS.md`, which Claude Code and Codex both load; the skills are `.agents/skills/<name>/`, which Codex
- * discovers and Claude Code 2.1.310 does not, so Claude reaches each through a router at `.claude/skills/<name>/SKILL.md`;
+ * the root `AGENTS.md`, which Codex loads, and Claude Code where no `CLAUDE.md` stands in or above the checkout; the
+ * skills are `.agents/skills/<name>/`, which Codex discovers and Claude Code 2.1.310 does not, so Claude reaches each
+ * through a router at `.claude/skills/<name>/SKILL.md`;
  * the path-scoped rules are `.claude/rules/`, which only Claude Code loads by path, so `AGENTS.md` indexes them.
  *
  * This pins what keeps that from drifting:
@@ -10,8 +11,10 @@
  *   `docs/defects/fixed/the-run-autopsy-skill-has-no-claude-skills-router.md`; this file was `skill-routers.test.ts`
  *   until 2026-10-26, which pinned the router but let its description differ);
  * - a router carries no instructions of its own, and no router stands without a canonical skill;
- * - the root `CLAUDE.md` is the single line `@AGENTS.md`: Claude Code skips `AGENTS.md` whenever it finds a `CLAUDE.md`
- *   (the root or any directory above it, as on the Linux agent host), and the import is what still loads it;
+ * - the repository has no root `CLAUDE.md` (the owner, 2026-10-27): one beside `AGENTS.md` is what Claude Code reads
+ *   instead of it, so any text there is a second copy of the rules. The cost, that a `CLAUDE.md` above the checkout (the
+ *   Linux agent host's) hides `AGENTS.md` from Claude Code, is accepted and recorded in
+ *   `docs/defects/claude-code-sessions-under-an-ancestor-claude-md-load-no-repository-rules.md`;
  * - every path-scoped rule is named in `AGENTS.md`'s index, for the harnesses that do not load them;
  * - `AGENTS.md` stays under 32 KiB, the part of it Codex reads (`project_doc_max_bytes`'s default).
  */
@@ -73,10 +76,8 @@ describe('the portable skills and their .claude/skills routers', () => {
 });
 
 describe('the rules have one home', () => {
-  it('has a root CLAUDE.md that only imports AGENTS.md, so it holds no rule of its own', () => {
-    const claudeMd = join(root, 'CLAUDE.md');
-    expect(existsSync(claudeMd), 'without it a CLAUDE.md above the checkout hides AGENTS.md from Claude Code').toBe(true);
-    expect(readFileSync(claudeMd, 'utf8').trim()).toBe('@AGENTS.md');
+  it('has no root CLAUDE.md, which Claude Code would read in place of AGENTS.md', () => {
+    expect(existsSync(join(root, 'CLAUDE.md')), 'the rules are AGENTS.md alone (the owner, 2026-10-27)').toBe(false);
   });
 
   it('keeps AGENTS.md inside the 32 KiB Codex reads', () => {

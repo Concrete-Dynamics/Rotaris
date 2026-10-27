@@ -1,6 +1,6 @@
 # OQ-12: Testkonzept für Stromverlust während eines Schreibvorgangs
 
-Dieses Konzept zu [OQ-12](../architecture/open-questions.md#oq-12),
+Dieses Konzept zu [OQ-12](../architecture/open-questions/07-specification-questions-2.md#oq-12),
 [ADR-0058](../architecture/adr/0058-the-workspace-database.md) und dem
 [Spike-Protokoll](../architecture/spikes/power-loss.md) liefert keine Messung und trifft keine Entscheidung.
 Maßgeblich sind die drei Ebenen von [REQ-SESSION-034](../spec/07-sessions-persistence.md):

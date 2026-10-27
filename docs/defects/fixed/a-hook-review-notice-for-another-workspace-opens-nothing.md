@@ -52,9 +52,9 @@ with its own: it sends `hooks.review { workspace }`, and main's `openHookReview`
 route, with no REQ-SHELL-021 gate and no window closed, so nothing is asked — and parents the review to that window. The
 review payload keeps the workspace id it was opened for, and `hooks.reviewDecide` stores the decision against it rather
 than against the active window. Adding a window where none holds the workspace ~~is the build's reading, raised as
-[OQ-267](../../architecture/open-questions.md#oq-267) for the consortium~~ was the build's reading, raised as
-[OQ-267](../../architecture/open-questions.md#oq-267); *amended in place 2026-10-14:* it is the ruled reading since
-2026-10-13, under [R-072](../../product/requests.md#r-072), as [`PD-SHELL-001`](../../product/directives.md#pd-shell-001)
+[OQ-267](../../architecture/open-questions/57-spikes-and-later-questions-24.md#oq-267) for the consortium~~ was the build's reading, raised as
+[OQ-267](../../architecture/open-questions/57-spikes-and-later-questions-24.md#oq-267); *amended in place 2026-10-14:* it is the ruled reading since
+2026-10-13, under [R-072](../../product/requests.md#r-072), as [`PD-SHELL-001`](../../product/directives/pd-shell-001.md#pd-shell-001)
 revision 2, and nothing in the repair changed with the ruling. The provider-named sign-in branch is unchanged
 (dormant: nothing names a provider).
 

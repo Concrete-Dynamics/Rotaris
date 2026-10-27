@@ -4,7 +4,7 @@
 from the call's argument **values** (`pathIn`): the arguments are parsed, and the anchor is the first string, in written order
 and depth first, under a path- or file-named argument (`path`, `file_path`, an element of `paths`), else the first
 path-shaped string anywhere (one word, within 512 characters, holding a separator or ending in a file extension). It is never
-read from the JSON text, so an escape cannot be one, and the key order [OQ-364](../../architecture/open-questions.md#oq-364)
+read from the JSON text, so an escape cannot be one, and the key order [OQ-364](../../architecture/open-questions/66-spikes-and-later-questions-33.md#oq-364)
 made irrelevant to sameness is irrelevant to the anchor too. Arguments that do not parse, or hold no path, fall back to
 "<tool> with <the first 80 characters>" as before. Also found while repairing it: a Windows path anchored in its escaped form
 (`C:\\x\\y.ts` for `C:\x\y.ts`), and the old expression's second limb backtracked quadratically over a long run of path characters, so

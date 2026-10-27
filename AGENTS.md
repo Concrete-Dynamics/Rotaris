@@ -11,6 +11,11 @@ and prefer its word over a synonym you would otherwise reach for.
 open first, and where its tests are. Read it when the question is *where*; the
 [proof registry](docs/proofs/README.md) answers *what re-verifies it*.
 
+A document of the record holds at most **500 lines and 32 KiB**, and one over that is split into an index at its own
+path and parts in a folder of the same name ([`docs/README.md`](docs/README.md), "The document budget";
+`tools/check-doc-budget.mjs` fails `pnpm lint` on a new one). The specification's live domains, the directives, the
+open questions and the longest architecture records are split that way: open the index, then the part it names.
+
 This file covers two checks `CLAUDE.md` does not spell out: **`pnpm app:drive`** (free, interactive
 debugging of the built app) and **`pnpm live-run`** (the only check that spends real money) — and states the
 rules the proof scripts obey; which proof covers what is the [proof registry](docs/proofs/README.md).

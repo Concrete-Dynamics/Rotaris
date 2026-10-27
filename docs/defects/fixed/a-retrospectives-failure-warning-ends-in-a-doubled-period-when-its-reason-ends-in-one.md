@@ -10,7 +10,7 @@ period"; the post-run pass's detail has the same shape.
 
 ## Specs
 
-`PD-LIBRARY-002` revision 5 ([OQ-300](../../architecture/open-questions.md#oq-300)): at analysis, the reason "appears inside clause
+`PD-LIBRARY-002` revision 5 ([OQ-300](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-300)): at analysis, the reason "appears inside clause
 (c)'s failure warning, which offers no action and ends in a single period". REQ-LIBRARY-124's warning carries "the failure's
 reason" for the post-run pass on the same terms.
 

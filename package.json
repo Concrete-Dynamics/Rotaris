@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "node tools/dev-time/cli.mjs run --quiet gate:typecheck -- tsc -p tsconfig.json --noEmit",
-    "lint": "node tools/dev-time/cli.mjs run --quiet --shell gate:lint -- \"node tools/check-line-endings.mjs && node tools/check-conflict-markers.mjs && node tools/check-request-log.mjs && node tools/check-directive-register.mjs && node tools/check-record-links.mjs && node tools/proof-registry/generate.mjs --check && node tools/check-theme-colours.mjs && node tools/check-ui-language.mjs && node tools/check-plural-markers.mjs && node tools/check-timeline-vocabulary.mjs && node tools/check-open-question-claims.mjs && eslint .\"",
+    "lint": "node tools/dev-time/cli.mjs run --quiet --shell gate:lint -- \"node tools/check-line-endings.mjs && node tools/check-conflict-markers.mjs && node tools/check-request-log.mjs && node tools/check-directive-register.mjs && node tools/check-record-links.mjs && node tools/check-doc-budget.mjs && node tools/proof-registry/generate.mjs --check && node tools/check-theme-colours.mjs && node tools/check-ui-language.mjs && node tools/check-plural-markers.mjs && node tools/check-timeline-vocabulary.mjs && node tools/check-open-question-claims.mjs && eslint .\"",
     "mockup": "node tools/mockup.mjs",
     "test": "node tools/dev-time/cli.mjs run --quiet gate:test -- vitest run",
     "symbols": "node tools/dev-time/cli.mjs run --quiet gate:symbols -- node tools/symbol-artifact/generate.mjs",

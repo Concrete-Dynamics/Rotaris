@@ -22,7 +22,7 @@ arguments), one fresh server per row, in copies of `apps/desktop/scripts/fixture
 
 So the deletion the tier calls "safe" breaks the project in that shape, and the model's own look before an edit reports that
 nothing uses the symbol. Not repaired: no requirement says what the product does for either call where no project file covers
-the workspace, and PD-MCP-004 rules the rename alone. Raised as [OQ-378](../architecture/open-questions.md#oq-378).
+the workspace, and PD-MCP-004 rules the rename alone. Raised as [OQ-378](../architecture/open-questions/68-spikes-and-later-questions-35.md#oq-378).
 
 ## Specs
 

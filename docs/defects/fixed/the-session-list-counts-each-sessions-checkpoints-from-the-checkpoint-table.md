@@ -39,4 +39,4 @@ not repaired there (outside that task).
 
 ## Ruled as built — 2026-10-06 ([R-071](../../product/requests.md#r-071)); closed
 
-The owner kept the three labels and amended the listing record's field list to include the token total, the run start time and the workspace path (OQ-192, ruled in [`open-questions.md`](../../architecture/open-questions.md); [`PD-SESSION-001`](../../product/directives.md#pd-session-001) narrows REQ-SESSION-030). The label half is closed by that ruling, the checkpoint half having closed on 2026-10-03; the duration label stays the latest run's. Nothing is changed in the code.
+The owner kept the three labels and amended the listing record's field list to include the token total, the run start time and the workspace path (OQ-192, ruled in [`open-questions.md`](../../architecture/open-questions.md); [`PD-SESSION-001`](../../product/directives/pd-session-001.md#pd-session-001) narrows REQ-SESSION-030). The label half is closed by that ruling, the checkpoint half having closed on 2026-10-03; the duration label stays the latest run's. Nothing is changed in the code.

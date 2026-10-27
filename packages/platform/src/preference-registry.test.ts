@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,12 +14,15 @@ import { PANE_LAYOUT_PANES, PANE_LAYOUT_VIEWS, PREFERENCE_KEYS, PreferenceStore,
  * (docs/defects/fixed/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md).
  */
 const SPEC = resolve(dirname(fileURLToPath(import.meta.url)), '../../../docs/spec/12-desktop-shell-windows.md');
+/** The domain's parts, in order: since 2026-10-26 its file is an index (docs/README.md, "The document budget"). */
+const SPEC_PARTS = SPEC.replace(/\.md$/, '');
 /** REQ-SHELL-069's per-view key strings, the values `{view-key}` takes. */
 const VIEW_KEYS = ['overview', 'workspace', 'mission', 'requirements', 'git', 'library', 'settings'];
 
 /** Every literal key the table's rows name, braces expanded and `{view-key}` taken over REQ-SHELL-069's views. */
 function registeredKeys(): Set<string> {
-  const text = readFileSync(SPEC, 'utf8');
+  const parts = readdirSync(SPEC_PARTS).filter((name) => name.endsWith('.md')).sort();
+  const text = [SPEC, ...parts.map((name) => join(SPEC_PARTS, name))].map((file) => readFileSync(file, 'utf8')).join('\n');
   const start = text.indexOf('| Key | Meaning | Default |');
   const rows = text.slice(start).split('\n').slice(2).filter((line) => line.startsWith('| `'));
   const keys = new Set<string>();

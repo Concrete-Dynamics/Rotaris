@@ -8,7 +8,7 @@ per-attempt nonce, so each crash adds one `instance-<pid>-<nonce>.sock` for good
 ruling (R-072, 2026-10-13, risk 2); recorded by fin36 before the repair.
 
 
-**Repaired 2026-10-13 (fin36), under [OQ-248](../../architecture/open-questions.md#oq-248)'s ruling (R-072).**
+**Repaired 2026-10-13 (fin36), under [OQ-248](../../architecture/open-questions/53-spikes-and-later-questions-20.md#oq-248)'s ruling (R-072).**
 `removeDeadEndpoint` (`packages/platform/src/instance.ts`) runs before a reclaim removes a record whose process is dead on this
 host: it unlinks the endpoint the record names when that is a socket owned by this user named
 `instance-<recorded pid>-<8 hex>.sock`, and the per-attempt `rotaris-XXXXXX` directory it sat in once empty; a live but silent

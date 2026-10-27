@@ -6,7 +6,7 @@ report can still read `succeeded` over its own "I have no file-writing tool".
 
 Live-run finding: D6 (live runs of 2026-09-29)
 
-**Ruled 2026-09-29 — [OQ-112](../../architecture/open-questions.md), [`PD-TOOLS-006`](../../product/directives.md#pd-tools-006) revision 3,
+**Ruled 2026-09-29 — [OQ-112](../../architecture/open-questions.md), [`PD-TOOLS-006`](../../product/directives/pd-tools-006.md#pd-tools-006) revision 3,
 [R-067](../../product/requests.md#r-067).** A delegation carrying a `write_scope` to a persona that holds no file-writing
 tool (`write_file`, `haet_edit` or its alias `haet`) is refused with status `rejected` and no record, beside
 REQ-TOOLS-152's other refusals; the reason says the persona cannot write files and names the personas that can, where
@@ -33,7 +33,7 @@ the catalogue says. That refusal is this note's repair.
 
 ## Repaired — 2026-09-29
 
-Repaired 2026-09-29 under [R-067](../../product/requests.md#r-067), as [`PD-TOOLS-006`](../../product/directives.md#pd-tools-006)
+Repaired 2026-09-29 under [R-067](../../product/requests.md#r-067), as [`PD-TOOLS-006`](../../product/directives/pd-tools-006.md#pd-tools-006)
 revision 3 ([OQ-112](../../architecture/open-questions.md)) states. `IterationChildren.delegate` now refuses a delegation
 whose `write_scope` holds patterns for a known persona that cannot write files. The check comes straight after the
 scope's own validation, before any record exists. The refusal carries status `rejected` and no task id. The check is

@@ -13,9 +13,9 @@ analysis reached the docs-writer e2 as 4,000 characters and "… [24330 characte
 calls (`artifact_read`, `artifact_list`, `glob`, three reads under `.rotaris`) and 12 of its 24 steps on the cut, then wrote 7 of
 `docs/decisions.md`'s 8 file sections from its own reading, against a brief saying the judgement was already made; the user's
 answer credits them to the architect. The coordinator spent #243 to #246 and a 7,123-character brief re-typing f1's findings, and
-every harness check passed over it. Raised as [OQ-256](../../architecture/open-questions.md#oq-256).
+every harness check passed over it. Raised as [OQ-256](../../architecture/open-questions/55-spikes-and-later-questions-22.md#oq-256).
 
-**Repaired 2026-10-13 (fin38, `fin38-edits-handoff-classifier`) under [`PD-TOOLS-006`](../../product/directives.md#pd-tools-006)
+**Repaired 2026-10-13 (fin38, `fin38-edits-handoff-classifier`) under [`PD-TOOLS-006`](../../product/directives/pd-tools-006.md#pd-tools-006)
 revision 9**, the R-072 consortium's ruling of OQ-256. `inheritedContext` and `priorAgentContextParts`
 (`packages/engine/src/children/notify.ts`) render both hand-off blocks with each named task's whole result text under one
 100,000-character budget per block (`HAND_OFF_BUDGET`, `packages/kernel/src/hand-off.ts`); an answer that does not fit is cut to

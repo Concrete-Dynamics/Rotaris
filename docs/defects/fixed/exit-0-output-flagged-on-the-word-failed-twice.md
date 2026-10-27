@@ -39,7 +39,7 @@ changing behaviour a live requirement states exactly, which `docs/product/README
 an implementer may not mint. The request is logged with the requirements a directive would have to name,
 so the decision is in front of the owner rather than waiting in a defect note.
 
-**Ruled 2026-09-23 — [`PD-TOOLS-003`](../../product/directives.md#pd-tools-003), [R-048](../../product/requests.md#r-048).** The owner took the half
+**Ruled 2026-09-23 — [`PD-TOOLS-003`](../../product/directives/pd-tools-003.md#pd-tools-003), [R-048](../../product/requests.md#r-048).** The owner took the half
 this note left to them: the `FAILED ` marker matches case-sensitively, so only `FAILED ` in capitals warns,
 and the other four markers stay case-insensitive. Both warnings this run raised came from lower-case text and
 would not fire under the directive. The note stays open until the directive is built; the repair cites
@@ -47,7 +47,7 @@ would not fire under the directive. The note stays open until the directive is b
 
 ## Repaired 2026-09-27 ([R-055](../../product/requests.md#r-055))
 
-Built as [`PD-TOOLS-003`](../../product/directives.md#pd-tools-003) rules it: the fifth marker, `FAILED `, matches
+Built as [`PD-TOOLS-003`](../../product/directives/pd-tools-003.md#pd-tools-003) rules it: the fifth marker, `FAILED `, matches
 case-sensitively, and the other four markers, the error count, the banner check and the pipeline check keep their
 casing. In `packages/agent-tools/src/terminal/classify.ts` each entry of `MARKERS` now carries its own
 `caseSensitive` flag, and one predicate, `containsMarker`, answers both questions the warning asks: whether the

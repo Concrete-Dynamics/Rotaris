@@ -37,7 +37,7 @@ as well as by `stop_reason` and the timeline. OQ-96 records the reading.
 ## Settled 2026-09-29 by the owner's ruling (R-067)
 
 Settled 2026-09-29 by the owner's ruling ([R-067](../../product/requests.md#r-067)): a graceful user stop persists
-`paused`, as built. [`PD-ORCH-005`](../../product/directives.md#pd-orch-005) revision 5 adds clause 21 — a stop the user
+`paused`, as built. [`PD-ORCH-005`](../../product/directives/pd-orch-005.md#pd-orch-005) revision 5 adds clause 21 — a stop the user
 made, graceful and clean or forced, persists `paused` as a pause does and never `stopped` — and names `REQ-SESSION-186`
 among what it narrows, with `REQ-SESSION-073`, whose vocabulary glosses `stopped` with the user's stop; both carry the
 back-pointer in `docs/spec/07-sessions-persistence.md`, and `stopped` stays in the vocabulary for an exhausted budget

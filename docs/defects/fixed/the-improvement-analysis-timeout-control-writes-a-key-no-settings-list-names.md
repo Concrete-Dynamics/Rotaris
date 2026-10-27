@@ -25,7 +25,7 @@ REQ-CONFIG-256, REQ-CONFIG-263, REQ-CONFIG-323, REQ-CONFIG-417 (the enumerations
 ## Repaired — 2026-10-07, fin29 (PD-CONFIG-003 revision 2, OQ-223; REQ-CONFIG-256, REQ-CONFIG-262, REQ-CONFIG-263)
 
 Classified by the R-072 consortium as its question IT1, ruled as [OQ-223](../../architecture/open-questions.md) (advocate A
-followed) and recorded as [`PD-CONFIG-003`](../../product/directives.md#pd-config-003) revision 2: the control stays, and every
+followed) and recorded as [`PD-CONFIG-003`](../../product/directives/pd-config-003.md#pd-config-003) revision 2: the control stays, and every
 list now names the key. `DESKTOP_SAVE_RUNTIME_KEYS` (`packages/contracts/src/config.ts`) closes `DesktopSaveSchema.runtime` —
 REQ-CONFIG-256's eight, `child_timeout`, `improvement_collector_timeout` and the six confinement and egress fields — and types
 `DesktopSave.runtime` (`packages/config/src/writers.ts`); `TIER_B_RUNTIME_KEYS` (`packages/config/src/tiers.ts`) gains the key,

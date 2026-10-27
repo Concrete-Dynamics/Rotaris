@@ -20,8 +20,11 @@ const markdownUnder = (dir: string): string[] =>
   );
 
 const files = [
-  ...markdownUnder(join(root, 'docs', 'architecture')).filter((f) => !f.endsWith(join('views', 'reconciliation-log.md'))),
+  ...markdownUnder(join(root, 'docs', 'architecture')).filter(
+    (f) => !f.endsWith(join('views', 'reconciliation-log.md')) && !f.includes(join('views', 'reconciliation-log', '')),
+  ),
   join(root, 'docs', 'product', 'directives.md'),
+  ...markdownUnder(join(root, 'docs', 'product', 'directives')),
   // The proof registry's records: `updater-proof`'s record tagged the check owed to the next Windows package "(IC-3)"
   // after both repairs, which read only the two above
   // (docs/defects/fixed/agents-md-still-tags-the-updaters-windows-package-check-ic-3.md); the row moved from AGENTS.md's

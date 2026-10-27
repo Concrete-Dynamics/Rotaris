@@ -17,7 +17,7 @@ runs, and the Agent plan strip (REQ-TOOLS-147's primary progress display, REQ-CH
 - **REQ-TOOLS-145's sentence gives harmful advice here.** `#14`'s refusal told the coordinator to mark the running
   implementer's item COMPLETED or ABANDONED, which is the record OQ-220's terminal-item refusal exists to prevent.
 
-Ruled as [OQ-249](../../architecture/open-questions.md#oq-249) under the owner's delegation (R-072): `PD-TOOLS-008` revision 2 and
+Ruled as [OQ-249](../../architecture/open-questions/53-spikes-and-later-questions-20.md#oq-249) under the owner's delegation (R-072): `PD-TOOLS-008` revision 2 and
 `PD-TOOLS-006` revision 7.
 
 ## Specs
@@ -42,7 +42,7 @@ Ruled as [OQ-249](../../architecture/open-questions.md#oq-249) under the owner's
 ## Outcome
 
 Repaired 2026-10-13 (fin33, `fin33-delegation-targets-and-plan`) under `PD-TOOLS-008` revision 2 and `PD-TOOLS-006` revision 7
-([OQ-249](../../architecture/open-questions.md#oq-249)). A task a non-terminal child of the list's owner holds as its `todo_item` is
+([OQ-249](../../architecture/open-questions/53-spikes-and-later-questions-20.md#oq-249)). A task a non-terminal child of the list's owner holds as its `todo_item` is
 outside REQ-TOOLS-145's count, and the bound is checked only on a write that marks a task IN_PROGRESS (`todoTool`'s
 `TodoToolOptions.held`, read through `ToolPortContext.heldTodoItems` from `IterationChildren.heldTodoItems`). An admitted
 delegation hands its item back (`DelegateOutcome.todoItem`) and the caller's port marks it IN_PROGRESS when PENDING, persists

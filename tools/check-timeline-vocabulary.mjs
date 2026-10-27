@@ -24,6 +24,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
+import { readRecord } from './record-parts.mjs';
 
 /** The specification's timeline names, each with the requirement that fixes it. */
 export const VOCABULARY = {
@@ -145,10 +146,13 @@ function sources(root) {
   return out;
 }
 
-/** Domain 01's list as `docs/spec/01-run-orchestration.md` states it, or null where the section cannot be read. */
+/**
+ * Domain 01's list as `docs/spec/01-run-orchestration.md` states it, read with the parts it indexes (`record-parts.mjs`),
+ * or null where the section cannot be read.
+ */
 export function specVocabulary(root) {
   let text;
-  try { text = readFileSync(join(root, 'docs', 'spec', '01-run-orchestration.md'), 'utf8'); } catch { return null; }
+  try { text = readRecord(join(root, 'docs', 'spec', '01-run-orchestration.md')); } catch { return null; }
   const at = text.indexOf('### Timeline event vocabulary');
   if (at < 0) return null;
   const end = text.indexOf('\n### ', at + 1);

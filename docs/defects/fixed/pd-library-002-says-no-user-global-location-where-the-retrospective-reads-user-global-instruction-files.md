@@ -24,7 +24,7 @@ repaired, since which decision governs is the owner's (or the delegated round's)
 
 ## Outcome
 
-Settled 2026-10-13 by [OQ-235](../../architecture/open-questions.md#oq-235), ruled under the owner's delegation
+Settled 2026-10-13 by [OQ-235](../../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-235), ruled under the owner's delegation
 ([R-072](../../product/requests.md#r-072)): the reach clause governs reach and OQ-65's ruling governs the switches.
 `PD-LIBRARY-002` revision 2 names the set — the instruction files discovered at the workspace root, of those enabled under
 REQ-WORKSPACE-048's master switch and the per-file switches — and keeps the reach clause word for word. Repaired in plan

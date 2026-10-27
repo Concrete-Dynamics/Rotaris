@@ -4,7 +4,8 @@
 // typed reference, and a withdrawn one warns at every reference (REQ-TRACE-181,
 // at editor level through JSDoc @deprecated).
 //
-// It also generates the product-directive symbols from docs/product/directives.md.
+// It also generates the product-directive symbols from docs/product/directives.md, the register's index, and the
+// one file per entry beside it in docs/product/directives/ (tools/record-parts.mjs).
 // A directive governs over every requirement it names (docs/product/README.md), so
 // the artifact carries the disposition both ways: PD.supersedes / narrows / extends
 // list what each directive reaches, and SUPERSEDED_BY / NARROWED_BY / EXTENDED_BY
@@ -23,7 +24,8 @@
 // Shared by the build and by vitest's globalSetup, so the two cannot drift.
 
 import { readdirSync, readFileSync, mkdirSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { partsOf } from '../record-parts.mjs';
+import { join, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // REQ-TRACE-061 / REQ-TRACE-502 (OQ-41): the artifact is replaced atomically, under the requirement's ladder.
 import { replaceAtomically } from './replace.mjs';
@@ -44,7 +46,13 @@ const WITHDRAWN = /\*Withdrawn\.?\*/i;
 
 /** @type {Map<string, {domain: string, file: string, line: number, withdrawn: boolean}>} */
 const ids = new Map();
-for (const file of readdirSync(specDir).filter((f) => /^\d\d-.*\.md$/.test(f)).sort()) {
+// A domain over the document budget is an index at `NN-<domain>.md` and its parts in `NN-<domain>/` (since 2026-10-26,
+// tools/record-parts.mjs); each is read in order, and `file` names the one that defines the identifier.
+const specFiles = readdirSync(specDir)
+  .filter((f) => /^\d\d-.*\.md$/.test(f))
+  .sort()
+  .flatMap((f) => [f, ...partsOf(join(specDir, f)).map((p) => relative(specDir, p).split(sep).join('/'))]);
+for (const file of specFiles) {
   // A checkout under core.autocrlf=true (a git worktree on Windows) carries CRLF; `.` never matches `\r`, so a
   // split on `\n` alone left every definition unmatched and wrote an EMPTY artifact without a word (Part N found it).
   const lines = readFileSync(join(specDir, file), 'utf8').split(/\r?\n/);
@@ -73,10 +81,15 @@ const PD_SECTION = /^#{2,5}\s+(PD-[A-Z]+-\d+)(.*)$/;
 const DISPOSITION = /^>?\s*\*\*(Supersedes|Narrows|Extends|New):\*\*\s*(.*)$/;
 const RETIRED = /^PD-(TUI|CLI)-/; // domains 17 and 18 are closed here as they are in the corpus
 
-/** @type {Map<string, {domain: string, line: number, withdrawn: boolean, stated: boolean, statedNew: boolean, supersedes: string[], narrows: string[], extends: string[], text: string[]}>} */
+/** @type {Map<string, {domain: string, file: string, line: number, withdrawn: boolean, stated: boolean, statedNew: boolean, supersedes: string[], narrows: string[], extends: string[], text: string[]}>} */
 const directives = new Map();
-if (existsSync(directivesFile)) {
-  const lines = readFileSync(directivesFile, 'utf8').split(/\r?\n/);
+const registerFiles = existsSync(directivesFile) ? [directivesFile, ...partsOf(directivesFile)] : [];
+for (const registerFile of registerFiles) {
+  // The file as the generated artifact names it, relative to docs/product: `directives.md` or `directives/pd-….md`.
+  const file = relative(dirname(directivesFile), registerFile).split(sep).join('/');
+  const lines = readFileSync(registerFile, 'utf8').split(/\r?\n/);
+  // Each entry's file holds that entry alone: an entry's text ends with its file, and a disposition before any
+  // directive in a file is one with no directive.
   /** @type {string | null} */
   let current = null;
   // The register carries its own entry template inside an HTML comment. Parsing it would
@@ -96,7 +109,7 @@ if (existsSync(directivesFile)) {
     const named = text.match(/REQ-[A-Z]+-\d+/g);
     if (named) {
       throw new Error(
-        `symbol artifact: ${current}'s "New" disposition (docs/product/directives.md:${at}) names ${named.join(', ')}; New is used alone and names no identifier — a requirement the directive reaches goes under Supersedes, Narrows or Extends (OQ-222)`,
+        `symbol artifact: ${current}'s "New" disposition (docs/product/${file}:${at}) names ${named.join(', ')}; New is used alone and names no identifier — a requirement the directive reaches goes under Supersedes, Narrows or Extends (OQ-222)`,
       );
     }
   };
@@ -120,15 +133,16 @@ if (existsSync(directivesFile)) {
     if (m) {
       const id = m[1];
       if (RETIRED.test(id)) {
-        throw new Error(`symbol artifact: ${id} (docs/product/directives.md:${i + 1}) is in a retired domain; PD-TUI and PD-CLI are closed`);
+        throw new Error(`symbol artifact: ${id} (docs/product/${file}:${i + 1}) is in a retired domain; PD-TUI and PD-CLI are closed`);
       }
       if (directives.has(id)) {
-        throw new Error(`symbol artifact: ${id} is defined twice in docs/product/directives.md (line ${i + 1}); identifiers are never reused`);
+        throw new Error(`symbol artifact: ${id} is defined twice in docs/product/ (again at ${file}:${i + 1}); identifiers are never reused`);
       }
       current = id;
       entryOpen = true;
       directives.set(id, {
         domain: id.split('-')[1],
+        file,
         line: i + 1,
         withdrawn: WITHDRAWN.test(m[2] ?? ''),
         // Whether the directive stated a disposition at all, which "New" does while naming
@@ -154,7 +168,7 @@ if (existsSync(directivesFile)) {
     const d = DISPOSITION.exec(line);
     if (!d) return;
     if (!current) {
-      throw new Error(`symbol artifact: a "${d[1]}" disposition at docs/product/directives.md:${i + 1} precedes any directive`);
+      throw new Error(`symbol artifact: a "${d[1]}" disposition at docs/product/${file}:${i + 1} precedes any directive`);
     }
     const entry = directives.get(current);
     if (!entry) return;
@@ -170,7 +184,7 @@ if (existsSync(directivesFile)) {
     }
     const named = (d[2] ?? '').match(/REQ-[A-Z]+-\d+/g) ?? [];
     if (named.length === 0) {
-      throw new Error(`symbol artifact: ${current}'s "${d[1]}" disposition (docs/product/directives.md:${i + 1}) names no requirement identifier`);
+      throw new Error(`symbol artifact: ${current}'s "${d[1]}" disposition (docs/product/${file}:${i + 1}) names no requirement identifier`);
     }
     const key = d[1] === 'Supersedes' ? 'supersedes' : d[1] === 'Narrows' ? 'narrows' : 'extends';
     entry[key].push(...named);
@@ -187,7 +201,7 @@ const narrowedBy = new Map();
 /** @type {Map<string, string[]>} */
 const extendedBy = new Map();
 for (const [id, v] of directives) {
-  const where = `docs/product/directives.md:${v.line}`;
+  const where = `docs/product/${v.file}:${v.line}`;
   if (!v.stated && !v.withdrawn) {
     throw new Error(`symbol artifact: ${id} (${where}) states no disposition; every directive names what it supersedes, narrows or extends, or declares itself New`);
   }
@@ -326,7 +340,7 @@ export const PD = {
 for (const [id, v] of directivesSorted) {
   if (v.withdrawn) src += `  /** @deprecated Withdrawn in place. */\n`;
   const lists = `supersedes: [${v.supersedes.map((r) => `'${r}'`).join(', ')}], narrows: [${v.narrows.map((r) => `'${r}'`).join(', ')}], extends: [${v.extends.map((r) => `'${r}'`).join(', ')}]`;
-  src += `  '${id}': { id: '${id}', domain: '${v.domain}', file: 'directives.md', line: ${v.line}, withdrawn: ${v.withdrawn}, ${lists} },\n`;
+  src += `  '${id}': { id: '${id}', domain: '${v.domain}', file: '${v.file}', line: ${v.line}, withdrawn: ${v.withdrawn}, ${lists} },\n`;
 }
 src += `} as const satisfies Record<string, DirectiveSymbol>;
 

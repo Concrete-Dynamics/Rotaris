@@ -34,7 +34,7 @@ live run; established by reading the call path.
 `countToolCalls`. `IterationChildren.execute` hands it to the child's `runTurn`, so every completed provider
 request a child makes, at any depth (grandchildren launch through the same `IterationChildren`), reaches
 `Aggregates` and emits its own `usage.update` exactly as the entry agent's do. Part of building
-[`PD-MONITOR-001`](../../product/directives.md#pd-monitor-001) revision 2 ([R-049](../../product/requests.md#r-049)),
+[`PD-MONITOR-001`](../../product/directives/pd-monitor-001.md#pd-monitor-001) revision 2 ([R-049](../../product/requests.md#r-049)),
 which names this repair as its prerequisite.
 
 Evidence: `children.test.ts` — *a delegated child's provider requests reach the run's tokens, cost and

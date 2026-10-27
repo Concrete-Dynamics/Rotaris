@@ -6,7 +6,7 @@ model, the issue record and the timeline; no screen shows any of them. `AgentRec
 carries no end cause, so the delegation-tree row and the Mission table row read `failed` beside the delegation task, the
 inspector's meta line reads `failed · … · N tool calls`, and the persona window's instance tab reads `failed`. Nothing on the
 screen says the agent was stopped by a limit, what the limit was, or that Settings › Runtime › Delegation limits ›
-Per-agent timeout ([`PD-CONFIG-003`](../../product/directives.md#pd-config-003)) moves it — in minutes, in another view — although
+Per-agent timeout ([`PD-CONFIG-003`](../../product/directives/pd-config-003.md#pd-config-003)) moves it — in minutes, in another view — although
 the rulings that kept the 1200 s default (OQ-218, OQ-214) count on the person raising it.
 
 Seen in the final duress live run at `a68f121` (session `e6747bd0`): the testers `wave3-verify-all` (`bg_dcecf655`, issue 14,

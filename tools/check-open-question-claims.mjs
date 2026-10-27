@@ -16,7 +16,8 @@
 //     question still open it is what the build proceeds under; of a settled one it reads as unruled. Some sixty such
 //     sentences stood in the code and the views after the first repair fixed three of them (repair round 1).
 //
-// This gate reads `docs/architecture/open-questions.md` for each question's state (`questionStates`) and fails on
+// This gate reads `docs/architecture/open-questions.md` and its parts (`tools/record-parts.mjs`) for each question's
+// state (`questionStates`) and fails on
 // any of the three (`claimsIn`) in the code (comments, tests and proofs under `apps/`, `packages/` and `tools/`) and
 // in the parts of the record that describe the build as it stands: the architecture views, `codebase.md`,
 // `first-release-plan.md`, the architecture README, `AGENTS.md`, `docs/module-map.md`, the domain glossaries
@@ -26,7 +27,7 @@
 // ruling, "closed 2026-…", the request `R-NNN` that ruled it, "while it was open"); a reading may carry it earlier
 // in its own sentence too, where "until 2026-…" also dates it as past. A bare "closed" or a "not ruled" is no
 // ruling. A question still open, or deferred by the owner, may be called open and its answer the build's reading.
-// `open-questions.md` itself, the ADRs, the directives, `first-executions.md` and the defect notes keep their history
+// `open-questions.md` itself and its parts, the ADRs, the directives, `first-executions.md` and the defect notes keep their history
 // as written and are not read.
 //
 // Runs as part of `pnpm lint`. Reads the tree; costs no subprocess. The pure parts are exported for the test beside
@@ -34,6 +35,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { partsOf, readRecord } from './record-parts.mjs';
 
 // ---------------------------------------------------------------- the questions
 
@@ -225,14 +227,18 @@ function walk(dir, keep, out = []) {
   return out;
 }
 
+/** @param {string} file */
+const withParts = (file) => [file, ...partsOf(file)];
+
 /** The files read: the code under the three roots, and the record that describes the build as it stands. */
 export function filesOf(root) {
   const code = CODE_ROOTS.flatMap((r) => walk(join(root, r), (n) => CODE_EXT.test(n)));
   const record = [
     ...walk(join(root, 'docs', 'architecture', 'views'), (n) => n.endsWith('.md')),
-    join(root, 'docs', 'architecture', 'codebase.md'),
-    join(root, 'docs', 'architecture', 'first-release-plan.md'),
-    join(root, 'docs', 'architecture', 'README.md'),
+    // Each with the parts it indexes, where it was split (`record-parts.mjs`).
+    ...withParts(join(root, 'docs', 'architecture', 'codebase.md')),
+    ...withParts(join(root, 'docs', 'architecture', 'first-release-plan.md')),
+    ...withParts(join(root, 'docs', 'architecture', 'README.md')),
     join(root, 'AGENTS.md'),
     join(root, 'CONTEXT-MAP.md'),
     join(root, 'docs', 'module-map.md'),
@@ -244,7 +250,7 @@ export function filesOf(root) {
 
 /** Every refuted claim in the tree, `{ file, line, kind, numbers, text }`. */
 export function checkTree(root) {
-  const states = questionStates(readFileSync(join(root, 'docs', 'architecture', 'open-questions.md'), 'utf8'));
+  const states = questionStates(readRecord(join(root, 'docs', 'architecture', 'open-questions.md')));
   const problems = [];
   for (const file of filesOf(root)) {
     for (const c of claimsIn(readFileSync(file, 'utf8'), states)) problems.push({ file: relative(root, file).split(sep).join('/'), ...c });

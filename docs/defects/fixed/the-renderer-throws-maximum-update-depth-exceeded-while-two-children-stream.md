@@ -2,7 +2,7 @@
 
 ## Outcome: not reproduced, not repaired; closed under a guard (OQ-278)
 
-Closed 2026-10-14 by fin45 (`fin45-seams-ui-and-live`) on [OQ-278](../../architecture/open-questions.md#oq-278)'s rule
+Closed 2026-10-14 by fin45 (`fin45-seams-ui-and-live`) on [OQ-278](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-278)'s rule
 (ruled 2026-10-13 under [R-072](../../product/requests.md#r-072); `docs/defects/README.md`, "Closing a note that was never
 reproduced"). **The cause is unidentified**: the seven React error 185 throws of `a68f121` were never reproduced and never
 explained, and nothing in the product was changed for them. This is not a repair and is not reported as one.
@@ -207,7 +207,7 @@ component. A development build remains the one step of fin32's route not taken.
 **What it does not do.** It reproduces nothing. `a68f121`'s seven errors are still unexplained, and this is one more absence.
 Closing the note unreproduced is not something the record provides for: `docs/defects/README.md` moves only a repaired note to
 `fixed/`. Whether the note may close with the trap and the per-launch count as a standing monitor is raised as
-[OQ-278](../../architecture/open-questions.md#oq-278). Nothing in the product was changed. *(Superseded 2026-10-13 by OQ-278's
+[OQ-278](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-278). Nothing in the product was changed. *(Superseded 2026-10-13 by OQ-278's
 ruling, which gives `docs/defects/README.md` the rule for closing a note unreproduced under a guard; the dated section below
 records it. Kept as written.)*
 
@@ -220,7 +220,7 @@ re-rendered components, at the high before the throw.
 
 ## OQ-278 ruled; the guard built, 2026-10-14 (fin43) — not yet run; open
 
-**The ruling.** [OQ-278](../../architecture/open-questions.md#oq-278) was ruled 2026-10-13 under the owner's delegation
+**The ruling.** [OQ-278](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-278) was ruled 2026-10-13 under the owner's delegation
 ([R-072](../../product/requests.md#r-072)): a relayed React update-depth error (React error 185) in any live launch is a live-run
 FAILURE, and so is a duress launch whose `pendingLanes` trap does not install or whose install line does not reach
 `duress/app.log` through the console relay. `docs/defects/README.md` now holds the rule for closing a note that was never

@@ -353,7 +353,7 @@ never parses the document; `REQ-LIBRARY-094`'s edit overwrites the document and 
 fallback for an empty stored body is that same rendering. ~~Open question, not a settled reading.~~ *No entry was written
 for it then; raised as [OQ-210](../open-questions.md) on 2026-10-06 (acceptance finding F16), the owner's.* **Ruled
 2026-10-07 under the owner's delegation (R-072) and minted as
-[`PD-LIBRARY-003`](../../product/directives.md#pd-library-003):** the document is the body, as decided here, and the
+[`PD-LIBRARY-003`](../../product/directives/pd-library-003.md#pd-library-003):** the document is the body, as decided here, and the
 submitted body is kept twice on purpose. The ruling added what this execution had not tested: a re-render of a document a
 person edited (supersession, re-materialisation) wrote the whole rendering over the edit while `edited_at` stayed, and now
 rewrites only the frontmatter; the Key Findings section drops only the blank lines around the body, where it was trimmed;

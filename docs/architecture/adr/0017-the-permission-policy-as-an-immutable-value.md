@@ -50,7 +50,7 @@ recent grant first, and they outlive policy replacement and mode change unchange
 (case-insensitive), same persona, and either a byte-identical pre-redaction command facet or the same
 exact argument set.
 
-> **Narrowed 2026-09-27 — [`PD-TOOLS-004`](../../product/directives.md#pd-tools-004).** "Either a byte-identical
+> **Narrowed 2026-09-27 — [`PD-TOOLS-004`](../../product/directives/pd-tools-004.md#pd-tools-004).** "Either a byte-identical
 > pre-redaction command facet or the same exact argument set" no longer holds for the public `write_file` and
 > `haet_edit` (`haet` folded into it): a session grant of either now matches a later call of the same tool from the same persona
 > whose `REQ-TOOLS-018` path arguments resolve to exactly the grant's set of paths, whatever its other arguments. The

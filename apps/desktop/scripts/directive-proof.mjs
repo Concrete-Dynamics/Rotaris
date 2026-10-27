@@ -11,7 +11,7 @@
 // The register is edited in place and restored in a finally block; the last act is to
 // re-run the generator so the committed artifact matches the committed register.
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +19,16 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..', '..');
 const register = join(repo, 'docs', 'product', 'directives.md');
+// Since 2026-10-26 the register's entries are one file each in `directives/` beside its index (tools/record-parts.mjs).
+// A fixture replaces the whole register, so the entries are moved aside while one stands and moved back after.
+const entries = join(repo, 'docs', 'product', 'directives');
+const entriesAside = join(repo, 'docs', 'product', '.directives-set-aside-by-directive-proof');
+const setEntriesAside = () => {
+  if (existsSync(entries)) renameSync(entries, entriesAside);
+};
+const restoreEntries = () => {
+  if (existsSync(entriesAside)) renameSync(entriesAside, entries);
+};
 const generator = join(repo, 'tools', 'symbol-artifact', 'generate.mjs');
 const artifact = join(repo, 'packages', 'kernel', 'src', 'generated', 'requirements.ts');
 
@@ -43,8 +53,10 @@ let ran = 0;
  *
  * @param {string} body
  */
-const withDirectives = (body) =>
+const withDirectives = (body) => {
+  setEntriesAside();
   writeFileSync(register, `# Product directives — replaced by directive-proof, restored in its finally block\n\n${body}\n`);
+};
 
 /** Run the generator, returning its exit status and combined output. */
 const generate = () => {
@@ -279,8 +291,9 @@ try {
     );
   }
 } finally {
+  restoreEntries();
   writeFileSync(register, original);
-  const restored = readFileSync(register, 'utf8') === original;
+  const restored = readFileSync(register, 'utf8') === original && existsSync(entries) && !existsSync(entriesAside);
   const { ok } = generate();
   assert('the register is restored and the artifact regenerated from it', restored && ok);
 }

@@ -8,7 +8,7 @@ stored `child_timeout: 3` overtyped with `1` minute reads "Stored as 60 seconds.
 still says 3. The visible stored-value line beneath (`storedTimeoutNote`, `storedSecondsLine` in
 `packages/ui/src/settings/config-state.ts`) reads the same pending value, but is hidden whenever the pending value is one the
 field can show, which every typed value is. Read from the code on 2026-10-14 by fin45 (`fin45-retro-and-record`) while
-recording [OQ-301](../../architecture/open-questions.md#oq-301)'s ruling; not seen in the built app. Recorded, not repaired: its
+recording [OQ-301](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-301)'s ruling; not seen in the built app. Recorded, not repaired: its
 repair follows the ordinary path and is outside that ruling.
 
 ## Specs

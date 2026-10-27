@@ -126,7 +126,7 @@ it, which is the cheap path when the work is done.
 **The cost met live, and what replaced it (2026-10-07).** The final default live run at `a68f121` met this cost in its
 disagreeing case (finding P1): the terminal coordinator answered in full with "Report one line per command" `PENDING`, and
 the fresh root re-delegated the whole probe and told the person the report was never delivered. Under
-[`PD-ORCH-015`](../../product/directives.md#pd-orch-015) (OQ-225) the root that answers with its plan open is now corrected in
+[`PD-ORCH-015`](../../product/directives/pd-orch-015.md#pd-orch-015) (OQ-225) the root that answers with its plan open is now corrected in
 its own conversation at least once by default (the paragraph above described REQ-ORCH-078's default of 0, which no longer
 governs the count), and a task still re-queued carries the held answer to its next root and is announced in the
 transcript. Recorded and repaired as

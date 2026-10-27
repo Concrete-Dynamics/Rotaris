@@ -42,7 +42,7 @@ which records this and does not repair it. Recorded by fin31, not repaired.
 ## Repaired — 2026-10-13
 
 Ruled as [OQ-238](../../architecture/open-questions.md) (GC1, under the owner's delegation, R-072) and built as
-[`PD-TOOLS-013`](../../product/directives.md#pd-tools-013) revision 2 by fin34 (`fin34-record-and-cancels`): every call its
+[`PD-TOOLS-013`](../../product/directives/pd-tools-013.md#pd-tools-013) revision 2 by fin34 (`fin34-record-and-cancels`): every call its
 run cancels reads `interrupted` and files no issue.
 
 - `packages/agent-tools/src/gate.ts`: the catch records a throw under an aborted signal as failure kind `interrupted`, "The

@@ -147,5 +147,5 @@ was corrected — the lists are not normative and the test now asserts the invar
 the three picks distinct, the lowest qualified id on a tie, determinism under a shuffled catalogue) and the picks
 only where the data forces them.
 
-**Consequence 3 / OQ-6 stands unresolved and did not block:** *(OQ-6 ruled 2026-10-06, [R-071](../../product/requests.md#r-071): `hosted-cloud` canonical and the quota property a number per provider, [`PD-PROVIDER-001`](../../product/directives.md#pd-provider-001).)* the catalogue's attribute set is the one
+**Consequence 3 / OQ-6 stands unresolved and did not block:** *(OQ-6 ruled 2026-10-06, [R-071](../../product/requests.md#r-071): `hosted-cloud` canonical and the quota property a number per provider, [`PD-PROVIDER-001`](../../product/directives/pd-provider-001.md#pd-provider-001).)* the catalogue's attribute set is the one
 REQ-PROVIDER-002 declares; `service_name`, the quick-start URL and the quota property are not on it.

@@ -10,9 +10,9 @@ sentence is "When the child will write files, give write_scope: …": it makes t
 the `write_scope` field carries no description. Req 65 then quoted the routing sentence and re-routed 30.0 s later: e1
 (`architect`, no scope, #111) and e2 (`docs-writer`, `inherited_context`, #163). Every enforced bound held: 0 unknown-tool calls,
 0 stray files, 0 impossible briefs. OQ-250's reopening condition (first limb) is met; raised as
-[OQ-257](../../architecture/open-questions.md#oq-257).
+[OQ-257](../../architecture/open-questions/55-spikes-and-later-questions-22.md#oq-257).
 
-**Repaired 2026-10-13 (fin38, `fin38-edits-handoff-classifier`) under [`PD-TOOLS-006`](../../product/directives.md#pd-tools-006)
+**Repaired 2026-10-13 (fin38, `fin38-edits-handoff-classifier`) under [`PD-TOOLS-006`](../../product/directives/pd-tools-006.md#pd-tools-006)
 revision 9**, the R-072 consortium's ruling of OQ-257. `delegate`'s write-scope sentence is `WRITE_SCOPE_SENTENCE`
 (`packages/agent-tools/src/tools/delegation.ts`): work that writes files goes to a persona whose catalogue entry writes workspace
 files, which is given the scope, and a scope given to any other persona is refused and nothing is started; the `write_scope` field

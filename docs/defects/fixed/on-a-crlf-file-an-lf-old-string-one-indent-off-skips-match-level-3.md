@@ -24,7 +24,7 @@ hold where it matters most, and `PD-TOOLS-014`'s reply is not given.
 ## Specs
 
 None contradicted word for word; a question the specification leaves open, raised as
-[OQ-280](../../architecture/open-questions.md#oq-280). REQ-TOOLS-136's level 3 reads "each line equal once one uniform leading prefix
+[OQ-280](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-280). REQ-TOOLS-136's level 3 reads "each line equal once one uniform leading prefix
 is added or removed", silent on whether a line's `\r` (its line ending) takes part in "equal"; level 2 already ignores it.
 `PD-TOOLS-015` and `PD-TOOLS-016` state that REQ-TOOLS-136's levels and their order are unchanged, and `PD-TOOLS-014`'s case
 names level 3 as REQ-TOOLS-136 defines it. `PD-TOOLS-015`'s reason (OQ-233: a level-3 apply wrote `new_string` unshifted beside a
@@ -46,7 +46,7 @@ success) is what the CRLF case still does, one level down.
 ## Outcome
 
 **Repaired 2026-10-14 by fin43** under OQ-280's ruling (R-072), recorded as
-[`PD-TOOLS-019`](../../product/directives.md#pd-tools-019) with [`PD-TOOLS-014`](../../product/directives.md#pd-tools-014)
+[`PD-TOOLS-019`](../../product/directives/pd-tools-019.md#pd-tools-019) with [`PD-TOOLS-014`](../../product/directives/pd-tools-014.md#pd-tools-014)
 revision 3: `matchEdit`'s level 3 compares each line of the window and of `old_string` with one trailing `\r` set aside and
 measures the prefix on those lines; levels 1, 2 and 4, `shiftNewString`, `carryWindow` and both tools' branches are unchanged and
 still read the window's raw lines. `nearMissMessage`'s level-3 reply adds "The line endings differ too: CRLF in the file and LF in
@@ -63,4 +63,4 @@ through `haet_edit`. **Not shown:** the live `crlf` scenario, the orchestrator's
 `old_string` was a uniform indent off. A neighbouring gap the ruling does not decide — a block with a blank interior line never
 reaches level 3 — is
 [`a-block-with-a-blank-interior-line-never-matches-at-level-3`](a-block-with-a-blank-interior-line-never-matches-at-level-3.md)
-([OQ-295](../../architecture/open-questions.md#oq-295)).
+([OQ-295](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295)).

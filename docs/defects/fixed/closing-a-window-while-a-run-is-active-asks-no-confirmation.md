@@ -34,7 +34,7 @@ REQ-SHELL-055 (Escape and the close control as the returning answer). `PD-ORCH-0
 
 **Repaired 2026-10-07 (fin28, bundle `fin28-window-gate-timeout`), under [OQ-206](../../architecture/open-questions.md)'s
 ruling of that day ([R-072](../../product/requests.md#r-072)), recorded as
-[`PD-SHELL-009`](../../product/directives.md#pd-shell-009).** Closing a main window ends the active runs of its own project
+[`PD-SHELL-009`](../../product/directives/pd-shell-009.md#pd-shell-009).** Closing a main window ends the active runs of its own project
 and asks first. The last main window's close asks REQ-SHELL-119's question over the instance's count, as before. The close of
 one of several asks "Close this window while a run is active?" (`windowCloseBox`, `apps/desktop/src/main/close-confirmation.ts`)
 while the window's own workspace has a run active — the run host's `runs.active` now keyed by the session row's

@@ -5,7 +5,7 @@ included, through the same `resolveCell`. No built-in row names a ROUTE variant,
 too, takes the slot's default `routed`, whose text addresses a specialist a coordinator delegated to: "Your assignment is
 inside the standard flow: the coordinator routed it to you by need and the rest of the run expects the outcome named in
 the task." The entry role is the coordinator, and nothing routed the request to it: the user sent it. On a run the
-intent-to-tools mapping grants the direct-work bundle ([`PD-ORCH-006`](../../product/directives.md#pd-orch-006)) the same
+intent-to-tools mapping grants the direct-work bundle ([`PD-ORCH-006`](../../product/directives/pd-orch-006.md#pd-orch-006)) the same
 line sits beside the statement that the entry role does the work itself.
 
 Found by the default live run at `c2fdd6a` (finding K3, 2026-10-06): every orchestrator request in all eight sessions

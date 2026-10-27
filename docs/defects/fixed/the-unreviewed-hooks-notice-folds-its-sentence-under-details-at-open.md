@@ -1,7 +1,7 @@
 ## The unreviewed-hooks notice folds its sentence under Details at the open
 
 Recorded 2026-10-14 by fin44 (`fin44-hooks-and-config`) from the consortium's ruling of
-[OQ-293](../../architecture/open-questions.md#oq-293), before the repair. Confirmed by reading the path and by `notice-proof`
+[OQ-293](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-293), before the repair. Confirmed by reading the path and by `notice-proof`
 section 6's new assertion that the message row holds REQ-HOOKS-101's sentence.
 
 REQ-NOTIFY-224's notice is raised from two places, and they build it differently. On the run path (`Run.start` in

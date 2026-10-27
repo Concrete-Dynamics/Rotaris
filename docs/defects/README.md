@@ -22,7 +22,7 @@ struck-through passage) stays as written and is marked on its own line by an HTM
 `<!-- historical-path: <the path> -->`, which does not render; the check fails a mark that keeps no path on its line, or
 keeps one a note is at. `docs/product/requests.md` is the orchestrator's to edit and is not read by this pass.
 
-**Closing a note that was never reproduced** ([OQ-278](../architecture/open-questions.md#oq-278), ruled 2026-10-13 under
+**Closing a note that was never reproduced** ([OQ-278](../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-278), ruled 2026-10-13 under
 [R-072](../product/requests.md#r-072)). A note whose cause was never found may close unreproduced only when all of these hold:
 (a) its investigations are recorded in the note; (b) a check that FAILS on recurrence runs in the acceptance round (the live
 run or a proof), not a NOTE; (c) that check has executed at least once, with its instrument shown working; (d) the note moves

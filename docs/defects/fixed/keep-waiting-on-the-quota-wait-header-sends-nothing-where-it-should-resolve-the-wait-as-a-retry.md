@@ -43,7 +43,7 @@ keep waiting sends nothing, and the wait ends only by a change of model (which c
 
 ## Outcome — 2026-10-06 (plan fin21, under [R-071](../../product/requests.md#r-071)): ruled and repaired
 
-OQ-188 was ruled by the owner as recommended ([`PD-MONITOR-004`](../../product/directives.md#pd-monitor-004) revision 2, narrowing
+OQ-188 was ruled by the owner as recommended ([`PD-MONITOR-004`](../../product/directives/pd-monitor-004.md#pd-monitor-004) revision 2, narrowing
 REQ-MONITOR-303): in the wait that never auto-resumes, Keep waiting retries the waiting pair at once through the existing
 retry path; in the timed wait it stays an acknowledgement and the timer retries.
 

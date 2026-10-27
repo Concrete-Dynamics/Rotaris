@@ -11,7 +11,7 @@ directory, named in the record as the endpoint already is, would leave nothing t
 review; not measured here (one user on this host).
 
 
-**Repaired 2026-10-13 (fin36), under [OQ-248](../../architecture/open-questions.md#oq-248)'s ruling (R-072).** A
+**Repaired 2026-10-13 (fin36), under [OQ-248](../../architecture/open-questions/53-spikes-and-later-questions-20.md#oq-248)'s ruling (R-072).** A
 temporary-directory candidate is now the temporary directory itself (`socketDirectoryCandidates`, sized with the
 `rotaris-XXXXXX/` component), and each claim attempt makes its own `0700` directory below it with `mkdtempSync`
 (`placeSocket`, `packages/platform/src/instance.ts`), a name nobody can take first; the attempt's socket goes there, and the

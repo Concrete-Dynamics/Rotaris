@@ -90,7 +90,7 @@ to finish the model step in flight, and what is kept when that bound is reached?
 
 The owner ruled OQ-196 as recommended on 2026-10-06 ([R-071](../../product/requests.md#r-071)): the 30 s landing bound
 stays, so a child's time limit stays hard, and the cut step's reasoning stays in the transcript alone. The bound is now
-written into [`PD-ORCH-004`](../../product/directives.md#pd-orch-004) revision 5 ("The landing at the limit is bounded"),
+written into [`PD-ORCH-004`](../../product/directives/pd-orch-004.md#pd-orch-004) revision 5 ("The landing at the limit is bounded"),
 with a back-pointer at REQ-ORCH-088 and REQ-CONFIG-113, and reported back into
 [`adr/0012-the-delegated-child-scheduler.md`](../../architecture/adr/0012-the-delegated-child-scheduler.md) and beside
 `CHILD_LANDING_GRACE` in `packages/engine/src/children/orchestration.ts`, where the reason promised it. No code changed: the

@@ -65,14 +65,14 @@ volume half of the note stays open until that question is ruled; the mechanism h
 Measured: `pnpm check` green (2,119 passed); `pnpm overview-proof` and `pnpm rows-proof` exit 0 with the
 log lines unchanged in shape.
 
-**Ruled 2026-09-23 — OQ-63, by [`PD-MONITOR-002`](../../product/directives.md#pd-monitor-002), [R-048](../../product/requests.md#r-048).** The
+**Ruled 2026-09-23 — OQ-63, by [`PD-MONITOR-002`](../../product/directives/pd-monitor-002.md#pd-monitor-002), [R-048](../../product/requests.md#r-048).** The
 application log carries each line's level as a field and records `info` and above; `ROTARIS_APP_LOG_LEVEL`
 restores `debug`, and no configuration key reaches it. Under the directive the 141 `run host debug:` lines
 measured above are not recorded by default. The note stays open until the directive is built.
 
 ## Repaired 2026-09-27 ([R-055](../../product/requests.md#r-055))
 
-Both halves of the title are now false: [`PD-MONITOR-002`](../../product/directives.md#pd-monitor-002) is built.
+Both halves of the title are now false: [`PD-MONITOR-002`](../../product/directives/pd-monitor-002.md#pd-monitor-002) is built.
 The level, the threshold and the line live in one pure unit, `apps/desktop/src/main/app-log.ts`: `appLogThreshold`
 reads `ROTARIS_APP_LOG_LEVEL` (`debug`, `info`, `warning`, `error` in any casing; anything else `info`, with a warning
 line when a value was given but not taken), `createAppLog` is the predicate, and `formatAppLogLine` writes the level

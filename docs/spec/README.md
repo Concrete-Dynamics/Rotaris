@@ -188,6 +188,13 @@ Each file carries frontmatter naming the behavioral target and its draft status,
 numbered requirements grouped by subtopic, a data and formats section describing externally
 observable shapes, and open questions.
 
+**A live domain is a folder behind its file, since 2026-10-26** ([the document budget](../README.md#the-document-budget)).
+`NN-<domain>.md` keeps the frontmatter, the title, the overview and a table of its parts; the requirements, the data
+and formats and the open questions are in `NN-<domain>/`, one file per subtopic or run of subtopics, moved verbatim
+and in order. The table names each part's subtopics and the identifiers it defines, so a requirement is one hop from
+its domain's file. `pnpm symbols` reads the parts in order, and the identifier counts above did not move. The retired
+domains 17 and 18 stay single files.
+
 **Open Questions are load-bearing.** They record behavior that could not be determined, conflicting
 values that need a canonical choice, and scope decisions. They are inputs to the Specification Gate,
 not footnotes.

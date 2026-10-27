@@ -59,7 +59,7 @@ failed calls, two `tool_error` issues, about 10 s. No code changed: the note wai
 ## Repaired — 2026-10-06, under the owner's ruling of OQ-163 (fin21)
 
 The owner ruled [OQ-163](../../architecture/open-questions.md) on 2026-10-06 as recommended
-([R-071](../../product/requests.md#r-071)), minted as [`PD-TOOLS-008`](../../product/directives.md#pd-tools-008), which
+([R-071](../../product/requests.md#r-071)), minted as [`PD-TOOLS-008`](../../product/directives/pd-tools-008.md#pd-tools-008), which
 narrows REQ-TOOLS-145 for this case. Such a `replace` is still refused whole, in a sentence of its own: `Only one task can
 be IN_PROGRESS at a time. The submitted list marks 2 tasks IN_PROGRESS ('Create friction-probe.txt', 'Run and SIGINT the
 node timer'), so the replace was rejected and nothing was saved. Send it again with at most one task IN_PROGRESS.` It names

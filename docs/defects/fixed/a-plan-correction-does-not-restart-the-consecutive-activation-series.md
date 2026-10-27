@@ -8,7 +8,7 @@ activations before its correction was escalated by the first trigger after it (`
 and the run aborted) where REQ-ORCH-105 makes that trigger the first of a new series. Confirmed by test before the repair
 (`coordinator-plan.test.ts`, "REQ-ORCH-105: a correction restarts the consecutive series — two activations before it and a
 trigger after it inject, never escalate", red on `a3be56c`: the run ended `failed`). Noticed 2026-10-14 by fin44
-(`fin44-supervision-and-match`) as [OQ-284](../../architecture/open-questions.md#oq-284)'s ruling asked, which names the reset
+(`fin44-supervision-and-match`) as [OQ-284](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-284)'s ruling asked, which names the reset
 as REQ-ORCH-105 as written.
 
 ## Specs
@@ -28,7 +28,7 @@ steering, or a todo-correction message all count." The user's own todo edits (`R
 
 **Repaired 2026-10-14 by fin44 (`fin44-supervision-and-match`)**, in the bundle that recorded it: `Run.turn`'s `correction()`
 (`packages/engine/src/run/run.ts`) calls `noteUserInstruction()` on the root's supervisor when it sends a plan correction, so
-REQ-ORCH-105's todo-correction message starts a fresh consecutive series, as [OQ-284](../../architecture/open-questions.md#oq-284)'s
+REQ-ORCH-105's todo-correction message starts a fresh consecutive series, as [OQ-284](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-284)'s
 ruling names it. **Pinned by** the case in `coordinator-plan.test.ts` named above, red on `a3be56c` (the run ended `failed` with a
 `circuit_breaker_escalation`) and green after (activations counted 1, 2, then 1; no escalation; the iteration `succeeded`). **Not
 shown:** in the built app or a live run; no proof drives two activations before a correction.

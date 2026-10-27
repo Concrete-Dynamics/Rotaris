@@ -21,7 +21,7 @@ and by a Linux bundle built by the full key (`docs/architecture/first-executions
 `pnpm code-intel:bundle` (`apps/desktop/scripts/code-intelligence/bundle.mjs`) installs the interpreter with
 `uv python install <pin>`, the bare version, so uv picks a CPython for the architecture of the host it runs on. Its marker
 records no architecture: `pinsHash` hashes the Python, distribution and uv versions and the recipe, nothing else. On a
-Windows ARM64 host (the first one this record has met, [OQ-400](../../architecture/open-questions.md#oq-400)) a bundle would
+Windows ARM64 host (the first one this record has met, [OQ-400](../../architecture/open-questions/64-spikes-and-later-questions-31.md#oq-400)) a bundle would
 therefore carry an arm64 `python.exe`, and `pnpm package` would freeze it into the `windows-x64` artifact.
 
 Nothing at packaging catches it. `afterPack`'s "runtime" rule (`checkRuntime` in `apps/desktop/scripts/build-hooks.cjs`)

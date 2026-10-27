@@ -3,7 +3,7 @@
 The `faults-stall` scenario of `apps/desktop/scripts/live-run.mjs` holds the entry agent's second model call silent for
 300 s and reads the session's `issues`. Its check of the entry agent's stall watch filters the `stall` issues by their
 message (`agent appears stalled: no model event or token for N seconds`) and asserts only that at least one exists
-(`rootStall.length > 0`). Since [`PD-MONITOR-005`](../../product/directives.md#pd-monitor-005) revision 2 (OQ-127's ruling,
+(`rootStall.length > 0`). Since [`PD-MONITOR-005`](../../product/directives/pd-monitor-005.md#pd-monitor-005) revision 2 (OQ-127's ruling,
 2026-10-06) the issue is written only with its warning: at stall entry, then no more often than REQ-MONITOR-120's throttle
 (the stall timeout, or 30 s, whichever is longer). Before that revision the build wrote one issue at every evaluation
 (REQ-MONITOR-117's cadence, 5 s at the default 90 s threshold), and the check passed that too: a regression to an issue per
@@ -16,7 +16,7 @@ evaluation" and that no live run measured it.
 
 ## Specs
 
-- [`PD-MONITOR-005`](../../product/directives.md#pd-monitor-005) revision 2, "The `stall` issue": emitted only when the
+- [`PD-MONITOR-005`](../../product/directives/pd-monitor-005.md#pd-monitor-005) revision 2, "The `stall` issue": emitted only when the
   evaluation also writes the warning, at entry and then no more often than REQ-MONITOR-120 lets the warning repeat.
 - REQ-MONITOR-119 (narrowed by the directive) and REQ-MONITOR-120 (the throttle). The product is not contradicted; the
   proof that should show the product meets the directive cannot fail when it does not.
@@ -42,5 +42,5 @@ came sooner (`readIssues` reads `recorded_at` and `metadata` too, and the pack's
 Shown live on 2026-10-06: `live-run.mjs --confirm --skip-build --only=faults` against `katalyst` at `4ddcc02` (pack
 `.live-run/runs/2026-10-06T20-00-40-851Z`) passed the new check, "1 stall(s): orchestrator at 94 s", the one `stall`
 issue beside the session log's one `WARNING`, before the 120 s idle bound. Reported in place into
-[`PD-MONITOR-005`](../../product/directives.md#pd-monitor-005)'s first execution of revision 2, with a row in
+[`PD-MONITOR-005`](../../product/directives/pd-monitor-005.md#pd-monitor-005)'s first execution of revision 2, with a row in
 [`first-executions.md`](../../architecture/first-executions.md).

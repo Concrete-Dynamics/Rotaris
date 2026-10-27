@@ -26,7 +26,7 @@ question: no live run sets the key.
 
 ## Outcome
 
-Repaired 2026-10-13 (fin33, `fin33-delegation-targets-and-plan`) as [OQ-229](../../architecture/open-questions.md#oq-229) rules it,
+Repaired 2026-10-13 (fin33, `fin33-delegation-targets-and-plan`) as [OQ-229](../../architecture/open-questions/53-spikes-and-later-questions-20.md#oq-229) rules it,
 covered work under REQ-CONFIG-101. A non-empty `delegates_to` becomes `Persona.delegatesTo` (`personaResolverFor`), and
 `delegationTargetsFor` narrows the caller's targets by it for the catalogue (which then says it is narrowed), admission, the
 ledger and the write-scope refusal's writers; a persona outside the list is refused naming the caller's `delegates_to`. An empty

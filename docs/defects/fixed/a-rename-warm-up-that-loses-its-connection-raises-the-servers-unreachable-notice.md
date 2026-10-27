@@ -10,7 +10,7 @@ server is spent. Noted by fin43's reviewer of `fin43-rename-and-match`.
 
 ## Specs
 
-- [`PD-MCP-004`](../../product/directives.md#pd-mcp-004) clause 3 — the search writes no tool-call record, total, histogram bucket,
+- [`PD-MCP-004`](../../product/directives/pd-mcp-004.md#pd-mcp-004) clause 3 — the search writes no tool-call record, total, histogram bucket,
   child-report entry or notice.
 - `REQ-MCP-069` — a failure after connect is that call's failure; one warning per server per session.
 

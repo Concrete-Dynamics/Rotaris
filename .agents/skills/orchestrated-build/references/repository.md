@@ -104,7 +104,8 @@ The same commits as the code carry:
 - a repaired defect note: its outcome written on it (what changed, which test or proof pins it), `git mv` to
   `docs/defects/fixed/`, every link to its old path repointed (`pnpm lint` runs `tools/check-record-links.mjs`);
 - a defect noticed along the way recorded in `docs/defects/` (schema in `docs/defects/README.md`), fixed or not;
-- a question the specification leaves open appended to `docs/architecture/open-questions.md` as the next free number;
+- a question the specification leaves open appended to the last part of `docs/architecture/open-questions.md` (its
+  index names the part) as the next free number;
 - `docs/architecture/codebase.md`, `AGENTS.md` and `docs/architecture/first-release-plan.md` updated where they name
   the work.
 

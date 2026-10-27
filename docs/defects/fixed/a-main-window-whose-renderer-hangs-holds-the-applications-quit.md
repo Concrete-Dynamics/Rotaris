@@ -31,8 +31,8 @@ so whether Chromium's `unresponsive` judgement is that point is a question to ra
 
 ## Outcome — repaired 2026-10-14 (fin44, `fin44-hang-and-seams`), under `PD-SHELL-010`
 
-The question this note left open was raised and ruled: [OQ-297](../../architecture/open-questions.md#oq-297), the consortium's
-HR1 under [R-072](../../product/requests.md#r-072), minted [`PD-SHELL-010`](../../product/directives.md#pd-shell-010). Chromium's
+The question this note left open was raised and ruled: [OQ-297](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-297), the consortium's
+HR1 under [R-072](../../product/requests.md#r-072), minted [`PD-SHELL-010`](../../product/directives/pd-shell-010.md#pd-shell-010). Chromium's
 `unresponsive` alone is not the point a live renderer "cannot answer"; main's own liveness probe is, with `unresponsive` kept as a
 second signal. (In the proof below the event never fired for a stopped renderer that had no input sent to it: the probe alone
 released both launches.)
@@ -65,9 +65,9 @@ against a build without the repair FAILS 8 of 27: both launches held, no exit in
 **Measured, so not built:** the allowed `win.close()` completes on a hung renderer (both launches closed the window and exited
 about 0.6 s after the bound), so `guardClose`'s close stays a close; `destroy()` for a window whose guard could not answer was
 not needed. **Not decided here:** an answering renderer with unsaved settings still holds a quit from outside any window on a
-person's answer ([OQ-298](../../architecture/open-questions.md#oq-298), open).
+person's answer ([OQ-298](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298), open).
 *Since ruled, 2026-10-14 ([R-072](../../product/requests.md#r-072); fin45, `fin45-supervision-and-quit`): OQ-298's ruling,
-[`PD-SHELL-009`](../../product/directives.md#pd-shell-009) revision 2, has a quit from outside any window ask no close guard, so
+[`PD-SHELL-009`](../../product/directives/pd-shell-009.md#pd-shell-009) revision 2, has a quit from outside any window ask no close guard, so
 neither an answering nor a hung renderer holds it. `exit-trace-proof`'s `hang` launch now measures that quit exiting 0 well under
 the probe's bound (625 ms) with the OQ-298 line and no PD-SHELL-010 `warn` line; `hang-close`, a person's close, remains this
 repair's built-app measure (5,567 ms with the `warn` line). The "Shown" paragraph above is kept as it was measured on the day.*

@@ -51,7 +51,7 @@ provider, key or network, and it already named the `scripted` provider in the sc
 variables. So the configuration path is what the packaged binary's own proof runs on, and the variables were redundant to it
 (the dialect switch) or replaceable by a fixed script (`ROTARIS_SCRIPT=git`). Whether a person's own configuration may select
 the stand-in in a shipped build is a product question no requirement answers: raised as
-[OQ-312](../../architecture/open-questions.md#oq-312) (raised as OQ-311, renumbered at landing), with the build proceeding under the configuration path as it was.
+[OQ-312](../../architecture/open-questions/62-spikes-and-later-questions-29.md#oq-312) (raised as OQ-311, renumbered at landing), with the build proceeding under the configuration path as it was.
 
 **What changed**, in the shape fin42 to fin44 used — each read behind `__ROTARIS_SEAMS__` on the read's own line:
 
@@ -88,7 +88,7 @@ unreachable `base_url`: no scripted model call at all, the orchestrator's reques
 `_SCRIPT_TOOL_ARGS` and `_SCRIPT_QUESTIONS`) exit 0. `pnpm package` itself was not run: it produces a release artifact, which this
 Linux host may not (IC-3).
 
-**Outcome addendum — 2026-10-14 (fin46, `fin46-accept1-11`; [OQ-312](../../architecture/open-questions.md#oq-312) ruled under
+**Outcome addendum — 2026-10-14 (fin46, `fin46-accept1-11`; [OQ-312](../../architecture/open-questions/62-spikes-and-later-questions-29.md#oq-312) ruled under
 R-072).** The client itself does not ship any more. The repair above left it in every build so that rule 4 (b)'s launch could reach
 it through a `provider: scripted` configuration, and a packaged build answered such an entry with the fixed `PACKAGED_SCRIPT`.
 OQ-312's ruling removed that path: `host.ts` builds the client only behind `__ROTARIS_SEAMS__`, so the packaged `run-host.js`

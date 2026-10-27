@@ -46,7 +46,7 @@ path whole, and a path that began near character 1,997 was cut through, against 
 are never truncated". Where a path or an identifier is itself longer than the cap, REQ-SESSION-136's cap and that sentence
 cannot both hold: [OQ-209](../../architecture/open-questions.md) records the question and the reading the build proceeds
 under (the value kept whole, the free text cut to the marker alone, the record over 2,000 characters). *Ruled 2026-10-07:
-[`PD-SESSION-003`](../../product/directives.md#pd-session-003) (R-072), the reading confirmed.* `run/cut.ts`'s comment no longer places this
+[`PD-SESSION-003`](../../product/directives/pd-session-003.md#pd-session-003) (R-072), the reading confirmed.* `run/cut.ts`'s comment no longer places this
 cut outside REQ-SESSION-194; its old reading is kept there beside the new one. The runtime view's store table says so.
 
 **Pinned by** `packages/engine/src/session-writer.test.ts`, "SessionWriter — an error-path tool record marks the cut it

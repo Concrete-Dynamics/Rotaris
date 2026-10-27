@@ -12,6 +12,7 @@ It holds paths, entry files and test globs, and nothing that would go stale fast
 | What a word means, and which requirement owns it | [`../CONTEXT-MAP.md`](../CONTEXT-MAP.md) and the `CONTEXT.md` it names |
 | Which evidence re-verifies an area | [`proofs/README.md`](proofs/README.md) — the proof registry |
 | What is owed, what stands in, what was decided | [`architecture/codebase.md`](architecture/codebase.md), the ADRs |
+| How the record is laid out, and how long one document may be | [`README.md`](README.md) — the document budget |
 
 Every package is `@rotaris/<name>` and exports through `src/index.ts`; `@rotaris/ui` also exports
 `./design-system`. Tests are **co-located** with the unit they cover (`<unit>.test.ts` beside
@@ -113,6 +114,11 @@ Each of these was decided; the authority is in brackets, and none of them is saf
   fails `pnpm lint` on one written anywhere else in `ui/src` or `apps/desktop/src/renderer`.
 - **The engine and the tools do not import each other** — the run-host root fills the engine's `ToolPort`
   with the gate (`run-host/tools.ts`).
+- **A long record is a folder behind its own file** — [`docs/README.md`](README.md), "The document budget", lists
+  them. `spec/NN-<domain>.md`, `product/directives.md`, `architecture/open-questions.md`, `architecture/codebase.md`,
+  `architecture/README.md` and the others it names are indexes; their text is in the folder of the same name beside
+  each (`directives/` holds one file per directive). A gate that reads one whole reads it through
+  `tools/record-parts.mjs`.
 - **Theme data the main process needs before first paint is in `contracts/src/theme/`**, because `main`
   cannot import `ui`.
 - **`apps/desktop/` is the application, not a copy of `packages/`** — the one member of `apps/`, the

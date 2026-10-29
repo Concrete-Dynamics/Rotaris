@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Ninety-nine.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -184,6 +184,12 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-TOOLS-018](directives/pd-tools-018.md) | a `write_file` insert keeps a CRLF file's line endings |
 | [PD-TOOLS-019](directives/pd-tools-019.md) | a match at level 3 compares each line without its carriage return |
 | [PD-TOOLS-020](directives/pd-tools-020.md) | level 3 matches blank lines by having no visible character |
+
+### TRACE
+
+| Directive | What it decides |
+|---|---|
+| [PD-TRACE-001](directives/pd-trace-001.md) | an adoption assistant, separate from the toolchain, detects a project's requirement layout and records what it found |
 
 ### WORKSPACE
 

@@ -43,3 +43,16 @@ built from the specification alone, which offers no detection at all.
 
 *Raised by the owner, 2026-10-29; logged as [R-087](../requests.md#r-087). Mints REQ-ADOPT-001 to REQ-ADOPT-030 at
 the owner's ask (domain 22, decided, not derived).*
+
+> **First execution, 2026-10-29, built under [R-087](../requests.md#r-087):** the directive held as written. The
+> detection pass found the store, family, numbering, roots and annotation vocabulary of a scratch Python project by script;
+> a scripted interpretation was composed into an adapter, every field passing `parseLayout` (REQ-TRACE-043, REQ-TRACE-073)
+> before execution; the record was written to `.rotaris/requirements-adoption.json`; and after a requirement was added the
+> next opening named it as new while writing nothing. Thirteen malformed or hostile answers (prose, an unknown key such as
+> `write_to`, an invented candidate, an absolute or `..` root, a two-group pattern, a convention that does not compile) were
+> each refused by field with the workspace unchanged, and so was a store directory that is a symbolic link out of it.
+> **Found:** the strip's first read, made at mount, landed in the board's paint window and `requirements-proof` measured
+> 263 ms against REQ-TRACE-239's 100 ms; the read now waits for the board's arrival (13 ms after). **Not measured:** no real
+> model answered an interpretation — every test and the demonstration scripted it — so how the `requirements-engineer`
+> role's model performs the interpretation is the first live run's. The row is in
+> [`../../architecture/first-executions.md`](../../architecture/first-executions.md).

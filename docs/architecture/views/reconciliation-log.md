@@ -20,8 +20,9 @@ Last reconciled with the code: **2026-10-29**
 responsibilities table gains the assistant's row (`workspace/src/adoption/`, `engine/src/adoption/`,
 `contracts/src/adoption.ts`; no new package, no new edge). `02-process-view.md`'s third message part gains the two
 `requirements.*` members, the service's `adoption.interpret` ask, the run host's request of that name and its
-`adoption.interpreted` reply. No channel, store table or ownership changed: the record is a file in the workspace scope
-directory the service writes, and the layout file is written only by the user's choice and never over an existing one.
+`adoption.interpreted` reply. `05-state-ownership.md` gains the adoption record's row: a file in the workspace scope
+directory the service alone writes, on the user's press; the layout file is written only by the user's choice and never
+over an existing one. No channel or store table changed.
 
 **Four views, and this log, split under the document budget (`docs/README.md`; 2026-10-26).** `01-component-view.md`,
 `02-process-view.md`, `03-runtime-view.md`, `04-seams.md` and `06-sequences.md` each keep their path as an index and

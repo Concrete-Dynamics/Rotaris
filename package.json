@@ -90,6 +90,7 @@
     "build-id": "node tools/build-id/write.mjs",
     "req-coverage": "node tools/requirement-coverage/coverage.mjs",
     "verify:plan": "node tools/verify-plan/plan.mjs",
+    "local-model:apply": "node tools/local-model/apply.mjs",
     "dev-time": "node tools/dev-time/cli.mjs",
     "worktree:new": "node tools/worktree/new.mjs",
     "worktree:land": "node tools/worktree/land.mjs",
@@ -105,6 +106,7 @@
     "eslint-plugin-boundaries": "^7.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.12.0",
+    "jiti": "2.7.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.69.0",
     "vitest": "^4.1.11"

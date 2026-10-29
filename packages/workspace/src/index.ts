@@ -46,3 +46,4 @@ export * from './delivery/index.js'; // Part AK
 export * from './improvements/index.js';
 // Part AJ
 export * from './traceability/index.js';
+export * from './adoption/index.js'; // domain 22, PD-TRACE-001

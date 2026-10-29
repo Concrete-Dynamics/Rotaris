@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { BlockerPayload, BoardAction, BoardCard, BoardProjection, ColumnToken, DeliveryColumn, DeliveryQueue, EpicCard, LaunchPreview, PaneKey, Reachability, Refusal, ReqId, RequirementDetail, RequirementsChanged, ReviewPayload, TransitionOutcome } from '@rotaris/contracts';
+import type { AdoptionOutcome, AdoptionView, BlockerPayload, BoardAction, BoardCard, BoardProjection, ColumnToken, DeliveryColumn, DeliveryQueue, EpicCard, LaunchPreview, PaneKey, Reachability, Refusal, ReqId, RequirementDetail, RequirementsChanged, ReviewPayload, TransitionOutcome } from '@rotaris/contracts';
 import { COLUMN_TOKENS, DELIVERY_COLUMNS, HEALTH_TOKENS } from '@rotaris/contracts';
 import { AXES, AXIS_DRAGGABLE, EMPTY_AXIS_SENTENCE, EMPTY_COLUMN_SENTENCE, EMPTY_FILTER, SORT_ORDERS, absoluteMoment, axisOf, columnLabel, columnsFor, describeFilter, distribute, emptinessFolds, filterActive, filterCards, foldDecision, parseFolds, relativeAge, serializeFolds, sortCards, sortOrderOf, type BoardFilter, type GroupingAxis, type SortOrder } from '@rotaris/ui-core';
 import { ConfirmDialog } from '../ConfirmDialog.js';
 import { formatChord, type KeyboardPlatform } from '../commands/registry.js';
 import { BlockedStrip } from './BlockedStrip.js';
+import { AdoptionStrip } from './AdoptionStrip.js';
 import { RequirementCard } from './Card.js';
 import { Column } from './Column.js';
 import { DetailPanel } from './DetailPanel.js';
@@ -98,6 +99,12 @@ export interface RequirementsHost {
   /** REQ-TRACE-472: accepting permanently suppresses the disclosure in later launches. */
   suppressDisclosure(): Promise<HostResult<unknown>>;
   onChanged(listener: (change: RequirementsChanged) => void): () => void;
+  /**
+   * Domain 22 (PD-TRACE-001): the adoption strip's two commands — the comparison on opening, a read (REQ-ADOPT-022), and
+   * the button (REQ-ADOPT-002). Optional so a host without the assistant draws no strip.
+   */
+  readAdoption?(): Promise<HostResult<AdoptionView>>;
+  adopt?(mode: 'run' | 'record', writeLayout: boolean): Promise<HostResult<AdoptionOutcome>>;
   readPreferences(): Promise<BoardPreferences>;
   writePreference(key: BoardPreferenceKey, value: string): void;
   /** REQ-TRACE-250: the clock is injected; the board reads none of its own. */
@@ -933,6 +940,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
         {error !== null && board !== null && <p className="req-status req-status--error" role="alert" data-testid="req-error-inline">{PROJECTION_UNAVAILABLE}: {error} The last good board stays on screen. <DesignButton type="button" className="btn btn-link" onClick={reevaluate}>{REEVALUATE_LABEL}</DesignButton></p>}
         {notice !== null && <p className="req-status" role="status" data-testid="req-notice">{notice} <DesignButton type="button" className="btn btn-link" onClick={() => setNotice(null)}>Dismiss</DesignButton></p>}
       </header>
+      {host.readAdoption !== undefined && host.adopt !== undefined && <AdoptionStrip readAdoption={host.readAdoption} adopt={host.adopt} />}
       {board !== null && <BlockedStrip blocked={board.blocked} onResume={(id) => { const c = board.cards.find((x) => x.id === id); if (c) void requestMove(id, c.returnTo ?? 'backlog'); }} onNavigate={revealCard} onFilterToBlocked={() => setFilter((f) => ({ ...f, health: 'blocked' }))} />}
       <div className="req-body">
         {body}

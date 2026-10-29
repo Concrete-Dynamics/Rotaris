@@ -23,6 +23,7 @@ export * from './library.js';
 export * from './improvements.js';
 export * from './artifacts.js';
 export * from './requirements.js'; // Part AK
+export * from './adoption.js'; // domain 22, PD-TRACE-001
 export * from './terminal.js';
 export * from './terminal-keys.js';
 export * from './slash.js'; // Part AO

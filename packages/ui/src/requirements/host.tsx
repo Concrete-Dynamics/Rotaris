@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { BlockerPayload, BoardAction, BoardProjection, ColumnToken, DeliveryQueue, LaunchPreview, Reachability, RendererBridge, ReqId, RequirementDetail, RequirementsChanged, ReviewPayload } from '@rotaris/contracts';
+import type { AdoptionOutcome, AdoptionView, BlockerPayload, BoardAction, BoardProjection, ColumnToken, DeliveryQueue, LaunchPreview, Reachability, RendererBridge, ReqId, RequirementDetail, RequirementsChanged, ReviewPayload } from '@rotaris/contracts';
 import { commandById, detectPlatform } from '../commands/registry.js';
 import { RequirementsView, type ActOutcome, type BoardPreferenceKey, type BoardPreferences, type DispatchOutcome, type HostResult, type LocationPreviewOutcome, type QueueChange, type RequirementsHost, type SourceWriteOutcome } from './RequirementsView.js';
 
@@ -70,6 +70,9 @@ export function createRequirementsHost({ bridge, workspace, onOpenSession }: Req
     dispatchRuns: () => runs<DispatchOutcome>({ op: 'dispatch' }),
     acceptDisclosure: () => runs<unknown>({ op: 'accept' }),
     suppressDisclosure: () => runs<unknown>({ op: 'suppress', suppressed: true }),
+    // Domain 22 (PD-TRACE-001): the adoption strip — a read on opening, and the button. No actor and no path cross here (REQ-ADOPT-028).
+    readAdoption: () => send<AdoptionView>({ name: 'requirements.adoption' }),
+    adopt: (mode: 'run' | 'record', writeLayout: boolean) => send<AdoptionOutcome>({ name: 'requirements.adopt', mode, ...(writeLayout ? { writeLayout: true } : {}) }),
     onChanged: (listener: (change: RequirementsChanged) => void) => bridge.onRequirementsChanged((p) => listener(p as RequirementsChanged)),
     async readPreferences(): Promise<BoardPreferences> {
       const [text, epic, source, lifecycle, health, priority, sort, axis, blocked, folds] = await Promise.all([

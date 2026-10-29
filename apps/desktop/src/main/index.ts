@@ -401,6 +401,9 @@ async function main(): Promise<void> {
           case 'runHost.closeStore': return runHost.request({ kind: 'workspace.closeStore', workspaceId: a.workspaceId }, millis(5_000));
           case 'runHost.release': return runHost.request({ kind: 'workspace.release', workspaceId: a.workspaceId }, millis(5_000));
           case 'runHost.reopen': return runHost.request({ kind: 'workspace.release', workspaceId: a.workspaceId }, millis(5_000));
+          // Domain 22 (PD-TRACE-001), REQ-ADOPT-012: the adoption run's one interpretation, on the host where the model resolves.
+          // The service's root is replaced with the canonical one this instance opened it under, as the relay does for a command.
+          case 'adoption.interpret': return runHost.request({ kind: 'adoption.interpret', workspaceRoot: key, detection: a.detection }, millis(195_000));
           default: return Promise.resolve({ kind: 'refused', code: 'ask.unhandled', headline: `main does not answer ${a.kind} from a workspace service` } as ProcessReply);
         }
       });

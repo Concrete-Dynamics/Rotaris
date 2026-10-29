@@ -940,7 +940,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
         {error !== null && board !== null && <p className="req-status req-status--error" role="alert" data-testid="req-error-inline">{PROJECTION_UNAVAILABLE}: {error} The last good board stays on screen. <DesignButton type="button" className="btn btn-link" onClick={reevaluate}>{REEVALUATE_LABEL}</DesignButton></p>}
         {notice !== null && <p className="req-status" role="status" data-testid="req-notice">{notice} <DesignButton type="button" className="btn btn-link" onClick={() => setNotice(null)}>Dismiss</DesignButton></p>}
       </header>
-      {host.readAdoption !== undefined && host.adopt !== undefined && <AdoptionStrip readAdoption={host.readAdoption} adopt={host.adopt} />}
+      {host.readAdoption !== undefined && host.adopt !== undefined && <AdoptionStrip armed={board !== null} readAdoption={host.readAdoption} adopt={host.adopt} />}
       {board !== null && <BlockedStrip blocked={board.blocked} onResume={(id) => { const c = board.cards.find((x) => x.id === id); if (c) void requestMove(id, c.returnTo ?? 'backlog'); }} onNavigate={revealCard} onFilterToBlocked={() => setFilter((f) => ({ ...f, health: 'blocked' }))} />}
       <div className="req-body">
         {body}

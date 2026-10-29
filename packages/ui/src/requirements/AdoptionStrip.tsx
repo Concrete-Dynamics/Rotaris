@@ -11,21 +11,28 @@ import type { HostResult } from './RequirementsView.js';
  * no model (REQ-ADOPT-022). A run or a recording starts only when its button is pressed (REQ-ADOPT-003).
  */
 export interface AdoptionStripProps {
+  /**
+   * The comparison is read once the board has arrived, never beside the board's own read: the service answers the two in
+   * turn, and the board's arrival is what REQ-TRACE-239 budgets. Measured: armed at mount, the strip's answer landed in
+   * the board's paint window and `requirements-proof` read 263 ms against the 100 ms budget, and 12 ms without the strip.
+   */
+  readonly armed: boolean;
   readonly readAdoption: () => Promise<HostResult<AdoptionView>>;
   readonly adopt: (mode: 'run' | 'record', writeLayout: boolean) => Promise<HostResult<AdoptionOutcome>>;
 }
 
-export function AdoptionStrip({ readAdoption, adopt }: AdoptionStripProps) {
+export function AdoptionStrip({ armed, readAdoption, adopt }: AdoptionStripProps) {
   const [view, setView] = useState<AdoptionView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [outcome, setOutcome] = useState<string | null>(null);
   const [writeLayout, setWriteLayout] = useState(false);
+  const [details, setDetails] = useState(false);
 
   const read = useCallback(() => {
     void readAdoption().then((r) => { if (r.ok) { setView(r.value); setError(null); } else setError(r.reason); });
   }, [readAdoption]);
-  useEffect(read, [read]);
+  useEffect(() => { if (armed && view === null && error === null) read(); }, [armed, view, error, read]);
 
   const press = (mode: 'run' | 'record') => {
     setRunning(true);
@@ -38,23 +45,23 @@ export function AdoptionStrip({ readAdoption, adopt }: AdoptionStripProps) {
   };
 
   const adopted = view?.state === 'adopted';
-  const sentence = error !== null ? `The adoption state could not be read: ${error}` : view === null ? 'Reading the adoption state…' : adoptionSentence(view);
+  const sentence = error !== null ? `The adoption state could not be read: ${error}` : view === null ? (armed ? 'Reading the adoption state…' : 'The adoption state is read once the board has arrived.') : adoptionSentence(view);
+  const lines = view === null ? [] : view.state === 'adopted' ? deltaLines(view.delta) : view.detection.undecided.length > 0 ? [{ kind: 'undecided' as const, label: 'Undecided', ids: view.detection.undecided.map((u) => u.detail).join('; ') }] : [];
+  // One line of fixed height, so an answer arriving changes no layout below it; the lists open on the user's press.
   return (
     <section className="req-adoption" data-testid="req-adoption" aria-label="Requirements adoption" aria-busy={running}>
       <div className="req-adoption__row">
-        <span className="req-adoption__state" data-testid="req-adoption-state" data-state={view?.state ?? 'reading'}>{sentence}</span>
+        <span className="req-adoption__state" data-testid="req-adoption-state" data-state={view?.state ?? 'reading'} title={sentence}>{running ? RUNNING_SENTENCE : outcome ?? sentence}</span>
+        {lines.length > 0 && <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="req-adoption-details" aria-expanded={details} onClick={() => setDetails((d) => !d)}>{details ? 'Hide details' : 'Details'}</DesignButton>}
         <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-adoption-run" disabled={running} onClick={() => press('run')} title={RUN_DESCRIPTION} aria-description={RUN_DESCRIPTION}>{adopted ? RERUN_LABEL : RUN_LABEL}</DesignButton>
         {adopted && <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-adoption-record" disabled={running} onClick={() => press('record')} title={RECORD_DESCRIPTION} aria-description={RECORD_DESCRIPTION}>{RECORD_LABEL}</DesignButton>}
         <DesignCheckbox className="check req-adoption__check" data-testid="req-adoption-layout" disabled={running} checked={writeLayout} onChange={(e) => setWriteLayout(e.currentTarget.checked)} title={LAYOUT_DESCRIPTION} aria-description={LAYOUT_DESCRIPTION} label={LAYOUT_LABEL} />
       </div>
-      {view?.state === 'adopted' && deltaLines(view.delta).map((l) => (
-        <p key={l.kind} className="req-adoption__delta card-meta" data-testid={`req-adoption-${l.kind}`}><span className="req-adoption__label">{l.label}</span> <span className="mono">{l.ids}</span></p>
+      {details && lines.map((l) => (
+        <p key={l.kind} className="req-adoption__delta card-meta" data-testid={`req-adoption-${l.kind}`}><span className="req-adoption__label">{l.label}</span> <span className={l.kind === 'undecided' ? undefined : 'mono'}>{l.ids}</span></p>
       ))}
-      {view?.state !== undefined && view.state !== 'adopted' && view.detection.undecided.length > 0 && (
-        <p className="req-adoption__delta card-meta" data-testid="req-adoption-undecided"><span className="req-adoption__label">Undecided</span> {view.detection.undecided.map((u) => u.detail).join('; ')}</p>
-      )}
-      {running && <p className="req-adoption__outcome card-meta" role="status" data-testid="req-adoption-running">{RUNNING_SENTENCE}</p>}
-      {!running && outcome !== null && <p className="req-adoption__outcome card-meta" role="status" data-testid="req-adoption-outcome">{outcome}</p>}
+      {running && <span className="req-adoption__live" role="status" data-testid="req-adoption-running">{RUNNING_SENTENCE}</span>}
+      {!running && outcome !== null && <span className="req-adoption__live" role="status" data-testid="req-adoption-outcome">{outcome}</span>}
     </section>
   );
 }

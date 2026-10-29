@@ -17,7 +17,7 @@ describe('the adoption strip', () => {
     expect(adoptionSentence({ state: 'not-adopted', detection: DETECTION })).toBe('Not adopted. No candidate requirements store was found.');
     expect(adoptionSentence({ state: 'adopted', record: RECORD, delta: EMPTY, current: 1, skippedLines: 0 })).toBe('Adopted: FR requirements in docs, no change since 2026-10-29T12:00:00.000Z.');
     const changed: AdoptionView = { state: 'adopted', record: RECORD, delta: { ...EMPTY, newIds: ['FR-2', 'FR-3'], removedIds: ['FR-1'] }, current: 2, skippedLines: 0 };
-    expect(adoptionSentence(changed)).toBe('Adopted: FR requirements in docs, 3 changes since 2026-10-29T12:00:00.000Z.');
+    expect(adoptionSentence(changed)).toBe('Adopted: FR requirements in docs, 3 changes since 2026-10-29T12:00:00.000Z. New: FR-2, FR-3.');
   });
 
   it('lists new requirements first, then changed, then removed, capped at twenty', () => {

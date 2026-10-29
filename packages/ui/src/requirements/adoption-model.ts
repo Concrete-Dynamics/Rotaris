@@ -28,7 +28,10 @@ export function adoptionSentence(view: AdoptionView): string {
   const { delta, record } = view;
   const changes = delta.newIds.length + delta.changedIds.length + delta.removedIds.length;
   const where = `${record.adapter.idPrefix} requirements in ${record.adapter.storeDir}`;
-  return changes === 0 ? `Adopted: ${where}, no change since ${record.recordedAt}.` : `Adopted: ${where}, ${plural(changes, 'change', 'changes')} since ${record.recordedAt}.`;
+  if (changes === 0) return `Adopted: ${where}, no change since ${record.recordedAt}.`;
+  // REQ-ADOPT-023: new requirements are the headline, named in the sentence itself.
+  const fresh = delta.newIds.length === 0 ? '' : ` New: ${delta.newIds.slice(0, 5).join(', ')}${delta.newIds.length > 5 ? ` and ${delta.newIds.length - 5} more` : ''}.`;
+  return `Adopted: ${where}, ${plural(changes, 'change', 'changes')} since ${record.recordedAt}.${fresh}`;
 }
 
 export function capList(ids: readonly string[]): string {

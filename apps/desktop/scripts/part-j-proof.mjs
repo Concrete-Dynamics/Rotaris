@@ -150,7 +150,7 @@ await launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PR
   const triggered = db.prepare("SELECT metadata FROM timeline WHERE session_id = ? AND name = 'prompt_triggered'").all(session.session_id).map((r) => JSON.parse(r.metadata).prompt_id);
   db.close();
   if (session.execution_status !== 'completed' || session.iterations_completed < 2) throw new Error(`the queued run did not complete two iterations: ${JSON.stringify(session)}`);
-  if (prompts.length !== 1 || prompts[0].content !== 'and then this' || prompts[0].status !== 'TRIGGERED') throw new Error(`the queued prompt was not consumed exactly once: ${JSON.stringify(prompts)}`);
+  if (prompts.length !== 1 || prompts[0].content !== 'and then this' || prompts[0].status !== 'COMPLETED') throw new Error(`the queued prompt was not consumed exactly once: ${JSON.stringify(prompts)}`);
   const todo = JSON.parse(session.todo);
   const phase = todo.phases.find((p) => p.name === 'Queued Prompts');
   if (!phase || phase.tasks[0].state !== 'complete') throw new Error(`the queued prompt did not become a completed task: ${session.todo}`);

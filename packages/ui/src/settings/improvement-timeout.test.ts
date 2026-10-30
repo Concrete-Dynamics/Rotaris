@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { DESKTOP_SAVE_RUNTIME_KEYS, type ConfigSnapshot } from '@rotaris/contracts';
+import { DESKTOP_SAVE_RUNTIME_KEYS, type ConfigSnapshot, DICTATION_CONFIG_DEFAULT } from '@rotaris/contracts';
 import { RuntimeSettings, type ConfigSettingsProps } from './ConfigSettings.js';
 import { adoptSnapshot, applyChange, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutEdit, improvementTimeoutForDisplay, improvementTimeoutFromInput, isDirty, liveStateOf, pendingFrom, savePayload, storedImprovementTimeoutNote } from './config-state.js';
 
@@ -21,7 +21,7 @@ const snapshotWith = (improvementTimeout: number): ConfigSnapshot => ({
   runtime: runtime(improvementTimeout),
   rawRuntime: { workspace: null, global: null },
   circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { show_tool_results: true, show_tool_inputs: true, tool_result_lines: 10, tool_input_lines: 2 },
-  skills: { enabled: true, overrides: {}, invocation_overrides: {} }, instructionsPolicy: { overrides: {} }, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', instructions: [], referential: [], warnings: [],
+  skills: { enabled: true, overrides: {}, invocation_overrides: {} }, instructionsPolicy: { overrides: {} }, dictation: DICTATION_CONFIG_DEFAULT, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', instructions: [], referential: [], warnings: [],
   files: { workspace: '/ws/.rotaris/agents.yaml', global: '/cfg/agents.yaml' },
 });
 const outcome = async () => ({ ok: true as const });

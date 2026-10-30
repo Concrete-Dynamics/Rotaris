@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ConfigSnapshot } from '@rotaris/contracts';
-import { applyChange, clampForDisplay, isDirty, liveStateOf, pendingFrom, savePayload } from './config-state.js';
+import { applyChange, clampForDisplay, isDirty, liveStateOf, pendingFrom, rebasePending, savePayload } from './config-state.js';
+import { DICTATION_CONFIG_DEFAULT } from '@rotaris/contracts';
 
 const snapshot: ConfigSnapshot = {
   workspaceRoot: 'C:/ws', loadOk: true, fatal: null,
@@ -13,7 +14,7 @@ const snapshot: ConfigSnapshot = {
   runtime: { max_depth: 3, max_active_children: 6, child_timeout: 1200, max_iterations: 20, allow_outside_workspace: false, permission_mode: 'ask', improvement_collector_enabled: true, improvement_collector_timeout: 60, retrospective_timeout: 120, keep_going: false, run_start_mode: 'auto', memory_diagnostics_enabled: false, sandbox_mode: 'off', sandbox_writable_roots: [], sandbox_allow_network: false, network_egress_policy: 'ask', network_allowed_hosts: [], network_denied_hosts: [] },
   rawRuntime: { workspace: { max_depth: 3 }, global: null },
   circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { show_tool_results: true, show_tool_inputs: true, tool_result_lines: 10, tool_input_lines: 2 },
-  skills: { enabled: true, overrides: {}, invocation_overrides: {} }, instructionsPolicy: { overrides: {} }, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', instructions: [], referential: [], warnings: [],
+  skills: { enabled: true, overrides: {}, invocation_overrides: {} }, instructionsPolicy: { overrides: {} }, dictation: DICTATION_CONFIG_DEFAULT, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', instructions: [], referential: [], warnings: [],
   files: { workspace: 'C:/ws/.rotaris/agents.yaml', global: 'C:/cfg/agents.yaml' },
 };
 
@@ -291,5 +292,24 @@ describe('REQ-CONFIG-259/341 — each field of a role\'s pending edit keeps the 
     pending = applyChange(pending, { kind: 'role', role: 'tester', scope: 'workspace', unsetModel: true });
     pending = applyChange(pending, { kind: 'role', role: 'tester', scope: 'global', model: 'gpt-4o-mini' });
     expect(savePayload(saved, pending).roles).toEqual({ tester: { workspace: { unsetModel: true, thinking: 'low' }, global: { model: 'gpt-4o-mini' } } });
+  });
+});
+
+describe('OQ-457 — the dictation keys on the screen', () => {
+  const off = pendingFrom(snapshot);
+  it('dirties on a change, is equal-guarded, and saves only what changed', () => {
+    expect(applyChange(off, { kind: 'dictation', key: 'backend', value: 'off' })).toBe(off);
+    const local = applyChange(off, { kind: 'dictation', key: 'backend', value: 'local' });
+    expect(isDirty(off, local)).toBe(true);
+    expect(savePayload(off, local).dictation).toEqual({ backend: 'local' });
+  });
+  it('sends null for an emptied optional key, which the writer reads as a removal', () => {
+    const saved = applyChange(off, { kind: 'dictation', key: 'language', value: 'de' });
+    expect(savePayload(saved, applyChange(saved, { kind: 'dictation', key: 'language', value: null })).dictation).toEqual({ language: null });
+  });
+  it('rebases per key: a pending change stands, and any other takes the reloaded value', () => {
+    const pending = applyChange(off, { kind: 'dictation', key: 'backend', value: 'local' });
+    const fresh = pendingFrom({ ...snapshot, dictation: { ...snapshot.dictation, language: 'en' } });
+    expect(rebasePending(off, pending, fresh).dictation).toEqual({ ...snapshot.dictation, backend: 'local', language: 'en' });
   });
 });

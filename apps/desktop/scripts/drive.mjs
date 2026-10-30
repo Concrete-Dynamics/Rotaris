@@ -8,6 +8,7 @@
  *
  *   pnpm app:drive start [--workspace=PATH] [--dialect=scripted|...] [--fresh]
  *   pnpm app:drive start --env=ROTARIS_CAPTURE_PROJECT_FOLDER=D:\a\folder   (repeatable; hands a seam over)
+ *   pnpm app:drive start --electron-arg=--use-fake-device-for-media-stream   (repeatable; a Chromium switch for this launch)
  *   pnpm app:drive waitFor ".board" [--timeout=15000]
  *   pnpm app:drive click ".nav-item" --text=Overview
  *   pnpm app:drive click ".agent-table__row .btn" --text="Pop out" --settle   (pressed once it holds still; fails a press that missed)
@@ -112,6 +113,8 @@ switch (command) {
       dialect: typeof flag('dialect', 'scripted') === 'string' ? flag('dialect', 'scripted') : 'scripted',
       detached: true,
       extra,
+      // `--electron-arg=--use-fake-device-for-media-stream`, repeatable: a Chromium switch for this launch, for a device the host has none of.
+      electronArgs: argv.filter((a) => a.startsWith('--electron-arg=')).map((a) => a.slice('--electron-arg='.length)),
     });
     print({ pid: started.child.pid, endpoint: started.endpointFile, log: started.logFile, seams: Object.keys(extra), ...(await started.driver.ping()) });
     started.driver.close();

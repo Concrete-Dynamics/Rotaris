@@ -143,6 +143,35 @@ export const InstructionsConfigViewSchema = z.object({
 export type InstructionsConfigView = z.infer<typeof InstructionsConfigViewSchema>;
 export const INSTRUCTIONS_CONFIG_DEFAULT: InstructionsConfigView = Object.freeze({ overrides: {} });
 
+/**
+ * OQ-457: the `dictation:` section as the layered load resolves it. It names a provider and never holds a credential, so it may
+ * reach a renderer (OQ-458). `off` is the default: nothing is sent or started until someone chooses a model.
+ */
+export const DICTATION_BACKEND_NAMES = ['off', 'local', 'endpoint'] as const;
+export const DictationConfigViewSchema = z.object({
+  backend: z.enum(DICTATION_BACKEND_NAMES),
+  local_model: z.string(),
+  base_url: z.string().nullable(),
+  model: z.string().nullable(),
+  provider: z.string().nullable(),
+  language: z.string().nullable(),
+});
+export type DictationConfigView = z.infer<typeof DictationConfigViewSchema>;
+export const DICTATION_CONFIG_DEFAULT: DictationConfigView = Object.freeze({ backend: 'off', local_model: 'small', base_url: null, model: null, provider: null, language: null });
+
+/** OQ-457: what is wrong with one value, or null. The loader, the save and the Settings field all read this one rule. */
+export function dictationFieldProblem(key: keyof DictationConfigView, value: string | null): string | null {
+  if (value === null) return null;
+  if (key === 'local_model' && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) return 'must be a bare model name, with no path';
+  if (key === 'language' && !/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(value)) return 'must be a language tag such as en or de';
+  if (key === 'base_url') {
+    let url: URL | null = null;
+    try { url = new URL(value); } catch { /* reported below */ }
+    if (url === null || (url.protocol !== 'http:' && url.protocol !== 'https:')) return 'must be an http or https URL';
+  }
+  return null;
+}
+
 export const ConfigSnapshotSchema = z.object({
   workspaceRoot: z.string(),
   /** False when the files could not be loaded; `fatal` then carries REQ-CONFIG-478's report and every other field is the built-in default. */
@@ -181,6 +210,8 @@ export const ConfigSnapshotSchema = z.object({
    * it sparsely.
    */
   instructionsPolicy: InstructionsConfigViewSchema,
+  /** OQ-457: the dictation model. */
+  dictation: DictationConfigViewSchema,
   /**
    * REQ-WORKSPACE-048's master switch `inject_agents_md`, as the files resolve it. It rides here
    * **separately from each row's `enabled`** — which already folds it in — because the Instructions
@@ -285,6 +316,22 @@ export const DESKTOP_SAVE_RUNTIME_KEYS = [
 ] as const;
 export type DesktopSaveRuntimeKey = (typeof DESKTOP_SAVE_RUNTIME_KEYS)[number];
 
+/** OQ-457: the changed `dictation:` keys, each held to the loader's rule. A null value removes a key. */
+export const DictationSaveSchema = z.object({
+  backend: z.enum(DICTATION_BACKEND_NAMES).optional(),
+  local_model: z.string().nullable().optional(),
+  base_url: z.string().nullable().optional(),
+  model: z.string().nullable().optional(),
+  provider: z.string().nullable().optional(),
+  language: z.string().nullable().optional(),
+}).strict().superRefine((save, ctx) => {
+  for (const key of ['local_model', 'base_url', 'language'] as const) {
+    const problem = dictationFieldProblem(key, save[key] ?? null);
+    if (problem !== null) ctx.addIssue({ code: 'custom', path: [key], message: problem });
+  }
+});
+export type DictationSavePayload = z.infer<typeof DictationSaveSchema>;
+
 export const DesktopSaveSchema = z.object({
   slots: z.partialRecord(z.enum(MODEL_SLOT_NAMES), z.string().nullable()).optional(),
   slotThinking: z.partialRecord(z.enum(MODEL_SLOT_NAMES), z.enum(REASONING_LEVEL_NAMES).nullable()).optional(),
@@ -299,6 +346,8 @@ export const DesktopSaveSchema = z.object({
   skills: SkillsSaveSchema.optional(),
   /** PD-WORKSPACE-002: the `instructions.overrides` key. Written SPARSELY — see `InstructionsSaveSchema`. */
   instructions: InstructionsSaveSchema.optional(),
+  /** OQ-457: the `dictation:` keys. */
+  dictation: DictationSaveSchema.optional(),
 });
 export type DesktopSavePayload = z.infer<typeof DesktopSaveSchema>;
 

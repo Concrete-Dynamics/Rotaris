@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, REASONING_LEVEL_NAMES, ROLE_REASONING_NAMES, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
 import { CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, clampForDisplay, COMPRESSION_THRESHOLD_RANGE, DEPTH_CAP_RANGE, FAN_OUT_RANGE, ITERATION_CAP_RANGE, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutForDisplay, scopeCellOf, type NumberRange, storedImprovementTimeoutNote, storedSecondsDescription, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
 import { SecurityPolicy } from './SecurityPolicy.js';
+import { DictationSettings } from './DictationSettings.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
 
 /**
@@ -147,6 +148,7 @@ export function ModelsSettings(props: ConfigSettingsProps) {
         </tbody>
       </DesignTable>
       {props.providersCard ?? <p className="text-secondary">The provider list is not available in this window.</p>}
+      <DictationSettings value={pending.dictation} onChange={onChange} />
     </div>
   );
 }

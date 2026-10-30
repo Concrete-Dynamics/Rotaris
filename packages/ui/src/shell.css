@@ -453,6 +453,10 @@
 .strip-btn:hover { background: var(--rt-hover); color: var(--rt-text); }
 .strip-btn.is-open { background: var(--rt-hover); color: var(--rt-text); }
 .strip-btn:disabled { opacity: 0.6; cursor: default; }
+/* OQ-455: a recording says so in the fail state's readable token and a pulse; reduced motion keeps the colour and stops the pulse (REQ-SHELL-135). */
+.strip-btn[data-dictation='recording'] .ph { color: var(--rt-danger-300); animation: rt-pulse var(--rt-duration-slow) ease-in-out infinite; }
+.strip-btn[data-dictation='recording'][data-motion='reduced'] .ph { animation: none; }
+@media (prefers-reduced-motion: reduce) { .strip-btn[data-dictation='recording'] .ph { animation: none; } }
 .strip-btn:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 .strip-btn .ph { font-size: var(--rt-text-sm); color: var(--rt-text-tertiary); }
 /* The compact trigger is icon-only: the icon keeps the row's neutral ink, so a shortened control reads
@@ -665,6 +669,7 @@
 .settings__actions { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); margin-top: var(--rt-space-3, 12px); }
 .settings__action { display: flex; align-items: center; gap: var(--rt-space-3, 12px); flex-wrap: wrap; }
 .settings__hint { font-size: var(--rt-text-xs, 12px); }
+.settings__dictation-field { display: flex; flex-direction: column; gap: var(--rt-space-1); margin-top: var(--rt-space-2); }
 .settings__select { width: max-content; max-width: 100%; }
 
 /* ── Tool rows (REQ-CHAT-060/061), diff rows (REQ-CHAT-050), approval trailer rows (REQ-CHAT-051) ── */

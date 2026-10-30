@@ -53,6 +53,8 @@ import { mcpCommands } from './commands/mcp.js';
 import { providersCommands } from './commands/providers.js';
 import { requirementsCommands } from './commands/requirements.js';
 import { sessionCommands } from './commands/session.js';
+import { dictationCommands } from './commands/dictation.js';
+import { installPermissionHandlers, type PermissionSession } from './permissions.js';
 import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
@@ -146,7 +148,11 @@ process.on('unhandledRejection', (reason) => { log(`UNHANDLED rejection in main:
 
 // REQ-STARTUP-160 / REQ-SHELL-005: the runtime makes no request of its own. Registered before `app.whenReady()` so the
 // default session is reached while it is built — later is too late (`runtime-requests.ts` says what was measured).
-app.on('session-created', (created) => { withoutRuntimeRequests(created, (m) => { log(m, 'error'); }); });
+app.on('session-created', (created) => {
+  withoutRuntimeRequests(created, (m) => { log(m, 'error'); });
+  // OQ-459: the microphone for dictation, and only what the application's own pages need.
+  installPermissionHandlers(created as unknown as PermissionSession, process.env['ELECTRON_RENDERER_URL']);
+});
 
 /*
  * Why the process is going away, written down while it still can be.
@@ -1811,6 +1817,7 @@ async function main(): Promise<void> {
     ...checkpointsCommands(commandContext),
     ...configCommands(commandContext),
     ...dialogsCommands(commandContext),
+    ...dictationCommands(commandContext),
     ...gitCommands(commandContext),
     ...hooksCommands(commandContext),
     ...improvementsCommands(commandContext),

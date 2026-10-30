@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { ConfigSnapshot } from '@rotaris/contracts';
 import { RuntimeSettings, type ConfigSettingsProps } from './ConfigSettings.js';
 import { CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, COMPRESSION_THRESHOLD_RANGE, DEPTH_CAP_RANGE, FAN_OUT_RANGE, IMPROVEMENT_TIMEOUT_SECONDS, ITERATION_CAP_RANGE, pendingFrom, type NumberRange } from './config-state.js';
+import { DICTATION_CONFIG_DEFAULT } from '@rotaris/contracts';
 
 /**
  * REQ-CONFIG-322 and REQ-CONFIG-325 ("hard widget-level clamping, so out-of-range values are unreachable through the UI"),
@@ -68,7 +69,7 @@ describe('a Settings number field — REQ-CONFIG-322, REQ-CONFIG-325, PD-CONFIG-
       runtime: { max_depth: 3, max_active_children: 6, child_timeout: 1200, max_iterations: 20, allow_outside_workspace: false, permission_mode: 'ask', improvement_collector_enabled: true, improvement_collector_timeout: 60, retrospective_timeout: 120, keep_going: false, run_start_mode: 'auto', memory_diagnostics_enabled: false, sandbox_mode: 'off', sandbox_writable_roots: [], sandbox_allow_network: false, network_egress_policy: 'ask', network_allowed_hosts: [], network_denied_hosts: [] },
       rawRuntime: { workspace: null, global: null }, circuitBreakerEnabled: true, compressorThresholdPercentage: 60,
       display: { show_tool_results: true, show_tool_inputs: true, tool_result_lines: 10, tool_input_lines: 2 },
-      skills: { enabled: true, overrides: {}, invocation_overrides: {} }, instructionsPolicy: { overrides: {} }, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', instructions: [], referential: [], warnings: [],
+      skills: { enabled: true, overrides: {}, invocation_overrides: {} }, instructionsPolicy: { overrides: {} }, dictation: DICTATION_CONFIG_DEFAULT, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', instructions: [], referential: [], warnings: [],
       files: { workspace: '/ws/.rotaris/agents.yaml', global: '/cfg/agents.yaml' },
     } as ConfigSnapshot;
     const props: ConfigSettingsProps = { snapshot, pending: pendingFrom(snapshot), dirty: false, loading: false, error: null, serviceAvailable: true, onChange: () => {}, onSave: async () => ({ ok: true as const }), onDiscard: () => {}, onSetField: async () => ({ ok: true as const }) };

@@ -95,3 +95,5 @@ export {
   LogPanel as DesignLogPanel,
 } from './design-system/index.js';
 export type { UiLayoutContract, UiLayoutRelation } from './design-system/index.js';
+export { DictationControl, type DictationCapture, type DictationHost } from './DictationControl.js';
+export { captureRefusal, captureUnavailable, insertTranscript } from './dictation.js';

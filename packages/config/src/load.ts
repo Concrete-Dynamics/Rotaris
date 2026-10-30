@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { LEGACY_ROLE_ALIASES } from '@rotaris/contracts';
+import { LEGACY_ROLE_ALIASES, type DictationConfigView } from '@rotaris/contracts';
 import { WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
 import { err, ok, type Result } from '@rotaris/kernel';
 import { parseConfig, plainOf, triOf, asMap, vocabularyText, type ParsedConfig } from './document.js';
@@ -18,6 +18,7 @@ import { readCheckpointsSection, type CheckpointsSection } from './sections/chec
 import { readRequirementsSection, worktreeStorageCollision, type RequirementsSection } from './sections/requirements.js'; // Part AP
 import { readSkillsSection, type SkillsSection } from './sections/skills.js'; // ADR-0063
 import { readInstructionsSection, type InstructionsSection } from './sections/instructions.js'; // PD-WORKSPACE-002
+import { readDictationSection } from './sections/dictation.js'; // OQ-457
 import { readDisplaySection, type DisplaySection } from './display-section.js';
 import { readMcpServersSection } from './sections/mcp-servers.js';
 import { readDiscoveryFiles, resolveMcpConfiguration, type BuiltinLaunch, type Diagnostic, type DiscoveredServers, type McpConfiguration } from './mcp/index.js';
@@ -79,6 +80,8 @@ export interface LoadedConfiguration {
   readonly skills: SkillsSection;
   /** PD-WORKSPACE-002: the per-file instruction on/off policy, keyed by stable file identity. */
   readonly instructions: InstructionsSection;
+  /** OQ-457: the dictation model. Main reads it at each press; no run does. */
+  readonly dictation: DictationConfigView;
   readonly hooks: HooksResolved;
   readonly worktreeStorageSubpath: string;
   readonly injectAgentsMd: boolean;
@@ -600,6 +603,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
   const requirements = readRequirementsSection(top['requirements'], sink); // Part AP
   const skills = readSkillsSection(top['skills'], sink); // ADR-0063
   const instructions = readInstructionsSection(top['instructions'], sink); // PD-WORKSPACE-002
+  const dictation = readDictationSection(top['dictation'], sink); // OQ-457
   const display = readDisplaySection(top['display'], sink);
   // REQ-MCP-002: every defect of a YAML-scope server entry is fatal and every one is reported (the discovered entries were validated before the merge).
   const mcpServers = readMcpServersSection(top['mcp_servers'], sink);
@@ -653,6 +657,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
     requirements, // Part AP
     skills, // ADR-0063
     instructions, // PD-WORKSPACE-002
+    dictation, // OQ-457
     display,
     hooks,
     worktreeStorageSubpath: worktree,

@@ -226,7 +226,7 @@ Launches 10, 11 and 13 to 15 are re-run. Launches 16 and 17 join launches 11 and
 
 **What is open.** Text can change while a transcription runs, since typing is not blocked, and no requirement says which caret applies or how the text meets its neighbours.
 
-**What the build proceeds under.** The caret when the transcript arrives. A selection is kept and the text goes after it, because a dictation never deletes. One space is added where the text would otherwise touch a non-space. The composer takes focus and the draft publishes as for typing; the microphone never submits and records no history entry. An empty transcript inserts nothing and says so.
+**What the build proceeds under.** The caret when the transcript arrives. A selection is kept and the text goes after it, because a dictation never deletes. One space is added where the text would otherwise touch a non-space. A transcript arriving after the composer left the screen goes to the end of the stored draft. The composer takes focus and the draft publishes as for typing; the microphone never submits and records no history entry. An empty transcript inserts nothing and says so.
 
 **What decides it.** A ruling on the caret and on the selection.
 
@@ -236,7 +236,7 @@ Launches 10, 11 and 13 to 15 are re-run. Launches 16 and 17 join launches 11 and
 
 **What is open.** No key exists, and a workspace's `agents.yaml` comes with the repository, so a key naming a program or a path would let a cloned repository choose what a press of the microphone runs.
 
-**What the build proceeds under.** A Tier A top-level section, `dictation:`, edited in Settings › Models: `backend` (`off`, the default, `local` or `endpoint`), `local_model`, `base_url`, `model`, `auth_provider` and `language`. There is no command key and no path key: `local_model` is a bare name, refused otherwise, resolved to `<name>.pt` under the Whisper cache, and the program is `whisper` from `PATH` or `~/.local/bin`. A model file that is absent is refused before anything starts, because the CLI would otherwise download it. Nothing is installed or downloaded. The run host reads none of it, so `TIER_B_RUNTIME_KEYS` does not change.
+**What the build proceeds under.** A Tier A top-level section, `dictation:`, edited in Settings › Models: `backend` (`off`, the default, `local` or `endpoint`), `local_model`, `base_url`, `model`, `provider` and `language`. There is no command key and no path key: `local_model` is a bare name, refused otherwise, resolved to `<name>.pt` under the Whisper cache, and the program is `whisper` from `PATH` or `~/.local/bin`. A model file that is absent is refused before anything starts, because the CLI would otherwise download it. Nothing is installed or downloaded. The run host reads none of it, so `TIER_B_RUNTIME_KEYS` does not change.
 
 **What decides it.** A ruling on the keys and the default. `off` means the control starts refused, with a reason naming the setting.
 
@@ -244,7 +244,7 @@ Launches 10, 11 and 13 to 15 are re-run. Launches 16 and 17 join launches 11 and
 
 **OQ-458 — What may a dictation send, and where is that disclosed?** *(ADR-0030, REQ-STARTUP-160, REQ-SHELL-005, REQ-PROVIDER-057. Raised 2026-10-30 by R-089.)*
 
-**What is open.** `backend: endpoint` sends the person's voice to a URL. REQ-STARTUP-160's disclosure "SHALL name no host, endpoint, or request this document does not require" and states only its three things, so it has no room for this, and its "never carry … prompt text" is scoped to those requests. A workspace file can state `base_url` and `auth_provider` together, as a `models:` entry can.
+**What is open.** `backend: endpoint` sends the person's voice to a URL. REQ-STARTUP-160's disclosure "SHALL name no host, endpoint, or request this document does not require" and states only its three things, so it has no room for this, and its "never carry … prompt text" is scoped to those requests. A workspace file can state `base_url` and `provider` together, as a `models:` entry can.
 
 **What the build proceeds under.** Only after the person presses the control, and only to the configured `base_url`. The bearer is the named provider's own credential, resolved in main through `ProviderService.lease`, never in the file, the snapshot or the renderer. The disclosure is left unchanged. Demo mode (REQ-SHELL-005) has no code to meet in the product as built; when it lands, the endpoint path must decline with it.
 
@@ -256,6 +256,6 @@ Launches 10, 11 and 13 to 15 are re-run. Launches 16 and 17 join launches 11 and
 
 **What is open.** Nothing set a permission handler before this, so Electron's default answered yes to every request. Capture needs a secure context, and a request refused without a reason looks like a broken button.
 
-**What the build proceeds under.** Handlers on the default session: `media` is granted for audio only, to the application's own pages; the clipboard write the copy buttons use stays granted; every other request is refused. A non-secure page shows a specific reason in the control's two channels instead of attempting capture, and a device refusal or absence states its own reason. Measured values are in the first-execution row.
+**What the build proceeds under.** Handlers on the default session: `media` is granted for audio only, to the application's own pages; the clipboard write the copy buttons use stays granted, under both names Chromium asks it by (`clipboard-sanitized-write` and, for a write with no press behind it, `clipboard-read`, which therefore also admits a read); every other request is refused, to any page. A non-secure page shows a specific reason in the control's two channels instead of attempting capture, and a device refusal or absence states its own reason. Measured on the built app, 2026-10-30: `isSecureContext` true on `file:`, `getUserMedia({video:true})` `NotAllowedError`, `Notification.requestPermission()` `denied`, `writeText` granted.
 
 **What decides it.** A ruling on the list.

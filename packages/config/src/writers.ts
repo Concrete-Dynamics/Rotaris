@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { isMap, isNode, type Document, type Node, type YAMLMap } from 'yaml';
-import { LEGACY_ROLE_ALIASES, VerifierSectionSchema, type DesktopSaveRuntimeKey, type VerifierSection } from '@rotaris/contracts';
+import { LEGACY_ROLE_ALIASES, VerifierSectionSchema, type DesktopSaveRuntimeKey, type DictationConfigView, type VerifierSection } from '@rotaris/contracts';
 import { err, millis, ok, type Result, type Timers } from '@rotaris/kernel';
 import { replaceDocument, replaceDocumentSync, type RetryLadder } from '@rotaris/platform';
 import { parseConfig, plainOf } from './document.js';
@@ -245,6 +245,8 @@ export interface DesktopSave {
   readonly instructions?: {
     readonly overrides?: Readonly<Record<string, string | null>> | undefined;
   };
+  /** OQ-457: the changed `dictation:` keys, into the WORKSPACE file only. A value of `null` removes that key. */
+  readonly dictation?: { readonly [K in keyof DictationConfigView]?: string | null | undefined };
   readonly roles?: Readonly<Record<string, RoleEdit>>;
 }
 
@@ -364,6 +366,15 @@ export async function saveDesktop(files: { workspace: string; global: string }, 
       if (map.items.length === 0) instructions.delete('overrides');
     }
     if (instructions.items.length === 0) root.delete('instructions');
+  }
+  // OQ-457: one key each; a section left empty by the removals is removed with them.
+  if (save.dictation && Object.keys(save.dictation).length > 0) {
+    const dictation = ensureMapping(root, 'dictation', doc);
+    for (const [key, value] of Object.entries(save.dictation)) {
+      if (value === null || value === undefined) dictation.delete(key);
+      else dictation.set(key, doc.createNode(value));
+    }
+    if (dictation.items.length === 0) root.delete('dictation');
   }
   for (const [role, edit] of workspaceEdits) applyRoleEdit(doc, root, role, edit);
   if (global) for (const [role, edit] of globalEdits) applyRoleEdit(global.doc, rootOf(global.doc), role, edit);

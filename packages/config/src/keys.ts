@@ -24,7 +24,7 @@ export const REPLACE_KEYS = [
   'inject_agents_md',
 ] as const;
 export const NAMED_ENTRY_KEYS = ['personas', 'models', 'mcp_servers', 'unavailable_models'] as const;
-export const SECTION_KEYS = ['runtime', 'verifier', 'compressor', 'circuit_breaker', 'transcript', 'display', 'initialization', 'project_init', 'requirements', 'skills', 'hooks', 'checkpoints', 'integration', 'instructions'] as const;
+export const SECTION_KEYS = ['runtime', 'verifier', 'compressor', 'circuit_breaker', 'transcript', 'display', 'initialization', 'project_init', 'requirements', 'skills', 'hooks', 'checkpoints', 'integration', 'instructions', 'dictation'] as const;
 export const COMPUTED_KEYS = ['workspace_root', 'metadata_workspace_root', 'mcp_server_sources', 'resolved_persona_model_tiers'] as const;
 /** Outside the layered model: read by a separate lookup over the same document, never merged (REQ-CONFIG-477 ground 1). */
 export const SEPARATE_KEYS = ['rotaris'] as const;

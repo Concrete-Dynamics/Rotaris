@@ -359,6 +359,36 @@ describe('store — the session lock (REQ-SESSION-046)', () => {
   });
 });
 
+describe('store — a completed backup is flushed (REQ-SESSION-034 level 2, REQ-SESSION-201)', () => {
+  // Whether a flush reached the device is not observable without a power-loss run (OQ-12); what is pinned here is that the
+  // flushes are issued, in the order that makes the reported artifact durable: the archive before its rename, the
+  // destination's directory after it.
+  it('flushes the archive before the rename onto the destination and the destination\'s directory after it', () => {
+    const id = mintWorkspaceId('000000000000000000000000000003b1');
+    const src = mkdtempSync(join(tmpdir(), 'rotaris-src-'));
+    seed(src, id, [{ sid: 'S-1', rows: 2 }]);
+    const destination = join(root, 'backup.tar');
+    const steps: string[] = [];
+    const r = takeBackup(src, id, destination, '2026-10-30T00:00:00.000Z', null, {
+      fsyncFile: (file) => { steps.push(`fsyncFile ${file}`); },
+      rename: (from, to) => { steps.push(`rename ${from} -> ${to}`); renameSync(from, to); },
+      fsyncDirectory: (dir) => { steps.push(`fsyncDirectory ${dir}`); },
+    });
+    const tmp = `${destination}.tmp-${process.pid}`;
+    expect(steps).toEqual([`fsyncFile ${tmp}`, `rename ${tmp} -> ${destination}`, `fsyncDirectory ${root}`]);
+    expect(r.bytes).toBe(statSync(destination).size);
+    // The real flushes, unobserved: the artifact they leave still expands to the store and its manifest.
+    rmSync(destination);
+    takeBackup(src, id, destination, '2026-10-30T00:00:00.000Z', null);
+    rmSync(src, { recursive: true, force: true });
+    const into = join(root, 'expanded');
+    expandArtifactInto(destination, into);
+    expect(readdirSync(into).sort()).toEqual(['manifest.json', 'store.db']);
+    expect(JSON.parse(readFileSync(join(into, 'manifest.json'), 'utf8')).counts).toEqual({ sessions: 1, rows: 2, locks: 0 });
+    expect(readdirSync(root).sort()).toEqual(['backup.tar', 'expanded']);
+  });
+});
+
 describe('store — the corrected restore, re-measured (IC-1)', () => {
   const id = mintWorkspaceId('00000000000000000000000000000010');
   const ctx = (rh: RunHostControl, artifact: string) => ({

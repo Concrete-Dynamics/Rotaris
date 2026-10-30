@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { WorkspaceId } from '@rotaris/kernel';
+import { fsyncDirectory, fsyncFile } from './flush.js';
 import { CONTAINER_MANIFEST, CONTAINER_STORE_FILE, SESSIONS_DIR, storeDir, storeFile } from './layout.js';
 import { openStore } from './open.js';
 
@@ -15,6 +16,12 @@ import { openStore } from './open.js';
  * GD-4b: a backup in progress may be abandoned — the partial artifact is
  * discarded, the store untouched, nothing partial left at the destination.
  * That is what staging-then-rename gives by construction.
+ *
+ * REQ-SESSION-034 level 2: a backup reported complete survives the loss of
+ * the operating system or of power, so the archive is flushed before the
+ * rename and the destination's directory after it. The staging directory is
+ * not flushed: it is read by `tar` through the page cache and removed, and
+ * nothing at the destination depends on it once the archive is flushed.
  *
  * The archive tool is the platform's `tar` (bsdtar on Windows 10+). A
  * TypeScript archiver is a later decision; the container format is fixed
@@ -39,7 +46,14 @@ function tarBin(): string {
   return process.platform === 'win32' ? 'C:\\Windows\\System32\\tar.exe' : 'tar';
 }
 
-export function takeBackup(workspacesRoot: string, id: WorkspaceId, destination: string, takenAtUtc: string, lastSeenPath: string | null): BackupResult {
+/** REQ-SESSION-034 — verification only: the flushes and the rename, so a test can observe their order. */
+export interface TakeBackupOptions {
+  readonly fsyncFile?: (file: string) => void;
+  readonly fsyncDirectory?: (dir: string) => void;
+  readonly rename?: (from: string, to: string) => void;
+}
+
+export function takeBackup(workspacesRoot: string, id: WorkspaceId, destination: string, takenAtUtc: string, lastSeenPath: string | null, options: TakeBackupOptions = {}): BackupResult {
   const stage = `${destination}.part-${process.pid}`;
   rmSync(stage, { recursive: true, force: true });
   mkdirSync(stage, { recursive: true });
@@ -75,7 +89,9 @@ export function takeBackup(workspacesRoot: string, id: WorkspaceId, destination:
 
   const tmp = `${destination}.tmp-${process.pid}`;
   execFileSync(tarBin(), ['-cf', tmp, '-C', stage, '.'], { stdio: 'pipe' });
-  renameSync(tmp, destination);
+  (options.fsyncFile ?? fsyncFile)(tmp);
+  (options.rename ?? renameSync)(tmp, destination);
+  (options.fsyncDirectory ?? fsyncDirectory)(dirname(destination));
   rmSync(stage, { recursive: true, force: true });
   return { manifest, bytes: statSync(destination).size };
 }

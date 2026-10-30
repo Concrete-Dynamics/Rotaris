@@ -11,12 +11,18 @@ import { findWhisperProgram, transcriptOf, whisperCliTranscriber, whisperModelFi
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
+/**
+ * The name the program has on the platform this suite runs on — not the POSIX spelling, which
+ * `findWhisperProgram` seeks as `whisper.exe` under Windows (`process.platform`). The suite is the
+ * same on every host; the fixture has to be.
+ */
+const WHISPER_EXE = process.platform === 'win32' ? 'whisper.exe' : 'whisper';
 const scratchHome = (models: readonly string[]): string => {
   const home = mkdtempSync(join(tmpdir(), 'rotaris-dictation-home-'));
   dirs.push(home);
   mkdirSync(join(home, '.cache', 'whisper'), { recursive: true });
   mkdirSync(join(home, '.local', 'bin'), { recursive: true });
-  writeFileSync(join(home, '.local', 'bin', 'whisper'), '');
+  writeFileSync(join(home, '.local', 'bin', WHISPER_EXE), '');
   for (const m of models) writeFileSync(join(home, '.cache', 'whisper', `${m}.pt`), '');
   return home;
 };
@@ -66,10 +72,11 @@ describe('OQ-457 — the local whisper client', () => {
   });
 
   it('finds the program on PATH, then in the per-user directory, and says so when neither has it', async () => {
-    expect(findWhisperProgram({ PATH: `/a${process.platform === 'win32' ? ';' : ':'}/b` }, '/h', (p) => p === join('/b', 'whisper'))).toBe(join('/b', 'whisper'));
-    expect(findWhisperProgram({ PATH: '/a' }, '/h', (p) => p === join('/h', '.local', 'bin', 'whisper'))).toBe(join('/h', '.local', 'bin', 'whisper'));
+    const path = `/a${process.platform === 'win32' ? ';' : ':'}/b`;
+    expect(findWhisperProgram({ PATH: path }, '/h', (p) => p === join('/b', WHISPER_EXE))).toBe(join('/b', WHISPER_EXE));
+    expect(findWhisperProgram({ PATH: '/a' }, '/h', (p) => p === join('/h', '.local', 'bin', WHISPER_EXE))).toBe(join('/h', '.local', 'bin', WHISPER_EXE));
     const home = scratchHome(['small']);
-    rmSync(join(home, '.local', 'bin', 'whisper'));
+    rmSync(join(home, '.local', 'bin', WHISPER_EXE));
     const r = await whisperCliTranscriber('small', { env: { PATH: '' }, home, spawn: fakeSpawn(() => ({ code: 0 })).spawn }).transcribe(request);
     expect(r).toMatchObject({ ok: false, error: { code: 'dictation.program-missing' } });
   });

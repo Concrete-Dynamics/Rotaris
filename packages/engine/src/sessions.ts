@@ -2043,6 +2043,8 @@ export class Sessions {
     if (req.op === 'forceCompression') return { ok: false, refusal: { code: 'no_run', message: 'No run is active.' } };
     // PD-ORCH-005 clause 16: one paused child is cancellable while its session rests, with no run behind it.
     if (req.op === 'cancelAgent' && (!run || run.isEnded)) return this.cancelPausedAtRest(s, req);
+    // REQ-CHAT-040: a prompt a resting session holds stays editable in the panel; only a run's own consumption ends that.
+    if ((req.op === 'editQueuedPrompt' || req.op === 'removeQueuedPrompt') && (!run || run.isEnded)) return this.editQueuedAtRest(s, req);
     if (!run || run.isEnded) return { ok: false };
     // PD-TOOLS-005: input the user sends to a live run's session — an answer, a message, a run control, a mode change —
     // ends the run's away stretch, before the operation is judged. A shutdown announcement is the application's, not the user's.
@@ -2073,6 +2075,7 @@ export class Sessions {
         return id === null ? { ok: false } : { ok: true, value: id };
       }
       case 'createQueuedPrompt': {
+        if (!run.acceptsQueuedPrompts) return { ok: false };
         const content = text('text');
         // REQ-CHAT-038: empty content is an invalid value and is rejected before anything is written; `text` already
         // refuses an absent or blank argument (REQ-MONITOR-008), so the two rules meet at one check.
@@ -2091,21 +2094,9 @@ export class Sessions {
         s!.owner.reconcile();
         return { ok: true, value: r.value.prompt_id };
       }
-      case 'editQueuedPrompt': {
-        const promptId = text('promptId');
-        const content = text('text');
-        if (promptId === null || content === null) return { ok: false };
-        const r = s!.writer.editQueuedPrompt(promptId, content);
-        if (r.ok && r.value) s!.owner.reconcile();
-        return r.ok && r.value ? { ok: true } : { ok: false };
-      }
-      case 'removeQueuedPrompt': {
-        const promptId = text('promptId');
-        if (promptId === null) return { ok: false };
-        const r = s!.writer.removeQueuedPrompt(promptId);
-        if (r.ok && r.value) s!.owner.reconcile();
-        return r.ok && r.value ? { ok: true } : { ok: false };
-      }
+      case 'editQueuedPrompt':
+      case 'removeQueuedPrompt':
+        return this.editQueued(s!, req);
       case 'editTodo': {
         const op = text('op');
         const id = text('id') ?? '';
@@ -2208,6 +2199,37 @@ export class Sessions {
    * store could not be read or written to take it. A malformed request is refused before the lock is touched (the repair
    * of `a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md`).
    */
+  /** REQ-CHAT-037/038: edit or delete one prompt still QUEUED; anything else, an unknown id included, answers false. */
+  private editQueued(s: Live, req: ControlRequest): ControlResult {
+    const value = (key: string): string | null => { const v = req.args[key]; return typeof v === 'string' && v.trim() !== '' ? v : null; };
+    const promptId = value('promptId');
+    if (promptId === null) return { ok: false };
+    let r: ReturnType<SessionWriter['removeQueuedPrompt']>;
+    if (req.op === 'removeQueuedPrompt') r = s.writer.removeQueuedPrompt(promptId);
+    else {
+      const content = value('text');
+      if (content === null) return { ok: false };
+      r = s.writer.editQueuedPrompt(promptId, content);
+    }
+    if (r.ok && r.value) s.owner.reconcile();
+    return r.ok && r.value ? { ok: true } : { ok: false };
+  }
+
+  /** REQ-CHAT-040 with ADR-0005: the same edit with no run behind the session, under the lock a stored todo edit takes. */
+  private editQueuedAtRest(s: Live | undefined, req: ControlRequest): ControlResult {
+    if (!s) return { ok: false };
+    const sid = s.writer.sessionId;
+    const warn = (m: string) => { s.log?.warn(m); this.deps.warn(m); };
+    const hold = this.claimHold(s.dal, sid, warn);
+    if ('holder' in hold) return { ok: false, refusal: { code: 'session_locked', message: lockHeldRefusal(sid, this.deps.host, hold.holder).reason } };
+    if ('failure' in hold) {
+      warn(`taking the lock of ${sid} for a queued prompt edit failed: ${hold.failure}`);
+      return { ok: false, refusal: { code: 'store_failed', message: `The workspace store could not take this session's lock, so the queued message was not changed: ${hold.failure}` } };
+    }
+    try { return this.editQueued(s, req); }
+    finally { hold.release(); }
+  }
+
   private editStoredTodo(s: Live | undefined, req: ControlRequest): ControlResult {
     if (!s) return { ok: false };
     const op = req.args['op'];

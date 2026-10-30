@@ -14,6 +14,10 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-10-30**
+
+**The queue's rest and end repaired, and the composer's microphone added (REQ-CHAT-035/037/038/040, PD-CONFIG-005, R-089; 2026-10-30).** `03-runtime-view.md` §5: a resting session's queued prompts stay editable (`editQueuedAtRest`), `createQueuedPrompt` is refused once the run stops stepping, and a completed task moves its prompt to COMPLETED. `01-what-each-process-owns.md`: main holds the dictation port and the session permission handlers. `04-seams/01` and `04-seams/05`: the `dictation.transcribe` command's stop and the `dictation:` section's stops.
+
 Last reconciled with the code: **2026-10-29**
 
 **The requirements adoption assistant (domain 22, PD-TRACE-001, R-088; 2026-10-29).** `01-component-view.md`'s

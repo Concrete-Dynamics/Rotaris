@@ -8,6 +8,9 @@ import { cut, cutArguments } from './run/cut.js';
 import { AgentActivity } from './children/activity.js';
 import type { AgentGrant } from './children/personas.js';
 
+/** REQ-CHAT-040: a queued prompt's task is named this, then the first 8 characters of the prompt id. */
+export const QUEUED_PROMPT_TASK_NAME = 'Queued Prompt: ';
+
 /** REQ-SESSION-136: an error-path tool record's arguments and result are cut to this many characters, marker included. */
 const ERROR_RECORD_CAP = 2000;
 
@@ -1455,7 +1458,7 @@ export class SessionWriter {
           if (row.status !== 'QUEUED') continue;
           if (!dal.triggerQueuedPrompt(sessionId, row.prompt_id, at)) continue;
           triggered.push({ ...row, status: 'TRIGGERED', triggered_at: at });
-          dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'prompt_triggered', 'rotaris', `Queued Prompt: ${row.prompt_id.slice(0, 8)} became a task in phase "Queued Prompts".`, JSON.stringify({ prompt_id: row.prompt_id }), timelineId(), 'info');
+          dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'prompt_triggered', 'rotaris', `${QUEUED_PROMPT_TASK_NAME}${row.prompt_id.slice(0, 8)} became a task in phase "Queued Prompts".`, JSON.stringify({ prompt_id: row.prompt_id }), timelineId(), 'info');
         }
       });
     } catch (cause) {
@@ -1464,8 +1467,18 @@ export class SessionWriter {
     if (triggered.length > 0) this.deps.onCommitted({ kind: 'save' });
     return ok(triggered);
   }
-  completeQueuedPrompt(promptId: string): void {
-    try { this.deps.dal.completeQueuedPrompt(this.deps.sessionId, promptId); } catch (cause) { this.deps.warn(`queued prompt ${promptId} could not be marked completed: ${String(cause)}`); }
+  /**
+   * REQ-CHAT-038: the end of the status series — the prompt whose task this name is ("Queued Prompt: <first 8 characters of
+   * the prompt id>", REQ-CHAT-040) has been carried out. Any other task's name finds no prompt and moves nothing.
+   */
+  completeQueuedPromptOfTask(taskName: string | undefined): void {
+    const prefix = taskName?.startsWith(QUEUED_PROMPT_TASK_NAME) === true ? taskName.slice(QUEUED_PROMPT_TASK_NAME.length) : null;
+    if (prefix === null) return;
+    try {
+      const { dal, sessionId } = this.deps;
+      const prompt = dal.queuedPromptsOf(sessionId).find((p) => p.status === 'TRIGGERED' && p.prompt_id.startsWith(prefix));
+      if (prompt !== undefined) dal.completeQueuedPrompt(sessionId, prompt.prompt_id);
+    } catch (cause) { this.deps.warn(`the queued prompt of ${taskName} could not be marked completed: ${String(cause)}`); }
   }
 
   /** REQ-ORCH-087: the pause recorded durably — status, count, limit — with its timeline entry, before the run stops. */

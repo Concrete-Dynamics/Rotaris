@@ -209,3 +209,53 @@ Launches 10, 11 and 13 to 15 are re-run. Launches 16 and 17 join launches 11 and
 **What the build proceeds under.** Unchanged: the setup is started with no argument, so an update shows the assisted installer's pages, its directory page offering the installed directory.
 
 **What decides it.** A ruling on the form. Silent would mean `applyInstaller` passing `/S` (and `/D=` the installed directory) and a decision on who starts the updated application afterwards.
+
+<a id="oq-455"></a>
+
+**OQ-455 — Does the composer carry a microphone, and what are its states?** *(REQ-CHAT-001, REQ-CHAT-007, REQ-SHELL-135; PD-CHAT-001. Raised 2026-10-30 by [R-089](../../product/requests.md#r-089).)*
+
+**What is open.** No requirement names dictation. PD-CHAT-001 states "The strip SHALL carry every input control the composer draws", then lists them, and a microphone is not in the list.
+
+**What the build proceeds under.** A strip action (`StripActionButton`) between Attach and Stash, enabled in every run state as Stash is (REQ-CHAT-006), reading idle, recording or transcribing. Each state is its icon, its accessible name, its tooltip and a polite live announcement; a second press while recording stops it; a press while transcribing does nothing and says why; every refusal reason takes REQ-CHAT-007's two channels. The recording pulse stops under reduced motion (REQ-SHELL-135). A recording stops itself after 5 minutes. The list in PD-CHAT-001 is read as naming what existed, not as closing the strip.
+
+**What decides it.** A ruling on the control, and on whether PD-CHAT-001 gains the microphone by a revision.
+
+<a id="oq-456"></a>
+
+**OQ-456 — Where does a transcript land?** *(REQ-CHAT-001, REQ-CHAT-003, REQ-CHAT-014, REQ-SHELL-159, REQ-CHAT-017. Raised 2026-10-30 by R-089.)*
+
+**What is open.** Text can change while a transcription runs, since typing is not blocked, and no requirement says which caret applies or how the text meets its neighbours.
+
+**What the build proceeds under.** The caret when the transcript arrives. A selection is kept and the text goes after it, because a dictation never deletes. One space is added where the text would otherwise touch a non-space. The composer takes focus and the draft publishes as for typing; the microphone never submits and records no history entry. An empty transcript inserts nothing and says so.
+
+**What decides it.** A ruling on the caret and on the selection.
+
+<a id="oq-457"></a>
+
+**OQ-457 — What configures the dictation model?** *(REQ-CONFIG-040, REQ-CONFIG-268, REQ-CONFIG-082..097. Raised 2026-10-30 by R-089.)*
+
+**What is open.** No key exists, and a workspace's `agents.yaml` comes with the repository, so a key naming a program or a path would let a cloned repository choose what a press of the microphone runs.
+
+**What the build proceeds under.** A Tier A top-level section, `dictation:`, edited in Settings › Models: `backend` (`off`, the default, `local` or `endpoint`), `local_model`, `base_url`, `model`, `auth_provider` and `language`. There is no command key and no path key: `local_model` is a bare name, refused otherwise, resolved to `<name>.pt` under the Whisper cache, and the program is `whisper` from `PATH` or `~/.local/bin`. A model file that is absent is refused before anything starts, because the CLI would otherwise download it. Nothing is installed or downloaded. The run host reads none of it, so `TIER_B_RUNTIME_KEYS` does not change.
+
+**What decides it.** A ruling on the keys and the default. `off` means the control starts refused, with a reason naming the setting.
+
+<a id="oq-458"></a>
+
+**OQ-458 — What may a dictation send, and where is that disclosed?** *(ADR-0030, REQ-STARTUP-160, REQ-SHELL-005, REQ-PROVIDER-057. Raised 2026-10-30 by R-089.)*
+
+**What is open.** `backend: endpoint` sends the person's voice to a URL. REQ-STARTUP-160's disclosure "SHALL name no host, endpoint, or request this document does not require" and states only its three things, so it has no room for this, and its "never carry … prompt text" is scoped to those requests. A workspace file can state `base_url` and `auth_provider` together, as a `models:` entry can.
+
+**What the build proceeds under.** Only after the person presses the control, and only to the configured `base_url`. The bearer is the named provider's own credential, resolved in main through `ProviderService.lease`, never in the file, the snapshot or the renderer. The disclosure is left unchanged. Demo mode (REQ-SHELL-005) has no code to meet in the product as built; when it lands, the endpoint path must decline with it.
+
+**What decides it.** A ruling on the disclosure, and on whether a workspace file may pair a `base_url` with a credential here when it may for a model.
+
+<a id="oq-459"></a>
+
+**OQ-459 — What does the application grant the renderer's device requests?** *(ADR-0030, REQ-CHAT-007. Raised 2026-10-30 by R-089.)*
+
+**What is open.** Nothing set a permission handler before this, so Electron's default answered yes to every request. Capture needs a secure context, and a request refused without a reason looks like a broken button.
+
+**What the build proceeds under.** Handlers on the default session: `media` is granted for audio only, to the application's own pages; the clipboard write the copy buttons use stays granted; every other request is refused. A non-secure page shows a specific reason in the control's two channels instead of attempting capture, and a device refusal or absence states its own reason. Measured values are in the first-execution row.
+
+**What decides it.** A ruling on the list.

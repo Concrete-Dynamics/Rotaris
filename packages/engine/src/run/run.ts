@@ -4,7 +4,7 @@ import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type Approv
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
-import type { Committed, SessionWriter } from '../session-writer.js';
+import { QUEUED_PROMPT_TASK_NAME, type Committed, type SessionWriter } from '../session-writer.js';
 import { Aggregates } from './aggregates.js';
 import { classifyStop, HELD_ANSWER_LIMIT, openPlanIds, openPlanItems, planCarryText, planCorrectionText, planHeldRowText, planNotDoneSummary, statusForResult, stopCondition, summarise, TODO_LIST_OWED_TEXT, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
@@ -1307,6 +1307,7 @@ export class Run {
       } else if (report.status === 'succeeded') {
         outcome = 'succeeded';
         this.todo.complete(task);
+        writer.completeQueuedPromptOfTask(task.name);
         // PD-ORCH-005 clause 17: a continue's message the resumed iteration held is done with it, before completion is judged.
         this.todo.releaseHeld(iteration, true);
         if (this.rootRecord) this.rootRecord.state = 'succeeded';
@@ -2246,6 +2247,15 @@ export class Run {
     return this.register(p);
   };
 
+  /**
+   * REQ-CHAT-035 / REQ-CHAT-040: whether a new queued prompt can still be honoured. No boundary follows once the run stops
+   * stepping (`closeSteering`), and teardown can take as long as its hooks do: a prompt accepted there would sit QUEUED under
+   * a run reporting completion, so it is refused, and the composer gives the person their text back.
+   */
+  get acceptsQueuedPrompts(): boolean {
+    return !this.ended && !this.steeringClosed;
+  }
+
   /** REQ-MONITOR-133: a steer is pending until its conversation's next step; the id is the control's string value. */
   steer(agentId: string, text: string): string | null {
     if (this.ended || this.steeringClosed || text.trim() === '' || agentId.trim() === '') return null;
@@ -2398,7 +2408,7 @@ export class Run {
     if (!r.ok || r.value.length === 0) return;
     // REQ-CHAT-089: the task's id is the backend's own, never the prompt's; the prompt is found by the task's name and by
     // the `prompt_triggered` timeline entry, which carries its full id.
-    for (const p of r.value) this.todo.appendTask('Queued Prompts', this.mintTaskId(), p.content, `Queued Prompt: ${p.prompt_id.slice(0, 8)}`);
+    for (const p of r.value) this.todo.appendTask('Queued Prompts', this.mintTaskId(), p.content, `${QUEUED_PROMPT_TASK_NAME}${p.prompt_id.slice(0, 8)}`);
     this.deps.supervisorFor?.(this.rootId).noteUserInstruction();
     this.saveRunning({});
   }

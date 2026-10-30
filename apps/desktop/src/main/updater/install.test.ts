@@ -4,7 +4,7 @@ import { formatChecksumManifest } from '@rotaris/release-naming';
 import type { DownloadProgress, DownloadSink } from './download.js';
 import type { Offer } from './feed.js';
 import { RELEASE_SIGNING_KEYS } from './keys.js';
-import { hashMismatchSentence, noHashSentence, noManifestSentence, noSignatureSentence, runInstall, untrustedSignatureSentence, type InstallContext, type NetworkResponse, type StagingArea, type UpdateNetwork } from './install.js';
+import { formatHandOffRecord, hashMismatchSentence, isStagingDirectory, noHashSentence, noManifestSentence, noSignatureSentence, parseHandOffRecord, recordHandOff, removeHandedOffStaging, runInstall, untrustedSignatureSentence, type HandOffRecordFile, type InstallContext, type NetworkResponse, type StagingArea, type UpdateNetwork } from './install.js';
 import type { StrategyFiles, StrategySpawn } from './strategies.js';
 
 const ASSET = 'Rotaris-0.2.0-windows-x64-portable.exe';
@@ -53,7 +53,7 @@ const offer = (over: Partial<Offer> = {}): Offer => ({
 });
 
 /** An in-memory staging area recording every directory it made and every file it holds. */
-function stagingArea(options: { writeFails?: boolean; createFails?: boolean } = {}) {
+function stagingArea(options: { writeFails?: boolean; createFails?: boolean; removeFails?: boolean } = {}) {
   const dirs = new Set<string>();
   const files = new Map<string, Buffer>();
   let n = 0;
@@ -79,7 +79,10 @@ function stagingArea(options: { writeFails?: boolean; createFails?: boolean } = 
       return sink;
     },
     removeFile: async (path) => { files.delete(path); },
-    removeDirectory: async (dir) => { dirs.delete(dir); },
+    removeDirectory: async (dir) => {
+      if (options.removeFails) throw new Error('EPERM: operation not permitted');
+      dirs.delete(dir);
+    },
   };
   return { area, dirs, files };
 }
@@ -317,5 +320,91 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     expect(await runInstall(offer({ asset: { name: setup, url: 'https://github.com/x/asset', size: payload.byteLength } }), ctx)).toMatchObject({ ok: false, stage: 'download' });
     expect(spawned).toEqual([]);
     expect(staging.dirs.size).toBe(0);
+  });
+});
+
+describe('the installer hand-off\'s staging directory — REQ-STARTUP-178', () => {
+  const SETUP = 'Rotaris-0.2.0-windows-x64-setup.exe';
+  const setupOffer = (): Offer => offer({ asset: { name: SETUP, url: 'https://github.com/x/asset', size: payload.byteLength } });
+
+  /** The record's file, in memory; `fails` names the operation that rejects. */
+  function recordFile(initial: string | null, fails: 'read' | 'write' | null = null) {
+    let text = initial;
+    const port: HandOffRecordFile = {
+      read: async () => { if (fails === 'read') throw new Error('EACCES'); return text; },
+      write: async (t) => { if (fails === 'write') throw new Error('ENOSPC: no space left on device'); text = t; },
+      clear: async () => { text = null; },
+    };
+    return { port, text: () => text };
+  }
+
+  it('beforeHandOff is given the staging directory after beforeApply allowed and before the installer starts', async () => {
+    const release = published({ manifestEntries: [{ name: SETUP, sha256: digest }] });
+    const staging = stagingArea();
+    const events: string[] = [];
+    const spawn: StrategySpawn = { spawnDetached: async (exe) => { events.push(`spawn:${exe}`); } };
+    const { ctx } = context(release, staging, targetVolume(), {
+      flavour: 'installer', target: 'C:\\Users\\u\\AppData\\Local\\Rotaris', spawn,
+      beforeApply: async () => { events.push('beforeApply'); return true; },
+      beforeHandOff: async (dir) => { events.push(`beforeHandOff:${dir}`); },
+    });
+    expect(await runInstall(setupOffer(), ctx)).toMatchObject({ ok: true, applied: { outcome: 'handed-off' } });
+    expect(events).toEqual(['beforeApply', 'beforeHandOff:/tmp/rotaris-update-1', `spawn:/tmp/rotaris-update-1/${SETUP}`]);
+  });
+
+  it('a beforeHandOff that rejects does not stop the hand-off; a declined beforeApply never reaches it', async () => {
+    const release = published({ manifestEntries: [{ name: SETUP, sha256: digest }] });
+    const { ctx, spawned } = context(release, stagingArea(), targetVolume(), { flavour: 'installer', beforeHandOff: async () => { throw new Error('ENOSPC'); } });
+    expect(await runInstall(setupOffer(), ctx)).toMatchObject({ ok: true });
+    expect(spawned).toHaveLength(1);
+
+    let reached = 0;
+    const declined = context(published({ manifestEntries: [{ name: SETUP, sha256: digest }] }), stagingArea(), targetVolume(), {
+      flavour: 'installer', beforeApply: async () => false, beforeHandOff: async () => { reached += 1; },
+    });
+    expect(await runInstall(setupOffer(), declined.ctx)).toMatchObject({ ok: false, stage: 'declined' });
+    expect(reached).toBe(0);
+  });
+
+  it('only a `rotaris-update-` directory with a parent is a staging directory; a record naming anything else is no record', () => {
+    expect(isStagingDirectory('/tmp/rotaris-update-AbC123')).toBe(true);
+    expect(isStagingDirectory('C:\\Users\\u\\AppData\\Local\\Temp\\rotaris-update-x1y2')).toBe(true);
+    for (const path of ['/home/u', 'C:\\Users\\u', 'rotaris-update-x', '/tmp/rotaris-update-', '/tmp/rotaris-update-x/..', '/tmp/not-rotaris-update-x', '']) expect(isStagingDirectory(path)).toBe(false);
+    const record = { version: '0.2.0', staging: 'C:\\Temp\\rotaris-update-abc' };
+    expect(parseHandOffRecord(formatHandOffRecord(record))).toEqual(record);
+    expect(parseHandOffRecord(JSON.stringify({ schema: 1, version: '0.2.0', staging: 'C:\\Users\\u' }))).toBeNull();
+    expect(parseHandOffRecord(JSON.stringify({ schema: 2, version: '0.2.0', staging: '/tmp/rotaris-update-a' }))).toBeNull();
+    expect(parseHandOffRecord('{')).toBeNull();
+    expect(parseHandOffRecord('null')).toBeNull();
+  });
+
+  it('recordHandOff writes the record, removes the directory an earlier record named, and never rejects', async () => {
+    const staging = stagingArea();
+    staging.dirs.add('/tmp/rotaris-update-old');
+    const file = recordFile(formatHandOffRecord({ version: '0.2.0', staging: '/tmp/rotaris-update-old' }));
+    expect(await recordHandOff(file.port, staging.area, { version: '0.2.0', staging: '/tmp/rotaris-update-new' })).toBe('recorded');
+    expect(staging.dirs.has('/tmp/rotaris-update-old')).toBe(false);
+    expect(parseHandOffRecord(file.text()!)).toEqual({ version: '0.2.0', staging: '/tmp/rotaris-update-new' });
+    expect(await recordHandOff(recordFile(null, 'write').port, staging.area, { version: '0.2.0', staging: '/tmp/rotaris-update-new' })).toBe('not-recorded');
+    expect(await recordHandOff(recordFile(null, 'read').port, staging.area, { version: '0.2.0', staging: '/tmp/rotaris-update-new' })).toBe('recorded');
+  });
+
+  it('removeHandedOffStaging: nothing without a record, removed at the recorded or a newer version, not yet at an older one, kept when the removal fails, a bad record discarded', async () => {
+    const at = (dir: string) => formatHandOffRecord({ version: '0.2.0', staging: dir });
+    const run = async (text: string | null, running: string, removeFails = false) => {
+      const staging = stagingArea({ removeFails });
+      staging.dirs.add('/tmp/rotaris-update-9');
+      const file = recordFile(text);
+      const outcome = await removeHandedOffStaging(file.port, staging.area, running);
+      return { outcome, dirs: [...staging.dirs], text: file.text() };
+    };
+    expect(await run(null, '0.2.0')).toEqual({ outcome: 'nothing', dirs: ['/tmp/rotaris-update-9'], text: null });
+    expect(await run(at('/tmp/rotaris-update-9'), '0.2.0')).toEqual({ outcome: 'removed', dirs: [], text: null });
+    expect(await run(at('/tmp/rotaris-update-9'), '0.3.0')).toEqual({ outcome: 'removed', dirs: [], text: null });
+    expect(await run(at('/tmp/rotaris-update-9'), '0.1.0')).toEqual({ outcome: 'not-yet', dirs: ['/tmp/rotaris-update-9'], text: at('/tmp/rotaris-update-9') });
+    expect(await run(at('/tmp/rotaris-update-9'), '0.2.0', true)).toEqual({ outcome: 'kept', dirs: ['/tmp/rotaris-update-9'], text: at('/tmp/rotaris-update-9') });
+    expect(await run(JSON.stringify({ schema: 1, version: '0.2.0', staging: '/home/u' }), '0.2.0')).toEqual({ outcome: 'discarded', dirs: ['/tmp/rotaris-update-9'], text: null });
+    const unreadable = recordFile(at('/tmp/rotaris-update-9'), 'read');
+    expect(await removeHandedOffStaging(unreadable.port, stagingArea().area, '0.2.0')).toBe('nothing');
   });
 });

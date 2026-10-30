@@ -6,7 +6,7 @@ import { app, net } from 'electron';
 import type { ArtifactVariables } from '@rotaris/platform';
 import type { DownloadSink } from './download.js';
 import { classifyInstallation, parseInstallDir, type Classification } from './classify.js';
-import type { NetworkResponse, StagingArea, UpdateNetwork } from './install.js';
+import type { HandOffRecordFile, NetworkResponse, StagingArea, UpdateNetwork } from './install.js';
 import type { StrategyFiles, StrategySpawn } from './strategies.js';
 
 /**
@@ -71,9 +71,12 @@ export interface UpdaterPorts {
   readonly staging: StagingArea;
   readonly files: StrategyFiles;
   readonly spawn: StrategySpawn;
+  readonly handOffRecord: HandOffRecordFile;
 }
 
-export function createUpdaterPorts(): UpdaterPorts {
+/** `updatesDir` is `dataLayout`'s `updates`, under the per-user data directory (REQ-STARTUP-145), never the temporary one. */
+export function createUpdaterPorts(updatesDir: string): UpdaterPorts {
+  const handOffFile = join(updatesDir, 'installer-handoff.json');
   return {
     network: {
       /**
@@ -139,6 +142,17 @@ export function createUpdaterPorts(): UpdaterPorts {
         child.once('error', reject);
         child.once('spawn', () => { child.unref(); resolve(); });
       }),
+    },
+    handOffRecord: {
+      read: () => fsp.readFile(handOffFile, 'utf8').catch(() => null),
+      // REQ-STARTUP-178: written atomically — a same-directory temporary file, flushed, then renamed over the record.
+      write: async (text) => {
+        await fsp.mkdir(updatesDir, { recursive: true });
+        const incoming = `${handOffFile}.tmp`;
+        await fsp.writeFile(incoming, text, { encoding: 'utf8', flush: true });
+        await fsp.rename(incoming, handOffFile);
+      },
+      clear: () => fsp.rm(handOffFile, { force: true }),
     },
   };
 }

@@ -526,12 +526,12 @@ async function main(): Promise<void> {
    * before the clear (REQ-STARTUP-116/117). `updater/electron.ts` is the one file of it that touches Electron, the
    * network, the disk or a process; everything else is decided in its tests.
    */
-  const updaterPorts = createUpdaterPorts();
+  const updaterPorts = createUpdaterPorts(layout.updates);
   const classification = await classifyThisInstallation(launchArtifact);
   const updater = createUpdater({
     classification,
     runningVersion: productVersion(),
-    network: updaterPorts.network, staging: updaterPorts.staging, files: updaterPorts.files, spawn: updaterPorts.spawn,
+    network: updaterPorts.network, staging: updaterPorts.staging, files: updaterPorts.files, spawn: updaterPorts.spawn, handOffRecord: updaterPorts.handOffRecord,
     dismissedVersion: { read: () => preferences.read('updates/dismissedVersion'), write: (version) => preferences.write('updates/dismissedVersion', version) },
     notices,
     log: (level, message) => log(message, level),

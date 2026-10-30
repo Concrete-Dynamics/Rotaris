@@ -108,6 +108,8 @@ export function dataLayout(dirs: UserDirs, platform: NodeJS.Platform = process.p
   return {
     workspaces: join(dirs.data, 'workspaces'),
     instanceRecord: join(dirs.data, 'instance.json'),
+    /** The updater's per-user records (REQ-STARTUP-178): today the installer hand-off's, `installer-handoff.json`. */
+    updates: join(dirs.data, 'updates'),
     machineId: join(dirs.data, 'machine-id'),
     // REQ-PROVIDER-014 fixes `tokens/`; the name reserved here before the store was built was `credentials`,
     // which no requirement names — corrected when ADR-0029 was first executed (Part K, 2026-09-05).

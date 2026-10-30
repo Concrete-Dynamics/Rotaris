@@ -6,7 +6,7 @@ import type { NoticePatch, NoticeStore } from '../notices.js';
 import type { Classification } from './classify.js';
 import { measuredLabel, messageOf, type DownloadProgress } from './download.js';
 import { FEED_ACCEPT, FEED_ENDPOINT, FEED_TIMEOUT_MS, parseLatestRelease, selectOffer, SUMMARY_FALLBACK, type Offer } from './feed.js';
-import { runInstall, type StagingArea, type UpdateNetwork } from './install.js';
+import { recordHandOff, removeHandedOffStaging, runInstall, type HandOffRecordFile, type StagingArea, type UpdateNetwork } from './install.js';
 import { cleanupPortableBackup, type StrategyFiles, type StrategySpawn } from './strategies.js';
 
 /**
@@ -21,6 +21,8 @@ import { cleanupPortableBackup, type StrategyFiles, type StrategySpawn } from '.
  *    refused. REQ-STARTUP-106/150: a build classified not updatable performs no check and issues no request; the one
  *    line it writes is the application log's. REQ-STARTUP-057: a demo window, the same.
  *  - REQ-STARTUP-115: the portable's leftover `<name>.old` is deleted before the network round trip.
+ *  - REQ-STARTUP-178: the installer hand-off's staging directory is recorded before the setup starts and removed by the
+ *    first check of the updated build, in the same launch-time step.
  *  - REQ-STARTUP-105/107..110/112: the feed request, the offer rule, the silent failure, the summary (`feed.ts`).
  *  - REQ-STARTUP-116/117/146: the offer notice; `updates/dismissedVersion`, written only when THAT notice is dismissed
  *    and read at every check; the same version stays silent, any newer version notifies again.
@@ -74,6 +76,8 @@ export interface UpdaterDeps {
   readonly staging: StagingArea;
   readonly files: StrategyFiles;
   readonly spawn: StrategySpawn;
+  /** REQ-STARTUP-178: the record of the installer hand-off's staging directory, in the per-user data directory. */
+  readonly handOffRecord: HandOffRecordFile;
   /** The key set to verify against; production passes nothing and gets the compiled-in set (`keys.ts`). */
   readonly keys?: readonly string[];
   /** `updates/dismissedVersion` — REQ-STARTUP-146's key, main's alone. */
@@ -313,8 +317,15 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     // window's check it would delete the backup this process's own apply made moments earlier, which is not "left by
     // a previous update" — the previous update is the one a later launch finds.
     const cleaned = cleanedThisLaunch ? 'nothing' : await cleanupPortableBackup(updatable.flavour, updatable.target, deps.files);
+    // REQ-STARTUP-178, on the same launch-time terms: never a later window's check, which in the process that handed off
+    // would find its own installer's directory.
+    const handedOff = cleanedThisLaunch ? 'nothing' : await removeHandedOffStaging(deps.handOffRecord, deps.staging, deps.runningVersion);
     cleanedThisLaunch = true;
     if (cleaned !== 'nothing') deps.log('info', `update check: the previous update's backup beside the artifact was ${cleaned === 'removed' ? 'removed' : 'left for a later launch'} (REQ-STARTUP-115)`);
+    if (handedOff !== 'nothing') {
+      const what = handedOff === 'removed' ? 'removed' : handedOff === 'kept' ? 'left for a later launch' : handedOff === 'not-yet' ? 'kept: the version it installs is not running yet' : 'not readable, and the record was cleared';
+      deps.log('info', `update check: the installer hand-off's staging directory was ${what} (REQ-STARTUP-178)`);
+    }
     abort = new AbortController();
     deps.log('info', `update check: window ${windowId}, ${updatable.flavour} flavour, GET ${FEED_ENDPOINT} (REQ-STARTUP-105)`);
     let body: string;
@@ -375,11 +386,21 @@ export function createUpdater(deps: UpdaterDeps): Updater {
       // meanwhile is asked about here, immediately before the installer is started. OQ-311: so is a window's unsaved
       // settings, first, since a window may have become dirty while the download ran; OQ-361: then guard (2), since an
       // integration may have been admitted meanwhile.
+      // REQ-STARTUP-178: the setup runs from staging, so the directory is recorded before it starts, for the updated
+      // build's first launch to remove.
       ...(updatable.flavour === 'installer'
-        ? { beforeApply: async () => { const declined = await confirmAtHandOff('install', click, true); if (declined !== null) declinedBy = declined; return declined === null; } }
+        ? {
+          beforeApply: async () => { const declined = await confirmAtHandOff('install', click, true); if (declined !== null) declinedBy = declined; return declined === null; },
+          beforeHandOff: async (staging: string) => {
+            const recorded = await recordHandOff(deps.handOffRecord, deps.staging, { version: offer.version, staging });
+            deps.log(recorded === 'recorded' ? 'info' : 'warn', `update install: the installer's staging directory ${staging} was ${recorded === 'recorded' ? 'recorded for the updated build to remove' : 'not recorded; nothing will remove it'} (REQ-STARTUP-178)`);
+          },
+        }
         : {}),
     });
     await repaint;
+    // An installer that could not be started had its staging discarded, so the record naming it is cleared with it.
+    if (!result.ok && result.stage === 'apply' && updatable.flavour === 'installer') await deps.handOffRecord.clear().catch(() => undefined);
     if (!result.ok && result.stage === 'declined') {
       // Declining keeps the update offered: the offer's face comes back in the same notice, and nothing was started.
       noticeId = await show(noticeId, offerFace(offer));

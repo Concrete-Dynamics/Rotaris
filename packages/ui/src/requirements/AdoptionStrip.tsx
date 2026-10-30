@@ -61,7 +61,7 @@ export function AdoptionStrip({ armed, readAdoption, adopt }: AdoptionStripProps
       {details && lines.map((l) => (
         <p key={l.kind} className="req-adoption__delta card-meta" data-testid={`req-adoption-${l.kind}`}><span className="req-adoption__label">{l.label}</span> <span className={l.kind === 'undecided' ? undefined : 'mono'}>{l.ids}</span></p>
       ))}
-      {running && <span className="req-adoption__live" role="status" data-testid="req-adoption-running">{RUNNING_SENTENCE}</span>}
+      {running && <span className="visually-hidden" role="status" data-testid="req-adoption-running">{RUNNING_SENTENCE}</span>}
       {/* REQ-ADOPT-004: the outcome of the press, on its own line, so the state sentence above stays REQ-ADOPT-001's. */}
       {!running && outcome !== null && <p className="req-adoption__outcome card-meta" role="status" data-testid="req-adoption-outcome">{outcome}</p>}
     </section>

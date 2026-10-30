@@ -21,7 +21,7 @@ export function DictationSettings({ value, onChange }: { value: DictationConfigV
   return (
     <section aria-label="Dictation" data-testid="settings-dictation">
       <h2 className="settings__heading">Dictation</h2>
-      <p className="text-secondary settings__hint">The composer's microphone uses this model. Rotaris downloads nothing by itself, and the recording goes only where you point it here.</p>
+      <p className="text-secondary settings__hint">The composer's microphone uses this model. Rotaris downloads nothing by itself: a local model is read from this machine and the recording never leaves it, while an endpoint sends the recording to the host named above.</p>
       <div className="settings__dictation-field">
         <label htmlFor="dictation-backend">Model source</label>
         <DesignSelect id="dictation-backend" className="input select" value={value.backend} onChange={(e) => onChange({ kind: 'dictation', key: 'backend', value: e.currentTarget.value })}>

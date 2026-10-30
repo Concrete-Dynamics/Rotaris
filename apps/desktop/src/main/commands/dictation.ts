@@ -4,7 +4,7 @@ import { transcriberFor } from '../dictation/select.js';
 import type { CommandAt, CommandContext, CommandHandlers } from './context.js';
 import type { CommandOutcome, CommandRequest } from '@rotaris/contracts';
 
-/** A refusal's sentence is the headline: the composer shows it as it stands, in the control's two channels and its error line. */
+/** A refusal's sentence is the headline: the composer shows it on its error line, and the control carries it in its two channels once idle. */
 const refuse = (code: string, headline: string): CommandOutcome => ({ ok: false, code, headline });
 
 /**

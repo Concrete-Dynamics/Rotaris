@@ -866,6 +866,10 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
           await ensure();
           return { value: blockerPayload(command.id) };
         }
+        // Domain 22 (PD-TRACE-001): answered by `adoption.ts` before this service is reached; never the delivery store's.
+        case 'requirements.adoption':
+        case 'requirements.adopt':
+          return { value: { ok: false, reason: `${command.name} is the adoption assistant's, not the delivery store's; nothing changed.` } };
       }
   }
   return service;

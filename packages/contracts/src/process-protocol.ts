@@ -78,6 +78,9 @@ export const InitialTodoSchema = z.object({
 });
 export type InitialTodo = z.infer<typeof InitialTodoSchema>;
 
+/** REQ-ADOPT-012: the detection result as it travels to the interpretation, bounded so a large workspace cannot flood the channel. */
+export const ADOPTION_DETECTION_MAX = 200_000;
+
 export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   /**
    * PD-PROVIDER-001: main's handshake carries the shared-quota cap each provider's catalogue entry declares, by provider id
@@ -259,6 +262,12 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
    */
   z.object({ kind: z.literal('retrospective.capture'), workspaceId: z.string().min(1), workspaceRoot: z.string().min(1) }),
   z.object({ kind: z.literal('improvement.cancel'), artifactId: z.string().regex(/^impart_[0-9A-Za-z]{8}$/) }),
+  /**
+   * Domain 22 (PD-TRACE-001), REQ-ADOPT-012: the adoption assistant's one interpretation — the workspace service asks,
+   * main forwards, and the host answers on the model the `requirements-engineer` role resolves to. `detection` is the
+   * detection result as JSON text; the answer is untrusted and validated by the service, never here.
+   */
+  z.object({ kind: z.literal('adoption.interpret'), workspaceRoot: z.string().min(1), detection: z.string().min(2).max(ADOPTION_DETECTION_MAX) }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
   /**
    * Part AL — the live terminal (ADR-0021): main relays the seven `terminal.*` commands as they arrive, shape for shape,
@@ -466,6 +475,8 @@ export const ServiceAskSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('checkpoint.deleteNamespace'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1) }),
   /** REQ-LIBRARY-034: run host freezes bounded workspace history before publishing a job. */
   z.object({ kind: z.literal('improvements.command'), workspaceRoot: z.string(), command: ImprovementCommandSchema }),
+  /** Domain 22 (PD-TRACE-001): the adoption run's interpretation, forwarded by main to the run host (REQ-ADOPT-012). */
+  z.object({ kind: z.literal('adoption.interpret'), workspaceRoot: z.string().min(1), detection: z.string().min(2).max(ADOPTION_DETECTION_MAX) }),
 ]);
 export type ServiceAsk = z.infer<typeof ServiceAskSchema>;
 export const ServiceAskEnvelopeSchema = z.object({ v, ask: id, request: ServiceAskSchema });
@@ -592,6 +603,8 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('requirements.result'), value: z.unknown(), changed: z.object({ generation: z.number().int().nonnegative(), affected: z.array(z.string()).nullable() }).optional() }),
   z.object({ kind: z.literal('improvements.result'), value: z.unknown(), changed: z.boolean().optional() }),
   z.object({ kind: z.literal('improvement.analyzed'), artifact: ImprovementArtifactSchema }),
+  /** Domain 22 (PD-TRACE-001): the interpretation's text — its first JSON object, or the raw answer — and the model it came from; untrusted. */
+  z.object({ kind: z.literal('adoption.interpreted'), text: z.string(), model: z.string() }),
   /** PD-LIBRARY-002: the captured retrospective, handed straight to the coordinator main already owns. */
   z.object({ kind: z.literal('retrospective.captured'), job: ImprovementAnalysisJobSchema }),
   // Part AJ

@@ -1,14 +1,14 @@
 import { SKILLS_DISABLED_MESSAGE, type ImprovementArtifactRecord, type ProcessReply, type RunHostRequest } from '@rotaris/contracts';
 import { asSessionId, millis, toIsoUtc, type WorkspaceId } from '@rotaris/kernel';
 import { openStore, StoreDal, forgetSpelling } from '@rotaris/store';
-import { analyzeImprovement, captureRetrospectiveJob, CATALOGUE, relativeTime, timelineId, workspaceUsage } from '@rotaris/engine';
+import { ADOPTION_ROLE, analyzeImprovement, captureRetrospectiveJob, CATALOGUE, interpretAdoption, relativeTime, timelineId, workspaceUsage } from '@rotaris/engine';
 import { renderUnavailability } from '@rotaris/agent-tools';
 import { clearHooksDecision, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
 import { REFS_ASK_BOUND } from './checkpoints.js';
 import { configurationForExecutionRoot, type McpHost } from './mcp.js';
 import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessionFiles } from './session-actions.js';
 import { CHECKPOINTS_DEFAULTS, liveStateProblems, type LiveState } from '@rotaris/config';
-import { improvementCollectorOf, retrospectiveOf } from './configuration.js';
+import { improvementCollectorOf, modelRefOf, retrospectiveOf, thinkingOf } from './configuration.js';
 import { launchSession } from './launch.js';
 import { SKILLS_CONFIGURATION_UNLOADED, SkillsUnloaded, writeSkillListing, type SkillHost } from './skills.js'; // REQ-CHAT-162, OQ-279
 import { randomUUID } from 'node:crypto';
@@ -381,6 +381,27 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
         improvementControllers.delete(req.job.artifact_id);
         improvementContexts.delete(req.job.artifact_id);
       }
+    }
+    case 'adoption.interpret': {
+      /*
+       * Domain 22 (PD-TRACE-001), REQ-ADOPT-012: the adoption assistant's one interpretation, on the model the
+       * `requirements-engineer` role resolves to — the configuration loaded and leased afresh, as a retrospective's is,
+       * since no run carries it. The answer goes back as text; the workspace service validates it (REQ-ADOPT-013).
+       */
+      const leased = await retrospectiveSetup(req.workspaceRoot);
+      if (leased.kind === 'refused') return leased.reply;
+      if (leased.kind === 'unconfigured') {
+        log(leased.reason, 'warn');
+        return { kind: 'refused', code: 'adoption.no-configuration', headline: 'The workspace configuration could not be loaded', detail: leased.reason };
+      }
+      if (leased.kind === 'no-model') return { kind: 'refused', code: 'adoption.no-model', headline: `No model is configured for the ${ADOPTION_ROLE} role` };
+      const run = leased.setup;
+      const name = run.cfg.personas[ADOPTION_ROLE]?.model ?? null;
+      const model = modelRefOf(run.cfg, name, run.scripted);
+      if (model === null || name === null) return { kind: 'refused', code: 'adoption.no-model', headline: `No model is configured for the ${ADOPTION_ROLE} role` };
+      const answer = await interpretAdoption(req.detection, { backend: run.model.backend, model, thinking: thinkingOf(run.cfg.models[name]), timers: clocks.timers, credentialFor: run.model.config.credentialFor }, new AbortController().signal);
+      log(`adoption: interpretation for ${req.workspaceRoot} on ${model.providerId}/${model.modelId}: ${answer.ok ? `${answer.text.length} characters` : answer.reason}`, answer.ok ? 'info' : 'warn');
+      return answer.ok ? { kind: 'adoption.interpreted', text: answer.text, model: `${model.providerId}/${model.modelId}` } : { kind: 'refused', code: 'adoption.interpretation', headline: 'The model gave no usable interpretation', detail: answer.reason };
     }
     case 'improvement.cancel': {
       improvementControllers.get(req.artifactId)?.abort();

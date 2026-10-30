@@ -38,6 +38,7 @@ export * from './children/orchestration.js';
 export * from './children/write-scope.js';
 export * from './artifacts/index.js';
 export * from './improvements/index.js';
+export * from './adoption/index.js'; // domain 22, PD-TRACE-001
 export * from './hooks-port.js';
 export * from './checkpoint-port.js';
 export * from './intent/index.js';

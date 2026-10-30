@@ -2352,6 +2352,14 @@
 .req-blocked__id { flex: none; color: var(--rt-text-tertiary); }
 .req-blocked__reason { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rt-text-secondary); }
 .req-blocked__row .btn { flex: none; }
+/* Domain 22 (PD-TRACE-001): the adoption strip beneath the header, drawn as the blocked strip is; every control secondary (REQ-ADOPT-001). */
+.req-adoption { position: relative; flex: none; padding: var(--rt-space-2) var(--rt-space-4); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); display: flex; flex-direction: column; gap: var(--rt-space-1); }
+.req-adoption__row { display: flex; align-items: center; gap: var(--rt-space-2); min-width: 0; font-size: var(--rt-text-xs); }
+.req-adoption__state { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rt-text-secondary); }
+.req-adoption__row .btn, .req-adoption__check { flex: none; }
+.req-adoption__delta, .req-adoption__outcome { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--rt-text-secondary); }
+.req-adoption__label { color: var(--rt-text-tertiary); }
+/* The live region a screen reader hears uses the adopted `visually-hidden`; the visible words are the state line's. */
 /* The body: the columns area scrolls horizontally (REQ-TRACE-237); the detail is an aside beside it, never over it. */
 .req-body { flex: 1 1 auto; min-height: 0; display: flex; }
 .req-columns { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto; padding: var(--rt-space-3) var(--rt-space-4); display: flex; gap: var(--rt-space-3); align-items: stretch; }

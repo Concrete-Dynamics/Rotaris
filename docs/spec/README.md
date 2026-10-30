@@ -17,10 +17,10 @@ how any other implementation achieves it.
 - Behavioral target: `ROTARIS-CRW-001` (see [`../clean-room/reference-record.md`](../clean-room/reference-record.md))
 - Status: **draft — gate decisions recorded, awaiting the sufficiency statement**
 - Open questions: resolved per domain; decisions recorded in [`resolutions/`](resolutions/)
-- Requirements: **3,973** identifiers across the 19 shipping domains, of which **258** are withdrawn
-  in place, leaving **3,715** that carry live behavior. The two retired domains (17 and 18) hold a
+- Requirements: **4,003** identifiers across the 20 shipping domains, of which **258** are withdrawn
+  in place, leaving **3,745** that carry live behavior. The two retired domains (17 and 18) hold a
   further **444** identifiers, **10** of them withdrawn in place; those are counted separately and
-  are not part of the shipping total — **4,417** identifiers in all, **268** of them withdrawn.
+  are not part of the shipping total — **4,447** identifiers in all, **268** of them withdrawn.
   *(Corrected 2026-10-13: this read 3,954, 3,696 and 4,398, with REQ-TOOLS at 192 and REQ-MCP at 117 below. REQ-MCP-118
   of the code-intelligence round and REQ-TOOLS-193 of the OQ-61 round were minted and never counted;
   `tools/symbol-artifact/spec-readme-counts.test.ts` now holds every figure here to the generated artifact.)*
@@ -28,6 +28,10 @@ how any other implementation achieves it.
   at the owner's explicit ask under [R-084](../product/requests.md#r-084). Unlike every other identifier counted here they
   are **decided, not derived**, and say so at their heading; `PD-STARTUP-008` carries what they displace. The amendment is
   in [`resolutions/11-startup-distribution-updates.md`](resolutions/11-startup-distribution-updates.md).)*
+  *(2026-10-29: 3,973, 3,715 and 4,417 became 4,003, 3,745 and 4,447, and the shipping domains nineteen became twenty,
+  when domain 22 and REQ-ADOPT-001 to REQ-ADOPT-030 were minted at the owner's explicit ask under
+  [R-088](../product/requests.md#r-088). They are **decided, not derived**, as R-084's are; `PD-TRACE-001` carries what
+  they displace. The amendment is in [`resolutions/22-requirements-adoption.md`](resolutions/22-requirements-adoption.md).)*
   Every figure here counts identifiers, not behaviors: an identifier is never removed, so a
   withdrawn requirement keeps its number and keeps being counted. A total that rose while behavior
   was being removed rose because resolution minted new identifiers to carry rescued capabilities,
@@ -155,6 +159,7 @@ never renumbered or reused. A changed requirement gets a new revision, not a new
 | 19 | [Notifications, Error Handling, and Recovery](19-notifications-errors-recovery.md) | `REQ-NOTIFY` | 268 | 4 | secondary |
 | 20 | [Machine-Readable Event Stream, Replay, and Trajectory Export](20-event-history-replay-export.md) | `REQ-EVENTS` | 179 | 39 | secondary |
 | 21 | [UI Performance Benchmark](21-ui-performance-benchmark.md) | `REQ-UIBENCH` | 119 | 14 | peripheral |
+| 22 | [Requirements Adoption Assistant](22-requirements-adoption.md) | `REQ-ADOPT` | 30 | 0 | secondary |
 
 "Reqs" is the count of identifiers a domain defines; "Withdrawn" is how many of those are withdrawn
 in place, retaining their number while carrying no behavior. Subtracting the second from the first

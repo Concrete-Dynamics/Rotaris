@@ -182,3 +182,34 @@ What the board's columns mean: `delivery` (default), `health`, `lifecycle`, `epi
 A configured origin of requirement documents, of type `reqtocode`, `markdown`, `yaml` or `json`,
 which may or may not declare the create capability and may or may not be writable. — `REQ-CONFIG`
 vocabularies
+
+### Adoption (domain 22, PD-TRACE-001)
+
+**Adoption assistant**:
+The board's surface that brings a project whose requirement layout matches nothing built in into the toolchain's
+own form. It is **not** a toolchain operation (REQ-TRACE-155 keeps the four). — `REQ-ADOPT-001`, `PD-TRACE-001`
+_Avoid_: importer, migrator, scaffolder
+
+**Detection pass**:
+The read-only, model-free walk that reports candidate stores, the identifier family and its numbering, the roots, the
+annotation vocabulary, and what it could not decide. — `REQ-ADOPT-005` to `REQ-ADOPT-010`
+
+**Candidate store**:
+A directory whose documents define two or more identifiers of one family in one definition shape. — `REQ-ADOPT-007`
+
+**Interpretation**:
+The one model answer that chooses a candidate and supplies the definition pattern, roots and conventions; untrusted
+input until every field has passed the toolchain's validators. — `REQ-ADOPT-012`, `REQ-ADOPT-013`
+
+**Adapter**:
+The layout document, its conventions and the extraction, composed from the detection and the interpretation, and
+executed to extract the requirements. — `REQ-ADOPT-011`, `REQ-ADOPT-016`
+
+**Adoption record**:
+What a run or a recording wrote to `.rotaris/requirements-adoption.json`: the adapter and every document's and
+identifier's hash. — `REQ-ADOPT-018`
+_Avoid_: baseline (that word is REQ-TRACE-121's three debt files)
+
+**Comparison** (on opening):
+The read that names the requirements new, changed and removed since the record. — `REQ-ADOPT-022`, `REQ-ADOPT-023`
+_Avoid_: diff, sync

@@ -80,12 +80,22 @@ const TENS = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy:
  * something this gate is entitled to change — so the gate carries the table
  * instead. One to ninety-nine, hyphenated or spaced; a bare number is taken too,
  * so that a register that ever switches form is not made un-checkable by this file.
+ * Since PD-TRACE-001 (2026-10-29, the hundredth entry) a leading "<unit> hundred", optionally followed by
+ * "and" and one to ninety-nine, is read as well — "One hundred", "One hundred and four".
  * @param {string} word
  * @returns {number | null}
  */
 function wordToNumber(word) {
-  const w = word.trim().toLowerCase();
+  const w = word.trim().toLowerCase().replace(/\s+/g, ' ');
   if (/^\d+$/.test(w)) return Number.parseInt(w, 10);
+  const hundreds = /^([a-z]+) hundred(?: and ([a-z]+(?:[-\s][a-z]+)?))?$/.exec(w);
+  if (hundreds !== null) {
+    const h = UNITS.indexOf(hundreds[1] ?? '');
+    if (h < 1 || h > 9) return null;
+    if (hundreds[2] === undefined) return h * 100;
+    const rest = wordToNumber(hundreds[2]);
+    return rest === null || rest >= 100 ? null : h * 100 + rest;
+  }
   const unit = UNITS.indexOf(w);
   if (unit > 0) return unit;
   const compound = /^([a-z]+)[-\s]([a-z]+)$/.exec(w);
@@ -205,7 +215,7 @@ const countSection = /^##\s+Count\s*$([\s\S]*?)^---\s*$/m.exec(source);
 if (countSection === null) {
   fail('there is no `## Count` section ending in a `---` rule. The declared total lives there.');
 } else {
-  const declared = /\*\*([A-Za-z-]+|\d+)\.\*\*/.exec(countSection[1]);
+  const declared = /\*\*([A-Za-z][A-Za-z -]*|\d+)\.\*\*/.exec(countSection[1]);
   if (declared === null) {
     fail(
       'the Count section declares no total. Write it as `**Nineteen.**` — a bolded number word ending ' +
@@ -216,7 +226,7 @@ if (countSection === null) {
     if (total === null) {
       fail(
         `the Count section says **${declared[1]}.**, which this gate cannot read as a number. ` +
-          'It knows one to ninety-nine in words, hyphenated or spaced, and bare digits.',
+          'It knows one to nine hundred and ninety-nine in words, hyphenated or spaced, and bare digits.',
       );
     } else if (total !== entries.length) {
       fail(

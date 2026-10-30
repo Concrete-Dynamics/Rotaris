@@ -153,7 +153,11 @@ export type RequirementsCommand =
   | { readonly name: 'requirements.run.reap'; readonly workspace: string; readonly live: readonly string[] }   // → RunReaped[] (REQ-TRACE-476 with the run host's real live set)
   // Part AP — the two pane reads: the review's twelve elements (REQ-TRACE-417..420) and a blocker with its engine fields (REQ-TRACE-449/452).
   | { readonly name: 'requirements.review'; readonly workspace: string; readonly id: ReqId }    // → ReviewPayload
-  | { readonly name: 'requirements.blocker'; readonly workspace: string; readonly id: ReqId };  // → BlockerPayload
+  | { readonly name: 'requirements.blocker'; readonly workspace: string; readonly id: ReqId }  // → BlockerPayload
+  // Domain 22 (PD-TRACE-001): the adoption assistant. `adoption` is a read — the comparison on opening (REQ-ADOPT-022);
+  // `adopt` is the strip's button — a run (consults a model) or a recording (consults none), REQ-ADOPT-002/003.
+  | { readonly name: 'requirements.adoption'; readonly workspace: string }                     // → AdoptionView
+  | { readonly name: 'requirements.adopt'; readonly workspace: string; readonly mode: 'run' | 'record'; readonly writeLayout?: boolean };  // → AdoptionOutcome
 /** channel 10 */
 export interface RequirementsChanged { readonly workspace: string; readonly generation: number; readonly affected: readonly ReqId[] | null; readonly progress?: ProgressReport }
 
@@ -222,6 +226,9 @@ export const RequirementsCommandSchema = z.discriminatedUnion('name', [
   z.object({ name: z.literal('requirements.run.reap'), workspace, live: z.array(z.string()) }),
   z.object({ name: z.literal('requirements.review'), workspace, id: ReqIdSchema }),
   z.object({ name: z.literal('requirements.blocker'), workspace, id: ReqIdSchema }),
+  // Domain 22 (PD-TRACE-001): REQ-ADOPT-028 — no actor and no path; the workspace is main's to replace.
+  z.object({ name: z.literal('requirements.adoption'), workspace }),
+  z.object({ name: z.literal('requirements.adopt'), workspace, mode: z.enum(['run', 'record']), writeLayout: z.boolean().optional() }),
 ]);
 /** The command as it arrives off the wire (zod's `optional` admits an explicit `undefined`; the seam's type does not). */
 export type RequirementsCommandPayload = z.infer<typeof RequirementsCommandSchema>;

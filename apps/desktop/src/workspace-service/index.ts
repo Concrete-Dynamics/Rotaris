@@ -286,6 +286,16 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
     // holds for this process, so the board's pass and the four operations share one I/O owner (ADR-0040 specific 6).
     case 'requirements.command': {
       if (!open) return { kind: 'refused', code: 'workspace.none', headline: 'Open a workspace before reading its requirements' };
+      // Domain 22 (PD-TRACE-001): the adoption assistant answers its two commands beside the delivery service, never through it —
+      // neither moves the board's generation (REQ-ADOPT-022, REQ-ADOPT-029). Loaded on first use, as the engine is.
+      if (req.command.name === 'requirements.adoption') {
+        const { adoptionView } = await import('./adoption.js');
+        return { kind: 'requirements.result', value: adoptionView(req.workspaceRoot) };
+      }
+      if (req.command.name === 'requirements.adopt') {
+        const { adoptionRun } = await import('./adoption.js');
+        return { kind: 'requirements.result', value: await adoptionRun(req.workspaceRoot, req.command.mode, req.command.writeLayout === true, ask, clocks, log) };
+      }
       const { engineFor } = await import('./traceability.js');
       const r = await deliveryServiceFor(open, { workspaceRoot: req.workspaceRoot, engine: engineFor(clocks, log), clocks, log }).handle(req.command, req.actor, req.disclosure);
       return { kind: 'requirements.result', value: r.value, ...(r.changed === undefined ? {} : { changed: r.changed }) };

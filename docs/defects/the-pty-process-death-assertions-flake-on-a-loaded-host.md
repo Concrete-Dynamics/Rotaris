@@ -83,3 +83,11 @@ obviously a timeout, and what it read has to come from the log before a change i
   command with a 60 s timeout.
 - `apps/desktop/scripts/lib/bounded-launch.test.ts` — `alive` at 52 and `goneWithin` at 65, the same kind of
   process-death check with the zombie-aware reading and a 15 s bound; not observed red here.
+
+**Observed again, 2026-10-29 (R-088's branch, Linux host with `DISPLAY=:97`).** Not only under load: `pnpm vitest run
+packages/agent-tools/src/terminal/terminal.test.ts` **alone** went red on the base commit `3ed01f9f` itself (a detached
+worktree, nothing of R-088 in it) — 5 failed, 112 passed — and on R-088's head — 4 failed, 113 passed. The four
+soft-paused kill cases (`goneWithin` read `[true, true]` where `[false, false]` is expected, i.e. neither the command nor
+its grandchild was gone within 5 s), and on the base run also the handshake case of
+[`a-cancel-during-the-first-calls-handshake-can-read-as-cancelled-before-the-command-completed.md`](a-cancel-during-the-first-calls-handshake-can-read-as-cancelled-before-the-command-completed.md).
+R-088 changes nothing the terminal loads. Recorded, not investigated.

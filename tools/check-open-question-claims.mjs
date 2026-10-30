@@ -240,7 +240,7 @@ export function filesOf(root) {
     ...withParts(join(root, 'docs', 'architecture', 'first-release-plan.md')),
     ...withParts(join(root, 'docs', 'architecture', 'README.md')),
     join(root, 'AGENTS.md'),
-    join(root, 'docs', 'proofs', 'live-run.md'),
+    ...withParts(join(root, 'docs', 'proofs', 'live-run.md')),
     join(root, 'CONTEXT-MAP.md'),
     join(root, 'docs', 'module-map.md'),
     ...walk(join(root, '.claude', 'rules'), (n) => n.endsWith('.md')),

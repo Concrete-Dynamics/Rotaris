@@ -353,7 +353,7 @@ script, the worktree wrappers' steps — so no habit is needed and none should b
 the store already holds. Anything else is explicit: `pnpm dev-time run <kind>:<label> -- <command>`, or a `start`/`stop`
 pair. A measurement never fails the work it measures, and no test writes the operator's store
 (`ROTARIS_DEV_TIME_DISABLE`, `ROTARIS_DEV_TIME_HOME`). What records itself, and how, is
-[`01-component-view.md`'s dev-time section](docs/architecture/views/01-component-view.md#the-development-time-store-behind-pnpm-dev-time-2026-10-18-r-075).
+[the component view's dev-time section](docs/architecture/views/01-component-view/03-where-the-responsibilities-sit.md#the-development-time-store-behind-pnpm-dev-time-2026-10-18-r-075).
 
 ## Driving the built app — `pnpm app:drive`
 

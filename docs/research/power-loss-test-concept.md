@@ -48,6 +48,6 @@ Ergebnisse werden pro Plattform und Fehlerart mit Zeugenvergleich, verlorenen Sa
 Integritätsbefunden ins Spike-Protokoll übernommen. OQ-12 bleibt bis dahin Messschuld.
 
 **Weitere offene Befunde:** Das Backup benötigt eine eigene Phase; die bestehende
-[Notiz zum fehlenden Backup-Flush](../defects/a-completed-backup-artifact-is-never-flushed.md) wird nicht repariert.
+[Notiz zum fehlenden Backup-Flush](../defects/fixed/a-completed-backup-artifact-is-never-flushed.md) wird nicht repariert.
 REQ-SHELL-131s Stromverlustzusage für die Theme-Datei und ADR-0004s Verzicht auf Verzeichnis-Flush bleiben zur
 Klärung festgehalten.

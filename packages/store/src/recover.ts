@@ -1,6 +1,7 @@
 import { closeSync, existsSync, fsyncSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { WorkspaceId } from '@rotaris/kernel';
+import { fsyncDirectory } from './flush.js';
 import { restoreJournal, stagingDir, storeDir } from './layout.js';
 
 /**
@@ -44,18 +45,6 @@ export class CutRestoreError extends Error {
   constructor(readonly target: string, readonly displaced: string | null, message: string) {
     super(message);
     this.name = 'CutRestoreError';
-  }
-}
-
-function fsyncDirectory(dir: string): void {
-  // A directory's entry is durable once the directory is flushed; Windows refuses to open a directory for that and
-  // flushes the entry with the file, so a refusal there is not a failure.
-  let fd: number | undefined;
-  try {
-    fd = openSync(dir, 'r');
-    fsyncSync(fd);
-  } catch { /* EISDIR / EPERM on Windows */ } finally {
-    if (fd !== undefined) closeSync(fd);
   }
 }
 

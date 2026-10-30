@@ -106,7 +106,7 @@ manual remedy and this escalation gets worse rather than better.**
 2026-09-02 corrected ten specification defects this record reported and, in five places, found that
 closing the defect required deciding something a user would see. It recorded the decision rather than
 taking it. **They are stated in full in
-[`../clean-room/specification-gate.md`](../../clean-room/specification-gate.md), which is canonical for
+`docs/clean-room/specification-gate.md` *(removed 2026-10-26)*, which is canonical for
 them; they were listed here so this register's count of open escalations stayed honest.**
 
 - **ESC-27 — `secrets.yaml` has no file mode.** `REQ-CONFIG-216` fixes the write as atomic and

@@ -216,5 +216,5 @@ No requirement identifier was renumbered, reused, or deleted.
 Of the 63 open questions raised in the draft, 60 were resolved, 2 were omitted (OQ 32 and OQ 33,
 legacy directory adoption) and 1 was escalated (OQ 44, the identity of the three default tool
 servers). That escalation was answered by the product owner on 2026-08-30 and the answer is recorded
-in [`../../clean-room/specification-gate.md`](../../../clean-room/specification-gate.md), so every
+in `docs/clean-room/specification-gate.md` *(removed 2026-10-26)*, so every
 question raised against this document is now disposed of and none remains open.

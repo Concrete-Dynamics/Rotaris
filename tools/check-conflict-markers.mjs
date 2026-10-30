@@ -210,7 +210,7 @@ if (process.argv[1] && import.meta.filename === process.argv[1]) {
       else console.error(`  ${p.path}:${p.line}: ${p.marker} (${p.where})`);
     }
     console.error('');
-    console.error('Resolve the merge by reading both sides (docs/clean-room/agent-workflow.md, "Merge back"), then stage the path again.');
+    console.error('Resolve the merge by reading both sides (AGENTS.md, "Rebase onto main, and persevere"), then stage the path again.');
     process.exitCode = 1;
   } else {
     console.log('check-conflict-markers: no merge-conflict marker in a tracked file');

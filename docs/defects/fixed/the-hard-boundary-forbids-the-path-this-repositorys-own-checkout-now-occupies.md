@@ -21,7 +21,7 @@ them.
 
 ## Specs
 
-None in `docs/spec/`: the boundary is process ([`../../clean-room/`](../../clean-room/)), not product behaviour.
+None in `docs/spec/`: the boundary is process (`docs/clean-room/` *(removed 2026-10-26)*), not product behaviour.
 
 ## Relevant files
 

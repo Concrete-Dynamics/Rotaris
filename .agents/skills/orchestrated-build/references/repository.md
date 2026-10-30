@@ -56,9 +56,9 @@ reported to the owner and recorded as a defect note (`docs/defects/README.md`). 
 count line, a link a moved note left behind), the orchestrator repairs it forward on its own branch in its own
 worktree from origin/main, the note moved to `fixed/` in the same commit, landed with the gate green before the next
 bundle's merge gate meets it; a red that needs code goes to the owner or into a plan. Their commit is never reverted
-(`docs/clean-room/agent-workflow.md`: surface a collision with the owner's commit, never reset it).
+(`AGENTS.md`, "The agent workflow": surface a collision with the owner's commit, never reset it).
 
-## Worktrees and branches — `docs/clean-room/agent-workflow.md`
+## Worktrees and branches — `AGENTS.md`, "The agent workflow"
 
 One temporary branch in one temporary worktree per bundle (`<repo>-wt-<short>`), cut from `origin/main`. The primary
 checkout is not a place to write. **Main's history is linear**: a reviewed bundle lands by a rebase onto `origin/main`

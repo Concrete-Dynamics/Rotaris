@@ -11,6 +11,6 @@ Part 6 of 7 of [the design README](../README.md), which indexes every part.
 - Assets: `docs/design/assets/` — the mark and the self-hosted variable fonts.
 - Information architecture: `docs/spec/12-desktop-shell-windows.md` (`REQ-SHELL-023` is canonical),
   and the owning domain for each view's contents.
-- Provenance of this material: `docs/clean-room/provenance.md`, section "Design material".
+- Provenance of this material: recorded in the repository's history (`docs/clean-room/provenance.md` *(removed 2026-10-26)*, section "Design material").
 
 ---

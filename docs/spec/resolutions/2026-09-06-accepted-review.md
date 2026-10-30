@@ -45,9 +45,9 @@ stderr. ADR-0020 and the question register record the amendment. Real PowerShell
 PTY coverage checks stderr capture and the empty soft-pause observation.
 
 Authority: the user accepted all recommendations in the repository-root
-`SPECIFICATION_REVIEW.md`, with evidence-led adjustments permitted. This record
+`SPECIFICATION_REVIEW.md` *(removed 2026-10-26)*, with evidence-led adjustments permitted. This record
 tracks applied cross-domain decisions; the root
-`SPECIFICATION_RESOLUTION_PROGRESS.md` tracks implementation and verification.
+`SPECIFICATION_RESOLUTION_PROGRESS.md` *(removed 2026-10-26)* tracks implementation and verification.
 
 ## A2 — classifier input boundary
 

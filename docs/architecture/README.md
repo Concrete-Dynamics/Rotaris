@@ -5,7 +5,7 @@
 - **Status:** **ACCEPTED. The Architecture Gate CLOSED on 2026-09-03** and **implementation is authorised**
   — bounded, for the mechanism, subject to IC-1 to IC-6 in [`implementation-conditions.md`](implementation-conditions.md).
   The verdict, the five decisions and the record of decision are in
-  [`../clean-room/architecture-gate.md`](../clean-room/architecture-gate.md). **The design language in
+  `docs/clean-room/architecture-gate.md` *(removed 2026-10-26)*. **The design language in
   [`../design/`](../design/) is adopted and authoritative; its information architecture is not — structure
   comes from `docs/spec/`, and `REQ-SHELL-023` is canonical.** *This bullet read "no screen may be built
   before IC-2's design reference exists"; the reference exists and has since 2026-09-01. IC-2 now bounds
@@ -16,7 +16,8 @@
   pipeline, CI, the Linux and macOS builds and the owner's hardware checks ([R-071](../product/requests.md#r-071)), and
   since 2026-10-07 the orchestrator's consortium rules open questions under the owner's delegation
   ([R-072](../product/requests.md#r-072)).*
-- **Behavioural target:** `ROTARIS-CRW-001` (see [`../clean-room/reference-record.md`](../clean-room/reference-record.md))
+- **Behavioural target:** `ROTARIS-CRW-001`, the earlier implementation, which the boundary in `CLAUDE.md` forbids
+  reading (its reference record, `docs/clean-room/reference-record.md`, was removed 2026-10-26)
 - **Evidence base:** [`constraints.md`](constraints.md) — what the specification forces, with requirement identifiers — read together with [`../spec/resolutions/`](../spec/resolutions/), the twenty-one records disposing of every open question each domain draft raised. A resolution sometimes narrows what a requirement appears to license; `constraints.md` says where and why.
 - **Measurements:** [`spikes/`](spikes/) — **ten reports covering nine live spikes and one withdrawn one**, two dated 2026-08-31, two dated 2026-09-01 and six dated 2026-09-02 *(this read "four dated 2026-09-01"; two of those four are 2026-08-31)*, and **the only real evidence this record has**. Several of them overturn something it asserted, and the 2026-09-02 group overturned more than the first four did: **three platform facts this record had asserted were disproved, one ADR's own stated gate trigger fired, and one mechanism this record had decided and never run was found not to work at all.** They are named inline wherever a claim rests on one, and the ADRs that depend on them carry an `Evidence:` header field. **Where a measurement disproved a *reason* but not a *conclusion*, both records say so in as many words** — the conclusion, that the original reason was tested and found false, and the reason that actually holds. That sentence is what stops a later reader "simplifying" the decision back into the defect. **Where a measurement disproved a *mechanism*, which has now happened four times, the record carries the failure in place beside the corrected step** — see the finding in section 6, which is now
 **four for four**: the fourth mechanism was the harness built to measure the third.

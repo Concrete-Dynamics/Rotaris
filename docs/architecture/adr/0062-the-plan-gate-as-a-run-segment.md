@@ -3,7 +3,7 @@
 - **Status:** accepted, with its first execution recorded below
 - **Date:** 2026-09-13
 - **Origin:** `REQ-ORCH-152`, `REQ-ORCH-153` and `REQ-ORCH-154`, settled by A4's amendment round (merged
-  `2dd77e7`) and by five owner rulings recorded in `SPECIFICATION_RESOLUTION_PROGRESS.md` (2026-09-13). The
+  `2dd77e7`) and by five owner rulings recorded in `SPECIFICATION_RESOLUTION_PROGRESS.md` *(removed 2026-10-26)* (2026-09-13). The
   rulings are inputs to this record, not decisions it re-takes: **park, do not block**; **the answer is a
   session command, not a control, and there are two of them**; **a plan cycle is not an iteration**; **the
   word `plan` stays as the specification has it**; **the mode is offered in the composer and in the start

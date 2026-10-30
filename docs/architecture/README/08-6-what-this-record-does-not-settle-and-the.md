@@ -6,7 +6,7 @@ Part 8 of 13 of [the architecture README](../README.md), which indexes every par
 
 > **THE GATE CLOSED ON 2026-09-03 AND IMPLEMENTATION IS AUTHORISED, BOUNDED.** This section is the verdict
 > the gate was decided on and it is kept as it stood, because a decision is only readable against what it
-> was given. The decision itself is [`../clean-room/architecture-gate.md`](../../clean-room/architecture-gate.md)
+> was given. The decision itself is `docs/clean-room/architecture-gate.md` *(removed 2026-10-26)*
 > and the five rulings are **GD-6 to GD-10** in [`owner-decisions.md`](../owner-decisions.md). What they changed
 > in this record: the three closures that rested on argument are bound as **IC-4, IC-5 and IC-6**; the
 > unstarted spikes are bound to the work each prices, with spike 8, spike 18 and the power-loss test named
@@ -84,7 +84,7 @@ release)*.
 
 **No escalation is open.** The seven bullets that stood here, each stating an open question for the owner,
 are removed rather than kept as tombstones, because every one is answered by a requirement and
-[`../clean-room/specification-gate.md`](../../clean-room/specification-gate.md) carries what each amendment
+`docs/clean-room/specification-gate.md` *(removed 2026-10-26)* carries what each amendment
 says, clause by clause. Two of the seven are worth naming here because they changed something this record
 had leaned on. **ESC-22's bound is now `REQ-MONITOR-222`'s condition rather than a smoothness concern**:
 1,000 frames per second **in aggregate**, counted per delivery so a stream shown in two windows counts

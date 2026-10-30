@@ -9,7 +9,7 @@ status: retired
 
 > **Retired — not part of the product.** The product owner scoped the product to a single Electron
 > desktop application with no command-line interface and no terminal user interface (see
-> [`../clean-room/specification-gate.md`](../clean-room/specification-gate.md)). This document is
+> `docs/clean-room/specification-gate.md` *(removed 2026-10-26)*). This document is
 > retained only until its capabilities have been restated as desktop behavior in the domains that own
 > them; the `REQ-TUI` and `REQ-CLI` identifiers are withdrawn and are never reused. Nothing here is
 > implemented.

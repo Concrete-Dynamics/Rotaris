@@ -20,7 +20,7 @@ bounds the aggregate terminal-frame rate, `REQ-SHELL-169` refuses a launch insid
 `REQ-CONFIG-216` fixes `secrets.yaml` at `0600`, `REQ-CONFIG-183` reports and carries on for a withdrawn key
 in either scope, `REQ-LIBRARY-047` and `REQ-LIBRARY-176` make a never-recorded version distinguishable from
 a pruned one, and `REQ-TOOLS-079` puts the permission-audit identifier in the entry.
-[`../clean-room/specification-gate.md`](../../clean-room/specification-gate.md) carries what each amendment
+`docs/clean-room/specification-gate.md` *(removed 2026-10-26)* carries what each amendment
 says. **Every one of the seven was a cost of a ruling or a consequence of a measurement rather than a
 decision anyone deferred, and no escalation in this register is now open.**
 

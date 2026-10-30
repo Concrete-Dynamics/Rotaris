@@ -2,8 +2,6 @@
   "$comment": "The record files over the document budget (docs/README.md, \"The document budget\") that the split of 2026-10-26 did not reach. tools/check-doc-budget.mjs fails on a file over the budget that is not listed here, and on a listed file back within it: this list only shrinks.",
   "over": [
     "docs/architecture/open-questions/35-spikes-and-later-questions-2.md",
-    "docs/clean-room/provenance.md",
-    "docs/clean-room/specification-gate.md",
     "docs/defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md",
     "docs/defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md",
     "docs/product/directives/pd-library-002.md",

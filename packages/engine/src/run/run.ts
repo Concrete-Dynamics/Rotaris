@@ -564,6 +564,11 @@ export class Run {
    */
   private steeringClosed = false;
   /**
+   * REQ-CHAT-040: set by `teardown` for a run that is about to report completion, and by nothing else — a rest a continue
+   * takes up again, a pause at the message limit and a park at the plan gate all leave the queue open.
+   */
+  private queueClosed = false;
+  /**
    * REQ-MONITOR-142: the entry model/reasoning switched mid-run; applied from the next iteration. `key` is the `models:` key
    * the switched model was chosen by, which the root's cell carries (`AgentResilienceCell.key`, `entryModelKey`).
    */
@@ -2253,7 +2258,7 @@ export class Run {
    * a run reporting completion, so it is refused, and the composer gives the person their text back.
    */
   get acceptsQueuedPrompts(): boolean {
-    return !this.ended && !this.steeringClosed;
+    return !this.ended && !this.queueClosed;
   }
 
   /** REQ-MONITOR-133: a steer is pending until its conversation's next step; the id is the control's string value. */
@@ -3214,6 +3219,12 @@ export class Run {
   /** REQ-SESSION-094: the ordered pipeline, each step guarded, the whole of it run even on exception. */
   private async teardown(reasonIn: StopReason): Promise<RunResult> {
     const { writer, owner, bus, clocks } = this.deps;
+    // REQ-EVENTS-028 / REQ-SESSION-092: a requested cancellation wins over any other outcome. Read here rather than after the
+    // first await below, because REQ-CHAT-040's queue closure has to be decided before closeSteering, and it must know whether
+    // this end is a completion.
+    const stopReason: StopReason = this.stop.requested ? (this.stop.reason ?? 'user_cancelled') : reasonIn;
+    const classified = classifyStop(stopReason);
+    if (classified.diagnostic) this.deps.warn(classified.diagnostic);
     // REQ-SESSION-094: every agent's turn has returned or been given up on, so nothing of this run's tool ports is owed
     // from here. Each is closed before anything terminal is written: a call still open settles now, and one that returns
     // later writes nothing through its gate into the finished session, or into a later run's.
@@ -3222,16 +3233,22 @@ export class Run {
     // — a steer while the hooks run is refused, not acknowledged for nothing to deliver — and what is still pending is
     // recorded as not delivered.
     this.closeSteering();
+    /*
+     * REQ-CHAT-040: only a run that is about to report COMPLETION closes its queue. A run that ends any other way — a stop,
+     * an explicit cancel, the message limit, the iteration limit — is a run a continue takes up again, and REQ-CHAT-040's
+     * "consumed at the first iteration boundary after it resumes" promises exactly the prompt this would otherwise refuse.
+     * Until 2026-10-30 this was `steeringClosed`, which is also set at a pause's iteration rest, so a prompt written while a
+     * session was coming to rest was refused although its status still read `pausing` and the composer still offered
+     * `Queue`; the refusal is now the narrower one the requirement actually states.
+     */
+    this.queueClosed = classified.result === 'completed';
     // PD-ORCH-005 clause 10: a run that comes to rest records its agents' background sessions — a stop and a quit end them,
     // and so does the explicit cancel, which is a stop the user made final (OQ-96). Guarded like every teardown step.
     const ended = this.terminalsEndedBy();
     if (ended !== null) {
       try { await this.restTerminals(ended); } catch (cause) { this.deps.warn(`recording the background sessions of ${this.sessionId} failed: ${String(cause)}`); }
     }
-    // REQ-EVENTS-028 / REQ-SESSION-092: a requested cancellation wins over any other outcome.
-    const stopReason: StopReason = this.stop.requested ? (this.stop.reason ?? 'user_cancelled') : reasonIn;
-    const classified = classifyStop(stopReason);
-    if (classified.diagnostic) this.deps.warn(classified.diagnostic);
+    // REQ-EVENTS-028 / REQ-SESSION-092: the stop reason is read at the top of this method, before the queue closure above.
     // OQ-199 (PD-ORCH-009): the run ends here after an iteration whose root wrote no answer — unless it is only paused, to
     // be continued, when the iteration is what ended without one.
     try { this.tellUnanswered(classified.result !== 'interrupted'); } catch (cause) { this.deps.warn(`telling ${this.sessionId}'s answerless iteration failed: ${String(cause)}`); }

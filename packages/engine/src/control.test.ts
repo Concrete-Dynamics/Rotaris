@@ -242,6 +242,39 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     } finally { settled.mockRestore(); }
   });
 
+  it('still accepts a prompt after a PAUSE has come to rest, and keeps it QUEUED until the continue drains it (REQ-CHAT-040, REQ-CHAT-035)', async () => {
+    /*
+     * REQ-CHAT-040: only a run about to report COMPLETION closes its queue. A paused run is one a continue takes up
+     * again, and the requirement promises the prompt is consumed at the first boundary after it resumes. Until
+     * 2026-10-30 the closure was `steeringClosed`, also set at a pause's rest, so this prompt was refused although the
+     * session read `pausing` and the composer still offered `Queue`. The hold is teardown's first await, so the prompt is
+     * offered while the run is still live and after its rest is recorded.
+     */
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    let reached = false;
+    const settled = vi.spyOn(Run.prototype as unknown as { childCompletionsSettled(): Promise<void> }, 'childCompletionsSettled').mockImplementation(async () => { reached = true; await hold; });
+    try {
+      const sessions = makeSessions(many(6));
+      const started = sessions.start(dal, 'C:/ws', 'first');
+      if (!started.ok) throw new Error(started.error.reason);
+      const sid = started.value;
+      sessions.control({ op: 'pause', sessionId: sid, args: {} });
+      await vi.waitFor(() => { expect(reached).toBe(true); });
+      const queued = sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'while resting' } });
+      expect(queued).toMatchObject({ ok: true });
+      release();
+      await sessions.running(sid);
+      expect(dal.getSession(sid)!.execution_status).toBe('paused');
+      expect(dal.queuedPromptsOf(sid).map((p) => [p.content, p.status])).toEqual([['while resting', 'QUEUED']]);
+      expect(sessions.control({ op: 'editQueuedPrompt', sessionId: sid, args: { promptId: queued.ok ? queued.value! : '', text: 'while resting, edited' } })).toEqual({ ok: true });
+      expect(sessions.continueSession(sid, 'continue')).toMatchObject({ ok: true });
+      await sessions.running(sid);
+      expect(dal.queuedPromptsOf(sid).map((p) => [p.content, p.status])).toEqual([['while resting, edited', 'COMPLETED']]);
+      expect(dal.getSession(sid)!.execution_status).toBe('completed');
+    } finally { settled.mockRestore(); }
+  });
+
   it('survives the process: a second Sessions over the same store shows the prompt, edits it and consumes it on the continue (REQ-CHAT-041)', async () => {
     const first = makeSessions(many(6));
     const started = first.start(dal, 'C:/ws', 'first');

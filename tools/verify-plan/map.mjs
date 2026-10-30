@@ -172,7 +172,7 @@ export const RULES = Object.freeze([
 
   // --- composition roots: main ---
   { paths: ['apps/desktop/src/main/driver', 'apps/desktop/scripts/drive.mjs'], areas: ['driver'] },
-  { paths: ['apps/desktop/src/main/dictation/', 'apps/desktop/src/main/permissions', 'apps/desktop/src/renderer/dictation', 'packages/ui/src/dictation', 'packages/ui/src/DictationControl'], areas: ['composer'] },
+  { paths: ['apps/desktop/src/main/dictation/', 'apps/desktop/src/main/permissions', 'apps/desktop/src/renderer/dictation-capture.ts', 'packages/ui/src/dictation', 'packages/ui/src/DictationControl'], areas: ['composer'] },
   { paths: ['apps/desktop/src/main/updater/'], areas: ['configStartup'] },
   { paths: ['apps/desktop/src/main/initialization'], areas: ['configStartup'] },
   { paths: ['apps/desktop/src/main/store-resolution', 'apps/desktop/src/main/store-notice'], areas: ['run'] },

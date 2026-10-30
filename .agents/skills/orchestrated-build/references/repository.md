@@ -19,7 +19,7 @@ touches. Where this page and an authority disagree, the authority governs and th
   `docs/product/requests.md` (the orchestrator logs the owner's requests there, before a run) unless the
   orchestrator's notes authorize one named row. Also the owner's: downgrading or removing an implementation condition
   (`docs/architecture/implementation-conditions.md`: discharging one means recording its result where its entry
-  says, pass or fail, and that is the work's to do); a Linux or macOS release artifact (IC-3), signing and release
+  says, pass or fail, and that is the work's to do); a macOS release artifact (IC-3) or the Linux one (ADR-0066 authorises building it; accepting and publishing it are not a workflow's), signing and release
   workflows; granting permissions or spending. Raise; never decide.
 - A requirement found wrong while building is a **defect found by building**: record it, add its row to
   `docs/architecture/first-executions.md`, and raise it for the amendment round; never correct the requirement.

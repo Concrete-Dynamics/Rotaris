@@ -17,7 +17,7 @@ Nothing below is claimed done. Each is already recorded where it lives; R-084 ad
 | §4.5 — the portable's launcher stub, its spike on a Windows x64 host | agent, on a host | PR-1b |
 | The one-click installer defect — repaired on `main` 2026-10-23; its measurement (pages, `/S`, `/D=`, the two registry values) is owed | agent | PR-1a |
 | The tag, the draft's publication, the release itself | **owner** | R-080's working rule |
-| IC-3, IC-8, `PD-STARTUP-001` — no Linux or macOS artifact | unchanged | [implementation-conditions.md](../implementation-conditions.md) |
+| IC-3, IC-8, `PD-STARTUP-001` — no Linux or macOS artifact | unchanged *(2026-10-26, [R-087](../../product/requests.md#r-087): IC-3 binds macOS alone; a Linux artifact may be built under [ADR-0066](../adr/0066-the-linux-artifact-is-built-on-a-developer-host.md), and none is published while `PD-STARTUP-001` stands)* | [implementation-conditions.md](../implementation-conditions.md) |
 | UD-1 to UD-12 | **owner** | §6 |
 | ESC-43 — domain 19's update requirements against domain 11 | **owner** | [owner-decisions.md](../owner-decisions/15-escalations-after-the-gate-2026-10-22.md#esc-43) |
 

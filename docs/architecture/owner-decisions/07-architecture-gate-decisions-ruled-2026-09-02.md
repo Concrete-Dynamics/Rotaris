@@ -189,4 +189,13 @@ has to infer it.
 four remain open, and this ruling relocates them rather than closing them. Whether the gate closes with
 category C outstanding is a separate decision and is the owner's.
 
+> **Amended 2026-10-26 by the owner — the Linux half is no longer deferred to hardware
+> ([R-087](../../product/requests.md#r-087)).** The owner: "das IC, also Implementation Conditions sollten keine
+> Linux-Builds verhindern … deine Arbeit darf nicht blockiert werden dadurch. … Müsste ein AC sein und eine
+> Architekturentscheidung." A developer of this project has a Linux host, so the premise "a machine this record does
+> not have" no longer holds for Linux. IC-3 binds macOS alone; the Linux halves of the four obligations above are
+> **not waived** — they are the acceptance criteria AC-1 to AC-4 of
+> [ADR-0066](../adr/0066-the-linux-artifact-is-built-on-a-developer-host.md), which authorises building the Linux
+> artifact and keeps this ruling's warning for one built before they are met. The ruling above is kept as written.
+
 ---

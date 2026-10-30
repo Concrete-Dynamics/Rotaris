@@ -1,4 +1,4 @@
-import { parseChecksumManifest } from '@rotaris/release-naming';
+import { isStrictlyNewer, parseChecksumManifest } from '@rotaris/release-naming';
 import type { Flavour } from './classify.js';
 import { CHUNK_BYTES, messageOf, streamInChunks, type DownloadProgress, type DownloadSink } from './download.js';
 import type { Offer } from './feed.js';
@@ -36,6 +36,90 @@ export interface StagingArea {
   removeDirectory(dir: string): Promise<void>;
 }
 
+/**
+ * REQ-STARTUP-178 (decided, R-084): "an installer started from [a pending update] is run from it and removed by that same
+ * launch" — the first launch of the updated version that paints its main window. The installer flavour's setup runs from
+ * its staging directory, so the process that started it can never remove that directory; it is recorded here, in the
+ * per-user data directory, before the setup starts, and a later launch running the recorded version or a newer one removes
+ * it (`removeHandedOffStaging`). Until the background-update plan's pending update is built, this record is the one thing
+ * the update path keeps across processes. The file is read whole (`null` when there is none), written atomically, and
+ * cleared; clearing an absent record is not an error.
+ */
+export interface HandOffRecord {
+  readonly version: string;
+  readonly staging: string;
+}
+export interface HandOffRecordFile {
+  read(): Promise<string | null>;
+  write(text: string): Promise<void>;
+  clear(): Promise<void>;
+}
+
+/** Only a directory `StagingArea.create` could have made is ever removed on a record's word: `<parent>/rotaris-update-<random>`. */
+export function isStagingDirectory(path: string): boolean {
+  const at = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
+  return at > 0 && /^rotaris-update-[^\\/]+$/.test(path.slice(at + 1));
+}
+
+export const formatHandOffRecord = (record: HandOffRecord): string => `${JSON.stringify({ schema: 1, version: record.version, staging: record.staging })}\n`;
+
+/** A record that does not parse, is of another schema, or names no staging directory is no record. */
+export function parseHandOffRecord(text: string): HandOffRecord | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof value !== 'object' || value === null) return null;
+  const { schema, version, staging } = value as Record<string, unknown>;
+  if (schema !== 1 || typeof version !== 'string' || typeof staging !== 'string' || !isStagingDirectory(staging)) return null;
+  return { version, staging };
+}
+
+/**
+ * Immediately before the setup starts: the record names the directory it runs from. A record already there names an
+ * earlier hand-off's directory, which this one supersedes — REQ-STARTUP-178 keeps at most one — so that directory is
+ * removed first, best-effort. Never rejects: a record that cannot be written does not stop the update.
+ */
+export async function recordHandOff(file: HandOffRecordFile, staging: StagingArea, record: HandOffRecord): Promise<'recorded' | 'not-recorded'> {
+  const earlier = parseHandOffRecord((await file.read().catch(() => null)) ?? '');
+  if (earlier !== null && earlier.staging !== record.staging) await staging.removeDirectory(earlier.staging).catch(() => undefined);
+  try {
+    await file.write(formatHandOffRecord(record));
+    return 'recorded';
+  } catch {
+    return 'not-recorded';
+  }
+}
+
+/**
+ * REQ-STARTUP-178, at a launch's first check — after its main window was shown (REQ-STARTUP-114): the recorded hand-off's
+ * staging directory is removed once the running version is the recorded one or newer, the installer having replaced the
+ * installation and no longer running anything from it. A running version older than the record is an installer that has
+ * not completed — cancelled, failed, or still on its pages — and nothing is removed (the next hand-off supersedes it). A
+ * removal that fails (Windows refuses to delete a file a process still runs from) keeps the record for a later launch and
+ * is not reported, on REQ-STARTUP-115's terms. A record that does not parse names nothing that may be removed and is
+ * cleared. Answers what happened, for the log line and nothing else.
+ */
+export async function removeHandedOffStaging(file: HandOffRecordFile, staging: StagingArea, runningVersion: string): Promise<'nothing' | 'removed' | 'kept' | 'not-yet' | 'discarded'> {
+  const text = await file.read().catch(() => null);
+  if (text === null) return 'nothing';
+  const record = parseHandOffRecord(text);
+  if (record === null) {
+    await file.clear().catch(() => undefined);
+    return 'discarded';
+  }
+  if (isStrictlyNewer(record.version, runningVersion)) return 'not-yet';
+  try {
+    await staging.removeDirectory(record.staging);
+  } catch {
+    return 'kept';
+  }
+  await file.clear().catch(() => undefined);
+  return 'removed';
+}
+
 export interface InstallContext {
   readonly flavour: Flavour;
   readonly target: string;
@@ -55,6 +139,13 @@ export interface InstallContext {
    * guard declined, and this step's sentence is not shown.
    */
   readonly beforeApply?: () => Promise<boolean>;
+  /**
+   * Called once `beforeApply` has allowed and immediately before the apply starts anything, with the staging directory the
+   * verified file sits in. The updater passes it for the installer flavour, whose setup runs from that directory, to
+   * record it for the updated build's first launch to remove (REQ-STARTUP-178, `recordHandOff`). A rejection is ignored:
+   * a directory that could not be recorded does not stop the update.
+   */
+  readonly beforeHandOff?: (staging: string) => Promise<void>;
 }
 
 export type InstallStage = 'manifest' | 'signature' | 'download' | 'digest' | 'apply';
@@ -189,13 +280,15 @@ export async function runInstall(offer: Offer, ctx: InstallContext): Promise<Ins
   }
 
   // 6. Apply, by flavour (REQ-STARTUP-125).
+  if (ctx.beforeHandOff !== undefined) await ctx.beforeHandOff(staging).catch(() => undefined);
   const applied = await applyUpdate(ctx.flavour, ctx.target, downloaded, ctx.files, ctx.spawn);
   if (!applied.ok) {
     await discard();
     return { ok: false, stage: 'apply', sentence: applied.sentence };
   }
   // A replacement copied the verified file beside the target, so staging is done with; a hand-off runs the setup from
-  // staging and it stays until the installer has finished with it.
+  // staging and it stays until the installer has finished with it — recorded by `beforeHandOff` and removed by the updated
+  // build's first launch (REQ-STARTUP-178, `removeHandedOffStaging`).
   if (applied.outcome === 'replaced') await discard();
   return { ok: true, applied };
 }

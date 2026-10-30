@@ -7,7 +7,7 @@ import { createNoticeStore, type NoticeRecord } from '../notices.js';
 import type { Classification } from './classify.js';
 import type { DownloadSink } from './download.js';
 import { FEED_ACCEPT, FEED_ENDPOINT, FEED_TIMEOUT_MS, SUMMARY_FALLBACK } from './feed.js';
-import type { NetworkResponse, StagingArea, UpdateNetwork } from './install.js';
+import { formatHandOffRecord, parseHandOffRecord, type HandOffRecordFile, type NetworkResponse, type StagingArea, type UpdateNetwork } from './install.js';
 import type { StrategyFiles, StrategySpawn } from './strategies.js';
 import { passFailedSentence } from './successor.js';
 import { createUpdater, DOWNLOAD_IN_PROGRESS, downloadingMessage, downloadingTitle, FINISH_TITLE, INSTALLED_TITLE, INSTALLER_AUTO_CLOSE_MS, NOT_INSTALLED_MESSAGE, NOT_INSTALLED_TITLE, offerTitle, RESTART_NOW, RETURN_TO_WINDOW, TRY_AGAIN, UPDATE_DECLINED, UPDATE_DECLINED_INTEGRATION, UPDATE_DECLINED_UNSAVED, UPDATE_NOW, mustAskAtHandOff, updateCloseBox, updateCloseDetail, updateCloseMessage, type UpdaterDeps } from './updater.js';
@@ -70,7 +70,7 @@ function server(options: FeedOptions = {}) {
   return { pair, network, requests, release: () => releaseHold?.() };
 }
 
-function stagingArea() {
+function stagingArea(options: { removeFails?: boolean } = {}) {
   const files = new Map<string, Buffer>();
   const dirs = new Set<string>();
   let n = 0;
@@ -84,9 +84,24 @@ function stagingArea() {
       return sink;
     },
     removeFile: async (p) => { files.delete(p); },
-    removeDirectory: async (d) => { dirs.delete(d); },
+    removeDirectory: async (d) => {
+      if (options.removeFails) throw new Error('EBUSY: resource busy or locked');
+      dirs.delete(d);
+    },
   };
   return { area, files, dirs };
+}
+
+/** REQ-STARTUP-178: the hand-off record's file, in memory; `spawnedAtWrite` is how many processes had started when it was written. */
+function handOffFile(initial: string | null, spawned: readonly string[]) {
+  let text = initial;
+  const spawnedAtWrite: number[] = [];
+  const port: HandOffRecordFile = {
+    read: async () => text,
+    write: async (t) => { spawnedAtWrite.push(spawned.length); text = t; },
+    clear: async () => { text = null; },
+  };
+  return { port, spawnedAtWrite, text: () => text, record: () => (text === null ? null : parseHandOffRecord(text)) };
 }
 
 function volume(initial: Record<string, string>) {
@@ -105,7 +120,7 @@ const portable: Classification = { updatable: true, flavour: 'portable', target:
 const installer: Classification = { updatable: true, flavour: 'installer', target: INSTALL_DIR };
 const dev: Classification = { updatable: false, reason: 'a development or source-tree launch, not a released standalone artifact (REQ-STARTUP-106)' };
 
-function harness(options: { classification?: Classification; feed?: FeedOptions; running?: string; dismissed?: string; keys?: 'carried' | 'empty' | 'other'; successor?: 'passes' | 'fails' | 'never' | 'refused'; volumeFiles?: Record<string, string>; confirm?: boolean | 'throws' | 'hold' | readonly boolean[]; runs?: readonly (number | null | 'throws')[]; unsaved?: boolean | 'throws' | readonly boolean[]; integrating?: boolean | 'throws' | readonly boolean[] } = {}) {
+function harness(options: { classification?: Classification; feed?: FeedOptions; running?: string; dismissed?: string; keys?: 'carried' | 'empty' | 'other'; successor?: 'passes' | 'fails' | 'never' | 'refused'; volumeFiles?: Record<string, string>; confirm?: boolean | 'throws' | 'hold' | readonly boolean[]; runs?: readonly (number | null | 'throws')[]; unsaved?: boolean | 'throws' | readonly boolean[]; integrating?: boolean | 'throws' | readonly boolean[]; handOff?: string; stagingRemoveFails?: boolean; spawnFails?: boolean } = {}) {
   const srv = server(options.feed);
   const clock = new FakeClock();
   const logged: string[] = [];
@@ -120,10 +135,16 @@ function harness(options: { classification?: Classification; feed?: FeedOptions;
     focusedSession: () => 's1',
   });
   let dismissed = options.dismissed;
-  const staging = stagingArea();
+  const staging = stagingArea({ removeFails: options.stagingRemoveFails ?? false });
   const vol = volume(options.volumeFiles ?? { [TARGET]: 'v0.1.0' });
   const spawned: string[] = [];
-  const spawn: StrategySpawn = { spawnDetached: async (exe) => { spawned.push(exe); } };
+  const spawn: StrategySpawn = {
+    spawnDetached: async (exe) => {
+      if (options.spawnFails) throw new Error('EACCES: cannot execute');
+      spawned.push(exe);
+    },
+  };
+  const handOff = handOffFile(options.handOff ?? null, spawned);
   const started: string[] = [];
   let closed = 0;
   const asked: string[] = [];
@@ -139,7 +160,7 @@ function harness(options: { classification?: Classification; feed?: FeedOptions;
   const deps: UpdaterDeps = {
     classification: options.classification ?? portable,
     runningVersion: options.running ?? '0.1.0',
-    network: srv.network, staging: staging.area, files: vol.port, spawn, keys,
+    network: srv.network, staging: staging.area, files: vol.port, spawn, handOffRecord: handOff.port, keys,
     dismissedVersion: { read: () => dismissed, write: async (v) => { dismissed = v; } },
     notices, log, timers: clock.timers,
     startSuccessor: async (target) => {
@@ -188,7 +209,7 @@ function harness(options: { classification?: Classification; feed?: FeedOptions;
     },
   };
   const updater = createUpdater(deps);
-  return { updater, srv, clock, logged, recorded, broadcasts, notices, staging, vol, spawned, started, asked, unsavedAsked, integrationAsked, order, held, reads: () => reads, closed: () => closed, dismissed: () => dismissed };
+  return { updater, srv, clock, logged, recorded, broadcasts, notices, staging, vol, spawned, handOff, started, asked, unsavedAsked, integrationAsked, order, held, reads: () => reads, closed: () => closed, dismissed: () => dismissed };
 }
 
 describe('activation — REQ-STARTUP-106, REQ-STARTUP-114, REQ-STARTUP-057, REQ-STARTUP-150', () => {
@@ -440,6 +461,101 @@ describe('the applied outcomes — REQ-STARTUP-119, REQ-STARTUP-120, REQ-STARTUP
   it('install is refused with no held offer, and for a build that cannot update itself', async () => {
     expect(await harness().updater.install()).toMatchObject({ ok: false, code: 'update.none' });
     expect(await harness({ classification: dev }).updater.install()).toMatchObject({ ok: false, code: 'update.notUpdatable' });
+  });
+});
+
+describe('the installer hand-off\'s staging directory — REQ-STARTUP-178', () => {
+  const handedOff = (version: string, staging: string): string => formatHandOffRecord({ version, staging });
+
+  it('is recorded, with the version it installs, before the setup starts — and the process that handed off never removes it', async () => {
+    const h = harness({ classification: installer });
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    expect(h.spawned).toEqual([`/tmp/rotaris-update-1/${SETUP}`]);
+    expect(h.handOff.record()).toEqual({ version: '0.2.0', staging: '/tmp/rotaris-update-1' });
+    expect(h.handOff.spawnedAtWrite).toEqual([0]);
+    // A later window's check in the same process is not the updated build's first launch.
+    await h.updater.activate({ windowId: 2 });
+    expect(h.staging.dirs.has('/tmp/rotaris-update-1')).toBe(true);
+    expect(h.handOff.record()).not.toBeNull();
+  });
+
+  it('the updated build\'s first check removes it and clears the record, before the network round trip, and reports nothing', async () => {
+    const h = harness({ classification: installer, running: '0.2.0', handOff: handedOff('0.2.0', '/tmp/rotaris-update-9') });
+    h.staging.dirs.add('/tmp/rotaris-update-9');
+    await h.updater.activate({ windowId: 1 });
+    expect(h.staging.dirs.has('/tmp/rotaris-update-9')).toBe(false);
+    expect(h.handOff.text()).toBeNull();
+    expect(h.notices.current()).toBeNull();
+    expect(h.logged).toContain('info: update check: the installer hand-off\'s staging directory was removed (REQ-STARTUP-178)');
+    expect(h.logged.findIndex((l) => l.includes('REQ-STARTUP-178'))).toBeLessThan(h.logged.findIndex((l) => l.includes(FEED_ENDPOINT)));
+  });
+
+  it('a launch of a newer version removes it too: the same or a newer version running supersedes it', async () => {
+    const h = harness({ classification: installer, running: '0.3.0', feed: { version: '0.3.0' }, handOff: handedOff('0.2.0', '/tmp/rotaris-update-9') });
+    h.staging.dirs.add('/tmp/rotaris-update-9');
+    await h.updater.activate({ windowId: 1 });
+    expect(h.staging.dirs.size).toBe(0);
+    expect(h.handOff.text()).toBeNull();
+  });
+
+  it('a launch still running the older version (the installer cancelled, failed or still open) removes nothing', async () => {
+    const h = harness({ classification: installer, running: '0.1.0', handOff: handedOff('0.2.0', '/tmp/rotaris-update-9') });
+    h.staging.dirs.add('/tmp/rotaris-update-9');
+    await h.updater.activate({ windowId: 1 });
+    expect(h.staging.dirs.has('/tmp/rotaris-update-9')).toBe(true);
+    expect(h.handOff.record()).toEqual({ version: '0.2.0', staging: '/tmp/rotaris-update-9' });
+  });
+
+  it('a removal that fails keeps the record for a later launch and is not reported', async () => {
+    const record = handedOff('0.2.0', '/tmp/rotaris-update-9');
+    const h = harness({ classification: installer, running: '0.2.0', handOff: record, stagingRemoveFails: true });
+    h.staging.dirs.add('/tmp/rotaris-update-9');
+    await h.updater.activate({ windowId: 1 });
+    expect(h.handOff.text()).toBe(record);
+    expect(h.notices.current()).toBeNull();
+    expect(h.logged).toContain('info: update check: the installer hand-off\'s staging directory was left for a later launch (REQ-STARTUP-178)');
+    // The next launch retries.
+    const next = harness({ classification: installer, running: '0.2.0', handOff: h.handOff.text()! });
+    next.staging.dirs.add('/tmp/rotaris-update-9');
+    await next.updater.activate({ windowId: 1 });
+    expect(next.staging.dirs.size).toBe(0);
+    expect(next.handOff.text()).toBeNull();
+  });
+
+  it('a new hand-off supersedes an earlier record: the directory it named is removed and the record names the new one', async () => {
+    const h = harness({ classification: installer, handOff: handedOff('0.2.0', '/tmp/rotaris-update-earlier') });
+    h.staging.dirs.add('/tmp/rotaris-update-earlier');
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    expect([...h.staging.dirs]).toEqual(['/tmp/rotaris-update-1']);
+    expect(h.handOff.record()).toEqual({ version: '0.2.0', staging: '/tmp/rotaris-update-1' });
+  });
+
+  it('an installer that cannot be started discards its staging and clears the record naming it', async () => {
+    const h = harness({ classification: installer, spawnFails: true });
+    await h.updater.activate({ windowId: 1 });
+    expect(await h.updater.install()).toMatchObject({ ok: false, code: 'update.apply' });
+    expect(h.staging.dirs.size).toBe(0);
+    expect(h.handOff.text()).toBeNull();
+  });
+
+  it('the portable flavour records nothing: its apply copies the verified file out of staging and removes staging at once', async () => {
+    const h = harness();
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    expect(h.staging.dirs.size).toBe(0);
+    expect(h.handOff.spawnedAtWrite).toEqual([]);
+    expect(h.handOff.text()).toBeNull();
+  });
+
+  it('a build classified not updatable leaves the record and its directory as they are', async () => {
+    const record = handedOff('0.2.0', '/tmp/rotaris-update-9');
+    const h = harness({ classification: dev, handOff: record });
+    h.staging.dirs.add('/tmp/rotaris-update-9');
+    await h.updater.activate({ windowId: 1 });
+    expect(h.staging.dirs.has('/tmp/rotaris-update-9')).toBe(true);
+    expect(h.handOff.text()).toBe(record);
   });
 });
 

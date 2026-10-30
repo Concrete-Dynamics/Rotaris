@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-30**
 
+**The installer hand-off's staging directory is removed (REQ-STARTUP-178; 2026-10-30, `../../defects/fixed/the-installer-hand-offs-staging-directory-is-never-removed.md`).** `02-process-view.md`'s files on disk: the staging row says who removes it, and `<data>/updates/installer-handoff.json` gains a row; `05-state-ownership.md` gains the record's row; `dataLayout` gains `updates`. No package, edge, process, channel, command or store column changed.
+
 **The clean-room process records removed (2026-10-26).** At the owner's request of 2026-10-26 five of `docs/clean-room/`'s
 six files — `architecture-gate.md`, `provenance.md`, `reference-record.md`, `specification-gate.md`, `zone-policy.md` —
 and the two root specification-review files are gone, kept in history and marked *(removed 2026-10-26)* where the live

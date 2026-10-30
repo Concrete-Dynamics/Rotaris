@@ -437,6 +437,30 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         return;
       }
       /**
+       * Domain 22 (PD-TRACE-001): the adoption assistant's interpretation, recognised by its own system text. It answers
+       * from the detection quoted in the request — the first candidate, the definition pattern its shape implies, the roots
+       * the detection found — so a proof drives the strip's button through the real ask, forward, dispatch and validation.
+       * `ROTARIS_ADOPTION_SCRIPT` (verification only): `garbage` (no JSON), `empty` (no content, the reasoning model's
+       * answer), `escape` (a root outside the workspace); unset, the answer described.
+       */
+      if (/^You interpret the requirements layout/.test(system)) {
+        const want = ((__ROTARIS_SEAMS__ ? process.env['ROTARIS_ADOPTION_SCRIPT'] : undefined) ?? '').trim();
+        log(`scripted adoption interpretation: ${want === '' ? 'first candidate' : want}`);
+        const quoted = /<detection>\n([\s\S]*)\n<\/detection>/.exec(firstUserText)?.[1] ?? '{}';
+        let detection: { candidates?: { id: string; prefix: string; shape: string }[]; implRoots?: string[]; testRoots?: string[] } = {};
+        try { detection = JSON.parse(quoted) as typeof detection; } catch { /* answered below as no candidate */ }
+        const c = detection.candidates?.[0];
+        const id = c === undefined ? '' : `(${c.prefix.replace(/[^A-Za-z0-9]/g, (ch) => `\\${ch}`)}-\\d+)`;
+        const pattern = c === undefined || c.shape === 'frontmatter' ? null
+          : c.shape === 'bullet' ? `^\\s*[-*+]\\s+\\*\\*${id}\\*\\*` : c.shape === 'heading' ? `^#{1,6}\\s+(?:\\*\\*)?${id}` : c.shape === 'bold-line' ? `^\\*\\*${id}\\*\\*` : `^\\|\\s*(?:\\*\\*)?${id}`;
+        const answer = { candidate: c?.id ?? '', id_prefix: c?.prefix ?? '', definition_pattern: pattern, impl_roots: want === 'escape' ? ['../outside'] : (detection.implRoots ?? []).slice(0, 1), test_roots: (detection.testRoots ?? []).slice(0, 1), annotation_conventions: [], notes: 'scripted interpretation' };
+        const text = want === 'garbage' ? 'The store is probably docs/requirements.' : want === 'empty' ? '' : JSON.stringify(answer);
+        if (text !== '') yield ok<StreamPart>({ kind: 'text', delta: text });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 20 } });
+        yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
+        return;
+      }
+      /**
        * PD-LIBRARY-002 (ADR-0065): the improvement analyst, BOTH passes, recognised by its own system text
        * rather than by a role, because `analystSystem` is the only thing that tells them apart on the wire.
        *

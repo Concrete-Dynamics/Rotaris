@@ -27,9 +27,13 @@ const TEST_FILE_PATTERNS: readonly (readonly [string, RegExp])[] = [
 ];
 const SAMPLE_CAP = 5;
 const SAMPLE_CHARS = 160;
-/** An identifier as a project may write one: an uppercase prefix, a hyphen, a number that may be dotted. */
-const TOKEN = /\b([A-Z][A-Z0-9]*)-(\d+(?:\.\d+)*)\b/g;
-const ID = '([A-Z][A-Z0-9]*-\\d+(?:\\.\\d+)*)';
+/**
+ * An identifier as a project may write one: an uppercase prefix — possibly namespaced, `REQ-AUTH` — a hyphen, and a
+ * number that may be dotted or zero-padded. Whatever REQ-TRACE-078 cannot write is still READ here, so that it is named
+ * as undecidable (REQ-ADOPT-008, REQ-ADOPT-010) rather than reported as no store at all.
+ */
+const TOKEN = /\b([A-Z][A-Z0-9]*(?:-[A-Z][A-Z0-9]*)*)-(\d+(?:\.\d+)*)\b/g;
+const ID = '([A-Z][A-Z0-9]*(?:-[A-Z][A-Z0-9]*)*-\\d+(?:\\.\\d+)*)';
 /** REQ-ADOPT-007's line shapes; frontmatter is read through the toolchain's own reader. */
 const SHAPES: readonly (readonly [DefinitionShape, RegExp])[] = [
   ['bullet', new RegExp(`^\\s*[-*+]\\s+\\*\\*${ID}\\*\\*`)],
@@ -89,6 +93,7 @@ function commonDir(paths: readonly string[]): string {
 
 export function numberingOf(numbers: readonly string[]): { numbering: Numbering; gaps: number } {
   if (numbers.some((n) => n.includes('.'))) return { numbering: 'dotted', gaps: 0 };
+  if (numbers.some((n) => /^0\d/.test(n))) return { numbering: 'zero-padded', gaps: 0 };
   const ints = [...new Set(numbers.map(Number))].sort((a, b) => a - b);
   if (ints.length === 0) return { numbering: 'contiguous', gaps: 0 };
   const gaps = ints[ints.length - 1]! - ints[0]! + 1 - ints.length;
@@ -136,7 +141,7 @@ export function detectWorkspace(root: string): DetectionResult {
       for (const [shape, re] of SHAPES) {
         const m = re.exec(line);
         if (m === null) continue;
-        const at = m[1]!.indexOf('-');
+        const at = m[1]!.lastIndexOf('-');
         define(m[1]!.slice(0, at), m[1]!.slice(at + 1), shape, f.path, line);
         break;
       }
@@ -165,6 +170,10 @@ export function detectWorkspace(root: string): DetectionResult {
   if (families.length > 1) undecided.push({ code: 'several-families', detail: `identifier families ${families.join(', ')}` });
   const dotted = candidates.filter((c) => c.numbering === 'dotted');
   if (dotted.length > 0) undecided.push({ code: 'dotted-numbering', detail: `${dotted.map((c) => c.id).join(', ')} carry dotted numbers, which REQ-TRACE-078's <PREFIX>-<digits> cannot write` });
+  const padded = candidates.filter((c) => c.numbering === 'zero-padded');
+  if (padded.length > 0) undecided.push({ code: 'zero-padded-numbering', detail: `${padded.map((c) => c.id).join(', ')} carry zero-padded numbers (${padded[0]!.prefix}-001), which REQ-TRACE-078 forbids; adopting them would renumber every identifier` });
+  const namespaced = candidates.filter((c) => c.prefix.includes('-'));
+  if (namespaced.length > 0) undecided.push({ code: 'namespaced-prefix', detail: `${namespaced.map((c) => c.id).join(', ')} carry a prefix with a hyphen (${namespaced[0]!.prefix}), which REQ-TRACE-038's id_prefix cannot hold` });
   const byStore = new Map<string, string[]>();
   for (const c of candidates) byStore.set(`${c.dir}#${c.prefix}`, [...(byStore.get(`${c.dir}#${c.prefix}`) ?? []), c.shape]);
   for (const [k, shapes] of byStore) if (shapes.length > 1) undecided.push({ code: 'mixed-shapes', detail: `${k.replace('#', ' ')} defines identifiers as ${shapes.join(' and ')}` });

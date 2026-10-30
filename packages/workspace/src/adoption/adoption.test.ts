@@ -255,3 +255,22 @@ describe('initial run, re-run and the delta (REQ-ADOPT-018 to REQ-ADOPT-025)', (
     expect(r.ok).toBe(false);
   });
 });
+
+describe('families REQ-TRACE-078 cannot write are named, not adopted (REQ-ADOPT-008, REQ-ADOPT-010)', () => {
+  it('a zero-padded family (REQ-001) is a candidate, named undecidable, and refused at the adapter', async () => {
+    const root = project({ 'docs/req/a.md': '- **REQ-001** — a\n- **REQ-002** — b\n', 'src/a.ts': '// REQ-001\n' });
+    const d = detectWorkspace(root);
+    expect(d.candidates[0]).toMatchObject({ id: 'docs/req#REQ#bullet', numbering: 'zero-padded' });
+    expect(d.undecided.map((u) => u.code)).toContain('zero-padded-numbering');
+    const r = await adopt(root, { mode: 'run', writeLayout: false }, deps(interpreter(() => JSON.stringify({ candidate: 'docs/req#REQ#bullet', id_prefix: 'REQ', definition_pattern: '\\*\\*(REQ-\\d+)\\*\\*', impl_roots: ['src'], test_roots: [], annotation_conventions: [], notes: '' })).interpret));
+    expect(r).toMatchObject({ ok: false, field: 'candidate' });
+    expect(existsSync(adoptionRecordPath(root))).toBe(false);
+  });
+
+  it('a namespaced family (REQ-AUTH-1), this repository\'s own form, is a candidate named undecidable rather than no store', () => {
+    const d = detectWorkspace(project({ 'docs/spec/auth.md': '- **REQ-AUTH-1** — a\n- **REQ-AUTH-2** — b\n' }));
+    expect(d.candidates[0]).toMatchObject({ prefix: 'REQ-AUTH', numbering: 'contiguous' });
+    expect(d.undecided.map((u) => u.code)).toEqual(expect.arrayContaining(['namespaced-prefix']));
+    expect(d.undecided.map((u) => u.code)).not.toContain('no-store');
+  });
+});

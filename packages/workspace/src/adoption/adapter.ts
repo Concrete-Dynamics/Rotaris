@@ -80,7 +80,8 @@ export function composeAdapter(answer: string, detection: DetectionResult, root:
 
   const candidate: CandidateStore | undefined = typeof doc.candidate === 'string' ? detection.candidates.find((c) => c.id === doc.candidate) : undefined;
   if (candidate === undefined) return refuse('candidate', `${JSON.stringify(doc.candidate)} is not a candidate the detection reported (${detection.candidates.map((c) => c.id).join(', ') || 'none'})`);
-  if (candidate.numbering === 'dotted') return refuse('candidate', `${candidate.id} carries dotted numbers, which REQ-TRACE-078 cannot write`);
+  if (candidate.numbering === 'dotted' || candidate.numbering === 'zero-padded') return refuse('candidate', `${candidate.id} carries ${candidate.numbering} numbers, which REQ-TRACE-078 cannot write`);
+  if (candidate.prefix.includes('-')) return refuse('candidate', `${candidate.id} carries the namespaced prefix ${candidate.prefix}, which REQ-TRACE-038's id_prefix cannot hold`);
   if (doc.id_prefix !== candidate.prefix) return refuse('id_prefix', `${JSON.stringify(doc.id_prefix)} is not the chosen candidate's family ${candidate.prefix}`);
   if (typeof doc.notes !== 'string' || doc.notes.length > NOTES_MAX) return refuse('notes', `must be a string of at most ${NOTES_MAX} characters`);
 

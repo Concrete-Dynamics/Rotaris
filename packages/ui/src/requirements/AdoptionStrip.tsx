@@ -47,11 +47,12 @@ export function AdoptionStrip({ armed, readAdoption, adopt }: AdoptionStripProps
   const adopted = view?.state === 'adopted';
   const sentence = error !== null ? `The adoption state could not be read: ${error}` : view === null ? (armed ? 'Reading the adoption state…' : 'The adoption state is read once the board has arrived.') : adoptionSentence(view);
   const lines = view === null ? [] : view.state === 'adopted' ? deltaLines(view.delta) : view.detection.undecided.length > 0 ? [{ kind: 'undecided' as const, label: 'Undecided', ids: view.detection.undecided.map((u) => u.detail).join('; ') }] : [];
-  // One line of fixed height, so an answer arriving changes no layout below it; the lists open on the user's press.
+  // One line of fixed height, so an answer arriving changes no layout below it; the lists open on the user's press, and the
+  // outcome line appears only after one (REQ-ADOPT-002's disclosure, REQ-ADOPT-004).
   return (
     <section className="req-adoption" data-testid="req-adoption" aria-label="Requirements adoption" aria-busy={running}>
       <div className="req-adoption__row">
-        <span className="req-adoption__state" data-testid="req-adoption-state" data-state={view?.state ?? 'reading'} title={sentence}>{running ? RUNNING_SENTENCE : outcome ?? sentence}</span>
+        <span className="req-adoption__state" data-testid="req-adoption-state" data-state={view?.state ?? 'reading'} title={sentence}>{running ? RUNNING_SENTENCE : sentence}</span>
         {lines.length > 0 && <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="req-adoption-details" aria-expanded={details} onClick={() => setDetails((d) => !d)}>{details ? 'Hide details' : 'Details'}</DesignButton>}
         <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-adoption-run" disabled={running} onClick={() => press('run')} title={RUN_DESCRIPTION} aria-description={RUN_DESCRIPTION}>{adopted ? RERUN_LABEL : RUN_LABEL}</DesignButton>
         {adopted && <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-adoption-record" disabled={running} onClick={() => press('record')} title={RECORD_DESCRIPTION} aria-description={RECORD_DESCRIPTION}>{RECORD_LABEL}</DesignButton>}
@@ -61,7 +62,8 @@ export function AdoptionStrip({ armed, readAdoption, adopt }: AdoptionStripProps
         <p key={l.kind} className="req-adoption__delta card-meta" data-testid={`req-adoption-${l.kind}`}><span className="req-adoption__label">{l.label}</span> <span className={l.kind === 'undecided' ? undefined : 'mono'}>{l.ids}</span></p>
       ))}
       {running && <span className="req-adoption__live" role="status" data-testid="req-adoption-running">{RUNNING_SENTENCE}</span>}
-      {!running && outcome !== null && <span className="req-adoption__live" role="status" data-testid="req-adoption-outcome">{outcome}</span>}
+      {/* REQ-ADOPT-004: the outcome of the press, on its own line, so the state sentence above stays REQ-ADOPT-001's. */}
+      {!running && outcome !== null && <p className="req-adoption__outcome card-meta" role="status" data-testid="req-adoption-outcome">{outcome}</p>}
     </section>
   );
 }

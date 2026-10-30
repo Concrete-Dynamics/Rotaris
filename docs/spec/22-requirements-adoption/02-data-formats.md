@@ -9,11 +9,11 @@ REQ-TRACE-040 and nothing the assistant records.
 
 | Field | Meaning |
 |---|---|
-| `candidates[]` | `{ id, dir, prefix, shape, documents, identifiers, numbering, gaps, reasons[], samples[] }` — `id` is `<dir>#<prefix>#<shape>`; `shape` is one of `frontmatter`, `bullet`, `heading`, `bold-line`, `table-row`; `numbering` is one of `contiguous`, `sparse`, `dotted` (REQ-ADOPT-007, REQ-ADOPT-008) |
+| `candidates[]` | `{ id, dir, prefix, shape, documents, identifiers, numbering, gaps, reasons[], samples[] }` — `id` is `<dir>#<prefix>#<shape>`; `shape` is one of `frontmatter`, `bullet`, `heading`, `bold-line`, `table-row`; `numbering` is one of `contiguous`, `sparse`, `dotted`, `zero-padded`; `prefix` may hold a hyphen, which REQ-ADOPT-008 names undecidable (REQ-ADOPT-007, REQ-ADOPT-008) |
 | `implRoots[]`, `testRoots[]` | repository-relative directories (REQ-ADOPT-009) |
 | `testFilePatterns[]` | the test file-name forms seen: `*.test.*`, `*.spec.*`, `*_test.*`, `test_*.*` |
 | `annotations[]` | `{ extension, form, count, samples[] }` — `form` is the text before the identifier on its line, comment marker included, whitespace collapsed |
-| `undecided[]` | `{ code, detail }` — `code` one of `no-store`, `several-stores`, `several-families`, `dotted-numbering`, `mixed-shapes`, `tests-colocated`, `no-annotations`, `bound-reached` (REQ-ADOPT-010) |
+| `undecided[]` | `{ code, detail }` — `code` one of `no-store`, `several-stores`, `several-families`, `dotted-numbering`, `zero-padded-numbering`, `namespaced-prefix`, `mixed-shapes`, `tests-colocated`, `no-annotations`, `bound-reached` (REQ-ADOPT-010) |
 | `bounds` | `{ files, bytes, reached: null \| 'files' \| 'bytes' }` |
 
 ### The interpretation

@@ -14,11 +14,11 @@ import type { ProgressReport, ReqId } from './requirements.js';
 export const DEFINITION_SHAPES = ['frontmatter', 'bullet', 'heading', 'bold-line', 'table-row'] as const;
 export type DefinitionShape = (typeof DEFINITION_SHAPES)[number];
 
-/** REQ-ADOPT-008. */
-export type Numbering = 'contiguous' | 'sparse' | 'dotted';
+/** REQ-ADOPT-008: `dotted` and `zero-padded` are families REQ-TRACE-078's `<PREFIX>-<digits>` cannot write. */
+export type Numbering = 'contiguous' | 'sparse' | 'dotted' | 'zero-padded';
 
 /** REQ-ADOPT-010: what the detection pass names rather than guesses. */
-export const UNDECIDED_CODES = ['no-store', 'several-stores', 'several-families', 'dotted-numbering', 'mixed-shapes', 'tests-colocated', 'no-annotations', 'bound-reached'] as const;
+export const UNDECIDED_CODES = ['no-store', 'several-stores', 'several-families', 'dotted-numbering', 'zero-padded-numbering', 'namespaced-prefix', 'mixed-shapes', 'tests-colocated', 'no-annotations', 'bound-reached'] as const;
 export type UndecidedCode = (typeof UNDECIDED_CODES)[number];
 
 export interface CandidateStore {

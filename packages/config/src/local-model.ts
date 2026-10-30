@@ -7,7 +7,7 @@ import type { PlainMap } from './merge.js';
 import { writeConfigFields, type WriteOutcome, type WriteRefusal } from './writers.js';
 
 /**
- * R-087 — every agent role on one locally hosted, OpenAI-compatible model (the owner's `ds41`), as CONFIGURATION and
+ * R-088 — every agent role on one locally hosted, OpenAI-compatible model (the owner's `ds41`), as CONFIGURATION and
  * nothing else: REQ-PROVIDER-051's `openai-compatible--<label>` instance as a `models:` entry (REQ-CONFIG-082..097), every
  * slot of REQ-CONFIG-063 pointed at it, `compressor:` and `circuit_breaker:` with them, and a `personas:` block that
  * binds each of the thirteen built-in roles and `intent-classifier` by name (REQ-CONFIG-098) — so no role reaches the

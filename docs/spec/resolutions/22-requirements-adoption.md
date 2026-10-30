@@ -7,10 +7,10 @@ status: decided
 
 # Resolution Record — Domain 22, Requirements Adoption Assistant
 
-> ## Amendment, 2026-10-29 — the adoption assistant (R-087): thirty identifiers decided, not derived
+> ## Amendment, 2026-10-29 — the adoption assistant (R-088): thirty identifiers decided, not derived
 >
 > REQ-ADOPT-001 to REQ-ADOPT-030 were minted at the owner's explicit ask
-> ([R-087](../../product/requests.md#r-087)): "Rotaris' specification-driven development must work end to end … there
+> ([R-088](../../product/requests.md#r-088)): "Rotaris' specification-driven development must work end to end … there
 > is no agentic adapter that inspects a foreign project's actual requirement layout and brings it into the format
 > Rotaris can read", with the adapter "dynamically built and executed", "offered by a button", refreshable "on an
 > initial run and on a re-run", detecting the structure "by script/tooling", and finding "new requirements that were

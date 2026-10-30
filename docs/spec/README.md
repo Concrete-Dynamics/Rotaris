@@ -30,7 +30,7 @@ how any other implementation achieves it.
   in [`resolutions/11-startup-distribution-updates.md`](resolutions/11-startup-distribution-updates.md).)*
   *(2026-10-29: 3,973, 3,715 and 4,417 became 4,003, 3,745 and 4,447, and the shipping domains nineteen became twenty,
   when domain 22 and REQ-ADOPT-001 to REQ-ADOPT-030 were minted at the owner's explicit ask under
-  [R-087](../product/requests.md#r-087). They are **decided, not derived**, as R-084's are; `PD-TRACE-001` carries what
+  [R-088](../product/requests.md#r-088). They are **decided, not derived**, as R-084's are; `PD-TRACE-001` carries what
   they displace. The amendment is in [`resolutions/22-requirements-adoption.md`](resolutions/22-requirements-adoption.md).)*
   Every figure here counts identifiers, not behaviors: an identifier is never removed, so a
   withdrawn requirement keeps its number and keeps being counted. A total that rose while behavior

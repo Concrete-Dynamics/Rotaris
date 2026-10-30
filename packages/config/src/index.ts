@@ -35,4 +35,4 @@ export * from './launch-snapshot.js';
 export * from './project-settings.js';
 export * from './setup-manifest.js'; // REQ-STARTUP-058/059, first-release-plan.md §4.1
 export * from './saved-read.js';
-export * from './local-model.js'; // R-087: every role on one local OpenAI-compatible model
+export * from './local-model.js'; // R-088: every role on one local OpenAI-compatible model

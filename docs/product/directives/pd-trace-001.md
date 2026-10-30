@@ -41,10 +41,10 @@ built from the specification alone, which offers no detection at all.
 
 > **Narrows:** REQ-TRACE-155
 
-*Raised by the owner, 2026-10-29; logged as [R-087](../requests.md#r-087). Mints REQ-ADOPT-001 to REQ-ADOPT-030 at
+*Raised by the owner, 2026-10-29; logged as [R-088](../requests.md#r-088). Mints REQ-ADOPT-001 to REQ-ADOPT-030 at
 the owner's ask (domain 22, decided, not derived).*
 
-> **First execution, 2026-10-29, built under [R-087](../requests.md#r-087):** the directive held as written. The
+> **First execution, 2026-10-29, built under [R-088](../requests.md#r-088):** the directive held as written. The
 > detection pass found the store, family, numbering, roots and annotation vocabulary of a scratch Python project by script;
 > a scripted interpretation was composed into an adapter, every field passing `parseLayout` (REQ-TRACE-043, REQ-TRACE-073)
 > before execution; the record was written to `.rotaris/requirements-adoption.json`; and after a requirement was added the

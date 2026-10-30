@@ -2,13 +2,13 @@
 reference: ROTARIS-CRW-001
 domain: requirements-adoption
 date: 2026-10-29
-status: decided at the owner's ask under R-087 (PD-TRACE-001); not derived
+status: decided at the owner's ask under R-088 (PD-TRACE-001); not derived
 ---
 
 # Requirements Adoption Assistant
 
 > **Decided, not derived.** Every identifier in this domain was minted on 2026-10-29 at the owner's explicit ask,
-> logged as [R-087](../product/requests.md#r-087), and carries behaviour the behavioural target never had. The
+> logged as [R-088](../product/requests.md#r-088), and carries behaviour the behavioural target never had. The
 > domain exists because [`PD-TRACE-001`](../product/directives/pd-trace-001.md#pd-trace-001) narrows REQ-TRACE-155's
 > "no project-structure detection and no configuration-scaffolding operation" for this one surface; outside it
 > REQ-TRACE-155 governs in full. The amendment is recorded in

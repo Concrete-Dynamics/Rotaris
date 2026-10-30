@@ -16,7 +16,7 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-29**
 
-**The requirements adoption assistant (domain 22, PD-TRACE-001, R-087; 2026-10-29).** `01-component-view.md`'s
+**The requirements adoption assistant (domain 22, PD-TRACE-001, R-088; 2026-10-29).** `01-component-view.md`'s
 responsibilities table gains the assistant's row (`workspace/src/adoption/`, `engine/src/adoption/`,
 `contracts/src/adoption.ts`; no new package, no new edge). `02-process-view.md`'s third message part gains the two
 `requirements.*` members, the service's `adoption.interpret` ask, the run host's request of that name and its

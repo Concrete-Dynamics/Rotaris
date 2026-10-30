@@ -1,5 +1,5 @@
 /**
- * R-087 — every agent role on the owner's locally hosted `ds41`. The layer is APPLIED to a scratch configuration
+ * R-088 — every agent role on the owner's locally hosted `ds41`. The layer is APPLIED to a scratch configuration
  * directory by the same function `pnpm local-model:apply` runs, LOADED by the product's loader, and RESOLVED through the
  * run host's own resolvers — the persona resolver a delegation reads (REQ-CONFIG-098), the classifier's slots
  * (REQ-ORCH-009), the compressor, the summariser, both improvement passes — never through the draft alone.
@@ -32,7 +32,7 @@ async function loaded() {
   return r.value;
 }
 
-describe('R-087: every agent role resolves to ds41', () => {
+describe('R-088: every agent role resolves to ds41', () => {
   it('names every built-in role and the classifier, and nothing else, in the layer', () => {
     expect([...LOCAL_MODEL_ROLES].sort()).toEqual([...BUILT_IN_ROLE_NAMES, 'intent-classifier'].sort());
     const layer = localModelLayer(SPEC);

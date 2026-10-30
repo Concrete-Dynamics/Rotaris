@@ -1,6 +1,6 @@
 [Requirements Adoption Assistant](../22-requirements-adoption.md) › Part 01
 
-> **Decided, not derived** — minted 2026-10-29 at the owner's ask ([R-087](../../product/requests.md#r-087)) under
+> **Decided, not derived** — minted 2026-10-29 at the owner's ask ([R-088](../../product/requests.md#r-088)) under
 > [`PD-TRACE-001`](../../product/directives/pd-trace-001.md#pd-trace-001).
 
 ## Requirements

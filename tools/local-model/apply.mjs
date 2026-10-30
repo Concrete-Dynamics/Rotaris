@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// R-087 — `pnpm local-model:apply`: bind every agent role of Rotaris (the thirteen built-in roles and `intent-classifier`),
+// R-088 — `pnpm local-model:apply`: bind every agent role of Rotaris (the thirteen built-in roles and `intent-classifier`),
 // every model slot, the compressor and the circuit breaker to ONE locally hosted OpenAI-compatible model, by writing the
 // layer `@rotaris/config`'s `localModelLayer` builds into the user's global configuration (`agents.yaml`), field by field
 // and keeping its comments. Repeatable: applying it twice changes nothing the second time, so it survives a re-run and a

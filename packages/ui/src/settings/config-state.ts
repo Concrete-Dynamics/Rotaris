@@ -1,4 +1,4 @@
-import { displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type ModelSlotName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
+import { dictationFieldProblem, displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DictationConfigView, type DictationSavePayload, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type ModelSlotName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
 
 /**
  * The pending settings state (REQ-CONFIG-279..287, 417..426): destination 1's values as the screen holds
@@ -67,6 +67,8 @@ export interface PendingSettings {
    * a name present in `saved` and absent from a higher layer is the case where a baseline must be
    * written out explicitly.
    */
+  /** OQ-457: the `dictation:` section as the screen holds it. */
+  readonly dictation: DictationConfigView;
   readonly instructions: {
     readonly overrides: Readonly<Record<string, InstructionStateName>>;
   };
@@ -121,6 +123,7 @@ export function pendingFrom(snapshot: ConfigSnapshot): PendingSettings {
     display: { ...snapshot.display },
     skills: { enabled: snapshot.skills.enabled, overrides: { ...snapshot.skills.overrides }, invocationOverrides: { ...snapshot.skills.invocation_overrides } },
     instructions: { overrides: { ...snapshot.instructionsPolicy.overrides } },
+    dictation: { ...snapshot.dictation },
     roles: {},
   };
 }
@@ -211,6 +214,8 @@ export function rebasePending(previousSaved: PendingSettings, pending: PendingSe
     // block above and for the same reason — the screen only ever sets a state, and the sparse write below
     // is what turns a baseline choice into a removal.
     instructions: sameValue(pending.instructions, previousSaved.instructions) ? fresh.instructions : pending.instructions,
+    // OQ-457: per key, like the runtime block: a key the person changed stands, and any other takes the reloaded value.
+    dictation: Object.fromEntries((Object.keys(fresh.dictation) as (keyof DictationConfigView)[]).map((key) => [key, pending.dictation[key] !== previousSaved.dictation[key] ? pending.dictation[key] : fresh.dictation[key]])) as unknown as DictationConfigView,
     circuitBreakerEnabled: pending.circuitBreakerEnabled !== previousSaved.circuitBreakerEnabled ? pending.circuitBreakerEnabled : fresh.circuitBreakerEnabled,
     compressorThresholdPercentage: pending.compressorThresholdPercentage !== previousSaved.compressorThresholdPercentage ? pending.compressorThresholdPercentage : fresh.compressorThresholdPercentage,
     delegationStrategy: pending.delegationStrategy !== previousSaved.delegationStrategy ? pending.delegationStrategy : fresh.delegationStrategy,
@@ -256,6 +261,7 @@ export type PendingChange =
   | { readonly kind: 'skillLoad'; readonly name: string; readonly value: SkillLoadModeName }
   | { readonly kind: 'skillInvocation'; readonly name: string; readonly value: SkillInvocationModeName }
   | { readonly kind: 'instructionToggle'; readonly id: string; readonly value: InstructionStateName }
+  | { readonly kind: 'dictation'; readonly key: keyof DictationConfigView; readonly value: string | null }
   | { readonly kind: 'role'; readonly role: string; readonly scope: 'workspace' | 'global'; readonly model?: string | null; readonly thinking?: string | null; readonly unsetModel?: boolean; readonly unsetThinking?: boolean };
 
 /** Apply one change; returns the same object when nothing changed (the equality guard). */
@@ -291,6 +297,8 @@ export function applyChange(pending: PendingSettings, change: PendingChange): Pe
     // PD-WORKSPACE-002 — a per-file switch marks settings dirty and is written by Save. The setter does
     // not validate the value: `InstructionStateName` is a closed type, and the writer rejects an
     // unsupported one, so a bad value cannot reach a file through here.
+    case 'dictation':
+      return pending.dictation[change.key] === change.value ? pending : { ...pending, dictation: { ...pending.dictation, [change.key]: change.value } };
     case 'instructionToggle':
       return pending.instructions.overrides[change.id] === change.value ? pending : { ...pending, instructions: { overrides: { ...pending.instructions.overrides, [change.id]: change.value } } };
     case 'role': {
@@ -388,6 +396,10 @@ export function savePayload(saved: PendingSettings, pending: PendingSettings): D
   // A file the file stated and the screen no longer holds: its key is removed.
   for (const id of Object.keys(saved.instructions.overrides)) if (pending.instructions.overrides[id] === undefined) instructionOverrides[id] = null;
   if (Object.keys(instructionOverrides).length > 0) out.instructions = { overrides: instructionOverrides };
+  // OQ-457: the keys that changed. `backend` and `local_model` always hold a value; an emptied optional key is removed.
+  const dictation: Record<string, string | null> = {};
+  for (const key of Object.keys(pending.dictation) as (keyof DictationConfigView)[]) if (pending.dictation[key] !== saved.dictation[key]) dictation[key] = pending.dictation[key];
+  if (Object.keys(dictation).length > 0) out.dictation = dictation as DictationSavePayload;
   if (Object.keys(pending.roles).length > 0) {
     // REQ-CONFIG-259/341: each field's edit travels under the scope it was made at, and the writer applies it at that layer.
     const fieldsOf = (e: PendingRoleFields | undefined) => (e === undefined ? undefined : {
@@ -538,4 +550,14 @@ export function improvementTimeoutEdit(raw: string): { readonly commit: number }
  */
 export function storedImprovementTimeoutNote(stored: number, pending: number = stored): string | null {
   return pending !== stored || improvementTimeoutForDisplay(stored) === stored ? null : storedSecondsLine(stored);
+}
+
+/** PD-CONFIG-005: the sentence Save refuses with when a dictation value would fail the loader, or null. */
+export function dictationSaveProblem(pending: PendingSettings): string | null {
+  const labels = { local_model: 'Dictation local model name', base_url: 'Dictation base URL', language: 'Dictation language' } as const;
+  for (const key of ['local_model', 'base_url', 'language'] as const) {
+    const problem = dictationFieldProblem(key, pending.dictation[key]);
+    if (problem !== null) return `${labels[key]} ${problem}.`;
+  }
+  return null;
 }

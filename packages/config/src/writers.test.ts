@@ -197,6 +197,21 @@ describe('REQ-CONFIG-441..444 the scoped per-field write path', () => {
     const r = await writeConfigFields(s.wsFile, { runtime: { memory_diagnostics_enabled: true } });
     expect(r.ok && r.value.text).toBe('runtime:\n  memory_diagnostics_enabled: true\n');
   });
+  it('OQ-457: writes the dictation keys, keeps the comments, removes a key on null and the section with its last key', async () => {
+    const s = scope();
+    mkdirSync(join(s.workspaceRoot, '.rotaris'), { recursive: true });
+    writeFileSync(s.wsFile, '# keep me\nmodels: {}\n', 'utf8');
+    const first = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { dictation: { backend: 'local', local_model: 'large-v3-turbo', language: 'de' } });
+    expect(first.ok).toBe(true);
+    const written = readFileSync(s.wsFile, 'utf8');
+    expect(written).toContain('# keep me');
+    expect(written).toMatch(/dictation:\n\s+backend: local\n\s+local_model: large-v3-turbo\n\s+language: de/);
+    await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { dictation: { language: null } });
+    expect(readFileSync(s.wsFile, 'utf8')).not.toContain('language');
+    await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { dictation: { backend: null, local_model: null } });
+    expect(readFileSync(s.wsFile, 'utf8')).not.toContain('dictation');
+  });
+
   it('PD-CONFIG-003: the desktop save writes runtime.child_timeout in seconds, and refuses one below 1 before touching the file (REQ-CONFIG-111)', async () => {
     const s = scope();
     const r = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { runtime: { child_timeout: 2700 } });

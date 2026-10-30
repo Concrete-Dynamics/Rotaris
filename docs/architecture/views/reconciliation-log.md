@@ -14,6 +14,12 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-10-30**
+
+**Dictation (OQ-455 to OQ-459, R-089; 2026-10-30).** `02-process-view.md`: the renderer → main list gains `dictation.transcribe`, and main spawns `whisper` for a press. `04-seams.md` §1 (the `dictation` facet) and §5 (a section no run reads). `docs/module-map.md`: main's row. No package, edge, channel or store change.
+
+**The queue's rest and end repaired (REQ-CHAT-035/037/038/040, R-089; 2026-10-30).** `03-runtime-view.md` §5: a resting session's queued prompts stay editable (`editQueuedAtRest`), `createQueuedPrompt` is refused once the run stops stepping, and a completed task moves its prompt to COMPLETED.
+
 Last reconciled with the code: **2026-10-29**
 
 **The requirements adoption assistant (domain 22, PD-TRACE-001, R-088; 2026-10-29).** `01-component-view.md`'s
@@ -23,6 +29,8 @@ responsibilities table gains the assistant's row (`workspace/src/adoption/`, `en
 `adoption.interpreted` reply. `05-state-ownership.md` gains the adoption record's row: a file in the workspace scope
 directory the service alone writes, on the user's press; the layout file is written only by the user's choice and never
 over an existing one. No channel or store table changed.
+
+(Add the composer's microphone: dictation inserted as prompt text)
 
 **Four views, and this log, split under the document budget (`docs/README.md`; 2026-10-26).** `01-component-view.md`,
 `02-process-view.md`, `03-runtime-view.md`, `04-seams.md` and `06-sequences.md` each keep their path as an index and

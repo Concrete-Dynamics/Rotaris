@@ -67,6 +67,7 @@
     "slash-proof": "node apps/desktop/scripts/slash-proof.mjs",
     "requirements-runs-proof": "node apps/desktop/scripts/requirements-runs-proof.mjs",
     "chat-controls-proof": "node apps/desktop/scripts/chat-controls-proof.mjs",
+    "dictation-proof": "node apps/desktop/scripts/dictation-proof.mjs",
     "update-depth-proof": "node apps/desktop/scripts/update-depth-proof.mjs",
     "live-run": "node apps/desktop/scripts/live-run.mjs",
     "autopsy": "node apps/desktop/scripts/autopsy.mjs",

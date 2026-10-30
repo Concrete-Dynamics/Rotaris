@@ -74,6 +74,9 @@ const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', .
  * No sixth channel exists for reconciliation: the response is ordinary
  * traffic on channels 1 and 2.
  */
+/** OQ-455: 24 MiB of audio as base64, the size a hosted transcription endpoint itself refuses past. */
+export const DICTATION_AUDIO_MAX_BASE64 = 32 * 1024 * 1024;
+
 export const CommandOutcomeSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), value: z.unknown().optional() }),
   z.object({ ok: z.literal(false), code: z.string(), headline: z.string(), detail: z.string().optional() }),
@@ -309,6 +312,11 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('config.save'), save: DesktopSaveSchema }),
   z.object({ kind: z.literal('config.setField'), scope: z.enum(CONFIG_SCOPES).optional(), patch: z.record(z.string(), z.unknown()) }),
   z.object({ kind: z.literal('config.liveState'), state: LiveStateSchema }),
+  /**
+   * OQ-455..458: one recording, as the renderer's recorder wrote it, answered `{ text }`. Five minutes of the recorder's default
+   * opus fit well inside the bound, so one oversized request cannot hold the one channel every kind shares.
+   */
+  z.object({ kind: z.literal('dictation.transcribe'), audioBase64: z.string().min(1).max(DICTATION_AUDIO_MAX_BASE64), mimeType: z.string().min(1).max(100) }),
   /** ADR-0030 / REQ-PROVIDER-140..143/147: the provider list and its actions, answered by main itself (the store lives there). No reply carries a credential. */
   z.object({ kind: z.literal('providers.list') }),
   z.object({ kind: z.literal('providers.health'), id: z.string().min(1) }),

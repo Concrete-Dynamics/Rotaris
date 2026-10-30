@@ -6,6 +6,7 @@ import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId }
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, type AgentBackend } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, type ModelLookup, type RunNotice } from './index.js';
+import { Run } from './run/run.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000c') as MachineId;
 const MODEL = { providerId: 'test', modelId: 'test', dialect: 'chat' as const };
@@ -53,7 +54,7 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     expect(row.iterations_completed).toBe(2);
     const prompts = dal.queuedPromptsOf(sid);
     expect(prompts).toHaveLength(1);
-    expect(prompts[0]).toMatchObject({ prompt_id: promptId, content: 'then do this instead', status: 'TRIGGERED' });
+    expect(prompts[0]).toMatchObject({ prompt_id: promptId, content: 'then do this instead', status: 'COMPLETED' });
     const todo = JSON.parse(row.todo!) as { phases: { name: string; tasks: { id: string; name?: string; text: string; state: string }[] }[] };
     expect(todo.phases.map((p) => p.name)).toEqual(['main', 'Queued Prompts']);
     // REQ-CHAT-040 / REQ-ORCH-071 (acceptance A28): the task is NAMED "Queued Prompt: <first 8 characters of the prompt id>"
@@ -98,7 +99,7 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     await sessions.running(sid);
     const afterTrigger = dal.queuedPromptsOf(sid)[0]!;
     expect(afterTrigger.session_id).toBe(sid);
-    expect(afterTrigger.status).toBe('TRIGGERED');
+    expect(afterTrigger.status).toBe('COMPLETED');
     expect(afterTrigger.context_snapshot).toBe(afterCreate[0]!.context_snapshot);
   });
 
@@ -161,6 +162,105 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     expect(dal.getSession(sid)!.execution_status).toBe('completed');
     expect(dal.residentRows(sid).filter((r) => r.kind === 'user').length).toBe(before);
     expect(sessions.continueSession(sid, 'continue')).toMatchObject({ ok: false, error: { code: 'not-paused' } });
+  });
+
+  it('keeps a prompt queued for a paused session editable and removable at rest, and consumes the edit on the continue (REQ-CHAT-040, REQ-CHAT-037)', async () => {
+    const sessions = makeSessions(many(6));
+    const started = sessions.start(dal, 'C:/ws', 'first');
+    if (!started.ok) throw new Error(started.error.reason);
+    const sid = started.value;
+    const kept = sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'keep me' } });
+    const dropped = sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'drop me' } });
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    await sessions.running(sid);
+    expect(dal.getSession(sid)!.execution_status).toBe('paused');
+    const keptId = kept.ok ? kept.value! : '';
+    const droppedId = dropped.ok ? dropped.value! : '';
+    expect(sessions.control({ op: 'editQueuedPrompt', sessionId: sid, args: { promptId: keptId, text: 'kept and edited' } })).toEqual({ ok: true });
+    expect(sessions.control({ op: 'removeQueuedPrompt', sessionId: sid, args: { promptId: droppedId } })).toEqual({ ok: true });
+    expect(dal.queuedPromptsOf(sid).map((p) => [p.content, p.status])).toEqual([['kept and edited', 'QUEUED']]);
+    expect(dal.timelineOf(sid).map((t) => t.name)).toEqual(expect.arrayContaining(['prompt_edited', 'prompt_removed']));
+    expect(sessions.continueSession(sid, 'continue')).toMatchObject({ ok: true });
+    await sessions.running(sid);
+    expect(dal.queuedPromptsOf(sid).map((p) => [p.content, p.status])).toEqual([['kept and edited', 'COMPLETED']]);
+    expect(sessions.control({ op: 'editQueuedPrompt', sessionId: sid, args: { promptId: keptId, text: 'too late' } })).toEqual({ ok: false });
+  });
+
+  it('moves a queued prompt to COMPLETED only once its task has finished (REQ-CHAT-038)', async () => {
+    const sessions = makeSessions(many(6));
+    const started = sessions.start(dal, 'C:/ws', 'first');
+    if (!started.ok) throw new Error(started.error.reason);
+    const sid = started.value;
+    const seen: string[] = [];
+    sessions.bus.attach(sid, { mode: 'blocking', deliver: (e) => { if (e.event === 'iteration.start') seen.push(dal.queuedPromptsOf(sid)[0]?.status ?? 'none'); return undefined; } });
+    sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'later' } });
+    await sessions.running(sid);
+    expect(seen.at(-1)).toBe('TRIGGERED');
+    expect(dal.queuedPromptsOf(sid)[0]).toMatchObject({ status: 'COMPLETED' });
+  });
+
+  it('a prompt the iteration limit left TRIGGERED runs on the next prompt to the session, and stays on its todo meanwhile (REQ-CHAT-040, REQ-ORCH-071)', async () => {
+    const backend = many(8);
+    const sessions = new Sessions({
+      clocks: clock, publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 4242, host: HOST,
+      retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-limit',
+      model: { backend, config: { ...RUN_CONFIG_DEFAULTS, iterationLimit: 1, model: MODEL, credentialFor: () => async () => '' } },
+      sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid),
+      runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', messageLimit: null },
+    });
+    const started = sessions.start(dal, 'C:/ws', 'first');
+    if (!started.ok) throw new Error(started.error.reason);
+    const sid = started.value;
+    sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'later' } });
+    await sessions.running(sid);
+    expect(dal.getSession(sid)).toMatchObject({ execution_status: 'stopped', stop_reason: 'iteration_limit_reached', iterations_completed: 1 });
+    const task = (): unknown => (JSON.parse(dal.getSession(sid)!.todo!) as { phases: { name: string; tasks: { state: string }[] }[] }).phases.find((p) => p.name === 'Queued Prompts')?.tasks[0]?.state;
+    expect(task()).toBe('pending');
+    const r = sessions.prompt(sid, 'and now this');
+    expect(r.ok).toBe(true);
+    await sessions.running(sid);
+    expect(task()).toBe('complete');
+    expect(dal.queuedPromptsOf(sid).map((p) => p.status)).toEqual(['COMPLETED']);
+  });
+
+  it('refuses a prompt queued once the run has stopped stepping, so none is left QUEUED under a completed run (REQ-CHAT-035, REQ-CHAT-040)', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    let reached = false;
+    const settled = vi.spyOn(Run.prototype as unknown as { childCompletionsSettled(): Promise<void> }, 'childCompletionsSettled').mockImplementation(async () => { reached = true; await hold; });
+    try {
+      const sessions = makeSessions(many(3));
+      const started = sessions.start(dal, 'C:/ws', 'first');
+      if (!started.ok) throw new Error(started.error.reason);
+      const sid = started.value;
+      await vi.waitFor(() => { expect(reached).toBe(true); });
+      expect(sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'too late' } })).toEqual({ ok: false });
+      release();
+      await sessions.running(sid);
+      expect(dal.getSession(sid)!.execution_status).toBe('completed');
+      expect(dal.queuedPromptsOf(sid)).toEqual([]);
+    } finally { settled.mockRestore(); }
+  });
+
+  it('survives the process: a second Sessions over the same store shows the prompt, edits it and consumes it on the continue (REQ-CHAT-041)', async () => {
+    const first = makeSessions(many(6));
+    const started = first.start(dal, 'C:/ws', 'first');
+    if (!started.ok) throw new Error(started.error.reason);
+    const sid = started.value;
+    const queued = first.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'after a restart' } });
+    first.control({ op: 'pause', sessionId: sid, args: {} });
+    await first.running(sid);
+    const promptId = queued.ok ? queued.value! : '';
+
+    const second = makeSessions(many(6));
+    const resumed = second.resume(dal, 'C:/ws', sid);
+    if (!resumed.ok) throw new Error(resumed.error.reason);
+    expect(dal.queuedPromptsOf(sid).map((p) => p.status)).toEqual(['QUEUED']);
+    expect(second.control({ op: 'editQueuedPrompt', sessionId: sid, args: { promptId, text: 'after a restart, edited' } })).toEqual({ ok: true });
+    expect(second.continueSession(sid, 'continue')).toMatchObject({ ok: true });
+    await second.running(sid);
+    expect(dal.queuedPromptsOf(sid).map((p) => [p.content, p.status])).toEqual([['after a restart, edited', 'COMPLETED']]);
+    expect(dal.getSession(sid)!.execution_status).toBe('completed');
   });
 
   it('pauses at the message limit durably with the count and the limit, tells the host, and resumes on double with the limit doubled (REQ-ORCH-084/085/087, REQ-SESSION-110)', async () => {

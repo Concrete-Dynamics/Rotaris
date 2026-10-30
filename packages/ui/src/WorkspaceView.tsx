@@ -1,3 +1,5 @@
+import { DictationControl, type DictationHost } from './DictationControl.js';
+import { insertTranscript } from './dictation.js';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { isBusy, PERMISSION_PRESETS, resolveTheme, RUN_AGENT_ID, THEME_NAMES, type AgentRecord, type ControlOp, type ImageAttachment, type ImageAttachmentInput, PROJECT_SETUP_SEND_REASON, PROJECT_SETUP_SUBMIT_DETAIL, PROJECT_SETUP_SUBMIT_HEADLINE, type InitializationStateView, type Notice, type PermissionPreset, type PlanDecision, type QuestionAnswers, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { projectSidebarSection } from './settings/project-init.js'; // Part AS
@@ -75,6 +77,8 @@ export interface WorkspaceViewProps {
   readonly onCancelAgent?: ((id: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /** For the tree's elapsed labels; the surface's own clock, never a run's. */
   readonly nowIso?: string | null | undefined;
+  /** OQ-455: the microphone; absent where a window offers none. */
+  readonly dictation?: DictationHost | undefined;
   /** REQ-CHAT-035/037: the queue during a run — create, edit, remove; the panel shows the session's QUEUED prompts. */
   readonly onQueue?: ((text: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   readonly onEditQueued?: ((id: string, text: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
@@ -748,7 +752,7 @@ function ModeSelector({ current, enabled, onSetMode, strip = false, stripCompact
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, dictation}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
   const [scope, setScope] = useState<'all' | 'task'>('all');
@@ -1027,6 +1031,18 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     flushDraft(value);
     caretToEnd();
     raiseCommandNotice(slashOutcomeMessage(outcome, name) ?? defaultUnavailableReason(name));
+  };
+
+  /** OQ-456: at the caret of what the composer holds now, through the path typing takes; it publishes and writes the draft and submits nothing. */
+  const insertDictated = (transcript: string) => {
+    const el = area.current;
+    const current = el?.value ?? text;
+    const { value, caret } = insertTranscript(current, el?.selectionStart ?? current.length, el?.selectionEnd ?? current.length, transcript);
+    setText(value);
+    setWalk(null);
+    setRowIndex(0);
+    noteKeystroke();
+    requestAnimationFrame(() => { const now = area.current; if (now) { now.focus(); now.setSelectionRange(caret, caret); } });
   };
 
   const submit = async () => {
@@ -1633,6 +1649,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
           {onSetMode && <ModeSelector current={mode} enabled={runActive} onSetMode={onSetMode} strip stripCompact={stripTight} />}
           {/* REQ-LIBRARY-140 / REQ-CHAT-042: stashes whatever is typed, run or no run.
             * PD-CHAT-001 revision 2: the strip's stash is the action shell — icon only, the sentence as tooltip. */}
+          {/* OQ-455: beside Attach and Stash, and like Stash enabled in every run state. It only ever inserts text. */}
+          {dictation && <DictationControl host={dictation} onError={setError} onTranscript={insertDictated} />}
           {onStash && <StripActionButton icon="ph-push-pin" aria-label="Stash prompt for later" title="Stash prompt for later" data-testid="composer-stash" onClick={stash} />}
           {/* PD-CHAT-001 revision 2: the estimate lives on the strip, so the legacy attachments row
             * below keeps only the ordered removable list — REQ-CHAT-169's own surface.

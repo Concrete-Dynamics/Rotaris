@@ -33,6 +33,8 @@ it, the screen's runtime keys (`pendingFrom`) must equal it and `TIER_B_RUNTIME_
 confinement and egress fields (`improvement-timeout.test.ts`, `writers.test.ts`), so a runtime key the screen edits is
 added in the list or the save refuses it.
 
+`dictation:` (OQ-457, 2026-10-30) is the worked example of a section **no run reads**: stop 5 is not crossed, main reads the snapshot at each press, and its rule for a value (`dictationFieldProblem` in `packages/contracts/src/config.ts`) is the one the loader, the save schema and the field share.
+
 A persona field the engine must act on rides on `Persona` (`packages/engine/src/children/personas.ts`), set in
 `personaResolverFor` (`apps/desktop/src/run-host/configuration.ts`) from the loaded entry: `delegates_to` (REQ-CONFIG-101) is
 the latest (OQ-229, 2026-10-07), parsed and validated for years and read by nothing until it became `Persona.delegatesTo`,

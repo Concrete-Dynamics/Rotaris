@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { ConfigSnapshot } from '@rotaris/contracts';
 import { RuntimeSettings, type ConfigSettingsProps } from './ConfigSettings.js';
 import { pendingFrom } from './config-state.js';
+import { DICTATION_CONFIG_DEFAULT } from '@rotaris/contracts';
 
 /**
  * The Runtime category's run-start mode hint (REQ-CONFIG-320, REQ-ORCH-152 narrowed by PD-ORCH-003). Until 2026-09-29
@@ -20,7 +21,7 @@ const snapshot: ConfigSnapshot = {
   runtime: { max_depth: 3, max_active_children: 6, child_timeout: 1200, max_iterations: 20, allow_outside_workspace: false, permission_mode: 'ask', improvement_collector_enabled: true, improvement_collector_timeout: 60, retrospective_timeout: 120, keep_going: false, run_start_mode: 'plan', memory_diagnostics_enabled: false, sandbox_mode: 'off', sandbox_writable_roots: [], sandbox_allow_network: false, network_egress_policy: 'ask', network_allowed_hosts: [], network_denied_hosts: [] },
   rawRuntime: { workspace: null, global: null },
   circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { show_tool_results: true, show_tool_inputs: true, tool_result_lines: 10, tool_input_lines: 2 },
-  skills: { enabled: true, overrides: {}, invocation_overrides: {} }, instructionsPolicy: { overrides: {} }, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', instructions: [], referential: [], warnings: [],
+  skills: { enabled: true, overrides: {}, invocation_overrides: {} }, instructionsPolicy: { overrides: {} }, dictation: DICTATION_CONFIG_DEFAULT, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', instructions: [], referential: [], warnings: [],
   files: { workspace: '/ws/.rotaris/agents.yaml', global: '/cfg/agents.yaml' },
 };
 

@@ -1,3 +1,4 @@
+import { captureSupport, startCapture } from './dictation-capture.js';
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
@@ -5,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
-import { TerminalHostProvider } from '@rotaris/ui';
+import { dictationSaveProblem, insertTranscript, TerminalHostProvider, type DictationHost } from '@rotaris/ui';
 import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
@@ -290,6 +291,23 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
   // REQ-WORKSPACE-105/112: a background run in progress does not lift the gate (OQ-123; `setupPromptDue`).
   const promptDue = setupPromptDue(init.state);
   const openProjectSetup = useShellState((s) => s.openProjectSetup);
+  // OQ-455, OQ-457: the reason names the saved setting, so saving a model lifts it without a reload; the press re-reads the file in main.
+  const backend = snapshot?.dictation.backend ?? 'off';
+  const dictation: DictationHost = useMemo(() => ({
+    unavailable: captureSupport() ?? (backend === 'off' ? 'Choose a dictation model in Settings › Models.' : null),
+    start: startCapture,
+    transcribe: async (audioBase64, mimeType) => {
+      const r = await bridge.command({ kind: 'dictation.transcribe', audioBase64, mimeType });
+      return r.ok ? { ok: true, text: (r.value as { text: string }).text } : { ok: false, reason: r.headline };
+    },
+    appendToDraft: (text) => {
+      const current = composerDraft.current ?? '';
+      const next = insertTranscript(current, current.length, current.length, text).value;
+      drafts.publish(next);
+      drafts.write(next);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `drafts` is rebuilt each render over a stable module-level ref
+  }), [backend]);
   return <>
     {worktreeOpen && (
       <WorktreeDialog workspaceRoot={workspace} existingBranches={worktrees.flatMap((r) => (r.branch === null ? [] : [r.branch]))} existingPaths={worktrees.map((r) => r.path)}
@@ -317,6 +335,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     onSelectAgent={(id, source) => { if (source === 'click' && popOut && id !== null && id !== RUN_AGENT_ID) { const agent = session?.agents.find((a) => a.id === id); if (agent) void openPersona(agent, false); } }}
     onOpenPersona={(agent, focusSteer) => { void openPersona(agent, focusSteer); }}
     models={models} imageInputModels={snapshot?.imageInputModels ?? []}
+    dictation={dictation}
     onQueue={(text) => control('createQueuedPrompt', { text }, 'The run no longer accepts prompts.')}
     onEditQueued={(promptId, text) => control('editQueuedPrompt', { promptId, text }, 'Queued message was already picked up and cannot be edited.')}
       onRemoveQueued={(promptId) => control('removeQueuedPrompt', { promptId }, 'Queued message was already picked up and cannot be deleted.')}
@@ -691,6 +710,9 @@ function useConfiguration(workspace: string | null) {
   const onSave = useCallback(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
     const current = formRef.current;
     if (!current) return { ok: false, reason: 'No configuration is loaded.' };
+    // PD-CONFIG-005: said in the Save bar, where it is seen, rather than as the channel's unreadable request.
+    const dictationProblem = dictationSaveProblem(current.pending);
+    if (dictationProblem !== null) return { ok: false, reason: dictationProblem };
     const r = await bridge.command({ kind: 'config.save', save: savePayload(current.saved, current.pending) });
     if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
     adopt(r.value as ConfigSnapshot, false);

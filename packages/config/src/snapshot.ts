@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { declaredToolsOf, INSTRUCTIONS_CONFIG_DEFAULT, SKILLS_CONFIG_DEFAULT, type ConfigSnapshot, type DesktopSavePayload, type RoleFieldEditsPayload } from '@rotaris/contracts';
+import { declaredToolsOf, DICTATION_CONFIG_DEFAULT, INSTRUCTIONS_CONFIG_DEFAULT, SKILLS_CONFIG_DEFAULT, type ConfigSnapshot, type DesktopSavePayload, type RoleFieldEditsPayload } from '@rotaris/contracts';
 import type { Timers } from '@rotaris/kernel';
 import { PERSONA_SYNTHETIC_PREFIX, STARTUP_SLOT_PREFIX } from './keys.js';
 import { isPlainMap, type PlainMap } from './merge.js';
@@ -88,6 +88,8 @@ export function snapshotOf(cfg: LoadedConfiguration, env: InstructionSnapshotEnv
     // PD-WORKSPACE-002: the per-file policy the Instructions switches edit, and REQ-WORKSPACE-048's
     // master switch beside it, so the screen can tell "this file is off" from "injection is off".
     instructionsPolicy: { overrides: { ...cfg.instructions.overrides } },
+    // OQ-457: never a credential; `provider` is a provider's name, resolved in main (OQ-458).
+    dictation: { ...cfg.dictation },
     injectAgentsMd: cfg.injectAgentsMd,
     // REQ-GIT-073 / REQ-CONFIG-068: main sends it on an isolated start's `worktree.create` (REQ-GIT-005).
     worktreeStorageSubpath: cfg.worktreeStorageSubpath,
@@ -113,7 +115,7 @@ export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: 
       network_allowed_hosts: [...RUNTIME_DEFAULTS.network_allowed_hosts], network_denied_hosts: [...RUNTIME_DEFAULTS.network_denied_hosts],
     },
     rawRuntime: { workspace: null, global: null },
-    circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { ...DISPLAY_DEFAULTS }, skills: { ...SKILLS_CONFIG_DEFAULT }, instructionsPolicy: { ...INSTRUCTIONS_CONFIG_DEFAULT }, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', referential: [], warnings: [],
+    circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { ...DISPLAY_DEFAULTS }, skills: { ...SKILLS_CONFIG_DEFAULT }, instructionsPolicy: { ...INSTRUCTIONS_CONFIG_DEFAULT }, dictation: { ...DICTATION_CONFIG_DEFAULT }, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', referential: [], warnings: [],
     // The instruction files exist or do not whatever the configuration says, so the inventory stands in a fatal snapshot too.
     instructions: instructionFiles(workspaceRoot, { ...env, globalDir: env.globalDir ?? globalDir }).map((f) => ({ ...f, enabled: true })),
     files: { workspace: files.workspace.agents, global: files.global.agents },
@@ -144,6 +146,8 @@ function toDesktopSave(save: DesktopSavePayload): DesktopSave {
     ...(save.skills && Object.keys(save.skills).length > 0 ? { skills: save.skills } : {}),
     // PD-WORKSPACE-002: the `instructions.overrides` key, already sparse — a null value removes a key.
     ...(save.instructions && Object.keys(save.instructions).length > 0 ? { instructions: save.instructions } : {}),
+    // OQ-457: the changed `dictation:` keys; a null value removes a key.
+    ...(save.dictation && Object.keys(save.dictation).length > 0 ? { dictation: save.dictation } : {}),
     ...(Object.keys(roles).length > 0 ? { roles } : {}),
   };
 }

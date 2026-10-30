@@ -25,7 +25,7 @@ reads or writes for itself stays in the root that draws it: `main.tsx` for the m
 **Which facet.** Nineteen sit beside `commands/context.ts`, one per family: `dialogs`, `providers`, `session`,
 `hooks`, `mcp`, `initialization`, `skills`, `shell`, `git`, `checkpoints`, `library`, `improvements`, `config`,
 `requirements`, `windows`, `workspace`, `update` (the updater's), `auth-recovery` (REQ-NOTIFY-072's recovery window,
-2026-10-02; this line said sixteen until then, `update` uncounted) and `reauth` (REQ-NOTIFY-071/078's prompt, 2026-10-02).
+2026-10-02; this line said sixteen until then, `update` uncounted) `reauth` (REQ-NOTIFY-071/078's prompt, 2026-10-02) and `dictation` (OQ-455, 2026-10-30, whose clients sit in `main/dictation/`).
 Add the kind to the one whose name it already carries; a family with no
 facet yet is a new file and one more spread in the table. Each declares the slice of `CommandContext` it uses
 (`Pick<CommandContext, 'runHost' | …>`) — take what you need and nothing more, because that slice is what a

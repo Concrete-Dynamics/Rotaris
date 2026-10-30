@@ -97,4 +97,4 @@ take the part past the budget, a new part is started with the next number, and a
 | [65](open-questions/65-spikes-and-later-questions-32.md) | Spikes, and the questions raised since (32/35) | OQ-362, OQ-363 |
 | [66](open-questions/66-spikes-and-later-questions-33.md) | Spikes, and the questions raised since (33/35) | OQ-364, OQ-401, OQ-402 |
 | [67](open-questions/67-spikes-and-later-questions-34.md) | Spikes, and the questions raised since (34/35) | OQ-386, OQ-370 |
-| [68](open-questions/68-spikes-and-later-questions-35.md) | Spikes, and the questions raised since (35/35) | OQ-378, OQ-450 – OQ-454 |
+| [68](open-questions/68-spikes-and-later-questions-35.md) | Spikes, and the questions raised since (35/35) | OQ-378, OQ-450 – OQ-459 |

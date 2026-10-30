@@ -15,5 +15,5 @@ shape of exactly two cards, and the section stands below the providers list, pas
 
 > **Narrows:** REQ-CONFIG-329
 
-*Raised by the owner, 2026-10-30, relayed in a lane brief; logged as [R-087](../requests.md#r-087). Minted by the lane under the brief's
+*Raised by the owner, 2026-10-30, relayed in a lane brief; logged as [R-089](../requests.md#r-089). Minted by the lane under the brief's
 instruction to mint where a reading departs from a live requirement; the rest of dictation is raised as OQ-455 to OQ-459 and not ruled here.*

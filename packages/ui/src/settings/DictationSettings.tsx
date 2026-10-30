@@ -16,7 +16,7 @@ function Field({ id, label, hint, field, value, onChange }: { id: string; label:
   );
 }
 
-/** OQ-457: Settings › Models › Dictation, saved with the rest of the screen. Each backend shows only what it reads. */
+/** OQ-457, PD-CONFIG-005: Settings › Models › Dictation, saved with the rest of the screen. Each backend shows only what it reads. */
 export function DictationSettings({ value, onChange }: { value: DictationConfigView; onChange: (change: PendingChange) => void }) {
   return (
     <section aria-label="Dictation" data-testid="settings-dictation">

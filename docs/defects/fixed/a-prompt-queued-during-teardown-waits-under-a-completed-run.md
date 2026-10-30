@@ -8,7 +8,7 @@ then reported completion while the prompt waited.
 Found by reading `Run.teardown` on 2026-10-30, and reproduced by holding teardown at `childCompletionsSettled` in a test.
 Steering already closes at this point for the same reason (REQ-MONITOR-133/134, `closeSteering`).
 
-**Repaired 2026-10-30.** `Run.acceptsQueuedPrompts` is false from the moment the run stops stepping, and the operation is refused.
+**Repaired 2026-10-30.** `Run.acceptsQueuedPrompts` is false from the moment the run stops stepping, whichever way it stops (a pause's or a stop's teardown too, where a prompt would have waited visibly rather than been stranded, a change this accepts for one rule), and the operation is refused.
 The composer's existing failure path then gives the text back with "Message could not be queued because the run is no longer
 active.", REQ-CHAT-035's own wording for this case.
 

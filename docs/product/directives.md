@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and one.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -52,6 +52,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-CONFIG-002](directives/pd-config-002.md) | the Settings provider list shows every provider REQ-PROVIDER-140 lists |
 | [PD-CONFIG-003](directives/pd-config-003.md) | the Runtime category's two timeouts: the per-agent timeout as a third delegation limit, in minutes, and the improvement analysis timeout, in seconds |
 | [PD-CONFIG-004](directives/pd-config-004.md) | the Display category's Transcript heading holds the tool-verbosity slider and the reasoning switch |
+| [PD-CONFIG-005](directives/pd-config-005.md) | the Models category also holds the dictation model |
 
 ### GIT
 

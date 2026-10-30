@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ConfigSnapshot } from '@rotaris/contracts';
-import { applyChange, clampForDisplay, isDirty, liveStateOf, pendingFrom, rebasePending, savePayload } from './config-state.js';
+import { applyChange, clampForDisplay, dictationSaveProblem, isDirty, liveStateOf, pendingFrom, rebasePending, savePayload } from './config-state.js';
 import { DICTATION_CONFIG_DEFAULT } from '@rotaris/contracts';
 
 const snapshot: ConfigSnapshot = {
@@ -311,5 +311,10 @@ describe('OQ-457 — the dictation keys on the screen', () => {
     const pending = applyChange(off, { kind: 'dictation', key: 'backend', value: 'local' });
     const fresh = pendingFrom({ ...snapshot, dictation: { ...snapshot.dictation, language: 'en' } });
     expect(rebasePending(off, pending, fresh).dictation).toEqual({ ...snapshot.dictation, backend: 'local', language: 'en' });
+  });
+  it('names the field Save refuses, before anything is sent (PD-CONFIG-005)', () => {
+    expect(dictationSaveProblem(off)).toBeNull();
+    expect(dictationSaveProblem(applyChange(off, { kind: 'dictation', key: 'local_model', value: '' }))).toBe('Dictation local model name must be a bare model name, with no path.');
+    expect(dictationSaveProblem(applyChange(off, { kind: 'dictation', key: 'base_url', value: 'ftp://x' }))).toBe('Dictation base URL must be an http or https URL.');
   });
 });

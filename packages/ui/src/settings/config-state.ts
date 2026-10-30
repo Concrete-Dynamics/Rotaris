@@ -1,4 +1,4 @@
-import { displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DictationConfigView, type DictationSavePayload, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type ModelSlotName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
+import { dictationFieldProblem, displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DictationConfigView, type DictationSavePayload, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type ModelSlotName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
 
 /**
  * The pending settings state (REQ-CONFIG-279..287, 417..426): destination 1's values as the screen holds
@@ -550,4 +550,14 @@ export function improvementTimeoutEdit(raw: string): { readonly commit: number }
  */
 export function storedImprovementTimeoutNote(stored: number, pending: number = stored): string | null {
   return pending !== stored || improvementTimeoutForDisplay(stored) === stored ? null : storedSecondsLine(stored);
+}
+
+/** PD-CONFIG-005: the sentence Save refuses with when a dictation value would fail the loader, or null. */
+export function dictationSaveProblem(pending: PendingSettings): string | null {
+  const labels = { local_model: 'Dictation local model name', base_url: 'Dictation base URL', language: 'Dictation language' } as const;
+  for (const key of ['local_model', 'base_url', 'language'] as const) {
+    const problem = dictationFieldProblem(key, pending.dictation[key]);
+    if (problem !== null) return `${labels[key]} ${problem}.`;
+  }
+  return null;
 }

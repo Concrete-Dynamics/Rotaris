@@ -25,7 +25,7 @@ job in `ci.yml` on `windows-latest` x64): silent install into a scratch director
 and checking nothing on a development feed**, silent uninstall leaving the per-user and per-workspace directories. Measures
 `--force-run` after `/S` for PR-3. Owner input: none (the icon, O-4, is not needed to install).
 
-**PR-1b — the portable launcher stub (first-release plan §4.5).** Spike first on a Windows x64 host (CLAUDE.md), result into
+**PR-1b — the portable launcher stub (first-release plan §4.5).** Spike first on a Windows x64 host (AGENTS.md), result into
 ADR-0054; then the stub: P4's preparation with the marker, `ROTARIS_PORTABLE_ARTIFACT`, arguments forwarded, the handle on
 the artifact closed before the payload starts. Proofs: the two runs of REQ-STARTUP-156, the damaged-preparation classes,
 the read-only directory, the rename-aside while running. **Needs a Windows x64 host**; `windows-latest` can build and run

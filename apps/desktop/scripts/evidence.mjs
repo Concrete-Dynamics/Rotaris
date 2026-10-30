@@ -9,7 +9,7 @@
  * for every file in it (`lib/evidence-manifest.mjs`); `verify` re-hashes the directory and reports every
  * difference, so a pack kept beside a record can be shown to be the one that was examined.
  *
- * A live run writes `evidence-manifest.json` into its pack as it finishes (the pack's row in AGENTS.md). This
+ * A live run writes `evidence-manifest.json` into its pack as it finishes (the pack's row in docs/proofs/live-run.md). This
  * tool is what verifies one, and what writes one for any other evidence directory — a `.proof/` scratch tree, a
  * `pnpm ui-review` pack (whose own `manifest.json` is the critic protocol's and is not touched), a directory
  * whose contents a report cites.

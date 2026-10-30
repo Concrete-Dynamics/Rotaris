@@ -47,7 +47,7 @@ const hasKey = (dir: string): boolean => existsSync(join(dir, 'local', 'tokens',
 const sweep = (r: string, extra: Partial<Parameters<typeof sweepSandboxes>[1]> = {}) =>
   sweepSandboxes(r, { dropCredentials, now: NOW, probe, ownPid: 1, warn: () => undefined, ...extra });
 
-describe('the live run\'s startup sweep leaves a concurrent run\'s sandbox alone (AGENTS.md, the live run)', () => {
+describe('the live run\'s startup sweep leaves a concurrent run\'s sandbox alone (docs/proofs/live-run.md)', () => {
   it('leaves a sandbox whose OWNER is a live process — its workspace, its store and its key', () => {
     const r = root();
     const sibling = sandbox(r, name(NOW - 60_000), { pid: LIVE, startedAt: NOW - 60_000 });

@@ -49,7 +49,7 @@ Your edits land in documentation. The one artifact you regenerate rather than ed
 
 # The hard boundary — it binds you before anything else here
 
-`CLAUDE.md` states it and it is not negotiable. Do **not** read, clone, fetch, search or quote:
+`AGENTS.md` states it and it is not negotiable. Do **not** read, clone, fetch, search or quote:
 
 - `https://github.com/Concrete-Dynamics/Rotaris-legacy` (the reference, renamed 2026-10-21) and
   `https://github.com/theUpsider/Rotaris` (an earlier home of the same reference), or any mirror, fork or
@@ -539,8 +539,8 @@ assumption or a non-critical open question. Then write the entry.
 
 # Where the work happens
 
-`CLAUDE.md` binds this: **every change is built on a temporary branch in its own temporary worktree, and
-lands on `main` by a merge you perform yourself.** A directive touches three or more files, so it is
+`AGENTS.md` binds this: **every change is built on a temporary branch in its own temporary worktree, and
+lands on `main` by a rebase and a fast-forward push you perform yourself — never a merge commit.** A directive touches three or more files, so it is
 never an in-place edit in the primary checkout. Only a trivially reversible, single-file documentation
 edit may be made in place, and only when `git status` is clean.
 
@@ -550,9 +550,9 @@ git worktree add -b req-<topic> ../Rotaris-crw-wt-<short> main
 cd ../Rotaris-crw-wt-<short>
 ```
 
-Steps, the five merge-conflict shapes, and the LF rule are in
+Steps, the five conflict shapes a rebase replays, and the LF rule are in
 [`docs/clean-room/agent-workflow.md`](../../docs/clean-room/agent-workflow.md) — read it before the
-first edit. Write LF. Re-read `main` before merging, for prose **and** for every register identifier
+first edit. Write LF. Re-read `main` before rebasing, for prose **and** for every register identifier
 you took while you worked.
 
 Verification for a documentation-only change:

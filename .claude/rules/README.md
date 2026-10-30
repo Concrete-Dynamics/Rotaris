@@ -6,7 +6,7 @@ paths:
 # Path-scoped rules — what belongs here
 
 Each file here carries `paths:` frontmatter, so it enters context only when a file it names is read.
-That is the whole reason they exist: `CLAUDE.md` is loaded every session and must stay short, while an
+That is the whole reason they exist: `AGENTS.md` is loaded every session and must stay short, while an
 invariant that binds one subtree can afford to be stated where it binds.
 
 Three constraints on a rule in this directory:

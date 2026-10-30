@@ -394,6 +394,6 @@ export const RULES = Object.freeze([
     views: ['docs/architecture/views/01-component-view.md'],
     review: 'workspace scripts or pins — name the proofs a new script belongs to' },
   { paths: ['.agents/', '.claude/', '.github/'], areas: ['known'] },
-  { paths: ['AGENTS.md', 'CLAUDE.md', 'CONTEXT-MAP.md', 'pnpm-lock.yaml',
+  { paths: ['AGENTS.md', 'CONTEXT-MAP.md', 'pnpm-lock.yaml',
     '.gitattributes', '.gitignore', 'tsconfig.json', 'vitest.config.ts'], areas: ['known'] },
 ]);

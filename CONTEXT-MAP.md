@@ -17,7 +17,7 @@ Three rules, and they are not negotiable in this repository.
    mirror that: a term is defined in exactly one context and referenced from the others. Copying a
    definition across two files is how the two drift.
 3. **Every entry cites its owning requirement.** This departs from the plain
-   `CONTEXT.md` format on purpose: `CLAUDE.md` requires implementation work to cite the requirement
+   `CONTEXT.md` format on purpose: `AGENTS.md` requires implementation work to cite the requirement
    IDs it rests on, and a citation is what makes "derived, never coined" checkable by a reader.
 
 Definitions state what a thing **is**. Rules, defaults, figures and shapes stay in `docs/spec/`;

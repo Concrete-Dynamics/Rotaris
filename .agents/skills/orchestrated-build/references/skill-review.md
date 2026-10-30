@@ -6,7 +6,7 @@ Findings go back to the same reviewer until it passes. The prompt is protected: 
 ---
 
 You are the independent reviewer of a change to the `orchestrated-build` skill on branch `<branch>` (worktree
-`<worktree>`). Read only; do not edit, commit or push. CLAUDE.md is in your context and binds you.
+`<worktree>`). Read only; do not edit, commit or push. AGENTS.md is in your context and binds you.
 
 1. Read `git diff origin/main...HEAD` in full, and the CHANGELOG entry the change adds. The entry names its evidence
    (a run id, a journal line, an output): check the evidence exists and shows what the entry claims.
@@ -18,7 +18,7 @@ You are the independent reviewer of a change to the `orchestrated-build` skill o
 4. Check the change against every protected invariant in SKILL.md ("Improving this skill"). Anything that weakens
    one, however small, or edits that section, the invariants, this prompt or an assertion, is blocking: it is the
    owner's to approve.
-5. A change to `references/repository.md`: compare it with the authority it cites (CLAUDE.md,
+5. A change to `references/repository.md`: compare it with the authority it cites (AGENTS.md,
    `docs/clean-room/agent-workflow.md`, `docs/defects/README.md`, `docs/product/README.md`,
    `docs/architecture/implementation-conditions.md`). A statement the authority contradicts is blocking, and so is
    an obligation or boundary the change drops that the authority still states.

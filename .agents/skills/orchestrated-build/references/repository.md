@@ -5,7 +5,7 @@ touches. Where this page and an authority disagree, the authority governs and th
 
 ## Boundaries that bind every step
 
-- `CLAUDE.md`'s hard boundary (the clean-room sources) binds every command, file and search. A task that seems to
+- `AGENTS.md`'s hard boundary (the clean-room sources) binds every command, file and search. A task that seems to
   need a forbidden source does not; raise the gap as an open question.
 - **Never edited in place:** `docs/spec/` (a directive governs over a requirement it names, and the requirement
   gains a back-pointer in the same commit; `pnpm symbols` enforces the identifiers); a shipped store migration;
@@ -25,7 +25,7 @@ touches. Where this page and an authority disagree, the authority governs and th
   `docs/architecture/first-executions.md`, and raise it for the amendment round; never correct the requirement.
 - Never undo a commit you did not make; never force, reset or rewrite a shared branch.
 
-## Owner requests — `CLAUDE.md`, `docs/product/README.md`
+## Owner requests — `AGENTS.md`, `docs/product/README.md`
 
 A request that would change what the product does is classified before code and logged in
 `docs/product/requests.md` (covered, OQ, ESC, defect found by building, or a directive). The orchestrator does this
@@ -78,7 +78,7 @@ aside with a patch file outside the checkout (`git diff -- <files> > <scratchpad
 `git checkout -- <files>`, then `git apply <scratchpad>/<name>.patch`), or read the base in a throwaway detached worktree
 (`git worktree add --detach <path> origin/main`, removed after).
 
-## Before and after an edit — `CLAUDE.md`
+## Before and after an edit — `AGENTS.md`
 
 Consult the architecture view the router in `docs/architecture/views/README.md` names before changing code, and
 update it after. A change that draws or restyles a surface follows `docs/design/README.md` §7 (`pnpm mockup` before;

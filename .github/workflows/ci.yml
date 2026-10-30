@@ -2,7 +2,7 @@
 #
 # Every push to a branch and every pull request runs two jobs on a Windows x64 runner:
 #
-#   gate     `pnpm check` — symbols, typecheck, lint, tests: the commit gate of CLAUDE.md
+#   gate     `pnpm check` — symbols, typecheck, lint, tests: the commit gate of AGENTS.md
 #   package  `pnpm package` — the code-intelligence runtime for win32-x64 (ADR-0035), the native bindings rebuilt and
 #            load-proved under the shipped Electron, the installer named by tools/release-naming (REQ-STARTUP-031), and
 #            the packaged app launched once against a loopback stub model (ADR-0056 rule 4 (b)); the installer is

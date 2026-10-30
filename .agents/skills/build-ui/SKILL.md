@@ -5,7 +5,7 @@ description: Build or substantially restyle a Rotaris desktop surface using the 
 
 # Build a Rotaris surface
 
-Treat the specification as information-architecture authority and `docs/design/` as visual-language authority. Read `CLAUDE.md`, `CONTEXT-MAP.md`, `packages/ui/CONTEXT.md`, and the affected architecture view before editing. Classify an owner request in `docs/product/requests.md` when it can change product behavior.
+Treat the specification as information-architecture authority and `docs/design/` as visual-language authority. Read `AGENTS.md`, `CONTEXT-MAP.md`, `packages/ui/CONTEXT.md`, and the affected architecture view before editing. Classify an owner request in `docs/product/requests.md` when it can change product behavior.
 
 ## Workflow
 

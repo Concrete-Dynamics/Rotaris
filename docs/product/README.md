@@ -182,7 +182,7 @@ of logging refusals: without it the same request can be asked again in three wee
 different answer, and nobody can see that it ever happened.
 
 **The log has no allocator, and that is now gated rather than hoped about.** An `R-NNN` is unique only
-against the `main` the session that chose it last read, and `CLAUDE.md` puts every change in a temporary
+against the `main` the session that chose it last read, and `AGENTS.md` puts every change in a temporary
 worktree — precisely the case where that is not the `main` the row lands on. It collided twice on
 consecutive days. The second time it was caught at the merge by an agent who happened to re-read `main`;
 the first time two rows numbered `R-016` both merged and sat in the log for a day, in two different
@@ -236,7 +236,7 @@ to change form for a machine.
   (fin44's builder that minted `PD-SHELL-010` ran only those, and its reviewer found the gap; noted by fin45).
   `pnpm check` runs it with every other test.
 - **First execution still reports back.** A directive is a mechanism decided on paper like any other.
-  The first time one is built, `CLAUDE.md`'s standing policy applies: report back into this record,
+  The first time one is built, `AGENTS.md`'s standing policy applies: report back into this record,
   in place, including when it found nothing, and append a row to
   [`../architecture/first-executions.md`](../architecture/first-executions.md).
 

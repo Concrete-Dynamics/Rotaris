@@ -32,6 +32,29 @@ over an existing one. No channel or store table changed.
 
 (Add the composer's microphone: dictation inserted as prompt text)
 
+**The ancestor `CLAUDE.md` removed, and the eager-import crutch dropped (2026-10-27).** The entry below left a host-side
+condition: a `CLAUDE.md` above the checkout (`/home/glados/CLAUDE.md`) shadowed `AGENTS.md` from Claude Code. That file
+has been moved aside (`~/.CLAUDE.md.removed-20261027`), so no `CLAUDE.md` stands in or above a checkout and Claude Code's
+own discovery reaches `AGENTS.md` again — measured in this branch's checkout, Claude Code 2.1.310, every tool disabled,
+3 of 3 sessions holding the repository `AGENTS.md`. The `.claude/rules/repository-rules.md` eager import (`bd46f85a`)
+that worked around the condition was dropped with it: a `paths:`-less rule file is a second, silent route to the rules,
+and the branch carries one rules file alone. `tools/agent-config.test.ts` now fails any `.claude/rules/` file without
+`paths:` frontmatter instead of pinning that import; `AGENTS.md` and
+`docs/defects/claude-code-sessions-under-an-ancestor-claude-md-load-no-repository-rules.md` state the closure. No
+package, edge, process, message, channel or ownership changed.
+
+**The repository's `CLAUDE.md` deleted (the owner's option (a); 2026-10-27).** The import `@AGENTS.md` the entry below
+left is gone and `AGENTS.md` is the rules alone; a Claude session under an ancestor `CLAUDE.md` loads none of them, an
+accepted gap recorded in `docs/defects/claude-code-sessions-under-an-ancestor-claude-md-load-no-repository-rules.md`
+and closed the same day by removing that ancestor file (the entry above).
+No package, edge, process, message, channel or ownership changed.
+
+**The agent configuration consolidated into `AGENTS.md` (2026-10-26).** `CLAUDE.md` is folded into `AGENTS.md` and
+reduced to the import `@AGENTS.md`, so the maintenance rule this README cites is stated in `AGENTS.md`; the README's pointer moves with it. The
+live run's manual moved from `AGENTS.md` to `docs/proofs/live-run.md`, and the proof-launch mechanics to the proof
+registry's page. `tools/skill-routers.test.ts` became `tools/agent-config.test.ts`. No package, edge, process, message,
+channel or ownership changed.
+
 **Four views, and this log, split under the document budget (`docs/README.md`; 2026-10-26).** `01-component-view.md`,
 `02-process-view.md`, `03-runtime-view.md`, `04-seams.md` and `06-sequences.md` each keep their path as an index and
 hold their sections, verbatim and in order, in the folder of the same name; every link to a section names its part. The

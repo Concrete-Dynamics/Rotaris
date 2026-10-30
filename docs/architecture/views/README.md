@@ -32,7 +32,7 @@ Each view carries its own section router at the top, so consulting one is a page
 ## Maintenance rule
 
 These views are part of the record, not documentation written after the fact. Two obligations bind every
-change to the code (stated in `CLAUDE.md`):
+change to the code (stated in `AGENTS.md`):
 
 1. **Consult before modifying.** Before changing code, read the view that covers the area — the table above
    chooses it.

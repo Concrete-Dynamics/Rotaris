@@ -7,7 +7,7 @@ Part 7 of 7 of [the design README](../README.md), which indexes every part.
 > **Adopting the language is not the same as using it. Section 2 said what is adopted; this section says
 > what a change to the interface has to do about it.**
 
-Two obligations bind every change that draws, redraws or restyles a surface. They are stated in `CLAUDE.md`
+Two obligations bind every change that draws, redraws or restyles a surface. They are stated in `AGENTS.md`
 beside the architecture views' pair, and they are read the same way.
 
 1. **Consult before drawing.** Before writing or changing a component, look at the surface in the mockup.

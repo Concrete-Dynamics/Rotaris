@@ -5,7 +5,7 @@ Part 8 of 22 of [the codebase record](../codebase.md), which indexes every part.
 **The five decisions this scenario was held on were taken on 2026-09-22**, four by the owner and one delegated:
 the endpoint is the unmetered `katalyst`, the wall clock is **40 minutes** (*2026-09-29: the first execution overran it
 by 6 s with the endpoint generating for 99 % of the wait; the figure stands, and an overrun the endpoint held while
-the run progressed is now reported as the window's bound, a NOTE — `AGENTS.md`, "`LIVE_RUN_DURESS_MS`"*), it stays **opt-in**, its assertions
+the run progressed is now reported as the window's bound, a NOTE — `docs/proofs/live-run.md`, "`LIVE_RUN_DURESS_MS`"*), it stays **opt-in**, its assertions
 stay coherence-shaped, and **`--max-iterations` rises from 15 to 500**. That last one is a bound being loosened
 and is recorded as such. Fifteen was a bound while every scenario here was a short task; the long run turned it
 into the thing being measured — a delegating run reaches 15 while it is still commissioning and then reports its
@@ -54,7 +54,7 @@ drops each rejected document silently and a board missing a requirement looks ex
 `req-id: REQ-TODO-001..003`, which REQ-TRACE-022 does not admit as identifiers at all, and no check ever noticed
 because the live run reads those documents only as **prose** for the agent — the one surface that parses them is the
 board, and until this scenario existed the board had never been pointed at that workspace. The store is renumbered to
-an epic and four children; `AGENTS.md`'s fixture section now states both constraints as load-bearing.
+an epic and four children; the live run's fixture section (`docs/proofs/live-run.md`) now states both constraints as load-bearing.
 **`REQ-TRACE-515` was minted for this on 2026-09-11**, because the board's obligation here was inferred from a field
 the projection already carried and was stated nowhere — which is exactly why the build satisfied it in the no-source
 branch and not in the other; the round is recorded in `docs/spec/resolutions/08-requirements-traceability.md`. **The tally
@@ -70,7 +70,7 @@ about half-way through, and **one timing failure became three**, two of which ac
 not committed: "the card rests in running", "the history lacks the accept". Both were true statements about a card
 that accept had been pressed at while it was still running, which the board had correctly declined to move. Re-running
 the one scenario at 900 s with nothing else changed passed every check, which is how the harness was shown to be the
-wrong one — `AGENTS.md`'s standing rule is to believe the harness first, and that rule is what makes a harness that
+wrong one — the live run's standing rule (`docs/proofs/live-run.md`) is to believe the harness first, and that rule is what makes a harness that
 manufactures false product symptoms expensive rather than merely annoying.
 
 The repair is the one the scenario's own comment now carries: **nothing it presses is pressed on a clock.** The

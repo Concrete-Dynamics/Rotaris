@@ -80,7 +80,7 @@ proof, and measure HEAD, before attributing it to the change in your hand.**
 
 **The design language was adopted on 2026-09-01 and first measured against the built interface on 2026-09-08**,
 after the owner reported that the Workspace and the transcript do not look like the material. The reading is in
-`docs/design/README.md` §7.1 and the obligation it produced is in `CLAUDE.md` and §7: **consult the mockup before
+`docs/design/README.md` §7.1 and the obligation it produced is in `AGENTS.md` and §7: **consult the mockup before
 drawing a surface — `pnpm mockup` — and match it after.** What the reading found is worth carrying here, because
 it is not the shape the complaint suggested. The tokens hold: no source file carries a literal colour, the
 renderer imports the design system's three stylesheets, and 59 of the 96 class names its component CSS defines

@@ -68,3 +68,10 @@ was running, `/tmp/.X11-unix/` was empty, and `/proc/net/unix` held no X11 name.
   a fake `display` that throws if it is called on a path that must not probe. Against the pre-repair `preflight.mjs`,
   7 failed and 18 passed. The existing case "linux needs DISPLAY or xvfb-run; win32 and darwin need neither" passes
   unchanged in meaning; its set-`DISPLAY` line now carries a reached probe.
+
+The review of 2026-10-31 added three things. A connect that throws (`DISPLAY=:60000` gives port 66000,
+`ERR_SOCKET_BAD_PORT`) is now a miss on that target, where it used to kill the child and hide the sockets' real errors
+behind "the probe exited 1". `displayTargets` reads `unix/:N` and `tcp/host:N`; any other protocol pairing stays unread
+and fails, because libxcb's handling of it was not read for this change. A case that runs the real child against TCP
+now runs on every platform, where the Unix-socket case skips win32. Measured on Windows only: the protocol forms have
+not met a real X client.

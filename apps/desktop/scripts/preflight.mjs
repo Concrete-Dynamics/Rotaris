@@ -182,15 +182,20 @@ export function environmentCheck(env) {
  * Where an X client would connect for `DISPLAY`: `:N` and `unix:N` the server's socket file and its abstract
  * name (Linux X servers listen on both); a bare `:N` then TCP `localhost:6000+N`, the fallback libX11 takes when
  * neither socket answers (`unix:N` has none); `host:N` TCP port 6000+N. A screen suffix (`.M`) does not change the
- * connection. Null for a shape this check cannot read.
+ * connection. A named protocol is read in the two plain pairings: `unix/:N` the two sockets with no TCP fallback,
+ * `tcp/host:N` as `host:N`. Null for a shape this check cannot read, any other protocol pairing among them.
  * @param {string} display
  * @returns {DisplayTarget[] | null}
  */
 export function displayTargets(display) {
-  const m = /^(.*?):(\d+)(?:\.\d+)?$/.exec(display);
+  const [, protocol, rest = ''] = /^(?:(tcp|unix)\/)?(.*)$/s.exec(display) ?? [];
+  const m = /^(.*?):(\d+)(?:\.\d+)?$/.exec(rest);
   if (!m) return null;
-  const [, host = '', number = ''] = m;
-  if (host.endsWith(':') || host.includes('/')) return null;
+  const [, named = '', number = ''] = m;
+  if (named.endsWith(':') || named.includes('/')) return null;
+  if (protocol === 'unix' && named !== '') return null;
+  if (protocol === 'tcp' && (named === '' || named === 'unix')) return null;
+  const host = protocol === 'unix' ? 'unix' : named;
   const port = 6000 + Number(number);
   if (host === '' || host === 'unix') {
     const path = `/tmp/.X11-unix/X${number}`;
@@ -205,8 +210,9 @@ export function displayTargets(display) {
 
 /**
  * The connect is the only question asked: it opens each target, in order, until one accepts, and closes it again
- * without speaking the X protocol. Only a `connect` reaches a target; a timeout and an error are each a miss.
- * It runs in a child node, from its own source, because the preflight is synchronous — so it closes over nothing.
+ * without speaking the X protocol. Only a `connect` reaches a target; a timeout, an error and a connect that throws
+ * (a display number past the TCP port range) are each a miss. It runs in a child node, from its own source, because
+ * the preflight is synchronous — so it closes over nothing.
  * @param {DisplayTarget[]} targets
  * @param {{ connect: (options: DisplayTarget['connect']) => import('node:net').Socket }} net
  * @param {(json: string) => void} write
@@ -218,7 +224,15 @@ export function connectTargets(targets, net, write) {
   const next = (i) => {
     if (i >= targets.length) { write(JSON.stringify({ reached: null, tried })); return; }
     const t = targets[i];
-    const s = net.connect(t.connect);
+    let s;
+    try {
+      s = net.connect(t.connect);
+    } catch (e) {
+      const thrown = /** @type {NodeJS.ErrnoException} */ (e);
+      tried.push({ label: t.label, error: thrown.code ?? thrown.message });
+      next(i + 1);
+      return;
+    }
     s.setTimeout(2000);
     /** @param {string} error */
     const fail = (error) => { s.destroy(); tried.push({ label: t.label, error }); next(i + 1); };

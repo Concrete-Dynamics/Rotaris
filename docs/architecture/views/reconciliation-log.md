@@ -16,7 +16,7 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-31**
 
-**`pnpm preflight` connects to a set Linux display (2026-10-31, `../../defects/fixed/pnpm-preflight-passes-the-display-check-for-a-display-no-client-can-reach.md`).** `01-component-view/03-where-the-responsibilities-sit.md`'s preflight paragraph says what the display check now asks and of which addresses. Repository tooling only: no package, edge, process, channel, command, notice or store column changed, and no fact changed owner.
+**`pnpm preflight` connects to a set Linux display (2026-10-31, `../../defects/fixed/pnpm-preflight-passes-the-display-check-for-a-display-no-client-can-reach.md`).** `01-component-view/03-where-the-responsibilities-sit.md`'s preflight paragraph says what the display check now asks and of which addresses. Repository tooling only; no package, edge, process or fact changed.
 
 **The portable swap flushes what it renames (REQ-STARTUP-176, REQ-STARTUP-126; 2026-10-31, `../../defects/fixed/the-portable-swap-renames-a-copy-it-never-flushed-onto-the-artifact.md`).** `02-process-view.md`'s `.update`/`.old` row and `06-sequences.md` §1 name the flushes (`updater/flush.ts`); on Windows, the one portable host, the directory flushes and the put-back reach nothing. No other view changed.
 

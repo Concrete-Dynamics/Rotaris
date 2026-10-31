@@ -57,6 +57,17 @@ the posted reply. The generation cases are red with the guard removed. The equal
 `packages/config/src/skills/skills.test.ts` ("OQ-386 — the asynchronous walk reaches the synchronous walk's discovery"). No proof
 was run on the built app for this repair, so the 8,201.5 ms launch has not been measured again.
 
+**Reworked after an independent review, 2026-10-31, before it landed.** Four faults of the first build, none ever on `main`.
+`settled` handed back the raw walk, so a read that never returned held every `skills.*` request for that root with no bound
+(ADR-0002 consequence 11): the wait now ends after `WARM_UP_WAIT_BOUND` (6 s) on the timer port, the walk is abandoned and
+said once at `warn`, and the waiting request reads the catalogue as a cold ask does — one request may pay a slow cold walk,
+and no request waits on that walk again. OQ-279's refusal had moved behind the wait: it is read first again and answered at
+once (`skillsAnswerSettled`). A walk a clear overtook kept reading beside the next one: `discoverSkillsAsync` takes a
+`stopped` predicate, and a superseded or abandoned walk starts no further read (`DiscoveryStopped`). And the new cases keyed
+their trees on POSIX paths, which `node:path` writes otherwise on Windows (the PR's `gate (pnpm check)` was red on
+`windows-latest` only): the fixtures now normalise every path they are asked, as `packages/config`'s `ports()` does. Each
+repair has a case red without it, and `warm`'s early return over a held catalogue gained the case it lacked.
+
 **Still owed, and not decided by the ruling** (its "Recorded beside it, not decided here"). The synchronous re-discovery after a
 session creation or a rescan still holds the run host's loop. `onSessionCreated` and `rescan` clear the catalogue, and the next
 `SkillHost.catalog` call walks the tree with `discoverSkills` on the loop: the agent's construction (`contextUnits`,

@@ -10,6 +10,7 @@
     "apps/*/src/**/*.ts",
     "apps/*/src/**/*.tsx",
     "apps/*/electron.vite.config.ts",
+    "apps/*/*.test.ts",
     "tools/*/src/**/*.ts",
     "tools/*/*.ts",
     "vitest.config.ts",

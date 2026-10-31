@@ -54,7 +54,8 @@ Listed foundation-first, which is also dependency order. "Root" is the compositi
 | `ui` | every drawn surface: the shell and views, the dialogs, the design system, the transcript engine, the terminal display, Markdown, the slash catalogue, the command vocabulary, Settings, the Library | `AppShell.tsx`, `design-system/`, `transcript/`, `settings/`, `commands/` | renderer | [`ui/CONTEXT.md`](../packages/ui/CONTEXT.md) |
 
 `tools/` holds build-time and lint-time code, not product code: `tools/eslint-rules/` (`rotaris/no-bare-timers`
-and its siblings), `tools/symbol-artifact/` (the generator behind `pnpm symbols`), `tools/release-naming/` (the
+and its siblings), `tools/symbol-artifact/` (the generator behind `pnpm symbols`, and `ensure.mjs`, the
+plugin `electron.vite.config.ts` carries so a build writes the symbols when they are absent), `tools/release-naming/` (the
 artifact names and the release-tag grammar), `tools/release-guard/` (`pnpm release:guard <tag>`, the pre-build version
 and package-pin guard; `cli.mjs` boots `src/guard.ts` through Vite's module runner because it reads `@rotaris/config`'s
 source), `tools/release-pipeline/` (since 2026-10-22 `pnpm release:pipeline` — the tag workflow's stages after the

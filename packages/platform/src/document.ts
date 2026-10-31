@@ -191,7 +191,12 @@ export function exclusiveCreate(target: string, content: string): Result<Exclusi
   return ok({ minted: true });
 }
 
-export type ReadOutcome<T> = { readonly state: 'absent' } | { readonly state: 'readable'; readonly value: T } | { readonly state: 'unreadable'; readonly raw: string; readonly reason: string };
+/** `raw` is the file's first 200 characters; `truncated` is present where the file held more than that. */
+export type ReadOutcome<T> = { readonly state: 'absent' } | { readonly state: 'readable'; readonly value: T } | { readonly state: 'unreadable'; readonly raw: string; readonly reason: string; readonly truncated?: true };
+
+const RAW_BOUND = 200;
+const beginning = (raw: string): { readonly raw: string; readonly truncated?: true } =>
+  raw.length > RAW_BOUND ? { raw: raw.slice(0, RAW_BOUND), truncated: true } : { raw };
 
 /**
  * Guarded read: open-read-close; a decode failure while the file is known to
@@ -214,7 +219,7 @@ export function guardedRead<T>(target: string, decode: (raw: string) => T): Read
       } catch {
         return { state: 'absent' };
       }
-      return raw.length === 0 || e ? 'retry' : { state: 'unreadable', raw: raw.slice(0, 200), reason: String(e) };
+      return raw.length === 0 || e ? 'retry' : { state: 'unreadable', ...beginning(raw), reason: String(e) };
     }
   };
   const first = attempt();
@@ -227,5 +232,5 @@ export function guardedRead<T>(target: string, decode: (raw: string) => T): Read
   } catch {
     return { state: 'absent' };
   }
-  return { state: 'unreadable', raw: raw.slice(0, 200), reason: 'decode failed twice while the file exists' };
+  return { state: 'unreadable', ...beginning(raw), reason: 'decode failed twice while the file exists' };
 }

@@ -18,6 +18,8 @@ Last reconciled with the code: **2026-10-31**
 
 **The portable's could-not-prepare notice (REQ-STARTUP-165 (c), REQ-STARTUP-150; 2026-10-31, `../../defects/fixed/a-portable-that-could-make-no-preparation-starts-without-the-notice-req-startup-165-c-requires.md`).** `04-seams.md` §6 gains the invariant for a notice about the launch itself: read before the window, raised by `report` from `postShowActivation`, every word in `main/preparation-notice.ts`. `02-process-view.md`'s portable paragraph says main now reads the stub's marker; `05-state-ownership.md` gains the marker's row (the stub writes it, main reads it once); `06-sequences.md` §1 gains the read after the claim and the raise after the show. No package, edge, process, message or channel changed.
 
+**An unreadable identifier is held and raised (REQ-SESSION-197; 2026-10-31, `../../defects/fixed/an-unreadable-workspace-identifier-leaves-the-window-unopened-without-a-notice.md`).** `04-seams.md` §6 and `03-runtime-view.md` §7 name `WORKSPACE_REFUSALS` and `holdOpenRefusal`, and, since the review's rework, `workspace.not-a-folder` (`../../defects/fixed/a-workspace-path-that-is-not-a-directory-is-reported-as-an-unreadable-identifier.md`) and the withdrawal of a replaced hold's notice. No package, process, channel, command or store column changed.
+
 **The portable swap never empties the artifact's path (REQ-STARTUP-176, REQ-STARTUP-125 under PD-STARTUP-008; 2026-10-31, `../../defects/fixed/the-portable-swap-leaves-the-artifact-path-empty-between-its-two-renames.md`).** `02-process-view.md`'s files on disk: the `.update`/`.old` row names the copy aside and the single rename onto the target, and what a failed final rename leaves; `06-sequences.md` §1's portable branch says the same. `StrategyFiles` gains `copyAside` (`updater/electron.ts`: an exclusive `copyFile`). No package, edge, process, channel, command, notice or store column changed, and no fact changed owner (`05-state-ownership.md` unchanged).
 
 **The update download is bounded by the size the feed states (REQ-STARTUP-169/179; 2026-10-31, `../../defects/fixed/the-update-download-writes-whatever-length-the-server-sends.md`).** `02-process-view.md`'s files on disk: the staging row names the bound; `06-sequences.md` §1's asset fetch says the same. A longer transfer fails at the existing `download` stage with its own sentence. No package, edge, process, channel, command, notice or store column changed, and no fact changed owner (`05-state-ownership.md` unchanged).
@@ -259,7 +261,7 @@ with the next number, and its row goes at the top of this table.
 
 | Part | "Last reconciled" dates it carries | Its newest entry |
 |---|---|---|
-| [13](reconciliation-log/13.md) | 2026-10-18, 2026-10-16 | The development-time store behind `pnpm dev-time` (R-075; first execution 2026-10-18). |
+| [15](reconciliation-log/15.md) | 2026-10-18, 2026-10-16 | The development-time store behind `pnpm dev-time` (R-075; first execution 2026-10-18). |
 | [12](reconciliation-log/12.md) | 2026-10-15, 2026-10-14 | A Windows ARM64 development tree's bundle is the win32-x64 one (the Windows ARM64 session; OQ-401, the … |
 | [11](reconciliation-log/11.md) | 2026-10-13 | `focus-session` reaches the session where it lives (PD-SHELL-001 revision 3, OQ-292; fin44, … |
 | [10](reconciliation-log/10.md) | — | An exact or replace-all edit keeps a CRLF file's line endings (PD-TOOLS-017, OQ-254; fin38). |

@@ -20,7 +20,8 @@ import { recoverCutRestore, type CutRestore } from './recover.js';
  */
 export type IdentifierOutcome =
   | { readonly state: 'readable'; readonly id: WorkspaceId; readonly minted: boolean }
-  | { readonly state: 'unreadable'; readonly raw: string };
+  /** `raw` is the file's beginning; `truncated` is present where the file held more (`guardedRead`). */
+  | { readonly state: 'unreadable'; readonly raw: string; readonly truncated?: true };
 
 const HEADER = '# This file names this workspace to its machine-local session store.\n# Removing it detaches this workspace from its recorded sessions.\n';
 
@@ -59,7 +60,7 @@ export function establishWorkspaceId(workspaceRoot: string): IdentifierOutcome {
   };
   const existing = guardedRead(file, decode);
   if (existing.state === 'readable') return { state: 'readable', id: existing.value, minted: false };
-  if (existing.state === 'unreadable') return { state: 'unreadable', raw: existing.raw };
+  if (existing.state === 'unreadable') return { state: 'unreadable', raw: existing.raw, ...(existing.truncated ? { truncated: true } : {}) };
   const fresh = mintWorkspaceId(randomBytes(16).toString('hex'));
   const r = exclusiveCreate(file, `${HEADER}${fresh}\n`);
   if (!r.ok) throw new Error(`workspace identifier: ${r.error.headline}`);
@@ -68,7 +69,7 @@ export function establishWorkspaceId(workspaceRoot: string): IdentifierOutcome {
   try {
     return { state: 'readable', id: decode(r.value.existing), minted: false };
   } catch {
-    return { state: 'unreadable', raw: r.value.existing.slice(0, 200) };
+    return { state: 'unreadable', raw: r.value.existing.slice(0, 200), ...(r.value.existing.length > 200 ? { truncated: true } : {}) };
   }
 }
 

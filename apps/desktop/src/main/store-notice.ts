@@ -3,7 +3,9 @@ import type { CommandOutcome, NoticeAction, NoticeSeverity, ProcessReply } from 
 /**
  * What main says about a workspace's store from the workspace service's answer to `workspace.open`, decided here and nowhere
  * else (`views/04-seams.md` §6). Pure: the answer in, the notice (or the condition to hold for the listing) out, so a test
- * pins every word without an Electron process. Main's `openWorkspaceInner` (`index.ts`) is the only caller.
+ * pins every word without an Electron process. Main's `openWorkspaceInner` (`index.ts`) is the only caller. An identifier the
+ * open could not read (REQ-SESSION-197), and a workspace path that is not a folder, are held and raised here beside the store's
+ * refusals (`WORKSPACE_REFUSALS`).
  */
 
 export interface StoreNotice {
@@ -44,12 +46,72 @@ export function storeRefusalOf(reply: ProcessReply): StoreRefusal | undefined {
   return { code: reply.code, headline: reply.headline, ...(reply.detail === undefined ? {} : { detail: reply.detail }) };
 }
 
-/** REQ-SESSION-202: the error notice a held refusal is raised as — what was found, and no reason invented for it (W-31 (2)). */
+/**
+ * The refusals that are a condition of the workspace itself rather than of the store's place, so they are not `STORE_REFUSALS`:
+ * an identifier file present but unreadable (REQ-SESSION-197), and a workspace path, or its `.rotaris`, that is a file and not a
+ * folder (`workspace-service/not-a-folder.ts`; no requirement names it). Each is held and raised beside the store's refusals
+ * because the same two things are owed — said at the open as a condition for the person to resolve, and never answered as "no
+ * sessions" or "open a workspace", since the window holds a workspace the product cannot open (REQ-SESSION-043). Their notices
+ * carry no action: neither of Settings › Project's resolutions (OQ-281) can act on them — the restore and the new store both
+ * refuse an unreadable identifier, and neither makes a file a folder — and nothing else in REQ-NOTIFY-044's vocabulary repairs
+ * a file. The way on, by hand, is the service's detail (`workspace-service/identifier-refusal.ts`, `not-a-folder.ts`).
+ */
+export const WORKSPACE_REFUSALS: ReadonlySet<string> = new Set(['workspace.identifier-unreadable', 'workspace.not-a-folder']);
+
+/** The workspace's own refusal to hold and raise, in the workspace service's own words; `undefined` for any other answer. */
+export function workspaceRefusalOf(reply: ProcessReply): StoreRefusal | undefined {
+  if (reply.kind !== 'refused' || !WORKSPACE_REFUSALS.has(reply.code)) return undefined;
+  return { code: reply.code, headline: reply.headline, ...(reply.detail === undefined ? {} : { detail: reply.detail }) };
+}
+
+/**
+ * REQ-SESSION-202, REQ-SESSION-197: the error notice a held refusal is raised as — what was found, and no reason invented for it
+ * (W-31 (2)). Only the place holding no store carries an action (OQ-281); the others are resolved by hand, as their detail says.
+ */
 export function storeRefusalNotice(held: StoreRefusal): StoreNotice {
   return {
     severity: 'error', headline: held.headline, ...(held.detail === undefined ? {} : { detail: held.detail }),
     ...(held.code === 'workspace.store-missing' ? { action: OPEN_PROJECT_SETTINGS } : {}),
   };
+}
+
+/** One of main's held refusals (`storeRefusals`, `index.ts`), by canonical root: the condition, and the id of the notice it was raised as. */
+export interface HeldOpenRefusal {
+  readonly held: StoreRefusal;
+  readonly noticeId: Promise<number | null>;
+}
+
+/**
+ * What main's `openWorkspaceInner` (`index.ts`) does with an open the workspace service refused: a store refusal or a workspace
+ * refusal is held for the root — so the listing and every workspace-scoped refusal in that window state it (`answerUnderHeldRefusal`)
+ * — and raised as its error notice through `report`, which answers the notice's id. Any other refusal holds and raises nothing.
+ * Answers the notice raised, or `undefined`.
+ *
+ * A workspace refusal is raised once while it is held: a further open of that root refused for the same reason updates the
+ * words held and keeps the notice already raised, rather than putting the same notice up again over one the person dismissed.
+ * The successful open that clears the hold (`index.ts`) lets a later refusal raise again. A store refusal is raised at every
+ * refused open, as it was before this condition was held (`store-resolution-proof` measures that path).
+ *
+ * A hold this replaces — any other condition for the root, or the same store refusal raised again — has its notice withdrawn
+ * through `dismiss` as the new one is raised: the map keeps one notice id per root, so a notice it no longer holds could never
+ * be withdrawn by the open that later succeeds, and would stand beside a working workspace saying what is no longer found.
+ */
+export function holdOpenRefusal(
+  root: string, reply: ProcessReply, held: Map<string, HeldOpenRefusal>,
+  report: (notice: StoreNotice) => Promise<number | null>, dismiss: (noticeId: number) => unknown,
+): StoreNotice | undefined {
+  const workspace = workspaceRefusalOf(reply);
+  const refusal = storeRefusalOf(reply) ?? workspace;
+  if (refusal === undefined) return undefined;
+  const prior = held.get(root);
+  if (workspace !== undefined && prior?.held.code === workspace.code) {
+    held.set(root, { held: workspace, noticeId: prior.noticeId });
+    return undefined;
+  }
+  if (prior !== undefined) void prior.noticeId.then((id) => (id === null ? undefined : dismiss(id))).catch(() => undefined);
+  const notice = storeRefusalNotice(refusal);
+  held.set(root, { held: refusal, noticeId: report(notice) });
+  return notice;
 }
 
 /**

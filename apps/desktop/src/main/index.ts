@@ -217,7 +217,7 @@ async function main(): Promise<void> {
     // surfaced for it — and is answered not-acknowledged, so its launch resolves to the process the record names. Said once
     // per hand-over, so a resumed primary's log shows that it stood down.
     onHandOverDeclined: (h: HandOver, holder: InstanceRecord | undefined) => {
-      log(`hand-over declined${h.workspace === undefined ? '' : ` for ${h.workspace}`}: the instance record ${holder === undefined ? 'could not be read' : `names pid ${holder.pid}`}, not this process (pid ${process.pid}), so it does not act as the instance (ADR-0055 consequence 14)`, 'warn');
+      log(`hand-over declined${h.workspace === undefined ? '' : ` for ${h.workspace}`}: the instance record ${holder === undefined ? 'names no process' : `names pid ${holder.pid}`}, not this process (pid ${process.pid}), so it does not act as the instance (ADR-0055 consequence 14)`, 'warn');
     },
     onRecordPassed: () => { successorWait.passed(); },
     // REQ-STARTUP-121: an accepted successor the record could not be passed to fails the waiting restart, which then

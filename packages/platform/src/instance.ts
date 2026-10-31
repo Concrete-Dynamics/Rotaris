@@ -28,10 +28,12 @@ import { isLockLive, type LockRecord } from './liveness.js';
  * 5 s — record unreadable, no process, process dead, or process silent —
  * reclaim once and retry the claim exactly once; (4) that retry lost too —
  * another launch claimed inside the interval — hand over once more and end.
- * At most one reclaim, two claim attempts, no spin.
+ * At most one reclaim, two claim attempts, no spin. Two readings of the requirement stand in this order and neither is
+ * ruled: (4)'s hand-over runs its own interval after (2)'s (OQ-460), and a holder that is live and never answers leaves
+ * the launch `refused` with no window (OQ-461).
  *
- * The instance answers a hand-over only while the record still names it (ADR-0055 consequence 14): a process the record
- * was reclaimed from — a primary suspended past the interval and resumed — declines rather than acting as the instance.
+ * The instance answers a hand-over unless the record shows it no longer names it (ADR-0055 consequence 14): a process the
+ * record was reclaimed from — a primary suspended past the interval and resumed — declines rather than acting as the instance.
  */
 
 export interface InstanceRecord extends LockRecord {
@@ -67,14 +69,14 @@ export interface ClaimDeps {
   readonly timers: Timers;
   readonly handOverIntervalMs: Millis;
   /**
-   * Called on the instance side for every hand-over it acknowledges — and it acknowledges one only while the record, read
-   * again as the hand-over arrives, still names this process (ADR-0055 consequence 14).
+   * Called on the instance side for every hand-over it acknowledges — and it acknowledges one unless the record, read again
+   * as the hand-over arrives, shows it no longer names this process (ADR-0055 consequence 14; `readHolder`).
    */
   readonly onHandOver: (h: HandOver) => void;
   /**
    * ADR-0055 consequence 14: called on a process whose endpoint received an ordinary hand-over while the record no longer
    * names it — REQ-STARTUP-164 (3) reclaimed it meanwhile, or the record passed to a successor (REQ-STARTUP-121) — with the
-   * record as it was read then (`undefined` when there was none to read). The hand-over is not acted on and is answered
+   * record as it was read then (`undefined` when the file is gone or holds no record). The hand-over is not acted on and is answered
    * not-acknowledged, so the launch that sent it resolves to the process the record names; what this process does with
    * the windows it already has is not decided here. Main logs it.
    */
@@ -216,16 +218,41 @@ export function endpointFor(endpointDir: string, pid: number, platform: NodeJS.P
   return posix.join(dir, `instance-${pid}-${nonce}.sock`);
 }
 
-function readRecord(file: string): InstanceRecord | undefined {
+function parseRecord(content: string): InstanceRecord | undefined {
   try {
-    const raw = JSON.parse(readFileSync(file, 'utf8')) as Partial<InstanceRecord>;
+    const raw = JSON.parse(content) as Partial<InstanceRecord>;
     if (typeof raw.pid === 'number' && typeof raw.host === 'string' && typeof raw.acquired_at === 'string' && typeof raw.endpoint === 'string') {
       return raw as InstanceRecord;
     }
   } catch {
-    /* unreadable → undefined */
+    /* malformed → undefined */
   }
   return undefined;
+}
+
+function readRecord(file: string): InstanceRecord | undefined {
+  try {
+    return parseRecord(readFileSync(file, 'utf8'));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * What the record says of who holds it, for the one reader that must tell "it says nobody" from "it could not be asked":
+ * the listener deciding whether to stand down. A read that failed with anything but `ENOENT` (`EBUSY`, `EPERM`, `EMFILE`: a
+ * scanner holding the file, a process out of handles) is `known: false`. It is no evidence the record moved, and the launch
+ * that sent the hand-over takes a decline from the process its record still names as silence: it reclaims and becomes a
+ * second instance beside one that answered (REQ-STARTUP-161, REQ-STARTUP-164).
+ */
+function readHolder(file: string): { readonly known: true; readonly holder: InstanceRecord | undefined } | { readonly known: false } {
+  let content: string;
+  try {
+    content = readFileSync(file, 'utf8');
+  } catch (cause) {
+    return (cause as NodeJS.ErrnoException).code === 'ENOENT' ? { known: true, holder: undefined } : { known: false };
+  }
+  return { known: true, holder: parseRecord(content) };
 }
 
 /** Whether two reads of the record are the same claim: the same process, at the same endpoint, acquired at the same moment. */
@@ -263,8 +290,9 @@ function isAck(line: string): boolean {
 }
 
 /**
- * The endpoint's server. An ordinary hand-over (REQ-STARTUP-162/163) is acted on and acknowledged only while the record,
- * read again as the line arrives, names this process at this endpoint (ADR-0055 consequence 14). Until 2026-10-31 nothing
+ * The endpoint's server. An ordinary hand-over (REQ-STARTUP-162/163) is acted on and acknowledged unless the record, read
+ * again as the line arrives, shows it no longer names this process at this endpoint (ADR-0055 consequence 14): the file is
+ * gone, holds no record, or names another claim. A read that merely failed shows nothing, and the instance answers. Until 2026-10-31 nothing
  * re-read it: a primary suspended past REQ-STARTUP-164's interval and resumed answered the hand-over queued on its pipe
  * and surfaced its window beside the instance that had reclaimed the record
  * (`docs/defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md`). It now answers `DECLINED_LINE`
@@ -331,9 +359,9 @@ function listen(endpoint: string, deps: ClaimDeps, platform: NodeJS.Platform, on
             );
             continue;
           }
-          const holder = readRecord(deps.recordFile);
-          if (holder === undefined || holder.pid !== deps.pid || holder.endpoint !== endpoint) {
-            deps.onHandOverDeclined?.(h, holder);
+          const read = readHolder(deps.recordFile);
+          if (read.known && (read.holder === undefined || read.holder.pid !== deps.pid || read.holder.endpoint !== endpoint)) {
+            deps.onHandOverDeclined?.(h, read.holder);
             sock.end(DECLINED_LINE);
             return;
           }
@@ -651,7 +679,7 @@ export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): P
    * claim whose process lives — another launch reclaimed it inside the interval, or the process this launch reached
    * declined because the record had moved on (ADR-0055 consequence 14) — is that claim's, and removing it would make this
    * launch a second instance beside it (REQ-STARTUP-161). It is left as it is, the retry loses, and (4) hands this launch
-   * to it. A record that cannot be read, the claim that went unanswered, or another claim whose process has ended is
+   * to it (OQ-461: where that claim never answers, the launch ends refused). A record that cannot be read, the claim that went unanswered, or another claim whose process has ended is
    * nobody's, and is reclaimed. Until 2026-10-31 the reclaim removed whatever stood there; the same day, for one commit
    * (7262da97), it left every other claim, a dead one too, and such a launch ended refused with no window.
    */

@@ -251,7 +251,9 @@ check for proof launches**: node against `engines.node`, git, the Electron binar
 against the app's and the packages' sources (a `generated/` tree is skipped — the symbol generator writes it), the
 code-intelligence bundle through `scripts/lib/code-intelligence-bundle.mjs`'s `runBundleScript --check`, `.proof/`'s
 writability, an exported `ROTARIS_*` variable and the display, plus each named proof's registry record read from
-`tools/proof-registry/registry.mjs`: its hosts, its `requires` and its per-host clauses. It launches nothing and
+`tools/proof-registry/registry.mjs`: its hosts, its `requires` and its per-host clauses. On Linux a set `DISPLAY`
+passes only when a connect reaches it (`probeDisplay`, from a child node because the check is synchronous: `:N` and
+`unix:N` the socket file `/tmp/.X11-unix/XN` or its abstract name, `host:N` TCP 6000+N; 2026-10-31). It launches nothing and
 writes nothing but a scratch probe it removes. It sits in `scripts/` rather than `tools/` because the scripts reach
 the tools and never the reverse, and an endpoint proof's key needs `scripts/lib/endpoint-registry.mjs`.
 **Edges unchanged**: no product code imports it.

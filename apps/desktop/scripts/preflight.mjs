@@ -7,7 +7,8 @@
 // nothing. It names the reasons a suite would otherwise discover late — an absent
 // Electron, a build older than its sources, a missing code-intelligence bundle, an
 // unwritable `.proof/`, an exported `ROTARIS_*` variable (every launch strips them:
-// "an exported variable never reaches it"), a Linux host with no display, an endpoint
+// "an exported variable never reaches it"), a Linux host with no display or with a DISPLAY
+// no client can reach (`displayTargets`, `probeDisplay`), an endpoint
 // proof without a registered endpoint or key — before the launch rather than after it.
 //
 // The per-proof half reads `tools/proof-registry/registry.mjs`: the hosts a proof runs
@@ -21,8 +22,8 @@
 //   --json              the report as JSON
 //   --help, -h          this text
 //
-// Reads the tree, the registry and git; writes nothing but a probe file under `.proof/`,
-// which it removes. Exit 0 when nothing failed, 1 when a check failed, 2 on a usage error.
+// Reads the tree, the registry and git, and on Linux opens and closes a connection to a set
+// DISPLAY; writes nothing but a probe file under `.proof/`, which it removes. Exit 0 when nothing failed, 1 when a check failed, 2 on a usage error.
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, relative, resolve } from 'node:path';
@@ -172,10 +173,94 @@ export function environmentCheck(env) {
   };
 }
 
-/** @param {{ platform: string, display: string | undefined, xvfb: boolean }} facts */
-export function displayCheck({ platform, display, xvfb }) {
+/**
+ * @typedef {{ label: string, connect: { path: string } | { host: string, port: number } }} DisplayTarget
+ * @typedef {{ reached: string | null, tried: { label: string, error: string }[] }} DisplayProbe
+ */
+
+/**
+ * Where an X client would connect for `DISPLAY`: `:N` and `unix:N` the server's socket file and its abstract
+ * name (Linux X servers listen on both, and a client that finds neither has no display); `host:N` TCP port
+ * 6000+N. A screen suffix (`.M`) does not change the connection. Null for a shape this check cannot read.
+ * @param {string} display
+ * @returns {DisplayTarget[] | null}
+ */
+export function displayTargets(display) {
+  const m = /^(.*?):(\d+)(?:\.\d+)?$/.exec(display);
+  if (!m) return null;
+  const [, host = '', number = ''] = m;
+  if (host.endsWith(':') || host.includes('/')) return null;
+  if (host === '' || host === 'unix') {
+    const path = `/tmp/.X11-unix/X${number}`;
+    return [
+      { label: `socket ${path}`, connect: { path } },
+      { label: `abstract socket @${path}`, connect: { path: `\0${path}` } },
+    ];
+  }
+  const port = 6000 + Number(number);
+  return [{ label: `tcp ${host}:${port}`, connect: { host: host.replace(/^\[(.*)\]$/, '$1'), port } }];
+}
+
+/**
+ * The connect is the only question asked: it opens each target in a child node, in order, until one accepts,
+ * and closes it again without speaking the X protocol. A child because the preflight is synchronous.
+ */
+const DISPLAY_PROBE = `
+const net = require('node:net');
+const targets = JSON.parse(process.argv[1]);
+const tried = [];
+const next = (i) => {
+  if (i >= targets.length) { process.stdout.write(JSON.stringify({ reached: null, tried })); return; }
+  const t = targets[i];
+  const s = net.connect(t.connect);
+  s.setTimeout(2000);
+  const fail = (error) => { s.destroy(); tried.push({ label: t.label, error }); next(i + 1); };
+  s.once('connect', () => { s.destroy(); process.stdout.write(JSON.stringify({ reached: t.label, tried })); });
+  s.once('timeout', () => fail('no answer within 2 s'));
+  s.once('error', (e) => fail(e.code ?? e.message));
+};
+next(0);
+`;
+
+/**
+ * @param {DisplayTarget[]} targets
+ * @returns {DisplayProbe}
+ */
+export function probeTargets(targets) {
+  const r = spawnSync(process.execPath, ['-e', DISPLAY_PROBE, JSON.stringify(targets)], { encoding: 'utf8', timeout: 10_000, windowsHide: true });
+  try {
+    return JSON.parse(r.stdout ?? '');
+  } catch {
+    const why = r.error ? r.error.message : `the probe exited ${r.status ?? r.signal}`;
+    return { reached: null, tried: targets.map((t) => ({ label: t.label, error: why })) };
+  }
+}
+
+/**
+ * @param {string} display
+ * @returns {DisplayProbe} nothing tried when `display` is no shape `displayTargets` reads
+ */
+export function probeDisplay(display) {
+  const targets = displayTargets(display);
+  return targets === null ? { reached: null, tried: [] } : probeTargets(targets);
+}
+
+/**
+ * A set DISPLAY on Linux passes only when a connect reached it (`probe`, from `probeDisplay`): a named display
+ * no client can reach makes every launch exit SIGTRAP, and that is the machine, not the proof.
+ * @param {{ platform: string, display: string | undefined, xvfb: boolean, probe?: DisplayProbe | null }} facts
+ */
+export function displayCheck({ platform, display, xvfb, probe = null }) {
   if (platform === 'linux') {
-    if (display) return { name: 'display', status: 'pass', message: `the display is available (DISPLAY=${display})` };
+    if (display) {
+      if (probe === null) return { name: 'display', status: 'fail', message: `DISPLAY=${display} is set, but no connection to it was tried` };
+      if (probe.reached !== null) return { name: 'display', status: 'pass', message: `the display is available (DISPLAY=${display})` };
+      if (probe.tried.length === 0) {
+        return { name: 'display', status: 'fail', message: `DISPLAY=${display} is no display this check can read (expected :N, unix:N or host:N, with an optional .screen)` };
+      }
+      const tried = probe.tried.map((t) => `${t.label} (${t.error})`).join(', ');
+      return { name: 'display', status: 'fail', message: `DISPLAY=${display} is set, but no client can reach it — tried ${tried}; start an X server there, or unset DISPLAY and run under xvfb-run` };
+    }
     if (xvfb) return { name: 'display', status: 'warn', message: 'no DISPLAY is set — run the proof under xvfb-run -a -s "-screen 0 1600x1000x24"' };
     return { name: 'display', status: 'fail', message: 'no DISPLAY is set and xvfb-run is not on PATH — Electron cannot open a window on this host' };
   }
@@ -340,6 +425,8 @@ export function realIo(env = process.env) {
     },
     sourceRoots: presentSourceRoots,
     xvfb: () => findOnPath('xvfb-run', env) !== null,
+    /** @param {string} display */
+    display: (display) => probeDisplay(display),
     store: () => endpointStore(),
   };
 }
@@ -378,7 +465,9 @@ export function runPreflight({ ids = [], platform = process.platform, env = proc
 
   checks.push(scratchCheck(io.scratch()));
   checks.push(environmentCheck(env));
-  checks.push(displayCheck({ platform, display: env.DISPLAY, xvfb: io.xvfb() }));
+  const display = env.DISPLAY;
+  const probe = platform === 'linux' && display ? io.display(display) : null;
+  checks.push(displayCheck({ platform, display, xvfb: io.xvfb(), probe }));
 
   let store = null;
   const getStore = () => (store ??= io.store());

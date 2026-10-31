@@ -67,15 +67,22 @@ function namesADirectory(root: string): boolean {
 /** The marker's text in, the finding to hold out; `undefined` for every outcome that stays silent and every malformed text. */
 export function preparationFindingOf(text: string | undefined): PreparationFinding | undefined {
   if (text === undefined) return undefined;
-  const [header = '', ...lines] = text.split(/\r?\n/);
-  const words = header.trim().split(/\s+/);
+  const headerEnd = text.indexOf('\n');
+  const words = (headerEnd === -1 ? text : text.slice(0, headerEnd)).trim().split(/\s+/);
   if (words.length !== 2 || words[0] !== MARKER_HEADER || words[1] !== LAUNCHER_FORMAT) return undefined;
   let outcome: string | undefined;
   let root: string | undefined;
-  for (const line of lines) {
+  // The stub writes one `file` line per payload file after `entry` (`marker_text`): on the order of 10,000 lines, on every
+  // prepared launch, inside REQ-STARTUP-155's first-paint budget. `outcome` and `unprepared-root` precede `entry`, so the
+  // walk ends there and the file list is never split.
+  for (let end = headerEnd; end !== -1;) {
+    const from = end + 1;
+    end = text.indexOf('\n', from);
+    const line = (end === -1 ? text.slice(from) : text.slice(from, end)).replace(/\r$/, '');
     const space = line.indexOf(' ');
     const field = space === -1 ? line : line.slice(0, space);
     const rest = space === -1 ? '' : line.slice(space + 1);
+    if (field === 'entry') break;
     // Later lines win, as the stub's own `read_marker` reads them.
     if (field === 'outcome') outcome = rest.trim();
     else if (field === 'unprepared-root') root = rest.trim();

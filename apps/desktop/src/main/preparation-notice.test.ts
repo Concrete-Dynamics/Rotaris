@@ -37,6 +37,13 @@ describe('the finding a marker holds (REQ-STARTUP-165 (c), REQ-STARTUP-150)', ()
     expect(preparationFindingOf(marker('run-scoped', '/d/rotaris/prepared').replace(/\n/g, '\r\n'))).toEqual({ storage: { kind: 'directory', path: '/d/rotaris' } });
   });
 
+  it('reads only as far as `entry`: the file list after it, one line per payload file, is never walked', () => {
+    // The stub writes `outcome` and `unprepared-root` before `entry` (`marker_text`), so a line after it is no finding.
+    expect(preparationFindingOf(`${marker('prepared')}outcome run-scoped\nunprepared-root /d/rotaris/prepared\n`)).toBeUndefined();
+    const manyFiles = Array.from({ length: 10_000 }, (_, i) => `file 17 resources/app/${i}.js\n`).join('');
+    expect(preparationFindingOf(`${marker('run-scoped', '/d/rotaris/prepared')}${manyFiles}`)).toEqual({ storage: { kind: 'directory', path: '/d/rotaris' } });
+  });
+
   it('the four silent outcomes — preparing, reusing, superseding, redoing — all write `prepared`, and answer nothing', () => {
     expect(preparationFindingOf(marker('prepared'))).toBeUndefined();
   });

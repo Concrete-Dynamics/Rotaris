@@ -239,6 +239,7 @@ export function createRunHost() {
   const skills = new SkillHost({
     log: (m, level) => log(m, level ?? 'info'),
     monotonic: clocks.monotonic,
+    timers: clocks.timers,
     /*
      * Verification only — `ROTARIS_CAPTURE_SKILLS_HOME` points user-scope discovery at a scratch tree, so a proof
      * exercises `~/.agents/skills` and the OpenHands manifest without reading the operator's own skills.

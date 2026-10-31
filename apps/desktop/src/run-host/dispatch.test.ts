@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RunHostRequest } from '@rotaris/contracts';
-import { SKILLS_DEFAULTS, type AsyncDiscoveryPorts, type DiscoveryPorts, type LoadedConfiguration } from '@rotaris/config';
+import { DISCOVERY_READS_IN_FLIGHT, SKILLS_DEFAULTS, type AsyncDiscoveryPorts, type DiscoveryPorts, type LoadedConfiguration } from '@rotaris/config';
 import { FakeClock } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore } from '@rotaris/store';
 import type { AvailabilityVerdict } from '@rotaris/agent-tools';
@@ -12,7 +12,7 @@ import { dispatch } from './dispatch.js';
 import type * as Engine from '@rotaris/engine';
 import type * as Configuration from './configuration.js';
 import type { RunHost } from './host.js';
-import { SkillHost } from './skills.js';
+import { SkillHost, WARM_UP_WAIT_BOUND } from './skills.js';
 
 /*
  * `launchSession` is replaced by one that hands its `start` a configured setup at once, so a case can read what
@@ -542,36 +542,42 @@ describe('a continuation settles the confinement verdict before the engine confi
  * the warm-up was a `queueMicrotask` that ran the synchronous walk before the reaction `index.ts` attaches to post the reply.
  * The tree here is a map behind both kinds of port, each call recorded, and the asynchronous `readFile` can be held open —
  * the slow disk — so a case can look at the run host while the walk is parked.
+ *
+ * The map is keyed by POSIX paths and every path the ports are asked is normalised before it is looked up or recorded, as
+ * `packages/config`'s `ports()` does: the walk builds its paths with `node:path`, which on Windows writes `\` and `resolve`
+ * adds a drive letter — a property of the harness, not of the rules under test.
  */
 describe('the run host answers workspace.opened before it warms the skill catalogue, off its loop (OQ-386 point 1)', () => {
   const root = '/ws';
   const skill = (name: string): string => `---\nname: ${name}\ndescription: ${name} does things.\n---\n${name} body\n`;
+  const norm = (p: string): string => p.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '').replace(/\/+$/, '');
   const fixture = () => {
     const files = new Map<string, string>([[`${root}/.agents/skills/alpha/SKILL.md`, skill('alpha')]]);
     const calls: string[] = [];
-    const isDir = (p: string): boolean => [...files.keys()].some((f) => f.startsWith(`${p}/`));
-    const list = (dir: string): string[] => [...new Set([...files.keys()].filter((f) => f.startsWith(`${dir}/`)).map((f) => f.slice(dir.length + 1).split('/')[0]!))];
-    const read = (p: string): string => { const v = files.get(p); if (v === undefined) throw new Error(`ENOENT ${p}`); return v; };
+    const isDir = (p: string): boolean => [...files.keys()].some((f) => f.startsWith(`${norm(p)}/`));
+    const list = (dir: string): string[] => { const d = norm(dir); return [...new Set([...files.keys()].filter((f) => f.startsWith(`${d}/`)).map((f) => f.slice(d.length + 1).split('/')[0]!))]; };
+    const read = (p: string): string => { const v = files.get(norm(p)); if (v === undefined) throw new Error(`ENOENT ${norm(p)}`); return v; };
+    const isFile = (p: string): boolean => files.has(norm(p));
     const sync: DiscoveryPorts = {
-      readDir: (d) => { calls.push(`sync readDir ${d}`); return list(d); },
-      readFile: (f) => { calls.push(`sync readFile ${f}`); return read(f); },
-      isDirectory: (d) => { calls.push(`sync isDirectory ${d}`); return isDir(d); },
-      isFile: (f) => { calls.push(`sync isFile ${f}`); return files.has(f); },
+      readDir: (d) => { calls.push(`sync readDir ${norm(d)}`); return list(d); },
+      readFile: (f) => { calls.push(`sync readFile ${norm(f)}`); return read(f); },
+      isDirectory: (d) => { calls.push(`sync isDirectory ${norm(d)}`); return isDir(d); },
+      isFile: (f) => { calls.push(`sync isFile ${norm(f)}`); return isFile(f); },
     };
     let held = false;
     const parked: (() => void)[] = [];
     let failing: Error | null = null;
     const async: AsyncDiscoveryPorts = {
-      readDir: async (d) => { calls.push(`async readDir ${d}`); if (failing) throw failing; return list(d); },
-      // Answered from the tree as it stood when asked, delivered once released: a slow disk.
+      readDir: async (d) => { calls.push(`async readDir ${norm(d)}`); if (failing) throw failing; return list(d); },
+      // Answered from the tree as it stood when asked, delivered once released: a slow disk — or, never released, a wedged one.
       readFile: async (f) => {
-        calls.push(`async readFile ${f}`);
+        calls.push(`async readFile ${norm(f)}`);
         const text = read(f);
         if (held) await new Promise<void>((go) => parked.push(go));
         return text;
       },
-      isDirectory: async (d) => { calls.push(`async isDirectory ${d}`); return isDir(d); },
-      isFile: async (f) => { calls.push(`async isFile ${f}`); return files.has(f); },
+      isDirectory: async (d) => { calls.push(`async isDirectory ${norm(d)}`); return isDir(d); },
+      isFile: async (f) => { calls.push(`async isFile ${norm(f)}`); return isFile(f); },
     };
     return {
       files, calls, sync, async,
@@ -593,9 +599,12 @@ describe('the run host answers workspace.opened before it warms the skill catalo
     const fx = fixture();
     const clock = new FakeClock();
     const lines: string[] = [];
+    const warnings: string[] = [];
+    let fault: string | null = null;
     const skills = new SkillHost({
-      home: '/home/u', machineDir: '/machine', platform: 'linux', ports: fx.sync, asyncPorts: fx.async, monotonic: clock,
-      section: () => ({ ok: true, value: SKILLS_DEFAULTS }), log: (m) => { lines.push(m); },
+      home: '/home/u', machineDir: '/machine', platform: 'linux', ports: fx.sync, asyncPorts: fx.async, monotonic: clock, timers: clock,
+      section: () => (fault === null ? { ok: true, value: SKILLS_DEFAULTS } : { ok: false, fault }),
+      log: (m, level) => { lines.push(m); if (level === 'warn') warnings.push(m); },
     });
     const stores = new Map<string, { db: { close: () => void } | null }>();
     const host = {
@@ -604,7 +613,8 @@ describe('the run host answers workspace.opened before it warms the skill catalo
     } as unknown as RunHost;
     const opened: RunHostRequest = { kind: 'workspace.opened', workspaceId: 'W1', storeFile: join(dir, file), workspaceRoot: root };
     const close = () => { for (const s of stores.values()) s.db?.close(); };
-    return { fx, clock, lines, skills, host, opened, close };
+    const unload = (f: string): void => { fault = f; };
+    return { fx, clock, lines, warnings, skills, host, opened, close, unload };
   };
   /** Lets every job the walk queued run — microtasks and the pending `setImmediate`s between them — up to `limit` turns. */
   const until = async (condition: () => boolean, limit = 200): Promise<void> => {
@@ -703,6 +713,104 @@ describe('the run host answers workspace.opened before it warms the skill catalo
       // A failure costs nothing: the waiting ask discovers on a cold cache, as any cold ask does.
       expect(names(await dispatch({ kind: 'skills.read', workspaceRoot: root }, host))).toEqual(['alpha']);
       expect(lines).toContain('skills: discovery on workspace open failed: Error: EIO: i/o error, scandir');
+    } finally { close(); }
+  });
+
+  /*
+   * ADR-0002 consequence 11: every request is bounded. A walk wedged on a read that never returns held every `skills.*`
+   * request for its root with no bound until 2026-10-31; now the wait ends after `WARM_UP_WAIT_BOUND` on the clock port, the
+   * waiting request reads the catalogue as a cold ask does, and the abandonment is said once at `warn`.
+   */
+  it('a skills.read waiting on a warm-up whose read never returns is still answered once the bound expires, and the walk is abandoned once', async () => {
+    const { fx, clock, warnings, skills, host, opened, close } = setup();
+    try {
+      await dispatch(opened, host);
+      fx.hold();
+      clock.advance(0);
+      await until(() => fx.parkedCount() > 0);
+      let answered = 0;
+      const first = dispatch({ kind: 'skills.read', workspaceRoot: root }, host).then((r) => { answered += 1; return r; });
+      const second = dispatch({ kind: 'skills.read', workspaceRoot: root }, host).then((r) => { answered += 1; return r; });
+      await until(() => answered > 0, 20);
+      expect(answered).toBe(0);
+      // Just short of the bound nothing is released; at it, both waiters are, and the walk is never released at all.
+      clock.advance(WARM_UP_WAIT_BOUND - 1);
+      await until(() => answered > 0, 20);
+      expect(answered).toBe(0);
+      clock.advance(1);
+      expect(names(await first)).toEqual(['alpha']);
+      expect(names(await second)).toEqual(['alpha']);
+      expect(warnings).toEqual([`skills: the discovery begun at the open of ${root} did not settle within ${WARM_UP_WAIT_BOUND} ms; it is abandoned and the waiting request reads the catalogue as a cold ask does (OQ-386, ADR-0002)`]);
+      // The wedged walk is dropped: a later request waits on nothing, and a later warm is not handed it again.
+      expect(names(await dispatch({ kind: 'skills.read', workspaceRoot: root }, host))).toEqual(['alpha']);
+      await skills.warm(root);
+      // Should the wedged read ever return, over a tree that has changed since, what the cold ask stored stays.
+      fx.files.set(`${root}/.agents/skills/beta/SKILL.md`, skill('beta'));
+      const readsBefore = fx.calls.filter((c) => c.startsWith('async ')).length;
+      fx.release();
+      await until(() => false, 20);
+      expect(fx.calls.filter((c) => c.startsWith('async ')).length).toBe(readsBefore);
+      expect(skills.state(root).skills.map((s) => s.name)).toEqual(['alpha']);
+    } finally { close(); }
+  });
+
+  // OQ-279's refusal is answered at once: the ruling lets a request wait for a warm-up, and never puts a refusal behind one.
+  for (const ask of asks) {
+    it(`${ask.name} on a configuration that does not load is refused at once, while the warm-up is parked`, async () => {
+      const { fx, clock, host, opened, close, unload } = setup();
+      try {
+        await dispatch(opened, host);
+        fx.hold();
+        clock.advance(0);
+        await until(() => fx.parkedCount() > 0);
+        unload('agents.yaml: line 3: bad indentation');
+        let answered = false;
+        const answer = dispatch(ask.req, host).then((r) => { answered = true; return r; });
+        await until(() => answered, 20);
+        expect(answered).toBe(true);
+        expect(await answer).toMatchObject({ kind: 'refused', code: 'config.fatal', detail: 'agents.yaml: line 3: bad indentation' });
+        // Nothing was released: the walk is still parked.
+        expect(fx.parkedCount()).toBeGreaterThan(0);
+      } finally { fx.release(); close(); }
+    });
+  }
+
+  /*
+   * A walk a clear supersedes is stopped, not left to finish beside the walk a later warm starts: once the clear has come, it
+   * starts no read beyond those already in flight. The tree is wide enough that the walk's four slots are all parked on
+   * reads while most of the tree is still queued behind them.
+   */
+  it('a warm-up superseded by a clear stops: it starts no read after the clear beyond those already in flight', async () => {
+    const { fx, clock, lines, skills, host, opened, close } = setup();
+    try {
+      for (let i = 0; i < 12; i += 1) fx.files.set(`${root}/.agents/skills/s${String(i).padStart(2, '0')}/SKILL.md`, skill(`s${String(i).padStart(2, '0')}`));
+      await dispatch(opened, host);
+      fx.hold();
+      clock.advance(0);
+      await until(() => fx.parkedCount() === DISCOVERY_READS_IN_FLIGHT);
+      expect(fx.parkedCount()).toBe(DISCOVERY_READS_IN_FLIGHT);
+      skills.onSessionCreated(root, 's1');
+      const asked = fx.calls.length;
+      fx.release();
+      await until(() => lines.some((l) => l.includes('was set aside')));
+      expect(lines.filter((l) => l.includes('was set aside'))).toHaveLength(1);
+      // Left running, the walk would have gone on to probe and read every skill it had not reached yet.
+      expect(fx.calls.slice(asked)).toEqual([]);
+      // The next warm walks the tree once, alone, and is the catalogue.
+      await skills.warm(root);
+      expect(skills.state(root).skills).toHaveLength(13);
+    } finally { close(); }
+  });
+
+  // `warm`'s early return: a catalogue already held — a cold ask's — is never walked over or replaced by a warm-up.
+  it('a warm on a root whose catalogue a cold ask already stored walks nothing, and what the cold ask stored survives', async () => {
+    const { fx, skills, host, close } = setup();
+    try {
+      expect(names(await dispatch({ kind: 'skills.read', workspaceRoot: root }, host))).toEqual(['alpha']);
+      fx.files.set(`${root}/.agents/skills/beta/SKILL.md`, skill('beta'));
+      await skills.warm(root);
+      expect(fx.calls.filter((c) => c.startsWith('async '))).toEqual([]);
+      expect(names(await dispatch({ kind: 'skills.read', workspaceRoot: root }, host))).toEqual(['alpha']);
     } finally { close(); }
   });
 });

@@ -1,9 +1,9 @@
 import { homedir } from 'node:os';
 import { skillListing, skillListingBody, type SkillsState, type SkillRow } from '@rotaris/contracts';
 import type { SessionWriter } from '@rotaris/engine';
-import type { Millis, MonotonicClock } from '@rotaris/kernel';
+import { millis, type Millis, type MonotonicClock, type Timers } from '@rotaris/kernel';
 import {
-  asyncDiscoveryPorts, discoverInstructionFiles, discoverSkills, discoverSkillsAsync, enabledInstructionFiles, instructionContextUnit, loadManualSkill, mergeInstructionContext,
+  asyncDiscoveryPorts, discoverInstructionFiles, DiscoveryStopped, discoverSkills, discoverSkillsAsync, enabledInstructionFiles, instructionContextUnit, loadManualSkill, mergeInstructionContext,
   NODE_ASYNC_DISCOVERY_PORTS, NODE_DISCOVERY_PORTS, parseSkill, PRODUCT_DIRECTORIES_UNIT, resolveSkills,
   skillBodyBlock, skillCatalogBlock, skillReadRoots,
   type AsyncDiscoveryPorts, type DiscoveredSkill, type DiscoveryPorts, type InstructionFileEntry, type InstructionsSection, type SkillDiscovery, type SkillSessionState, type SkillsSection,
@@ -79,7 +79,10 @@ export interface SkillHostDeps {
   readonly ports?: DiscoveryPorts;
   /**
    * OQ-386 point 1: the ports the warm-up at a workspace open reads through (`warm`). Absent, they are `ports` behind the
-   * asynchronous face where `ports` is given — so a test's tree serves both walks — and `node:fs/promises` otherwise.
+   * asynchronous face where `ports` is given, and `node:fs/promises` otherwise. One tree serves both walks only when it is
+   * given as `ports` (alone, or with these beside it): `asyncPorts` given alone moves the warm-up and nothing else, and the
+   * cold walk, the rescan and every body read still go to the real filesystem, because a synchronous port cannot be derived
+   * from an asynchronous one.
    */
   readonly asyncPorts?: AsyncDiscoveryPorts;
   /** The SAVED `skills:` section for a workspace, or its fatal report (OQ-279) — see `forceLoad` on why it is read per gesture. */
@@ -98,7 +101,30 @@ export interface SkillHostDeps {
   readonly configured?: ((sessionId: string) => RunSections | undefined) | undefined;
   /** ADR-0006: the monotonic clock port. Absent means the discovery log carries no duration, never a global read. */
   readonly monotonic?: MonotonicClock | undefined;
+  /** ADR-0006: the timer port, which bounds a `skills.*` request's wait for a warm-up in flight (`settled`). */
+  readonly timers: Timers;
   readonly log: (message: string, level?: 'info' | 'warn') => void;
+}
+
+/**
+ * OQ-386 point 1 with ADR-0002 consequence 11 (every request bounded): how long a `skills.*` request waits for a warm-up in
+ * flight before it stops waiting and reads the catalogue as a cold ask does. A wedged walk — a read that never returns —
+ * would otherwise hold every skills request for its root with no bound, past main's own bounds on them (10 s for a gesture,
+ * 15 s for a read, `main/commands/skills.ts`), so main's would expire and no answer would arrive at all.
+ *
+ * The tradeoff, chosen on purpose: when the bound fires, the request walks the tree synchronously, on the loop — and on a
+ * disk that is wedged rather than slow that walk may itself be slow. So the bound is long enough not to fire on a merely slow
+ * disk (the warm-up has also been running since the open, before the request arrived), and short enough to leave 4 s of
+ * main's tightest bound for the cold walk and the answer. A wedged walk now costs ONE request its answer, at worst, instead
+ * of wedging every skills request for that root forever; and the walk given up on is stopped and dropped (`abandon`), so no
+ * later request waits on it again.
+ */
+export const WARM_UP_WAIT_BOUND = millis(6_000);
+
+/** One warm-up in flight: its promise, and the flag its walk's `stopped` reads — set by a clear or by an abandonment. */
+interface Warming {
+  readonly promise: Promise<void>;
+  stopped: boolean;
 }
 
 /** The pending bucket's key: a workspace root that has no session yet, or none on screen. */
@@ -119,7 +145,7 @@ export class SkillHost {
    */
   private readonly generations = new Map<string, number>();
   /** OQ-386 point 1: the warm-up in flight per root, which a `skills.*` request waits for rather than walking the tree again. */
-  private readonly warming = new Map<string, Promise<void>>();
+  private readonly warming = new Map<string, Warming>();
   /**
    * REQ-WORKSPACE-046: the merged workspace context, on the same lifetime and cleared in the same places.
    * REQ-WORKSPACE-050: nested by base workspace, then by the root the run EXECUTES in — a session in an
@@ -148,10 +174,17 @@ export class SkillHost {
    * REQ-WORKSPACE-058/069: the catalogue cleared, and its generation advanced so a warm-up begun before it is set aside. That
    * warm-up is no longer one a request waits for either: its result will not be the catalogue, so a request after the clear
    * reads the tree as it stands now (one already waiting is released when the walk ends, and reads the same).
+   *
+   * The rule for the superseded walk: it is STOPPED, not left to finish. Its result would be set aside anyway, and a walk left
+   * running would keep reading the same tree beside the one a later `warm` starts — twice the disk load for one catalogue.
+   * Its flag is set here, the walk starts no further read (`discoverSkillsAsync`'s `stopped`) and ends at once with the reads
+   * already in flight.
    */
   private clearCatalog(workspaceRoot: string): void {
     this.catalogs.delete(workspaceRoot);
     this.generations.set(workspaceRoot, this.generationOf(workspaceRoot) + 1);
+    const superseded = this.warming.get(workspaceRoot);
+    if (superseded) superseded.stopped = true;
     this.warming.delete(workspaceRoot);
   }
 
@@ -204,29 +237,35 @@ export class SkillHost {
   warm(workspaceRoot: string): Promise<void> {
     if (this.catalogs.has(workspaceRoot)) return Promise.resolve();
     const inFlight = this.warming.get(workspaceRoot);
-    if (inFlight) return inFlight;
-    const warming: Promise<void> = this.warmUnder(workspaceRoot, this.generationOf(workspaceRoot)).finally(() => {
-      if (this.warming.get(workspaceRoot) === warming) this.warming.delete(workspaceRoot);
+    if (inFlight) return inFlight.promise;
+    const flags = { stopped: false };
+    const promise: Promise<void> = this.warmUnder(workspaceRoot, this.generationOf(workspaceRoot), () => flags.stopped).finally(() => {
+      if (this.warming.get(workspaceRoot) === walk) this.warming.delete(workspaceRoot);
     });
-    this.warming.set(workspaceRoot, warming);
-    return warming;
+    const walk: Warming = Object.assign(flags, { promise });
+    this.warming.set(workspaceRoot, walk);
+    return promise;
   }
 
-  /** `warm`'s walk: the catalogue read asynchronously and stored only under `generation`. Never rejects. */
-  private async warmUnder(workspaceRoot: string, generation: number): Promise<void> {
+  /** `warm`'s walk: the catalogue read asynchronously and stored only under `generation`, stopping once `stopped`. Never rejects. */
+  private async warmUnder(workspaceRoot: string, generation: number, stopped: () => boolean): Promise<void> {
     const started = this.deps.monotonic?.now() ?? null;
     const ports = this.asyncPorts;
+    const setAside = (): void => this.deps.log(`skills: the discovery begun at the open of ${workspaceRoot} was set aside: a rescan or a session creation cleared the catalogue while it ran`);
     try {
       const discovery = await discoverSkillsAsync(
         { workspaceRoot, home: this.home, platform: this.deps.platform ?? process.platform, machineDir: this.deps.machineDir, exists: async (p) => (await ports.isDirectory(p)) || (await ports.isFile(p)) },
         ports,
+        undefined,
+        stopped,
       );
-      if (this.generationOf(workspaceRoot) !== generation) {
-        this.deps.log(`skills: the discovery begun at the open of ${workspaceRoot} was set aside: a rescan or a session creation cleared the catalogue while it ran`);
-        return;
-      }
+      if (this.generationOf(workspaceRoot) !== generation) { setAside(); return; }
+      // Abandoned (`abandon`) after its last read began: the waiters already read the tree themselves.
+      if (stopped()) return;
       if (!this.catalogs.has(workspaceRoot)) this.publish(workspaceRoot, discovery, started);
     } catch (cause) {
+      // A stopped walk was superseded by a clear (the generation moved) or abandoned by its waiters (`abandon` said so).
+      if (cause instanceof DiscoveryStopped) { if (this.generationOf(workspaceRoot) !== generation) setAside(); return; }
       this.deps.log(`skills: discovery on workspace open failed: ${String(cause)}`, 'warn');
     }
   }
@@ -235,10 +274,30 @@ export class SkillHost {
    * OQ-386 point 1: what `skills.read`, `skills.forceLoad`, `skills.loadFile` and `skills.list` wait for before they read the
    * catalogue — the warm-up in flight for this root, so it is read once and not walked a second time beside it. Resolved at
    * once when none is in flight, so a request never waits on nothing. It settles when the walk does, whether the walk
-   * succeeded, failed (`warm` resolves either way) or was set aside by a clear.
+   * succeeded, failed (`warm` resolves either way) or was set aside by a clear — and, at the latest, after
+   * `WARM_UP_WAIT_BOUND` on the timer port (ADR-0002 consequence 11), when the walk is abandoned and the waiting request
+   * reads the catalogue as a cold ask does. The constant states the tradeoff.
    */
   settled(workspaceRoot: string): Promise<void> {
-    return this.warming.get(workspaceRoot) ?? Promise.resolve();
+    const walk = this.warming.get(workspaceRoot);
+    if (walk === undefined) return Promise.resolve();
+    return new Promise<void>((released) => {
+      const bound = this.deps.timers.after(WARM_UP_WAIT_BOUND, () => { this.abandon(workspaceRoot, walk); released(); });
+      void walk.promise.then(() => { bound.cancel(); released(); });
+    });
+  }
+
+  /**
+   * A warm-up its waiters stopped waiting for: said once, at `warn`, naming the root; stopped, so it starts no further read;
+   * and dropped, so neither a later request nor a later `warm` is handed it again. A second waiter's bound finding it already
+   * dropped says nothing more. Its result, should the wedged read ever return, is not published: the walk stops at its next
+   * read, and a cold ask has stored the catalogue by then.
+   */
+  private abandon(workspaceRoot: string, walk: Warming): void {
+    if (this.warming.get(workspaceRoot) !== walk) return;
+    walk.stopped = true;
+    this.warming.delete(workspaceRoot);
+    this.deps.log(`skills: the discovery begun at the open of ${workspaceRoot} did not settle within ${WARM_UP_WAIT_BOUND} ms; it is abandoned and the waiting request reads the catalogue as a cold ask does (OQ-386, ADR-0002)`, 'warn');
   }
 
   /**

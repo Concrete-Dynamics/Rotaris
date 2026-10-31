@@ -36,7 +36,7 @@ function tree(): { root: string; home: string; cleanup: () => void } {
  * `skills/zeta/SKILL.md`, the gap this seam closes). With it, every case here is decidable on any host.
  */
 const host = (_root: string, home: string, section: SkillsSection = SKILLS_DEFAULTS, extra: Partial<SkillHostDeps> = {}) =>
-  new SkillHost({ home, machineDir: join(home, 'machine'), section: () => ({ ok: true, value: section }), log: () => undefined, ...extra });
+  new SkillHost({ home, machineDir: join(home, 'machine'), section: () => ({ ok: true, value: section }), log: () => undefined, timers: new FakeClock(), ...extra });
 
 describe('the skill catalog (REQ-WORKSPACE-058, 069, 073, 057)', () => {
   it('discovers on a cold cache and caches the answer until something clears it', () => {
@@ -242,6 +242,7 @@ const contextHost = (home: string, globalDir: string, overrides: Record<string, 
     section: () => ({ ok: true, value: SKILLS_DEFAULTS }),
     instructions: () => ({ ok: true, value: { section: { overrides }, master, globalDir } }),
     log: () => undefined,
+    timers: new FakeClock(),
     ...extra,
   });
 
@@ -644,7 +645,7 @@ describe('the skill host on a configuration that does not load (OQ-279, REQ-CONF
   };
   const unloadedHost = (t: { home: string }, file: ReturnType<typeof saved>, configured?: (sessionId: string) => RunSections | undefined) =>
     new SkillHost({
-      home: t.home, machineDir: join(t.home, 'machine'), log: () => undefined,
+      home: t.home, machineDir: join(t.home, 'machine'), log: () => undefined, timers: new FakeClock(),
       section: file.section, instructions: file.instructions(join(t.home, 'cfg')),
       ...(configured === undefined ? {} : { configured }),
     });
@@ -670,7 +671,7 @@ describe('the skill host on a configuration that does not load (OQ-279, REQ-CONF
     try {
       let reads = 0;
       const h = new SkillHost({
-        home: t.home, machineDir: join(t.home, 'machine'), log: () => undefined,
+        home: t.home, machineDir: join(t.home, 'machine'), log: () => undefined, timers: new FakeClock(),
         section: (): SavedRead<SkillsSection> => (reads++ === 0 ? { ok: true, value: SKILLS_DEFAULTS } : { ok: false, fault: FAULT }),
         instructions: () => ({ ok: false, fault: FAULT }),
       });

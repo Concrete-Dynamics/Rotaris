@@ -113,7 +113,7 @@ Part 5 of 17 of [ADR-0055](../0055-startup-sequencing.md), which indexes every p
     not-acknowledged (`onHandOverDeclined`; main logs `hand-over declined`). The rule alone was not enough, and that is the
     part of this consequence the repair corrects. A launch that read the record while it named the primary, and got that
     decline, reclaimed by removing whatever record stood there, which was the new holder's, and became a second instance;
-    clause (4)'s second hand-over had never been built. The reclaim now removes only the claim it failed to reach, and (4)
+    clause (4)'s second hand-over had never been built. The reclaim now leaves only a record naming another live claim, and (4)
     hands such a launch to the process the record names (`instance.test.ts`, "a process the record was reclaimed from stands
     down"). What the stood-down process does with its open windows is not stated here or in the specification
     ([the note](../../../defects/a-stood-down-primary-keeps-its-windows-and-runs-on-with-no-end-the-specification-states.md)).*

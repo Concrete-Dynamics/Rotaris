@@ -8,19 +8,39 @@ const TARGET = 'E:\\Tools\\Rotaris-0.1.0-windows-x64-portable.exe';
  * records what the target path then holds (`null` for nothing), so a test can read off REQ-STARTUP-176's "at every
  * instant" — a process ended after any one of them leaves exactly that on disk. `copy-aside-partial` fails after
  * writing part of `<name>.old`, as a copy interrupted by a full medium does.
+ *
+ * It also models the machine losing power, on a file system that may journal a rename before the data of the file
+ * renamed. Every file is an inode whose bytes reach the medium only by `flushFile`; the directory's entries reach it only
+ * by `flushDirectory`, which snapshots them. After every operation `onPowerLoss` records what the target would hold
+ * under either outcome for the unflushed entries — the latest names kept, or only the last flushed ones — with
+ * `<unflushed>` for a name whose bytes never reached the medium. `durable()` reads what is on the medium now.
  */
-function volume(initial: Record<string, string>, failing: Partial<Record<'copy' | 'copy-aside' | 'copy-aside-exists' | 'copy-aside-partial' | 'rename-in' | 'remove-backup', string>> = {}) {
-  const files = new Map(Object.entries(initial));
+type Failing = 'copy' | 'copy-aside' | 'copy-aside-exists' | 'copy-aside-partial' | 'rename-in' | 'remove-backup' | 'flush-update' | 'flush-old' | 'flush-dir-before-rename' | 'flush-dir-after-rename' | 'restore-copy';
+function volume(initial: Record<string, string>, failing: Partial<Record<Failing, string>> = {}) {
+  type Inode = { content: string; flushed: boolean };
+  const entries = new Map<string, Inode>(Object.entries(initial).map(([p, content]) => [p, { content, flushed: true }]));
+  let onMedium = new Map(entries);
+  const files = { get: (p: string) => entries.get(p)?.content, has: (p: string) => entries.has(p) };
   const ops: string[] = [];
   const targetAfter: (string | null)[] = [];
-  const settle = () => { targetAfter.push(files.get(TARGET) ?? null); };
+  const onPowerLoss: (string | null)[] = [];
+  const backupOnMedium: (string | null)[] = [];
+  const held = (inode: Inode | undefined): string | null => (inode === undefined ? null : inode.flushed ? inode.content : '<unflushed>');
+  const settle = () => {
+    targetAfter.push(entries.get(TARGET)?.content ?? null);
+    onPowerLoss.push(held(entries.get(TARGET)), held(onMedium.get(TARGET)));
+    backupOnMedium.push(held(onMedium.get(`${TARGET}.old`)));
+  };
+  const durable = (): Record<string, string | null> => Object.fromEntries([...onMedium].map(([p, inode]) => [p, held(inode)]));
+  const replacedTarget = () => ops.some((op) => op.endsWith(`→${TARGET}`) && op.startsWith('rename:'));
   const port: StrategyFiles = {
-    pathKind: async (p) => (files.has(p) ? 'file' : 'absent'),
+    pathKind: async (p) => (entries.has(p) ? 'file' : 'absent'),
     copyFile: async (from, to) => {
       ops.push(`copy:${from}→${to}`);
       try {
         if (failing.copy) throw new Error(failing.copy);
-        files.set(to, files.get(from) ?? `<${from}>`);
+        if (failing['restore-copy'] && from.endsWith('.old')) throw new Error(failing['restore-copy']);
+        entries.set(to, { content: entries.get(from)?.content ?? `<${from}>`, flushed: false });
       } finally { settle(); }
     },
     copyAside: async (from, to) => {
@@ -30,32 +50,51 @@ function volume(initial: Record<string, string>, failing: Partial<Record<'copy' 
         if (failing['copy-aside-exists']) {
           // The race this models: something else put a file at the backup name after `applyPortable` removed the previous
           // one and before this copy ran. The fake writes it, then reports the refusal a real `COPYFILE_EXCL` gives.
-          files.set(to, 'someone else\u2019s file');
+          entries.set(to, { content: 'someone else\u2019s file', flushed: true });
           const e = new Error(`EEXIST: file already exists, copyfile '${from}' -> '${to}'`); (e as { code?: string }).code = 'EEXIST'; throw e;
         }
-        if (files.has(to)) { const e = new Error(`EEXIST: file already exists, copyfile '${from}' -> '${to}'`); (e as { code?: string }).code = 'EEXIST'; throw e; }
-        if (failing['copy-aside-partial']) { files.set(to, 'partial'); throw new Error(failing['copy-aside-partial']); }
-        files.set(to, files.get(from)!);
+        if (entries.has(to)) { const e = new Error(`EEXIST: file already exists, copyfile '${from}' -> '${to}'`); (e as { code?: string }).code = 'EEXIST'; throw e; }
+        if (failing['copy-aside-partial']) { entries.set(to, { content: 'partial', flushed: false }); throw new Error(failing['copy-aside-partial']); }
+        entries.set(to, { content: entries.get(from)!.content, flushed: false });
+      } finally { settle(); }
+    },
+    flushFile: async (p) => {
+      ops.push(`flush:${p}`);
+      try {
+        if (failing['flush-update'] && p.endsWith('.update')) throw new Error(failing['flush-update']);
+        if (failing['flush-old'] && p.endsWith('.old')) throw new Error(failing['flush-old']);
+        const inode = entries.get(p);
+        if (inode === undefined) throw new Error(`ENOENT: ${p}`);
+        inode.flushed = true;
+      } finally { settle(); }
+    },
+    flushDirectory: async (d) => {
+      ops.push(`flush-dir:${d}`);
+      try {
+        if (failing['flush-dir-before-rename'] && !replacedTarget()) throw new Error(failing['flush-dir-before-rename']);
+        if (failing['flush-dir-after-rename'] && replacedTarget()) throw new Error(failing['flush-dir-after-rename']);
+        onMedium = new Map(entries);
       } finally { settle(); }
     },
     rename: async (from, to) => {
       ops.push(`rename:${from}→${to}`);
       try {
         if (failing['rename-in'] && from.endsWith('.update')) throw new Error(failing['rename-in']);
-        if (!files.has(from)) throw new Error(`ENOENT: ${from}`);
-        files.set(to, files.get(from)!);
-        files.delete(from);
+        const inode = entries.get(from);
+        if (inode === undefined) throw new Error(`ENOENT: ${from}`);
+        entries.set(to, inode);
+        entries.delete(from);
       } finally { settle(); }
     },
     removeFile: async (p) => {
       ops.push(`remove:${p}`);
       try {
-        if (failing['remove-backup'] && p.endsWith('.old') && files.has(p)) throw new Error(failing['remove-backup']);
-        files.delete(p);
+        if (failing['remove-backup'] && p.endsWith('.old') && entries.has(p)) throw new Error(failing['remove-backup']);
+        entries.delete(p);
       } finally { settle(); }
     },
   };
-  return { files, ops, targetAfter, port };
+  return { files, ops, targetAfter, onPowerLoss, backupOnMedium, durable, port };
 }
 const STAGED = 'C:\\Users\\u\\AppData\\Local\\Temp\\rotaris-update-abc\\Rotaris-0.2.0-windows-x64-portable.exe';
 
@@ -73,16 +112,77 @@ describe('the Windows portable strategy — REQ-STARTUP-125, REQ-STARTUP-126', (
     expect(out).toEqual({ ok: true, outcome: 'replaced', message: REPLACED_MESSAGE });
     expect(v.ops).toEqual([
       `copy:${STAGED}→${TARGET}.update`,
+      `flush:${TARGET}.update`,
       `remove:${TARGET}.old`,
       `copy-aside:${TARGET}→${TARGET}.old`,
+      `flush:${TARGET}.old`,
+      'flush-dir:E:\\Tools',
       `rename:${TARGET}.update→${TARGET}`,
+      'flush-dir:E:\\Tools',
     ]);
     // REQ-STARTUP-176: after every step the target path names a complete executable, the previous one until the single
     // rename replaces it with the new one — never nothing. The target is never the source of a rename.
-    expect(v.targetAfter).toEqual(['v0.1.0', 'v0.1.0', 'v0.1.0', 'v0.2.0']);
+    expect(v.targetAfter).toEqual(['v0.1.0', 'v0.1.0', 'v0.1.0', 'v0.1.0', 'v0.1.0', 'v0.1.0', 'v0.2.0', 'v0.2.0']);
     expect(v.ops.some((op) => op.startsWith(`rename:${TARGET}→`))).toBe(false);
     expect(v.files.get(TARGET)).toBe('v0.2.0');
     // The backup remains until a later launch removes it (REQ-STARTUP-115).
+    expect(v.files.get(`${TARGET}.old`)).toBe('v0.1.0');
+    expect(v.files.has(`${TARGET}.update`)).toBe(false);
+  });
+
+  it('a power loss at any instant leaves the target naming flushed bytes, the backup is on the medium before the target is replaced, and the outcome is on it before the step reports', async () => {
+    const v = volume({ [TARGET]: 'v0.1.0', [`${TARGET}.old`]: 'v0.0.9', [STAGED]: 'v0.2.0' });
+    expect(await applyPortable(TARGET, STAGED, v.port)).toMatchObject({ ok: true, outcome: 'replaced' });
+    // The incoming file's data is flushed before the rename onto the target: with that flush gone, the rename would name
+    // `<unflushed>` bytes for a power loss that kept it.
+    expect(v.onPowerLoss.every((held) => held === 'v0.1.0' || held === 'v0.2.0')).toBe(true);
+    // The backup's bytes and its name reached the medium before the one rename that leaves it the only previous copy.
+    const renamedAt = v.ops.indexOf(`rename:${TARGET}.update→${TARGET}`);
+    expect(v.backupOnMedium[renamedAt]).toBe('v0.1.0');
+    // And the directory was flushed after that rename: what the medium holds once the step reports is its outcome.
+    expect(v.durable()).toEqual({ [TARGET]: 'v0.2.0', [`${TARGET}.old`]: 'v0.1.0', [STAGED]: 'v0.2.0' });
+    expect(v.ops.lastIndexOf('flush-dir:E:\\Tools')).toBeGreaterThan(renamedAt);
+  });
+
+  it('a flush that fails before the rename fails the step: the target is untouched throughout, and no sibling of the attempt is left', async () => {
+    for (const failing of [{ 'flush-update': 'EIO: i/o error, fsync' }, { 'flush-old': 'EIO: i/o error, fsync' }, { 'flush-dir-before-rename': 'EIO: i/o error, fsync' }] as const) {
+      const v = volume({ [TARGET]: 'v0.1.0', [STAGED]: 'v0.2.0' }, failing);
+      expect(await applyPortable(TARGET, STAGED, v.port)).toEqual({ ok: false, sentence: `could not install the update at ${TARGET}: EIO: i/o error, fsync` });
+      expect(v.targetAfter.every((held) => held === 'v0.1.0')).toBe(true);
+      expect(v.onPowerLoss.every((held) => held === 'v0.1.0')).toBe(true);
+      expect(v.ops.some((op) => op.startsWith('rename:'))).toBe(false);
+      expect(v.files.get(TARGET)).toBe('v0.1.0');
+      expect(v.files.has(`${TARGET}.old`)).toBe(false);
+      expect(v.files.has(`${TARGET}.update`)).toBe(false);
+    }
+  });
+
+  it('a directory flush that fails after the rename puts the previous bytes back by the same order, and the target ends as it was', async () => {
+    const v = volume({ [TARGET]: 'v0.1.0', [STAGED]: 'v0.2.0' }, { 'flush-dir-after-rename': 'EIO: i/o error, fsync' });
+    expect(await applyPortable(TARGET, STAGED, v.port)).toEqual({ ok: false, sentence: `could not install the update at ${TARGET}: EIO: i/o error, fsync` });
+    expect(v.ops.slice(v.ops.indexOf(`rename:${TARGET}.update→${TARGET}`))).toEqual([
+      `rename:${TARGET}.update→${TARGET}`,
+      'flush-dir:E:\\Tools',
+      `copy:${TARGET}.old→${TARGET}.update`,
+      `flush:${TARGET}.update`,
+      `rename:${TARGET}.update→${TARGET}`,
+      'flush-dir:E:\\Tools',
+      `remove:${TARGET}.old`,
+    ]);
+    // Never empty and never unflushed, while the new bytes stood at the path and after they were put back.
+    expect(v.targetAfter.every((held) => held === 'v0.1.0' || held === 'v0.2.0')).toBe(true);
+    expect(v.onPowerLoss.every((held) => held === 'v0.1.0' || held === 'v0.2.0')).toBe(true);
+    expect(v.ops.some((op) => op.startsWith(`rename:${TARGET}→`))).toBe(false);
+    expect(v.files.get(TARGET)).toBe('v0.1.0');
+    expect(v.files.has(`${TARGET}.old`)).toBe(false);
+    expect(v.files.has(`${TARGET}.update`)).toBe(false);
+  });
+
+  it('when putting the previous bytes back fails too, the sentence says the new version is at the path, and the previous one is kept as `<name>.old`', async () => {
+    const v = volume({ [TARGET]: 'v0.1.0', [STAGED]: 'v0.2.0' }, { 'flush-dir-after-rename': 'EIO: i/o error, fsync', 'restore-copy': 'ENOSPC: no space left on device' });
+    expect(await applyPortable(TARGET, STAGED, v.port)).toEqual({ ok: false, sentence: `could not install the update at ${TARGET}: EIO: i/o error, fsync; putting the previous version back failed too (ENOSPC: no space left on device), so the new version is at the path and the previous one is kept beside it as ${TARGET}.old` });
+    expect(v.onPowerLoss.every((held) => held === 'v0.1.0' || held === 'v0.2.0')).toBe(true);
+    expect(v.files.get(TARGET)).toBe('v0.2.0');
     expect(v.files.get(`${TARGET}.old`)).toBe('v0.1.0');
     expect(v.files.has(`${TARGET}.update`)).toBe(false);
   });
@@ -202,7 +302,7 @@ describe('launch-time cleanup of the portable backup — REQ-STARTUP-115', () =>
   it('a deletion failure is tolerated silently and left for a later launch; an unreachable directory is nothing to do', async () => {
     const held = volume({ [`${TARGET}.old`]: 'old' }, { 'remove-backup': 'EBUSY' });
     expect(await cleanupPortableBackup('portable', TARGET, held.port)).toBe('kept');
-    const gone: StrategyFiles = { pathKind: async () => { throw new Error('ENOENT: the medium is gone'); }, copyFile: async () => undefined, copyAside: async () => undefined, rename: async () => undefined, removeFile: async () => undefined };
+    const gone: StrategyFiles = { pathKind: async () => { throw new Error('ENOENT: the medium is gone'); }, copyFile: async () => undefined, copyAside: async () => undefined, flushFile: async () => undefined, flushDirectory: async () => undefined, rename: async () => undefined, removeFile: async () => undefined };
     expect(await cleanupPortableBackup('portable', TARGET, gone)).toBe('kept');
     expect(await cleanupPortableBackup('portable', TARGET, volume({}).port)).toBe('nothing');
   });

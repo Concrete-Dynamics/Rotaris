@@ -70,6 +70,8 @@ function installContext(keys: readonly string[]) {
     pathKind: async (p) => (volume.has(p) ? 'file' : 'absent'),
     copyFile: async (_from, to) => { volume.set(to, 'v0.2.0'); },
     copyAside: async (from, to) => { volume.set(to, volume.get(from)!); },
+    flushFile: async () => undefined,
+    flushDirectory: async () => undefined,
     rename: async (from, to) => { volume.set(to, volume.get(from)!); volume.delete(from); },
     removeFile: async (p) => { volume.delete(p); },
   };

@@ -119,7 +119,7 @@ sequenceDiagram
   M->>M: parse the manifest (REQ-STARTUP-113)
   M->>F: GET the one asset, redirects followed, into <temp>/rotaris-update-…/ in 1 MiB chunks, never past a non-zero stated size (REQ-STARTUP-169); progress repainted per whole percent
   M->>M: digest verified, case-insensitively, with REQ-STARTUP-123's sentences
-  alt portable: copy aside, rename onto the target in one step (REQ-STARTUP-125, PD-STARTUP-008, REQ-STARTUP-176)
+  alt portable: place and flush .update, copy aside and flush .old and the directory, rename onto the target in one step, flush the directory (REQ-STARTUP-125, PD-STARTUP-008, REQ-STARTUP-176)
     M->>M: "Update installed" + Restart now (REQ-STARTUP-119)
     R->>M: update.restart
     M->>R: confirmUnsaved at the click — every main window's Save/Discard/Cancel in turn (OQ-311); Cancel or a failed Save → { cancelled }, no run box, nothing started

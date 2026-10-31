@@ -25,6 +25,10 @@ export interface StrategyFiles {
    * — and `applyPortable` then leaves it alone, because it is not this step's to remove.
    */
   copyAside(from: string, to: string): Promise<void>;
+  /** Write a file's data through to the medium, so that a power loss after this resolves keeps its bytes (REQ-STARTUP-176). */
+  flushFile(path: string): Promise<void>;
+  /** Write a directory's entries through to the medium, so that a name a copy or a rename put there survives a power loss. */
+  flushDirectory(dir: string): Promise<void>;
   /** Move `from` onto `to`, replacing a file at `to` in one step (on Windows, as on POSIX, a rename onto a file replaces it). */
   rename(from: string, to: string): Promise<void>;
   /** Remove a file; an absent file is not an error. */
@@ -80,22 +84,31 @@ export const portableIncomingPath = (target: string): string => sibling(target, 
  * sits on media that cannot be written — read-only, or removed since launch — the step fails reporting that it could
  * not install the update at the target, changes nothing anywhere, and leaves the running application and its
  * preparation exactly as they were.
+ *
+ * "The machine's loss of power included": a file system may journal a rename before the data of the file renamed, so
+ * every copy is flushed before anything relies on it — `<name>.update` before it is renamed onto the target, `<name>.old`
+ * and the directory's entries before the target is replaced — and the directory again after the rename, before the step
+ * reports it. A flush that fails is a failure of the step like any other. One that fails after the rename puts the
+ * previous bytes back by the same order (copy, flush, one rename), so the target is again what it was. How far each
+ * flush reaches on which host is `flush.ts`'s.
  */
 export async function applyPortable(target: string, verifiedFile: string, files: StrategyFiles): Promise<ApplyOutcome> {
   const fail = (error: unknown): ApplyOutcome => ({ ok: false, sentence: `could not install the update at ${target}: ${messageOf(error)}` });
+  const { dir } = splitPath(target);
   if ((await files.pathKind(target)) !== 'file') {
     // The artifact is not where it was: either its medium is gone or read-only (REQ-STARTUP-125's "removed since
     // launch", reported as not installable at the target) or there never was a released artifact there.
-    const { dir } = splitPath(target);
     if (dir !== '' && (await files.pathKind(dir)) !== 'directory') return fail('the directory holding it cannot be reached (the medium may have been removed)');
     return { ok: false, sentence: NO_TARGET_SENTENCE };
   }
   const incoming = portableIncomingPath(target);
   const backup = portableBackupPath(target);
+  const holder = dir === '' ? '.' : dir;
   try {
     await files.copyFile(verifiedFile, incoming);
+    await files.flushFile(incoming);
   } catch (error) {
-    // Nothing was placed, or a partial sibling was: remove it and change nothing else (REQ-STARTUP-126).
+    // Nothing was placed, or a partial or unflushed sibling was: remove it and change nothing else (REQ-STARTUP-126).
     await files.removeFile(incoming).catch(() => undefined);
     return fail(error);
   }
@@ -116,6 +129,17 @@ export async function applyPortable(target: string, verifiedFile: string, files:
     return fail(error);
   }
   try {
+    // The backup is relied on from the rename on, as the only copy of the previous executable: its bytes and its name
+    // reach the medium first, with `<name>.update`'s name.
+    await files.flushFile(backup);
+    await files.flushDirectory(holder);
+  } catch (error) {
+    // `copyAside` wrote the backup, so it is this attempt's own; the target was only read.
+    await files.removeFile(backup).catch(() => undefined);
+    await files.removeFile(incoming).catch(() => undefined);
+    return fail(error);
+  }
+  try {
     await files.rename(incoming, target);
   } catch (error) {
     // The target was never moved, so it still holds the original bytes; re-renaming anything here would only reopen
@@ -124,7 +148,36 @@ export async function applyPortable(target: string, verifiedFile: string, files:
     await files.removeFile(incoming).catch(() => undefined);
     return fail(error);
   }
+  try {
+    await files.flushDirectory(holder);
+  } catch (error) {
+    return putPreviousBack(target, holder, files, error);
+  }
   return { ok: true, outcome: 'replaced', message: REPLACED_MESSAGE };
+}
+
+/**
+ * The rename took effect but could not be made durable, so the step fails, and what is installed must be what it was
+ * (REQ-STARTUP-126): the previous bytes, kept in the flushed `<name>.old`, are copied beside the target, flushed and
+ * renamed onto it in one step — the swap's own order, so the path names a complete executable throughout. Should that
+ * fail too, the new version stays at the path with the previous one kept as `<name>.old`, and the sentence says so.
+ */
+async function putPreviousBack(target: string, holder: string, files: StrategyFiles, error: unknown): Promise<ApplyOutcome> {
+  const incoming = portableIncomingPath(target);
+  const backup = portableBackupPath(target);
+  try {
+    await files.copyFile(backup, incoming);
+    await files.flushFile(incoming);
+    await files.rename(incoming, target);
+  } catch (restoreError) {
+    await files.removeFile(incoming).catch(() => undefined);
+    return { ok: false, sentence: `could not install the update at ${target}: ${messageOf(error)}; putting the previous version back failed too (${messageOf(restoreError)}), so the new version is at the path and the previous one is kept beside it as ${backup}` };
+  }
+  // Best effort: the flush that failed a moment ago is what this would need. Unflushed, a power loss leaves either rename,
+  // and both name a complete, flushed executable.
+  await files.flushDirectory(holder).catch(() => undefined);
+  await files.removeFile(backup).catch(() => undefined);
+  return { ok: false, sentence: `could not install the update at ${target}: ${messageOf(error)}` };
 }
 
 /**

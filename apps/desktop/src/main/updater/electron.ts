@@ -6,6 +6,7 @@ import { app, net } from 'electron';
 import type { ArtifactVariables } from '@rotaris/platform';
 import type { DownloadSink } from './download.js';
 import { classifyInstallation, parseInstallDir, type Classification } from './classify.js';
+import { flushDirectory, flushFile } from './flush.js';
 import type { HandOffRecordFile, NetworkResponse, StagingArea, UpdateNetwork } from './install.js';
 import type { StrategyFiles, StrategySpawn } from './strategies.js';
 
@@ -135,6 +136,10 @@ export function createUpdaterPorts(updatesDir: string): UpdaterPorts {
       // REQ-STARTUP-176: the target copied to `<name>.old` beside it, the target itself left in place; exclusive, so a
       // file that appeared there since `applyPortable` removed the previous backup is refused, never replaced.
       copyAside: (from, to) => fsp.copyFile(from, to, fsConstants.COPYFILE_EXCL),
+      // REQ-STARTUP-176's power loss: fsync(2) of the file and of its directory on POSIX, measured on the Linux agent host;
+      // `FlushFileBuffers` for the file and nothing for the directory on Windows, not measured there (`flush.ts`).
+      flushFile: (path) => flushFile(path),
+      flushDirectory: (dir) => flushDirectory(dir),
       // Node's rename overwrites an existing `to` (its documentation; on Windows libuv's MoveFileExW with
       // MOVEFILE_REPLACE_EXISTING): onto the existing target, one step. Not yet measured on a Windows host.
       rename: (from, to) => fsp.rename(from, to),

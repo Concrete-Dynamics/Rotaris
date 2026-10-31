@@ -21,7 +21,8 @@ export interface StrategyFiles {
   copyFile(from: string, to: string): Promise<void>;
   /**
    * Copy the target to its backup name beside it, leaving the target where it is (REQ-STARTUP-176): the only destination
-   * is `<name>.old`, removed just before, so an existing file there is refused rather than replaced.
+   * is `<name>.old`, removed just before, so a file that appeared there since is refused (`EEXIST`) rather than replaced
+   * — and `applyPortable` then leaves it alone, because it is not this step's to remove.
    */
   copyAside(from: string, to: string): Promise<void>;
   /** Move `from` onto `to`, replacing a file at `to` in one step (on Windows, as on POSIX, a rename onto a file replaces it). */
@@ -44,6 +45,12 @@ export type ApplyOutcome =
 export const REPLACED_MESSAGE = 'The update is installed. Restart Rotaris to run it.';
 export const INSTALLER_HANDOFF_MESSAGE = 'Rotaris will close so the installer can replace it.';
 export const NO_TARGET_SENTENCE = 'this Rotaris was not installed from a released artifact';
+
+/**
+ * Whether a copy refused a file already at the destination, rather than failing part-way through writing one. Node's
+ * `COPYFILE_EXCL` reports the first as `EEXIST`, which is the one case where the destination is not this attempt's.
+ */
+const destinationExisted = (error: unknown): boolean => (error as { readonly code?: unknown } | null | undefined)?.code === 'EEXIST';
 
 /** The path helpers for the platform the target lives on, without `node:path` binding to the host. */
 function splitPath(target: string): { dir: string; name: string; sep: string } {
@@ -101,8 +108,10 @@ export async function applyPortable(target: string, verifiedFile: string, files:
   try {
     await files.copyAside(target, backup);
   } catch (error) {
-    // The target was only read. A partial `<name>.old` is this attempt's own (the previous one was removed above).
-    await files.removeFile(backup).catch(() => undefined);
+    // The target was only read. The previous backup was removed just above, so the backup name now holds either a
+    // partial copy of this attempt's own (removed here) or a file that appeared there since — refused, and left
+    // where it is, because removing a file this step did not write would change something it never touched.
+    if (!destinationExisted(error)) await files.removeFile(backup).catch(() => undefined);
     await files.removeFile(incoming).catch(() => undefined);
     return fail(error);
   }

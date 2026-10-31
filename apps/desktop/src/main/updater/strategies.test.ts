@@ -9,7 +9,7 @@ const TARGET = 'E:\\Tools\\Rotaris-0.1.0-windows-x64-portable.exe';
  * instant" — a process ended after any one of them leaves exactly that on disk. `copy-aside-partial` fails after
  * writing part of `<name>.old`, as a copy interrupted by a full medium does.
  */
-function volume(initial: Record<string, string>, failing: Partial<Record<'copy' | 'copy-aside' | 'copy-aside-partial' | 'rename-in' | 'remove-backup', string>> = {}) {
+function volume(initial: Record<string, string>, failing: Partial<Record<'copy' | 'copy-aside' | 'copy-aside-exists' | 'copy-aside-partial' | 'rename-in' | 'remove-backup', string>> = {}) {
   const files = new Map(Object.entries(initial));
   const ops: string[] = [];
   const targetAfter: (string | null)[] = [];
@@ -27,7 +27,13 @@ function volume(initial: Record<string, string>, failing: Partial<Record<'copy' 
       ops.push(`copy-aside:${from}→${to}`);
       try {
         if (failing['copy-aside']) throw new Error(failing['copy-aside']);
-        if (files.has(to)) throw new Error(`EEXIST: ${to}`);
+        if (failing['copy-aside-exists']) {
+          // The race this models: something else put a file at the backup name after `applyPortable` removed the previous
+          // one and before this copy ran. The fake writes it, then reports the refusal a real `COPYFILE_EXCL` gives.
+          files.set(to, 'someone else\u2019s file');
+          const e = new Error(`EEXIST: file already exists, copyfile '${from}' -> '${to}'`); (e as { code?: string }).code = 'EEXIST'; throw e;
+        }
+        if (files.has(to)) { const e = new Error(`EEXIST: file already exists, copyfile '${from}' -> '${to}'`); (e as { code?: string }).code = 'EEXIST'; throw e; }
         if (failing['copy-aside-partial']) { files.set(to, 'partial'); throw new Error(failing['copy-aside-partial']); }
         files.set(to, files.get(from)!);
       } finally { settle(); }
@@ -132,6 +138,18 @@ describe('the Windows portable strategy — REQ-STARTUP-125, REQ-STARTUP-126', (
       expect(aside.files.has(`${TARGET}.old`)).toBe(false);
       expect(aside.files.has(`${TARGET}.update`)).toBe(false);
     }
+  });
+
+  it('a file that appeared at the backup name since the previous backup was removed is refused, not deleted', async () => {
+    // `copyAside` is exclusive (COPYFILE_EXCL): a foreign file at `<name>.old` is not this attempt's to remove, so the
+    // step fails with EEXIST and leaves it exactly where it was, alongside the target it never touched.
+    const v = volume({ [TARGET]: 'v0.1.0', [STAGED]: 'v0.2.0' }, { 'copy-aside-exists': 'EEXIST' });
+    expect(await applyPortable(TARGET, STAGED, v.port)).toMatchObject({ ok: false });
+    expect(v.targetAfter.every((held) => held === 'v0.1.0')).toBe(true);
+    expect(v.files.get(`${TARGET}.old`)).toBe('someone else\u2019s file');
+    expect(v.files.get(TARGET)).toBe('v0.1.0');
+    expect(v.files.has(`${TARGET}.update`)).toBe(false);
+    expect(v.ops.some((op) => op.startsWith('rename:'))).toBe(false);
   });
 
   it('a failure deleting the previous backup removes the placed sibling and changes nothing else', async () => {

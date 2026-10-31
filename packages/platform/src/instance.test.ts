@@ -423,6 +423,129 @@ describe('the successor\'s side of the two-step pass — REQ-STARTUP-121 (ADR-00
 });
 
 /**
+ * ADR-0055 consequence 14: "a primary that recovers still believes it is the instance. It must therefore re-read the record
+ * before acting as one, and where it finds a record naming another process it must stop behaving as the instance rather than
+ * compete". Measured not to hold on Windows on 2026-10-21: the resumed primary answered the hand-over queued on its pipe and
+ * surfaced its window beside the instance that had reclaimed the record
+ * (`docs/defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md`). The suspension is not
+ * reproduced here; its result is — the record rewritten under a primary whose endpoint is still listening.
+ */
+describe('a process the record was reclaimed from stands down — ADR-0055 consequence 14, REQ-STARTUP-161, REQ-STARTUP-164', () => {
+  const file = () => join(dir, 'instance.json');
+
+  it('the resumed primary declines the hand-over queued for it and acts on nothing; the record keeps naming the instance that reclaimed it', async () => {
+    const primarySeen: HandOver[] = [];
+    const declined: { h: HandOver; holder: InstanceRecord | undefined }[] = [];
+    const primary = await claimInstance(deps({ pid: PREDECESSOR_PID, seen: primarySeen, onHandOverDeclined: (h, holder) => declined.push({ h, holder }) }));
+    if (primary.outcome !== 'instance') throw new Error(primary.outcome);
+
+    // REQ-STARTUP-164 (3), as the second launch performs it while the primary is suspended: the record removed, the claim
+    // retried and won.
+    rmSync(file());
+    const instanceSeen: HandOver[] = [];
+    const instance = await claimInstance(deps({ seen: instanceSeen }));
+    if (instance.outcome !== 'instance') throw new Error(instance.outcome);
+
+    // The line the second launch had queued on the primary's endpoint before it gave up, read once the primary runs again.
+    const sock = await openTo(primary.record.endpoint);
+    const queued = peer(sock);
+    sock.write('{"workspace":"/w"}\n');
+    const answer = JSON.parse((await queued.nextLine()) ?? '{}') as { ok?: unknown; reason?: unknown };
+
+    // THE FALSIFIER: until 2026-10-31 the primary surfaced its window for it — `[{ workspace: '/w' }]` — and answered `{"ok":true}`.
+    expect(primarySeen).toEqual([]);
+    expect(answer).toEqual({ ok: false, reason: 'the instance record no longer names this process, so it does not act as the instance (ADR-0055)' });
+    expect(declined).toEqual([{ h: { workspace: '/w' }, holder: instance.record }]);
+    expect(record(file())).toEqual(instance.record);
+    expect(instanceSeen).toEqual([]);
+
+    // A launch arriving now is handed to the instance the record names, and the primary still acts on nothing.
+    const later = await claimInstance(deps(), { workspace: '/x' });
+    expect(later.outcome).toBe('handed-over');
+    expect(instanceSeen).toEqual([{ workspace: '/x' }]);
+    expect(primarySeen).toEqual([]);
+
+    // The primary's close leaves the instance's record alone.
+    await primary.close();
+    expect(record(file())).toEqual(instance.record);
+    await instance.close();
+    expect(existsSync(file())).toBe(false);
+  });
+
+  it('between the reclaim\'s removal and its retried claim — no record to read — the primary declines too', async () => {
+    const seen: HandOver[] = [];
+    const declined: { h: HandOver; holder: InstanceRecord | undefined }[] = [];
+    const primary = await claimInstance(deps({ pid: PREDECESSOR_PID, seen, onHandOverDeclined: (h, holder) => declined.push({ h, holder }) }));
+    if (primary.outcome !== 'instance') throw new Error(primary.outcome);
+    rmSync(file());
+    const sock = await openTo(primary.record.endpoint);
+    const launch = peer(sock);
+    sock.write('{"workspace":"/w"}\n');
+    expect(JSON.parse((await launch.nextLine()) ?? '{}')).toMatchObject({ ok: false });
+    expect(seen).toEqual([]);
+    expect(declined).toEqual([{ h: { workspace: '/w' }, holder: undefined }]);
+    await primary.close();
+  });
+
+  it('a launch that read the record while it named the primary and reached it after the reclaim ends handed to the instance the record names — exactly one instance, its window surfaced (REQ-STARTUP-164 (3), (4))', async () => {
+    const primarySeen: HandOver[] = [];
+    const instanceSeen: HandOver[] = [];
+    // The instance that will have reclaimed the record. Its claim is taken first only so that it is listening when the
+    // record comes to name it; the record is then handed back to the primary for the arriving launch to read.
+    const instance = await claimInstance(deps({ seen: instanceSeen }));
+    if (instance.outcome !== 'instance') throw new Error(instance.outcome);
+    const reclaimed = readFileSync(file(), 'utf8');
+    rmSync(file());
+    const primary = await claimInstance(deps({ pid: PREDECESSOR_PID, seen: primarySeen }));
+    if (primary.outcome !== 'instance') throw new Error(primary.outcome);
+
+    // The reclaim lands after the arriving launch read the record naming the primary, and before the primary reads its
+    // hand-over: the launch's first timer is the hand-over's bound, armed between the two.
+    let landed = false;
+    const reclaimAfterRead = {
+      after: (delay: Parameters<typeof clocks.timers.after>[0], fn: () => void) => {
+        if (!landed) { landed = true; writeFileSync(file(), reclaimed); }
+        return clocks.timers.after(delay, fn);
+      },
+      every: clocks.timers.every.bind(clocks.timers),
+    };
+    const arriving = await claimInstance(deps({ timers: reclaimAfterRead }), { workspace: '/w' });
+
+    expect(landed).toBe(true);
+    // Before the fix the primary acknowledged and surfaced its window for it. With the primary declining but the reclaim still
+    // removing whatever stood there, the launch removed the instance's record and became a second instance ('instance').
+    expect(arriving.outcome).toBe('handed-over');
+    expect(primarySeen).toEqual([]);
+    expect(instanceSeen).toEqual([{ workspace: '/w' }]);
+    expect(record(file())).toEqual(instance.record);
+
+    if (arriving.outcome === 'instance') await arriving.close();
+    await primary.close();
+    await instance.close();
+  });
+
+  it('the reclaim still takes a record that cannot be read: re-reading it before the removal finds nothing to leave (REQ-STARTUP-164 (3))', async () => {
+    writeFileSync(file(), '{"pid":');
+    const claim = await claimInstance(deps({ handOverIntervalMs: millis(300) }));
+    expect(claim.outcome).toBe('instance');
+    if (claim.outcome !== 'instance') return;
+    expect(record(file())).toEqual(claim.record);
+    await claim.close();
+  });
+
+  it('a primary the record still names is unchanged: it acts on the hand-over and acknowledges it (REQ-STARTUP-162)', async () => {
+    const seen: HandOver[] = [];
+    const declined: HandOver[] = [];
+    const primary = await claimInstance(deps({ pid: PREDECESSOR_PID, seen, onHandOverDeclined: (h) => declined.push(h) }));
+    if (primary.outcome !== 'instance') throw new Error(primary.outcome);
+    expect((await claimInstance(deps(), { workspace: '/w' })).outcome).toBe('handed-over');
+    expect(seen).toEqual([{ workspace: '/w' }]);
+    expect(declined).toEqual([]);
+    await primary.close();
+  });
+});
+
+/**
  * Where the hand-over socket lives off Windows (REQ-STARTUP-145, REQ-STARTUP-161, REQ-STARTUP-164). Until fin30 the claim
  * listened under the data directory whatever its length, so a deep one made the listen fail with `EINVAL` and the
  * rejection went unhandled in main — a launch with no window that said nothing

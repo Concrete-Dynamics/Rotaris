@@ -26,8 +26,12 @@ import { isLockLive, type LockRecord } from './liveness.js';
  * Order (REQ-STARTUP-164): (1) exclusive claim, its endpoint already listening (ADR-0055); (2) on failure, hand over to
  * the named instance, complete when acknowledged; (3) not acknowledged within
  * 5 s — record unreadable, no process, process dead, or process silent —
- * reclaim once and retry the claim exactly once. At most one reclaim, two
- * claim attempts, no waiting beyond that one interval.
+ * reclaim once and retry the claim exactly once; (4) that retry lost too —
+ * another launch claimed inside the interval — hand over once more and end.
+ * At most one reclaim, two claim attempts, no spin.
+ *
+ * The instance answers a hand-over only while the record still names it (ADR-0055 consequence 14): a process the record
+ * was reclaimed from — a primary suspended past the interval and resumed — declines rather than acting as the instance.
  */
 
 export interface InstanceRecord extends LockRecord {
@@ -62,8 +66,19 @@ export interface ClaimDeps {
   readonly wall: WallClock;
   readonly timers: Timers;
   readonly handOverIntervalMs: Millis;
-  /** Called on the instance side for every hand-over it acknowledges. */
+  /**
+   * Called on the instance side for every hand-over it acknowledges — and it acknowledges one only while the record, read
+   * again as the hand-over arrives, still names this process (ADR-0055 consequence 14).
+   */
   readonly onHandOver: (h: HandOver) => void;
+  /**
+   * ADR-0055 consequence 14: called on a process whose endpoint received an ordinary hand-over while the record no longer
+   * names it — REQ-STARTUP-164 (3) reclaimed it meanwhile, or the record passed to a successor (REQ-STARTUP-121) — with the
+   * record as it was read then (`undefined` when there was none to read). The hand-over is not acted on and is answered
+   * not-acknowledged, so the launch that sent it resolves to the process the record names; what this process does with
+   * the windows it already has is not decided here. Main logs it.
+   */
+  readonly onHandOverDeclined?: (h: HandOver, holder: InstanceRecord | undefined) => void;
   /**
    * REQ-STARTUP-121: called on the instance side once the successor has acknowledged the offer and the record has been
    * rewritten with its fields; the successor is told so as this returns. What the predecessor does then — close its
@@ -213,6 +228,14 @@ function readRecord(file: string): InstanceRecord | undefined {
   return undefined;
 }
 
+/** Whether two reads of the record are the same claim: the same process, at the same endpoint, acquired at the same moment. */
+function sameClaim(a: InstanceRecord, b: InstanceRecord): boolean {
+  return a.pid === b.pid && a.host === b.host && a.acquired_at === b.acquired_at && a.endpoint === b.endpoint;
+}
+
+/** The answer of a process the record no longer names to an ordinary hand-over (ADR-0055 consequence 14). Never `ok:true`. */
+const DECLINED_LINE = `${JSON.stringify({ ok: false, reason: 'the instance record no longer names this process, so it does not act as the instance (ADR-0055)' })}\n`;
+
 /** The predecessor's answer to a successor's announcement: passed, or refused with the check that refused it. */
 type PassAnswer = { readonly passed: true } | { readonly passed: false; readonly reason: string };
 
@@ -239,7 +262,16 @@ function isAck(line: string): boolean {
   try { return (JSON.parse(line) as { ack?: unknown }).ack === true; } catch { return false; }
 }
 
-function listen(endpoint: string, onHandOver: (h: HandOver) => void, platform: NodeJS.Platform, onSuccessor: (successor: InstanceRecord, link: SuccessorLink) => Promise<PassAnswer>): Promise<Server> {
+/**
+ * The endpoint's server. An ordinary hand-over (REQ-STARTUP-162/163) is acted on and acknowledged only while the record,
+ * read again as the line arrives, names this process at this endpoint (ADR-0055 consequence 14). Until 2026-10-31 nothing
+ * re-read it: a primary suspended past REQ-STARTUP-164's interval and resumed answered the hand-over queued on its pipe
+ * and surfaced its window beside the instance that had reclaimed the record
+ * (`docs/defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md`). It now answers `DECLINED_LINE`
+ * and acts on nothing, and the launch, if it is still waiting, resolves to the process the record names (`claimInstance`
+ * (3)/(4)). A successor's announcement is the record pass's own (`passRecord`), which reads the record itself.
+ */
+function listen(endpoint: string, deps: ClaimDeps, platform: NodeJS.Platform, onSuccessor: (successor: InstanceRecord, link: SuccessorLink) => Promise<PassAnswer>): Promise<Server> {
   return new Promise((resolve, reject) => {
     if (platform !== 'win32') {
       try { unlinkSync(endpoint); } catch { /* absent */ }
@@ -299,7 +331,13 @@ function listen(endpoint: string, onHandOver: (h: HandOver) => void, platform: N
             );
             continue;
           }
-          onHandOver(h);
+          const holder = readRecord(deps.recordFile);
+          if (holder === undefined || holder.pid !== deps.pid || holder.endpoint !== endpoint) {
+            deps.onHandOverDeclined?.(h, holder);
+            sock.end(DECLINED_LINE);
+            return;
+          }
+          deps.onHandOver(h);
           sock.end('{"ok":true}\n');
           return;
         }
@@ -447,7 +485,7 @@ function removeDeadEndpoint(dead: InstanceRecord, platform: NodeJS.Platform): vo
  */
 async function openEndpoint(deps: ClaimDeps, endpoint: string, platform: NodeJS.Platform): Promise<{ readonly server: Server } | { readonly refused: string }> {
   try {
-    return { server: await listen(endpoint, deps.onHandOver, platform, (successor, link) => passRecord(deps, successor, link)) };
+    return { server: await listen(endpoint, deps, platform, (successor, link) => passRecord(deps, successor, link)) };
   } catch (cause) {
     return { refused: `this launch could not open its hand-over endpoint ${endpoint}: ${String(cause)}; no instance record was written (REQ-STARTUP-164)` };
   }
@@ -608,12 +646,29 @@ export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): P
     const answer = await tryHandOver(existing.endpoint, handOver, deps.timers, deps.handOverIntervalMs);
     if (answer.acked) return { outcome: 'handed-over' };
   }
-  // OQ-248: the endpoint is the record's, so a dead process's goes with its record; a live but silent one's stays its own.
-  if (existing && !live) removeDeadEndpoint(existing, platform);
-  rmSync(deps.recordFile, { force: true });
+  /**
+   * (3) The reclaim takes the record that went unacknowledged, and only it. Read again first: a record that now names
+   * another claim — another launch reclaimed it inside the interval, or the process this launch reached declined because
+   * the record had moved on (ADR-0055 consequence 14) — is that claim's, and removing it would make this launch a second
+   * instance beside it (REQ-STARTUP-161). It is left as it is, the retry loses, and (4) hands this launch to it. Until
+   * 2026-10-31 the reclaim removed whatever stood there.
+   */
+  const now = readRecord(deps.recordFile);
+  if (now === undefined || (existing !== undefined && sameClaim(now, existing))) {
+    // OQ-248: the endpoint is the record's, so a dead process's goes with its record; a live but silent one's stays its own.
+    if (existing && !live) removeDeadEndpoint(existing, platform);
+    rmSync(deps.recordFile, { force: true });
+  }
   const second = await attempt();
   if (second !== 'lost') return second;
-  return { outcome: 'refused', reason: 'the record was recreated by another party between the reclaim and the retry; no third attempt is made (REQ-STARTUP-164)' };
+  // (4) Another launch claimed the record inside the interval and is becoming the instance: hand over once more, then end,
+  // having started no rival. Not done until 2026-10-31, when the launch ended refused with no window of its own or another's.
+  const holder = readRecord(deps.recordFile);
+  if (holder && isLockLive(holder, deps.machineId)) {
+    const answer = await tryHandOver(holder.endpoint, handOver, deps.timers, deps.handOverIntervalMs);
+    if (answer.acked) return { outcome: 'handed-over' };
+  }
+  return { outcome: 'refused', reason: 'the record was recreated by another party between the reclaim and the retry, and the hand-over to it was not acknowledged; no third attempt is made (REQ-STARTUP-164)' };
 }
 
 /**
@@ -639,7 +694,7 @@ export async function inheritInstance(deps: ClaimDeps, predecessorEndpoint: stri
   const record: InstanceRecord = { pid: deps.pid, host: deps.machineId, acquired_at: toIsoUtc(deps.wall.instant()), endpoint };
   let server: Server;
   try {
-    server = await listen(endpoint, deps.onHandOver, platform, (successor, link) => passRecord(deps, successor, link));
+    server = await listen(endpoint, deps, platform, (successor, link) => passRecord(deps, successor, link));
   } catch (cause) {
     removeOwnDirectory(placed.own);
     return { outcome: 'refused', reason: `the successor could not open its hand-over endpoint: ${String(cause)}` };

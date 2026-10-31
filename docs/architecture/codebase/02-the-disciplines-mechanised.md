@@ -40,7 +40,7 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   design assets carry the same two fonts and are not referenced directly.
 - **A relative link in the record reaches what it names** — `tools/check-record-links.mjs` (in `pnpm lint`, beside
   `check-request-log.mjs` and `check-directive-register.mjs`) fails on a Markdown link under `docs/`, in
-  `CONTEXT-MAP.md`, `AGENTS.md` or a `packages/**/CONTEXT.md` whose target file does not exist or
+  `CONTEXT-MAP.md`, `AGENTS.md`, the root `README.md` (since 2026-10-31) or a `packages/**/CONTEXT.md` whose target file does not exist or
   whose `#fragment` names no heading or anchor in it; fenced and inline code and HTML comments are text, not links.
   A defect note moved to `docs/defects/fixed/` takes every link to it along in the same commit, or the gate says
   which one stayed behind (since 2026-09-28, R-062). A second pass reads the code: a `docs/defects/….md` path in a

@@ -171,12 +171,12 @@ start a run from the composer.
 
 ```sh
 pnpm install --prefer-offline                       # dependencies; Electron's install script fetches its runtime
-pnpm symbols                                        # writes packages/kernel/src/generated/, which every build imports
 pnpm dev                                            # the application through electron-vite, against the workspace source
 ```
 
-`pnpm symbols` must run before the first build: the generated directory is not committed
-([defect note](docs/defects/a-fresh-clone-cannot-build-until-pnpm-symbols-has-run.md)). If Electron's runtime is
+`packages/kernel/src/generated/`, which every build imports, is not committed: the first `pnpm dev`, `pnpm build` or
+`pnpm package` writes it with the generator behind `pnpm symbols`, and `pnpm symbols` or a test run keeps it current
+([the repaired note](docs/defects/fixed/a-fresh-clone-cannot-build-until-pnpm-symbols-has-run.md)). If Electron's runtime is
 missing, as it is in a new Git worktree, `node node_modules/electron/install.js` installs it.
 
 ## Concepts

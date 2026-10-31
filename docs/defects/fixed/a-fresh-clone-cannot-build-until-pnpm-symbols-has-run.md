@@ -34,3 +34,23 @@ session preceded.
   symbols.
 - `apps/desktop/scripts/lib/environment-facts.mjs` — the comment that says the build regenerates the file.
 - `docs/architecture/adr/0056-the-build-toolchain.md` — the build-input bullet.
+
+## Repaired — 2026-10-31
+
+The build writes the artifact when it is absent, with the generator the test session runs. `tools/symbol-artifact/ensure.mjs`
+is a Vite plugin at `buildStart`, carried by all three sections of `apps/desktop/electron.vite.config.ts`, so `pnpm build`,
+`pnpm dev` and `pnpm package`'s own `electron-vite build` all reach it. It runs `generate.mjs` as a child process, as
+`global-setup.ts` does, so there is still one generator. It runs only when the file does not exist. Keeping the file
+current stays with `pnpm symbols` and the test session, as ADR-0056 has it. Every build pays one `existsSync`; a tree pays
+one generator run (about 0.2 s) once. A generation that fails, or exits 0 and writes nothing, fails the build. The message
+names the file and `pnpm symbols`, beside the generator's own error. The `environment-facts.mjs` comment and the README's
+setup lines now say what the tree does.
+
+Linux x86_64, Node 26.12.1, on `c583e1bc`. `rm -rf packages/kernel/src/generated && pnpm build`: exit 1 with the
+`UNRESOLVED_IMPORT` above before the change, exit 0 after, with one generator line across the three sections. The same
+with `packages/kernel/src` made read-only: exit 1 at `[plugin rotaris:symbol-artifact]`, naming the file and
+`pnpm symbols` under the generator's `EACCES`. Regressions: `tools/symbol-artifact/ensure.test.ts` (absent → written;
+present → the generator is not run; a failing or silent generator → the error) and `apps/desktop/electron.vite.config.test.ts`
+(each section carries the plugin, pointed at the file `packages/kernel/src/index.ts` re-exports). Each goes red when its
+part is reverted: the plugin taken out of one section, the existence check removed, or the throw swallowed.
+`apps/desktop/scripts/preflight.mjs` still does not check for the file, and no longer needs to.

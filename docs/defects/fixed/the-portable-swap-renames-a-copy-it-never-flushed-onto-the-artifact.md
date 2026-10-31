@@ -47,5 +47,8 @@ at the path, because the swap never moved or modified it.
 Pinned in `strategies.test.ts` over a fake volume that models a power loss on a file system that may keep a rename and
 drop unflushed data. It checks that the target names flushed bytes, the previous or the new ones, after every operation;
 that the backup is on the medium when the rename replaces the target; that the outcome is on the medium before the step
-reports it; and the exact order. Deleting any one of the four flush calls fails both the order test and the power-loss
-test. `flush.test.ts` runs both flushes against the host's real file system.
+reports it; and the exact order. Each of the four flushes on the ordinary path (the incoming file, the backup, the
+directory before the rename, the directory after it) is load-bearing: deleting any one reddens the order test *and* the
+power-loss test, and the power-loss assertion reddens on its own when the order assertion is neutralised with it. The
+fifth site, the flush inside `putPreviousBack`, reddens the restore-order test alone — it is that branch's own, and it is
+not one of the four. `flush.test.ts` runs both flushes against the host's real file system.

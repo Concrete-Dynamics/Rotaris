@@ -90,7 +90,10 @@ export const portableIncomingPath = (target: string): string => sibling(target, 
  * and the directory's entries before the target is replaced — and the directory again after the rename, before the step
  * reports it. A flush that fails is a failure of the step like any other. One that fails after the rename puts the
  * previous bytes back by the same order (copy, flush, one rename), so the target is again what it was. How far each
- * flush reaches on which host is `flush.ts`'s.
+ * flush reaches on which host is `flush.ts`'s; the consequence today: `classifyInstallation` answers `portable` only on
+ * Windows, where `flushDirectory` does nothing and cannot fail, so neither directory flush does anything in production,
+ * `putPreviousBack` is not reached, and the rename's own durability rests on NTFS. They stand because the strategy is
+ * selected by flavour and never by operating system, and are decided here against the port's contract.
  */
 export async function applyPortable(target: string, verifiedFile: string, files: StrategyFiles): Promise<ApplyOutcome> {
   const fail = (error: unknown): ApplyOutcome => ({ ok: false, sentence: `could not install the update at ${target}: ${messageOf(error)}` });

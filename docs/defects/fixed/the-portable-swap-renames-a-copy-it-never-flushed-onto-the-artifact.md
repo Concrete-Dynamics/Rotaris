@@ -52,3 +52,7 @@ directory before the rename, the directory after it) is load-bearing: deleting a
 power-loss test, and the power-loss assertion reddens on its own when the order assertion is neutralised with it. The
 fifth site, the flush inside `putPreviousBack`, reddens the restore-order test alone — it is that branch's own, and it is
 not one of the four. `flush.test.ts` runs both flushes against the host's real file system.
+
+Only a Windows host classifies as portable, and the directory flush does nothing there, so in production today neither
+directory flush does anything and the put-back is not reached: the repair that takes effect is the two file flushes.
+The directory flushes and the put-back are pinned against the port's contract, on a POSIX target.

@@ -16,7 +16,7 @@ const TARGET = 'E:\\Tools\\Rotaris-0.1.0-windows-x64-portable.exe';
  * `<unflushed>` for a name whose bytes never reached the medium. `durable()` reads what is on the medium now.
  */
 type Failing = 'copy' | 'copy-aside' | 'copy-aside-exists' | 'copy-aside-partial' | 'rename-in' | 'remove-backup' | 'flush-update' | 'flush-old' | 'flush-dir-before-rename' | 'flush-dir-after-rename' | 'restore-copy';
-function volume(initial: Record<string, string>, failing: Partial<Record<Failing, string>> = {}) {
+function volume(initial: Record<string, string>, failing: Partial<Record<Failing, string>> = {}, target: string = TARGET) {
   type Inode = { content: string; flushed: boolean };
   const entries = new Map<string, Inode>(Object.entries(initial).map(([p, content]) => [p, { content, flushed: true }]));
   let onMedium = new Map(entries);
@@ -27,12 +27,12 @@ function volume(initial: Record<string, string>, failing: Partial<Record<Failing
   const backupOnMedium: (string | null)[] = [];
   const held = (inode: Inode | undefined): string | null => (inode === undefined ? null : inode.flushed ? inode.content : '<unflushed>');
   const settle = () => {
-    targetAfter.push(entries.get(TARGET)?.content ?? null);
-    onPowerLoss.push(held(entries.get(TARGET)), held(onMedium.get(TARGET)));
-    backupOnMedium.push(held(onMedium.get(`${TARGET}.old`)));
+    targetAfter.push(entries.get(target)?.content ?? null);
+    onPowerLoss.push(held(entries.get(target)), held(onMedium.get(target)));
+    backupOnMedium.push(held(onMedium.get(`${target}.old`)));
   };
   const durable = (): Record<string, string | null> => Object.fromEntries([...onMedium].map(([p, inode]) => [p, held(inode)]));
-  const replacedTarget = () => ops.some((op) => op.endsWith(`→${TARGET}`) && op.startsWith('rename:'));
+  const replacedTarget = () => ops.some((op) => op.endsWith(`→${target}`) && op.startsWith('rename:'));
   const port: StrategyFiles = {
     pathKind: async (p) => (entries.has(p) ? 'file' : 'absent'),
     copyFile: async (from, to) => {
@@ -96,6 +96,13 @@ function volume(initial: Record<string, string>, failing: Partial<Record<Failing
   };
   return { files, ops, targetAfter, onPowerLoss, backupOnMedium, durable, port };
 }
+/**
+ * A directory flush can fail only on a host whose `flushDirectory` opens a handle, and a Windows one's does nothing
+ * (`flush.ts`). No host reaches these cases today, Windows alone classifying as portable; they pin the strategy against
+ * its port's contract, so they name a target on a file system where that failure can happen.
+ */
+const POSIX_DIR = '/media/stick';
+const POSIX_TARGET = `${POSIX_DIR}/Rotaris-portable`;
 const STAGED = 'C:\\Users\\u\\AppData\\Local\\Temp\\rotaris-update-abc\\Rotaris-0.2.0-windows-x64-portable.exe';
 
 describe('the Windows portable strategy — REQ-STARTUP-125, REQ-STARTUP-126', () => {
@@ -158,33 +165,33 @@ describe('the Windows portable strategy — REQ-STARTUP-125, REQ-STARTUP-126', (
   });
 
   it('a directory flush that fails after the rename puts the previous bytes back by the same order, and the target ends as it was', async () => {
-    const v = volume({ [TARGET]: 'v0.1.0', [STAGED]: 'v0.2.0' }, { 'flush-dir-after-rename': 'EIO: i/o error, fsync' });
-    expect(await applyPortable(TARGET, STAGED, v.port)).toEqual({ ok: false, sentence: `could not install the update at ${TARGET}: EIO: i/o error, fsync` });
-    expect(v.ops.slice(v.ops.indexOf(`rename:${TARGET}.update→${TARGET}`))).toEqual([
-      `rename:${TARGET}.update→${TARGET}`,
-      'flush-dir:E:\\Tools',
-      `copy:${TARGET}.old→${TARGET}.update`,
-      `flush:${TARGET}.update`,
-      `rename:${TARGET}.update→${TARGET}`,
-      'flush-dir:E:\\Tools',
-      `remove:${TARGET}.old`,
+    const v = volume({ [POSIX_TARGET]: 'v0.1.0', [STAGED]: 'v0.2.0' }, { 'flush-dir-after-rename': 'EIO: i/o error, fsync' }, POSIX_TARGET);
+    expect(await applyPortable(POSIX_TARGET, STAGED, v.port)).toEqual({ ok: false, sentence: `could not install the update at ${POSIX_TARGET}: EIO: i/o error, fsync` });
+    expect(v.ops.slice(v.ops.indexOf(`rename:${POSIX_TARGET}.update→${POSIX_TARGET}`))).toEqual([
+      `rename:${POSIX_TARGET}.update→${POSIX_TARGET}`,
+      `flush-dir:${POSIX_DIR}`,
+      `copy:${POSIX_TARGET}.old→${POSIX_TARGET}.update`,
+      `flush:${POSIX_TARGET}.update`,
+      `rename:${POSIX_TARGET}.update→${POSIX_TARGET}`,
+      `flush-dir:${POSIX_DIR}`,
+      `remove:${POSIX_TARGET}.old`,
     ]);
     // Never empty and never unflushed, while the new bytes stood at the path and after they were put back.
     expect(v.targetAfter.every((held) => held === 'v0.1.0' || held === 'v0.2.0')).toBe(true);
     expect(v.onPowerLoss.every((held) => held === 'v0.1.0' || held === 'v0.2.0')).toBe(true);
-    expect(v.ops.some((op) => op.startsWith(`rename:${TARGET}→`))).toBe(false);
-    expect(v.files.get(TARGET)).toBe('v0.1.0');
-    expect(v.files.has(`${TARGET}.old`)).toBe(false);
-    expect(v.files.has(`${TARGET}.update`)).toBe(false);
+    expect(v.ops.some((op) => op.startsWith(`rename:${POSIX_TARGET}→`))).toBe(false);
+    expect(v.files.get(POSIX_TARGET)).toBe('v0.1.0');
+    expect(v.files.has(`${POSIX_TARGET}.old`)).toBe(false);
+    expect(v.files.has(`${POSIX_TARGET}.update`)).toBe(false);
   });
 
   it('when putting the previous bytes back fails too, the sentence says the new version is at the path, and the previous one is kept as `<name>.old`', async () => {
-    const v = volume({ [TARGET]: 'v0.1.0', [STAGED]: 'v0.2.0' }, { 'flush-dir-after-rename': 'EIO: i/o error, fsync', 'restore-copy': 'ENOSPC: no space left on device' });
-    expect(await applyPortable(TARGET, STAGED, v.port)).toEqual({ ok: false, sentence: `could not install the update at ${TARGET}: EIO: i/o error, fsync; putting the previous version back failed too (ENOSPC: no space left on device), so the new version is at the path and the previous one is kept beside it as ${TARGET}.old` });
+    const v = volume({ [POSIX_TARGET]: 'v0.1.0', [STAGED]: 'v0.2.0' }, { 'flush-dir-after-rename': 'EIO: i/o error, fsync', 'restore-copy': 'ENOSPC: no space left on device' }, POSIX_TARGET);
+    expect(await applyPortable(POSIX_TARGET, STAGED, v.port)).toEqual({ ok: false, sentence: `could not install the update at ${POSIX_TARGET}: EIO: i/o error, fsync; putting the previous version back failed too (ENOSPC: no space left on device), so the new version is at the path and the previous one is kept beside it as ${POSIX_TARGET}.old` });
     expect(v.onPowerLoss.every((held) => held === 'v0.1.0' || held === 'v0.2.0')).toBe(true);
-    expect(v.files.get(TARGET)).toBe('v0.2.0');
-    expect(v.files.get(`${TARGET}.old`)).toBe('v0.1.0');
-    expect(v.files.has(`${TARGET}.update`)).toBe(false);
+    expect(v.files.get(POSIX_TARGET)).toBe('v0.2.0');
+    expect(v.files.get(`${POSIX_TARGET}.old`)).toBe('v0.1.0');
+    expect(v.files.has(`${POSIX_TARGET}.update`)).toBe(false);
   });
 
   it('with no released-artifact target it fails with the fixed sentence and changes nothing on disk', async () => {

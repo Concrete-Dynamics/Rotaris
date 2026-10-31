@@ -26,6 +26,11 @@ describe('the portable swap\'s flushes — REQ-STARTUP-176', () => {
     await expect(flushDirectory(join(dir, 'absent'), 'linux')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  // Node opens no directory handle on Windows, so the POSIX branch's sync on a real directory runs on POSIX hosts only.
+  it.skipIf(process.platform === 'win32')('on POSIX the directory flush syncs a real directory handle', async () => {
+    await expect(flushDirectory(dir, 'linux')).resolves.toBeUndefined();
+  });
+
   it('on Windows the directory flush opens nothing (Node offers no directory handle there)', async () => {
     await expect(flushDirectory(join(dir, 'absent'), 'win32')).resolves.toBeUndefined();
   });

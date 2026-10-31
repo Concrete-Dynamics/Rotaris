@@ -3,6 +3,7 @@
  * proof's registry record adds — its hosts, its `requires` and its per-host clauses,
  * read from `tools/proof-registry/registry.mjs`.
  */
+import { EventEmitter } from 'node:events';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -10,6 +11,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { app, buildCheck, bundleCheck, displayCheck, displayTargets, electron, endpointCheck, environmentCheck, formatReport, mainEntry, newestSourceMtime } from './preflight.mjs';
 import { nodeCheck, parseArgs, platformCheck, probeTargets, proofChecks, repo, runPreflight, scratchCheck, suggestIds } from './preflight.mjs';
+import { connectTargets, probeDisplay, readProbe } from './preflight.mjs';
 import { PROOFS } from '../../../tools/proof-registry/registry.mjs';
 import { app as harnessApp, electron as harnessElectron, mainEntry as harnessMainEntry, repo as harnessRepo } from './lib/harness.mjs';
 
@@ -71,14 +73,17 @@ describe('preflight — node, the environment and the display', () => {
     expect(displayCheck({ platform: 'darwin', display: ':0', xvfb: false }).status).toBe('pass');
   });
 
-  it('reads :N and unix:N as the socket file and its abstract name, host:N as TCP 6000+N', () => {
+  it('reads :N and unix:N as the socket file and its abstract name, a bare :N then TCP localhost, host:N as TCP 6000+N', () => {
     const unix = [
       { label: 'socket /tmp/.X11-unix/X7', connect: { path: '/tmp/.X11-unix/X7' } },
       { label: 'abstract socket @/tmp/.X11-unix/X7', connect: { path: '\0/tmp/.X11-unix/X7' } },
     ];
-    expect(displayTargets(':7')).toEqual(unix);
-    expect(displayTargets(':7.1')).toEqual(unix);
+    // libX11 falls back to TCP on localhost for a bare :N only; unix:N names the socket and nothing else.
+    const bare = [...unix, { label: 'tcp localhost:6007', connect: { host: 'localhost', port: 6007 } }];
+    expect(displayTargets(':7')).toEqual(bare);
+    expect(displayTargets(':7.1')).toEqual(bare);
     expect(displayTargets('unix:7')).toEqual(unix);
+    expect(displayTargets('localhost:7')).toEqual([{ label: 'tcp localhost:6007', connect: { host: 'localhost', port: 6007 } }]);
     expect(displayTargets('build-host:10.0')).toEqual([{ label: 'tcp build-host:6010', connect: { host: 'build-host', port: 6010 } }]);
     expect(displayTargets('[::1]:2')).toEqual([{ label: 'tcp [::1]:6002', connect: { host: '::1', port: 6002 } }]);
     for (const shape of ['', 'nonsense', ':x', 'decnet::0', '/tmp/launch-x/org.xquartz:0']) expect(displayTargets(shape)).toBeNull();
@@ -100,6 +105,41 @@ describe('preflight — node, the environment and the display', () => {
       await new Promise((done) => server.close(done));
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('a target that times out or errors is a miss; only a connect reaches it', () => {
+    const net = (outcomes: Record<string, string>) => ({
+      connect: (options: { path?: string }) => {
+        const s = Object.assign(new EventEmitter(), { setTimeout: () => {}, destroy: () => {} });
+        const outcome = outcomes[options.path ?? ''] ?? 'error';
+        queueMicrotask(() => (outcome === 'error' ? s.emit('error', Object.assign(new Error('refused'), { code: 'ECONNREFUSED' })) : s.emit(outcome)));
+        return s;
+      },
+    });
+    const targets = [{ label: 'slow', connect: { path: 'slow' } }, { label: 'refused', connect: { path: 'refused' } }];
+    return new Promise<void>((done) => {
+      connectTargets(targets, net({ slow: 'timeout' }), (json: string) => {
+        expect(JSON.parse(json)).toEqual({ reached: null, tried: [{ label: 'slow', error: 'no answer within 2 s' }, { label: 'refused', error: 'ECONNREFUSED' }] });
+        connectTargets(targets, net({ slow: 'timeout', refused: 'connect' }), (hit: string) => {
+          expect(JSON.parse(hit)).toEqual({ reached: 'refused', tried: [{ label: 'slow', error: 'no answer within 2 s' }] });
+          done();
+        });
+      });
+    });
+  });
+
+  it('an unreadable or empty answer from the probe child is a miss on every target, never a hit', () => {
+    const targets = [{ label: 'socket a', connect: { path: 'a' } }, { label: 'tcp b:6000', connect: { host: 'b', port: 6000 } }];
+    const missed = (error: string) => ({ reached: null, tried: [{ label: 'socket a', error }, { label: 'tcp b:6000', error }] });
+    expect(readProbe(targets, { stdout: '', status: 1 })).toEqual(missed('the probe exited 1'));
+    expect(readProbe(targets, { stdout: null, signal: 'SIGTERM', error: new Error('spawnSync node ETIMEDOUT') })).toEqual(missed('spawnSync node ETIMEDOUT'));
+    expect(readProbe(targets, { stdout: '{"reached":"so', status: null, signal: 'SIGKILL' })).toEqual(missed('the probe exited SIGKILL'));
+    for (const stdout of ['{}', 'null', '[]', '{"tried":[]}', '{"reached":"elsewhere","tried":[]}', '{"reached":1,"tried":[]}', '{"reached":"socket a"}']) {
+      expect(readProbe(targets, { stdout, status: 0 })).toEqual(missed('the probe answered no result'));
+    }
+    expect(readProbe(targets, { stdout: '{"reached":"tcp b:6000","tried":[]}', status: 0 })).toEqual({ reached: 'tcp b:6000', tried: [] });
+    // And a probe that is not a string hit never passes the check, whatever reached it.
+    expect(displayCheck({ platform: 'linux', display: ':0', xvfb: true, probe: { reached: undefined, tried: [] } as never }).status).toBe('fail');
   });
 });
 
@@ -246,6 +286,15 @@ describe('preflight — the report', () => {
     expect(runPreflight({ platform: 'linux', env: {}, io: fakeIo({ xvfb: () => false }) }).checks.find((c: { name: string }) => c.name === 'display')).toMatchObject({ status: 'fail' });
     expect(runPreflight({ platform: 'win32', env: { DISPLAY: ':99' }, io: fakeIo() }).checks.find((c: { name: string }) => c.name === 'display')).toMatchObject({ status: 'pass' });
     expect(runPreflight({ platform: 'darwin', env: {}, io: fakeIo() }).checks.find((c: { name: string }) => c.name === 'display')).toMatchObject({ status: 'pass' });
+  });
+
+  it('a DISPLAY the targets cannot read probes nothing and fails the report', () => {
+    for (const display of ['garbage', ':x', 'decnet::0']) {
+      expect(probeDisplay(display)).toEqual({ reached: null, tried: [] });
+      const report = runPreflight({ platform: 'linux', env: { DISPLAY: display }, io: fakeIo({ display: probeDisplay }) });
+      expect(report.ok).toBe(false);
+      expect(report.checks.find((c: { name: string }) => c.name === 'display')).toMatchObject({ status: 'fail', message: expect.stringContaining('no display this check can read') });
+    }
   });
 
   it('a healthy machine passes and a named proof reads its record', () => {

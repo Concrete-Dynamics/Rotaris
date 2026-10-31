@@ -12,7 +12,7 @@ import {
   parseSkill, readInvocation, readTrigger,
   SKILL_EMPTY_NAME, SKILL_NO_FRONTMATTER, SKILL_NOT_A_MAPPING, SKILL_UNCLOSED_FRONTMATTER,
 } from './parse.js';
-import { discoverSkills, NODE_DISCOVERY_PORTS, skillReadRoots, type DiscoveredSkill, type DiscoveryPorts } from './discover.js';
+import { asyncDiscoveryPorts, discoverSkills, discoverSkillsAsync, DISCOVERY_READS_IN_FLIGHT, NODE_ASYNC_DISCOVERY_PORTS, NODE_DISCOVERY_PORTS, skillReadRoots, type AsyncDiscoveryPorts, type DiscoveredSkill, type DiscoveryPorts } from './discover.js';
 import { resolveSkills } from './policy.js';
 import { skillActivationStatement, skillCatalogBlock, skillCatalogLine } from './blocks.js';
 import { expandHome, loadManualSkill, skillNotFound, skillPathNotAcceptable } from './manual.js';
@@ -308,6 +308,120 @@ describe('REQ-WORKSPACE-051/054 — discovery, precedence and shadowing', () => 
     expect(roots).toEqual([...roots].sort());
     expect(new Set(roots).size).toBe(roots.length);
     expect(roots).toContain('/repo/ws/.agents/skills/alpha');
+  });
+});
+
+/**
+ * OQ-386 point 1 (ruled 2026-10-21): the run host's warm-up at a workspace open reads the tree asynchronously "with the same
+ * result as `discoverSkills`". The two walks share every rule after the reads (`Admitted`), and these cases hold them to the
+ * same discovery over a tree that exercises each rule the synchronous walk is held to above: the `.git` ladder, shadowing
+ * across scopes, an invalid file, an unreadable one, a file that is not UTF-8, and the disable manifest in both its readings.
+ */
+describe('OQ-386 — the asynchronous walk reaches the synchronous walk\'s discovery', () => {
+  const env = { workspaceRoot: '/repo/ws', home: '/home/u', platform: 'linux' as NodeJS.Platform, machineDir: '/machine' };
+  const tree: Record<string, string> = {
+    '/repo/.git': '',
+    '/repo/.agents/skills/repo-skill/SKILL.md': skillFile('repo-skill'),
+    '/repo/ws/.agents/skills/shared/SKILL.md': skillFile('shared'),
+    '/repo/ws/.opencode/skills/shared/SKILL.md': skillFile('shared'),
+    '/repo/ws/.agents/skills/zebra/SKILL.md': skillFile('zebra'),
+    '/repo/ws/.agents/skills/alpha/SKILL.md': skillFile('alpha'),
+    '/repo/ws/.agents/skills/broken/SKILL.md': 'no frontmatter here\n',
+    '/repo/ws/.agents/skills/locked/SKILL.md': skillFile('locked'),
+    '/repo/ws/.agents/skills/not-a-skill/README.md': 'ignored',
+    '/home/u/.agents/skills/shared/SKILL.md': skillFile('shared'),
+    '/home/u/.agents/skills/home-only/SKILL.md': skillFile('home-only'),
+    '/home/u/.openhands/skills/installed/kept/SKILL.md': skillFile('kept'),
+    '/home/u/.openhands/skills/installed/dropped/SKILL.md': skillFile('dropped'),
+    '/machine/skills/shared/SKILL.md': skillFile('shared'),
+  };
+  /** The map's ports, with one file that cannot be read and a log of every `readFile`, so "never opened" is checkable. */
+  const fixture = (extra: Record<string, string> = {}) => {
+    const p = ports({ ...tree, ...extra });
+    const opened: string[] = [];
+    const sync: DiscoveryPorts = {
+      ...p,
+      readFile: (path) => {
+        opened.push(path.replace(/\\/g, '/'));
+        if (path.replace(/\\/g, '/').endsWith('/locked/SKILL.md')) throw new Error(`EACCES: permission denied, open '${path}'`);
+        return p.readFile(path);
+      },
+    };
+    return { sync, opened };
+  };
+  const both = async (extra: Record<string, string> = {}) => {
+    const a = fixture(extra);
+    const b = fixture(extra);
+    const sync = discoverSkills({ ...env, exists: (path) => a.sync.isDirectory(path) || a.sync.isFile(path) }, a.sync);
+    const ap = asyncDiscoveryPorts(b.sync);
+    const async = await discoverSkillsAsync({ ...env, exists: async (path) => (await ap.isDirectory(path)) || (await ap.isFile(path)) }, ap);
+    return { sync, async, syncOpened: a.opened, asyncOpened: b.opened };
+  };
+
+  it('is equal for shadowing, an invalid and an unreadable file, and a disable manifest that reads', async () => {
+    const r = await both({ '/home/u/.openhands/skills/.installed.json': '{"disabled":["dropped"]}' });
+    expect(r.async).toEqual(r.sync);
+    // The rules the equality covers are really exercised by this tree.
+    expect(r.sync.skills.map((s) => s.name)).toEqual(['alpha', 'home-only', 'kept', 'repo-skill', 'shared', 'zebra']);
+    expect(r.sync.skills.find((s) => s.name === 'shared')!.shadowed.map((p) => p.replace(/\\/g, '/'))).toEqual([
+      '/repo/ws/.opencode/skills/shared/SKILL.md', '/home/u/.agents/skills/shared/SKILL.md', '/machine/skills/shared/SKILL.md',
+    ]);
+    expect(r.sync.skipped.map((s) => [s.path.replace(/\\/g, '/'), s.reason])).toEqual([
+      ['/repo/ws/.agents/skills/broken/SKILL.md', SKILL_NO_FRONTMATTER],
+      ['/repo/ws/.agents/skills/locked/SKILL.md', "unreadable file: EACCES: permission denied, open '/repo/ws/.agents/skills/locked/SKILL.md'"],
+    ]);
+    // REQ-WORKSPACE-052: the disabled directory is never opened, by either walk; the manifest itself is.
+    for (const opened of [r.syncOpened, r.asyncOpened]) expect(opened.some((p) => p.includes('/dropped/'))).toBe(false);
+    expect(new Set(r.asyncOpened)).toEqual(new Set(r.syncOpened));
+  });
+
+  it('is equal for a disable manifest that does not parse — the same warning, nothing disabled', async () => {
+    const r = await both({ '/home/u/.openhands/skills/.installed.json': '{not json' });
+    expect(r.async).toEqual(r.sync);
+    expect(r.sync.warnings).toHaveLength(1);
+    expect(r.sync.skills.some((s) => s.name === 'dropped')).toBe(true);
+  });
+
+  it('is equal over a real tree through the node ports, the strict decoder included (OQ-79)', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'rotaris-skill-async-'));
+    try {
+      const root = join(base, 'ws');
+      const home = join(base, 'home');
+      for (const d of [join(root, '.agents', 'skills', 'bad'), join(root, '.agents', 'skills', 'good'), join(root, '.opencode', 'skills', 'good'), join(home, '.openhands', 'skills', 'installed', 'off')]) mkdirSync(d, { recursive: true });
+      writeFileSync(join(root, '.agents', 'skills', 'bad', 'SKILL.md'), Buffer.from([0x68, 0x69, 0x0a, 0xff, 0xfe, 0xc3, 0x28, 0x0a]));
+      writeFileSync(join(root, '.agents', 'skills', 'good', 'SKILL.md'), skillFile('good'));
+      writeFileSync(join(root, '.opencode', 'skills', 'good', 'SKILL.md'), skillFile('good'));
+      writeFileSync(join(home, '.openhands', 'skills', 'installed', 'off', 'SKILL.md'), skillFile('off'));
+      writeFileSync(join(home, '.openhands', 'skills', '.installed.json'), '{"disabled":["off"]}');
+      const shared = { workspaceRoot: root, home, platform: 'linux' as NodeJS.Platform, machineDir: join(base, 'machine') };
+      const sync = discoverSkills({ ...shared, exists: (p) => NODE_DISCOVERY_PORTS.isDirectory(p) || NODE_DISCOVERY_PORTS.isFile(p) }, NODE_DISCOVERY_PORTS);
+      const a = NODE_ASYNC_DISCOVERY_PORTS;
+      const async = await discoverSkillsAsync({ ...shared, exists: async (p) => (await a.isDirectory(p)) || (await a.isFile(p)) }, a);
+      expect(async).toEqual(sync);
+      expect(sync.skills.map((s) => s.name)).toEqual(['good']);
+      expect(sync.skills[0]!.shadowed).toEqual([join(root, '.opencode', 'skills', 'good', 'SKILL.md')]);
+      expect(sync.skipped.map((s) => s.path)).toEqual([join(root, '.agents', 'skills', 'bad', 'SKILL.md')]);
+      expect(sync.skipped[0]!.reason).toMatch(/^unreadable file: /);
+    } finally { rmSync(base, { recursive: true, force: true }); }
+  });
+
+  it(`keeps at most ${DISCOVERY_READS_IN_FLIGHT} reads in flight, whatever the tree's width`, async () => {
+    const wide: Record<string, string> = {};
+    for (let i = 0; i < 40; i += 1) wide[`/repo/ws/.agents/skills/s${String(i).padStart(2, '0')}/SKILL.md`] = skillFile(`s${String(i).padStart(2, '0')}`);
+    const plain = ports({ ...tree, ...wide });
+    const p = asyncDiscoveryPorts(plain);
+    let inFlight = 0;
+    let most = 0;
+    const slow = <A extends unknown[], R>(f: (...args: A) => Promise<R>) => async (...args: A): Promise<R> => {
+      inFlight += 1; most = Math.max(most, inFlight);
+      try { await new Promise((resolve) => setImmediate(resolve)); return await f(...args); } finally { inFlight -= 1; }
+    };
+    const counted: AsyncDiscoveryPorts = { readDir: slow(p.readDir), readFile: slow(p.readFile), isDirectory: slow(p.isDirectory), isFile: slow(p.isFile) };
+    const d = await discoverSkillsAsync({ ...env, exists: async (path) => (await counted.isDirectory(path)) || (await counted.isFile(path)) }, counted);
+    expect(d).toEqual(discoverSkills({ ...env, exists: (path) => plain.isDirectory(path) || plain.isFile(path) }, plain));
+    expect(d.skills.filter((s) => /^s\d\d$/.test(s.name))).toHaveLength(40);
+    expect(most).toBeGreaterThan(1);
+    expect(most).toBeLessThanOrEqual(DISCOVERY_READS_IN_FLIGHT);
   });
 });
 

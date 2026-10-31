@@ -129,10 +129,9 @@ jobs:
       - name: Electron runtime
         run: node node_modules/electron/install.js
 
-      # The generated requirement symbols are git-ignored, and `pnpm package` does not write them
-      # (docs/defects/pnpm-package-on-a-fresh-checkout-fails-for-the-requirement-symbols-it-never-generates.md).
-      - name: Requirement symbols
-        run: pnpm symbols
+      # No `pnpm symbols` step: `pnpm package`'s build writes the git-ignored requirement symbols itself when they are
+      # absent, and this job's fresh clone is the check that it does
+      # (docs/defects/fixed/pnpm-package-on-a-fresh-checkout-fails-for-the-requirement-symbols-it-never-generates.md).
 
       # The bundle step extracts the pinned uv with the first `tar` on PATH, and Git for Windows' GNU tar cannot read a
       # zip (docs/defects/the-bundle-step-extracts-the-pinned-uv-with-whatever-tar-is-first-on-path.md): say which one

@@ -248,7 +248,7 @@ the boundary rule, and the test imports the library directly, as its siblings' t
 
 `apps/desktop/scripts/preflight.mjs` (`pnpm preflight [proof-id …]`, tests in `preflight.test.ts`) is a **machine
 check for proof launches**: node against `engines.node`, git, the Electron binary, the desktop build's freshness
-against the app's and the packages' sources (a `generated/` tree is skipped — `pnpm symbols` rewrites it), the
+against the app's and the packages' sources (a `generated/` tree is skipped — the symbol generator writes it), the
 code-intelligence bundle through `scripts/lib/code-intelligence-bundle.mjs`'s `runBundleScript --check`, `.proof/`'s
 writability, an exported `ROTARIS_*` variable and the display, plus each named proof's registry record read from
 `tools/proof-registry/registry.mjs`: its hosts, its `requires` and its per-host clauses. It launches nothing and
@@ -268,3 +268,11 @@ re-hashes the directory and names every file that changed, went missing or arriv
 A `pnpm ui-review` pack's `manifest.json` is the critic protocol's own and is untouched. **Edges unchanged**: the
 tool launches nothing, no product code imports it, and `environment-facts.mjs` is the one reading the preflight's
 checks and the manifest's record are both taken from.
+
+### The requirement symbols on the build path (2026-10-31)
+
+`apps/desktop/electron.vite.config.ts` imports `tools/symbol-artifact/ensure.mjs` (typed by `ensure.d.mts`, tests in
+`ensure.test.ts` and the config's own `electron.vite.config.test.ts`). Each of its three sections carries the plugin, which
+runs `generate.mjs` at `buildStart` when `packages/kernel/src/generated/requirements.ts` is absent, and fails the build
+naming `pnpm symbols` when it cannot write it (ADR-0056's build input). **Edges unchanged**: the build config reaching a tool,
+as `package.mjs` reaches `tools/release-naming/`; nothing the product ships imports it.

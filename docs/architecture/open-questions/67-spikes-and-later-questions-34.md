@@ -118,7 +118,8 @@ The two recommendations weighed, and the ruling followed **both**:
 from `clocks.timers.after(millis(0), …)`, and the falsified comment stands beside its replacement. `SkillHost.warm` reads the
 tree through `discoverSkillsAsync`, which shares every rule after the reads with `discoverSkills`, at most four reads in flight.
 A per-root generation, advanced by a rescan and by a session creation, decides whether it stores its catalogue. The four reads
-wait on `SkillHost.settled`. The first execution held in the unit cases, and no proof re-measured the launch
+wait on `SkillHost.settled`, bounded on the timer port (`WARM_UP_WAIT_BOUND`) and only after OQ-279's refusal, and a walk a
+clear overtakes stops at its next read (reworked after review, the same day). The first execution held in the unit cases, and no proof re-measured the launch
 ([first-executions](../first-executions/34-the-register-33.md);
 [the note](../../defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md)).
 Points 2 to 5 are not built. The first item recorded beside the ruling stands as recorded.

@@ -60,7 +60,7 @@ import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
 import { anotherMainWindowStays, confirmActiveRunClose } from './close-confirmation.js';
 import { emptyArtifactNotice, passFailureDetail, passFailureTitle } from './improvement-notice.js';
-import { answerUnderHeldRefusal, cutRestoreNotice, storeRefusalNotice, storeRefusalOf, type StoreRefusal } from './store-notice.js'; // REQ-SESSION-202, OQ-266, OQ-281
+import { answerUnderHeldRefusal, cutRestoreNotice, holdOpenRefusal, type HeldOpenRefusal } from './store-notice.js'; // REQ-SESSION-202, REQ-SESSION-197, OQ-266, OQ-281
 import { handOffOpenedWorkspace } from './workspace-handoff.js'; // W-18, ADR-0002 consequence 11, OQ-386
 import { establishFlow as establishStoreFlow, restoreFlow as restoreStoreFlow, type StoreFlowDeps } from './store-resolution.js'; // OQ-281
 import { ChildrenEndedByMain, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitOutsideAnyWindow, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
@@ -329,8 +329,9 @@ async function main(): Promise<void> {
   /**
    * REQ-SESSION-202 / OQ-266: each workspace whose store the last open refused rather than create over, by canonical root, with
    * the error notice it was raised as — withdrawn once an open succeeds (OQ-281: the restore or the new store resolved it).
+   * REQ-SESSION-197: and each whose identifier the open could not read, withdrawn the same way once the file is put right.
    */
-  const storeRefusals = new Map<string, { readonly held: StoreRefusal; noticeId: Promise<number | null> }>();
+  const storeRefusals = new Map<string, HeldOpenRefusal>();
   let cancelImprovementWorkspace = (_workspaceRoot: string): void => undefined;
   /**
    * Step A1 of the window builder (ADR-0048's registry over main windows; ADR-0055 consequences 5 and 6).
@@ -419,14 +420,11 @@ async function main(): Promise<void> {
       log(`workspace.open refused: ${JSON.stringify(opened)}`);
       // REQ-SESSION-202 / W-31, OQ-266: a store the open refused rather than create over is reported as what was found, and
       // the listing answers with the same condition instead of an empty list or "open a workspace" (`storeRefusals`).
-      const held = storeRefusalOf(opened);
-      if (held) {
-        // OQ-281: the notice opens Settings at Project, where the place is resolved; its id is kept to withdraw it.
-        const n = storeRefusalNotice(held);
-        const noticeId = notices.report({ severity: n.severity, title: n.headline, ...(n.detail === undefined ? {} : { detail: n.detail }), ...(n.action === undefined ? {} : { action: n.action }) })
-          .then((r) => r.id).catch(() => null);
-        storeRefusals.set(key, { held, noticeId });
-      }
+      // REQ-SESSION-197: so is an identifier present but unreadable, which is never minted over (`IDENTIFIER_REFUSALS`).
+      // OQ-281: a store-missing notice opens Settings at Project, where the place is resolved; its id is kept to withdraw it.
+      const raised = holdOpenRefusal(key, opened, storeRefusals, (n) => notices.report({ severity: n.severity, title: n.headline, ...(n.detail === undefined ? {} : { detail: n.detail }), ...(n.action === undefined ? {} : { action: n.action }) })
+        .then((r) => r.id).catch(() => null));
+      if (raised) log(`notice: ${raised.headline}`);
       return undefined;
     }
     // OQ-281: an open that succeeds resolves a held refusal — it is cleared, and its error notice withdrawn (compare-and-clear,

@@ -1,0 +1,47 @@
+## An unreadable workspace identifier leaves the window unopened without a notice
+
+A launch on a workspace whose `.rotaris/workspace-id` is present but holds no identifier the product can read painted the
+window with no workspace open and nothing on screen. The workspace service refused the open with
+`workspace.identifier-unreadable` and minted nothing over the file, as REQ-SESSION-197 requires, but main's
+`openWorkspaceInner` raised a notice only for the refusals in `STORE_REFUSALS` (`workspace.store-missing`,
+`workspace.store-displaced`), so this one reached the log alone:
+
+```
+[main] info  workspace.open refused: {"kind":"refused","code":"workspace.identifier-unreadable","headline":"The workspace identifier is present but cannot be read","detail":"It will not be minted over (REQ-SESSION-197). Content begins: "}
+```
+
+Every workspace-scoped command in that window then answered "Open a workspace …" (`session.list`: "Open a workspace before
+browsing sessions"), though the window held one and the product could not tell which store was its. Reproduced 2026-10-31 on the
+Linux host by launching the built tree headless on such a workspace. (That reproduction's empty "Content begins:" was a second
+defect, not this one's: its launch line put Chromium switches before the entry script, so the script itself was opened as the
+workspace — `docs/defects/a-dev-launch-with-a-switch-before-its-entry-script-opens-the-script-as-the-workspace.md`.)
+
+## Specs
+
+REQ-SESSION-197 (an identifier present but unreadable MUST be reported as a condition for the user to resolve, never
+overwritten); REQ-SESSION-043 (the listing must not answer as though the workspace had no sessions, or none were open, where the
+product cannot tell); REQ-NOTIFY-044 (a notice's action, where it carries one, is a member of the closed vocabulary).
+
+## Relevant files
+
+- `apps/desktop/src/main/index.ts`: `openWorkspaceInner`, which raised and held only the store's refusals.
+- `apps/desktop/src/main/store-notice.ts`: `STORE_REFUSALS`, the set that decided which refusals were said.
+- `apps/desktop/src/workspace-service/index.ts`: `openOwn`, whose refusal detail named a requirement id and not the file.
+
+## Outcome — repaired 2026-10-31 (`fix/unreadable-workspace-id-is-reported`)
+
+- The refusal's words moved to `workspace-service/identifier-refusal.ts` (pure, pinned by its test): the file's path, what it
+  holds where the identifier belongs (the first non-comment line, or that it could not be read), that nothing was written over
+  it and why, and the two ways on by hand — put back the identifier, or remove the file and open with a new identifier and none
+  of the sessions recorded before.
+- `main/store-notice.ts` gains `IDENTIFIER_REFUSALS`, a set of its own beside `STORE_REFUSALS` (this is a condition of the file
+  the workspace carries, not of the store's place), and `holdOpenRefusal`, which `openWorkspaceInner` now calls: the refusal is
+  held per root in `storeRefusals`, so `answerUnderHeldRefusal` and the listing answer it instead of "open a workspace", and it
+  is raised as one persistent error notice, once while held; the successful open that clears the hold withdraws it.
+- The notice carries no action. Settings › Project (OQ-281) is where a place holding no store is resolved, but both of its
+  resolutions refuse an unreadable identifier themselves (the restore, `packages/workspace/src/restore.ts`; the new store,
+  `workspace-service/store-establish.ts`), and nothing else in REQ-NOTIFY-044's vocabulary repairs a file.
+- Evidence: `store-notice.test.ts` drives `holdOpenRefusal` with a recording report (red with the identifier refusal dropped from
+  it: 4 tests); the built app launched headless on `not-an-id` shows the error notice with no action, and `session.list` and
+  `config.read` answer `workspace.identifier-unreadable` (`pnpm app:drive`); the same launch built without the main-process
+  change shows no notice. `store-resolution-proof` needs a display and was not run on that host.

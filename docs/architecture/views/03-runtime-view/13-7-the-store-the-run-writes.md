@@ -23,7 +23,8 @@ first; `.<identifier>.new` until 2026-10-15, which the next open still removes) 
 `EPERM`/`EBUSY`, and then opened `mustExist` like any present store; a place that appeared meanwhile discards the sibling and is
 opened (or refused) as found, a failed create removes it, and a stray one is removed at the identifier's next open, however the place is found.
 Every scan of the workspaces root skips dot-prefixed entries. While the service's own restore is in flight its opens skip the
-first check and refuse rather than create beside the journal. In a window holding such a refusal, every command's
+first check and refuse rather than create beside the journal. An identifier present but unreadable is refused before any of
+this (`workspace.identifier-unreadable`, REQ-SESSION-197) and held the same way. In a window holding such a refusal, every command's
 `workspace.none` answer (and the checkpoints' `checkpoint.no-workspace`) leaves `runCommand` as the held refusal (`answerUnderHeldRefusal`), and `session.start` says nothing was
 started because the store could not be opened (REQ-SESSION-089).
 

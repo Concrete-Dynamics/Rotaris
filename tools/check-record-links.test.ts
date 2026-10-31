@@ -69,16 +69,17 @@ describe('check-record-links — a dangling link fails, a good anchor passes', (
     expect(checkFile(file)).toMatchObject([{ line: 3, target: '#nowhere' }]);
   });
 
-  it('walks docs/, the three root files and every packages CONTEXT.md, and nothing else', () => {
+  it('walks docs/, the root files and every packages CONTEXT.md, and nothing else', () => {
     mkdirSync(join(root, 'packages', 'engine', 'src', 'artifacts'), { recursive: true });
     writeFileSync(join(root, 'packages', 'engine', 'CONTEXT.md'), '[bad](nope.md)\n');
     writeFileSync(join(root, 'packages', 'engine', 'src', 'artifacts', 'CONTEXT.md'), '[bad](nope.md)\n');
     writeFileSync(join(root, 'packages', 'engine', 'README.md'), '[ignored](nope.md)\n');
     writeFileSync(join(root, 'AGENTS.md'), '[bad](nope.md)\n');
-    writeFileSync(join(root, 'README.md'), '[ignored](nope.md)\n');
+    writeFileSync(join(root, 'README.md'), '[bad](nope.md)\n');
     const { problems } = checkRecord(root);
     expect(problems.map((p: { file: string }) => p.file.slice(root.length + 1).replaceAll('\\', '/')).sort()).toEqual([
       'AGENTS.md',
+      'README.md',
       'packages/engine/CONTEXT.md',
       'packages/engine/src/artifacts/CONTEXT.md',
     ]);
@@ -306,5 +307,43 @@ describe("check-record-links — a defect-note path in the record's prose must n
     expect([brief(problems), pointers, kept]).toEqual([[[1, note('gone.md'), 'no note at this path']], 3, 1]);
     expect(problems[0].file).toBe(join(root, 'AGENTS.md'));
     expect(PROSE_EXEMPT.get('docs/product/requests.md')).toMatch(/orchestrator's alone to edit/);
+  });
+});
+
+/*
+ * The root README: the page a visitor reads first, citing paths other lanes move. Until 2026-10-31 no pass read it, so a
+ * link in it to a moved note or a renamed heading left `pnpm lint` green. Each case runs the whole gate over the fixture
+ * root, as `pnpm lint` does, so it is red while `recordFiles` leaves the README out.
+ */
+describe('check-record-links — the root README is the record', () => {
+  const inReadme = (problems: { file: string }[]) => problems.filter((p) => p.file === join(root, 'README.md'));
+
+  it('fails a README link to a file that does not exist, naming line and target', () => {
+    writeFileSync(join(root, 'README.md'), ['# Rotaris', '', `See [the note](${note('a-note.md')}), which moved.`, ''].join('\n'));
+    expect(inReadme(checkRecord(root).problems)).toMatchObject([
+      { line: 3, text: 'the note', target: note('a-note.md'), reason: 'the target does not exist' },
+    ]);
+  });
+
+  it('passes a README whose links reach existing files and headings, and counts them read', () => {
+    writeFileSync(
+      join(root, 'README.md'),
+      `[the note](${note('fixed', 'a-note.md')}#a-note), [§2](docs/architecture/target.md#2-the-store-the-run-writes-packagesstoresrcschemats-v22)\n`,
+    );
+    const { problems, links } = checkRecord(root);
+    expect(problems).toEqual([]);
+    expect(links).toBe(2);
+  });
+
+  it('fails a README anchor that names no heading in the existing target', () => {
+    writeFileSync(join(root, 'README.md'), '\n[§9](docs/architecture/target.md#9-nothing-here)\n');
+    expect(inReadme(checkRecord(root).problems)).toMatchObject([
+      { line: 2, target: 'docs/architecture/target.md#9-nothing-here', reason: 'no heading or anchor `#9-nothing-here` in the target' },
+    ]);
+  });
+
+  it('reads a defect-note path the README writes as inline code (the prose pass)', () => {
+    writeFileSync(join(root, 'README.md'), `Recorded as \`${note('a-note.md')}\`.\n`);
+    expect(checkProse(root).problems).toMatchObject([{ file: join(root, 'README.md'), line: 1, target: note('a-note.md') }]);
   });
 });

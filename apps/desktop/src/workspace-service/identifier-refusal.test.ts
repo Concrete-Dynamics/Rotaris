@@ -88,7 +88,7 @@ describe('the open of a workspace whose identifier cannot be read (REQ-SESSION-1
       });
       const vague = at({ kind: 'unreachable', code: 'EIO' });
       expect(vague.headline).toBe('The workspace identifier cannot be reached');
-      expect(vague.detail).toBe('/w/.rotaris/workspace-id could not be examined (EIO), so whether it exists cannot be told. Nothing was written there. Open the workspace again once its folder can be reached.');
+      expect(vague.detail).toBe('/w/.rotaris/workspace-id could not be examined (EIO), so whether it exists cannot be told. Nothing was written there. Open the workspace again once it can be examined.');
     });
 
     it('nothing there any more, and something that is not a file: neither claimed present as an identifier', () => {
@@ -158,6 +158,42 @@ describe('the open of a workspace whose identifier cannot be read (REQ-SESSION-1
       const r = identifierUnreadableAtOpen(id, ident.raw);
       expect(r.detail).toContain('Nothing that reads as an identifier was found in what was read of it.');
       expect(r.detail).not.toMatch(/only comments|it names this workspace's recorded sessions/);
+    });
+
+    /** `guardedRead` keeps the first 200 characters; a data line the cut lands in is quoted as how it begins, never as all it holds. */
+    describe('a data line the 200-character read ends in', () => {
+      const openOn = (content: string) => {
+        const root = scratch();
+        mkdirSync(join(root, '.rotaris'));
+        const id = join(root, '.rotaris', 'workspace-id');
+        writeFileSync(id, content);
+        const ident = establishWorkspaceId(root);
+        if (ident.state !== 'unreadable') throw new Error(`identifier read answered ${ident.state}`);
+        return identifierUnreadableAtOpen(id, ident).detail;
+      };
+      const cutHolds = (shown: string) => `Where the identifier belongs it holds a line beginning "${shown}"; the file is longer than the part that was read, so the line may run on past it.`;
+
+      it('an identifier with one character too many, cut back to a well-formed one: not quoted as what the file holds', () => {
+        const d = openOn(`${'#'.repeat(164)}\nv1-0123456789abcdef0123456789abcdefx\n`);
+        expect(d).toContain(cutHolds('v1-0123456789abcdef0123456789abcdef'));
+        expect(d).not.toContain('it holds "v1-0123456789abcdef0123456789abcdef".');
+      });
+
+      it('a short junk line cut the same way', () => {
+        const d = openOn(`${'#'.repeat(194)}\njunk-line\n`);
+        expect(d).toContain(cutHolds('junk-'));
+        expect(d).not.toContain('it holds "junk-".');
+      });
+
+      it('a file of exactly 200 characters, its line reaching the end uncut: quoted as what it holds', () => {
+        const content = `${'#'.repeat(190)}\nnot-an-id`;
+        expect(content).toHaveLength(200);
+        expect(openOn(content)).toContain('Where the identifier belongs it holds "not-an-id". Nothing was written over it');
+      });
+
+      it('a line that ends inside the read, with more of the file after it: quoted as what it holds', () => {
+        expect(openOn(`not-an-id\n${'#'.repeat(300)}\n`)).toContain('Where the identifier belongs it holds "not-an-id". Nothing was written over it');
+      });
     });
 
     it('a .rotaris that is a file, met without the service\'s guard: not called a folder that cannot be entered', () => {

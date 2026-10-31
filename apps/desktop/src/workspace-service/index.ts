@@ -116,7 +116,7 @@ function openOwn(workspaceRoot: string): ProcessReply {
   if (notAFolder) return notAFolder;
   const ident = establishWorkspaceId(workspaceRoot);
   // REQ-SESSION-197: reported as a condition to resolve, never minted over; main raises it as a notice (`identifier-refusal.ts`).
-  if (ident.state === 'unreadable') return identifierUnreadableAtOpen(workspaceIdFile(workspaceRoot), ident.raw);
+  if (ident.state === 'unreadable') return identifierUnreadableAtOpen(workspaceIdFile(workspaceRoot), ident);
   closeOwn();
   // OQ-266's cut-restore check, then REQ-SESSION-202's (W-31): both before anything is created (`store-open.ts`).
   const opened = openStoreAtOpen(layout.workspaces, ident.id, workspaceRoot, restoreInFlight.active);

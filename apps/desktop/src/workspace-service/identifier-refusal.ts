@@ -87,7 +87,7 @@ function nothingRead(file: string, place: IdentifierPlace): Extract<ProcessReply
     case 'unreachable':
       return refused('The workspace identifier cannot be reached', place.blocked
         ? `${place.blocked} cannot be entered with this account's permissions, so whether ${file} exists cannot be told. Nothing was written there. Give this account access to ${place.blocked} and open the workspace again.`
-        : `${file} could not be examined${place.code ? ` (${place.code})` : ''}, so whether it exists cannot be told. Nothing was written there. Open the workspace again once its folder can be reached.`);
+        : `${file} could not be examined${place.code ? ` (${place.code})` : ''}, so whether it exists cannot be told. Nothing was written there. Open the workspace again once it can be examined.`);
   }
 }
 
@@ -96,14 +96,22 @@ function nothingRead(file: string, place: IdentifierPlace): Extract<ProcessReply
  * is said, as the identifier reader reads it: the first line that is neither blank nor a `#` comment. `raw` is only the
  * file's beginning (`guardedRead` keeps its first 200 characters), so where no such line is in it nothing is said of the
  * rest of the file — it may hold comments, blank lines, or a line past what was read — and the way on is hedged as `KEPT` is.
+ * Where the read was cut (`truncated`) and the line found is the last in `raw`, the line may run on past the cut, so it is
+ * quoted as how the line begins, never as all it holds.
  * Where the read produced nothing, the path is examined first (`examine`), so presence is never claimed where it was not found.
  */
-export function identifierUnreadableAtOpen(file: string, raw: string, examine: ExamineIdentifier = nodeExamine): Extract<ProcessReply, { kind: 'refused' }> {
+export function identifierUnreadableAtOpen(file: string, read: string | { readonly raw: string; readonly truncated?: true }, examine: ExamineIdentifier = nodeExamine): Extract<ProcessReply, { kind: 'refused' }> {
+  const { raw, truncated } = typeof read === 'string' ? { raw: read, truncated: undefined } : read;
   if (raw === '') return nothingRead(file, examine(file));
-  const line = raw.split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0 && !s.startsWith('#'));
+  const lines = raw.split(/\r?\n/).map((s) => s.trim());
+  const at = lines.findIndex((s) => s.length > 0 && !s.startsWith('#'));
+  const line = at === -1 ? undefined : lines[at];
   if (line === undefined) {
     return refused(IDENTIFIER_UNREADABLE_HEADLINE, `${file} exists, but this workspace cannot be opened by what it holds. Nothing that reads as an identifier was found in what was read of it. ${KEPT} If this workspace had an identifier, put it back — from version control or a copy of the folder — and open the workspace again. ${REMOVE}`);
   }
-  const holds = `Where the identifier belongs it holds "${line.length > 60 ? `${line.slice(0, 60)}…` : line}".`;
+  const shown = line.length > 60 ? `${line.slice(0, 60)}…` : line;
+  const holds = truncated && at === lines.length - 1
+    ? `Where the identifier belongs it holds a line beginning "${shown}"; the file is longer than the part that was read, so the line may run on past it.`
+    : `Where the identifier belongs it holds "${shown}".`;
   return refused(IDENTIFIER_UNREADABLE_HEADLINE, `${file} exists, but this workspace cannot be opened by what it holds. ${holds} Nothing was written over it: it names this workspace's recorded sessions, and replacing it would detach them. Put back the identifier this workspace had — from version control or a copy of the folder — and open the workspace again. ${REMOVE}`);
 }

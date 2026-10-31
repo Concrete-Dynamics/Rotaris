@@ -5,7 +5,7 @@
  */
 import { EventEmitter } from 'node:events';
 import { mkdtempSync, rmSync } from 'node:fs';
-import { createServer } from 'node:net';
+import { createServer, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -88,6 +88,39 @@ describe('preflight — node, the environment and the display', () => {
     expect(displayTargets('[::1]:2')).toEqual([{ label: 'tcp [::1]:6002', connect: { host: '::1', port: 6002 } }]);
     for (const shape of ['', 'nonsense', ':x', 'decnet::0', '/tmp/launch-x/org.xquartz:0']) expect(displayTargets(shape)).toBeNull();
   });
+
+  it('reads a named protocol: unix/:N the two sockets with no TCP fallback, tcp/host:N TCP; any other pairing stays unread', () => {
+    expect(displayTargets('unix/:7')).toEqual(displayTargets('unix:7'));
+    expect(displayTargets('tcp/build-host:10.0')).toEqual(displayTargets('build-host:10.0'));
+    for (const shape of ['tcp/:0', 'tcp/unix:0', 'unix/build-host:0', 'inet/build-host:0', 'tcp/a/b:0']) expect(displayTargets(shape)).toBeNull();
+  });
+
+  // Runs on every platform: the child is built from connectTargets's own source, so this is what catches a reference
+  // to a module binding in it, and a connect that throws instead of emitting.
+  it('the probe child runs from its own source: a closed port and a port out of range are misses, a listener is reached', async () => {
+    const listen = async () => {
+      const server = createServer((socket) => socket.destroy());
+      await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+      return { server, port: (server.address() as AddressInfo).port };
+    };
+    const closed = await listen();
+    await new Promise((done) => closed.server.close(done));
+    const open = await listen();
+    try {
+      const probe = probeTargets([
+        { label: 'closed', connect: { host: '127.0.0.1', port: closed.port } },
+        { label: 'out of range', connect: { host: '127.0.0.1', port: 66000 } },
+        { label: 'listening', connect: { host: '127.0.0.1', port: open.port } },
+      ]);
+      expect(probe.reached).toBe('listening');
+      expect(probe.tried.map((t) => t.label)).toEqual(['closed', 'out of range']);
+      // Windows retries a refused loopback connect for about as long as the probe's 2 s bound.
+      expect(probe.tried[0]?.error).toMatch(/ECONNREFUSED|no answer within 2 s/);
+      expect(probe.tried[1]?.error).toBe('ERR_SOCKET_BAD_PORT');
+    } finally {
+      await new Promise((done) => open.server.close(done));
+    }
+  }, 15_000);
 
   it.skipIf(process.platform === 'win32')('the probe connects for real: a listening socket is reached, a missing one is tried and named', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'preflight-display-'));

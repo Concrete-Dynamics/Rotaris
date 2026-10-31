@@ -254,7 +254,7 @@ writability, an exported `ROTARIS_*` variable and the display, plus each named p
 `tools/proof-registry/registry.mjs`: its hosts, its `requires` and its per-host clauses. On Linux a set `DISPLAY`
 passes only when a connect reaches it (`probeDisplay`, from a child node because the check is synchronous: `:N` and
 `unix:N` the socket file `/tmp/.X11-unix/XN` or its abstract name, a bare `:N` then TCP `localhost:6000+N` as libX11
-falls back, `host:N` TCP 6000+N; 2026-10-31). It launches nothing and
+falls back, `host:N` TCP 6000+N, `unix/:N` and `tcp/host:N` as their plain forms; 2026-10-31). It launches nothing and
 writes nothing but a scratch probe it removes. It sits in `scripts/` rather than `tools/` because the scripts reach
 the tools and never the reverse, and an endpoint proof's key needs `scripts/lib/endpoint-registry.mjs`.
 **Edges unchanged**: no product code imports it.

@@ -26,6 +26,11 @@ collection; sampled load 100 % before and 16 % after). It is the load shape OQ-1
 [the soft-pause under-load note](fixed/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md)
 — both recorded from an unrelated bundle's gate and both left unrepaired until their own work took them.
 
+Seen again 2026-10-31 in `pnpm check` (295.3 s, 7,233 tests, this the one failure) of the `confident-kepler-16f989`
+worktree on the owner's Windows 11 Home ARM64 host (build 26300, Node 26.13.0 arm64, 8 logical processors), gating a change to the adoption suite only:
+the fifth ender, `Write-Output 'bye'; exit 3`, measured **6,526.0 ms** against the same 5,000 ms bound, and the
+reading before it was again right (`outcome_kind` not `soft_pause`). The file alone took 293 s inside the suite; rerun alone straight after (`pnpm vitest run` on the file, 231 s), 93 passed and 42 skipped, the case among the green.
+
 Not repaired: noticed while gating an unrelated change; recording only. Whether the bound should move — it can be
 exceeded by the host's load alone, with the reading itself correct — is a decision for the work that owns this case.
 

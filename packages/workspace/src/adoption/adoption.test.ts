@@ -91,7 +91,7 @@ describe('the detection pass (REQ-ADOPT-005 to REQ-ADOPT-010)', () => {
   it('never walks node_modules, hidden directories or the scope directory, and never follows a symbolic link out', () => {
     const outside = project({ 'secret/r.md': '- **ZZ-1** — x\n- **ZZ-2** — y\n' });
     const root = project({ ...FOREIGN, '.rotaris/r.md': '- **QQ-1** — x\n- **QQ-2** — y\n' });
-    symlinkSync(join(outside, 'secret'), join(root, 'linked'));
+    symlinkSync(join(outside, 'secret'), join(root, 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
     expect(detectWorkspace(root).candidates.map((c) => c.prefix)).toEqual(['FR']);
   });
 });
@@ -150,7 +150,7 @@ describe('the adapter over an untrusted interpretation (REQ-ADOPT-011 to REQ-ADO
     const outside = project({ 'r/core.md': '- **FR-1** — a\n- **FR-2** — b\n' });
     const root = project({ 'src/a.py': '# FR-1\n' });
     mkdirSync(join(root, 'docs'));
-    symlinkSync(join(outside, 'r'), join(root, 'docs', 'reqs'));
+    symlinkSync(join(outside, 'r'), join(root, 'docs', 'reqs'), process.platform === 'win32' ? 'junction' : 'dir');
     const fake: DetectionResult = { ...detectWorkspace(root), candidates: [{ id: 'docs/reqs#FR#bullet', dir: 'docs/reqs', prefix: 'FR', shape: 'bullet', documents: 1, identifiers: 2, numbering: 'contiguous', gaps: 0, reasons: [], samples: [] }] };
     const r = composeAdapter(JSON.stringify({ candidate: 'docs/reqs#FR#bullet', id_prefix: 'FR', definition_pattern: '(FR-\\d+)', impl_roots: [], test_roots: [], annotation_conventions: [], notes: '' }), fake, root);
     expect(r).toMatchObject({ ok: false, field: 'candidate' });

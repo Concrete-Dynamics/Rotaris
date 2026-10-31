@@ -16,7 +16,7 @@ the bundle's range OQ-386 to OQ-387, its first number. Renumbered at landing if 
 **What is open.** A workspace open has two hops. The workspace service opens the store and answers `workspace.opened`. Main
 then hands the store to the run host in its own `workspace.opened` request, bounded at 5,000 ms. When that reply misses the
 bound, main cannot tell what happened. The run host may have opened the store and answered late (the likely case:
-[the run host's skill discovery runs before its reply](../../defects/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md)).
+[the run host's skill discovery runs before its reply](../../defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md)).
 It may have refused, or it may never answer. A late reply finds no pending request and is dropped. The specification states
 what a store that cannot be opened owes (the run refused, the reason reported). It says nothing about a hand-off between
 two processes of one application whose outcome is unknown. Until 2026-10-20 the timeout was a rejection out of the launch,

@@ -3,14 +3,16 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RunHostRequest } from '@rotaris/contracts';
-import type { LoadedConfiguration } from '@rotaris/config';
+import { SKILLS_DEFAULTS, type AsyncDiscoveryPorts, type DiscoveryPorts, type LoadedConfiguration } from '@rotaris/config';
 import { FakeClock } from '@rotaris/kernel';
+import { forgetSpelling, migrateStore, openStore } from '@rotaris/store';
 import type { AvailabilityVerdict } from '@rotaris/agent-tools';
 import { configureRun, type ConfigureDeps } from './configuration.js';
 import { dispatch } from './dispatch.js';
 import type * as Engine from '@rotaris/engine';
 import type * as Configuration from './configuration.js';
 import type { RunHost } from './host.js';
+import { SkillHost } from './skills.js';
 
 /*
  * `launchSession` is replaced by one that hands its `start` a configured setup at once, so a case can read what
@@ -531,4 +533,176 @@ describe('a continuation settles the confinement verdict before the engine confi
       expect(detail).not.toContain('No OS-level confinement can be used on this host.');
     });
   }
+});
+
+/**
+ * OQ-386 point 1 (ruled 2026-10-21; the repair of
+ * `docs/defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`): the run
+ * host answers `workspace.opened` before it warms the skill catalogue, and the warm-up never holds its loop. Until the repair
+ * the warm-up was a `queueMicrotask` that ran the synchronous walk before the reaction `index.ts` attaches to post the reply.
+ * The tree here is a map behind both kinds of port, each call recorded, and the asynchronous `readFile` can be held open —
+ * the slow disk — so a case can look at the run host while the walk is parked.
+ */
+describe('the run host answers workspace.opened before it warms the skill catalogue, off its loop (OQ-386 point 1)', () => {
+  const root = '/ws';
+  const skill = (name: string): string => `---\nname: ${name}\ndescription: ${name} does things.\n---\n${name} body\n`;
+  const fixture = () => {
+    const files = new Map<string, string>([[`${root}/.agents/skills/alpha/SKILL.md`, skill('alpha')]]);
+    const calls: string[] = [];
+    const isDir = (p: string): boolean => [...files.keys()].some((f) => f.startsWith(`${p}/`));
+    const list = (dir: string): string[] => [...new Set([...files.keys()].filter((f) => f.startsWith(`${dir}/`)).map((f) => f.slice(dir.length + 1).split('/')[0]!))];
+    const read = (p: string): string => { const v = files.get(p); if (v === undefined) throw new Error(`ENOENT ${p}`); return v; };
+    const sync: DiscoveryPorts = {
+      readDir: (d) => { calls.push(`sync readDir ${d}`); return list(d); },
+      readFile: (f) => { calls.push(`sync readFile ${f}`); return read(f); },
+      isDirectory: (d) => { calls.push(`sync isDirectory ${d}`); return isDir(d); },
+      isFile: (f) => { calls.push(`sync isFile ${f}`); return files.has(f); },
+    };
+    let held = false;
+    const parked: (() => void)[] = [];
+    let failing: Error | null = null;
+    const async: AsyncDiscoveryPorts = {
+      readDir: async (d) => { calls.push(`async readDir ${d}`); if (failing) throw failing; return list(d); },
+      // Answered from the tree as it stood when asked, delivered once released: a slow disk.
+      readFile: async (f) => {
+        calls.push(`async readFile ${f}`);
+        const text = read(f);
+        if (held) await new Promise<void>((go) => parked.push(go));
+        return text;
+      },
+      isDirectory: async (d) => { calls.push(`async isDirectory ${d}`); return isDir(d); },
+      isFile: async (f) => { calls.push(`async isFile ${f}`); return files.has(f); },
+    };
+    return {
+      files, calls, sync, async,
+      hold: () => { held = true; },
+      parkedCount: () => parked.length,
+      release: () => { held = false; for (const go of parked.splice(0)) go(); },
+      fail: (e: Error) => { failing = e; },
+    };
+  };
+  let dir: string;
+  // The store the case hands over, migrated first as the workspace service's open leaves it.
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-warm-up-'));
+    for (const file of ['store.sqlite', 'cold.sqlite']) { const db = openStore(join(dir, file)); migrateStore(db); db.close(); }
+  });
+  afterEach(() => { forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
+
+  const setup = (file = 'store.sqlite') => {
+    const fx = fixture();
+    const clock = new FakeClock();
+    const lines: string[] = [];
+    const skills = new SkillHost({
+      home: '/home/u', machineDir: '/machine', platform: 'linux', ports: fx.sync, asyncPorts: fx.async, monotonic: clock,
+      section: () => ({ ok: true, value: SKILLS_DEFAULTS }), log: (m) => { lines.push(m); },
+    });
+    const stores = new Map<string, { db: { close: () => void } | null }>();
+    const host = {
+      clocks: clock, lease: { isRefusing: () => false }, stores, log: (m: string) => { lines.push(m); }, skills,
+      sessions: { writer: () => ({ appendRow: () => ({ ok: true, value: { index: 7 } }) }) },
+    } as unknown as RunHost;
+    const opened: RunHostRequest = { kind: 'workspace.opened', workspaceId: 'W1', storeFile: join(dir, file), workspaceRoot: root };
+    const close = () => { for (const s of stores.values()) s.db?.close(); };
+    return { fx, clock, lines, skills, host, opened, close };
+  };
+  /** Lets every job the walk queued run — microtasks and the pending `setImmediate`s between them — up to `limit` turns. */
+  const until = async (condition: () => boolean, limit = 200): Promise<void> => {
+    for (let i = 0; i < limit && !condition(); i += 1) await new Promise((go) => setImmediate(go));
+  };
+  const names = (r: unknown): string[] => ((r as { state: { skills: { name: string }[] } }).state.skills.map((s) => s.name));
+
+  it('posts the reply, as index.ts does, before the walk asks the tree anything; the walk starts from a zero-delay timer', async () => {
+    const { fx, clock, skills, host, opened, close } = setup();
+    try {
+      // index.ts: `dispatch(req.data, h).then((r) => reply(env.data.id, r))`.
+      const replied = dispatch(opened, host).then((r) => { fx.calls.push('reply posted'); return r; });
+      await until(() => false, 5);
+      expect(await replied).toEqual({ kind: 'workspace.ack', workspaceId: 'W1' });
+      // Before the repair the microtask's synchronous walk stood here, ahead of the reply.
+      expect(fx.calls).toEqual(['reply posted']);
+      expect(clock.pendingCount()).toBe(1);
+      fx.hold();
+      clock.advance(0);
+      await until(() => fx.parkedCount() > 0);
+      // The walk is parked on a slow read, and the run host still answers: its loop is not held.
+      expect(fx.parkedCount()).toBe(1);
+      expect(await dispatch({ kind: 'ping' }, host)).toEqual({ kind: 'pong' });
+      fx.release();
+      await skills.settled(root);
+      expect(fx.calls[0]).toBe('reply posted');
+      expect(fx.calls.slice(1).every((c) => c.startsWith('async '))).toBe(true);
+      // The warm catalogue is the one every later ask reads: nothing walks the tree again.
+      const before = fx.calls.length;
+      expect(skills.state(root).skills.map((s) => s.name)).toEqual(['alpha']);
+      expect(fx.calls.length).toBe(before);
+    } finally { close(); }
+  });
+
+  for (const clear of ['a rescan', 'a session creation'] as const) {
+    it(`a warm-up overtaken by ${clear} sets its catalogue aside, so the tree as it stands after the clear is what is read`, async () => {
+      const { fx, clock, lines, skills, host, opened, close } = setup();
+      try {
+        await dispatch(opened, host);
+        fx.hold();
+        clock.advance(0);
+        await until(() => fx.parkedCount() > 0);
+        // The warm-up has listed the tree with alpha alone; beta lands now, and the clear comes after it.
+        fx.files.set(`${root}/.agents/skills/beta/SKILL.md`, skill('beta'));
+        if (clear === 'a rescan') expect(names(await dispatch({ kind: 'skills.rescan', workspaceRoot: root }, host))).toEqual(['alpha', 'beta']);
+        else skills.onSessionCreated(root, 's1');
+        fx.release();
+        await until(() => lines.some((l) => l.includes('was set aside')));
+        expect(lines.filter((l) => l.includes('was set aside'))).toEqual([`skills: the discovery begun at the open of ${root} was set aside: a rescan or a session creation cleared the catalogue while it ran`]);
+        // Published over the clear, the stale catalogue would read alpha alone.
+        expect(names(await dispatch({ kind: 'skills.read', workspaceRoot: root }, host))).toEqual(['alpha', 'beta']);
+      } finally { close(); }
+    });
+  }
+
+  const asks: readonly { readonly name: string; readonly req: RunHostRequest; readonly answer: Record<string, unknown> }[] = [
+    { name: 'skills.read', req: { kind: 'skills.read', workspaceRoot: root }, answer: { kind: 'skills.state' } },
+    { name: 'skills.forceLoad', req: { kind: 'skills.forceLoad', workspaceRoot: root, sessionId: 's1', name: 'alpha' }, answer: { kind: 'skills.state', loaded: 'alpha' } },
+    { name: 'skills.loadFile', req: { kind: 'skills.loadFile', workspaceRoot: root, sessionId: 's1', path: `${root}/.agents/skills/alpha` }, answer: { kind: 'skills.state', loaded: 'alpha' } },
+    { name: 'skills.list', req: { kind: 'skills.list', workspaceRoot: root, sessionId: 's1' }, answer: { kind: 'skills.listed', count: 1, index: 7 } },
+  ];
+  for (const ask of asks) {
+    it(`${ask.name} arriving while the warm-up is in flight waits for it and is answered from it, walking the tree once`, async () => {
+      const { fx, clock, host, opened, close } = setup();
+      try {
+        await dispatch(opened, host);
+        fx.hold();
+        clock.advance(0);
+        await until(() => fx.parkedCount() > 0);
+        let answered = false;
+        const answer = dispatch(ask.req, host).then((r) => { answered = true; return r; });
+        await until(() => answered, 20);
+        expect(answered).toBe(false);
+        fx.release();
+        expect(await answer).toMatchObject(ask.answer);
+        // One walk: the warm-up listed each root once, and nothing listed or read a root synchronously beside it.
+        expect(fx.calls.filter((c) => c === `async readDir ${root}/.agents/skills`)).toHaveLength(1);
+        expect(fx.calls.filter((c) => c.startsWith('sync readDir'))).toEqual([]);
+      } finally { close(); }
+    });
+  }
+
+  it('a skills request with no warm-up in flight is answered at once', async () => {
+    const { host, close } = setup();
+    try {
+      expect(names(await dispatch({ kind: 'skills.read', workspaceRoot: root }, host))).toEqual(['alpha']);
+    } finally { close(); }
+  });
+
+  it('a skills request waiting on a warm-up that fails is still answered, and the failure is logged at the open', async () => {
+    const { fx, clock, lines, host, opened, close } = setup('cold.sqlite');
+    try {
+      await dispatch(opened, host);
+      fx.fail(new Error('EIO: i/o error, scandir'));
+      clock.advance(0);
+      // A failure costs nothing: the waiting ask discovers on a cold cache, as any cold ask does.
+      expect(names(await dispatch({ kind: 'skills.read', workspaceRoot: root }, host))).toEqual(['alpha']);
+      expect(lines).toContain('skills: discovery on workspace open failed: Error: EIO: i/o error, scandir');
+    } finally { close(); }
+  });
 });

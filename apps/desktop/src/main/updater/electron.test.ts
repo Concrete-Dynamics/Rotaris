@@ -14,31 +14,30 @@ import { flushDirectory, flushFile } from './flush.js';
 const source = readFileSync(join(import.meta.dirname, 'electron.ts'), 'utf8');
 
 /** The text of `createUpdaterPorts`'s `files` port object, which is where the swap's operations are bound. */
-const filesPort = ((): string => {
+const filesPort = (): string => {
   const start = source.indexOf('files: {');
-  expect(start).toBeGreaterThan(0);
+  expect(start, "electron.ts has no 'files: {' port object").toBeGreaterThan(0);
   const end = source.indexOf('spawn: {', start);
-  expect(end).toBeGreaterThan(start);
+  expect(end, "electron.ts has no 'spawn: {' after its files port").toBeGreaterThan(start);
   return source.slice(start, end);
-})();
+};
+
+/** A port bound to the function of its name: shorthand, a direct reference, or an arrow handing its parameter on. A no-op matches none. */
+const boundTo = (name: string): RegExp => new RegExp(`\\b${name}(?:\\s*,|\\s*:\\s*${name}\\s*,|\\s*:\\s*(?:async\\s*)?\\((\\w+)\\)\\s*=>\\s*(?:await\\s+)?${name}\\(\\1\\))`);
 
 describe("the portable swap's real ports flush, and flush with the real implementations (REQ-STARTUP-176)", () => {
   it('electron.ts imports the two flushes from flush.js rather than doing nothing itself', () => {
-    expect(source).toMatch(/import \{[^}]*\bflushDirectory\b[^}]*\bflushFile\b[^}]*\} from '\.\/flush\.js';/);
+    const names = /import \{([^}]*)\} from '\.\/flush\.js';/.exec(source)?.[1] ?? '';
+    expect(names).toMatch(/\bflushFile\b/);
+    expect(names).toMatch(/\bflushDirectory\b/);
   });
 
-  it('the files port binds flushFile and flushDirectory to those functions', () => {
-    expect(filesPort).toMatch(/flushFile: \(path\) => flushFile\(path\),/);
-    expect(filesPort).toMatch(/flushDirectory: \(dir\) => flushDirectory\(dir\),/);
-  });
-
-  it('neither port is a no-op: both name a call, and neither swallows what it returns', () => {
-    // The mutation this catches: `flushFile: async () => undefined,` — green everywhere else in the suite, and the
-    // portable swap would again rename a copy nothing had flushed.
-    expect(filesPort).not.toMatch(/flushFile: async \(\) =>/);
-    expect(filesPort).not.toMatch(/flushDirectory: async \(\) =>/);
-    expect(filesPort).not.toMatch(/flushFile: \(\) =>/);
-    expect(filesPort).not.toMatch(/flushDirectory: \(\) =>/);
+  it('the files port binds flushFile and flushDirectory to those functions, and neither is a no-op', () => {
+    // The mutation this catches: `flushFile: async () => undefined,`, with or without a parameter — green everywhere else
+    // in the suite, and the portable swap would again rename a copy nothing had flushed.
+    const port = filesPort();
+    expect(port).toMatch(boundTo('flushFile'));
+    expect(port).toMatch(boundTo('flushDirectory'));
   });
 
   it('the functions the ports name are the ones that issue the sync, against a real medium', async () => {

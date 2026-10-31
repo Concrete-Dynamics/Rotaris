@@ -38,7 +38,7 @@ function firstUnenterable(dir: string): string | undefined {
   for (const part of ['', ...relative(root, dir).split(sep).filter(Boolean)]) {
     at = join(at, part);
     try { accessSync(at, constants.X_OK); } catch (e) {
-      return (e as NodeJS.ErrnoException).code === 'EACCES' ? at : undefined;
+      return (e as NodeJS.ErrnoException).code === 'EACCES' && statSync(at, { throwIfNoEntry: false })?.isDirectory() ? at : undefined;
     }
   }
   return undefined;
@@ -93,12 +93,17 @@ function nothingRead(file: string, place: IdentifierPlace): Extract<ProcessReply
 
 /**
  * The refusal for an identifier that could not be read. Where the read produced content, the file is there and what it holds
- * is said, as the identifier reader reads it: the first line that is neither blank nor a `#` comment. Where it produced
- * nothing, the path is examined first (`examine`), so presence is never claimed where it was not found.
+ * is said, as the identifier reader reads it: the first line that is neither blank nor a `#` comment. `raw` is only the
+ * file's beginning (`guardedRead` keeps its first 200 characters), so where no such line is in it nothing is said of the
+ * rest of the file — it may hold comments, blank lines, or a line past what was read — and the way on is hedged as `KEPT` is.
+ * Where the read produced nothing, the path is examined first (`examine`), so presence is never claimed where it was not found.
  */
 export function identifierUnreadableAtOpen(file: string, raw: string, examine: ExamineIdentifier = nodeExamine): Extract<ProcessReply, { kind: 'refused' }> {
   if (raw === '') return nothingRead(file, examine(file));
   const line = raw.split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0 && !s.startsWith('#'));
-  const holds = line === undefined ? 'It holds only comments.' : `Where the identifier belongs it holds "${line.length > 60 ? `${line.slice(0, 60)}…` : line}".`;
+  if (line === undefined) {
+    return refused(IDENTIFIER_UNREADABLE_HEADLINE, `${file} exists, but this workspace cannot be opened by what it holds. Nothing that reads as an identifier was found in what was read of it. ${KEPT} If this workspace had an identifier, put it back — from version control or a copy of the folder — and open the workspace again. ${REMOVE}`);
+  }
+  const holds = `Where the identifier belongs it holds "${line.length > 60 ? `${line.slice(0, 60)}…` : line}".`;
   return refused(IDENTIFIER_UNREADABLE_HEADLINE, `${file} exists, but this workspace cannot be opened by what it holds. ${holds} Nothing was written over it: it names this workspace's recorded sessions, and replacing it would detach them. Put back the identifier this workspace had — from version control or a copy of the folder — and open the workspace again. ${REMOVE}`);
 }

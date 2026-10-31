@@ -26,7 +26,26 @@ describe('the open of a workspace whose identifier cannot be read (REQ-SESSION-1
     const header = '# This file names this workspace to its machine-local session store.\n# Removing it detaches this workspace from its recorded sessions.\n';
     expect(identifierUnreadableAtOpen(file, `${header}v1-garbled\n`).detail).toContain('Where the identifier belongs it holds "v1-garbled".');
     expect(identifierUnreadableAtOpen(file, `${'x'.repeat(70)}\n`).detail).toContain(`it holds "${'x'.repeat(60)}…".`);
-    expect(identifierUnreadableAtOpen(file, header).detail).toContain('this workspace cannot be opened by what it holds. It holds only comments.');
+  });
+
+  /** Where no line reads as an identifier, only what was read is spoken of: it may be comments, blanks, or the file's cut beginning. */
+  describe('where nothing in what was read reads as an identifier', () => {
+    const notFound = '/w/.rotaris/workspace-id exists, but this workspace cannot be opened by what it holds. Nothing that reads as an identifier was found in what was read of it. Nothing was written over it: what it holds may name this workspace\'s recorded sessions, and replacing it would detach them. If this workspace had an identifier, put it back — from version control or a copy of the folder — and open the workspace again. Removing the file instead opens the workspace with a new identifier and none of the sessions recorded before.';
+    const claims = /only comments|it names this workspace's recorded sessions|Put back the identifier this workspace had/;
+
+    it('comments only: claims neither that it holds only comments nor that it names the sessions', () => {
+      const r = identifierUnreadableAtOpen(file, '# only comments\n# more comments\n');
+      expect(r).toMatchObject({ headline: 'The workspace identifier is present but cannot be read', detail: notFound });
+      expect(r.detail).not.toMatch(claims);
+    });
+
+    it('blank lines only: not said to be comments', () => {
+      expect(identifierUnreadableAtOpen(file, '\n\n\n').detail).toBe(notFound);
+    });
+
+    it('a beginning cut before its data line (a 250-character comment): nothing said of the rest of the file', () => {
+      expect(identifierUnreadableAtOpen(file, '#'.repeat(200)).detail).toBe(notFound);
+    });
   });
 
   it('says what it holds without examining the path, where the read produced content', () => {
@@ -127,6 +146,26 @@ describe('the open of a workspace whose identifier cannot be read (REQ-SESSION-1
       const r = refusalFor(root);
       expect(r.headline).toBe('The workspace identifier is present but cannot be read');
       expect(r.detail).toMatch(new RegExp(`^${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} is there, but this account is not permitted to read it\\. `));
+    });
+
+    it('a first line of 250 "#" before a data line: the read is cut inside the comment, and no file content is claimed', () => {
+      const root = scratch();
+      mkdirSync(join(root, '.rotaris'));
+      const id = join(root, '.rotaris', 'workspace-id');
+      writeFileSync(id, `${'#'.repeat(250)}\nnot-an-id\n`);
+      const ident = establishWorkspaceId(root);
+      if (ident.state !== 'unreadable') throw new Error(`identifier read answered ${ident.state}`);
+      const r = identifierUnreadableAtOpen(id, ident.raw);
+      expect(r.detail).toContain('Nothing that reads as an identifier was found in what was read of it.');
+      expect(r.detail).not.toMatch(/only comments|it names this workspace's recorded sessions/);
+    });
+
+    it('a .rotaris that is a file, met without the service\'s guard: not called a folder that cannot be entered', () => {
+      const root = scratch();
+      writeFileSync(join(root, '.rotaris'), 'x');
+      const r = refusalFor(root);
+      expect(r.detail).not.toMatch(/cannot be entered/);
+      expect(r.headline).toBe('The workspace identifier cannot be reached');
     });
 
     it('an empty identifier file, and a folder in its place', () => {

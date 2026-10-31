@@ -21,3 +21,22 @@ neither failure of the opener is silent; Open log meets the first failure (an er
 
 - `apps/desktop/src/main/commands/library.ts` — `onSessionOpenLog`, `await shell.openPath(r.files.log)`.
 - `apps/desktop/src/main/open-folder.ts` — `openFolder` and `OPEN_FOLDER_BOUND`, the bounded form the strip uses.
+
+## Repaired — 2026-10-31; never reproduced in the built app
+
+Open log now goes through the same bounded opening as the strip's open-folder. `open-folder.ts` gained `openBounded`,
+which takes a name for the opener that failed to answer. `openFolder` keeps its exact reason for the strip ("the file
+manager did not answer within 5 s"), and `openFile` reads "the platform opener did not answer within 5 s". An opener
+that never answers is now the existing `session.open-failed` refusal, with that sentence as its detail, after 5 s on the
+timer port (`library.test.ts`, "answers session.open-failed once the bound passes": red against the unbounded handler,
+whose outcome was still `undefined` at the bound).
+
+**What the repair disproved in the explanation above.** The note named Open log as the one path left unbounded beside
+the strip. It was not the only one. `shell.openThirdPartyLicenses` (REQ-SHELL-142's "Open third-party licenses") awaited
+the same `shell.openPath` with no bound, in the same one-line shape. It is bounded in the same change and answers
+`licenses.failed` (`shell.test.ts`, red against the unbounded handler in the same way).
+
+**What remains owed.** As before, the hang has not been seen in the built app. It needs a host whose opener cannot run,
+and the Linux host this was repaired on has no display to drive the built app. The tests stand a never-settling promise
+where `shell.openPath` stands. They prove the bound, not the opener's behaviour, which rests on the strip's measurement
+of 2026-10-02.

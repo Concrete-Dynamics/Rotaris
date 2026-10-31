@@ -5,6 +5,7 @@ import { productVersion } from '../version.js';
 import { composerDraftKey, PANE_LAYOUT_PANES, PANE_LAYOUT_VIEWS, paneLayoutKeys, type PaneLayoutView } from '@rotaris/platform';
 import { homedir } from 'node:os';
 import { millis } from '@rotaris/kernel';
+import { openFile } from '../open-folder.js';
 import { type CommandContext, type CommandHandlers } from './context.js';
 
 /** REQ-SHELL-069: the view a pane layout's registered state key names, or null for any other preference key. */
@@ -38,9 +39,9 @@ export function announceDisplayPreference(key: DisplayPreferenceKey, value: bool
 }
 
 export function shellCommands(
-  ctx: Pick<CommandContext, 'capturing' | 'currentTheme' | 'log' | 'notices' | 'preferences' | 'processes' | 'requirementsPreferenceKey' | 'runHost' | 'services' | 'setTheme' | 'themeBackground' | 'updater'>,
+  ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'currentTheme' | 'log' | 'notices' | 'preferences' | 'processes' | 'requirementsPreferenceKey' | 'runHost' | 'services' | 'setTheme' | 'themeBackground' | 'updater'>,
 ): Pick<CommandHandlers, 'shell.hello' | 'shell.openExternal' | 'shell.openThirdPartyLicenses' | 'theme.get' | 'theme.set' | 'prefs.get' | 'prefs.set' | 'composer.readDraft' | 'composer.writeDraft' | 'notice.acknowledge' | 'notice.current' | 'notice.report'> {
-  const { capturing, currentTheme, log, notices, preferences, processes, requirementsPreferenceKey, runHost, services, setTheme, themeBackground, updater } = ctx;
+  const { capturing, clocks, currentTheme, log, notices, preferences, processes, requirementsPreferenceKey, runHost, services, setTheme, themeBackground, updater } = ctx;
   return {
     'shell.hello': async (_req, { w }) => {
       const cb = w.workspaceId
@@ -101,8 +102,9 @@ export function shellCommands(
       const scripted = __ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_OPEN_EXTERNAL'] : undefined;
       if (scripted === 'fail') { log(`capture: open-licenses REFUSED ${path}`); return { ok: false, code: 'licenses.failed', headline: 'The license bundle could not be opened', detail: 'The system refused to open it (scripted).' }; }
       if (scripted === 'record') { log(`capture: open-licenses ${path}`); return { ok: true, value: { path } }; }
-      const failed = await shell.openPath(path);
-      if (failed !== '') return { ok: false, code: 'licenses.failed', headline: 'The license bundle could not be opened', detail: failed };
+      // REQ-SHELL-142's failed open includes an opener that never answers: bounded, as the strip's open-folder is.
+      const opened = await openFile(path, (p) => shell.openPath(p), clocks.timers);
+      if (!opened.ok) return { ok: false, code: 'licenses.failed', headline: 'The license bundle could not be opened', detail: opened.reason };
       log(`opened licenses: ${path}`);
       return { ok: true, value: { path } };
     },

@@ -2,6 +2,7 @@ import { canonicalPath } from '@rotaris/platform';
 import { millis } from '@rotaris/kernel';
 import { shell } from 'electron';
 import { type CommandOutcome, type CommandRequest } from '@rotaris/contracts';
+import { openFile } from '../open-folder.js';
 import { refusal, type CommandAt, type CommandContext, type CommandHandlers } from './context.js';
 
 /**
@@ -38,8 +39,9 @@ export function libraryCommands(
     if (r.kind !== 'session.files') return refusal(r, 'The session files could not be located');
     if (req.kind === 'session.openLog') {
       if (r.files.log === null) return { ok: false, code: 'session.no-log', headline: 'No log is kept for this session', detail: `Nothing was logged at or above the configured level, so no log file exists in ${r.files.directory}.` };
-      const failed = await shell.openPath(r.files.log);
-      return failed === '' ? { ok: true, value: { path: r.files.log } } : { ok: false, code: 'session.open-failed', headline: 'The log could not be opened', detail: failed };
+      // Bounded as the strip's open-folder is: an opener that never answers is the failure reported, not a command left waiting.
+      const opened = await openFile(r.files.log, (p) => shell.openPath(p), clocks.timers);
+      return opened.ok ? { ok: true, value: { path: r.files.log } } : { ok: false, code: 'session.open-failed', headline: 'The log could not be opened', detail: opened.reason };
     }
     const anyFile = r.files.summary ?? r.files.log ?? r.files.artifacts;
     if (anyFile === null) return { ok: false, code: 'session.no-files', headline: 'This session has no files yet', detail: `No log, summary or artifact body has been written for it, so there is nothing to reveal in ${r.files.directory}.` };

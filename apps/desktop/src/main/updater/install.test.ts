@@ -93,6 +93,7 @@ function targetVolume(initial: Record<string, string> = { [TARGET]: 'v0.1.0' }) 
   const port: StrategyFiles = {
     pathKind: async (p) => (files.has(p) ? 'file' : 'absent'),
     copyFile: async (from, to) => { ops.push(`copy:${from}→${to}`); files.set(to, `copy of ${from}`); },
+    copyAside: async (from, to) => { ops.push(`copy-aside:${from}→${to}`); files.set(to, files.get(from)!); },
     rename: async (from, to) => { ops.push(`rename:${from}→${to}`); files.set(to, files.get(from)!); files.delete(from); },
     removeFile: async (p) => { ops.push(`remove:${p}`); files.delete(p); },
   };

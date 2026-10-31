@@ -1,7 +1,7 @@
 import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, ServiceAnswerEnvelopeSchema, WorkspaceServiceRequestSchema, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { fileStamp, millis, toIsoUtc, type Millis, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
-import { establishWorkspaceId, forgetSpelling, readWorkspaceId, REFUSAL_LEASE_MS, type ResolvedStore, type RunHostControl } from '@rotaris/store';
+import { establishWorkspaceId, forgetSpelling, readWorkspaceId, REFUSAL_LEASE_MS, workspaceIdFile, type ResolvedStore, type RunHostControl } from '@rotaris/store';
 import { assessRestore, backupWorkspace, capture as captureCheckpoint, checkAttach, createWorktree, deleteNamespace, deleteRefs, listRefs, performRestore, preview as previewCheckpoint, readGitView, readRepository, removeWorktree, restore as restoreCheckpoint, sessionWorktreePath, validateBranchName } from '@rotaris/workspace';
 import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
 import { homedir } from 'node:os';
@@ -9,6 +9,7 @@ import { mkdirSync } from 'node:fs';
 import { deliveryServiceFor } from './delivery.js'; // Part AK
 import { promptsRootsRead } from './prompts.js'; // Part AO
 import { improvementServiceFor } from './improvements.js';
+import { identifierUnreadableAtOpen } from './identifier-refusal.js';
 import { bootstrapAtOpen } from './open-bootstrap.js';
 import { assessEstablish, performEstablish } from './store-establish.js';
 import { openStoreAtOpen, RestoreInFlight } from './store-open.js';
@@ -110,9 +111,8 @@ function tracked<T>(p: Promise<T>): Promise<T> {
 }
 function openOwn(workspaceRoot: string): ProcessReply {
   const ident = establishWorkspaceId(workspaceRoot);
-  if (ident.state === 'unreadable') {
-    return { kind: 'refused', code: 'workspace.identifier-unreadable', headline: 'The workspace identifier is present but cannot be read', detail: `It will not be minted over (REQ-SESSION-197). Content begins: ${ident.raw}` };
-  }
+  // REQ-SESSION-197: reported as a condition to resolve, never minted over; main raises it as a notice (`identifier-refusal.ts`).
+  if (ident.state === 'unreadable') return identifierUnreadableAtOpen(workspaceIdFile(workspaceRoot), ident.raw);
   closeOwn();
   // OQ-266's cut-restore check, then REQ-SESSION-202's (W-31): both before anything is created (`store-open.ts`).
   const opened = openStoreAtOpen(layout.workspaces, ident.id, workspaceRoot, restoreInFlight.active);

@@ -29,14 +29,15 @@ resolve.
 description above is what it read until this date. (It also named `CLAUDE.md` among the record's files; the repository
 has had none since 2026-10-27, and the checker's list had already dropped it.)*
 
-`recordFiles` reads the root `README.md` beside `CONTEXT-MAP.md` and `AGENTS.md`, so all three passes reach it: its
-relative links and their `#fragment`s (the first pass) and any `docs/defects/….md` path it writes as inline code (the
-third). Only the root README: a `README.md` elsewhere (under `packages/`, say) stays outside the record, and the root
+`recordFiles` reads the root `README.md` beside `CONTEXT-MAP.md` and `AGENTS.md`, so the first and third passes reach
+it: its relative links and their `#fragment`s (the first pass) and any `docs/defects/….md` path it writes as inline
+code (the third). The second pass does not, and could not: it reads the code under `apps/`, `packages/` and `tools/`
+(`codeFiles`), and the README is none of those. Only the root README: a `README.md` elsewhere (under `packages/`, say) stays outside the record, and the root
 holds no other Markdown file. `tools/check-doc-budget.mjs` reads the same set, so the README now also falls under the
 document budget (359 lines, 27.7 KB: within it).
 
 On this tree the gate read the README's 92 relative links, 12 of them with a fragment, and its one prose path, all
-resolving: 9072 links in 2325 files, against 2324 files before. Pinned in `tools/check-record-links.test.ts` by four
+resolving: 9073 links in 2325 files, against 2324 files before. Pinned in `tools/check-record-links.test.ts` by four
 cases over a fixture root (a dead link and a dead anchor in the README fail, live ones pass and are counted, a stale
 note path in its inline code fails) and the walk case, which now expects the README; all five are red with the
 README left out of the list. Falsified on the real tree as well: a dead link added to `README.md` turned `pnpm lint`

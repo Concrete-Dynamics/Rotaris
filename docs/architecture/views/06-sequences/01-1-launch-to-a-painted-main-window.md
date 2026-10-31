@@ -82,8 +82,9 @@ a slow discovery is a slow reply
 (`../../../defects/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`, open).
 
 **A process the record no longer names stands down (2026-10-31, ADR-0055 consequence 14).** The endpoint reads the record
-again as each ordinary hand-over arrives (`listen`, `platform/instance.ts`). Where the record names another process, or
-none can be read, it calls no `onHandOver`, so nothing is surfaced. It answers `{"ok":false,"reason":…}` and reports
+again as each ordinary hand-over arrives (`listen`, `platform/instance.ts`). Where the file is gone, holds no record, or names
+another process (a read that fails any other way shows nothing, and the instance answers: `readHolder`),
+it calls no `onHandOver`, so nothing is surfaced. It answers `{"ok":false,"reason":…}` and reports
 `onHandOverDeclined`, which main logs at `warn` (`hand-over declined …`). This covers a primary reclaimed from after a wedge
 past the 5 s interval, and a predecessor whose record has passed to its successor. The launch that sent it resolves to the
 process the record names. Its clause (3) removes the record unless a fresh read finds another live claim: nothing

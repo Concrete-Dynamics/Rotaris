@@ -42,12 +42,18 @@ been run against it on Windows, and that run is what would close this note. Unti
 with tests behind it, not a measured outcome.
 
 **What the repair does.** `listen()` (`packages/platform/src/instance.ts`) now reads the record again whenever an ordinary
-hand-over arrives. If the record does not name this process at this endpoint — another process, or no readable record (a
+hand-over arrives. If the record shows it does not name this process at this endpoint — another process, or no record (a
 reclaim between its removal and its retried claim) — it does not call `onHandOver`, so main surfaces nothing. It answers
 `{"ok":false,"reason":…}`, never `{"ok":true}`, and reports the decline through `onHandOverDeclined`. Main logs that at
 `warn` as `hand-over declined … the instance record names pid <n>, not this process … (ADR-0055 consequence 14)`. That is
 the line the Windows re-run should look for in the resumed primary's log in place of `hand-over surfaced window 1`. A
 successor's announcement (REQ-STARTUP-121) is not on this path, and its record pass is unchanged.
+
+**Corrected by the review of 2026-10-31.** Any failed read counted as "no readable record", so a transient `EBUSY`, `EPERM`
+or `EMFILE` on the listener's side declined from the very process the record named. The launch took that as silence and,
+finding the record unchanged, reclaimed it and became a second instance beside a process that had answered. Only `ENOENT`,
+content that is no record, or a record naming another claim declines now (`readHolder`); any other failed read answers as
+the instance did before the repair.
 
 **What the repair disproved in the explanation above.** The note placed the defect wholly in the resumed primary: it
 "answered the hand-over" and "nothing … says it re-read the record". The first half is right: no re-read existed. But the
@@ -93,4 +99,5 @@ hand-over goes unanswered too and the launch ends `refused` with no window. That
   startup, and it is not covered.
 - Clause (4)'s second hand-over is bounded by the same interval as the first. Where (2)'s hand-over already waited the
   full 5 s and the new holder does not answer either, the resolution can take two intervals. Whether REQ-STARTUP-164's
-  "no waiting beyond that one interval" admits that is a question for the orchestrator, not ruled here.
+  "no waiting beyond that one interval" admits that is raised as
+  [OQ-460](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-460), not ruled here.

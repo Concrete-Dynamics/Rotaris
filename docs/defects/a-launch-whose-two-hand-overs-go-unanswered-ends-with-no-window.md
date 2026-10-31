@@ -17,9 +17,9 @@ behaviour starts no rival, which is what (4)'s letter asks. It does not meet the
 
 Verified by the owner's probe on 2026-10-31 (real sockets and timers: a record naming a live holder that accepts and never
 answers). Not repaired, and not ruled here: which sentence governs is a question for the specification, and a ruling is
-owed. No open-question number is taken by this note.
+owed: [OQ-461](../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-461) raises it.
 
-A related reading, also not ruled: (3) lists "a process that is running does not answer" among the reasons to reclaim.
+A related reading, raised in the same entry and also not ruled: (3) lists "a process that is running does not answer" among the reasons to reclaim.
 For a record that has come to name a different live claim during the interval, the code leaves the record rather than
 reclaiming it, on REQ-STARTUP-161's ground above.
 
@@ -44,5 +44,5 @@ reclaiming it, on REQ-STARTUP-161's ground above.
 - `packages/platform/src/liveness.ts` — `isLockLive`, which counts another machine's record and a malformed one as live.
 - `docs/defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md` — the repair that introduced
   (3)'s re-read and (4)'s second hand-over.
-- `docs/architecture/adr/0055-startup-sequencing/03-decision.md` — the 2026-10-31 note on (3) and (4), which also leaves the
-  two-interval wait unruled.
+- `docs/architecture/adr/0055-startup-sequencing/03-decision.md` — the 2026-10-31 note on (3) and (4), which also cites the
+  two-interval wait's [OQ-460](../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-460).

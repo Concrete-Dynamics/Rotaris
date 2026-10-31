@@ -136,7 +136,9 @@ anywhere, and that is OQ-43.** It is left open rather than closed by this record
   reclaimed as before; for one commit that day the removal also left a dead claim's record, and the launch ended
   `refused` with no window (the fixed note records it). (4)'s hand-over is bounded by the same interval as (2)'s, so a
   launch whose first hand-over went unanswered and whose second does too can wait two intervals. Whether "one interval"
-  admits that is not ruled here.*
+  admits that is [OQ-460](../../open-questions/69-spikes-and-later-questions-36.md#oq-460); whether a holder that is live
+  and never answers may end the launch `refused` with no window is
+  [OQ-461](../../open-questions/69-spikes-and-later-questions-36.md#oq-461).*
 - **The probe is the session lock's probe, with the ambiguous case resolved the other way — deliberately,
   and the requirement says so.** `REQ-SESSION-051` to `REQ-SESSION-054` are inherited whole, including
   the rule that matters most in practice: on Windows **the probe must deliver no signal and no console

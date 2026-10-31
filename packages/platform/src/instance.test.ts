@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { connect, createServer, type Socket } from 'node:net';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -487,6 +487,26 @@ describe('a process the record was reclaimed from stands down — ADR-0055 conse
     await primary.close();
   });
 
+  it('a read of the record that failed shows nothing about who holds it: the instance answers rather than declining into a reclaim (REQ-STARTUP-161, REQ-STARTUP-164)', async () => {
+    const seen: HandOver[] = [];
+    const declined: HandOver[] = [];
+    const primary = await claimInstance(deps({ pid: PREDECESSOR_PID, seen, onHandOverDeclined: (h) => declined.push(h) }));
+    if (primary.outcome !== 'instance') throw new Error(primary.outcome);
+    // A read that fails with something other than ENOENT, on every platform: EISDIR stands in for EBUSY, EPERM and EMFILE.
+    rmSync(file());
+    mkdirSync(file());
+    const sock = await openTo(primary.record.endpoint);
+    const launch = peer(sock);
+    sock.write('{"workspace":"/w"}\n');
+    // THE FALSIFIER: a decline here is silence to a launch whose record still names this process; it reclaims and becomes a
+    // second instance beside one that was answering.
+    expect(JSON.parse((await launch.nextLine()) ?? '{}')).toEqual({ ok: true });
+    expect(seen).toEqual([{ workspace: '/w' }]);
+    expect(declined).toEqual([]);
+    rmdirSync(file());
+    await primary.close();
+  });
+
   it('a launch that read the record while it named the primary and reached it after the reclaim ends handed to the instance the record names — exactly one instance, its window surfaced (REQ-STARTUP-164 (3), (4))', async () => {
     const primarySeen: HandOver[] = [];
     const instanceSeen: HandOver[] = [];
@@ -524,12 +544,12 @@ describe('a process the record was reclaimed from stands down — ADR-0055 conse
     await instance.close();
   });
 
-  it.skipIf(process.platform === 'win32')('a record that came to name a dead process while the hand-over went unanswered is still reclaimed: the launch becomes the instance, never refused (REQ-STARTUP-164 (3))', async () => {
+  it('a record that came to name a dead process while the hand-over went unanswered is still reclaimed: the launch becomes the instance, never refused (REQ-STARTUP-164 (3))', async () => {
     // A: alive (the parent's pid) and listening, but it never answers.
     const held: Socket[] = [];
     const silent = createServer((sock) => { held.push(sock); });
     const closeSilent = () => new Promise((resolve) => { for (const sock of held) sock.destroy(); silent.close(resolve); });
-    const silentEndpoint = join(dir, 'silent.sock');
+    const silentEndpoint = process.platform === 'win32' ? `\\\\.\\pipe\\rotaris-silent-${process.pid}` : join(dir, 'silent.sock');
     await new Promise<void>((resolve) => { silent.listen(silentEndpoint, resolve); });
     writeFileSync(file(), `${JSON.stringify({ pid: PREDECESSOR_PID, host: M, acquired_at: toIsoUtc(clocks.wall.instant()), endpoint: silentEndpoint })}\n`);
     // C: a process that has ended, at an endpoint nothing serves.

@@ -10,6 +10,7 @@ import { deliveryServiceFor } from './delivery.js'; // Part AK
 import { promptsRootsRead } from './prompts.js'; // Part AO
 import { improvementServiceFor } from './improvements.js';
 import { identifierUnreadableAtOpen } from './identifier-refusal.js';
+import { notAFolderAtOpen } from './not-a-folder.js';
 import { bootstrapAtOpen } from './open-bootstrap.js';
 import { assessEstablish, performEstablish } from './store-establish.js';
 import { openStoreAtOpen, RestoreInFlight } from './store-open.js';
@@ -110,6 +111,9 @@ function tracked<T>(p: Promise<T>): Promise<T> {
   return p.finally(() => { inFlight.delete(p); });
 }
 function openOwn(workspaceRoot: string): ProcessReply {
+  // A path that is not a folder is said as that, before the identifier read would call it unreadable (`not-a-folder.ts`).
+  const notAFolder = notAFolderAtOpen(workspaceRoot);
+  if (notAFolder) return notAFolder;
   const ident = establishWorkspaceId(workspaceRoot);
   // REQ-SESSION-197: reported as a condition to resolve, never minted over; main raises it as a notice (`identifier-refusal.ts`).
   if (ident.state === 'unreadable') return identifierUnreadableAtOpen(workspaceIdFile(workspaceRoot), ident.raw);

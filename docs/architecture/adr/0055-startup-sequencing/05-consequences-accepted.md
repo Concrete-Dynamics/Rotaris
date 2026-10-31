@@ -107,7 +107,16 @@ Part 5 of 17 of [ADR-0055](../0055-startup-sequencing.md), which indexes every p
     process it must stop behaving as the instance rather than compete — which is a rule this record
     states and which has no measurement behind it.
     *2026-10-21, measured on Windows: it does not hold. A primary suspended past the 5 s wait and then resumed answered the
-    hand-over queued on its pipe and surfaced its window beside the instance that had reclaimed the record ([the note](../../../defects/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md)).*
+    hand-over queued on its pipe and surfaced its window beside the instance that had reclaimed the record ([the note](../../../defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md)).*
+    *2026-10-31, built, not yet re-measured on Windows: the endpoint reads the record again as each ordinary hand-over
+    arrives. Where the record does not name this process at this endpoint, it acts on nothing, surfaces nothing and answers
+    not-acknowledged (`onHandOverDeclined`; main logs `hand-over declined`). The rule alone was not enough, and that is the
+    part of this consequence the repair corrects. A launch that read the record while it named the primary, and got that
+    decline, reclaimed by removing whatever record stood there, which was the new holder's, and became a second instance;
+    clause (4)'s second hand-over had never been built. The reclaim now removes only the claim it failed to reach, and (4)
+    hands such a launch to the process the record names (`instance.test.ts`, "a process the record was reclaimed from stands
+    down"). What the stood-down process does with its open windows is not stated here or in the specification
+    ([the note](../../../defects/a-stood-down-primary-keeps-its-windows-and-runs-on-with-no-end-the-specification-states.md)).*
 15. **The frequency of consequence 14 is governed by a rule in another record.** A synchronous
     platform-native dialog on main runs no main-process JavaScript at all for as long as it is open —
     measured across timers, renderer IPC and the utility-process channel alike — and the product

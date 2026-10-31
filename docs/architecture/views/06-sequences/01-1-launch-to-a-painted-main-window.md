@@ -76,9 +76,19 @@ driver seam, the hand-overs and everything after the launch never ran (`compress
 `workspace.opened` reply is a warning and an unacknowledged hand-off (`main/workspace-handoff.ts`). The window keeps its
 workspace, and the open's slot is not scheduled, as for any reply that is not `workspace.ack`. Any other rejection of the
 launch's open is logged, and the window stands with no workspace open, as a refused open leaves it. What else a missed reply
-owes is OQ-386's. The run host warms its skill catalogue in a microtask that runs before its reply is posted, so under load
-a slow discovery is a slow reply
-(`../../../defects/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`, open).
+owes is OQ-386's, ruled 2026-10-21; its main-side points (the idempotent case, the second hand-off, the notice, the log
+levels) are not built yet. Its point 1 is: the run host answers `workspace.opened` first and warms its skill catalogue
+from a zero-delay timer on its clock port, which runs after the reply is posted. The warm-up reads the tree
+asynchronously, at most four reads in flight (`SkillHost.warm`, `discoverSkillsAsync`). It stores its catalogue only if
+no rescan or session creation cleared that root while it ran, and the `skills.*` reads wait for it rather than walk the
+tree again. That wait is bounded on the clock port (`WARM_UP_WAIT_BOUND`, 6 s, under main's 10 s and 15 s bounds on those
+requests): a warm-up that has not settled by then is abandoned, said once at `warn`, and the waiting request reads the
+catalogue as a cold ask does. A request the saved configuration refuses (OQ-279) is refused before it waits, and a
+warm-up that a clear overtakes stops at its next read instead of finishing beside the next one. Until 2026-10-31 the warm-up was a microtask holding the synchronous walk, which ran before the reply was
+posted, so under load a slow discovery was a slow reply
+(`../../../defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`;
+[OQ-386](../../open-questions/67-spikes-and-later-questions-34.md#oq-386)). The re-discovery after a session creation or
+a rescan is still synchronous, which the ruling left open.
 
 **The update check rides the post-show activation, and so does every window built later.** `MainWindows` fires
 `postShowActivation` once per window on the window's own show event — the launch's window, a replacement's

@@ -107,10 +107,18 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       stores.set(req.workspaceId, { file: req.storeFile, root: req.workspaceRoot, db, dal });
       const t = dal.totals();
       log(`opened ${req.storeFile} (${t.sessions} sessions, ${t.rows} rows)`);
-      // REQ-WORKSPACE-058 (ADR-0063): "discovery runs automatically on workspace open with no user action".
-      // Warmed off the reply so it cannot delay the open; a failure here is logged and costs nothing, because
-      // the next ask discovers on a cold cache anyway.
-      queueMicrotask(() => { try { skills.catalog(req.workspaceRoot); } catch (cause) { log(`skills: discovery on workspace open failed: ${String(cause)}`, 'warn'); } });
+      /*
+       * REQ-WORKSPACE-058 (ADR-0063): "discovery runs automatically on workspace open with no user action".
+       * FALSIFIED 2026-10-20, kept beside its replacement: "Warmed off the reply so it cannot delay the open; a failure here
+       * is logged and costs nothing, because the next ask discovers on a cold cache anyway." The warm-up was a
+       * `queueMicrotask`, and the microtask ran before the reaction `index.ts` attaches to this promise to post the reply, so
+       * the synchronous walk ran first and held the loop while it did: 8,201.5 ms beside the full suite, against main's
+       * 5,000 ms bound (docs/defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md).
+       * OQ-386 point 1 (ruled 2026-10-21): the warm-up starts from a zero-delay timer on the clock port, which runs after the
+       * reply is posted, and reads the tree asynchronously, a few reads at a time (`SkillHost.warm`). A failure is still
+       * logged and still costs nothing; the `skills.*` requests below wait for a warm-up in flight rather than walk again.
+       */
+      clocks.timers.after(millis(0), () => { void skills.warm(req.workspaceRoot); });
       return { kind: 'workspace.ack', workspaceId: req.workspaceId };
     }
     /*
@@ -119,9 +127,15 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
      * and REQ-WORKSPACE-151 both scope their effect to the session and leave `skills.overrides` exactly as it
      * was, which is why the row a surface draws keeps showing the PERSISTED policy. The fifth, `skills.list`
      * (REQ-CHAT-162), persists exactly one thing — a transcript row — and changes no policy either.
+     *
+     * OQ-386 point 1: `skills.read`, `skills.forceLoad`, `skills.loadFile` and `skills.list` first wait for the warm-up a
+     * workspace open started (`SkillHost.settled`, at once when none is in flight, and bounded), so the tree is read once
+     * rather than a second time beside it. `skills.rescan` does not: it is the request that discards what the warm-up would
+     * store. OQ-279's refusal is not queued behind that wait: the saved configuration's fault is read first and refused at
+     * once (`skillsAnswerSettled`); only a request it does not refuse waits.
      */
     case 'skills.read':
-      return skillsAnswer(skills, req.workspaceRoot, () => ({ kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId) }));
+      return skillsAnswerSettled(skills, req.workspaceRoot, () => ({ kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId) }));
     case 'skills.rescan':
       return skillsAnswer(skills, req.workspaceRoot, () => {
         // REQ-WORKSPACE-069: re-read from disk, re-project, change no policy, mark nothing dirty.
@@ -132,20 +146,20 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
         return { kind: 'skills.state', state };
       });
     case 'skills.forceLoad':
-      return skillsAnswer(skills, req.workspaceRoot, () => {
+      return skillsAnswerSettled(skills, req.workspaceRoot, () => {
         const r = skills.forceLoad(req.workspaceRoot, req.sessionId, req.name);
         if (!r.ok) return { kind: 'refused', code: r.reason === 'disabled' ? 'skills.disabled' : 'skills.unknown', headline: r.reason === 'disabled' ? SKILLS_DISABLED_MESSAGE : r.reason };
         return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
       });
     case 'skills.loadFile':
-      return skillsAnswer(skills, req.workspaceRoot, () => {
+      return skillsAnswerSettled(skills, req.workspaceRoot, () => {
         const r = skills.loadFile(req.workspaceRoot, req.sessionId, req.path);
         // REQ-WORKSPACE-151: a failure is reported with the reason REQ-WORKSPACE-057 gives and leaves the catalog unchanged.
         if (!r.ok) return { kind: 'refused', code: 'skills.load-failed', headline: r.reason };
         return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
       });
     case 'skills.list':
-      return skillsAnswer(skills, req.workspaceRoot, () => {
+      return skillsAnswerSettled(skills, req.workspaceRoot, () => {
         // REQ-CHAT-162: one saved system row, through the followed session's own writer (`writeSkillListing` says why).
         const r = writeSkillListing(sessions.writer(asSessionId(req.sessionId)), skills.state(req.workspaceRoot, req.sessionId));
         if (!r.ok) return { kind: 'refused', code: r.code, headline: 'The skills could not be listed in the transcript', detail: r.reason };
@@ -845,6 +859,23 @@ function unloadedRefusal(fault: string): Extract<ProcessReply, { kind: 'refused'
 export function skillsAnswer(skills: Pick<SkillHost, 'fault'>, workspaceRoot: string, answer: () => ProcessReply): ProcessReply {
   const unloaded = skillsUnloaded(skills, workspaceRoot);
   if (unloaded) return unloaded;
+  return answeredUnlessUnloaded(answer);
+}
+
+/**
+ * `skillsAnswer` with OQ-386 point 1's wait for a warm-up in flight (`SkillHost.settled`) between the refusal and the answer.
+ * OQ-279's refusal is read FIRST and answered at once: the ruling lets a request wait for the warm-up, and does not put a
+ * refusal behind it. The configuration is read as often as `skillsAnswer` reads it — a file saved with a fault during the
+ * wait is still met by the answer's own read (`SkillsUnloaded`).
+ */
+export async function skillsAnswerSettled(skills: Pick<SkillHost, 'fault' | 'settled'>, workspaceRoot: string, answer: () => ProcessReply): Promise<ProcessReply> {
+  const unloaded = skillsUnloaded(skills, workspaceRoot);
+  if (unloaded) return unloaded;
+  await skills.settled(workspaceRoot);
+  return answeredUnlessUnloaded(answer);
+}
+
+function answeredUnlessUnloaded(answer: () => ProcessReply): ProcessReply {
   try {
     return answer();
   } catch (cause) {

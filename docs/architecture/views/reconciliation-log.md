@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-31**
 
+**The run host answers `workspace.opened` before it warms the skill catalogue, off its loop (OQ-386 point 1, REQ-WORKSPACE-058; 2026-10-31, `../../defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`).** `06-sequences/01-1-launch-to-a-painted-main-window.md` §1 says the warm-up starts from a zero-delay timer on the run host's clock port, after the reply is posted, and reads the tree asynchronously, at most four reads in flight; `02-process-view.md`'s run-host row says the catalog is warmed so. It stores its catalogue only if no rescan or session creation cleared that root while it ran, and `skills.read`, `skills.forceLoad`, `skills.loadFile` and `skills.list` wait for it. Before, it said a microtask ran the walk ahead of the reply. `config` gains `discoverSkillsAsync` and its ports beside `discoverSkills`, with a `stopped` predicate that ends a superseded walk at its next read (`DiscoveryStopped`); `SkillHost` gains `warm` and `settled`, whose wait is bounded on the timer port (`WARM_UP_WAIT_BOUND`, ADR-0002 consequence 11) and which a `skills.*` request reaches only after OQ-279's refusal (`skillsAnswerSettled`). No package, edge, process, channel, request shape, command, notice or store column changed, and no fact changed owner (`05-state-ownership.md` unchanged). The re-discovery after a session creation or a rescan stays synchronous, as OQ-386 left it.
+
 **The portable swap never empties the artifact's path (REQ-STARTUP-176, REQ-STARTUP-125 under PD-STARTUP-008; 2026-10-31, `../../defects/fixed/the-portable-swap-leaves-the-artifact-path-empty-between-its-two-renames.md`).** `02-process-view.md`'s files on disk: the `.update`/`.old` row names the copy aside and the single rename onto the target, and what a failed final rename leaves; `06-sequences.md` §1's portable branch says the same. `StrategyFiles` gains `copyAside` (`updater/electron.ts`: an exclusive `copyFile`). No package, edge, process, channel, command, notice or store column changed, and no fact changed owner (`05-state-ownership.md` unchanged).
 
 **The update download is bounded by the size the feed states (REQ-STARTUP-169/179; 2026-10-31, `../../defects/fixed/the-update-download-writes-whatever-length-the-server-sends.md`).** `02-process-view.md`'s files on disk: the staging row names the bound; `06-sequences.md` §1's asset fetch says the same. A longer transfer fails at the existing `download` stage with its own sentence. No package, edge, process, channel, command, notice or store column changed, and no fact changed owner (`05-state-ownership.md` unchanged).
@@ -251,12 +253,6 @@ Last reconciled with the code: **2026-10-18**
 
 **The development-time store behind `pnpm dev-time` (R-075; first execution 2026-10-18).** `01-component-view.md` gains the tool's section: measured spans of setup, build, each `pnpm check` stage, proofs, repairs and repeated rebases, one JSON record a span in `~/.rotaris/dev-time/log.jsonl`. No package, edge or process changed.
 
-Last reconciled with the code: **2026-10-16**
-
-**Windows MCP shutdown preserves the runner until its server closes (R-074, REQ-MCP-066/067/113).** `02-process-view.md` now states the Windows graceful phase: stdin EOF, then the existing grace, then taskkill of the intact tree. The immediate rename after graceful and forced runner shutdown is measured by the MCP suite. Observation fixtures use Windows junctions, preserving their existing path-alias assertions without needing symlink privileges.
-
-**Children have no fixed model-step cap (PD-ORCH-017, R-073).** `03-runtime-view.md` section 3 now distinguishes the root's 100-step bound from delegated children, which pass no limit to `runTurn`. The child composition no longer carries the root's step-bound setting. Timeout, cancellation, pause and supervision still govern children.
-
 
 ## Older entries
 
@@ -268,6 +264,7 @@ with the next number, and its row goes at the top of this table.
 
 | Part | "Last reconciled" dates it carries | Its newest entry |
 |---|---|---|
+| [13](reconciliation-log/13.md) | 2026-10-16 | Windows MCP shutdown preserves the runner until its server closes (R-074, REQ-MCP-066/067/113). |
 | [12](reconciliation-log/12.md) | 2026-10-15, 2026-10-14 | A Windows ARM64 development tree's bundle is the win32-x64 one (the Windows ARM64 session; OQ-401, the … |
 | [11](reconciliation-log/11.md) | 2026-10-13 | `focus-session` reaches the session where it lives (PD-SHELL-001 revision 3, OQ-292; fin44, … |
 | [10](reconciliation-log/10.md) | — | An exact or replace-all edit keeps a CRLF file's line endings (PD-TOOLS-017, OQ-254; fin38). |

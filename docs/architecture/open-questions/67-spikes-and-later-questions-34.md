@@ -114,6 +114,15 @@ The two recommendations weighed, and the ruling followed **both**:
 
   The ruling took the mechanism (a second ordinary bounded request), the idempotent case (owed as built, because of the reopen), the classification and the separate notes. It moved the second request off the open's path and bounded it at 25,000 ms, so the window waits no longer and a run host late by up to 30 s needs nothing from the person. It also repaired the open's own warm-up here rather than in a later note. A warm-up that still holds the loop after the acknowledgement would only move the lost slot from the hand-off to the slot's `hooks.summary`.
 
+**Built 2026-10-31 — point 1 alone** (`fix/workspace-open-warmup-off-the-loop`). The `workspace.opened` case starts the warm-up
+from `clocks.timers.after(millis(0), …)`, and the falsified comment stands beside its replacement. `SkillHost.warm` reads the
+tree through `discoverSkillsAsync`, which shares every rule after the reads with `discoverSkills`, at most four reads in flight.
+A per-root generation, advanced by a rescan and by a session creation, decides whether it stores its catalogue. The four reads
+wait on `SkillHost.settled`. The first execution held in the unit cases, and no proof re-measured the launch
+([first-executions](../first-executions/34-the-register-33.md);
+[the note](../../defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md)).
+Points 2 to 5 are not built. The first item recorded beside the ruling stands as recorded.
+
 <a id="oq-370"></a>
 
 **OQ-370 — When the terminal window kills a soft-paused command, when does its live stream end?** *(REQ-SHELL-092, "confirming

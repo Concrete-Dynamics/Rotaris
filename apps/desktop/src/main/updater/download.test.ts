@@ -101,6 +101,44 @@ describe('the size bound — REQ-STARTUP-169, REQ-STARTUP-179', () => {
     expect(Buffer.concat(s.written).equals(body)).toBe(true);
   });
 
+  it('a transfer this function ends keeps its own reason when the body rejects as it is closed', async () => {
+    // A cancelled web stream — what `electron.ts` hands in — reports `net::ERR_CONNECTION_RESET` from its close, and
+    // closing the body is exactly how the bound is enforced. The refusal must not be relabelled a transport failure:
+    // REQ-STARTUP-179 counts a bound refusal differently from one, and its sentence comes from that reason alone.
+    function bodyThatRejectsOnClose(parts: Uint8Array[], message: string): AsyncIterable<Uint8Array> {
+      let i = 0;
+      return {
+        [Symbol.asyncIterator]: () => ({
+          next: async () => (i < parts.length ? { value: parts[i++]!, done: false } : { value: undefined, done: true }),
+          return: async () => { throw new Error(message); },
+        }),
+      };
+    }
+    const claimed = 10;
+    const s = sink();
+    const out = await streamInChunks(bodyThatRejectsOnClose([bytes(50)], 'net::ERR_CONNECTION_RESET'), claimed, s.sink, () => undefined);
+    expect(out).toEqual({ ok: false, why: 'oversized', error: `the server sent more than the ${claimed} bytes the release feed states` });
+    expect(s.written).toEqual([]);
+
+    // The same for a write failure and for an abandonment: each keeps its own reason across the close.
+    const write = await streamInChunks(bodyThatRejectsOnClose([bytes(CHUNK_BYTES), bytes(1)], 'net::ERR_CONNECTION_RESET'), 0, sink(1).sink, () => undefined);
+    expect(write).toMatchObject({ ok: false, why: 'write', error: 'ENOSPC: no space left on device' });
+
+    const controller = new AbortController();
+    const aborting = bodyThatRejectsOnClose([bytes(4)], 'net::ERR_CONNECTION_RESET');
+    controller.abort();
+    expect(await streamInChunks(aborting, 0, sink().sink, () => undefined, controller.signal)).toMatchObject({ ok: false, why: 'aborted' });
+
+    // A body that really did fail on its own is still a read failure, close or no close.
+    const broken: AsyncIterable<Uint8Array> = {
+      [Symbol.asyncIterator]: () => ({
+        next: async () => { throw new Error('ECONNRESET'); },
+        return: async () => ({ value: undefined, done: true }),
+      }),
+    };
+    expect(await streamInChunks(broken, 0, sink().sink, () => undefined)).toMatchObject({ ok: false, why: 'read', error: 'ECONNRESET' });
+  });
+
   it('a claimed size of 0 leaves the body unbounded', async () => {
     const body = bytes(4 * CHUNK_BYTES + 3, 6);
     const progress: DownloadProgress[] = [];

@@ -32,7 +32,7 @@ shows the ordinary path unchanged; the missed reply itself is pinned by the unit
 
 **The likely trigger, recorded and not repaired.** The run host warms its skill catalogue in a microtask that runs before its
 reply is posted. A slow discovery (8,201.5 ms here) is therefore a slow reply:
-[`the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`](../the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md).
+[`the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`](the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md).
 This bundle's proof logs show the order: "skills: 1 discovered" before "run host: workspace.ack", in the same millisecond.
 
 While checking PD-ORCH-017 on Windows ARM64, `compression-proof`'s `automatic` launch logged `UNHANDLED rejection in main: Error: no reply to workspace.opened within 5000 ms` at `2026-10-16T08:21:30.637Z`. Its final log then reported skill discovery taking 8,201.5 ms and a presenter-liveness lapse. The proof ended the launch at its 180,000 ms bound; SIGTERM ended it after another 4,526 ms. It never reached the compression measurement.

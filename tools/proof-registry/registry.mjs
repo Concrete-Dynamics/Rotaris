@@ -355,7 +355,7 @@ export const PROOFS = [
   {
     id: 'portable-proof',
     area: 'Configuration and startup',
-    summary: 'the portable\'s launcher stub and its assembly (ADR-0054 P4, REQ-STARTUP-165): preparing, reusing, every damage redone, a new artifact, a race, a root that accepts no write, and the built app painted through it twice',
+    summary: 'the portable\'s launcher stub and its assembly (ADR-0054 P4, REQ-STARTUP-165): preparing, reusing, every damage redone, a new artifact, a race, a root that accepts no write, the built app painted through it twice, and its could-not-prepare warning on screen through the real stub',
     neighbours: ['updater-proof'],
     requires: ['a Rust toolchain (`cargo`)'],
     platforms: Object.freeze(['linux', 'darwin']),

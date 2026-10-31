@@ -335,7 +335,10 @@ found one thing the paragraph above did not say.** `run-scoped` put the warning 
 no marker drew nothing. The marker's `unprepared-root` is the preparation root, `<data>/prepared`, and `prepared` is the
 placement within the per-user data directory, so the notice names the directory above it. The notice shares REQ-NOTIFY-024's
 one slot: on that host a later post-show notice (a project-setup failure) replaced it 1.4 s later, as any publication
-replaces the current one; it stays in the diagnostics.
+replaces the current one; it stays in the diagnostics. It carries no `sessionId`, so it is unscoped: the first prompt the
+user submits clears it (`clearForRunStart`, REQ-NOTIFY-029/058), and `record` writes it into the focused session's timeline
+where a session is restored. Run again on Windows 11 the same day, the built app with a marker beside `electron.exe`: the same three answers, and where no provider is authenticated the first-launch notice replaces the warning within a second (`../../../defects/the-could-not-prepare-warning-is-replaced-within-a-second-on-a-launch-with-no-authenticated-provider.md`). `pnpm portable-proof` B4 is the check that runs the real stub to the notice; A7
+cannot show it, its payload being a shell script. B4 is written and not yet executed (no `cargo` on either host).
 
 **Two launches racing to prepare, which SR-1 does not prevent.** The preparation happens in the stub,
 **before** the Electron process exists and therefore before the instance claim of `REQ-STARTUP-164` can

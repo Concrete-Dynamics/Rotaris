@@ -17,7 +17,9 @@
  *   B. **The application**: this host's Electron runtime with the built desktop app as its payload, launched twice
  *      through the stub to a painted window — preparing, then from the preparation — with the artifact variable reaching
  *      the application's main process (clause (e)) and the running image inside the preparation, never beside the
- *      artifact.
+ *      artifact, and no notice about preparation on either. Then once more with the root refusing every write: the
+ *      application runs from a run-scoped placement and shows the warning REQ-STARTUP-165 (c) requires, naming the
+ *      per-user data directory (B4). Part A's A7 cannot show that notice: its payload is a shell script.
  *
  * What this proof is NOT: the Windows artifact. That one is assembled from `win-unpacked` and launched twice by
  * `pnpm package` on the Windows x64 runner (its "portable" steps in `release/load-proof.json`); this host has no Windows
@@ -242,7 +244,16 @@ async function application() {
   mkdirSync(ws, { recursive: true });
   writeFileSync(join(ws, 'README.md'), '# scratch\n');
   const recordFile = join(root, 'record.json');
-  const prepared = join(dataDirFor(local), 'prepared');
+  const dataDirectory = dataDirFor(local);
+  const prepared = join(dataDirectory, 'prepared');
+  // REQ-STARTUP-165 (c): sampled before B1 and B2's capture, waited for on B4, because any later notice replaces it (REQ-NOTIFY-024).
+  const TITLE = '[data-testid="notice-title"]';
+  const WARNING = '[data-testid="notice"][data-severity="warning"]';
+  const NOT_PREPARED = 'could not prepare itself';
+  const probedAt = (log, label, selector) => {
+    const line = log.split('\n').find((l) => l.includes(`capture: probe-at ${label} ${selector} → `));
+    return line ? JSON.parse(line.slice(line.indexOf(' → ') + 3)) : null;
+  };
   const tokenDir = join(prepared, made.token);
   chmodSync(media, 0o555);
   const before = snapshot(media, exe);
@@ -250,7 +261,7 @@ async function application() {
     for (const [i, label] of ['B1-preparing', 'B2-from-the-preparation'].entries()) {
       const png = join(output, `${label}.png`);
       rmSync(recordFile, { force: true });
-      const env = launchOptions({ local, preferences: join(scratch, 'preferences'), extra: { ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_AFTER_MS: '1500', PORTABLE_PROOF_RECORD: recordFile } });
+      const env = launchOptions({ local, preferences: join(scratch, 'preferences'), extra: { ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_PROBE_AT: `${TITLE}@1400`, PORTABLE_PROOF_RECORD: recordFile } });
       const markerBefore = i === 1 ? statSync(join(tokenDir, MARKER)) : null;
       const r = await launch(label, exe, [...hostSwitches, ws], env, 120_000);
       const records = existsSync(recordFile) ? readFileSync(recordFile, 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : [];
@@ -261,6 +272,8 @@ async function application() {
       check(`${label}: main is started with ROTARIS_PORTABLE_ARTIFACT naming the artifact (clause (e))`, rec.artifact === exe, rec.artifact ?? '(not recorded)');
       check(`${label}: the running image is inside the preparation, never beside the artifact (clause (a))`, typeof rec.execPath === 'string' && rec.execPath.startsWith(`${tokenDir}/`), rec.execPath ?? '(not recorded)');
       check(`${label}: no process the product started from its own image inherits the variable (REQ-STARTUP-147, PD-STARTUP-004)`, children.every((c) => c.artifact === null), `${children.length} such process(es)${children.length ? `: ${children.map((c) => JSON.stringify(c.argv.slice(0, 2))).join(' ')}` : ''}`);
+      const titles = probedAt(r.log, '1400', TITLE);
+      check(`${label}: a run that made or reused a preparation reports nothing about it (REQ-STARTUP-150)`, titles !== null && !titles.some((t) => t.text.includes(NOT_PREPARED)) && !r.log.includes('launch preparation:'), JSON.stringify(titles));
       if (markerBefore) {
         const markerAfter = statSync(join(tokenDir, MARKER));
         check(`${label}: started from the preparation the first launch made, not prepared again`, markerAfter.ino === markerBefore.ino && markerAfter.mtimeMs === markerBefore.mtimeMs, `marker inode ${markerAfter.ino}`);
@@ -271,6 +284,27 @@ async function application() {
   }
   const after = snapshot(media, exe);
   check('B3 the application artifact\'s read-only directory is byte for byte what it was (clause (a))', JSON.stringify(after) === JSON.stringify(before), `sha256 ${after.sha256.slice(0, 16)}…`);
+
+  // Clause (c)'s report, end to end: the real stub, the real marker, the real application. A7 measures the marker; this measures the notice.
+  const tmp = join(scratch, 'tmp');
+  mkdirSync(tmp, { recursive: true });
+  rmSync(prepared, { recursive: true, force: true });
+  mkdirSync(prepared, { recursive: true });
+  chmodSync(prepared, 0o555);
+  try {
+    const png = join(output, 'B4-no-preparation.png');
+    rmSync(recordFile, { force: true });
+    const env = launchOptions({ local, preferences: join(scratch, 'preferences'), extra: { TMPDIR: tmp, ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_AFTER_MS: '10000', ROTARIS_CAPTURE_PROBE_AT: `${WARNING}@100~8000`, PORTABLE_PROOF_RECORD: recordFile } });
+    const r = await launch('B4-no-preparation', exe, [...hostSwitches, ws], env, 180_000);
+    const [rec = {}] = existsSync(recordFile) ? readFileSync(recordFile, 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : [];
+    check('B4 with the root refusing every write the application still starts and paints (clause (c))', r.status === 0 && existsSync(png) && /captured /.test(r.log), `status ${r.status}, ${r.elapsedMs} ms`);
+    check('B4 it ran from a run-scoped placement, never from the root or beside the artifact (clause (c))', typeof rec.execPath === 'string' && rec.execPath.startsWith(`${tmp}/rotaris-run-`), rec.execPath ?? '(not recorded)');
+    const [warning] = probedAt(r.log, '~8000', WARNING) ?? [];
+    check('B4 the warning is on screen after the show, saying it could not prepare itself and that every launch costs the same (REQ-STARTUP-165 (c), REQ-STARTUP-150)', typeof warning?.text === 'string' && warning.text.includes(NOT_PREPARED) && warning.text.includes('Every launch will take as long as this one'), warning?.text ?? '(no warning)');
+    check('B4 it names the per-user data directory, never the preparation root or the placement (REQ-STARTUP-165 (c))', typeof warning?.text === 'string' && warning.text.includes(`${dataDirectory}.`) && !warning.text.includes(prepared) && !warning.text.includes('rotaris-run-'), warning?.text ?? '(no warning)');
+  } finally {
+    chmodSync(prepared, 0o755);
+  }
   rmSync(root, { recursive: true, force: true });
 }
 

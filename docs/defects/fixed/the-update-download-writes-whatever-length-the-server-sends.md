@@ -35,3 +35,10 @@ claimed size of 0 stays unbounded (REQ-STARTUP-118's `{N} MB`).
 Pinned in `download.test.ts` and `install.test.ts` over fakes; never run against a real oversized response. REQ-STARTUP-179's
 "not retried for that release by the same process" belongs to the background path, which is not built (the background-update
 plan's PR-4). Today an install is started only by the user's click, and no refusal is retried automatically.
+
+*Corrected 2026-10-31, in review of that repair: "kept apart from `read`" did not hold for a body whose close rejects.
+Returning out of the loop closes the iterator, a cancelled web stream (what `updater/electron.ts` hands in) can reject as
+it closes with `net::ERR_CONNECTION_RESET`, and the `catch` then reported the refusal as `read`, so `install.ts` showed
+"ended early" rather than the bound's sentence. The bound itself held: no byte past it was written. `streamInChunks` now
+carries the reason it ended a transfer (`oversized`, `write`, `aborted`) across the close; a body that fails on its own
+is still `read`. Pinned in `download.test.ts` over a fake body that rejects on close.*

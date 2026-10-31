@@ -121,13 +121,14 @@ describe('the size bound — REQ-STARTUP-169, REQ-STARTUP-179', () => {
     expect(s.written).toEqual([]);
 
     // The same for a write failure and for an abandonment: each keeps its own reason across the close.
-    const write = await streamInChunks(bodyThatRejectsOnClose([bytes(CHUNK_BYTES), bytes(1)], 'net::ERR_CONNECTION_RESET'), 0, sink(1).sink, () => undefined);
-    expect(write).toMatchObject({ ok: false, why: 'write', error: 'ENOSPC: no space left on device' });
+    // The write fails inside the loop, on the full chunk with a piece still to come, so the return closes the body.
+    const write = await streamInChunks(bodyThatRejectsOnClose([bytes(CHUNK_BYTES), bytes(5)], 'net::ERR_CONNECTION_RESET'), 0, sink(0).sink, () => undefined);
+    expect(write).toEqual({ ok: false, why: 'write', error: 'ENOSPC: no space left on device' });
 
     const controller = new AbortController();
     const aborting = bodyThatRejectsOnClose([bytes(4)], 'net::ERR_CONNECTION_RESET');
     controller.abort();
-    expect(await streamInChunks(aborting, 0, sink().sink, () => undefined, controller.signal)).toMatchObject({ ok: false, why: 'aborted' });
+    expect(await streamInChunks(aborting, 0, sink().sink, () => undefined, controller.signal)).toEqual({ ok: false, why: 'aborted', error: 'the download was abandoned' });
 
     // A body that really did fail on its own is still a read failure, close or no close.
     const broken: AsyncIterable<Uint8Array> = {

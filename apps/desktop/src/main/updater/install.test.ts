@@ -93,6 +93,7 @@ function targetVolume(initial: Record<string, string> = { [TARGET]: 'v0.1.0' }) 
   const port: StrategyFiles = {
     pathKind: async (p) => (files.has(p) ? 'file' : 'absent'),
     copyFile: async (from, to) => { ops.push(`copy:${from}→${to}`); files.set(to, `copy of ${from}`); },
+    copyAside: async (from, to) => { ops.push(`copy-aside:${from}→${to}`); files.set(to, files.get(from)!); },
     rename: async (from, to) => { ops.push(`rename:${from}→${to}`); files.set(to, files.get(from)!); files.delete(from); },
     removeFile: async (p) => { ops.push(`remove:${p}`); files.delete(p); },
   };
@@ -244,6 +245,21 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     expect(await runInstall(offer(), context(status, stagingArea(), targetVolume()).ctx)).toEqual({ ok: false, stage: 'download', sentence: `could not download ${ASSET}: HTTP 302` });
     const nostaging = published();
     expect(await runInstall(offer(), context(nostaging, stagingArea({ createFails: true }), targetVolume()).ctx)).toMatchObject({ ok: false, stage: 'download', sentence: expect.stringContaining('staging directory') });
+  });
+
+  it('a transfer longer than the size the feed states is ended and refused with its own sentence, discards what it wrote and installs nothing (REQ-STARTUP-169, REQ-STARTUP-179)', async () => {
+    // The manifest lists the long body's own digest, so nothing but the bound can refuse it.
+    const long = Buffer.concat([payload, Buffer.alloc(400_000, 1)]);
+    const release = published({ assetBytes: long, manifestEntries: [{ name: ASSET, sha256: createHash('sha256').update(long).digest('hex') }] });
+    const staging = stagingArea();
+    const volume = targetVolume();
+    const { ctx, progress } = context(release, staging, volume);
+    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'download', sentence: `${ASSET} is larger than the ${payload.byteLength} bytes the release feed states for it; the download was ended and discarded, and nothing was installed` });
+    expect(progress.every((p) => p.bytesSoFar <= payload.byteLength)).toBe(true);
+    expect(staging.files.size).toBe(0);
+    expect(staging.dirs.size).toBe(0);
+    expect(volume.ops).toEqual([]);
+    expect(volume.files.get(TARGET)).toBe('v0.1.0');
   });
 
   it('an abort during the download discards the partial file (REQ-SHELL-121: no partially written file is left)', async () => {

@@ -70,6 +70,46 @@ describe('download staging — REQ-STARTUP-124', () => {
   });
 });
 
+describe('the size bound — REQ-STARTUP-169, REQ-STARTUP-179', () => {
+  it('a body longer than a non-zero claimed size fails as oversized, and not one byte past the bound is written', async () => {
+    const claimed = 2 * CHUNK_BYTES + 100;
+    const s = sink();
+    const progress: DownloadProgress[] = [];
+    // Two whole chunks within the bound, then a piece that crosses it, then more the server would keep sending.
+    const out = await streamInChunks(pieces(bytes(CHUNK_BYTES), bytes(CHUNK_BYTES), bytes(101), bytes(CHUNK_BYTES)), claimed, s.sink, (p) => progress.push(p));
+    expect(out).toEqual({ ok: false, why: 'oversized', error: `the server sent more than the ${claimed} bytes the release feed states` });
+    const writtenBytes = s.written.reduce((n, c) => n + c.byteLength, 0);
+    expect(writtenBytes).toBe(2 * CHUNK_BYTES);
+    expect(writtenBytes).toBeLessThanOrEqual(claimed);
+    expect(progress.map((p) => p.bytesSoFar)).toEqual([CHUNK_BYTES, 2 * CHUNK_BYTES]);
+  });
+
+  it('a single piece already past the bound writes nothing, and the body is not read further', async () => {
+    let yielded = 0;
+    async function* endless(): AsyncGenerator<Uint8Array> { for (;;) { yielded += 1; yield bytes(CHUNK_BYTES + 1); } }
+    const s = sink();
+    expect(await streamInChunks(endless(), CHUNK_BYTES, s.sink, () => undefined)).toMatchObject({ ok: false, why: 'oversized' });
+    expect(s.written).toEqual([]);
+    expect(yielded).toBe(1);
+  });
+
+  it('a body of exactly the claimed size succeeds with its digest', async () => {
+    const body = bytes(CHUNK_BYTES + 7, 5);
+    const s = sink();
+    const out = await streamInChunks(pieces(body.subarray(0, 500_000), body.subarray(500_000)), body.byteLength, s.sink, () => undefined);
+    expect(out).toEqual({ ok: true, bytes: body.byteLength, sha256: createHash('sha256').update(body).digest('hex') });
+    expect(Buffer.concat(s.written).equals(body)).toBe(true);
+  });
+
+  it('a claimed size of 0 leaves the body unbounded', async () => {
+    const body = bytes(4 * CHUNK_BYTES + 3, 6);
+    const progress: DownloadProgress[] = [];
+    const out = await streamInChunks(pieces(body), 0, sink().sink, (p) => progress.push(p));
+    expect(out).toEqual({ ok: true, bytes: body.byteLength, sha256: createHash('sha256').update(body).digest('hex') });
+    expect(progress.map((p) => p.bytesSoFar)).toEqual([CHUNK_BYTES, 2 * CHUNK_BYTES, 3 * CHUNK_BYTES, 4 * CHUNK_BYTES, body.byteLength]);
+  });
+});
+
 describe('the measured figure — REQ-STARTUP-118', () => {
   it('is the whole-number percentage of a stated size, fractional part discarded, never above 100', () => {
     expect(measuredLabel({ bytesSoFar: 0, claimedTotal: 1000 })).toBe('0%');

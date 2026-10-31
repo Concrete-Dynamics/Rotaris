@@ -18,20 +18,32 @@ export interface DownloadProgress {
   readonly claimedTotal: number;
 }
 
+/**
+ * `oversized` is REQ-STARTUP-169's bound, kept apart from `read`: the transfer did not fail, the server sent more than
+ * the release feed states, which REQ-STARTUP-179 counts among the integrity refusals (not retried for that release by the
+ * same process) rather than among the transport failures. The caller words it and decides the retry from `why` alone.
+ */
 export type StreamOutcome =
   | { readonly ok: true; readonly bytes: number; readonly sha256: string }
-  | { readonly ok: false; readonly why: 'write' | 'read' | 'aborted'; readonly error: string };
+  | { readonly ok: false; readonly why: 'write' | 'read' | 'aborted' | 'oversized'; readonly error: string };
 
 /**
  * Read the body, write it in 1 MiB chunks, hash each chunk as it is written, and report `(bytes_so_far, claimed_total)`
  * no more often than once per 1 MiB received — plus the final settle report when the last partial chunk lands. The
  * caller decides what to do with the partial file on a failure (REQ-STARTUP-124: delete it, fail with its sentence).
+ *
+ * REQ-STARTUP-169: with a non-zero `claimedTotal`, a piece that would take what was received past it ends the transfer
+ * as `oversized` before any of that piece is buffered, so not one byte past the bound reaches the sink (returning out of
+ * the loop closes the body's iterator, which is what ends the transfer); what was written before it is within the
+ * bound, and the caller discards it as on any other failure. A `claimedTotal` of 0 is
+ * a feed that stated no size, and the body is unbounded as before (REQ-STARTUP-118's `{N} MB`).
  */
 export async function streamInChunks(body: AsyncIterable<Uint8Array>, claimedTotal: number, sink: DownloadSink, onProgress: (p: DownloadProgress) => void, signal?: AbortSignal): Promise<StreamOutcome> {
   const hash = createHash('sha256');
   let buffered: Uint8Array[] = [];
   let bufferedBytes = 0;
   let written = 0;
+  let received = 0;
   const flush = async (): Promise<void> => {
     if (bufferedBytes === 0) return;
     const chunk = buffered.length === 1 ? buffered[0]! : Buffer.concat(buffered, bufferedBytes);
@@ -45,6 +57,8 @@ export async function streamInChunks(body: AsyncIterable<Uint8Array>, claimedTot
   try {
     for await (const piece of body) {
       if (signal?.aborted) return { ok: false, why: 'aborted', error: 'the download was abandoned' };
+      received += piece.byteLength;
+      if (claimedTotal > 0 && received > claimedTotal) return { ok: false, why: 'oversized', error: `the server sent more than the ${claimedTotal} bytes the release feed states` };
       let offset = 0;
       while (offset < piece.byteLength) {
         const take = Math.min(CHUNK_BYTES - bufferedBytes, piece.byteLength - offset);

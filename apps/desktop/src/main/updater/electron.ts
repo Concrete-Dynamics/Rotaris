@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { createWriteStream, promises as fsp } from 'node:fs';
+import { constants as fsConstants, createWriteStream, promises as fsp } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { app, net } from 'electron';
@@ -132,6 +132,11 @@ export function createUpdaterPorts(updatesDir: string): UpdaterPorts {
       // leftover of an earlier interrupted attempt, and `applyPortable` removes a partial one when the copy fails.
       // Nothing of the installation is touched by it (REQ-STARTUP-126).
       copyFile: (from, to) => fsp.copyFile(from, to),
+      // REQ-STARTUP-176: the target copied to `<name>.old` beside it, the target itself left in place; exclusive, so a
+      // file that appeared there since `applyPortable` removed the previous backup is refused, never replaced.
+      copyAside: (from, to) => fsp.copyFile(from, to, fsConstants.COPYFILE_EXCL),
+      // Node's rename overwrites an existing `to` (its documentation; on Windows libuv's MoveFileExW with
+      // MOVEFILE_REPLACE_EXISTING): onto the existing target, one step. Not yet measured on a Windows host.
       rename: (from, to) => fsp.rename(from, to),
       removeFile: (path) => fsp.rm(path, { force: true }),
     },

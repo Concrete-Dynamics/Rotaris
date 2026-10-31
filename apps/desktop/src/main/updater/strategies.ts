@@ -19,6 +19,13 @@ export interface StrategyFiles {
    * Replaces `to` when it exists: the only destination is `<name>.update`, the updater's own sibling (`applyPortable`).
    */
   copyFile(from: string, to: string): Promise<void>;
+  /**
+   * Copy the target to its backup name beside it, leaving the target where it is (REQ-STARTUP-176): the only destination
+   * is `<name>.old`, removed just before, so a file that appeared there since is refused (`EEXIST`) rather than replaced
+   * — and `applyPortable` then leaves it alone, because it is not this step's to remove.
+   */
+  copyAside(from: string, to: string): Promise<void>;
+  /** Move `from` onto `to`, replacing a file at `to` in one step (on Windows, as on POSIX, a rename onto a file replaces it). */
   rename(from: string, to: string): Promise<void>;
   /** Remove a file; an absent file is not an error. */
   removeFile(path: string): Promise<void>;
@@ -39,6 +46,12 @@ export const REPLACED_MESSAGE = 'The update is installed. Restart Rotaris to run
 export const INSTALLER_HANDOFF_MESSAGE = 'Rotaris will close so the installer can replace it.';
 export const NO_TARGET_SENTENCE = 'this Rotaris was not installed from a released artifact';
 
+/**
+ * Whether a copy refused a file already at the destination, rather than failing part-way through writing one. Node's
+ * `COPYFILE_EXCL` reports the first as `EEXIST`, which is the one case where the destination is not this attempt's.
+ */
+const destinationExisted = (error: unknown): boolean => (error as { readonly code?: unknown } | null | undefined)?.code === 'EEXIST';
+
 /** The path helpers for the platform the target lives on, without `node:path` binding to the host. */
 function splitPath(target: string): { dir: string; name: string; sep: string } {
   const sep = target.includes('\\') && !target.includes('/') ? '\\' : target.includes('/') ? '/' : '\\';
@@ -56,10 +69,14 @@ export const portableIncomingPath = (target: string): string => sibling(target, 
 
 /**
  * Windows portable → the verified file is placed beside the target, any previous backup is deleted, the target is
- * renamed to `<name>.old`, and the new file is then moved into the target path — while the application being replaced
- * is still running, the target being the artifact rather than the file the process is executing. If that final move
- * fails, the backup is renamed back before the step reports, so the executable present after a failure is the
- * original one. The `<name>.old` file remains until a later launch removes it (REQ-STARTUP-115). Where the artifact
+ * copied to `<name>.old`, and the new file is then renamed onto the target path in one step — while the application
+ * being replaced is still running, the target being the artifact rather than the file the process is executing.
+ * REQ-STARTUP-176 under PD-STARTUP-008 (narrowing REQ-STARTUP-125's "renamed to `<name>.old`, then moved in"): the
+ * target is never moved aside, so its path names the previous executable until the rename replaces it with the new one
+ * and is never empty — a process ended at any step leaves a file the user can start. If that final rename fails, the
+ * target was never touched and still holds the original bytes, so nothing is put back: the fresh copy and the placed
+ * sibling are removed and the step reports (REQ-STARTUP-126). The `<name>.old` file remains until a later launch
+ * removes it (REQ-STARTUP-115). Where the artifact
  * sits on media that cannot be written — read-only, or removed since launch — the step fails reporting that it could
  * not install the update at the target, changes nothing anywhere, and leaves the running application and its
  * preparation exactly as they were.
@@ -89,16 +106,21 @@ export async function applyPortable(target: string, verifiedFile: string, files:
     return fail(error);
   }
   try {
-    await files.rename(target, backup);
+    await files.copyAside(target, backup);
   } catch (error) {
+    // The target was only read. The previous backup was removed just above, so the backup name now holds either a
+    // partial copy of this attempt's own (removed here) or a file that appeared there since — refused, and left
+    // where it is, because removing a file this step did not write would change something it never touched.
+    if (!destinationExisted(error)) await files.removeFile(backup).catch(() => undefined);
     await files.removeFile(incoming).catch(() => undefined);
     return fail(error);
   }
   try {
     await files.rename(incoming, target);
   } catch (error) {
-    // The one step after which the original is no longer at the target path: put it back before reporting.
-    await files.rename(backup, target).catch(() => undefined);
+    // The target was never moved, so it still holds the original bytes; re-renaming anything here would only reopen
+    // the window this order closes. What this attempt added beside it is removed.
+    await files.removeFile(backup).catch(() => undefined);
     await files.removeFile(incoming).catch(() => undefined);
     return fail(error);
   }

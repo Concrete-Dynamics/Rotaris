@@ -1,35 +1,62 @@
 import { describe, expect, it } from 'vitest';
 import { applyInstaller, applyPortable, applyUpdate, cleanupPortableBackup, INSTALLER_HANDOFF_MESSAGE, NO_TARGET_SENTENCE, portableBackupPath, portableIncomingPath, REPLACED_MESSAGE, type StrategyFiles, type StrategySpawn } from './strategies.js';
 
-/** An in-memory volume: a map from path to content, with a script of operations that fail. */
-function volume(initial: Record<string, string>, failing: Partial<Record<'copy' | 'rename-aside' | 'rename-in' | 'remove-backup', string>> = {}) {
+const TARGET = 'E:\\Tools\\Rotaris-0.1.0-windows-x64-portable.exe';
+
+/**
+ * An in-memory volume: a map from path to content, with a script of operations that fail. After every operation it
+ * records what the target path then holds (`null` for nothing), so a test can read off REQ-STARTUP-176's "at every
+ * instant" — a process ended after any one of them leaves exactly that on disk. `copy-aside-partial` fails after
+ * writing part of `<name>.old`, as a copy interrupted by a full medium does.
+ */
+function volume(initial: Record<string, string>, failing: Partial<Record<'copy' | 'copy-aside' | 'copy-aside-exists' | 'copy-aside-partial' | 'rename-in' | 'remove-backup', string>> = {}) {
   const files = new Map(Object.entries(initial));
   const ops: string[] = [];
+  const targetAfter: (string | null)[] = [];
+  const settle = () => { targetAfter.push(files.get(TARGET) ?? null); };
   const port: StrategyFiles = {
     pathKind: async (p) => (files.has(p) ? 'file' : 'absent'),
     copyFile: async (from, to) => {
       ops.push(`copy:${from}→${to}`);
-      if (failing.copy) throw new Error(failing.copy);
-      files.set(to, files.get(from) ?? `<${from}>`);
+      try {
+        if (failing.copy) throw new Error(failing.copy);
+        files.set(to, files.get(from) ?? `<${from}>`);
+      } finally { settle(); }
+    },
+    copyAside: async (from, to) => {
+      ops.push(`copy-aside:${from}→${to}`);
+      try {
+        if (failing['copy-aside']) throw new Error(failing['copy-aside']);
+        if (failing['copy-aside-exists']) {
+          // The race this models: something else put a file at the backup name after `applyPortable` removed the previous
+          // one and before this copy ran. The fake writes it, then reports the refusal a real `COPYFILE_EXCL` gives.
+          files.set(to, 'someone else\u2019s file');
+          const e = new Error(`EEXIST: file already exists, copyfile '${from}' -> '${to}'`); (e as { code?: string }).code = 'EEXIST'; throw e;
+        }
+        if (files.has(to)) { const e = new Error(`EEXIST: file already exists, copyfile '${from}' -> '${to}'`); (e as { code?: string }).code = 'EEXIST'; throw e; }
+        if (failing['copy-aside-partial']) { files.set(to, 'partial'); throw new Error(failing['copy-aside-partial']); }
+        files.set(to, files.get(from)!);
+      } finally { settle(); }
     },
     rename: async (from, to) => {
       ops.push(`rename:${from}→${to}`);
-      if (failing['rename-aside'] && to.endsWith('.old')) throw new Error(failing['rename-aside']);
-      if (failing['rename-in'] && from.endsWith('.update')) throw new Error(failing['rename-in']);
-      if (!files.has(from)) throw new Error(`ENOENT: ${from}`);
-      files.set(to, files.get(from)!);
-      files.delete(from);
+      try {
+        if (failing['rename-in'] && from.endsWith('.update')) throw new Error(failing['rename-in']);
+        if (!files.has(from)) throw new Error(`ENOENT: ${from}`);
+        files.set(to, files.get(from)!);
+        files.delete(from);
+      } finally { settle(); }
     },
     removeFile: async (p) => {
       ops.push(`remove:${p}`);
-      if (failing['remove-backup'] && p.endsWith('.old') && files.has(p)) throw new Error(failing['remove-backup']);
-      files.delete(p);
+      try {
+        if (failing['remove-backup'] && p.endsWith('.old') && files.has(p)) throw new Error(failing['remove-backup']);
+        files.delete(p);
+      } finally { settle(); }
     },
   };
-  return { files, ops, port };
+  return { files, ops, targetAfter, port };
 }
-
-const TARGET = 'E:\\Tools\\Rotaris-0.1.0-windows-x64-portable.exe';
 const STAGED = 'C:\\Users\\u\\AppData\\Local\\Temp\\rotaris-update-abc\\Rotaris-0.2.0-windows-x64-portable.exe';
 
 describe('the Windows portable strategy — REQ-STARTUP-125, REQ-STARTUP-126', () => {
@@ -40,16 +67,20 @@ describe('the Windows portable strategy — REQ-STARTUP-125, REQ-STARTUP-126', (
     expect(portableBackupPath('Rotaris.exe')).toBe('Rotaris.exe.old');
   });
 
-  it('places the verified file beside the target, deletes any previous backup, renames the target aside and moves the new file in, in that order', async () => {
+  it('places the verified file beside the target, deletes any previous backup, copies the target aside and renames the new file onto it, in that order', async () => {
     const v = volume({ [TARGET]: 'v0.1.0', [`${TARGET}.old`]: 'v0.0.9', [STAGED]: 'v0.2.0' });
     const out = await applyPortable(TARGET, STAGED, v.port);
     expect(out).toEqual({ ok: true, outcome: 'replaced', message: REPLACED_MESSAGE });
     expect(v.ops).toEqual([
       `copy:${STAGED}→${TARGET}.update`,
       `remove:${TARGET}.old`,
-      `rename:${TARGET}→${TARGET}.old`,
+      `copy-aside:${TARGET}→${TARGET}.old`,
       `rename:${TARGET}.update→${TARGET}`,
     ]);
+    // REQ-STARTUP-176: after every step the target path names a complete executable, the previous one until the single
+    // rename replaces it with the new one — never nothing. The target is never the source of a rename.
+    expect(v.targetAfter).toEqual(['v0.1.0', 'v0.1.0', 'v0.1.0', 'v0.2.0']);
+    expect(v.ops.some((op) => op.startsWith(`rename:${TARGET}→`))).toBe(false);
     expect(v.files.get(TARGET)).toBe('v0.2.0');
     // The backup remains until a later launch removes it (REQ-STARTUP-115).
     expect(v.files.get(`${TARGET}.old`)).toBe('v0.1.0');
@@ -72,14 +103,18 @@ describe('the Windows portable strategy — REQ-STARTUP-125, REQ-STARTUP-126', (
   it('when the medium cannot be written the step fails naming the target, and the original is byte-for-byte what it was', async () => {
     const v = volume({ [TARGET]: 'v0.1.0', [STAGED]: 'v0.2.0' }, { copy: 'EROFS: read-only file system' });
     expect(await applyPortable(TARGET, STAGED, v.port)).toEqual({ ok: false, sentence: `could not install the update at ${TARGET}: EROFS: read-only file system` });
+    expect(v.targetAfter.every((held) => held === 'v0.1.0')).toBe(true);
     expect(v.files.get(TARGET)).toBe('v0.1.0');
     expect(v.files.has(`${TARGET}.update`)).toBe(false);
   });
 
-  it('when the final move fails the backup is renamed back before the step reports, so the executable present is the original', async () => {
+  it('when the final rename fails the target was never moved and still holds the original; nothing is renamed back, and what the attempt added is removed', async () => {
     const v = volume({ [TARGET]: 'v0.1.0', [STAGED]: 'v0.2.0' }, { 'rename-in': 'EPERM: operation not permitted' });
     expect(await applyPortable(TARGET, STAGED, v.port)).toEqual({ ok: false, sentence: `could not install the update at ${TARGET}: EPERM: operation not permitted` });
-    expect(v.ops.slice(-2)).toEqual([`rename:${TARGET}.old→${TARGET}`, `remove:${TARGET}.update`]);
+    expect(v.ops.slice(-3)).toEqual([`rename:${TARGET}.update→${TARGET}`, `remove:${TARGET}.old`, `remove:${TARGET}.update`]);
+    // No rollback rename: the only rename ever attempted is the one that failed.
+    expect(v.ops.filter((op) => op.startsWith('rename:'))).toEqual([`rename:${TARGET}.update→${TARGET}`]);
+    expect(v.targetAfter.every((held) => held === 'v0.1.0')).toBe(true);
     expect(v.files.get(TARGET)).toBe('v0.1.0');
     expect(v.files.has(`${TARGET}.old`)).toBe(false);
     expect(v.files.has(`${TARGET}.update`)).toBe(false);
@@ -93,14 +128,37 @@ describe('the Windows portable strategy — REQ-STARTUP-125, REQ-STARTUP-126', (
     expect(v.files.has(`${TARGET}.update`)).toBe(false);
   });
 
-  it('a failure renaming the target aside, or deleting the previous backup, removes the placed sibling and changes nothing else', async () => {
-    const aside = volume({ [TARGET]: 'v0.1.0', [STAGED]: 'v0.2.0' }, { 'rename-aside': 'EBUSY' });
-    expect(await applyPortable(TARGET, STAGED, aside.port)).toMatchObject({ ok: false, sentence: expect.stringContaining('EBUSY') });
-    expect(aside.files.get(TARGET)).toBe('v0.1.0');
-    expect(aside.files.has(`${TARGET}.update`)).toBe(false);
+  it('a failure copying the target aside removes the partial backup and the placed sibling, and the target is untouched throughout', async () => {
+    for (const failing of [{ 'copy-aside': 'EBUSY' }, { 'copy-aside-partial': 'ENOSPC: no space left on device' }] as const) {
+      const aside = volume({ [TARGET]: 'v0.1.0', [STAGED]: 'v0.2.0' }, failing);
+      expect(await applyPortable(TARGET, STAGED, aside.port)).toEqual({ ok: false, sentence: `could not install the update at ${TARGET}: ${Object.values(failing)[0]}` });
+      expect(aside.targetAfter.every((held) => held === 'v0.1.0')).toBe(true);
+      expect(aside.ops.some((op) => op.startsWith('rename:'))).toBe(false);
+      expect(aside.files.get(TARGET)).toBe('v0.1.0');
+      expect(aside.files.has(`${TARGET}.old`)).toBe(false);
+      expect(aside.files.has(`${TARGET}.update`)).toBe(false);
+    }
+  });
+
+  it('a file that appeared at the backup name since the previous backup was removed is refused, not deleted', async () => {
+    // `copyAside` is exclusive (COPYFILE_EXCL): a foreign file at `<name>.old` is not this attempt's to remove, so the
+    // step fails with EEXIST and leaves it exactly where it was, alongside the target it never touched.
+    const v = volume({ [TARGET]: 'v0.1.0', [STAGED]: 'v0.2.0' }, { 'copy-aside-exists': 'EEXIST' });
+    expect(await applyPortable(TARGET, STAGED, v.port)).toMatchObject({ ok: false });
+    expect(v.targetAfter.every((held) => held === 'v0.1.0')).toBe(true);
+    expect(v.files.get(`${TARGET}.old`)).toBe('someone else\u2019s file');
+    expect(v.files.get(TARGET)).toBe('v0.1.0');
+    expect(v.files.has(`${TARGET}.update`)).toBe(false);
+    expect(v.ops.some((op) => op.startsWith('rename:'))).toBe(false);
+  });
+
+  it('a failure deleting the previous backup removes the placed sibling and changes nothing else', async () => {
     const backup = volume({ [TARGET]: 'v0.1.0', [`${TARGET}.old`]: 'held', [STAGED]: 'v0.2.0' }, { 'remove-backup': 'EBUSY: held by the OS' });
     expect(await applyPortable(TARGET, STAGED, backup.port)).toMatchObject({ ok: false, sentence: `could not install the update at ${TARGET}: EBUSY: held by the OS` });
+    expect(backup.targetAfter.every((held) => held === 'v0.1.0')).toBe(true);
+    expect(backup.ops.some((op) => op.startsWith('copy-aside:') || op.startsWith('rename:'))).toBe(false);
     expect(backup.files.get(TARGET)).toBe('v0.1.0');
+    expect(backup.files.get(`${TARGET}.old`)).toBe('held');
     expect(backup.files.has(`${TARGET}.update`)).toBe(false);
   });
 });
@@ -144,7 +202,7 @@ describe('launch-time cleanup of the portable backup — REQ-STARTUP-115', () =>
   it('a deletion failure is tolerated silently and left for a later launch; an unreachable directory is nothing to do', async () => {
     const held = volume({ [`${TARGET}.old`]: 'old' }, { 'remove-backup': 'EBUSY' });
     expect(await cleanupPortableBackup('portable', TARGET, held.port)).toBe('kept');
-    const gone: StrategyFiles = { pathKind: async () => { throw new Error('ENOENT: the medium is gone'); }, copyFile: async () => undefined, rename: async () => undefined, removeFile: async () => undefined };
+    const gone: StrategyFiles = { pathKind: async () => { throw new Error('ENOENT: the medium is gone'); }, copyFile: async () => undefined, copyAside: async () => undefined, rename: async () => undefined, removeFile: async () => undefined };
     expect(await cleanupPortableBackup('portable', TARGET, gone)).toBe('kept');
     expect(await cleanupPortableBackup('portable', TARGET, volume({}).port)).toBe('nothing');
   });

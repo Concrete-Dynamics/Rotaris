@@ -25,3 +25,21 @@ it is scheduled in the plan's PR-2, not done by this note.
 
 - `apps/desktop/src/main/updater/strategies.ts` — `applyPortable`, the two `files.rename` calls.
 - `apps/desktop/src/main/updater/electron.ts` — the `rename` port (`fsp.rename`).
+
+## Repaired — 2026-10-31
+
+*Falsified by the repair: `applyPortable` no longer renames the target to `<name>.old`, and no longer renames the backup
+back when the final rename fails. The description above is what it did until this date.*
+
+The shape this note suggested, with a copy and not a hard link. `applyPortable` places `<name>.update`, removes a previous
+`<name>.old`, **copies** the target to `<name>.old` through a new port method `StrategyFiles.copyAside` (`electron.ts`:
+`fsp.copyFile` with `COPYFILE_EXCL`, a sibling of the existing `copyFile`), and then renames `<name>.update` onto the target
+in one step. The target is never the source of a rename, so its path names the previous executable until that rename
+replaces it with the new one. When the final rename fails, the target was never touched: nothing is renamed back, and the
+fresh `<name>.old` and `<name>.update` are removed. A copy aside that fails removes its partial `<name>.old` and the placed
+sibling. The end state and REQ-STARTUP-115's cleanup are unchanged.
+
+Pinned in `strategies.test.ts` over a fake volume that records what the target holds after every operation. It holds the
+previous bytes after each step until the rename and the new ones after it, and the original bytes throughout every failure
+case. Not executed on a Windows host. That `fsp.rename` replaces an existing file in one step there is Node's documented
+behaviour (libuv's `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`), not a measurement.

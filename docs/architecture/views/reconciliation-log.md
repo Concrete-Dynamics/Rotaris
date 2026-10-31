@@ -14,7 +14,11 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
-Last reconciled with the code: **2026-10-30**
+Last reconciled with the code: **2026-10-31**
+
+**The portable swap never empties the artifact's path (REQ-STARTUP-176, REQ-STARTUP-125 under PD-STARTUP-008; 2026-10-31, `../../defects/fixed/the-portable-swap-leaves-the-artifact-path-empty-between-its-two-renames.md`).** `02-process-view.md`'s files on disk: the `.update`/`.old` row names the copy aside and the single rename onto the target, and what a failed final rename leaves; `06-sequences.md` §1's portable branch says the same. `StrategyFiles` gains `copyAside` (`updater/electron.ts`: an exclusive `copyFile`). No package, edge, process, channel, command, notice or store column changed, and no fact changed owner (`05-state-ownership.md` unchanged).
+
+**The update download is bounded by the size the feed states (REQ-STARTUP-169/179; 2026-10-31, `../../defects/fixed/the-update-download-writes-whatever-length-the-server-sends.md`).** `02-process-view.md`'s files on disk: the staging row names the bound; `06-sequences.md` §1's asset fetch says the same. A longer transfer fails at the existing `download` stage with its own sentence. No package, edge, process, channel, command, notice or store column changed, and no fact changed owner (`05-state-ownership.md` unchanged).
 
 **The installer hand-off's staging directory is removed (REQ-STARTUP-178; 2026-10-30, `../../defects/fixed/the-installer-hand-offs-staging-directory-is-never-removed.md`).** `02-process-view.md`'s files on disk: the staging row says who removes it, and `<data>/updates/installer-handoff.json` gains a row; `05-state-ownership.md` gains the record's row; `dataLayout` gains `updates`. No package, edge, process, channel, command or store column changed.
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PREPARATION_MARKER, PREPARATION_NOTICE_KEY, preparationFindingOf, preparationNotice, readPreparationFinding } from './preparation-notice.js';
 
@@ -24,6 +25,12 @@ describe('the finding a marker holds (REQ-STARTUP-165 (c), REQ-STARTUP-150)', ()
     expect(preparationFindingOf(marker('run-scoped', '(no per-user data directory)'))).toEqual({ storage: { kind: 'none' } });
     expect(preparationFindingOf(marker('run-scoped'))).toEqual({ storage: { kind: 'unstated' } });
     expect(preparationFindingOf(marker('run-scoped', 'relative/path'))).toEqual({ storage: { kind: 'unstated' } });
+  });
+
+  it('a root that leaves no directory to name is not printed as an empty one', () => {
+    // The stub writes no such root; the sentence would otherwise read "directory, ." — the storage is still warned about.
+    expect(preparationFindingOf(marker('run-scoped', '/'))).toEqual({ storage: { kind: 'unstated' } });
+    expect(preparationFindingOf(marker('run-scoped', '\\\\'))).toEqual({ storage: { kind: 'unstated' } });
   });
 
   it('reads a marker written with CRLF line ends', () => {
@@ -93,5 +100,22 @@ describe('the notice (REQ-STARTUP-165 (c))', () => {
       expect(n.action).toBeUndefined();
       expect(n.persistent).toBeUndefined();
     }
+  });
+});
+
+/**
+ * The `prepared` segment this module strips is the stub's own choice of where within the per-user data directory a
+ * preparation goes (`let root = data_directory().map(|d| d.join("prepared"))`, `run` in `launcher/src/main.rs`), and
+ * REQ-STARTUP-165 (c) requires the notice to name the directory ABOVE it and never the placement within. Nothing else
+ * binds the two sides: the stub renaming that segment would need no launcher-format bump, and every test above would
+ * stay green while the notice named the preparation root — which the requirement forbids. This reads the stub's source,
+ * the way `capture/seam-reads.test.ts` reads main's for the packaged-seam rule, so the coupling fails here instead.
+ */
+describe('the coupling to the stub\'s preparation root (REQ-STARTUP-165 (c))', () => {
+  const STUB = join(import.meta.dirname, '..', '..', 'launcher', 'src', 'main.rs');
+
+  it('the stub still joins `prepared` onto the per-user data directory, so the segment this module strips is its name', () => {
+    const source = readFileSync(STUB, 'utf8');
+    expect(source).toContain('data_directory().map(|d| d.join("prepared"))');
   });
 });

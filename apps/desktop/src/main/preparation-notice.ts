@@ -59,6 +59,11 @@ function dataDirectoryOf(root: string): string {
   return match ? match[1]! : trimmed;
 }
 
+/** Whether a root names a directory the notice can print. A bare `/` (or `\`) leaves nothing to name, which the stub never writes. */
+function namesADirectory(root: string): boolean {
+  return dataDirectoryOf(root) !== '';
+}
+
 /** The marker's text in, the finding to hold out; `undefined` for every outcome that stays silent and every malformed text. */
 export function preparationFindingOf(text: string | undefined): PreparationFinding | undefined {
   if (text === undefined) return undefined;
@@ -77,7 +82,7 @@ export function preparationFindingOf(text: string | undefined): PreparationFindi
   }
   if (outcome !== 'run-scoped') return undefined;
   if (root === NO_DATA_DIRECTORY) return { storage: { kind: 'none' } };
-  if (root !== undefined && ABSOLUTE.test(root)) return { storage: { kind: 'directory', path: dataDirectoryOf(root) } };
+  if (root !== undefined && ABSOLUTE.test(root) && namesADirectory(root)) return { storage: { kind: 'directory', path: dataDirectoryOf(root) } };
   return { storage: { kind: 'unstated' } };
 }
 

@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-31**
 
+**The build writes the requirement symbols when they are absent (ADR-0056; 2026-10-31, `../../defects/fixed/a-fresh-clone-cannot-build-until-pnpm-symbols-has-run.md`).** `01-component-view.md`'s responsibilities gain "The requirement symbols on the build path": the desktop build config reaches `tools/symbol-artifact/ensure.mjs`, and the preflight's line says the generator, not `pnpm symbols` alone, writes `generated/`. No package, edge, process, message, channel or ownership changed.
+
 **A failed read of the record is no decline (ADR-0055 consequence 14, REQ-STARTUP-161/164; 2026-10-31, the PR's review).** `06-sequences.md` §1: the stand-down declines on a record gone, malformed or naming another claim, and any other failed read answers as the instance. OQ-460 and OQ-461 raise the two readings the entries below left unruled.
 
 **A reclaim leaves only a record naming another live claim (ADR-0055, REQ-STARTUP-161/164; 2026-10-31, the review of the entry below).** The entry below says the reclaim "takes only the claim it failed to reach"; that predicate left a record naming a dead process too, and the launch ended `refused` with no window. `instance.ts`'s clause (3) now removes the record unless a fresh read finds another live claim. `06-sequences.md` §1's Phase 0 note and stand-down paragraph, `02-process-view.md`'s instance-claim row and `05-state-ownership.md`'s reclaim name the corrected predicate; §1 points at the open note on a launch whose two hand-overs go unanswered. Nothing else in the views changed.

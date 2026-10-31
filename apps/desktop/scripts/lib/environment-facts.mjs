@@ -81,8 +81,8 @@ export function newestSourceMtime(roots, { list, mtime }) {
     for (const entry of entries) {
       const path = join(dir, entry.name);
       // `generated/` is a generator's output, not a source: packages/kernel/src/generated/requirements.ts
-      // is rewritten by `pnpm symbols` before every build and every test collection, so its mtime says
-      // nothing about whether the build is current.
+      // is written by `pnpm symbols`, before every test collection, and by a build that finds it absent
+      // (tools/symbol-artifact/ensure.mjs), so its mtime says nothing about whether the build is current.
       if (entry.dir) { if (entry.name !== 'generated') visit(path); continue; }
       if (/\.test(-support)?\.(ts|tsx|js|jsx)$/.test(entry.name)) continue;
       /** @type {number} */

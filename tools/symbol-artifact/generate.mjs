@@ -21,7 +21,7 @@
 // narrowing under Extends, or left a requirement out, to get past it
 // (docs/defects/fixed/a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md).
 //
-// Shared by the build and by vitest's globalSetup, so the two cannot drift.
+// Shared by the build (ensure.mjs, when the artifact is absent) and by vitest's globalSetup, so the two cannot drift.
 
 import { readdirSync, readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { partsOf } from '../record-parts.mjs';

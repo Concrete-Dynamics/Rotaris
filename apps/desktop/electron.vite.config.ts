@@ -2,6 +2,7 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'node:path';
 import { builtinModules } from 'node:module';
+import { symbolArtifactPlugin } from '../../tools/symbol-artifact/ensure.mjs';
 
 /**
  * ADR-0056 — electron-vite over Vite, chosen for exactly two properties:
@@ -42,6 +43,14 @@ const WORKSPACE_PACKAGES = ['@rotaris/kernel', '@rotaris/contracts', '@rotaris/p
 // the preload was measured to break both (the shim requires child_process, which the sandbox lacks).
 const EXTERNAL = ['electron', /^electron\/.+/, 'better-sqlite3', 'node-pty', ...builtinModules.flatMap((m) => [m, `node:${m}`])];
 
+// The requirement symbols every section imports through @rotaris/kernel: git-ignored, so a tree no gate or test session
+// has run in has none. Each section writes them when they are absent, with the test session's own generator, and fails
+// the build naming `pnpm symbols` when it cannot (tools/symbol-artifact/ensure.mjs says why that shape, and its cost).
+const symbolArtifact = symbolArtifactPlugin({
+  artifact: resolve(repo, 'packages/kernel/src/generated/requirements.ts'),
+  generator: resolve(repo, 'tools/symbol-artifact/generate.mjs'),
+});
+
 const workspaceAliases = {
   '@rotaris/kernel': resolve(repo, 'packages/kernel/src/index.ts'),
   '@rotaris/contracts': resolve(repo, 'packages/contracts/src/index.ts'),
@@ -63,7 +72,7 @@ const workspaceAliases = {
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin({ exclude: WORKSPACE_PACKAGES })],
+    plugins: [symbolArtifact, externalizeDepsPlugin({ exclude: WORKSPACE_PACKAGES })],
     resolve: { alias: workspaceAliases },
     define: { __ROTARIS_SEAMS__: JSON.stringify(seams) },
     build: {
@@ -79,7 +88,7 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin({ exclude: WORKSPACE_PACKAGES })],
+    plugins: [symbolArtifact, externalizeDepsPlugin({ exclude: WORKSPACE_PACKAGES })],
     resolve: { alias: workspaceAliases },
     build: {
       rollupOptions: {
@@ -90,7 +99,7 @@ export default defineConfig({
     },
   },
   renderer: {
-    plugins: [react()],
+    plugins: [symbolArtifact, react()],
     resolve: {
       // One React. pnpm's hoisted layout hands packages/ui a node_modules/.pnpm path for react while the
       // app resolves node_modules/react — one version, two real paths, two copies in the bundle, and

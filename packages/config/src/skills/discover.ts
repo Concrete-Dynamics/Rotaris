@@ -207,14 +207,31 @@ export function discoverSkills(env: SkillRootsEnv, ports: DiscoveryPorts = NODE_
  */
 export const DISCOVERY_READS_IN_FLIGHT = 4;
 
-/** At most `width` tasks running; the rest wait their turn in the order they asked. A finishing task hands its slot on. */
-function bounded(width: number): <T>(task: () => Promise<T>) => Promise<T> {
+/**
+ * OQ-386 point 1: what an asynchronous walk rejects with when its caller's `stopped` answered yes — the walk was superseded
+ * (a rescan or a session creation cleared the catalogue it would fill) or abandoned (its waiters stopped waiting), and it
+ * stops rather than reading on. It is never a file's failure: a probe rethrows it instead of recording an unreadable file.
+ */
+export class DiscoveryStopped extends Error {
+  constructor() {
+    super('the skill discovery was stopped: its result is no longer wanted');
+    this.name = 'DiscoveryStopped';
+  }
+}
+
+/**
+ * At most `width` tasks running; the rest wait their turn in the order they asked. A finishing task hands its slot on. A
+ * task whose turn comes after `stopped` answered yes is never started: it rejects with `DiscoveryStopped` and hands its slot
+ * on, so a stopped walk issues no read beyond the ones already in flight.
+ */
+function bounded(width: number, stopped: () => boolean): <T>(task: () => Promise<T>) => Promise<T> {
   let running = 0;
   const waiting: (() => void)[] = [];
   return async (task) => {
     if (running < width) running += 1;
     else await new Promise<void>((turn) => waiting.push(turn));
     try {
+      if (stopped()) throw new DiscoveryStopped();
       return await task();
     } finally {
       const next = waiting.shift();
@@ -250,7 +267,10 @@ async function probeChildAsync(root: SkillRoot, child: string, disabled: Disable
   if (!(await run(() => ports.isFile(path)))) return NOT_A_SKILL;
   // REQ-WORKSPACE-052: the manifest matches the DIRECTORY name, so a disabled skill is never opened.
   if (isDisabled(disabled, child)) return NOT_A_SKILL;
-  try { return { kind: 'read', path, directory, read: { text: await run(() => ports.readFile(path)) } }; } catch (cause) { return { kind: 'read', path, directory, read: { cause } }; }
+  try { return { kind: 'read', path, directory, read: { text: await run(() => ports.readFile(path)) } }; } catch (cause) {
+    if (cause instanceof DiscoveryStopped) throw cause;
+    return { kind: 'read', path, directory, read: { cause } };
+  }
 }
 
 /**
@@ -259,15 +279,27 @@ async function probeChildAsync(root: SkillRoot, child: string, disabled: Disable
  * first, as the synchronous walk reads it, so a disabled skill is still never opened; the roots are then listed and their
  * children probed side by side, and the probes are folded in discovery order once every one is in. A port that rejects
  * outside a file read rejects the walk, which its caller logs; `NODE_ASYNC_DISCOVERY_PORTS` folds those answers instead.
+ *
+ * `stopped` is asked before every read the walk would start. Once it answers yes the walk starts no further read and rejects
+ * with `DiscoveryStopped`: a walk whose result its caller will set aside must not go on loading the disk beside the walk
+ * that replaces it (the run host's warm-up, overtaken by a rescan or a session creation, or given up on by its waiters).
  */
-export async function discoverSkillsAsync(env: AsyncSkillRootsEnv, ports: AsyncDiscoveryPorts = NODE_ASYNC_DISCOVERY_PORTS, width: number = DISCOVERY_READS_IN_FLIGHT): Promise<SkillDiscovery> {
-  const run = bounded(Math.max(1, width));
+export async function discoverSkillsAsync(
+  env: AsyncSkillRootsEnv,
+  ports: AsyncDiscoveryPorts = NODE_ASYNC_DISCOVERY_PORTS,
+  width: number = DISCOVERY_READS_IN_FLIGHT,
+  stopped: () => boolean = () => false,
+): Promise<SkillDiscovery> {
+  const run = bounded(Math.max(1, width), stopped);
   const manifest = installedManifestPath(env.home);
   let disabled: DisabledSkills;
   if (!(await run(() => ports.isFile(manifest)))) disabled = disabledFrom(manifest, null);
   else {
     let read: FileRead;
-    try { read = { text: await run(() => ports.readFile(manifest)) }; } catch (cause) { read = { cause }; }
+    try { read = { text: await run(() => ports.readFile(manifest)) }; } catch (cause) {
+      if (cause instanceof DiscoveryStopped) throw cause;
+      read = { cause };
+    }
     disabled = disabledFrom(manifest, read);
   }
   const roots = await skillRootsAsync(env, run);

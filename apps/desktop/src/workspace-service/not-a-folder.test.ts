@@ -13,12 +13,19 @@ describe('the open of a path that is not a folder', () => {
   const dirs: string[] = [];
   const scratch = (): string => { const d = mkdtempSync(join(tmpdir(), 'rotaris-not-a-folder-')); dirs.push(d); return d; };
   afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
+  /**
+   * What the identifier read answers for a non-folder when nothing asks first: on POSIX the read under a regular file fails
+   * ENOTDIR, folded into `unreadable`; on Windows it fails ENOENT, so the read says absent and the mint under the file throws.
+   * Either way the file's absent identifier is spoken of as the workspace's, which is why the open asks `notAFolderAtOpen` first.
+   */
+  const withoutTheGuard = (root: string): string => { try { return establishWorkspaceId(root).state; } catch { return 'threw'; } };
+  const unguarded = process.platform === 'win32' ? 'threw' : 'unreadable';
 
   it('a workspace path that is a file: said as a file, and nothing about an identifier, sessions or putting anything back', () => {
     const file = join(scratch(), 'afile');
     writeFileSync(file, 'just a file\n');
-    // Without this check the identifier read is what answers, and calls the file's absent identifier unreadable.
-    expect(establishWorkspaceId(file).state).toBe('unreadable');
+    // Without this check the identifier read is what answers, and calls the file's absent identifier unreadable (or fails to mint one).
+    expect(withoutTheGuard(file)).toBe(unguarded);
     const refusal = notAFolderAtOpen(file);
     expect(refusal).toEqual({
       kind: 'refused', code: 'workspace.not-a-folder',
@@ -32,7 +39,7 @@ describe('the open of a path that is not a folder', () => {
   it('a workspace whose .rotaris is a file: names that file and the way on', () => {
     const root = scratch();
     writeFileSync(join(root, '.rotaris'), 'mine\n');
-    expect(establishWorkspaceId(root).state).toBe('unreadable');
+    expect(withoutTheGuard(root)).toBe(unguarded);
     expect(notAFolderAtOpen(root)).toMatchObject({
       code: 'workspace.not-a-folder',
       headline: 'The workspace\'s .rotaris is a file, not a folder',

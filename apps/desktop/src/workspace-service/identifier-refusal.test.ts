@@ -100,8 +100,13 @@ describe('the open of a workspace whose identifier cannot be read (REQ-SESSION-1
     });
   });
 
-  /** The reported shapes, on real files: the identifier read answers each as unreadable with nothing read, and this examines it. */
-  describe.skipIf(process.getuid?.() === 0)('on disk, as the open meets them', () => {
+  /**
+   * The reported shapes, on real files: the identifier read answers each as unreadable with nothing read, and this examines it.
+   * The cases that lock a path with `chmod 0o000` run only where the mode bits deny: not as root, and not on Windows, where
+   * access is decided by ACLs the mode does not touch (a `0o000` file reads there), as `open-bootstrap.test.ts` skips its own.
+   */
+  const whereModeBitsDeny = it.skipIf(process.platform === 'win32' || process.getuid?.() === 0);
+  describe('on disk, as the open meets them', () => {
     const dirs: string[] = [];
     const locked: string[] = [];
     const scratch = (): string => { const d = mkdtempSync(join(tmpdir(), 'rotaris-identifier-')); dirs.push(d); return d; };
@@ -117,7 +122,7 @@ describe('the open of a workspace whose identifier cannot be read (REQ-SESSION-1
       return identifierUnreadableAtOpen(join(root, '.rotaris', 'workspace-id'), ident.raw);
     };
 
-    it('an empty .rotaris that cannot be entered: names it, and claims no file', () => {
+    whereModeBitsDeny('an empty .rotaris that cannot be entered: names it, and claims no file', () => {
       const root = scratch();
       mkdirSync(join(root, '.rotaris'));
       lock(join(root, '.rotaris'));
@@ -126,7 +131,7 @@ describe('the open of a workspace whose identifier cannot be read (REQ-SESSION-1
       expect(r.detail).toBe(`${join(root, '.rotaris')} cannot be entered with this account's permissions, so whether ${join(root, '.rotaris', 'workspace-id')} exists cannot be told. Nothing was written there. Give this account access to ${join(root, '.rotaris')} and open the workspace again.`);
     });
 
-    it('a workspace inside a folder that cannot be entered, with no .rotaris: names the parent', () => {
+    whereModeBitsDeny('a workspace inside a folder that cannot be entered, with no .rotaris: names the parent', () => {
       const parent = join(scratch(), 'locked');
       const root = join(parent, 'inner');
       mkdirSync(root, { recursive: true });
@@ -137,7 +142,7 @@ describe('the open of a workspace whose identifier cannot be read (REQ-SESSION-1
       expect(r.detail).toMatch(new RegExp(`^${parent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} cannot be entered `));
     });
 
-    it('an identifier file this account may not read: there, and not permitted', () => {
+    whereModeBitsDeny('an identifier file this account may not read: there, and not permitted', () => {
       const root = scratch();
       mkdirSync(join(root, '.rotaris'));
       const id = join(root, '.rotaris', 'workspace-id');
@@ -196,9 +201,18 @@ describe('the open of a workspace whose identifier cannot be read (REQ-SESSION-1
       });
     });
 
+    /**
+     * Under a regular file POSIX answers the read ENOTDIR, which `guardedRead` folds into unreadable with nothing read; Windows
+     * answers ENOENT, so the read says absent and the mint's `mkdirSync` under the file fails. Both are why the service asks
+     * `notAFolderAtOpen` first (`not-a-folder.test.ts`); here only the words the unreadable read reaches are pinned.
+     */
     it('a .rotaris that is a file, met without the service\'s guard: not called a folder that cannot be entered', () => {
       const root = scratch();
       writeFileSync(join(root, '.rotaris'), 'x');
+      if (process.platform === 'win32') {
+        expect(() => establishWorkspaceId(root)).toThrow(/The destination folder could not be created/);
+        return;
+      }
       const r = refusalFor(root);
       expect(r.detail).not.toMatch(/cannot be entered/);
       expect(r.headline).toBe('The workspace identifier cannot be reached');

@@ -1,10 +1,11 @@
 ## A workspace path that is not a directory is reported as an unreadable identifier
 
 When a launch is handed a path that is a file rather than a directory, the open reads `<file>/.rotaris/workspace-id`, which fails
-with `ENOTDIR`. `guardedRead` (`packages/platform/src/document.ts`) treats every read error but `ENOENT` as `unreadable` with an
-empty `raw`, so `establishWorkspaceId` answers `unreadable` and the workspace service refuses with
-`workspace.identifier-unreadable`, headline "The workspace identifier is present but cannot be read". Nothing is present: the
-workspace is not a folder. The same holds for a folder whose `.rotaris` is a file.
+with `ENOTDIR` on POSIX (Windows answers `ENOENT`, so there the read says absent, the mint under the file fails, and the open
+reaches the log alone as `request.failed`). `guardedRead` (`packages/platform/src/document.ts`) treats every read error but
+`ENOENT` as `unreadable` with an empty `raw`, so `establishWorkspaceId` answers `unreadable` and the workspace service refuses
+with `workspace.identifier-unreadable`, headline "The workspace identifier is present but cannot be read". Nothing is present:
+the workspace is not a folder. The same holds for a folder whose `.rotaris` is a file.
 
 From the first commits of `fix/unreadable-workspace-id-is-reported` that refusal was raised as an error notice
 (`docs/defects/fixed/an-unreadable-workspace-identifier-leaves-the-window-unopened-without-a-notice.md`), so for a path that is a
@@ -51,3 +52,9 @@ and nothing more, and mints no requirement.
 - Evidence: `not-a-folder.test.ts` (real files in a scratch directory; the service's open pinned to ask before the identifier is
   read); `store-notice.test.ts` (held, raised once, no action); the built app launched headless on a file shows the new notice
   and none of the identifier's words.
+- 2026-10-31, the Windows gate (PR #42, windows-latest, both runs): six of the branch's own tests red. The on-disk cases that
+  lock a path with `chmod 0o000` read it anyway (Windows decides access by ACLs the mode does not touch), and the cases that
+  met a non-folder without the guard expected POSIX's `unreadable` where Windows throws at the mint. The locked cases now run
+  only where the mode bits deny (`it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)`, as
+  `open-bootstrap.test.ts` does), and the unguarded non-folder cases expect each platform's own answer. The product's words
+  are unchanged on both.

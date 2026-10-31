@@ -6,11 +6,12 @@ import { join } from 'node:path';
 /**
  * The open's refusal of a workspace path that is not a folder, or whose `.rotaris` is not one — checked before the identifier
  * is read, so that REQ-SESSION-197's "present but cannot be read" is never claimed where no identifier file can exist. Reading
- * `<root>/.rotaris/workspace-id` under a regular file fails with ENOTDIR, which the document reader (`guardedRead`) reports as
- * unreadable like any other failed read; that is true of the read and false of the workspace: nothing was ever written there,
- * there are no recorded sessions, and there is no identifier to put back. No requirement names this case (REQ-STARTUP-163
- * speaks only of "a directory" a launch carries); these words say what was found and nothing more
- * (`docs/defects/fixed/a-workspace-path-that-is-not-a-directory-is-reported-as-an-unreadable-identifier.md`).
+ * `<root>/.rotaris/workspace-id` under a regular file fails with ENOTDIR on POSIX, which the document reader (`guardedRead`)
+ * reports as unreadable like any other failed read; that is true of the read and false of the workspace: nothing was ever
+ * written there, there are no recorded sessions, and there is no identifier to put back. (Windows answers that read ENOENT, so
+ * there the open went on to mint an identifier under the file, and the mint's failure reached the log alone.) No requirement
+ * names this case (REQ-STARTUP-163 speaks only of "a directory" a launch carries); these words say what was found and nothing
+ * more (`docs/defects/fixed/a-workspace-path-that-is-not-a-directory-is-reported-as-an-unreadable-identifier.md`).
  *
  * Main holds and raises it as the identifier's refusal is (`main/store-notice.ts`, `WORKSPACE_REFUSALS`): no action, since
  * nothing in REQ-NOTIFY-044's vocabulary turns a file into a folder.

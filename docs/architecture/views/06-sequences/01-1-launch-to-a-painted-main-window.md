@@ -20,7 +20,7 @@ sequenceDiagram
   OS->>M: launch (argv may carry a folder)
   Note over M: Phase 0 — BEFORE app.whenReady(),<br/>before any window, before any write
   M->>M: claimInstance(...) — the endpoint listens first, then the record naming it is written (ADR-0055; a named pipe on Windows, pinned there by instance-order.test.ts since 2026-10-21)
-  Note over M: (2) hand over to the process the record names — acknowledged only while the record still names it (ADR-0055 consequence 14)<br/>(3) unacknowledged: remove the record only if it is still the claim this launch failed to reach, retry once<br/>(4) that retry lost: hand over once more to the record's process
+  Note over M: (2) hand over to the process the record names — acknowledged only while the record still names it (ADR-0055 consequence 14)<br/>(3) unacknowledged: remove the record unless it now names another live claim, retry once<br/>(4) that retry lost: hand over once more to the record's process
   alt handed over
     M-->>OS: app.exit(0) — shows nothing, leaves nothing behind: its endpoint (opened first) and its per-attempt directory removed (OQ-248)
   else refused (both claims lost and (4)'s hand-over unacknowledged, or no directory could hold the endpoint — no record written)
@@ -86,9 +86,12 @@ again as each ordinary hand-over arrives (`listen`, `platform/instance.ts`). Whe
 none can be read, it calls no `onHandOver`, so nothing is surfaced. It answers `{"ok":false,"reason":…}` and reports
 `onHandOverDeclined`, which main logs at `warn` (`hand-over declined …`). This covers a primary reclaimed from after a wedge
 past the 5 s interval, and a predecessor whose record has passed to its successor. The launch that sent it resolves to the
-process the record names. Its clause (3) removes the record only when a fresh read finds the claim it failed to reach, or
-nothing readable. A record naming another claim is left in place, the retry loses, and clause (4) hands the launch to that
-claim's process: exactly one instance, its window surfaced (REQ-STARTUP-164). Until that date a resumed primary
+process the record names. Its clause (3) removes the record unless a fresh read finds another live claim: nothing
+readable, the claim it failed to reach, or a claim whose process has ended is reclaimed. A record naming another live claim
+is left in place, the retry loses, and clause (4) hands the launch to that claim's process: exactly one instance, its
+window surfaced (REQ-STARTUP-164). Where that process is live but does not answer (4) either, the launch ends `refused`
+with no window, and whether REQ-STARTUP-164 admits that is open
+(`../../../defects/a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md`). Until that date a resumed primary
 surfaced its window for a stale hand-over, and (4) did not exist
 (`../../../defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md`). What the stood-down process does
 with its own windows is not decided

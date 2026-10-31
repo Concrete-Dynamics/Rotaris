@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-31**
 
+**A reclaim leaves only a record naming another live claim (ADR-0055, REQ-STARTUP-161/164; 2026-10-31, the review of the entry below).** The entry below says the reclaim "takes only the claim it failed to reach"; that predicate left a record naming a dead process too, and the launch ended `refused` with no window. `instance.ts`'s clause (3) now removes the record unless a fresh read finds another live claim. `06-sequences.md` §1's Phase 0 note and stand-down paragraph, `02-process-view.md`'s instance-claim row and `05-state-ownership.md`'s reclaim name the corrected predicate; §1 points at the open note on a launch whose two hand-overs go unanswered. Nothing else in the views changed.
+
 **A process the instance record no longer names stands down, and a reclaim takes only the claim it failed to reach (ADR-0055 consequence 14, REQ-STARTUP-161/164; 2026-10-31, `../../defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md`).** `06-sequences.md` §1: Phase 0 names clauses (2)–(4), with (4)'s second hand-over, and gains the stand-down paragraph; the ordinary hand-over's `{"ok":true}` is now conditional on the record. `02-process-view.md`'s files on disk: the instance-claim row names the conditional removal and the acknowledgement rule. `05-state-ownership.md`: the instance record's writers name the reclaim and its holder's re-read. `ClaimDeps` gains `onHandOverDeclined`, which main logs. No package, edge, process, channel, command, notice or store column changed, and no fact changed owner.
 
 **Open log and the third-party licence bundle are bounded at the opener (REQ-SESSION-191, REQ-SHELL-142, REQ-SHELL-040; 2026-10-31, `../../defects/fixed/open-log-waits-on-the-platform-opener-without-a-bound.md`).** `02-process-view.md`'s message families: `session.openLog` and `shell.openThirdPartyLicenses` name the 5 s bound (`openFile`, `main/open-folder.ts`) and the refusal an opener that never answers becomes. `workspace.openFolder` is unchanged. No package, edge, process, channel, command, notice or store column changed, and no fact changed owner.
@@ -239,25 +241,6 @@ evidence manifest before the sandbox goes; the evidence-manifest section says it
 (`docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`). No package, edge or process
 changed.
 
-Last reconciled with the code: **2026-10-19**
-
-**The handoff — one closing shape (2026-10-19).** `docs/clean-room/agent-workflow.md` gains "The handoff": every closing report — an agent's to the owner, a lane's to the next lane, a landed `pnpm worktree:land` run — is one heading and four labelled lines (Zustand, Beweise, Offen, Nächster Schritt), fixed in their order and written in the report's own language; `01-component-view.md`'s worktree section now states that a landed run closes with it and a run stopped before the push does not. AGENTS.md points at it, the UI skills close with it, and `orchestrated-build`'s final report is the shape (its CHANGELOG entry). No package, edge or process changed.
-
-**The overlap report behind `pnpm worktree:overlaps` (2026-10-19).** `01-component-view.md`'s worktree section now states it: every registered worktree's branch read against its fork from `origin/main` — the files it touches (committed, staged, unstaged and untracked), the files `origin/main` moved since the fork, and the files two or more branches both touch — and the branch-versus-main overlap `pnpm worktree:land` prints before the rebase. A third command joined `CLAUDE.md`'s Commands table and AGENTS.md's section. No package, edge or process changed.
-
-**The development-time capture, made transparent (R-075; 2026-10-19).** `01-component-view.md`'s dev-time section now states what records itself: `pnpm check` runs `pnpm dev-time gate`, the `package.json` stage scripts and `pnpm build` are wrapped in `dev-time run` and record themselves, the proof harness libraries arm an entry clock at import, and the `tools/worktree/` wrappers record their steps — each record marked with the context it ran in (`ROTARIS_DEV_TIME_VIA`); `report` tells the reds each next green closed. `report` joined `CLAUDE.md`'s Commands table and `AGENTS.md` gained the section. No package, edge or process changed.
-
-**The worktree wrappers behind `pnpm worktree:new` / `pnpm worktree:land` (2026-10-19).** `01-component-view.md` gains the tool's section: the two wrappers around the setup and landing halves of `docs/clean-room/agent-workflow.md` — a branch in a fresh worktree from `origin/main` with its dependencies, electron's `dist/` and a preflight; and the landing sequence (rebase, a landing worktree at the rebased head, `verify:plan` read against `origin/main`, `pnpm check` then the named proof suites on that exact head, a fast-forward push, cleanup). Two commands joined `CLAUDE.md`'s Commands table. No package, edge or process changed.
-
-**The platform preflight (2026-10-19; its view was updated then, the entry written here).** `01-component-view.md` gains the tool's section: `pnpm preflight [proof-id …]`, the machine checked before a proof suite launches, launching nothing. No package, edge or process changed.
-
-**The evidence manifest (2026-10-19; its view was updated then, the entry written here).** `01-component-view.md` gains the tool's section: `pnpm evidence write|verify <dir>`, the per-file sha256 manifest a live-run pack is closed with. No package, edge or process changed.
-
-Last reconciled with the code: **2026-10-18**
-
-**The development-time store behind `pnpm dev-time` (R-075; first execution 2026-10-18).** `01-component-view.md` gains the tool's section: measured spans of setup, build, each `pnpm check` stage, proofs, repairs and repeated rebases, one JSON record a span in `~/.rotaris/dev-time/log.jsonl`. No package, edge or process changed.
-
-
 ## Older entries
 
 Until 2026-10-26 every entry stood in this one file, 3,697 lines by then. The entries before 2026-10-16 were moved
@@ -268,6 +251,7 @@ with the next number, and its row goes at the top of this table.
 
 | Part | "Last reconciled" dates it carries | Its newest entry |
 |---|---|---|
+| [14](reconciliation-log/14.md) | 2026-10-19, 2026-10-18 | The handoff — one closing shape (2026-10-19). |
 | [13](reconciliation-log/13.md) | 2026-10-16 | Windows MCP shutdown preserves the runner until its server closes (R-074, REQ-MCP-066/067/113). |
 | [12](reconciliation-log/12.md) | 2026-10-15, 2026-10-14 | A Windows ARM64 development tree's bundle is the win32-x64 one (the Windows ARM64 session; OQ-401, the … |
 | [11](reconciliation-log/11.md) | 2026-10-13 | `focus-session` reaches the session where it lives (PD-SHELL-001 revision 3, OQ-292; fin44, … |

@@ -59,13 +59,28 @@ record while it named the primary would get the decline, and then:
 
 And REQ-STARTUP-164 (4)'s "attempt the hand-over once more", which ADR-0055's decision states, had never been built: a lost
 retry ended `refused`. So the arriving launch's side was repaired too:
-- (3) now removes the record only when a fresh read finds the same claim it failed to reach, or no readable record;
-- a record naming another claim is left in place, the retry loses, and (4) hands the launch to the process that record names.
+- (3) now reads the record again and removes it unless it names another live claim: a record that cannot be read, the
+  claim it failed to reach, or another claim whose process has ended is reclaimed as before;
+- a record naming another live claim is left in place, the retry loses, and (4) hands the launch to the process that record
+  names.
 
 `instance.test.ts`'s "a launch that read the record while it named the primary…" holds REQ-STARTUP-164's closing property
 over real endpoints: the launch ends `handed-over`, the instance's window is the one surfaced, the primary surfaced
 nothing, and the record still names the instance. With only the listener half it fails on `'instance'` (the second
 instance). Against the code before the repair it fails because the primary surfaced (`[{ workspace: '/w' }]`).
+
+**Corrected the same day, after an independent review the owner reproduced.** The repair's first commit (7262da97) wrote
+(3)'s test as "the same claim it failed to reach, or no readable record", and so also left a record naming another claim
+whose process had ended. A launch whose hand-over went unanswered while the record came to name a dead process left that
+record, lost its retry to it, found nothing live to hand over to in (4), and ended `refused`: no window, and nobody running
+as the instance. Before the repair the same launch became the instance. The sentence above, that the launch "ends
+`handed-over`", held only for the record its own test builds, one naming a live instance. (3) now asks whether the record
+names another *live* claim. `instance.test.ts`'s "a record that came to name a dead process while the hand-over went
+unanswered is still reclaimed…" fails against 7262da97 with `expected 'refused' to be 'instance'`.
+
+What remains, and is not repaired here: where the record names another claim that is live but never answers, (4)'s second
+hand-over goes unanswered too and the launch ends `refused` with no window. That is open as
+[its own note](../a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md).
 
 **What remains owed, and what this repair does not decide.**
 - The Windows run of C6 against this build: suspend, second launch, resume. Does the resumed primary log the decline and

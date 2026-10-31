@@ -647,14 +647,17 @@ export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): P
     if (answer.acked) return { outcome: 'handed-over' };
   }
   /**
-   * (3) The reclaim takes the record that went unacknowledged, and only it. Read again first: a record that now names
-   * another claim — another launch reclaimed it inside the interval, or the process this launch reached declined because
-   * the record had moved on (ADR-0055 consequence 14) — is that claim's, and removing it would make this launch a second
-   * instance beside it (REQ-STARTUP-161). It is left as it is, the retry loses, and (4) hands this launch to it. Until
-   * 2026-10-31 the reclaim removed whatever stood there.
+   * (3) The reclaim takes any record but one naming another LIVE claim. Read again first: a record that now names another
+   * claim whose process lives — another launch reclaimed it inside the interval, or the process this launch reached
+   * declined because the record had moved on (ADR-0055 consequence 14) — is that claim's, and removing it would make this
+   * launch a second instance beside it (REQ-STARTUP-161). It is left as it is, the retry loses, and (4) hands this launch
+   * to it. A record that cannot be read, the claim that went unanswered, or another claim whose process has ended is
+   * nobody's, and is reclaimed. Until 2026-10-31 the reclaim removed whatever stood there; the same day, for one commit
+   * (7262da97), it left every other claim, a dead one too, and such a launch ended refused with no window.
    */
   const now = readRecord(deps.recordFile);
-  if (now === undefined || (existing !== undefined && sameClaim(now, existing))) {
+  const namesAnotherLiveClaim = now !== undefined && (existing === undefined || !sameClaim(now, existing)) && isLockLive(now, deps.machineId);
+  if (!namesAnotherLiveClaim) {
     // OQ-248: the endpoint is the record's, so a dead process's goes with its record; a live but silent one's stays its own.
     if (existing && !live) removeDeadEndpoint(existing, platform);
     rmSync(deps.recordFile, { force: true });

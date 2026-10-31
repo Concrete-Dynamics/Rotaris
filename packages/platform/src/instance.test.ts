@@ -524,6 +524,39 @@ describe('a process the record was reclaimed from stands down — ADR-0055 conse
     await instance.close();
   });
 
+  it.skipIf(process.platform === 'win32')('a record that came to name a dead process while the hand-over went unanswered is still reclaimed: the launch becomes the instance, never refused (REQ-STARTUP-164 (3))', async () => {
+    // A: alive (the parent's pid) and listening, but it never answers.
+    const held: Socket[] = [];
+    const silent = createServer((sock) => { held.push(sock); });
+    const closeSilent = () => new Promise((resolve) => { for (const sock of held) sock.destroy(); silent.close(resolve); });
+    const silentEndpoint = join(dir, 'silent.sock');
+    await new Promise<void>((resolve) => { silent.listen(silentEndpoint, resolve); });
+    writeFileSync(file(), `${JSON.stringify({ pid: PREDECESSOR_PID, host: M, acquired_at: toIsoUtc(clocks.wall.instant()), endpoint: silentEndpoint })}\n`);
+    // C: a process that has ended, at an endpoint nothing serves.
+    const deadPid = spawnSync(process.execPath, ['-e', '0']).pid as number;
+    const dead = `${JSON.stringify({ pid: deadPid, host: M, acquired_at: toIsoUtc(clocks.wall.instant()), endpoint: join(dir, 'dead.sock') })}\n`;
+
+    // The record is replaced by C inside the hand-over's interval: the launch's first timer is that interval's bound.
+    let landed = false;
+    const replaceAfterRead = {
+      after: (delay: Parameters<typeof clocks.timers.after>[0], fn: () => void) => {
+        if (!landed) { landed = true; writeFileSync(file(), dead); }
+        return clocks.timers.after(delay, fn);
+      },
+      every: clocks.timers.every.bind(clocks.timers),
+    };
+    const launch = await claimInstance(deps({ timers: replaceAfterRead, handOverIntervalMs: millis(300) }), { workspace: '/w' });
+
+    expect(landed).toBe(true);
+    // THE FALSIFIER: from 7262da97 until this change the reclaim left any record naming another claim, dead or alive, so the
+    // retry lost to C's and the launch ended 'refused' — no window, and nobody running as the instance.
+    expect(launch.outcome).toBe('instance');
+    if (launch.outcome !== 'instance') { await closeSilent(); return; }
+    expect(record(file())).toEqual(launch.record);
+    await launch.close();
+    await closeSilent();
+  });
+
   it('the reclaim still takes a record that cannot be read: re-reading it before the removal finds nothing to leave (REQ-STARTUP-164 (3))', async () => {
     writeFileSync(file(), '{"pid":');
     const claim = await claimInstance(deps({ handOverIntervalMs: millis(300) }));

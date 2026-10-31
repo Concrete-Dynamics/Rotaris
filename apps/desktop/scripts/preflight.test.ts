@@ -3,10 +3,13 @@
  * proof's registry record adds — its hosts, its `requires` and its per-host clauses,
  * read from `tools/proof-registry/registry.mjs`.
  */
+import { mkdtempSync, rmSync } from 'node:fs';
+import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { app, buildCheck, bundleCheck, displayCheck, electron, endpointCheck, environmentCheck, formatReport, mainEntry, newestSourceMtime } from './preflight.mjs';
-import { nodeCheck, parseArgs, platformCheck, proofChecks, repo, runPreflight, scratchCheck, suggestIds } from './preflight.mjs';
+import { app, buildCheck, bundleCheck, displayCheck, displayTargets, electron, endpointCheck, environmentCheck, formatReport, mainEntry, newestSourceMtime } from './preflight.mjs';
+import { nodeCheck, parseArgs, platformCheck, probeTargets, proofChecks, repo, runPreflight, scratchCheck, suggestIds } from './preflight.mjs';
 import { PROOFS } from '../../../tools/proof-registry/registry.mjs';
 import { app as harnessApp, electron as harnessElectron, mainEntry as harnessMainEntry, repo as harnessRepo } from './lib/harness.mjs';
 
@@ -43,11 +46,60 @@ describe('preflight — node, the environment and the display', () => {
   });
 
   it('linux needs DISPLAY or xvfb-run; win32 and darwin need neither', () => {
-    expect(displayCheck({ platform: 'linux', display: ':0', xvfb: false }).status).toBe('pass');
+    expect(displayCheck({ platform: 'linux', display: ':0', xvfb: false, probe: { reached: 'socket /tmp/.X11-unix/X0', tried: [] } }).status).toBe('pass');
     expect(displayCheck({ platform: 'linux', display: undefined, xvfb: true }).status).toBe('warn');
     expect(displayCheck({ platform: 'linux', display: undefined, xvfb: false }).status).toBe('fail');
     expect(displayCheck({ platform: 'win32', display: undefined, xvfb: false }).status).toBe('pass');
     expect(displayCheck({ platform: 'darwin', display: undefined, xvfb: false }).status).toBe('pass');
+  });
+
+  it('a set DISPLAY on linux passes only when a connect reached it, and a miss names what was tried', () => {
+    const reached = displayCheck({ platform: 'linux', display: ':99', xvfb: false, probe: { reached: 'abstract socket @/tmp/.X11-unix/X99', tried: [{ label: 'socket /tmp/.X11-unix/X99', error: 'ENOENT' }] } });
+    expect(reached).toEqual({ name: 'display', status: 'pass', message: 'the display is available (DISPLAY=:99)' });
+    const missed = displayCheck({
+      platform: 'linux',
+      display: ':99',
+      xvfb: true,
+      probe: { reached: null, tried: [{ label: 'socket /tmp/.X11-unix/X99', error: 'ENOENT' }, { label: 'abstract socket @/tmp/.X11-unix/X99', error: 'ECONNREFUSED' }] },
+    });
+    expect(missed.status).toBe('fail');
+    expect(missed.message).toContain('no client can reach it');
+    expect(missed.message).toContain('socket /tmp/.X11-unix/X99 (ENOENT), abstract socket @/tmp/.X11-unix/X99 (ECONNREFUSED)');
+    expect(displayCheck({ platform: 'linux', display: 'nonsense', xvfb: true, probe: { reached: null, tried: [] } }).message).toContain('no display this check can read');
+    expect(displayCheck({ platform: 'linux', display: ':0', xvfb: true }).status).toBe('fail');
+    expect(displayCheck({ platform: 'win32', display: ':0', xvfb: false }).status).toBe('pass');
+    expect(displayCheck({ platform: 'darwin', display: ':0', xvfb: false }).status).toBe('pass');
+  });
+
+  it('reads :N and unix:N as the socket file and its abstract name, host:N as TCP 6000+N', () => {
+    const unix = [
+      { label: 'socket /tmp/.X11-unix/X7', connect: { path: '/tmp/.X11-unix/X7' } },
+      { label: 'abstract socket @/tmp/.X11-unix/X7', connect: { path: '\0/tmp/.X11-unix/X7' } },
+    ];
+    expect(displayTargets(':7')).toEqual(unix);
+    expect(displayTargets(':7.1')).toEqual(unix);
+    expect(displayTargets('unix:7')).toEqual(unix);
+    expect(displayTargets('build-host:10.0')).toEqual([{ label: 'tcp build-host:6010', connect: { host: 'build-host', port: 6010 } }]);
+    expect(displayTargets('[::1]:2')).toEqual([{ label: 'tcp [::1]:6002', connect: { host: '::1', port: 6002 } }]);
+    for (const shape of ['', 'nonsense', ':x', 'decnet::0', '/tmp/launch-x/org.xquartz:0']) expect(displayTargets(shape)).toBeNull();
+  });
+
+  it.skipIf(process.platform === 'win32')('the probe connects for real: a listening socket is reached, a missing one is tried and named', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'preflight-display-'));
+    const path = join(dir, 'X0');
+    const server = createServer((socket) => socket.destroy());
+    await new Promise<void>((done) => server.listen(path, done));
+    try {
+      // The probe runs synchronously in a child; the kernel's backlog accepts the connect while this loop blocks.
+      const probe = probeTargets([
+        { label: 'missing', connect: { path: join(dir, 'X1') } },
+        { label: 'listening', connect: { path } },
+      ]);
+      expect(probe).toEqual({ reached: 'listening', tried: [{ label: 'missing', error: 'ENOENT' }] });
+    } finally {
+      await new Promise((done) => server.close(done));
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -171,8 +223,29 @@ describe('preflight — the report', () => {
     scratch: () => ({ error: null }),
     sourceRoots: () => [],
     xvfb: () => true,
+    display: (_display: string): { reached: string | null, tried: { label: string, error: string }[] } => { throw new Error('the display was probed'); },
     store: () => fakeStore,
     ...over,
+  });
+
+  it('linux probes a set DISPLAY: unreached fails the report, reached passes; no DISPLAY and other hosts probe nothing', () => {
+    const unreached = { reached: null, tried: [{ label: 'socket /tmp/.X11-unix/X99', error: 'ENOENT' }, { label: 'abstract socket @/tmp/.X11-unix/X99', error: 'ECONNREFUSED' }] };
+    const asked: string[] = [];
+    const red = runPreflight({ platform: 'linux', env: { DISPLAY: ':99' }, io: fakeIo({ display: (d: string) => { asked.push(d); return unreached; } }) });
+    expect(asked).toEqual([':99']);
+    expect(red.ok).toBe(false);
+    expect(red.checks.find((c: { name: string }) => c.name === 'display')).toMatchObject({ status: 'fail' });
+    expect(formatReport(red)).toContain('FAIL  DISPLAY=:99 is set, but no client can reach it — tried socket /tmp/.X11-unix/X99 (ENOENT)');
+
+    const green = runPreflight({ platform: 'linux', env: { DISPLAY: ':99' }, io: fakeIo({ display: () => ({ reached: 'socket /tmp/.X11-unix/X99', tried: [] }) }) });
+    expect(green.ok).toBe(true);
+    expect(formatReport(green)).toContain('PASS  the display is available (DISPLAY=:99)');
+
+    // The default fake throws when probed: these four never reach it.
+    expect(runPreflight({ platform: 'linux', env: {}, io: fakeIo() }).checks.find((c: { name: string }) => c.name === 'display')).toMatchObject({ status: 'warn' });
+    expect(runPreflight({ platform: 'linux', env: {}, io: fakeIo({ xvfb: () => false }) }).checks.find((c: { name: string }) => c.name === 'display')).toMatchObject({ status: 'fail' });
+    expect(runPreflight({ platform: 'win32', env: { DISPLAY: ':99' }, io: fakeIo() }).checks.find((c: { name: string }) => c.name === 'display')).toMatchObject({ status: 'pass' });
+    expect(runPreflight({ platform: 'darwin', env: {}, io: fakeIo() }).checks.find((c: { name: string }) => c.name === 'display')).toMatchObject({ status: 'pass' });
   });
 
   it('a healthy machine passes and a named proof reads its record', () => {

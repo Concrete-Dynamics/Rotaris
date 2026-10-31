@@ -20,9 +20,10 @@ sequenceDiagram
   OS->>M: launch (argv may carry a folder)
   Note over M: Phase 0 — BEFORE app.whenReady(),<br/>before any window, before any write
   M->>M: claimInstance(...) — the endpoint listens first, then the record naming it is written (ADR-0055; a named pipe on Windows, pinned there by instance-order.test.ts since 2026-10-21)
+  Note over M: (2) hand over to the process the record names — acknowledged only while the record still names it (ADR-0055 consequence 14)<br/>(3) unacknowledged: remove the record unless it now names another live claim, retry once<br/>(4) that retry lost: hand over once more to the record's process
   alt handed over
     M-->>OS: app.exit(0) — shows nothing, leaves nothing behind: its endpoint (opened first) and its per-attempt directory removed (OQ-248)
-  else refused (both claims lost, or no directory could hold the endpoint — no record written)
+  else refused (both claims lost and (4)'s hand-over unacknowledged, or no directory could hold the endpoint — no record written)
     M-->>OS: one error line, app.exit(2)
   else claimed
     M->>M: preferences, theme, provider catalogue
@@ -79,6 +80,22 @@ launch's open is logged, and the window stands with no workspace open, as a refu
 owes is OQ-386's. The run host warms its skill catalogue in a microtask that runs before its reply is posted, so under load
 a slow discovery is a slow reply
 (`../../../defects/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`, open).
+
+**A process the record no longer names stands down (2026-10-31, ADR-0055 consequence 14).** The endpoint reads the record
+again as each ordinary hand-over arrives (`listen`, `platform/instance.ts`). Where the record names another process, or
+none can be read, it calls no `onHandOver`, so nothing is surfaced. It answers `{"ok":false,"reason":…}` and reports
+`onHandOverDeclined`, which main logs at `warn` (`hand-over declined …`). This covers a primary reclaimed from after a wedge
+past the 5 s interval, and a predecessor whose record has passed to its successor. The launch that sent it resolves to the
+process the record names. Its clause (3) removes the record unless a fresh read finds another live claim: nothing
+readable, the claim it failed to reach, or a claim whose process has ended is reclaimed. A record naming another live claim
+is left in place, the retry loses, and clause (4) hands the launch to that claim's process: exactly one instance, its
+window surfaced (REQ-STARTUP-164). Where that process is live but does not answer (4) either, the launch ends `refused`
+with no window, and whether REQ-STARTUP-164 admits that is open
+(`../../../defects/a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md`). Until that date a resumed primary
+surfaced its window for a stale hand-over, and (4) did not exist
+(`../../../defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md`). What the stood-down process does
+with its own windows is not decided
+(`../../../defects/a-stood-down-primary-keeps-its-windows-and-runs-on-with-no-end-the-specification-states.md`, open).
 
 **The update check rides the post-show activation, and so does every window built later.** `MainWindows` fires
 `postShowActivation` once per window on the window's own show event — the launch's window, a replacement's
@@ -197,7 +214,8 @@ arrives while no restart is waiting — a sentinel launch nobody started — is 
 record is unchanged, nothing is reported to main, and that launch ends; the instance stays the only one
 (REQ-STARTUP-161). **The pass is two steps (2026-09-28)** so the record is never rewritten for a successor that has
 stopped waiting: the offer, the acknowledgement within the interval, then the rewrite and `passed`. An ordinary launch's
-hand-over (REQ-STARTUP-162) is one line in and `{"ok":true}` out, unchanged.
+hand-over (REQ-STARTUP-162) is one line in and `{"ok":true}` out, while the record names the process answering; a
+predecessor whose record has passed declines it as below.
 Nothing of the installation is moved or modified before the replacement is fetched whole and verified
 (REQ-STARTUP-126). The apply strategies and the restart are decided by unit tests over fakes; their run against a real
 Windows artifact is owed to the next Windows package (IC-3 — *corrected 2026-10-13: a Windows x64 host, deferred with the pipeline under R-071; IC-3 binds Linux and macOS artifacts*) — ADR-0054's "The updater" note says what was executed.

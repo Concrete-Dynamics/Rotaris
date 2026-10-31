@@ -130,6 +130,13 @@ anywhere, and that is OQ-43.** It is left open rather than closed by this record
   retry the exclusive create **exactly once**. (4) A second failure means another launch claimed inside
   the interval: attempt the hand-over once more and end. **At most one reclaim, two create attempts, one
   interval, no spin**, so a record another party keeps recreating cannot make a launch loop.
+  *2026-10-31: (4) was built only on this date. Until then a lost retry ended `refused`. And (3)'s removal now reads the
+  record first: it removes any record but one that names another LIVE claim, which is (4)'s case (consequence 14's note
+  of that date). A record that cannot be read, the claim it failed to reach, or another claim whose process has ended is
+  reclaimed as before; for one commit that day the removal also left a dead claim's record, and the launch ended
+  `refused` with no window (the fixed note records it). (4)'s hand-over is bounded by the same interval as (2)'s, so a
+  launch whose first hand-over went unanswered and whose second does too can wait two intervals. Whether "one interval"
+  admits that is not ruled here.*
 - **The probe is the session lock's probe, with the ambiguous case resolved the other way — deliberately,
   and the requirement says so.** `REQ-SESSION-051` to `REQ-SESSION-054` are inherited whole, including
   the rule that matters most in practice: on Windows **the probe must deliver no signal and no console

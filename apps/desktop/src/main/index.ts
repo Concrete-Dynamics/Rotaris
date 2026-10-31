@@ -213,6 +213,12 @@ async function main(): Promise<void> {
     recordFile: layout.instanceRecord, endpointDir: dirs.data, machineId, pid: process.pid,
     wall: clocks.wall, timers: clocks.timers, handOverIntervalMs: millis(5_000),
     onHandOver: (h: HandOver) => { if (surface) surface(h); else pendingHandOvers.push(h); },
+    // ADR-0055 consequence 14: a hand-over reaching this process after the record moved on is not acted on — nothing is
+    // surfaced for it — and is answered not-acknowledged, so its launch resolves to the process the record names. Said once
+    // per hand-over, so a resumed primary's log shows that it stood down.
+    onHandOverDeclined: (h: HandOver, holder: InstanceRecord | undefined) => {
+      log(`hand-over declined${h.workspace === undefined ? '' : ` for ${h.workspace}`}: the instance record ${holder === undefined ? 'could not be read' : `names pid ${holder.pid}`}, not this process (pid ${process.pid}), so it does not act as the instance (ADR-0055 consequence 14)`, 'warn');
+    },
     onRecordPassed: () => { successorWait.passed(); },
     // REQ-STARTUP-121: an accepted successor the record could not be passed to fails the waiting restart, which then
     // surfaces `Update not installed` and clears the updater's in-flight guard, instead of waiting for ever.

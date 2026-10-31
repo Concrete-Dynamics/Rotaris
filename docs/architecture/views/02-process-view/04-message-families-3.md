@@ -43,7 +43,8 @@ loads the renderer in the `rows-proof` role, the row renderer over a fixture arr
 **The About page's two commands (Part AG).** Renderer → main: **`shell.openThirdPartyLicenses`** → `{path}` | a refusal.
 `REQ-SHELL-142`'s notices bundle is a **local file shipped with the build**, so it cannot travel through
 `shell.openExternal`, which refuses every scheme but `http(s)` for the reason above; it takes its own command, the
-renderer names no path, and main answers `licenses.absent` when the build carries no bundle. Since 2026-09-27
+renderer names no path, and main answers `licenses.absent` when the build carries no bundle. Since 2026-10-31 its
+`shell.openPath` is bounded at 5 s (`openFile`, `main/open-folder.ts`), so an opener that never answers is `licenses.failed`. Since 2026-09-27
 `pnpm notices` produces the asset (below), but only once its validation passes, and `pnpm package` carries it into the
 artifact (`first-release-plan.md` §4.4). A package cannot be made without it, except a development package that
 `ROTARIS_PACKAGE_WITHOUT_NOTICES=1` asks for. That package, and any source-tree run nobody has written the file for,

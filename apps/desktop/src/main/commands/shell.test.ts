@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PANE_LAYOUT_VIEWS, PreferenceStore, paneLayoutKeys } from '@rotaris/platform';
+import { FakeClock } from '@rotaris/kernel';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION } from '@rotaris/contracts';
 import type { CommandAt, CommandContext, MainWindowState } from './context.js';
 
@@ -31,7 +32,10 @@ vi.mock('@rotaris/platform', async (importOriginal) => {
   Object.assign(paneCounts, actual.PANE_LAYOUT_PANES);
   return { ...actual, PANE_LAYOUT_PANES: paneCounts };
 });
-vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => windows }, app: { isPackaged: false, getVersion: () => '0.0.0', getAppPath: () => '.' }, nativeTheme: {}, shell: {} }));
+/** The platform's opener (`shell.openPath`) and the licence bundle's path, as a case sets them. */
+const opener = vi.hoisted(() => ({ open: (_path: string): Promise<string> => Promise.resolve(''), bundle: null as string | null }));
+vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => windows }, app: { isPackaged: false, getVersion: () => '0.0.0', getAppPath: () => '.' }, nativeTheme: {}, shell: { openPath: (path: string) => opener.open(path) } }));
+vi.mock('../about.js', async (importOriginal) => ({ ...await importOriginal<object>(), thirdPartyLicensesPath: () => opener.bundle }));
 const { shellCommands, announceDisplayPreference } = await import('./shell.js');
 
 const written: [string, unknown][] = [];
@@ -172,5 +176,48 @@ describe('prefs.get reads a pane layout against its own view\'s pane count — R
     expect(await get('git')).toEqual({ version: 1, panes: 2, sizes: [400, 528] });
     await store.writeLayout('library', { version: 1, panes: 2, sizes: [500, 400] });
     expect(await get('library')).toBeUndefined();
+  });
+});
+
+/**
+ * REQ-SHELL-142: "a failed open shows 'Could not open the third-party license bundle.'" — and an opener that never answers is a
+ * failed open (REQ-SHELL-040: neither failure of the opener is silent). Until 2026-10-31 the command waited on it for good, as
+ * Open log did (`docs/defects/fixed/open-log-waits-on-the-platform-opener-without-a-bound.md`).
+ */
+describe('shell.openThirdPartyLicenses over an opener that never answers (REQ-SHELL-142, REQ-SHELL-040)', () => {
+  const bundle = '/opt/rotaris/resources/THIRD_PARTY_NOTICES.txt';
+  const licences = (clock: FakeClock) => shellCommands({ capturing: false, clocks: { timers: clock.timers }, log: () => undefined } as unknown as Parameters<typeof shellCommands>[0]);
+  const flush = () => new Promise((resolve) => { setImmediate(resolve); });
+  afterEach(() => { opener.bundle = null; opener.open = () => Promise.resolve(''); });
+
+  it('answers licenses.failed once the bound passes, and not a moment before', async () => {
+    const clock = new FakeClock();
+    opener.bundle = bundle;
+    const asked: string[] = [];
+    opener.open = (path) => { asked.push(path); return new Promise<string>(() => undefined); };
+    let outcome: unknown;
+    void Promise.resolve(licences(clock)['shell.openThirdPartyLicenses']({ kind: 'shell.openThirdPartyLicenses' }, at)).then((o) => { outcome = o; });
+    await flush();
+    expect(asked).toEqual([bundle]);
+    clock.advance(4_999);
+    await flush();
+    expect(outcome).toBeUndefined();
+    clock.advance(1);
+    await flush();
+    // THE FALSIFIER: until 2026-10-31 `outcome` stayed undefined here — the command never answered.
+    expect(outcome).toEqual({ ok: false, code: 'licenses.failed', headline: 'The license bundle could not be opened', detail: 'the platform opener did not answer within 5 s' });
+    expect(clock.pendingCount()).toBe(0);
+  });
+
+  it('(as before) success opens the bundle, a refusal is the detail, and no bundle is licenses.absent', async () => {
+    const clock = new FakeClock();
+    const facet = licences(clock);
+    expect(await facet['shell.openThirdPartyLicenses']({ kind: 'shell.openThirdPartyLicenses' }, at)).toMatchObject({ ok: false, code: 'licenses.absent' });
+    opener.bundle = bundle;
+    opener.open = async () => '';
+    expect(await facet['shell.openThirdPartyLicenses']({ kind: 'shell.openThirdPartyLicenses' }, at)).toEqual({ ok: true, value: { path: bundle } });
+    opener.open = async () => 'Failed to open path';
+    expect(await facet['shell.openThirdPartyLicenses']({ kind: 'shell.openThirdPartyLicenses' }, at)).toEqual({ ok: false, code: 'licenses.failed', headline: 'The license bundle could not be opened', detail: 'Failed to open path' });
+    expect(clock.pendingCount()).toBe(0);
   });
 });

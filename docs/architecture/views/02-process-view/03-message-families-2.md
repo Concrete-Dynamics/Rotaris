@@ -128,7 +128,8 @@ unreadable, elapsedMs}` (a live session refused with its sentence); `session.exp
 four records) and `session.exportTrajectory {sessionIds}` (one document, or REQ-EVENTS-144's wrapper in selection
 order) — main opens the save dialog first and nothing is written until a path is chosen; `session.openLog {sessionId}`
 and `session.revealFiles {sessionId}` (REQ-SESSION-191, answered from main with `shell.openPath` /
-`shell.showItemInFolder`, a missing file reported). Main → run host: `session.repair {workspaceId, sessionId?}` →
+`shell.showItemInFolder`, a missing file reported; since 2026-10-31 the log's `shell.openPath` is bounded at 5 s as
+`workspace.openFolder`'s is — `openFile` in `main/open-folder.ts` — so an opener that never answers is `session.open-failed`). Main → run host: `session.repair {workspaceId, sessionId?}` →
 `session.repaired {report}`; `session.delete {workspaceId, sessionId}` → `session.deleted {…}`; `session.export
 {workspaceId, sessionId, destination}` and `session.exportTrajectory {workspaceId, sessionIds, destination}` →
 `session.exported {destination, bytes, documents, warnings, elapsedMs}` (the run host writes the file from its one open

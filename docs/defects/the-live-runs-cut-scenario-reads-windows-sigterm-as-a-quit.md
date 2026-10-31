@@ -7,7 +7,8 @@ and the session stayed `running`. The launch failure then throws out of the run,
 time; they passed on their own with `--only=delegation,crlf` (pack `2026-10-31T20-01-30-279Z`). No `electron.exe` was left
 behind. The question the scenario asks, what a quit does to a foreground command, went unanswered on this platform.
 
-Not repaired (record-only). `fetch-proof` has the same shape on Windows, in the sibling note below.
+Not repaired (record-only). `fetch-proof` has the same shape on Windows, in the note named under Relevant files, which also
+points to the forms already repaired elsewhere (`exit-trace-proof`, `mcp-proof`'s `quitMethod`).
 
 ## Specs
 

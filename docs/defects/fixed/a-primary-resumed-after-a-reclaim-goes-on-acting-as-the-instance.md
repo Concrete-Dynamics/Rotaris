@@ -35,11 +35,12 @@ consequence 14's rule.
   hand-over names.
 - `docs/architecture/adr/0055-startup-sequencing.md` — consequence 14.
 
-## Repaired at the platform's level — 2026-10-31; the Windows re-measurement is owed
+## Repaired at the platform's level — 2026-10-31; re-measured on Windows the same day
 
-Not closed over a measurement. The repair is proven by unit tests on Linux; the suspended-and-resumed primary of C6 has not
-been run against it on Windows, and that run is what would close this note. Until it runs, the repair is a stated mechanism
-with tests behind it, not a measured outcome.
+**C6 re-run against the repair** (Windows 11 ARM64, Node 26.13.0 arm64, Electron 44.3.0, built app at `1cb6e96d`, a scratch driver, once). `NtSuspendProcess` on the primary's main
+process; a second launch of the same profile reclaimed and logged `instance claimed` about 6.7 s after the primary's own
+claim line; on resume the primary logged `hand-over declined … the instance record names pid <second>, not this process`,
+and `hand-over surfaced window` appears nowhere in the log. One run, of the suspended-primary shape only.
 
 **What the repair does.** `listen()` (`packages/platform/src/instance.ts`) now reads the record again whenever an ordinary
 hand-over arrives. If the record shows it does not name this process at this endpoint — another process, or no record (a
@@ -89,8 +90,6 @@ hand-over goes unanswered too and the launch ends `refused` with no window. That
 [its own note](../a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md).
 
 **What remains owed, and what this repair does not decide.**
-- The Windows run of C6 against this build: suspend, second launch, resume. Does the resumed primary log the decline and
-  surface nothing?
 - What the stood-down process does with the windows it already has. ADR-0055 states only the stand-down, and the
   specification says nothing here. Recorded as
   [its own note](../a-stood-down-primary-keeps-its-windows-and-runs-on-with-no-end-the-specification-states.md).

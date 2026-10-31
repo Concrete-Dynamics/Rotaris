@@ -108,7 +108,8 @@ Part 5 of 17 of [ADR-0055](../0055-startup-sequencing.md), which indexes every p
     states and which has no measurement behind it.
     *2026-10-21, measured on Windows: it does not hold. A primary suspended past the 5 s wait and then resumed answered the
     hand-over queued on its pipe and surfaced its window beside the instance that had reclaimed the record ([the note](../../../defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md)).*
-    *2026-10-31, built, not yet re-measured on Windows: the endpoint reads the record again as each ordinary hand-over
+    *2026-10-31, built, and re-measured on Windows that day (the note's C6 re-run: the resumed primary logs the decline and
+    surfaces nothing): the endpoint reads the record again as each ordinary hand-over
     arrives. Where the read shows the record does not name this process at this endpoint (a read that merely fails shows
     nothing, and the instance answers), it acts on nothing, surfaces nothing and answers
     not-acknowledged (`onHandOverDeclined`; main logs `hand-over declined`). The rule alone was not enough, and that is the

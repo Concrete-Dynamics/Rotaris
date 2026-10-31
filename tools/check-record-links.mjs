@@ -12,8 +12,12 @@
 // are skipped; so is anything inside an HTML comment, which does not render.
 //
 // The record, for this gate, is: every `.md` under `docs/`, `CONTEXT-MAP.md`,
-// `AGENTS.md`, and every `CONTEXT.md` under `packages/` (the
-// glossaries the context map names, nested ones included).
+// `AGENTS.md`, the root `README.md`, and every `CONTEXT.md` under `packages/` (the
+// glossaries the context map names, nested ones included). The README joined it
+// on 2026-10-31: it is the page a visitor reads first and cites paths other
+// lanes move, and a dead link in it had left the gate green
+// (`docs/defects/fixed/the-record-link-check-does-not-read-the-root-readme.md`).
+// A `README.md` anywhere else (under `packages/`, say) is not the record.
 //
 // A second pass reads the code. Comments, tests and proof scripts under `apps/`,
 // `packages/` and `tools/` cite defect notes by their repository path
@@ -260,7 +264,7 @@ export function recordFiles(root) {
     }
   };
   walk(join(root, 'docs'), (name) => name.endsWith('.md'));
-  for (const top of ['CONTEXT-MAP.md', 'AGENTS.md']) {
+  for (const top of ['CONTEXT-MAP.md', 'AGENTS.md', 'README.md']) {
     const full = join(root, top);
     if (existsSync(full)) files.push(full);
   }
@@ -532,7 +536,7 @@ if (invokedDirectly) {
     console.error(`check-record-links: ${problems.length} dangling link(s) in the record:`);
     for (const problem of problems) console.error(`  - ${formatProblem(root, problem)}`);
     console.error('');
-    console.error('A relative link in docs/, CONTEXT-MAP.md, AGENTS.md or a packages/**/CONTEXT.md must');
+    console.error('A relative link in docs/, CONTEXT-MAP.md, AGENTS.md, README.md or a packages/**/CONTEXT.md must');
     console.error('reach an existing file or directory, and a `#fragment` must name a heading or an explicit anchor');
     console.error('in that file. A defect note moved to docs/defects/fixed/ takes every link to it along, in the');
     console.error('same commit (AGENTS.md, "Defects noticed along the way").');

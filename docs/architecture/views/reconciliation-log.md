@@ -255,12 +255,6 @@ Last reconciled with the code: **2026-10-18**
 
 **The development-time store behind `pnpm dev-time` (R-075; first execution 2026-10-18).** `01-component-view.md` gains the tool's section: measured spans of setup, build, each `pnpm check` stage, proofs, repairs and repeated rebases, one JSON record a span in `~/.rotaris/dev-time/log.jsonl`. No package, edge or process changed.
 
-Last reconciled with the code: **2026-10-16**
-
-**Windows MCP shutdown preserves the runner until its server closes (R-074, REQ-MCP-066/067/113).** `02-process-view.md` now states the Windows graceful phase: stdin EOF, then the existing grace, then taskkill of the intact tree. The immediate rename after graceful and forced runner shutdown is measured by the MCP suite. Observation fixtures use Windows junctions, preserving their existing path-alias assertions without needing symlink privileges.
-
-**Children have no fixed model-step cap (PD-ORCH-017, R-073).** `03-runtime-view.md` section 3 now distinguishes the root's 100-step bound from delegated children, which pass no limit to `runTurn`. The child composition no longer carries the root's step-bound setting. Timeout, cancellation, pause and supervision still govern children.
-
 
 ## Older entries
 
@@ -272,6 +266,7 @@ with the next number, and its row goes at the top of this table.
 
 | Part | "Last reconciled" dates it carries | Its newest entry |
 |---|---|---|
+| [13](reconciliation-log/13.md) | 2026-10-16 | Windows MCP shutdown preserves the runner until its server closes (R-074, REQ-MCP-066/067/113). |
 | [12](reconciliation-log/12.md) | 2026-10-15, 2026-10-14 | A Windows ARM64 development tree's bundle is the win32-x64 one (the Windows ARM64 session; OQ-401, the … |
 | [11](reconciliation-log/11.md) | 2026-10-13 | `focus-session` reaches the session where it lives (PD-SHELL-001 revision 3, OQ-292; fin44, … |
 | [10](reconciliation-log/10.md) | — | An exact or replace-all edit keeps a CRLF file's line endings (PD-TOOLS-017, OQ-254; fin38). |

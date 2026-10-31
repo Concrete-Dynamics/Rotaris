@@ -201,6 +201,8 @@ export function untrustedSignatureSentence(version: string, noKey: boolean): str
 export const noManifestSentence = (version: string): string => `release ${version} publishes no checksum file; refusing to install an unverifiable download`;
 export const noHashSentence = (name: string): string => `no published hash for ${name}; the download was discarded`;
 export const hashMismatchSentence = (name: string, expected: string, actual: string): string => `${name} does not match the published hash (expected ${expected}, got ${actual}); the download was discarded and nothing was installed`;
+/** REQ-STARTUP-169's bound, worded on REQ-STARTUP-123's terms: the transfer was ended and nothing of it kept. */
+export const oversizedSentence = (name: string, size: number): string => `${name} is larger than the ${size} bytes the release feed states for it; the download was ended and discarded, and nothing was installed`;
 
 export async function runInstall(offer: Offer, ctx: InstallContext): Promise<InstallResult> {
   // 1. The manifest and its signature must both be published (REQ-STARTUP-032/123), and both are fetched before anything else.
@@ -255,6 +257,8 @@ export async function runInstall(offer: Offer, ctx: InstallContext): Promise<Ins
     await discard();
     if (streamed.why === 'write') return { ok: false, stage: 'download', sentence: `could not write the download to ${downloaded}: ${streamed.error}` };
     if (streamed.why === 'aborted') return { ok: false, stage: 'download', sentence: `the download of ${offer.asset.name} was abandoned before it finished` };
+    // REQ-STARTUP-169/179: an oversized transfer is a refusal, not a transport failure, and its sentence says so.
+    if (streamed.why === 'oversized') return { ok: false, stage: 'download', sentence: oversizedSentence(offer.asset.name, offer.asset.size) };
     return { ok: false, stage: 'download', sentence: `the download of ${offer.asset.name} ended early: ${streamed.error}` };
   }
 

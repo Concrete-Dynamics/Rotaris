@@ -246,6 +246,21 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     expect(await runInstall(offer(), context(nostaging, stagingArea({ createFails: true }), targetVolume()).ctx)).toMatchObject({ ok: false, stage: 'download', sentence: expect.stringContaining('staging directory') });
   });
 
+  it('a transfer longer than the size the feed states is ended and refused with its own sentence, discards what it wrote and installs nothing (REQ-STARTUP-169, REQ-STARTUP-179)', async () => {
+    // The manifest lists the long body's own digest, so nothing but the bound can refuse it.
+    const long = Buffer.concat([payload, Buffer.alloc(400_000, 1)]);
+    const release = published({ assetBytes: long, manifestEntries: [{ name: ASSET, sha256: createHash('sha256').update(long).digest('hex') }] });
+    const staging = stagingArea();
+    const volume = targetVolume();
+    const { ctx, progress } = context(release, staging, volume);
+    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'download', sentence: `${ASSET} is larger than the ${payload.byteLength} bytes the release feed states for it; the download was ended and discarded, and nothing was installed` });
+    expect(progress.every((p) => p.bytesSoFar <= payload.byteLength)).toBe(true);
+    expect(staging.files.size).toBe(0);
+    expect(staging.dirs.size).toBe(0);
+    expect(volume.ops).toEqual([]);
+    expect(volume.files.get(TARGET)).toBe('v0.1.0');
+  });
+
   it('an abort during the download discards the partial file (REQ-SHELL-121: no partially written file is left)', async () => {
     const controller = new AbortController();
     const release = published();

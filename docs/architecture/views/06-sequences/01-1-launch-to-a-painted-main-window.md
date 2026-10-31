@@ -117,7 +117,7 @@ sequenceDiagram
   M->>F: GET SHA256SUMS.txt, then SHA256SUMS.txt.sig
   M->>M: verify the signature against the compiled-in key set — BEFORE parsing (REQ-STARTUP-122/167); empty set → refused, nothing downloaded
   M->>M: parse the manifest (REQ-STARTUP-113)
-  M->>F: GET the one asset, redirects followed, into <temp>/rotaris-update-…/ in 1 MiB chunks; progress repainted per whole percent
+  M->>F: GET the one asset, redirects followed, into <temp>/rotaris-update-…/ in 1 MiB chunks, never past a non-zero stated size (REQ-STARTUP-169); progress repainted per whole percent
   M->>M: digest verified, case-insensitively, with REQ-STARTUP-123's sentences
   alt portable: rename aside, move in (REQ-STARTUP-125)
     M->>M: "Update installed" + Restart now (REQ-STARTUP-119)

@@ -138,8 +138,9 @@ describe('uvAssetFor — the pinned uv for the host uv runs on', () => {
 // docs/defects/fixed/the-bundle-steps-python-install-tries-to-place-an-interpreter-on-the-users-path.md: `--install-dir`
 // moves where uv keeps the interpreter, not its executable links, so without `--no-bin` the step also wrote a
 // `python3.13` into the user's `~/.local/bin`, on PATH, outside the tree — on the Linux host one was left dangling once
-// its worktree was removed (2026-10-31).
-describe("bundle.mjs's interpreter install — nothing onto the user's PATH", () => {
+// its worktree was removed (2026-10-31). `--no-registry` keeps the same call from registering the interpreter in the
+// Windows registry, an entry that would outlive the install directory the same way.
+describe("bundle.mjs's interpreter install — nothing onto the user's PATH or into the registry", () => {
   const calls = uvCalls(readFileSync(join(HERE, 'bundle.mjs'), 'utf8'));
   const installs = calls.filter((args) => args[0] === "'python'" && args[1] === "'install'");
   it('finds the one `uv python install` the bundle runs, into the tree by --install-dir', () => {
@@ -149,5 +150,8 @@ describe("bundle.mjs's interpreter install — nothing onto the user's PATH", ()
   });
   it('passes --no-bin on that same call, so uv installs no executable into its bin directory', () => {
     expect(installs[0]).toContain("'--no-bin'");
+  });
+  it('passes --no-registry on that same call, so uv registers nothing in the Windows registry', () => {
+    expect(installs[0]).toContain("'--no-registry'");
   });
 });

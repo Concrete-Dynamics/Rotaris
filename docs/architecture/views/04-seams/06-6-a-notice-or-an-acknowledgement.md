@@ -28,11 +28,14 @@ Invariants:
   `workspace.opened`'s `cutRestore` becomes one info notice (OQ-266), and a refused store (`workspace.store-missing`,
   `workspace.store-displaced`) an error notice whose headline and detail are the workspace service's own words, held for the
   listing to answer with (REQ-SESSION-202). An identifier present but unreadable (`workspace.identifier-unreadable`, its
-  words in `workspace-service/identifier-refusal.ts`) is held and raised the same way, once while held and with no action
-  (REQ-SESSION-197; since 2026-10-31). Every word is decided in `main/store-notice.ts` (`cutRestoreNotice`,
-  `storeRefusalOf`, `identifierRefusalOf`, `storeRefusalNotice`, `holdOpenRefusal`; pure, pinned by its test), which
-  `openWorkspaceInner` only raises. A new condition of the open follows the same path: a refusal code in the workspace
-  service, and a set in `main/store-notice.ts` — `STORE_REFUSALS` for the store's place, `IDENTIFIER_REFUSALS` for the file.
+  words in `workspace-service/identifier-refusal.ts`), and a workspace path or `.rotaris` that is a file
+  (`workspace.not-a-folder`, `workspace-service/not-a-folder.ts`, asked before the identifier is read), are held and raised
+  the same way, once while held and with no action (REQ-SESSION-197; since 2026-10-31). A hold that replaces another for the
+  same root withdraws the notice it held (`holdOpenRefusal`'s `dismiss`). Every word is decided in `main/store-notice.ts`
+  (`cutRestoreNotice`, `storeRefusalOf`, `workspaceRefusalOf`, `storeRefusalNotice`, `holdOpenRefusal`; pure, pinned by its
+  test), which `openWorkspaceInner` only raises. A new condition of the open follows the same path: a refusal code in the
+  workspace service, and a set in `main/store-notice.ts` — `STORE_REFUSALS` for the store's place, `WORKSPACE_REFUSALS` for
+  the workspace itself.
 - **A notice raised at two sites is built by one composer** (since 2026-10-14, OQ-293). The unreviewed-hooks notice
   (REQ-NOTIFY-224) is raised in the open slot of `openWorkspaceInner` and from a run's `notice.publish`; both go through
   `hooksReviewNotice(root, notice)` in `main/hooks-review-notice.ts` (the open slot by `hooksReviewOpenReport`, the run's by

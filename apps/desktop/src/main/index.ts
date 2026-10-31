@@ -329,7 +329,8 @@ async function main(): Promise<void> {
   /**
    * REQ-SESSION-202 / OQ-266: each workspace whose store the last open refused rather than create over, by canonical root, with
    * the error notice it was raised as — withdrawn once an open succeeds (OQ-281: the restore or the new store resolved it).
-   * REQ-SESSION-197: and each whose identifier the open could not read, withdrawn the same way once the file is put right.
+   * REQ-SESSION-197: and each whose identifier the open could not read, or whose path is not a folder, withdrawn the same way
+   * once that is put right — or as another condition replaces it (`holdOpenRefusal`).
    */
   const storeRefusals = new Map<string, HeldOpenRefusal>();
   let cancelImprovementWorkspace = (_workspaceRoot: string): void => undefined;
@@ -420,10 +421,11 @@ async function main(): Promise<void> {
       log(`workspace.open refused: ${JSON.stringify(opened)}`);
       // REQ-SESSION-202 / W-31, OQ-266: a store the open refused rather than create over is reported as what was found, and
       // the listing answers with the same condition instead of an empty list or "open a workspace" (`storeRefusals`).
-      // REQ-SESSION-197: so is an identifier present but unreadable, which is never minted over (`IDENTIFIER_REFUSALS`).
-      // OQ-281: a store-missing notice opens Settings at Project, where the place is resolved; its id is kept to withdraw it.
+      // REQ-SESSION-197: so is an identifier present but unreadable, which is never minted over, and a path that is not a
+      // folder (`WORKSPACE_REFUSALS`). OQ-281: a store-missing notice opens Settings at Project, where the place is resolved;
+      // its id is kept to withdraw it, here when another condition replaces it and below when an open succeeds.
       const raised = holdOpenRefusal(key, opened, storeRefusals, (n) => notices.report({ severity: n.severity, title: n.headline, ...(n.detail === undefined ? {} : { detail: n.detail }), ...(n.action === undefined ? {} : { action: n.action }) })
-        .then((r) => r.id).catch(() => null));
+        .then((r) => r.id).catch(() => null), (id) => notices.dismiss(id));
       if (raised) log(`notice: ${raised.headline}`);
       return undefined;
     }

@@ -4,7 +4,7 @@ import type { ProcessReply } from '@rotaris/contracts';
  * REQ-SESSION-197: the open's refusal of a workspace whose identifier file is present but cannot be read — reported as a
  * condition for the person to resolve and never minted over, since the file is the only thing binding the workspace to its
  * recorded sessions. Pure: the file and what was read from it in, the service's words out, so a test pins every one. Main
- * holds this refusal and raises it as a notice (`main/store-notice.ts`, `IDENTIFIER_REFUSALS`), in these words.
+ * holds this refusal and raises it as a notice (`main/store-notice.ts`, `WORKSPACE_REFUSALS`), in these words.
  *
  * The way on is the person's, by hand, outside the product: neither action in Settings › Project resolves it (the restore
  * refuses an unreadable identifier, `packages/workspace/src/restore.ts`; so does the new store, `store-establish.ts`), so

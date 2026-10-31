@@ -34,8 +34,9 @@ product cannot tell); REQ-NOTIFY-044 (a notice's action, where it carries one, i
   holds where the identifier belongs (the first non-comment line, or that it could not be read), that nothing was written over
   it and why, and the two ways on by hand — put back the identifier, or remove the file and open with a new identifier and none
   of the sessions recorded before.
-- `main/store-notice.ts` gains `IDENTIFIER_REFUSALS`, a set of its own beside `STORE_REFUSALS` (this is a condition of the file
-  the workspace carries, not of the store's place), and `holdOpenRefusal`, which `openWorkspaceInner` now calls: the refusal is
+- `main/store-notice.ts` gains `WORKSPACE_REFUSALS` (named `IDENTIFIER_REFUSALS` until the review's rework, which added
+  `workspace.not-a-folder` to it), a set of its own beside `STORE_REFUSALS` (this is a condition of the workspace itself, not of
+  the store's place), and `holdOpenRefusal`, which `openWorkspaceInner` now calls: the refusal is
   held per root in `storeRefusals`, so `answerUnderHeldRefusal` and the listing answer it instead of "open a workspace", and it
   is raised as one persistent error notice, once while held; the successful open that clears the hold withdraws it.
 - The notice carries no action. Settings › Project (OQ-281) is where a place holding no store is resolved, but both of its
@@ -45,3 +46,10 @@ product cannot tell); REQ-NOTIFY-044 (a notice's action, where it carries one, i
   it: 4 tests); the built app launched headless on `not-an-id` shows the error notice with no action, and `session.list` and
   `config.read` answer `workspace.identifier-unreadable` (`pnpm app:drive`); the same launch built without the main-process
   change shows no notice. `store-resolution-proof` needs a display and was not run on that host.
+- Review rework (PR #42): a hold that replaces another for the same root — the identifier put back over an empty store place,
+  then opened again; or the same store refusal raised again — now withdraws the notice it held as the new one is raised
+  (`holdOpenRefusal` takes the notice store's `dismiss`). Before, the map kept only the newer id, so the older notice could
+  never be withdrawn and stood beside the workspace once it opened. The same workspace refusal seen again still raises nothing.
+  `store-notice.test.ts` pins both, and pins `openWorkspaceInner`'s call from `index.ts`'s source. A path that is a file was
+  shown this condition's words; it now has its own
+  (`docs/defects/fixed/a-workspace-path-that-is-not-a-directory-is-reported-as-an-unreadable-identifier.md`).

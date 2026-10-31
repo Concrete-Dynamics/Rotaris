@@ -39,6 +39,9 @@ the session started at 19:42:48.309, the discovery finished in 2,800 ms at 19:42
 0 bytes. So a quick discovery does not leave the call enough of the 9 s bound either: what remains is the terminal's own
 start and `set >`'s write, not measured here.
 
+**Again on Windows ARM64 (2026-10-31).** At `1cb6e96d`, alone on the host: the same one check of 15, with
+`terminal-environment.txt` again at 0 bytes.
+
 ## Specs
 
 None is contradicted: REQ-STARTUP-106 and REQ-STARTUP-147 are what the stage measures, and it reads nothing because the

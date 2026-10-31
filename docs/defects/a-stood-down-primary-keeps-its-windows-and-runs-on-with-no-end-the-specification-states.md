@@ -8,7 +8,9 @@ still fires for any window it builds, and it ends only when its own windows are 
 5 s interval, the user can be left with two processes of the application, each with windows on screen, for as long as
 they keep using the old one.
 
-This was found while repairing the stand-down. It was not measured: the Windows run that measured the original defect
+This was found while repairing the stand-down. *Measured 2026-10-31 by the C6 re-run (Windows 11 ARM64, Node 26.13.0 arm64, Electron 44.3.0, built app at `1cb6e96d`): 8 s after the resume both
+processes were still up, and the log shows the workspace's code-intelligence setup started twice for the same directory.
+What becomes of that shared setup was not read.* Until then it was not measured: the Windows run that measured the original defect
 ended both processes with its driver. It is not repaired, because there is no rule to repair it to:
 - ADR-0055 states the stand-down and nothing further;
 - the specification does not say what a reclaimed-from process does with its windows: close them, keep them, or say

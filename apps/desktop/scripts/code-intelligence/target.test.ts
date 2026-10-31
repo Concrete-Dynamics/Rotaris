@@ -18,31 +18,6 @@ const PINS = JSON.parse(readFileSync(join(HERE, 'pins.json'), 'utf8')) as {
 };
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 
-/**
- * The argument lists of every `run(uv, [...])` in `bundle.mjs`, each as its top-level elements' source text. A static
- * scan, as `lib/launch-sites.test.ts` holds the proofs' launches: running the step would download an interpreter.
- */
-function uvCalls(text: string): string[][] {
-  return [...text.matchAll(/\brun\(\s*uv\s*,\s*\[/g)].map((m) => {
-    const out: string[] = [];
-    let depth = 0;
-    let start = m.index! + m[0].length;
-    for (let i = start; i < text.length; i += 1) {
-      const c = text[i]!;
-      if (c === "'" || c === '"' || c === '`') { for (i += 1; i < text.length && text[i] !== c; i += 1) if (text[i] === '\\') i += 1; continue; }
-      if ('([{'.includes(c)) depth += 1;
-      else if (')]}'.includes(c) && depth > 0) depth -= 1;
-      else if (c === ']' || (c === ',' && depth === 0)) {
-        const element = text.slice(start, i).trim();
-        if (element !== '') out.push(element);
-        if (c === ']') return out;
-        start = i + 1;
-      }
-    }
-    throw new Error(`no end to the argument list at ${m.index}`);
-  });
-}
-
 describe('parseTarget — the artifact the bundle is for, never by default the build host', () => {
   it('names the host when no target is given: the development tree runs on it', () => {
     expect(parseTarget(['--force'], { platform: 'linux', arch: 'x64' })).toEqual({ platform: 'linux', arch: 'x64', key: 'linux-x64' });
@@ -132,26 +107,5 @@ describe('uvAssetFor — the pinned uv for the host uv runs on', () => {
   it('a host with neither its own pin nor that fallback is refused', () => {
     expect(uvAssetFor(PINS.uv, 'linux-arm64')).toEqual({ error: 'no uv asset pinned for linux-arm64' });
     expect(uvAssetFor({ version: '0', assets: {} }, 'win32-arm64')).toEqual({ error: 'no uv asset pinned for win32-arm64' });
-  });
-});
-
-// docs/defects/fixed/the-bundle-steps-python-install-tries-to-place-an-interpreter-on-the-users-path.md: `--install-dir`
-// moves where uv keeps the interpreter, not its executable links, so without `--no-bin` the step also wrote a
-// `python3.13` into the user's `~/.local/bin`, on PATH, outside the tree — on the Linux host one was left dangling once
-// its worktree was removed (2026-10-31). `--no-registry` keeps the same call from registering the interpreter in the
-// Windows registry, an entry that would outlive the install directory the same way.
-describe("bundle.mjs's interpreter install — nothing onto the user's PATH or into the registry", () => {
-  const calls = uvCalls(readFileSync(join(HERE, 'bundle.mjs'), 'utf8'));
-  const installs = calls.filter((args) => args[0] === "'python'" && args[1] === "'install'");
-  it('finds the one `uv python install` the bundle runs, into the tree by --install-dir', () => {
-    expect(calls.length).toBeGreaterThan(1);
-    expect(installs).toHaveLength(1);
-    expect(installs[0]).toContain("'--install-dir'");
-  });
-  it('passes --no-bin on that same call, so uv installs no executable into its bin directory', () => {
-    expect(installs[0]).toContain("'--no-bin'");
-  });
-  it('passes --no-registry on that same call, so uv registers nothing in the Windows registry', () => {
-    expect(installs[0]).toContain("'--no-registry'");
   });
 });

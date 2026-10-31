@@ -60,13 +60,13 @@ Evidence:
   The final argument list, `python install cpython-3.13.15-linux-x86_64-gnu --install-dir <c> --no-bin --no-registry`,
   likewise exited 0 (`Installed Python 3.13.15`), left the bin directory empty and `~/.local/bin` unchanged, and
   `bundle.mjs`'s own `readdirSync` filter found exactly one directory under `<c>`, `cpython-3.13.15-linux-x86_64-gnu`.
-- Windows 11 x64 (build 26300), 2026-10-31. Before any run, `HKCUSoftwarePythonAstralCPython3.13.15` already stood there,
-  its `InstallPath` naming `C:devRotarisappsdesktopesourcescode-intelligence.python-installcpython-3.13.15-windows-x86_64-none`,
+- Windows 11 x64 (build 26300), 2026-10-31. Before any run, `HKCU\Software\Python\Astral\CPython3.13.15` already stood there,
+  its `InstallPath` naming `C:\dev\Rotaris\apps\desktop\resources\code-intelligence\.python-install\cpython-3.13.15-windows-x86_64-none`,
   a directory that no longer exists: what a bundle run without the flag leaves behind, measured rather than supposed. It is
   host state outside the tree and was left in place for the owner. The pinned uv 0.12.5 (hash-checked `win32-x64` asset), with
   `python install cpython-3.13.15-windows-x86_64-none --install-dir <d> --no-bin --no-registry`, its cache and
-  `UV_PYTHON_BIN_DIR` throwaway, exited 0 (`Installed Python 3.13.15`). `reg query HKCUSoftwarePythonAstral /s` was
-  byte-identical before and after, naming `<d>` nowhere; the bin directory stayed empty; `%USERPROFILE%.localin`'s
+  `UV_PYTHON_BIN_DIR` throwaway, exited 0 (`Installed Python 3.13.15`). `reg query HKCU\Software\Python\Astral /s` was
+  byte-identical before and after, naming `<d>` nowhere; the bin directory stayed empty; `%USERPROFILE%\.local\bin`'s
   listing was identical, times included; `<d>` held the `cpython-3.13.15-windows-x86_64-none` directory the step expects.
 - Not run: the full bundle step (`pnpm code-intel:bundle --force`), on any host; the same call without `--no-registry`
   on Windows, which would overwrite the host's registry entry; the Windows ARM64 run's warning is not re-measured.

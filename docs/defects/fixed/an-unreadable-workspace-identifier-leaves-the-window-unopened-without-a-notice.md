@@ -53,3 +53,12 @@ product cannot tell); REQ-NOTIFY-044 (a notice's action, where it carries one, i
   `store-notice.test.ts` pins both, and pins `openWorkspaceInner`'s call from `index.ts`'s source. A path that is a file was
   shown this condition's words; it now has its own
   (`docs/defects/fixed/a-workspace-path-that-is-not-a-directory-is-reported-as-an-unreadable-identifier.md`).
+- Review round 2 (PR #42): an empty read was said as "present but cannot be read … could not be read, or it is empty …
+  it names this workspace's recorded sessions" where nothing may be there: a `.rotaris` that cannot be entered (mode 000,
+  empty), and a workspace inside a folder that cannot be entered with no `.rotaris` at all. `guardedRead` answers every failed
+  read but ENOENT as unreadable with no content, so the empty `raw` alone cannot tell a file from an unreachable path.
+  `identifierUnreadableAtOpen` now examines the path where the read produced nothing (`stat`, then `access`): a file this
+  account may not read, an empty file, a folder in its place, something that is not a file, and a path whose first folder
+  that cannot be entered is named, with whether the file exists said to be unknown. Each has its own headline and detail;
+  the case with content is unchanged. `guardedRead` is unchanged. `identifier-refusal.test.ts` pins each, and on real files
+  the two reported shapes, an unreadable file, an empty file and a folder (9 tests, all red on the earlier head).

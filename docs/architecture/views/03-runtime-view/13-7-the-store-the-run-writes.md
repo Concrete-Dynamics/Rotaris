@@ -24,7 +24,7 @@ first; `.<identifier>.new` until 2026-10-15, which the next open still removes) 
 opened (or refused) as found, a failed create removes it, and a stray one is removed at the identifier's next open, however the place is found.
 Every scan of the workspaces root skips dot-prefixed entries. While the service's own restore is in flight its opens skip the
 first check and refuse rather than create beside the journal. A workspace path or `.rotaris` that is a file is refused first
-(`workspace.not-a-folder`), then an identifier present but unreadable (`workspace.identifier-unreadable`, REQ-SESSION-197),
+(`workspace.not-a-folder`), then an identifier that cannot be read or reached (`workspace.identifier-unreadable`, REQ-SESSION-197),
 both before any of this and held the same way. In a window holding such a refusal, every command's
 `workspace.none` answer (and the checkpoints' `checkpoint.no-workspace`) leaves `runCommand` as the held refusal (`answerUnderHeldRefusal`), and `session.start` says nothing was
 started because the store could not be opened (REQ-SESSION-089).

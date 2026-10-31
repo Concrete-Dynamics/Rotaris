@@ -27,8 +27,9 @@ Invariants:
 - **A notice about a workspace's store is main's, raised from the open's answer** (`openWorkspaceInner`, since 2026-10-14):
   `workspace.opened`'s `cutRestore` becomes one info notice (OQ-266), and a refused store (`workspace.store-missing`,
   `workspace.store-displaced`) an error notice whose headline and detail are the workspace service's own words, held for the
-  listing to answer with (REQ-SESSION-202). An identifier present but unreadable (`workspace.identifier-unreadable`, its
-  words in `workspace-service/identifier-refusal.ts`), and a workspace path or `.rotaris` that is a file
+  listing to answer with (REQ-SESSION-202). An identifier that cannot be read (`workspace.identifier-unreadable`, its
+  words in `workspace-service/identifier-refusal.ts`, which examines the path where the read produced nothing, so a file
+  not permitted, an empty one, a folder in its place and a folder that cannot be entered each say only what was found), and a workspace path or `.rotaris` that is a file
   (`workspace.not-a-folder`, `workspace-service/not-a-folder.ts`, asked before the identifier is read), are held and raised
   the same way, once while held and with no action (REQ-SESSION-197; since 2026-10-31). A hold that replaces another for the
   same root withdraws the notice it held (`holdOpenRefusal`'s `dismiss`). Every word is decided in `main/store-notice.ts`

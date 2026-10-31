@@ -90,8 +90,9 @@ preparations of other tokens that nothing runs from, and **exits**: main is no c
 holds the artifact, so REQ-STARTUP-125's rename-aside works while the application runs. Where no preparation can be made,
 the stub places the payload for that run (`<data>\prepared\.run-…`, else the temporary directory), records
 `outcome run-scoped` and the root in that tree's marker, waits for the application and removes the tree — the one case it
-stays. The application does not yet read that marker
-(`../../defects/a-portable-that-could-make-no-preparation-starts-without-the-notice-req-startup-165-c-requires.md`). Off
+stays. Main reads that marker beside `process.execPath` before its first window and raises REQ-STARTUP-165 (c)'s warning
+from the post-show activation (`main/preparation-notice.ts`, since 2026-10-31;
+`../../defects/fixed/a-portable-that-could-make-no-preparation-starts-without-the-notice-req-startup-165-c-requires.md`). Off
 Windows the stub (`pnpm portable-proof`) waits for the application in every case and returns its status.
 
 ## Parts

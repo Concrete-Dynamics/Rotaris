@@ -21,3 +21,22 @@ built; the application's half is not, and was out of the brief's scope ("no prod
 - `apps/desktop/launcher/src/main.rs` — `run_scoped` and `marker_text`: the marker the application would read, beside its own image.
 - `apps/desktop/scripts/portable-proof.mjs` — A7, the marker's two lines measured.
 - `apps/desktop/src/main/` — where the post-show notice would be raised (ADR-0054, "How the application learns of it"; its order is ADR-0055's).
+
+## Repaired — 2026-10-31
+
+*Falsified by the repair: "Nothing in the application reads that marker: no notice is raised" no longer holds.*
+
+The application's half, on ADR-0054's channel and ADR-0055 phase −1's order. `apps/desktop/src/main/preparation-notice.ts`
+reads `.rotaris-preparation` beside `process.execPath` — the executable the launch runs, so the tree the stub placed — and
+answers a finding only for header `rotaris-preparation 1` with `outcome run-scoped`; `prepared` (the four silent outcomes),
+no marker (every source-tree, installed and AppImage launch), another format and an unreadable file answer nothing. Main
+reads it once after the instance claim, before the window, and holds it; the post-show activation of `main-windows.ts`
+raises it beside the update check, through `notices.report` at warning severity, keyed so a second window does not raise it
+again. The notice names the per-user data directory above the stub's `prepared` root, never that root or the run's
+placement, and uses none of REQ-STARTUP-166's words (workspace, shared, synchronised, project).
+
+Pinned in `preparation-notice.test.ts` (12 cases: every word, every silent case). Run end to end on Linux x86_64 without
+the Rust stub: a tree placed as `portable-proof.mjs`'s `application()` places one, holding a real marker in the stub's
+format, launched with `--ozone-platform=headless` — `outcome run-scoped` put the warning banner on screen by the probe
+300 ms into the capture; `outcome prepared` and no marker drew nothing. `pnpm portable-proof` (the stub's own A7 plus the notice) was not run:
+this host has no cargo. Never run on Windows.

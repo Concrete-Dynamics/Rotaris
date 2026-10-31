@@ -40,7 +40,10 @@ startup properties rather than packaging ones:
   read is still one file and still off first paint's critical arithmetic — the whole fast-path check
   measured at a few milliseconds against 5,000 — but the "shrink the marker" escape hatch both records
   once reserved is now closed, and consequence 11's chain is what would break first if anyone reopened
-  it.)*
+  it.)* *(Built 2026-10-31 in this order, `main/preparation-notice.ts`: main reads the marker beside
+  `process.execPath` once, after the instance claim and before `app.whenReady()`, one synchronous read with
+  nothing awaited on it, and raises the held finding from `MainWindows`' post-show activation, before that
+  activation's update check. First execution: ADR-0054, "How the application learns of it".)*
 - **The instance claim cannot serialise it.** Two portable launches can race to prepare, because the
   claim they would be serialised by lives in a process neither has started yet. ADR-0054 resolves the
   race in the preparation itself; what this record records is that **SR-1 does not remove it**, and that

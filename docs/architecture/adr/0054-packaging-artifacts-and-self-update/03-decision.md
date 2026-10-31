@@ -329,6 +329,14 @@ same surface at the same severity and is about a different thing; and it must no
 since it is a post-show notice about a cost already paid. Where it sits in the post-show order is
 ADR-0055's.
 
+*First execution of the application's half, 2026-10-31 (`main/preparation-notice.ts`; Linux x86_64, a tree placed as
+`portable-proof`'s `application()` places one, a real marker in the stub's format, not yet through the stub).* **Held, and
+found one thing the paragraph above did not say.** `run-scoped` put the warning on screen by the probe 300 ms into the capture; `prepared` and
+no marker drew nothing. The marker's `unprepared-root` is the preparation root, `<data>/prepared`, and `prepared` is the
+placement within the per-user data directory, so the notice names the directory above it. The notice shares REQ-NOTIFY-024's
+one slot: on that host a later post-show notice (a project-setup failure) replaced it 1.4 s later, as any publication
+replaces the current one; it stays in the diagnostics.
+
 **Two launches racing to prepare, which SR-1 does not prevent.** The preparation happens in the stub,
 **before** the Electron process exists and therefore before the instance claim of `REQ-STARTUP-164` can
 resolve anything. Two double-clicks in quick succession produce two stubs both preparing. Each writes

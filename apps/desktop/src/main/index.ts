@@ -22,7 +22,7 @@ import { homedir } from 'node:os';
 import { FrameDeliveryLimiter } from './terminal.js';
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
-import { mkdirSync, statSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { millis, toIsoUtc } from '@rotaris/kernel';
 import { AUTH_RECOVERY_DIALOG_WIDTH, type AuthRecoveryPayload, type AcknowledgementAction, CHANNEL, CommandRequestSchema, type CommandRequest, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ImprovementActivity, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
@@ -68,6 +68,7 @@ import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWr
 import { workspaceCommands } from './commands/workspace.js';
 import { withoutRuntimeRequests } from './runtime-requests.js'; // REQ-STARTUP-160
 import { placeChromiumProfile } from './chromium-profile.js'; // REQ-STARTUP-145
+import { preparationNotice, readPreparationFinding } from './preparation-notice.js'; // REQ-STARTUP-165 (c)
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
 import { hooksReviewOpenReport } from './hooks-review-notice.js'; // OQ-293
 import { recoveryFor } from './notice-recovery.js';
@@ -247,6 +248,17 @@ async function main(): Promise<void> {
   // A value the variable does not accept is said once, here: after the claim, so a handed-over launch still writes nothing.
   if (appLogLevel.warning !== null) log(appLogLevel.warning, 'warn');
   app.on('will-quit', () => { void claim.close(); });
+  /*
+   * REQ-STARTUP-165 (c): a portable run that could make no preparation is reported, and this is where main learns of it.
+   * ADR-0054 ("How the application learns of it"): the stub records the outcome in the marker of the tree it placed, and
+   * "the application reads it relative to its own image" — `process.execPath`, the executable the launch runs, sits in that
+   * tree. ADR-0055 phase −1: read "during the pre-window phase, where it is one read of a file the fast path has already
+   * touched", and the finding is held "until after the show" (the post-show activation below). Every launch without a
+   * run-scoped marker beside its image — a source tree, an installed build, a portable run from its preparation — finds
+   * nothing here and stays silent (REQ-STARTUP-150).
+   */
+  const preparationFinding = readPreparationFinding(process.execPath, (path) => readFileSync(path, 'utf8'));
+  if (preparationFinding !== undefined) log(`launch preparation: none could be made (${preparationFinding.storage.kind === 'directory' ? preparationFinding.storage.path : preparationFinding.storage.kind}); the warning is held until a window is shown (REQ-STARTUP-165 (c))`, 'warn');
 
   const preferenceRoot = resolvePreferenceRoot();
   const preferences = new PreferenceStore(preferenceRoot);
@@ -1556,7 +1568,14 @@ async function main(): Promise<void> {
       for (const approval of quit.unshownToReport(approvals, quitting())) void runHost.request({ kind: 'approval.shown', requestId: approval.request_id, ok: false, error: 'its main window closed before it was shown' }, millis(5_000)).catch(() => undefined);
     },
     // REQ-STARTUP-043/114: the update check, initiated from the post-show activation of every main window and nowhere else.
-    postShowActivation: (window) => { void updater.activate({ windowId: window.wcId }); },
+    // REQ-STARTUP-165 (c): the finding held from the pre-window phase is raised here, after the window is painted, on the
+    // update offer's surface at warning severity — once per run, which its key holds however many windows are shown.
+    postShowActivation: (window) => {
+      if (preparationFinding !== undefined) {
+        void notices.report(preparationNotice(preparationFinding)).then((r) => { if (r.shown) log(`launch preparation: warning notice #${r.id} raised after the show (REQ-STARTUP-165 (c))`); });
+      }
+      void updater.activate({ windowId: window.wcId });
+    },
     // REQ-WORKSPACE-013: a workspace no window holds any more has its initialization run cancelled, and nothing recorded.
     workspaceClosed: (workspace) => { initialization.close(canonicalPath(workspace)); },
     // PD-LIBRARY-002 revision 2 (e): a window that opens a workspace is told the activity as it stands, its own pending

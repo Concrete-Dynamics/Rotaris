@@ -217,6 +217,14 @@ describe('platform — the atomic document primitive (ADR-0004)', () => {
     writeFileSync(f, '{not json');
     expect(guardedRead(f, JSON.parse).state).toBe('unreadable');
   });
+  it('an unreadable read keeps the first 200 characters and says so only where it cut', () => {
+    const f = join(dir, 'h.json');
+    writeFileSync(f, `{${'x'.repeat(199)}`);
+    expect(guardedRead(f, JSON.parse)).toMatchObject({ state: 'unreadable', raw: `{${'x'.repeat(199)}` });
+    expect(guardedRead(f, JSON.parse)).not.toHaveProperty('truncated');
+    writeFileSync(f, `{${'x'.repeat(200)}`);
+    expect(guardedRead(f, JSON.parse)).toMatchObject({ state: 'unreadable', raw: `{${'x'.repeat(199)}`, truncated: true });
+  });
 });
 
 describe('platform — liveness (REQ-SESSION-051 to REQ-SESSION-054)', () => {

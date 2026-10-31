@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-10-31**
 
+**The portable's could-not-prepare notice (REQ-STARTUP-165 (c), REQ-STARTUP-150; 2026-10-31, `../../defects/fixed/a-portable-that-could-make-no-preparation-starts-without-the-notice-req-startup-165-c-requires.md`).** `04-seams.md` §6 gains the invariant for a notice about the launch itself: read before the window, raised by `report` from `postShowActivation`, every word in `main/preparation-notice.ts`. `02-process-view.md`'s portable paragraph says main now reads the stub's marker; `05-state-ownership.md` gains the marker's row (the stub writes it, main reads it once); `06-sequences.md` §1 gains the read after the claim and the raise after the show. No package, edge, process, message or channel changed.
+
 **The build writes the requirement symbols when they are absent (ADR-0056; 2026-10-31, `../../defects/fixed/a-fresh-clone-cannot-build-until-pnpm-symbols-has-run.md`).** `01-component-view.md`'s responsibilities gain "The requirement symbols on the build path": the desktop build config reaches `tools/symbol-artifact/ensure.mjs`, and the preflight's line says the generator, not `pnpm symbols` alone, writes `generated/`. No package, edge, process, message, channel or ownership changed.
 
 **A failed read of the record is no decline (ADR-0055 consequence 14, REQ-STARTUP-161/164; 2026-10-31, the PR's review).** `06-sequences.md` §1: the stand-down declines on a record gone, malformed or naming another claim, and any other failed read answers as the instance. OQ-460 and OQ-461 raise the two readings the entries below left unruled.

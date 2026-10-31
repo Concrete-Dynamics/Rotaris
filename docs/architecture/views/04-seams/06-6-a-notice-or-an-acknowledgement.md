@@ -46,6 +46,13 @@ Invariants:
   action vocabulary main raises from in `recoveryFor` (`main/notice-recovery.ts`); an action naming a workspace takes the
   root on the event (`workspaceRoot`), never the focused window's, where the event carries one; a `hooks.review` notice that
   carries none is raised with the engine's words and no action (2026-10-14, fin45).
+- **A notice about the launch itself is read before the window and raised after the show** (since 2026-10-31,
+  REQ-STARTUP-165 (c)). The one such notice is the portable's "could not prepare itself": main reads the launcher stub's
+  `.rotaris-preparation` beside `process.execPath` in its pre-window phase and holds the finding (ADR-0055 phase −1), and
+  `postShowActivation` in `index.ts` raises it with `report`, at warning, keyed `startup.preparation.run-scoped` so a second
+  window does not raise it again, beside the update check. Every word, and every outcome that stays silent, is decided in
+  `main/preparation-notice.ts` (pure, pinned by its test); its words stay clear of REQ-STARTUP-166's workspace-storage
+  warning, which uses the same surface and severity.
 - A renderer that must raise a persistent notice sends `notice.report` — it does not draw one. That missing
   entry for a renderer was defect fifty-seven.
 - A transient acknowledgement may carry **exactly one** action, from a closed one-member type.

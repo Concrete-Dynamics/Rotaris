@@ -26,6 +26,7 @@ sequenceDiagram
   else refused (both claims lost and (4)'s hand-over unacknowledged, or no directory could hold the endpoint — no record written)
     M-->>OS: one error line, app.exit(2)
   else claimed
+    M->>M: read .rotaris-preparation beside process.execPath; hold a run-scoped finding (REQ-STARTUP-165 (c), ADR-0055 phase −1)
     M->>M: preferences, theme, provider catalogue
     M->>M: await app.whenReady()
     M->>RH: utilityProcess.fork(run-host.js) — one for the application's lifetime
@@ -34,6 +35,9 @@ sequenceDiagram
     MW->>R: build window, load renderer
     R-->>M: first paint
     MW->>M: postShowActivation(window) — once, on the window's own show event, never during construction
+    opt a run-scoped finding is held
+      M->>R: notices.report — warning, keyed once per run: could not prepare, the per-user data directory, every launch costs this
+    end
     M->>M: updater.activate(window) — REQ-STARTUP-043/114
     alt not updatable (a source-tree or development launch, a payload run without its launcher) or a demo window
       M->>M: one application-log line at info; NO request (REQ-STARTUP-106/057/150)

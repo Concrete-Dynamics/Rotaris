@@ -229,10 +229,12 @@ try {
   const pythonKey = interpreterKey(PINS.python, target);
   log(`uv python install ${pythonKey} → ${install} (the target ${target.key}, on a ${hostKey} host)`);
   // --no-bin: --install-dir moves where uv keeps the interpreter, not its executable links, which uv would otherwise put
-  // into the user's executable directory (`~/.local/bin`, on PATH). A build step writes nothing onto the user's PATH,
-  // and the bundle needs no link: the runtime is moved out of the install directory below
+  // into the user's executable directory (`~/.local/bin`, on PATH). --no-registry: on Windows uv would also register the
+  // interpreter in the user's registry, an entry that outlives the install directory. A build step writes nothing onto
+  // the user's PATH and registers nothing with the host, and the bundle needs neither: the runtime is moved out of the
+  // install directory below
   // (docs/defects/fixed/the-bundle-steps-python-install-tries-to-place-an-interpreter-on-the-users-path.md).
-  run(uv, ['python', 'install', pythonKey, '--install-dir', install, '--no-bin'], { stdio: ['ignore', 'inherit', 'inherit'] });
+  run(uv, ['python', 'install', pythonKey, '--install-dir', install, '--no-bin', '--no-registry'], { stdio: ['ignore', 'inherit', 'inherit'] });
   const dirs = readdirSync(install, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.isSymbolicLink() && e.name.startsWith(`cpython-${PINS.python}-`)).map((e) => e.name);
   if (dirs.length !== 1) throw new Error(`expected one cpython-${PINS.python}-* directory under ${install}, found [${dirs.join(', ')}]`);
   if (dirs[0] !== pythonKey) throw new Error(`uv installed ${dirs[0]}, not the ${pythonKey} the target ${target.key} asks for`);

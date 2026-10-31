@@ -39,15 +39,26 @@ why. The pinned uv documents it: `uv 0.12.5 (x86_64-unknown-linux-gnu)`, `python
 install a Python executable into the `bin` directory". Nothing in the bundle used the link: the runtime is moved out of
 the install directory, which with `--no-bin` still holds the one `cpython-3.13.15-*` directory the step expects.
 
+The same call also passes `--no-registry`, for the same reason: the pinned uv's `python install --help` documents "`--no-registry`
+Do not register the Python installation in the Windows registry", so a win32 build without it very likely records the
+interpreter under the user's registry, an entry left behind once the install directory is removed, as the PATH link was.
+It is **unmeasured on Windows**: added by symmetry with a flag uv documents, not because a Windows run showed the entry.
+Linux proves only that the pinned uv accepts it (below); no registry was read on any host.
+
 Evidence:
 - `apps/desktop/scripts/code-intelligence/target.test.ts`, "bundle.mjs's interpreter install — nothing onto the user's
-  PATH": a static scan of every `run(uv, [...])` in `bundle.mjs` that finds exactly one `'python', 'install'` call, with
-  `'--install-dir'`, and asserts `'--no-bin'` on that same argument list. Red against the pre-repair line (1 failed,
-  15 passed of 16: "expected [ 'python', 'install', …(3) ] to include '--no-bin'"), also red with the flag moved onto
-  `uv pip check` instead; green with the repair, 16 of 16.
+  PATH or into the registry": a static scan of every `run(uv, [...])` in `bundle.mjs` that finds exactly one
+  `'python', 'install'` call, with `'--install-dir'`, and asserts `'--no-bin'` and `'--no-registry'` on that same
+  argument list. Red against the pre-repair line (2 failed, 15 passed of 17: "expected [ 'python', 'install', …(3) ] to
+  include '--no-bin'" and the same for `'--no-registry'`); red with `--no-registry` moved onto `uv pip check` instead
+  (1 failed, 16 passed); green with the repair, 17 of 17. (With `--no-bin` alone, before `--no-registry` was added, the
+  same scan was 1 failed of 16 against the pre-repair line, also red with that flag moved onto `uv pip check`.)
 - The pinned uv 0.12.5 run by hand into throwaway directories, its cache and `UV_PYTHON_BIN_DIR` throwaway too:
   `python install cpython-3.13.15-linux-x86_64-gnu --install-dir <a> --no-bin` exited 0 and left the bin directory
   empty; the same without `--no-bin` exited 0, printed `+ cpython-3.13.15-linux-x86_64-gnu (python3.13)` and left
   `python3.13 -> <b>/cpython-3.13.15-linux-x86_64-gnu/bin/python3.13` there. `~/.local/bin` was unchanged across both.
+  The final argument list, `python install cpython-3.13.15-linux-x86_64-gnu --install-dir <c> --no-bin --no-registry`,
+  likewise exited 0 (`Installed Python 3.13.15`), left the bin directory empty and `~/.local/bin` unchanged, and
+  `bundle.mjs`'s own `readdirSync` filter found exactly one directory under `<c>`, `cpython-3.13.15-linux-x86_64-gnu`.
 - Not run: the full bundle step (`pnpm code-intel:bundle --force`), on any host; the Windows run's warning is not
-  re-measured.
+  re-measured, and no Windows registry was inspected, with or without `--no-registry`.

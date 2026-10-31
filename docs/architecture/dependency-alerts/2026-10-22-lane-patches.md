@@ -89,8 +89,8 @@ All of it ran on Linux x86_64 with Node 26.8.1 and pnpm 11.9.0, against the tree
 then exited SIGTRAP at their first launch ("Missing X server or $DISPLAY"). That server's socket was in another network
 namespace. The suite above ran on a private Xvfb (`:111`), Ubuntu's own `xvfb` 21.1.12 package unpacked under `/tmp`
 and run inside an unprivileged user and mount namespace, because the host has no `xkbcomp` at the path Xvfb expects.
-The note is
-[`pnpm-preflight-passes-the-display-check-for-a-display-no-client-can-reach.md`](../../defects/pnpm-preflight-passes-the-display-check-for-a-display-no-client-can-reach.md).
+The note, repaired on 2026-10-31, is
+[`pnpm-preflight-passes-the-display-check-for-a-display-no-client-can-reach.md`](../../defects/fixed/pnpm-preflight-passes-the-display-check-for-a-display-no-client-can-reach.md).
 
 **Not here, and why.** The gate (`pnpm check`) is run on this exact tree before the commit. Continuous integration's
 `gate` and `package` jobs run on the pushed head. Both results are in the pull request and the handoff, because no file can

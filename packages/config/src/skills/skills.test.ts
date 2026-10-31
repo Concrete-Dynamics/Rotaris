@@ -12,7 +12,7 @@ import {
   parseSkill, readInvocation, readTrigger,
   SKILL_EMPTY_NAME, SKILL_NO_FRONTMATTER, SKILL_NOT_A_MAPPING, SKILL_UNCLOSED_FRONTMATTER,
 } from './parse.js';
-import { asyncDiscoveryPorts, discoverSkills, discoverSkillsAsync, DISCOVERY_READS_IN_FLIGHT, NODE_ASYNC_DISCOVERY_PORTS, NODE_DISCOVERY_PORTS, skillReadRoots, type AsyncDiscoveryPorts, type DiscoveredSkill, type DiscoveryPorts } from './discover.js';
+import { asyncDiscoveryPorts, discoverSkills, discoverSkillsAsync, DISCOVERY_READS_IN_FLIGHT, DiscoveryStopped, NODE_ASYNC_DISCOVERY_PORTS, NODE_DISCOVERY_PORTS, skillReadRoots, type AsyncDiscoveryPorts, type DiscoveredSkill, type DiscoveryPorts } from './discover.js';
 import { resolveSkills } from './policy.js';
 import { skillActivationStatement, skillCatalogBlock, skillCatalogLine } from './blocks.js';
 import { expandHome, loadManualSkill, skillNotFound, skillPathNotAcceptable } from './manual.js';
@@ -335,6 +335,11 @@ describe('OQ-386 — the asynchronous walk reaches the synchronous walk\'s disco
     '/home/u/.openhands/skills/installed/dropped/SKILL.md': skillFile('dropped'),
     '/machine/skills/shared/SKILL.md': skillFile('shared'),
   };
+  /**
+   * A path as the tree above writes it, on every host: `ports()`'s normal form. `machineCodexDir` resolves the machine root,
+   * so on Windows it reaches the walk as `D:\\machine` — the drive letter is the harness's, not the rule's.
+   */
+  const posix = (p: string): string => p.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '');
   /** The map's ports, with one file that cannot be read and a log of every `readFile`, so "never opened" is checkable. */
   const fixture = (extra: Record<string, string> = {}) => {
     const p = ports({ ...tree, ...extra });
@@ -342,8 +347,8 @@ describe('OQ-386 — the asynchronous walk reaches the synchronous walk\'s disco
     const sync: DiscoveryPorts = {
       ...p,
       readFile: (path) => {
-        opened.push(path.replace(/\\/g, '/'));
-        if (path.replace(/\\/g, '/').endsWith('/locked/SKILL.md')) throw new Error(`EACCES: permission denied, open '${path}'`);
+        opened.push(posix(path));
+        if (posix(path).endsWith('/locked/SKILL.md')) throw new Error(`EACCES: permission denied, open '${posix(path)}'`);
         return p.readFile(path);
       },
     };
@@ -363,10 +368,10 @@ describe('OQ-386 — the asynchronous walk reaches the synchronous walk\'s disco
     expect(r.async).toEqual(r.sync);
     // The rules the equality covers are really exercised by this tree.
     expect(r.sync.skills.map((s) => s.name)).toEqual(['alpha', 'home-only', 'kept', 'repo-skill', 'shared', 'zebra']);
-    expect(r.sync.skills.find((s) => s.name === 'shared')!.shadowed.map((p) => p.replace(/\\/g, '/'))).toEqual([
+    expect(r.sync.skills.find((s) => s.name === 'shared')!.shadowed.map(posix)).toEqual([
       '/repo/ws/.opencode/skills/shared/SKILL.md', '/home/u/.agents/skills/shared/SKILL.md', '/machine/skills/shared/SKILL.md',
     ]);
-    expect(r.sync.skipped.map((s) => [s.path.replace(/\\/g, '/'), s.reason])).toEqual([
+    expect(r.sync.skipped.map((s) => [posix(s.path), s.reason])).toEqual([
       ['/repo/ws/.agents/skills/broken/SKILL.md', SKILL_NO_FRONTMATTER],
       ['/repo/ws/.agents/skills/locked/SKILL.md', "unreadable file: EACCES: permission denied, open '/repo/ws/.agents/skills/locked/SKILL.md'"],
     ]);
@@ -403,6 +408,27 @@ describe('OQ-386 — the asynchronous walk reaches the synchronous walk\'s disco
       expect(sync.skipped.map((s) => s.path)).toEqual([join(root, '.agents', 'skills', 'bad', 'SKILL.md')]);
       expect(sync.skipped[0]!.reason).toMatch(/^unreadable file: /);
     } finally { rmSync(base, { recursive: true, force: true }); }
+  });
+
+  it('stops once `stopped` answers yes: no read is started after it, and the walk rejects with DiscoveryStopped — never an unreadable file', async () => {
+    const p = asyncDiscoveryPorts(ports(tree));
+    let asked = 0;
+    const counting: AsyncDiscoveryPorts = {
+      readDir: (d) => { asked += 1; return p.readDir(d); },
+      readFile: (f) => { asked += 1; return p.readFile(f); },
+      isDirectory: (d) => { asked += 1; return p.isDirectory(d); },
+      isFile: (f) => { asked += 1; return p.isFile(f); },
+    };
+    const exists = async (path: string): Promise<boolean> => (await counting.isDirectory(path)) || (await counting.isFile(path));
+    // Unstopped, the walk asks the tree many more than six questions; stopped after six, it asks none beyond them.
+    await discoverSkillsAsync({ ...env, exists }, counting);
+    expect(asked).toBeGreaterThan(6);
+    asked = 0;
+    await expect(discoverSkillsAsync({ ...env, exists }, counting, DISCOVERY_READS_IN_FLIGHT, () => asked >= 6)).rejects.toBeInstanceOf(DiscoveryStopped);
+    expect(asked).toBeLessThanOrEqual(6 + DISCOVERY_READS_IN_FLIGHT);
+    const settledAt = asked;
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(asked).toBe(settledAt);
   });
 
   it(`keeps at most ${DISCOVERY_READS_IN_FLIGHT} reads in flight, whatever the tree's width`, async () => {

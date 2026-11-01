@@ -4,7 +4,7 @@ import { buildCatalogue, type CatalogueOptions } from './catalogue.js';
 import { registerPromptCommands } from './prompts.js';
 import { createSlashRegistry } from './registry.js';
 import {
-  askUntilDiscovered, bindSkillsReader, cachedSkills, catalogueNormalForm, freeName, readSkills, registerSkillCommands,
+  askUntilDiscovered, bindSkillsReader, cachedSkills, catalogueNormalForm, freeName, readSkills, readWhileMounted, registerSkillCommands,
   skillCommandDescription, skillPathCommand, skillRegistrations, skillsListCommand, triggerCommandName,
   SKILLS_LIST_COMMAND_NAME, SKILLS_LIST_DESCRIPTION,
 } from './skills.js';
@@ -177,6 +177,51 @@ describe('slash/skills — a walk in flight is not an answer about the catalogue
     expect(cachedSkills()).toEqual(answer);
     expect(replies).toEqual([]);
     bindSkillsReader(null);
+  });
+});
+
+describe('OQ-386 point 1 — a surface that unmounts stops asking', () => {
+  const discovering = { ok: false as const, code: SKILLS_DISCOVERING_CODE };
+  const settle = () => new Promise<void>((resolve) => { setTimeout(resolve, 0); });
+  /** A mount of the Settings effect over a walk that never ends: each ask answers at once, refused, until the asker is gone. */
+  const mount = (generation: { current: number }, asks: { count: number }, results: unknown[]) => readWhileMounted(() => {
+    const read = ++generation.current;
+    void askUntilDiscovered(async () => { asks.count += 1; await settle(); return discovering; }, undefined, () => generation.current !== read).then((r) => results.push(r));
+  }, () => { generation.current += 1; });
+
+  it('ends the asking at its next answer once the effect is cleaned up, leaving no asker behind', async () => {
+    const asks = { count: 0 };
+    const results: unknown[] = [];
+    const unmount = mount({ current: 0 }, asks, results);
+    await settle(); await settle(); await settle();
+    expect(asks.count).toBeGreaterThan(0);
+    unmount();
+    await settle(); await settle();
+    expect(results).toEqual([null]);
+    const stopped = asks.count;
+    await settle(); await settle();
+    expect(asks.count).toBe(stopped);
+  });
+  it('reads again on a remount, and only the remount goes on asking', async () => {
+    const generation = { current: 0 };
+    const asks = { count: 0 };
+    const results: unknown[] = [];
+    mount(generation, asks, results)();
+    const unmount = mount(generation, asks, results);
+    await settle(); await settle();
+    expect(asks.count).toBeGreaterThan(0);
+    expect(results).toEqual([]);
+    unmount();
+    await settle(); await settle();
+    expect(results).toEqual([null]);
+  });
+  it('starts no read when the cleanup comes first', async () => {
+    let reads = 0;
+    let retired = 0;
+    readWhileMounted(() => { reads += 1; }, () => { retired += 1; })();
+    await settle();
+    expect(reads).toBe(0);
+    expect(retired).toBe(1);
   });
 });
 

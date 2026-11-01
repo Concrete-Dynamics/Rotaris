@@ -188,6 +188,17 @@ export async function askUntilDiscovered<A extends SkillsAsked>(ask: () => Promi
 }
 
 /**
+ * OQ-386 point 1: one effect's read for a surface that can unmount, returned as that effect's cleanup. The cleanup calls `retire`,
+ * which is what makes the surface's `gone` true, so `askUntilDiscovered` stops at its next answer; on a walk that never ends nothing
+ * else would stop it. A read not yet started when the cleanup runs never starts.
+ */
+export function readWhileMounted(read: () => void, retire: () => void): () => void {
+  let mounted = true;
+  queueMicrotask(() => { if (mounted) read(); });
+  return () => { mounted = false; retire(); };
+}
+
+/**
  * REQ-CHAT-162's second half — `/skill <path>`, loading a skill from a path. It follows REQ-WORKSPACE-057's
  * rules, surfaces a load failure without registering anything, and on success re-registers the skill commands
  * and reports the loaded skill's name.

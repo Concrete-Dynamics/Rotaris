@@ -37,6 +37,13 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   cited nowhere that the baseline does not hold fails, named; one the baseline holds that is cited now fails with its
   own message until the baseline is rewritten in the same commit. A rebase that meets the file in conflict reruns
   `--write-baseline` rather than merging it by hand (R-092, ReqToCode §3.7; since 2026-11-02, hrd2 H2).
+- **Coverage has a floor that only rises** — `pnpm test:coverage` (`vitest run --coverage`, `@vitest/coverage-v8`; not in
+  `pnpm check`, whose time is the owner's budget, but in CI) measures `packages/*/src` and `apps/desktop/src`, generated
+  code, tests, test support and spikes aside, and fails below the four figures in `vitest.config.ts`. A whole-suite run
+  that measures more rewrites them, rounded down to the integer (`thresholds.autoUpdate`; only the four numbers change),
+  and the rewrite is committed with the change that earned it, so a change that deletes tests is no longer invisible.
+  The report lands in the git-ignored `coverage/` (`lcov.info`). First measured 2026-11-01: statements 71, branches 64,
+  functions 64, lines 75 (R-091, hardening F1).
 - **A window is held by id, never by handle, past its creation** — `webContents` on a destroyed
   window throws, and a throw from a `closed` handler during exit wedges the process behind a modal
   error dialog (ADR-0044 first-execution note). The relay attaches by id; `send` checks `isDestroyed()`.

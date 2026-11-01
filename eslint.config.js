@@ -96,7 +96,9 @@ export default tseslint.config(
       // Part AP
       '.requirements-runs-proof/**', '.chat-controls-proof/**',
       // The driver (2026-09-11): the scratch profile a driven app runs against, and its proof's evidence.
-      '.drive/**', '.driver-proof/**', '.layout-proof/**'],
+      '.drive/**', '.driver-proof/**', '.layout-proof/**',
+      // `pnpm test:coverage`'s report (R-091, hardening F1): generated HTML and lcov, never linted.
+      'coverage/**'],
   },
   ...tseslint.configs.recommended,
   {

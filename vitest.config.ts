@@ -37,5 +37,23 @@ export default defineConfig({
     environment: 'node',
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    // Coverage (R-091, hardening F1): measured by `pnpm test:coverage` (`vitest run --coverage`), never by `pnpm test` or
+    // the gate, whose time is the owner's budget; CI runs it. The floor only rises: `autoUpdate` rewrites the four figures
+    // below in this file, rounded down to the integer, whenever a whole-suite run measures more, and that rewrite is
+    // committed with the change that earned it. A run below a figure fails.
+    coverage: {
+      provider: 'v8',
+      include: ['packages/*/src/**/*.{ts,tsx}', 'apps/desktop/src/**/*.{ts,tsx}'],
+      exclude: ['**/generated/**', '**/*.test.ts', '**/*.test-support.ts', '**/spike/**', '**/*.d.ts'],
+      reporter: ['text-summary', 'lcov'],
+      reportsDirectory: 'coverage',
+      thresholds: {
+        autoUpdate: (measured: number) => Math.floor(measured),
+        lines: 75,
+        functions: 64,
+        branches: 64,
+        statements: 71,
+      },
+    },
   },
 });

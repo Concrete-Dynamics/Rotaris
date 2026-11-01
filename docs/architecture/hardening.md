@@ -120,7 +120,7 @@ Not a finding: the bundled SQLite is 3.53.4, past the WAL-reset fix of 3.51.3; C
 | No import-cycle or extraneous-dependency rule | `eslint.config.js` | E1 |
 | About 110 test files never typechecked; proof scripts never linted; `.mjs` untyped | `tsconfig.json:7-18`; `eslint.config.js:95` | E2 |
 | One tsconfig for every process: DOM types in main, Node types in the renderer | `tsconfig.json:4`, `tsconfig.base.json:20` | E2 |
-| No code coverage, no thresholds | `vitest.config.ts` | F1 |
+| ~~No code coverage, no thresholds~~ **Closed 2026-11-01 (F1):** `pnpm test:coverage` (`@vitest/coverage-v8` 4.1.11, outside the gate) holds a floor that only rises, set at the first measurement rounded down — statements 71 % (measured 71.46), branches 64 % (64.89), functions 64 % (64.24), lines 75 % (75.99) — and rewritten by `autoUpdate` | `vitest.config.ts` | F1 |
 | No property-based tests; `shell` and `kernel` thin | `packages/shell` (1 test file), `packages/kernel` (4) | F2, F3 |
 | ~~`minimumReleaseAge` implicit; no `trustPolicy`; no `engineStrict`; duplicated specifiers~~ closed 2026-11-01: seven days, `no-downgrade`, `blockExoticSubdeps`, `engineStrict`, a catalog, `.node-version` (`tools/dependency-policy.test.ts`) | `pnpm-workspace.yaml`, `.npmrc` | G1 |
 | ~~No dependency-update bot~~ closed 2026-11-01: Dependabot for npm (cooldown seven days, three groups) and the SHA-pinned actions (`.github/dependabot.yml`, `tools/dependabot.test.ts`) | `.github/` | G1 |

@@ -233,7 +233,8 @@ directory `ROTARIS_DEV_TIME_HOME` names, so every worktree of a host shares one 
 with a removed tree. Since 2026-10-19 nearly all of it is **transparent**: `pnpm check` is `pnpm dev-time
 gate`, and the `package.json` script of each stage is wrapped in `dev-time run --quiet gate:<stage>` — the
 stage records itself, marked `via: check`, and the run records one `gate:check` total (a `--stage=` subset run
-is not a check and gets none). `pnpm build` is wrapped the same way (`build:desktop`); every proof script
+is not a check and gets none). `pnpm build` is wrapped the same way (`build:desktop`), and so, since 2026-11-01, is
+`pnpm test:coverage` (`other:test-coverage`; R-091), which no gate runs; every proof script
 whose harness imports are in play records its own wall time through the entry clock — arming at import, one
 record at exit under the script's own name (`proof:<name>`); and the `tools/worktree/` wrappers record their
 steps (`via: worktree:new` / `worktree:land`). The explicit verbs remain: `proof <script>` runs a named

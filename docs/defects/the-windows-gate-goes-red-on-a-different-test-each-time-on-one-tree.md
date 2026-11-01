@@ -167,6 +167,15 @@ the dirty override, and restores the approved scope". Rerun together alone strai
 41.2 s, the two cases in 7,982 ms and 12,463 ms. The same gate's run of the head in its own worktree, an hour earlier
 beside the same neighbour, had gone red on the shell-exit case alone (its own note). A second landing attempt followed.
 
+*Seen again 2026-11-01, in the evening* (the same host, `pnpm worktree:land`'s gate on `hardening-record`'s rebased head
+`f3812fee`, 10m01s, with two other sessions' landing gates and a third session's build running on the host at the same time; the
+branch is docs-only): two cases hit their bounds, neither in a file the branch touched — `packages/workspace/src/git/checkpoints.test.ts`,
+the same REQ-GIT-039/040/056/057/061 restore case as the sighting above, at 30,097 ms, and
+`packages/agent-tools/src/terminal/terminal.test.ts`, the PowerShell shell-exit case (its own note), at 20,180 ms. Rerun together alone
+straight after, the host still loaded by the neighbours: 107 passed, 42 skipped, in 281 s, both cases green. The first attempt at this
+landing, an hour earlier beside the consortium's twenty-one agents, had gone red on the same checkpoints case and on
+`packages/mcp/src/setup.test.ts`'s 2 s cancellation bound, both green alone in 58.8 s. A third landing attempt follows this note.
+
 ## Specs
 
 None contradicted on this evidence. The failures are the harness's readings and its bounds: `REQ-MCP-066`/`REQ-MCP-067`

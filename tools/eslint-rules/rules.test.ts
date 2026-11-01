@@ -109,6 +109,17 @@ describe('lint — R-092 (ReqToCode §4.6): every cited requirement or directive
     expect(await cites('packages/ui/src/violation.tsx', `export const v = <p>see ${unknown}</p>;\n`)).toHaveLength(1);
   });
 
+  it('a digit too many or too few is an identifier the artifact does not define, never text the rule skips', async () => {
+    const extra = `${live}1`;
+    const short = id('PD', 'CHAT', '2');
+    const found = await cites('packages/engine/src/violation.ts', `// ${extra} and ${short}\nexport const s = '${id('REQ', 'CHAT', '1')}';\n`);
+    expect(found).toEqual([
+      `1: cites ${extra}, which docs/spec/ does not define. Correct it to the identifier meant, or remove it.`,
+      `1: cites ${short}, which docs/product/directives/ does not define. Correct it to the identifier meant, or remove it.`,
+      `2: cites ${id('REQ', 'CHAT', '1')}, which docs/spec/ does not define. Correct it to the identifier meant, or remove it.`,
+    ]);
+  });
+
   it('a range is expanded: an end past the last identifier fails, and a live range passes', async () => {
     const found = await cites('packages/engine/src/violation.ts', `// REQ-CHAT-${pad(lastChat - 1)}..${pad(lastChat + 1)}\n`);
     expect(found).toEqual([`1: cites REQ-CHAT-${pad(lastChat + 1)}, which docs/spec/ does not define. Correct it to the identifier meant, or remove it.`]);

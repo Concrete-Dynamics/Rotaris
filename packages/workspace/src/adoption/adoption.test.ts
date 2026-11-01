@@ -267,7 +267,9 @@ describe('families REQ-TRACE-078 cannot write are named, not adopted (REQ-ADOPT-
     expect(existsSync(adoptionRecordPath(root))).toBe(false);
   });
 
+  // eslint-disable-next-line rotaris/requirement-citations-resolve -- the user's repository's own form, not a citation of this specification
   it('a namespaced family (REQ-AUTH-1), this repository\'s own form, is a candidate named undecidable rather than no store', () => {
+    // eslint-disable-next-line rotaris/requirement-citations-resolve -- the user's repository's own identifiers, made up for the fixture
     const d = detectWorkspace(project({ 'docs/spec/auth.md': '- **REQ-AUTH-1** — a\n- **REQ-AUTH-2** — b\n' }));
     expect(d.candidates[0]).toMatchObject({ prefix: 'REQ-AUTH', numbering: 'contiguous' });
     expect(d.undecided.map((u) => u.code)).toEqual(expect.arrayContaining(['namespaced-prefix']));

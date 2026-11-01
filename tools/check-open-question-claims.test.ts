@@ -15,16 +15,19 @@ import { checkTree, claimsIn, entriesOf, entryState, numbersOf, questionStates }
 const RECORD = [
   '**OQ-1 — Decision closed, 2026-09-07.** The queue is scoped.',
   '',
+  // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
   '**OQ-2 — A question the owner ruled?** *(REQ-X-1. ~~Open.~~ Ruled 2026-10-06.)*',
   '',
   '**Ruled 2026-10-06 by the owner:** confirmed as built.',
   '',
+  // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
   '**OQ-3 — A question still open?** *(REQ-X-2. Open, the owner\'s.)*',
   '',
   '**OQ-4 — A question the owner deferred.**',
   '',
   '**Deferred 2026-10-06 by the owner.**',
   '',
+  // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
   '**OQ-5 — Another ruled one?** *(REQ-X-3.)*',
   '',
   '**Ruled 2026-10-06 by the owner:** as recommended.',

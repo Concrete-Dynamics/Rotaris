@@ -17,7 +17,8 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
 - **Every requirement or directive identifier cited in code resolves** — `rotaris/requirement-citations-resolve` (in
   `pnpm lint`, over every `.ts`, `.tsx`, `.js`, `.mjs` and `.cjs` file under `packages/`, `apps/` and `tools/`) reads every
   comment and every string, template and JSX-text token, expands the range forms `pnpm req-coverage` reads (its
-  `citationsIn`, imported), and resolves each identifier against the generated artifact: one it does not define fails;
+  `citationsIn`, imported), and resolves each identifier against the generated artifact: one it does not define fails,
+  a written one of any digit count included (a digit too many is no citation the report's grammar would read);
   one written out that is withdrawn, superseded by a directive or in a retired domain fails unless its line or the
   line above says `withdrawn`, `superseded` (or names the directive) or `retired`, the mark of a deliberate historical
   citation. The typed `REQ[…]` symbol gave the paper's property at two sites; this gives it at every citation (R-092,

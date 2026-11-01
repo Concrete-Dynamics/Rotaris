@@ -136,10 +136,12 @@ describe('open-questions.md: the rulings under R-072', () => {
 
   it('over fixtures: a ruling dated before the raising fails; the same day, a later day or no raised date passes', () => {
     const fixture = [
+      // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
       '**OQ-1 — Early?** *(REQ-X-1. Raised 2026-10-14 by fin44. Ruled 2026-10-13 under R-072, below.)*',
       '',
       '**Ruled 2026-10-13 under the owner\'s delegation ([R-072](requests.md#r-072)):** as built.',
       '',
+      // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
       '**OQ-2 — Same day?** *(REQ-X-2. Raised 2026-10-14 by fin44 as the brief asked.)*',
       '',
       '**Ruled 2026-10-14 under the owner\'s delegation:** as built. *Dated 2026-10-13 until fin46 corrected it.*',
@@ -148,6 +150,7 @@ describe('open-questions.md: the rulings under R-072', () => {
       '',
       '**Ruled 2026-10-13 by the consortium:** changed.',
       '',
+      // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
       '**OQ-4 — Never dated.** *(REQ-X-4.)* **Ruled 2026-09-01.**',
       '',
       '## Escalations',

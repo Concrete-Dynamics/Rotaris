@@ -140,7 +140,9 @@ const moneyOnlyInMoneyTs = {
  * `<id> to <nnn>`, `<id>/<nnn>`, `<id>, <nnn> and <nnn>`: `citationsIn`, imported from that report rather than copied), and
  * resolves it against the generated artifact `pnpm symbols` writes (`packages/kernel/src/generated/requirements.ts`).
  *
- * - An identifier the artifact does not define is an error, whether written out or inside a range.
+ * - An identifier the artifact does not define is an error, whether written out or inside a range. A written one is read
+ *   with any number of digits (`REQ-[A-Z]+-\d+`), so a digit too many or too few, which the coverage report's
+ *   three-digit grammar never reads as a citation, is an identifier the artifact does not define, not text skipped.
  * - An identifier written out that is withdrawn in place, superseded by a directive, or in a retired domain (TUI,
  *   CLI) is an error unless the line or the line above says so in a word — `withdrawn` (or `withdrawal`),
  *   `superseded` (or the superseding directive's own identifier), `retired` — which marks the citation as a
@@ -150,7 +152,7 @@ const moneyOnlyInMoneyTs = {
  *   holding it (`{ 'REQ-ORCH-153': 'OQ-491' }`); their lifecycle check waits on the ruling, and existence is still
  *   checked. An entry leaves with the ruling that closes its question. */
 const ARTIFACT = fileURLToPath(new URL('../../packages/kernel/src/generated/requirements.ts', import.meta.url));
-const IDENTIFIER_TEXT = /\b(?:REQ|PD)-[A-Z]+-\d{3}(?!\d)/g;
+const IDENTIFIER_TEXT = /\b(?:REQ|PD)-[A-Z]+-\d+/g;
 
 /**
  * @typedef {{ file: string, line: number, withdrawn: boolean }} CitedSymbol
@@ -187,6 +189,13 @@ export function citationFindings(text, context, art, pending = {}) {
   const written = new Map();
   for (const m of text.matchAll(IDENTIFIER_TEXT)) if (!written.has(m[0])) written.set(m[0], m.index ?? 0);
   const first = written.size > 0 ? Math.min(...written.values()) : 0;
+  // Every identifier the artifact defines has three digits and `citationsIn` reads only those, so a written one of
+  // any other length is reported here: a fourth digit typed after a live identifier cites nothing that exists.
+  for (const [id, index] of written) {
+    if (/-\d{3}$/.test(id)) continue;
+    const where = id.startsWith('PD-') ? 'docs/product/directives/' : 'docs/spec/';
+    out.push({ id, index, kind: 'undefined', data: { id, where } });
+  }
   for (const id of citationsIn(text)) {
     const at = written.get(id);
     const explicit = at !== undefined;

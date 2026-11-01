@@ -158,6 +158,7 @@ try {
   const refusals = [
     [
       'a disposition naming a requirement that does not exist',
+      // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier the generator must refuse
       '### PD-CHAT-001 — x\n\n> **Supersedes:** REQ-CHAT-9999\n',
       /does not define/,
     ],
@@ -190,6 +191,7 @@ try {
     ],
     [
       'two narrowings where the second names only a longer identifier sharing the first one\'s prefix',
+      // eslint-disable-next-line rotaris/requirement-citations-resolve -- a longer made-up identifier the generator must tell from its prefix
       '### PD-CHAT-001 — x\n\nOne case.\n\n> **Narrows:** REQ-CHAT-006\n\n### PD-CHAT-002 — y\n\nBeside PD-CHAT-0011, not the first.\n\n> **Narrows:** REQ-CHAT-006\n',
       /neither entry names the other/,
     ],

@@ -188,7 +188,8 @@ alone. It carries:
 ## A Windows host
 
 Measured on 2026-10-20 on the owner's Windows 11 ARM64 machine, where the host-independent finish ran. It has 8 CPUs,
-Git Bash shells and Node 24.18 as the default `node` (so `{node24}` is the no-op).
+Git Bash shells and Node 24.18 as the default `node` (so `{node24}` is the no-op); on 2026-11-01 the default `node` read
+v26.13.0, still at or above 24.
 
 - **No display wrapper.** `xvfb-run` does not exist here and is not needed: `pnpm preflight` reads "no display server is
   needed on win32", and every Electron launch opens real windows on the desktop. Render with
@@ -196,8 +197,15 @@ Git Bash shells and Node 24.18 as the default `node` (so `{node24}` is the no-op
   base's gate, budget, model, proofs, autopsy and live runs).
 - **Git Bash only.** The profile's commands are Git Bash commands: there `timeout` is GNU coreutils' (`/usr/bin/timeout`
   comes before `C:\Windows\System32` on its `PATH`), while under PowerShell or `cmd` it is Windows' pause command.
-- **`--repo` in forward slashes.** `render`'s default reads the checkout as `C:\dev\Rotaris-crw`, and an agent's Git
-  Bash reads those backslashes as escapes. Pass `--repo C:/dev/Rotaris-crw`.
+- **`--repo` in forward slashes.** `render`'s default reads the checkout as `C:\dev\Rotaris`, and an agent's Git
+  Bash reads those backslashes as escapes. Pass `--repo C:/dev/Rotaris`. *(The checkout was `C:/dev/Rotaris-crw` until
+  the repository's rename of 2026-10-21; measured again 2026-11-01.)*
+- **The first `pnpm` on PATH may be a broken corepack shim.** On the owner's machine (2026-11-01) `which -a pnpm` lists
+  `/c/Program Files/nodejs/pnpm` first, which throws on launch, `/c/Users/ganga/AppData/Local/corepack-shims/pnpm`
+  second (another shim), and the working pnpm 11.9.0 at `/c/Users/ganga/AppData/Roaming/npm/pnpm` third. Every agent command that runs `pnpm` fails under the shim, the gate
+  included. The remedy is the profile's `shellPrefix`: render with a copy of the Windows profile whose `shellPrefix` is
+  `export PATH=/c/Users/ganga/AppData/Roaming/npm:$PATH` (a host path belongs in a copy outside the skill, in the
+  orchestration's scratchpad, not in the committed profile), and say the same in the plan's brief.
 - **No `setsid`.** `nohup bash -c '…' > /dev/null 2>&1 < /dev/null & disown` outlives the shell that sent it: a 25 s job
   wrote its `exit=0` line after the Bash call had returned. The profile's duress launch takes that form.
 - **Six agents at a time** (`references/workflow-tool.md`, Concurrency).
@@ -212,10 +220,13 @@ Git Bash shells and Node 24.18 as the default `node` (so `{node24}` is the no-op
   lies in one of the run's own trees.
 - **Allow rules.** The allow-rule text in `references/live-runs.md` is the container's form (`xvfb-run`,
   `/opt/node24/bin/node`), which matches none of this profile's commands. Here the default and opt-in launches read
-  `Bash(timeout * node C:/dev/Rotaris-crw-wt-accept/apps/desktop/scripts/live-run.mjs --confirm --skip-build*)`. No
-  such rule existed on 2026-10-20, and adding one stays the owner's decision.
-- **A sibling folder that is not this repository.** `C:/dev/Rotaris` sits beside the checkout and its worktrees. Never
-  list, open or search it: it may be a copy of the project AGENTS.md seals off. An agent looks for worktrees with
-  `git worktree list`, never by listing `C:/dev/` in its own commands (`render`'s id check reads only the entry names
-  there that carry the plan's worktree prefix, and opens none).
+  `Bash(timeout * node C:/dev/Rotaris-wt-accept/apps/desktop/scripts/live-run.mjs --confirm --skip-build*)`. No
+  such rule existed on 2026-10-20; on 2026-11-01 the owner approved that one rule and it was written to the git-ignored
+  `.claude/settings.local.json` of the checkout. Adding or widening one stays the owner's decision.
+- **The checkout is `C:/dev/Rotaris` since 2026-10-21**, and `C:/dev/Rotaris-wt-*` are its worktrees. *(Until that
+  rename this bullet warned that `C:/dev/Rotaris` was a sibling folder that might be a copy of the sealed project; it is
+  the repository itself now, `https://github.com/Concrete-Dynamics/Rotaris`, as AGENTS.md says.)* The sealed material
+  AGENTS.md names lives elsewhere (`D:\Development\Apps\Rotaris-cleanroom-sealed\`) and is never opened. An agent looks
+  for worktrees with `git worktree list`, never by listing `C:/dev/` in its own commands (`render`'s id check reads only
+  the entry names there that carry the plan's worktree prefix, and opens none).
 - **Disk.** 24 GB was free of 237 GB on `C:`, and a worktree with its `node_modules` takes about 0.8 GB.

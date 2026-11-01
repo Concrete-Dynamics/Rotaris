@@ -66,6 +66,8 @@ The failure this prevents is invisible to every other detector this document has
 
 **REQ-MONITOR-238** — The per-session debug log is written at the configured session log level, defaulting to warning. It remains a file a person can open in a text reader (REQ-SESSION-142).
 
+> **Narrowed by [`PD-SESSION-004`](../../product/directives/pd-session-004.md#pd-session-004), 2026-11-01.** The session log stays one file and holds at most 32 MiB; past it the oldest whole lines are dropped behind one WARNING marker line. Everything else above still governs.
+
 **REQ-MONITOR-239** — A session's state is durable once a save is requested: no host may rely on a persistence delay, and none may be introduced (REQ-SESSION-067, REQ-SESSION-068). A save that records a terminal (non-running, non-idle) status is durable at that moment like any other, and shutdown leaves nothing outstanding to flush. Hosts must not treat persistence as a liveness signal and must not request saves in order to make a session appear live: liveness comes from the publication path, durability from the record.
 
 **REQ-MONITOR-240** — A session lock is claimed exclusively by an operation that either takes the lock or reports the current holder, behind a reaper that clears locks held by dead processes. The claim must fail whenever the holding process is still alive, and must convey what REQ-SESSION-048 requires — including, where the lock names another machine, that the session is held by a different machine rather than that a lock is merely in conflict. Consequently, a caller that pre-creates a session and then asks for it to be run must not hold that session's lock.

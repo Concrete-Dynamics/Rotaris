@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and three.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and five.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -43,6 +43,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-CHAT-008](directives/pd-chat-008.md) | the run timer counts from the newest row the run produced |
 | [PD-CHAT-009](directives/pd-chat-009.md) | the user's chat controls are recorded under the chat domain's timeline words |
 | [PD-CHAT-010](directives/pd-chat-010.md) | the transcript's tool-rendering verbosity is one slider with five ordered stops |
+| [PD-CHAT-011](directives/pd-chat-011.md) | a composer draft or an image past the contract's bound is refused and the refusal is shown |
 
 ### CONFIG
 
@@ -132,6 +133,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-SESSION-001](directives/pd-session-001.md) | the listing record carries the three figures the sessions card shows |
 | [PD-SESSION-002](directives/pd-session-002.md) | summary.md's mostly-elided artifacts are the attached artifacts a delegated agent was not given |
 | [PD-SESSION-003](directives/pd-session-003.md) | an error-path tool record's arguments keep their shape, and what is never cut stays whole past 2,000 characters |
+| [PD-SESSION-004](directives/pd-session-004.md) | the session log holds at most 32 MiB as one file, its oldest lines dropped |
 
 ### SHELL
 

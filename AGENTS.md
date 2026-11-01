@@ -82,7 +82,7 @@ rather than deleting it.
 (`docs/clean-room/architecture-gate.md`). What is authorized is **the mechanism** — process topology,
 the store, the run flow, the event stream, settings, permissions, the backup and the restore.
 **On 2026-10-06 the owner counted the work as finished** without the release pipeline and its inputs (signing,
-the licence inputs, the icon), continuous integration, the Linux and macOS builds and the owner's hardware checks
+the licence inputs, the icon), CI *(landed, R-079)*, the Linux and macOS builds and the owner's hardware checks
 ([R-071](docs/product/requests.md#r-071)): each stays owed where it is recorded, and none is an agent's to start.
 
 **Design material, and how to use it.** `docs/design/` holds the **approved design language** —

@@ -31,6 +31,13 @@ worktree on the owner's Windows 11 Home ARM64 host (build 26300, Node 26.13.0 ar
 the fifth ender, `Write-Output 'bye'; exit 3`, measured **6,526.0 ms** against the same 5,000 ms bound, and the
 reading before it was again right (`outcome_kind` not `soft_pause`). The file alone took 293 s inside the suite; rerun alone straight after (`pnpm vitest run` on the file, 231 s), 93 passed and 42 skipped, the case among the green.
 
+Seen again 2026-11-01 in `pnpm check` (391.6 s, 7,384 tests, this the one failure) of the
+`fix-instance-reclaim-pd-startup-009-ad2d06` worktree on the same host, gating `PD-STARTUP-009`'s repair in
+`packages/platform/src/instance.ts`, which the case does not reach: the first ender, `exit 3`, measured **5,284.4 ms**
+against the 5,000 ms bound, the reading before it again right (`outcome_kind` not `soft_pause`). The file took 385 s inside
+the suite, with a second worktree's gate running on the host at the same time; rerun alone straight after (`pnpm vitest run`
+on the file, 409 s), 93 passed and 42 skipped, the case among the green.
+
 Not repaired: noticed while gating an unrelated change; recording only. Whether the bound should move — it can be
 exceeded by the host's load alone, with the reading itself correct — is a decision for the work that owns this case.
 

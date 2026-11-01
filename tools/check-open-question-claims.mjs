@@ -16,7 +16,8 @@
 //     question still open it is what the build proceeds under; of a settled one it reads as unruled. Some sixty such
 //     sentences stood in the code and the views after the first repair fixed three of them (repair round 1).
 //
-// This gate reads `docs/architecture/open-questions.md` and its parts (`tools/record-parts.mjs`) for each question's
+// This gate reads `docs/architecture/open-questions.md`, its parts and its archived parts under `docs/archive/`
+// (`tools/record-parts.mjs`, `readRecordWithArchive`: a ruled question moved there is still settled) for each question's
 // state (`questionStates`) and fails on
 // any of the three (`claimsIn`) in the code (comments, tests and proofs under `apps/`, `packages/` and `tools/`) and
 // in the parts of the record that describe the build as it stands: the architecture views, `codebase.md`,
@@ -27,7 +28,7 @@
 // ruling, "closed 2026-…", the request `R-NNN` that ruled it, "while it was open"); a reading may carry it earlier
 // in its own sentence too, where "until 2026-…" also dates it as past. A bare "closed" or a "not ruled" is no
 // ruling. A question still open, or deferred by the owner, may be called open and its answer the build's reading.
-// `open-questions.md` itself and its parts, the ADRs, the directives, `first-executions.md` and the defect notes keep their history
+// `open-questions.md` itself, its parts and its archive (`docs/archive/`), the ADRs, the directives, `first-executions.md` and the defect notes keep their history
 // as written and are not read.
 //
 // Runs as part of `pnpm lint`. Reads the tree; costs no subprocess. The pure parts are exported for the test beside
@@ -35,38 +36,91 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { partsOf, readRecord } from './record-parts.mjs';
+import { partsOf, readRecordWithArchive } from './record-parts.mjs';
 
 // ---------------------------------------------------------------- the questions
 
-/** A question's entry opens a line: `**OQ-<n> — …`. */
-const ENTRY = /^\*\*OQ-(\d+)\b/;
+/**
+ * A question's entry opens a line: `**OQ-<n> — …`. A bold `**OQ-51**` opening a line of prose (the counts, a later
+ * paragraph naming one) is a mention, not an entry; until the archive's migration moved entries by it this read
+ * `^\*\*OQ-(\d+)\b`, and no question's state differed between the two readings on 2026-11-01.
+ */
+const ENTRY = /^\*\*OQ-(\d+) — /;
+/** An escalation's entry, which no question's entry runs into. */
+const ESCALATION = /^\*\*ESC-\d+\b/;
+/** A heading, which ends the entry before it. */
+const HEADING = /^#{1,6} /;
+/** An explicit anchor alone on its line: it belongs to the entry it stands above. */
+const ANCHOR_LINE = /^<a (?:id|name)="[^"]+"><\/a>\s*$/;
+/**
+ * The line a moved entry leaves in its live part (`tools/archive/migrate.mjs`): `- OQ-<n> — <title>; <state> <date>;
+ * [archived](…#oq-<n>)`. It ends the entry above it, so that an open entry never reads its neighbour's state.
+ */
+export const INDEX_LINE = /^- OQ-(\d+) — .*\[archived\]\([^)\s]*#oq-\d+\)\s*$/;
 /** The owner deferred it: still to be ruled, so it may be called open. */
 const DEFERRED = /\*\*Deferred 20\d\d-\d\d-\d\d/;
 /** The owner ruled, closed or withdrew it, or the specification resolved it. */
-const SETTLED = /\*\*(?:Ruled|RULED|Closed|CLOSED|Withdrawn|WITHDRAWN|Resolved|RESOLVED)\b|~~Open|\b(?:Ruled|Closed|Withdrawn|Resolved) 20\d\d-\d\d-\d\d|\bCLOSED\b|\bRULED\b|\bRESOLVED\b|\*Resolved\b|— Resolved\b|Decision closed|\(20\d\d-\d\d-\d\d\): closed\b/;
+export const SETTLED = /\*\*(?:Ruled|RULED|Closed|CLOSED|Withdrawn|WITHDRAWN|Resolved|RESOLVED)\b|~~Open|\b(?:Ruled|Closed|Withdrawn|Resolved) 20\d\d-\d\d-\d\d|\bCLOSED\b|\bRULED\b|\bRESOLVED\b|\*Resolved\b|— Resolved\b|Decision closed|\(20\d\d-\d\d-\d\d\): closed\b/;
 
 /**
- * Each question's state, read from its entry: from its opening line up to the next entry or heading. `deferred`
- * where the owner deferred it, else `settled` where it was ruled, closed, withdrawn or resolved, else `open`.
- * @param {string} text the open-questions record
+ * One entry's state from its text: `deferred` where the owner deferred it, else `settled` where it was ruled, closed,
+ * withdrawn or resolved, else `open`. The one rule this gate and the archive's migration both read: `pnpm
+ * archive:migrate` moves an entry exactly when this calls its question settled.
+ * @param {string} body
+ * @returns {'open' | 'settled' | 'deferred'}
+ */
+export function entryState(body) {
+  return DEFERRED.test(body) ? 'deferred' : SETTLED.test(body) ? 'settled' : 'open';
+}
+
+/**
+ * Every question's entry in a text, in order: its number, the line its explicit anchors start on (`anchor`, the
+ * entry's own line where it has none), the line it opens on (`start`), the line after its last (`end`, trailing blank
+ * lines left out) and its text from `start` to `end` (`body`). An entry runs up to the next entry or the anchors above
+ * it, an escalation, a heading, a moved entry's index line, or the text's end. Lines count from 0.
+ * @param {string} text
+ * @returns {{ n: number, anchor: number, start: number, end: number, body: string }[]}
+ */
+export function entriesOf(text) {
+  const lines = text.split('\n');
+  /** Where the explicit anchors above line `i` start: back over anchor and blank lines, to the first anchor. */
+  const anchorAbove = (/** @type {number} */ i) => {
+    let first = i;
+    for (let k = i - 1; k >= 0 && (ANCHOR_LINE.test(lines[k]) || lines[k].trim() === ''); k--) if (ANCHOR_LINE.test(lines[k])) first = k;
+    return first;
+  };
+  /** @type {number[]} */
+  const stops = [];
+  /** @type {{ n: number, anchor: number, start: number }[]} */
+  const opened = [];
+  lines.forEach((line, i) => {
+    const m = ENTRY.exec(line);
+    if (m) {
+      const anchor = anchorAbove(i);
+      opened.push({ n: Number(m[1]), anchor, start: i });
+      stops.push(anchor);
+    } else if (ESCALATION.test(line)) stops.push(anchorAbove(i));
+    else if (HEADING.test(line) || INDEX_LINE.test(line)) stops.push(i);
+  });
+  return opened.map((e) => {
+    let end = stops.find((s) => s > e.start) ?? lines.length;
+    while (end > e.start + 1 && lines[end - 1].trim() === '') end--;
+    return { ...e, end, body: lines.slice(e.start, end).join('\n') };
+  });
+}
+
+/**
+ * Each question's state, read from its entries (`entriesOf`, `entryState`). A question with two entries (one of them
+ * a later note, or one live and one archived) takes the first reading that is not `open`.
+ * @param {string} text the open-questions record, its live parts and its archived ones (`readRecordWithArchive`)
  * @returns {Map<number, 'open' | 'settled' | 'deferred'>}
  */
 export function questionStates(text) {
-  const lines = text.split('\n');
   /** @type {Map<number, 'open' | 'settled' | 'deferred'>} */
   const states = new Map();
-  for (let i = 0; i < lines.length; i++) {
-    const m = ENTRY.exec(lines[i]);
-    if (!m) continue;
-    let end = i + 1;
-    while (end < lines.length && !ENTRY.test(lines[end]) && !/^#{1,6} /.test(lines[end])) end++;
-    const body = lines.slice(i, end).join('\n');
-    const n = Number(m[1]);
-    // A question with two entries (one of them a later note) takes the more settled reading of the two.
-    const state = DEFERRED.test(body) ? 'deferred' : SETTLED.test(body) ? 'settled' : 'open';
-    const before = states.get(n);
-    if (before === undefined || before === 'open') states.set(n, state);
+  for (const e of entriesOf(text)) {
+    const before = states.get(e.n);
+    if (before === undefined || before === 'open') states.set(e.n, entryState(e.body));
   }
   return states;
 }
@@ -251,7 +305,7 @@ export function filesOf(root) {
 
 /** Every refuted claim in the tree, `{ file, line, kind, numbers, text }`. */
 export function checkTree(root) {
-  const states = questionStates(readRecord(join(root, 'docs', 'architecture', 'open-questions.md')));
+  const states = questionStates(readRecordWithArchive(join(root, 'docs', 'architecture', 'open-questions.md')));
   const problems = [];
   for (const file of filesOf(root)) {
     for (const c of claimsIn(readFileSync(file, 'utf8'), states)) problems.push({ file: relative(root, file).split(sep).join('/'), ...c });

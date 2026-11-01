@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
-import { readRecord } from './record-parts.mjs';
+import { readRecordWithArchive } from './record-parts.mjs';
 
 /** One question's entry: its number, the line it opens on, and its text up to the next entry or heading. */
 type Entry = { n: number; line: number; text: string };
@@ -90,7 +90,8 @@ function ruledUnderR072(text: string): Entry[] {
  */
 const UNNAMED_RECOMMENDATIONS: number[] = [];
 
-const RECORD = readRecord(join(import.meta.dirname, '..', 'docs', 'architecture', 'open-questions.md'));
+// Live parts and archived ones alike: a ruled question moves to docs/archive/ (R-092) and is read there.
+const RECORD = readRecordWithArchive(join(import.meta.dirname, '..', 'docs', 'architecture', 'open-questions.md'));
 const REQUESTS = readFileSync(join(import.meta.dirname, '..', 'docs', 'product', 'requests.md'), 'utf8');
 
 /**

@@ -1,6 +1,9 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
-import { MAX_BYTES, MAX_LINES, sizeOf, verdict } from './check-doc-budget.mjs';
+import { MAX_BYTES, MAX_LINES, measure, sizeOf, verdict } from './check-doc-budget.mjs';
 
 const size = (lines: number, bytes = lines * 10) => ({ lines, bytes });
 
@@ -36,5 +39,20 @@ describe('check-doc-budget (docs/README.md, "The document budget")', () => {
 
   it('reports a listed file that no longer exists without failing on it', () => {
     expect(verdict(new Map(), ['docs/removed.md'])).toEqual({ over: [], paid: [], gone: ['docs/removed.md'], debt: [] });
+  });
+});
+
+describe('check-doc-budget — the archive is under the budget too (R-092)', () => {
+  it('measures a file under docs/archive/ like any other record file', () => {
+    const root = mkdtempSync(join(tmpdir(), 'doc-budget-'));
+    try {
+      mkdirSync(join(root, 'docs', 'archive', 'architecture'), { recursive: true });
+      writeFileSync(join(root, 'docs', 'archive', 'architecture', 'part.md'), 'x\n'.repeat(MAX_LINES + 1));
+      const sizes = measure(root);
+      expect(sizes.get('docs/archive/architecture/part.md')).toEqual({ lines: MAX_LINES + 1, bytes: 2 * (MAX_LINES + 1) });
+      expect(verdict(sizes, []).over).toEqual(['docs/archive/architecture/part.md']);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

@@ -11,7 +11,8 @@
 // it points at. Links inside fenced code and inline code are text, not links, and
 // are skipped; so is anything inside an HTML comment, which does not render.
 //
-// The record, for this gate, is: every `.md` under `docs/`, `CONTEXT-MAP.md`,
+// The record, for this gate, is: every `.md` under `docs/` (the archive under `docs/archive/` among them, so an
+// archived entry's links are held as a live one's are, R-092), `CONTEXT-MAP.md`,
 // `AGENTS.md`, the root `README.md`, and every `CONTEXT.md` under `packages/` (the
 // glossaries the context map names, nested ones included). The README joined it
 // on 2026-10-31: it is the page a visitor reads first and cites paths other
@@ -76,6 +77,15 @@ export function withoutCode(text) {
 }
 
 /**
+ * An inline link `[text](target)` or image: the text may hold one level of nested brackets (an image inside a link,
+ * or `[`REQ-X`]`), the target no unescaped `)` except inside a balanced pair. Group 1 is the text, group 2 the
+ * target as written, `<angle-bracketed>` or not. `tools/archive/migrate.mjs` rewrites targets by this same pattern.
+ */
+export const INLINE_LINK = /\[((?:[^[\]]|\[[^[\]]*\])*)\]\(\s*(<[^>]*>|(?:[^\s()]|\([^\s()]*\))+)(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/dg;
+/** A reference definition `[label]: target`, which resolves exactly like an inline link. */
+export const LINK_DEFINITION = /^ {0,3}\[([^\]]+)\]:\s+(<[^>]*>|\S+)/dgm;
+
+/**
  * Every inline Markdown link `[text](target)` and image `![alt](target)` in the
  * text, with its 1-based line. The target may be `<angle-bracketed>` and may
  * carry a `"title"` after a space; both are stripped. Reference definitions
@@ -89,11 +99,7 @@ export function extractLinks(text, raw = text) {
   /** @type {{ line: number, text: string, target: string }[]} */
   const links = [];
   const lineOf = (/** @type {number} */ index) => text.slice(0, index).split('\n').length;
-  // `[text](target)` — the text may hold one level of nested brackets (an
-  // image inside a link, or `[`REQ-X`]`), the target no unescaped `)` except
-  // inside a balanced pair.
-  const INLINE = /\[((?:[^[\]]|\[[^[\]]*\])*)\]\(\s*(<[^>]*>|(?:[^\s()]|\([^\s()]*\))+)(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/g;
-  for (const match of text.matchAll(INLINE)) {
+  for (const match of text.matchAll(INLINE_LINK)) {
     const textStart = match.index + 1;
     links.push({
       line: lineOf(match.index),
@@ -101,8 +107,7 @@ export function extractLinks(text, raw = text) {
       target: unwrap(match[2]),
     });
   }
-  const DEFINITION = /^ {0,3}\[([^\]]+)\]:\s+(<[^>]*>|\S+)/gm;
-  for (const match of text.matchAll(DEFINITION)) {
+  for (const match of text.matchAll(LINK_DEFINITION)) {
     links.push({ line: lineOf(match.index), text: match[1], target: unwrap(match[2]) });
   }
   links.sort((a, b) => a.line - b.line);

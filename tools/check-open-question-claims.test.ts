@@ -5,10 +5,12 @@
  * unless its sentence names one. Acceptance finding F16 of finacc3 (2026-10-06):
  * `docs/defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`.
  */
-import { join } from 'node:path';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
-import { checkTree, claimsIn, numbersOf, questionStates } from './check-open-question-claims.mjs';
+import { checkTree, claimsIn, entriesOf, entryState, numbersOf, questionStates } from './check-open-question-claims.mjs';
 
 const RECORD = [
   '**OQ-1 — Decision closed, 2026-09-07.** The queue is scoped.',
@@ -141,5 +143,65 @@ describe('check-open-question-claims (F16)', () => {
       ].join('\n');
       expect(claims(text).map((c) => [c.line, c.kind])).toEqual([[2, 'unraised']]);
     });
+  });
+});
+
+/*
+ * The entries the archive's migration moves are the entries this gate reads (`entriesOf`, `entryState`: one rule), and
+ * a question moved to `docs/archive/` stays settled here (R-092).
+ */
+describe('check-open-question-claims — the entries, and the archive', () => {
+  it('reads an entry with the anchors above it, up to the next entry, escalation, heading or index line', () => {
+    const text = [
+      '<a id="oq-1"></a>',
+      '',
+      '**OQ-1 — One?** Asked.',
+      '',
+      '**OQ-51** (a bold mention opening a line of prose is no entry) and more.',
+      '',
+      '<a id="oq-2"></a>',
+      '**OQ-2 — Two?** Asked.',
+      '',
+      '- OQ-3 — Three; ruled 2026-10-06; [archived](../../archive/x.md#oq-3)',
+      '',
+      '**OQ-4 — Four?** Asked.',
+      '',
+      '**ESC-9 — An escalation.** **Ruled 2026-10-06.**',
+      '',
+      '**OQ-5 — Five?** Asked.',
+      '## A heading',
+      'After it.',
+    ].join('\n');
+    expect(entriesOf(text).map((e: { n: number; anchor: number; start: number; end: number }) => [e.n, e.anchor, e.start, e.end])).toEqual([
+      [1, 0, 2, 5],
+      [2, 6, 7, 8],
+      [4, 11, 11, 12],
+      [5, 15, 15, 16],
+    ]);
+    // An index line stands between OQ-2 and OQ-4 and an escalation after OQ-4: neither lends its "ruled" to them.
+    expect(Object.fromEntries(questionStates(text))).toEqual({ 1: 'open', 2: 'open', 4: 'open', 5: 'open' });
+  });
+
+  it('reads one entry\'s state by the same rule the migration moves by', () => {
+    expect(entryState('**OQ-1 — x** **Deferred 2026-10-06**, ruled later? **Ruled 2026-10-07.**')).toBe('deferred');
+    expect(entryState('**OQ-1 — x** **Ruled 2026-10-07.**')).toBe('settled');
+    expect(entryState('**OQ-1 — x** Asked.')).toBe('open');
+  });
+
+  it('holds a question archived under docs/archive/ settled, so a claim that calls it open fails', () => {
+    const root = mkdtempSync(join(tmpdir(), 'oq-claims-archive-'));
+    const put = (path: string, text: string) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), text);
+    };
+    try {
+      put('docs/architecture/open-questions.md', '# Open questions\n');
+      put('docs/architecture/open-questions/01-part.md', '# Part\n\n**OQ-1 — Open?** Asked.\n\n- OQ-2 — Ruled; ruled 2026-10-06; [archived](../../archive/architecture/open-questions/01-part.md#oq-2)\n');
+      put('docs/archive/architecture/open-questions/01-part.md', '# Archived\n\n<a id="oq-2"></a>\n\n**OQ-2 — Ruled?** **Ruled 2026-10-06 by the owner:** as built.\n');
+      put('apps/desktop/src/a.ts', '// OQ-1 stays open.\n// OQ-2 stays open.\n');
+      expect(checkTree(root).map((p: { file: string; line: number; numbers: number[] }) => [p.file, p.line, p.numbers])).toEqual([['apps/desktop/src/a.ts', 2, [2]]]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

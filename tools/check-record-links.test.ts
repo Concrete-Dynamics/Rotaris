@@ -347,3 +347,18 @@ describe('check-record-links — the root README is the record', () => {
     expect(checkProse(root).problems).toMatchObject([{ file: join(root, 'README.md'), line: 1, target: note('a-note.md') }]);
   });
 });
+
+/*
+ * The archive (`docs/README.md`, "The archive"; R-092) is the record too: an archived entry keeps its links and its
+ * anchors, so the gate reads `docs/archive/` as it reads every other folder under `docs/`, and a link into it resolves.
+ */
+describe('check-record-links — the archive is the record', () => {
+  it('reads a file under docs/archive/ and fails its dangling link, and resolves a link to an archived anchor', () => {
+    const archived = join(root, 'docs', 'archive', 'architecture', 'open-questions', '01-part.md');
+    mkdirSync(join(root, 'docs', 'archive', 'architecture', 'open-questions'), { recursive: true });
+    writeFileSync(archived, ['# Archived', '', '<a id="oq-1"></a>', '', '**OQ-1 — Ruled.** [gone](../../../architecture/gone.md)', ''].join('\n'));
+    writeFileSync(join(root, 'docs', 'architecture', 'index.md'), '[OQ-1](../archive/architecture/open-questions/01-part.md#oq-1)\n');
+    const { problems } = checkRecord(root);
+    expect(problems).toMatchObject([{ file: archived, line: 5, target: '../../../architecture/gone.md', reason: 'the target does not exist' }]);
+  });
+});

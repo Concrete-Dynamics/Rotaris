@@ -4,7 +4,8 @@
 // asked for a bound, fixed once and for all ("Das sollte man generell festlegen"), and the bound and its
 // sources are in `docs/README.md`, "The document budget": at most 500 lines and 32 KiB per Markdown file.
 //
-// This gate reads every record file (`recordFiles`, the set `check-record-links.mjs` reads) and fails on one over the
+// This gate reads every record file (`recordFiles`, the set `check-record-links.mjs` reads, the archive under
+// `docs/archive/` among them: an archived part is held to the budget like a live one, R-092) and fails on one over the
 // budget that `tools/doc-budget-baseline.json` does not list. The baseline is the debt the split of 2026-10-26 did
 // not reach, and it only shrinks: a listed file back within the budget fails until its line is removed, so a payment
 // is recorded where it was made. A listed file that no longer exists is reported and passes, since removing a file

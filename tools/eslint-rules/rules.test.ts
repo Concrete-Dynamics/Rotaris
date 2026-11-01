@@ -140,6 +140,9 @@ describe('lint — R-092 (ReqToCode §4.6): every cited requirement or directive
       `1: cites ${superseded}, superseded by PD-CHAT-002, which governs instead. Cite PD-CHAT-002, or mark a deliberate historical citation (\`superseded by PD-CHAT-002\`).`,
     ]);
     expect(await cites('packages/ui/src/fine.ts', `// the modal stepper (${superseded}, superseded by ${id('PD', 'CHAT', '002')})\n`)).toEqual([]);
+    // The word alone marks it, with no directive named, on the line or the line above.
+    expect(await cites('packages/ui/src/fine.ts', `// the modal stepper (${superseded}, superseded)\n`)).toEqual([]);
+    expect(await cites('packages/ui/src/fine.ts', `// Superseded, and cited as history:\nexport const s = '${superseded}';\n`)).toEqual([]);
     expect(await cites('packages/ui/src/fine.ts', `// ${id('PD', 'CHAT', '002')} (was ${superseded})\n`)).toEqual([]);
   });
 

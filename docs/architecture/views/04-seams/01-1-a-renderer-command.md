@@ -42,11 +42,17 @@ method there.
 Invariants:
 
 - A command is answered **for the window that raised it** — `MainWindows.forCommand(senderId)`: the sender's main
-  window, else the main window owning the persona or terminal window that sent it, else the active window — not for
-  "the main window" (`REQ-SHELL-020`, `REQ-STARTUP-163`). With two main windows alive those are different answers.
+  window, else the main window owning the persona or terminal window that sent it, else (a dialog) the main window it
+  was raised over, else the active window, which only a verification seam or the driver reaches — not for "the main
+  window" (`REQ-SHELL-020`, `REQ-STARTUP-163`). With two main windows alive those are different answers.
+- **The channel admits only the application's own page, in a window the application opened** (R-091,
+  `main/command-sender.ts`, Electron security checklist 17): `senderFrame`'s URL must pass `isApplicationPage`
+  (OQ-466), and a packaged build refuses a sender no main window stands behind; both are `command.untrustedSender`.
+  A new window that sends commands is built by main with `parent` set or is registered in `MainWindows`.
 - A request that does not parse is `command.malformed`. Nothing throws out of `runCommand`: an uncaught
   exception in main raises the platform's native error box and wedges the loop (`ADR-0019`). `runCommand`
-  itself is now three moves — resolve the window, read the request, call the handler — and holds no case.
+  is `dispatchCommand` (`main/command-dispatch.ts`) — resolve the window, read the request, call the handler — and
+  holds no case; a handler that throws is answered `command.failed`, its message redacted and cut to 500 characters.
 - **A renderer may not name a workspace, a preference key family or a session it was not given.** Main resolves
   the per-workspace key from the window it opened — that is what makes the composer draft and the requirement
   folds safe. Copy that discipline rather than adding a parameter.

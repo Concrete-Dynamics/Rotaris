@@ -1,5 +1,17 @@
 ## The command dispatcher catches nothing, so a handler that throws rejects the renderer's invoke
 
+**Outcome (repaired 2026-11-01, R-091 bundle A1).** `runCommand` now hands the request to `dispatchCommand`
+(`apps/desktop/src/main/command-dispatch.ts`), which awaits the handler inside a `try`: a throw or a rejection is answered
+`{ ok: false, code: 'command.failed', headline: 'The command failed', detail }`, the detail being the error's message through
+`redact` (`packages/kernel/src/redaction.ts`) cut to 500 characters, and one `error` record in the application log carries the
+command's kind and the redacted stack, never the request. `command-dispatch.test.ts` pins it with a handler table whose kind
+throws, one whose promise rejects with a non-`Error` reason, the redaction and the bound; those three cases are red with the `try` removed (measured). The
+comment that claimed a catch is replaced where the call now lives. Not measured on the built app: no product handler is known
+to throw, and the `driver-proof` scenario for a throwing command is bundle F3's (`docs/architecture/hardening.md` §5).
+**Not yet moved to `fixed/`:** R-091's row in `docs/product/requests.md` links this path, the link gate reads that file, and
+its rows are the orchestrator's to edit; the move is one `git mv` with that link, `hardening.md` §3.1's and the views'
+reconciliation-log entry's repointed.
+
 `runCommand` in `apps/desktop/src/main/index.ts` parses the request, picks the handler and awaits it with no `try`/`catch`
 around the call. The comment beside the call says "Nothing throws out of here (ADR-0019) — a handler that does is caught
 below", and nothing below catches it. A handler that throws therefore rejects the `ipcMain.handle` promise: the renderer's

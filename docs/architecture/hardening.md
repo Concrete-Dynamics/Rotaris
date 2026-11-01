@@ -62,8 +62,8 @@ Five clusters. Each row names the gap, the evidence and the bundle that closes i
 | ~~`app.enableSandbox()` absent; sandboxing is per window~~ | `main/index.ts` | A1 — **closed 2026-11-01**: called in `main/index.ts` before `whenReady`, every window keeping `sandbox: true`; its place is pinned by `web-contents-guard.test.ts`, and `pnpm driver-proof` runs the built app under it |
 | No fuses flipped, no ASAR integrity, `onlyLoadAppFromAsar` off | `apps/desktop/electron-builder.yml`; `@electron/fuses` unused | A2 |
 | `webSecurity`, `allowRunningInsecureContent`, `experimentalFeatures`, `webviewTag` left to defaults at eight window sites, nothing asserts them | `main-windows.ts:876,1129,1170`; `index.ts:719,759,898,996,1079` | A2 |
-| The dispatcher's sender check falls back to the active window; no sender-origin check | `mainWindows.forCommand` (`main-windows.ts:282`); `runCommand` (`index.ts:1882`) | A1 |
-| `runCommand` catches nothing; a throwing handler rejects the renderer's `invoke` | `index.ts:1893-1896`; [the note](../defects/the-command-dispatcher-catches-nothing-so-a-handler-that-throws-rejects-the-renderers-invoke.md) | A1 |
+| ~~The dispatcher's sender check falls back to the active window; no sender-origin check~~ | `mainWindows.forCommand` (`main-windows.ts:282`); `runCommand` (`index.ts:1882`) | A1 — **closed 2026-11-01**: the `ipcMain.handle` site refuses a `senderFrame` that is not `isApplicationPage` and, in a packaged build, a sender no main window stands behind (`command.untrustedSender`, `main/command-sender.ts`); a dialog answers for the window it was raised over (`MainWindows.standingBehind`), the active window only for the seams and the driver; pinned by `command-sender.test.ts` and `main-windows.test.ts`, and every command of `pnpm driver-proof`'s windows crosses it |
+| ~~`runCommand` catches nothing; a throwing handler rejects the renderer's `invoke`~~ | `index.ts:1893-1896`; [the note](../defects/the-command-dispatcher-catches-nothing-so-a-handler-that-throws-rejects-the-renderers-invoke.md) | A1 — **closed 2026-11-01**: `main/command-dispatch.ts` answers a throw `command.failed`, its message redacted and cut to 500 characters, with one `error` record; pinned by `command-dispatch.test.ts` (F3 adds the built app's throwing command) |
 | `setDevicePermissionHandler` and `setDisplayMediaRequestHandler` unset | `main/permissions.ts` | A2, under OQ-459 |
 
 Checklist items met today: 1 (no remote content), 2, 3, 4 (per window), 5, 6, 7 (meta tag, `style-src
@@ -75,7 +75,8 @@ application's renderer directory, or the dev server's exact origin while unpacka
 the navigation guard, the sender check and the reload.
 
 *Since 2026-11-01 (A1):* items 4 (`app.enableSandbox()`, application-wide), 13 and 14 are met, and 12 is guarded as well
-as unused. The predicate is `isApplicationPage` in `main/permissions.ts`; the navigation guard reads it. The permission
+as unused; item 17 is met by the channel's sender check. The predicate is `isApplicationPage` in `main/permissions.ts`;
+the navigation guard and the sender check read it. The permission
 handlers still read the older `isOwnPage`, which admits every `file:` URL, until A2 moves them with OQ-459's changes.
 
 ### 3.2 Failure handling outside main

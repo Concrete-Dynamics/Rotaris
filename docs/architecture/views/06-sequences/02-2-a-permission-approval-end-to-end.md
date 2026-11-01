@@ -43,6 +43,12 @@ sequenceDiagram
 
 The parts that are easy to get wrong:
 
+- **The dialog's commands cross the channel's sender check** (R-091, 2026-11-01; `main/command-sender.ts`). Its
+  `approval.payload`, and every command it sends after it, is admitted because the dialog shows the application's own page
+  (`isApplicationPage`, OQ-466) in a window main built with `parent: w.win`, and they are answered for that window
+  (`MainWindows.standingBehind` walks the parent), no longer for whichever main window is active. A frame on any other
+  page, or in a packaged build a sender no main window stands behind, is answered `command.untrustedSender`.
+
 - **Attendedness is a boolean the run host maintains**, not a question it asks. Main polls alive every 250 ms;
   3,000 ms without a reply is a lapse, and a lapse **cancels every waiting approval** — they resolve
   `cancelled`, and the application is unattended until main answers again (`ADR-0019`).

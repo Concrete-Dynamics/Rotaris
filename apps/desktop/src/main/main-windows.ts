@@ -4,6 +4,7 @@ import type { BrowserWindow, BrowserWindowConstructorOptions, OpenDialogOptions 
 import { PersonaWindows, TerminalWindows } from './windows.js';
 import { onConsoleWarning } from './capture/console-relay.js';
 import { integrationDeclinesWorkspaceOpen, type WorktreeIntegrationRunning } from './integration-guard.js';
+import { commandWindowFor } from './command-sender.js'; // R-091: a dialog speaks for the window it was raised over
 
 export type MainWindowOrigin = 'launch' | 'open-request' | 'hand-over';
 
@@ -273,14 +274,25 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
   }
 
   /**
-   * The main window a command speaks for (REQ-SHELL-020: the window that raised it). A main window answers for itself; a
+   * The main window that stands behind a sender (REQ-SHELL-020: the window that raised it). A main window answers for itself; a
    * persona or terminal window answers for the main window that owns it (ADR-0048 B, REQ-SHELL-072), so its configuration,
    * session list and artifacts are its owner's workspace and not the active window's when two main windows hold two
-   * workspaces (REQ-STARTUP-163; REQ-MONITOR-069's "the same resolved set the inspector shows"); any other sender — an
-   * approval dialog, a verification seam, the driver — answers for the active window.
+   * workspaces (REQ-STARTUP-163; REQ-MONITOR-069's "the same resolved set the inspector shows"); a dialog main presented —
+   * built with `parent` — answers for the window up its chain of parents that one of those is (`parentOf`; R-091). Undefined
+   * for a sender no window of the application stands behind: the IPC handler refuses such a sender in a packaged build
+   * (`command-sender.ts`).
    */
-  forCommand(senderId: number): MainWindowView<TWindow, TPersonaWindows, TTerminalWindows> | undefined {
-    return this.forSender(senderId) ?? this.ownerOfAuxiliary(senderId) ?? this.active();
+  standingBehind(senderId: number, parentOf: (id: number) => number | undefined = () => undefined): MainWindowView<TWindow, TPersonaWindows, TTerminalWindows> | undefined {
+    return commandWindowFor(senderId, (id) => this.forSender(id) ?? this.ownerOfAuxiliary(id), parentOf);
+  }
+
+  /**
+   * The main window a command speaks for: `standingBehind`, else the active window. That last answer is for the verification
+   * seams and the driver, which call `runCommand` directly and speak for no window by design; until 2026-11-01 it also
+   * answered every dialog, which with two main windows could be the other window's workspace.
+   */
+  forCommand(senderId: number, parentOf?: (id: number) => number | undefined): MainWindowView<TWindow, TPersonaWindows, TTerminalWindows> | undefined {
+    return this.standingBehind(senderId, parentOf) ?? this.active();
   }
 
   ownerOfSession(sessionId: string, subscriberIds: readonly number[]): MainWindowView<TWindow, TPersonaWindows, TTerminalWindows> | undefined {

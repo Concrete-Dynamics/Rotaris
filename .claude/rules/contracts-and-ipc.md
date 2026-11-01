@@ -12,9 +12,13 @@ Every cross-process shape is a schema in `contracts`, and the two directions are
 - **Outward is one channel.** A renderer command is a member of `CommandRequestSchema`, discriminated on
   `kind`; the answer is always `CommandOutcomeSchema`. A request that does not parse is
   `command.malformed`, and **nothing throws out of `runCommand`** — an uncaught exception in main raises
-  the platform's native error box and wedges the loop (ADR-0019).
-- **A command is answered for the window that raised it** — `windowFor(senderId) ?? activeWindow()`, not
-  "the main window" (`REQ-SHELL-020`). With two main windows alive those are different answers.
+  the platform's native error box and wedges the loop (ADR-0019); a throwing handler is `command.failed`.
+- **A command is answered for the window that raised it** — `MainWindows.forCommand(senderId)` (a dialog: its
+  parent's), not "the main window" (`REQ-SHELL-020`). With two main windows alive those are different answers.
+- **The sender is checked by origin, not by id alone** (R-091, checklist 17): a `senderFrame` that is not
+  `isApplicationPage` (OQ-466), or in a packaged build a sender no main window stands behind, is refused
+  `command.untrustedSender` before `runCommand` (`main/command-sender.ts`). A window that sends commands is
+  registered in `MainWindows` or built with `parent`.
 - **The preload is not a stop for a command** — it exposes one `command` method for every kind. Only a
   new *channel* adds a method there, and **the preload renumbers nothing and re-derives nothing**:
   sequence numbers are the producer's, payloads pass through untouched (ADR-0044).

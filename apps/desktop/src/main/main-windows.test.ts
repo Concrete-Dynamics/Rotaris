@@ -694,12 +694,28 @@ describe('MainWindows', () => {
     expect(h.mainWindows.forCommand(second.wcId + 100)?.workspace).toBe('C:/b');
     expect(h.mainWindows.forCommand(second.wcId)?.wcId).toBe(second.wcId);
     expect(h.mainWindows.forCommand(first.wcId)?.wcId).toBe(first.wcId);
-    // A sender that is neither a main window nor an auxiliary one (an approval dialog, a verification seam) answers for the active window.
+    // A sender that is neither a main window nor an auxiliary one, and has no parent named (a verification seam), answers for the active window.
     expect(h.mainWindows.forCommand(9_999)?.wcId).toBe(first.wcId);
     // The owner gone, its auxiliary windows' commands fall back to the active window rather than to a closed one.
     h.windows.get(second.wcId)!.destroyed = true;
     h.windows.get(second.wcId)!.closedListeners[0]!();
     expect(h.mainWindows.forCommand(second.wcId + 200)?.wcId).toBe(first.wcId);
+  });
+
+  it('answers a dialog for the main window it was raised over, not the active one, and finds no window behind a stranger (REQ-SHELL-020, R-091)', async () => {
+    const h = harness();
+    const first = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    const second = await h.mainWindows.build({ workspace: 'C:/b', origin: 'open-request' });
+    h.windows.get(first.wcId)!.focusListeners[0]!();
+    // 9_001 is a dialog over the second main window, 9_002 one over its persona window (id + 200); 9_999 has no parent.
+    const parents = new Map<number, number>([[9_001, second.wcId], [9_002, second.wcId + 200]]);
+    const parentOf = (id: number): number | undefined => parents.get(id);
+    expect(h.mainWindows.forCommand(9_001, parentOf)?.workspace).toBe('C:/b');
+    expect(h.mainWindows.forCommand(9_002, parentOf)?.workspace).toBe('C:/b');
+    expect(h.mainWindows.standingBehind(9_001, parentOf)?.wcId).toBe(second.wcId);
+    expect(h.mainWindows.standingBehind(9_999, parentOf)).toBeUndefined();
+    // The active window is what the seams and the driver, which speak for no window, are answered for.
+    expect(h.mainWindows.forCommand(9_999, parentOf)?.wcId).toBe(first.wcId);
   });
 
   it('names the live windows holding a workspace, and no other, so one workspace\'s state reaches its own window only (REQ-WORKSPACE-105, PD-SHELL-001)', async () => {

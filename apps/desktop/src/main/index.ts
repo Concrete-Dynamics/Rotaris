@@ -25,7 +25,7 @@ import { join } from 'node:path';
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { millis, toIsoUtc } from '@rotaris/kernel';
-import { AUTH_RECOVERY_DIALOG_WIDTH, type AuthRecoveryPayload, type AcknowledgementAction, CHANNEL, CommandRequestSchema, type CommandRequest, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ImprovementActivity, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
+import { AUTH_RECOVERY_DIALOG_WIDTH, type AuthRecoveryPayload, type AcknowledgementAction, CHANNEL, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ImprovementActivity, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
 import { claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
 import { createUpdater, updateCloseBox } from './updater/updater.js';
@@ -56,6 +56,8 @@ import { sessionCommands } from './commands/session.js';
 import { dictationCommands } from './commands/dictation.js';
 import { installPermissionHandlers, type ApplicationPages, type PermissionSession } from './permissions.js';
 import { installWebContentsGuard, type GuardedApp } from './web-contents-guard.js'; // R-091, OQ-466
+import { dispatchCommand } from './command-dispatch.js'; // R-091: nothing throws out of runCommand (ADR-0019)
+import { refuseCommandSender } from './command-sender.js'; // R-091: who may send a command (checklist 17)
 import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
@@ -74,7 +76,7 @@ import { preparationNotice, readPreparationFinding } from './preparation-notice.
 import { hooksReviewOpenReport } from './hooks-review-notice.js'; // OQ-293
 import { recoveryFor } from './notice-recovery.js';
 import { runNoticeReport } from './run-notice.js'; // Part V, OQ-293
-import { refusal, type ApprovalDialogState, type CommandContext, type CommandHandler, type CommandHandlers, type MainWindowState, type Recovery } from './commands/context.js';
+import { refusal, type ApprovalDialogState, type CommandContext, type CommandHandlers, type MainWindowState, type Recovery } from './commands/context.js';
 
 /**
  * MAIN — the composition root for the Electron main process (ADR-0002 #1).
@@ -1887,43 +1889,53 @@ async function main(): Promise<void> {
     ...windowsCommands(commandContext),
     ...workspaceCommands(commandContext),
   };
-  const runCommand = async (raw: unknown, senderId = activeWindow()?.wcId ?? -1): Promise<CommandOutcome> => {
+  /** A dialog's parent window, by web contents id (R-091): what `MainWindows.standingBehind` walks for a dialog's commands. */
+  const parentOf = (id: number): number | undefined => {
+    const parent = BrowserWindow.getAllWindows().find((b) => !b.isDestroyed() && b.webContents.id === id)?.getParentWindow();
+    return parent && !parent.isDestroyed() ? parent.webContents.id : undefined;
+  };
+  const runCommand = (raw: unknown, senderId = activeWindow()?.wcId ?? -1): Promise<CommandOutcome> => dispatchCommand(raw, senderId, {
     /**
      * A2 — REQ-SHELL-020: a command is answered for the window that RAISED it, so every workspace-scoped read
-     * below resolves against the sender rather than against "the main window". `MainWindows.forCommand` holds the
+     * resolves against the sender rather than against "the main window". `MainWindows.forCommand` holds the
      * rule: a main window answers for itself, a persona or terminal window for the main window that OWNS it (ADR-0048
      * B; REQ-MONITOR-069, REQ-STARTUP-163 — with two main windows on two workspaces a persona window's `config.read`,
      * a terminal window's `session.list` and a persona window's `artifacts.body`/`artifacts.save` are its owner's
-     * workspace), and any other sender (an approval dialog, the driver) the active window. This comment once said a
-     * non-main sender fell back to the active window "which while the capacity is one is the same object either
-     * way"; that reason predates REQ-STARTUP-163's several main windows and was falsified by it (2026-10-03).
-     * Handlers that key on `senderId` itself (session.subscribe's relay and follow) are unaffected.
+     * workspace), a dialog for the window it was raised over (since 2026-11-01, R-091; until then the active window),
+     * and a verification seam or the driver the active window. This comment once said a non-main sender fell back to
+     * the active window "which while the capacity is one is the same object either way"; that reason predates
+     * REQ-STARTUP-163's several main windows and was falsified by it (2026-10-03). Handlers that key on `senderId`
+     * itself (session.subscribe's relay and follow) are unaffected.
      *
      * A3: the default sender is the ACTIVE window's id (ADR-0055 c.5) — a verification seam and the driver speak
      * for no window, and what they mean is the window the user is looking at. It has to be a real id and not a
      * sentinel, because a subscription is keyed by the sender (Part R's twenty-seventh defect, noted below at
      * `session.follow`). With no main window open at all the command is refused rather than answered for a
      * window that is gone.
+     *
+     * A4: `dispatchCommand` reads the request, calls the handler the table names and catches what it throws
+     * (`command.failed`, ADR-0019): nothing throws out of here.
      */
-    const w = mainWindows.forCommand(senderId);
-    if (!w) return { ok: false, code: 'window.notMain', headline: 'No main window is open' };
-    const parsed = CommandRequestSchema.safeParse(raw);
-    if (!parsed.success) return { ok: false, code: 'command.malformed', headline: 'The request could not be read' };
-    const req = parsed.data;
-    const awaitWorkspace = () => mainWindows.awaitWorkspace(w.wcId);
-    /**
-     * A4: the handler the table above names, called with the request narrowed to its own kind. The cast is
-     * the one place that narrowing is asserted rather than proved — `handlers[req.kind]` is a union of
-     * handlers, and TypeScript cannot pair it with `req` unaided. It is sound because `CommandHandlers` is
-     * total over the contract's kinds: every entry answers the kind it is filed under, and a kind with no
-     * entry does not compile. Nothing throws out of here (ADR-0019) — a handler that does is caught below.
-     */
-    const handler = handlers[req.kind] as CommandHandler<CommandRequest['kind']>;
-    const outcome = await handler(req, { w, senderId, awaitWorkspace });
+    handlers,
+    forCommand: (id) => mainWindows.forCommand(id, parentOf),
+    awaitWorkspace: (wcId) => mainWindows.awaitWorkspace(wcId),
     // OQ-281 / REQ-SESSION-202: in a window whose store the open refused, "no workspace" is said as the condition held.
-    return w.workspaceId !== undefined || w.workspace === '(no workspace)' ? outcome : answerUnderHeldRefusal(outcome, w, storeRefusals.get(canonicalPath(w.workspace))?.held);
+    settle: (outcome, w) => (w.workspaceId !== undefined || w.workspace === '(no workspace)' ? outcome : answerUnderHeldRefusal(outcome, w, storeRefusals.get(canonicalPath(w.workspace))?.held)),
+    log: (m, level) => { log(m, level); },
+  });
+  /**
+   * R-091 (Electron security checklist 17; ADR-0044): the channel answers only the application's own page, in a window the
+   * application opened (`command-sender.ts`). A frame that is any other page is refused in every build; a sender no window
+   * of the application stands behind is refused in a packaged build, and keeps the active-window answer only where the
+   * verification seams are built in.
+   */
+  const commandAdmission = {
+    standingBehind: (id: number) => mainWindows.standingBehind(id, parentOf),
+    own: applicationPages,
+    admitUnknown: __ROTARIS_SEAMS__,
+    warn: (m: string) => { log(m, 'warn'); },
   };
-  ipcMain.handle(CHANNEL.command, (e, raw) => runCommand(raw, e.sender.id));
+  ipcMain.handle(CHANNEL.command, (e, raw) => refuseCommandSender(e, commandAdmission) ?? runCommand(raw, e.sender.id));
 
   /**
    * A3: the one call today. REQ-SHELL-010's resolution — the remembered folder, the working directory and the

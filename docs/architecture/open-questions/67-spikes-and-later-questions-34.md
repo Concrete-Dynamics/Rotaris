@@ -122,7 +122,7 @@ wait on `SkillHost.settled`, bounded on the timer port (`WARM_UP_WAIT_BOUND`) an
 clear overtakes stops at its next read (reworked after review, the same day). A wait that reaches the bound is refused
 (`skills.discovering`) and the walk goes on: the first rework fell through to `discoverSkills` on the loop there, which this
 entry's "never holds its event loop" and "instead of walking the tree a second time" exclude, and point 3's "nothing proceeds
-on an expiry" states the refusal. The first execution held in the unit cases, and no proof re-measured the launch
+on an expiry" states the refusal. The first execution held in the unit cases, and the proofs ran on the built app on 2026-11-01, where the launch's walk read 9.0 ms over a one-skill tree, which is no like-for-like reading of the 8,201.5 ms
 ([first-executions](../first-executions/34-the-register-33.md);
 [the note](../../defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md)).
 Points 2 to 5 are not built. The first item recorded beside the ruling stands as recorded. One more path holds the loop at

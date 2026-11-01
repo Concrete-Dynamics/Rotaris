@@ -4,17 +4,11 @@
 - **Date:** 2026-08-31
 - **Revised:** 2026-08-31, to carry SR-1 (one running instance) and to record the crash-domain
   consequence as accepted rather than as an unresolved slice conflict.
-- **Revised:** 2026-09-01, to carry the double-hop measurement. The topology is **confirmed by
-  measurement, not reopened**: the "Revisit if" clause that turned on it is discharged and retired, and
-  the `MessagePort` remedy is recorded as an available option rather than as a contingency.
+- **Revised:** 2026-09-01, to carry the double-hop measurement. *History: [the revision of 2026-09-01](../../archive/architecture/adr/0002-history.md#revision-2026-09-01).*
 - **Revised:** 2026-09-02, to **settle** the workspace-identity question this record previously left as a
   correction owed, and to place two allocations ESC-19 and ESC-21 create: who takes the whole-store
   backup, and who owns `REQ-STARTUP-166`'s storage classification.
-- **Revised:** 2026-09-02, second time, against defect **D3**. Consequence 11 gains the three obligations
-  it created and did not state — the refusal to start runs must be in force **before** liveness is judged;
-  every acknowledgement is bounded and expiry **refuses** rather than proceeds; and the refusal is a lease
-  the run host expires by itself, because a process that has died cannot release anything. All three were
-  being carried by ADR-0058 alone, which is the wrong place for properties of this capability.
+- **Revised:** 2026-09-02, second time, against defect **D3**. *History: [the revision of 2026-09-02](../../archive/architecture/adr/0002-history.md#revision-2026-09-02).*
 - **Origin:** RUNTIME (ADR-RUNTIME-01), EXEC (ADR-EXEC-01), DATA (ADR-DATA-08), UI (ADR-UI-01, ADR-UI-05), MODEL (ADR-MODEL-05, ADR-MODEL-12)
 - **Depends on:** ADR-0001
 - **Governed by:** `owner-decisions.md` SR-1, SR-4, SR-8, ESC-15, **ESC-19**, **ESC-21**

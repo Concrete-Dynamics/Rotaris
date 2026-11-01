@@ -5,10 +5,7 @@
 - **Revised:** 2026-08-31, to carry SR-3 (the sequence number on both update payloads, and the ordering
   obligation a shared counter puts on the relay) and SR-4 (alternative C re-argued now that a store
   exists).
-- **Revised:** 2026-09-01. **This record was wrong about a mechanism and now says so.** Measurement
-  falsified the premise that a distinct Electron IPC channel name gives terminal frames a lane of their
-  own. The outcome the premise was defending still holds, but it is supplied by ADR-0021's coalescing
-  cap, not by the channel split, and that cap is therefore now load-bearing for `REQ-MONITOR-222`.
+- **Revised:** 2026-09-01. *History: [the revision of 2026-09-01](../../archive/architecture/adr/0044-history.md#revision-2026-09-01).*
 - **Origin:** UI (ADR-UI-02)
 - **Depends on:** ADR-0002, ADR-0010, ADR-0021, ADR-0043
 - **Governed by:** `owner-decisions.md` SR-3, SR-4, SR-8

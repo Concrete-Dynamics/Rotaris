@@ -2,8 +2,7 @@
 
 - **Status:** proposed
 - **Date:** 2026-08-31
-- **Revised:** 2026-08-31, to carry SR-1 and SR-2. The registry no longer has to reason about runs
-  elsewhere, and focus is now explicitly per main window.
+- **Revised:** 2026-08-31, to carry SR-1 and SR-2. *History: [the revision of 2026-08-31](../../archive/architecture/adr/0013-history.md#revision-2026-08-31).*
 - **Origin:** RUNTIME (ADR-RUNTIME-11)
 - **Depends on:** ADR-0002, ADR-0010
 - **Governed by:** `owner-decisions.md` SR-1, SR-2

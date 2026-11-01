@@ -22,8 +22,7 @@ window and nothing else. **Found while running it:** the first-launch notice (RE
 workspace opens, replaced the failure's notice in the one slot when the driven prompt failed sooner — a race of the proof,
 not of the product, so the scenario now waits for that notice before it types.
 
-~~The non-modal window-level re-authentication prompt this ADR names (`REQ-NOTIFY-071`) is not built on this base (the note's
-part B, on `fin6-auth-recovery-1`, unmerged).~~ *Corrected at the merge, 2026-10-02:* it is built (the section above) and
+*History: [the struck text of 2026-10-02](../../../archive/architecture/adr/0048-history.md#struck-2026-10-02).* *Corrected at the merge, 2026-10-02:* it is built (the section above) and
 merged beside this dialog. The automatic fallback goes ahead of the dialog, which keeps REQ-NOTIFY-072's two cases, and the
 dialog's opening closes every prompt open (REQ-NOTIFY-079) — so at most one of the two authentication surfaces is drawn for
 a failure, the modal one taking the place of the non-modal one.

@@ -36,10 +36,4 @@ not write a session's rows without holding its lock"); what the requirement's or
 preceding the status — holds. The alternative, an entry written after the release, would be a row written without the
 lock, which this record forbids outright.
 
-*Corrected 2026-09-29 (R-067, acceptance finding A14): "the writer releases the lock last" and "an entry written after
-the release would be a row written without the lock" held for a session **not** loaded in the process that repairs it,
-whose writer `withWriter` opens (claiming the lock) for the call. For a session loaded here the unit wrote through the
-live writer and never looked at the lock, which the run's teardown had already released, so the status, the entry and
-the crash record were written with no lock row at all, and the safety checkpoint and the restore's outcome
-(`recordSafetyCheckpoint`, `recordRestore`) the same way. The reading is kept as it was taken; the section "a write
-through a loaded session outside a run" below is what the loaded branch does now.*
+*History: [the correction of 2026-09-29](../../../archive/architecture/adr/0005-history.md#correction-2026-09-29-2).*

@@ -2,18 +2,9 @@
 
 - **Status:** proposed
 - **Date:** 2026-08-31
-- **Revised:** 2026-09-01. The build gains an output this record did not contemplate — the Windows
-  portable's launcher stub — because SR-7 moved that artifact off the packaging tool's own portable
-  target (ADR-0054 alternative P4). The bundle-size revisit clause is restated on measurement, which
-  points somewhere other than where it pointed.
-- **Revised:** 2026-09-02. The build gains an **obligation** it did not carry: rebuilding the product's
-  native modules against the Electron binary interface, for every target, proved at build time. ESC-21's
-  comparison surfaced the store binding failing silently under an Electron runtime through an ABI
-  mismatch, and the owner recorded that as this record's to design for rather than to discover.
-- **Revised:** 2026-09-02, second time, against defect **D10**. Rule 1 gains 1a: the rebuild's exit status
-  is not evidence anything was rebuilt. `electron-rebuild` against the chosen store binding exits 0, prints
-  success and produces no compiled binary, and the binding's loader would prefer a prebuilt one over
-  anything built beside it. **Rule 4's load is no longer one check among several; it is the check.**
+- **Revised:** 2026-09-01. *History: [the revision of 2026-09-01](../../archive/architecture/adr/0056-history.md#revision-2026-09-01).*
+- **Revised:** 2026-09-02. *History: [the revision of 2026-09-02](../../archive/architecture/adr/0056-history.md#revision-2026-09-02).*
+- **Revised:** 2026-09-02, second time, against defect **D10**. *History: [the revision of 2026-09-02](../../archive/architecture/adr/0056-history.md#revision-2026-09-02-2).*
 - **Origin:** UI (ADR-UI-15)
 - **Depends on:** ADR-0001, ADR-0002, ADR-0020, ADR-0044, ADR-0053, ADR-0054, ADR-0058
 - **Governed by:** `owner-decisions.md` SR-7, and the consequence for ADR-0058 recorded with ESC-21

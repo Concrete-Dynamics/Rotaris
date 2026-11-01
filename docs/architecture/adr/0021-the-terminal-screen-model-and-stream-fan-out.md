@@ -2,10 +2,7 @@
 
 - **Status:** proposed
 - **Date:** 2026-08-31
-- **Revised:** 2026-09-01, to carry the `ipc-hop-latency` spike. **This record's frame-rate cap has
-  become load-bearing for `REQ-MONITOR-222` and is no longer a display concern**, because the mechanism
-  ADR-0044 relied on for the same protection was measured and does not work. Nothing about the screen
-  model, the placement of the authoritative emulator, or the frame vocabulary changes.
+- **Revised:** 2026-09-01, to carry the `ipc-hop-latency` spike. *History: [the revision of 2026-09-01](../../archive/architecture/adr/0021-history.md#revision-2026-09-01).*
 - **Origin:** EXEC (ADR-EXEC-07), UI (ADR-UI-10)
 - **Depends on:** ADR-0002, ADR-0010, ADR-0020, ADR-0044
 - **Depended on by `REQ-MONITOR-222`** — see *The cap is load-bearing*. ADR-0044 is owned elsewhere and

@@ -6,23 +6,9 @@
 - **Authority:** `owner-decisions.md` **SR-4**, **SR-6**, **SR-9(a)** and **ESC-20**; and the
   specification as amended on 2026-09-01, which minted `REQ-SESSION-199`, put the audit's integrity
   properties inside `REQ-SESSION-137`, and made the ring trim part of the operation that records the entry
-- **Revised 2026-09-02** against ESC-20 as the specification now carries it. **The export boundary is a
-  security property of this record and it now carries the mechanism as well as the reason** — see *The
-  export boundary, and the one line that must never move*. The gap the previous version reported is
-  **closed**: `REQ-TOOLS-190` now states the redaction-safety test and grants the verification-gate record
-  an export, `REQ-EVENTS-163` has been narrowed because it had accidentally granted one to a record that
-  must never have it, and SR-9(a)'s two exports have landed as `REQ-LIBRARY-176` and `REQ-TRACE-514`.
-  Consequence 6 was stale in three places and is rewritten.
+- **Revised 2026-09-02** against ESC-20 as the specification now carries it. *History: [the revision of 2026-09-02](../../archive/architecture/adr/0024-history.md#revision-2026-09-02).*
 - **Revised again 2026-09-02**, against `../spikes/commit-on-the-publish-path.md` and
-  `../spikes/remote-and-synchronised-storage.md`. Three things land here. **The pairing this record makes
-  between an entry and its two durable side effects is measured to be free** — a second insert inside a
-  transaction that is already committing costs **−4 to +31 µs at p50**, so `REQ-EVENTS-072`'s indivisible
-  step is not a cost this design absorbs. **The first of the two unmeasured export dependencies is now
-  partly measured and the answer is favourable** — see *Two dependencies of this record's export design*
-  at the end. And **this record must stop treating a successful store open as evidence of a working
-  store**, because every write on this path is best-effort with respect to the caller and a store that
-  opens and then fails is the one configuration in which a security record goes silent without anything
-  refusing.
+  `../spikes/remote-and-synchronised-storage.md`. *History: [the revision of 2026-09-02](../../archive/architecture/adr/0024-history.md#revision-2026-09-02-2).*
 - **Depends on:** ADR-0003 (the line between a file and a row), ADR-0058 (the workspace store),
   ADR-0005, ADR-0007, ADR-0008
 - **Supersedes** the line-delimited-file form of this record dated 2026-08-31, preserved below as

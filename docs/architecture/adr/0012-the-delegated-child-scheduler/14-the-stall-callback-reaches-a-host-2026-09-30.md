@@ -25,7 +25,7 @@ it, both of which the activity tracker and the projection owner already had. Thr
   nothing may join a conversation between a call and its result. What the evaluation leg adds is the agent with no next step
   coming: one waiting on its children.
 - **A stall can end with the watch.** The live run's root answered on the retry and its turn ended before the next
-  evaluation, so its stall was never logged recovered. ~~`StallWatch.stop` now reports a stall under way as recovered.~~
+  evaluation, so its stall was never logged recovered. *History: [the struck text of 2026-09-30](../../../archive/architecture/adr/0012-history.md#struck-2026-09-30).*
   *(Corrected 2026-09-30 by acceptance round 1's verifier: reported so, a cancelled, stopped, paused or timed-out stalled
   agent was logged "active again after a stall", which it was not.)* `StallWatch.stop` ends a stall under way and reports
   it recovered only when the agent was active after the evaluation that last found it stalled — a model event that is not

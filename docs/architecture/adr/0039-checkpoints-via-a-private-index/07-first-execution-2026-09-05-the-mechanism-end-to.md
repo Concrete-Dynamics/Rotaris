@@ -92,9 +92,7 @@ and the reason had been that a read is a read; `diff-index` compares the same tr
 as `%00`, not the `%x00` of `git log`'s format — the listing parsed nothing until corrected. **Found: nothing** in the
 decision itself, in the table, in the two orderings, or in the flow's gates.
 
-**Readings taken.** ~~*Capture position:* after `iteration.end` is recorded and BEFORE the hooks' `iteration_end`, so the
-checkpoint records the iteration's work as the agent left it and a hook that later carries the checkpoint (REQ-HOOKS-082
-with checkpoints — owed) can be handed it; awaited, so it precedes the next iteration and teardown (REQ-GIT-051).~~
+**Readings taken.** *History: [the struck text of 2026-10-13](../../../archive/architecture/adr/0039-history.md#struck-2026-10-13).*
 *Falsified 2026-10-13 (fin41, N68; the section at the end of this record):* REQ-HOOKS-082 is an ordering requirement —
 "`iteration_end` hooks SHALL finish before that iteration's checkpoint is taken" — and says nothing of a hook carrying a
 checkpoint; the reading put the capture on the wrong side of the hooks, so a hook's edit reached the next iteration's

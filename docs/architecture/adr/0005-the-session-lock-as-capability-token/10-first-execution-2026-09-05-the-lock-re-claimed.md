@@ -16,10 +16,6 @@ status is active and no live holder can be shown, and reaps nothing (`REQ-SESSIO
 app the resumed session's lock was claimed by the second process, held through the continued run, and
 released by its teardown: `session_locks` was empty at exit.
 
-*Corrected 2026-09-29 (R-067): "held through the continued run" was true of the **first** continue after a load only.
-That teardown released the lock while the session stayed loaded in the same process, and no later continue there took it
-back — `prompt`'s re-claim went through `resume`, which returns at once for a session already live, and the Continue
-action and the plan decision claimed nothing — so every run after a process's first ran with no lock row. The claim is
-kept as it was measured; what the later continue does now is the section "the lock a continue takes back" below.*
+*History: [the correction of 2026-09-29](../../../archive/architecture/adr/0005-history.md#correction-2026-09-29).*
 
 **Found: nothing in this record.**

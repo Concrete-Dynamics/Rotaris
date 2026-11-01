@@ -204,8 +204,7 @@ every tool through because it was never given anything, and no reading of the re
 takes the allowed-tool lists that bind the agent (OQ-145's reading: the entry its own persona's map and its delegating
 persona's map give its persona's name). It keeps a tool only when every list names it, through `restrictionsAllow` in
 `@rotaris/contracts`, which the engine's write-scope refusal also reads. It still only removes, after the three earlier
-stages. ~~The MCP loop in `run-host/tools.ts` withholds a server's tool the lists do not name, the same fail-closed
-reading the fourth execution took for `read_only`.~~ *Falsified 2026-09-29 by the verifier of the same change, kept
+stages. *History: [the struck text of 2026-09-29](../../archive/architecture/adr/0016-history.md#struck-2026-09-29).* *Falsified 2026-09-29 by the verifier of the same change, kept
 beside its replacement: the loop dropped the tool from the callable map and the listing, but the prompt's MCP section
 was still rendered from the unnarrowed surface, so it printed a name the agent could not call (REQ-MCP-062). The
 `read_only` withholding it claimed parity with empties the surface before rendering, and this did not.* The port now

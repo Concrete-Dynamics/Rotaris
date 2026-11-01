@@ -2,25 +2,9 @@
 
 - **Status:** proposed
 - **Date:** 2026-08-31
-- **Revised:** 2026-09-01. **The amended `REQ-TOOLS-053` and `REQ-TOOLS-069` dissolve the requirement
-  conflict this record was written around**, and the liveness signal it invented as an answer stops
-  being an invention. `owner-decisions.md` **SR-1** additionally makes the per-window registration
-  reading well defined rather than merely recommended. The decision is unchanged in every particular;
-  its *justification* moves from "the architecture supplies what the specification omits" to "the
-  architecture implements the test the specification states". A residual tension with
-  `REQ-SANDBOX-101` is named below rather than smoothed away.
+- **Revised:** 2026-09-01. *History: [the revision of 2026-09-01](../../archive/architecture/adr/0019-history.md#revision-2026-09-01).*
 - **Revised:** 2026-09-02, against `../spikes/presenter-liveness-and-instance-claim.md`, which measured
-  this record's remedy on the target platform. **The decision stands in every particular and the state it
-  detects is now reproducible rather than argued.** Three things changed underneath it, and two of them
-  are reasons rather than conclusions. (1) The detection mechanism gains **a condition that must be built
-  as stated**: the lapse test is *the gap since the last reply*, never *did a reply for sequence N
-  arrive*. (2) Obligation 3 is restated **application-wide and much harder** — no synchronous
-  platform-dialog call may ever be made on main — because the exposure turned out not to be the approval
-  dialog at all. (3) The consequence that registration "is revoked automatically when the channel to main
-  closes … **without a timeout**" was tested and **that path is not exercisable in this topology**; the
-  conclusion that a dead main leaves nothing hanging survives, the stated reason does not, and the reason
-  that actually holds has consequences of its own. Each is marked at the sentence it corrects rather than
-  only summarised here.
+  this record's remedy on the target platform. *History: [the revision of 2026-09-02](../../archive/architecture/adr/0019-history.md#revision-2026-09-02).*
 - **Origin:** EXEC (ADR-EXEC-05), RUNTIME (constraint C10.5), UI (ADR-UI-05)
 - **Depends on:** ADR-0002, ADR-0013, ADR-0017
 - **Contains an unresolved conflict between slices** (presenter registration per window or per session,

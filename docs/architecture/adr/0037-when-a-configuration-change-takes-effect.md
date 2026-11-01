@@ -2,11 +2,7 @@
 
 - **Status:** proposed
 - **Date:** 2026-08-31
-- **Revised:** 2026-09-01. **The escalation this record carried is ruled** — `owner-decisions.md` ESC-1,
-  option 2 — so the Escalation section becomes a Decision with the alternatives preserved. The three
-  tiers are unchanged. Two other things moved: why configuration stays in files is now stated in the
-  specification on grounds that are **not** the ones SR-4 originally gave (`REQ-CONFIG-477`, ESC-14),
-  and Tier B's record of what a run actually used is a row rather than a file (SR-4).
+- **Revised:** 2026-09-01. *History: [the revision of 2026-09-01](../../archive/architecture/adr/0037-history.md#revision-2026-09-01).*
 - **Origin:** DATA (constraints E1–E4, ESC-1)
 - **Depends on:** ADR-0002, ADR-0036
 - **Carries a ruled escalation whose requirement amendment has not been made** — see *ESC-1, ruled*.

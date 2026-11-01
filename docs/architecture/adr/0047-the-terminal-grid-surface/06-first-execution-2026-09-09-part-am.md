@@ -52,8 +52,7 @@ full-screen program repaints on each. Stated, not changed.
   re-lays the tab's header in the same frame, so the grid's host shrinks before the library has repainted with the
   new face; the resize observer measured the new host against the OLD cell and one wrong geometry reached the
   process a frame before the right one (`118×25` then `89×19` in the proof, two reports where `REQ-SHELL-100` wants
-  one). Seen on the third consecutive run, not the first two — a race. ~~The observer now stays quiet while a
-  re-measure is pending and the frame after the repaint measures once.~~ *(Falsified 2026-10-01: the pending flag was
+  one). Seen on the third consecutive run, not the first two — a race. *History: [the struck text of 2026-10-01](../../../archive/architecture/adr/0047-history.md#struck-2026-10-01).* *(Falsified 2026-10-01: the pending flag was
   raised by the layout effect React runs for the theme change, which React renders in a task of its own, so a frame
   falling between the root's style change and that task still let the observer measure first. The same `118×25` came
   back under load; the repair that replaced this one is in "The re-measure under load — 2026-10-01" below.)*

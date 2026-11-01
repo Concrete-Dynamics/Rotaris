@@ -2,12 +2,7 @@
 
 - **Status:** proposed
 - **Date:** 2026-08-31
-- **Revised:** 2026-09-01. **This record needed less correction than any other in its group and that is
-  worth saying plainly: the four pure functions, the provenance-carrying entries, the two-types rule and
-  the type-level unconstructibility are all unchanged.** Two things did move — why the snapshot stays a
-  file is now stated in the specification rather than inherited from a ruling whose grounds were
-  withdrawn (`REQ-CONFIG-477`, `owner-decisions.md` ESC-14), and `REQ-PROVIDER-152` was rewritten under
-  **SR-1**, which makes consequence 4's description of the lock wrong on three counts.
+- **Revised:** 2026-09-01. *History: [the revision of 2026-09-01](../../archive/architecture/adr/0032-history.md#revision-2026-09-01).*
 - **Origin:** MODEL (ADR-MODEL-07)
 - **Depends on:** ADR-0004, ADR-0007, ADR-0028, ADR-0031, ADR-0036
 

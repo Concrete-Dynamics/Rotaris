@@ -224,9 +224,7 @@ where this vocabulary was corrected to match a behavioural requirement rather th
 did change the code:** `REQ-NOTIFY-044` requires an action concerning an object to carry that object's identity, and
 the two members shipped here carried none — `open-hook-review` now names the workspace whose hooks it concerns
 (`REQ-NOTIFY-224` publishes per workspace and hook set, so an unparameterised action reviews whichever workspace
-happens to be open), and `open-provider-sign-in` names a provider where one is named. ~~A review action naming a
-workspace other than the open one opens nothing and is logged; navigating between workspaces from a notice is not
-built.~~ *Built 2026-10-13 (fin41, N86): a review action naming another workspace reaches it — the window holding it
+happens to be open), and `open-provider-sign-in` names a provider where one is named. *History: [the struck text of 2026-10-13](../../archive/architecture/adr/0049-history.md#struck-2026-10-13).* *Built 2026-10-13 (fin41, N86): a review action naming another workspace reaches it — the window holding it
 surfaced, else one added for it, asking nothing and closing nothing ([OQ-267](../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-267); the build's
 reading until it was ruled on 2026-10-13 under [R-072](../../product/requests.md#r-072) as
 [`PD-SHELL-001`](../../product/directives/pd-shell-001.md#pd-shell-001) revision 2) — and opens

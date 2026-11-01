@@ -2,10 +2,7 @@
 
 - **Status:** proposed
 - **Date:** 2026-08-31
-- **Revised:** 2026-09-01. **The settle mechanism this record chose does not work and is replaced.**
-  Offscreen rendering — the window choice — is confirmed and unchanged; the *signal* the phase timing
-  closed on is withdrawn on measurement. This revision also settles how a phase is driven, which the
-  record previously left implicit and which turns out to decide `REQ-UIBENCH-118` on its own.
+- **Revised:** 2026-09-01. *History: [the revision of 2026-09-01](../../archive/architecture/adr/0053-history.md#revision-2026-09-01).*
 - **Origin:** UI (ADR-UI-07)
 - **Depends on:** ADR-0042, ADR-0045, ADR-0046, ADR-0052, ADR-0056
 - **Evidence:** `../spikes/renderer-invariance-and-benchmark-cadence.md`

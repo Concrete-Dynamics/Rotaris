@@ -234,8 +234,7 @@ frame — an interrupt (`C-c`, REQ-TOOLS-098's advice) makes an interactive `sh`
 poll read everything after: the later calls' marker frames and 582 of the PD-TOOLS-001 snapshot's `__rot_b64__` lines,
 which encode the shell's whole environment. The first repair's replacement, "the paused call closes
 on its own frame only", fixed the status and broke the interrupt: that call then read "still running" on every poll.
-~~Now the paused call closes on its own frame with its own status, or else on the next call's frame with none, reported
-as −1 with the reason, and what it collected ends at the next call's printed start marker; its listener goes with it.~~
+*History: [the struck text of 2026-09-30](../../../archive/architecture/adr/0020-history.md#struck-2026-09-30).*
 **Falsified in turn by the second verification** (2026-09-30): that listener fed the paused screen until the next
 call's END frame, and the cut at the start marker was made on that screen, so a next call longer than the screen keeps
 (`seq 1 20000`, beyond `FOREGROUND_SCREEN_LINES`) scrolled the marker off and the poll read that call's output, its

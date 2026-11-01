@@ -5,9 +5,7 @@
 - **Revised:** 2026-09-01, under `owner-decisions.md` **SR-1** (one running instance), **SR-4** (the
   lock, the session state and the event store are one object) and the amendment of `REQ-SESSION-067`
   (no save is deferred), and to carry one measurement from the `ipc-hop-latency` spike that bears
-  directly on the quit path. **The choreography is unchanged.** What changed is what a force exit can
-  actually lose — consequence 2 was wrong on both of its clauses — and what can make the force-exit
-  backstop fire for a reason that is not the run's fault.
+  directly on the quit path. *History: [the revision of 2026-09-01](../../archive/architecture/adr/0014-history.md#revision-2026-09-01).*
 - **Origin:** RUNTIME (ADR-RUNTIME-10)
 - **Depends on:** ADR-0002, ADR-0005, ADR-0006, ADR-0008, ADR-0013, ADR-0058
 

@@ -4,10 +4,7 @@
 - **Date:** 2026-08-31
 - **Revised:** 2026-09-01, under `owner-decisions.md` **SR-4** (the delegated-child ledger is named in
   that ruling's own table as a database row kind), **SR-1** and **SR-2** (no second process can hold a
-  child record), and the amendment of `REQ-SESSION-067` (no save is deferred, parked or coalesced).
-  **The decision itself is unchanged — a persisted ledger driven to quiescence, not a promise graph.**
-  What changed is the medium, and the medium makes two of this record's mechanisms *stronger* rather
-  than merely different: the start claim and the transition function. The crash story changed outright.
+  child record), and the amendment of `REQ-SESSION-067` (no save is deferred, parked or coalesced). *History: [the revision of 2026-09-01](../../archive/architecture/adr/0012-history.md#revision-2026-09-01).*
 - **Origin:** RUNTIME (ADR-RUNTIME-06)
 - **Depends on:** ADR-0006, ADR-0008, ADR-0058
 

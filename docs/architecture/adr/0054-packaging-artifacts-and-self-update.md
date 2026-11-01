@@ -2,27 +2,9 @@
 
 - **Status:** proposed
 - **Date:** 2026-08-31
-- **Revised:** 2026-09-01. **Reopened and re-decided.** The packaging tool's own portable target cannot
-  meet `REQ-STARTUP-155` at any bundle weight, including an empty one; SR-7 rules that the artifact
-  prepares itself once and launches from that preparation, and `REQ-STARTUP-165` now states the contract
-  that preparation must satisfy. Both escalations this record raised are also ruled and are converted
-  from open questions into decisions.
-- **Revised:** 2026-09-02, against the settled specification, and it moves this record in three places.
-  **ESC-8's signature mechanism is decided against the shape this record proposed** — `REQ-STARTUP-167`,
-  `REQ-STARTUP-168` and an amended `REQ-STARTUP-032` publish a **detached** signature as a fifth asset and
-  make the *build* carry a set of keys, where this record argued no new filename could appear and put the
-  rotation in the manifest. **The one gap this record's own "Revisit if" named is closed**:
-  `REQ-STARTUP-165` (c) now states the outcome for a preparation that cannot be made at all, and the
-  design is built to it below rather than left owed. And the native-module obligation is widened to the
-  store binding and pointed at ADR-0056's build-time proof.
-- **Revised:** 2026-09-02, a second time, and this time against **measurement** rather than against text.
-  SR-7's gate condition was measured and **SR-7 is vindicated**: a cached launch paints in 575.5–624.2 ms
-  warm against 5,000 ms, and the worst cached measurement taken anywhere in the spike is 1,414.6 ms. The
-  "Revisit if" clause that turned on that number is discharged below. But the same run found **two defects
-  in the mechanism this record specifies, both observed rather than inferred** — the commit step does not
-  work on Windows, and the completeness check passes a damaged preparation that then launches to no window
-  at all — and both are corrected in the Decision. **The corrections do not reopen P4; they are what makes
-  P4 work.**
+- **Revised:** 2026-09-01. *History: [the revision of 2026-09-01](../../archive/architecture/adr/0054-history.md#revision-2026-09-01).*
+- **Revised:** 2026-09-02, against the settled specification, and it moves this record in three places. *History: [the revision of 2026-09-02](../../archive/architecture/adr/0054-history.md#revision-2026-09-02).*
+- **Revised:** 2026-09-02, a second time, and this time against **measurement** rather than against text. *History: [the revision of 2026-09-02](../../archive/architecture/adr/0054-history.md#revision-2026-09-02-2).*
 - **Origin:** UI (ADR-UI-12)
 - **Depends on:** ADR-0001, ADR-0002, ADR-0020, ADR-0042, ADR-0049, ADR-0055, ADR-0056, ADR-0058
 - **Governed by:** `owner-decisions.md` ESC-8, ESC-11, SR-7, and the consequence for ADR-0058 recorded

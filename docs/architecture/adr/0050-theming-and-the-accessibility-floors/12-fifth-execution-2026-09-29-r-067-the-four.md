@@ -32,10 +32,7 @@ transparent field. That departure is PD-CHAT-001 revision 2's, and the directive
 nothing in this repair.
 
 **`theme-proof` beside it.** The slash colours are painted only while a slash command is typed, and `theme-proof` types
-none. ~~Its full matrix on the branch failed only on `rotaris-dim` at 150 % and 175 %, both times on status-strip text and
-never on a slash role. Rebuilt with `highlight.ts` reverted, the 150 % case still failed. The same case passed on
-origin/main built in a checkout whose path is five characters longer, which shifts the elided strip item across the
-device-pixel grid.~~ *(Corrected 2026-09-30, the verifier's fix round 1. The first reading is falsified: the path's length
+none. *History: [the struck text of 2026-09-30](../../../archive/architecture/adr/0050-history.md#struck-2026-09-30).* *(Corrected 2026-09-30, the verifier's fix round 1. The first reading is falsified: the path's length
 moves nothing, and the matrix it described did not reproduce on the final tree.)* Its first run on the branch failed on
 `rotaris-dim` at 150 % and 175 %, and rebuilt with `highlight.ts` reverted the 150 % case still failed. On the final
 build, in the same checkout, the full matrix fails only `nocturne` at 150 %, and `rotaris-dim` passes at every scale.

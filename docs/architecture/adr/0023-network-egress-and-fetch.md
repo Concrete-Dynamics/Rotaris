@@ -221,8 +221,7 @@ its existing owner under REQ-SANDBOX-113.
 **Readings taken:** `error_class` for the three transport kinds, which no requirement fixes: `FetchTimeout`,
 `NetworkError`, `HttpError`. A three-line body ending in a newline has three lines (one trailing terminator is
 not a line; `\r\n` and `\n` both terminate). `final_url` on a refused hop is the URL of the hop that returned the
-redirect, with its status; on a refusal before any connection both are absent. ~~The run's own abort mid-fetch is
-`network_error` ("cancelled by the run"), never `timeout`.~~ *Replaced 2026-10-13 by
+redirect, with its status; on a refusal before any connection both are absent. *History: [the struck text of 2026-10-13](../../archive/architecture/adr/0023-history.md#struck-2026-10-13).* *Replaced 2026-10-13 by
 [`PD-TOOLS-013`](../../product/directives/pd-tools-013.md#pd-tools-013) revision 2 ([OQ-238](../../archive/architecture/open-questions/51-spikes-and-later-questions-18.md#oq-238)): the run's own
 abort mid-fetch is `interrupted`, `error_class` `InterruptedError`, "The fetch of <url> was cancelled by the run before it
 completed.", still never `timeout` (a deadline that expired first reads `timeout`), and it files no issue; `network_error`

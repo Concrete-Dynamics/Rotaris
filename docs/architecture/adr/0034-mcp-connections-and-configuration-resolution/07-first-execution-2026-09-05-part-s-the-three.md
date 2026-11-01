@@ -54,9 +54,7 @@ empty now.
   "collides with a native tool"). The reading: a colliding name is offered under the client-side prefix `<server>_`
   that `REQ-MCP-057` already anticipates (so grants and denials written against the reported name still match),
   **only on collision**, in code-point order of the servers, so the printed name and the callable name stay one
-  (`REQ-MCP-062`). `persona.ts`, `reservedNames`. ~~The recorded evidence (`granted_mcp`) is computed without the
-  native names (the persona resolver's surface at spawn), so a name a native tool shadows appears unprefixed there
-  and prefixed in the port; stated, not hidden.~~ *Corrected 2026-10-01:* that was true until then, and is no longer.
+  (`REQ-MCP-062`). `persona.ts`, `reservedNames`. *History: [the struck text of 2026-10-01](../../../archive/architecture/adr/0034-history.md#struck-2026-10-01).* *Corrected 2026-10-01:* that was true until then, and is no longer.
   The spawn records no evidence; the recorded evidence is the port's grant (`ToolPort.grant`, drawn by the run host's
   `grantEvidence`), written on the child's row once the port is ready, from the port's own surface — the one resolved
   with its native names reserved and narrowed to the tools that joined the callable map. A name a native tool shadows

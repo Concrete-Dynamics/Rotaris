@@ -2,18 +2,8 @@
 
 - **Status:** proposed
 - **Date:** 2026-09-02
-- **Revised 2026-09-02.** The trim's transaction boundary, recorded as a disagreement with ADR-0004 and
-  settled by neither, is **settled here in this record's favour** on an argument neither record had made.
-  ADR-0004 has withdrawn its sentence and preserved it as the reading it now is; this record does the same
-  from its side, in the new section under *Retention*.
-- **Revised again 2026-09-02**, against `../spikes/commit-on-the-publish-path.md`. **Consequence 2's
-  "still not measured" is discharged, and the measurement changes a reason rather than a conclusion.**
-  Per-event durability stays, and no longer stays because `REQ-EVENTS-029` forecloses batching "whatever
-  it costs" — **there is no cost to absorb**: the event insert rides the row's transaction at a marginal
-  p50 of **−4 to +31 µs**, inside the noise. A second measured result belongs to this record because the
-  history is the store's highest-volume writer: **one commit in 136 costs 9–11 ms** while the rest cost
-  179–220 µs at p50. And one thing this record must *stop* assuming is corrected under *Store lifecycle
-  and failure*: a successful open is not evidence of a working store.
+- **Revised 2026-09-02.** *History: [the revision of 2026-09-02](../../archive/architecture/adr/0009-history.md#revision-2026-09-02).*
+- **Revised again 2026-09-02**, against `../spikes/commit-on-the-publish-path.md`. *History: [the revision of 2026-09-02](../../archive/architecture/adr/0009-history.md#revision-2026-09-02-2).*
 - **Origin:** RUNTIME (constraints C4, ADR-RUNTIME-03)
 - **Authority:** `owner-decisions.md` **SR-4** and **SR-6**, read with **SR-2**; and the specification
   as amended on 2026-09-01, which rewrote `REQ-EVENTS-166` as an export obligation, made the trim and

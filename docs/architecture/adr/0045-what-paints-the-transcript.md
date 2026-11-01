@@ -4,13 +4,7 @@
   `renderer-invariance-and-benchmark-cadence` spike measured everything this record said it could not
   yet demonstrate.
 - **Date:** 2026-08-31
-- **Revised:** 2026-09-01. **Two things changed and both are of the kind worth naming.** A **ruling**
-  removed OQ-28's power to withdraw this record: ESC-13 decides that if OQ-28 resolves to the
-  framework-neutral reading then `REQ-UIBENCH-054` is relaxed and the canvas is refused outright — so
-  the answer to OQ-28 now changes a benchmark field and nothing a user can see. A **measurement**
-  converted four of this record's open risks into settled facts and confirmed one of its predictions
-  against a running window. One thing got worse: the settle signal this record owes the benchmark
-  cannot be the offscreen paint event, and that is measured too.
+- **Revised:** 2026-09-01. *History: [the revision of 2026-09-01](../../archive/architecture/adr/0045-history.md#revision-2026-09-01).*
 - **Origin:** UI (ADR-UI-03)
 - **Depends on:** ADR-0001, ADR-0043
 - **This is the tightest constraint in the interface, and the one most likely to be got wrong by

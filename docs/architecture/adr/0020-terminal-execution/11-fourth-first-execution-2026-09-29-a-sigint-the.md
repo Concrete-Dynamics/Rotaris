@@ -11,20 +11,12 @@ and the session runs on until the command ends. Measured through `BackgroundMana
 45 of 200 `sleep 30` sessions signalled the instant they started were still running 3 s later under six CPU burners.
 **Found: delivery reached every process, as decided, and did not stop the session, which R-044 rules it must.** The
 repair keeps delivery to the group and adds a check ~~on Linux, the one host whose `/bin/sh` has the window~~ *on Linux,
-where the session's shell is `dash` (corrected 2026-09-30, fix round 3; below)*. ~~At 250 ms and
-1.5 s, while the session runs, the process table (`linuxProcessTable`, `@rotaris/platform`) is read for members that
-never received the signal: alive at SIGINT's default, created within one second before it. Each is sent SIGINT once
-more, alone (`missedSigint`), and the re-delivery is logged. After it, 0 of 200 ran on, with and without the burners.
-A command that catches SIGINT is never sent a second.~~ *Falsified 2026-09-30 by the verifier, kept beside its
+where the session's shell is `dash` (corrected 2026-09-30, fix round 3; below)*. *History: [the struck text of 2026-09-30](../../../archive/architecture/adr/0020-history.md#struck-2026-09-30-2).* *Falsified 2026-09-30 by the verifier, kept beside its
 replacement: "alive at the default, created within a second before the signal" is also how a command stands whose
 one-shot handler (`process.once('SIGINT')`) restored the default as it ran, so such a command signalled the instant it
 was up was sent a second SIGINT that cut its shutdown off.* The group is now read the instant before the signal
 (`ProcessTable.tree`, a walk of the shell's descendants, so the reading does not push the signal past the window), and
-again at 250 ms and 1.5 s while the session runs. ~~A member is sent SIGINT once more, alone (`missedSigint`), only when
-the first reading found it still the shell, holding SIGINT off (the aimed reading found `dash` and its `vfork`ed child
-both `blocked`), and the later one finds it running another image at SIGINT's default. A process the first reading
-found running the command is never sent a second. With that predicate 0 of 200 ran on under six burners (twice) and
-without them; with re-delivery disabled, 8 of 200 still ran on under the burners.~~ *Falsified 2026-09-30 by the
+again at 250 ms and 1.5 s while the session runs. *History: [the struck text of 2026-09-30](../../../archive/architecture/adr/0020-history.md#struck-2026-09-30-3).* *Falsified 2026-09-30 by the
 verifier's second round, kept beside its replacement: "at SIGINT's default" and "its name changed" miss what a dev server
 or a watcher is. Node catches SIGINT as it starts (as Python and a shell do), and a shell `exec`ing a shell keeps the
 name `sh`; 27 of 150 Node sessions and 39 of 200 `sh -c 'sleep 30; echo x'` sessions still ran on under six burners,

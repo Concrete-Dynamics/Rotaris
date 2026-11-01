@@ -5,13 +5,8 @@
 - **Supersedes:** its own earlier decision that **both** locks live in one table keyed by `(kind, key)`,
   recorded under this number on 2026-08-31. `REQ-GIT-128` as amended keeps the workspace integration lock a
   **file**, deliberately. The earlier argument is preserved below as alternative **G**.
-- **Revised:** 2026-09-02, to carry **ESC-21**. `REQ-GIT-128` and `REQ-GIT-124` have since been amended and
-  they now decide what this record previously described as an unconnected hazard; the paragraph that said
-  "no requirement currently connects the two" is **withdrawn and must not be cited**.
-- **Revised again:** 2026-09-02. **Consequence 11's lock-row correction has been run, with its
-  counterfactual, and is confirmed.** The consequence now states what was measured instead of predicting
-  what would happen, and its subjunctive is retired. Nothing else in this record changes and no decision in
-  it moves.
+- **Revised:** 2026-09-02, to carry **ESC-21**. *History: [the revision of 2026-09-02](../../archive/architecture/adr/0005-history.md#revision-2026-09-02).*
+- **Revised again:** 2026-09-02. *History: [the revision of 2026-09-02](../../archive/architecture/adr/0005-history.md#revision-2026-09-02-2).*
 - **Evidence:** `../spikes/backup-restore-mechanism.md` (2026-09-02), for consequence 11. Every figure it
   contributes below is a measurement; none is estimated.
 - **Authority:** `owner-decisions.md` SR-1, SR-4, **ESC-15**, **ESC-21**; the amended `REQ-SESSION-046`,

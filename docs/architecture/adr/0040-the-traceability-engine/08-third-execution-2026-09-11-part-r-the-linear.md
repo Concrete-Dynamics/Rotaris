@@ -38,13 +38,7 @@ the assertion unfalsifiable in exactly the case it exists for — a genuinely qu
 **Found nothing else.** The engine, the parser, the sweep and the four operations are unchanged by this execution,
 and the fixture and process stages of `pnpm traceability-proof` pass as Part AJ′ left them.
 
-**Corrected 2026-10-01 (R-067): point 2 described the readings, and they were not taken that way.** The falsified
-claim was "each paired timing is therefore measured three times (`msMin`), the ratio is computed from the two
-minima". The parse and the parser took three readings of the full tree first and three of the half tree afterwards.
-The sweep's full side was **one** reading against a minimum of three. The minimum's rationale held only for readings
-taken under the same conditions, and these were not: the half side ran after the full side, on a hotter JIT, and read
-cheap. Acceptance round 1 saw the parse ratio at 3.04 and 3.16, twice in a row on an idle host, against a work ratio of
-2.14. This branch saw 3.37. The failure message also printed the half readings on both sides.
+*History: [the correction of 2026-10-01](../../../archive/architecture/adr/0040-history.md#correction-2026-10-01).*
 
 The replacement: each pair is read by `interleavedMinima` (`packages/workspace/src/traceability/growth-readings.ts` (since 2026-10-15 `growth-readings.test-support.ts`)),
 seven readings a side after one warm-up each. The sides are interleaved, and each round swaps which side goes first.
@@ -55,13 +49,7 @@ host in the verification's repair round, read the parse at 2.19 to 2.33 and the 
 18 to 23 ms, under the floor, so its ratio stays recorded and not asserted. The note is
 [`traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`](../../../defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md).
 
-**Corrected 2026-10-02 (fin5): the minimum screens out load only while some reading of each side runs uncontended.**
-The falsified reason was point 2's "load can only make a pass slower, never faster, so of repeated readings of one pass
-the **minimum** is the least contaminated estimate". It holds while some reading of each side escapes the load. On a
-host with more runnable work than CPUs none need: with eight CPU-bound loops beside the other plan's agents on four
-CPUs (load average 9.9 to 20.6), the parse ratio read 3.08 to 5.52 and the sweep's 0.34 and 3.32, and on this branch four
-runs before the repair stopped on growth four times (sweep 3.19, parse 3.1 and 3.89, parser 5.24). The minimum of a
-contended side is still contended, by an amount the other side need not share.
+*History: [the correction of 2026-10-02](../../../archive/architecture/adr/0040-history.md#correction-2026-10-02).*
 
 The replacement: each pass is read on two clocks, and the ratio is the quotient of the minima of the thread's own CPU
 time (`process.threadCpuUsage()`, user plus system), the measure of REQ-TRACE-088's reference conditions, one execution
@@ -79,12 +67,7 @@ The sweep's linear clause is therefore never asserted on this host. That is reco
 The note is
 [`traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`](../../../defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md).
 
-**Corrected 2026-10-02 (fin7): the sweep's pair has trees of its own, and its ratio is asserted.** The claim above, "the
-sweep's linear clause is therefore never asserted on this host", was too strong as written: it is not asserted at the
-reference conditions, an idle host, where the 500-file half side reads 14 to 23 ms of thread CPU. Under load the same
-side's CPU time can rise past the floor, and fin5's verifier saw the ratio asserted once, at 2.23 against a work ratio of
-2, at a load average of 11.6. Either way the proof could not fail on a sweep that grows faster than linearly while the
-host was idle.
+*History: [the correction of 2026-10-02](../../../archive/architecture/adr/0040-history.md#correction-2026-10-02-2).*
 
 The replacement: the sweep's pair is 2,000 files against 4,000 (`SWEEP_PAIR_FILES` in `traceability.proof.test.ts`),
 generated over spike 7's store with ten sites a file, and the proof requires the sweep's verdict to be asserted
@@ -97,13 +80,7 @@ thread CPU. Building and reading the pair adds 4.1 to 8.0 s to the proof (`pairM
 took no run beside added busy loops (the session's permission system refused launching them); fin7's verifier took one: four bounded `node -e 'for(;;){}'` loops beside the proof gave "sweep growth ratio 1.71 against work ratio 2", asserted, with the half side's minimum at 107 ms of thread CPU, at a load average of 7.77 on 4 CPUs, and the proof PASSED. The note is
 [`traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`](../../../defects/fixed/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md).
 
-**Corrected 2026-10-01 (R-062): the second execution's busy pair raced, and is now held in flight.** The falsified
-claim was "two concurrent checks yielded exactly one `busy` (`REQ-TRACE-512`)". The proof posted two board-path checks
-over the eleven-requirement fixture in one `Promise.all`, and a check there takes about 8 ms, so whenever the first
-finished before the service took the second off its channel both answered `ok`, a correct answer from an engine that
-refuses only while one is in flight. A scratch driver looping that pair through the built service answered both `ok` in
-2, 6 and 9 of 100 pairs beside six CPU-bound loops (0 of 100 without them, the other plan's agents alone on the host); the proof itself went red on it once
-in six at a load average of about 4. What it showed when it passed was the timing lining up, not the guard.
+*History: [the correction of 2026-10-01](../../../archive/architecture/adr/0040-history.md#correction-2026-10-01-2).*
 
 The replacement: the pair runs over the scale tree, opened as the workspace, whose check runs for hundreds of
 milliseconds (275 to 456 ms in the service when nothing cancels it). The second check is posted in the same tick as the

@@ -2,11 +2,7 @@
 
 - **Status:** proposed
 - **Date:** 2026-08-31
-- **Revised:** 2026-09-01. The one-registry decision is unchanged. Three things it did not account for
-  are now on it: **SR-4** moves the session stores this registry must count out of memory and into a
-  database, and the `ipc-hop-latency` spike establishes both **what** the relay's failure actually looks
-  like — which is not what ADR-0044 consequence 4 assumes — and that **`performance.timeOrigin` is not a
-  shared clock**, which invalidates any interval this registry assembles from two processes' stamps.
+- **Revised:** 2026-09-01. *History: [the revision of 2026-09-01](../../archive/architecture/adr/0052-history.md#revision-2026-09-01).*
 - **Origin:** UI (ADR-UI-08)
 - **Depends on:** ADR-0002, ADR-0008, ADR-0045, ADR-0046, ADR-0051, ADR-0058
 

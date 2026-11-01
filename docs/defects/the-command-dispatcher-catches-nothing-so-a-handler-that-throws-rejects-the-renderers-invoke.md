@@ -6,8 +6,11 @@
 `redact` (`packages/kernel/src/redaction.ts`) cut to 500 characters, and one `error` record in the application log carries the
 command's kind and the redacted stack, never the request. `command-dispatch.test.ts` pins it with a handler table whose kind
 throws, one whose promise rejects with a non-`Error` reason, the redaction and the bound; those three cases are red with the `try` removed (measured). The
-comment that claimed a catch is replaced where the call now lives. Not measured on the built app: no product handler is known
-to throw, and the `driver-proof` scenario for a throwing command is bundle F3's (`docs/architecture/hardening.md` §5).
+comment that claimed a catch is replaced where the call now lives. **Met on the built app without being sought:** in
+`pnpm driver-proof`'s cut launch on 2026-11-01, `session.subscribe`, `workspace.usage` and `session.list` each let the run
+host's `NoReplyWithinBound` escape their handler, and each was answered `command.failed` with one `error` record — the shape
+this note describes, now caught ([the note on those handlers](commands-that-await-the-run-host-bare-answer-a-missed-bound-only-through-the-dispatchers-catch.md)).
+A scenario that makes a command throw on purpose is bundle F3's (`docs/architecture/hardening.md` §5).
 **Not yet moved to `fixed/`:** R-091's row in `docs/product/requests.md` links this path, the link gate reads that file, and
 its rows are the orchestrator's to edit; the move is one `git mv` with that link, `hardening.md` §3.1's and the views'
 reconciliation-log entry's repointed.

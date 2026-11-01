@@ -3,7 +3,7 @@
 Many command handlers under `apps/desktop/src/main/commands/` await `runHost.request(…, millis(5_000))` with no `.catch`,
 and `ProcessLink` rejects that promise with `NoReplyWithinBound` when the run host does not answer within the bound. Until
 2026-11-01 such a rejection left `runCommand` and rejected the renderer's `invoke`
-([the dispatcher note](the-command-dispatcher-catches-nothing-so-a-handler-that-throws-rejects-the-renderers-invoke.md)); since
+([the dispatcher note](../archive/defects/the-command-dispatcher-catches-nothing-so-a-handler-that-throws-rejects-the-renderers-invoke.md)); since
 R-091's bundle A1 the dispatcher answers it `command.failed` with the headline "The command failed" and the bound's message as
 its detail. That is a value, but not the handler's own refusal: `session.start` answers the same condition
 `run-host.unreachable`, "The run host did not answer", and the others say nothing about the run host at all.

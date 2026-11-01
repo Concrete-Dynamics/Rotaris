@@ -5,7 +5,7 @@
  * **Nothing throws out of here** (`.claude/rules/contracts-and-ipc.md`). Until 2026-11-01 the handler's call was awaited bare
  * while the comment beside it said a throw "is caught below", and nothing below caught it: a handler that threw rejected the
  * renderer's `invoke` with Electron's wrapped error text in place of an outcome
- * (`docs/defects/the-command-dispatcher-catches-nothing-so-a-handler-that-throws-rejects-the-renderers-invoke.md`). A
+ * (`docs/archive/defects/the-command-dispatcher-catches-nothing-so-a-handler-that-throws-rejects-the-renderers-invoke.md`). A
  * throw is now `command.failed`, its detail the error's message through the one redaction pass (REQ-TOOLS-171) cut to
  * `COMMAND_FAILED_DETAIL_MAX` characters, and one `error` record in the application log carries the command's kind and the
  * stack, through the same pass — never the request, whose payload may carry a prompt, a path or a key (PD-MONITOR-002).

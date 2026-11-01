@@ -5,7 +5,7 @@ verified. An entry that turns out wrong is corrected by a new entry, never edite
 
 ## 2026-11-01 — the Windows host after the repository's rename, and its broken pnpm shim
 
-**Prompted by** the hardening orchestration's first render on the owner's Windows machine (R-090, 2026-11-01): `git remote -v`
+**Prompted by** the hardening orchestration's first render on the owner's Windows machine (R-091, 2026-11-01): `git remote -v`
 reads `https://github.com/Concrete-Dynamics/Rotaris/` and `git worktree list` puts the checkout at `C:/dev/Rotaris` with
 its worktrees at `C:/dev/Rotaris-wt-*`, while `references/environment.md` ("A Windows host") told agents to render with
 `--repo C:/dev/Rotaris-crw` and never to list, open or search `C:/dev/Rotaris` as a possibly sealed sibling: a statement
@@ -19,7 +19,7 @@ profile's no-op `shellPrefix` would have been red for the host and not the produ
 becomes "the checkout is `C:/dev/Rotaris` since 2026-10-21", with the former warning kept in italics and the sealed
 material's real place named from AGENTS.md; the allow-rule bullet names the new path and records that the owner approved
 that one rule on 2026-11-01 (the rule is line 4 of the checkout's git-ignored `.claude/settings.local.json`, and the
-approval is in `docs/product/requests.md` R-090's row and `docs/architecture/hardening.md` §4); a new bullet records the broken shim and the remedy, a copy of the Windows profile outside
+approval is in `docs/product/requests.md` R-091's row and `docs/architecture/hardening.md` §4); a new bullet records the broken shim and the remedy, a copy of the Windows profile outside
 the skill whose `shellPrefix` puts the working pnpm first, since a host path belongs in no committed profile. No script
 changed, so no self-test assertion is added. **Verified** by reading the two commands above on the host and by
 `node .agents/skills/orchestrated-build/scripts/orchestration.mjs self-test` and `pnpm check` on the branch; reviewed by

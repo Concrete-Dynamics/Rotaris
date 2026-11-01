@@ -36,9 +36,10 @@ type Opened = Extract<ProcessReply, { kind: 'workspace.opened' }>;
 /**
  * The refusals that are a lasting condition of the store's place, as against a restore merely under way
  * (`workspace.restore-in-flight`, which the restore's own end resolves): a place holding no store (REQ-SESSION-202, W-31) and
- * a cut restore whose store could not be put back (OQ-266).
+ * a cut restore whose store could not be put back (OQ-266); and, since hardening C1, a store that fails SQLite's `quick_check`
+ * (`workspace.store-corrupt`, REQ-SESSION-089), whose notice carries no action until OQ-477 says how it is resolved.
  */
-export const STORE_REFUSALS: ReadonlySet<string> = new Set(['workspace.store-missing', 'workspace.store-displaced']);
+export const STORE_REFUSALS: ReadonlySet<string> = new Set(['workspace.store-missing', 'workspace.store-displaced', 'workspace.store-corrupt']);
 
 /** REQ-SESSION-202 / W-31: the refusal to hold and raise, in the workspace service's own words; `undefined` for any other answer. */
 export function storeRefusalOf(reply: ProcessReply): StoreRefusal | undefined {

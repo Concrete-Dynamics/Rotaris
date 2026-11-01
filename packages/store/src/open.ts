@@ -23,14 +23,79 @@ export interface OpenOptions {
   readonly readonly?: boolean;
   readonly mustExist?: boolean;
   readonly busyTimeoutMs?: number;
+  /**
+   * ADR-0058's detection paragraph (hardening C1, REQ-SESSION-089): ask SQLite whether the file is sound — `PRAGMA
+   * quick_check`, after the write-ahead log is read back and before anything writes — and refuse a store that is not as
+   * `StoreCorruptError`. The WORKSPACE SERVICE's open alone passes it (`openWorkspaceStore`): it is the one opener that
+   * migrates (W-02), and a migration over a damaged file makes it worse. The run host's open never does, so its hot path
+   * pays nothing; the restore keeps its own check of its staging copy, and the backup's assessment its own of the backup.
+   */
+  readonly checkIntegrity?: boolean;
 }
 
 const openSpellings = new Map<string, string>();
 
 export class StoreOpenError extends Error {
-  constructor(readonly code: 'wal-not-enabled' | 'write-probe-failed' | 'spelling-mismatch' | 'open-failed', message: string, cause?: unknown) {
+  constructor(readonly code: 'wal-not-enabled' | 'write-probe-failed' | 'spelling-mismatch' | 'open-failed' | 'corrupt', message: string, cause?: unknown) {
     super(message, cause === undefined ? undefined : { cause });
     this.name = 'StoreOpenError';
+  }
+}
+
+/** How many lines of SQLite's own report a corrupt store's refusal carries: `quick_check(N)` stops after N problems. */
+export const QUICK_CHECK_REPORT_LINES = 5;
+
+/**
+ * Hardening C1 (REQ-SESSION-089, ADR-0058's corruption domain): the store failed SQLite's `quick_check`, or the engine
+ * called it damaged (`SQLITE_CORRUPT`, `SQLITE_NOTADB`) before the check could answer. `report` is the engine's own words,
+ * at most `QUICK_CHECK_REPORT_LINES` of them, unaltered. The store was closed without touching its write-ahead log, which
+ * holds committed transactions: nothing was migrated, probed or written.
+ */
+export class StoreCorruptError extends StoreOpenError {
+  constructor(readonly file: string, readonly report: readonly string[], cause?: unknown) {
+    super('corrupt', `the session store at ${file} fails SQLite's integrity check: ${report.join('; ')}`, cause);
+    this.name = 'StoreCorruptError';
+  }
+}
+
+/** The engine's own word for a damaged file, on whichever statement first meets it. */
+function damaged(e: unknown): boolean {
+  const code = (e as { code?: unknown } | null)?.code;
+  return typeof code === 'string' && (code.startsWith('SQLITE_CORRUPT') || code === 'SQLITE_NOTADB');
+}
+
+/** `null` where SQLite answers the single row `ok`; otherwise its report, at most `QUICK_CHECK_REPORT_LINES` lines. */
+function quickCheck(db: Database.Database): readonly string[] | null {
+  const rows = db.pragma(`quick_check(${QUICK_CHECK_REPORT_LINES})`) as { quick_check: unknown }[];
+  const lines = rows.map((r) => String(r.quick_check));
+  return lines.length === 1 && lines[0] === 'ok' ? null : lines.slice(0, QUICK_CHECK_REPORT_LINES);
+}
+
+/**
+ * Close a connection to a store refused as corrupt WITHOUT touching its write-ahead log. The last connection to a WAL
+ * database checkpoints the log into the file and deletes it on close — over a damaged file that writes into it, and it
+ * removes the one copy of the committed transactions the log holds (SQLite's guidance: never delete the log to make an
+ * open succeed). A close skips both while another connection still holds the database, and a read-only connection never
+ * checkpoints; so where the open found a log, a read-only holder takes a read first, this connection closes beside it,
+ * and the holder closes last. The log is left byte for byte, and the `-shm` index beside it, which the next open rebuilds
+ * (measured 2026-11-01, `open.test.ts`). A holder that cannot read is let go, and the close is the ordinary one: its
+ * read is of the header, which every open of the store already read to set the journal mode.
+ */
+function closeKeepingLog(db: Database.Database, file: string, logFound: boolean): void {
+  let holder: Database.Database | null = null;
+  if (logFound) {
+    try {
+      holder = new Database(file, { readonly: true, fileMustExist: true });
+      holder.pragma('user_version', { simple: true });
+    } catch {
+      try { holder?.close(); } catch { /* the ordinary close below */ }
+      holder = null;
+    }
+  }
+  try {
+    db.close();
+  } finally {
+    holder?.close();
   }
 }
 
@@ -43,6 +108,9 @@ export function openStore(file: string, opts: OpenOptions = {}): StoreHandle {
   if (prior !== undefined && prior !== canonicalDir) {
     throw new StoreOpenError('spelling-mismatch', `store at ${canonicalDir} is already open as ${prior}; one canonical spelling only (ADR-0058 rule 6)`);
   }
+  // Whether a write-ahead log was there before this open: the open creates one where none was, and only a log it found
+  // can hold transactions a refusal must leave in place (`closeKeepingLog`).
+  const logFound = !!opts.checkIntegrity && existsSync(`${canonicalFile}-wal`);
   let db: Database.Database;
   try {
     db = new Database(canonicalFile, { readonly: !!opts.readonly, fileMustExist: !!opts.mustExist });
@@ -50,11 +118,35 @@ export function openStore(file: string, opts: OpenOptions = {}): StoreHandle {
     throw new StoreOpenError('open-failed', `could not open ${file}: ${String(e)}`, e);
   }
   if (opts.readonly) return db;
-  const set = (db.pragma('journal_mode = WAL') as { journal_mode: string }[])[0]?.journal_mode;
-  const back = db.pragma('journal_mode', { simple: true });
+  let set: string | undefined;
+  let back: unknown;
+  try {
+    set = (db.pragma('journal_mode = WAL') as { journal_mode: string }[])[0]?.journal_mode;
+    back = db.pragma('journal_mode', { simple: true });
+  } catch (e) {
+    // A file the engine calls damaged before the check can run is the check's answer — on the checked open only; the
+    // run host's open throws what it always threw.
+    if (!opts.checkIntegrity || !damaged(e)) throw e;
+    closeKeepingLog(db, canonicalFile, logFound);
+    throw new StoreCorruptError(canonicalFile, [(e as Error).message], e);
+  }
   if (set !== 'wal' || back !== 'wal') {
     db.close();
-    throw new StoreOpenError('wal-not-enabled', `write-ahead logging not enabled: set=${set} readback=${back}`);
+    throw new StoreOpenError('wal-not-enabled', `write-ahead logging not enabled: set=${set} readback=${String(back)}`);
+  }
+  if (opts.checkIntegrity) {
+    // Hardening C1: after the mode is read back, before any pragma that writes, the write probe, or a migration.
+    let report: readonly string[] | null;
+    try {
+      report = quickCheck(db);
+    } catch (e) {
+      if (!damaged(e)) { db.close(); throw new StoreOpenError('open-failed', `the integrity check could not run on ${file}: ${String(e)}`, e); }
+      report = [(e as Error).message];
+    }
+    if (report !== null) {
+      closeKeepingLog(db, canonicalFile, logFound);
+      throw new StoreCorruptError(canonicalFile, report);
+    }
   }
   db.pragma('synchronous = NORMAL');
   db.pragma(`busy_timeout = ${opts.busyTimeoutMs ?? 5000}`);

@@ -125,7 +125,8 @@ without the starter: REQ-CONFIG-025/028, `workspace-service/open-bootstrap.ts`, 
 cut between its renames, OQ-266 (`staging` `null` when the prepared copy is not there at the open), which main raises as one
 info notice, and the open is **refused** — `workspace.store-missing`
 for a place holding no store (REQ-SESSION-202, W-31), `workspace.store-displaced` for a cut restore whose store could not be
-put back, `workspace.restore-in-flight` while the service's own restore runs — each creating nothing, the first two raised by
+put back, `workspace.store-corrupt` for a store that fails `quick_check` before the migration (hardening C1, REQ-SESSION-089;
+its write-ahead log left as found), `workspace.restore-in-flight` while the service's own restore runs — each creating nothing, the first three raised by
 main as an error notice and answered by `session.list` as the same refusal, `workspace-service/store-open.ts`; since
 2026-10-14, OQ-281, the `store-missing` notice carries `open-settings`/`project` and is withdrawn by the next open that
 succeeds, and while it is held `workspace.restore.assess/perform` are admitted for that window — no `runs.active` asked, no

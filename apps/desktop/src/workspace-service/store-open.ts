@@ -1,6 +1,6 @@
 import type { ProcessReply } from '@rotaris/contracts';
 import type { WorkspaceId } from '@rotaris/kernel';
-import { CutRestoreError, openWorkspaceStore, RestorePendingError, StorePlaceEmptyError, type ResolvedStore } from '@rotaris/store';
+import { CutRestoreError, openWorkspaceStore, RestorePendingError, StoreCorruptError, StorePlaceEmptyError, type ResolvedStore } from '@rotaris/store';
 
 type Refusal = Extract<ProcessReply, { kind: 'refused' }>;
 
@@ -13,6 +13,8 @@ type Refusal = Extract<ProcessReply, { kind: 'refused' }>;
  * - REQ-SESSION-202 / W-31: a place that exists and holds no store is refused as a store that could not be opened, saying
  *   what was found; no reason is invented for it (W-31 (2)). OQ-281 (ruled 2026-10-14 under R-072): the detail ends with
  *   where it is resolved — a restore or a deliberate new store in Settings › Project, or the store put back by hand.
+ * - Hardening C1, REQ-SESSION-089: a store that fails SQLite's `quick_check` is refused before it is migrated, held and raised
+ *   as a store that could not be opened (`workspace.store-corrupt`, `corruptRefusal`).
  */
 export function openStoreAtOpen(workspacesRoot: string, id: WorkspaceId, workspaceRoot: string, restoreInFlight: boolean): { readonly ok: true; readonly store: ResolvedStore } | { readonly ok: false; readonly refusal: Refusal } {
   try {
@@ -27,8 +29,22 @@ export function openStoreAtOpen(workspacesRoot: string, id: WorkspaceId, workspa
     if (e instanceof RestorePendingError) {
       return { ok: false, refusal: { kind: 'refused', code: 'workspace.restore-in-flight', headline: 'A restore of this workspace is under way', detail: `${e.message[0]!.toUpperCase()}${e.message.slice(1)}.` } };
     }
+    if (e instanceof StoreCorruptError) return { ok: false, refusal: corruptRefusal(e) };
     throw e;
   }
+}
+
+/**
+ * Hardening C1, REQ-SESSION-089: which store could not be opened and the reason the store itself gave — SQLite's own report,
+ * unaltered (ADR-0058's recovery ladder, step 1) — that it was left as it was found, and that no session starts. Main holds
+ * it and raises it like the other store refusals (`STORE_REFUSALS`, `main/store-notice.ts`). The notice names no way on yet:
+ * how the restore, or the ladder's salvage and move-aside, reach a store refused this way is OQ-477's.
+ */
+export function corruptRefusal(e: StoreCorruptError): Refusal {
+  return {
+    kind: 'refused', code: 'workspace.store-corrupt', headline: 'The session store for this workspace failed its integrity check',
+    detail: `The session store at ${e.file} fails SQLite's integrity check: ${e.report.join('; ')}. It was left exactly as it was found, its write-ahead log included: nothing was migrated or written, and no session in this workspace can start until it is resolved.`,
+  };
 }
 
 /** OQ-266: whether this service's own restore is running, so an open in the meantime leaves the journal to it. */

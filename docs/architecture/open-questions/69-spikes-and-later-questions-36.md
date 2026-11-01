@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (36 of 36)
 
-Part 69 of 69 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-468; OQ-460 – OQ-467 archived in [the archive](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md).
+Part 69 of 69 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-468, OQ-477, OQ-491; OQ-460 – OQ-467 archived in [the archive](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md).
 
 - OQ-460 — May clause (4)'s second hand-over wait an interval of its own?; ruled 2026-11-01; [archived](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-460)
 - OQ-461 — What does a launch end as when the holder is live and never answers?; ruled 2026-11-01; [archived](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-461)
@@ -20,6 +20,16 @@ Part 69 of 69 of the [open-questions record](../open-questions.md), which indexe
 **What the build proceeds under.** The sentences stay as the requirements state them; a change to those strings needs a directive, which OQ-464's ruling did not mint. The hardening plan hardens the fence (bundle `fence-hardening`) and adds OQ-464's invariant test, and changes no user-facing wording.
 
 **What decides it.** A ruling on whether the wording is narrowed where confinement is inactive (a directive over the three requirements, stating the terminal's and MCP's boundary as it is), or left as the target's own words with the gap recorded in `docs/architecture/hardening.md`.
+
+<a id="oq-477"></a>
+
+**OQ-477 — How is a store refused as corrupt resolved?** *(REQ-SESSION-089, REQ-SESSION-201, REQ-SESSION-202, ADR-0058's recovery ladder, OQ-281. Raised 2026-11-01 by hardening C1, which built the refusal.)*
+
+**What is open.** The workspace service's open now runs `PRAGMA quick_check` before it migrates, and a store that fails it is refused as `workspace.store-corrupt`, naming the store and SQLite's report, held by main beside the other store refusals (`main/store-notice.ts`). Nothing resolves it. ADR-0058's ladder (salvage into a fresh store, the exports of what it recovered, moving the damaged store aside and starting an empty one, and naming the restore as a remedy the user may take) is unbuilt. REQ-SESSION-201's restore is refused for a window with no workspace identifier unless the held refusal is `workspace.store-missing` (`main/store-resolution.ts`, `placeOf`), and Settings › Project disables it the same way. Admitting it here leaves open what the assessment says about a target it cannot read: its sessions and its lock rows may sit on the damaged pages, and REQ-SESSION-201's first dialog states how many sessions the replaced store holds. It also leaves open whether the inspection may open the target read-write, whose close checkpoints the log the refusal kept. Whether the notice should carry an action, and which, follows from that.
+
+**What the build proceeds under.** The refusal is held and raised as an error notice with no action. Its detail says the store was left as it was found, its write-ahead log included, and that no session starts until it is resolved. It names no remedy the product cannot perform. The person resolves it by hand. A copy may be taken and repaired outside the product; and once the store is moved out of its place by hand, the place reads as REQ-SESSION-202's empty place, where Settings › Project admits the restore and the new store (OQ-281).
+
+**What decides it.** A ruling on which of the ladder's steps, and whether the restore, are offered while the refusal is held; what the restore's assessment reports for a target that fails the check; and the notice's action.
 
 <a id="oq-491"></a>
 

@@ -22,6 +22,8 @@ Last reconciled with the code: **2026-11-02**
 
 Last reconciled with the code: **2026-11-01**
 
+**The workspace service's open checks the store before migrating it, and refuses a damaged one (hardening C1, REQ-SESSION-089; 2026-11-01, `../hardening.md` §3.3 row 1).** `03-runtime-view/13-7-the-store-the-run-writes.md`'s store-open paragraph gains the check (`checkIntegrity`, `quick_check(5)` after the journal mode is read back), the `workspace.store-corrupt` refusal, the close that leaves the write-ahead log as found, and `foreign_key_check` after a migrating open. `02-process-view/05-message-families-4.md` and `04-seams/06-6-a-notice-or-an-acknowledgement.md` name the new refusal beside `store-missing` and `store-displaced`, held by main and raised with no action (OQ-477). `05-state-ownership.md`'s W-02 rule says the service is the one that checks and refuses. No package, edge, process, channel, command or store column changed, and no fact changed owner.
+
 **`pnpm test:coverage` measures coverage against a floor that only rises (R-091, hardening F1; 2026-11-01).**
 `01-component-view/03-where-the-responsibilities-sit.md`'s development-time paragraph names the new script among those
 that record themselves (`other:test-coverage`). No package, edge, process, channel or seam changed: the script is a

@@ -124,6 +124,9 @@ function openOwn(workspaceRoot: string): ProcessReply {
   open = opened.store;
   const v = open.db.pragma('user_version', { simple: true }) as number;
   const cut = open.cutRestore;
+  // Hardening C1: rows naming a missing parent after this open's migration; said, never refused (`foreignKeyViolations`).
+  const fk = open.foreignKeyViolations;
+  if (fk) log(`open of ${ident.id}: after migrating, foreign_key_check found ${fk.count} row(s) naming a missing parent: ${fk.first.map((r) => `${r.table} rowid ${r.rowid ?? '-'} → ${r.parent}`).join('; ')}`, 'warn');
   if (cut) log(`open of ${ident.id}: a restore begun at ${cut.stamp} did not finish; ${cut.reversed ? `the store it displaced was put back from ${cut.reversed}` : 'there was no store here before it'}; ${cut.staging === null ? 'the prepared copy is no longer there' : `the prepared copy is kept at ${cut.staging}`} (OQ-266)`, 'warn');
   return { kind: 'workspace.opened', workspaceId: ident.id, storeFile: open.file, schemaVersion: v, ...(cut ? { cutRestore: { ...cut } } : {}) };
 }

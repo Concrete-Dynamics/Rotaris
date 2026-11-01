@@ -26,4 +26,7 @@ list.
 **Or the store open proves slow enough to matter after the show.** It is off the critical path by
 construction, so it cannot delay first paint — but the post-show pipeline is also where the window becomes
 useful, and a `quick_check` on a large store is bounded rather than fast. Nothing measures it today. If it
-does compete, the ordering above is what changes, not the placement.
+does compete, the ordering above is what changes, not the placement. *(2026-11-01, hardening C1: the check now runs at
+every workspace-service open, and was measured on its first execution at about 5 ms per MB under load — 894 ms at 186 MB
+— [ADR-0058](../0058-the-workspace-database/11-corruption-domain-and-recovery-for-a-store.md), the note under "Detection,
+and its limit". Nothing here was found to compete with it yet; no launch was timed with it.)*

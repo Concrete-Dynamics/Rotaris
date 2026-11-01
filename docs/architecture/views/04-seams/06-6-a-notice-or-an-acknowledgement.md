@@ -26,7 +26,8 @@ Invariants:
   control disabled with that text as its description. There is no disabled action without a reason.
 - **A notice about a workspace's store is main's, raised from the open's answer** (`openWorkspaceInner`, since 2026-10-14):
   `workspace.opened`'s `cutRestore` becomes one info notice (OQ-266), and a refused store (`workspace.store-missing`,
-  `workspace.store-displaced`) an error notice whose headline and detail are the workspace service's own words, held for the
+  `workspace.store-displaced`, and since 2026-11-01 `workspace.store-corrupt`, hardening C1, with no action until OQ-477) an
+  error notice whose headline and detail are the workspace service's own words, held for the
   listing to answer with (REQ-SESSION-202). An identifier that cannot be read (`workspace.identifier-unreadable`, its
   words in `workspace-service/identifier-refusal.ts`, which examines the path where the read produced nothing, so a file
   not permitted, an empty one, a folder in its place and a folder that cannot be entered each say only what was found), and a workspace path or `.rotaris` that is a file

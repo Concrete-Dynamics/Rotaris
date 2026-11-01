@@ -55,6 +55,30 @@ O(store) check belongs in. Store opening runs in the workspace service after the
 `REQ-STARTUP-043`'s post-show activation, so it delays neither first paint nor the moment the interface
 accepts input.
 
+*First execution, 2026-11-01 (hardening C1, [`hardening.md`](../../hardening.md) §3.3; REQ-SESSION-089).* **Until this
+day nothing ran the check this paragraph decided**: the open read the journal mode back, set `synchronous` and
+`foreign_keys` and ran the probe, and a damaged store surfaced as whatever its first statement threw. Built in
+`packages/store/src/open.ts` (`checkIntegrity`, `StoreCorruptError`) and asked for by `openWorkspaceStore` alone; the run
+host's open asks nothing. Three things differ from the paragraph, each kept beside it here rather than repaired in it:
+- **It runs at every workspace-service open, not only after an unclean shutdown**, because it guards the migration as much
+  as the shutdown: it sits after the journal mode is read back and before anything writes (the pragmas, the probe,
+  `migrateStore`), and SQLite's own guidance is to check before migrating. The open is post-show (above), so the cost lands
+  on the workspace open, not on first paint: on this day's Windows 11 ARM64 host, at 100 % CPU from other sessions' trees,
+  the checked open took a median of 51 ms at 9.6 MB, 598 ms at 93 MB and 894 ms at 186 MB, against 5 to 10 ms unchecked
+  (five opens each) — about 5 ms per MB, where the open-path spike measured 2.8 ms per MB unloaded. At that rate main's
+  10 s bound on `workspace.open` is met at about 2 GB of store.
+- **What is refused, and how it is closed.** A result other than the single row `ok` — or `SQLITE_CORRUPT` or
+  `SQLITE_NOTADB` thrown before the check could answer, which a page damaged whole produces — is `StoreOpenError('corrupt')`
+  with at most five lines of SQLite's report (`quick_check(5)`), unaltered (recovery step 1). The connection is closed with
+  a read-only holder open beside it where a write-ahead log was found, because the last connection's ordinary close
+  checkpoints the log into the damaged file and deletes it: measured in `open.test.ts`, the log is left byte for byte and
+  the file unwritten, and the counterfactual close removes the log and changes the file.
+- **The service raises it as REQ-SESSION-089's refusal**, `workspace.store-corrupt` naming the store and the report,
+  held by main for the listing beside the other store refusals. Steps 2 to 5 of the ladder below are not built, and the
+  restore is not admitted for a window whose open holds this refusal: [OQ-477](../../open-questions/69-spikes-and-later-questions-36.md#oq-477).
+  `PRAGMA foreign_key_check`, which `quick_check` does not cover, runs after an open that migrated, and what it finds is
+  logged, not refused.
+
 **Recovery, in order, and it never destroys anything.** On a store that will not open or fails
 `quick_check`:
 

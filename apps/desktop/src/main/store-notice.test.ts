@@ -49,6 +49,15 @@ describe('a store the open refused (REQ-SESSION-202, W-31, OQ-266)', () => {
     expect(storeRefusalNotice(storeRefusalOf(refused('workspace.store-displaced', 'x'))!).action).toBeUndefined();
   });
 
+  it('hardening C1: a store that fails its integrity check is held and raised as an error in the service\'s words, with no action until OQ-477', () => {
+    const held = storeRefusalOf(refused('workspace.store-corrupt', 'the store and its report'));
+    expect(held).toEqual({ code: 'workspace.store-corrupt', headline: 'headline of workspace.store-corrupt', detail: 'the store and its report' });
+    expect(storeRefusalNotice(held!)).toEqual({ severity: 'error', headline: 'headline of workspace.store-corrupt', detail: 'the store and its report' });
+    // The window's workspace-scoped refusals then state it, never "Open a workspace first" (REQ-SESSION-089).
+    expect(answerUnderHeldRefusal({ ok: false, code: 'workspace.none', headline: 'Open a workspace first' }, { workspaceId: undefined }, held))
+      .toEqual({ ok: false, code: 'workspace.store-corrupt', headline: 'headline of workspace.store-corrupt', detail: 'the store and its report' });
+  });
+
   it('a restore under way, any other refusal and an open that succeeded hold nothing', () => {
     expect(storeRefusalOf(refused('workspace.restore-in-flight', 'x'))).toBeUndefined();
     expect(storeRefusalOf(refused('workspace.identifier-unreadable'))).toBeUndefined();

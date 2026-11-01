@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { mintWorkspaceId, parseWorkspaceId, type WorkspaceId } from '@rotaris/kernel';
 import { exclusiveCreate, guardedRead, WORKSPACE_ID_FILE, WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
 import { firstStoreSibling, legacyFirstStoreSibling, ORIGIN_FILE, restoreJournal, STORE_FILE, storeDir, storeFile } from './layout.js';
-import { migrateStore, type MigrateOutcome } from './migrate.js';
+import { foreignKeyViolations, migrateStore, type ForeignKeyReport, type MigrateOutcome } from './migrate.js';
 import { forgetSpelling, openStore, type StoreHandle } from './open.js';
 import { recoverCutRestore, type CutRestore } from './recover.js';
 
@@ -81,6 +81,8 @@ export interface ResolvedStore {
   readonly migration: MigrateOutcome;
   /** OQ-266: a restore cut between its renames, reversed by this open before anything was created; main says so once. */
   readonly cutRestore?: CutRestore;
+  /** Hardening C1: rows naming a missing parent, found by `PRAGMA foreign_key_check` after this open migrated the store; logged, never refused. */
+  readonly foreignKeyViolations?: ForeignKeyReport;
 }
 
 /**
@@ -183,7 +185,9 @@ function installFirstStore(workspacesRoot: string, id: WorkspaceId, workspaceRoo
  *  2. REQ-SESSION-202 / W-31 — a place that exists and holds no `workspace.db` is refused (`StorePlaceEmptyError`), never
  *     opened by a call that creates: an empty store there would answer every later check perfectly;
  *  3. where the place is absent, the store is made whole in a sibling and renamed into place (OQ-281, `installFirstStore`),
- *     and the open that follows is the ordinary one, `mustExist`, over what is then there.
+ *     and the open that follows is the ordinary one, `mustExist`, over what is then there;
+ *  4. hardening C1 — that open asks SQLite whether the file is sound before it is migrated (`checkIntegrity`), and a store
+ *     that is not is refused (`StoreCorruptError`) with its write-ahead log left as it was found.
  */
 export function openWorkspaceStore(workspacesRoot: string, id: WorkspaceId, workspaceRoot: string, opts: OpenWorkspaceStoreOptions = {}): ResolvedStore {
   const dir = storeDir(workspacesRoot, id);
@@ -199,11 +203,15 @@ export function openWorkspaceStore(workspacesRoot: string, id: WorkspaceId, work
   const created = existsSync(dir) ? null : installFirstStore(workspacesRoot, id, workspaceRoot, opts);
   // Present now in every case — installed by this open, or found (before it, or appearing meanwhile): opened, never created.
   if (!existsSync(file)) throw new StorePlaceEmptyError(dir, file);
-  const db = openStore(file, { mustExist: true });
+  // Hardening C1 (REQ-SESSION-089, ADR-0058's detection): `quick_check` before the migration; a store that fails it is
+  // refused as `StoreCorruptError`, closed with its write-ahead log as found, and nothing below runs.
+  const db = openStore(file, { mustExist: true, checkIntegrity: true });
   const opened = migrateStore(db);
   const migration = created !== null && opened.kind === 'unchanged' ? created : opened;
+  // Hardening C1: `quick_check` does not look at foreign keys, and a migration is what rebuilds tables; reported, not refused.
+  const fk = opened.kind === 'migrated' ? foreignKeyViolations(db) : null;
   // origin.txt: the reclamation surface's only way to say which project a store belongs to (OQ-48).
   const origin = join(dir, ORIGIN_FILE);
   if (!existsSync(origin)) writeFileSync(origin, `${workspaceRoot}\n`);
-  return { id, dir, file, db, migration, ...(cutRestore ? { cutRestore } : {}) };
+  return { id, dir, file, db, migration, ...(cutRestore ? { cutRestore } : {}), ...(fk !== null && fk.count > 0 ? { foreignKeyViolations: fk } : {}) };
 }

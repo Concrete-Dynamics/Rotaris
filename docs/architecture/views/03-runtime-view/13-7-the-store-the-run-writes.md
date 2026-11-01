@@ -22,6 +22,11 @@ place gets a store created (REQ-SESSION-043) — since 2026-10-14 (OQ-281) made 
 first; `.<identifier>.new` until 2026-10-15, which the next open still removes) (created, migrated, closed, `origin.txt` written), renamed into `<identifier>` with a bounded retry on
 `EPERM`/`EBUSY`, and then opened `mustExist` like any present store; a place that appeared meanwhile discards the sibling and is
 opened (or refused) as found, a failed create removes it, and a stray one is removed at the identifier's next open, however the place is found.
+That open, every time, asks SQLite whether the file is sound before anything writes or migrates (`checkIntegrity`, `PRAGMA quick_check(5)`
+after the journal mode is read back; hardening C1): a store that fails is refused as `workspace.store-corrupt`, naming the store and
+SQLite's report (REQ-SESSION-089), and closed beside a read-only holder so that its write-ahead log is left as found; main holds it
+like the other store refusals, its notice with no action (OQ-477). An open that migrated runs `foreign_key_check` and logs
+what it finds. The run host's open asks nothing.
 Every scan of the workspaces root skips dot-prefixed entries. While the service's own restore is in flight its opens skip the
 first check and refuse rather than create beside the journal. A workspace path or `.rotaris` that is a file is refused first
 (`workspace.not-a-folder`), then an identifier that cannot be read or reached (`workspace.identifier-unreadable`, REQ-SESSION-197),

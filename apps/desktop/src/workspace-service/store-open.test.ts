@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, rmSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mintWorkspaceId } from '@rotaris/kernel';
@@ -78,5 +78,27 @@ describe('the workspace service\'s open of a store (OQ-266, REQ-SESSION-202)', (
     }
     expect(existsSync(restoreJournal(root, id))).toBe(true);
     expect(existsSync(storeDir(root, id))).toBe(false);
+  });
+
+  it('hardening C1, REQ-SESSION-089: a store that fails its integrity check is refused, naming the store and SQLite\'s own report', () => {
+    const seeded = openWorkspaceStore(root, id, '/work/a');
+    const dal = new StoreDal(seeded.db);
+    for (let n = 0; n < 400; n++) dal.upsertSession({ session_id: `S-${n}`, execution_status: 'completed', workspace_root: '/work/a', created_at: 't', updated_at: 't' });
+    const rootPage = (seeded.db.prepare("SELECT rootpage FROM sqlite_master WHERE name = 'sessions'").get() as { rootpage: number }).rootpage;
+    const pageSize = seeded.db.pragma('page_size', { simple: true }) as number;
+    seeded.db.close();
+    forgetSpelling(seeded.dir);
+    // The `sessions` table's root page, past the header, with its page header overwritten.
+    const fd = openSync(seeded.file, 'r+');
+    try { writeSync(fd, Buffer.alloc(12, 0xa5), 0, 12, (rootPage - 1) * pageSize); } finally { closeSync(fd); }
+    const r = openStoreAtOpen(root, id, '/work/a', false);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.refusal).toMatchObject({ kind: 'refused', code: 'workspace.store-corrupt', headline: 'The session store for this workspace failed its integrity check' });
+    expect(r.refusal.detail).toContain(`The session store at ${seeded.file} fails SQLite's integrity check: `);
+    expect(r.refusal.detail).toMatch(/It was left exactly as it was found, its write-ahead log included: nothing was migrated or written, and no session in this workspace can start until it is resolved\.$/);
+    // Nothing was created over it, and the same open refuses again.
+    expect(readdirSync(storeDir(root, id)).filter((n) => n === 'workspace.db')).toEqual(['workspace.db']);
+    expect(openStoreAtOpen(root, id, '/work/a', false).ok).toBe(false);
   });
 });

@@ -92,7 +92,7 @@ credentials     → main, and main alone
 
 - **Main never opens the workspace store and never writes a session** (W-01). It is the window, dialog,
   notice, preference, theme and credential process, and nothing else durable.
-- **Only the workspace service migrates the store** (W-02), and only it spawns Git. The run host asks main,
+- **Only the workspace service migrates the store** (W-02), refusing first one failing `quick_check` (C1); only it spawns Git. The run host asks main,
   which asks the service.
 - **The run host never writes a configuration file** and never reads `tokens/`. It receives leases.
 - **A renderer owns nothing durable.** It touches no file, no store and no credential, and it does not even

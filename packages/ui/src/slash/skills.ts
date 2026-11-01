@@ -1,4 +1,4 @@
-import { skillLoadedToast, type SkillRow, type SkillsState } from '@rotaris/contracts';
+import { SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERY_STALLED_CODE, SKILLS_NO_REPLY_CODE, skillLoadedToast, type SkillRow, type SkillsState } from '@rotaris/contracts';
 import type { SlashCommand, SlashContext, SlashOutcome, SlashRegistry } from './types.js';
 
 /**
@@ -159,6 +159,32 @@ export function readSkills(): Promise<SkillsState> | null {
   const p: Promise<SkillsState> = answered.finally(() => { if (skillsInFlight === p) skillsInFlight = null; });
   skillsInFlight = p;
   return p;
+}
+
+/** The one shape of a skills read's answer `askUntilDiscovered` reads: the renderer's command outcome is one. */
+export type SkillsAsked = { readonly ok: true } | { readonly ok: false; readonly code?: string | undefined };
+
+/** OQ-386 point 1: a refusal saying the catalogue is on its way, which is not an answer about the catalogue. */
+export function stillDiscovering(asked: SkillsAsked): boolean {
+  return !asked.ok && (asked.code === SKILLS_DISCOVERING_CODE || asked.code === SKILLS_DISCOVERY_STALLED_CODE || asked.code === SKILLS_NO_REPLY_CODE);
+}
+
+/**
+ * OQ-386 point 1 with REQ-CHAT-034 — a read of the catalogue that comes to hold it without anyone doing anything. A warm-up
+ * in flight refuses a read at its bound and goes on; the walk ending announces nothing, so the read is simply made again. It
+ * cannot spin: the run host holds each `skills.read` until the walk ends or the read's whole bound has passed, also on a stalled
+ * walk (`SkillHost.settled`), and main's no-reply refusal takes its whole bound, which is also why the catalogue lands the moment the walk ends rather than at a poll's next tick.
+ *
+ * Each refusal goes to `onWaiting` for the surface to name; what comes back is the first thing that is an answer. `gone` says the
+ * asker no longer wants one, and null is returned at the next answer rather than asking again.
+ */
+export async function askUntilDiscovered<A extends SkillsAsked>(ask: () => Promise<A>, onWaiting: (refused: A) => void = () => undefined, gone: () => boolean = () => false): Promise<A | null> {
+  for (;;) {
+    const asked = await ask();
+    if (gone()) return null;
+    if (!stillDiscovering(asked)) return asked;
+    onWaiting(asked);
+  }
 }
 
 /**

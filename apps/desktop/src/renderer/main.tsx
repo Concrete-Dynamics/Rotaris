@@ -12,8 +12,8 @@ import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEG
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
 // ADR-0063 — portable skills: the catalog reader, the Settings tab's props and the composer's commands.
-import { bindSkillsReader } from '@rotaris/ui';
-import { EMPTY_SKILLS_STATE, type InstructionStateName, type SkillInvocationModeName, type SkillListingOutcome, type SkillLoadModeName, type SkillsState } from '@rotaris/contracts';
+import { askUntilDiscovered, bindSkillsReader } from '@rotaris/ui';
+import { EMPTY_SKILLS_STATE, SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERING_NOTE, SKILLS_DISCOVERY_STALLED, SKILLS_DISCOVERY_STALLED_CODE, type InstructionStateName, type SkillInvocationModeName, type SkillListingOutcome, type SkillLoadModeName, type SkillsState } from '@rotaris/contracts';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -158,10 +158,11 @@ bindPromptRootsReader(async () => {
 
 // ADR-0063 — REQ-CHAT-034 / REQ-WORKSPACE-072: the skill catalog, read through the bridge (main names the open
 // workspace and the followed session and relays to the run host, which owns it). Bound once for the window, on the
-// prompt roots' terms; a window with no workspace gets an empty catalog and registers no skill command.
+// prompt roots' terms; a window with no workspace gets an empty catalog and registers no skill command. OQ-386 point 1: a
+// warm-up in flight is not an answer, so it is never kept as one (`lastSkills`): the read goes on until the catalogue is there.
 bindSkillsReader(async () => {
-  const r = await bridge.command({ kind: 'skills.read' });
-  return r.ok ? (r.value as SkillsState) : EMPTY_SKILLS_STATE;
+  const r = await askUntilDiscovered(() => bridge.command({ kind: 'skills.read' }));
+  return r?.ok ? (r.value as SkillsState) : EMPTY_SKILLS_STATE;
 });
 
 // Stage C — PD-SHELL-001's palette entry ("Open project folder in a new window") acts through this. The registry
@@ -921,17 +922,37 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
    */
   const [skillsState, setSkillsState] = useState<SkillsState | null>(null);
   const skillsChanged = useShellState((s) => s.skillsChanged);
+  const refusalLine = (refused: { readonly headline: string; readonly detail?: string | undefined }): string => (refused.detail === undefined ? refused.headline : `${refused.headline}: ${refused.detail}`);
+  // OQ-386 point 1: what the list says while it has no answer. Only a null here lets an empty list claim nothing was discovered.
+  const [skillsListNote, setSkillsListNote] = useState<string | null>(SKILLS_DISCOVERING_NOTE);
+  // The read that may still land: a newer read, a rescan or a hand-loaded skill retires the ones before it.
+  const skillsRead = useRef(0);
   const readSkillsState = useCallback(async () => {
-    if (workspace === null) { setSkillsState(null); return; }
-    const r = await bridge.command({ kind: 'skills.read' });
+    const read = ++skillsRead.current;
+    if (workspace === null) { setSkillsState(null); setSkillsListNote(null); return; }
+    setSkillsListNote(SKILLS_DISCOVERING_NOTE);
+    const r = await askUntilDiscovered(
+      // A closed link rejects, and no asking again answers it: it is said where the list stands rather than left as "discovering".
+      () => bridge.command({ kind: 'skills.read' }).catch((cause: unknown) => ({ ok: false as const, code: 'skills.read-failed', headline: 'The portable skills could not be read', detail: String(cause) })),
+      (refused) => {
+        if (refused.ok) return;
+        // A catalogue on its way leaves nothing to show from a read before it, which may have been of another workspace.
+        setSkillsState(null);
+        setSkillsListNote(refused.code === SKILLS_DISCOVERING_CODE ? SKILLS_DISCOVERING_NOTE : refused.code === SKILLS_DISCOVERY_STALLED_CODE ? SKILLS_DISCOVERY_STALLED : refusalLine(refused));
+      },
+      () => skillsRead.current !== read,
+    );
+    if (r === null) return;
     // OQ-279: a refusal (the configuration did not load) leaves no projection standing — never the last one read.
     setSkillsState(r.ok ? (r.value as SkillsState) : null);
+    setSkillsListNote(r.ok ? null : refusalLine(r));
   }, [workspace]);
   // Re-read on a configuration change too: `skills.enabled` and both override maps are configuration, so a Save
   // must put the resolved policy back on the rows rather than leaving the screen's own copy standing.
   useEffect(() => { queueMicrotask(() => { void readSkillsState(); }); }, [readSkillsState, config.snapshot]);
   const skills = useMemo(() => ({
     state: skillsState,
+    listNote: skillsListNote,
     home,
     // OQ-279 / REQ-CONFIG-478: an unloaded configuration draws its report here, as Models, Personas and Runtime do.
     ...(config.snapshot && !config.snapshot.loadOk ? { fatal: config.snapshot } : {}),
@@ -944,7 +965,9 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
       const r = await bridge.command({ kind: 'skills.rescan' });
       if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
       const state = r.value as SkillsState;
+      skillsRead.current += 1;
       setSkillsState(state);
+      setSkillsListNote(null);
       skillsChanged();
       return { ok: true as const, count: state.skills.length };
     },
@@ -954,11 +977,11 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
       const outcome = r.value as { cancelled: boolean; name?: string; state?: SkillsState };
       // REQ-WORKSPACE-151: a dismissal returns no selection and changes nothing — not the list, not the commands.
       if (outcome.cancelled) return { ok: true as const, cancelled: true };
-      if (outcome.state) setSkillsState(outcome.state);
+      if (outcome.state) { skillsRead.current += 1; setSkillsState(outcome.state); setSkillsListNote(null); }
       skillsChanged();
       return { ok: true as const, cancelled: false, ...(outcome.name === undefined ? {} : { name: outcome.name }) };
     },
-  }), [skillsState, home, config, skillsChanged]);
+  }), [skillsState, skillsListNote, home, config, skillsChanged]);
   /*
    * PD-WORKSPACE-002 — the Instructions category. The inventory is the configuration snapshot's; the
    * POLICY joins the pending settings like every other destination-1 value, so Save writes it through

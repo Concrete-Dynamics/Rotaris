@@ -12,7 +12,8 @@ import { dispatch } from './dispatch.js';
 import type * as Engine from '@rotaris/engine';
 import type * as Configuration from './configuration.js';
 import type { RunHost } from './host.js';
-import { SKILLS_STILL_DISCOVERING, SkillHost, WARM_UP_WAIT_BOUND } from './skills.js';
+import { SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERY_STALLED, SKILLS_DISCOVERY_STALLED_CODE, SKILLS_GESTURE_REPLY_BOUND_MS, SKILLS_READ_REPLY_BOUND_MS, SKILLS_STILL_DISCOVERING } from '@rotaris/contracts';
+import { SkillHost, WARM_UP_REPLY_MARGIN, WARM_UP_STALL_BOUND, warmUpWaitBound } from './skills.js';
 
 /*
  * `launchSession` is replaced by one that hands its `start` a configured setup at once, so a case can read what
@@ -639,7 +640,7 @@ describe('the run host answers workspace.opened before it warms the skill catalo
       expect(fx.parkedCount()).toBe(1);
       expect(await dispatch({ kind: 'ping' }, host)).toEqual({ kind: 'pong' });
       fx.release();
-      await skills.settled(root);
+      await skills.settled(root, 'read');
       expect(fx.calls[0]).toBe('reply posted');
       expect(fx.calls.slice(1).every((c) => c.startsWith('async '))).toBe(true);
       // The warm catalogue is the one every later ask reads: nothing walks the tree again.
@@ -735,15 +736,15 @@ describe('the run host answers workspace.opened before it warms the skill catalo
       await until(() => answered > 0, 20);
       expect(answered).toBe(0);
       // Just short of the bound nothing is released; at it, both waiters are, and the walk is not released at all.
-      clock.advance(WARM_UP_WAIT_BOUND - 1);
+      clock.advance(warmUpWaitBound('read') - 1);
       await until(() => answered > 0, 20);
       expect(answered).toBe(0);
       clock.advance(1);
-      const refusal = { kind: 'refused', code: 'skills.discovering', headline: SKILLS_STILL_DISCOVERING };
+      const refusal = { kind: 'refused', code: SKILLS_DISCOVERING_CODE, headline: SKILLS_STILL_DISCOVERING };
       expect(await first).toEqual(refusal);
       expect(await second).toEqual(refusal);
       // Said once, whatever the number of waiters.
-      expect(warnings).toEqual([`skills: the discovery begun at the open of ${root} has not settled within ${WARM_UP_WAIT_BOUND} ms; the request waiting on it is refused and the discovery goes on (OQ-386, ADR-0002)`]);
+      expect(warnings).toEqual([`skills: the discovery begun at the open of ${root} has not settled within ${warmUpWaitBound('read')} ms; the request waiting on it is refused and the discovery goes on (OQ-386, ADR-0002)`]);
       expect(fx.calls.filter((c) => c.startsWith('sync '))).toEqual([]);
       // The walk was not given up on: a later request waits on the same walk, and no second walk began.
       const later = dispatch({ kind: 'skills.read', workspaceRoot: root }, host);
@@ -754,6 +755,117 @@ describe('the run host answers workspace.opened before it warms the skill catalo
       expect(fx.calls.filter((c) => c === `async readFile ${root}/.agents/skills/alpha/SKILL.md`)).toHaveLength(1);
       expect(clock.pendingCount()).toBe(0);
     } finally { close(); }
+  });
+
+  /*
+   * Every waiter's bound, not just skills.read's: each ends inside main's own bound for that request by the same margin, so a
+   * refusal always reaches main while main is still waiting, and a gesture released at its bound cannot apply after main expired.
+   */
+  const reply = { 'skills.read': SKILLS_READ_REPLY_BOUND_MS, 'skills.forceLoad': SKILLS_GESTURE_REPLY_BOUND_MS, 'skills.loadFile': SKILLS_GESTURE_REPLY_BOUND_MS, 'skills.list': SKILLS_GESTURE_REPLY_BOUND_MS } as const;
+  const waiterOf = (name: string) => (name === 'skills.read' ? 'read' as const : 'gesture' as const);
+  for (const ask of asks) {
+    it(`${ask.name} is refused at main's bound for it less the margin, reading nothing synchronously`, async () => {
+      const { fx, clock, host, opened, close } = setup();
+      try {
+        await dispatch(opened, host);
+        fx.hold();
+        clock.advance(0);
+        await until(() => fx.parkedCount() > 0);
+        const bound = reply[ask.name as keyof typeof reply] - WARM_UP_REPLY_MARGIN;
+        expect(warmUpWaitBound(waiterOf(ask.name))).toBe(bound);
+        let answered = false;
+        const answer = dispatch(ask.req, host).then((r) => { answered = true; return r; });
+        await until(() => answered, 20);
+        clock.advance(bound - 1);
+        await until(() => answered, 20);
+        expect(answered).toBe(false);
+        clock.advance(1);
+        expect(await answer).toEqual({ kind: 'refused', code: SKILLS_DISCOVERING_CODE, headline: SKILLS_STILL_DISCOVERING });
+        expect(fx.calls.filter((c) => c.startsWith('sync readDir'))).toEqual([]);
+      } finally { fx.release(); close(); }
+    });
+  }
+
+  it('a skills.read waits past the 9 s it was once refused at, so a 10 s walk is answered', async () => {
+    const { fx, clock, host, opened, close } = setup();
+    try {
+      await dispatch(opened, host);
+      fx.hold();
+      clock.advance(0);
+      await until(() => fx.parkedCount() > 0);
+      const waiting = dispatch({ kind: 'skills.read', workspaceRoot: root }, host);
+      await until(() => false, 20);
+      clock.advance(10_000);
+      await until(() => false, 20);
+      fx.release();
+      expect(names(await waiting)).toEqual(['alpha']);
+    } finally { close(); }
+  });
+
+  /*
+   * A read that never returns (a dead network mount): the walk cannot be cancelled and stays in flight. "In a moment" stops being
+   * true at the stall bound, and from there a gesture is told so at once rather than held for nothing; a read still waits its whole
+   * bound, so a surface asking again neither spins nor misses the walk's end.
+   */
+  it('states the figure the stalled sentence names', () => {
+    expect(SKILLS_DISCOVERY_STALLED).toContain(`${WARM_UP_STALL_BOUND / 1000} s`);
+  });
+  for (const ask of asks.filter((a) => a.name !== 'skills.read')) {
+    it(`${ask.name} on a walk past the stall bound is refused at once, without the wait`, async () => {
+      const { fx, clock, warnings, host, opened, close } = setup();
+      try {
+        await dispatch(opened, host);
+        fx.hold();
+        clock.advance(0);
+        await until(() => fx.parkedCount() > 0);
+        clock.advance(WARM_UP_STALL_BOUND);
+        // No time passes after this: only an answer at once settles it.
+        expect(await dispatch(ask.req, host)).toEqual({ kind: 'refused', code: SKILLS_DISCOVERY_STALLED_CODE, headline: SKILLS_DISCOVERY_STALLED });
+        expect(warnings.filter((w) => w.includes('may never return'))).toHaveLength(1);
+        // The walk ending is what ends it: nothing stays stalled, and the same request is now answered.
+        fx.release();
+        await until(() => clock.pendingCount() === 0);
+        await until(() => false, 20);
+        expect(await dispatch(ask.req, host)).toMatchObject(ask.answer);
+      } finally { fx.release(); close(); }
+    });
+  }
+  it('a skills.read on a stalled walk still waits its whole bound, and is released the moment the walk ends', async () => {
+    const { fx, clock, host, opened, close } = setup();
+    try {
+      await dispatch(opened, host);
+      fx.hold();
+      clock.advance(0);
+      await until(() => fx.parkedCount() > 0);
+      clock.advance(WARM_UP_STALL_BOUND);
+      let answered = false;
+      const first = dispatch({ kind: 'skills.read', workspaceRoot: root }, host).then((r) => { answered = true; return r; });
+      await until(() => answered, 20);
+      expect(answered).toBe(false);
+      clock.advance(warmUpWaitBound('read'));
+      expect(await first).toEqual({ kind: 'refused', code: SKILLS_DISCOVERY_STALLED_CODE, headline: SKILLS_DISCOVERY_STALLED });
+      const second = dispatch({ kind: 'skills.read', workspaceRoot: root }, host);
+      await until(() => false, 20);
+      fx.release();
+      expect(names(await second)).toEqual(['alpha']);
+    } finally { close(); }
+  });
+
+  it('a walk a clear stopped, parked past the bound, is not said to go on, and leaves no stall timer behind', async () => {
+    const { fx, clock, warnings, skills, host, opened, close } = setup();
+    try {
+      await dispatch(opened, host);
+      fx.hold();
+      clock.advance(0);
+      await until(() => fx.parkedCount() > 0);
+      const waiting = dispatch({ kind: 'skills.read', workspaceRoot: root }, host);
+      await until(() => clock.pendingCount() === 2);
+      skills.onSessionCreated(root, 's1');
+      expect(clock.pendingCount()).toBe(1);
+      clock.advance(warmUpWaitBound('read'));
+      expect(await waiting).toMatchObject({ kind: 'refused', code: SKILLS_DISCOVERING_CODE });
+      expect(warnings).toEqual([`skills: the discovery begun at the open of ${root} has not settled within ${warmUpWaitBound('read')} ms; the request waiting on it is refused and the discovery was stopped by a rescan or a session creation and starts no further read (OQ-386, ADR-0002)`]);
+    } finally { fx.release(); close(); }
   });
 
   // A request waits for a catalogue it does not have. One a cold ask stored beside the walk (a run's construction) is answered from.
@@ -768,7 +880,7 @@ describe('the run host answers workspace.opened before it warms the skill catalo
       skills.catalog(root);
       expect(names(await dispatch({ kind: 'skills.read', workspaceRoot: root }, host))).toEqual(['alpha']);
       // The waiter from before the cold ask finds the catalogue when its bound expires, rather than a refusal.
-      clock.advance(WARM_UP_WAIT_BOUND);
+      clock.advance(warmUpWaitBound('read'));
       expect(names(await waiting)).toEqual(['alpha']);
     } finally { fx.release(); close(); }
   });

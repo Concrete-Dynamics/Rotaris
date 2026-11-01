@@ -57,6 +57,11 @@ export interface SkillsSettingsProps {
    * and Runtime do, and no row, switch or action (the run host refuses every `skills.*` request meanwhile).
    */
   readonly fatal?: ConfigSnapshot | undefined;
+  /**
+   * OQ-386 point 1: what stands in the list's place while there is no answer about the catalogue: that it is still being
+   * discovered, or the refusal the read met. Null is an answer, and only then does an empty list say no skill was discovered.
+   */
+  readonly listNote?: string | null | undefined;
 }
 
 export const SKILLS_EMPTY = 'No portable skills were discovered.';
@@ -127,7 +132,7 @@ function SkillRowView({ row, home, load, invocation, onLoadMode, onInvocationMod
   );
 }
 
-export function SkillsSettings({ state, workspace, home, pending, onLoadMode, onInvocationMode, onEnabled, onRescan, onLoadFile, fatal }: SkillsSettingsProps) {
+export function SkillsSettings({ state, workspace, home, pending, onLoadMode, onInvocationMode, onEnabled, onRescan, onLoadFile, fatal, listNote }: SkillsSettingsProps) {
   const [busy, setBusy] = useState<'rescan' | 'load' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   if (fatal !== undefined && !fatal.loadOk) return <Fatal snapshot={fatal} />;
@@ -191,7 +196,9 @@ export function SkillsSettings({ state, workspace, home, pending, onLoadMode, on
         }
       >
         {skills.length === 0 ? (
-          <p className="text-secondary" data-testid="skills-empty">{noWorkspace ? 'No workspace is open, so there are no portable skills to list.' : SKILLS_EMPTY}</p>
+          !noWorkspace && listNote != null
+            ? <p className="text-secondary" role="status" data-testid="skills-list-note">{listNote}</p>
+            : <p className="text-secondary" data-testid="skills-empty">{noWorkspace ? 'No workspace is open, so there are no portable skills to list.' : SKILLS_EMPTY}</p>
         ) : (
           <Table className="table settings__grid" aria-label="Portable skills">
             <thead><tr><th>Skill</th><th>Source</th><th>Path</th><th>Trigger</th><th>Invocation</th><th>Load</th><th>Description</th></tr></thead>

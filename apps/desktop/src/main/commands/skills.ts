@@ -1,6 +1,7 @@
 import { canonicalPath } from '@rotaris/platform';
+import { NoReplyWithinBound } from '@rotaris/shell';
 import { millis } from '@rotaris/kernel';
-import { SKILL_LISTING_NO_SESSION, type CommandOutcome, type CommandRequest } from '@rotaris/contracts';
+import { SKILL_LISTING_NO_SESSION, SKILLS_GESTURE_REPLY_BOUND_MS, SKILLS_NO_REPLY_CODE, SKILLS_READ_REPLY_BOUND_MS, type CommandOutcome, type ProcessReply, type CommandRequest } from '@rotaris/contracts';
 import { refusal, type CommandAt, type CommandContext, type CommandHandlers } from './context.js';
 
 /**
@@ -20,7 +21,14 @@ export function skillsCommands(
    */
   const onSkillsRead = async (req: Extract<CommandRequest, { kind: 'skills.read' | 'skills.rescan' }>, { w }: CommandAt): Promise<CommandOutcome> => {
     if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its portable skills' };
-    const r = await runHost.request({ kind: req.kind, workspaceRoot: canonicalPath(w.workspace), ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(15_000));
+    let r: ProcessReply;
+    try {
+      r = await runHost.request({ kind: req.kind, workspaceRoot: canonicalPath(w.workspace), ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(SKILLS_READ_REPLY_BOUND_MS));
+    } catch (cause) {
+      // OQ-386 point 1: a read that met a loaded run host is a refusal the surface can name and ask past, not a thrown handler.
+      if (req.kind === 'skills.read' && cause instanceof NoReplyWithinBound) return { ok: false, code: SKILLS_NO_REPLY_CODE, headline: 'The portable skills could not be read', detail: cause.message };
+      throw cause;
+    }
     return r.kind === 'skills.state' ? { ok: true, value: r.state } : refusal(r, 'The portable skills could not be read');
   };
   return {
@@ -28,7 +36,7 @@ export function skillsCommands(
     'skills.rescan': onSkillsRead,
     'skills.forceLoad': async (req, { w }) => {
       if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
-      const r = await runHost.request({ kind: 'skills.forceLoad', workspaceRoot: canonicalPath(w.workspace), name: req.name, ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(10_000));
+      const r = await runHost.request({ kind: 'skills.forceLoad', workspaceRoot: canonicalPath(w.workspace), name: req.name, ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(SKILLS_GESTURE_REPLY_BOUND_MS));
       // REQ-WORKSPACE-073: the refusal text is the run host's — "Skills are disabled. Enable them in Settings."
       return r.kind === 'skills.state' ? { ok: true, value: { name: r.loaded, state: r.state } } : refusal(r, 'The skill could not be loaded');
     },
@@ -50,7 +58,7 @@ export function skillsCommands(
         if (chosen === null) return { ok: true, value: { cancelled: true } };
         path = chosen;
       }
-      const r = await runHost.request({ kind: 'skills.loadFile', workspaceRoot: canonicalPath(w.workspace), path, ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(10_000));
+      const r = await runHost.request({ kind: 'skills.loadFile', workspaceRoot: canonicalPath(w.workspace), path, ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(SKILLS_GESTURE_REPLY_BOUND_MS));
       return r.kind === 'skills.state' ? { ok: true, value: { cancelled: false, name: r.loaded, state: r.state } } : refusal(r, 'The skill file could not be loaded');
     },
     /*
@@ -61,7 +69,7 @@ export function skillsCommands(
     'skills.list': async (_req, { w }) => {
       if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
       if (w.followedSessionId === null) return { ok: false, code: 'session.none', headline: SKILL_LISTING_NO_SESSION };
-      const r = await runHost.request({ kind: 'skills.list', workspaceRoot: canonicalPath(w.workspace), sessionId: w.followedSessionId }, millis(10_000));
+      const r = await runHost.request({ kind: 'skills.list', workspaceRoot: canonicalPath(w.workspace), sessionId: w.followedSessionId }, millis(SKILLS_GESTURE_REPLY_BOUND_MS));
       return r.kind === 'skills.listed' ? { ok: true, value: { count: r.count, index: r.index } } : refusal(r, 'The skills could not be listed in the transcript');
     },
   };

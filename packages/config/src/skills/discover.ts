@@ -209,8 +209,8 @@ export const DISCOVERY_READS_IN_FLIGHT = 4;
 
 /**
  * OQ-386 point 1: what an asynchronous walk rejects with when its caller's `stopped` answered yes — the walk was superseded
- * (a rescan or a session creation cleared the catalogue it would fill) or abandoned (its waiters stopped waiting), and it
- * stops rather than reading on. It is never a file's failure: a probe rethrows it instead of recording an unreadable file.
+ * (a rescan or a session creation cleared the catalogue it would fill), and it stops rather than reading on. It is never a
+ * file's failure: a probe rethrows it instead of recording an unreadable file.
  */
 export class DiscoveryStopped extends Error {
   constructor() {
@@ -226,7 +226,10 @@ export class DiscoveryStopped extends Error {
  */
 function bounded(width: number, stopped: () => boolean): <T>(task: () => Promise<T>) => Promise<T> {
   let running = 0;
+  // A cursor, not `shift`: a directory of 200,000 children queues that many tasks, and shifting an array that long is linear,
+  // so the queue alone held the loop for tens of seconds (measured 2026-11-01), which is what this walk exists not to do.
   const waiting: (() => void)[] = [];
+  let next = 0;
   return async (task) => {
     if (running < width) running += 1;
     else await new Promise<void>((turn) => waiting.push(turn));
@@ -234,9 +237,9 @@ function bounded(width: number, stopped: () => boolean): <T>(task: () => Promise
       if (stopped()) throw new DiscoveryStopped();
       return await task();
     } finally {
-      const next = waiting.shift();
+      const turn = waiting[next];
       // The slot passes straight to the next task, so one that asks in between can never make it width + 1.
-      if (next) next(); else running -= 1;
+      if (turn) { waiting[next] = () => undefined; next += 1; turn(); } else running -= 1;
     }
   };
 }
@@ -282,7 +285,7 @@ async function probeChildAsync(root: SkillRoot, child: string, disabled: Disable
  *
  * `stopped` is asked before every read the walk would start. Once it answers yes the walk starts no further read and rejects
  * with `DiscoveryStopped`: a walk whose result its caller will set aside must not go on loading the disk beside the walk
- * that replaces it (the run host's warm-up, overtaken by a rescan or a session creation, or given up on by its waiters).
+ * that replaces it (the run host's warm-up, overtaken by a rescan or a session creation).
  */
 export async function discoverSkillsAsync(
   env: AsyncSkillRootsEnv,

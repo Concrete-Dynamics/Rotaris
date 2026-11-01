@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { skillListing, skillListingBody, type SkillsState, type SkillRow } from '@rotaris/contracts';
+import { SKILLS_GESTURE_REPLY_BOUND_MS, SKILLS_READ_REPLY_BOUND_MS, skillListing, skillListingBody, type SkillsState, type SkillRow } from '@rotaris/contracts';
 import type { SessionWriter } from '@rotaris/engine';
 import { millis, type Millis, type MonotonicClock, type Timers } from '@rotaris/kernel';
 import {
@@ -110,25 +110,42 @@ export interface SkillHostDeps {
  * OQ-386 point 1 with ADR-0002 consequence 11 (every request bounded, and nothing proceeds on an expiry): how long a
  * `skills.*` request waits for a warm-up in flight before it is refused (`SKILLS_STILL_DISCOVERING`). A wedged walk — a read
  * that never returns — would otherwise hold every skills request for its root with no bound, past main's own bounds on them
- * (10 s for a gesture, 15 s for a read, `main/commands/skills.ts`), so main's would expire and no answer would arrive at all.
+ * (`SKILLS_READ_REPLY_BOUND_MS`, `SKILLS_GESTURE_REPLY_BOUND_MS`), so main's would expire and no answer would arrive at all.
  *
  * FALSIFIED 2026-10-31, kept beside its replacement: "when the bound fires, the request walks the tree synchronously, on the
  * loop", at 6 s so as to leave 4 s for that walk. The ruling says the warm-up never holds the loop and that a request waits
  * "instead of walking the tree a second time", and the case the bound fires in is the slow disk the repair exists for. So the
  * request is refused, the walk goes on and stores its catalogue for the next request, and nothing reads the tree on the loop.
- * With no walk left to fit in, the bound sits just under main's tightest, so a walk as slow as the 8,201.5 ms the launch of
- * 2026-10-16 logged is still waited for and answered.
+ *
+ * FALSIFIED 2026-11-01, kept beside its replacement: "the bound sits just under main's tightest", one 9 s for all four requests.
+ * It refused at 9 s a read main allows 15 s, and left a gesture about 1 s, in which a loaded host could apply a force-load after
+ * main had expired and reported failure. So each request's wait is main's bound for that request less
+ * `WARM_UP_REPLY_MARGIN`: a read still answers a walk as slow as the 8,201.5 ms the launch of 2026-10-16 logged, and a gesture,
+ * which a person is waiting on, is refused sooner and with room for the work it does when released.
  */
-export const WARM_UP_WAIT_BOUND = millis(9_000);
+export const WARM_UP_REPLY_MARGIN = millis(3_000);
+export type SkillsWaiter = 'read' | 'gesture';
+export const warmUpWaitBound = (waiter: SkillsWaiter): Millis => millis((waiter === 'read' ? SKILLS_READ_REPLY_BOUND_MS : SKILLS_GESTURE_REPLY_BOUND_MS) - WARM_UP_REPLY_MARGIN);
 
-/** OQ-386 point 1: the refusal of a `skills.*` request whose wait for a warm-up in flight reached `WARM_UP_WAIT_BOUND`. */
-export const SKILLS_STILL_DISCOVERING = 'The portable skills are still being discovered. Try again in a moment.';
+/**
+ * OQ-386 point 1: how long a warm-up runs before the product stops saying "in a moment" of it (`SKILLS_DISCOVERY_STALLED` states
+ * this figure). A read that never returns keeps its walk in flight, since no read can be cancelled and a second walk would only
+ * park beside it on the same dead mount, holding more of the thread pool. From here a gesture is refused at once rather than made
+ * to wait for an answer that may never come; a read still waits, which is what lets a surface hold the catalogue the moment the
+ * walk ends, however late.
+ */
+export const WARM_UP_STALL_BOUND = millis(60_000);
 
-/** One warm-up in flight: its promise, the flag its walk's `stopped` reads (set by a clear), and whether its overrun was said. */
+/** What a `skills.*` request found: it may read, or it is refused, the walk being under or past `WARM_UP_STALL_BOUND`. */
+export type SkillsWait = 'ready' | 'discovering' | 'stalled';
+
+/** One warm-up in flight: its promise, the flag its walk's `stopped` reads (set by a clear), what was said of it, and its stall. */
 interface Warming {
   readonly promise: Promise<void>;
   stopped: boolean;
   overrunSaid: boolean;
+  stalled: boolean;
+  readonly stall: { cancel(): void };
 }
 
 /** The pending bucket's key: a workspace root that has no session yet, or none on screen. */
@@ -188,7 +205,7 @@ export class SkillHost {
     this.catalogs.delete(workspaceRoot);
     this.generations.set(workspaceRoot, this.generationOf(workspaceRoot) + 1);
     const superseded = this.warming.get(workspaceRoot);
-    if (superseded) superseded.stopped = true;
+    if (superseded) { superseded.stopped = true; superseded.stall.cancel(); }
     this.warming.delete(workspaceRoot);
   }
 
@@ -242,11 +259,16 @@ export class SkillHost {
     if (this.catalogs.has(workspaceRoot)) return Promise.resolve();
     const inFlight = this.warming.get(workspaceRoot);
     if (inFlight) return inFlight.promise;
-    const flags = { stopped: false, overrunSaid: false };
+    const flags = { stopped: false, overrunSaid: false, stalled: false };
+    const stall = this.deps.timers.after(WARM_UP_STALL_BOUND, () => {
+      flags.stalled = true;
+      this.deps.log(`skills: the discovery begun at the open of ${workspaceRoot} has not settled within ${WARM_UP_STALL_BOUND} ms, so a read it made may never return; a gesture is refused at once until it ends (OQ-386)`, 'warn');
+    });
     const promise: Promise<void> = this.warmUnder(workspaceRoot, this.generationOf(workspaceRoot), () => flags.stopped).finally(() => {
+      stall.cancel();
       if (this.warming.get(workspaceRoot) === walk) this.warming.delete(workspaceRoot);
     });
-    const walk: Warming = Object.assign(flags, { promise });
+    const walk: Warming = Object.assign(flags, { promise, stall });
     this.warming.set(workspaceRoot, walk);
     return promise;
   }
@@ -274,30 +296,37 @@ export class SkillHost {
 
   /**
    * OQ-386 point 1: what `skills.read`, `skills.forceLoad`, `skills.loadFile` and `skills.list` wait for before they read the
-   * catalogue — the warm-up in flight for this root, so it is read once and not walked a second time beside it. True when the
+   * catalogue — the warm-up in flight for this root, so it is read once and not walked a second time beside it. `ready` when the
    * request may read: at once when none is in flight or a catalogue is already held (a cold ask stored one beside the walk),
    * and otherwise when the walk ends, whether it succeeded, failed (`warm` resolves either way) or was set aside by a clear.
-   * False when `WARM_UP_WAIT_BOUND` passed on the timer port first (ADR-0002 consequence 11): the request is refused and reads
-   * nothing, and the walk goes on, so the next request finds its catalogue. The constant states why.
+   * `discovering` or `stalled` when `warmUpWaitBound(waiter)` passed on the timer port first (ADR-0002 consequence 11): the request
+   * is refused and reads nothing, and the walk goes on, so the next request finds its catalogue. The constants state why. A gesture
+   * meeting a walk already past `WARM_UP_STALL_BOUND` is `stalled` at once.
    */
-  settled(workspaceRoot: string): Promise<boolean> {
+  settled(workspaceRoot: string, waiter: SkillsWaiter): Promise<SkillsWait> {
     const walk = this.warming.get(workspaceRoot);
-    if (walk === undefined || this.catalogs.has(workspaceRoot)) return Promise.resolve(true);
-    return new Promise<boolean>((released) => {
-      const bound = this.deps.timers.after(WARM_UP_WAIT_BOUND, () => {
-        if (this.catalogs.has(workspaceRoot)) { released(true); return; }
-        this.sayOverrun(workspaceRoot, walk);
-        released(false);
+    if (walk === undefined || this.catalogs.has(workspaceRoot)) return Promise.resolve('ready');
+    if (waiter === 'gesture' && walk.stalled) return Promise.resolve('stalled');
+    return new Promise<SkillsWait>((released) => {
+      const limit = warmUpWaitBound(waiter);
+      const bound = this.deps.timers.after(limit, () => {
+        if (this.catalogs.has(workspaceRoot)) { released('ready'); return; }
+        this.sayOverrun(workspaceRoot, walk, limit);
+        released(walk.stalled ? 'stalled' : 'discovering');
       });
-      void walk.promise.then(() => { bound.cancel(); released(true); });
+      void walk.promise.then(() => { bound.cancel(); released('ready'); });
     });
   }
 
-  /** A warm-up its waiters stopped waiting for: said once at `warn`, naming the root, however many waiters' bounds find it. */
-  private sayOverrun(workspaceRoot: string, walk: Warming): void {
+  /**
+   * A warm-up its waiters stopped waiting for: said once at `warn`, naming the root, however many waiters' bounds find it. A walk
+   * a clear stopped does not go on: it is parked on a read already in flight, and only that read's return ends it.
+   */
+  private sayOverrun(workspaceRoot: string, walk: Warming, limit: Millis): void {
     if (walk.overrunSaid) return;
     walk.overrunSaid = true;
-    this.deps.log(`skills: the discovery begun at the open of ${workspaceRoot} has not settled within ${WARM_UP_WAIT_BOUND} ms; the request waiting on it is refused and the discovery goes on (OQ-386, ADR-0002)`, 'warn');
+    const after = walk.stopped ? 'the discovery was stopped by a rescan or a session creation and starts no further read' : 'the discovery goes on';
+    this.deps.log(`skills: the discovery begun at the open of ${workspaceRoot} has not settled within ${limit} ms; the request waiting on it is refused and ${after} (OQ-386, ADR-0002)`, 'warn');
   }
 
   /**

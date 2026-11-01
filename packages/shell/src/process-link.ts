@@ -12,6 +12,11 @@ export interface MessagePortLike {
   onMessage(fn: (message: unknown) => void): () => void;
 }
 
+/** A request's bound passed with no reply: told apart from a closed link, which no asking again can answer. */
+export class NoReplyWithinBound extends Error {
+  override readonly name = 'NoReplyWithinBound';
+}
+
 export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
   private nextId = 1;
   private readonly pending = new Map<number, { resolve: (r: ProcessReply) => void; reject: (e: Error) => void; cancel: () => void }>();
@@ -68,7 +73,7 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
     return new Promise<ProcessReply>((resolve, reject) => {
       const h = this.timers.after(boundMs, () => {
         this.pending.delete(id);
-        reject(new Error(`no reply to ${request.kind} within ${boundMs} ms`));
+        reject(new NoReplyWithinBound(`no reply to ${request.kind} within ${boundMs} ms`));
       });
       this.pending.set(id, { resolve, reject, cancel: () => h.cancel() });
       this.port.postMessage(env);

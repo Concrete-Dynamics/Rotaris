@@ -10,7 +10,8 @@ import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessi
 import { CHECKPOINTS_DEFAULTS, liveStateProblems, type LiveState } from '@rotaris/config';
 import { improvementCollectorOf, modelRefOf, retrospectiveOf, thinkingOf } from './configuration.js';
 import { launchSession } from './launch.js';
-import { SKILLS_CONFIGURATION_UNLOADED, SKILLS_STILL_DISCOVERING, SkillsUnloaded, writeSkillListing, type SkillHost } from './skills.js'; // REQ-CHAT-162, OQ-279
+import { SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERY_STALLED, SKILLS_DISCOVERY_STALLED_CODE, SKILLS_STILL_DISCOVERING } from '@rotaris/contracts'; // OQ-386 point 1
+import { SKILLS_CONFIGURATION_UNLOADED, SkillsUnloaded, writeSkillListing, type SkillHost, type SkillsWaiter } from './skills.js'; // REQ-CHAT-162, OQ-279
 import { randomUUID } from 'node:crypto';
 // The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network.
 
@@ -135,7 +136,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
      * once (`skillsAnswerSettled`); only a request it does not refuse waits.
      */
     case 'skills.read':
-      return skillsAnswerSettled(skills, req.workspaceRoot, () => ({ kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId) }));
+      return skillsAnswerSettled(skills, req.workspaceRoot, 'read', () => ({ kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId) }));
     case 'skills.rescan':
       return skillsAnswer(skills, req.workspaceRoot, () => {
         // REQ-WORKSPACE-069: re-read from disk, re-project, change no policy, mark nothing dirty.
@@ -146,20 +147,20 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
         return { kind: 'skills.state', state };
       });
     case 'skills.forceLoad':
-      return skillsAnswerSettled(skills, req.workspaceRoot, () => {
+      return skillsAnswerSettled(skills, req.workspaceRoot, 'gesture', () => {
         const r = skills.forceLoad(req.workspaceRoot, req.sessionId, req.name);
         if (!r.ok) return { kind: 'refused', code: r.reason === 'disabled' ? 'skills.disabled' : 'skills.unknown', headline: r.reason === 'disabled' ? SKILLS_DISABLED_MESSAGE : r.reason };
         return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
       });
     case 'skills.loadFile':
-      return skillsAnswerSettled(skills, req.workspaceRoot, () => {
+      return skillsAnswerSettled(skills, req.workspaceRoot, 'gesture', () => {
         const r = skills.loadFile(req.workspaceRoot, req.sessionId, req.path);
         // REQ-WORKSPACE-151: a failure is reported with the reason REQ-WORKSPACE-057 gives and leaves the catalog unchanged.
         if (!r.ok) return { kind: 'refused', code: 'skills.load-failed', headline: r.reason };
         return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
       });
     case 'skills.list':
-      return skillsAnswerSettled(skills, req.workspaceRoot, () => {
+      return skillsAnswerSettled(skills, req.workspaceRoot, 'gesture', () => {
         // REQ-CHAT-162: one saved system row, through the followed session's own writer (`writeSkillListing` says why).
         const r = writeSkillListing(sessions.writer(asSessionId(req.sessionId)), skills.state(req.workspaceRoot, req.sessionId));
         if (!r.ok) return { kind: 'refused', code: r.code, headline: 'The skills could not be listed in the transcript', detail: r.reason };
@@ -867,12 +868,14 @@ export function skillsAnswer(skills: Pick<SkillHost, 'fault'>, workspaceRoot: st
  * OQ-279's refusal is read FIRST and answered at once: the ruling lets a request wait for the warm-up, and does not put a
  * refusal behind it. The configuration is read as often as `skillsAnswer` reads it — a file saved with a fault during the
  * wait is still met by the answer's own read (`SkillsUnloaded`). A wait that reaches its bound is refused rather than answered
- * from a walk on the loop: "nothing proceeds on an expiry", and the walk it waited for goes on (`WARM_UP_WAIT_BOUND`).
+ * from a walk on the loop: "nothing proceeds on an expiry", and the walk it waited for goes on (`warmUpWaitBound`).
  */
-export async function skillsAnswerSettled(skills: Pick<SkillHost, 'fault' | 'settled'>, workspaceRoot: string, answer: () => ProcessReply): Promise<ProcessReply> {
+export async function skillsAnswerSettled(skills: Pick<SkillHost, 'fault' | 'settled'>, workspaceRoot: string, waiter: SkillsWaiter, answer: () => ProcessReply): Promise<ProcessReply> {
   const unloaded = skillsUnloaded(skills, workspaceRoot);
   if (unloaded) return unloaded;
-  if (!(await skills.settled(workspaceRoot))) return { kind: 'refused', code: 'skills.discovering', headline: SKILLS_STILL_DISCOVERING };
+  const waited = await skills.settled(workspaceRoot, waiter);
+  if (waited === 'discovering') return { kind: 'refused', code: SKILLS_DISCOVERING_CODE, headline: SKILLS_STILL_DISCOVERING };
+  if (waited === 'stalled') return { kind: 'refused', code: SKILLS_DISCOVERY_STALLED_CODE, headline: SKILLS_DISCOVERY_STALLED };
   return answeredUnlessUnloaded(answer);
 }
 

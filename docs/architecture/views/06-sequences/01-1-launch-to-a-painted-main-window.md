@@ -86,9 +86,13 @@ levels) are not built yet. Its point 1 is: the run host answers `workspace.opene
 from a zero-delay timer on its clock port, which runs after the reply is posted. The warm-up reads the tree
 asynchronously, at most four reads in flight (`SkillHost.warm`, `discoverSkillsAsync`). It stores its catalogue only if
 no rescan or session creation cleared that root while it ran, and the `skills.*` reads wait for it rather than walk the
-tree again. That wait is bounded on the clock port (`WARM_UP_WAIT_BOUND`, 9 s, under main's 10 s and 15 s bounds on those
-requests): a request still waiting then is refused (`skills.discovering`), the overrun is said once at `warn`, nothing reads
-the tree on the loop, and the warm-up goes on and stores its catalogue for the next request. A request the saved configuration refuses (OQ-279) is refused before it waits, and a
+tree again. That wait is bounded on the clock port (`warmUpWaitBound`: main's bound for the request less 3 s, so 12 s for a
+read and 7 s for a gesture): a request still waiting then is refused (`skills.discovering`), the overrun is said once at `warn`,
+nothing reads the tree on the loop, and the warm-up goes on and stores its catalogue. A walk past `WARM_UP_STALL_BOUND` (60 s),
+which may be parked on a read that never returns, answers `skills.discovery-stalled` instead, and a gesture is told so at once.
+Main answers a `skills.read` its own bound expired on as `skills.no-reply`. The renderer's two readers treat all three as no answer and ask again (`askUntilDiscovered`); each ask waits in the run host,
+so the catalogue lands when the walk ends, Settings says it is being discovered meanwhile (`listNote`), and nothing empty is
+cached for the composer. A request the saved configuration refuses (OQ-279) is refused before it waits, and a
 warm-up that a clear overtakes stops at its next read instead of finishing beside the next one. Until 2026-10-31 the warm-up was a microtask holding the synchronous walk, which ran before the reply was
 posted, so under load a slow discovery was a slow reply
 (`../../../defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`;

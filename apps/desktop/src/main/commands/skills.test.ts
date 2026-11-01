@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { SKILL_LISTING_NO_SESSION, type ProcessReply, type RunHostRequest } from '@rotaris/contracts';
+import { NoReplyWithinBound } from '@rotaris/shell';
+import { SKILL_LISTING_NO_SESSION, SKILLS_NO_REPLY_CODE, type ProcessReply, type RunHostRequest } from '@rotaris/contracts';
 import { canonicalPath } from '@rotaris/platform';
 import { skillsCommands } from './skills.js';
 import type { CommandAt, CommandContext, MainWindowState } from './context.js';
@@ -24,6 +25,18 @@ const windowOn = (workspace: string | null, followedSessionId: string | null): C
 });
 
 const facet = (host: ReturnType<typeof fakeRunHost>) => skillsCommands({ runHost: host.link, chooseSkillFile: async () => null });
+
+describe('skills.read — no reply within main\'s bound (OQ-386 point 1)', () => {
+  const rejecting = (cause: Error) => ({ link: { request: async () => { throw cause; } } as CommandContext['runHost'], asked: [] });
+  it('answers a refusal the surface can ask past, rather than throwing out of the handler', async () => {
+    const host = rejecting(new NoReplyWithinBound('no reply to skills.read within 15000 ms'));
+    expect(await facet(host)['skills.read']({ kind: 'skills.read' }, windowOn('/work/project', null))).toEqual({ ok: false, code: SKILLS_NO_REPLY_CODE, headline: 'The portable skills could not be read', detail: 'no reply to skills.read within 15000 ms' });
+  });
+  it('leaves a closed link, and a rescan, as they were', async () => {
+    await expect(facet(rejecting(new Error('link closed')))['skills.read']({ kind: 'skills.read' }, windowOn('/work/project', null))).rejects.toThrow('link closed');
+    await expect(facet(rejecting(new NoReplyWithinBound('x')))['skills.rescan']({ kind: 'skills.rescan' }, windowOn('/work/project', null))).rejects.toThrow('x');
+  });
+});
 
 describe('skills.list — the /skills listing, relayed for the window that asked', () => {
   it('refuses before it asks when the window has no workspace open', async () => {

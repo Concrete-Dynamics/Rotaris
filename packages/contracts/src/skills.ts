@@ -79,6 +79,31 @@ export type SkillsState = z.infer<typeof SkillsStateSchema>;
 export const EMPTY_SKILLS_STATE: SkillsState = Object.freeze({ enabled: true, skills: [], skipped: [] });
 
 /**
+ * ADR-0002 consequence 11: how long main waits for the run host's answer to a skills request, in milliseconds: a read of the
+ * catalogue (and a rescan), and a gesture (`skills.forceLoad`, `skills.loadFile`, `skills.list`). One statement, because the
+ * run host's wait for a warm-up in flight has to end inside these (`run-host/skills.ts`, `warmUpWaitBound`).
+ */
+export const SKILLS_READ_REPLY_BOUND_MS = 15_000;
+export const SKILLS_GESTURE_REPLY_BOUND_MS = 10_000;
+
+/**
+ * OQ-386 point 1: the two refusals of a skills request that met the warm-up in flight. Neither means "no skills": the walk goes
+ * on and stores its catalogue, so a surface reading the catalogue keeps asking (`askUntilDiscovered`, `packages/ui`), which a
+ * read can do cheaply because each ask waits in the run host and is released the moment the walk ends.
+ *
+ * `discovering` is a walk still inside its stall bound. `stalled` is one past it, where "in a moment" stopped being true: a read
+ * that never returns (a dead network mount) cannot be told from a very slow one, so its sentence says what is known.
+ */
+export const SKILLS_DISCOVERING_CODE = 'skills.discovering';
+export const SKILLS_DISCOVERY_STALLED_CODE = 'skills.discovery-stalled';
+/** Main's own bound passed on a `skills.read` (a run host too busy to answer): asked again like the two above, each ask taking the whole bound. */
+export const SKILLS_NO_REPLY_CODE = 'skills.no-reply';
+export const SKILLS_STILL_DISCOVERING = 'The portable skills are still being discovered. Try again in a moment.';
+export const SKILLS_DISCOVERY_STALLED = 'Discovering the portable skills has not finished after 60 s, so a skill folder may not be answering. Skills are offered when it finishes.';
+/** The Settings list while the catalogue is on its way: it asks again by itself, so it tells nobody to. */
+export const SKILLS_DISCOVERING_NOTE = 'Discovering portable skills. They are listed here when that finishes.';
+
+/**
  * Renderer → main. None carries a workspace or a session: main names the window's open workspace and the
  * session it follows, as it does for every workspace-scoped command.
  *

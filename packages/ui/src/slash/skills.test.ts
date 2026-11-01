@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { PromptFile, PromptsRootsResult, SkillRow, SkillsState } from '@rotaris/contracts';
+import { EMPTY_SKILLS_STATE, SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERY_STALLED_CODE, SKILLS_NO_REPLY_CODE, type PromptFile, type PromptsRootsResult, type SkillRow, type SkillsState } from '@rotaris/contracts';
 import { buildCatalogue, type CatalogueOptions } from './catalogue.js';
 import { registerPromptCommands } from './prompts.js';
 import { createSlashRegistry } from './registry.js';
 import {
-  bindSkillsReader, cachedSkills, catalogueNormalForm, freeName, readSkills, registerSkillCommands,
+  askUntilDiscovered, bindSkillsReader, cachedSkills, catalogueNormalForm, freeName, readSkills, registerSkillCommands,
   skillCommandDescription, skillPathCommand, skillRegistrations, skillsListCommand, triggerCommandName,
   SKILLS_LIST_COMMAND_NAME, SKILLS_LIST_DESCRIPTION,
 } from './skills.js';
@@ -134,6 +134,49 @@ describe('REQ-WORKSPACE-073 — what invoking a skill command does', () => {
     // The typed name is the catalogue's form; the name the host is asked for is the SKILL's (REQ-WORKSPACE-054).
     await registry.lookup('build-ui')!.run('anything typed after it', ctx);
     expect(loaded).toEqual(['build-ui']);
+  });
+});
+
+describe('slash/skills — a walk in flight is not an answer about the catalogue (OQ-386 point 1, REQ-CHAT-034)', () => {
+  const discovering = { ok: false as const, code: SKILLS_DISCOVERING_CODE, headline: 'h' };
+  const stalled = { ok: false as const, code: SKILLS_DISCOVERY_STALLED_CODE, headline: 'h' };
+  it('asks again through both refusals, naming each, and returns the first answer', async () => {
+    const noReply = { ok: false as const, code: SKILLS_NO_REPLY_CODE, headline: 'h' };
+    const answers = [discovering, noReply, stalled, { ok: true as const }];
+    const waited: unknown[] = [];
+    let asked = 0;
+    const r = await askUntilDiscovered(async () => answers[asked++]!, (refused) => waited.push(refused));
+    expect(r).toEqual({ ok: true });
+    expect(asked).toBe(4);
+    expect(waited).toEqual([discovering, noReply, stalled]);
+  });
+  it('takes any other refusal as the answer: a configuration that does not load is not on its way', async () => {
+    const fatal = { ok: false as const, code: 'config.fatal' };
+    let asked = 0;
+    expect(await askUntilDiscovered(async () => { asked += 1; return fatal; })).toBe(fatal);
+    expect(asked).toBe(1);
+  });
+  it('stops asking once the asker has gone', async () => {
+    let asked = 0;
+    let gone = false;
+    const r = await askUntilDiscovered(async () => { asked += 1; gone = true; return discovering; }, undefined, () => gone);
+    expect(r).toBeNull();
+    expect(asked).toBe(1);
+  });
+  it('caches nothing during the walk and the catalogue after it, with no gesture between', async () => {
+    const answer = state([row()]);
+    const replies: ({ ok: true; value: SkillsState } | typeof discovering)[] = [discovering, discovering, { ok: true, value: answer }];
+    // The renderer's reader (renderer/main.tsx): the refusals never reach `lastSkills`, so nothing empty is cached.
+    bindSkillsReader(async () => {
+      const r = await askUntilDiscovered(async () => replies.shift()!);
+      return r !== null && r.ok ? r.value : EMPTY_SKILLS_STATE;
+    });
+    const read = readSkills();
+    expect(cachedSkills()).toBeNull();
+    expect(await read).toEqual(answer);
+    expect(cachedSkills()).toEqual(answer);
+    expect(replies).toEqual([]);
+    bindSkillsReader(null);
   });
 });
 

@@ -9,7 +9,7 @@ Part 2 of 7 of [domain 14](../14-library-artifacts-improvements.md), which index
 **REQ-LIBRARY-033** — Evidence MUST be frozen at capture time by taking independent snapshots of run progress, todo state, transcript events, child reports, workspace history, and gate evidence, so that subsequent work cannot mutate what is reviewed. A failing transcript-context supplier degrades to empty context; child-report coercion failures degrade to an empty list.
 
 **REQ-LIBRARY-034** — Workspace history supplied to the analyst MUST be bounded and filtered: prior artifacts whose `source_run_type` is not `task_run` are excluded, the current session's own artifact is excluded, and at most 5 prior artifacts are included, newest first.
-  > **Narrowed by [`PD-LIBRARY-002`](../../product/directives/pd-library-002.md#pd-library-002) revision 3, 2026-10-13** ([OQ-271](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-271)). The
+  > **Narrowed by [`PD-LIBRARY-002`](../../product/directives/pd-library-002.md#pd-library-002) revision 3, 2026-10-13** ([OQ-271](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-271)). The
   > history also excludes every prior artifact whose `source_kind` is `retrospective`, and that exclusion is applied before
   > the five-artifact bound, so every artifact supplied has a source session (clause (h)). The rest is as stated.
 

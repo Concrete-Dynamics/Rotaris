@@ -4,7 +4,7 @@
 
 ### PD-LIBRARY-003 — an artifact's body is its document, and a person's edit of it survives and travels
 
-*Revision 2 (2026-10-13, [R-072](../requests.md#r-072), ruling [OQ-272](../../architecture/open-questions/57-spikes-and-later-questions-24.md#oq-272)) — **the
+*Revision 2 (2026-10-13, [R-072](../requests.md#r-072), ruling [OQ-272](../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-272)) — **the
 frontmatter is the record's in the inspector and at a save**: clause (f)'s second sentence is replaced and clause (c) gains one
 sentence, each replaced sentence quoted beneath its clause; the costs paragraph loses one cost and gains two, the replaced
 wording quoted beneath it; REQ-LIBRARY-133 joins the Extends line.*
@@ -66,7 +66,7 @@ as text (and travel in the handoff) until the person removes them. *(Revision 2,
 > **Narrows:** REQ-LIBRARY-093, REQ-LIBRARY-095
 > **Extends:** REQ-SESSION-115, REQ-LIBRARY-132, REQ-LIBRARY-133
 
-*Revision 2, 2026-10-13 ([OQ-272](../../architecture/open-questions/57-spikes-and-later-questions-24.md#oq-272), ruled under [R-072](../requests.md#r-072)):
+*Revision 2, 2026-10-13 ([OQ-272](../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-272), ruled under [R-072](../requests.md#r-072)):
 REQ-LIBRARY-133 joins the Extends line with its back-pointer, and REQ-LIBRARY-132's back-pointer names revision 2.
 REQ-LIBRARY-094, REQ-LIBRARY-095, REQ-LIBRARY-092 and REQ-SESSION-115 keep their text and their notes.*
 
@@ -109,7 +109,7 @@ the frontmatter shown read-only, and a save writing the record's frontmatter.
 > building:** the first build of launch 8 typed where its click put the caret, the editor's centre, which is inside the
 > frontmatter; the save stamped `edited_at` and the table showed ` · edited`, and launch 9's re-render rewrote the block, so the
 > edit was gone while the handoff still named the artifact `edited`. That is clause (d) as written, and a cost the paragraph
-> above does not name; raised as [OQ-272](../../architecture/open-questions/57-spikes-and-later-questions-24.md#oq-272), not decided. The proofs now take the caret
+> above does not name; raised as [OQ-272](../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-272), not decided. The proofs now take the caret
 > below the frontmatter first. A person's edit live is asked by the default live run's `delegation-edit` launch, the
 > orchestrator's to run. The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 

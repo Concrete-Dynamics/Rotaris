@@ -9,7 +9,7 @@ flag; `host.ts` builds the client in every build, and `scripted-client.ts` keeps
 `provider: scripted` gets, in a shipped build, a model that asks for no credential and runs a terminal command it did not
 choose, where every other provider the build knows no endpoint for is refused.
 
-The consortium ruled [OQ-312](../../architecture/open-questions/62-spikes-and-later-questions-29.md#oq-312) on 2026-10-14 under R-072, with no directive: a packaged
+The consortium ruled [OQ-312](../../archive/architecture/open-questions/62-spikes-and-later-questions-29.md#oq-312) on 2026-10-14 under R-072, with no directive: a packaged
 build answers no `provider: scripted` entry; the client is compiled out with the other verification seams; a `scripted` entry
 with no `base_url` gets the no-endpoint refusal; ADR-0056 rule 4 (b) is re-based on a loopback OpenAI-compatible stub that
 `scripts/package.mjs` starts itself. Found unbuilt on origin/main `7533685` by the final acceptance round (finding B2);
@@ -20,7 +20,7 @@ recorded 2026-10-14 by fin46 (`fin46-accept1-11`) before its repair.
 REQ-CONFIG-082 and REQ-CONFIG-478 (a run's model is the configured model), ADR-0029/0030 (authenticated as configured),
 REQ-EVENTS-021 and REQ-EVENTS-019 ("No usable model is configured for the entry role" for a provider the build knows no
 endpoint for). The specification names no `scripted` provider. ADR-0056 (the packaged build carries no verification seam).
-[OQ-312](../../architecture/open-questions/62-spikes-and-later-questions-29.md#oq-312) as ruled.
+[OQ-312](../../archive/architecture/open-questions/62-spikes-and-later-questions-29.md#oq-312) as ruled.
 
 ## Relevant files
 

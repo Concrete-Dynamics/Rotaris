@@ -223,7 +223,7 @@ its existing owner under REQ-SANDBOX-113.
 not a line; `\r\n` and `\n` both terminate). `final_url` on a refused hop is the URL of the hop that returned the
 redirect, with its status; on a refusal before any connection both are absent. ~~The run's own abort mid-fetch is
 `network_error` ("cancelled by the run"), never `timeout`.~~ *Replaced 2026-10-13 by
-[`PD-TOOLS-013`](../../product/directives/pd-tools-013.md#pd-tools-013) revision 2 ([OQ-238](../open-questions/51-spikes-and-later-questions-18.md#oq-238)): the run's own
+[`PD-TOOLS-013`](../../product/directives/pd-tools-013.md#pd-tools-013) revision 2 ([OQ-238](../../archive/architecture/open-questions/51-spikes-and-later-questions-18.md#oq-238)): the run's own
 abort mid-fetch is `interrupted`, `error_class` `InterruptedError`, "The fetch of <url> was cancelled by the run before it
 completed.", still never `timeout` (a deadline that expired first reads `timeout`), and it files no issue; `network_error`
 read a deliberate cancel as a transport fault and filed a `tool_error` warning for every quit.* A hop is classified before the permitted set is

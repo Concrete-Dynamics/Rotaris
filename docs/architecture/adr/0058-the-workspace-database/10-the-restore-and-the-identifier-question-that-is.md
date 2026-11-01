@@ -209,7 +209,7 @@ ordinary state and not an error. So the worst observable in the gap is an empty 
 store is closed anyway; it is not a corrupt store and not a half-restored one, which is what the requirement
 actually forbids.
 
-**A process cut in the gap, and the journal that names it.** *(Added 2026-10-14, [OQ-266](../../open-questions/57-spikes-and-later-questions-24.md#oq-266)
+**A process cut in the gap, and the journal that names it.** *(Added 2026-10-14, [OQ-266](../../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-266)
 ruled 2026-10-13 under R-072; the paragraph above holds for a restore that reaches step 9, and the 2026-10-13 measurement in
 "Not exercised" below is what it did not cover.)* The gap is milliseconds for a restore that runs on, and indefinite for a
 process that dies in it: the next open met an empty target name and created a fresh store there, 10 of 10. So the restore
@@ -265,7 +265,7 @@ reached a store directory holding no database in **0 of 30**. R1 cost 3.15–3.7
 6.43–7.36 ms. The counterfactual was run in the same harness: the single-rename reversal failed `EPERM` in
 10 of 10 and reached the forbidden end state in 10 of 10, with the error naming both paths each time. **Two
 leftovers, not one, were observed on every corrected run**: the `.obstruction-` aside this reversal mints,
-which is intended and kept, and the staging copy, which is defect D5 and is still open. *(2026-10-14, [OQ-265](../../open-questions/57-spikes-and-later-questions-24.md#oq-265)
+which is intended and kept, and the staging copy, which is defect D5 and is still open. *(2026-10-14, [OQ-265](../../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-265)
 as ruled under R-072: a reversal that puts the store back now deletes the staging copy; only the `.obstruction-` aside is left,
 and E2 asserts both. A reversal that fails keeps the copy and lists it.)*
 

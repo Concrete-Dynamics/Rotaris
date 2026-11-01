@@ -17,7 +17,7 @@ kept; the only signal is an `[IN_PROGRESS]` marker in the Todo state below it.
 - **The observation is false by omission.** A success that does not say a sent state was overridden tells the agent its list
   was stored as sent.
 
-Ruled as [OQ-255](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-255) under the owner's delegation (R-072): `PD-TOOLS-008` revision 3.
+Ruled as [OQ-255](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-255) under the owner's delegation (R-072): `PD-TOOLS-008` revision 3.
 
 ## Specs
 
@@ -41,7 +41,7 @@ Ruled as [OQ-255](../../architecture/open-questions/54-spikes-and-later-question
 ## Outcome
 
 Repaired 2026-10-13 (fin37, `fin37-replace-closes-delegated`) under `PD-TOOLS-008` revision 3
-([OQ-255](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-255)). The `todo` tool reads, beside the held set, the items any child of the
+([OQ-255](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-255)). The `todo` tool reads, beside the held set, the items any child of the
 list's owner serves, ended ones included (`TodoToolOptions.served`, read through `ToolPortContext.servedTodoItems` from
 `IterationChildren.servedTodoItems`). In `replace`, a served IN_PROGRESS task no running child holds takes the COMPLETED or
 ABANDONED the list sends and no longer counts as the active task against a mark in the same list; finished work, held tasks and

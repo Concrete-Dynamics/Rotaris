@@ -199,7 +199,7 @@ the schema and does not enforce it, the model answers in roughly its shape. The 
 which rung *this* endpoint honours is one measurement; a second provider is a second one, and the memory is per
 session by REQ-ORCH-010, so the first call of every session still pays the descent.
 
-**Reported back 2026-10-13 ([OQ-258](../open-questions/55-spikes-and-later-questions-22.md#oq-258), ruled under R-072; fin38).** One reading of this correction is
+**Reported back 2026-10-13 ([OQ-258](../../archive/architecture/open-questions/55-spikes-and-later-questions-22.md#oq-258), ruled under R-072; fin38).** One reading of this correction is
 falsified: "the strict rung's says only that the reply is the object" because "the schema was meant to be the instruction". A
 reasoning model never sees `response_format` while it reasons — the schema shapes only the decoded answer — so against the
 registered self-hosted endpoint at `552d346` (`qwen3.8-flash-next`) the duress classification chose `whole_project`, deliberated

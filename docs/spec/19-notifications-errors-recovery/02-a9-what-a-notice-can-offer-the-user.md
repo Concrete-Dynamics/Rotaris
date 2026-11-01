@@ -11,7 +11,7 @@ Part 2 of 7 of [domain 19](../19-notifications-errors-recovery.md), which indexe
   > **Extended by [`PD-SHELL-001`](../../product/directives/pd-shell-001.md#pd-shell-001) revision 2, 2026-10-13.** An action naming a
   > workspace surfaces the main window holding it, else adds one for it on PD-SHELL-001's add terms (no gate, nothing
   > asked, nothing closed), and opens its surface there.
-  > *Amended in place 2026-10-14 (revision 3, [OQ-292](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-292)):* "focus a named session"
+  > *Amended in place 2026-10-14 (revision 3, [OQ-292](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-292)):* "focus a named session"
   > carries the session's workspace as well — in Data & Formats, "parameterised by session identifier and its workspace" —
   > taken from the run host's record of the session's root, and takes the same reach; the session is focused in the window
   > surfaced or added. A notice whose session's workspace is not known carries no action.

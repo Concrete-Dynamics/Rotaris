@@ -52,7 +52,7 @@ no-op that names the state it would read. *(That sentence was false until 2026-1
 places — the close's between the unsaved-settings guard and the active-run confirmation (`guardClose`), the workspace-open flow's
 between gates 1 and 3 — over `noWorktreeIntegration`, the reader that names a binding's `'integrating'` status and answers none
 running until integration is built; what the requirement leaves open beyond one window's close is
-[OQ-361](../open-questions/63-spikes-and-later-questions-30.md#oq-361), *ruled 2026-10-20 and built 2026-10-21 (`PD-SHELL-009` revision 3): the close of one of several
+[OQ-361](../../archive/architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361), *ruled 2026-10-20 and built 2026-10-21 (`PD-SHELL-009` revision 3): the close of one of several
 windows and gate (2) count the window's own workspace, the last window's close and the update's `Restart now` and installer
 hand-off count the whole instance (`integrationAllowsUpdate`), the reader is main's own record of an integration it admitted
 and has not seen end — never a binding's `merge_status` or REQ-GIT-128's lock, so the "names a binding's `'integrating'`

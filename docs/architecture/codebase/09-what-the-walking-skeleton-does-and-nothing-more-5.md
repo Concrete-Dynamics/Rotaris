@@ -167,7 +167,7 @@ it found was repaired (OQ-273): the pinned runtime renamed the declaring file al
 sends the reference search itself before every rename, writing no row, and the eleventh launch is green with both files renamed
 and no search row, `PD-MCP-004`'s acceptance gate, re-run on every pin change; since fin47 a thirteenth launch,
 `child-rename-cold-js`, makes the same cold rename in a JavaScript workspace with no `tsconfig.json` or `jsconfig.json`, the live
-run's shape, which was red there until [OQ-362](../open-questions/65-spikes-and-later-questions-32.md#oq-362) was ruled and built (the note reopened); since
+run's shape, which was red there until [OQ-362](../../archive/architecture/open-questions/65-spikes-and-later-questions-32.md#oq-362) was ruled and built (the note reopened); since
 `PD-MCP-004` revision 2 (2026-10-20, loc1) the run host places a `jsconfig.json` of the product's own at the root for such a rename
 and removes it when the rename has answered, so launch 13 is green, joined by a fourteenth (`child-rename-opened-js`, a symbol
 overview of the declaring file first) and a fifteenth (`child-rename-cold-ts`, two TypeScript files and no `tsconfig.json`), each

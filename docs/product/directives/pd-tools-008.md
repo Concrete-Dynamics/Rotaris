@@ -5,18 +5,18 @@
 ### PD-TOOLS-008 — a todo list that itself marks two tasks in progress is refused without naming an active task
 
 *Revision 4 (2026-10-15, [R-072](../requests.md#r-072)) — **a task a delegation has served is outside the single-active count, before
-and after its child ends**, a section added after revision 3's; the ruling of [OQ-333](../../architecture/open-questions/62-spikes-and-later-questions-29.md#oq-333)
+and after its child ends**, a section added after revision 3's; the ruling of [OQ-333](../../archive/architecture/open-questions/62-spikes-and-later-questions-29.md#oq-333)
 under the owner's delegation. It replaces revision 2's "A task a running delegation holds is never counted against such a write",
 quoted below, and keeps revision 2's falsified cost line beside its replacement. Revision 3's close rules, protections and four
 kept-reasons are unchanged; the Narrows line is unchanged.*
 
 *Revision 3 (2026-10-13, [R-072](../requests.md#r-072)) — **a `replace` closes a delegated item once its child has ended, and
 names every task it restores**, a section added after revision 2's; the ruling of
-[OQ-255](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-255) under the owner's delegation. It replaces revision 2's "REQ-TOOLS-146's
+[OQ-255](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-255) under the owner's delegation. It replaces revision 2's "REQ-TOOLS-146's
 protection is otherwise unchanged", quoted below; the Narrows line is unchanged.*
 
 *Revision 2 (2026-10-07, [R-072](../requests.md#r-072)) — **a task a running delegation holds is outside the single-active
-count**, a section added after revision 1's text; the ruling of [OQ-249](../../architecture/open-questions/53-spikes-and-later-questions-20.md#oq-249) under the owner's
+count**, a section added after revision 1's text; the ruling of [OQ-249](../../archive/architecture/open-questions/53-spikes-and-later-questions-20.md#oq-249) under the owner's
 delegation. It replaces revision 1's "at most one task is `IN_PROGRESS`", quoted below, and adds REQ-TOOLS-146 to the Narrows
 line.*
 
@@ -105,7 +105,7 @@ ABANDONED, and the plan recorded the item `PENDING` while its child ran; the dur
 makes that plan the run's primary progress display. OQ-163's case, which revision 1 ruled, had no delegation. What it costs:
 - several active rows while children run;
 - a stale active row between a child's end and the coordinator closing its item, which then counts against the next write that
-  marks a task — *falsified 2026-10-15 and replaced by revision 4 ([OQ-333](../../architecture/open-questions/62-spikes-and-later-questions-29.md#oq-333)): the
+  marks a task — *falsified 2026-10-15 and replaced by revision 4 ([OQ-333](../../archive/architecture/open-questions/62-spikes-and-later-questions-29.md#oq-333)): the
   stale row still stands until the coordinator closes it, but it counts against no write, and the resume line of `PD-TOOLS-006`
   revision 11 names it;*
 - the `todo` tool now depends on the run's child records, read through a port at each call.
@@ -136,9 +136,9 @@ that child's work, not the coordinator's own active task, whether or not the chi
 
 *Raised by the owner, 2026-10-06, ruling OQ-163 as recommended; logged as [R-071](../requests.md#r-071). Revision 2 ruled under the
 owner's delegation, [R-072](../requests.md#r-072), from OQ-249 (the consortium's question P3, the final live runs' findings P3 and
-D7). Revision 3 ruled under the same delegation from [OQ-255](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-255) (the consortium's
+D7). Revision 3 ruled under the same delegation from [OQ-255](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-255) (the consortium's
 question RC1, from revision 7's first execution). Revision 4 ruled under the same delegation from
-[OQ-333](../../architecture/open-questions/62-spikes-and-later-questions-29.md#oq-333) (finding F9 of fin46's final acceptance, the default live run at `3c03287`).*
+[OQ-333](../../archive/architecture/open-questions/62-spikes-and-later-questions-29.md#oq-333) (finding F9 of fin46's final acceptance, the default live run at `3c03287`).*
 
 > **First execution, 2026-10-06, built under [R-071](../requests.md#r-071) (fin21):** the rule held as written. The case it
 > names is exactly the second of `todo`'s two `replace` checks (`packages/agent-tools/src/tools/todo.ts`): the first
@@ -167,7 +167,7 @@ question RC1, from revision 7's first execution). Revision 4 ruled under the sam
 > tests child's item `PENDING` (`#14`, refused again). The row is in
 > [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
-> **First execution of revision 2, 2026-10-13, ruled under [R-072](../requests.md#r-072) ([OQ-249](../../architecture/open-questions/53-spikes-and-later-questions-20.md#oq-249)),
+> **First execution of revision 2, 2026-10-13, ruled under [R-072](../requests.md#r-072) ([OQ-249](../../archive/architecture/open-questions/53-spikes-and-later-questions-20.md#oq-249)),
 > built by fin33 (`fin33-delegation-targets-and-plan`):** built as written, and the text met the code in two places.
 >
 > - **The held set is read at each call, through the run.** `todoTool` takes `TodoToolOptions.held`
@@ -192,7 +192,7 @@ question RC1, from revision 7's first execution). Revision 4 ruled under the sam
 > `heldItemReading` (`apps/desktop/scripts/lib/coordinator-todo.mjs`) counts items read PENDING while held and single-active
 > refusals (target 0). The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
-> **First execution of revision 3, 2026-10-13, ruled under [R-072](../requests.md#r-072) ([OQ-255](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-255)),
+> **First execution of revision 3, 2026-10-13, ruled under [R-072](../requests.md#r-072) ([OQ-255](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-255)),
 > built by fin37 (`fin37-replace-closes-delegated`):** built as written, and the text met the code in three places.
 >
 > - **The served set is a second read through the run, beside the held one.** `todoTool` takes `TodoToolOptions.served`
@@ -252,7 +252,7 @@ question RC1, from revision 7's first execution). Revision 4 ruled under the sam
 > [`live-0bc3eee-default-autopsy.md`](../../architecture/live-runs/live-0bc3eee-default-autopsy.md).
 > The rows are in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
-> **First execution of revision 4, 2026-10-15, ruled under [R-072](../requests.md#r-072) ([OQ-333](../../architecture/open-questions/62-spikes-and-later-questions-29.md#oq-333)),
+> **First execution of revision 4, 2026-10-15, ruled under [R-072](../requests.md#r-072) ([OQ-333](../../archive/architecture/open-questions/62-spikes-and-later-questions-29.md#oq-333)),
 > built by fin47 (`fin47-classifier-and-todo`):** built as written, and the text met the code in two places.
 >
 > - **One exempt set, held inside served.** `todoTool` computes `exemptNow`, the union of the served and held reads

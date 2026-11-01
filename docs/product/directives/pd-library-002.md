@@ -4,27 +4,27 @@
 
 ### PD-LIBRARY-002 — a retrospective pass reads the workspace's own session history and proposes what a user would otherwise have to teach the product by hand
 
-*Revision 2 (2026-10-13, [R-072](../requests.md#r-072), rulings [OQ-235](../../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-235) and
-[OQ-236](../../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236)) — **which instruction files the retrospective reads** (OQ-235): the
+*Revision 2 (2026-10-13, [R-072](../requests.md#r-072), rulings [OQ-235](../../archive/architecture/open-questions/51-spikes-and-later-questions-18.md#oq-235) and
+[OQ-236](../../archive/architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236)) — **which instruction files the retrospective reads** (OQ-235): the
 rule paragraph's instruction-file clause is replaced, and revision 1's is quoted beneath it; the reach clause is unchanged
 word for word. **Where the retrospective departs from the requirements it sits beside, and its start gesture** (OQ-236):
 one paragraph added after "Reach, and the boundary it holds"; revision 1 said nothing on these points, so nothing is
 replaced.*
 
-*Revision 3 (2026-10-13, [R-072](../requests.md#r-072), ruling [OQ-271](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-271)) — **the
+*Revision 3 (2026-10-13, [R-072](../requests.md#r-072), ruling [OQ-271](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-271)) — **the
 per-run history**: clause (h) is added to the revision-2 paragraph and REQ-LIBRARY-034 joins the Narrows line. Revision 2
 said nothing on the per-run history, so nothing is replaced.*
 
-*Revision 4 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-285](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-285)) — **an empty
+*Revision 4 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-285](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-285)) — **an empty
 artifact whose collector failed, and a timed-out retrospective**: one sentence is added at the end of clause (c), which points
 at [`PD-LIBRARY-005`](pd-library-005.md#pd-library-005). Revision 2's text of (c) stays otherwise word for word, so nothing is replaced.*
 
-*Revision 5 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-300](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-300)) — **the
+*Revision 5 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-300](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-300)) — **the
 retrospective's authentication refusal**: one sentence is added at the end of "The model", and REQ-WORKSPACE-137 and
 REQ-WORKSPACE-152 join the Extends line. Revision 4 said nothing on a retrospective whose entry provider has no credential, so
 nothing is replaced.*
 
-*Revision 6 (2026-10-20, [R-072](../requests.md#r-072), ruling [OQ-363](../../architecture/open-questions/65-spikes-and-later-questions-32.md#oq-363)) — **what a
+*Revision 6 (2026-10-20, [R-072](../requests.md#r-072), ruling [OQ-363](../../archive/architecture/open-questions/65-spikes-and-later-questions-32.md#oq-363)) — **what a
 configuration that loads may refuse a retrospective for**: one passage, with its reason and its cost, is added at the end of
 "The model", and REQ-CONFIG-246 joins the Extends line. Revision 5 said nothing on a run's other refusals of a configuration
 that loads, so nothing is replaced.*
@@ -204,21 +204,21 @@ Extends because its clauses bind an analysis that a run triggered, and the rule 
 analyst. No rule text changed ([OQ-222](../../architecture/open-questions.md), ruled under [R-072](../requests.md#r-072);
 [`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement`](../../defects/fixed/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md)).*
 
-*Revision 2, 2026-10-13 ([OQ-236](../../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236), ruled under [R-072](../requests.md#r-072)): the
+*Revision 2, 2026-10-13 ([OQ-236](../../archive/architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236), ruled under [R-072](../requests.md#r-072)): the
 Narrows line is added and REQ-LIBRARY-126 and REQ-LIBRARY-128 join the Extends line, each requirement with its back-pointer;
 the cases are the revision-2 paragraph's (a) to (g)
 ([`pd-library-002-reaches-further-requirements-its-disposition-does-not-name`](../../defects/fixed/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md)).*
 
-*Revision 3, 2026-10-13 ([OQ-271](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-271), ruled under [R-072](../requests.md#r-072)):
+*Revision 3, 2026-10-13 ([OQ-271](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-271), ruled under [R-072](../requests.md#r-072)):
 REQ-LIBRARY-034 joins the Narrows line with its back-pointer (clause (h)). REQ-LIBRARY-017 stays on the Extends line, and
 REQ-LIBRARY-025 is untouched: with no retrospective artifact supplied as history, both read word for word for every run.*
 
-*Revision 5, 2026-10-14 ([OQ-300](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-300), ruled under [R-072](../requests.md#r-072)):
+*Revision 5, 2026-10-14 ([OQ-300](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-300), ruled under [R-072](../requests.md#r-072)):
 REQ-WORKSPACE-137 and REQ-WORKSPACE-152 join the Extends line, each with its "Extended by" back-pointer. Both read word for word
 for a run: the retrospective takes REQ-WORKSPACE-137's headline with a detail naming the retrospective, and REQ-WORKSPACE-152 (2)'s
 action at its capture.*
 
-*Revision 6, 2026-10-20 ([OQ-363](../../architecture/open-questions/65-spikes-and-later-questions-32.md#oq-363), ruled under [R-072](../requests.md#r-072)):
+*Revision 6, 2026-10-20 ([OQ-363](../../archive/architecture/open-questions/65-spikes-and-later-questions-32.md#oq-363), ruled under [R-072](../requests.md#r-072)):
 REQ-CONFIG-246 joins the Extends line with its "Extended by" back-pointer. It reads word for word for every run, the
 improvement run that applies a retrospective's proposal included. A retrospective, which is no run, decides what to do with the
 referential list it is handed, as REQ-CONFIG-229 leaves to every caller. The entry-model stand-in and the confinement gate's
@@ -281,7 +281,7 @@ written to the log at its capture, whatever the presenter.
 > and the no-artifact state is gone. **Found by building:** once a retrospective artifact stood among a workspace's five newest,
 > no later run's analysis was captured — its null source session reached the post-run job's `considered_session_ids` and the
 > parse threw; repaired in `captureImprovementJob`, which records no session for it, and the reading raised as
-> [OQ-271](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-271)
+> [OQ-271](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-271)
 > ([`fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md`](../../defects/fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md)).
 > **The live steps:** `live-run.mjs`'s `ask` now lets its run's analysis finish and its `ask-retrospective` presses the
 > gesture (Ctrl+6, Proposals) and waits for the pass to end, asserting one retrospective artifact with no session that read the

@@ -54,9 +54,9 @@ Part 12 of 22 of [ADR-0058](../0058-the-workspace-database.md), which indexes ev
    > | `<identifier>.displaced-<stamp>` | a restore, displacing the store it replaces | nothing — kept on purpose |
    > | `<identifier>.displaced-<stamp>` | the corruption ladder | nothing — kept on purpose |
    > | the old identifier's whole store | ESC-26's confirmed establishment | nothing — kept on purpose, and it is the undo |
-   > | `<identifier>.restoring-<n>` | **every** restore, staging the artifact | **since 2026-10-14 ([OQ-265](../../open-questions/57-spikes-and-later-questions-24.md#oq-265), ruled 2026-10-13 under R-072): deleted by the restore on every failure that leaves the store as it was; kept and reported after a failed reversal; left by a killed process ([OQ-266](../../open-questions/57-spikes-and-later-questions-24.md#oq-266)); cleared by the next restore's step 6.** *Until then: nothing, and nothing knows it exists.* |
+   > | `<identifier>.restoring-<n>` | **every** restore, staging the artifact | **since 2026-10-14 ([OQ-265](../../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-265), ruled 2026-10-13 under R-072): deleted by the restore on every failure that leaves the store as it was; kept and reported after a failed reversal; left by a killed process ([OQ-266](../../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-266)); cleared by the next restore's step 6.** *Until then: nothing, and nothing knows it exists.* |
    > | `<identifier>.obstruction-<stamp>` | the R1/R2 reversal, displacing whatever occupied the target | ***nothing, and nothing knows it exists*** |
-   > | `<identifier>.restore-pending` *(added 2026-10-14, [OQ-266](../../open-questions/57-spikes-and-later-questions-24.md#oq-266))* | every restore that reaches step 8, its journal, a file of a few dozen bytes | step 9, the in-process reversal, or the next open (`recoverCutRestore`); kept after a failed R2 until the next open retries the rename |
+   > | `<identifier>.restore-pending` *(added 2026-10-14, [OQ-266](../../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-266))* | every restore that reaches step 8, its journal, a file of a few dozen bytes | step 9, the in-process reversal, or the next open (`recoverCutRestore`); kept after a failed R2 until the next open retries the rename |
    >
    > **The last two are defect D5 and it is open.** The staging copy was left behind in every measured
    > failure of spike 22 — 30 of 30 on the literal reading, 30 of 30 with a file manager holding the store
@@ -66,7 +66,7 @@ Part 12 of 22 of [ADR-0058](../0058-the-workspace-database.md), which indexes ev
    > The first three are kept deliberately and are the reclamation surface's business; the last two are not
    > kept deliberately by anybody, which is the difference this table exists to show.
    >
-   > *2026-10-14: the staging copy's half of D5 is repaired ([OQ-265](../../open-questions/57-spikes-and-later-questions-24.md#oq-265)); the paragraph above is
+   > *2026-10-14: the staging copy's half of D5 is repaired ([OQ-265](../../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-265)); the paragraph above is
    > kept as what was measured. A copy is now kept only after a reversal that failed, where it sits beside the displaced store
    > the error names, or where its delete failed, which the failure's error names in one sentence; the obstruction aside's row
    > stands as it was, deferred with OQ-48.*
@@ -91,7 +91,7 @@ Part 12 of 22 of [ADR-0058](../0058-the-workspace-database.md), which indexes ev
    occupied-name failures. That state is now excluded by the reversal's displace step rather than by luck,
    and the exclusion is a correctness property of the reversal and not a nicety of it. *(2026-10-14: a process cut in
    the gap is the case the 20 observations did not cover — the absence then lasts until the next open, which now
-   reverses it from the restore's journal, [OQ-266](../../open-questions/57-spikes-and-later-questions-24.md#oq-266); and a store directory present and
+   reverses it from the restore's journal, [OQ-266](../../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-266); and a store directory present and
    empty, whatever reaches it, is refused at the open rather than created over, REQ-SESSION-202 and W-31.)*
 8. **Restoring on a machine other than the one that took the backup changes which sessions need repair.**
    Foreign-host lock rows are dropped on the way in (ADR-0005), so every session that was live when the

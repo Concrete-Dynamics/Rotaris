@@ -30,7 +30,7 @@ Whether a retrospective artifact belongs to a post-run analysis's history at all
 Repaired 2026-10-13 by fin42 (branch `fin42-timeout-and-retro`). `captureImprovementJob` records, in `considered_session_ids`,
 the source session of each prior artifact that has one, so a retrospective's artifact stays in a later run's history under
 REQ-LIBRARY-034's letter and contributes no session (the reading raised as
-[OQ-271](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-271), left for a ruling). Pinned by `analyst.test.ts`'s case "captures a run's
+[OQ-271](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-271), left for a ruling). Pinned by `analyst.test.ts`'s case "captures a run's
 analysis when a retrospective artifact is among the prior ones …", red on the code before ("expected string, received null").
 Shown in the built app by `retrospective-proof`'s launch 8 (`live-shape-timeout`, a run after a retrospective in one
 workspace): before, the run's notice read "The run completed." and no artifact was stored; after, the run's empty artifact

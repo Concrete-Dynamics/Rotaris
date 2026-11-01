@@ -37,7 +37,7 @@ Part 2 of 7 of [domain 13](../13-workspace-context-onboarding.md), which indexes
   > [`PD-WORKSPACE-002`](../../product/directives/pd-workspace-002.md#pd-workspace-002) narrowed this requirement, the retrospective
   > reads the set injection reads, the per-file switches and REQ-WORKSPACE-048's master switch included (OQ-65,
   > ruled under [R-071](../../product/requests.md#r-071)), so the sentence above no longer states that set.
-  > *Amended 2026-10-13 ([OQ-235](../../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-235), ruled under
+  > *Amended 2026-10-13 ([OQ-235](../../archive/architecture/open-questions/51-spikes-and-later-questions-18.md#oq-235), ruled under
   > [R-072](../../product/requests.md#r-072); `PD-LIBRARY-002` revision 2):* the retrospective reads the workspace-root
   > part of the set injection reads — the files discovered at the workspace root, the per-file switches and
   > REQ-WORKSPACE-048's master switch applied — and no file under the global, home-relative or machine-wide bases,

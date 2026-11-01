@@ -4,7 +4,7 @@ Part 13 of 13 of [ADR-0065](../0065-the-retrospective-pass.md), which indexes ev
 
 ## Decision 5's refusal set, built and measured — 2026-10-20 (`PD-LIBRARY-002` revision 6, OQ-363, R-072; loc1)
 
-**Reported back.** The question the previous section left as [OQ-363](../../open-questions/65-spikes-and-later-questions-32.md#oq-363) was ruled (b), refined, on
+**Reported back.** The question the previous section left as [OQ-363](../../../archive/architecture/open-questions/65-spikes-and-later-questions-32.md#oq-363) was ruled (b), refined, on
 2026-10-20 under R-072 *(the ruling in that entry; `PD-LIBRARY-002` revision 6)*, and built the same day by loc1
 (`loc1-confinement-retro`). Of a configuration that loads, decision 5's pass is now refused for exactly what the directive's "The
 model" states, and the run's refusals reach it no longer:

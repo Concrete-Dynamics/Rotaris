@@ -35,7 +35,7 @@ artifact with zero proposals as "a result with zero proposals", its warning rese
 artifact". So a pass that never reached the model — the retrospective's 401 in the live run at `ce5f952`, the analyst's answer
 twice unreadable — was told to the person as one that looked and found nothing ("The retrospective found nothing to propose",
 "Nothing was proposed in impart_dL3YK5Xd."), which REQ-NOTIFY-100's truthfulness and REQ-NOTIFY-254 ("No failure is reported by
-silence") read against ([OQ-285](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-285);
+silence") read against ([OQ-285](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-285);
 [`a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing`](../../defects/fixed/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md)).
 The warning tells the person the review did not happen and why, the same notice a job with no artifact already earns; naming
 the artifact says where the notes are kept. A timeout is different in kind: the pass ran and was cut at a bound the person can
@@ -48,7 +48,7 @@ REQ-NOTIFY-254, `PD-CONFIG-003` revision 2 and OQ-223 are cited and not changed.
 
 > **Narrows:** REQ-LIBRARY-124
 
-*Ruled under the owner's delegation, 2026-10-14 ([OQ-285](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-285); dated 2026-10-13 until fin46
+*Ruled under the owner's delegation, 2026-10-14 ([OQ-285](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-285); dated 2026-10-13 until fin46
 corrected it from the consortium's ruling record); logged as
 [R-072](../requests.md#r-072). Narrows REQ-LIBRARY-124 for both passes. Comes with `PD-LIBRARY-002` revision 4, ruled with it, which
 names this directive in its clause (c). `PD-CONFIG-003` revision 2 is unchanged. The build's reading, kept as the falsified one:

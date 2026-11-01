@@ -29,7 +29,7 @@ bundle that builds that ruling.
 ## Outcome
 
 Repaired 2026-10-13 (plan fin34) under `PD-LIBRARY-002` revision 2's clause (e), ruled as
-[OQ-236](../../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236). `improvement:activity` carries `retrospective_pending`, which the
+[OQ-236](../../archive/architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236). `improvement:activity` carries `retrospective_pending`, which the
 coordinator answers per workspace from its queue and active job (`retrospectivePending`) and main sends to each main window
 for its own workspace. The Library tab and the Overview card draw one `RetrospectiveGesture`, unavailable only on that flag,
 with the reason "A retrospective is already queued or running."; the `improvements.retrospective` handler refuses a press

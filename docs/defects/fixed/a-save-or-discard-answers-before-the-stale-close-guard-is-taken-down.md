@@ -33,7 +33,7 @@ dialog a second time for a form that is already saved or discarded.
 
 - `REQ-SHELL-124`: the save/discard/cancel dialog, put once for a close the person started; a second dialog for an answered
   question contradicts it.
-- `REQ-CONFIG-287` and [OQ-311](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-311): the update's `Restart now` and `Update now` are
+- `REQ-CONFIG-287` and [OQ-311](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-311): the update's `Restart now` and `Update now` are
   user-initiated closes for the guard, one question per window, and an asking while the question is open joins it.
 
 ## Relevant files

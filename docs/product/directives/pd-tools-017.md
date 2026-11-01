@@ -29,7 +29,7 @@ outside this case is REQ-TOOLS-135's, REQ-TOOLS-136's and REQ-TOOLS-189's, exact
 text", and REQ-TOOLS-189's `haet_edit` matches "exact text"; the build wrote `new_string` as given, so on a CRLF file a one-line
 anchor replaced by several lines written with `\n` alone left LF lines among CRLF ones beside a clean success: probed by fin36,
 `one\r\ntwo\r\n` edited `one` → `ONE\nX` left `ONE\nX\r\ntwo\r\n`, through both tools and `replace_all`
-([OQ-254](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-254)). Windows is the only platform shipped (`PD-STARTUP-001`), where CRLF files are
+([OQ-254](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-254)). Windows is the only platform shipped (`PD-STARTUP-001`), where CRLF files are
 ordinary, and this is the commonest small edit. `PD-TOOLS-016` already ruled that line endings belong to the file and say
 nothing of the caller's intent; its own recovery path finished mixed too, since `PD-TOOLS-014`'s quote ends in the file's `\r`
 (`one\r\ntwo\r`) and a retry with `ONE\ntwo` took that `\r` with it, which is why clause 2 reads the result and covers the
@@ -42,7 +42,7 @@ from the specification alone writes `new_string` as given.
 > **Narrows:** REQ-TOOLS-136, REQ-TOOLS-189
 > **Extends:** REQ-TOOLS-135
 
-*Ruled under the owner's delegation, 2026-10-13 ([OQ-254](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-254)); logged as [R-072](../requests.md#r-072).
+*Ruled under the owner's delegation, 2026-10-13 ([OQ-254](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-254)); logged as [R-072](../requests.md#r-072).
 Narrows REQ-TOOLS-136 (level 1's "exact" and replace-all's "as plain text" keep a CRLF occurrence's line endings) and
 REQ-TOOLS-189 (`haet_edit`'s level-1 apply, whose matching stays exact); extends REQ-TOOLS-135 (one success sentence and one
 refusal).*
@@ -67,10 +67,10 @@ refusal).*
 > `one \ntwo` → `one\ntwo` on `one\r\ntwo\r\nthree\r\n` answers "(+0 -0). Match level: 2. new_string was written with the file's
 > CRLF line endings." with the file unchanged and an undo entry pushed, recorded as
 > [`a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success`](../../defects/fixed/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md)
-> and raised as [OQ-260](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-260); and `insert` writes LF lines into a CRLF file
+> and raised as [OQ-260](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-260); and `insert` writes LF lines into a CRLF file
 > (`a\r\nb\r\n` with `X` at line 1 gives `a\r\nX\nb\r\n`), recorded as
 > [`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](../../defects/fixed/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md) and
-> raised as [OQ-259](../../architecture/open-questions/55-spikes-and-later-questions-22.md#oq-259). A `replace_all` whose `old_string` is empty is outside the case
+> raised as [OQ-259](../../archive/architecture/open-questions/55-spikes-and-later-questions-22.md#oq-259). A `replace_all` whose `old_string` is empty is outside the case
 > and keeps its build. **Found in review (fin38):** `crlfLines` walked every line of the file for each question, and a `replace_all` asks once
 > per occurrence, so carrying one grew with the square of the file's length — 2,852 ms for 50,000 CRLF lines with a token on each
 > (load 1.8 on 4 CPUs), where the split and join it replaced was linear. It now reads only the lines it tests, and the unterminated

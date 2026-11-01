@@ -42,5 +42,5 @@ already under the registered key wins) and removes the old name (`RENAMED_KEYS`)
 the upgrade. Pinned by two cases in `packages/platform/src/platform.test.ts`, both red on the code before (the registered key was
 refused as "not registered (REQ-SHELL-006)"). The second half of this note — REQ-CONFIG-405's list omitting
 `display/showReasoning`, which REQ-SHELL-006 and REQ-CHAT-167 register — is a disagreement of the specification, not of the code,
-and is raised as [OQ-302](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-302) (raised as OQ-297 and renumbered at landing, where fin44's sibling bundles had taken OQ-297 to OQ-301); the build keeps `display/showReasoning` as registered.
+and is raised as [OQ-302](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-302) (raised as OQ-297 and renumbered at landing, where fin44's sibling bundles had taken OQ-297 to OQ-301); the build keeps `display/showReasoning` as registered.
 *Added 2026-10-14 (fin45):* OQ-302 was ruled confirmed as built under [R-072](../../product/requests.md#r-072), with no change: REQ-CONFIG-405's list names the keys it owns and REQ-SHELL-006's table is the one complete registry, so this note's second half is settled.

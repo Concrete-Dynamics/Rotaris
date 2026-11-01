@@ -5,7 +5,7 @@
 ### PD-TOOLS-013 — a call its run cancels reads `interrupted`
 
 *Revision 2 (2026-10-13, [R-072](../requests.md#r-072)) — **every call its run cancels**, the ruling of
-[OQ-238](../../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-238) (GC1) under the owner's delegation: the title and the scope widen from the
+[OQ-238](../../archive/architecture/open-questions/51-spikes-and-later-questions-18.md#oq-238) (GC1) under the owner's delegation: the title and the scope widen from the
 terminal to every tool call the run's signal cuts off, in the section **A call its run cancels, of any tool** after the
 terminal's; REQ-TOOLS-092, REQ-SANDBOX-025 and REQ-SESSION-139 join the Narrows line. The terminal's clause stands as written.*
 

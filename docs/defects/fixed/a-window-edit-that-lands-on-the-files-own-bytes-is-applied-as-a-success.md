@@ -12,10 +12,10 @@ byte of the file changed. The caller meant to strip a trailing space it believed
 `haet_edit` refuses its no-op (`docs/defects/fixed/haet-edit-applies-an-edit-that-changes-nothing.md`), and `PD-TOOLS-017`
 clause 3 refuses an exact or replace-all edit whose carried result equals the file. A window edit has no such refusal, since
 `PD-TOOLS-016` does not decide it. Found by the R-072 consortium's ruling of OQ-254, which asked for this probe; raised as
-[OQ-260](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-260). Recorded by fin38 (`b6d85c9`), not repaired then.
+[OQ-260](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-260). Recorded by fin38 (`b6d85c9`), not repaired then.
 
 **Repaired 2026-10-13 (fin39, `fin39-insert-noop-optionals`), under `PD-TOOLS-016` revision 3 clause 4**
-([OQ-260](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-260), ruled under R-072). `writeFileTool`'s edit branch compares the window
+([OQ-260](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-260), ruled under R-072). `writeFileTool`'s edit branch compares the window
 path's result with the file before `commit`, and a result equal to the file is refused through `windowNoOpMessage`
 (`packages/agent-tools/src/tools/files.ts`): nothing written, no undo entry, the read record unchanged, and the reply `old_string
 matches n.txt only at match level 2 (lines 1-2), and those lines already hold new_string as this edit would write it; nothing to

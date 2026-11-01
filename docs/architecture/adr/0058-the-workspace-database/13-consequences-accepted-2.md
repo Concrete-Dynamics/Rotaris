@@ -17,7 +17,7 @@ Part 13 of 22 of [ADR-0058](../0058-the-workspace-database.md), which indexes ev
       exist.** The full table is in consequence 5 above. Each is the size of a store. What is owed is
       OQ-48's inspect-and-delete surface, which the specification still does not have.
 
-      ***The staging half, repaired 2026-10-14 (fin43; [OQ-265](../../open-questions/57-spikes-and-later-questions-24.md#oq-265) ruled under R-072); the
+      ***The staging half, repaired 2026-10-14 (fin43; [OQ-265](../../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-265) ruled under R-072); the
       bullet above is kept as what stood.*** On every failure return that leaves the store as it was — a failed
       expansion, a staging store that fails `quick_check` or does not open, a failed step-8 displacement, a step-9
       failure with no previous store, and a step-9 failure whose R1/R2 reversal put the store back — `restoreStore`

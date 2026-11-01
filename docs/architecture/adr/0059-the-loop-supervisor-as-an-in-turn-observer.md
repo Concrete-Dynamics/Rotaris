@@ -58,7 +58,7 @@ next user message; "escalate" ends the turn failed with the signal. Chosen.
    part of it, and an argument text that does not parse compared whole as text.
    *Until 2026-10-20 this read "tool name plus the whole argument string, never a prefix or a cap"; the string kept
    the model client's key order, so one value with its keys reordered was another action
-   ([OQ-364](../open-questions/66-spikes-and-later-questions-33.md#oq-364); the section at the end).* The
+   ([OQ-364](../../archive/architecture/open-questions/66-spikes-and-later-questions-33.md#oq-364); the section at the end).* The
    assistant's text between two calls neither breaks "in a row" nor pairs with a call to form a cycle.
    Messages count toward the raw thresholds and are `REQ-ORCH-104`'s evidence (the last three
    normalised-equal). See the first execution for why this sentence is here.
@@ -197,21 +197,21 @@ tool call cut short or not sent (the fallback deciding), and after a quick one c
 turn that earns [`PD-ORCH-009`](../../product/directives/pd-orch-009.md#pd-orch-009)'s answer re-prompt. The re-prompt's turn took the trigger
 at its first `check()`, a classification was asked over an empty excerpt, and the stuck corrective ("Pause and reassess the
 current task. …") followed the re-prompt in the same request, so the re-prompt was not the model's last instruction. Ruled under
-the owner's delegation (R-072) as [OQ-282](../open-questions/59-spikes-and-later-questions-26.md#oq-282) and carried by `PD-ORCH-009` revision 3, which narrows
+the owner's delegation (R-072) as [OQ-282](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-282) and carried by `PD-ORCH-009` revision 3, which narrows
 REQ-ORCH-104's stuck-mode clause for that one turn: `LoopSupervisor.withdrawStuck()` clears a pending trigger only when it is
 `stuck` (a repetition, cycle or raw-count one stays) and leaves the consecutive counter alone, and `Run.turn` calls it on the
 root's supervisor immediately before it returns `ANSWER_REPROMPT`. **The reading it replaces, kept beside it:** *every* empty
 reply with no call is a stuck report, so the supervisor recovers it whatever the run itself sends next. It now holds for every
 turn but that one; a delegated child's empty turn before its REQ-ORCH-095 re-prompt still arms stuck (pinned as found, raised as
-[OQ-283](../open-questions/59-spikes-and-later-questions-26.md#oq-283)), and a trigger a root's last empty turn leaves pending is taken by its next turn in the same
-execution, after a plan correction ([OQ-284](../open-questions/60-spikes-and-later-questions-27.md#oq-284)). Pinned by `supervisor.test.ts`'s three
+[OQ-283](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-283)), and a trigger a root's last empty turn leaves pending is taken by its next turn in the same
+execution, after a plan correction ([OQ-284](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-284)). Pinned by `supervisor.test.ts`'s three
 `withdrawStuck` cases and `answerless.test.ts`'s two revision-3 cases (all five red on `29dbc4e`), and by `pnpm part-h-proof`'s
 `answerless` and `answer-when-asked` launches with supervision on (no loop classification and no stuck activation).
 **Not measured:** a live run since the change (the orchestrator's `empty-answer`).
 
 ## 2026-10-14 — the producer narrowed again: the run's own follow-ups (PD-ORCH-009 revision 4, fin44)
 
-**Ruled under the owner's delegation (R-072)** as [OQ-283](../open-questions/59-spikes-and-later-questions-26.md#oq-283) and [OQ-284](../open-questions/60-spikes-and-later-questions-27.md#oq-284):
+**Ruled under the owner's delegation (R-072)** as [OQ-283](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-283) and [OQ-284](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-284):
 the two neighbouring shapes the entry above named. A delegated child's empty turn before its REQ-ORCH-095 re-prompt, and an
 execution iteration's root turn the run follows with REQ-ORCH-078's plan correction, are no stuck report either: `withdrawStuck()`
 is called before the child's "Carry out the task now, …" (`IterationChildren.execute`) and before the correction (`Run.turn`'s
@@ -221,13 +221,13 @@ turn, re-prompt, corrective] and a correction's [... , correction, corrective]. 
 here: the plan correction is REQ-ORCH-105's todo-correction message and never reset the series (an activation after a correction
 that followed two others escalated), so the correction now calls `noteUserInstruction()` too. What still arms stuck: every other
 empty turn, a root silent while its background child runs among them — the corrective follows the child's report (pinned as found,
-raised as [OQ-296](../open-questions/60-spikes-and-later-questions-27.md#oq-296)). Pinned by `children.test.ts`'s and `coordinator-plan.test.ts`'s revision-4
+raised as [OQ-296](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-296)). Pinned by `children.test.ts`'s and `coordinator-plan.test.ts`'s revision-4
 cases (five red on `a3be56c`) and by `pnpm part-h-proof`'s `silent-correction` and `silent-child` launches (0 loop
 classifications, 0 stuck activations). **Not measured:** a live run since the change.
 
 ## 2026-10-14 — the producer narrowed a third time: a parent's silent wait (PD-ORCH-009 revision 5, fin45)
 
-**Ruled under the owner's delegation (R-072)** as [OQ-296](../open-questions/60-spikes-and-later-questions-27.md#oq-296): the shape the entry above left as found.
+**Ruled under the owner's delegation (R-072)** as [OQ-296](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-296): the shape the entry above left as found.
 A parent — an execution iteration's root, or a delegated child acting as parent — whose turn ends with neither text nor a call
 while a child of its is pending or ended unobserved is waiting (REQ-ORCH-055), not stuck: `IterationChildren.runWithChildren`
 calls `withdrawStuck()` as it takes the parent into the wait, so the children's reports are the request's last message. Decision
@@ -255,7 +255,7 @@ The record already stored those arguments with sorted keys (`session-writer.ts`)
 the supervisor saw five different ones. The build also read a strict alternation of two key orders as a two-action cycle at
 the sixth call, so whether one failing edit counted as a loop depended on the pattern of its key orders.
 
-**Ruled under the owner's delegation (R-072)** as [OQ-364](../open-questions/66-spikes-and-later-questions-33.md#oq-364), with no directive: REQ-ORCH-101's "the
+**Ruled under the owner's delegation (R-072)** as [OQ-364](../../archive/architecture/open-questions/66-spikes-and-later-questions-33.md#oq-364), with no directive: REQ-ORCH-101's "the
 whole of their arguments" is their value read as JSON (a dated note beneath the requirement). **The change**
 (`packages/engine/src/run/supervisor.ts`): a tool event's fingerprint is `tool\0<name>\0v\0<encoding>` of
 `JSON.parse(args)`, where the encoding is a string written with every object's keys sorted at every depth, every member kept

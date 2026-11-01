@@ -40,7 +40,7 @@ Part 1 of 5 of [domain 11's resolutions](../11-startup-distribution-updates.md),
 > `%LOCALAPPDATA%\rotaris\rotaris\`, and `REQ-UIBENCH-039` requires `XDG_CONFIG_HOME` to be honoured. Live requirements
 > disagreed, and nothing the product does changes. Ruled under the owner's delegation
 > ([R-072](../../../product/requests.md#r-072)); the ruling is in
-> [`open-questions.md`](../../../architecture/open-questions/52-spikes-and-later-questions-19.md#oq-247).
+> [`open-questions.md`](../../../archive/architecture/open-questions/52-spikes-and-later-questions-19.md#oq-247).
 
 
 > ## Superseded by the storage rulings (2026-09-01)

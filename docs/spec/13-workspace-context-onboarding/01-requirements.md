@@ -40,7 +40,7 @@ Part 1 of 7 of [domain 13](../13-workspace-context-onboarding.md), which indexes
 
 - **REQ-WORKSPACE-012** — Opening another project SHALL be refused while work is in flight, with an error toast stating exactly "Finish the worktree integration before opening another project." while a worktree integration is running, or "Finish the active run before opening another project." while any run is active or the run state is busy.
   > **Narrowed by [`PD-SHELL-009`](../../product/directives/pd-shell-009.md#pd-shell-009) revision 3, 2026-10-20**
-  > ([OQ-361](../../architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361), ruled under [R-072](../../product/requests.md#r-072)). Both
+  > ([OQ-361](../../archive/architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361), ruled under [R-072](../../product/requests.md#r-072)). Both
   > refusals count the requesting window's own workspace: a window whose project runs no integration and has no run active
   > may open another project while another window's project integrates or runs, and the window whose project does is
   > refused with the toast above, as before. The run count has been the window's own since revision 1 (2026-10-07), which

@@ -31,7 +31,7 @@ log; a reader holding the file open sees it change under it; and the figures are
 
 > **Narrows:** REQ-SESSION-142, REQ-MONITOR-238
 
-*Raised as [OQ-465](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-465) by the hardening
+*Raised as [OQ-465](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-465) by the hardening
 request [R-091](../requests.md#r-091), 2026-11-01, and ruled the same day by the orchestrator's consortium under the
 owner's delegation ([R-072](../requests.md#r-072)); minted because the bound departs from the unbounded file the
 requirement states. Built by the hardening plan's bundle `log-sinks`.*

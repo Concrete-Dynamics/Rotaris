@@ -2,7 +2,7 @@
 
 Recorded 2026-10-14 by fin43 (`fin43-notices-and-config`) from the consortium's ruling of OQ-267 (step 8 (b)). Not repaired:
 REQ-HOOKS-101 fixes the message's words, so a change to them needs a directive, raised as
-[OQ-293](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-293).
+[OQ-293](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-293).
 
 REQ-NOTIFY-224's notice for a workspace whose declared hooks are unreviewed is an application notice: one store, shown in every
 main window (ADR-0049). Main raises it with the title "Workspace hooks need review" and REQ-HOOKS-101's message, "Skipped <N>

@@ -127,7 +127,7 @@ unnecessary or insufficient; launch 11 is its acceptance gate and is re-run when
 *Found insufficient 2026-10-15 (fin47), the same pin:* the warm-up helps only where a `tsconfig.json` or `jsconfig.json` covers the
 files. In a workspace with none (the live run's `todo-app` fixture, a Vite React shape) the TypeScript language server holds only
 the open files, the runtime opens the declaring file alone, and the search answers `{}`: the live `rename` scenario at `3c03287`
-renamed one file of three. The remedy is open as [OQ-362](../../open-questions/65-spikes-and-later-questions-32.md#oq-362); `code-intel-proof` launch 13
+renamed one file of three. The remedy is open as [OQ-362](../../../archive/architecture/open-questions/65-spikes-and-later-questions-32.md#oq-362); `code-intel-proof` launch 13
 (`child-rename-cold-js`) is red on it until a ruling is built, and joins launch 11 as a gate re-run on every pin change.
 *Revision 2, built 2026-10-20 (loc1, `loc1-rename`; `PD-MCP-004` revision 2, OQ-362 ruled 2026-10-20 under R-072), the same pin:*
 the manifest also carries `projectFiles`, a product choice keyed by capability beside `warmUps` — the symbol rename's project file:

@@ -8,19 +8,19 @@
 [`PD-ORCH-015`](pd-orch-015.md#pd-orch-015). The first sentence is narrowed below and its revision-1 text quoted beside it. Revision 1
 (2026-10-06, [R-071](../requests.md#r-071)) is otherwise unchanged.*
 
-*Revision 3 (2026-10-13, [R-072](../requests.md#r-072), ruling [OQ-282](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-282), the
+*Revision 3 (2026-10-13, [R-072](../requests.md#r-072), ruling [OQ-282](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-282), the
 consortium's E1) — **the re-prompt is the root's only message for that turn**: one paragraph is added after the re-prompt's,
 which narrows REQ-ORCH-104's stuck-mode clause for the one turn the re-prompt answers. Revision 2's paragraph is quoted beside
 it, unchanged; everything else stands as revisions 1 and 2 wrote it.*
 
-*Revision 4 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-283](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-283) and
-[OQ-284](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-284), both ruled by the consortium and written on 2026-10-14) — **the run's own follow-up
+*Revision 4 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-283](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-283) and
+[OQ-284](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-284), both ruled by the consortium and written on 2026-10-14) — **the run's own follow-up
 is the only message it adds for the turn it follows**: revision 3's last sentence is replaced and its case widened from the
 entry role's re-prompted turn to three turns — that one, a delegated child's empty turn that REQ-ORCH-095's re-prompt answers
 (OQ-283), and an execution iteration's root turn that REQ-ORCH-078's plan correction follows (OQ-284). Revision 3's replaced
 sentence and its case are quoted beside their replacements; everything else stands as revisions 1 to 3 wrote it.*
 
-*Revision 5 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-296](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-296), ruled by the
+*Revision 5 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-296](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-296), ruled by the
 consortium and written on 2026-10-14) — **a parent's silent wait on its children is no stuck report**: the case is widened by a fourth turn,
 (d), a parent's empty turn the run follows by waiting and resuming the parent with its children's reports (REQ-ORCH-055..057).
 Revision 4's two sentences that named this turn as governed by REQ-ORCH-104 as written — "a root resumed with a child's report
@@ -58,7 +58,7 @@ REQ-ORCH-105. Every other trigger, every other empty turn and every other turn o
 REQ-ORCH-099..107 say.
 
 > Revision 4's last sentence said, and no longer governs: "Every other trigger, every other empty turn — a root resumed with a
-> child's report after an empty turn among them ([OQ-296](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-296)) — and every other turn of a
+> child's report after an empty turn among them ([OQ-296](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-296)) — and every other turn of a
 > delegated child stay as REQ-ORCH-096 and REQ-ORCH-099..107 say." As built under it, a root that delegated in the background and
 > ended its turn silent was resumed with the child's report followed, in the same request, by the stuck corrective ("Pause and
 > reassess …"), with one stuck activation; and a root that waited so across three batches reached its third consecutive
@@ -129,11 +129,11 @@ so the consecutive series is not reset) and REQ-ORCH-106 (the escalation, unchan
 
 *Raised by the owner, 2026-10-06, ruling OQ-199 as recommended; logged as [R-071](../requests.md#r-071). Revision 3 ruled under
 the owner's delegation, 2026-10-13; logged under [R-072](../requests.md#r-072), the ruling of
-[OQ-282](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-282) (the consortium's E1). Revision 4 ruled under the owner's delegation
+[OQ-282](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-282) (the consortium's E1). Revision 4 ruled under the owner's delegation
 and written, both 2026-10-14; logged under [R-072](../requests.md#r-072), the rulings of
-[OQ-283](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-283) and [OQ-284](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-284). Revision 5 ruled
+[OQ-283](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-283) and [OQ-284](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-284). Revision 5 ruled
 under the owner's delegation and written, both 2026-10-14; logged under [R-072](../requests.md#r-072), the ruling of
-[OQ-296](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-296). Revisions 4 and 5 read "ruled … 2026-10-13, and written 2026-10-14" — a ruling date a day before
+[OQ-296](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-296). Revisions 4 and 5 read "ruled … 2026-10-13, and written 2026-10-14" — a ruling date a day before
 their questions were raised — until fin46 (`fin46-accept1-12`) corrected them on 2026-10-14 from the consortium's ruling
 record, which dates both sittings 2026-10-14 (by 04:58 and by 10:14 UTC).*
 
@@ -238,7 +238,7 @@ record, which dates both sittings 2026-10-14 (by 04:58 and by 10:14 UTC).*
 > 0 stuck activations, 0 loop classifications, one `succeeded` iteration; `silent-child` — the child's re-prompt sent once and
 > followed by its own step, 0 and 0, the child `succeeded`. **Found beside it:** the route revision 4 leaves out, a root silent
 > while its background child runs, takes the stuck corrective after the child's report (pinned as found in `children.test.ts`;
-> [OQ-296](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-296)). **What was not measured:** a build without the calls through the new
+> [OQ-296](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-296)). **What was not measured:** a build without the calls through the new
 > launches (the unit cases are the red evidence), and any live run — the `empty-answer` scenario with the plan open and a
 > delegation scenario meeting a silent child are the orchestrator's. The row is in
 > [`../architecture/first-executions.md`](../../architecture/first-executions.md).

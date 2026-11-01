@@ -23,7 +23,7 @@ Recorded 2026-10-13 from PD-ORCH-004's report-back ("The changed-paths reading f
 EDIT calls, open for the owner) and the fixed note
 [`a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing`](a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md)'s
 stated bound; ruled by the R-072 consortium as XE1, opened and ruled as
-[OQ-245](../../architecture/open-questions/52-spikes-and-later-questions-19.md#oq-245). Recorded before the repair (fin35).
+[OQ-245](../../archive/architecture/open-questions/52-spikes-and-later-questions-19.md#oq-245). Recorded before the repair (fin35).
 
 ## Specs
 
@@ -90,4 +90,4 @@ report-back keeps fin32's literal reading beside its replacement; the row is in 
 provisions the server on first use (launch 4). The eleventh launch found the rename itself reaching the declaring file alone when
 nothing came before it in the server session, a separate defect:
 [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
-([OQ-273](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-273)). A live run is still not shown.
+([OQ-273](../../archive/architecture/open-questions/58-spikes-and-later-questions-25.md#oq-273)). A live run is still not shown.

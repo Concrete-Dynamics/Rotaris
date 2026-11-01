@@ -4,15 +4,15 @@
 
 ### PD-TOOLS-016 — a window-match `write_file` edit keeps the file's line endings and the bytes of the lines it leaves unchanged
 
-*Revision 2 (2026-10-13, [R-072](../requests.md#r-072), ruling [OQ-254](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-254)) — **level 1 and
+*Revision 2 (2026-10-13, [R-072](../requests.md#r-072), ruling [OQ-254](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-254)) — **level 1 and
 `replace_all` are [`PD-TOOLS-017`](pd-tools-017.md#pd-tools-017)'s**: the case's "Everything outside this case" names it, and the cost sentence
 no longer says an exact `old_string` converts endings; revision 1's text is quoted beneath each.*
 
-*Revision 3 (2026-10-13, [R-072](../requests.md#r-072), ruling [OQ-260](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-260)) — **a window
+*Revision 3 (2026-10-13, [R-072](../requests.md#r-072), ruling [OQ-260](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-260)) — **a window
 edit whose carried result equals the file is refused**: clause 4 is added, and the cost sentence says so; revision 2's cost
 text is quoted beneath it. The case is unchanged: it already held the edit clause 4 refuses.*
 
-*Revision 4 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-295](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295) with
+*Revision 4 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-295](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295) with
 [`PD-TOOLS-020`](pd-tools-020.md#pd-tools-020)) — **level 3's blank lines are the window's own**: clause 1's heading and scope read "at level 2,
 and at level 3 for blank lines"; revision 3's clause 1 heading is quoted beneath it.*
 
@@ -24,7 +24,7 @@ Everything outside this case — several windows, and `haet_edit` and its alias 
 both tools, keep a CRLF file's line endings by [`PD-TOOLS-017`](pd-tools-017.md#pd-tools-017), which reads clause 2's test; and REQ-TOOLS-136's
 levels and their order are unchanged *(— revision 2)*.
 
-> Level 3's comparison is narrowed by [`PD-TOOLS-019`](pd-tools-019.md#pd-tools-019) ([OQ-280](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-280)).
+> Level 3's comparison is narrowed by [`PD-TOOLS-019`](pd-tools-019.md#pd-tools-019) ([OQ-280](../../archive/architecture/open-questions/58-spikes-and-later-questions-25.md#oq-280)).
 
 > Revision 1 said, and no longer governs: "Everything outside this case — level 1, `replace_all`, several windows, and
 > `haet_edit` and its alias `haet` ([`PD-TOOLS-014`](pd-tools-014.md#pd-tools-014)) — is REQ-TOOLS-135's and REQ-TOOLS-136's, exactly as
@@ -91,7 +91,7 @@ quote); and an implementation built from the specification alone writes `new_str
 
 > **Extends:** REQ-TOOLS-136, REQ-TOOLS-135
 
-*Ruled under the owner's delegation, 2026-10-13 ([OQ-246](../../architecture/open-questions/52-spikes-and-later-questions-19.md#oq-246)); logged as [R-072](../requests.md#r-072).
+*Ruled under the owner's delegation, 2026-10-13 ([OQ-246](../../archive/architecture/open-questions/52-spikes-and-later-questions-19.md#oq-246)); logged as [R-072](../requests.md#r-072).
 Extends REQ-TOOLS-136 (fills its silence on what a window match's replacement lines carry) and REQ-TOOLS-135 (one sentence
 added to the edit's success).*
 
@@ -111,7 +111,7 @@ added to the edit's success).*
 > line (`p q q r` → `P q R` pairs the second `q`), as the directive states; and level 1 is not covered: an exact match writes
 > `new_string`'s LF lines into a CRLF file through both tools and `replace_all`, recorded as
 > [`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../../defects/fixed/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md)
-> and raised as [OQ-254](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-254) for a ruling. **What was not measured.** No live run: the live-run fixtures are LF files on Linux, and none of the six
+> and raised as [OQ-254](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-254) for a ruling. **What was not measured.** No live run: the live-run fixtures are LF files on Linux, and none of the six
 > autopsies records a level-2 `write_file` edit; no proof script drives `write_file` in the built app, and the executor runs
 > unchanged inside the run host. Repairs
 > [`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../../defects/fixed/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md).

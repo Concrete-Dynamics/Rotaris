@@ -5,28 +5,28 @@
 ### PD-TOOLS-006 — a delegated child may declare a write scope that its siblings may not write into
 
 *Revision 11 (2026-10-15, [R-072](../requests.md#r-072)) — **the message that resumes a wait names a reported child's item still
-open**, a section added after revision 10's; the ruling of [OQ-333](../../architecture/open-questions/62-spikes-and-later-questions-29.md#oq-333) under the owner's
+open**, a section added after revision 10's; the ruling of [OQ-333](../../archive/architecture/open-questions/62-spikes-and-later-questions-29.md#oq-333) under the owner's
 delegation, with `PD-TOOLS-008` revision 4. REQ-ORCH-063 joins the Narrows line. Nothing is replaced. The ruling named it revision
-10; [OQ-334](../../architecture/open-questions/64-spikes-and-later-questions-31.md#oq-334)'s revision 10 landed on `main` first, so it takes the next, 11.*
+10; [OQ-334](../../archive/architecture/open-questions/64-spikes-and-later-questions-31.md#oq-334)'s revision 10 landed on `main` first, so it takes the next, 11.*
 
-*Revision 10 (2026-10-15, [R-072](../requests.md#r-072)): the ruling of [OQ-334](../../architecture/open-questions/64-spikes-and-later-questions-31.md#oq-334), from
+*Revision 10 (2026-10-15, [R-072](../requests.md#r-072)): the ruling of [OQ-334](../../archive/architecture/open-questions/64-spikes-and-later-questions-31.md#oq-334), from
 finding F10 of fin46's final acceptance (the default live run's `delegation` scenario at `3c03287`). A section added after revision
 9's, "What a child is told of its report", each clause marked "— revision 10"; the dispositions stay as they were (REQ-TOOLS-152
-and REQ-TOOLS-154 already stand on the Narrows line). Nothing is replaced. [OQ-331](../../architecture/open-questions/63-spikes-and-later-questions-30.md#oq-331), ruled
+and REQ-TOOLS-154 already stand on the Narrows line). Nothing is replaced. [OQ-331](../../archive/architecture/open-questions/63-spikes-and-later-questions-30.md#oq-331), ruled
 the same day, takes no revision.*
 
-*Revision 9 (2026-10-13, [R-072](../requests.md#r-072)): the rulings of [OQ-256](../../architecture/open-questions/55-spikes-and-later-questions-22.md#oq-256) (the
-consortium's question V1) and [OQ-257](../../architecture/open-questions/55-spikes-and-later-questions-22.md#oq-257) (V2), from the duress live run at `552d346`. Two
+*Revision 9 (2026-10-13, [R-072](../requests.md#r-072)): the rulings of [OQ-256](../../archive/architecture/open-questions/55-spikes-and-later-questions-22.md#oq-256) (the
+consortium's question V1) and [OQ-257](../../archive/architecture/open-questions/55-spikes-and-later-questions-22.md#oq-257) (V2), from the duress live run at `552d346`. Two
 sections added after revision 8's, "What an answer handed on carries" and "What `delegate` says of a write scope", each clause
 marked "— revision 9" and naming the question it rules; REQ-TOOLS-152's `depends_on` clause is quoted below as no longer
 governing, and REQ-ORCH-047 joins the Narrows line. Nothing else is replaced.*
 
 *Revision 8 (2026-10-07, [R-072](../requests.md#r-072)): the ruling of the OQ raised from live-run finding D3,
-[OQ-250](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-250). Nothing is replaced. A section added after revision 7's, "What the routing table says
+[OQ-250](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-250). Nothing is replaced. A section added after revision 7's, "What the routing table says
 of the work a route implies (revision 8)"; the dispositions stay as they were.*
 
 *Revision 7 (2026-10-07, [R-072](../requests.md#r-072)) — **an admitted delegation marks its PENDING item in progress**, a section
-added after revision 6's; the ruling of [OQ-249](../../architecture/open-questions/53-spikes-and-later-questions-20.md#oq-249) under the owner's delegation, with
+added after revision 6's; the ruling of [OQ-249](../../archive/architecture/open-questions/53-spikes-and-later-questions-20.md#oq-249) under the owner's delegation, with
 `PD-TOOLS-008` revision 2. Nothing is replaced, and the dispositions stay as they were.*
 
 *Revision 6 (2026-10-07, [R-072](../requests.md#r-072)) — **which todo item a delegation serves**, a section added after
@@ -162,7 +162,7 @@ answer, through `depends_on` or `inherited_context`, to a persona that has what 
 show is available to it. A configured `system_prompt` (REQ-CONFIG-100) is unchanged: it replaces the routing table and its
 sentence, and the catalogue still reaches that coordinator. Revision 3's refusal and revision 4's catalogue are unchanged.
 
-**What an answer handed on carries (revision 9, [OQ-256](../../architecture/open-questions/55-spikes-and-later-questions-22.md#oq-256)).** The two hand-off blocks
+**What an answer handed on carries (revision 9, [OQ-256](../../archive/architecture/open-questions/55-spikes-and-later-questions-22.md#oq-256)).** The two hand-off blocks
 of a delegated child's payload — the inherited-context block (REQ-TOOLS-154 item 5) and REQ-ORCH-047's prior-agent-context block —
 SHALL carry each named task's answer as follows *(— revision 9, OQ-256)*:
 1. Each block renders, in the caller's order, every named sibling's (inherited) or dependency's (prior-agent) result text — the
@@ -191,14 +191,14 @@ hand-off block.
 > child's payload" — REQ-ORCH-047's block and clause 1 above state what a dependency's answer carries. Its "reports" for
 > `inherited_context` is read as clause 1's result text under clause 2's budget.
 
-**What `delegate` says of a write scope (revision 9, [OQ-257](../../architecture/open-questions/55-spikes-and-later-questions-22.md#oq-257)).** `delegate`'s
+**What `delegate` says of a write scope (revision 9, [OQ-257](../../archive/architecture/open-questions/55-spikes-and-later-questions-22.md#oq-257)).** `delegate`'s
 description SHALL tie work that writes files to a persona whose entry in its catalogue writes workspace files, SHALL tell the
 caller to give that child `write_scope`, and SHALL say that a `write_scope` given to any other persona is refused and nothing is
 started; the `write_scope` field's description in the offered schema SHALL say the same in one sentence. Both texts are fixed
 and name no persona *(— revision 9, OQ-257)*. Revision 3's refusal, revision 4's catalogue, revision 8's routing sentence and
 REQ-ORCH-028's routes are unchanged.
 
-**What a child is told of its report (revision 10, [OQ-334](../../architecture/open-questions/64-spikes-and-later-questions-31.md#oq-334)).** REQ-LIBRARY-092 keeps
+**What a child is told of its report (revision 10, [OQ-334](../../archive/architecture/open-questions/64-spikes-and-later-questions-31.md#oq-334)).** REQ-LIBRARY-092 keeps
 every ended child's report as an artifact of kind `child_report`, and the agents are now told so *(— revision 10, OQ-334)*:
 - `delegate`'s description, where the caller's run holds an artifact store, SHALL carry one fixed sentence, after revision 9's
   hand-off sentence and naming no persona, saying that the run keeps an ended child's report as a `child_report` artifact, which
@@ -214,7 +214,7 @@ A brief is neither refused nor rewritten, the routing table names no publisher, 
 ARTIFACT text stays as built. Revision 3's refusals, revision 4's three facets, revision 8's routing sentence and revision 9's
 sentences are unchanged.
 
-**What the message that resumes a wait says of a reported child's item still open (revision 11, [OQ-333](../../architecture/open-questions/62-spikes-and-later-questions-29.md#oq-333)).**
+**What the message that resumes a wait says of a reported child's item still open (revision 11, [OQ-333](../../archive/architecture/open-questions/62-spikes-and-later-questions-29.md#oq-333)).**
 Revision 7's mark leaves a delegated item IN_PROGRESS after its child ends, and `PD-TOOLS-008` revision 4 no longer counts it
 against the caller's next mark, so nothing but this line tells the caller to close it. When the message that resumes a wait
 (REQ-ORCH-063: a `wait_for_tasks` result, the wait of a `delegate` with `run_in_background: false`, and the orchestration pass's
@@ -340,7 +340,7 @@ the task the condition and never the persona. What it costs:
 - the write-scope sentence is still advice, about 40 more tokens on every delegating request, and a model that drops the scope
   but still briefs a non-writer to write is caught only by OQ-257's reopening condition;
 - OQ-216's write-scope target of zero becomes a bound (at most one refusal a run, each re-routed by the next request) —
-  *falsified 2026-10-15 and replaced by [OQ-331](../../architecture/open-questions/63-spikes-and-later-questions-30.md#oq-331)'s per-task bound, reported under
+  *falsified 2026-10-15 and replaced by [OQ-331](../../archive/architecture/open-questions/63-spikes-and-later-questions-30.md#oq-331)'s per-task bound, reported under
   revision 9's first execution below;*
 - an implementation built from the specification alone caps the inherited block at 4,000 characters and words the sentence as
   before.
@@ -513,7 +513,7 @@ OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287
 > coordinator delegated to it). **Still owed:** the duress counts named above (briefs, `write_scope` refusals, rows spent on a
 > missing tool, stray files). The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 >
-> **Reported back 2026-10-07, ruled under [R-072](../requests.md#r-072) ([OQ-228](../../architecture/open-questions/53-spikes-and-later-questions-20.md#oq-228), the consortium's
+> **Reported back 2026-10-07, ruled under [R-072](../requests.md#r-072) ([OQ-228](../../archive/architecture/open-questions/53-spikes-and-later-questions-20.md#oq-228), the consortium's
 > question P5):** the build read "every persona that agent can delegate to" as **every `personas:` key of the configuration**
 > (`knownRoles()`, `Object.keys(cfg.personas)`), with `gatekeeper` among the research and decision roles; that reading stays
 > here, and is replaced by the **delegation targets**: every persona of the configuration except the three REQ-MCP-014 and
@@ -524,7 +524,7 @@ OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287
 > for. Found by building: the resolver path's unknown-persona message listed no aliases, which REQ-ORCH-034 requires; it now
 > does. **What was not measured:** no live run yet; the next default run should show neither reserved name in any catalogue.
 >
-> **Reported back 2026-10-07, ruled under [R-072](../requests.md#r-072) ([OQ-229](../../architecture/open-questions/53-spikes-and-later-questions-20.md#oq-229), the consortium's
+> **Reported back 2026-10-07, ruled under [R-072](../requests.md#r-072) ([OQ-229](../../archive/architecture/open-questions/53-spikes-and-later-questions-20.md#oq-229), the consortium's
 > question DT1):** for a caller whose `delegates_to` names any persona, "every persona that agent can delegate to" means the
 > delegation targets that list names (REQ-CONFIG-101); an empty list narrows nothing. Built 2026-10-13 by fin33
 > (`Persona.delegatesTo`, `DelegateCatalogue.narrowedBy`); the evidence is scripted only, since no live run sets the key.
@@ -536,7 +536,7 @@ OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287
 > live run's `delegation` scenario sets the key (`codebase-analyst`, `docs-writer`); its run is the orchestrator's.
 >
 > **Measured 2026-10-07 (the duress live run at `a68f121`, pack `2026-10-07T07-09-30-708Z`, session `e6747bd0`; recorded
-> 2026-10-13 under [OQ-250](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-250)):** the "What was not measured" above, now measured. The catalogue
+> 2026-10-13 under [OQ-250](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-250)):** the "What was not measured" above, now measured. The catalogue
 > was in 35 of 35 coordinator requests. Briefs asking a persona without a terminal to run commands: 1, against 2 to 3 per run
 > before (`#114`, `node --test` offered to a docs-writer, then `run_command` refused at the gate, `#164`). `write_scope` refusals:
 > 1, against 2 per run (`#115`, `architect` given `docs/decisions.md`, refused in 170 ms with the writers named, re-briefed in
@@ -544,7 +544,7 @@ OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287
 > failed child before. No stray workaround file, no impossible brief on a failed child's path, and the answer claimed no test run.
 > The target of zero was missed for revision 4 alone; revision 8 is the next step, measured against the same target.
 
-> **First execution of revision 8, 2026-10-13, ruled under [R-072](../requests.md#r-072) ([OQ-250](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-250)),
+> **First execution of revision 8, 2026-10-13, ruled under [R-072](../requests.md#r-072) ([OQ-250](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-250)),
 > built by fin33 (`fin33-delegation-targets-and-plan`):** built as written. The sentence is `ROUTING_WORK_SENTENCE`, appended to
 > `ROUTING` after "final acceptance → verifier." (`packages/engine/src/children/personas.ts`), so `BUILT_IN_ORCHESTRATOR_PROMPT` stays
 > a constant and `entryInstructionsFor` still swaps it whole on a direct-work grant; a configured `system_prompt` carries neither the
@@ -633,7 +633,7 @@ OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287
 > item, and the refusals counted (target at most one per run, each followed by a named delegation). The row is in
 > [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
-> **First execution of revision 7, 2026-10-13, ruled under [R-072](../requests.md#r-072) ([OQ-249](../../architecture/open-questions/53-spikes-and-later-questions-20.md#oq-249)),
+> **First execution of revision 7, 2026-10-13, ruled under [R-072](../requests.md#r-072) ([OQ-249](../../archive/architecture/open-questions/53-spikes-and-later-questions-20.md#oq-249)),
 > built by fin33 (`fin33-delegation-targets-and-plan`):** built as written, and the text met the code in two places.
 >
 > - **The mark is the run host's, made before a foreground wait.** The engine hands the admitted item back on the accepted
@@ -644,7 +644,7 @@ OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287
 > - **`replace` cannot complete an active item.** REQ-TOOLS-146 restores an IN_PROGRESS task over a `replace`, so an item the
 >   run marked is closed with `update`. The scripted coordinator's `done` step (`apps/desktop/src/run-host/scripted-client.ts`)
 >   wrote one `replace` with every item COMPLETED; it now sends one `update` per open item, as a model must.
->   *Falsified as a rule for a served-and-ended item, 2026-10-13, by [OQ-255](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-255)'s ruling
+>   *Falsified as a rule for a served-and-ended item, 2026-10-13, by [OQ-255](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-255)'s ruling
 >   (`PD-TOOLS-008` revision 3, under [R-072](../requests.md#r-072)):* the reason held of the code as built, but no live model is
 >   told it, and the restore it describes is the defect
 >   [`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../../defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
@@ -664,8 +664,8 @@ OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287
 > Agent plan strip drawing both rows active while both children run; the duress run, a parallel child's item active while it
 > runs (`#305` not recurring). The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
-> **First execution of revision 9, 2026-10-13, ruled under [R-072](../requests.md#r-072) ([OQ-256](../../architecture/open-questions/55-spikes-and-later-questions-22.md#oq-256)
-> and [OQ-257](../../architecture/open-questions/55-spikes-and-later-questions-22.md#oq-257)), built by fin38 (`fin38-edits-handoff-classifier`):** built as written, and
+> **First execution of revision 9, 2026-10-13, ruled under [R-072](../requests.md#r-072) ([OQ-256](../../archive/architecture/open-questions/55-spikes-and-later-questions-22.md#oq-256)
+> and [OQ-257](../../archive/architecture/open-questions/55-spikes-and-later-questions-22.md#oq-257)), built by fin38 (`fin38-edits-handoff-classifier`):** built as written, and
 > the text met the code in three places.
 >
 > - **One figure, two packages.** The engine renders the blocks and `agent-tools` writes the description, and neither imports the
@@ -730,7 +730,7 @@ OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287
 > The rows are in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
 > **Revision 9's duress execution, reported back 2026-10-15 (fin47, `fin47-delegation-routing`), ruled under
-> [R-072](../requests.md#r-072) as [OQ-331](../../architecture/open-questions/63-spikes-and-later-questions-30.md#oq-331):** the duress run at `3c03287` (fin46's final
+> [R-072](../requests.md#r-072) as [OQ-331](../../archive/architecture/open-questions/63-spikes-and-later-questions-30.md#oq-331):** the duress run at `3c03287` (fin46's final
 > acceptance, pack `2026-10-15T04-01-06-491Z`, session `2fe0a837`, finding F6) carried the write-scope sentence and the field's
 > description in every delegating request and refused two write scopes for a non-writer: `#105` (`architect`, `docs/decisions.md`,
 > refused in 7 ms before any record, re-routed 26.9 s later by `#126`, the architect without a scope, whose answer a docs-writer
@@ -744,7 +744,7 @@ OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287
 > OQ-331)"), pinned by `lib/routing-misses.test.ts`, red on the code before. The row is in
 > [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
-> **First execution of revision 10, 2026-10-15, ruled under [R-072](../requests.md#r-072) ([OQ-334](../../architecture/open-questions/64-spikes-and-later-questions-31.md#oq-334)),
+> **First execution of revision 10, 2026-10-15, ruled under [R-072](../requests.md#r-072) ([OQ-334](../../archive/architecture/open-questions/64-spikes-and-later-questions-31.md#oq-334)),
 > built by fin47 (`fin47-delegation-routing`):** built as written, and the text met the code in two places.
 >
 > - **Where the store's presence reaches the description.** `delegate`'s description is written in `agent-tools`, which knows no
@@ -769,7 +769,7 @@ OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287
 > [`a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for`](../../defects/fixed/a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for.md).
 > The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
-> **First execution of revision 11 (the resume line, [OQ-333](../../architecture/open-questions/62-spikes-and-later-questions-29.md#oq-333)), 2026-10-15, ruled under
+> **First execution of revision 11 (the resume line, [OQ-333](../../archive/architecture/open-questions/62-spikes-and-later-questions-29.md#oq-333)), 2026-10-15, ruled under
 > [R-072](../requests.md#r-072), built by fin47 (`fin47-classifier-and-todo`):** built as written, and the text met the code in three
 > places.
 >

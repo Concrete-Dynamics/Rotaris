@@ -21,8 +21,8 @@ launch that becomes the instance beside a live holder that never answered is the
 already admits ("the one path by which two processes of the application can briefly exist"), protected by the session
 locks it names.
 
-**Why, and what it costs.** [OQ-460](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-460) and
-[OQ-461](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-461), raised by the review of the
+**Why, and what it costs.** [OQ-460](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-460) and
+[OQ-461](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-461), raised by the review of the
 instance's stand-down on 2026-10-31. A second hand-over attempt with no interval of its own is not an attempt, and a
 launch that used the first interval would make clause (4) a formality. As built on that date, a holder that is live and
 never answers ended the launch `refused`, exit code 2, with no window of its own and none surfaced: the person who

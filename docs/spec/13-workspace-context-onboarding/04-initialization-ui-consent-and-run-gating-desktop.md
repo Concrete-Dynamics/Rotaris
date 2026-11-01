@@ -9,10 +9,10 @@ Part 4 of 7 of [domain 13](../13-workspace-context-onboarding.md), which indexes
   > resolution raises, shown in every window, reads "Project setup could not be checked: " followed by the project's name, the
   > project's folder heading its detail area; its message is the sentence above, unchanged. The window's own surface keeps
   > the headline as stated.
-  > *Amended in place 2026-10-13 (revision 2, [OQ-262](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-262)):* the banner carries
+  > *Amended in place 2026-10-13 (revision 2, [OQ-262](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-262)):* the banner carries
   > `open-project-init` naming the project's folder, labelled "Open Project settings"; it opens Settings › Project in the
   > window holding the project, or says the project is not open in any window.
-  > *Amended in place 2026-10-14 (revision 3, [OQ-294](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-294)):* where no window holds the
+  > *Amended in place 2026-10-14 (revision 3, [OQ-294](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-294)):* where no window holds the
   > project, a main window is added for it on PD-SHELL-001's add terms and Settings › Project opens there; the "not open in any
   > window" notice is gone.
 
@@ -20,10 +20,10 @@ Part 4 of 7 of [domain 13](../13-workspace-context-onboarding.md), which indexes
   > **Narrowed by [`PD-WORKSPACE-005`](../../product/directives/pd-workspace-005.md#pd-workspace-005), 2026-10-06.** The banner stays an
   > application notice shown in every window, and its title reads "Project setup did not finish: " followed by the project's name,
   > the project's folder heading its detail area; its message is the sentence above, unchanged.
-  > *Amended in place 2026-10-13 (revision 2, [OQ-262](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-262)):* its "Try again" is
+  > *Amended in place 2026-10-13 (revision 2, [OQ-262](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-262)):* its "Try again" is
   > `open-project-init` naming the project's folder; it opens Settings › Project in the window holding the project, or
   > says the project is not open in any window.
-  > *Amended in place 2026-10-14 (revision 3, [OQ-294](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-294)):* where no window holds the
+  > *Amended in place 2026-10-14 (revision 3, [OQ-294](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-294)):* where no window holds the
   > project, a main window is added for it on PD-SHELL-001's add terms and Settings › Project opens there; the "not open in any
   > window" notice is gone.
 

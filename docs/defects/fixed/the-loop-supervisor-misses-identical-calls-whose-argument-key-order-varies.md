@@ -1,6 +1,6 @@
 ## The loop supervisor misses identical calls whose argument key order varies
 
-**Outcome: repaired 2026-10-20 by `loc1-supervisor` under [OQ-364](../../architecture/open-questions/66-spikes-and-later-questions-33.md#oq-364)** (ruled
+**Outcome: repaired 2026-10-20 by `loc1-supervisor` under [OQ-364](../../archive/architecture/open-questions/66-spikes-and-later-questions-33.md#oq-364)** (ruled
 2026-10-20 under R-072, no directive; a dated note beneath `REQ-ORCH-101`). A tool event's fingerprint in
 `packages/engine/src/run/supervisor.ts` is now the tool name and the whole argument **value**: `JSON.parse(args)` written out
 with every object's keys sorted at every depth, every member kept, arrays in order and strings quoted, tagged `v`; a text that

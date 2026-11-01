@@ -85,7 +85,7 @@ advocate's first execution against the registered self-hosted endpoint.
 > 1,234 characters, faults-stall 786 → 2,114, frictions 1,073 → 1,544; requirements fell, 1,973 → 1,478). **The endpoint's
 > pace confounds it:** terminal's classifier received 0 bytes in 11,967 ms and edit's 201 chunks, and in three stretches single
 > requests ran at 10 to 22 output tokens/s with nothing else of the run in flight, against 64 to 74 at other times. Read from the
-> copied traffic by the R-072 consortium's ruling of [OQ-258](../../architecture/open-questions/55-spikes-and-later-questions-22.md#oq-258): the cuts of duress,
+> copied traffic by the R-072 consortium's ruling of [OQ-258](../../archive/architecture/open-questions/55-spikes-and-later-questions-22.md#oq-258): the cuts of duress,
 > resume and faults-args deliberated over which key to write the category under (the strict rung named none), edit's was still
 > applying the tie-break, and terminal's was the endpoint queueing. So this revision's sentence is not shown to have lengthened
 > classification; the key deliberation is OQ-258's, repaired by naming the keys on the strict rung, and the next default pack is
@@ -106,7 +106,7 @@ advocate's first execution against the registered self-hosted endpoint.
 > `0bc3eee` pack it reproduces the figures above, faults-args `explicit_trivial` 0.78 in 9.2 s.*
 >
 > **Reported back 2026-10-15 (fin47), revision 2 at `3c03287` — a NOTE** (pack `2026-10-15T03-10-08-908Z`, fin46's final
-> acceptance, finding F7; ruled as [OQ-332](../../architecture/open-questions/62-spikes-and-later-questions-29.md#oq-332) under [R-072](../requests.md#r-072)).
+> acceptance, finding F7; ruled as [OQ-332](../../archive/architecture/open-questions/62-spikes-and-later-questions-29.md#oq-332) under [R-072](../requests.md#r-072)).
 > **faults-args, the prompt this revision defines, fell back instead of reaching the micro group.** Its classification was cut at
 > REQ-ORCH-008's 12 s bound (11,972 ms, about 95.6 kB of stream) after its reasoning had named `single_file_change` at 0.85 and
 > then reopened the choice against `explicit_trivial`; it took REQ-ORCH-007's fallback, `moderate_feature`, and the coordinator

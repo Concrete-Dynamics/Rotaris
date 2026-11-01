@@ -204,13 +204,13 @@ therefore readable in the log and nowhere else. `REQ-SHELL-118`'s update-offer n
 progress, is not built (there is no updater). ~~Seven~~ members of the action vocabulary parse and dispatch to nothing in
 this build — the update, the restart, the cloud account, ~~the project initialization,~~ ~~the retry,~~ the proposal revert and
 the settings save — each logged rather than silently ignored, and `open-library` has no target until the Library view
-exists. *Corrected 2026-10-14 ([OQ-262](../open-questions/56-spikes-and-later-questions-23.md#oq-262), ruled 2026-10-13 under
+exists. *Corrected 2026-10-14 ([OQ-262](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-262), ruled 2026-10-13 under
 [R-072](../../product/requests.md#r-072); [`PD-WORKSPACE-005`](../../product/directives/pd-workspace-005.md#pd-workspace-005) revision 2): the
 project initialization dispatches. Both project-setup banners carry `open-project-init` naming their project's folder
 ("Try again" on a failed background run, "Open Project settings" on a failed resolution); activated in any window, main's
 `projectInit.open` surfaces the main window holding that workspace and tells it on channel 15 (`project-init:open`) to open
 Settings › Project, ~~and where no window holds it the activating window shows "Project <name> is not open in any window."
-and nothing else happens~~ *(corrected 2026-10-14, [OQ-294](../open-questions/59-spikes-and-later-questions-26.md#oq-294) ruled under R-072,
+and nothing else happens~~ *(corrected 2026-10-14, [OQ-294](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-294) ruled under R-072,
 [`PD-WORKSPACE-005`](../../product/directives/pd-workspace-005.md#pd-workspace-005) revision 3: where no window holds it, `MainWindows.reach`
 adds a main window for it on [`PD-SHELL-001`](../../product/directives/pd-shell-001.md#pd-shell-001)'s add terms and Settings › Project
 opens there, held by the window until its renderer sends `projectInit.ready`)*. `pnpm notice-proof` section 6c presses it from the window that does not hold the project.* *Corrected 2026-10-02: the retry was one of the seven as first written; since 2026-10-02 `retry-run`
@@ -227,7 +227,7 @@ the two members shipped here carried none — `open-hook-review` now names the w
 happens to be open), and `open-provider-sign-in` names a provider where one is named. ~~A review action naming a
 workspace other than the open one opens nothing and is logged; navigating between workspaces from a notice is not
 built.~~ *Built 2026-10-13 (fin41, N86): a review action naming another workspace reaches it — the window holding it
-surfaced, else one added for it, asking nothing and closing nothing ([OQ-267](../open-questions/57-spikes-and-later-questions-24.md#oq-267); the build's
+surfaced, else one added for it, asking nothing and closing nothing ([OQ-267](../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-267); the build's
 reading until it was ruled on 2026-10-13 under [R-072](../../product/requests.md#r-072) as
 [`PD-SHELL-001`](../../product/directives/pd-shell-001.md#pd-shell-001) revision 2) — and opens
 that workspace's review there; `pnpm notice-proof`'s `review-other` launch measures it

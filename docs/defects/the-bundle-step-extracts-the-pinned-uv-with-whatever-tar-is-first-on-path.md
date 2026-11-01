@@ -22,7 +22,7 @@ expected: `ensureBundle` rebuilds a missing runtime before any launch.
 
 ## Specs
 
-None in `docs/spec/` contradicted: the bundle step is a build tool. [OQ-400](../architecture/open-questions/64-spikes-and-later-questions-31.md#oq-400) (c)'s
+None in `docs/spec/` contradicted: the bundle step is a build tool. [OQ-400](../archive/architecture/open-questions/64-spikes-and-later-questions-31.md#oq-400) (c)'s
 ruling, as [ADR-0035](../architecture/adr/0035-the-bundled-code-intelligence-runtime.md) "The bundle is built for the
 artifact's architecture" records it: an ARM64 host "takes the pinned, hash-checked `win32-x64` uv". Under Git Bash it cannot.
 

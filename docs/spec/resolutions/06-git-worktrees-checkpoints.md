@@ -20,7 +20,7 @@ status: resolved
 > `REQ-GIT-130`'s own layout — the integration container `integrations/` inside the session storage directory — shows that
 > namespace containers nest by design. Nothing the product does changes. Ruled under the owner's delegation
 > ([R-072](../../product/requests.md#r-072)), confirmed as built; the ruling, with its caveat on session ids, is in
-> [`open-questions.md`](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-263).
+> [`open-questions.md`](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-263).
 
 > ## Superseded by the storage rulings (2026-09-01)
 >

@@ -69,7 +69,7 @@ renderer held a person's close and the quit, a SIGTERM's included, for good
 and `hang-close` launches: the renderer stopped with SIGSTOP, the quit and the host's close each end the process, exit 0, about
 5.6 s after they were asked). The allowed `win.close()` completes on a hung renderer, so the close stays a close, not a
 `destroy()`. A renderer that answers its probes is waited for with no bound: its guard may be a person's Save/Discard/Cancel
-(a quit from outside any window no longer asks it: [OQ-298](../../open-questions/61-spikes-and-later-questions-28.md#oq-298), ruled; `exit-trace-proof`'s `hang`
+(a quit from outside any window no longer asks it: [OQ-298](../../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298), ruled; `exit-trace-proof`'s `hang`
 quit now exits in well under a second, and its `unsaved-quit` and `unsaved-sigterm` launches leave the configuration file
 byte-identical). Nothing a quit closes answers for a person. `QuitState` (`main/exit.ts`) knows the quit from
 `exitCleanly` and from each main window's confirmed close, which `guardClose` reports before closing. While it is under
@@ -79,7 +79,7 @@ REQ-SHELL-119's guards in order** (REQ-STARTUP-046, OQ-206; fin22): the renderer
 (since 2026-10-15, fin47: while a worktree integration runs the close is refused by the informational "Integration in progress"
 box, `integrationAllowsClose`, `main/integration-guard.ts`, reached through the adapter's `integrationAllowsClose`; main reads
 `noWorktreeIntegration`, which answers none running while integration is deferred, so it refuses nothing in this build;
-since 2026-10-21, as [OQ-361](../../open-questions/63-spikes-and-later-questions-30.md#oq-361) ruled on 2026-10-20 (`PD-SHELL-009` revision 3), the close of one of
+since 2026-10-21, as [OQ-361](../../../archive/architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361) ruled on 2026-10-20 (`PD-SHELL-009` revision 3), the close of one of
 several main windows asks about the closing window's own workspace and never refuses a window that holds none, the last
 window's close asks about the whole instance, the reader is main's own record of an integration it admitted and has not
 seen end — never a binding's `merge_status` or REQ-GIT-128's lock — and a record that cannot be read allows with a `warn`

@@ -17,7 +17,7 @@ keeps the workspace the service opened, and the open's slot (initialization reso
 the configuration's load) is not scheduled. `MainWindows.launch` now catches any other rejection of the launch's open, logs
 it, and leaves the window standing with no workspace open, as a refused open does. The specification does not say what else
 a missed hand-off owes, so that is raised as
-[OQ-386](../../architecture/open-questions/67-spikes-and-later-questions-34.md#oq-386). The build proceeds under the reading above.
+[OQ-386](../../archive/architecture/open-questions/67-spikes-and-later-questions-34.md#oq-386). The build proceeds under the reading above.
 
 **What pins it.** `apps/desktop/src/main/workspace-handoff.test.ts` runs the hand-off over main's own `ProcessLink` against a
 run host that never answers. At the bound it resolves unacknowledged and writes the warning, with no rejection (vitest fails

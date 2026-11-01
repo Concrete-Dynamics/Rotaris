@@ -8,7 +8,7 @@ false, and the workspace service's log line says the same. Noted by fin43's revi
 
 ## Specs
 
-- [OQ-266](../../architecture/open-questions/57-spikes-and-later-questions-24.md#oq-266), ruled 2026-10-13 under R-072 — the open reverses the cut restore and
+- [OQ-266](../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-266), ruled 2026-10-13 under R-072 — the open reverses the cut restore and
   tells the user once; the built notice names where the prepared copy is kept.
 - No requirement names this sentence; `REQ-SESSION-201`'s restore is the mechanism it reports on.
 

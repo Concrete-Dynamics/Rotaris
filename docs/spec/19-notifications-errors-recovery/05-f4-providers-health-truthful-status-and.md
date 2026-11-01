@@ -67,7 +67,7 @@ Part 5 of 7 of [domain 19](../19-notifications-errors-recovery.md), which indexe
 **REQ-NOTIFY-249** — The title bar carries session status as a single tag-styled chip combining the status indicator and the status word, never as a free-floating dot beside a word.
 
 **REQ-NOTIFY-250** — A subordinate indicator one size step smaller than the status chip reports background post-run improvement analysis, labelled to state that a review is in progress and describing that the user can continue working. It is shown only while that analysis is in flight.
-  > **Narrowed by [`PD-LIBRARY-002`](../../product/directives/pd-library-002.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../../architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236)). The indicator is also
+  > **Narrowed by [`PD-LIBRARY-002`](../../product/directives/pd-library-002.md#pd-library-002) revision 2, 2026-10-13** ([OQ-236](../../archive/architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236)). The indicator is also
   > shown while a user-started retrospective is in flight, labelled "Reviewing workspace history for improvements…"
   > (clause (d)); for the post-run pass the text above governs unchanged.
 

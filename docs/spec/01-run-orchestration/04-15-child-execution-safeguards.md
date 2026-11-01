@@ -45,7 +45,7 @@ Part 4 of 8 of [domain 01](../01-run-orchestration.md), which indexes every part
   > run held at REQ-ORCH-153's plan gate is an observed event for the entry agent, because the hold withholds
   > every writing tool and the reading a plan requires trips trigger (1) on the gate's own side effect.
 
-  > *Noted 2026-10-20 ([OQ-364](../../architecture/open-questions/66-spikes-and-later-questions-33.md#oq-364), ruled under
+  > *Noted 2026-10-20 ([OQ-364](../../archive/architecture/open-questions/66-spikes-and-later-questions-33.md#oq-364), ruled under
   > [R-072](../../product/requests.md#r-072)):* "the whole of their arguments" is their value read as JSON — every member of
   > every object at every depth, arrays in order, nothing trimmed, cased, cut or disregarded. The order in which an object's
   > members were written is no part of it, so one argument object sent with its keys in another order is the same action.

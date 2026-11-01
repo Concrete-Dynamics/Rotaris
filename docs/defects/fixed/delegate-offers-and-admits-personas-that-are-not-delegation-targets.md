@@ -36,7 +36,7 @@ through `fileWriters`), and the resolver path's unknown-persona message omits th
 
 ## Outcome
 
-Repaired 2026-10-13 (fin33, `fin33-delegation-targets-and-plan`) as [OQ-228](../../architecture/open-questions/53-spikes-and-later-questions-20.md#oq-228) rules it,
+Repaired 2026-10-13 (fin33, `fin33-delegation-targets-and-plan`) as [OQ-228](../../archive/architecture/open-questions/53-spikes-and-later-questions-20.md#oq-228) rules it,
 covered work under REQ-MCP-014, REQ-ORCH-126, REQ-ORCH-034 and REQ-ORCH-038. `NOT_DELEGATION_TARGETS` (`packages/contracts/src/roles.ts`)
 names the three reserved personas with what the product runs each for; `PersonaResolver.delegationTargets` (renamed from
 `knownRoles`, now filtered) and `delegationTargetsFor` are the one list the catalogue, `ChildLedger.spawn`, `fileWriters` and

@@ -50,7 +50,7 @@ Recorded 2026-10-13 by fin41 (item N71 of the whats-next survey at main `6de2a67
   bodies shown" or "Reasoning bodies hidden"; a refused write is reported with main's reason. Its slash mirror is
   `/toggle-reasoning-bodies`. Settings → Display has a third Transcript switch, "Show reasoning bodies", on the same
   write — placed there as a reading taken, raised as
-  [OQ-264](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-264).
+  [OQ-264](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-264).
 - `OMITTED_COMMANDS` holds "Open demo window" alone.
 
 **Pinned by** `packages/ui/src/commands/search-and-reasoning.test.ts` (fourteen cases red on the code before, with

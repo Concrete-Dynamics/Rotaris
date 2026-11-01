@@ -9,7 +9,7 @@ sentence now says no close guard is asked.
 
 ## Specs
 
-None contradicted by the product; the text contradicted [OQ-298](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298)'s ruling
+None contradicted by the product; the text contradicted [OQ-298](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298)'s ruling
 as the driver implements it.
 
 ## Relevant files

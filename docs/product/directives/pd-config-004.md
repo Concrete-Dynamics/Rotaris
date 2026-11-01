@@ -45,5 +45,5 @@ heading's three-control sentence. The change that builds it owes this paragraph 
 
 > **Extends:** REQ-CONFIG-403, REQ-CHAT-167
 
-*Raised 2026-10-13 by the ruling of [OQ-264](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-264) under the owner's delegation
+*Raised 2026-10-13 by the ruling of [OQ-264](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-264) under the owner's delegation
 ([R-072](../requests.md#r-072)).*

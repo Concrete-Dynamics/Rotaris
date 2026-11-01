@@ -13,7 +13,7 @@ disposition: "Narrows: REQ-CONFIG-322, REQ-CONFIG-256, REQ-CONFIG-417 / Extends:
 where its failure shows. The clause marked "— revision 3" below is added; the heading stays as revision 2 left it, and the
 text of revisions 1 and 2 stands unchanged beside it.*
 
-*Revision 4 (2026-10-13, [R-072](../requests.md#r-072), the ruling of [OQ-253](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-253)) — the
+*Revision 4 (2026-10-13, [R-072](../requests.md#r-072), the ruling of [OQ-253](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-253)) — the
 `<limit>` bullet of revision 3 states both singular forms; revision 3's bullet is quoted beneath it, and every other clause
 stands unchanged.*
 
@@ -134,10 +134,10 @@ REQ-ORCH-088, PD-ORCH-004 revisions 1 to 5, REQ-CONFIG-113, REQ-MONITOR-041, REQ
 REQ-NOTIFY-100, REQ-NOTIFY-261, OQ-217 and revision 2's notice detail.*
 
 *Revision 4 raised by the consortium under the owner's delegation, 2026-10-13; logged as [R-072](../requests.md#r-072), the
-ruling of [OQ-253](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-253) (TS1), from revision 3's first execution. Cites, without changing
+ruling of [OQ-253](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-253) (TS1), from revision 3's first execution. Cites, without changing
 them: REQ-ORCH-088, REQ-CONFIG-113 and REQ-MONITOR-286.*
 
-*Ruled 2026-10-14 under [OQ-301](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-301) ([R-072](../requests.md#r-072)), with no revision:
+*Ruled 2026-10-14 under [OQ-301](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-301) ([R-072](../requests.md#r-072)), with no revision:
 "until the user changes the field" and "until the field changes" mean until the person types or steps a value into the field,
 an entry equal to the value shown included — that entry is "a user's entry", replaces the pending value, marks the form dirty
 when it differs from the saved value, and is written by Save. Opening, repopulating, focusing or leaving the field without
@@ -199,7 +199,7 @@ typing changes nothing, and the stored value survives all of them. Revisions 1 t
 > ([`the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md`](../../defects/fixed/the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md));
 > repaired 2026-10-13 (fin35) the same way, the stalled tag on a line of its own.
 > The limit is written "<N> seconds" except that one second reads "1 second", the way "1 minute" does — since revision 4
-> (2026-10-13, [OQ-253](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-253)) the directive's own text. **As built.**
+> (2026-10-13, [OQ-253](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-253)) the directive's own text. **As built.**
 > `childTimedOutMessage` and `timedOutOf` (`packages/engine/src/children/cut-off.ts`), `AgentRecord.timedOut`
 > (`packages/contracts/src/children.ts`) filled by `toAgentRecord` (`packages/engine/src/sessions.ts`), `TIMED_OUT_TAG`,
 > `timeoutLimitText`, `perAgentTimeoutPath` and `timeoutLine` (`packages/ui/src/agents.ts`) over `RUNTIME_CATEGORY_LABEL` and

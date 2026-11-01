@@ -27,7 +27,7 @@ status: resolved
 > stream. The reading builds `REQ-SHELL-091`, `REQ-SHELL-087`, `REQ-TOOLS-127` and `REQ-TOOLS-128` as written and departs
 > from none of them. Ruled under the owner's delegation ([R-072](../../product/requests.md#r-072)) with no directive; the
 > ruling, its evidence and its corrections of the entry are in
-> [`open-questions.md`](../../architecture/open-questions/67-spikes-and-later-questions-34.md#oq-370).
+> [`open-questions.md`](../../archive/architecture/open-questions/67-spikes-and-later-questions-34.md#oq-370).
 
 
 > ## Superseded by the storage rulings (2026-09-01)

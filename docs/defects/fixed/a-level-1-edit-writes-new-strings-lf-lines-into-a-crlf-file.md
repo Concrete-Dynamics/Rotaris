@@ -11,7 +11,7 @@ case. Windows is the only platform shipped (`PD-STARTUP-001`), where CRLF files 
 
 `PD-TOOLS-016` (OQ-246) keeps the file's line endings for a window match (levels 2 to 4) and says it does not decide level 1;
 the R-072 consortium's ruling asked that this case be probed and recorded on its own. Recorded, not repaired; raised
-as [OQ-254](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-254) for a ruling.
+as [OQ-254](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-254) for a ruling.
 
 **Repaired 2026-10-13 (fin38, `fin38-edits-handoff-classifier`) under [`PD-TOOLS-017`](../../product/directives/pd-tools-017.md#pd-tools-017)**,
 the R-072 consortium's ruling of OQ-254. `carryExact` (`packages/agent-tools/src/tools/files.ts`) carries every level-1 match and

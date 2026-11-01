@@ -79,7 +79,7 @@ Per-workspace state is not per-user state and nothing in this clause reaches it.
 > packaged Windows build outside `InstallDir` decides that no check happens. Main removes both variables from its
 > own environment before it starts any child, so no child inherits them.
 
-> *Amended 2026-10-13 ([OQ-247](../../architecture/open-questions/52-spikes-and-later-questions-19.md#oq-247), ruled under
+> *Amended 2026-10-13 ([OQ-247](../../archive/architecture/open-questions/52-spikes-and-later-questions-19.md#oq-247), ruled under
 > [R-072](../../product/requests.md#r-072)):* the list further names the **platform-convention directory variables**:
 > `XDG_CONFIG_HOME` and `XDG_DATA_HOME` (Linux, the per-user configuration and data homes of REQ-STARTUP-145),
 > `XDG_RUNTIME_DIR` (Linux, the first directory the instance claim's hand-over socket is placed in, REQ-STARTUP-161 and

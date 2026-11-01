@@ -230,4 +230,4 @@ leftover kinds), D8 (the three gates are not read-only at the filesystem level �
 suffix's +35 characters against the store engine's path thresholds, not reachable at the shipped location),
 and the two carried-over architecture items at 10 and 11. **None is in the build-wrong class**, and each is
 stated above with what it costs. *(Since 2026-10-13/14: D8 and D11 are repaired, and D5's staging half is repaired
-under [OQ-265](../open-questions/57-spikes-and-later-questions-24.md#oq-265)'s ruling; its obstruction half stays deferred with OQ-48 — ADR-0058 consequence 18.)*
+under [OQ-265](../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-265)'s ruling; its obstruction half stays deferred with OQ-48 — ADR-0058 consequence 18.)*

@@ -10,7 +10,7 @@ pending lands after a plan correction", two cases). The route the raising agent 
 was checked and does not occur: each iteration's root has a fresh task id and so a fresh supervisor (`answerless.test.ts`,
 "PD-ORCH-009 revision 3 with OQ-284 …"). A root resumed after a child's report in the same execution would take a pending trigger
 the same way; that route was not measured. Noticed 2026-10-14 by fin43 (`fin43-live-findings`) while building
-[`PD-ORCH-009`](../../product/directives/pd-orch-009.md#pd-orch-009) revision 3; raised as [OQ-284](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-284).
+[`PD-ORCH-009`](../../product/directives/pd-orch-009.md#pd-orch-009) revision 3; raised as [OQ-284](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-284).
 Not repaired: whether the trigger stands is the ruling's.
 
 ## Specs
@@ -29,7 +29,7 @@ the answer re-prompt answers.
 
 ## Outcome
 
-**Repaired 2026-10-14 by fin44 (`fin44-supervision-and-match`)** under [OQ-284](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-284)'s
+**Repaired 2026-10-14 by fin44 (`fin44-supervision-and-match`)** under [OQ-284](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-284)'s
 ruling (R-072), recorded as [`PD-ORCH-009`](../../product/directives/pd-orch-009.md#pd-orch-009) revision 4: a plan correction is the only
 message the run adds for the turn it follows. `Run.turn`'s `correction()` (`packages/engine/src/run/run.ts`) calls
 `withdrawStuck()` on the root's supervisor before it returns the correction (a repetition, cycle or raw-count trigger stays), and
@@ -42,7 +42,7 @@ is kept. **Shown in the built app** by `pnpm part-h-proof`'s `silent-correction`
 classifications, one `succeeded` iteration. The route this note left unmeasured — a root resumed after a child's report — was
 measured: the corrective follows the report; it is outside the ruling, recorded as
 [`a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn`](a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md)
-and raised as [OQ-296](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-296) (since ruled 2026-10-14 — "2026-10-13" here until fin47, the
+and raised as [OQ-296](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-296) (since ruled 2026-10-14 — "2026-10-13" here until fin47, the
 date OQ-296's entry carried until fin46 corrected it — under
 [R-072](../../product/requests.md#r-072): a parent's silent wait on its children is no stuck report, recorded as
 [`PD-ORCH-009`](../../product/directives/pd-orch-009.md#pd-orch-009) revision 5, case (d), and built 2026-10-14 by fin45

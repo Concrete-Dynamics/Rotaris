@@ -139,9 +139,9 @@ anywhere, and that is OQ-43.** It is left open rather than closed by this record
   reclaimed as before; for one commit that day the removal also left a dead claim's record, and the launch ended
   `refused` with no window (the fixed note records it). (4)'s hand-over is bounded by the same interval as (2)'s, so a
   launch whose first hand-over went unanswered and whose second does too can wait two intervals. Whether "one interval"
-  admits that is [OQ-460](../../open-questions/69-spikes-and-later-questions-36.md#oq-460); whether a holder that is live
+  admits that is [OQ-460](../../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-460); whether a holder that is live
   and never answers may end the launch `refused` with no window is
-  [OQ-461](../../open-questions/69-spikes-and-later-questions-36.md#oq-461). Both ruled 2026-11-01 by the owner as
+  [OQ-461](../../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-461). Both ruled 2026-11-01 by the owner as
   [`PD-STARTUP-009`](../../../product/directives/pd-startup-009.md#pd-startup-009): each hand-over has its own interval, and
   an unanswered second hand-over is followed by one more reclaim and claim — three attempts, two reclaims, three intervals.
   Built the same day: `claimInstance`'s final reclaim takes the record whatever it holds after (4)'s unanswered hand-over and
@@ -215,8 +215,8 @@ anywhere, and that is OQ-43.** It is left open rather than closed by this record
   its private directory below the temporary directory), which it closes and unlinks before it hands over (`closeEndpoint`,
   `packages/platform/src/instance.ts`). On Windows the endpoint is a named pipe and nothing is written. Whether that
   transient socket is a write `REQ-STARTUP-164` forbids, and which of the two decisions gives way if it is, is
-  [OQ-248](../../open-questions/53-spikes-and-later-questions-20.md#oq-248).
-  **Ruled 2026-10-13 under the owner's delegation ([R-072](../../../product/requests.md#r-072), [OQ-248](../../open-questions/53-spikes-and-later-questions-20.md#oq-248)):
+  [OQ-248](../../../archive/architecture/open-questions/53-spikes-and-later-questions-20.md#oq-248).
+  **Ruled 2026-10-13 under the owner's delegation ([R-072](../../../product/requests.md#r-072), [OQ-248](../../../archive/architecture/open-questions/53-spikes-and-later-questions-20.md#oq-248)):
   neither gives way, and the decision reads _a launch that is handed over leaves nothing behind_.** The record is the file and
   the endpoint it names, with whatever a claim attempt creates to hold that endpoint — "the record itself" of
   `REQ-STARTUP-164`, since `REQ-STARTUP-161` makes "how a launch reaches it" part of what the record is. A handed-over launch's

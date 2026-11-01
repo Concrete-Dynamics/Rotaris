@@ -4,9 +4,9 @@
 
 ### PD-WORKSPACE-005 — a project-setup banner names the project it is about
 
-*Revision 3 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-294](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-294)) — **the banners'
+*Revision 3 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-294](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-294)) — **the banners'
 action reaches a project no window holds**, below: revision 2's no-holder sentence replaced, and quoted beside the new text.*
-*Revision 2 (2026-10-13, [R-072](../requests.md#r-072), ruling [OQ-262](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-262)) — **the
+*Revision 2 (2026-10-13, [R-072](../requests.md#r-072), ruling [OQ-262](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-262)) — **the
 banners' action**, below: a clause added, the revision-1 sentence it falsifies and the "every other surface" clause it
 amends quoted beside it.*
 
@@ -74,8 +74,8 @@ defect "a main window added after a notice was published does not show it" is re
 banner. *(That third cost lapsed the same day: the defect was repaired by fin44, a window asking main for the current notice
 when it boots, [`a-main-window-added-after-a-notice-was-published-does-not-show-it.md`](../../defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).)*
 
-*Revised by [R-072](../requests.md#r-072), 2026-10-13, ruling [OQ-262](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-262) (revision 2).*
-*Revised by [R-072](../requests.md#r-072), 2026-10-14, ruling [OQ-294](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-294) (revision 3): the
+*Revised by [R-072](../requests.md#r-072), 2026-10-13, ruling [OQ-262](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-262) (revision 2).*
+*Revised by [R-072](../requests.md#r-072), 2026-10-14, ruling [OQ-294](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-294) (revision 3): the
 disposition "Narrows REQ-WORKSPACE-102, REQ-WORKSPACE-103" stands, and their back-pointers name revision 3.*
 
 > **First execution of revision 3, 2026-10-14 (fin44, `fin44-notice-reach`).** Built the day it was ruled: `projectInit.open`

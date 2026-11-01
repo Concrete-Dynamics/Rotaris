@@ -14,7 +14,7 @@ Raised by fin32's review of PD-TOOLS-014 and deferred by fin35; no live run has 
 `origin/main` `4f0dbc0` (`nearMissMessage`, `packages/agent-tools/src/tools/files.ts`) and the R-072 consortium's ruling NQ1.
 
 **Repaired 2026-10-13 (fin36), under [`PD-TOOLS-014`](../../product/directives/pd-tools-014.md#pd-tools-014) revision 2
-([OQ-252](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-252)).** `nearMissMessage` counts each quoted window's level-1 occurrences
+([OQ-252](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-252)).** `nearMissMessage` counts each quoted window's level-1 occurrences
 (`levelOneLines`, the same search `matchEdit` runs); when the text recurs, the facts name the count and the lines (at most 10,
 then "and N more") before the quote, "matches exactly" is dropped, and the reply asks for a neighbouring line, unchanged, in both
 strings with the reader's offset and limit for the window and one line on each side; the over-30,000-character direction and the
@@ -27,7 +27,7 @@ counts retries refused "Found N occurrences" (`lib/near-miss-edits.mjs`, target 
 
 - `PD-TOOLS-014` clause 5 promises that the quote "sent back as `old_string` with the same hash … matches at level 1", which
   holds, and is silent on whether it matches once; the reply reads as a promise that the retry applies, which the "Why" (a retry
-  with no read and no probe) depends on. Raised as [OQ-252](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-252) and ruled under R-072
+  with no read and no probe) depends on. Raised as [OQ-252](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-252) and ruled under R-072
   as `PD-TOOLS-014` revision 2.
 - REQ-TOOLS-136's "Found <n> occurrences" refusal of the retry is correct and unchanged.
 

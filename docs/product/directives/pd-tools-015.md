@@ -14,9 +14,9 @@ clauses below are disjoint. Everything outside this case — several level-3 win
 `old_string` with no visible character, and `haet_edit` and its alias `haet` ([`PD-TOOLS-014`](pd-tools-014.md#pd-tools-014)) — is
 REQ-TOOLS-135's and REQ-TOOLS-136's, exactly as written.
 
-> Level 3's comparison is narrowed by [`PD-TOOLS-019`](pd-tools-019.md#pd-tools-019) ([OQ-280](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-280)).
+> Level 3's comparison is narrowed by [`PD-TOOLS-019`](pd-tools-019.md#pd-tools-019) ([OQ-280](../../archive/architecture/open-questions/58-spikes-and-later-questions-25.md#oq-280)).
 
-> *Since [`PD-TOOLS-020`](pd-tools-020.md#pd-tools-020) (2026-10-14, [OQ-295](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295)):* this case now reaches
+> *Since [`PD-TOOLS-020`](pd-tools-020.md#pd-tools-020) (2026-10-14, [OQ-295](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295)):* this case now reaches
 > blocks holding blank lines — a line of `old_string` with no visible character matches a window line with none at any shift —
 > and O and W above are where level 3 measures its prefix. The clauses are unchanged; what a blank line of `new_string` paired
 > with a blank line of `old_string` writes is `PD-TOOLS-016` revision 4's.
@@ -40,7 +40,7 @@ REQ-TOOLS-135's and REQ-TOOLS-136's, exactly as written.
    `new_string` carry the file's indentation; the quote, sent back as `old_string`, needs no hash; and every pointer names
    `read_file`. The window is quoted as one JSON string of at most 30,000 characters; a longer window is not quoted and the
    reply gives `read_file`'s offset and limit instead. The facts SHALL come before the quote, so that REQ-SESSION-136's
-   2,000-character error record keeps them. Since `PD-TOOLS-014` revision 2 (2026-10-13, [OQ-252](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-252)),
+   2,000-character error record keeps them. Since `PD-TOOLS-014` revision 2 (2026-10-13, [OQ-252](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-252)),
    this clause inherits revised clause 5's flag, in `write_file`'s voice (`read_file`, no hash): a quote whose text occurs more
    than once in the file at level 1 is preceded by the count and the lines, is not said to match exactly, and asks for a
    neighbouring line, unchanged, in both strings.
@@ -62,7 +62,7 @@ twice, which takes a coincidence.
 > **Narrows:** REQ-TOOLS-136
 > **Extends:** REQ-TOOLS-135
 
-*Ruled under the owner's delegation, 2026-10-13 ([OQ-233](../../architecture/open-questions/50-spikes-and-later-questions-17.md#oq-233)); logged as [R-072](../requests.md#r-072).
+*Ruled under the owner's delegation, 2026-10-13 ([OQ-233](../../archive/architecture/open-questions/50-spikes-and-later-questions-17.md#oq-233)); logged as [R-072](../requests.md#r-072).
 Narrows REQ-TOOLS-136 (a level-3 match the case names is refused rather than applied, and one is applied with a shifted
 `new_string`); extends REQ-TOOLS-135 (one sentence added to the edit's success).*
 
@@ -88,7 +88,7 @@ Narrows REQ-TOOLS-136 (a level-3 match the case names is refused rather than app
 > default and duress runs may not send a `write_file` edit that matches only at level 3; no proof script drives `write_file`
 > in the built app, and the executor runs unchanged inside the run host. **Found:** the level-2 apply beside it writes
 > `new_string`'s LF lines into a CRLF file, which this directive does not decide (raised as
-> [OQ-246](../../architecture/open-questions/52-spikes-and-later-questions-19.md#oq-246),
+> [OQ-246](../../archive/architecture/open-questions/52-spikes-and-later-questions-19.md#oq-246),
 > [`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../../defects/fixed/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md)).
 > The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
@@ -100,6 +100,6 @@ Narrows REQ-TOOLS-136 (a level-3 match the case names is refused rather than app
 > [`live-0bc3eee-default-autopsy.md`](../../architecture/live-runs/live-0bc3eee-default-autopsy.md).
 > The rows are in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
-> **In the built app, 2026-10-13 (fin42, N52):** `pnpm edits-proof` drove this directive through the run host on a CRLF, tab-indented fixture it generates (`apps/desktop/scripts/lib/crlf-fixture.mjs`), the scripted coordinator's calls sent by the new step `tool:<key>`; load average 6.8 to 12.2 on four CPUs beside a sibling plan. **Held as written, for the `old_string` that reaches level 3 on a CRLF file.** `shift`: an `old_string` one tab shallow that carries the file's `\r`s matched at level 3 and applied with "new_string was shifted by the same leading prefix \"\t\" (1 character added) to the file's indentation." and `PD-TOOLS-016`'s CRLF sentence, the block at the file's depth and every line CRLF. **Found:** the shape a model sends, an LF `old_string` one tab shallow (`shift-lf`, recorded and not asserted), does not reach level 3 on a CRLF file: it applied at "Match level: 4 (similarity: 0.91). Verify the result." and wrote the block one tab too shallow beside a success — the case this directive was ruled to prevent, one level down ([`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3`](../../defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md), raised as [OQ-280](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-280)). **What was not measured.** No live run. The live run's `crlf` scenario (`apps/desktop/scripts/lib/crlf-scenario.mjs`, default set) is written and unit-tested and is the orchestrator's to run; what it reads depends on the shapes the model chooses. The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
+> **In the built app, 2026-10-13 (fin42, N52):** `pnpm edits-proof` drove this directive through the run host on a CRLF, tab-indented fixture it generates (`apps/desktop/scripts/lib/crlf-fixture.mjs`), the scripted coordinator's calls sent by the new step `tool:<key>`; load average 6.8 to 12.2 on four CPUs beside a sibling plan. **Held as written, for the `old_string` that reaches level 3 on a CRLF file.** `shift`: an `old_string` one tab shallow that carries the file's `\r`s matched at level 3 and applied with "new_string was shifted by the same leading prefix \"\t\" (1 character added) to the file's indentation." and `PD-TOOLS-016`'s CRLF sentence, the block at the file's depth and every line CRLF. **Found:** the shape a model sends, an LF `old_string` one tab shallow (`shift-lf`, recorded and not asserted), does not reach level 3 on a CRLF file: it applied at "Match level: 4 (similarity: 0.91). Verify the result." and wrote the block one tab too shallow beside a success — the case this directive was ruled to prevent, one level down ([`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3`](../../defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md), raised as [OQ-280](../../archive/architecture/open-questions/58-spikes-and-later-questions-25.md#oq-280)). **What was not measured.** No live run. The live run's `crlf` scenario (`apps/desktop/scripts/lib/crlf-scenario.mjs`, default set) is written and unit-tested and is the orchestrator's to run; what it reads depends on the shapes the model chooses. The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
 > **Since `PD-TOOLS-019`, 2026-10-14 (fin43):** the one-tab-shallow LF `old_string` on a CRLF file that `edits-proof`'s `shift-lf` step recorded at level 4 now matches at level 3, so clause 2 applies to it: `shift-lf` is asserted ("Match level: 3." with this directive's shift sentence, then `PD-TOOLS-016`'s CRLF sentence, the block at the file's depth), and clause 4's refusal carries `PD-TOOLS-014` revision 3's line-ending sentence through clause 2 (pinned in `tools.test.ts` under "PD-TOOLS-019"); the row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).

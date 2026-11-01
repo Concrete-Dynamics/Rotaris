@@ -35,7 +35,7 @@ and a reader comparing it with REQ-STARTUP-160's words finds two moments missing
 > **Narrows:** REQ-STARTUP-160
 
 *Ruled 2026-10-13 by the consortium under the owner's delegation ([R-072](../requests.md#r-072)), the ruling of
-[OQ-261](../../architecture/open-questions/56-spikes-and-later-questions-23.md#oq-261).*
+[OQ-261](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-261).*
 
 > **First execution, 2026-10-14 (fin43, `fin43-notices-and-config`).** Built the day after it was ruled. **What was
 > measured.** `About.test.ts`'s setup case requires "first time a tool is needed", "may", "package registr" and "does not

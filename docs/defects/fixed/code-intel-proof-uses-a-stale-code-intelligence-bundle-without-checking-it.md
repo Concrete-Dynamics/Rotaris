@@ -52,7 +52,7 @@ form and are green after the change (17 of 17 in the file).
 0.98 at the start and 2.81 at the end, with no other proof running) then read "the code-intelligence bundle is present".
 Launch 11 (`child-rename-cold`, `PD-MCP-004`'s gate) was green on the recipe-4 runtime: both files were renamed ("2
 changes applied") and no search row was written. Launches 1 to 10 and 12 were green as well. Launch 13 (`child-rename-cold-js`)
-was red, as the proof's header says it stays until [OQ-362](../../architecture/open-questions/65-spikes-and-later-questions-32.md#oq-362) is ruled and built.
+was red, as the proof's header says it stays until [OQ-362](../../archive/architecture/open-questions/65-spikes-and-later-questions-32.md#oq-362) is ruled and built.
 Only `src/cold-c.js` was renamed ("1 changes applied"), and the proof exited 1 at its end with that one held failure. That
 failure belongs to
 [the open rename note](a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md),

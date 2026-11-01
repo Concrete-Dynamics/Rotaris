@@ -4,7 +4,7 @@
 
 ### PD-SHELL-009 — closing a main window ends its own project's runs, and asks first
 
-*Revision 3 (2026-10-20, [R-072](../requests.md#r-072), ruling [OQ-361](../../architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361)): **REQ-SHELL-119's guard (2), "Integration in progress", and the workspace-open flow's gate (2) count the window's own project, as guard (3) and gate (3) do. They read main's own record of an integration, and a record main cannot read refuses no close.** What changes:*
+*Revision 3 (2026-10-20, [R-072](../requests.md#r-072), ruling [OQ-361](../../archive/architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361)): **REQ-SHELL-119's guard (2), "Integration in progress", and the workspace-open flow's gate (2) count the window's own project, as guard (3) and gate (3) do. They read main's own record of an integration, and a record main cannot read refuses no close.** What changes:*
 
 - *the opening sentence names guard (2), with its earlier text quoted beside it;*
 - *the first three cases and the gate case each end with a revision-3 sentence;*
@@ -15,7 +15,7 @@
 
 *Everything else stands as revisions 1 and 2 wrote it.*
 
-*Revision 2 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-298](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298)) — **a quit
+*Revision 2 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-298](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298)) — **a quit
 that starts outside any window asks no close guard**: the last case below is revised, its revision-1 text quoted beside it.
 No requirement gains a back-pointer: the case now follows REQ-CONFIG-287 and REQ-SHELL-119 guard (1) as written. Everything
 else stands as revision 1 wrote it.*
@@ -77,9 +77,9 @@ Closing a main window SHALL end the active runs of the project open in it, and S
 
   While main records an integration running, a box that cannot be shown still refuses, as REQ-SHELL-119 writes.
 
-  The update's clicks, which close every window, are not this case. Under [OQ-361](../../architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361) (a) they ask guard (2) as REQ-SHELL-119 and REQ-NOTIFY-056 write it, and they decline on a record main cannot read.
+  The update's clicks, which close every window, are not this case. Under [OQ-361](../../archive/architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361) (a) they ask guard (2) as REQ-SHELL-119 and REQ-NOTIFY-056 write it, and they decline on a record main cannot read.
 - **A quit that starts outside any window** — a signal, the end of the desktop session where Electron emits `before-quit`,
-  the driver's or the capture's quit — asks no close guard at all (**revision 2**, [OQ-298](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298)):
+  the driver's or the capture's quit — asks no close guard at all (**revision 2**, [OQ-298](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298)):
   no active-run confirmation, as built, and no unsaved-settings guard, because such a quit is no **user-initiated** close
   (REQ-SHELL-119 guard (1), REQ-CONFIG-287: "a programmatic close does not prompt"). Unsaved Settings edits stay unsaved and
   nothing is written, so the workspace configuration keeps its last saved values. The main windows close in PD-ORCH-005
@@ -91,10 +91,10 @@ Closing a main window SHALL end the active runs of the project open in it, and S
 
   > Revision 1 said, and no longer governs: "asks no active-run confirmation, as built; it asks only the renderer's
   > unsaved-settings guard, and its shutdown leaves the runs as PD-ORCH-005 clause 3 says. *Since 2026-10-14
-  > ([`PD-SHELL-010`](pd-shell-010.md#pd-shell-010), [OQ-297](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-297)) it asks that guard only while the
+  > ([`PD-SHELL-010`](pd-shell-010.md#pd-shell-010), [OQ-297](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-297)) it asks that guard only while the
   > renderer can answer: a renderer that is gone, fails main's liveness probe or is reported `unresponsive` cannot, its guard
   > allows, and the quit goes on asking nothing more. A renderer that answers its probe is still waited for without bound
-  > ([OQ-298](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298), open).*" As built under it, a SIGTERM, the driver's quit or the
+  > ([OQ-298](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298), open).*" As built under it, a SIGTERM, the driver's quit or the
   > capture's quit with Settings left unsaved raised REQ-SHELL-124's Save/Discard/Cancel and held the quit — the run host never
   > asked to `shutdown` — until a person answered or the process was killed.
 
@@ -155,14 +155,14 @@ What it costs:
 holds. Its case, gate (3)'s count on the replacement route, is disjoint from `PD-SHELL-001`'s, the two add-a-window
 gestures on which no gate is evaluated.*
 
-*REQ-STARTUP-053, REQ-WORKSPACE-012 and REQ-NOTIFY-056 joined the Narrows line on 2026-10-20 under [OQ-361](../../architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361) (revision 3):*
+*REQ-STARTUP-053, REQ-WORKSPACE-012 and REQ-NOTIFY-056 joined the Narrows line on 2026-10-20 under [OQ-361](../../archive/architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361) (revision 3):*
 
 - *REQ-STARTUP-053 and REQ-WORKSPACE-012 for gate (2)'s scope, and for gate (3)'s count. Revision 1 built that count for the chooser and the refusal, as for the chip, and wrote no back-pointer for it;*
 - *REQ-NOTIFY-056 for a record main cannot read.*
 
 *Raised by the consortium under the owner's delegation, 2026-10-07; logged as [R-072](../requests.md#r-072), the ruling of
 [OQ-206](../../architecture/open-questions.md) (advocate A, the user's lens, followed). Revision 2 ruled by the consortium under
-the same delegation, 2026-10-14, the ruling of [OQ-298](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298). Revision 3 ruled by the consortium under the same delegation, 2026-10-20, the ruling of [OQ-361](../../architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361) (both advocates followed in part).*
+the same delegation, 2026-10-14, the ruling of [OQ-298](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298). Revision 3 ruled by the consortium under the same delegation, 2026-10-20, the ruling of [OQ-361](../../archive/architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361) (both advocates followed in part).*
 
 > **First execution, 2026-10-07, built under [R-072](../requests.md#r-072):** the directive held as written, and one claim the
 > record carried was false. The run host's per-workspace predicate ADR-0013 names as its registry's job was not built: every
@@ -237,7 +237,7 @@ the same delegation, 2026-10-14, the ruling of [OQ-298](../../architecture/open-
 > stopped (SIGSTOP) after a first quit, a second — SIGTERM or the driver's quit — exited 0 in 53 ms and 110 ms (a scratch check,
 > not a proof). The update's closes (`mainWindows.dispose()`, REQ-STARTUP-119/121) ask no unsaved-settings guard either; whether
 > `Restart now`, a person's action, is a user-initiated close for guard (1) is raised as
-> [OQ-311](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-311). **Not measured:** a real dirty Settings form (the guard was replaced, which
+> [OQ-311](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-311). **Not measured:** a real dirty Settings form (the guard was replaced, which
 > the ruling's implementation allows), a desktop logout, a Windows or macOS host. The row is in
 > [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 

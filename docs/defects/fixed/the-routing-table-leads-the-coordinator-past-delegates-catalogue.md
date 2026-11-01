@@ -27,7 +27,7 @@ revision 4's catalogue say what each persona can do.
 
 ## Outcome
 
-Repaired 2026-10-13 (fin33, `fin33-delegation-targets-and-plan`) as [OQ-250](../../architecture/open-questions/54-spikes-and-later-questions-21.md#oq-250) rules it,
+Repaired 2026-10-13 (fin33, `fin33-delegation-targets-and-plan`) as [OQ-250](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-250) rules it,
 `PD-TOOLS-006` revision 8: the routing table closes with one fixed sentence (`ROUTING_WORK_SENTENCE`,
 `packages/engine/src/children/personas.ts`) sending the work a route implies to a persona whose catalogue entry allows it and the
 route's persona's answer on to one that has the tools, and the catalogue's closing instruction forbids a brief offering a command

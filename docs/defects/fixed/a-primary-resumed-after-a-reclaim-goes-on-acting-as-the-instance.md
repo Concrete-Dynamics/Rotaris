@@ -100,4 +100,4 @@ hand-over goes unanswered too and the launch ends `refused` with no window. That
 - Clause (4)'s second hand-over is bounded by the same interval as the first. Where (2)'s hand-over already waited the
   full 5 s and the new holder does not answer either, the resolution can take two intervals. Whether REQ-STARTUP-164's
   "no waiting beyond that one interval" admits that is raised as
-  [OQ-460](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-460), not ruled here.
+  [OQ-460](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-460), not ruled here.

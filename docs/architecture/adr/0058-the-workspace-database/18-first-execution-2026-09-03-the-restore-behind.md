@@ -66,7 +66,7 @@ OQ-265's ruling, consequence 18.)*
 > and the workspace listed no session, saying nothing — REQ-SESSION-201's "no reader may observe" a partly restored store,
 > met by a reader observing a third, empty one. REQ-SESSION-202 declines this case by name (an absent place "is an absence
 > and not this condition, including while a restore is under way"), so finishing, reversing or reporting it is a question:
-> [OQ-266](../../open-questions/57-spikes-and-later-questions-24.md#oq-266), with the defect note
+> [OQ-266](../../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-266), with the defect note
 > [`../../../defects/fixed/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md`](../../../defects/fixed/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md).
 > `store.test.ts` pins the gap state in-process, as built. Not measured: a power loss in the gap (R-071's O-8 is the
 > power-loss test, a different fault), and the run host's side (its refusal lease expires by itself, 3b, untouched here).

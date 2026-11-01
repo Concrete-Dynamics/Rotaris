@@ -16,7 +16,7 @@ None states a last-resort handler. ADR-0002 bounds every request and says a lost
 REQ-SESSION-066 states what the user must be able to observe afterwards (a stale marking and a refused restore), and the
 build meets that. What is missing is the line that says why the child ended, written where PD-MONITOR-002's log can carry
 it, and an end that follows the parent's. Whether the user is told at the moment it happens is
-[OQ-462](../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-462).
+[OQ-462](../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-462).
 
 ## Relevant files
 

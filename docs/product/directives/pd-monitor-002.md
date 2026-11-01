@@ -101,7 +101,7 @@ are not recorded, and cannot be recovered afterwards.
 > line is written. So in the built app, an invalid entry does not lead to REQ-HOOKS-085's `info` line. The line needs a hook set
 > that fails to assemble after the configuration has loaded, and no free seam produces that. Its run-host unit cases remain its
 > evidence. Neither section reads the hook engine's own `log` sink lines (REQ-HOOKS-128) in the application log. *Added
-> 2026-10-14 ([OQ-279](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-279), ruled 2026-10-13 under [R-072](../requests.md#r-072)):* the
+> 2026-10-14 ([OQ-279](../../archive/architecture/open-questions/58-spikes-and-later-questions-25.md#oq-279), ruled 2026-10-13 under [R-072](../requests.md#r-072)):* the
 > same fatal load is now raised as a persistent error notice when the workspace opens, before any prompt (section 1b reads
 > it on screen, section 1c in the workspace scope), and cleared by a later clean load.
 

@@ -24,7 +24,7 @@ hold where it matters most, and `PD-TOOLS-014`'s reply is not given.
 ## Specs
 
 None contradicted word for word; a question the specification leaves open, raised as
-[OQ-280](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-280). REQ-TOOLS-136's level 3 reads "each line equal once one uniform leading prefix
+[OQ-280](../../archive/architecture/open-questions/58-spikes-and-later-questions-25.md#oq-280). REQ-TOOLS-136's level 3 reads "each line equal once one uniform leading prefix
 is added or removed", silent on whether a line's `\r` (its line ending) takes part in "equal"; level 2 already ignores it.
 `PD-TOOLS-015` and `PD-TOOLS-016` state that REQ-TOOLS-136's levels and their order are unchanged, and `PD-TOOLS-014`'s case
 names level 3 as REQ-TOOLS-136 defines it. `PD-TOOLS-015`'s reason (OQ-233: a level-3 apply wrote `new_string` unshifted beside a
@@ -63,4 +63,4 @@ through `haet_edit`. **Not shown:** the live `crlf` scenario, the orchestrator's
 `old_string` was a uniform indent off. A neighbouring gap the ruling does not decide — a block with a blank interior line never
 reaches level 3 — is
 [`a-block-with-a-blank-interior-line-never-matches-at-level-3`](a-block-with-a-blank-interior-line-never-matches-at-level-3.md)
-([OQ-295](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295)).
+([OQ-295](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295)).

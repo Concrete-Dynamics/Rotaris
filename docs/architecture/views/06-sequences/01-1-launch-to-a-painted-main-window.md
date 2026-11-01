@@ -96,7 +96,7 @@ cached for the composer. Settings' asking ends when Settings unmounts (`readWhil
 warm-up that a clear overtakes stops at its next read instead of finishing beside the next one. Until 2026-10-31 the warm-up was a microtask holding the synchronous walk, which ran before the reply was
 posted, so under load a slow discovery was a slow reply
 (`../../../defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`;
-[OQ-386](../../open-questions/67-spikes-and-later-questions-34.md#oq-386)). The re-discovery after a session creation or
+[OQ-386](../../../archive/architecture/open-questions/67-spikes-and-later-questions-34.md#oq-386)). The re-discovery after a session creation or
 a rescan is still synchronous, which the ruling left open.
 
 **A process the record no longer names stands down (2026-10-31, ADR-0055 consequence 14).** The endpoint reads the record

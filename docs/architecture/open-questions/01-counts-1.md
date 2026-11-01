@@ -112,16 +112,16 @@ was found, with what the build shipped meanwhile, so a ruling replaces an interi
 
 **On 2026-10-13 the consortium ruled a further round under the same delegation ([R-072](../../product/requests.md#r-072)),** each
 entry carrying its ruling, dated and citing R-072, with the recommendations it weighed. This paragraph was started on 2026-10-14
-(fin44), as [OQ-264](56-spikes-and-later-questions-23.md#oq-264)'s ruling asks that its outcome be named where the round's rulings are summarised; it names the
-rulings fin43 built, and the round's others are in their own entries: [OQ-263](56-spikes-and-later-questions-23.md#oq-263), confirmed as built (a dated note under
-REQ-GIT-138, no directive); [OQ-264](56-spikes-and-later-questions-23.md#oq-264), confirmed as built and carried by `PD-CONFIG-004`; [OQ-265](57-spikes-and-later-questions-24.md#oq-265), changed (the
-restore deletes its own staging copy on a failure that leaves the store as it was; no directive); [OQ-266](57-spikes-and-later-questions-24.md#oq-266), changed (a
-restore cut between its renames is reversed at the next open; no directive); [OQ-273](58-spikes-and-later-questions-25.md#oq-273), changed (`PD-MCP-004`);
-[OQ-278](58-spikes-and-later-questions-25.md#oq-278), changed (a note closes unreproduced only under a guard, `docs/defects/README.md`); [OQ-280](58-spikes-and-later-questions-25.md#oq-280), changed
-(`PD-TOOLS-019`). Written 2026-10-14 by fin45 (`fin45-retro-and-record`): [OQ-299](61-spikes-and-later-questions-28.md#oq-299), the search's failure confirmed as
+(fin44), as [OQ-264](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-264)'s ruling asks that its outcome be named where the round's rulings are summarised; it names the
+rulings fin43 built, and the round's others are in their own entries: [OQ-263](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-263), confirmed as built (a dated note under
+REQ-GIT-138, no directive); [OQ-264](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-264), confirmed as built and carried by `PD-CONFIG-004`; [OQ-265](../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-265), changed (the
+restore deletes its own staging copy on a failure that leaves the store as it was; no directive); [OQ-266](../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-266), changed (a
+restore cut between its renames is reversed at the next open; no directive); [OQ-273](../../archive/architecture/open-questions/58-spikes-and-later-questions-25.md#oq-273), changed (`PD-MCP-004`);
+[OQ-278](../../archive/architecture/open-questions/58-spikes-and-later-questions-25.md#oq-278), changed (a note closes unreproduced only under a guard, `docs/defects/README.md`); [OQ-280](../../archive/architecture/open-questions/58-spikes-and-later-questions-25.md#oq-280), changed
+(`PD-TOOLS-019`). Written 2026-10-14 by fin45 (`fin45-retro-and-record`): [OQ-299](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-299), the search's failure confirmed as
 built and the answered search's check reordered to match (a ruling note under `PD-MCP-004` clause 4, no directive);
-[OQ-300](61-spikes-and-later-questions-28.md#oq-300), changed (`PD-LIBRARY-002` revision 5); [OQ-301](61-spikes-and-later-questions-28.md#oq-301), confirmed as built (a ruling note under
-`PD-CONFIG-003`, no directive); [OQ-302](61-spikes-and-later-questions-28.md#oq-302), confirmed as built, no directive.
+[OQ-300](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-300), changed (`PD-LIBRARY-002` revision 5); [OQ-301](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-301), confirmed as built (a ruling note under
+`PD-CONFIG-003`, no directive); [OQ-302](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-302), confirmed as built, no directive.
 
 ***Three of those counts changed on 2026-09-02 and the direction is not the usual one, so a reader should
 not skim them.*** The seven escalations this register carried as open were **all ruled on that date** and

@@ -8,7 +8,7 @@ Part 9 of 10 of [ADR-0035](../0035-the-bundled-code-intelligence-runtime.md), wh
 so uv picked a CPython for the build host's architecture, and the marker recorded none: on a Windows ARM64 host an arm64
 `python.exe` would have entered the `windows-x64` artifact and answered every packaging check, since it runs there
 ([`../../../defects/fixed/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md`](../../../defects/fixed/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md)).
-[OQ-400](../../open-questions/64-spikes-and-later-questions-31.md#oq-400) ruled the repair: `bundle.mjs` takes `--target=<platform>-<arch>` (the host by
+[OQ-400](../../../archive/architecture/open-questions/64-spikes-and-later-questions-31.md#oq-400) ruled the repair: `bundle.mjs` takes `--target=<platform>-<arch>` (the host by
 default, for the development tree; `package.mjs` passes `win32-x64`), installs the interpreter by its full uv key
 (`cpython-3.13.15-windows-x86_64-none`, `cpython-3.13.15-linux-x86_64-gnu`; `target.mjs`), writes `target` and
 `targetArch` into `bundle.json` and `targetArch` into the pins' hash (recipe 4), so a tree built for another

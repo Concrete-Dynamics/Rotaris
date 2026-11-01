@@ -65,7 +65,7 @@ restore***, which is owed because all three corrections are at this moment exact
 the three-for-three finding says is not evidence; and ***the kill-in-the-gap case***, which is now the only
 route to an absent store directory that those corrections do not close *(measured 2026-10-13 by
 `pnpm restore-kill-proof`, ten kills of ten: the disk is the model's, and the next open creates an empty store —
-[OQ-266](57-spikes-and-later-questions-24.md#oq-266))*. **The re-run is the one of the four
+[OQ-266](../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-266))*. **The re-run is the one of the four
 that a product owner should weigh at the gate**, because it is a re-measurement of a mechanism already known
 to have been wrong three times, and it is bounded: race a launch into the refusal window, and force the
 install rename to fail on an occupied name.
@@ -141,7 +141,7 @@ force the install rename to fail with the target name occupied and confirm the d
 reversal leaves the store byte-identical. **(2) The kill-in-the-gap case.** What a restore interrupted
 between the two renames leaves behind, with no process left to reverse anything. It is now the only route
 to an absent store directory that the corrections do not close, and no power-loss or kill test was
-performed. *(The kill test was performed on 2026-10-13: [OQ-266](57-spikes-and-later-questions-24.md#oq-266). The power-loss test is R-071's O-8.)* *A third, adjacent and not owed by the spike:* a restore of an artifact read from a network
+performed. *(The kill test was performed on 2026-10-13: [OQ-266](../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-266). The power-loss test is R-071's O-8.)* *A third, adjacent and not owed by the spike:* a restore of an artifact read from a network
 destination, and two concurrent restores of one identifier, neither of which the instance claim was
 modelled against.
 

@@ -21,7 +21,7 @@
 **Why, and what it costs.** REQ-TOOLS-135's `insert` names `insert_line` and its bounds and is silent on the line endings the
 inserted lines carry. The build joined the file's lines and `content`'s with `\n`, so on a CRLF file the inserted lines were LF
 among CRLF ones beside a clean success: probed by fin38, `a\r\nb\r\n` with `X` at line 1 left `a\r\nX\nb\r\n`
-([OQ-259](../../architecture/open-questions/55-spikes-and-later-questions-22.md#oq-259)). Windows is the only platform shipped (`PD-STARTUP-001`), where CRLF files
+([OQ-259](../../archive/architecture/open-questions/55-spikes-and-later-questions-22.md#oq-259)). Windows is the only platform shipped (`PD-STARTUP-001`), where CRLF files
 are ordinary, and a model writing JSON tool arguments almost never sends `\r`. `PD-TOOLS-016` and `PD-TOOLS-017` ruled that line
 endings belong to the file and say nothing of the caller's intent, and LF lines an insert leaves behind later fail their test, so
 their guarantees decayed wherever an insert had been. It is a directive of its own rather than a revision of `PD-TOOLS-017`,
@@ -32,7 +32,7 @@ alone writes `content` as given.
 
 > **Extends:** REQ-TOOLS-135
 
-*Ruled under the owner's delegation, 2026-10-13 ([OQ-259](../../architecture/open-questions/55-spikes-and-later-questions-22.md#oq-259)); logged as [R-072](../requests.md#r-072).
+*Ruled under the owner's delegation, 2026-10-13 ([OQ-259](../../archive/architecture/open-questions/55-spikes-and-later-questions-22.md#oq-259)); logged as [R-072](../requests.md#r-072).
 Extends REQ-TOOLS-135 (fills its silence on the line endings an insert writes, and adds one success sentence). Names
 `PD-TOOLS-016`, whose clause 2 test it reads, and `PD-TOOLS-017`, whose write rule and sentence it mirrors; neither is revised.*
 

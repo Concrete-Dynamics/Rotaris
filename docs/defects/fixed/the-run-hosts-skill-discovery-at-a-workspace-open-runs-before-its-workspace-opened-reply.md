@@ -14,7 +14,7 @@ That is the likely trigger of the timeout repaired in
 open still loses its slot (initialization resolution, the board's queue, the hook review, the configuration's load) whenever
 discovery takes longer than the bound. Recorded by bundle `loc1-main-rejection`, not repaired: that repair was the
 unhandled rejection alone. Moving the warm-up past the reply (a macrotask, or after `reply` is called) is the obvious repair.
-Whether it is wanted, and what a late reply owes, is [OQ-386](../../architecture/open-questions/67-spikes-and-later-questions-34.md#oq-386)'s.
+Whether it is wanted, and what a late reply owes, is [OQ-386](../../archive/architecture/open-questions/67-spikes-and-later-questions-34.md#oq-386)'s.
 
 ## Specs
 
@@ -31,7 +31,7 @@ misses its bound. The falsified claim is the code comment's. No requirement cont
 
 ## Outcome (2026-10-31, branch `fix/workspace-open-warmup-off-the-loop`) — repaired, the open's warm-up only
 
-Built as [OQ-386](../../architecture/open-questions/67-spikes-and-later-questions-34.md#oq-386)'s point 1 rules it (ruled
+Built as [OQ-386](../../archive/architecture/open-questions/67-spikes-and-later-questions-34.md#oq-386)'s point 1 rules it (ruled
 2026-10-21), and nothing of its points 2 to 5.
 
 - **After the reply.** The `workspace.opened` case starts the warm-up from a zero-delay timer on its clock port

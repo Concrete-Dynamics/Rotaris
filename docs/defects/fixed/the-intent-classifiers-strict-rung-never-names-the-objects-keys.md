@@ -18,7 +18,7 @@ Measured at `552d346` against the registered self-hosted endpoint (`qwen3.8-flas
   43.3 s and 23 k); edit was cut while applying the tie-break; terminal received 0 bytes in 11,967 ms (the endpoint queueing).
   The launches that finished in time (frictions, faults-ladder, requirements) also guessed at `category` or `classification`.
 
-Raised as [OQ-258](../../architecture/open-questions/55-spikes-and-later-questions-22.md#oq-258).
+Raised as [OQ-258](../../archive/architecture/open-questions/55-spikes-and-later-questions-22.md#oq-258).
 
 **Repaired 2026-10-13 (fin38, `fin38-edits-handoff-classifier`)**, the R-072 consortium's ruling of OQ-258, as covered work under
 REQ-ORCH-010 (no directive). `KEYS_INSTRUCTION` (`packages/engine/src/intent/classifier.ts`) names the three keys; rung 1's

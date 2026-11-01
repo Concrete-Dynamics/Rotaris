@@ -93,7 +93,7 @@ copies, ships no `jsconfig.json`, so this is the ordinary shape of a JavaScript 
 two shared arguments). Every measured remedy is outside it: a project file written into the person's workspace, the importers held
 open by the runtime (a patch of the pinned distribution, which OQ-273 rejected as its option (b)), or the run host telling the model
 or mending the files itself (OQ-273's rejected (c), and more). The choice is raised as
-[OQ-362](../../architecture/open-questions/65-spikes-and-later-questions-32.md#oq-362) and left for the consortium (R-072). **Pinned red until then** by
+[OQ-362](../../archive/architecture/open-questions/65-spikes-and-later-questions-32.md#oq-362) and left for the consortium (R-072). **Pinned red until then** by
 `code-intel-proof` launch 13 (`child-rename-cold-js`), the live fixture's shape in the built app, held to the proof's end as launch
 11 is; and by the live `rename` scenario's check above, which failed at `3c03287`. Launch 13's first runs, built from fin47's branch
 (`--steps=10,11,13`, load 1.98 rising to 4.26 on four CPUs): launches 10 and 11 green ("(2 changes applied)", both files each);
@@ -156,7 +156,7 @@ have to edit them one by one.
 - `REQ-ORCH-109`: a report "cannot conceal files it failed to account for" — not contradicted (the report lists the one file the
   call changed), but a report saying the rename succeeded hides that the work is broken.
 - No requirement says how the product drives the runtime's language server, or whether it may warm it, so the repair is a
-  question: [OQ-273](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-273).
+  question: [OQ-273](../../archive/architecture/open-questions/58-spikes-and-later-questions-25.md#oq-273).
 
 ## Relevant files
 

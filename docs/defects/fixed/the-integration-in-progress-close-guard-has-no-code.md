@@ -54,7 +54,7 @@ REQ-GIT-083 and REQ-GIT-125 to REQ-GIT-135 are deferred. The builder of integrat
   requirement's sentence. PD-SHELL-001's add route evaluates no gate, this one included.
 
 What the requirement leaves open beyond a person's close of one window — the update's closes, one of several windows, and a state
-that cannot be read — is raised as [OQ-361](../../architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361), with the reading the build proceeds under.
+that cannot be read — is raised as [OQ-361](../../archive/architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361), with the reading the build proceeds under.
 
 **Pinned** by `apps/desktop/src/main/integration-guard.test.ts` (the box, the refusal, a box that cannot be shown, an unreadable
 state, the decline's sentence, the product's reader) and two blocks of `apps/desktop/src/main/main-windows.test.ts`: "REQ-SHELL-021's

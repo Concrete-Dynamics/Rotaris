@@ -18,14 +18,14 @@ What a level-3 match then does stays as follows: [`PD-TOOLS-015`](pd-tools-015.m
 `PD-TOOLS-015` governs **what a level-3 apply writes**; [`PD-TOOLS-017`](pd-tools-017.md#pd-tools-017) governs level 1 and `replace_all`. None
 of the three restates another.
 
-> *Since [`PD-TOOLS-020`](pd-tools-020.md#pd-tools-020) (2026-10-14, [OQ-295](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295)):* which windows match at
+> *Since [`PD-TOOLS-020`](pd-tools-020.md#pd-tools-020) (2026-10-14, [OQ-295](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295)):* which windows match at
 > level 3 is decided by this directive and `PD-TOOLS-020` together — this one sets one trailing `\r` aside on every line, and
 > `PD-TOOLS-020` then compares lines with no visible character by having none and measures the prefix on the first visible line.
 > The two are disjoint: neither restates the other.
 
 **Why, and what it costs.** On a CRLF file every line ends in `\r`, and an `old_string` a model writes in a JSON string almost
 never carries one. Level 2 already strips the `\r` with the trailing whitespace, but level 3 compared lines exactly, so an LF
-`old_string` one uniform indent off never matched a CRLF file at level 3 ([OQ-280](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-280)).
+`old_string` one uniform indent off never matched a CRLF file at level 3 ([OQ-280](../../archive/architecture/open-questions/58-spikes-and-later-questions-25.md#oq-280)).
 Measured in the built app (`pnpm edits-proof`, `shift-lf`) and with the tools directly: `write_file` applied the three-line block
 at "Match level: 4 (similarity: 0.91). Verify the result." and wrote it **one tab too shallow beside a success**, and `haet_edit`
 gave the plain miss with no quote; a shorter window read "not found at any of the four match levels". That is the case
@@ -37,7 +37,7 @@ caller must send back; and the product departs from an implementation built from
 
 > **Narrows:** REQ-TOOLS-136
 
-*Ruled under the owner's delegation, 2026-10-13 ([OQ-280](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-280)); logged as [R-072](../requests.md#r-072).
+*Ruled under the owner's delegation, 2026-10-13 ([OQ-280](../../archive/architecture/open-questions/58-spikes-and-later-questions-25.md#oq-280)); logged as [R-072](../requests.md#r-072).
 Narrows REQ-TOOLS-136 (level 3's comparison sets one trailing `\r` aside on both sides). Names `PD-TOOLS-015` and `PD-TOOLS-017`,
 the earlier narrowings of REQ-TOOLS-136, and `PD-TOOLS-014` (revision 3, ruled with it) and `PD-TOOLS-016`; none of the last
 three is otherwise revised.*
@@ -59,7 +59,7 @@ three is otherwise revised.*
 > `retry-lf` steps through `haet_edit` (the level-3 near miss naming the line endings, its quote applying, the file wholly CRLF).
 > **Found:** a block with a blank interior line never reaches level 3, on LF and CRLF alike — not decided by this ruling, recorded
 > as [`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../../defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md)
-> and raised as [OQ-295](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295). **What was not measured.** A live run: the `crlf` scenario
+> and raised as [OQ-295](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295). **What was not measured.** A live run: the `crlf` scenario
 > (`lib/crlf-scenario.mjs`) now fails a level-4 window edit whose `old_string` was a uniform indent off, checks a level-3 one lands
 > at the file's depth and a level-3 near miss names the endings, and is the orchestrator's to run. Repairs
 > [`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3`](../../defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md).

@@ -73,7 +73,7 @@ Part 1 of 7 of [domain 12](../12-desktop-shell-windows.md), which indexes every 
   > runs is declined with "Finish the active run before opening another project." as before. Gates (1) and (2), their order,
   > and every other clause above still govern. Its case is disjoint from `PD-SHELL-001`'s, the add-a-window gestures, on
   > which no gate is evaluated. Written under [OQ-237](../../architecture/open-questions.md), as OQ-206's ruling named it.
-  > *Added 2026-10-20 ([OQ-361](../../architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361), ruled under
+  > *Added 2026-10-20 ([OQ-361](../../archive/architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361), ruled under
   > [R-072](../../product/requests.md#r-072); `PD-SHELL-009` revision 3):* gate (2) on the replacement route counts the
   > requesting window's own workspace too: a window whose project runs no integration passes gate (2) while another window's
   > project integrates, the window whose project integrates is declined with "Finish the worktree integration before opening
@@ -84,7 +84,7 @@ Part 1 of 7 of [domain 12](../12-desktop-shell-windows.md), which indexes every 
   > **Narrowed by [`PD-SHELL-010`](../../product/directives/pd-shell-010.md#pd-shell-010), 2026-10-14.** Gate (1) is asked of the requesting
   > window's renderer; a renderer that cannot answer — gone, failing main's 5 s liveness probe, or reported `unresponsive` —
   > passes gate (1), and gates (2) and (3) are evaluated as written. Its case is disjoint from `PD-SHELL-001`'s and
-  > `PD-SHELL-009`'s. Written under [OQ-297](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-297).
+  > `PD-SHELL-009`'s. Written under [OQ-297](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-297).
 
 ### Main window structure
 

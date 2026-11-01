@@ -17,7 +17,7 @@ behaviour starts no rival, which is what (4)'s letter asks. It does not meet the
 
 Verified by the owner's probe on 2026-10-31 (real sockets and timers: a record naming a live holder that accepts and never
 answers). Not repaired, and not ruled here: which sentence governs is a question for the specification, and a ruling is
-owed: [OQ-461](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-461) raises it.
+owed: [OQ-461](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-461) raises it.
 
 A related reading, raised in the same entry and also not ruled: (3) lists "a process that is running does not answer" among the reasons to reclaim.
 For a record that has come to name a different live claim during the interval, the code leaves the record rather than
@@ -45,7 +45,7 @@ reclaiming it, on REQ-STARTUP-161's ground above.
 - `docs/defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md` (beside this note) — the repair that introduced
   (3)'s re-read and (4)'s second hand-over.
 - `docs/architecture/adr/0055-startup-sequencing/03-decision.md` — the 2026-10-31 note on (3) and (4), which also cites the
-  two-interval wait's [OQ-460](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-460).
+  two-interval wait's [OQ-460](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-460).
 
 ## Repaired — 2026-11-01, under PD-STARTUP-009
 

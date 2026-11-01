@@ -29,7 +29,7 @@ application, REQ-TOOLS-126/127) launches `release/win-unpacked/Rotaris.exe` with
 through `ROTARIS_CAPTURE_EVAL_AT` (lines 15 and 92). A packaged build (`ROTARIS_BUILD=package`, `__ROTARIS_SEAMS__` false) compiles
 every one of those out: `_EVAL_AT` since fin43 (`scripts/lib/seam-check.mjs` forbids it), the dialect switch and the script
 variables since fin45, and since fin46 the scripted model client itself, which a packaged build no longer carries at all
-([OQ-312](../../architecture/open-questions/62-spikes-and-later-questions-29.md#oq-312), ruled 2026-10-14 under R-072). Against a seam-free package the launch's
+([OQ-312](../../archive/architecture/open-questions/62-spikes-and-later-questions-29.md#oq-312), ruled 2026-10-14 under R-072). Against a seam-free package the launch's
 model is the workspace's configured one (none in its scratch workspace, so no run), and the probe line it waits for is never
 logged, so the proof cannot measure what it exists to measure: it fails, or would read nothing, on every package `pnpm package`
 can now produce. Read from the code on 2026-10-14 by fin46 (`fin46-accept1-11`) while building OQ-312; not run (the proof needs a

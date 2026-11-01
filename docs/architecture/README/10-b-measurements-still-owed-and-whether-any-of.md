@@ -41,7 +41,7 @@ absorbed, because a sub-case folded into a discharged spike is a gap nobody can 
   only route to an absent store directory that the corrections do **not** close. ***Measured 2026-10-13
   (fin41), `pnpm restore-kill-proof`:*** killed 10 of 10 times between the renames, the disk was always the
   model's (target empty, displaced and staging stores whole), and the next open always created an empty store
-  there and listed no session — finish, reverse or report is [OQ-266](../open-questions/57-spikes-and-later-questions-24.md#oq-266)'s (ADR-0058,
+  there and listed no session — finish, reverse or report is [OQ-266](../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-266)'s (ADR-0058,
   the restore section's report). ***Repaired 2026-10-14 (fin43; OQ-266 ruled 2026-10-13 under R-072: reverse, at the
   next open):*** the restore journals the cut (`<identifier>.restore-pending`, before step 8), and the next open puts the
   displaced store back before creating anything — 10 of 10 in the same proof, byte-identical, the journal gone. A power loss

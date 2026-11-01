@@ -4,9 +4,9 @@
 
 ### PD-SHELL-001 — a chosen project folder may be opened in an additional main window
 
-*Revision 3 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-292](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-292)) — **`focus-session`
+*Revision 3 (2026-10-14, [R-072](../requests.md#r-072), ruling [OQ-292](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-292)) — **`focus-session`
 names its session's workspace and takes the reach**, in the gesture clause below; revision 2's clause quoted beside it.*
-*Revision 2 (2026-10-13, [R-072](../requests.md#r-072), ruling [OQ-267](../../architecture/open-questions/57-spikes-and-later-questions-24.md#oq-267)) — **a notice
+*Revision 2 (2026-10-13, [R-072](../requests.md#r-072), ruling [OQ-267](../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-267)) — **a notice
 action's reach**, in the gesture clause below; revision 1's clause quoted beside it.*
 
 Choosing a project folder from inside a window SHALL offer two outcomes, and which one is taken SHALL
@@ -39,7 +39,7 @@ the replacement route, on which REQ-SHELL-021 governs in full.
 > composer's slash catalogue on the terms of REQ-SHELL-048 and REQ-SHELL-056; and activating the title-bar workspace chip of
 > REQ-SHELL-035 with the platform's secondary-activation modifier held."
 
-*Pointer, 2026-10-14:* [OQ-294](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-294) ruled the project-setup banner's press for a project
+*Pointer, 2026-10-14:* [OQ-294](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-294) ruled the project-setup banner's press for a project
 no window holds under revision 2's reach (a window is added), recorded as [`PD-WORKSPACE-005`](pd-workspace-005.md#pd-workspace-005) revision 3.
 *(Moved out of the quotation of revision 1 on 2026-10-14 by fin44, where it read as part of the quote.)*
 
@@ -95,10 +95,10 @@ is raised there as the ordinary load error.
 > **Narrows:** REQ-SHELL-021
 
 *Raised by the owner, 2026-09-12; logged as [R-004](../requests.md#r-004).* *Revised by [R-072](../requests.md#r-072), 2026-10-13,
-ruling [OQ-267](../../architecture/open-questions/57-spikes-and-later-questions-24.md#oq-267) (revision 2): both advocates recommended the add; the ruling takes
+ruling [OQ-267](../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-267) (revision 2): both advocates recommended the add; the ruling takes
 one advocate's user-facing costs and the other's directive revision. The new case stays disjoint from
 [`PD-SHELL-009`](pd-shell-009.md#pd-shell-009)'s narrowing of REQ-SHELL-021, which covers gate (3)'s count on the replacement route.*
-*Revised by [R-072](../requests.md#r-072), 2026-10-14, ruling [OQ-292](../../architecture/open-questions/59-spikes-and-later-questions-26.md#oq-292) (revision 3): the
+*Revised by [R-072](../requests.md#r-072), 2026-10-14, ruling [OQ-292](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-292) (revision 3): the
 press reaches the session where it lives; REQ-NOTIFY-044 (with its Data & Formats parameterisation, which becomes "parameterised
 by session identifier and its workspace"), REQ-NOTIFY-031 and REQ-NOTIFY-032 are extended and carry the back-pointer.*
 

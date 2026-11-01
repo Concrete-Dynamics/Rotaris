@@ -7,7 +7,7 @@ with zero proposals as the zero-proposal outcome: the info notice "The retrospec
 proposed in impart_dL3YK5Xd.". The person is told the pass ran and found nothing when it never reached the model. The post-run pass
 has the same shape ("Improvement analysis complete — no proposals"); only its timed-out case says what happened (PD-CONFIG-003
 revision 2's detail). Noticed 2026-10-14 by the orchestrator's reading of the `ce5f952` pack; recorded by fin43
-(`fin43-live-findings`) and raised as [OQ-285](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-285). **Not repaired:** which notice a crashed
+(`fin43-live-findings`) and raised as [OQ-285](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-285). **Not repaired:** which notice a crashed
 collector's artifact owes is not named by the specification or the directive, and is the ruling's. *(As written 2026-10-14;
 repaired the same day, below.)*
 

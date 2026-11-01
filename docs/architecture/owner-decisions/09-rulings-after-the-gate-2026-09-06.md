@@ -113,7 +113,7 @@ a surface in each case and erases a distinction one of them draws on purpose.
   window holding another workspace. The renderer now hands the action's workspace to main (`hooks.review {workspace}`),
   and main reaches it — the window holding it surfaced (REQ-STARTUP-163), else one added for it with no gate and no close
   — then opens that workspace's review in that window and stores the decision against it. Where no window holds the
-  workspace, adding one is ~~the build's reading and not a ruling~~ the ruled reading since 2026-10-13: [OQ-267](../open-questions/57-spikes-and-later-questions-24.md#oq-267),
+  workspace, adding one is ~~the build's reading and not a ruling~~ the ruled reading since 2026-10-13: [OQ-267](../../archive/architecture/open-questions/57-spikes-and-later-questions-24.md#oq-267),
   ruled under [R-072](../../product/requests.md#r-072) as [`PD-SHELL-001`](../../product/directives/pd-shell-001.md#pd-shell-001) revision 2. `pnpm notice-proof`'s
   `review-other` launch drives it; before the repair it logged "… which is not the open workspace" and opened nothing
   ([`../../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md`](../../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md)).

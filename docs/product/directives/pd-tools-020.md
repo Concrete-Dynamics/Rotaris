@@ -26,7 +26,7 @@ lines that hold a visible character in its level-3 sentence when the window hold
 **Why, and what it costs.** REQ-TOOLS-136's level 3 adds or removes "one and the same leading-whitespace prefix … to every line of
 the candidate", and is silent on a line with no visible character. As built, a blank line took the prefix like any other — the bare
 prefix in the deeper direction, a failed `startsWith` in the shallower — while the file's blank line is empty, so an indentation-
-shifted block holding a blank line never matched at level 3 ([OQ-295](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295)). Measured with
+shifted block holding a blank line never matched at level 3 ([OQ-295](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295)). Measured with
 `matchEdit` on `a`, `\t\tx = 1;`, an empty line, `\t\ty = 2;`, `z`: the block one tab shallow or one tab deep reached level 4 on an
 LF file (similarity 0.89 and 0.90), where `write_file` applied it unshifted beside "Verify the result.", and nothing on a CRLF file.
 A blank line inside a function body or between two statements is the commonest shape a multi-line edit carries, so the guarantee
@@ -39,7 +39,7 @@ departs from an implementation built from the specification alone, which shifts 
 
 > **Narrows:** REQ-TOOLS-136
 
-*Ruled under the owner's delegation, 2026-10-14 ([OQ-295](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295); dated 2026-10-13 until fin46
+*Ruled under the owner's delegation, 2026-10-14 ([OQ-295](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295); dated 2026-10-13 until fin46
 corrected it from the consortium's ruling record); logged as
 [R-072](../requests.md#r-072). Narrows REQ-TOOLS-136 at level 3 only. Comes with `PD-TOOLS-014` revision 4 and `PD-TOOLS-016`
 revision 4, ruled with it; names `PD-TOOLS-015`, `PD-TOOLS-017` and `PD-TOOLS-019`, the other narrowings of REQ-TOOLS-136, each

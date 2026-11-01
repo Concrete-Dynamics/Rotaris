@@ -321,7 +321,7 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > when it returned `ok`. One reading, `writtenPathsOf` (`packages/engine/src/children/report.ts`), now feeds the cut-off's
 > changed paths, the report's `edited_files`, the facts the pass is told never to deny and the fallback's "Files
 > touched". The terminal stays outside, as PD-TOOLS-006 states. **A literal reading taken, open for the owner
-> ([OQ-245](../../architecture/open-questions/52-spikes-and-later-questions-19.md#oq-245), numbered by fin35):** a
+> ([OQ-245](../../archive/architecture/open-questions/52-spikes-and-later-questions-19.md#oq-245), numbered by fin35):** a
 > cross-file EDIT capability is listed by the one file or directory its arguments confine it to — a symbol rename lists
 > the file declaring the symbol, not the files whose references it rewrote, and a replacement across the whole project
 > (no path argument) lists none — because the arguments name no more and the result's text is the server's; a preview
@@ -335,7 +335,7 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > the row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 >
 > **The literal reading for cross-file EDIT calls falsified, 2026-10-13, and its replacement, built by fin35 (ruled as
-> [OQ-245](../../architecture/open-questions/52-spikes-and-later-questions-19.md#oq-245) under [R-072](../requests.md#r-072), XE1):** the reading taken above, "a
+> [OQ-245](../../archive/architecture/open-questions/52-spikes-and-later-questions-19.md#oq-245) under [R-072](../requests.md#r-072), XE1):** the reading taken above, "a
 > cross-file EDIT capability is listed by the one file or directory its arguments confine it to", is kept as written. It is
 > false against this directive's own words — the paths the calls "changed" — and against REQ-ORCH-109: a rename lists one
 > file of the many it rewrites, a whole-project replacement none, a directory-scoped one the directory, so a child whose only
@@ -384,7 +384,7 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > before a rename, so a rename that is a server session's first cross-file request reaches the declaring file alone (measured
 > also over the runtime's own stdio branch, a copy of the live run's `todo-app` fixture among four arrangements). Recorded as
 > [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
-> and raised as [OQ-273](../../architecture/open-questions/58-spikes-and-later-questions-25.md#oq-273); launch 11 keeps the assertion and is red until it is repaired;
+> and raised as [OQ-273](../../archive/architecture/open-questions/58-spikes-and-later-questions-25.md#oq-273); launch 11 keeps the assertion and is red until it is repaired;
 > **launch 12** (`child-renamed-tool`) — the global configuration's `tool_name_map` offers the cross-file replacement as
 > `replace_across_project`, and a tester's call by that name lists both files it changed in its report and artifact, with the
 > evidence's `renamed` map `{"replace_across_project":"replace_in_files"}` (41.5 s): fin38's repair of

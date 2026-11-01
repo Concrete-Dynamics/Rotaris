@@ -47,16 +47,16 @@ The gone case was built by fin43 on 2026-10-14 without a directive
 this directive is its record home. What it costs: a renderer busy for more than 5 s on its main thread while its window is being
 closed — a long synchronous task, not a person deciding — loses its guard, so unsaved settings in it are not offered for saving;
 and an answering renderer with unsaved settings still holds a quit from outside any window on a person's answer
-([OQ-298](../../architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298), raised apart, not decided here). *Amended 2026-10-14: OQ-298 is ruled
+([OQ-298](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-298), raised apart, not decided here). *Amended 2026-10-14: OQ-298 is ruled
 (`PD-SHELL-009` revision 2) — such a quit asks no guard, so an answering renderer no longer holds it; its unsaved settings stay
 unsaved and are not written.* This directive's cases are disjoint from
 `PD-SHELL-009`'s (guard (3) and gate (3)'s count) and from `PD-SHELL-001`'s (the add-a-window gestures, on which no gate is
-evaluated): it narrows only guard (1) and gate (1), when the renderer cannot answer. *Noted 2026-10-20 ([OQ-361](../../architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361), `PD-SHELL-009` revision 3): since revision 3, `PD-SHELL-009`'s cases are guard (2) and gate (2) too, beside guard (3) and gate (3)'s count; this directive's stay disjoint from them.*
+evaluated): it narrows only guard (1) and gate (1), when the renderer cannot answer. *Noted 2026-10-20 ([OQ-361](../../archive/architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361), `PD-SHELL-009` revision 3): since revision 3, `PD-SHELL-009`'s cases are guard (2) and gate (2) too, beside guard (3) and gate (3)'s count; this directive's stay disjoint from them.*
 
 > **Narrows:** REQ-SHELL-119, REQ-SHELL-124, REQ-SHELL-021
 
 *Raised by the consortium under the owner's delegation, 2026-10-14; logged as [R-072](../requests.md#r-072), the ruling of
-[OQ-297](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-297) (HR1; advocate B followed, one point from advocate A folded in).*
+[OQ-297](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-297) (HR1; advocate B followed, one point from advocate A folded in).*
 
 > **First execution, 2026-10-14, built by fin44 (`fin44-hang-and-seams`):** the directive held as written. `askRendererGuard`'s
 > probe, its bound and the `unresponsive` listener were built as stated; `main-windows.test.ts` pins seven cases, all red on the

@@ -28,7 +28,7 @@ Part 4 of 7 of [domain 12](../12-desktop-shell-windows.md), which indexes every 
   > window while a run is active?" ("…while {n} runs are active?") while that window's own project has a run active,
   > states that Rotaris will stop the run(s) and that in-flight work may not finish, and its Yes stops them before the
   > window closes; with no run active in its project it asks nothing.
-  > *Added 2026-10-20 ([OQ-361](../../architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361), ruled under
+  > *Added 2026-10-20 ([OQ-361](../../archive/architecture/open-questions/63-spikes-and-later-questions-30.md#oq-361), ruled under
   > [R-072](../../product/requests.md#r-072); `PD-SHELL-009` revision 3):* guard (2) counts the whole instance at the close of
   > the last main window, and the closing window's own workspace at a close that leaves another main window open; it never
   > refuses a window that holds no workspace and leaves another main window open. It reads main's own record of an
@@ -44,7 +44,7 @@ Part 4 of 7 of [domain 12](../12-desktop-shell-windows.md), which indexes every 
   > **Narrowed by [`PD-SHELL-010`](../../product/directives/pd-shell-010.md#pd-shell-010), 2026-10-14.** Guard (1) is asked of the window's
   > renderer, and a renderer that cannot answer it — gone, failing main's 5 s liveness probe, or reported `unresponsive` while
   > the question is out — allows: the close proceeds without guard (1), and a person's close still meets guard (3). A renderer
-  > that answers the probe is waited for without bound. Written under [OQ-297](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-297).
+  > that answers the probe is waited for without bound. Written under [OQ-297](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-297).
 - **REQ-SHELL-120**: Once the guards pass, the window is committed to closing: no new background work may start on the closing window.
 - **REQ-SHELL-121**: Shutdown is clean and complete, and is checkable from outside the process. Active runs are asked to stop before the process ends, and no run keeps consuming a model provider afterwards. Once the last main window has gone, no persona window, artifact dialog or terminal window is left on screen — the one running instance may hold several main windows at once (REQ-STARTUP-161), and closing one takes only its own auxiliary windows with it (REQ-SHELL-123). A diagnostics run that was in progress leaves a complete, readable diagnostics directory rather than a truncated one. An update download that was in progress leaves behind no partially written and no locked file. The shutdown itself raises no error dialog and produces no crash report.
 - **REQ-SHELL-169**: A launch of the application that arrives while this instance is shutting down SHALL be refused rather than admitted, and SHALL be honoured once the shutdown has finished. Shutting down means the interval that begins when the ordered shutdown effects REQ-MONITOR-131 fixes begin and ends when the process ends, the force-exit allowance that requirement carries included; this document holds no copy of that allowance. Throughout that interval the instance SHALL build no window for the launch, SHALL open no workspace for it, and SHALL start and write nothing on its behalf — in particular the window REQ-STARTUP-162 would otherwise have an instance with no window open build for a launch SHALL NOT be built while this interval is running. Admitting the launch would mean two instances of the application briefly existed, which REQ-STARTUP-161 exists to prevent, at the moment the product is least able to reason about its own state; refusing is also the shape REQ-STARTUP-161 already has, since a launch never starts a rival process.
@@ -63,7 +63,7 @@ Part 4 of 7 of [domain 12](../12-desktop-shell-windows.md), which indexes every 
   > **Narrowed by [`PD-SHELL-010`](../../product/directives/pd-shell-010.md#pd-shell-010), 2026-10-14.** At a window's close (and at
   > REQ-SHELL-021's gate 1) the dialog is the renderer's: a renderer that cannot answer — gone, failing main's 5 s liveness
   > probe, or reported `unresponsive` — raises none and blocks nothing, and the close or the quit proceeds. Leaving the
-  > Settings view is unchanged. Written under [OQ-297](../../architecture/open-questions/60-spikes-and-later-questions-27.md#oq-297).
+  > Settings view is unchanged. Written under [OQ-297](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-297).
 
 ### Sessions: new, browse, focus
 

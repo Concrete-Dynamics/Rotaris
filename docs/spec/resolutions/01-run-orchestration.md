@@ -24,7 +24,7 @@ status: resolved
 > comparison of the text in its emitted key order was the defect
 > [`the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies`](../../defects/fixed/the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md)
 > records. Ruled under the owner's delegation ([R-072](../../product/requests.md#r-072)) with no directive; the ruling, its
-> evidence and its reopening condition are in [`open-questions.md`](../../architecture/open-questions/66-spikes-and-later-questions-33.md#oq-364).
+> evidence and its reopening condition are in [`open-questions.md`](../../archive/architecture/open-questions/66-spikes-and-later-questions-33.md#oq-364).
 
 > ## Amendment, 2026-09-14 — one persisted run vocabulary
 >

@@ -68,7 +68,7 @@ Five clusters. Each row names the gap, the evidence and the bundle that closes i
 
 Checklist items met today: 1 (no remote content), 2, 3, 4 (per window), 5, 6, 7 (meta tag, `style-src
 'unsafe-inline'` remains), 8, 9, 10, 11, 12 (no webview), 15, 16 (Electron 44.3.0), 20. Open: 13, 14, 17, 19. Item 18
-(a custom scheme) is deliberately not met under [OQ-466](open-questions/69-spikes-and-later-questions-36.md#oq-466)'s
+(a custom scheme) is deliberately not met under [OQ-466](../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-466)'s
 ruling of 2026-11-01: the renderer stays on `file:`, `grantFileProtocolExtraPrivileges` stays enabled, and "the
 application's own page" becomes one exported exact-path predicate (the built renderer's `index.html` under the
 application's renderer directory, or the dev server's exact origin while unpackaged) shared by the permission handlers,
@@ -80,7 +80,7 @@ the navigation guard, the sender check and the reload.
 |---|---|---|
 | The run host and the workspace service have no `uncaughtException` / `unhandledRejection` handler and do not end when the parent port closes | `run-host/index.ts`, `workspace-service/index.ts`; [the note](../defects/the-run-host-and-the-workspace-service-have-no-last-resort-exception-handler-and-end-without-a-word.md); [the orphaned run host](../defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md) | B1 |
 | A forked child's `ready` is not bounded | `main/index.ts:310`, `:413` | B1 |
-| A lost run host or workspace service is logged and never surfaced | `main/index.ts:339`, `:418`; [OQ-462](open-questions/69-spikes-and-later-questions-36.md#oq-462) | B1 |
+| A lost run host or workspace service is logged and never surfaced | `main/index.ts:339`, `:418`; [OQ-462](../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-462) | B1 |
 | No React error boundary; `createRoot` without error options | `renderer/main.tsx:1685`, `windows.tsx:30`, `packages/ui/src/AppShell.tsx` | B2 |
 | A dead renderer is detached and logged; no reload, no notice; GPU loss unhandled | `main-windows.ts:1151-1159` | B2 |
 
@@ -99,12 +99,12 @@ Not a finding: the bundled SQLite is 3.53.4, past the WAL-reset fix of 3.51.3; C
 
 | Finding | Evidence | Closes |
 |---|---|---|
-| `prompt`, every `path` and every name unbounded in `CommandRequestSchema` | `packages/contracts/src/commands.ts`; [OQ-467](open-questions/69-spikes-and-later-questions-36.md#oq-467) | D1 |
+| `prompt`, every `path` and every name unbounded in `CommandRequestSchema` | `packages/contracts/src/commands.ts`; [OQ-467](../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-467) | D1 |
 | Main's application log bypasses `redact()` | `main/app-log.ts`; [the note](../defects/mains-application-log-lines-bypass-the-redaction-pass.md) | D1 |
 | Application log to stdout alone in a packaged build; diagnostics (REQ-STARTUP-129 to REQ-STARTUP-139) not built | `main/app-log.ts` | D2 |
-| Session log unbounded | `run-host/tools.ts:26`; [OQ-465](open-questions/69-spikes-and-later-questions-36.md#oq-465) | D2 |
+| Session log unbounded | `run-host/tools.ts:26`; [OQ-465](../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-465) | D2 |
 | The fence folds case on every platform; a check-then-write gap | `agent-tools/src/tools/fence.ts:52-82` | D3 |
-| Terminal, git and MCP writes outside the file tools' fence | `write-scope.ts`; [OQ-464](open-questions/69-spikes-and-later-questions-36.md#oq-464), ruled 2026-11-01: the boundary is per tool — the fence binds every first-party tool that takes a path, the gate's key scoping binds a path key, and the terminal and MCP are bounded by OS confinement where it exists and by nothing on native Windows (IC-8); the wording the user reads is [OQ-468](open-questions/69-spikes-and-later-questions-36.md#oq-468) | D3 (the invariant test) |
+| Terminal, git and MCP writes outside the file tools' fence | `write-scope.ts`; [OQ-464](../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-464), ruled 2026-11-01: the boundary is per tool — the fence binds every first-party tool that takes a path, the gate's key scoping binds a path key, and the terminal and MCP are bounded by OS confinement where it exists and by nothing on native Windows (IC-8); the wording the user reads is [OQ-468](open-questions/69-spikes-and-later-questions-36.md#oq-468) | D3 (the invariant test) |
 
 ### 3.5 Engineering hygiene
 
@@ -135,7 +135,7 @@ tests count), SAST, SBOM, Security-Policy, Vulnerabilities. The owner's: Branch-
   settings; adding or widening one stays the owner's.
 - **A repository-wide formatter**: a reformat touches every in-flight branch; the owner decides when.
 - **`strict-type-checked`**: a follow-up plan once the type-aware baseline (E1) has landed and its lint time is known.
-- **Credentials at rest** ([OQ-463](open-questions/69-spikes-and-later-questions-36.md#oq-463)): ruled not wanted on
+- **Credentials at rest** ([OQ-463](../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-463)): ruled not wanted on
   2026-11-01; the plain JSON file under REQ-PROVIDER-016's protection stays, and the entry names the conditions under
   which the question may return as a new request.
 
@@ -212,8 +212,8 @@ archived entries, the link gate walks `docs/archive/`, and the budget applies th
 identifier defined where it is: a withdrawn or superseded requirement keeps its definition line, its anchor and its
 back-pointer, and its text moves verbatim; the generator's counts are unchanged, and the counts test holds.
 
-Open questions this plan raised and rules before building: [OQ-462 to OQ-467](open-questions/69-spikes-and-later-questions-36.md#oq-462)
-and [OQ-459](open-questions/68-spikes-and-later-questions-35.md#oq-459), all ruled 2026-11-01 by the orchestrator's
+Open questions this plan raised and rules before building: [OQ-462 to OQ-467](../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-462)
+and [OQ-459](../archive/architecture/open-questions/68-spikes-and-later-questions-35.md#oq-459), all ruled 2026-11-01 by the orchestrator's
 consortium under R-072; two rulings minted directives, [`PD-SESSION-004`](../product/directives/pd-session-004.md#pd-session-004)
 (the session log's bound, from OQ-465) and [`PD-CHAT-011`](../product/directives/pd-chat-011.md#pd-chat-011) (a refused
 draft or image, from OQ-467), and OQ-464's ruling raised [OQ-468](open-questions/69-spikes-and-later-questions-36.md#oq-468),

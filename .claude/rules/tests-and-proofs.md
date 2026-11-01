@@ -10,7 +10,9 @@ paths:
 Unit tests sit **beside the unit they cover** (`<unit>.test.ts`), run on Node with scripted model clients, and are
 collected by `vitest.config.ts` — `*.test.ts` only, so a `.tsx` suffix collects nothing. The narrowest verification is
 `pnpm vitest run <path>`. A module only tests reach is named `<unit>.test-support.ts`, and no product module imports it
-(`tools/test-support-naming/test-support-naming.test.ts`, every package under `packages/`).
+(`tools/test-support-naming/test-support-naming.test.ts`, every package under `packages/` and `apps/desktop`'s `src/` and
+`scripts/`, where the name ends `.test-support.mjs` or `.cjs` for a script). Nothing one test stubs reaches the next:
+`vitest.config.ts` restores spies, clears calls and undoes `vi.stubEnv` and `vi.stubGlobal` before each test.
 
 - **A few suites go red only under full-suite parallelism** — those driving a real PTY or child process. Re-run the file
   alone before believing a red from `pnpm test`.

@@ -69,8 +69,9 @@ build identifier, open `build-id.mjs`; tests in `build-id.test.ts`), `tools/requ
 `pnpm req-coverage` — every live shipping requirement's implementation, test and proof citations; `--check` in `pnpm lint` holds `baseline.json`, the uncited per domain, which only shrinks; `--since`
 the identifiers a branch adds and drops, `--drift` the requirements changed after their code; open
 `coverage.mjs`, tests in `coverage.test.ts`), `tools/test-support-naming/` (since 2026-10-15 the one guard that a module
-only tests reach is named `<unit>.test-support.ts` in every package under `packages/` and that nothing an entry reaches
-imports one; `test-support-naming.test.ts`), `tools/proof-registry/` (the proof registry behind `pnpm proofs:index` —
+only tests reach is named `<unit>.test-support.ts` in every package under `packages/`, and since 2026-11-01 in
+`apps/desktop`'s `src/` and `scripts/`, and that nothing an entry reaches imports one; `test-support-naming.test.ts`),
+`tools/vitest-config.test.ts` (the mock hygiene `vitest.config.ts` sets), `tools/proof-registry/` (the proof registry behind `pnpm proofs:index` —
 `registry.mjs` holds one record per proof entry, `generate.mjs` renders `docs/proofs/README.md` and `pnpm lint` fails
 when it is stale, `flags.mjs` reads the flags a proof script takes from its own argv, and `registry.test.ts` holds
 the registry to the tree), `tools/verify-plan/` (`pnpm verify:plan` —

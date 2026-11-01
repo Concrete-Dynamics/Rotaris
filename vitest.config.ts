@@ -37,6 +37,13 @@ export default defineConfig({
     environment: 'node',
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    // Mock hygiene (R-091, hardening F1): before each test every spy is restored and its calls cleared, and every
+    // `vi.stubEnv` and `vi.stubGlobal` is undone, so nothing one test stubs leaks into the next in its file
+    // (`tools/vitest-config.test.ts` pins all four).
+    restoreMocks: true,
+    clearMocks: true,
+    unstubEnvs: true,
+    unstubGlobals: true,
     // Coverage (R-091, hardening F1): measured by `pnpm test:coverage` (`vitest run --coverage`), never by `pnpm test` or
     // the gate, whose time is the owner's budget; CI runs it. The floor only rises: `autoUpdate` rewrites the four figures
     // below in this file, rounded down to the integer, whenever a whole-suite run measures more, and that rewrite is

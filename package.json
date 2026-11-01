@@ -101,17 +101,17 @@
     "check": "node tools/dev-time/cli.mjs gate"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
+    "@types/node": "^26.6.5",
     "@vitejs/plugin-react": "catalog:",
-    "eslint": "^10.9.1",
+    "eslint": "^10.13.0",
     "eslint-import-resolver-typescript": "^4.4.5",
-    "eslint-plugin-boundaries": "^7.2.1",
+    "eslint-plugin-boundaries": "^7.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.12.0",
     "jiti": "2.7.0",
-    "typescript": "~5.9.3",
-    "typescript-eslint": "^8.69.0",
-    "vitest": "^4.1.11",
+    "typescript": "~7.0.2",
+    "typescript-eslint": "^8.72.0",
+    "vitest": "^5.0.5",
     "yaml": "catalog:"
   }
 }

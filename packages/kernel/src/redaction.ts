@@ -72,13 +72,60 @@ function maskToken(value: string): string {
   return REDACTION_MARK;
 }
 
+/**
+ * (1) key=value / key: value. A value is consumed only when it is masked, so the value of an assignment whose key is
+ * NOT secret-looking is still read for assignments of its own: `https://h/p?api_key=s` is an assignment of `https`
+ * whose value holds `api_key=s`, and `error: token=s` one of `error` whose value holds `token=s`. Until 2026-11-01
+ * the non-secret value was consumed whole and both secrets came through unmasked (REQ-EVENTS-060's "an assignment
+ * inside the text"; `docs/archive/defects/an-assignment-inside-a-non-secret-assignments-value-is-not-masked.md`).
+ *
+ * The boundary before the key is a lookbehind and nothing after the separator is consumed, so the character that ends
+ * one assignment's separator can begin the next (`x:token=s`, `error: token=s`). The value's extent is `VALUE`'s, found
+ * by `valueEnd` only for a secret-looking key: a lookahead over the whole token at every key made a run of chained
+ * assignments quadratic (3.8 s over 100 KB, measured while this was written).
+ */
+function layerPlainAssignments(text: string): string {
+  const plain = new RegExp(String.raw`(?<![A-Za-z0-9_.\-])${KEY}(\s*[=:])`, 'g');
+  const unclosed = new Set<string>();
+  let out = '';
+  let last = 0;
+  for (let m = plain.exec(text); m !== null; m = plain.exec(text)) {
+    if (!isSecretLookingName(m[1] as string)) continue;
+    let start = m.index + m[0].length;
+    while (start < text.length && /\s/.test(text[start] as string)) start += 1;
+    const end = valueEnd(text, start, unclosed);
+    if (end === null) continue;
+    const value = text.slice(start, end);
+    if (SCHEME_WORDS.test(value)) continue;
+    out += text.slice(last, start) + maskToken(value);
+    last = end;
+    plain.lastIndex = end;
+  }
+  return last === 0 ? text : out + text.slice(last);
+}
+
+/**
+ * Where the one value token at `start` ends, by `VALUE`'s three alternatives — a quoted value to its closing quote, else
+ * to the next whitespace or quote; null where none starts there. A quote found unclosed once is unclosed from every later
+ * position too, so `unclosed` keeps a run of `token="` from re-scanning the text to its end at each one.
+ */
+function valueEnd(text: string, start: number, unclosed: Set<string>): number | null {
+  const first = text[start];
+  if (first === undefined) return null;
+  if (first === '"' || first === "'") {
+    if (unclosed.has(first)) return null;
+    const close = text.indexOf(first, start + 1);
+    if (close === -1) { unclosed.add(first); return null; }
+    return close + 1;
+  }
+  let end = start;
+  while (end < text.length && !/[\s"']/.test(text[end] as string)) end += 1;
+  return end;
+}
+
 function layerAssignments(text: string): string {
   // (1) key=value / key: value; a quoted key followed by whitespace counts as an assignment too (REQ-EVENTS-060).
-  const plain = new RegExp(String.raw`(^|[^A-Za-z0-9_.\-])${KEY}(\s*[=:]\s*)${VALUE}`, 'g');
-  text = text.replace(plain, (m, pre: string, key: string, sep: string, value: string) => {
-    if (!isSecretLookingName(key) || SCHEME_WORDS.test(value)) return m;
-    return `${pre}${key}${sep}${maskToken(value)}`;
-  });
+  text = layerPlainAssignments(text);
   const quoted = new RegExp(String.raw`(^|\s)(["'])([A-Za-z0-9_.\-]{1,128})\2(\s+)${VALUE}`, 'g');
   return text.replace(quoted, (m, pre: string, q: string, key: string, ws: string, value: string) => {
     if (!isSecretLookingName(key) || SCHEME_WORDS.test(value)) return m;

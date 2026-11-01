@@ -36,6 +36,17 @@ describe('kernel — redaction (REQ-TOOLS-171/172, REQ-EVENTS-060..063)', () => 
     expect(redact(pem)).toBe('-----BEGIN PRIVATE KEY-----\n***\n-----END PRIVATE KEY-----');
   });
 
+  it('REQ-EVENTS-060: an assignment inside the value of a non-secret assignment is masked too — a URL\'s key query, an error\'s token', () => {
+    // Red before 2026-11-01: `https:` took the whole URL as its value, and `error:` the rest of the token.
+    expect(redact('GET https://api.example.com/v1/models?api_key=SECRET123 failed')).toBe('GET https://api.example.com/v1/models?api_key=*** failed');
+    expect(redact('https://h/p?key=SECRET')).toBe('https://h/p?key=***');
+    expect(redact('error: token=abc123')).toBe('error: token=***');
+    expect(redact('status:401 auth=xyz')).toBe('status:401 auth=***');
+    // A non-secret query stays as it was, and the masked one stays masked.
+    expect(redact('https://h/p?page=2&sort=asc')).toBe('https://h/p?page=2&sort=asc');
+    expect(redact('https://h/p?api_key=***')).toBe('https://h/p?api_key=***');
+  });
+
   it('is idempotent and leaves credential-free text byte-identical', () => {
     const samples = ['--token abc def', 'password: "a b"', 'Bearer sk-live-1', 'https://bob:hunter2@example.com', 'git status && rm -rf /', 'sha256:9f86d081884c7d659a2feaa0c55ad015', 'C:\\Users\\me\\keyboard_layout.txt'];
     for (const s of samples) {
@@ -94,5 +105,12 @@ describe('the pass at size (REQ-HOOKS-139, found on first execution)', () => {
     expect(Number(process.hrtime.bigint() - started) / 1e6).toBeLessThan(50);
     expect(redact(`${'a'.repeat(200)}=secret`)).toBe(`${'a'.repeat(200)}=secret`);
     expect(redact(`${'a'.repeat(120)}_token=secret`)).toBe(`${'a'.repeat(120)}_token=***`);
+  });
+  it('stays linear over 100 KB of chained non-secret assignments, each value now read for one of its own (2026-11-01)', () => {
+    const text = ' a:'.repeat(33_000);
+    const started = process.hrtime.bigint();
+    expect(redact(text)).toBe(text);
+    expect(redact(`${'x:'.repeat(50_000)}token=s`)).toBe(`${'x:'.repeat(50_000)}token=***`);
+    expect(Number(process.hrtime.bigint() - started) / 1e6).toBeLessThan(100);
   });
 });

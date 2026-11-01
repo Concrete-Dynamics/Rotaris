@@ -44,10 +44,12 @@ const FIXTURE: Record<string, string> = {
     '',
     '<a id="oq-1"></a>',
     '',
+    // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
     '**OQ-1 — Still open?** *(REQ-X-1.)* See [OQ-2](#oq-2) and [the note](../../defects/fixed/a-note.md).',
     '',
     '<a id="oq-2"></a>',
     '',
+    // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
     '**OQ-2 — A ruled one?** *(REQ-X-2.)* Cites `../../defects/fixed/a-note.md` and [OQ-1](#oq-1).',
     '',
     '**Ruled 2026-10-06 by the owner ([R-071](../../product/requests.md#r-071)):** as built.',
@@ -155,6 +157,7 @@ describe('archive:migrate — what moves', () => {
         '',
         '<a id="oq-1"></a>',
         '',
+        // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
         '**OQ-1 — Still open?** *(REQ-X-1.)* See [OQ-2](../../archive/architecture/open-questions/01-fixture-questions.md#oq-2) ' +
           'and [the note](../../defects/fixed/a-note.md).',
         '',
@@ -183,6 +186,7 @@ describe('archive:migrate — what moves', () => {
       [
         '<a id="oq-2"></a>',
         '',
+        // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
         '**OQ-2 — A ruled one?** *(REQ-X-2.)* Cites `../../../defects/fixed/a-note.md` and [OQ-1](../../../architecture/open-questions/01-fixture-questions.md#oq-1).',
         '',
         '**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** as built.',

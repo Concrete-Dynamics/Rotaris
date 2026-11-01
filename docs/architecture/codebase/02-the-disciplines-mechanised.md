@@ -136,6 +136,11 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   migration on, fails while a settled entry is still live. The gates read the archive as part of the record:
   `check-record-links.mjs` and `check-doc-budget.mjs` walk `docs/archive/` with the rest of `docs/`, and the claims gate and the record's tests read
   live and archived parts together through `tools/record-parts.mjs` (`readRecordWithArchive`) (since 2026-11-01, hrd2).
+  The same script moves two more kinds (since 2026-11-01, hrd2's I2), each its rule as code with a test over fixtures:
+  `owner-decisions.mjs` an ESC, SR or GD entry that is ruled and whose ruling a sentence of `docs/spec/` carries, whole
+  to `docs/archive/architecture/owner-decisions/<part>.md`; `adr-history.mjs` an ADR's revision explanations, its
+  corrections that hold only the falsified reason and its struck sentences beside a dated replacement, to
+  `docs/archive/architecture/adr/<nnnn>-history.md`, each leaving a `*History: […](…)*` line. `--check` reads all three.
 - **A whole-session update keeps the transcript rows** — `REQ-MONITOR-216` omits the transcript from it, so
   it cannot say which rows survived; the increment after an attach or a reconcile upserts by index. The
   first run loop's status saves emptied a transcript still being written before this was so (ADR-0043

@@ -128,3 +128,25 @@ regenerates the proof index. An open question qualifies exactly when `tools/chec
 settled (`entryState`: one rule for both); a deferred one stays live. **A gate that asks what the record holds reads the
 live parts and the archived ones alike** through `tools/record-parts.mjs` (`archivePartsOf`, `readRecordWithArchive`):
 a question moved to the archive is still settled for the claims gate.
+
+**What else moves, and by which rule** (each a module of `tools/archive/` with its own test; `--dry-run --verbose` prints
+the passages and the evidence):
+
+- **Owner decisions** (`owner-decisions.mjs`, since 2026-11-01). An ESC, SR or GD entry of
+  `architecture/owner-decisions/<part>.md` moves whole to `archive/architecture/owner-decisions/<part>.md`, under an
+  `esc-<n>`-shaped anchor, when it is **ruled** and the **specification carries its ruling**: a sentence of `spec/` names
+  its identifier with the words a round or an amendment uses (*applied*, *amended under*, *accepted amendment*, *swept*,
+  *nothing is owed*), or the ruling is a directive whose identifier `spec/` names. The specification's back-pointers are
+  the evidence rather than the entry's words. A ruling no requirement carries stays: the gate decisions about the process
+  (GD-2, GD-3, GD-5 to GD-10) and an escalation still the owner's (ESC-43). The live part keeps
+  `- ESC-<n> — <title>; ruled <date>; [archived](…#esc-<n>)`.
+- **ADR history** (`adr-history.mjs`, since 2026-11-01). Into `archive/architecture/adr/<nnnn>-history.md` go a
+  `**Revised…**` header bullet's sentences after its first, a correction paragraph or blockquote that holds only the
+  falsified reason (its replacement is the paragraph after it, or a section below it names), and a struck sentence beside
+  its dated replacement. Each leaves one line: `*History: [the correction of <date>](…/<nnnn>-history.md#correction-<date>).*`,
+  which is how the record still keeps a falsified reason beside its replacement. Nothing under a Decision or Consequences
+  heading moves, nor a correction that states its replacement inside itself, nor a struck word within a sentence: those
+  are the record as it now reads.
+
+`--check` reads every kind, so the commit that lands a ruling in the specification, or writes such a correction or strike
+into an ADR, runs `pnpm archive:migrate` too.

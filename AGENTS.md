@@ -36,7 +36,7 @@ never valid reasons to cross the boundary.
 - `docs/architecture/` — architecture and Architecture Decision Records
 - `docs/clean-room/` — process, reference record, zone policy, provenance
 - public library and platform documentation
-- the approved Claude Design UX reference for information architecture and visual design
+- the approved Claude Design UX reference for visual design
 - sanitized black-box conformance feedback (observable differences only)
 
 ## When the owner asks for something
@@ -141,13 +141,13 @@ the only places `electron` is imported. Engine code takes time from the clock po
 
 ```
 pnpm install --prefer-offline                 # a fresh worktree also needs: node node_modules/electron/install.js
-pnpm worktree:new <topic>                     # that line and the ones before it, wrapped: fetch origin/main, branch, worktree, install, electron, preflight
+pnpm worktree:new <topic>                     # fetch origin/main, branch, worktree, install, electron, preflight
 pnpm worktree:land                            # fetch, rebase onto origin/main, gate + affected proofs on the rebased head, fast-forward push, cleanup
-pnpm worktree:overlaps                        # what parallel work shares: each branch's files vs its fork from origin/main, the files two branches touch, and where main moved too — a report
+pnpm worktree:overlaps                        # what parallel work shares — a report, never a gate
 pnpm check                                    # symbols + typecheck + lint + tests — all four green before a commit (an orchestrated build: on each head it lands)
 pnpm vitest run <path>                        # the narrowest verification; tests sit beside the unit they cover
 pnpm typecheck | pnpm lint | pnpm symbols     # the pieces, when the whole gate is too slow
-pnpm dev-time report                          # where the time went (R-075): the gate, builds, proofs and worktree steps record themselves — and the reds each next green closed
+pnpm dev-time report                          # where the time went (R-075); most spans record themselves
 pnpm build && electron apps/desktop/out/main/index.js
 pnpm dev                                      # electron-vite, against the workspace source
 pnpm <area>-proof                             # the built app measuring one mechanism — docs/proofs/README.md indexes all of them
@@ -209,9 +209,9 @@ The same pair binds every change that **draws, redraws or restyles a surface**
 `docs/spec/` (`REQ-SHELL-023` governs). After drawing, match it: tokens alone are not compliance,
 and a plausible invention is not a third option where the design material decides.
 
-The repository operationalizes this pair through `.agents/skills/build-ui`, `.agents/skills/debug-ui`, and
-`.agents/skills/review-ui`. The first two join implementation to built-app evidence; the third is a report-only
-critic over screenshots, geometry, computed styles and deterministic findings, capped at three iterations.
+The repository operationalizes this pair through `.agents/skills/{design-ui,build-ui,debug-ui,review-ui}`: a brief
+before drawing, implementation joined to built-app evidence, and a report-only critic over screenshots, geometry,
+computed styles and deterministic findings, capped at three iterations.
 
 ## Traceability
 
@@ -262,10 +262,9 @@ canonical file's, a root `CLAUDE.md`, a `.claude/rules/` file without `paths:` f
 not name, and this file at 32 KiB or more.
 
 **Every `.claude/rules/` file is path-scoped, and this file is the only route to the rules.** A file there without
-`paths:` frontmatter loads eagerly at session start — a second, silent route to the rules, and it was tried and dropped
-on 2026-10-27: the host-side gap it worked around (an ancestor `CLAUDE.md` shadowing this file) is closed at the host
-instead, by removing that file. The test fails any eager rule file, so the route cannot return unnoticed. What is left
-is one rules file, `AGENTS.md`, reached by every harness by discovery.
+`paths:` frontmatter loads eagerly at session start — a second, silent route, tried and dropped on 2026-10-27 (the
+ancestor `CLAUDE.md` it worked around was removed at the host instead); the test fails any eager rule file, so the
+route cannot return unnoticed.
 
 **The path-scoped rules, by path.** A harness that does not load them reads the rule before editing a file it names:
 
@@ -325,24 +324,26 @@ aborts the rebase and hands back, a red stops it with nothing pushed, and the ga
 
 ## Repository skills — `.agents/skills/`
 
-Six portable workflows live under `.agents/skills/`, where REQ-WORKSPACE-051 makes them discoverable from
-this repository; Claude Code reaches each through its router (above). **`build-ui`** creates or substantially restyles a
-surface, **`debug-ui`** repairs a bounded rendered defect, and **`review-ui`** is a report-only external critique.
+Seven portable workflows live under `.agents/skills/`, where REQ-WORKSPACE-051 makes them discoverable from
+this repository; Claude Code reaches each through its router (above). **`design-ui`** briefs a surface before it is
+drawn and audits a built one into a refactor brief (its knowledge: `docs/research/design/`), **`build-ui`** creates or
+substantially restyles a surface, **`debug-ui`** repairs a bounded rendered defect, and **`review-ui`** is a
+report-only external critique scored against its rubric.
 
-A fourth, **`orchestrated-build`**, drives a large body of work (a release backlog, every open defect) through a
+**`orchestrated-build`** drives a large body of work (a release backlog, every open defect) through a
 multi-agent workflow: per bundle an independent reviewer that repairs in place and lands it, repair rounds,
 acceptance with the proof sweep and live runs, and recovery from container restarts out of the workflow journals.
 It improves itself under the guardrails its `SKILL.md` states; `pnpm check` runs its self-test.
 
-A fifth, **`run-autopsy`**, is the post-run forensic skill: it reads a live run's launch log, session store and
+**`run-autopsy`** is the post-run forensic skill: it reads a live run's launch log, session store and
 transcript as evidence and writes a fixed-schema friction and defect report, and the orchestrated build's acceptance
 autopsy follows it (the profile's `autopsy.method`).
 
-A sixth, **`verify-plan`**, prints the gate, the complete affected proof suites and the architecture documents for a
+**`verify-plan`** prints the gate, the complete affected proof suites and the architecture documents for a
 diff (`pnpm verify:plan`). Unmapped paths require explicit review — never treat them as no proofs.
 
 `build-ui` and `debug-ui` may change source within the authority of the current task. `review-ui` writes only
-evidence under `.ui-review/`. Its critique is proposed evidence and reaches implementation through a separate,
+evidence under `.ui-review/`, and `design-ui` only the record (`docs/design/briefs/`, an open question). A critique is proposed evidence and reaches implementation through a separate,
 authorized build or debug pass. A complete review loop has at most three iterations.
 
 ## Where the time went — the development-time store (R-075)

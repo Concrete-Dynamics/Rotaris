@@ -1,0 +1,44 @@
+# 09. Accessibility for a dense desktop tool
+
+WCAG 2.2 AA on the desktop, mapped onto REQ-SHELL-144..168: contrast, focus, keyboard reach, names, live regions for streaming, reduced motion and scaling.
+
+**Review date:** 2026-11-01
+**Status:** planned — guidance; informs craft within `docs/design/README.md` §1 and structure within §2; overrides nothing.
+
+Guide 09 of 14 of [the design research corpus](README.md), which indexes every guide and fixes the template below.
+
+## 1. Purpose and scope
+
+*Planned.*
+
+## 2. Principles
+
+*Planned.*
+
+## 3. Patterns and anti-patterns
+
+*Planned.*
+
+## 4. Method
+
+*Planned.*
+
+## 5. Worked example
+
+*Planned.*
+
+## 6. Checks
+
+*Planned.*
+
+## 7. How this applies here
+
+*Planned.*
+
+## 8. Where this disagrees with the adopted material
+
+*Planned.*
+
+## 9. References and further reading
+
+*Planned.*

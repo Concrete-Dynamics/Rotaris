@@ -9,10 +9,10 @@ code is [`module-map.md`](module-map.md)'s question, not this file's.
 | [`spec/`](spec/) | The approved behavioural requirements, one file per domain, and their resolutions | [`spec/README.md`](spec/README.md) |
 | [`architecture/`](architecture/) | ADRs, views, open questions, the build's own record | [`architecture/README.md`](architecture/README.md) |
 | `clean-room/` | Process, the gates, the provenance record | — |
-| [`design/`](design/) | The adopted design language | [`design/README.md`](design/README.md) |
+| [`design/`](design/) | The adopted design language, and the surface briefs under `briefs/` | [`design/README.md`](design/README.md) |
 | [`defects/`](defects/) | Defect notes, open and fixed | [`defects/README.md`](defects/README.md) |
 | [`proofs/`](proofs/) | One record per built-app proof | [`proofs/README.md`](proofs/README.md) |
-| [`research/`](research/) | Measurements and probes that informed a decision | — |
+| [`research/`](research/) | Measurements and probes that informed a decision, and research-derived guidance: [`optimization/`](research/optimization/README.md) (the harness), [`design/`](research/design/README.md) (UX and craft) | — |
 | [`archive/`](archive/) | Ruled, closed and withdrawn entries, moved out of the live record whole (R-092) | [The archive](#the-archive), below |
 
 ## The document budget

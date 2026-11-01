@@ -452,7 +452,7 @@ describe('OQ-386 — the asynchronous walk reaches the synchronous walk\'s disco
 });
 
 describe('this repository is its own fixture (AGENTS.md, REQ-WORKSPACE-051)', () => {
-  it('discovers its own three portable skills from .agents/skills, against the real filesystem', () => {
+  it('discovers its own UI skills from .agents/skills, against the real filesystem', () => {
     // `AGENTS.md` has claimed since 2026-09-12 that "three portable workflows live under `.agents/skills/`,
     // where REQ-WORKSPACE-051 makes them discoverable from this repository". Until this feature existed
     // nothing could observe that. The walk starts inside `packages/config`, so it exercises the ancestor climb
@@ -465,7 +465,7 @@ describe('this repository is its own fixture (AGENTS.md, REQ-WORKSPACE-051)', ()
       exists: (p) => existsSync(p),
     });
     const project = d.skills.filter((s) => s.scope === 'project').map((s) => s.name);
-    expect(project).toEqual(expect.arrayContaining(['build-ui', 'debug-ui', 'review-ui']));
+    expect(project).toEqual(expect.arrayContaining(['design-ui', 'build-ui', 'debug-ui', 'review-ui']));
   });
 });
 

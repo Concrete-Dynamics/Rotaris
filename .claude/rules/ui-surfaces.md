@@ -29,4 +29,4 @@ craft only. Where the two disagree, the specification wins. `docs/design/README.
 
 Ordered edit path: `docs/architecture/views/04-seams.md` §8. Evidence after drawing: `pnpm build`,
 `pnpm app:drive shot`, then `pnpm ui-audit` and `pnpm ui-review` (report-only, three iterations at most).
-The `.agents/skills/build-ui` and `debug-ui` workflows drive this loop; `review-ui` only critiques it.
+`.agents/skills/design-ui` briefs a surface before this loop and audits one after; `build-ui` and `debug-ui` drive it; `review-ui` only critiques it, against its rubric.

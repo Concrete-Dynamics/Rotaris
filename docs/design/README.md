@@ -25,5 +25,5 @@ one now names its part.
 | [03](README/03-3-view-reconciliation.md) | 3. View reconciliation; 3.1 Specified view → design material; 3.2 Specified views and surfaces with no design; 3.3 Design screens with no specified counterpart |
 | [04](README/04-4-component-inventory-against-the-specification.md) | 4. Component inventory against the specification; 4.1 Affordance → component; 4.2 Affordances with no component at all |
 | [05](README/05-5-acceptance-items-the-design-language-must-be.md) | 5. Acceptance items the design language must be measured against |
-| [06](README/06-6-reference.md) | 6. Reference |
+| [06](README/06-6-reference.md) | 6. Reference; 6.1 The research corpus and the surface briefs — guidance, never authority |
 | [07](README/07-7-fidelity-consult-before-maintain-after.md) | 7. Fidelity — consult before, maintain after; 7.1 What the first reading of this obligation found — 2026-09-08; 7.2 The repair — 2026-09-09 (Part AI); 7.3 Telling two working agents apart — 2026-09-16 (`PD-CHAT-004` rev. 2, `PD-CHAT-005`); 7.4 A tool row says what it is doing — 2026-10-24 (`REQ-CHAT-175` – `REQ-CHAT-178`) |

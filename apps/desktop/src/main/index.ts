@@ -54,7 +54,8 @@ import { providersCommands } from './commands/providers.js';
 import { requirementsCommands } from './commands/requirements.js';
 import { sessionCommands } from './commands/session.js';
 import { dictationCommands } from './commands/dictation.js';
-import { installPermissionHandlers, type PermissionSession } from './permissions.js';
+import { installPermissionHandlers, type ApplicationPages, type PermissionSession } from './permissions.js';
+import { installWebContentsGuard, type GuardedApp } from './web-contents-guard.js'; // R-091, OQ-466
 import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
@@ -154,6 +155,21 @@ app.on('session-created', (created) => {
   // OQ-459: the microphone for dictation, and only what the application's own pages need.
   installPermissionHandlers(created as unknown as PermissionSession, process.env['ELECTRON_RENDERER_URL']);
 });
+
+/**
+ * The application's own page (OQ-466): the built renderer's `index.html` every window loads, or the development server while
+ * the application is not packaged. The web-contents guard and the dispatcher's sender check read it.
+ */
+const applicationPages: ApplicationPages = {
+  rendererIndex: join(__dirname, '../renderer/index.html'),
+  devServerUrl: app.isPackaged ? undefined : process.env['ELECTRON_RENDERER_URL'],
+};
+// R-091 (Electron security checklist 12 to 14): no page navigates its window away from the application, opens a window or
+// attaches a webview. Registered before `app.whenReady()`, so every web contents is guarded from its first navigation.
+installWebContentsGuard(app as unknown as GuardedApp, applicationPages, (m) => { log(m, 'warn'); });
+// R-091 (Electron security checklist 4): every renderer is sandboxed by the application, not by each window's
+// `webPreferences` alone; each window still states `sandbox: true`. Only callable before the app is ready.
+app.enableSandbox();
 
 /*
  * Why the process is going away, written down while it still can be.

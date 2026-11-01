@@ -58,8 +58,8 @@ Five clusters. Each row names the gap, the evidence and the bundle that closes i
 
 | Finding | Evidence | Closes |
 |---|---|---|
-| No `will-navigate`, `will-redirect`, `setWindowOpenHandler` or `will-attach-webview` guard anywhere | `apps/desktop/src` has none; the only navigation hook releases modality (`main-windows.ts`, `did-start-navigation`) | A1 |
-| `app.enableSandbox()` absent; sandboxing is per window | `main/index.ts` | A1 |
+| ~~No `will-navigate`, `will-redirect`, `setWindowOpenHandler` or `will-attach-webview` guard anywhere~~ | `apps/desktop/src` has none; the only navigation hook releases modality (`main-windows.ts`, `did-start-navigation`) | A1 — **closed 2026-11-01**: `main/web-contents-guard.ts`, installed on `web-contents-created` before `whenReady`, refuses a navigation or redirect away from `isApplicationPage` (OQ-466), every `window.open` and every webview, one `warning` line each naming the origin alone; pinned by `web-contents-guard.test.ts` and `pnpm driver-proof` step 9b |
+| ~~`app.enableSandbox()` absent; sandboxing is per window~~ | `main/index.ts` | A1 — **closed 2026-11-01**: called in `main/index.ts` before `whenReady`, every window keeping `sandbox: true`; its place is pinned by `web-contents-guard.test.ts`, and `pnpm driver-proof` runs the built app under it |
 | No fuses flipped, no ASAR integrity, `onlyLoadAppFromAsar` off | `apps/desktop/electron-builder.yml`; `@electron/fuses` unused | A2 |
 | `webSecurity`, `allowRunningInsecureContent`, `experimentalFeatures`, `webviewTag` left to defaults at eight window sites, nothing asserts them | `main-windows.ts:876,1129,1170`; `index.ts:719,759,898,996,1079` | A2 |
 | The dispatcher's sender check falls back to the active window; no sender-origin check | `mainWindows.forCommand` (`main-windows.ts:282`); `runCommand` (`index.ts:1882`) | A1 |
@@ -73,6 +73,10 @@ ruling of 2026-11-01: the renderer stays on `file:`, `grantFileProtocolExtraPriv
 application's own page" becomes one exported exact-path predicate (the built renderer's `index.html` under the
 application's renderer directory, or the dev server's exact origin while unpackaged) shared by the permission handlers,
 the navigation guard, the sender check and the reload.
+
+*Since 2026-11-01 (A1):* items 4 (`app.enableSandbox()`, application-wide), 13 and 14 are met, and 12 is guarded as well
+as unused. The predicate is `isApplicationPage` in `main/permissions.ts`; the navigation guard reads it. The permission
+handlers still read the older `isOwnPage`, which admits every `file:` URL, until A2 moves them with OQ-459's changes.
 
 ### 3.2 Failure handling outside main
 

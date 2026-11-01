@@ -26,6 +26,10 @@
  * (13d) quits while a foreground `terminal` call runs and reads its record: PD-TOOLS-013's `interrupted`, no exit code, no
  * timeout and no issue (`docs/archive/defects/a-foreground-terminal-call-the-run-cancels-reads-as-a-timeout.md`).
  *
+ * Since 2026-11-01 (R-091, step 9b) it is the first execution of the web-contents guard (`main/web-contents-guard.ts`): the
+ * driven page calls `window.open` and sets `location.href` to another origin, and each is refused in main with one `warning`
+ * line naming the origin alone while the window keeps the application's page (Electron security checklist 13 and 14).
+ *
  * Evidence under `.proof/driver-proof/`: `app.log`, `screen.png`, `shots/`, `run-app.log`, `cut-app.log`, `results.json`.
  * `--skip-build` skips the build.
  */
@@ -154,6 +158,27 @@ try {
   const themed = await d.command({ kind: 'theme.set', name: 'nocturne' });
   const applied = await d.eval(`document.documentElement.dataset.theme`);
   check('a command reaches the product’s own handler', themed.ok === true && applied === 'nocturne', `outcome ${JSON.stringify(themed)}, document reports "${applied}"`);
+
+  // 9b. The web-contents guard (R-091; Electron security checklist 13 and 14; OQ-466): the page asks for a window and then
+  // sends its own window to another origin. Both are refused in main, each with one `warning` line naming the origin alone
+  // (never the path or the query, which carries a marker here), and the window still shows the application's page.
+  const pageBefore = await d.eval('location.href');
+  const opened = await d.eval(`window.open('https://example.invalid/driver-proof?marker=guard-open-9b') === null`);
+  await d.eval(`(location.href = 'https://example.invalid/driver-proof?marker=guard-nav-9b', true)`);
+  const guardLines = await until(
+    () => (existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '').split(/\r?\n/).filter((line) => /(window|navigation) refused: /.test(line)),
+    (lines) => lines.length >= 2,
+    { timeoutMs: 10_000, what: 'the guard\'s two warning lines in the application log' },
+  ).catch(() => []);
+  const openLine = guardLines.find((line) => line.includes('window refused: a page asked to open https://example.invalid;'));
+  const navLine = guardLines.find((line) => line.includes('navigation refused: will-navigate to https://example.invalid,'));
+  check('window.open is denied with one warning naming the origin alone', opened === true && openLine !== undefined && /\bwarning\b/.test(openLine) && !openLine.includes('marker'), `window.open returned ${opened === true ? 'null' : 'a window'}; ${openLine ?? 'no line'}`);
+  // The navigation is refused before it commits; the page is read once it answers again, so a refusal that came too late to
+  // stop the load would show here as another URL or as no shell.
+  const pageAfter = await until(() => d.eval('location.href').catch(() => null), (href) => typeof href === 'string', { timeoutMs: 10_000, what: 'the page answering after the refused navigation' });
+  const shellStill = await d.waitFor('.app-shell', { timeoutMs: 10_000 }).then(() => true).catch(() => false);
+  check('a page sent to another origin stays the application\'s page, with one warning naming the origin alone', navLine !== undefined && /\bwarning\b/.test(navLine) && !navLine.includes('marker') && pageAfter === pageBefore && shellStill, `${navLine ?? 'no line'}; before ${pageBefore}, after ${pageAfter}; shell ${shellStill ? 'present' : 'absent'}`);
+  check('each refusal is said once', guardLines.length === 2, `${guardLines.length} guard line(s) in the log`);
 
   // 10. The photograph.
   const shot = join(output, 'screen.png');

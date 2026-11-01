@@ -613,7 +613,7 @@ export const PROOFS = [
   {
     id: 'driver-proof',
     area: 'Whole product',
-    summary: 'the driver seam `pnpm app:drive` depends on',
+    summary: 'the driver seam `pnpm app:drive` depends on, and the web-contents guard refusing a page\'s navigation and window (R-091)',
     neighbours: ['part-j-proof', 'mission-proof'],
     requires: [],
     platforms: ALL_HOSTS,

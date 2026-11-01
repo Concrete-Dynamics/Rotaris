@@ -91,3 +91,11 @@ soft-paused kill cases (`goneWithin` read `[true, true]` where `[false, false]` 
 its grandchild was gone within 5 s), and on the base run also the handshake case of
 [`a-cancel-during-the-first-calls-handshake-can-read-as-cancelled-before-the-command-completed.md`](a-cancel-during-the-first-calls-handshake-can-read-as-cancelled-before-the-command-completed.md).
 R-088 changes nothing the terminal loads. Recorded, not investigated.
+
+**Observed again, 2026-11-01 (the design-knowledge branch, Windows 11 ARM64, Node 26.13.0, Developer Mode on).** The
+full `pnpm check` on `f11fbec4`'s tree — a change to documentation, skills and one lint, nothing the terminal loads —
+went red on the soft-paused kill case at line 1267 only: `goneWithin(pids, 5_000)` read `[false, true]` (the command gone,
+its grandchild not) after 10.4 s in a 416 s test run, with a Vitest fork worker exiting unexpectedly in the same run; the
+host also carried a thirty-agent research workflow at the time. `pnpm vitest run packages/agent-tools/src/terminal/terminal.test.ts`
+alone, minutes later on the same tree: 93 passed, 42 skipped, 363 s. The Windows reading therefore still flakes away
+alone where the Linux reading of 2026-10-29 did not. Recorded, not investigated.

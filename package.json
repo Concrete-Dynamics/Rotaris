@@ -102,7 +102,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "@vitejs/plugin-react": "^6.1.1",
+    "@vitejs/plugin-react": "catalog:",
     "eslint": "^10.9.1",
     "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-boundaries": "^7.2.1",
@@ -111,6 +111,7 @@
     "jiti": "2.7.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.69.0",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "yaml": "catalog:"
   }
 }

@@ -7,7 +7,7 @@
   "dependencies": {
     "@rotaris/config": "workspace:*",
     "@rotaris/release-naming": "workspace:*",
-    "vite": "^8.2.4"
+    "vite": "catalog:"
   },
   "devDependencies": {
     "@rotaris/platform": "workspace:*"

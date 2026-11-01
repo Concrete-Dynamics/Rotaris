@@ -51,6 +51,16 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   `<!-- historical-path: <the path> -->`, keeps it as history on purpose; a mark that keeps nothing, or keeps a live
   path, fails. `docs/product/requests.md`, the orchestrator's alone to edit, is not read by it, and the check says why
   (since 2026-10-04, fin15).
+- **What an install may resolve is written down, not defaulted** — `pnpm-workspace.yaml` states pnpm 11's supply-chain
+  settings with a comment giving each one's reason and date: `minimumReleaseAge: 10080` (a version waits seven days on
+  the registry before it can be resolved; pnpm's default is one day), no `minimumReleaseAgeExclude` (its four entries of
+  2026-09-03 were removed on 2026-11-01), `trustPolicy: no-downgrade` with two exact `trustPolicyExclude` versions
+  (`semver@5.7.2` and `semver@6.3.1`, the CVE-2022-25883 backports the rule's publish-date test misreads),
+  `blockExoticSubdeps: true` and `engineStrict: true` (pnpm 11 reads it there; `.npmrc`'s `engine-strict` is inert,
+  measured). A dependency two or more manifests name has one specifier, in its `catalog:`, and every such manifest
+  writes `catalog:`. `.node-version` holds `24`, the floor `engines.node` states, and CI's two setup-node steps read it.
+  `tools/dependency-policy.test.ts` holds each value, the catalog's coverage and the pin (since 2026-11-01, R-091,
+  `hardening.md` §3.5 row 8).
 - **No merge leaves a conflict marker behind** — `tools/check-conflict-markers.mjs` (in `pnpm lint`, after
   `check-line-endings.mjs`) reads every tracked text file in the working copy and the index, through `git grep`, and
   fails on a line git writes as a marker: seven `<`, `|` or `>` at column 0 followed by a space or the line's end, and

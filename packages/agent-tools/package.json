@@ -14,10 +14,10 @@
     "@rotaris/platform": "workspace:*",
     "@rotaris/store": "workspace:*",
     "@xterm/addon-serialize": "0.14.0",
-    "@xterm/headless": "6.0.0",
-    "ajv": "8.20.0",
-    "node-pty": "1.1.0",
+    "@xterm/headless": "catalog:",
+    "ajv": "catalog:",
+    "node-pty": "catalog:",
     "undici": "7.29.1",
-    "zod": "^4.5.4"
+    "zod": "catalog:"
   }
 }

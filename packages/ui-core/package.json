@@ -10,6 +10,6 @@
   "dependencies": {
     "@rotaris/kernel": "workspace:*",
     "@rotaris/contracts": "workspace:*",
-    "zustand": "^5.0.15"
+    "zustand": "catalog:"
   }
 }

@@ -12,14 +12,14 @@
     "@rotaris/kernel": "workspace:*",
     "@rotaris/contracts": "workspace:*",
     "@rotaris/ui-core": "workspace:*",
-    "@xterm/headless": "6.0.0",
+    "@xterm/headless": "catalog:",
     "@xterm/xterm": "6.0.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "zustand": "^5.0.15"
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "zustand": "catalog:"
   },
   "devDependencies": {
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7"
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:"
   }
 }

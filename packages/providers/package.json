@@ -12,6 +12,6 @@
     "@rotaris/contracts": "workspace:*",
     "@rotaris/kernel": "workspace:*",
     "@rotaris/platform": "workspace:*",
-    "yaml": "^2.9.0"
+    "yaml": "catalog:"
   }
 }

@@ -4,6 +4,51 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@modelcontextprotocol/client':
+      specifier: 2.3.0
+      version: 2.3.0
+    '@types/react':
+      specifier: ^19.2.18
+      version: 19.2.18
+    '@types/react-dom':
+      specifier: ^19.2.7
+      version: 19.2.7
+    '@vitejs/plugin-react':
+      specifier: ^6.1.1
+      version: 6.1.1
+    '@xterm/headless':
+      specifier: 6.0.0
+      version: 6.0.0
+    ajv:
+      specifier: 8.20.0
+      version: 8.20.0
+    better-sqlite3:
+      specifier: ^13.0.3
+      version: 13.0.3
+    node-pty:
+      specifier: 1.1.0
+      version: 1.1.0
+    react:
+      specifier: ^19.2.8
+      version: 19.2.8
+    react-dom:
+      specifier: ^19.2.8
+      version: 19.2.8
+    vite:
+      specifier: ^8.2.4
+      version: 8.2.4
+    yaml:
+      specifier: ^2.9.0
+      version: 2.9.0
+    zod:
+      specifier: ^4.5.4
+      version: 4.5.4
+    zustand:
+      specifier: ^5.0.15
+      version: 5.0.15
+
 importers:
 
   .:
@@ -12,7 +57,7 @@ importers:
         specifier: ^24.0.0
         version: 24.13.3
       '@vitejs/plugin-react':
-        specifier: ^6.1.1
+        specifier: 'catalog:'
         version: 6.1.1(vite@8.2.4(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.0))
       eslint:
         specifier: ^10.9.1
@@ -41,35 +86,38 @@ importers:
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@24.13.3)(vite@8.2.4(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.0))
+      yaml:
+        specifier: 'catalog:'
+        version: 2.9.0
 
   apps/desktop:
     dependencies:
       '@modelcontextprotocol/client':
-        specifier: 2.3.0
+        specifier: 'catalog:'
         version: 2.3.0
       '@phosphor-icons/web':
         specifier: 2.1.1
         version: 2.1.1
       ajv:
-        specifier: 8.20.0
+        specifier: 'catalog:'
         version: 8.20.0
       better-sqlite3:
-        specifier: ^13.0.3
+        specifier: 'catalog:'
         version: 13.0.3
       node-pty:
-        specifier: 1.1.0
+        specifier: 'catalog:'
         version: 1.1.0
       react:
-        specifier: ^19.2.8
+        specifier: 'catalog:'
         version: 19.2.8
       react-dom:
-        specifier: ^19.2.8
+        specifier: 'catalog:'
         version: 19.2.8(react@19.2.8)
       zod:
-        specifier: ^4.5.4
+        specifier: 'catalog:'
         version: 4.5.4
       zustand:
-        specifier: ^5.0.15
+        specifier: 'catalog:'
         version: 5.0.15(@types/react@19.2.18)(react@19.2.8)
     devDependencies:
       '@electron/rebuild':
@@ -124,13 +172,13 @@ importers:
         specifier: workspace:*
         version: link:../../packages/workspace
       '@types/react':
-        specifier: ^19.2.18
+        specifier: 'catalog:'
         version: 19.2.18
       '@types/react-dom':
-        specifier: ^19.2.7
+        specifier: 'catalog:'
         version: 19.2.7(@types/react@19.2.18)
       '@vitejs/plugin-react':
-        specifier: ^6.1.1
+        specifier: 'catalog:'
         version: 6.1.1(vite@8.2.4(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.0))
       electron:
         specifier: 44.3.0
@@ -142,7 +190,7 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0(vite@8.2.4(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.0))
       vite:
-        specifier: ^8.2.4
+        specifier: 'catalog:'
         version: 8.2.4(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.0)
 
   packages/agent-tools:
@@ -166,19 +214,19 @@ importers:
         specifier: 0.14.0
         version: 0.14.0
       '@xterm/headless':
-        specifier: 6.0.0
+        specifier: 'catalog:'
         version: 6.0.0
       ajv:
-        specifier: 8.20.0
+        specifier: 'catalog:'
         version: 8.20.0
       node-pty:
-        specifier: 1.1.0
+        specifier: 'catalog:'
         version: 1.1.0
       undici:
         specifier: 7.29.1
         version: 7.29.1
       zod:
-        specifier: ^4.5.4
+        specifier: 'catalog:'
         version: 4.5.4
 
   packages/config:
@@ -193,10 +241,10 @@ importers:
         specifier: workspace:*
         version: link:../platform
       yaml:
-        specifier: ^2.9.0
+        specifier: 'catalog:'
         version: 2.9.0
       zod:
-        specifier: ^4.5.4
+        specifier: 'catalog:'
         version: 4.5.4
 
   packages/contracts:
@@ -205,7 +253,7 @@ importers:
         specifier: workspace:*
         version: link:../kernel
       zod:
-        specifier: ^4.5.4
+        specifier: 'catalog:'
         version: 4.5.4
 
   packages/engine:
@@ -246,7 +294,7 @@ importers:
   packages/mcp:
     dependencies:
       '@modelcontextprotocol/client':
-        specifier: 2.3.0
+        specifier: 'catalog:'
         version: 2.3.0
       '@rotaris/kernel':
         specifier: workspace:*
@@ -291,7 +339,7 @@ importers:
         specifier: workspace:*
         version: link:../platform
       yaml:
-        specifier: ^2.9.0
+        specifier: 'catalog:'
         version: 2.9.0
 
   packages/shell:
@@ -315,7 +363,7 @@ importers:
         specifier: workspace:*
         version: link:../platform
       better-sqlite3:
-        specifier: ^13.0.3
+        specifier: 'catalog:'
         version: 13.0.3
     devDependencies:
       '@types/better-sqlite3':
@@ -334,26 +382,26 @@ importers:
         specifier: workspace:*
         version: link:../ui-core
       '@xterm/headless':
-        specifier: 6.0.0
+        specifier: 'catalog:'
         version: 6.0.0
       '@xterm/xterm':
         specifier: 6.0.0
         version: 6.0.0
       react:
-        specifier: ^19.2.8
+        specifier: 'catalog:'
         version: 19.2.8
       react-dom:
-        specifier: ^19.2.8
+        specifier: 'catalog:'
         version: 19.2.8(react@19.2.8)
       zustand:
-        specifier: ^5.0.15
+        specifier: 'catalog:'
         version: 5.0.15(@types/react@19.2.18)(react@19.2.8)
     devDependencies:
       '@types/react':
-        specifier: ^19.2.18
+        specifier: 'catalog:'
         version: 19.2.18
       '@types/react-dom':
-        specifier: ^19.2.7
+        specifier: 'catalog:'
         version: 19.2.7(@types/react@19.2.18)
 
   packages/ui-core:
@@ -365,7 +413,7 @@ importers:
         specifier: workspace:*
         version: link:../kernel
       zustand:
-        specifier: ^5.0.15
+        specifier: 'catalog:'
         version: 5.0.15(@types/react@19.2.18)(react@19.2.8)
 
   packages/workspace:
@@ -394,7 +442,7 @@ importers:
         specifier: workspace:*
         version: link:../release-naming
       vite:
-        specifier: ^8.2.4
+        specifier: 'catalog:'
         version: 8.2.4(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.0)
     devDependencies:
       '@rotaris/platform':

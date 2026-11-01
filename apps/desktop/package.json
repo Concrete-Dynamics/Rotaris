@@ -12,15 +12,15 @@
     "package": "node scripts/package.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/client": "2.3.0",
+    "@modelcontextprotocol/client": "catalog:",
     "@phosphor-icons/web": "2.1.1",
-    "ajv": "8.20.0",
-    "better-sqlite3": "^13.0.3",
-    "node-pty": "1.1.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "zod": "^4.5.4",
-    "zustand": "^5.0.15"
+    "ajv": "catalog:",
+    "better-sqlite3": "catalog:",
+    "node-pty": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "zod": "catalog:",
+    "zustand": "catalog:"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
@@ -40,12 +40,12 @@
     "@rotaris/ui": "workspace:*",
     "@rotaris/ui-core": "workspace:*",
     "@rotaris/workspace": "workspace:*",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^6.1.1",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
     "electron": "44.3.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
-    "vite": "^8.2.4"
+    "vite": "catalog:"
   }
 }

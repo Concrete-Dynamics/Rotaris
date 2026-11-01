@@ -10,7 +10,7 @@
   "dependencies": {
     "@rotaris/kernel": "workspace:*",
     "@rotaris/platform": "workspace:*",
-    "better-sqlite3": "^13.0.3"
+    "better-sqlite3": "catalog:"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0"

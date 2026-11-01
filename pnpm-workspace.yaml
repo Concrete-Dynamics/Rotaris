@@ -15,11 +15,71 @@ allowBuilds:
   esbuild: true
   unrs-resolver: true
 
-minimumReleaseAgeExclude:
-  - '@types/react-dom@19.2.7'
-  - '@ai-sdk/gateway@4.0.74'
-  - '@ai-sdk/openai@4.0.58'
-  - ai@7.0.92
+# The supply-chain settings, written out so that none rests on a pnpm default
+# and none changes without an edit a reviewer sees (R-091; hardening.md §3.5;
+# tools/dependency-policy.test.ts holds each value). Measured against pnpm
+# 11.9.0 on 2026-11-01.
+#
+# minimumReleaseAge — the first line of defence: a version is not resolved
+# until it has been on the registry this many minutes. 10080 is seven days
+# (pnpm 11's default is 1440, one day), long enough for a hijacked release to
+# be noticed and pulled before it can reach this lockfile; Dependabot's
+# cooldown matches it (.github/dependabot.yml), so a PR it opens installs.
+# Set 2026-11-01.
+minimumReleaseAge: 10080
+
+# minimumReleaseAgeExclude — none. Its four entries (@types/react-dom@19.2.7,
+# @ai-sdk/gateway@4.0.74, @ai-sdk/openai@4.0.58, ai@7.0.92) were added on
+# 2026-09-03 to take versions published that same day; all four were older
+# than seven days on 2026-11-01 and were removed then. An entry added later
+# carries a comment saying why and the date after which it is removed.
+
+# trustPolicy — fail an install when a package's trust evidence (provenance,
+# trusted publishing) is weaker than an earlier version of the same package
+# had: the shape of a stolen publish token.
+trustPolicy: no-downgrade
+
+# trustPolicyExclude — the two exact versions the policy refused on its first
+# install (2026-11-01, ERR_PNPM_TRUST_DOWNGRADE), each a false positive of a
+# rule that judges by publish date, not by semver: semver@5.7.2 and
+# semver@6.3.1 are the maintainers' backports of the CVE-2022-25883 (ReDoS)
+# fix to the 5.x and 6.x lines, published 2023-07-10 without provenance after
+# 7.5.1 to 7.5.4 had shipped with it. Reached through @babel/core and
+# @electron/get (6.3.1) and tiny-async-pool (5.7.2). Exact versions only, so a
+# later 5.x or 6.x publish is still checked; an entry goes when the lockfile no
+# longer resolves that version.
+trustPolicyExclude:
+  - semver@5.7.2
+  - semver@6.3.1
+
+# blockExoticSubdeps — a transitive dependency may not come from git or a
+# tarball URL, only from the registry. pnpm 11's default; written so that a
+# change of default does not change this repository.
+blockExoticSubdeps: true
+
+# engineStrict — refuse to install under a Node or pnpm outside `engines`
+# (root package.json). pnpm 11 reads it here: an `engine-strict` line in
+# .npmrc is inert (measured 2026-11-01: a package wanting node >=99 installed
+# with a warning under .npmrc's line and was refused under this one).
+engineStrict: true
+
+# One specifier per dependency that two or more manifests name; each such
+# manifest writes `catalog:` (pnpm catalogs). A version moves here, once.
+catalog:
+  '@modelcontextprotocol/client': 2.3.0
+  '@types/react': ^19.2.18
+  '@types/react-dom': ^19.2.7
+  '@vitejs/plugin-react': ^6.1.1
+  '@xterm/headless': 6.0.0
+  ajv: 8.20.0
+  better-sqlite3: ^13.0.3
+  node-pty: 1.1.0
+  react: ^19.2.8
+  react-dom: ^19.2.8
+  vite: ^8.2.4
+  yaml: ^2.9.0
+  zod: ^4.5.4
+  zustand: ^5.0.15
 
 # One flat node_modules (see .npmrc for why); pnpm 11 reads it from here.
 nodeLinker: hoisted

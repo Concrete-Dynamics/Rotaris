@@ -13,6 +13,16 @@ written. When a later pass finds an alert closed, re-opened or re-scoped, that p
 file is not rewritten. An alert closes when the default branch carries the fix. A reading never dismisses one: dismissal
 is the repository owner's act in GitHub, and none of these files performs or implies it.
 
+**The release-age window comes before any alert.** An alert answers a vulnerability someone has already found in a
+version this repository resolves; the first line of defence is that a version just published is not resolved at all.
+Since 2026-11-01 `pnpm-workspace.yaml` sets `minimumReleaseAge: 10080`: no install takes a version younger than seven
+days, so a hijacked or broken release that is noticed and pulled from the registry within that week never reaches
+`pnpm-lock.yaml`. Beside it, `trustPolicy: no-downgrade` refuses a version whose publishing evidence is weaker than an
+earlier one's (the shape of a stolen token), and `blockExoticSubdeps` keeps transitive dependencies on the registry. An
+exception to either is an entry in that file with its reason and the date it goes; `tools/dependency-policy.test.ts`
+fails any release-age exception and a trust exception that names no exact version (R-091,
+[`hardening.md`](../hardening.md) §3.5).
+
 The dispositions a reading uses:
 
 - **patched**: a pull request moves the copy to a version outside the advisory's range, without breaking any dependent's

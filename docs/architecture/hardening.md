@@ -117,7 +117,7 @@ Not a finding: the bundled SQLite is 3.53.4, past the WAL-reset fix of 3.51.3; C
 | One tsconfig for every process: DOM types in main, Node types in the renderer | `tsconfig.json:4`, `tsconfig.base.json:20` | E2 |
 | No code coverage, no thresholds | `vitest.config.ts` | F1 |
 | No property-based tests; `shell` and `kernel` thin | `packages/shell` (1 test file), `packages/kernel` (4) | F2, F3 |
-| `minimumReleaseAge` implicit; no `trustPolicy`; no `engineStrict`; duplicated specifiers | `pnpm-workspace.yaml`, `.npmrc` | G1 |
+| ~~`minimumReleaseAge` implicit; no `trustPolicy`; no `engineStrict`; duplicated specifiers~~ closed 2026-11-01: seven days, `no-downgrade`, `blockExoticSubdeps`, `engineStrict`, a catalog, `.node-version` (`tools/dependency-policy.test.ts`) | `pnpm-workspace.yaml`, `.npmrc` | G1 |
 | No dependency-update bot | `.github/` | G1 |
 | No audit, no SAST, no SBOM, no `SECURITY.md`, no `CODEOWNERS` | `.github/workflows/`, the root | G2 |
 

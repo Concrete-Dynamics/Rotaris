@@ -8,7 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/client": "2.3.0",
+    "@modelcontextprotocol/client": "catalog:",
     "@rotaris/kernel": "workspace:*",
     "@rotaris/platform": "workspace:*"
   }

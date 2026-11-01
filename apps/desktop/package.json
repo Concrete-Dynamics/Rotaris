@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/client": "catalog:",
-    "@phosphor-icons/web": "2.1.1",
+    "@phosphor-icons/web": "2.1.2",
     "ajv": "catalog:",
     "better-sqlite3": "catalog:",
     "node-pty": "catalog:",
@@ -23,7 +23,7 @@
     "zustand": "catalog:"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.2.0",
+    "@electron/rebuild": "^4.2.1",
     "@rotaris/agent-tools": "workspace:*",
     "@rotaris/config": "workspace:*",
     "@rotaris/contracts": "workspace:*",

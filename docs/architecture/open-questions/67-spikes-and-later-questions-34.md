@@ -119,10 +119,16 @@ from `clocks.timers.after(millis(0), …)`, and the falsified comment stands bes
 tree through `discoverSkillsAsync`, which shares every rule after the reads with `discoverSkills`, at most four reads in flight.
 A per-root generation, advanced by a rescan and by a session creation, decides whether it stores its catalogue. The four reads
 wait on `SkillHost.settled`, bounded on the timer port (`WARM_UP_WAIT_BOUND`) and only after OQ-279's refusal, and a walk a
-clear overtakes stops at its next read (reworked after review, the same day). The first execution held in the unit cases, and no proof re-measured the launch
+clear overtakes stops at its next read (reworked after review, the same day). A wait that reaches the bound is refused
+(`skills.discovering`) and the walk goes on: the first rework fell through to `discoverSkills` on the loop there, which this
+entry's "never holds its event loop" and "instead of walking the tree a second time" exclude, and point 3's "nothing proceeds
+on an expiry" states the refusal. The first execution held in the unit cases, and no proof re-measured the launch
 ([first-executions](../first-executions/34-the-register-33.md);
 [the note](../../defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md)).
-Points 2 to 5 are not built. The first item recorded beside the ruling stands as recorded.
+Points 2 to 5 are not built. The first item recorded beside the ruling stands as recorded. One more path holds the loop at
+launch, which the ruling's four waiters do not name and this entry did not record: a run started in an existing session during
+the warm-up builds its context units (`contextUnits`, `resolved`, `catalog`), a synchronous walk beside the warm-up in flight,
+whose own result is then dropped because a catalogue is held. It is not repaired here.
 
 <a id="oq-370"></a>
 

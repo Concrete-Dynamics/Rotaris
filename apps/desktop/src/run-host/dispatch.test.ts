@@ -12,7 +12,7 @@ import { dispatch } from './dispatch.js';
 import type * as Engine from '@rotaris/engine';
 import type * as Configuration from './configuration.js';
 import type { RunHost } from './host.js';
-import { SkillHost, WARM_UP_WAIT_BOUND } from './skills.js';
+import { SKILLS_STILL_DISCOVERING, SkillHost, WARM_UP_WAIT_BOUND } from './skills.js';
 
 /*
  * `launchSession` is replaced by one that hands its `start` a configured setup at once, so a case can read what
@@ -717,41 +717,60 @@ describe('the run host answers workspace.opened before it warms the skill catalo
   });
 
   /*
-   * ADR-0002 consequence 11: every request is bounded. A walk wedged on a read that never returns held every `skills.*`
-   * request for its root with no bound until 2026-10-31; now the wait ends after `WARM_UP_WAIT_BOUND` on the clock port, the
-   * waiting request reads the catalogue as a cold ask does, and the abandonment is said once at `warn`.
+   * ADR-0002 consequence 11 with OQ-386 point 1: every request is bounded, nothing proceeds on an expiry, and a request waits
+   * "instead of walking the tree a second time". A walk parked on a read past the bound costs the waiting requests a refusal,
+   * and no synchronous port call: until 2026-10-31 the bound fell through to `discoverSkills` on the loop.
    */
-  it('a skills.read waiting on a warm-up whose read never returns is still answered once the bound expires, and the walk is abandoned once', async () => {
-    const { fx, clock, warnings, skills, host, opened, close } = setup();
+  it('a skills.read waiting on a warm-up past the bound is refused without one synchronous read, and the walk goes on to store the catalogue', async () => {
+    const { fx, clock, warnings, host, opened, close } = setup();
     try {
       await dispatch(opened, host);
       fx.hold();
       clock.advance(0);
       await until(() => fx.parkedCount() > 0);
+      const asks = fx.calls.length;
       let answered = 0;
       const first = dispatch({ kind: 'skills.read', workspaceRoot: root }, host).then((r) => { answered += 1; return r; });
       const second = dispatch({ kind: 'skills.read', workspaceRoot: root }, host).then((r) => { answered += 1; return r; });
       await until(() => answered > 0, 20);
       expect(answered).toBe(0);
-      // Just short of the bound nothing is released; at it, both waiters are, and the walk is never released at all.
+      // Just short of the bound nothing is released; at it, both waiters are, and the walk is not released at all.
       clock.advance(WARM_UP_WAIT_BOUND - 1);
       await until(() => answered > 0, 20);
       expect(answered).toBe(0);
       clock.advance(1);
-      expect(names(await first)).toEqual(['alpha']);
-      expect(names(await second)).toEqual(['alpha']);
-      expect(warnings).toEqual([`skills: the discovery begun at the open of ${root} did not settle within ${WARM_UP_WAIT_BOUND} ms; it is abandoned and the waiting request reads the catalogue as a cold ask does (OQ-386, ADR-0002)`]);
-      // The wedged walk is dropped: a later request waits on nothing, and a later warm is not handed it again.
-      expect(names(await dispatch({ kind: 'skills.read', workspaceRoot: root }, host))).toEqual(['alpha']);
-      await skills.warm(root);
-      // Should the wedged read ever return, over a tree that has changed since, what the cold ask stored stays.
-      fx.files.set(`${root}/.agents/skills/beta/SKILL.md`, skill('beta'));
-      const readsBefore = fx.calls.filter((c) => c.startsWith('async ')).length;
-      fx.release();
+      const refusal = { kind: 'refused', code: 'skills.discovering', headline: SKILLS_STILL_DISCOVERING };
+      expect(await first).toEqual(refusal);
+      expect(await second).toEqual(refusal);
+      // Said once, whatever the number of waiters.
+      expect(warnings).toEqual([`skills: the discovery begun at the open of ${root} has not settled within ${WARM_UP_WAIT_BOUND} ms; the request waiting on it is refused and the discovery goes on (OQ-386, ADR-0002)`]);
+      expect(fx.calls.filter((c) => c.startsWith('sync '))).toEqual([]);
+      // The walk was not given up on: a later request waits on the same walk, and no second walk began.
+      const later = dispatch({ kind: 'skills.read', workspaceRoot: root }, host);
       await until(() => false, 20);
-      expect(fx.calls.filter((c) => c.startsWith('async ')).length).toBe(readsBefore);
-      expect(skills.state(root).skills.map((s) => s.name)).toEqual(['alpha']);
+      fx.release();
+      expect(names(await later)).toEqual(['alpha']);
+      expect(fx.calls.slice(asks).filter((c) => c.startsWith('sync '))).toEqual([]);
+      expect(fx.calls.filter((c) => c === `async readFile ${root}/.agents/skills/alpha/SKILL.md`)).toHaveLength(1);
+      expect(clock.pendingCount()).toBe(0);
     } finally { close(); }
+  });
+
+  // A request waits for a catalogue it does not have. One a cold ask stored beside the walk (a run's construction) is answered from.
+  it('a skills.read on a root whose catalogue a cold ask stored beside a parked warm-up does not wait for that walk', async () => {
+    const { fx, clock, skills, host, opened, close } = setup();
+    try {
+      await dispatch(opened, host);
+      fx.hold();
+      clock.advance(0);
+      await until(() => fx.parkedCount() > 0);
+      const waiting = dispatch({ kind: 'skills.read', workspaceRoot: root }, host);
+      skills.catalog(root);
+      expect(names(await dispatch({ kind: 'skills.read', workspaceRoot: root }, host))).toEqual(['alpha']);
+      // The waiter from before the cold ask finds the catalogue when its bound expires, rather than a refusal.
+      clock.advance(WARM_UP_WAIT_BOUND);
+      expect(names(await waiting)).toEqual(['alpha']);
+    } finally { fx.release(); close(); }
   });
 
   // OQ-279's refusal is answered at once: the ruling lets a request wait for a warm-up, and never puts a refusal behind one.

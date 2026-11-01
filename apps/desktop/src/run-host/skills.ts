@@ -107,24 +107,28 @@ export interface SkillHostDeps {
 }
 
 /**
- * OQ-386 point 1 with ADR-0002 consequence 11 (every request bounded): how long a `skills.*` request waits for a warm-up in
- * flight before it stops waiting and reads the catalogue as a cold ask does. A wedged walk — a read that never returns —
- * would otherwise hold every skills request for its root with no bound, past main's own bounds on them (10 s for a gesture,
- * 15 s for a read, `main/commands/skills.ts`), so main's would expire and no answer would arrive at all.
+ * OQ-386 point 1 with ADR-0002 consequence 11 (every request bounded, and nothing proceeds on an expiry): how long a
+ * `skills.*` request waits for a warm-up in flight before it is refused (`SKILLS_STILL_DISCOVERING`). A wedged walk — a read
+ * that never returns — would otherwise hold every skills request for its root with no bound, past main's own bounds on them
+ * (10 s for a gesture, 15 s for a read, `main/commands/skills.ts`), so main's would expire and no answer would arrive at all.
  *
- * The tradeoff, chosen on purpose: when the bound fires, the request walks the tree synchronously, on the loop — and on a
- * disk that is wedged rather than slow that walk may itself be slow. So the bound is long enough not to fire on a merely slow
- * disk (the warm-up has also been running since the open, before the request arrived), and short enough to leave 4 s of
- * main's tightest bound for the cold walk and the answer. A wedged walk now costs ONE request its answer, at worst, instead
- * of wedging every skills request for that root forever; and the walk given up on is stopped and dropped (`abandon`), so no
- * later request waits on it again.
+ * FALSIFIED 2026-10-31, kept beside its replacement: "when the bound fires, the request walks the tree synchronously, on the
+ * loop", at 6 s so as to leave 4 s for that walk. The ruling says the warm-up never holds the loop and that a request waits
+ * "instead of walking the tree a second time", and the case the bound fires in is the slow disk the repair exists for. So the
+ * request is refused, the walk goes on and stores its catalogue for the next request, and nothing reads the tree on the loop.
+ * With no walk left to fit in, the bound sits just under main's tightest, so a walk as slow as the 8,201.5 ms the launch of
+ * 2026-10-16 logged is still waited for and answered.
  */
-export const WARM_UP_WAIT_BOUND = millis(6_000);
+export const WARM_UP_WAIT_BOUND = millis(9_000);
 
-/** One warm-up in flight: its promise, and the flag its walk's `stopped` reads — set by a clear or by an abandonment. */
+/** OQ-386 point 1: the refusal of a `skills.*` request whose wait for a warm-up in flight reached `WARM_UP_WAIT_BOUND`. */
+export const SKILLS_STILL_DISCOVERING = 'The portable skills are still being discovered. Try again in a moment.';
+
+/** One warm-up in flight: its promise, the flag its walk's `stopped` reads (set by a clear), and whether its overrun was said. */
 interface Warming {
   readonly promise: Promise<void>;
   stopped: boolean;
+  overrunSaid: boolean;
 }
 
 /** The pending bucket's key: a workspace root that has no session yet, or none on screen. */
@@ -173,7 +177,7 @@ export class SkillHost {
   /**
    * REQ-WORKSPACE-058/069: the catalogue cleared, and its generation advanced so a warm-up begun before it is set aside. That
    * warm-up is no longer one a request waits for either: its result will not be the catalogue, so a request after the clear
-   * reads the tree as it stands now (one already waiting is released when the walk ends, and reads the same).
+   * reads the tree as it stands now (one already waiting is released when the walk ends and reads the same, or is refused at the bound).
    *
    * The rule for the superseded walk: it is STOPPED, not left to finish. Its result would be set aside anyway, and a walk left
    * running would keep reading the same tree beside the one a later `warm` starts — twice the disk load for one catalogue.
@@ -238,7 +242,7 @@ export class SkillHost {
     if (this.catalogs.has(workspaceRoot)) return Promise.resolve();
     const inFlight = this.warming.get(workspaceRoot);
     if (inFlight) return inFlight.promise;
-    const flags = { stopped: false };
+    const flags = { stopped: false, overrunSaid: false };
     const promise: Promise<void> = this.warmUnder(workspaceRoot, this.generationOf(workspaceRoot), () => flags.stopped).finally(() => {
       if (this.warming.get(workspaceRoot) === walk) this.warming.delete(workspaceRoot);
     });
@@ -260,44 +264,40 @@ export class SkillHost {
         stopped,
       );
       if (this.generationOf(workspaceRoot) !== generation) { setAside(); return; }
-      // Abandoned (`abandon`) after its last read began: the waiters already read the tree themselves.
-      if (stopped()) return;
       if (!this.catalogs.has(workspaceRoot)) this.publish(workspaceRoot, discovery, started);
     } catch (cause) {
-      // A stopped walk was superseded by a clear (the generation moved) or abandoned by its waiters (`abandon` said so).
-      if (cause instanceof DiscoveryStopped) { if (this.generationOf(workspaceRoot) !== generation) setAside(); return; }
+      // Only a clear stops a walk, and a clear moves the generation.
+      if (cause instanceof DiscoveryStopped) { setAside(); return; }
       this.deps.log(`skills: discovery on workspace open failed: ${String(cause)}`, 'warn');
     }
   }
 
   /**
    * OQ-386 point 1: what `skills.read`, `skills.forceLoad`, `skills.loadFile` and `skills.list` wait for before they read the
-   * catalogue — the warm-up in flight for this root, so it is read once and not walked a second time beside it. Resolved at
-   * once when none is in flight, so a request never waits on nothing. It settles when the walk does, whether the walk
-   * succeeded, failed (`warm` resolves either way) or was set aside by a clear — and, at the latest, after
-   * `WARM_UP_WAIT_BOUND` on the timer port (ADR-0002 consequence 11), when the walk is abandoned and the waiting request
-   * reads the catalogue as a cold ask does. The constant states the tradeoff.
+   * catalogue — the warm-up in flight for this root, so it is read once and not walked a second time beside it. True when the
+   * request may read: at once when none is in flight or a catalogue is already held (a cold ask stored one beside the walk),
+   * and otherwise when the walk ends, whether it succeeded, failed (`warm` resolves either way) or was set aside by a clear.
+   * False when `WARM_UP_WAIT_BOUND` passed on the timer port first (ADR-0002 consequence 11): the request is refused and reads
+   * nothing, and the walk goes on, so the next request finds its catalogue. The constant states why.
    */
-  settled(workspaceRoot: string): Promise<void> {
+  settled(workspaceRoot: string): Promise<boolean> {
     const walk = this.warming.get(workspaceRoot);
-    if (walk === undefined) return Promise.resolve();
-    return new Promise<void>((released) => {
-      const bound = this.deps.timers.after(WARM_UP_WAIT_BOUND, () => { this.abandon(workspaceRoot, walk); released(); });
-      void walk.promise.then(() => { bound.cancel(); released(); });
+    if (walk === undefined || this.catalogs.has(workspaceRoot)) return Promise.resolve(true);
+    return new Promise<boolean>((released) => {
+      const bound = this.deps.timers.after(WARM_UP_WAIT_BOUND, () => {
+        if (this.catalogs.has(workspaceRoot)) { released(true); return; }
+        this.sayOverrun(workspaceRoot, walk);
+        released(false);
+      });
+      void walk.promise.then(() => { bound.cancel(); released(true); });
     });
   }
 
-  /**
-   * A warm-up its waiters stopped waiting for: said once, at `warn`, naming the root; stopped, so it starts no further read;
-   * and dropped, so neither a later request nor a later `warm` is handed it again. A second waiter's bound finding it already
-   * dropped says nothing more. Its result, should the wedged read ever return, is not published: the walk stops at its next
-   * read, and a cold ask has stored the catalogue by then.
-   */
-  private abandon(workspaceRoot: string, walk: Warming): void {
-    if (this.warming.get(workspaceRoot) !== walk) return;
-    walk.stopped = true;
-    this.warming.delete(workspaceRoot);
-    this.deps.log(`skills: the discovery begun at the open of ${workspaceRoot} did not settle within ${WARM_UP_WAIT_BOUND} ms; it is abandoned and the waiting request reads the catalogue as a cold ask does (OQ-386, ADR-0002)`, 'warn');
+  /** A warm-up its waiters stopped waiting for: said once at `warn`, naming the root, however many waiters' bounds find it. */
+  private sayOverrun(workspaceRoot: string, walk: Warming): void {
+    if (walk.overrunSaid) return;
+    walk.overrunSaid = true;
+    this.deps.log(`skills: the discovery begun at the open of ${workspaceRoot} has not settled within ${WARM_UP_WAIT_BOUND} ms; the request waiting on it is refused and the discovery goes on (OQ-386, ADR-0002)`, 'warn');
   }
 
   /**

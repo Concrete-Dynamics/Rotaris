@@ -68,8 +68,22 @@ their trees on POSIX paths, which `node:path` writes otherwise on Windows (the P
 `windows-latest` only): the fixtures now normalise every path they are asked, as `packages/config`'s `ports()` does. Each
 repair has a case red without it, and `warm`'s early return over a held catalogue gained the case it lacked.
 
+**Reworked again after a second review, 2026-10-31, before it landed: the bound no longer walks on the loop.** ~~When the wait
+reached the bound, the walk was abandoned and the waiting request read the catalogue as a cold ask does.~~ That was a
+synchronous walk on the loop, in the slow-disk case this repair exists for, and the ruling excludes it. A request still waiting
+at the bound (now 9 s, just under main's tightest, since no walk has to fit after it) is refused with `skills.discovering`,
+"The portable skills are still being discovered. Try again in a moment."; the overrun is said once at `warn`; the walk goes on
+and stores its catalogue for the next request. A request also no longer waits where a catalogue is already held. Pinned by "a
+skills.read waiting on a warm-up past the bound is refused without one synchronous read", red on the fall-through. What the
+refusal costs: `renderer/main.tsx` reads a refused `skills.read` as no catalogue (the composer) and no projection (Settings), and
+nothing there re-reads when the walk ends, so on a disk slower than the bound the surface stays so until its next read. A failed
+walk still lets its waiter discover on a cold cache, synchronously, as any cold ask does.
+
 **Still owed, and not decided by the ruling** (its "Recorded beside it, not decided here"). The synchronous re-discovery after a
 session creation or a rescan still holds the run host's loop. `onSessionCreated` and `rescan` clear the catalogue, and the next
 `SkillHost.catalog` call walks the tree with `discoverSkills` on the loop: the agent's construction (`contextUnits`,
-`readRoots`) after a session creation, and `rescan` itself. This repair does not change that path. Points 2 to 5 of the ruling
+`readRoots`) after a session creation, and `rescan` itself. This repair does not change that path. **A second path at launch,
+which the ruling does not name:** a run started in an existing session during the warm-up reaches `SkillHost.catalog` through
+`contextUnits` and `resolved` (`dispatch.ts`), a cold synchronous walk beside the warm-up in flight, and the warm-up's result is
+then dropped (`if (!this.catalogs.has(workspaceRoot))`). It still holds the loop. Points 2 to 5 of the ruling
 are main-side and owed as their own unit: the idempotent case, the second hand-off, the notice and the log levels.

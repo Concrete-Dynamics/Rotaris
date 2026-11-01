@@ -10,7 +10,7 @@ import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessi
 import { CHECKPOINTS_DEFAULTS, liveStateProblems, type LiveState } from '@rotaris/config';
 import { improvementCollectorOf, modelRefOf, retrospectiveOf, thinkingOf } from './configuration.js';
 import { launchSession } from './launch.js';
-import { SKILLS_CONFIGURATION_UNLOADED, SkillsUnloaded, writeSkillListing, type SkillHost } from './skills.js'; // REQ-CHAT-162, OQ-279
+import { SKILLS_CONFIGURATION_UNLOADED, SKILLS_STILL_DISCOVERING, SkillsUnloaded, writeSkillListing, type SkillHost } from './skills.js'; // REQ-CHAT-162, OQ-279
 import { randomUUID } from 'node:crypto';
 // The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network.
 
@@ -866,12 +866,13 @@ export function skillsAnswer(skills: Pick<SkillHost, 'fault'>, workspaceRoot: st
  * `skillsAnswer` with OQ-386 point 1's wait for a warm-up in flight (`SkillHost.settled`) between the refusal and the answer.
  * OQ-279's refusal is read FIRST and answered at once: the ruling lets a request wait for the warm-up, and does not put a
  * refusal behind it. The configuration is read as often as `skillsAnswer` reads it — a file saved with a fault during the
- * wait is still met by the answer's own read (`SkillsUnloaded`).
+ * wait is still met by the answer's own read (`SkillsUnloaded`). A wait that reaches its bound is refused rather than answered
+ * from a walk on the loop: "nothing proceeds on an expiry", and the walk it waited for goes on (`WARM_UP_WAIT_BOUND`).
  */
 export async function skillsAnswerSettled(skills: Pick<SkillHost, 'fault' | 'settled'>, workspaceRoot: string, answer: () => ProcessReply): Promise<ProcessReply> {
   const unloaded = skillsUnloaded(skills, workspaceRoot);
   if (unloaded) return unloaded;
-  await skills.settled(workspaceRoot);
+  if (!(await skills.settled(workspaceRoot))) return { kind: 'refused', code: 'skills.discovering', headline: SKILLS_STILL_DISCOVERING };
   return answeredUnlessUnloaded(answer);
 }
 

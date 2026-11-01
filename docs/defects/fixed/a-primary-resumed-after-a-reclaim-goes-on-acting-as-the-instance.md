@@ -86,8 +86,9 @@ names another *live* claim. `instance.test.ts`'s "a record that came to name a d
 unanswered is still reclaimed…" fails against 7262da97 with `expected 'refused' to be 'instance'`.
 
 What remains, and is not repaired here: where the record names another claim that is live but never answers, (4)'s second
-hand-over goes unanswered too and the launch ends `refused` with no window. That is open as
-[its own note](../a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md).
+hand-over goes unanswered too and the launch ends `refused` with no window. That is
+[its own note](a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md), repaired under `PD-STARTUP-009` on
+2026-11-01.
 
 **What remains owed, and what this repair does not decide.**
 - What the stood-down process does with the windows it already has. ADR-0055 states only the stand-down, and the

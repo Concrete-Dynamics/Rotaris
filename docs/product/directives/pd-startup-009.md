@@ -33,9 +33,14 @@ fifteen seconds before a window where ten stood, only on a holder that is wedged
 requirement already admits, now reachable from clause (4) as well as clause (3). What it displaces: clause (4)'s "SHALL
 then end" in the unanswered case, and "one interval" read as the whole resolution's bound.
 
-**As built.** Not yet: `claimInstance` (`packages/platform/src/instance.ts`) returns `refused` after clause (4)'s unanswered
-hand-over and main turns it into `app.exit(2)`. The repair is owed with this directive's first execution, and the open note
-`docs/defects/a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md` moves to `fixed/` when it lands.
+**As built.** 2026-11-01, the same day: `claimInstance` (`packages/platform/src/instance.ts`) follows clause (4)'s unanswered
+hand-over with a final reclaim that takes the record whatever it holds — the live holder that never answered, another
+machine's record, a malformed one, a dead process's — and a third exclusive claim; success returns `instance` with
+`reclaimedFrom` naming what the record held, which main logs at `warn` (`instance claimed after the final reclaim …`), and
+a third lost claim returns `refused`, exit code 2, as before. As built the launch waits two hand-over intervals, not three:
+the final claim is attempted without a further hand-over, which the bound above admits and the register's row of
+2026-11-01 reports ([first executions](../../architecture/first-executions/34-the-register-33.md)). The note moved to
+`docs/defects/fixed/a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md`.
 
 > **Narrows:** REQ-STARTUP-164
 

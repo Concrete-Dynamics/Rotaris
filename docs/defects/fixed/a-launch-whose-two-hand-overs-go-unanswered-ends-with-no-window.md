@@ -17,7 +17,7 @@ behaviour starts no rival, which is what (4)'s letter asks. It does not meet the
 
 Verified by the owner's probe on 2026-10-31 (real sockets and timers: a record naming a live holder that accepts and never
 answers). Not repaired, and not ruled here: which sentence governs is a question for the specification, and a ruling is
-owed: [OQ-461](../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-461) raises it.
+owed: [OQ-461](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-461) raises it.
 
 A related reading, raised in the same entry and also not ruled: (3) lists "a process that is running does not answer" among the reasons to reclaim.
 For a record that has come to name a different live claim during the interval, the code leaves the record rather than
@@ -42,7 +42,29 @@ reclaiming it, on REQ-STARTUP-161's ground above.
   `tryHandOver`, and the closing `refused`.
 - `apps/desktop/src/main/index.ts` — the claim's `refused` outcome, logged and ended with exit code 2.
 - `packages/platform/src/liveness.ts` — `isLockLive`, which counts another machine's record and a malformed one as live.
-- `docs/defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md` — the repair that introduced
+- `docs/defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md` (beside this note) — the repair that introduced
   (3)'s re-read and (4)'s second hand-over.
 - `docs/architecture/adr/0055-startup-sequencing/03-decision.md` — the 2026-10-31 note on (3) and (4), which also cites the
-  two-interval wait's [OQ-460](../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-460).
+  two-interval wait's [OQ-460](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-460).
+
+## Repaired — 2026-11-01, under PD-STARTUP-009
+
+OQ-461 was ruled the same day as [`PD-STARTUP-009`](../../product/directives/pd-startup-009.md#pd-startup-009): a holder that
+is live and never answers is treated as one that cannot be reached. `claimInstance` now follows clause (4)'s unanswered
+hand-over with a final reclaim that takes the record whatever it holds — the live holder that answered neither hand-over,
+another machine's record, a malformed one, a dead process's — and a third exclusive claim. Success returns `instance`, with
+`reclaimedFrom` naming what the record held, and main logs it at `warn`: `instance claimed after the final reclaim: the
+record of pid <n> on <host>, which was running and answered neither hand-over within the interval; this launch is the
+instance on its third claim attempt (PD-STARTUP-009, REQ-STARTUP-164)`. A third lost claim still ends `refused`, exit code
+2, so the resolution is bounded: three claim attempts, two reclaims, no spin. Nothing a hand-over answers is touched —
+a holder answering late inside clause (4)'s own interval is handed to, and a record re-created by a launch that became
+the instance is handed to, never rivalled.
+
+**Evidence.** Five cases in `packages/platform/src/instance.test.ts` under "a holder that is live and never answers is
+reclaimed after the second unanswered hand-over", real named pipes and real timers at a 300 ms interval. The state this
+note describes — a record naming a live process that accepts the connection and never answers, replaced inside the first
+interval by another such — became the instance in 638–651 ms over four runs (two intervals and the pipe work), with exactly
+two hand-over bounds armed; against the code before the repair the case failed with `expected 'refused' to be 'instance'`,
+as did the other-machine and malformed cases. The owner's probe of 2026-10-31 on the built app was not repeated. What the
+mechanism waits is two intervals, not the three the directive counts: the final claim follows the second unanswered
+hand-over with no further hand-over, which the directive's bound admits and the first-executions register reports.

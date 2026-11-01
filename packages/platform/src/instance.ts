@@ -27,10 +27,11 @@ import { isLockLive, type LockRecord } from './liveness.js';
  * the named instance, complete when acknowledged; (3) not acknowledged within
  * 5 s — record unreadable, no process, process dead, or process silent —
  * reclaim once and retry the claim exactly once; (4) that retry lost too —
- * another launch claimed inside the interval — hand over once more and end.
- * At most one reclaim, two claim attempts, no spin. Two readings of the requirement stand in this order and neither is
- * ruled: (4)'s hand-over runs its own interval after (2)'s (OQ-460), and a holder that is live and never answers leaves
- * the launch `refused` with no window (OQ-461).
+ * another launch claimed inside the interval — hand over once more, within an interval of its own; and, since
+ * PD-STARTUP-009 (2026-11-01, the ruling of OQ-460 and OQ-461), where that second hand-over is not acknowledged either,
+ * reclaim the record and attempt the claim a final time: success makes this process the instance, failure ends the
+ * launch as (4) says. At most three claim attempts, two reclaims, two hand-over intervals (the directive's bound is
+ * three), no spin. Until that ruling a holder that was live and never answered left the launch `refused` with no window.
  *
  * The instance answers a hand-over unless the record shows it no longer names it (ADR-0055 consequence 14): a process the
  * record was reclaimed from — a primary suspended past the interval and resumed — declines rather than acting as the instance.
@@ -55,8 +56,20 @@ export interface HandOver {
   readonly successor?: InstanceRecord;
 }
 
+/**
+ * PD-STARTUP-009: what the final reclaim took — the record as clause (4) read it (`undefined` when it could not be read),
+ * whether the process it named was live on this machine (a live one answered neither hand-over; a dead one, another
+ * machine's or a malformed record could not be handed to), and the attempt that won. Main logs it: a launch that became the
+ * instance this way did so beside a process that may still be running.
+ */
+export interface ReclaimedFrom {
+  readonly record: InstanceRecord | undefined;
+  readonly live: boolean;
+  readonly attempts: 3;
+}
+
 export type ClaimOutcome =
-  | { readonly outcome: 'instance'; readonly record: InstanceRecord; readonly server: Server; readonly close: () => Promise<void> }
+  | { readonly outcome: 'instance'; readonly record: InstanceRecord; readonly server: Server; readonly close: () => Promise<void>; readonly reclaimedFrom?: ReclaimedFrom }
   | { readonly outcome: 'handed-over' }
   | { readonly outcome: 'refused'; readonly reason: string };
 
@@ -679,8 +692,8 @@ export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): P
    * claim whose process lives — another launch reclaimed it inside the interval, or the process this launch reached
    * declined because the record had moved on (ADR-0055 consequence 14) — is that claim's, and removing it would make this
    * launch a second instance beside it (REQ-STARTUP-161). It is left as it is, the retry loses, and (4) hands this launch
-   * to it (OQ-461: where that claim never answers, the launch ends refused). A record that cannot be read, the claim that went unanswered, or another claim whose process has ended is
-   * nobody's, and is reclaimed. Until 2026-10-31 the reclaim removed whatever stood there; the same day, for one commit
+   * to it (where that claim never answers either, PD-STARTUP-009's final reclaim below takes the record). A record that
+   * cannot be read, the claim that went unanswered, or another claim whose process has ended is nobody's, and is reclaimed. Until 2026-10-31 the reclaim removed whatever stood there; the same day, for one commit
    * (7262da97), it left every other claim, a dead one too, and such a launch ended refused with no window.
    */
   const now = readRecord(deps.recordFile);
@@ -692,14 +705,31 @@ export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): P
   }
   const second = await attempt();
   if (second !== 'lost') return second;
-  // (4) Another launch claimed the record inside the interval and is becoming the instance: hand over once more, then end,
-  // having started no rival. Not done until 2026-10-31, when the launch ended refused with no window of its own or another's.
+  // (4) Another launch claimed the record inside the interval and is becoming the instance: hand over once more, within an
+  // interval of its own (PD-STARTUP-009). Not done until 2026-10-31, when the launch ended refused with no window of its own
+  // or another's.
   const holder = readRecord(deps.recordFile);
-  if (holder && isLockLive(holder, deps.machineId)) {
+  const holderLive = holder ? isLockLive(holder, deps.machineId) : false;
+  if (holder && holderLive) {
     const answer = await tryHandOver(holder.endpoint, handOver, deps.timers, deps.handOverIntervalMs);
     if (answer.acked) return { outcome: 'handed-over' };
   }
-  return { outcome: 'refused', reason: 'the record was recreated by another party between the reclaim and the retry, and the hand-over to it was not acknowledged; no third attempt is made (REQ-STARTUP-164)' };
+  /*
+   * PD-STARTUP-009: the second hand-over went unanswered too — the record names a process that is live on this machine and
+   * does not answer, one that cannot be probed (another machine, a malformed record), or one that has ended — so the launch
+   * reclaims the record and attempts the exclusive claim a final time. The reclaim takes whatever stands there now and
+   * re-reads nothing into a further hand-over: three attempts and two reclaims are the whole bound, and a launch that becomes
+   * the instance beside a live holder that never answered is the brief second process REQ-STARTUP-164 admits, protected by
+   * the session locks. Until 2026-11-01 this launch ended `refused`, exit code 2, with no window of its own and none surfaced
+   * (`docs/defects/fixed/a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md`).
+   */
+  if (holder && !holderLive) removeDeadEndpoint(holder, platform);
+  rmSync(deps.recordFile, { force: true });
+  const third = await attempt();
+  if (third !== 'lost') {
+    return third.outcome === 'instance' ? { ...third, reclaimedFrom: { record: holder, live: holderLive, attempts: 3 } } : third;
+  }
+  return { outcome: 'refused', reason: 'the record was recreated by another party between the final reclaim and the final claim; no fourth attempt is made (PD-STARTUP-009, REQ-STARTUP-164)' };
 }
 
 /**

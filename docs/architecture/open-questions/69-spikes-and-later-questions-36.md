@@ -16,7 +16,7 @@ Part 69 of 69 of the [open-questions record](../open-questions.md), which indexe
 
 <a id="oq-461"></a>
 
-**OQ-461 — What does a launch end as when the holder is live and never answers?** *(REQ-STARTUP-161, REQ-STARTUP-164, ADR-0055 consequence 14. Raised 2026-10-31 by the review of the instance's stand-down; [the note](../../defects/a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md).)*
+**OQ-461 — What does a launch end as when the holder is live and never answers?** *(REQ-STARTUP-161, REQ-STARTUP-164, ADR-0055 consequence 14. Raised 2026-10-31 by the review of the instance's stand-down; [the note](../../defects/fixed/a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md), moved to `fixed/` on 2026-11-01.)*
 
 **What is open.** Where the record has come to name another live claim that does not answer, the requirement pulls three ways. (4): the launch ends "having in either case started no rival". The sentence after it: "Every path therefore ends with exactly one instance running and a window on screen". Its first sentence: a record naming a process that cannot be reached "SHALL never leave the application unlaunchable". REQ-STARTUP-161 closes the outcomes at two, and `refused` is neither. (3) also lists "a process that is running does not answer" among the reasons to reclaim, without saying whether that holds for a record that came to name a different process during the interval.
 

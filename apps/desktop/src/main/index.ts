@@ -242,8 +242,9 @@ async function main(): Promise<void> {
     return;
   }
   if (claim.outcome === 'refused') {
-    // An ordinary launch refused is REQ-STARTUP-164's bounded end. A successor refused ends quietly and starts no rival:
-    // the running instance keeps its record and its window, which is REQ-STARTUP-121's failure branch.
+    // An ordinary launch refused is the bounded end of PD-STARTUP-009's resolution of REQ-STARTUP-164: three claim attempts
+    // lost, the last after a final reclaim, or no directory could hold the endpoint. A successor refused ends quietly and
+    // starts no rival: the running instance keeps its record and its window, which is REQ-STARTUP-121's failure branch.
     log(`launch refused: ${claim.reason}`, 'error');
     app.exit(successorOf === null ? 2 : 0);
     return;
@@ -251,6 +252,15 @@ async function main(): Promise<void> {
   log(successorOf === null
     ? `instance claimed (pid ${process.pid}, host ${machineId})`
     : `instance record inherited from the predecessor at ${successorOf} (pid ${process.pid}, host ${machineId}; REQ-STARTUP-121)`);
+  if (claim.reclaimedFrom !== undefined) {
+    // PD-STARTUP-009: the final reclaim. Said at `warn`, because a holder that was live is a process that may still be running
+    // beside this one — the brief second process REQ-STARTUP-164 admits, held apart by the session locks.
+    const from = claim.reclaimedFrom.record;
+    const named = from === undefined
+      ? 'a record that could not be read'
+      : `the record of pid ${from.pid} on ${from.host}${from.host === machineId ? (claim.reclaimedFrom.live ? ', which was running and answered neither hand-over within the interval' : ', whose process had ended') : ', which is another machine and could not be reached'}`;
+    log(`instance claimed after the final reclaim: ${named}; this launch is the instance on its third claim attempt (PD-STARTUP-009, REQ-STARTUP-164)`, 'warn');
+  }
   // A value the variable does not accept is said once, here: after the claim, so a handed-over launch still writes nothing.
   if (appLogLevel.warning !== null) log(appLogLevel.warning, 'warn');
   app.on('will-quit', () => { void claim.close(); });

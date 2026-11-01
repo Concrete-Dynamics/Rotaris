@@ -599,6 +599,164 @@ describe('a process the record was reclaimed from stands down — ADR-0055 conse
 });
 
 /**
+ * PD-STARTUP-009 (2026-11-01, the ruling of OQ-460 and OQ-461): clause (4)'s hand-over has an interval of its own, and where
+ * it goes unanswered too the launch reclaims the record and attempts the claim a final time. Real sockets and real timers
+ * throughout; the record is replaced inside the first interval from the launch's own first timer, the way the stand-down
+ * cases above do it, so that clause (3) finds another live claim and leaves it.
+ */
+describe('a holder that is live and never answers is reclaimed after the second unanswered hand-over — PD-STARTUP-009, REQ-STARTUP-164', () => {
+  const file = () => join(dir, 'instance.json');
+  const INTERVAL = millis(300);
+  const recordLine = (over: Partial<InstanceRecord>): string =>
+    `${JSON.stringify({ pid: PREDECESSOR_PID, host: M, acquired_at: toIsoUtc(clocks.wall.instant()), ...over })}\n`;
+
+  /** A process that accepts the hand-over's connection and answers only what `onConnection` makes it answer — by default nothing. */
+  async function holder(name: string, onConnection?: (sock: Socket) => void): Promise<{ endpoint: string; connections: number; close: () => Promise<void> }> {
+    const held: Socket[] = [];
+    const h = {
+      endpoint: process.platform === 'win32' ? `\\\\.\\pipe\\rotaris-${name}-${process.pid}` : join(dir, `${name}.sock`),
+      connections: 0,
+      close: () => new Promise<void>((resolve) => { for (const sock of held) sock.destroy(); server.close(() => resolve()); }),
+    };
+    const server = createServer((sock) => { held.push(sock); h.connections += 1; onConnection?.(sock); });
+    await new Promise<void>((resolve) => { server.listen(h.endpoint, resolve); });
+    return h;
+  }
+
+  /**
+   * The launch's first timer is the first hand-over's bound: the record is replaced as it is armed, inside that interval.
+   * `intervals` counts the hand-over bounds armed — the intervals the launch waited, whatever the host's clock did.
+   */
+  function replacingOnFirstTimer(content: string): ClaimDeps['timers'] & { landed: () => boolean; intervals: () => number } {
+    let landed = false;
+    let intervals = 0;
+    return {
+      landed: () => landed,
+      intervals: () => intervals,
+      after: (delay, fn) => {
+        if (!landed) { landed = true; writeFileSync(file(), content); }
+        if (delay === INTERVAL) intervals += 1;
+        return clocks.timers.after(delay, fn);
+      },
+      every: clocks.timers.every.bind(clocks.timers),
+    };
+  }
+
+  it('a live holder that answers neither hand-over: the launch reclaims after the second interval and becomes the instance (the defect this repairs)', async () => {
+    const first = await holder('silent-first');
+    const second = await holder('silent-second');
+    writeFileSync(file(), recordLine({ endpoint: first.endpoint }));
+    const secondLine = recordLine({ endpoint: second.endpoint });
+    const timers = replacingOnFirstTimer(secondLine);
+
+    const started = performance.now();
+    const launch = await claimInstance(deps({ timers, handOverIntervalMs: INTERVAL }), { workspace: '/w' });
+    const elapsed = performance.now() - started;
+
+    expect(timers.landed()).toBe(true);
+    expect(first.connections).toBe(1);
+    expect(second.connections).toBe(1);
+    // THE FALSIFIER: until 2026-11-01 this was 'refused' — no window of this launch's own and none surfaced.
+    expect(launch.outcome).toBe('instance');
+    if (launch.outcome !== 'instance') { await first.close(); await second.close(); return; }
+    // Each hand-over waited its own interval, and the final claim followed the second without a third (two intervals; the
+    // directive's bound is three). The wall clock gives the lower bound; the count of bounds armed gives the upper one.
+    expect(elapsed).toBeGreaterThanOrEqual(2 * INTERVAL);
+    expect(timers.intervals()).toBe(2);
+    expect(launch.reclaimedFrom).toEqual({ record: JSON.parse(secondLine), live: true, attempts: 3 });
+    expect(record(file())).toEqual(launch.record);
+    await launch.close();
+    expect(existsSync(file())).toBe(false);
+    await first.close();
+    await second.close();
+  });
+
+  it('a holder that answers late, inside clause (4)\'s own interval, is handed to: no reclaim, no rival', async () => {
+    const first = await holder('silent-late-first');
+    const seen: string[] = [];
+    const late = await holder('late', (sock) => {
+      sock.setEncoding('utf8');
+      sock.on('data', (line: string) => { seen.push(line.trim()); clocks.timers.after(millis(INTERVAL / 2), () => sock.write('{"ok":true}\n')); });
+    });
+    writeFileSync(file(), recordLine({ endpoint: first.endpoint }));
+    const lateLine = recordLine({ endpoint: late.endpoint });
+    const timers = replacingOnFirstTimer(lateLine);
+
+    const launch = await claimInstance(deps({ timers, handOverIntervalMs: INTERVAL }), { workspace: '/w' });
+
+    expect(launch.outcome).toBe('handed-over');
+    expect(seen).toEqual(['{"workspace":"/w"}']);
+    // The late holder's record stands: nothing was reclaimed from it.
+    expect(record(file())).toEqual(JSON.parse(lateLine));
+    await first.close();
+    await late.close();
+  });
+
+  it('a record re-created inside the first interval by another launch that became the instance: handed to it, never a rival (REQ-STARTUP-161)', async () => {
+    const first = await holder('silent-rival-first');
+    const instanceSeen: HandOver[] = [];
+    // The instance that claimed meanwhile. Taken first so that it is listening; its record is then set aside and the
+    // silent holder's put in its place for the arriving launch to read first.
+    const instance = await claimInstance(deps({ seen: instanceSeen }));
+    if (instance.outcome !== 'instance') throw new Error(instance.outcome);
+    const reclaimed = readFileSync(file(), 'utf8');
+    writeFileSync(file(), recordLine({ endpoint: first.endpoint }));
+    const timers = replacingOnFirstTimer(reclaimed);
+
+    const arriving = await claimInstance(deps({ timers, handOverIntervalMs: INTERVAL }), { workspace: '/w' });
+
+    expect(arriving.outcome).toBe('handed-over');
+    expect(instanceSeen).toEqual([{ workspace: '/w' }]);
+    expect(record(file())).toEqual(instance.record);
+    await instance.close();
+    await first.close();
+  });
+
+  it('a record that came to name another machine cannot be handed to and is reclaimed by the final reclaim; one that became malformed during clause (4)\'s interval too', async () => {
+    // Another machine's record: live by construction (REQ-SESSION-056), its endpoint served by nothing here.
+    const first = await holder('silent-foreign-first');
+    writeFileSync(file(), recordLine({ endpoint: first.endpoint }));
+    const foreign = recordLine({ pid: 4242, host: 'another-machine', endpoint: join(dir, 'elsewhere.sock') });
+    const timers = replacingOnFirstTimer(foreign);
+    const launch = await claimInstance(deps({ timers, handOverIntervalMs: INTERVAL }));
+    expect(launch.outcome).toBe('instance');
+    if (launch.outcome !== 'instance') { await first.close(); return; }
+    expect(launch.reclaimedFrom).toEqual({ record: JSON.parse(foreign), live: true, attempts: 3 });
+    expect(record(file())).toEqual(launch.record);
+    await launch.close();
+    await first.close();
+
+    // A live claim that, reached by clause (4)'s hand-over, leaves a malformed record behind and never answers.
+    const again = await holder('silent-malformed-first');
+    const spoiling = await holder('spoiling', () => { writeFileSync(file(), '{"pid":'); });
+    writeFileSync(file(), recordLine({ endpoint: again.endpoint }));
+    const spoiled = recordLine({ endpoint: spoiling.endpoint });
+    const launch2 = await claimInstance(deps({ timers: replacingOnFirstTimer(spoiled), handOverIntervalMs: INTERVAL }));
+    expect(spoiling.connections).toBe(1);
+    expect(launch2.outcome).toBe('instance');
+    if (launch2.outcome !== 'instance') { await again.close(); await spoiling.close(); return; }
+    expect(launch2.reclaimedFrom).toEqual({ record: JSON.parse(spoiled), live: true, attempts: 3 });
+    expect(record(file())).toEqual(launch2.record);
+    await launch2.close();
+    await again.close();
+    await spoiling.close();
+  });
+
+  it('a holder that answers the first hand-over is never subject to any of this: no interval runs, one connection, handed over', async () => {
+    const seen: HandOver[] = [];
+    const primary = await claimInstance(deps({ pid: PREDECESSOR_PID, seen }));
+    if (primary.outcome !== 'instance') throw new Error(primary.outcome);
+    const started = performance.now();
+    const launch = await claimInstance(deps({ handOverIntervalMs: INTERVAL }), { workspace: '/w' });
+    expect(performance.now() - started).toBeLessThan(INTERVAL);
+    expect(launch.outcome).toBe('handed-over');
+    expect(seen).toEqual([{ workspace: '/w' }]);
+    expect(record(file())).toEqual(primary.record);
+    await primary.close();
+  });
+});
+
+/**
  * Where the hand-over socket lives off Windows (REQ-STARTUP-145, REQ-STARTUP-161, REQ-STARTUP-164). Until fin30 the claim
  * listened under the data directory whatever its length, so a deep one made the listen fail with `EINVAL` and the
  * rejection went unhandled in main — a launch with no window that said nothing

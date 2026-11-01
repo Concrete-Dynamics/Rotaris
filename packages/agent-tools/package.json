@@ -17,7 +17,7 @@
     "@xterm/headless": "catalog:",
     "ajv": "catalog:",
     "node-pty": "catalog:",
-    "undici": "7.29.1",
+    "undici": "8.12.3",
     "zod": "catalog:"
   }
 }

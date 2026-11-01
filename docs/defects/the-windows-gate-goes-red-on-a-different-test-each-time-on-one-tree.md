@@ -157,6 +157,16 @@ The same day's other reds were at recorded sites: `runs.test.ts`'s `-2` collisio
 shell-exit bound, and [the fork worker's exit](a-vitest-fork-worker-exits-unexpectedly-during-the-gate-and-its-test-file-goes-unreported.md),
 which came three times. No cause was found for any of the four; nothing was repaired.
 
+*Seen again 2026-11-01, later that day* (the same host, `pnpm worktree:land`'s gate on `claude/fix-instance-reclaim-pd-startup-009-ad2d06`'s
+rebased head, 10m46s with a second worktree's gate running on the host at the same time): two Git-driven cases hit vitest's
+30,000 ms case bound, both in files the branch did not touch, and neither at a site this note named before —
+`packages/workspace/src/git/checkpoints.test.ts`, "REQ-GIT-039/040/056/057/061: the preview letters state what the restore
+does; the restore puts the tree back and touches exactly the union; drift against a recorded baseline", and
+`packages/workspace/src/improvements/executor.test.ts:75`, "records dedicated checkpoints, previews later edits, requires
+the dirty override, and restores the approved scope". Rerun together alone straight after on the quiet host: 17 passed in
+41.2 s, the two cases in 7,982 ms and 12,463 ms. The same gate's run of the head in its own worktree, an hour earlier
+beside the same neighbour, had gone red on the shell-exit case alone (its own note). A second landing attempt followed.
+
 ## Specs
 
 None contradicted on this evidence. The failures are the harness's readings and its bounds: `REQ-MCP-066`/`REQ-MCP-067`

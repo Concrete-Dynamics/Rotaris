@@ -134,6 +134,29 @@ above, and it is recorded here only because it shows a related family's bounds b
 tree; the repo's documentation gate `pnpm lint` passed in that same worktree (48.6 s and 46.0 s, exit 0 both times),
 and the docs-only change this note is does not move the test stage either way.
 
+*Seen again 2026-11-01* (Windows 11 Home, build 26300, Node 26.13.0, `pnpm check` in `pnpm worktree:land`'s landing trees, one
+landing after another, 5m32s to 6m42s a gate): four sites no note named as open, each in a file the branch being landed did not
+touch, and none repeated in that day's gates.
+
+- `tools/dev-time/dev-time.test.ts:138`, "recordSpan writes one span with its context; a store that cannot be written is
+  answered, not thrown": `Error: git commit -q -m fixture:` from the case's `gitRun`, with nothing on stderr. Green on the next
+  run of the same head.
+- `apps/desktop/scripts/lib/proof-git-bar.test.ts:39`, "a workspace holding a repository of its own still reads that repository":
+  `Command failed: git init -q -b own-branch` under the landing tree's `.proof/git-bar-test-<pid>/own`. Not green on the next
+  run only because that run ended on a different red: this case did not fail again.
+- `packages/agent-tools/src/terminal/terminal.test.ts`, "PD-TOOLS-001 (OQ-134): a reset restores the snapshot of the last command
+  the product saw complete": `expected 93106.2667 to be less than 93050.296`, a timing reading. The case is named in
+  [the repaired note on the restored variable](fixed/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md), which is
+  about a different reading.
+- `packages/agent-tools/src/terminal/terminal.test.ts`, "REQ-TOOLS-098/100/103 (OQ-144): a soft-paused command that ends the shell
+  is handed over by the poll as an execution_error": `expected 'soft_pause' not to be 'soft_pause'`. The case comes from
+  [the repaired note on a command that exits the shell](fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md);
+  this is its reading going red under the gate's load, not shown to be that defect back. Green on the next run of the same head.
+
+The same day's other reds were at recorded sites: `runs.test.ts`'s `-2` collision, `setup at 77`, the soft-paused kill family, the
+shell-exit bound, and [the fork worker's exit](a-vitest-fork-worker-exits-unexpectedly-during-the-gate-and-its-test-file-goes-unreported.md),
+which came three times. No cause was found for any of the four; nothing was repaired.
+
 ## Specs
 
 None contradicted on this evidence. The failures are the harness's readings and its bounds: `REQ-MCP-066`/`REQ-MCP-067`

@@ -3,6 +3,21 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-11-01 — a ruled open question moves to the archive
+
+**Prompted by** the owner's request R-092 (2026-11-01) and its bundle I1 of plan hrd2 (`docs/architecture/hardening.md`
+§6): `tools/archive/migrate.mjs` (`pnpm archive:migrate`) now moves every ruled, closed, resolved or withdrawn open
+question from `docs/architecture/open-questions/` to `docs/archive/architecture/open-questions/` (301 entries on its
+first run, 22 left live), and `pnpm lint` runs its `--check`, which fails while a settled entry is still live. The
+`Records` bullet of `references/repository.md` told an agent where a question is raised and nothing of where it goes
+once ruled, so a consortium ruling written into an entry without the move would turn the next gate red, and a rebase
+over a landed move would invite a hand merge of moved text. **Changed:** that bullet gains one clause: a settled
+question moves by `pnpm archive:migrate` in the same commit, and a rebase re-runs the script instead of merging. A
+reference fact only; no script changed, so no self-test assertion is added. **Verified** by the script's own tests
+(`tools/archive/migrate.test.ts`), `pnpm lint` green with the check in it on the migrated tree, and
+`node .agents/skills/orchestrated-build/scripts/orchestration.mjs self-test`; the independent review of this skill change
+(`references/skill-review.md`) is the orchestrator's, and is owed.
+
 ## 2026-11-01 — the Windows host after the repository's rename, and its broken pnpm shim
 
 **Prompted by** the hardening orchestration's first render on the owner's Windows machine (R-091, 2026-11-01): `git remote -v`

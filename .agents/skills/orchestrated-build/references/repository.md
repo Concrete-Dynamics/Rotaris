@@ -105,7 +105,9 @@ The same commits as the code carry:
   `docs/defects/fixed/`, every link to its old path repointed (`pnpm lint` runs `tools/check-record-links.mjs`);
 - a defect noticed along the way recorded in `docs/defects/` (schema in `docs/defects/README.md`), fixed or not;
 - a question the specification leaves open appended to the last part of `docs/architecture/open-questions.md` (its
-  index names the part) as the next free number;
+  index names the part) as the next free number, and once it is ruled, closed or withdrawn moved to `docs/archive/` by
+  `pnpm archive:migrate` in the same commit, which a rebase re-runs rather than merging moved entries by hand
+  (`docs/README.md`, "The archive"; `pnpm lint` fails while a settled entry is live);
 - `docs/architecture/codebase.md`, `AGENTS.md` and `docs/architecture/first-release-plan.md` updated where they name
   the work.
 

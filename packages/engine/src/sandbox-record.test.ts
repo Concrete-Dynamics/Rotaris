@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type Result, type SessionId } from '@rotaris/kernel';
+import { FakeClock, mintMachineId, type Result, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, toSessionRecord, type RunConfig, type RunSetup } from './index.js';
@@ -14,7 +14,7 @@ import type { SessionRecord } from '@rotaris/contracts';
  * indicator can name it. Before the repair the backend reached only the `session.start` event (`sandbox.backend`) and
  * the record carried the flag alone.
  */
-const HOST = mintMachineId('0000000000000000000000000000000f') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000f');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 
 describe('REQ-SANDBOX-121: the session record carries the confinement backend of its latest run', () => {

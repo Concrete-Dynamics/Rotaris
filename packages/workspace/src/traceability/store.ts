@@ -133,6 +133,7 @@ function readOverrides(lines: readonly string[], from: number, to: number): { ov
       case 'trace': overrides.trace = value; break;
       case 'test': overrides.test = value; break;
       case 'legacy-id': overrides.legacyId = value; break;
+      case undefined:
       default: break;
     }
   }

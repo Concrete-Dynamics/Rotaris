@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, millis, mintMachineId, mintWorkspaceId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, millis, mintMachineId, mintWorkspaceId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { SessionSnapshot, TranscriptIncrement } from '@rotaris/contracts';
 import { createReplicaStore } from '@rotaris/ui-core';
 import { answer, DefaultAgentBackend, ScriptedModelClient } from '@rotaris/model';
 import { ProjectionOwner, RefusalLease, RUN_CONFIG_DEFAULTS, SequenceCounters, SessionWriter, Sessions, parseEventLine, serializeEvent, toSessionRecord, toTranscriptRow, type Publisher } from './index.js';
 
-const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000a');
 
 describe('engine — the refusal lease (ADR-0058 step 3b, IC-1 E3b)', () => {
   it('refuses while held, and re-admits by itself after the lease expires with nothing to release it', () => {
@@ -53,7 +53,7 @@ describe('engine — the one serialiser (REQ-EVENTS-064/065/068/080/089)', () =>
     if (r.ok) expect(/[\r\n]/.test(r.value)).toBe(false);
   });
   it('a value that cannot be serialised fails as a value, never a throw', () => {
-    const r = serializeEvent({ ...base, bad: 1n as unknown });
+    const r = serializeEvent({ ...base, bad: 1n });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe('not-serializable');
   });
@@ -147,7 +147,7 @@ describe('engine — the session writer feeds the projection owner (ADR-0008, AD
     expect(dal.eventsOfKind(sessionId, 'tool.finish')).toHaveLength(1);
     // an issue: 12 hex, an `issue` timeline entry, an error event only at error severity
     const w = writer.recordIssue({ kind: 'permission_denied', severity: 'warning', actor: 'orchestrator', message: 'm', evidence_ref: 'permission_audit#1' });
-    expect(w.ok && /^[0-9a-f]{12}$/.test(w.value as string)).toBe(true);
+    expect(w.ok && /^[0-9a-f]{12}$/.test(w.value)).toBe(true);
     expect(dal.eventsOfKind(sessionId, 'error')).toHaveLength(0);
     const e = writer.recordIssue({ kind: 'terminal_shell_failure', severity: 'error', actor: 'orchestrator', message: 'boom' });
     expect(dal.eventsOfKind(sessionId, 'error')).toHaveLength(1);

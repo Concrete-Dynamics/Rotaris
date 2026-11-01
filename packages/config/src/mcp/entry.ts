@@ -1,6 +1,7 @@
 import { isPlainMap } from '../merge.js';
 import { typeName } from '../sections/field.js';
 import { fatal, warn, type Diagnostic } from './diagnostics.js';
+import { textOf } from '@rotaris/kernel';
 
 /**
  * REQ-MCP-001 — the product's single definition of the tool-server entry schema: exactly these fields, these types,
@@ -96,7 +97,7 @@ export function readMcpServerEntry(name: string, value: unknown, source: { reado
   let type: McpTransport = 'stdio';
   if (rawType !== undefined && rawType !== null) {
     if (typeof rawType === 'string' && (MCP_TRANSPORTS as readonly string[]).includes(rawType)) type = rawType as McpTransport;
-    else fail('type', `'${String(rawType)}' is not one of ${MCP_TRANSPORTS.join(', ')}`);
+    else fail('type', `'${textOf(rawType)}' is not one of ${MCP_TRANSPORTS.join(', ')}`);
   } else if (typeof value['url'] === 'string' && value['url'] !== '') type = 'http';
   const command = str('command');
   const url = str('url');

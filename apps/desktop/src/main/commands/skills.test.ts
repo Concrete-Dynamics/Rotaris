@@ -13,7 +13,7 @@ import type { CommandAt, CommandContext, MainWindowState } from './context.js';
 function fakeRunHost(reply: (req: RunHostRequest) => ProcessReply) {
   const asked: RunHostRequest[] = [];
   const link: CommandContext['runHost'] = {
-    request: async (req) => { asked.push(req as RunHostRequest); return reply(req as RunHostRequest); },
+    request: async (req) => { asked.push(req); return reply(req); },
   };
   return { link, asked };
 }

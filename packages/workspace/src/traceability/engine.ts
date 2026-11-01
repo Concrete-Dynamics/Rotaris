@@ -92,7 +92,7 @@ export function createTraceabilityEngine(deps: EngineDeps): TraceabilityEngineHa
     inFlight.set(k, controller);
     try {
       const outcome: JobOutcome = await deps.executor.run(build(prepared.value), { signal: controller.signal, ...(options.progress ? { progress: options.progress } : {}), onHookError: (hook, e) => deps.log?.(`traceability: progress hook ${hook} raised and was stepped over: ${e instanceof Error ? e.message : String(e)}`) });
-      if (!outcome.result.ok) return outcome.result as Result<T, TraceabilityFailure>;
+      if (!outcome.result.ok) return outcome.result;
       for (const w of outcome.writes) {
         // REQ-TRACE-222: a checkpoint between one artifact and the next; a replace under way is never interrupted.
         if (controller.signal.aborted) return err({ kind: 'cancelled' });

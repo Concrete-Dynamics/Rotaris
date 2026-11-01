@@ -58,7 +58,7 @@ describe('launch configuration ownership (REQ-TRACE-470/471, REQ-SESSION-138)', 
     save(dir);
   });
   afterEach(async () => {
-    await Promise.all([...setups.keys()].map((id) => sessions.running(asSessionId(id))));
+    await Promise.all([...setups.keys()].map((id) => sessions.running(asSessionId(id))).filter((run) => run !== null));
     dal.db.close();
     forgetSpelling(dir);
     rmSync(dir, { recursive: true, force: true });

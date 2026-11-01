@@ -35,7 +35,7 @@ function plant(total: number): TranscriptRow[] {
     } else if (i === 420) {
       rows.push({ ...base, kind: 'tool', toolName: 'grep', toolStatus: 'ok', callKey: 'call-long', durationMs: 90, startedAt: at, input: JSON.stringify({ pattern: 'x' }), output: longOutput } as unknown as TranscriptRow);
     } else {
-      rows.push({ ...base, kind: i === 200 ? 'user' : 'agent', body: `row ${i} of the fixture` } as unknown as TranscriptRow);
+      rows.push({ ...base, kind: i === 200 ? 'user' : 'agent', body: `row ${i} of the fixture` });
     }
   }
   return rows;

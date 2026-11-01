@@ -194,7 +194,7 @@ export function TerminalGrid({ view, armed, running, onKey, onRejectedInput, onC
       data-rows={reported.geometry?.rows ?? PREFERRED_ROWS}
       onKeyDown={onKeyDown}
       onFocus={() => { setFocusWithin(true); }}
-      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusWithin(false); }}
+      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocusWithin(false); }}
     >
       <div ref={cursor} className="term-cursor" data-testid="term-cursor" aria-hidden="true" hidden />
     </div>

@@ -120,8 +120,8 @@ export function computeConfinement(input: SpecInput, deps: SpecDeps = REAL): Con
  */
 export const TRIAL_SPEC: ConfinementSpec = Object.freeze({
   mode: 'read-only' as const,
-  writableRoots: Object.freeze([]) as readonly string[],
-  carveOuts: Object.freeze([]) as readonly CarveOut[],
+  writableRoots: Object.freeze([]),
+  carveOuts: Object.freeze([]),
   allowNetwork: false,
-  skippedRoots: Object.freeze([]) as readonly string[],
+  skippedRoots: Object.freeze([]),
 });

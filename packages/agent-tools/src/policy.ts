@@ -1,4 +1,4 @@
-import { clipValue, isSecretLookingName, redact } from '@rotaris/kernel';
+import { clipValue, isSecretLookingName, redact, textOf } from '@rotaris/kernel';
 import { type Decision, type DecisionSource, type PermissionPreset, presetRank, resolvePreset } from '@rotaris/contracts';
 import { isRemoteUrl } from './egress.js';
 import { canonicalToolName, META_TOOL_NAMES, NETWORK_CLASS, READ_ONLY_CLASS } from './registry.js';
@@ -27,7 +27,7 @@ export interface PermissionRequest {
 /** REQ-TOOLS-015: `command` if a string, else `url` if a string, else none. */
 export function permissionRequest(toolName: string, persona: string, args: Readonly<Record<string, unknown>> | null): PermissionRequest {
   const a = args ?? {};
-  const facet = typeof a['command'] === 'string' ? (a['command'] as string) : typeof a['url'] === 'string' ? (a['url'] as string) : null;
+  const facet = typeof a['command'] === 'string' ? (a['command']) : typeof a['url'] === 'string' ? (a['url']) : null;
   return { toolName, persona, args: a, commandFacet: facet };
 }
 
@@ -60,7 +60,7 @@ export function canonicalArgument(value: unknown): string {
       const o = v as Record<string, unknown>;
       return `{${Object.keys(o).sort().map((k) => `${JSON.stringify(k)}:${enc(o[k])}`).join(',')}}`;
     }
-    return JSON.stringify(String(v));
+    return JSON.stringify(textOf(v));
   };
   return enc(value);
 }
@@ -241,7 +241,7 @@ export function resolvedPathSet(args: Readonly<Record<string, unknown>>, env: Pa
     carried = true;
     const v = args[k];
     if (typeof v === 'string') raw.push(v);
-    else if (Array.isArray(v) && v.every((x) => typeof x === 'string')) raw.push(...(v as string[]));
+    else if (Array.isArray(v) && v.every((x) => typeof x === 'string')) raw.push(...(v));
     else return 'unresolvable';
   }
   if (!carried) return 'none';

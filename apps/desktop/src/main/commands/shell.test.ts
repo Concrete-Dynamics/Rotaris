@@ -26,6 +26,7 @@ const fakeWindow = (destroyed = false) => {
  * can give one view a third pane — the change the read must follow (a layout stored for the old count refused, one for the
  * new count applied). Every other export is the real one.
  */
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- tsc reads `{}` without it and refuses the indexing below.
 const paneCounts = vi.hoisted(() => ({} as Record<string, number>));
 vi.mock('@rotaris/platform', async (importOriginal) => {
   const actual = await importOriginal<{ readonly PANE_LAYOUT_PANES: Readonly<Record<string, number>> }>();
@@ -69,7 +70,7 @@ describe('prefs.set announces a stored display preference to every window — RE
   it('announces nothing for a refused value or a key that is not a display preference', async () => {
     windows.length = 0;
     const w = fakeWindow();
-    expect((await facet['prefs.set']({ kind: 'prefs.set', key: 'display/showReasoning', value: 'yes' as never }, at)).ok).toBe(false);
+    expect((await facet['prefs.set']({ kind: 'prefs.set', key: 'display/showReasoning', value: 'yes' }, at)).ok).toBe(false);
     expect((await facet['prefs.set']({ kind: 'prefs.set', key: 'interface/agentPopout', value: true }, at)).ok).toBe(true);
     expect(w.sent).toEqual([]);
   });

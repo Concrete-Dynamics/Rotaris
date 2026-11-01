@@ -1554,7 +1554,7 @@ export class Run {
 
   /** REQ-ORCH-088/090/144, REQ-CONFIG-065/067/110: the role's own `fallback_model`, else the run-level slot; never the agent's own model. */
   private fallbackFor(persona: Persona | undefined, current: ModelChoice): ModelChoice | null {
-    const own = persona?.fallbackModel ? { model: persona.fallbackModel, thinking: persona.fallbackThinking ?? 'unset' as ThinkingLevel } : null;
+    const own = persona?.fallbackModel ? { model: persona.fallbackModel, thinking: persona.fallbackThinking ?? 'unset' } : null;
     const chosen = own ?? this.deps.resilience?.fallbackModel ?? null;
     if (!chosen || sameRef(chosen.model, current.model)) return null;
     return withSettings(this.catalogue, chosen);

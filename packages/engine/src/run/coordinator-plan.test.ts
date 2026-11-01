@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type RuntimePosture, type ToolPort, type ToolPortContext } from '../index.js';
@@ -23,7 +23,7 @@ import { SUPERVISOR_DEFAULTS, type LoopActivation, type LoopClassifier, type Sup
  * PD-ORCH-015 (OQ-225): a correction goes into the root's own conversation first, at least once, so the cases that pin the
  * re-queue script a root that ignores it ("Still done."); the directive's own cases are in their block below.
  */
-const HOST = mintMachineId('0000000000000000000000000000000f') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000f');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 
 function plan(states: readonly ('PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED')[]): AgentTodoDocument {

@@ -7,8 +7,8 @@ import { nodeClocks } from '@rotaris/platform';
 import { forgetSpelling, openStore, openWorkspaceStore, readWorkspaceId, SIDECAR_PATTERN, StoreDal, storeFile, takeBackup, type RunHostControl } from '@rotaris/store';
 import { assessRestore, backupWorkspace, decisionAllowed, performRestore } from './index.js';
 
-const M = mintMachineId('0000000000000000000000000000000a') as MachineId;
-const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
+const M = mintMachineId('0000000000000000000000000000000a');
+const OTHER = mintMachineId('0000000000000000000000000000000b');
 const A = mintWorkspaceId('000000000000000000000000000000aa');
 const B = mintWorkspaceId('000000000000000000000000000000bb');
 const clocks = nodeClocks();

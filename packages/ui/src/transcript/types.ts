@@ -120,7 +120,7 @@ export type DisplayRow =
 export interface RowRenderProps {
   readonly display: DisplayRow;
   readonly expanded: boolean;
-  onToggle(): void;
+  onToggle: () => void;
   /** REQ-CHAT-074: the active search match on this row, or null — AA paints it, Z decides it. */
   readonly match: { readonly start: number; readonly end: number } | null;
 }

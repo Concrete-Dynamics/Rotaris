@@ -76,7 +76,8 @@ describe('an acknowledgement\'s close control stands clear of the inspector\'s S
       .replace(/(\d+(?:\.\d+)?)px/g, '$1')
       .replace(/^calc\((.*)\)$/, '$1');
     if (!/^[\d\s.+*/()-]+$/.test(expr)) throw new Error(`not a length this reads: ${text}`);
-    return Function(`return (${expr});`)() as number;
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval -- the expression is the test's own arithmetic, held to digits and operators by the line above.
+    return (Function(`return (${expr});`) as () => number)();
   };
   const sides = (shorthand: string | undefined, vw: number): number[] => {
     const v = (shorthand ?? '0').split(/\s+(?![^(]*\))/).map((s) => px(s, vw));

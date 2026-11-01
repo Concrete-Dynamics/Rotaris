@@ -50,8 +50,8 @@ export interface ToolHooks {
 
 /** REQ-HOOKS-029: the facet a hook matcher is compared against — the same one the policy matches on. */
 export function hookFacet(toolName: string, args: Readonly<Record<string, unknown>>): string {
-  if (toolName === 'terminal' && typeof args['command'] === 'string') return args['command'] as string;
-  if (typeof args['operation'] === 'string') return args['operation'] as string;
+  if (toolName === 'terminal' && typeof args['command'] === 'string') return args['command'];
+  if (typeof args['operation'] === 'string') return args['operation'];
   return '';
 }
 
@@ -370,7 +370,7 @@ export class Gate {
      */
     const workItem = !isMeta && deps.todoList !== undefined && executor !== undefined && isWorkItem(call.name, !undeclared, deps.todoList.directWork);
     if (workItem) {
-      const owed = deps.todoList!.owed();
+      const owed = deps.todoList.owed();
       if (owed !== null) return finish({ text: owed, isError: true, status: 'blocked', decision: null, observation: null, blockedReason: owed }, { failure_kind: 'todo_list_owed', error: 'a todo list is owed before the second work item' });
     }
 
@@ -463,7 +463,7 @@ export class Gate {
       if (pre.blocked) return finish({ text: pre.refusal, isError: true, status: 'blocked', decision, observation: null, blockedReason: pre.refusal }, { failure_kind: 'hook_blocked', error: 'stopped by a pre_tool hook' });
     }
     // OQ-213: a work item is counted once it reaches execution, so a call refused above never starts one.
-    if (workItem) deps.todoList!.started();
+    if (workItem) deps.todoList.started();
     // (3) execution.
     let obs: Observation;
     try {

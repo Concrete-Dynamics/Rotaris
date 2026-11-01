@@ -1,6 +1,6 @@
 import { existsSync, writeFileSync } from 'node:fs';
 import { millis } from '@rotaris/kernel';
-import { type CaptureHost, parseSelectors, pause } from './host.js';
+import { type CaptureHost, parseSelectors, pause, settled, stepFailed } from './host.js';
 
 /**
  * THE PACKAGED PROBE — the part of a capture a shipped build still answers.
@@ -168,7 +168,7 @@ export function installFinish(host: CaptureHost, capture: string, prompt: string
   const endView = Number((__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_END_VIEW'] : undefined) ?? 0);
   const probes = parseSelectors(__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_PROBE'] : undefined);
 
-  const finish = (timedOut = false) => host.clocks.timers.after(millis(after), async () => {
+  const finish = (timedOut = false) => host.clocks.timers.after(millis(after), settled(async () => {
     if (endView > 0) {
       host.win.webContents.sendInputEvent({ type: 'keyDown', keyCode: String(endView), modifiers: ['control'] });
       host.win.webContents.sendInputEvent({ type: 'keyUp', keyCode: String(endView), modifiers: ['control'] });
@@ -185,7 +185,7 @@ export function installFinish(host: CaptureHost, capture: string, prompt: string
     host.log(`captured ${capture}`);
     if (timedOut) { host.log('capture: ending through the application\'s quit (the wait timed out; a run may still be live)'); host.quit(); return; }
     host.exit(0);
-  });
+  }, stepFailed(host.log)));
 
   if (!wait) { finish(); return; }
   // `js:` is read in the renderer, so its answer arrives a tick late; the flag carries it between polls. A throw

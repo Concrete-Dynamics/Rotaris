@@ -38,13 +38,13 @@ const UNDO_V24 = `${UNDO_V25} DROP TABLE agent_fingerprints;`;
 /** PD-ORCH-005: what v23 added, undone so a test that lowers `user_version` below 23 can migrate forward through it again. v24's goes first. */
 const UNDO_V23 = `${UNDO_V24} ALTER TABLE children DROP COLUMN interruption; ALTER TABLE children DROP COLUMN resume_state; ALTER TABLE children DROP COLUMN write_scope; DROP TABLE iterations; DROP TABLE agent_messages; DROP TABLE agent_terminals;`;
 
-const M = mintMachineId('0000000000000000000000000000000a') as MachineId;
+const M = mintMachineId('0000000000000000000000000000000a');
 /**
  * The archiver the product's backup uses (`backup.ts`, `tarBin`): a bare `tar` launched from Git Bash is Git's GNU tar, which
  * reads `C:` as a remote host (docs/archive/defects/two-store-cases-pack-their-artifact-with-whichever-tar-path-finds-first.md).
  */
 const TAR = process.platform === 'win32' ? 'C:\\Windows\\System32\\tar.exe' : 'tar';
-const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
+const OTHER = mintMachineId('0000000000000000000000000000000b');
 const clocks = nodeClocks();
 
 let root: string;
@@ -529,7 +529,7 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
       seed(root, id, [{ sid: 'S-1', rows: 2 }]);
       const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 3 }]);
       const stage = join(root, `${id}.restoring-1`);
-      const r = await restoreStore(ctx(rh(), artifact), { forceInstallFail: 'target-exists', removeStaging: (() => { throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' }); }) as never });
+      const r = await restoreStore(ctx(rh(), artifact), { forceInstallFail: 'target-exists', removeStaging: (() => { throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' }); }) });
       expect(r.reversal?.ok).toBe(true);
       expect(r.leftovers).toContain(stage);
       // Step 9's code is the host's own for a rename onto a store that exists: ENOTEMPTY on POSIX, EPERM on Windows
@@ -823,8 +823,8 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
       await expect(restoreStore(ctx(rh(), artifact), { betweenRenames: async () => { throw new Error('cut'); } })).rejects.toThrow('cut');
       const displaced = readdirSync(root).find((n) => n.includes('.displaced-'))!;
       const refusing = () => { throw Object.assign(new Error('EPERM'), { code: 'EPERM' }); };
-      expect(() => recoverCutRestore(root, id, { rename: refusing as never })).toThrow(CutRestoreError);
-      try { recoverCutRestore(root, id, { rename: refusing as never }); } catch (e) {
+      expect(() => recoverCutRestore(root, id, { rename: refusing })).toThrow(CutRestoreError);
+      try { recoverCutRestore(root, id, { rename: refusing }); } catch (e) {
         expect((e as Error).message).toBe(`the store for this workspace is at ${join(root, displaced)} and must be renamed to ${storeDir(root, id)} (EPERM)`);
       }
       expect(existsSync(journal())).toBe(true);

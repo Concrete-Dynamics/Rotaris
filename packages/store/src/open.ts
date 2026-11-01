@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { existsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { canonicalPath } from '@rotaris/platform';
+import { textOf } from '@rotaris/kernel';
 
 /**
  * ADR-0058 rule 3 — the open sequence, and rule 6 — one canonical spelling.
@@ -151,7 +152,7 @@ export function openStore(file: string, opts: OpenOptions = {}): StoreHandle {
   }
   if (set !== 'wal' || back !== 'wal') {
     db.close();
-    throw new StoreOpenError('wal-not-enabled', `write-ahead logging not enabled: set=${set} readback=${String(back)}`);
+    throw new StoreOpenError('wal-not-enabled', `write-ahead logging not enabled: set=${set} readback=${textOf(back)}`);
   }
   if (opts.checkIntegrity) {
     // Hardening C1: after the mode is read back, before any pragma that writes, the write probe, or a migration.

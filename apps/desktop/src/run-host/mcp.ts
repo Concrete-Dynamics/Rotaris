@@ -46,7 +46,7 @@ export function configurationForExecutionRoot(cfg: LoadedConfiguration, executio
 
 /** The `project <path>` words a launch line carries for a server launched against a project (REQ-MCP-034), or ''. */
 function projectWords(description: ServerDescription): string {
-  const project = launchedProjectOf(description as McpResolvedServer['description']);
+  const project = launchedProjectOf(description);
   return project === null ? '' : `project ${project}`;
 }
 
@@ -233,7 +233,7 @@ export class McpHost {
   }
 
   private descriptionOf(server: McpResolvedServer): ServerDescription {
-    return server.description as ServerDescription;
+    return server.description;
   }
 
   /** The servers any configured persona carries that survive the drop rules — what discovery is run for ahead of a run. */
@@ -467,7 +467,7 @@ export class McpHost {
               if (projectFile !== null) this.releaseProjectFile(projectFile);
             }
           }),
-        } as ToolExecutor);
+        });
       }
     }
     return out;
@@ -702,7 +702,7 @@ export class McpHost {
     const line = `${invocation.command} ${invocation.args.join(' ')}`.trim();
     this.setSetup({ status: { provisioning: provisioning(), state: 'running', steps: steps(), outcome: null, message: '', containsCode, invocation: line, startedAt, applicable }, abort });
     this.deps.log(`mcp setup: started for ${workspaceRoot} — invocation '${line}', contains code ${containsCode}, marker ${markerPresent ? 'present' : 'absent'}`);
-    const description = server.description as ServerDescription;
+    const description = server.description;
     const env = { ...this.deps.parentEnv, ...(description.transport === 'stdio' ? description.env : {}) };
     const shutdown = new AbortController();
     const ended = runSetupSteps({

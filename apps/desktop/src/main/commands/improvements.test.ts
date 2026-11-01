@@ -25,7 +25,7 @@ function rig(pending: (workspaceId: string) => boolean) {
   let next = 1;
   const runHost: CommandContext['runHost'] = {
     request: (req) => {
-      asked.push(req as RunHostRequest);
+      asked.push(req);
       return new Promise<ProcessReply>((resolve) => { release = resolve; });
     },
   };

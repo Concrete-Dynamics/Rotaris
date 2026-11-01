@@ -554,6 +554,7 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
         }
         deps.timers.after(millis(50), () => { deps.quit(); });
         return { quitting: true, how: 'quit' };
+      case undefined:
       default:
         throw new Error(`unknown op ${JSON.stringify(request.op ?? '')}`);
     }

@@ -1184,8 +1184,8 @@ ${personas === '' ? '' : `personas:\n${personas}`}runtime:
     const { resolver, portOf } = setup(personas);
     const callerPort = portOf(caller, { parentId: 'root:1', depth: 0 });
     const catalogue = catalogueOf(descriptionOf(callerPort));
-    expect([...catalogue.keys()]).toEqual(resolver!.delegationTargets());
-    for (const role of resolver!.delegationTargets()) {
+    expect([...catalogue.keys()]).toEqual(resolver.delegationTargets());
+    for (const role of resolver.delegationTargets()) {
       const child = portOf(role, { parentPersona: caller, parentId: 'bg_0a1b2c3d', depth: 1 });
       await child.ready?.();
       expect({ role, facets: catalogue.get(role) }).toEqual({ role, facets: facetsOf(child.grant?.()?.tools ?? []) });
@@ -1215,7 +1215,7 @@ ${personas === '' ? '' : `personas:\n${personas}`}runtime:
       const { resolver, portOf, cfg } = setup(personas);
       expect(Object.keys(cfg.personas)).toContain('intent-classifier');
       const catalogue = catalogueOf(descriptionOf(portOf('orchestrator', { parentId: 'root:1', depth: 0 })));
-      expect([...catalogue.keys()]).toEqual(resolver!.delegationTargets());
+      expect([...catalogue.keys()]).toEqual(resolver.delegationTargets());
       expect(catalogue.has('intent-classifier')).toBe(false);
       expect(catalogue.has('gatekeeper')).toBe(false);
       if (personas !== '') expect(catalogue.get('release-manager')).toBe('reads workspace files');
@@ -1228,12 +1228,12 @@ ${personas === '' ? '' : `personas:\n${personas}`}runtime:
    */
   it('OQ-229 (red): the catalogue equals what admission accepts, for a narrowed caller and an unnarrowed one', () => {
     const { resolver, portOf } = setup('  orchestrator:\n    name: orchestrator\n    model: selected\n    delegates_to: [codebase-analyst, coding-agent]\n  lead:\n    name: lead\n    model: selected\n    tools: [read_file, delegate]\n');
-    for (const [caller, expected] of [['orchestrator', ['codebase-analyst', 'coding-agent']], ['lead', resolver!.delegationTargets()]] as const) {
-      const callerPersona = resolver!.resolve(caller)!.persona;
+    for (const [caller, expected] of [['orchestrator', ['codebase-analyst', 'coding-agent']], ['lead', resolver.delegationTargets()]] as const) {
+      const callerPersona = resolver.resolve(caller)!.persona;
       const port = portOf(caller, caller === 'orchestrator' ? { parentId: 'root:1', depth: 0 } : { parentPersona: 'orchestrator', parentId: 'bg_0a1b2c3d', depth: 1 });
       const description = descriptionOf(port);
       const listed = [...catalogueOf(description).keys()];
-      const admitted = [...new Set([...resolver!.delegationTargets(), 'intent-classifier', 'gatekeeper', 'project-initializer'])].filter((n) => resolveDelegationTarget(resolver, n, callerPersona).ok);
+      const admitted = [...new Set([...resolver.delegationTargets(), 'intent-classifier', 'gatekeeper', 'project-initializer'])].filter((n) => resolveDelegationTarget(resolver, n, callerPersona).ok);
       expect(listed).toEqual([...expected]);
       expect(admitted).toEqual(listed);
       expect(description.includes('Your delegates_to (codebase-analyst, coding-agent) narrows this list')).toBe(caller === 'orchestrator');
@@ -1247,7 +1247,7 @@ ${personas === '' ? '' : `personas:\n${personas}`}runtime:
     const narrowed = setup('');
     expect([...catalogueOf(descriptionOf(narrowed.portOf('orchestrator', { parentId: 'root:1', depth: 0 }))).keys()]).toEqual(['tester']);
     const lifted = setup('  orchestrator:\n    name: orchestrator\n    model: selected\n    delegates_to: []\n');
-    expect([...catalogueOf(descriptionOf(lifted.portOf('orchestrator', { parentId: 'root:1', depth: 0 }))).keys()]).toEqual(lifted.resolver!.delegationTargets());
+    expect([...catalogueOf(descriptionOf(lifted.portOf('orchestrator', { parentId: 'root:1', depth: 0 }))).keys()]).toEqual(lifted.resolver.delegationTargets());
     rmSync(join(dir, 'global'), { recursive: true, force: true });
   });
 
@@ -1329,12 +1329,12 @@ ${personas === '' ? '' : `personas:\n${personas}`}runtime:
     const { resolver, portOf } = setup(personas);
     for (const caller of ['orchestrator', 'planner']) {
       const catalogue = catalogueOf(descriptionOf(portOf(caller, { parentId: 'root:1', depth: 0 })));
-      const callerPersona = resolver!.resolve(caller)!.persona;
-      for (const role of resolver!.delegationTargets()) {
-        expect({ caller, role, implementation: implementationRole(resolver!.resolve(role)!.persona, callerPersona) }).toEqual({ caller, role, implementation: catalogue.get(role)!.split(', ').includes('writes workspace files') });
+      const callerPersona = resolver.resolve(caller)!.persona;
+      for (const role of resolver.delegationTargets()) {
+        expect({ caller, role, implementation: implementationRole(resolver.resolve(role)!.persona, callerPersona) }).toEqual({ caller, role, implementation: catalogue.get(role)!.split(', ').includes('writes workspace files') });
       }
     }
-    const of = (role: string, caller = 'orchestrator') => implementationRole(resolver!.resolve(role)!.persona, resolver!.resolve(caller)!.persona);
+    const of = (role: string, caller = 'orchestrator') => implementationRole(resolver.resolve(role)!.persona, resolver.resolve(caller)!.persona);
     expect([of('coding-agent'), of('docs-writer'), of('release-manager')]).toEqual([true, true, true]);
     // The orchestrator's map leaves tester no writer, a planner's does not; read_only and the research roles never write.
     expect([of('tester'), of('tester', 'planner'), of('refactorer'), of('codebase-analyst'), of('verifier')]).toEqual([false, true, false, false, false]);
@@ -1423,7 +1423,7 @@ ${entry}runtime:
       egress: () => permissivePolicyRead,
       mcp: {
         prepare: async (c: LoadedConfiguration, root: string) => { seen.push({ call: 'prepare', cfg: c, root }); },
-        surfaceFor: (c: LoadedConfiguration, root: string): PersonaMcpSurface => { seen.push({ call: 'surfaceFor', cfg: c, root }); return { persona: 'coding-agent', active: [], dropped: [] } as unknown as PersonaMcpSurface; },
+        surfaceFor: (c: LoadedConfiguration, root: string): PersonaMcpSurface => { seen.push({ call: 'surfaceFor', cfg: c, root }); return { persona: 'coding-agent', active: [], dropped: [] }; },
         section: () => '',
         executorsFor: (a: { cfg: LoadedConfiguration; workspaceRoot: string }) => { seen.push({ call: 'executorsFor', cfg: a.cfg, root: a.workspaceRoot }); return []; },
       } as unknown as McpHost,

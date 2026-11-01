@@ -347,7 +347,7 @@ describe('McpHost.prepare\'s discovery lines (REQ-MCP-048, U4)', () => {
   function host(failed: boolean) {
     const lines: { message: string; level: string }[] = [];
     const mcp = new McpHost({ clocks: new FakeClock(), log: (message, level = 'info') => { lines.push({ message, level }); }, acknowledge: () => undefined, parentEnv: {}, productVersion: '0.0.0' });
-    vi.spyOn(mcp.discovery, 'discover').mockResolvedValue({ tools: failed ? [] : [{ name: 'lookup', description: '', inputSchema: {} }], failed, detail: failed ? 'Connection closed (ci exited with code 127; stderr: first\nsecond)' : '', elapsedMs: 508, memoised: false } as unknown as Awaited<ReturnType<typeof mcp.discovery.discover>>);
+    vi.spyOn(mcp.discovery, 'discover').mockResolvedValue({ tools: failed ? [] : [{ name: 'lookup', description: '', inputSchema: {} }], failed, detail: failed ? 'Connection closed (ci exited with code 127; stderr: first\nsecond)' : '', elapsedMs: 508, memoised: false });
     const entry = { type: 'stdio', enabled: true, disabled_tools: [], tool_name_map: {}, command: 'ci' };
     const cfg = {
       personas: { tester: { mcp_servers: ['ci'], tools: [] } },
@@ -419,8 +419,8 @@ describe('an MCP call checked against the input schema the model was given (REQ-
       executors: new Map(executors.map((e) => [e.name, e])), resolvePath: (p) => p, publicTool: () => false,
       monotonic: clock, wall: clock, timers: clock, nextSequence: () => ++seq,
       sink: {
-        decision: () => null, approvalRequested: () => undefined, pendingChanged: () => undefined, issue: (i) => { issues.push(i as Record<string, unknown>); },
-        timeline: () => undefined, toolOpen: () => ++seq, toolSettle: (_o, _open, s) => { settles.push(s as Record<string, unknown>); }, warn: () => undefined,
+        decision: () => null, approvalRequested: () => undefined, pendingChanged: () => undefined, issue: (i) => { issues.push(i); },
+        timeline: () => undefined, toolOpen: () => ++seq, toolSettle: (_o, _open, s) => { settles.push(s); }, warn: () => undefined,
       },
     });
     const dispatch = (args: Record<string, unknown>, signal: AbortSignal = new AbortController().signal) => gate.dispatch({ callId: 'c1', name: 'amend_note', rawArgs: args, persona: 'verifier', agentId: 'verifier', agentName: 'verifier' }, signal);
@@ -525,7 +525,7 @@ describe('an MCP call checked against the input schema the model was given (REQ-
     const run = new AbortController();
     const both = rig(EDIT_MEMORY, (_signal, hostClock) => { hostClock.advance(300_000); run.abort(); throw new Error('MCP error -32001: Request timed out'); });
     const ctx = { workspaceRoot: '/ws', sessionId: 'S1', agentName: 'verifier', persona: 'verifier', monotonic: new FakeClock(), wall: new FakeClock(), signal: run.signal, warn: () => undefined };
-    const obs = await both.executors[0]!.execute({ memory_name: 'm', needle: 'a', repl: 'b', mode: 'literal' }, ctx as never);
+    const obs = await both.executors[0]!.execute({ memory_name: 'm', needle: 'a', repl: 'b', mode: 'literal' }, ctx);
     expect(obs).toMatchObject({ isError: true, failureKind: 'timeout' });
     expect(obs.text).toContain('within its allowance of 300 s');
   });
@@ -728,8 +728,8 @@ describe('a symbol rename is preceded by the referencing-symbol search of the sa
       executors: new Map(executors.map((e) => [e.name, e])), resolvePath: (p) => p, publicTool: () => false,
       monotonic: clock, wall: clock, timers: clock, nextSequence: () => ++seq,
       sink: {
-        decision: () => null, approvalRequested: () => undefined, pendingChanged: () => undefined, issue: (i) => { issues.push(i as Record<string, unknown>); },
-        timeline: () => undefined, toolOpen: () => ++seq, toolSettle: (_o, _open, s) => { settles.push(s as Record<string, unknown>); }, warn: () => undefined,
+        decision: () => null, approvalRequested: () => undefined, pendingChanged: () => undefined, issue: (i) => { issues.push(i); },
+        timeline: () => undefined, toolOpen: () => ++seq, toolSettle: (_o, _open, s) => { settles.push(s); }, warn: () => undefined,
       },
     });
     const dispatch = (name: string, args: Record<string, unknown>, signal: AbortSignal = new AbortController().signal) => gate.dispatch({ callId: `c${seq + 1}`, name, rawArgs: args, persona: 'refactorer', agentId: 'refactorer', agentName: 'refactorer' }, signal);
@@ -932,8 +932,8 @@ describe('PD-MCP-004 revision 2 (OQ-362)', () => {
       executors: new Map(executors.map((e) => [e.name, e])), resolvePath: (p) => p, publicTool: () => false,
       monotonic: clock, wall: clock, timers: clock, nextSequence: () => ++seq,
       sink: {
-        decision: () => null, approvalRequested: () => undefined, pendingChanged: () => undefined, issue: (i) => { issues.push(i as Record<string, unknown>); },
-        timeline: () => undefined, toolOpen: () => ++seq, toolSettle: (_o, _open, s) => { settles.push(s as Record<string, unknown>); }, warn: () => undefined,
+        decision: () => null, approvalRequested: () => undefined, pendingChanged: () => undefined, issue: (i) => { issues.push(i); },
+        timeline: () => undefined, toolOpen: () => ++seq, toolSettle: (_o, _open, s) => { settles.push(s); }, warn: () => undefined,
       },
     });
     const dispatch = (name: string, args: Record<string, unknown>, signal: AbortSignal = new AbortController().signal, agentName = 'Refactorer 1') => gate.dispatch({ callId: `c${++calls}`, name, rawArgs: args, persona: 'refactorer', agentId: agentName, agentName }, signal);

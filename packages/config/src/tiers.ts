@@ -87,7 +87,7 @@ export function overlayLiveState(config: LoadedConfiguration, live: LiveState): 
   for (const slot of MODEL_SLOTS) {
     const wanted = live.slots?.[slot];
     if (wanted === undefined || wanted === '') continue;
-    const previous = typeof top[slot] === 'string' ? (top[slot] as string) : null;
+    const previous = typeof top[slot] === 'string' ? (top[slot]) : null;
     top[slot] = wanted;
     // REQ-CONFIG-263: a role whose model equals the slot name or the slot's previous value follows the new value (first match wins).
     if (wanted !== null) {
@@ -105,7 +105,7 @@ export function overlayLiveState(config: LoadedConfiguration, live: LiveState): 
     if (thinking !== undefined && live.slots?.[slot] === undefined) top[thinkingKeyOf(slot)] = thinking;
   }
 
-  let defaultPersona = typeof top['default_persona'] === 'string' ? (top['default_persona'] as string) : config.defaultPersona;
+  let defaultPersona = typeof top['default_persona'] === 'string' ? (top['default_persona']) : config.defaultPersona;
   if (live.entryRole !== undefined && isPlainMap(personas[live.entryRole])) { defaultPersona = live.entryRole; top['default_persona'] = live.entryRole; }
   const entry = personas[defaultPersona];
   if (isPlainMap(entry)) {
@@ -114,17 +114,17 @@ export function overlayLiveState(config: LoadedConfiguration, live: LiveState): 
   }
 
   if (live.runtime) {
-    const runtime = isPlainMap(top['runtime']) ? (top['runtime'] as PlainMap) : {};
+    const runtime = isPlainMap(top['runtime']) ? (top['runtime']) : {};
     for (const key of TIER_B_RUNTIME_KEYS) if (live.runtime[key] !== undefined) runtime[key] = live.runtime[key];
     top['runtime'] = runtime;
   }
   if (live.circuitBreakerEnabled !== undefined) {
-    const cb = isPlainMap(top['circuit_breaker']) ? (top['circuit_breaker'] as PlainMap) : {};
+    const cb = isPlainMap(top['circuit_breaker']) ? (top['circuit_breaker']) : {};
     cb['enabled'] = live.circuitBreakerEnabled;
     top['circuit_breaker'] = cb;
   }
   if (live.compressorThresholdPercentage !== undefined) {
-    const c = isPlainMap(top['compressor']) ? (top['compressor'] as PlainMap) : {};
+    const c = isPlainMap(top['compressor']) ? (top['compressor']) : {};
     c['threshold_percentage'] = live.compressorThresholdPercentage;
     top['compressor'] = c;
   }

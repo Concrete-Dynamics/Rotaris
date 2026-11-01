@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, type ScriptedCall } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type CheckpointCaptureInput, type CheckpointPort, type HookPort, type Publisher } from '../index.js';
@@ -15,7 +15,7 @@ import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type CheckpointCaptureInp
  * the timeline entry, the event; the event observable only on `publish()`, REQ-GIT-048) and `recordRestore`
  * (REQ-GIT-062/068/155).
  */
-const HOST = mintMachineId('0000000000000000000000000000000c') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000c');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 const NONE: Publisher = { increment: () => undefined, snapshot: () => undefined };
 

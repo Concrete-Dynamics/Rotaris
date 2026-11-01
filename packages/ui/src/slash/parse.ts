@@ -52,6 +52,7 @@ export function slashOutcomeMessage(outcome: SlashOutcome, name: string): string
     case 'unknown': return `Unknown command /${outcome.name}`;
     case 'unavailable': return outcome.reason.trim() === '' ? defaultUnavailableReason(name) : outcome.reason;
     case 'failed': return outcome.message;
+    case 'executed': case 'not-a-command':
     default: return null;
   }
 }

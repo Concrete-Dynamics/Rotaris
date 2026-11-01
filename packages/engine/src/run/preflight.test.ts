@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
 import { BUILT_IN_PERSONAS, DIRECT_WORK_INSTRUCTION, SWARM_INSTRUCTION, SWARM_PLAN_HELD_NOTE, intentPayloadOf, intentStatusOf, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type Publisher, type ToolPort, type ToolPortContext } from '../index.js';
 import { resolvePlaybooks } from '../playbooks/resolve.js';
 
-const HOST = mintMachineId('0000000000000000000000000000000c') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000c');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 const NONE: Publisher = { increment: () => undefined, snapshot: () => undefined };
 

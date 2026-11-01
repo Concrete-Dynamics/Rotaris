@@ -154,7 +154,7 @@ describe('the claim\'s order on Windows, over a named pipe — ADR-0055, REQ-STA
       });
       setInterval(() => undefined, 1000);
     `], { stdio: ['ignore', 'pipe', 'inherit'] });
-    const endpoint = await new Promise<string>((resolve) => { holder.stdout!.once('data', (d: Buffer) => resolve(d.toString().trim())); });
+    const endpoint = await new Promise<string>((resolve) => { holder.stdout.once('data', (d: Buffer) => resolve(d.toString().trim())); });
     expect(endpoint).toMatch(PIPE(holder.pid!));
     expect(await accepts(endpoint)).toBe(true);
     const exited = new Promise((resolve) => holder.once('exit', resolve));
@@ -180,7 +180,7 @@ describe('the claim\'s order on Windows, over a named pipe — ADR-0055, REQ-STA
     const target = spawn(process.execPath, ['-e', 'setInterval(() => undefined, 1000)'], { stdio: 'ignore' });
     const keeper = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `$p = Get-Process -Id ${target.pid}; $null = $p.Handle; 'held'; Start-Sleep -Seconds 60`], { stdio: ['ignore', 'pipe', 'ignore'] });
     try {
-      await new Promise((resolve) => { keeper.stdout!.once('data', resolve); });
+      await new Promise((resolve) => { keeper.stdout.once('data', resolve); });
       const ended = new Promise((resolve) => target.once('exit', resolve));
       target.kill();
       await ended;

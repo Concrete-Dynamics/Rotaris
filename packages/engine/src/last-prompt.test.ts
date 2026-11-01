@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, RESIDENT_ROW_CAP, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, type RunConfig } from './index.js';
@@ -19,7 +19,7 @@ import { lastSubmittedPrompt } from './sessions.js';
  * engine searched the resident rows only (falling back to the session id as the prompt's text) and the retry was the
  * renderer's, over its replica's window, re-sending the text alone.
  */
-const HOST = mintMachineId('0000000000000000000000000000000e') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000e');
 const WS = 'C:/ws';
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 const PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);

@@ -452,7 +452,7 @@ export function replacedPrefixLength(below: PlainMap, doc: PlainMap | null, path
       const name = pathKeyOf(value, rest);
       if (name === null) return -1;
       const entry = value[name];
-      const current = isPlainMap(below[top]) ? (below[top] as PlainMap)[name] : undefined;
+      const current = isPlainMap(below[top]) ? (below[top])[name] : undefined;
       if (!isPlainMap(entry) || !isPlainMap(current)) return at(rest) + name.length;
       rest = afterStep(rest, name.length);
       if (rest === '') return -1;
@@ -476,6 +476,7 @@ export function replacedPrefixLength(below: PlainMap, doc: PlainMap | null, path
         rest = afterStep(rest, key.length);
       }
     }
+    case 'unknown': case 'computed': case 'separate':
     default:
       return -1;
   }

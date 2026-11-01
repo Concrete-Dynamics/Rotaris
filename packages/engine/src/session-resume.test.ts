@@ -2,15 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, mintMachineId, type MachineId, type Result, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, type Result, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
 import { ArtifactStore, buildContinuationPayload, entryRootsOf, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type ArtifactOps, type Preflight, type PreflightContext, type RunSetup, type SessionWriter, type TodoDocument, type ToolPort } from './index.js';
 import { recordedRootNames } from './children/naming.js';
 import { splitFrontmatter, type SessionRecord } from '@rotaris/contracts';
 
-const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
-const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000a');
+const OTHER = mintMachineId('0000000000000000000000000000000b');
 const MODEL = { providerId: 'test', modelId: 'test', dialect: 'chat' as const };
 
 describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () => {
@@ -108,7 +108,7 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
       priorContexts.push(ctx.previousIntent);
       const carried = ctx.previousIntent !== undefined && ctx.previousIntent !== null;
       return {
-        intent: { category: carried ? ctx.previousIntent! : 'single_file_change', confidence: carried ? null : 0.9, reason: carried ? 'continued' : 'fresh', fallback: false, carried_over: carried },
+        intent: { category: carried ? ctx.previousIntent : 'single_file_change', confidence: carried ? null : 0.9, reason: carried ? 'continued' : 'fresh', fallback: false, carried_over: carried },
         grant: 'direct-work', route: 'work', resolvedPlaybooks: {}, playbookFor: () => '', budgetCell: null, warnings: [],
       };
     };

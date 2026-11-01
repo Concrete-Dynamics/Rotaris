@@ -1,6 +1,7 @@
 import { guardedRead } from '@rotaris/platform';
 import { INTENT_GRANTS, type IntentGrant } from '@rotaris/contracts';
 import { parseConfig, plainOf, typeNameOf } from './document.js';
+import { textOf } from '@rotaris/kernel';
 
 /**
  * REQ-ORCH-016/017: the user-inspectable intent-to-tools mapping. Decision 5 of the plan: the built-in
@@ -24,7 +25,7 @@ export function readIntentMapping(path: string): IntentMappingRead {
   if (root === null) return parsed.value.topLevelType === 'null' ? { kind: 'value', mapping: {} } : { kind: 'invalid', reason: `the mapping must be a mapping of intent to grant, got ${parsed.value.topLevelType}` };
   const mapping: Record<string, IntentGrant> = {};
   for (const pair of root.items) {
-    const key = String(plainOf(pair.key as never) ?? '');
+    const key = textOf(plainOf(pair.key as never) ?? '');
     const value = plainOf(pair.value as never);
     if (typeof value !== 'string' || !(INTENT_GRANTS as readonly string[]).includes(value)) {
       return { kind: 'invalid', reason: `intent '${key}' maps to ${typeof value === 'string' ? `'${value.slice(0, 60)}'` : typeNameOf(pair.value)}; expected one of: ${INTENT_GRANTS.join(', ')} (instruction text is not accepted)` };

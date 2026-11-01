@@ -79,6 +79,7 @@ export function resumeStateFor(from: ChildState): ResumeState | null {
       return from;
     case 'starting':
       return 'queued';
+    case 'succeeded': case 'failed': case 'cancelled': case 'blocked': case 'paused':
     default:
       return null;
   }

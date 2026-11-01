@@ -187,6 +187,7 @@ export function destinationHint(entry: CatalogueEntry): string {
     case 'custom': return 'Custom endpoint — model traffic is sent to the base URL you enter below.';
     case 'local-sdk': return 'Rotaris invokes the Claude Agent SDK installed locally; traffic goes through that SDK.';
     case 'hosted-cloud': return `Rotaris-managed cloud service — destination: ${destinationHost(entry) ?? ''}.`;
+    case 'direct':
     default: return `Direct provider API — ${entry.operator ?? ''}, destination: ${destinationHost(entry) ?? ''}.`;
   }
 }

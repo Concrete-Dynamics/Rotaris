@@ -70,6 +70,7 @@ export function tallyFrom(qualifier: string | undefined, hasTokens: boolean): Pr
     case 'incomplete': return { priced: true, unpriced: true, configured: false };
     case 'reported': return { priced: true, unpriced: false, configured: false };
     case 'configured': return { priced: true, unpriced: false, configured: true };
+    case undefined:
     default: return { priced: false, unpriced: hasTokens, configured: false };
   }
 }

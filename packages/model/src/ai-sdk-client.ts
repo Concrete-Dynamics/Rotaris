@@ -367,6 +367,8 @@ export class AiSdkModelClient implements ModelClient {
             // The SDK reports the COMBINED signal firing and cannot say which half did; this can.
             yield err(endedEarly());
             return;
+          // The stream parts this client takes nothing from, named so that a part a library upgrade adds is read or passed over on purpose (R-091).
+          case 'file': case 'custom': case 'source': case 'start': case 'raw': case 'tool-result': case 'reasoning-file': case 'tool-approval-request': case 'tool-approval-response': case 'tool-error': case 'tool-output-denied': case 'text-start': case 'text-end': case 'reasoning-start': case 'reasoning-end': case 'tool-input-end':
           default:
             break;
         }

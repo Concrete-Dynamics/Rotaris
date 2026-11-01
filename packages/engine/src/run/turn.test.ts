@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { AiSdkModelClient, answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type FetchLike, type ModelClient, type ScriptedCall } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, type ModeChange, type PortToolCall, type PortToolResult, type Publisher, type RunConfig, type SessionsDeps, type ToolPort } from '../index.js';
@@ -12,7 +12,7 @@ import { decodeStoredTodo } from '../todo-view.js';
 import type { LiveTerminal } from './run.js';
 import type { HookPort } from '../hooks-port.js';
 
-const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000a');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 const NONE: Publisher = { increment: () => undefined, snapshot: () => undefined };
 
@@ -139,7 +139,7 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     const sse = (lines: string[]) => new Response(lines.map((l) => `data: ${l}\n\n`).join(''), { status: 200, headers: { 'content-type': 'text/event-stream' } });
     const bodies: { messages: { role: string; content?: unknown; tool_calls?: { function: { arguments: string } }[] }[] }[] = [];
     const endpoint: FetchLike = async (_input, init) => {
-      const body = JSON.parse(String(init?.body ?? '{}')) as (typeof bodies)[number];
+      const body = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as (typeof bodies)[number];
       bodies.push(body);
       const replayed = body.messages.flatMap((m) => m.tool_calls ?? []).map((c) => JSON.parse(c.function.arguments) as unknown);
       if (replayed.some((a) => typeof a !== 'object' || a === null || Array.isArray(a))) {
@@ -494,7 +494,7 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     it('clause 10: when an agent resumes it is told, for each background session it had started, whether it still runs or how it ended, with its last recorded output', async () => {
       const { terminals } = withTerminals();
       const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
-      const { sessions, client } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('resumed')], port, { terminals: (sid) => { const t = terminals!(sid); return { ...t, list: () => t.list().map((l) => ({ ...l, taskId: dal.iterationsOf(sid)[0]?.root_task_id ?? '' })) }; }, runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
+      const { sessions, client } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('resumed')], port, { terminals: (sid) => { const t = terminals(sid); return { ...t, list: () => t.list().map((l) => ({ ...l, taskId: dal.iterationsOf(sid)[0]?.root_task_id ?? '' })) }; }, runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
       const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
       await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
       sessions.control({ op: 'pause', sessionId: sid, args: {} });
@@ -514,7 +514,7 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     it('clauses 4 and 10 (found by phase 4\'s second review): a continue by message tells the resumed root of its background sessions first, so the user\'s message is the last it reads', async () => {
       const { terminals } = withTerminals();
       const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
-      const { sessions, client } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('resumed')], port, { terminals: (sid) => { const t = terminals!(sid); return { ...t, list: () => t.list().map((l) => ({ ...l, taskId: dal.iterationsOf(sid)[0]?.root_task_id ?? '' })) }; }, runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
+      const { sessions, client } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('resumed')], port, { terminals: (sid) => { const t = terminals(sid); return { ...t, list: () => t.list().map((l) => ({ ...l, taskId: dal.iterationsOf(sid)[0]?.root_task_id ?? '' })) }; }, runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
       const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
       await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
       sessions.control({ op: 'pause', sessionId: sid, args: {} });
@@ -530,7 +530,7 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     it('clause 10 (found by phase 4\'s third review): continues that come to rest before the root takes a step tell it of its background sessions once, and deliver every message', async () => {
       const { terminals } = withTerminals();
       const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
-      const { sessions, client } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('resumed')], port, { terminals: (sid) => { const t = terminals!(sid); return { ...t, list: () => t.list().map((l) => ({ ...l, taskId: dal.iterationsOf(sid)[0]?.root_task_id ?? '' })) }; }, runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
+      const { sessions, client } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('resumed')], port, { terminals: (sid) => { const t = terminals(sid); return { ...t, list: () => t.list().map((l) => ({ ...l, taskId: dal.iterationsOf(sid)[0]?.root_task_id ?? '' })) }; }, runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
       const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
       await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
       sessions.control({ op: 'pause', sessionId: sid, args: {} });

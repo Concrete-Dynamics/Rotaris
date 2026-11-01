@@ -128,7 +128,7 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, filterPl
   const chosen = options.find((o) => o.value === value);
   const chosenText = chosen === undefined ? value : rowSuffix(chosen);
   /** The strip shell reads the display map over the SAME text the chip shows — never a second source. */
-  const triggerText = strip?.labels !== undefined && strip.labels[chosenText] !== undefined ? strip.labels[chosenText]! : chosenText;
+  const triggerText = strip?.labels !== undefined && strip.labels[chosenText] !== undefined ? strip.labels[chosenText] : chosenText;
 
   // The highlight is a pure function of the narrowed list, derived during render rather than
   // synchronized in an effect: no cascading render is needed to keep it in step with the filter.

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ChatMessage } from '@rotaris/model';
 import type { Interruption } from '@rotaris/contracts';
@@ -18,7 +18,7 @@ import { answerUnanswered, callsRun, interruptedResult } from './interruption.js
  * how a turn comes to rest: every call of the step gets a result, a completed call its own, a call cut off or withdrawn
  * the interrupted statement with what it produced, and a call not yet started the statement that it never ran.
  */
-const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000a');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 const SID = 'S-rest' as SessionId;
 

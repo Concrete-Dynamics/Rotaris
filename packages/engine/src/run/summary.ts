@@ -1,4 +1,4 @@
-import { countNoun, millis, type Millis, type SessionId, type Timers } from '@rotaris/kernel';
+import { countNoun, millis, type SessionId, type Timers } from '@rotaris/kernel';
 import { replaceDocument, type RetryLadder } from '@rotaris/platform';
 import type { ElidedAttachmentRow, SessionRow, StoreDal, TimelineRow } from '@rotaris/store';
 import { NOT_KEPT, sessionMetrics, type SessionMetrics } from '../export.js';
@@ -15,7 +15,7 @@ import { cut } from './cut.js';
  * never overwrite a newer one; a failed replacement leaves the previous file
  * in force behind a warning and never fails the save (ADR-0008).
  */
-export const SUMMARY_LADDER: RetryLadder = { delays: [50, 100, 200, 400, 800].map((n) => millis(n)) as Millis[] };
+export const SUMMARY_LADDER: RetryLadder = { delays: [50, 100, 200, 400, 800].map((n) => millis(n)) };
 
 /** The outcome a session's readers present: its record's summary, `summary.md`'s Outcome block, the agents view's activity line. */
 export interface SessionOutcome {

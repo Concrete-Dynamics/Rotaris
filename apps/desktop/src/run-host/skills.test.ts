@@ -6,7 +6,7 @@ import { FileToolState, grepTool, readFileTool, writeFileTool } from '@rotaris/a
 import { MCP_SECTION_HEADING, NODE_DISCOVERY_PORTS, PRODUCT_DIRECTORIES_UNIT, renderMcpSection, SKILLS_DEFAULTS, type DiscoveryPorts, type SkillsSection } from '@rotaris/config';
 import { parseSkillListing } from '@rotaris/contracts';
 import { readTrajectory, Sessions, withContextUnits, withMcpSection } from '@rotaris/engine';
-import { asSessionId, FakeClock, millis, mintMachineId, type MachineId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, millis, mintMachineId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { SKILLS_CONFIGURATION_UNLOADED, SkillHost, SkillsUnloaded, writeSkillListing, type RunSections, type SavedRead, type SkillHostDeps } from './skills.js';
 import { dispatch, skillsUnloaded } from './dispatch.js';
@@ -554,7 +554,7 @@ describe("the retrospective's instruction files (PD-LIBRARY-002 revision 2, OQ-2
  * trajectory export (REQ-SESSION-189) carrying it as the `transcript.row` event the append recorded.
  */
 describe('the /skills listing is one saved system row (REQ-CHAT-162)', () => {
-  const HOST = mintMachineId('0000000000000000000000000000000c') as MachineId;
+  const HOST = mintMachineId('0000000000000000000000000000000c');
   const sessionsFor = (dir: string, pid: number, isProcessAlive: (pid: number) => boolean = () => true) => new Sessions({
     clocks: new FakeClock(), publisher: { increment: () => undefined, snapshot: () => undefined }, pid, host: HOST,
     retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-listing', model: null,

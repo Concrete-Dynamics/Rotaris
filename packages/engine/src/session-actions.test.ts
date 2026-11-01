@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, RING_CAPS, StoreDal } from '@rotaris/store';
-import { batchDocument, readRecords, readTrajectory, renderExport, Sessions, summariseTrajectory, timelineId, trajectoryWarnings, writeExport, DELETE_LIVE_REFUSAL, DELETE_LIVENESS_UNKNOWN_REFUSAL, type JsonValue } from './index.js';
+import { batchDocument, readRecords, readTrajectory, renderExport, Sessions, summariseTrajectory, timelineId, trajectoryWarnings, writeExport, DELETE_LIVE_REFUSAL, DELETE_LIVENESS_UNKNOWN_REFUSAL } from './index.js';
 
 /**
  * The immutable-attribute refusal, for the uid that ignores mode bits. Root bypasses DAC, so a write-denied
@@ -26,8 +26,8 @@ function clearImmutable(path: string): void {
   try { execFileSync(IMMUTABLE_CLEAR[0], [IMMUTABLE_CLEAR[1], path], { stdio: 'ignore' }); } catch { /* best effort */ }
 }
 
-const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
-const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000a');
+const OTHER = mintMachineId('0000000000000000000000000000000b');
 const WS = 'C:/ws';
 
 /**
@@ -402,13 +402,13 @@ describe('Part U — repair, delete and the exports', () => {
 
     it('A9 / REQ-EVENTS-145 / REQ-TRACE-061: a destination that cannot be replaced exhausts the ladder, reports recoverably and leaves the previous export exactly as it was', async () => {
       const target = join(dir, 'exports', 'previous.json');
-      const first = await writeExport(target, { generation: 1 } as unknown as JsonValue, clock.timers);
+      const first = await writeExport(target, { generation: 1 }, clock.timers);
       expect(first.ok).toBe(true);
       const before = readFileSync(target, 'utf8');
       const refusal = refuseReplacement(target);
       let failed;
       try {
-        const attempt = writeExport(target, { generation: 2 } as unknown as JsonValue, clock.timers);
+        const attempt = writeExport(target, { generation: 2 }, clock.timers);
         // REQ-TRACE-061's ladder: four waits of 0.05 / 0.1 / 0.2 / 0.4 s behind five attempts in total.
         for (let i = 0; i < 6; i += 1) { for (let j = 0; j < 8; j += 1) await Promise.resolve(); clock.advance(400); }
         failed = await attempt;
@@ -426,7 +426,7 @@ describe('Part U — repair, delete and the exports', () => {
       // A file standing where the export's parent directory would go: the create fails, and the caller must still get a Result.
       const blocked = join(dir, 'blocked');
       writeFileSync(blocked, 'not a directory');
-      const r = await writeExport(join(blocked, 'nested', 'export.json'), { a: 1 } as unknown as JsonValue, clock.timers);
+      const r = await writeExport(join(blocked, 'nested', 'export.json'), { a: 1 }, clock.timers);
       expect(r.ok).toBe(false);
       if (r.ok) throw new Error('unreachable');
       expect(r.error.code).toBe('document.parent');
@@ -452,7 +452,7 @@ describe('Part U — repair, delete and the exports', () => {
       const text = renderExport({ z: 1, a: { d: [3, { y: 1, x: 2 }], b: null } });
       expect(text).toBe('{\n  "a": {\n    "b": null,\n    "d": [\n      3,\n      {\n        "x": 2,\n        "y": 1\n      }\n    ]\n  },\n  "z": 1\n}\n');
       const target = join(dir, 'exports', 'nested', 'batch.json');
-      const w = await writeExport(target, batch as unknown as JsonValue, clock.timers);
+      const w = await writeExport(target, batch, clock.timers);
       expect(w.ok).toBe(true);
       expect(JSON.parse(readFileSync(target, 'utf8'))).toEqual(JSON.parse(JSON.stringify(batch)));
     });

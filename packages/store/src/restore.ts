@@ -157,7 +157,7 @@ function bounded<T>(p: Promise<T>, ms: Millis, timers: Timers): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let settled = false;
     const h = timers.after(ms, () => { if (!settled) { settled = true; reject(new Error('timeout')); } });
-    p.then((v) => { if (!settled) { settled = true; h.cancel(); resolve(v); } }, (e) => { if (!settled) { settled = true; h.cancel(); reject(e); } });
+    p.then((v) => { if (!settled) { settled = true; h.cancel(); resolve(v); } }, (e: unknown) => { if (!settled) { settled = true; h.cancel(); reject(e); } });
   });
 }
 

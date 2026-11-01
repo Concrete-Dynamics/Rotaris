@@ -1,4 +1,4 @@
-import { namesCredential, redact, REDACTION_MARK } from '@rotaris/kernel';
+import { namesCredential, redact, REDACTION_MARK, textOf } from '@rotaris/kernel';
 import type { HookEvent, LifecycleHookEvent } from '@rotaris/contracts';
 
 /**
@@ -70,7 +70,7 @@ function textForm(value: unknown, underCredential: boolean): string {
   try {
     return maskText(String(value));
   } catch {
-    const typeName = value === null ? 'null' : typeof value === 'object' ? (value as object).constructor?.name ?? 'object' : typeof value;
+    const typeName = value === null ? 'null' : typeof value === 'object' ? (value).constructor?.name ?? 'object' : typeof value;
     return `<unrepresentable ${typeName}>`;
   }
 }
@@ -129,7 +129,7 @@ const STRING_FIELDS: Readonly<Record<LifecycleHookEvent, readonly string[]>> = {
 function asText(v: unknown): string {
   if (v === undefined || v === null) return '';
   if (typeof v === 'string') return v;
-  try { return String(v); } catch { return ''; }
+  try { return textOf(v); } catch { return ''; }
 }
 
 /** REQ-HOOKS-058/059/075/077: the three base keys, reserved; the occurrence's fields as siblings. */

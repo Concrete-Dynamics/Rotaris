@@ -159,7 +159,7 @@ export function reuseKey(
    * and AA: without this, inserting a row above a block reused the rendering that drew attribution and the new
    * first row of the block silently lost its role line.
    */
-  place?: { readonly blockStart: boolean; readonly recentTool: boolean } | undefined,
+  place?: { readonly blockStart: boolean; readonly recentTool: boolean }  ,
 ): string | null {
   if (isLive(d)) return null;
   return measureKey(d, width, expanded, match, place);
@@ -180,7 +180,7 @@ export function reuseKey(
  */
 export function measureKey(
   d: DisplayRow, width: number, expanded: boolean, match: { start: number; end: number } | null,
-  place?: { readonly blockStart: boolean; readonly recentTool: boolean } | undefined,
+  place?: { readonly blockStart: boolean; readonly recentTool: boolean }  ,
 ): string {
   const p = place === undefined ? '' : `${place.blockStart ? 'b' : ''}${place.recentTool ? 'r' : ''}`;
   const plain = match === null && place === undefined && d.shape === 'row';

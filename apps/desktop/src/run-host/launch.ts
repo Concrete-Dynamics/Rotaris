@@ -66,6 +66,7 @@ export async function leaseForContinuation(workspaceRoot: string, deps: Continua
  */
 async function leaseOver(prepared: PreparedRun, required: string | null, deps: Pick<ContinuationLeaseDeps, 'leaseCredentials'>, refusalDetail: string): Promise<ContinuationLease> {
   const bearers = prepared.authProviders.length > 0
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- without it the lease's type widens to `{}` and tsc refuses its indexing.
     ? await deps.leaseCredentials(prepared.authProviders).catch(() => ({} as Readonly<Record<string, string>>))
     : {};
   if (required !== null && !bearers[required]) {
@@ -184,6 +185,7 @@ export async function launchSession(req: LaunchRequest, deps: LaunchDeps): Promi
     return { kind: 'refused', code: prepared.error.code === 'confinement' ? 'session.confinement' : 'session.configuration', headline: 'The run was refused before it started', detail: prepared.error.reason };
   }
   const bearers = prepared.value.authProviders.length > 0
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- without it the lease's type widens to `{}` and tsc refuses its indexing.
     ? await deps.leaseCredentials(prepared.value.authProviders).catch(() => ({} as Readonly<Record<string, string>>))
     : {};
   if (prepared.value.entryAuthProvider !== null && !bearers[prepared.value.entryAuthProvider]) {

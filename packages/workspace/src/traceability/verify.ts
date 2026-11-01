@@ -275,7 +275,7 @@ export function verify(input: VerifyInput): VerifyOutput {
       continue;
     }
     const why = unparsable.has(m) ? ' and its text could not be parsed, so the re-export rule cannot vouch for it (REQ-TRACE-104)'
-      : disqualified[m] !== undefined ? ` and it is not a re-export-only module (it declares ${disqualified[m]!.kind} at line ${disqualified[m]!.line})` : '';
+      : disqualified[m] !== undefined ? ` and it is not a re-export-only module (it declares ${disqualified[m].kind} at line ${disqualified[m].line})` : '';
     findings.push(finding('error', 'orphan-module', `${m}: has no implementation trace${why}; ${remedies(builtInOf(m))}`, { path: m }));
   }
   // (11) REQ-TRACE-108..115: orphan tests, each located at its function's line (REQ-TRACE-100/508: openable at its own line).

@@ -30,6 +30,7 @@ export function normalisePath(path: string, platform: NodeJS.Platform = process.
  * and is attempted only when the two agree — no parameter can make a Windows path exist on a POSIX disk.
  */
 export function resolvedPath(path: string, platform: NodeJS.Platform = process.platform): string {
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- node:path's functions read no `this`.
   const { resolve } = platform === 'win32' ? win32 : posix;
   let real = resolve(path);
   if (platform === process.platform) {

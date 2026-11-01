@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, mintMachineId, type MachineId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { SessionWriter } from './session-writer.js';
 
-const HOST = mintMachineId('0000000000000000000000000000000b') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000b');
 
 /**
  * REQ-SESSION-136's error-path cut under REQ-SESSION-194's marker

@@ -179,7 +179,7 @@ export const Column = memo(function Column({ colKey, label, count, members, fold
       aria-label={`${label} column`}
       aria-description={`${deliveryWord}. ${count} ${count === 1 ? 'requirement' : 'requirements'}.${count === 0 ? ` ${emptySentence}` : ''}`}
       onFocusCapture={() => { hadFocus.current = true; }}
-      onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) hadFocus.current = false; }}
+      onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) hadFocus.current = false; }}
       onDragOver={(event) => {
         if (drag === null || !drag.droppable || ![...event.dataTransfer.types].includes(PRIVATE_TRANSFER_TYPE)) return;
         event.preventDefault();

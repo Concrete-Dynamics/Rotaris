@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, RESIDENT_ROW_CAP, StoreDal } from '@rotaris/store';
 import { Sessions } from './index.js';
 import { sessionTaskTitle } from './todo-view.js';
@@ -14,7 +14,7 @@ import { sessionTaskTitle } from './todo-view.js';
  * `Sessions.list` read every listed session's resident rows and labelled it with the oldest resident prompt, so a session
  * whose first prompt was released past the resident window was listed under another name after a long run.
  */
-const HOST = mintMachineId('0000000000000000000000000000000c') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000c');
 const WS = 'C:/ws';
 
 const planner = (...phases: (readonly { text: string; name?: string }[])[]) => JSON.stringify({

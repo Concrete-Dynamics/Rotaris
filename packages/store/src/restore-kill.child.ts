@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
+import { asSessionId, millis, mintMachineId, mintWorkspaceId, type WorkspaceId } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
 import { takeBackup } from './backup.js';
 import { StoreDal } from './dal.js';
@@ -27,7 +27,7 @@ import { restoreStore, type RunHostControl } from './restore.js';
  *                                             it did about a cut restore (`cutRestore`, OQ-266); `sha256` is the store's
  *                                             bytes before that open read it
  */
-const MACHINE = mintMachineId('0000000000000000000000000000000a') as MachineId;
+const MACHINE = mintMachineId('0000000000000000000000000000000a');
 const clocks = nodeClocks();
 
 function seed(root: string, id: WorkspaceId, sessions: readonly string[]): void {
@@ -103,6 +103,7 @@ async function main(): Promise<unknown> {
         forgetSpelling(r.dir);
       }
     }
+    case undefined:
     default:
       throw new Error(`unknown command ${String(command)}`);
   }

@@ -30,6 +30,7 @@ import { reportNoticeActionRefusal } from './notice-action-refusal.js';
 import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery, useShownSession } from './session-view.js';
 // The other windows this same bundle is the root of, each one a role on the route (`windows.tsx`, ADR-0056).
 import { bootApproval, bootAuthRecovery, bootHookReview, bootPause, bootPersona, bootProvider, bootTerminal } from './windows.js';
+import { textOf } from '@rotaris/kernel';
 /**
  * THE RENDERER'S ROOT. One bundle for every window; the window's role arrives by route (ADR-0056), and `boot` at the
  * bottom is the only place that reads it. Sandboxed: no Node, no filesystem, no store handle — everything this bundle
@@ -1045,7 +1046,7 @@ function dispatchNoticeAction(action: NoticeAction): void {
   switch (action.kind) {
     case 'open-view':
       // REQ-SHELL-023's seven ids, imported; an unknown id is a silent no-op inside `switchView` (REQ-SHELL-025).
-      if (!isViewId(action.view)) { console.warn(`notice action named a view outside REQ-SHELL-023: ${action.view}`); return; }
+      if (!isViewId(action.view)) { console.warn(`notice action named a view outside REQ-SHELL-023: ${textOf(action.view)}`); return; }
       shell.switchView(action.view);
       return;
     case 'open-settings':

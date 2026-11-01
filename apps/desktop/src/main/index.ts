@@ -39,6 +39,7 @@ import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
 import { deliverSetupCancel, InitializationCoordinator, serviceMarkerWriter } from './initialization.js'; // Part AS (ADR-0064)
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)
 import { approvalAnswerer, approvalButtonLabel } from './capture/approval-answers.js'; // the approval dialog's scripted answers (verification only)
+import { settled, stepFailed } from './capture/host.js'; // a scripted answer's awaited step reports its failure (R-091)
 import { authRecoveryCommands } from './commands/auth-recovery.js';
 import { checkpointsCommands } from './commands/checkpoints.js';
 import { configAnnouncer, configCommands } from './commands/config.js';
@@ -54,7 +55,7 @@ import { providersCommands } from './commands/providers.js';
 import { requirementsCommands } from './commands/requirements.js';
 import { sessionCommands } from './commands/session.js';
 import { dictationCommands } from './commands/dictation.js';
-import { installPermissionHandlers, type ApplicationPages, type PermissionSession } from './permissions.js';
+import { installPermissionHandlers, type ApplicationPages } from './permissions.js';
 import { installWebContentsGuard, type GuardedApp } from './web-contents-guard.js'; // R-091, OQ-466
 import { dispatchCommand } from './command-dispatch.js'; // R-091: nothing throws out of runCommand (ADR-0019)
 import { refuseCommandSender } from './command-sender.js'; // R-091: who may send a command (checklist 17)
@@ -155,7 +156,7 @@ process.on('unhandledRejection', (reason) => { log(`UNHANDLED rejection in main:
 app.on('session-created', (created) => {
   withoutRuntimeRequests(created, (m) => { log(m, 'error'); });
   // OQ-459: the microphone for dictation, and only what the application's own pages need.
-  installPermissionHandlers(created as unknown as PermissionSession, process.env['ELECTRON_RENDERER_URL']);
+  installPermissionHandlers(created, process.env['ELECTRON_RENDERER_URL']);
 });
 
 /**
@@ -458,6 +459,8 @@ async function main(): Promise<void> {
           // Domain 22 (PD-TRACE-001), REQ-ADOPT-012: the adoption run's one interpretation, on the host where the model resolves.
           // The service's root is replaced with the canonical one this instance opened it under, as the relay does for a command.
           case 'adoption.interpret': return runHost.request({ kind: 'adoption.interpret', workspaceRoot: key, detection: a.detection }, millis(195_000));
+          // Named so that a kind added to the ask union is routed or refused on purpose (R-091): main routes none of these from a workspace service.
+          case 'checkpoint.capture': case 'checkpoint.refs': case 'checkpoint.prune': case 'checkpoint.deleteNamespace': case 'improvements.command': case 'credentials.lease':
           default: return Promise.resolve({ kind: 'refused', code: 'ask.unhandled', headline: `main does not answer ${a.kind} from a workspace service` } as ProcessReply);
         }
       });
@@ -1054,7 +1057,7 @@ async function main(): Promise<void> {
       if (scripted?.kind === 'none') log(`capture: approval dialog (${payload.tool_name}) left unanswered`);
       else if (scripted) {
         const kind = scripted.kind;
-        clocks.timers.after(millis(scripted.afterMs ?? scriptedApprovalMs), async () => {
+        clocks.timers.after(millis(scripted.afterMs ?? scriptedApprovalMs), settled(async () => {
           if (dlg.isDestroyed()) return;
           if (scriptedDialogPng) { const { writeFileSync } = await import('node:fs'); writeFileSync(scriptedDialogPng, (await dlg.webContents.capturePage()).toPNG()); log(`captured dialog ${scriptedDialogPng}`); }
           if (kind === 'escape') { dlg.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' }); dlg.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' }); log('capture: approval dialog → Escape'); return; }
@@ -1064,7 +1067,7 @@ async function main(): Promise<void> {
           dlg.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
           dlg.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
           log(`capture: approval dialog (${payload.tool_name}) → clicked "${label}"`);
-        });
+        }, stepFailed((message) => { log(message, 'error'); })));
       }
     } catch (cause) {
       log(`approval ${payload.request_id} could not be presented: ${String(cause)}`, 'warn');
@@ -1126,7 +1129,7 @@ async function main(): Promise<void> {
       // Verification seam (only with ROTARIS_CAPTURE_PNG): capture the dialog, then click Allow or Do-not-run.
       const scriptedReview = __ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_HOOK_REVIEW'] : undefined;
       if (scriptedReview) {
-        clocks.timers.after(millis(__ROTARIS_SEAMS__ ? Number(process.env['ROTARIS_CAPTURE_HOOK_REVIEW_MS'] ?? 900) : 900), async () => {
+        clocks.timers.after(millis(__ROTARIS_SEAMS__ ? Number(process.env['ROTARIS_CAPTURE_HOOK_REVIEW_MS'] ?? 900) : 900), settled(async () => {
           if (dlg.isDestroyed()) return;
           const png = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_REVIEW_PNG'] : undefined;
           if (png) { const { writeFileSync } = await import('node:fs'); writeFileSync(png, (await dlg.webContents.capturePage()).toPNG()); log(`captured review dialog ${png}`); }
@@ -1136,7 +1139,7 @@ async function main(): Promise<void> {
           dlg.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
           dlg.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
           log(`capture: review dialog → clicked "${label}"`);
-        });
+        }, stepFailed((message) => { log(message, 'error'); })));
       }
       return { ok: true, value: { opened: true } };
     } catch (cause) {

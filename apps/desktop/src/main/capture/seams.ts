@@ -1,10 +1,10 @@
 import { execFile } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { type BrowserWindow, screen } from 'electron';
-import { millis } from '@rotaris/kernel';
+import { millis, textOf } from '@rotaris/kernel';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION, type NoticeAction, type NoticeSeverity } from '@rotaris/contracts';
 import { inputEvent, submitEvents, textEvents } from './probe.js';
-import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, centreWhen, chordEvent, clickAt, doubleClickAt, gripOffset, onStep, parseSelectors, parseSteps, pause, pressCategory, releaseProbe, selectWait, settleAt, targetProbe } from './host.js';
+import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, centreWhen, chordEvent, clickAt, doubleClickAt, gripOffset, onStep, parseSelectors, parseSteps, pause, pressCategory, releaseProbe, selectWait, settleAt, settled, stepFailed, targetProbe } from './host.js';
 
 /**
  * THE SCRIPTABLE SEAMS — clicks, typed text, chords, renderer `eval`, notices, prompts, drags, OS input,
@@ -33,6 +33,7 @@ export interface SeamOptions {
 
 export function installSeams(host: CaptureHost, options: SeamOptions): void {
   const { win, clocks, log } = host;
+  const failed = stepFailed(log);
   const steps = (raw: string | undefined): CaptureStep[] => parseSteps(raw);
   const firstPersona = () => host.personaWindows.list().map((p) => host.personaWindows.entry(p.persona)).find((e) => e !== undefined && !e.win.isDestroyed()) ?? null;
 
@@ -41,7 +42,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   // Runs after the workspace is open (the list is the workspace's); the prompt seam then continues it.
   if (options.resumeWanted) {
     const resumeWanted = options.resumeWanted;
-    clocks.timers.after(millis(600), async () => {
+    clocks.timers.after(millis(600), settled(async () => {
       // Both waits are DEADLINES, not appointments. A fixed 700 ms after the click read the list once and
       // gave up when the browser had not finished listing — one run in four of `plan-gate-proof`, against a
       // store that held everything the resume needed. Neither waits longer than it has to, and each logs how
@@ -54,23 +55,23 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       if (!open) { log(`capture: no session row for "${resumeWanted}" in the browser within 10000 ms`); return; }
       clickAt(win, open);
       log(`capture: opened session "${resumeWanted}" from the browser`);
-    });
+    }, failed));
   }
 
   // ROTARIS_CAPTURE_ACTION=backup|restore at ROTARIS_CAPTURE_ACTION_MS: the command a Settings action sends.
   const action = process.env['ROTARIS_CAPTURE_ACTION'];
   if (action === 'backup' || action === 'restore' || action === 'hooks-review') {
-    clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_ACTION_MS'] ?? 1_500)), async () => {
+    clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_ACTION_MS'] ?? 1_500)), settled(async () => {
       const outcome = await host.command({ kind: action === 'backup' ? 'workspace.backup' : action === 'restore' ? 'workspace.restore' : 'hooks.review' });
       log(`capture: ${action} → ${JSON.stringify(outcome)}`);
-    });
+    }, failed));
   }
 
   // ROTARIS_CAPTURE_VIEW=<n>: open view n and, for Settings, select the category ROTARIS_CAPTURE_SETTINGS names
   // (Project by default). The first press still lands 200 ms after the chord; it is then verified (`pressCategory`).
   const view = Number(process.env['ROTARIS_CAPTURE_VIEW'] ?? 0);
   if (view > 0) {
-    clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_VIEW_MS'] ?? 600)), async () => {
+    clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_VIEW_MS'] ?? 600)), settled(async () => {
       const wc = win.webContents;
       wc.sendInputEvent({ type: 'keyDown', keyCode: String(view), modifiers: ['control'] });
       wc.sendInputEvent({ type: 'keyUp', keyCode: String(view), modifiers: ['control'] });
@@ -78,7 +79,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
         await pause(host, 200);
         await pressCategory(host, process.env['ROTARIS_CAPTURE_SETTINGS'] ?? 'Project', 5_000);
       }
-    });
+    }, failed));
   }
 
   // ROTARIS_CAPTURE_MODE=<preset> at ROTARIS_CAPTURE_MODE_MS: click the mode selector's option, then the confirmation (REQ-TOOLS-077).
@@ -92,7 +93,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       log(`capture: clicked "${text ?? selector}"`);
       return true;
     };
-    clocks.timers.after(millis(modeAt), async () => {
+    clocks.timers.after(millis(modeAt), settled(async () => {
       // PD-CHAT-001 replaced the always-drawn segmented row with a press-revealed popover, so the three presets are
       // reached in two clicks now: the chip, then the option. The option's own text is label + hint, so the click
       // lands on `.chip-menu__label`, whose text is the preset alone. (This seam still read `.seg-opt` until Part AT;
@@ -105,7 +106,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       await pause(host, 200);
       if (!(await click('.chip-menu__panel .chip-menu__label', modeWanted))) return;
       if (modeWanted === 'autonomous') { await pause(host, 300); await click('.dialog-actions .btn-danger', 'Switch to autonomous'); }
-    });
+    }, failed));
   }
 
   /**
@@ -237,16 +238,16 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       let parsed: Record<string, unknown>;
       try { parsed = JSON.parse(step.selector) as Record<string, unknown>; }
       catch (cause) { log(`capture: notices at ${step.at} — unreadable step: ${String(cause)}`); return; }
-      const op = String(parsed['op'] ?? 'report');
-      if (op === 'acknowledge') { host.notices.acknowledge(parsed['kind'] as 'info' | 'ok' | 'warn' | 'fail', String(parsed['title']), parsed['body'] === undefined ? undefined : String(parsed['body'])); log(`capture: notices at ${step.at} acknowledge ${String(parsed['title'])}`); return; }
-      if (op === 'dismiss') { void host.notices.dismiss(parsed['id'] === undefined ? undefined : Number(parsed['id'])).then(() => log(`capture: notices at ${step.at} dismiss ${String(parsed['id'] ?? 'current')} → current ${host.notices.current()?.id ?? 'null'}`)); return; }
+      const op = textOf(parsed['op'] ?? 'report');
+      if (op === 'acknowledge') { host.notices.acknowledge(parsed['kind'] as 'info' | 'ok' | 'warn' | 'fail', String(parsed['title']), parsed['body'] === undefined ? undefined : textOf(parsed['body'])); log(`capture: notices at ${step.at} acknowledge ${String(parsed['title'])}`); return; }
+      if (op === 'dismiss') { void host.notices.dismiss(parsed['id'] === undefined ? undefined : Number(parsed['id'])).then(() => log(`capture: notices at ${step.at} dismiss ${textOf(parsed['id'] ?? 'current')} → current ${host.notices.current()?.id ?? 'null'}`)); return; }
       if (op === 'run-start') { void host.notices.clearForRunStart(String(parsed['sessionId'])).then(() => log(`capture: notices at ${step.at} run-start ${String(parsed['sessionId'])} → current ${host.notices.current()?.id ?? 'null'}`)); return; }
       void host.notices.report({
         severity: (parsed['severity'] ?? 'info') as NoticeSeverity, title: String(parsed['title']),
-        ...(parsed['message'] === undefined ? {} : { message: String(parsed['message']) }),
-        ...(parsed['detail'] === undefined ? {} : { detail: String(parsed['detail']) }),
+        ...(parsed['message'] === undefined ? {} : { message: textOf(parsed['message']) }),
+        ...(parsed['detail'] === undefined ? {} : { detail: textOf(parsed['detail']) }),
         ...(parsed['persistent'] === undefined ? {} : { persistent: Boolean(parsed['persistent']) }),
-        ...(parsed['sessionId'] === undefined ? {} : { sessionId: String(parsed['sessionId']) }),
+        ...(parsed['sessionId'] === undefined ? {} : { sessionId: textOf(parsed['sessionId']) }),
         ...(parsed['action'] === undefined ? {} : { action: parsed['action'] as { label: string; action: NoticeAction } }),
         ...(parsed['acknowledge'] === undefined ? {} : { acknowledge: parsed['acknowledge'] as { kind: 'info' | 'ok' | 'warn' | 'fail'; body?: string } }),
       }).then((r) => log(`capture: notices at ${step.at} report #${r.id} shown=${r.shown} → current ${host.notices.current()?.id ?? 'null'}`));
@@ -258,7 +259,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   // revision are all exercised rather than stood in for. `{n}` before the text pushes n entries with the index appended,
   // which is how a proof reaches REQ-LIBRARY-139's cap without an env var per row.
   for (const step of steps(process.env['ROTARIS_CAPTURE_PROMPTS'])) {
-    clocks.timers.after(millis(step.at), async () => {
+    clocks.timers.after(millis(step.at), settled(async () => {
       const list = step.selector === 'stash' ? 'stash' : 'history';
       const raw = step.arg ?? '';
       const repeat = /^\{(\d+)\}(.*)$/.exec(raw);
@@ -270,22 +271,22 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
         if (!outcome.ok) failures += 1;
       }
       log(`capture: prompts at ${step.at} ${list} ×${count} → ${failures === 0 ? 'ok' : `${failures} refused`}, revision ${host.libraryRevision.value}`);
-    });
+    }, failed));
   }
 
   // ROTARIS_CAPTURE_TEXT_AT="needle@ms": whether the document's rendered text contains the needle — a keyword must be
   // matched and never displayed (REQ-SHELL-053).
   for (const step of steps(process.env['ROTARIS_CAPTURE_TEXT_AT'])) {
-    clocks.timers.after(millis(step.at), async () => {
+    clocks.timers.after(millis(step.at), settled(async () => {
       const found = await win.webContents.executeJavaScript(`document.body.innerText.includes(${JSON.stringify(step.selector)})`).catch(() => 'error') as unknown;
       log(`capture: text-at ${step.at} ${JSON.stringify(step.selector)} → ${String(found)}`);
-    });
+    }, failed));
   }
 
   // ROTARIS_CAPTURE_ORDER_AT="arm@ms;;read@ms": a mutation log over the document — the instant the palette left the DOM and
   // the instant the shell's view changed, in the order they happened (REQ-SHELL-052: close first, then run).
   for (const step of steps(process.env['ROTARIS_CAPTURE_ORDER_AT'])) {
-    clocks.timers.after(millis(step.at), async () => {
+    clocks.timers.after(millis(step.at), settled(async () => {
       if (step.selector === 'arm') {
         const armed = await win.webContents.executeJavaScript(`(() => { const log = []; const t0 = performance.now(); window.__rotarisOrder = log; const shell = document.querySelector('.app-shell'); const view0 = shell?.getAttribute('data-view'); const mo = new MutationObserver((records) => { for (const r of records) { if (r.type === 'childList') for (const n of r.removedNodes) if (n.nodeType === 1 && (n.matches('[data-testid="command-palette"]') || n.querySelector('[data-testid="command-palette"]'))) log.push({ event: 'palette-removed', at: performance.now() - t0 }); if (r.type === 'attributes' && r.target === shell && r.attributeName === 'data-view') log.push({ event: 'view-changed', from: r.oldValue, to: shell.getAttribute('data-view'), at: performance.now() - t0 }); } }); mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeOldValue: true, attributeFilter: ['data-view'] }); return { armed: true, view: view0, palette: document.querySelector('[data-testid="command-palette"]') !== null }; })()`).catch((cause: unknown) => ({ error: String(cause) })) as unknown;
         log(`capture: order-at ${step.at} arm → ${JSON.stringify(armed)}`);
@@ -293,7 +294,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
         const read = await win.webContents.executeJavaScript(`({ events: window.__rotarisOrder ?? null, view: document.querySelector('.app-shell')?.getAttribute('data-view'), palette: document.querySelector('[data-testid="command-palette"]') !== null })`).catch((cause: unknown) => ({ error: String(cause) })) as unknown;
         log(`capture: order-at ${step.at} read → ${JSON.stringify(read)}`);
       }
-    });
+    }, failed));
   }
 
   // ROTARIS_CAPTURE_RESIZE="WxH@ms": the main window resized to that content size — the 1000×680 minimum of REQ-SHELL-022.
@@ -316,7 +317,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
     execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', osScript, ...args], { timeout: 20_000, windowsHide: true }, (error, stdout, stderr) => resolve(error ? `error: ${error.message} ${stderr}` : String(stdout).trim()));
   });
   for (const step of steps(process.env['ROTARIS_CAPTURE_OS_INPUT'])) {
-    clocks.timers.after(millis(step.at), async () => {
+    clocks.timers.after(millis(step.at), settled(async () => {
       const e = firstPersona();
       if (!e) { log(`capture: os-input ${step.at} ${step.selector}: no persona window`); return; }
       const own = [handleOf(win), handleOf(e.win)];
@@ -338,7 +339,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
         const out = await runOs(['where', '0', '0', own[0]!, own[1]!]);
         log(`capture: os-input ${step.at} where (main hwnd ${own[0]}, persona hwnd ${own[1]}, enabled=${e.win.isEnabled()}) → ${out}`);
       }
-    });
+    }, failed));
   }
 
   // ROTARIS_CAPTURE_PNG_AT="path@ms;;…": a capture of the painted window at that time, beside the one at the end — the wait
@@ -369,12 +370,12 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   // the modal to close programmatically without emitting a second decision, and the proof asserts exactly that by counting
   // the controls the renderer sent afterwards.
   for (const step of steps(process.env['ROTARIS_CAPTURE_QUESTION_ELSEWHERE'])) {
-    clocks.timers.after(millis(step.at), async () => {
+    clocks.timers.after(millis(step.at), settled(async () => {
       const found = await win.webContents.executeJavaScript('(() => { const el = document.querySelector(\'[data-testid="question-stepper"]\'); return el ? { requestId: el.getAttribute("data-request"), sessionId: el.getAttribute("data-session") } : null; })()') as { requestId: string; sessionId: string } | null;
       if (!found) { log(`capture: question-elsewhere ${step.at} → no stepper on screen`); return; }
       const r = await host.runHost.request({ kind: 'session.control', request: { op: 'answerQuestion', sessionId: found.sessionId, args: { requestId: found.requestId, selected: { [step.selector]: 'answered elsewhere' }, freeform: {} } } }, millis(10_000)).catch(() => null);
       log(`capture: question-elsewhere ${step.at} ${found.requestId} → ${r && r.kind === 'control.result' ? (r.result.ok ? 'delivered' : 'false') : 'undelivered'}`);
-    });
+    }, failed));
   }
 
   // Part AA's seam. ROTARIS_CAPTURE_DRAG_AT="selector@ms;;…": a REAL pointer selection across the matched element — press just
@@ -382,7 +383,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   // REQ-CHAT-075 requires selection "in every row category including rows whose body is rendered Markdown", and a Range set
   // by script would prove the document model rather than the pointer.
   for (const step of steps(process.env['ROTARIS_CAPTURE_DRAG_AT'])) {
-    clocks.timers.after(millis(step.at), async () => {
+    clocks.timers.after(millis(step.at), settled(async () => {
       const box = await win.webContents.executeJavaScript(`(() => { const el = document.querySelector(${JSON.stringify(step.selector)}); if (!el) return null; el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`) as { x: number; y: number; width: number; height: number } | null;
       if (!box) { log(`capture: drag-at ${step.at} ${step.selector} → no such element`); return; }
       const from = { x: Math.round(box.x + 2), y: Math.round(box.y + 4) };
@@ -394,7 +395,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       await pause(host, 120);
       const selected = await win.webContents.executeJavaScript('String(document.getSelection() ?? "")') as string;
       log(`capture: drag-at ${step.at} ${step.selector} → ${JSON.stringify(selected)}`);
-    });
+    }, failed));
   }
 
   // ROTARIS_CAPTURE_GRIP_DRAG="selector>>dx,dy@ms;;…" (fin42): a REAL pointer drag of the matched element's resize grip — press
@@ -427,7 +428,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   // ROTARIS_CAPTURE_SHOT="path@ms;;…": a PNG of the main window at that time, so a proof can keep a dialog mid-flow (the
   // checkpoint proof's confirmation dialog, REQ-GIT-097); the final capture still happens at the end.
   for (const step of steps(process.env['ROTARIS_CAPTURE_SHOT'])) {
-    clocks.timers.after(millis(step.at), async () => {
+    clocks.timers.after(millis(step.at), settled(async () => {
       try {
         // The same probes as the final capture, logged under a `shot-probe` prefix, so what the dialog showed is asserted, not eyeballed.
         for (const selector of parseSelectors(process.env['ROTARIS_CAPTURE_PROBE'])) {
@@ -437,7 +438,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
         writeFileSync(step.selector, (await win.webContents.capturePage()).toPNG());
         log(`captured shot ${step.selector}`);
       } catch (cause) { log(`capture: shot ${step.selector} failed: ${String(cause)}`); }
-    });
+    }, failed));
   }
 
   // Part R's seams. ROTARIS_CAPTURE_WINDOWS_AT="ms;;ms": the registry's persona windows — title, size, visible, minimized —
@@ -463,7 +464,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
    * would not be measuring it at all.
    */
   for (const step of steps(process.env['ROTARIS_CAPTURE_OPEN_AT'])) {
-    clocks.timers.after(millis(step.at), async () => {
+    clocks.timers.after(millis(step.at), settled(async () => {
       const control = await centre(win, `document.querySelector('.title-bar__sessions')`);
       if (!control) { log(`capture: open-at ${step.at}: no "Sessions" control on screen`); return; }
       clickAt(win, control);
@@ -472,7 +473,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       if (!open) { log(`capture: open-at ${step.at}: no session row for "${step.selector}"`); return; }
       clickAt(win, open);
       log(`capture: open-at ${step.at} opened session "${step.selector}"`);
-    });
+    }, failed));
   }
 
   /**
@@ -529,7 +530,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
    * order; only their delivery is bunched (REQ-CONFIG-419, `docs/archive/defects/two-quick-configuration-reloads-mark-settings-unsaved.md`).
    */
   for (const step of steps(process.env['ROTARIS_CAPTURE_CONFIG_PAIR_AT'])) {
-    clocks.timers.after(millis(step.at), async () => {
+    clocks.timers.after(millis(step.at), settled(async () => {
       const contents = win.webContents;
       const send = contents.send.bind(contents);
       const held: unknown[][] = [];
@@ -542,7 +543,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       }
       for (const args of held) send(CHANNEL.configChanged, ...args);
       log(`capture: config-pair-at ${step.at} → writes ${JSON.stringify(written)}, ${held.length} announcements delivered in one tick`);
-    });
+    }, failed));
   }
 
   // ROTARIS_CAPTURE_RECONCILE_AT="ms;;ms": a whole read of the followed session at that time — one publication while a chosen
@@ -560,11 +561,11 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   }
 
   for (const step of steps(process.env['ROTARIS_CAPTURE_PERSONA_PNG_AT'])) {
-    clocks.timers.after(millis(step.at), async () => {
+    clocks.timers.after(millis(step.at), settled(async () => {
       const e = firstPersona();
       if (!e) { log(`capture: persona-png-at ${step.at}: no persona window`); return; }
       try { writeFileSync(step.selector, (await e.win.webContents.capturePage()).toPNG()); log(`capture: persona-png-at ${step.at} → ${step.selector} ("${e.persona}")`); } catch (cause) { log(`capture: persona-png-at failed: ${String(cause)}`); }
-    });
+    }, failed));
   }
 
   // `selector>>text@from~ms`, the waiting form the main window's probes take: the first persona window is read once an element
@@ -616,21 +617,21 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   }
 
   for (const step of steps(process.env['ROTARIS_CAPTURE_PERSONA_STEER'])) {
-    clocks.timers.after(millis(step.at), async () => {
+    clocks.timers.after(millis(step.at), settled(async () => {
       const e = firstPersona();
       if (!e) { log(`capture: persona-steer-at ${step.at}: no persona window`); return; }
       const done = await e.win.webContents.executeJavaScript(`(() => { const el = document.querySelector('[data-testid="persona-steer"]'); if (!el) return 'no box'; const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; setter.call(el, ${JSON.stringify(step.selector)}); el.dispatchEvent(new Event('input', { bubbles: true })); const b = document.querySelector('[data-testid="persona-send"]'); if (!b) return 'no send'; b.click(); return 'sent'; })()`).catch((cause: unknown) => `error: ${String(cause)}`) as string;
       log(`capture: persona-steer-at ${step.at} → ${done}`);
-    });
+    }, failed));
   }
 
   for (const step of steps(process.env['ROTARIS_CAPTURE_PERSONA_CLICKS'])) {
-    clocks.timers.after(millis(step.at), async () => {
+    clocks.timers.after(millis(step.at), settled(async () => {
       const e = firstPersona();
       if (!e) { log(`capture: persona-click-at ${step.at} ${step.selector}: no persona window`); return; }
       const done = await e.win.webContents.executeJavaScript(`(() => { const el = document.querySelector(${JSON.stringify(step.selector)}); if (!el) return 'absent'; el.click(); return 'clicked'; })()`).catch((cause: unknown) => `error: ${String(cause)}`) as string;
       log(`capture: persona-click-at ${step.at} ${step.selector} → ${done}`);
-    });
+    }, failed));
   }
 
   // ROTARIS_CAPTURE_QUIT_MS: a user-initiated close of the main window at that time — the quit path of REQ-MONITOR-131, not the capture's exit.
@@ -675,11 +676,11 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   // ROTARIS_CAPTURE_STOP_MS: press the stop control with a real click at its measured position (REQ-SESSION-186).
   const stopAt = Number(process.env['ROTARIS_CAPTURE_STOP_MS'] ?? 0);
   if (options.prompt && stopAt > 0) {
-    clocks.timers.after(millis(stopAt), async () => {
+    clocks.timers.after(millis(stopAt), settled(async () => {
       const rect = await win.webContents.executeJavaScript(`(() => { const b = document.querySelector('.composer__actions .btn-danger'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, label: b.textContent }; })()`) as { x: number; y: number; label: string } | null;
       if (!rect) { log('capture: no stop control on screen'); return; }
       clickAt(win, rect);
       log(`capture: clicked "${rect.label}" at ${Math.round(rect.x)},${Math.round(rect.y)}`);
-    });
+    }, failed));
   }
 }

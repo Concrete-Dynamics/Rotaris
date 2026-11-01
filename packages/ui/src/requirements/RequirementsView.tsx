@@ -103,8 +103,8 @@ export interface RequirementsHost {
    * Domain 22 (PD-TRACE-001): the adoption strip's two commands — the comparison on opening, a read (REQ-ADOPT-022), and
    * the button (REQ-ADOPT-002). Optional so a host without the assistant draws no strip.
    */
-  readAdoption?(): Promise<HostResult<AdoptionView>>;
-  adopt?(mode: 'run' | 'record', writeLayout: boolean): Promise<HostResult<AdoptionOutcome>>;
+  readAdoption?: () => Promise<HostResult<AdoptionView>>;
+  adopt?: (mode: 'run' | 'record', writeLayout: boolean) => Promise<HostResult<AdoptionOutcome>>;
   readPreferences(): Promise<BoardPreferences>;
   writePreference(key: BoardPreferenceKey, value: string): void;
   /** REQ-TRACE-250: the clock is injected; the board reads none of its own. */

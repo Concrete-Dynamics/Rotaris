@@ -59,7 +59,7 @@ export function resolveSlotsAndReasoning(draft: SlotDraft): SlotResolution {
   if (draft.slots.fallback_model === null || draft.slots.fallback_model === '') draft.slots.fallback_model = draft.slots.small_model;
 
   const aliases = registeredAliases(draft.slots);
-  const substitute = (value: string | null): string | null => (value !== null && aliases[value] !== undefined ? aliases[value]! : value);
+  const substitute = (value: string | null): string | null => (value !== null && aliases[value] !== undefined ? aliases[value] : value);
 
   // REQ-CONFIG-075/071: the original tier recorded before a role's model is substituted.
   const tiers: Record<string, TierAlias> = {};

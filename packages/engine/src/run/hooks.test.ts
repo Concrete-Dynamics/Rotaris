@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, type HookPort, type HookPortContext, type PortToolResult, type Publisher, type RunNotice, type ToolPort } from '../index.js';
 
-const HOST = mintMachineId('0000000000000000000000000000000b') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000b');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 const NONE: Publisher = { increment: () => undefined, snapshot: () => undefined };
 

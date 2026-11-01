@@ -645,7 +645,7 @@ export function readAutopsy(dal: StoreDal, sessionId: SessionId, _wall: WallCloc
       byEndpoint.set(endpoint, row);
     }
     const requests: AutopsyEndpointRow[] = [...byEndpoint.entries()]
-      .map(([endpoint, r]) => ({ endpoint, agents: [...r.agents].sort() as readonly string[], tool_calls: r.calls }))
+      .map(([endpoint, r]) => ({ endpoint, agents: [...r.agents].sort(), tool_calls: r.calls }))
       .sort((a, b) => b.tool_calls - a.tool_calls);
 
     let tokenSpan: string | null = null;

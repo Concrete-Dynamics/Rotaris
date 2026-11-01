@@ -1,6 +1,6 @@
 import { ISOLATION_REQUIRED_HINT, type CommandOutcome, type ProcessReply, type WorktreeBinding } from '@rotaris/contracts';
 import { canonicalPath } from '@rotaris/platform';
-import { millis } from '@rotaris/kernel';
+import { millis, textOf } from '@rotaris/kernel';
 import { randomUUID } from 'node:crypto';
 import { refusal, type CommandContext, type CommandHandlers } from './context.js';
 import type { ReportInput } from '../notices.js';
@@ -260,11 +260,11 @@ export function sessionCommands(
       // host's `shutdown` withdraws the question instead, and a withdrawn question is never an answer. PD-SHELL-009: the same
       // for a dock whose window's close stopped the session's run — the stop withdraws the question.
       if (req.request.op === 'cancelQuestions' && quitting()) {
-        log(`question ${String(req.request.args['requestId'] ?? '')} left for the quit to withdraw: its dock closed with the application (PD-ORCH-005 clause 9)`);
+        log(`question ${textOf(req.request.args['requestId'] ?? '')} left for the quit to withdraw: its dock closed with the application (PD-ORCH-005 clause 9)`);
         return { ok: true, value: { ok: true } };
       }
       if (req.request.op === 'cancelQuestions' && withdrawnByClose?.(req.request.sessionId) === true) {
-        log(`question ${String(req.request.args['requestId'] ?? '')} left for the stop to withdraw: its window's close stopped session ${req.request.sessionId} (PD-SHELL-009, PD-ORCH-005 clause 9)`);
+        log(`question ${textOf(req.request.args['requestId'] ?? '')} left for the stop to withdraw: its window's close stopped session ${req.request.sessionId} (PD-SHELL-009, PD-ORCH-005 clause 9)`);
         return { ok: true, value: { ok: true } };
       }
       // ADR-0010 channel 1 across ADR-0013's boundary: the same arguments, the same `{ok, value?}`.
@@ -273,7 +273,7 @@ export function sessionCommands(
       // a race between the click and the wait being released, which no script can hit reliably; the whole product
       // path — the stepper, the channel, the run host's routing — is exercised unchanged, only the id is stale.
       const forwarded = __ROTARIS_SEAMS__ && capturing && process.env['ROTARIS_CAPTURE_QUESTION_STALE'] && req.request.op === 'answerQuestion'
-        ? { ...req.request, args: { ...req.request.args, requestId: `${String(req.request.args['requestId'])}-stale` } }
+        ? { ...req.request, args: { ...req.request.args, requestId: `${textOf(req.request.args['requestId'])}-stale` } }
         : req.request;
       // Part AO: a manual compression settles only once every live conversation has (REQ-MONITOR-092), each pass bounded by
       // `compressor.timeout_seconds` (120 s by default, ADR-0060), so the 10 s bound every other control keeps would time this
@@ -283,7 +283,7 @@ export function sessionCommands(
         // REQ-TOOLS-063: a delivered answer marks its dialog answered (the run host's close follows); an undeliverable one leaves it open.
         const d = dialogs.get(senderId);
         if (d && r.result.ok) d.answered = true;
-        log(`approval ${String(req.request.args['requestId'])} answered ${String(req.request.args['option'])} → ${r.result.ok ? 'delivered' : 'undeliverable'}`);
+        log(`approval ${textOf(req.request.args['requestId'])} answered ${textOf(req.request.args['option'])} → ${r.result.ok ? 'delivered' : 'undeliverable'}`);
       }
       if (req.request.op !== 'answerApproval') log(`control ${req.request.op} on ${req.request.sessionId} → ${r.kind === 'control.result' ? (r.result.ok ? `ok${r.result.value ? ` (${r.result.value})` : ''}` : 'false') : r.kind}`);
       return r.kind === 'control.result' ? { ok: true, value: r.result } : refusal(r, 'The control could not be delivered');

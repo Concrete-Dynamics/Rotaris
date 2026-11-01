@@ -162,7 +162,7 @@ export async function listTools(client: Client, timeoutMs: Millis, signal?: Abor
   const out: ToolInfo[] = [];
   for (const t of result.tools) {
     if (typeof t.name !== 'string' || t.name === '') continue;
-    out.push({ name: t.name, description: typeof t.description === 'string' ? t.description : '', inputSchema: (t.inputSchema as Record<string, unknown> | undefined) ?? { type: 'object', properties: {} } });
+    out.push({ name: t.name, description: typeof t.description === 'string' ? t.description : '', inputSchema: (t.inputSchema) ?? { type: 'object', properties: {} } });
   }
   return out;
 }

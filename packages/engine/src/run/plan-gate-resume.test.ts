@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { IntentCategory } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
@@ -14,7 +14,7 @@ import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
  * at the plan gate, whatever the mode and the release; when the gate would hold the run — no release and the mode
  * `plan`, or the release re-armed — it holds before the first new iteration the run begins.
  */
-const HOST = mintMachineId('0000000000000000000000000000000d') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000d');
 const MODEL = { providerId: 'scripted', modelId: 'm', dialect: 'chat' as const };
 
 describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {

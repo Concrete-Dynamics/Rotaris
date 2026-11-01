@@ -17,9 +17,9 @@ export interface TodoListGate {
    */
   readonly directWork: boolean;
   /** The refusal the model reads when the call that would start a work item must wait for a todo list, else null. */
-  owed(): string | null;
+  owed: () => string | null;
   /** A work item reached execution — past the todo check, the schema, the permission and the pre-execution hooks. */
-  started(): void;
+  started: () => void;
 }
 
 /**

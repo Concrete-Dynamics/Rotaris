@@ -7,7 +7,7 @@ import type { PlainMap } from '../merge.js';
 import { ignoredBy, parseGitignore } from './gitignore.js';
 import { classifyWorkspace, classifyWorkspaceRoot, DEFAULT_SOURCE_EXTENSIONS, extensionOf } from './classify.js';
 import { applyRecord, initializationOf, isNeverInitialized, isResolved, NEVER_INITIALIZED, readInitializationState, recordPatch, sourceExtensionOverrideOf, type InitializationState } from './state.js';
-import { DUPLICATE_TASK, isApplicable, labelFor, TaskRegistry, type InitializationTask, type TaskResult } from './registry.js';
+import { DUPLICATE_TASK, isApplicable, labelFor, TaskRegistry, type InitializationTask } from './registry.js';
 import { deriveSets, promptOwed, sameView, viewOf } from './sets.js';
 import { executeTasks, recordSkip, stampOnly } from './execute.js';
 
@@ -252,7 +252,7 @@ function task(id: string, over: Partial<InitializationTask> = {}): Initializatio
     label: `${id} label`,
     description: `${id} description`,
     applicable: () => true,
-    run: async () => ({ status: 'success', steps: [], classification: null, error: '', retryable: false, summary: 'done' }) as TaskResult,
+    run: async () => ({ status: 'success', steps: [], classification: null, error: '', retryable: false, summary: 'done' }),
     ...over,
   };
 }

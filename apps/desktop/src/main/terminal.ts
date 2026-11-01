@@ -183,7 +183,7 @@ export class FrameDeliveryLimiter {
     if (!this.anyPending()) { this.timer?.cancel(); this.timer = null; return; }
     if (this.timer) return;
     const wait = Math.max(1, (this.times[0] ?? now) + WINDOW_MS - now);
-    this.timer = this.deps.clocks.timers.after(millis(wait) as Millis, () => { this.timer = null; this.drain(); });
+    this.timer = this.deps.clocks.timers.after(millis(wait), () => { this.timer = null; this.drain(); });
   }
 }
 

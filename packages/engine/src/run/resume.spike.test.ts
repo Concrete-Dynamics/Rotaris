@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ChatMessage } from '@rotaris/model';
 import { ProjectionOwner } from '../projection-owner.js';
@@ -17,7 +17,7 @@ import type { ConversationRecorder } from './conversation.js';
  * conversation as it happens, pause it, restore the record into a new `Conversation`, and continue it against the
  * scripted backend. The findings are written up in `docs/architecture/spikes/agent-resume.md`.
  */
-const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000a');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 const SID = 'S-spike' as SessionId;
 
@@ -70,7 +70,7 @@ describe('SPIKE PD-ORCH-005: one agent recorded, paused, restored and continued'
     };
   }
   /** What a request carried, less the system message the backend puts first. */
-  const sent = (client: ScriptedModelClient, i: number): ChatMessage[] => client.requests[i]!.messages.slice(1) as ChatMessage[];
+  const sent = (client: ScriptedModelClient, i: number): ChatMessage[] => client.requests[i]!.messages.slice(1);
 
   it('a paused turn\'s record is exactly its conversation, and a new Conversation built from it continues where it stood', async () => {
     const client = new ScriptedModelClient([

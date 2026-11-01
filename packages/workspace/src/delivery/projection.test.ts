@@ -122,7 +122,7 @@ describe('projectBoard', () => {
     expect(b.parseErrors).toEqual([{ path: 'C:\\ws', message: 'the traceability engine failed: not merged' }]);
   });
   it('REQ-TRACE-388: an in-flight action is rendered with its label', () => {
-    const b = projectBoard(input({ inFlight: new Map([['REQ-101', 'release' as BoardAction]]) }));
+    const b = projectBoard(input({ inFlight: new Map([['REQ-101', 'release']]) }));
     expect(b.cards.find((c) => c.id === 'REQ-101')!.inFlight).toEqual({ action: 'release', label: 'Releasing…' });
   });
 });

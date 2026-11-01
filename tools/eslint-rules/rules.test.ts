@@ -12,7 +12,17 @@ import { REQ, SUPERSEDED_BY } from '@rotaris/kernel';
  * the plan called for: each must be reported, or the lint is decorative.
  */
 const repo = fileURLToPath(new URL('../..', import.meta.url));
-const eslint = new ESLint({ cwd: repo, overrideConfigFile: join(repo, 'eslint.config.js') });
+/*
+ * The fixtures are text at paths no file occupies, so no tsconfig's program holds them: the type-aware parse (R-091)
+ * takes them into the default project the repository's own configuration names, on the root tsconfig's options. Only
+ * the list of files it admits is widened; every rule is the repository's.
+ */
+const FIXTURES = ['tools/*.test.ts', 'packages/*/src/violation.ts', 'packages/*/src/fine.ts', 'packages/*/src/ok.ts', 'packages/*/src/x.test.ts', 'packages/*/src/violation.tsx', 'apps/desktop/src/main/violation.ts', 'apps/desktop/src/main/fine.ts', 'tools/requirement-coverage/fixture.test.ts'];
+const eslint = new ESLint({
+  cwd: repo,
+  overrideConfigFile: join(repo, 'eslint.config.js'),
+  overrideConfig: { files: ['**/*.{ts,tsx,mts,cts}'], languageOptions: { parserOptions: { projectService: { allowDefaultProject: FIXTURES, defaultProject: 'tsconfig.json', maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 64 } } } },
+});
 
 async function lintAs(filePath: string, code: string): Promise<string[]> {
   const [result] = await eslint.lintText(code, { filePath: join(repo, filePath) });
@@ -166,5 +176,25 @@ describe('lint — R-092 (ReqToCode §4.6): every cited requirement or directive
     const art = loadArtifact();
     expect(citationFindings(`// ${held}`, '', art).map((f: { kind: string }) => f.kind)).toEqual(['superseded']);
     expect(citationFindings(`// ${held}`, '', art, { [held]: 'OQ-491' })).toEqual([]);
+  });
+});
+
+describe('lint — the type-aware rules run (R-091, hardening.md §3.5 row 1)', () => {
+  it('a promise neither awaited, caught nor marked void is reported', async () => {
+    const work = 'async function work(): Promise<number> { return 1; }\n';
+    expect(await lintAs('packages/engine/src/violation.ts', `${work}export function caller(): void { work(); }\n`)).toContain('@typescript-eslint/no-floating-promises');
+    expect(await lintAs('packages/engine/src/fine.ts', `${work}export function caller(): void { void work(); }\n`)).not.toContain('@typescript-eslint/no-floating-promises');
+  });
+  it('an async callback where a () => void is expected is reported', async () => {
+    const rules = await lintAs('packages/engine/src/violation.ts', 'declare function after(fn: () => void): void;\nafter(async () => { await Promise.resolve(); });\n');
+    expect(rules).toContain('@typescript-eslint/no-misused-promises');
+  });
+  it('a switch over a union whose default covers a member it does not name is reported', async () => {
+    const code = (cases: string) => `type Kind = 'a' | 'b' | 'c';\nexport function name(k: Kind): string {\n  switch (k) {\n    ${cases}\n    default: return 'other';\n  }\n}\n`;
+    expect(await lintAs('packages/engine/src/violation.ts', code("case 'a': return 'A';"))).toContain('@typescript-eslint/switch-exhaustiveness-check');
+    expect(await lintAs('packages/engine/src/fine.ts', code("case 'a': return 'A';\n    case 'b': case 'c':"))).not.toContain('@typescript-eslint/switch-exhaustiveness-check');
+  });
+  it('an await of a value that is no promise is reported', async () => {
+    expect(await lintAs('packages/engine/src/violation.ts', 'export async function f(): Promise<number> { return await 3; }\n')).toContain('@typescript-eslint/await-thenable');
   });
 });

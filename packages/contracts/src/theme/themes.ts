@@ -112,5 +112,7 @@ export function isThemeName(value: string): value is ThemeName { return THEME_NA
 export function resolveTheme(value: string | null | undefined): Theme { return THEMES.find((theme) => theme.name === value) ?? THEMES[0]!; }
 
 export function themeCustomProperties(theme: Theme): Readonly<Record<string, string>> {
-  return Object.assign({}, ...Object.values(theme.tokens));
+  const properties: Record<string, string> = {};
+  for (const group of Object.values(theme.tokens)) Object.assign(properties, group);
+  return properties;
 }

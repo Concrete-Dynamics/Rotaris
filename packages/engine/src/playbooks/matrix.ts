@@ -99,7 +99,7 @@ export function applyOverrides(base: PlaybookCatalogue, overrides: PlaybookOverr
       known[variant] = text;
     }
   }
-  return out as PlaybookCatalogue;
+  return out;
 }
 
 export interface RenderInput {

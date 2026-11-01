@@ -1,5 +1,5 @@
 import { countNoun } from '@rotaris/kernel';
-import type { BoardAction, BoardCard, BoardProjection, ColumnToken, DeliveryColumn, DeliveryQueue, EpicCard, HealthToken, ParseError, QueueEntry, RelationToken, ReqId, RequirementEvidence, RequirementRecord, StoreParse, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
+import type { BoardAction, BoardCard, BoardProjection, ColumnToken, DeliveryQueue, EpicCard, HealthToken, ParseError, QueueEntry, RelationToken, ReqId, RequirementEvidence, RequirementRecord, StoreParse, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
 import { compareReqIds } from '@rotaris/contracts';
 import type { DeliveryBlockerRow, DeliveryReadRow, DeliveryRunRow } from '@rotaris/store';
 import { cardBlocker, type Blocker } from './blockers.js';
@@ -177,7 +177,7 @@ export function projectBoard(input: ProjectionInput): BoardProjection {
     epics.push({ id: r.id, title: r.title, done, total: counted.length, children });
   }
 
-  const blocked = cards.filter((c) => c.column === 'blocked').map((c) => ({ id: c.id, reason: c.blocker?.reason ?? 'blocked', returnTo: c.returnTo ?? 'backlog' as DeliveryColumn }));
+  const blocked = cards.filter((c) => c.column === 'blocked').map((c) => ({ id: c.id, reason: c.blocker?.reason ?? 'blocked', returnTo: c.returnTo ?? 'backlog' }));
 
   const parseErrors: ParseError[] = [...(parse?.errors ?? [])];
   if (input.parseFailure) parseErrors.push({ path: parse?.root ?? input.workspace, message: describeFailure(input.parseFailure) });

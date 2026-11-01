@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { isMap } from 'yaml';
 import { guardedRead } from '@rotaris/platform';
 import { parseConfig, plainOf, typeNameOf } from './document.js';
+import { textOf } from '@rotaris/kernel';
 
 /**
  * REQ-ORCH-026: playbook overrides at two scopes — `<config>/playbooks/` and `<workspace>/.rotaris/playbooks/`
@@ -40,12 +41,12 @@ export function readPlaybookOverrides(dir: string): OverridesRead {
     const root = parsed.value.root;
     if (root === null) { if (parsed.value.topLevelType !== 'null') warnings.push(`playbook override ${path}: expected a mapping of slots, got ${parsed.value.topLevelType}`); continue; }
     for (const pair of root.items) {
-      const slot = String(plainOf(pair.key as never) ?? '');
+      const slot = textOf(plainOf(pair.key as never) ?? '');
       const value = pair.value;
       if (!isMap(value)) { warnings.push(`playbook override ${path}: slot '${slot}' must map variants to text, got ${typeNameOf(value)}`); continue; }
       const variants = out[slot] ?? {};
       for (const v of value.items) {
-        const variant = String(plainOf(v.key as never) ?? '');
+        const variant = textOf(plainOf(v.key as never) ?? '');
         const text = plainOf(v.value as never);
         if (typeof text !== 'string') { warnings.push(`playbook override ${path}: ${slot}.${variant} must be text, got ${typeNameOf(v.value)}`); continue; }
         variants[variant] = text;

@@ -120,6 +120,7 @@ describe('REQ-MCP-017..024, 027 — the discovery files', () => {
       if (r.ok) cfg = r.value;
     }
     expect(hash()).toBe(before);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- tsc reads `cfg` as possibly undefined here.
     const mcp = cfg!.mcp;
     expect(mcp.origins).toEqual({ web_search: 'discovered-project', browser: 'default', code_intelligence: 'default', gamma: 'yaml', alpha: 'yaml', beta: 'yaml' });
     // Field-wise: the YAML `enabled: false` merged onto the discovered gamma keeps its command and args.

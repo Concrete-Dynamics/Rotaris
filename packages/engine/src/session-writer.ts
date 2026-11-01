@@ -480,7 +480,7 @@ export class SessionWriter {
     // as `stalledSince`, REQ-CHAT-164): the `transcript.row` event carries the row without it, so a session read back
     // from storage names no stream (REQ-SHELL-104) and the recorded row is the row released (REQ-CHAT-165).
     const { streamId: _display, ...recorded } = row;
-    const ev = this.envelope('transcript.row', at, { index, row: maskRow(recorded as TranscriptRow) });
+    const ev = this.envelope('transcript.row', at, { index, row: maskRow(recorded) });
     const line = serializeEvent(ev);
     if (!line.ok) {
       // REQ-EVENTS-032: the row is recorded, its event alone is dropped, and every later event lands.

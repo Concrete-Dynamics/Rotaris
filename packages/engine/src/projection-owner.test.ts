@@ -15,7 +15,7 @@ describe('ProjectionOwner — the record is published when the ledger or the too
     const publisher: Publisher = { snapshot: (p) => { snapshots.push(p); }, increment: (p) => { increments.push(p); } };
     const clock = new FakeClock();
     const owner = new ProjectionOwner({ sessionId: asSessionId('s1'), seq: new SequenceCounters(), timers: clock, publisher, readSession: () => ({ id: 's1' }) as unknown as SessionSnapshot['session'], readResident: () => [] });
-    const event = (kind: string): WireEvent => ({ event: kind as WireEvent['event'], session_id: 's1', timestamp: '2026-09-05T10:00:00.000Z', schema_version: 1 } as WireEvent);
+    const event = (kind: string): WireEvent => ({ event: kind as WireEvent['event'], session_id: 's1', timestamp: '2026-09-05T10:00:00.000Z', schema_version: 1 });
     return { owner, snapshots, increments, event, clock };
   };
   it('a child spawn, a child transition, a tool start and a tool finish each publish the record — coalesced to one per 80 ms tick; a permission decision does not; a save publishes at once', () => {
@@ -52,7 +52,7 @@ describe('ProjectionOwner — a row committed below the last held row is publish
   const coordinator = { persona: 'orchestrator', name: 'orchestrator' };
   const child = { persona: 'coding-agent', name: 'wave3-verify-result' };
   const row = (index: number, who: object, over: Partial<TranscriptRow>): TranscriptRow =>
-    ({ index, at: at(index), ts: at(index).slice(11, 19), body: `row ${index}`, kind: 'agent', settled: true, ...who, ...over }) as TranscriptRow;
+    ({ index, at: at(index), ts: at(index).slice(11, 19), body: `row ${index}`, kind: 'agent', settled: true, ...who, ...over });
   const thinking = (index: number, who: object, settled: boolean) => row(index, who, { kind: 'thinking', settled, ...(settled ? { durationMs: 1709 } : {}) });
   const tool = (index: number, who: object, name: string, settled: boolean) =>
     row(index, who, { kind: 'tool', toolName: name, body: name, callKey: `c${index}`, settled, toolStatus: settled ? 'ok' : 'running', ...(settled ? { durationMs: 5 } : {}) });

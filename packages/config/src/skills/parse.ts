@@ -2,6 +2,7 @@ import { parse as parseYaml } from 'yaml';
 import { isPlainMap } from '../merge.js';
 import { collapseWhitespace, normalizeSkillName } from './names.js';
 import { DEFAULT_SKILL_INVOCATION_MODE, type SkillInvocationMode } from '../sections/skills.js';
+import { textOf } from '@rotaris/kernel';
 
 /**
  * REQ-WORKSPACE-053, 055 and 056 — the `SKILL.md` document, a third-party format this product reads.
@@ -92,7 +93,7 @@ export function readTrigger(fields: Readonly<Record<string, unknown>>): { ok: tr
     return { ok: true, trigger: null };
   }
   if (type === undefined || type === null) return { ok: false, reason: skillUnsupportedTrigger("no trigger type is stated; only 'keyword' is supported") };
-  if (type !== 'keyword') return { ok: false, reason: skillUnsupportedTrigger(`'${String(type)}' is not supported; only 'keyword' is`) };
+  if (type !== 'keyword') return { ok: false, reason: skillUnsupportedTrigger(`'${textOf(type)}' is not supported; only 'keyword' is`) };
   if (keywords === undefined || keywords === null) return { ok: true, trigger: { type: 'keyword', keywords: [] } };
   if (!Array.isArray(keywords)) return { ok: false, reason: skillUnsupportedTrigger('the keyword collection must be a list of strings') };
   const out: string[] = [];

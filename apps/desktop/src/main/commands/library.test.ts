@@ -15,7 +15,7 @@ vi.mock('electron', () => ({ shell: { openPath: (path: string) => opener.open(pa
  */
 function facet(storeRefusal: CommandContext['storeRefusal']) {
   const asked: RunHostRequest[] = [];
-  const runHost: CommandContext['runHost'] = { request: async (req) => { asked.push(req as RunHostRequest); return { kind: 'session.list', sessions: [] } as unknown as ProcessReply; } };
+  const runHost: CommandContext['runHost'] = { request: async (req) => { asked.push(req); return { kind: 'session.list', sessions: [] } as unknown as ProcessReply; } };
   const commands = libraryCommands({ runHost, storeRefusal } as unknown as Parameters<typeof libraryCommands>[0]);
   return { commands, asked };
 }

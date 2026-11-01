@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { isMap, isNode, type Document, type Node, type YAMLMap } from 'yaml';
-import { LEGACY_ROLE_ALIASES, VerifierSectionSchema, type DesktopSaveRuntimeKey, type DictationConfigView, type VerifierSection } from '@rotaris/contracts';
+import { LEGACY_ROLE_ALIASES, VerifierSectionSchema, type DesktopSaveRuntimeKey, type DictationConfigView } from '@rotaris/contracts';
 import { err, millis, ok, type Result, type Timers } from '@rotaris/kernel';
 import { replaceDocument, replaceDocumentSync, type RetryLadder } from '@rotaris/platform';
 import { parseConfig, plainOf } from './document.js';
@@ -121,7 +121,9 @@ function yamlOps(doc: Document): MapOps<YAMLMap> {
 }
 
 function rootOf(doc: Document): YAMLMap {
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- tsc refuses the node's type without it.
   if (!isMap(doc.contents)) doc.contents = doc.createNode({}) as never;
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- tsc does not narrow `doc.contents` across the assignment above.
   return doc.contents as YAMLMap;
 }
 
@@ -178,7 +180,7 @@ export async function writeVerifierSection(file: string, section: unknown, deps:
   const current = before['verifier'];
   const currentParsed = VerifierSectionSchema.safeParse(current);
   if (currentParsed.success && JSON.stringify(currentParsed.data) === JSON.stringify(parsed.data)) return ok({ file, text: opened.value.doc.toString({ lineWidth: 0 }), changed: false });
-  const written = await writeConfigFields(file, { verifier: parsed.data as VerifierSection }, deps);
+  const written = await writeConfigFields(file, { verifier: parsed.data }, deps);
   return written.ok ? ok({ ...written.value, changed: true }) : written;
 }
 

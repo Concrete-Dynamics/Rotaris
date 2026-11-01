@@ -39,12 +39,12 @@ const root: AgentRecord = {
   id: 'run', name: 'orchestrator', givenName: 'orchestrator', persona: 'orchestrator', state: 'running', presentationState: 'running', parentId: '', dependencies: [], activity: '', model: 'beta',
   depth: 0, background: false, category: '', spawnedAt: '2026-10-02T10:00:00.000Z', completedAt: null, toolCalls: 0, delegationTask: '', reasoning: 'medium', contextUsed: 0, contextLimit: DEFAULT_CONTEXT_CAPACITY,
   grantedTools: [], grantRecorded: false, calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null, timedOut: null,
-} as AgentRecord;
+};
 const session = (excludedModels: string[]): SessionRecord => ({
   id: 's1', executionStatus: 'completed', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-10-02T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [root], pendingApprovals: [], pendingQuestions: [],
   tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: 'tasks_complete', runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-10-02T10:00:00.000Z', iterationsCompleted: 1, summary: null, permissionMode: 'ask', sandboxed: false, sandboxBackend: '', backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
   usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 0, agents: 0, byTool: [] }, worktreeBranch: null, wait: null, modelOverrides: [], excludedModels, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryPersona: null, entryModelKey: null, entryStalledSeconds: null, entryToolCalls: null, compressions: 0,
-} as SessionRecord);
+});
 const ok = async () => ({ ok: true as const });
 const MODELS = ['alpha', 'beta', 'gamma'];
 /** The rows one select was handed, by its accessible name: `value:hint:unavailable` each. */

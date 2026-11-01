@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
 import type { CaptureHost } from './host.js';
-import { categoryProbe, chordEvent, gripOffset, matchProbe, parseSelectors, parseSteps, selectWait, settleAt, targetProbe } from './host.js';
+import { categoryProbe, chordEvent, gripOffset, matchProbe, parseSelectors, parseSteps, selectWait, settled, settleAt, stepFailed, targetProbe } from './host.js';
 
 /**
  * The capture script's grammar, which every `*-proof` script writes and which — until this module
@@ -156,5 +156,31 @@ describe('gripOffset — the grip drag\'s dx,dy (fin42, PD-ORCH-002 revision 3)'
     expect(gripOffset('120')).toBeNull();
     expect(gripOffset('a,b')).toBeNull();
     expect(gripOffset(null)).toBeNull();
+  });
+});
+
+describe('a scheduled capture step that awaits (R-091, no-misused-promises)', () => {
+  it('reports a step that rejects to its reporter instead of leaving the rejection floating', async () => {
+    const failures: unknown[] = [];
+    const floating: unknown[] = [];
+    const onUnhandled = (reason: unknown) => { floating.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      settled(() => Promise.reject(new Error('the step broke')), (cause) => { failures.push(cause); })();
+      await new Promise<void>((resolve) => { setImmediate(resolve); });
+      expect(failures.map((c) => (c as Error).message)).toEqual(['the step broke']);
+      expect(floating).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
+  it('logs the failure with its stack, naming it a capture step', () => {
+    const lines: string[] = [];
+    stepFailed((m) => { lines.push(m); })(new Error('no window'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^capture: a scheduled step failed: Error: no window/);
+    stepFailed((m) => { lines.push(m); })('plain');
+    expect(lines[1]).toBe('capture: a scheduled step failed: plain');
   });
 });

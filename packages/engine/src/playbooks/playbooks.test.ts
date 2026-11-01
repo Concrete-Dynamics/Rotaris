@@ -47,13 +47,13 @@ describe('REQ-ORCH-019..027 the playbook matrix', () => {
   it('REQ-ORCH-026: overrides re-word a variant; an unknown slot or variant is ignored with a warning naming it', () => {
     const warnings: string[] = [];
     const c = applyOverrides(CATALOGUE, { VERIFY: { prove: 'PROVE IT.', bogus: 'x' }, NOPE: { a: 'b' } }, (m) => warnings.push(m));
-    expect(c.VERIFY!['prove']).toBe('PROVE IT.');
-    expect(c.VERIFY!['none']).toBe(CATALOGUE.VERIFY!['none']);
+    expect(c.VERIFY['prove']).toBe('PROVE IT.');
+    expect(c.VERIFY['none']).toBe(CATALOGUE.VERIFY['none']);
     expect(warnings).toEqual([
       "playbook override names variant 'VERIFY.bogus', which the catalogue does not define; ignored (REQ-ORCH-026)",
       "playbook override names slot 'NOPE', which the catalogue does not define; ignored (REQ-ORCH-026)",
     ]);
-    expect(CATALOGUE.VERIFY!['prove']).not.toBe('PROVE IT.');
+    expect(CATALOGUE.VERIFY['prove']).not.toBe('PROVE IT.');
   });
   it('REQ-ORCH-024/027: the resolved set names the row per role, the BUDGET cell clamps, wide is no clamp', () => {
     const r = resolvePlaybooks({ intent: 'whole_project', tier: 'medium', roles: ['orchestrator', 'coding-agent', 'nobody'], entryRole: 'orchestrator' });
@@ -81,14 +81,14 @@ describe('REQ-ORCH-019..027 the playbook matrix', () => {
       const r = resolvePlaybooks({ intent, tier: 'medium', roles: ['orchestrator', 'coding-agent'], entryRole: 'orchestrator' });
       const entry = r.asEntry['orchestrator']!;
       expect(entry.cell.ROUTE).toBe('entry');
-      expect(entry.text).toContain(`ROUTE: ${CATALOGUE.ROUTE!['entry']}`);
+      expect(entry.text).toContain(`ROUTE: ${CATALOGUE.ROUTE['entry']}`);
       expect(entry.text).not.toMatch(/coordinator routed it to you/);
       expect(entry.row).toBe(r.perRole['orchestrator']!.row);
       expect({ ...entry.cell, ROUTE: 'routed' }).toEqual(r.perRole['orchestrator']!.cell);
       expect(r.perRole['orchestrator']!.cell.ROUTE).toBe('routed');
-      expect(r.perRole['coding-agent']!.text).toContain(`ROUTE: ${CATALOGUE.ROUTE!['routed']}`);
+      expect(r.perRole['coding-agent']!.text).toContain(`ROUTE: ${CATALOGUE.ROUTE['routed']}`);
     }
-    expect(CATALOGUE.ROUTE!['entry']).not.toMatch(/coordinator routed/);
+    expect(CATALOGUE.ROUTE['entry']).not.toMatch(/coordinator routed/);
     // The budget the entry role's cell clamps is unchanged by the wording.
     expect(resolvePlaybooks({ intent: 'question', tier: 'small', roles: ['orchestrator'], entryRole: 'orchestrator' }).budgetCell).toEqual(BUDGET_CELLS['tight']);
     // REQ-ORCH-026: the variant is listed in the catalogue, so an override may re-word it.
@@ -98,7 +98,7 @@ describe('REQ-ORCH-019..027 the playbook matrix', () => {
     // REQ-ORCH-023: a not-routed cell keeps its narrow text, for the entry role too.
     const nr = resolvePlaybooks({ intent: 'question', tier: 'small', roles: ['tester'], entryRole: 'tester' });
     expect(nr.asEntry['tester']!.cell.ROUTE).toBe('not_routed');
-    expect(nr.asEntry['tester']!.text).toContain(`ROUTE: ${CATALOGUE.ROUTE!['not_routed']}`);
+    expect(nr.asEntry['tester']!.text).toContain(`ROUTE: ${CATALOGUE.ROUTE['not_routed']}`);
     expect(resolvePlaybooks({ intent: 'question', tier: 'small', roles: ['nobody'], entryRole: 'nobody' }).asEntry['nobody']).toBeNull();
     // REQ-ORCH-024: an entry role with no row has no cell, so no BUDGET: the configured child policy stands unchanged.
     expect(resolvePlaybooks({ intent: 'question', tier: 'small', roles: ['nobody'], entryRole: 'nobody' }).budgetCell).toBeNull();

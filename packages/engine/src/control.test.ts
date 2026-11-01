@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, type AgentBackend } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, type ModelLookup, type RunNotice } from './index.js';
 import { Run } from './run/run.js';
 
-const HOST = mintMachineId('0000000000000000000000000000000c') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000c');
 const MODEL = { providerId: 'test', modelId: 'test', dialect: 'chat' as const };
 
 describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-MONITOR-123..125/133/134/142, REQ-ORCH-084..087, REQ-SESSION-110)', () => {

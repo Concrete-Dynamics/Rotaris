@@ -1,5 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
-import { millis, type Clocks, type Millis, type Timers } from '@rotaris/kernel';
+import { millis, textOf, type Clocks, type Millis, type Timers } from '@rotaris/kernel';
 import { linuxProcessTable, spawnChild, windowsLaunchOf } from '@rotaris/platform';
 import type { McpLog } from './types.js';
 
@@ -128,13 +128,13 @@ export async function terminateSetupChild(child: ChildProcess, clocks: Clocks, g
   // Whether the step leads a group (spawned with `processGroup`): a group whose id is its pid exists while any member lives.
   const group = process.platform !== 'win32' && pid !== undefined && groupExists(pid);
   const leaderRunning = (): boolean => child.exitCode === null && child.signalCode === null;
-  const running = (): boolean => leaderRunning() || (group && groupRunning(pid!));
+  const running = (): boolean => leaderRunning() || (group && groupRunning(pid));
   if (!running()) return;
   const timers = clocks.timers;
   if (process.platform === 'win32' && pid !== undefined) {
     spawnChild({ command: 'taskkill', args: ['/PID', String(pid), '/T'], env, stdio: 'ignore' }).once('error', () => undefined);
   } else if (group) {
-    signalGroup(pid!, 'SIGTERM');
+    signalGroup(pid, 'SIGTERM');
   } else {
     try { child.kill('SIGTERM'); } catch { /* already gone */ }
   }
@@ -147,7 +147,7 @@ export async function terminateSetupChild(child: ChildProcess, clocks: Clocks, g
   } finally {
     hurry?.signal.removeEventListener('abort', hurried);
   }
-  if (group) signalGroup(pid!, 'SIGKILL');
+  if (group) signalGroup(pid, 'SIGKILL');
   if (leaderRunning()) {
     if (process.platform === 'win32' && pid !== undefined) {
       await new Promise<void>((resolve) => {
@@ -187,7 +187,7 @@ export async function runSetupSteps(o: RunSetupOptions): Promise<SetupReport> {
   const pollMs = o.pollMs ?? SETUP_POLL_MS;
   const graceMs = o.graceMs ?? SETUP_TERMINATE_GRACE_MS;
   const reports: SetupStepReport[] = o.steps.map((s) => ({ id: s.id, label: s.label, status: 'pending', detail: '', elapsedMs: null }));
-  const set = (i: number, patch: Partial<SetupStepReport>) => { reports[i] = { ...reports[i]!, ...patch }; o.onStep(reports[i]!, reports); };
+  const set = (i: number, patch: Partial<SetupStepReport>) => { reports[i] = { ...reports[i]!, ...patch }; o.onStep(reports[i], reports); };
   let stopped: 'failed' | 'cancelled' | null = null;
   // Read through functions: a signal's `aborted` changes under the awaits below, which TypeScript's narrowing cannot see.
   const shuttingDown = (): boolean => o.shutdown?.signal.aborted === true;
@@ -242,7 +242,7 @@ export async function runSetupSteps(o: RunSetupOptions): Promise<SetupReport> {
     const tail = output.trim().slice(-SETUP_OUTPUT_TAIL);
     if (cancelled) { stopped = 'cancelled'; set(i, { status: 'failed', detail: `cancelled while running; the child was terminated${tail ? `; its last output: ${tail}` : ''}`, elapsedMs, stopped: 'cancelled', output: tail }); continue; }
     if (exceeded) { stopped = 'failed'; set(i, { status: 'failed', detail: `exceeded its budget of ${Math.round(step.budgetMs / 1000)} s and was terminated${tail ? `; its last output: ${tail}` : ''}`, elapsedMs, stopped: 'budget', output: tail }); continue; }
-    if (spawnError !== null) { stopped = 'failed'; set(i, { status: 'failed', detail: `the setup command could not be started: ${spawnError}`, elapsedMs, startError: spawnError }); continue; }
+    if (spawnError !== null) { stopped = 'failed'; set(i, { status: 'failed', detail: `the setup command could not be started: ${textOf(spawnError)}`, elapsedMs, startError: spawnError }); continue; }
     if (child.exitCode !== 0) { stopped = 'failed'; set(i, { status: 'failed', detail: `exited with ${child.signalCode ? `signal ${child.signalCode}` : `code ${child.exitCode}`}${tail ? `; its last output: ${tail}` : ''}`, elapsedMs, output: tail }); continue; }
     // A step's outcome is logged by the caller's `onStep` (the run host's step reporter), never here as well:
     // PD-MONITOR-002, live-run finding a71-9 — each success had reached the application log twice.

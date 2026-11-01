@@ -4,6 +4,10 @@ import { AiSdkModelClient, outputDowngrade, redactHeaders, type FetchLike } from
 import { DefaultAgentBackend } from './default-backend.js';
 import type { DispatchRetry, ModelRequest, StreamPart } from './ports.js';
 
+/** What a fake endpoint saw: the request's URL, and its body when it is text (every body the SDK sends here is). */
+const urlOf = (input: RequestInfo | URL): string => (typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+const bodyOf = (init?: RequestInit): string => (typeof init?.body === 'string' ? init.body : '');
+
 /**
  * Spike 6's structural half, against a fake fetch: which URL each dialect
  * reaches under one base URL, that the custom fetch carries the per-request
@@ -51,7 +55,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
     const seen: { url: string; headers: Record<string, string>; body: string }[] = [];
     const fake: FetchLike = async (input, init) => {
       const h = Object.fromEntries(new Headers(init?.headers).entries());
-      seen.push({ url: String(input), headers: h, body: String(init?.body ?? '') });
+      seen.push({ url: urlOf(input), headers: h, body: bodyOf(init) });
       return sse([chatChunk('Hel', null), chatChunk('lo', null), chatChunk(null, 'stop', { prompt_tokens: 7, completion_tokens: 2 }), '[DONE]']);
     };
     const logged: Record<string, string>[] = [];
@@ -72,7 +76,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
     const seen: string[] = [];
     const costChunk = JSON.stringify({ id: 'c1', object: 'chat.completion.chunk', created: 0, model: 'm', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 7, completion_tokens: 2, total_tokens: 9, cost: 0.0123 } });
     const fake: FetchLike = async (_input, init) => {
-      seen.push(String(init?.body ?? ''));
+      seen.push(bodyOf(init));
       return sse([chatChunk('done', null), costChunk, '[DONE]']);
     };
     const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://openrouter.ai/api/v1', fetch: fake });
@@ -86,7 +90,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
   it('PD-MONITOR-001: an endpoint whose protocol defines no cost field is asked nothing, and its usage carries none', async () => {
     const seen: string[] = [];
     const fake: FetchLike = async (_input, init) => {
-      seen.push(String(init?.body ?? ''));
+      seen.push(bodyOf(init));
       return sse([chatChunk('done', 'stop', { prompt_tokens: 3, completion_tokens: 1 }), '[DONE]']);
     };
     const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://api.openai.com/v1', fetch: fake });
@@ -99,7 +103,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
   it('REQ-ORCH-010: the strict rung leaves as a schema, and a rung the SDK drops is read back as a rejection', async () => {
     const seen: string[] = [];
     const fake: FetchLike = async (_input, init) => {
-      seen.push(String(init?.body ?? ''));
+      seen.push(bodyOf(init));
       return sse([chatChunk('{"intent":"question"}', 'stop', { prompt_tokens: 3, completion_tokens: 4 }), '[DONE]']);
     };
     const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: fake });
@@ -121,7 +125,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
   it('responses: the same base URL reaches <base>/responses through the vendor constructor; a 401 keeps its status and body', async () => {
     const seen: string[] = [];
     const fake: FetchLike = async (input, init) => {
-      seen.push(`${init?.method ?? 'GET'} ${String(input)} auth=${new Headers(init?.headers).get('authorization')}`);
+      seen.push(`${init?.method ?? 'GET'} ${urlOf(input)} auth=${new Headers(init?.headers).get('authorization')}`);
       return new Response(JSON.stringify({ error: { message: 'bad key for acme', type: 'invalid_request_error' } }), { status: 401, headers: { 'content-type': 'application/json' } });
     };
     const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: fake });
@@ -268,7 +272,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
 describe('model — a system message reaches the provider (spike 6, live half: the SDK refuses one inside `messages`)', () => {
   it('chat: the system text travels as instructions and lands in the request body; the stream still maps across', async () => {
     const seen: string[] = [];
-    const fake: FetchLike = async (_input, init) => { seen.push(String(init?.body ?? '')); return sse([chatChunk('ok', null), chatChunk(null, 'stop', { prompt_tokens: 3, completion_tokens: 1 }), '[DONE]']); };
+    const fake: FetchLike = async (_input, init) => { seen.push(bodyOf(init)); return sse([chatChunk('ok', null), chatChunk(null, 'stop', { prompt_tokens: 3, completion_tokens: 1 }), '[DONE]']); };
     const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: fake });
     const req = request('chat', { messages: [{ role: 'system', content: [{ kind: 'text', text: 'You are the orchestrator.' }] }, { role: 'user', content: [{ kind: 'text', text: 'hi' }] }] });
     const { parts, error } = await collect(client.stream(req));
@@ -290,7 +294,7 @@ describe('model — a replayed tool call always carries a mapping (REQ-TOOLS-032
    */
   const replayed = async (args: string) => {
     const seen: string[] = [];
-    const fake: FetchLike = async (_input, init) => { seen.push(String(init?.body ?? '')); return sse([chatChunk('ok', null), chatChunk(null, 'stop', { prompt_tokens: 3, completion_tokens: 1 }), '[DONE]']); };
+    const fake: FetchLike = async (_input, init) => { seen.push(bodyOf(init)); return sse([chatChunk('ok', null), chatChunk(null, 'stop', { prompt_tokens: 3, completion_tokens: 1 }), '[DONE]']); };
     const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: fake });
     const req = request('chat', {
       messages: [

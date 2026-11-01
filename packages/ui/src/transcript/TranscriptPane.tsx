@@ -608,6 +608,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
         // pool binds a WINDOW of rows to slots, so moving past the bound span has to scroll before it can
         // select — which the plain list Part AA wrote it against never had to do.
         if (e.key === 'c' && (e.ctrlKey || e.metaKey)) {
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- `querySelector` answers an `Element`, which has no `dataset`.
           const key = (e.currentTarget.querySelector('.row--current') as HTMLElement | null)?.dataset['rowKey'];
           const d = display.find((x) => x.key === key);
           if (d !== undefined) { void copyRowEntry(rowMenuEntries(d)[0]!, onAcknowledge); e.preventDefault(); }

@@ -62,7 +62,7 @@ export function renderUnavailability(verdict: AvailabilityVerdict): string {
   return verdict.remediation === '' ? verdict.reason : `${verdict.reason}\n${verdict.remediation}`;
 }
 
-const AVAILABLE: AvailabilityVerdict = Object.freeze({ available: true, backend: 'unavailable' as BackendName, reason: '', remediation: '' });
+const AVAILABLE: AvailabilityVerdict = Object.freeze({ available: true, backend: 'unavailable', reason: '', remediation: '' });
 
 const unavailable = (backend: BackendName, reason: string, remediation: string): AvailabilityVerdict => ({ available: false, backend, reason, remediation });
 

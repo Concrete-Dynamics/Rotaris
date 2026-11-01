@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, type Publisher, type ToolPort } from '../index.js';
 import { ANSWER_REPROMPT } from './run.js';
 import { SUPERVISOR_DEFAULTS, type LoopActivation, type LoopClassifier } from './supervisor.js';
 
-const HOST = mintMachineId('0000000000000000000000000000000d') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000d');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 const NONE: Publisher = { increment: () => undefined, snapshot: () => undefined };
 

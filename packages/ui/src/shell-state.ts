@@ -12,11 +12,11 @@ import { isViewId, LIBRARY_TABS, STARTUP_VIEW, type AnalysisPass, type ViewId } 
  */
 export interface ShellState {
   readonly activeView: ViewId;
-  switchView(id: string): void;
+  switchView: (id: string) => void;
   /** A category the Settings view should select next (a notice action, REQ-NOTIFY-223); consumed once. */
   readonly settingsCategory: string | null;
-  openSettings(category: string): void;
-  takeSettingsCategory(): void;
+  openSettings: (category: string) => void;
+  takeSettingsCategory: () => void;
   /**
    * Part AS — ADR-0064 / REQ-WORKSPACE-106: the project setup dialog is a WINDOW-level surface, so its
    * open state lives here rather than inside a view; navigating away does not dismiss a decision the
@@ -25,9 +25,9 @@ export interface ShellState {
    * difference — a manually opened dialog is never auto-closed.
    */
   readonly projectSetup: 'auto' | 'manual' | null;
-  openProjectSetup(): void;
-  autoOpenProjectSetup(): void;
-  closeProjectSetup(): void;
+  openProjectSetup: () => void;
+  autoOpenProjectSetup: () => void;
+  closeProjectSetup: () => void;
   /**
    * REQ-LIBRARY-102 / REQ-SHELL-115 (Part X): a Library tab a notice action asked for, consumed once — the same
    * shape `settingsCategory` takes for REQ-NOTIFY-223. REQ-LIBRARY-103 closes the tab names and says activating
@@ -41,30 +41,30 @@ export interface ShellState {
    */
   readonly libraryArtifactId: string | null;
   /** `focusId` names the proposal to focus on the proposals tab, or the artifact to inspect on the artifacts tab. */
-  openLibrary(tab: string, focusId?: string): void;
-  takeLibraryTab(): void;
-  takeLibraryProposalId(): void;
-  takeLibraryArtifactId(): void;
+  openLibrary: (tab: string, focusId?: string) => void;
+  takeLibraryTab: () => void;
+  takeLibraryProposalId: () => void;
+  takeLibraryArtifactId: () => void;
   /** REQ-CONFIG-286/287: the unsaved-settings guard; asked before a view switch away from Settings while dirty. */
   readonly navigationGuard: ((next: ViewId) => Promise<boolean>) | null;
-  setNavigationGuard(guard: ((next: ViewId) => Promise<boolean>) | null): void;
+  setNavigationGuard: (guard: ((next: ViewId) => Promise<boolean>) | null) => void;
   /** REQ-SHELL-125: the accepted launch dialog's choices, held for the composer's NEXT submission and consumed by it. */
   readonly launchOptions: LaunchChoices | null;
-  setLaunchOptions(options: LaunchChoices | null): void;
-  takeLaunchOptions(): LaunchChoices | null;
+  setLaunchOptions: (options: LaunchChoices | null) => void;
+  takeLaunchOptions: () => LaunchChoices | null;
   /** REQ-MONITOR-042 (Part R): ONE selected agent for every surface — the Workspace sidebar tree, the Overview card, Mission, the inspector; `run` names the run-level selection (REQ-MONITOR-274), null nothing. */
   readonly selectedAgentId: string | null;
-  selectAgent(id: string | null): void;
+  selectAgent: (id: string | null) => void;
   /** REQ-SHELL-051 / REQ-SHELL-054 (Part W): the two application-modal dialogs; at most one is open, the other closes first. */
   readonly paletteOpen: boolean;
   readonly helpOpen: boolean;
-  openPalette(): void;
-  closePalette(): void;
-  openKeyboardHelp(): void;
-  closeKeyboardHelp(): void;
+  openPalette: () => void;
+  closePalette: () => void;
+  openKeyboardHelp: () => void;
+  closeKeyboardHelp: () => void;
   /** REQ-SHELL-049's Ctrl+Return: the composer registers its submit and whether its send control is enabled; null while unmounted. */
   readonly composer: ComposerRegistration | null;
-  registerComposer(registration: ComposerRegistration | null): void;
+  registerComposer: (registration: ComposerRegistration | null) => void;
   /**
    * REQ-SHELL-049's Ctrl+F (N71, 2026-10-13): the transcript pane registers the opener of its search panel (REQ-CHAT-074)
    * while it is mounted; null while unmounted. The panel's open state stays the pane's — this is the way in, the same
@@ -72,7 +72,7 @@ export interface ShellState {
    * no longer binds the chord itself.
    */
   readonly transcriptSearch: (() => void) | null;
-  registerTranscriptSearch(open: (() => void) | null): void;
+  registerTranscriptSearch: (open: (() => void) | null) => void;
   /**
    * Window-level Escape on the Workspace view, in REQ-CHAT-002's fixed order: the slash suggestion popup (REQ-CHAT-002/026),
    * then the transcript search panel, then both compact overlay drawers. REQ-SHELL-055 names only the last two, in that order;
@@ -82,7 +82,7 @@ export interface ShellState {
    * `docs/archive/defects/window-level-escape-skips-the-open-transcript-search-panel.md`).
    */
   readonly overlays: Readonly<Record<OverlayKind, OverlayCloser | null>>;
-  registerOverlay(kind: OverlayKind, close: OverlayCloser | null): void;
+  registerOverlay: (kind: OverlayKind, close: OverlayCloser | null) => void;
   /**
    * REQ-CHAT-034 (ADR-0063): a counter the Settings Skills tab bumps after a rescan or a hand-loaded skill, so
    * the composer's catalogue lists **exactly** the rescanned set. It lives in this store because the two
@@ -93,7 +93,7 @@ export interface ShellState {
    * skill need no separate signal and nothing here can go stale against what the run host actually holds.
    */
   readonly skillsRevision: number;
-  skillsChanged(): void;
+  skillsChanged: () => void;
   /**
    * REQ-LIBRARY-125/126 with PD-LIBRARY-002: whether an improvement analysis is running anywhere, and which
    * pass it is. It lives here because the two indicators that show it sit in two different surfaces — the
@@ -102,7 +102,7 @@ export interface ShellState {
    * (REQ-LIBRARY-126) is exactly `active`, and shutdown's last publication clears it (REQ-LIBRARY-127).
    */
   readonly improvementAnalysis: ImprovementAnalysisActivity;
-  setImprovementAnalysis(activity: ImprovementAnalysisActivity): void;
+  setImprovementAnalysis: (activity: ImprovementAnalysisActivity) => void;
 }
 
 export interface ImprovementAnalysisActivity {

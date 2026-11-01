@@ -1,5 +1,5 @@
 import { parseDocument, isMap, isSeq, isScalar, isNode, type Document, type Node, type YAMLMap, type YAMLSeq } from 'yaml';
-import { err, ok, type Result } from '@rotaris/kernel';
+import { err, ok, textOf, type Result } from '@rotaris/kernel';
 
 /**
  * ADR-0036 alternative B: configuration is parsed to the document tree over a tri-state model — a key
@@ -80,5 +80,5 @@ export function vocabularyText(node: Node | null | undefined): string | null {
   const v = node.value;
   if (typeof v === 'boolean') return v ? 'true' : 'false';
   if (v === null || v === undefined) return null;
-  return String(v);
+  return textOf(v);
 }

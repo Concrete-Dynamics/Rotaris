@@ -18,7 +18,7 @@ import type { DisplayRow } from './types.js';
 function rows(total: number): TranscriptRow[] {
   return Array.from({ length: total }, (_, i) => {
     const at = new Date(Date.UTC(2026, 8, 6, 9, 0, Math.min(59, i % 60), 0)).toISOString();
-    return { index: i, at, ts: at.slice(11, 19), persona: 'orchestrator', name: 'orchestrator', settled: true, kind: i === 0 ? 'user' : 'agent', body: `row ${i}` } as unknown as TranscriptRow;
+    return { index: i, at, ts: at.slice(11, 19), persona: 'orchestrator', name: 'orchestrator', settled: true, kind: i === 0 ? 'user' : 'agent', body: `row ${i}` };
   });
 }
 
@@ -103,7 +103,7 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
   describe('the bounded form, with the earliest-changed row read off the arrays', () => {
     const tool = (i: number, status: string, settled: boolean): TranscriptRow => {
       const at = new Date(Date.UTC(2026, 8, 6, 9, 1, Math.min(59, i % 60), 0)).toISOString();
-      return { index: i, at, ts: at.slice(11, 19), persona: 'orchestrator', name: 'orchestrator', settled, kind: 'tool', body: 'read_file', toolName: 'read_file', toolStatus: status, callKey: `call-${i}`, startedAt: at, input: '{"path":"README.md"}', output: settled ? `read ${i}` : undefined } as unknown as TranscriptRow;
+      return { index: i, at, ts: at.slice(11, 19), persona: 'orchestrator', name: 'orchestrator', settled, kind: 'tool', body: 'read_file', toolName: 'read_file', toolStatus: status, callKey: `call-${i}`, startedAt: at, input: '{"path":"README.md"}', output: settled ? `read ${i}` : undefined };
     };
 
     it('finds where the update began from the row objects the replica kept, and refuses the shapes it cannot bound', () => {
@@ -112,14 +112,14 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
       // An append: the earlier rows are the same objects, so the change begins at the first new one.
       expect(changedFrom(o, { ...o, rows: [...base, ...rows(13).slice(12)] })).toBe(12);
       // The last row replaced in place (a growth tick, a settle): the change begins at it.
-      const grown = [...base.slice(0, 11), { ...base[11]!, body: 'row 11 grew' } as TranscriptRow];
+      const grown = [...base.slice(0, 11), { ...base[11]!, body: 'row 11 grew' }];
       expect(changedFrom(o, { ...o, rows: grown })).toBe(11);
       // An earlier row replaced: the change begins there, whatever follows.
-      const earlier = [...base.slice(0, 4), { ...base[4]!, body: 'row 4 changed' } as TranscriptRow, ...base.slice(5)];
+      const earlier = [...base.slice(0, 4), { ...base[4]!, body: 'row 4 changed' }, ...base.slice(5)];
       expect(changedFrom(o, { ...o, rows: earlier })).toBe(4);
       // Rows removed, older rows placed above, or nothing but another input changed: the whole window.
       expect(changedFrom(o, { ...o, rows: base.slice(0, 10) })).toBeNull();
-      expect(changedFrom(o, { ...o, rows: [...rows(3).map((r) => ({ ...r, index: r.index - 3 }) as TranscriptRow), ...base] })).toBeNull();
+      expect(changedFrom(o, { ...o, rows: [...rows(3).map((r) => ({ ...r, index: r.index - 3 })), ...base] })).toBeNull();
       expect(changedFrom(o, { ...o, rows: [...base], running: true })).toBeNull();
       expect(changedFrom(o, { ...o, rows: base })).toBeNull();
     });
@@ -142,8 +142,8 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
       step([...held.slice(0, 12), tool(12, 'ok', true)], true);                             // it settles in place
       step([...held, tool(13, 'running', false)], true);                                    // a second call, folding with the first
       step([...held.slice(0, 13), tool(13, 'ok', true), ...rows(15).slice(14)], true);      // it settles and an agent row lands
-      step([...held.slice(0, 14), { ...held[14]!, body: 'grown' } as TranscriptRow], true); // the last row grows
-      step([...rows(3).map((r) => ({ ...r, index: r.index - 3 }) as TranscriptRow), ...held], false); // older rows paged in above
+      step([...held.slice(0, 14), { ...held[14]!, body: 'grown' }], true); // the last row grows
+      step([...rows(3).map((r) => ({ ...r, index: r.index - 3 })), ...held], false); // older rows paged in above
       step(held.slice(0, 10), false);                                                       // a truncation
       step([...held, ...rows(11).slice(10)], true);                                         // appending again after it
       // The run ends. Until the 2026-09-29 round this was "another input" and projected the whole window; `settle` reads
@@ -180,7 +180,7 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
     // position even when the previous array's row there was GONE, and the bounded form kept the removed row.
     const indices = (display: readonly DisplayRow[]) => display.map((d) => (d.shape === 'row' ? `row:${d.row.index}` : d.shape === 'group' ? `group:${d.members.map((m) => m.index).join(',')}` : d.shape));
     // Negative indices are rows paged in above (REQ-CHAT-165); they take row 0's instants and keep their own index.
-    const said = (i: number, name: string, over: Partial<TranscriptRow> = {}): TranscriptRow => ({ ...rows(Math.max(0, i) + 1)[Math.max(0, i)]!, index: i, body: `row ${i}`, name, persona: 'coder', kind: 'agent', ...over } as TranscriptRow);
+    const said = (i: number, name: string, over: Partial<TranscriptRow> = {}): TranscriptRow => ({ ...rows(Math.max(0, i) + 1)[Math.max(0, i)]!, index: i, body: `row ${i}`, name, persona: 'coder', kind: 'agent', ...over });
 
     it('REQ-CHAT-069: switching "This task" from one agent to another draws the second agent\'s rows and none of the first\'s', () => {
       const all = [rows(1)[0]!, said(1, 'X'), said(2, 'Y'), said(3, 'Y')];
@@ -214,7 +214,7 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
       expect(indices(display)).not.toContain('row:5');
       expect(display).toEqual(projectDisplay(next));
       // A row replaced at its own index, with a later one removed behind it, is still bounded — and still right.
-      const replaced = { ...next, rows: [...next.rows.slice(0, 7), { ...next.rows[7]!, body: 'row 8 changed' } as TranscriptRow, ...next.rows.slice(9)] };
+      const replaced = { ...next, rows: [...next.rows.slice(0, 7), { ...next.rows[7]!, body: 'row 8 changed' }, ...next.rows.slice(9)] };
       expect(changedFrom(next, replaced)).toBe(8);
       expect(projector.project(replaced).display).toEqual(projectDisplay(replaced));
       expect(projector.incrementals).toBe(1);
@@ -225,7 +225,7 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
       const projector = createProjector();
       const o = options({ rows: held });
       expect(indices(projector.project(o).display)).toEqual(['row:0', 'group:1,2']);
-      const prose = { ...o, rows: [held[0]!, held[1]!, { ...rows(3)[2]!, kind: 'agent', body: 'now prose' } as TranscriptRow] };
+      const prose = { ...o, rows: [held[0]!, held[1]!, { ...rows(3)[2]!, kind: 'agent', body: 'now prose' }] };
       expect(changedFrom(o, prose)).toBe(2);
       expect(indices(projector.project(prose).display)).toEqual(['row:0', 'row:1', 'row:2']);
       expect(projector.project(prose).display).toEqual(projectDisplay(prose));
@@ -235,7 +235,7 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
     // the prefix boundary could pass `from` when the rows at and after it were dropped. Both drew something the
     // whole-state form does not, on shapes the bounded form was taking.
     it('REQ-CHAT-048 / PD-CHAT-004: an append after a duplicate live reasoning row joins the run that row no longer interrupts', () => {
-      const Y = (i: number, over: Partial<TranscriptRow>) => ({ ...said(i, 'Y'), ...over } as TranscriptRow);
+      const Y = (i: number, over: Partial<TranscriptRow>) => ({ ...said(i, 'Y'), ...over });
       const held = [
         rows(1)[0]!,
         Y(1, { kind: 'thinking', streamId: 's1', durationMs: 5, body: 'same' }),
@@ -258,7 +258,7 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
     // appending agent's OWN previous thinking row, exactly as the whole-state loop carries it.
     it('REQ-CHAT-048: an agent\'s repeat appended after another agent\'s reasoning projects to zero rows in the bounded form too', () => {
       const think = (i: number, name: string, body: string, over: Partial<TranscriptRow> = {}) =>
-        said(i, name, { kind: 'thinking', streamId: `s${i}`, body, ...over } as Partial<TranscriptRow>);
+        said(i, name, { kind: 'thinking', streamId: `s${i}`, body, ...over });
       const held = [rows(1)[0]!, think(1, 'X', 'plan'), said(2, 'Y'), think(3, 'Y', 'other'), said(4, 'X'), said(5, 'Y')];
       for (const groupTools of [false, true]) {
         const projector = createProjector();
@@ -303,7 +303,7 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
       const O = { persona: 'orchestrator', name: 'orchestrator' };
       const C = { persona: 'coding-agent', name: 'wave3-verify-result' };
       const make = (index: number, who: object, over: Partial<TranscriptRow>): TranscriptRow =>
-        ({ index, at: at(index), ts: at(index).slice(11, 19), body: `row ${index}`, kind: 'agent', settled: true, ...who, ...over }) as TranscriptRow;
+        ({ index, at: at(index), ts: at(index).slice(11, 19), body: `row ${index}`, kind: 'agent', settled: true, ...who, ...over });
       const think = (i: number, who: object, settled: boolean) => make(i, who, { kind: 'thinking', settled, body: `thought ${i}`, ...(settled ? { durationMs: 1709 } : {}) });
       const call = (i: number, who: object, name: string, settled: boolean) =>
         make(i, who, { kind: 'tool', toolName: name, body: name, callKey: `c${i}`, settled, toolStatus: settled ? 'ok' : 'running', startedAt: at(i), ...(settled ? { durationMs: 5, output: 'out' } : {}) });
@@ -363,12 +363,12 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
         const name = pick(names);
         switch (pick(['user', 'agent', 'tool', 'tool', 'tool', 'thinking', 'thinking', 'diff', 'system'])) {
           case 'user': return { ...rows(1)[0]!, index: i };
-          case 'system': return { ...said(i, '', { kind: 'system' }), name: undefined, persona: undefined } as unknown as TranscriptRow;
+          case 'system': return { ...said(i, '', { kind: 'system' }), name: undefined, persona: undefined };
           case 'thinking': {
             const settled = rand() < 0.5;
-            return said(i, name, { kind: 'thinking', streamId: `s${i}`, settled, body: `thought ${Math.floor(rand() * 2)}`, ...(settled && rand() < 0.5 ? { durationMs: 5 } : {}) } as Partial<TranscriptRow>);
+            return said(i, name, { kind: 'thinking', streamId: `s${i}`, settled, body: `thought ${Math.floor(rand() * 2)}`, ...(settled && rand() < 0.5 ? { durationMs: 5 } : {}) });
           }
-          case 'diff': return said(i, name, { kind: 'diff', body: `a.md +${Math.floor(rand() * 2)} -0`, ...(rand() < 0.7 ? { callKey: `call-${Math.floor(rand() * 3)}` } : {}) } as Partial<TranscriptRow>);
+          case 'diff': return said(i, name, { kind: 'diff', body: `a.md +${Math.floor(rand() * 2)} -0`, ...(rand() < 0.7 ? { callKey: `call-${Math.floor(rand() * 3)}` } : {}) });
           case 'tool': return { ...tool(i, rand() < 0.5 ? 'running' : 'ok', rand() < 0.5), name, persona: 'coder' };
           default: return said(i, name);
         }
@@ -382,7 +382,7 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
         const top = all[all.length - 1]!.index;
         const r = rand();
         if (r < 0.4) all = [...all, make(top + 1)];
-        else if (r < 0.55) { const at = all.length - 1 - Math.floor(rand() * Math.min(4, all.length - 1)); all = [...all.slice(0, at), { ...all[at]!, settled: true, toolStatus: 'ok', body: `${all[at]!.body}+` } as TranscriptRow, ...all.slice(at + 1)]; }
+        else if (r < 0.55) { const at = all.length - 1 - Math.floor(rand() * Math.min(4, all.length - 1)); all = [...all.slice(0, at), { ...all[at]!, settled: true, toolStatus: 'ok', body: `${all[at]!.body}+` }, ...all.slice(at + 1)]; }
         else if (r < 0.62 && all.length > 1) { const at = Math.max(1, all.length - 1 - Math.floor(rand() * 3)); all = [...all.slice(0, at), make(all[at]!.index), ...all.slice(at + 1)]; }
         else if (r < 0.72 && all.length > 3) {
           const from = all[Math.max(1, all.length - 1 - Math.floor(rand() * 5))]!.index;
@@ -390,7 +390,7 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
         }
         else if (r < 0.85) scope = rand() < 0.3 ? null : pick(agents);
         else if (r < 0.9 && all.length > 4) all = all.slice(0, all.length - 2);
-        else if (r < 0.93) { const bottom = all[0]!.index; all = [{ ...make(bottom - 1), index: bottom - 1 } as TranscriptRow, ...all]; }
+        else if (r < 0.93) { const bottom = all[0]!.index; all = [{ ...make(bottom - 1), index: bottom - 1 }, ...all]; }
         else all = [...all, make(top + 1), make(top + 2)];
         // A run beginning or ending, beside whatever else the step did (REQ-CHAT-049; the 2026-09-29 round bounds it).
         if (rand() < 0.08) running = !running;

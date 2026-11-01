@@ -3,6 +3,7 @@ import { EXTERNAL_CLAUDE_CODE_SCOPE, type HookAgentId, type HookInvocation, type
 import type { Result } from '@rotaris/kernel';
 import { agentOn, hookOn, type ExternalPolicy } from './policy.js';
 import type { GateResult } from './trust.js';
+import { textOf } from '@rotaris/kernel';
 
 /**
  * What the Hooks tab and the review dialog work from (REQ-HOOKS-103..105, REQ-HOOKS-137, REQ-CONFIG-354..359):
@@ -108,11 +109,11 @@ export function invocationsOf(timeline: readonly TimelineLike[], withheld: reado
     if (t.name !== 'hook_run') continue;
     let m: Record<string, unknown> = {};
     try { m = JSON.parse(t.metadata) as Record<string, unknown>; } catch { /* an unreadable entry is shown by its message alone */ }
-    const hookId = String(m['hook_id'] ?? '');
+    const hookId = textOf(m['hook_id'] ?? '');
     out.push({
-      hookId, name: String(m['hook_name'] ?? t.actor), event: String(m['event'] ?? ''), toolName: String(m['tool_name'] ?? ''),
+      hookId, name: textOf(m['hook_name'] ?? t.actor), event: textOf(m['event'] ?? ''), toolName: textOf(m['tool_name'] ?? ''),
       exitCode: typeof m['exit_code'] === 'number' ? m['exit_code'] : -1, durationMs: typeof m['duration_ms'] === 'number' ? m['duration_ms'] : 0,
-      timedOut: m['timed_out'] === true, blocked: m['blocked'] === true, stdout: String(m['stdout'] ?? ''), stderr: String(m['stderr'] ?? ''),
+      timedOut: m['timed_out'] === true, blocked: m['blocked'] === true, stdout: textOf(m['stdout'] ?? ''), stderr: textOf(m['stderr'] ?? ''),
       withheld: false, switchedOff: false, reason: '',
     });
     lastOf.set(hookId, out.length - 1);

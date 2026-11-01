@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, textOf, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, RESIDENT_ROW_CAP, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { SessionSnapshot } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRef, type ScriptedCall } from '@rotaris/model';
@@ -11,7 +11,7 @@ import { conversationOf } from './record.js';
 import { persistAttachments } from '../attachments.js';
 import { childModelKeys, entryModelKeys } from '../autopsy.js';
 
-const HOST = mintMachineId('0000000000000000000000000000000d') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000d');
 const ref = (providerId: string, modelId: string): ModelRef => ({ providerId, modelId, dialect: 'chat' });
 const A1 = ref('a', 'a1');
 const B1 = ref('b', 'b1');
@@ -781,7 +781,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     ]);
     // REQ-MONITOR-194: a1, excluded and not the waiting pair, was chosen in c1's wait, which cleared its exclusion; c1 stays excluded.
     const exhausted = dal.timelineOf(sid).filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
-    expect(exhausted.map((m) => `${m['provider']}/${m['model']}${m['cleared'] === true ? ' cleared' : ''}`)).toEqual(['a/a1', 'c/c1', 'a/a1 cleared']);
+    expect(exhausted.map((m) => `${textOf(m['provider'])}/${textOf(m['model'])}${m['cleared'] === true ? ' cleared' : ''}`)).toEqual(['a/a1', 'c/c1', 'a/a1 cleared']);
     // A reload holds the same memory: c1 → a1 alone, a1 eligible, c1 excluded.
     const resolve = (key: string) => { const e = catalogue.find((c) => c.key === key); return e ? { model: e.model, thinking: e.thinking } : null; };
     const memory = ResilienceMemory.rehydrate(dal.timelineOf(sid), resolve);

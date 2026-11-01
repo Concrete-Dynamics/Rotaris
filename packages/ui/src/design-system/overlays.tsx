@@ -216,7 +216,7 @@ export function PopoverMenu({ value, icon, ariaLabel, options, onChoose, classNa
 
   const currentIndex = Math.max(0, options.findIndex((o) => o.value === value));
   /** The strip shell reads the display map over the SAME value the chip shows — never a second source. */
-  const triggerText = strip?.labels !== undefined && strip.labels[value] !== undefined ? strip.labels[value]! : value;
+  const triggerText = strip?.labels !== undefined && strip.labels[value] !== undefined ? strip.labels[value] : value;
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (!open) {

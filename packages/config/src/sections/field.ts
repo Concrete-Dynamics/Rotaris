@@ -198,7 +198,7 @@ export class FieldReader {
     if (map === null) return null;
     const out: Record<string, readonly string[]> = {};
     for (const [k, v] of Object.entries(map)) {
-      if (Array.isArray(v) && v.every((x) => typeof x === 'string')) out[k] = v as string[];
+      if (Array.isArray(v) && v.every((x) => typeof x === 'string')) out[k] = v;
       else this.error(`${key}.${k}`, `must be a list of strings, got ${typeName(v)}`);
     }
     return out;

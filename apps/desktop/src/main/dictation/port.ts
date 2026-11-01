@@ -33,6 +33,7 @@ export function audioExtension(mimeType: string): string {
     case 'audio/ogg': return 'ogg';
     case 'audio/mp4': return 'm4a';
     case 'audio/wav': return 'wav';
+    case undefined:
     default: return 'audio';
   }
 }

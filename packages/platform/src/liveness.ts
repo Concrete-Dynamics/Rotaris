@@ -48,7 +48,7 @@ export function isLockLive(lock: Partial<LockRecord> | null | undefined, thisMac
     typeof lock.acquired_at === 'string' && lock.acquired_at.length > 0;
   if (!wellFormed) return true;
   if (lock.host !== thisMachine) return true;
-  return probe(lock.pid!) === 'alive';
+  return probe(lock.pid) === 'alive';
 }
 
 export function isLockForeign(lock: Partial<LockRecord> | null | undefined, thisMachine: MachineId): boolean {

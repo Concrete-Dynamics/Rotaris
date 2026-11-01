@@ -185,7 +185,7 @@ describe('chords — REQ-SHELL-057, REQ-SHELL-058, REQ-SHELL-165', () => {
 
   it('resolves an event to at most one command and ignores an unbound chord (REQ-SHELL-165: nothing compensates)', () => {
     expect(commandForEvent(chord('k', { ctrlKey: true }))?.id).toBe('palette.open');
-    expect(commandForEvent(chord('3', { ctrlKey: true }))?.id).toBe(`view.${PRIMARY_VIEWS[2]!.id}`);
+    expect(commandForEvent(chord('3', { ctrlKey: true }))?.id).toBe(`view.${PRIMARY_VIEWS[2].id}`);
     expect(commandForEvent(chord(',', { ctrlKey: true }))?.id).toBe('settings.open');
     // Part AL2: Ctrl+Shift+T is bound now (REQ-SHELL-080); Ctrl+T alone stays unbound.
     expect(commandForEvent(chord('T', { ctrlKey: true, shiftKey: true }))?.id).toBe('terminal.open');

@@ -100,7 +100,45 @@ export default tseslint.config(
       // `pnpm test:coverage`'s report (R-091, hardening F1): generated HTML and lcov, never linted.
       'coverage/**'],
   },
-  ...tseslint.configs.recommended,
+  // Type-aware (R-091, hardening.md §3.5 row 1): every TypeScript file is parsed against its project, so the rules
+  // that need types (a dropped promise, a switch that misses a member) run in the gate. The stylistic set stays out.
+  ...tseslint.configs.recommendedTypeChecked,
+  // The JavaScript files (the tools' and skills' `.mjs`, this file) belong to no project: they keep the untyped
+  // `recommended` rules and are type-checked by nothing here (E2's `checkJs` brings them in).
+  { files: ['**/*.{js,mjs,cjs}'], ...tseslint.configs.disableTypeChecked },
+  {
+    files: ['**/*.{ts,tsx,mts,cts}'],
+    languageOptions: {
+      parserOptions: {
+        projectService: {
+          // The root `tools/*.test.ts` are in no tsconfig's `include` yet: they are linted against the root
+          // tsconfig's options until E2 (typecheck coverage) brings them into a project.
+          allowDefaultProject: ['tools/*.test.ts'],
+          defaultProject: 'tsconfig.json',
+          maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 64,
+        },
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+      '@typescript-eslint/await-thenable': 'error',
+      '@typescript-eslint/switch-exhaustiveness-check': ['error', { considerDefaultExhaustiveForUnions: false }],
+      // A rejection handed on as it arrived (a caught `unknown`, a promise's own reason) is passed through unchanged.
+      '@typescript-eslint/prefer-promise-reject-errors': ['error', { allowThrowingUnknown: true }],
+      // Off, measured (hardening.md §3.5 row 1): the first type-aware run raised 308, and the sampled ones in the run
+      // loop are TypeScript's narrowing kept across an `await` or a callback that mutates the value (a stop requested
+      // while a turn awaited, a timeout's flag set by its timer), where removing the check changes behaviour. Turning
+      // it on is the `strict-type-checked` plan's, which reads each site (hardening.md §4).
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+      // Off: an `async` function with no `await` is how this codebase implements a promise-returning port with a
+      // synchronous body (the fakes and stubs behind every `ToolPort`, `ModelClient` and store reader, and the
+      // command handlers that return a value or throw): `async` turns its throw into a rejection, which a plain
+      // function returning `Promise.resolve(…)` would not. The first type-aware run counted 954 such functions.
+      '@typescript-eslint/require-await': 'off',
+    },
+  },
   {
     files: ['**/*.{ts,tsx,js,mjs,cjs}'],
     languageOptions: {
@@ -121,6 +159,20 @@ export default tseslint.config(
       'boundaries/no-unknown-files': 'off',
       // Electron is imported only in the composition roots and shell's adapters.
       'rotaris/no-electron-outside-roots': 'error',
+    },
+  },
+  {
+    // The `any`-flow rules hold product code, not tests: vitest's asymmetric matchers (`expect.any`,
+    // `expect.stringContaining`) are typed `any`, a test reads a stored record back through `JSON.parse`, and the
+    // tools' tests import the tools' untyped `.mjs`, so every value they take from one is `any` until E2 (typecheck
+    // coverage) brings `checkJs` over the `.mjs` (hardening.md §3.5 row 4).
+    files: ['**/*.test.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
     },
   },
   {

@@ -53,6 +53,7 @@ function compile(files: readonly string[]) {
     getCurrentDirectory: () => root,
     getCompilationSettings: () => options,
     getDefaultLibFileName: (o) => ts.getDefaultLibFilePath(o),
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- `ts.sys`'s members are closures over Node's file system, read no `this`, and are handed to a host as TypeScript's own examples do.
     fileExists: ts.sys.fileExists, readFile: ts.sys.readFile, readDirectory: ts.sys.readDirectory, directoryExists: ts.sys.directoryExists, getDirectories: ts.sys.getDirectories,
   };
   const service = ts.createLanguageService(host, ts.createDocumentRegistry());

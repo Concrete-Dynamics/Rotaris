@@ -194,11 +194,11 @@ function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConf
    */
   const memoryTools = { list: CODE_INTELLIGENCE_MEMORY_GATE[0], read: CODE_INTELLIGENCE_MEMORY_GATE[1] };
   const list: ToolExecutor[] = [
-    readFileTool(state, fence, memoryTools) as ToolExecutor, writeFileTool(state, fence) as ToolExecutor, haetReadTool(state, fence) as ToolExecutor,
-    haetEditTool(state, fence, 'haet_edit') as ToolExecutor, haetEditTool(state, fence, 'haet') as ToolExecutor,
-    grepTool(fence) as ToolExecutor, globTool(fence) as ToolExecutor, gitReadTool(root) as ToolExecutor, todoExecutor,
+    readFileTool(state, fence, memoryTools), writeFileTool(state, fence), haetReadTool(state, fence),
+    haetEditTool(state, fence, 'haet_edit'), haetEditTool(state, fence, 'haet'),
+    grepTool(fence), globTool(fence), gitReadTool(root), todoExecutor,
     // ADR-0023: the policy is read per call from the saved files (REQ-SANDBOX-038); the gate resolved any `ask` before execution (REQ-TOOLS-091).
-    fetchTool({ policy: deps.egress(root), timers: deps.clocks.timers }) as ToolExecutor,
+    fetchTool({ policy: deps.egress(root), timers: deps.clocks.timers }),
   ];
   /*
    * ADR-0022's terminal enforcement point. REQ-SANDBOX-093: the specification is resolved AFRESH for
@@ -216,7 +216,7 @@ function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConf
       return { spec: { mode: c.mode, executionRoot, writableRoots: c.writableRoots, allowNetwork: c.allowNetwork }, verdict: c.verdict ?? { available: false, backend: 'unavailable', reason: '', remediation: '' } };
     },
   };
-  if (deps.terminal) list.push(terminalTool(deps.terminal, { ...TERMINAL_DEFAULTS, commandTimeoutS: runtime.shellCommandTimeoutS }, confinement, attribution) as ToolExecutor);
+  if (deps.terminal) list.push(terminalTool(deps.terminal, { ...TERMINAL_DEFAULTS, commandTimeoutS: runtime.shellCommandTimeoutS }, confinement, attribution));
   // The seam wraps here, before the map is keyed, so PD-TOOLS-004's `publicTool` identity test still meets the one object.
   const seam = deps.throwOnAbort ?? NO_NAMES;
   return new Map(list.map((e) => [e.name, throwOnAbort(seam, e)]));
@@ -243,7 +243,7 @@ function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConf
  * batch call is built. Exported so that shape can be asserted; the closure it replaced could not be.
  */
 export function toolSpec(e: ToolExecutor): { name: string; description: string; parameters: Record<string, unknown> } {
-  return { name: e.name, description: e.description, parameters: (e.parameters ? { ...e.parameters } : z.toJSONSchema(e.schema, { io: 'input' })) as Record<string, unknown> };
+  return { name: e.name, description: e.description, parameters: (e.parameters ? { ...e.parameters } : z.toJSONSchema(e.schema, { io: 'input' })) };
 }
 
 export function isEntryPort(ctx: Pick<ToolPortContext, 'parentId' | 'depth'>): boolean {
@@ -398,9 +398,9 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // Part Y (REQ-LIBRARY-099/100/101): the three artifact executors over the engine's port, bound to THIS agent.
   const artifacts = ctx.artifacts;
   if (artifacts) {
-    executors.set('artifact_write', artifactWriteTool(artifacts) as ToolExecutor);
-    executors.set('artifact_read', artifactReadTool(artifacts) as ToolExecutor);
-    executors.set('artifact_list', artifactListTool(artifacts) as ToolExecutor);
+    executors.set('artifact_write', artifactWriteTool(artifacts));
+    executors.set('artifact_read', artifactReadTool(artifacts));
+    executors.set('artifact_list', artifactListTool(artifacts));
   }
   /*
    * Part AC (REQ-TOOLS-157/158, REQ-CHAT-092..097): the user-prompt channel. ONE registry per port, and a port IS a
@@ -436,7 +436,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       if (!ctx.attended() && !quitting()) return false;
       return ctx.writer.save(ctx.writer.currentStatus).ok;
     },
-  }) as ToolExecutor);
+  }));
   // ONE resolution feeds the prompt listing and the callable set (REQ-TOOLS-010).
   // `canPublishArtifacts` is the persona's `can_publish_artifacts` (REQ-CONFIG-106) where a store exists: a declared
   // `artifact_write` is handed over only while the flag is true (REQ-TOOLS-150), and is otherwise removed and recorded as
@@ -461,9 +461,9 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     const catalogue = delegateCatalogue(resolver, persona, { ...prerequisites, delegationRuntime: true });
     // PD-TOOLS-006 revision 10 (OQ-334): the report-artifact sentence where this run holds a store — the prerequisite the
     // catalogue's grants are resolved under, so "publishes artifacts" and the sentence never disagree about the store.
-    executors.set('delegate', delegateTool(ctx.delegation, parentId, catalogue, { markItem: markDelegatedItem, artifactStore: prerequisites.artifactStore }) as ToolExecutor);
-    executors.set('background_output', backgroundOutputTool(ctx.delegation, parentId) as ToolExecutor);
-    executors.set('wait_for_tasks', waitForTasksTool(ctx.delegation, parentId) as ToolExecutor);
+    executors.set('delegate', delegateTool(ctx.delegation, parentId, catalogue, { markItem: markDelegatedItem, artifactStore: prerequisites.artifactStore }));
+    executors.set('background_output', backgroundOutputTool(ctx.delegation, parentId));
+    executors.set('wait_for_tasks', waitForTasksTool(ctx.delegation, parentId));
   }
   const resolved = resolveAgentGrant(persona, { name: ctx.persona, declared, parentPersona: parentAgentPersona, coordinating: delegationAvailable && !directWork, prerequisites, isEntry });
   /*

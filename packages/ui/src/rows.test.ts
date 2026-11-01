@@ -295,8 +295,8 @@ describe('rows — REQ-CHAT-067/167, the two display preferences', () => {
   });
 
   it('REQ-CHAT-066: a live terminal row is recognised by its stream id and its unsettled state', () => {
-    expect(isLiveTerminalRow({ ...row({ kind: 'tool', settled: false }), streamId: 's-1' } as TranscriptRow)).toBe(true);
-    expect(isLiveTerminalRow({ ...row({ kind: 'tool', settled: true }), streamId: 's-1' } as TranscriptRow)).toBe(false);
+    expect(isLiveTerminalRow({ ...row({ kind: 'tool', settled: false }), streamId: 's-1' })).toBe(true);
+    expect(isLiveTerminalRow({ ...row({ kind: 'tool', settled: true }), streamId: 's-1' })).toBe(false);
     expect(isLiveTerminalRow(row({ kind: 'tool', settled: false }))).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, millis, mintMachineId, ok, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, millis, mintMachineId, ok, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ChatMessage, type ModelRequest } from '@rotaris/model';
 import { RUN_AGENT_ID, type ApprovalPayload, type SessionRecord } from '@rotaris/contracts';
@@ -18,7 +18,7 @@ import type { HookPort } from '../hooks-port.js';
  * PD-ORCH-005 clause 3 — "a crash is recorded when the session is next repaired or continued": what a dead run host
  * left, written from the store alone. Clause 8 — loading a session to view it records nothing.
  */
-const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000a');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 const NONE: Publisher = { increment: () => undefined, snapshot: () => undefined };
 const ROOT = 'bg_0000dead';
@@ -1073,7 +1073,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     });
     describe('PD-ORCH-005 clause 16 (revision 4, OQ-101): the at-rest cancel writes under the session\'s lock, answers a session not loaded, and keeps a failed descendant paused', () => {
       const cancel = (s: Sessions, sid: SessionId, agentId: string) => s.control({ op: 'cancelAgent', sessionId: sid, args: { agentId } });
-      const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
+      const OTHER = mintMachineId('0000000000000000000000000000000b');
       const at = () => new Date(Number(clock.instant())).toISOString();
 
       it('refused, writing nothing, while another machine holds the lock; the lock is left as it was', async () => {

@@ -1,6 +1,6 @@
 import { isScalar, type Node, type YAMLMap } from 'yaml';
 import { HOOK_EVENTS, isHookEvent, type HookEvent, type TrustedHookScope } from '@rotaris/contracts';
-import { err, ok, type Result } from '@rotaris/kernel';
+import { err, ok, textOf, type Result } from '@rotaris/kernel';
 import { asMap, asSeq, plainOf, triOf, typeNameOf, vocabularyText, type ParsedConfig, type Tri } from './document.js';
 import { tokenizeHookPattern } from './command-pattern.js';
 
@@ -101,14 +101,14 @@ function readEntry(item: Node | null | undefined, i: number, scope: TrustedHookS
 
   // command: required, non-blank, kept exactly as written.
   const cmd = field('command');
-  const command = cmd.kind === 'value' && isScalar(cmd.value) && cmd.value.value !== null ? String(cmd.value.value) : '';
+  const command = cmd.kind === 'value' && isScalar(cmd.value) && cmd.value.value !== null ? textOf(cmd.value.value) : '';
   if (command.trim() === '') errors.push({ path: `${base}.command`, message: "hook 'command' must not be blank" });
 
   const nameTri = field('name');
-  const name = nameTri.kind === 'value' ? String(plainOf(nameTri.value) ?? '') : '';
+  const name = nameTri.kind === 'value' ? textOf(plainOf(nameTri.value) ?? '') : '';
 
   const matcherTri = field('matcher');
-  const matcher = matcherTri.kind === 'value' ? String(plainOf(matcherTri.value) ?? '').trim() : '';
+  const matcher = matcherTri.kind === 'value' ? textOf(plainOf(matcherTri.value) ?? '').trim() : '';
   if (matcher !== '' && tokenizeHookPattern(matcher) === null) errors.push({ path: `${base}.matcher`, message: `hook matcher '${matcher}' is not a usable command pattern: unterminated quote` });
 
   let timeoutSeconds = HOOK_TIMEOUT_DEFAULT_SECONDS;

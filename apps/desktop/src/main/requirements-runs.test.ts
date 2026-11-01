@@ -42,6 +42,7 @@ function harness(opts: { claims?: RunClaim[]; startReply?: ProcessReply; prefs?:
         case 'requirements.run.ended': return Promise.resolve({ kind: 'requirements.result', value: { settled: true, id: 'REQ-101', unit: 'u1', to: 'review' }, changed: { generation: 4, affected: ['REQ-101'] } });
         case 'requirements.run.waiting': return Promise.resolve({ kind: 'requirements.result', value: { noted: true }, changed: { generation: 5, affected: ['REQ-101'] } });
         case 'requirements.run.reap': return Promise.resolve({ kind: 'requirements.result', value: [], changed: { generation: 6, affected: null } });
+        case 'requirements.board': case 'requirements.detail': case 'requirements.refresh': case 'requirements.reachable': case 'requirements.act': case 'requirements.operation': case 'requirements.cancel': case 'requirements.queue.set': case 'requirements.source.write': case 'requirements.source.previewLocation': case 'requirements.review': case 'requirements.blocker': case 'requirements.adoption': case 'requirements.adopt':
         default: return Promise.resolve({ kind: 'requirements.result', value: null });
       }
     },

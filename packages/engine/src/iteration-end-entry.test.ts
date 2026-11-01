@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, mintMachineId, type MachineId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { SessionWriter } from './index.js';
 
@@ -11,7 +11,7 @@ import { SessionWriter } from './index.js';
  * iteration (fin34). It was appended in a write of its own after the close, so a death between the two left a closed
  * iteration with no entry, missing from the follow-up's "last 5 outer-loop iterations".
  */
-const HOST = mintMachineId('0000000000000000000000000000000e') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000e');
 const ENTRY = { message: 'Iteration 1 (first): succeeded', metadata: { iteration: 1, outcome: 'succeeded' } };
 
 describe('the iteration_end entry closes with its iteration (REQ-ORCH-139, REQ-SESSION-115, PD-ORCH-005)', () => {

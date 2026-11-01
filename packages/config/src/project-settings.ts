@@ -190,7 +190,7 @@ export function snapshotLayer(snapshot: ProjectSnapshot): { layer: PlainMap | nu
   }
   layer['models'] = models;
   const slots: Partial<Record<ModelSlot, string>> = {};
-  for (const slot of SNAPSHOT_SLOTS) if (typeof layer[slot] === 'string') slots[slot] = layer[slot] as string;
+  for (const slot of SNAPSHOT_SLOTS) if (typeof layer[slot] === 'string') slots[slot] = layer[slot];
   return { layer, authenticated: ids, slots };
 }
 

@@ -57,7 +57,7 @@ export function slotPreferences(config: LoadedConfiguration): readonly SlotPrefe
     const fromWorkspace = followRawSlot(ws, slot);
     const fromGlobal = fromWorkspace === undefined ? followRawSlot(g, slot) : undefined;
     const thinkingKey = thinkingKeyOf(slot);
-    const thinkingRaw = ws && typeof ws[thinkingKey] === 'string' ? (ws[thinkingKey] as string) : g && typeof g[thinkingKey] === 'string' ? (g[thinkingKey] as string) : null;
+    const thinkingRaw = ws && typeof ws[thinkingKey] === 'string' ? (ws[thinkingKey]) : g && typeof g[thinkingKey] === 'string' ? (g[thinkingKey]) : null;
     // A raw value the file states — a concrete name, or null because the chain is a cycle or written null — is the file's.
     if (fromWorkspace !== undefined) return { slot, value: fromWorkspace, origin: 'workspace', thinking: thinkingRaw };
     if (fromGlobal !== undefined) return { slot, value: fromGlobal, origin: 'global', thinking: thinkingRaw };

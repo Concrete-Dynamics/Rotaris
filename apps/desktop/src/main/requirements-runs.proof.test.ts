@@ -141,7 +141,7 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
     expect(hostRequests.map((h) => h.request.kind)).toEqual(['session.start']);
 
     // The composer carries its ordinary configuration on the next start.
-    await host({ kind: 'session.start', workspaceId: 'proof-workspace', prompt: 'the composer\'s next run', sessionId: 'composer-run' } as RunHostRequest);
+    await host({ kind: 'session.start', workspaceId: 'proof-workspace', prompt: 'the composer\'s next run', sessionId: 'composer-run' });
     expect(hostRequests[hostRequests.length - 1]!.liveState).toEqual({});
     expect(hostRequests[hostRequests.length - 1]!.request).not.toHaveProperty('boardPermissions');
     results.launch = { branch: preview.branch, worktree: preview.worktreePath, session: firstSession, boardPermissions: 'permissive', composerLiveState: {} };
@@ -158,7 +158,7 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
     // REQ-TRACE-475: the live run declares which requirement and which unit it came from.
     expect(runs.live()).toEqual([{ sessionId: firstSession, id: 'REQ-101', unit: 'u1', waitingOnPerson: false, permissions: 'permissive' }]);
     // REQ-TRACE-466: a pending approval on the live run puts the fact on the run row, and clearing it takes it off.
-    const snapshot = (approvals: number): ProcessEvent => ({ kind: 'publish.snapshot', payload: { v: 1, sessionId: firstSession, seq: approvals + 1, session: { pendingApprovals: Array.from({ length: approvals }, (_, i) => ({ request_id: `r${i}` })), pendingQuestions: [] } as never } } as ProcessEvent);
+    const snapshot = (approvals: number): ProcessEvent => ({ kind: 'publish.snapshot', payload: { v: 1, sessionId: firstSession, seq: approvals + 1, session: { pendingApprovals: Array.from({ length: approvals }, (_, i) => ({ request_id: `r${i}` })), pendingQuestions: [] } as never } });
     emit(snapshot(1));
     await settle();
     expect((await board()).cards.find((c) => c.id === 'REQ-101')!.run?.waitingOnPerson).toBe(true);

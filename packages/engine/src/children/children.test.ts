@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, millis, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, millis, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type ChildRow } from '@rotaris/store';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { CHILD_STATES, CHILD_TRANSITIONS, FOLLOW_UP_STATE, isDelegationTarget, isLegalChildMove, isLegalFollowUp, RUN_AGENT_ID, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type ApprovalPayload, type PermissionPreset, type SessionRecord, type TranscriptIncrement } from '@rotaris/contracts';
@@ -23,7 +23,7 @@ import { CHILD_REPORT_ARTIFACT_SENTENCE, inheritedContext } from './notify.js';
 import { CODE_INTELLIGENCE_MANIFEST } from '@rotaris/config';
 import { SUPERVISOR_DEFAULTS, type LoopActivation, type LoopClassifier, type SupervisorConfig } from '../run/supervisor.js';
 
-const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000a');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 const NONE: Publisher = { increment: () => undefined, snapshot: () => undefined };
 
@@ -953,7 +953,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     };
     const narrowed: AgentGrant = { tools: ['read_file', 'grep'], mcp: { granted: { srv: [] }, servers: [{ name: 'srv', transport: 'stdio', origin: 'workspace', fate: 'connected' }] } };
     const snapshots: SessionRecord[] = [];
-    const publisher: Publisher = { increment: () => undefined, snapshot: (p: { session: SessionRecord }) => { snapshots.push(p.session); } } as Publisher;
+    const publisher: Publisher = { increment: () => undefined, snapshot: (p: { session: SessionRecord }) => { snapshots.push(p.session); } };
     const { sessions } = sessionsWith(script, { grant: (ctx) => (ctx.depth === 1 ? narrowed : null), publisher });
     const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
     expect((await sessions.running(sid)!).status).toBe('completed');
@@ -979,7 +979,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     };
     const onlyEcho: AgentGrant = { tools: [], mcp: { granted: { srv: ['echo'] }, servers: [{ name: 'srv', transport: 'stdio', origin: 'workspace', fate: 'connected' }] } };
     const snapshots: SessionRecord[] = [];
-    const publisher: Publisher = { increment: () => undefined, snapshot: (p: { session: SessionRecord }) => { snapshots.push(p.session); } } as Publisher;
+    const publisher: Publisher = { increment: () => undefined, snapshot: (p: { session: SessionRecord }) => { snapshots.push(p.session); } };
     const { sessions } = sessionsWith(script, { grant: (ctx) => (ctx.depth === 1 ? onlyEcho : null), publisher });
     const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
     expect((await sessions.running(sid)!).status).toBe('completed');
@@ -1281,7 +1281,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       for (const [name, o] of Object.entries(over)) table[name] = { ...(table[name] ?? extra(name, [])), ...o };
       const aliases: Record<string, string> = { coder: 'coding-agent', playwright: 'ui-verifier' };
       return {
-        resolve: (name) => (table[name] ? { persona: table[name]!, alias: null } : aliases[name] && table[aliases[name]!] ? { persona: table[aliases[name]!]!, alias: name } : null),
+        resolve: (name) => (table[name] ? { persona: table[name], alias: null } : aliases[name] && table[aliases[name]] ? { persona: table[aliases[name]]!, alias: name } : null),
         delegationTargets: () => Object.keys(table).filter(isDelegationTarget),
       };
     }
@@ -1626,7 +1626,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     /** A settled child of another agent — a grandchild's shape — in the case's one session, `S1`. */
     const othersChild = () => {
       const OTHER = 'bg_0000a7e1';
-      dal.insertChild({ session_id: 'S1' as SessionId, task_id: OTHER, canonical_name: 'grand', given_name: 'grand', persona: 'codebase-analyst', state: 'succeeded', parent_id: 'bg_0000a11e', depth: 2, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
+      dal.insertChild({ session_id: 'S1', task_id: OTHER, canonical_name: 'grand', given_name: 'grand', persona: 'codebase-analyst', state: 'succeeded', parent_id: 'bg_0000a11e', depth: 2, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
       return { session_id: OTHER };
     };
     it.each([
@@ -1813,10 +1813,10 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const CRASHY = 'bg_0000c0de';
       const { sid, client } = await surveyThenFollowUp((surveyId) => {
         const survey = dal.getChild('S1' as SessionId, surveyId)!;
-        dal.insertChild({ session_id: survey.session_id as SessionId, task_id: CRASHY, canonical_name: 'crashy', given_name: 'crashy', persona: 'codebase-analyst', state: 'failed', parent_id: survey.parent_id, depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 'TASK: crashy', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: survey.spawned_at });
+        dal.insertChild({ session_id: survey.session_id, task_id: CRASHY, canonical_name: 'crashy', given_name: 'crashy', persona: 'codebase-analyst', state: 'failed', parent_id: survey.parent_id, depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 'TASK: crashy', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: survey.spawned_at });
         dal.setChildObserved(survey.session_id as SessionId, CRASHY);
         for (const m of [{ role: 'user', content: [{ kind: 'text', text: 'TASK: crashy' }] }, { role: 'assistant', content: [{ kind: 'tool-call', callId: 'x1', name: 'read_file', args: '{"path":"a.ts"}' }] }]) {
-          dal.insertAgentMessage({ session_id: survey.session_id as SessionId, task_id: CRASHY, iteration: 1, kind: 'message', body: JSON.stringify(m), at: 't' });
+          dal.insertAgentMessage({ session_id: survey.session_id, task_id: CRASHY, iteration: 1, kind: 'message', body: JSON.stringify(m), at: 't' });
         }
         return { session_id: CRASHY };
       }, (_step, req) => answer(req.messages.some((m) => textOf(m) === 'TASK: crashy') ? 'Crashy answers.' : 'The module is small.'));
@@ -2770,7 +2770,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     function tools(observed: string[]): TestTool {
       return (name, a, ctx, builtIn) => {
         if (name === 'todo') {
-          const written = ctx.writeTodo?.(planOf(a['states'] as ItemState[], (a['ids'] as string[] | undefined) ?? IDS) as never) ?? false;
+          const written = ctx.writeTodo?.(planOf(a['states'] as ItemState[], (a['ids'] as string[] | undefined) ?? IDS)) ?? false;
           return Promise.resolve({ text: written ? 'Plan updated.' : 'not written', isError: !written, status: written ? 'ok' : 'failed', durationMs: 1, label: 'todo', args: a });
         }
         if (name === 'delegate') return builtIn().then((r) => { observed.push(r.text); return r; });
@@ -3271,7 +3271,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         if (stepOf(req) === 1) return toolCalls([{ callId: 'w1', name: 'write_file', args: { path: 'src/a.ts', content: 'a' } }, { callId: 'r1', name: 'read_file', args: { path: 'gate' } }]);
         return { parts: [{ hold: hold.p }, { part: { kind: 'text', delta: 'I wrote a and was reading on' } }, { part: { kind: 'finish', reason: 'stop' } }] };
       }, { tool: (name, a, ctx) => {
-        if (name === 'todo') { const written = ctx.writeTodo?.((a['done'] === true ? done : plan) as never) ?? false; return Promise.resolve({ text: written ? 'Plan updated.' : 'not written', isError: !written, status: written ? 'ok' : 'failed', durationMs: 1, label: 'todo', args: a }); }
+        if (name === 'todo') { const written = ctx.writeTodo?.((a['done'] === true ? done : plan)) ?? false; return Promise.resolve({ text: written ? 'Plan updated.' : 'not written', isError: !written, status: written ? 'ok' : 'failed', durationMs: 1, label: 'todo', args: a }); }
         return files(name, a);
       } });
       sid = (sessions.start(dal, '/ws', 'x') as { value: SessionId }).value;

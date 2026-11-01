@@ -180,6 +180,21 @@ export interface CaptureTarget {
   readonly under: string | null;
 }
 
+/**
+ * A step that awaits, as a timer callback: the clock ports take a `() => void`, so an `async` step handed to them
+ * straight drops its promise, and a step that throws reached only main's last-resort `unhandledRejection` line.
+ * Here its failure is reported to `failed`, with nothing left floating (`@typescript-eslint/no-misused-promises`,
+ * R-091).
+ */
+export function settled(step: () => Promise<void>, failed: (cause: unknown) => void): () => void {
+  return () => { step().catch(failed); };
+}
+
+/** The line a failed capture step logs: the cause's stack where it has one. */
+export function stepFailed(log: (message: string) => void): (cause: unknown) => void {
+  return (cause) => { log(`capture: a scheduled step failed: ${cause instanceof Error ? cause.stack ?? cause.message : String(cause)}`); };
+}
+
 /** A promise that resolves after `ms` on the clock ports — never a bare timer (`rotaris/no-bare-timers`). */
 export function pause(host: CaptureHost, ms: number): Promise<void> {
   return new Promise<void>((resolve) => { host.clocks.timers.after(millis(ms), () => resolve()); });

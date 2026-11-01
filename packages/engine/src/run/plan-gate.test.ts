@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { IntentCategory } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
@@ -13,7 +13,7 @@ import { BUILT_IN_PERSONAS, DIRECT_WORK_INSTRUCTION, RUN_CONFIG_DEFAULTS, Sessio
  * REQ-ORCH-152/153/154 (ADR-0062): the plan gate end to end through the session manager — the park, what it
  * records, what survives it, the answer group's exemption, and approval's one-way release.
  */
-const HOST = mintMachineId('0000000000000000000000000000000b') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000b');
 const MODEL = { providerId: 'scripted', modelId: 'm', dialect: 'chat' as const };
 
 describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {

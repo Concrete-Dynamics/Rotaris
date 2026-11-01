@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { z } from 'zod';
-import { countNoun, similarity } from '@rotaris/kernel';
+import { countNoun, similarity, textOf } from '@rotaris/kernel';
 import { lineChanges, linePairs, renderDiff } from './diff.js';
 import { lineCount, splitLines } from './lines.js';
 import { checkFence, relPosix, realPathOf, type FenceConfig } from './fence.js';
@@ -957,7 +957,7 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
         const exists = target !== null && existsSync(target.resolved) ? ` ${target.rel} already exists, so the call was not read as a create; name 'overwrite' or 'edit'.` : '';
         return errorObservation(`write_file requires an operation: one of create, edit, overwrite, insert, undo. Example: {"operation": "edit", "path": "notes.txt", "old_string": "a", "new_string": "b"}.${exists} (${detail})`);
       }
-      const op = String(args['operation']);
+      const op = textOf(args['operation']);
       const fields: Record<string, string> = {
         create: 'create reads `path` and `content`.',
         edit: 'edit reads `path`, `old_string` and `new_string` (plus `replace_all?`).',

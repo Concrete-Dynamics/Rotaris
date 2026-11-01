@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls } from '@rotaris/model';
 import type { SessionRecord } from '@rotaris/contracts';
@@ -123,7 +123,7 @@ describe('engine — the run-level agent\'s tool-call count while its turn runs 
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
   const MODEL = { providerId: 'test', modelId: 'test', dialect: 'chat' as const };
-  const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
+  const HOST = mintMachineId('0000000000000000000000000000000a');
   /** Each call recorded through the writer as the run host's gate records it (`openToolCall`, `settleToolCall`); `boom` raises once it is open. */
   const port = (writer: SessionWriter): ToolPort => ({
     specs: () => [{ name: 'grep', description: 'grep', parameters: { type: 'object' } }, { name: 'boom', description: 'raises', parameters: { type: 'object' } }],

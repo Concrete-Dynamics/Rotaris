@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { millis } from '@rotaris/kernel';
-import { type CaptureHost, pause } from './host.js';
+import { type CaptureHost, pause, settled, stepFailed } from './host.js';
 import { onConsoleWarning } from './console-relay.js';
 
 /**
@@ -19,9 +19,9 @@ export function runThemeProof(host: CaptureHost, proofDir: string): void {
   const rendererErrors: string[] = [];
   onConsoleWarning(host.win.webContents, ({ message }) => { rendererErrors.push(message); });
 
-  host.clocks.timers.after(millis(900), async () => {
+  host.clocks.timers.after(millis(900), settled(async () => {
     const win = host.win;
-    const metadata = async () => win.webContents.executeJavaScript(`(() => {
+    const metadata = async (): Promise<unknown> => win.webContents.executeJavaScript(`(() => {
       const rect = (element) => { const r = element.getBoundingClientRect(); return { x:r.x, y:r.y, width:r.width, height:r.height }; };
       const visible = (element) => { const r = element.getBoundingClientRect(); const s = getComputedStyle(element); const x=Math.max(0,Math.min(innerWidth-1,r.x+r.width/2)); const y=Math.max(0,Math.min(innerHeight-1,r.y+r.height/2)); const hit=document.elementFromPoint(x,y); return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight && s.visibility !== 'hidden' && s.display !== 'none' && (hit===element || element.contains(hit)); };
       const texts = [...document.body.querySelectorAll('*')].filter((element) => visible(element) && element.children.length === 0 && (element.textContent || '').trim()).map((element) => { const s = getComputedStyle(element); return { text:(element.textContent || '').trim(), rect:rect(element), color:s.color, background:s.backgroundColor, fontSize:parseFloat(s.fontSize), fontWeight:s.fontWeight, disabled:element.matches(':disabled') || element.closest(':disabled') !== null }; });
@@ -97,9 +97,9 @@ export function runThemeProof(host: CaptureHost, proofDir: string): void {
     await pause(host, 120);
     const afterSwitch = await metadata();
     await take('theme-switch');
-    writeFileSync(join(proofDir, 'switch.json'), `${JSON.stringify({ before: beforeSwitch, after: afterSwitch, composer: await win.webContents.executeJavaScript(`document.querySelector('.composer__input')?.value ?? ''`) }, null, 2)}\n`);
+    writeFileSync(join(proofDir, 'switch.json'), `${JSON.stringify({ before: beforeSwitch, after: afterSwitch, composer: (await win.webContents.executeJavaScript(`document.querySelector('.composer__input')?.value ?? ''`)) as unknown }, null, 2)}\n`);
     writeFileSync(join(proofDir, 'console-errors.json'), `${JSON.stringify(rendererErrors, null, 2)}\n`);
     host.log(`theme proof captured ${proofDir}`);
     host.exit(rendererErrors.length === 0 ? 0 : 3);
-  });
+  }, stepFailed(host.log)));
 }

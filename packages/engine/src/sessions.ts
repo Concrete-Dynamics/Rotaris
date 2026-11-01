@@ -190,11 +190,11 @@ export interface ToolPortContext {
  */
 export interface TodoListCheck {
   /** The refusal text while a list is owed before the call that would start a work item, else null. */
-  owed(): string | null;
+  owed: () => string | null;
   /** A work item reached execution. */
-  started(): void;
+  started: () => void;
   /** The entry role holds no `todo` tool: nothing is refused, and the run says so once. */
-  unavailable(): void;
+  unavailable: () => void;
 }
 
 /** PD-TOOLS-006: what a write-scope refusal names — the holding child, its persona and the pattern that matched. */
@@ -2039,7 +2039,7 @@ export class Sessions {
     // Part AO: the clear reaches a loaded session with or without a run (REQ-CHAT-084's two routes); the compression
     // pass is asynchronous and answered by `controlAsync` — a synchronous caller gets the refusal it would get with no run.
     // PD-TOOLS-005: a confirmed clear on a live run is the user's input to it too (REQ-MONITOR-004, REQ-CHAT-084).
-    if (req.op === 'clearTranscript') { if (run && !run.isEnded) s!.presence.returned(); return this.clearTranscript(s, req); }
+    if (req.op === 'clearTranscript') { if (run && !run.isEnded) s.presence.returned(); return this.clearTranscript(s, req); }
     if (req.op === 'forceCompression') return { ok: false, refusal: { code: 'no_run', message: 'No run is active.' } };
     // PD-ORCH-005 clause 16: one paused child is cancellable while its session rests, with no run behind it.
     if (req.op === 'cancelAgent' && (!run || run.isEnded)) return this.cancelPausedAtRest(s, req);
@@ -2048,7 +2048,7 @@ export class Sessions {
     if (!run || run.isEnded) return { ok: false };
     // PD-TOOLS-005: input the user sends to a live run's session — an answer, a message, a run control, a mode change —
     // ends the run's away stretch, before the operation is judged. A shutdown announcement is the application's, not the user's.
-    if (req.op !== 'announceShutdown') s!.presence.returned();
+    if (req.op !== 'announceShutdown') s.presence.returned();
     const text = (key: string): string | null => { const v = req.args[key]; return typeof v === 'string' && v.trim() !== '' ? v : null; };
     switch (req.op) {
       case 'cancel': {
@@ -2089,18 +2089,18 @@ export class Sessions {
         const snapshot = readContextSnapshot(req.args['context']);
         const ownership = resolveQueueOwnership(req.sessionId, snapshot);
         if (ownership.kind !== 'scoped') return { ok: false };
-        const r = s!.writer.queuePrompt(randomUUID(), content, snapshot === null || snapshot === undefined ? null : JSON.stringify(snapshot));
+        const r = s.writer.queuePrompt(randomUUID(), content, snapshot === null || snapshot === undefined ? null : JSON.stringify(snapshot));
         if (!r.ok) return { ok: false };
-        s!.owner.reconcile();
+        s.owner.reconcile();
         return { ok: true, value: r.value.prompt_id };
       }
       case 'editQueuedPrompt':
       case 'removeQueuedPrompt':
-        return this.editQueued(s!, req);
+        return this.editQueued(s, req);
       case 'editTodo': {
         const op = text('op');
         const id = text('id') ?? '';
-        const body = typeof req.args['text'] === 'string' ? (req.args['text'] as string) : '';
+        const body = typeof req.args['text'] === 'string' ? (req.args['text']) : '';
         const requestedSource = req.args['source'];
         const source = requestedSource === 'child' || requestedSource === 'agent' || requestedSource === 'planner' ? requestedSource : 'planner';
         const ownerId = typeof req.args['ownerId'] === 'string' && req.args['ownerId'] !== '' ? req.args['ownerId'] : null;
@@ -2135,7 +2135,7 @@ export class Sessions {
         const r = run.setPermissionMode(mode, 'user');
         // REQ-TOOLS-073's second half: the change reaches the live agents through the run, and the session-level
         // override is what carries it to the agents this run builds afterwards — every delegated child included.
-        if (r.ok) s!.modeOverride.value = r.effective;
+        if (r.ok) s.modeOverride.value = r.effective;
         return r.ok ? { ok: true } : { ok: false };
       }
       case 'cancelAgent': {
@@ -2183,6 +2183,7 @@ export class Sessions {
         if (typeof requestId !== 'string' || requestId === '') return { ok: false };
         return this.cancelQuestions(requestId) ? { ok: true } : { ok: false };
       }
+      case 'skipCheck': case 'terminalInput': case 'terminalResize': case 'terminalInterrupt': case 'terminalKill':
       default:
         // REQ-MONITOR-004's remaining operations have no mechanism behind them in this build (decision 9 of the plan) and answer false.
         return { ok: false };

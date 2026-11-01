@@ -7,7 +7,7 @@ import { ProcessLink, UpdateRelay, type MessagePortLike } from './index.js';
 describe('shell — the seven views (REQ-SHELL-023, -026, -027)', () => {
   it('are exactly seven, in the fixed order, with the fixed labels, and Overview is the startup view', () => {
     expect(PRIMARY_VIEWS.map((v) => v.label)).toEqual(['Overview', 'Workspace', 'Mission', 'Requirements', 'Git', 'Library', 'Settings']);
-    expect(PRIMARY_VIEWS[3]!.id).toBe('requirements');
+    expect(PRIMARY_VIEWS[3].id).toBe('requirements');
     expect(STARTUP_VIEW).toBe('overview');
   });
 });

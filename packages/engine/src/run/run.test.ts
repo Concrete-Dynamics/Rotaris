@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { SessionSnapshot, TranscriptIncrement } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall, type TurnReport } from '@rotaris/model';
 import { BASE_TREE_BUSY_REFUSAL, parseEventLine, ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, treesOverlap, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type LiveTerminal, type PortToolResult, type Publisher, type RunConfig, type RunNotice, type RunResult, type SessionsDeps, type ToolPort } from '../index.js';
 
-const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000a');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 
 function recorder(): Publisher & { seen: { channel: 'inc' | 'snap'; seq: number; payload: TranscriptIncrement | SessionSnapshot }[] } {

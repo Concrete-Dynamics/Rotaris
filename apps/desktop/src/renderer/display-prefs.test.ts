@@ -12,7 +12,7 @@ function scriptedBridge() {
   const sets: CommandRequest[] = [];
   const bridge = {
     command: (req: CommandRequest): Promise<CommandOutcome> => {
-      if (req.kind === 'prefs.get') return new Promise((resolve) => { gets.push({ key: req.key, answer: (value) => resolve({ ok: true, value: value === undefined ? {} : { value } } as CommandOutcome) }); });
+      if (req.kind === 'prefs.get') return new Promise((resolve) => { gets.push({ key: req.key, answer: (value) => resolve({ ok: true, value: value === undefined ? {} : { value } }) }); });
       sets.push(req);
       return Promise.resolve({ ok: true, value: {} } as CommandOutcome);
     },

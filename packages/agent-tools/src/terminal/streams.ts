@@ -1,5 +1,5 @@
 import { CONTRACT_SCHEMA_VERSION, TERMINAL_COALESCE_FLOOR_MS, TERMINAL_INTERVAL_RANGE_MS, type TerminalFrame, type TerminalRefusal, type TerminalStreamKind, type TerminalStreamMeta } from '@rotaris/contracts';
-import { millis, type Clocks, type Millis, type TimerHandle } from '@rotaris/kernel';
+import { millis, type Clocks, type TimerHandle } from '@rotaris/kernel';
 import type { EmulatorFactory, ScreenEmulator } from './emulator.js';
 
 /**
@@ -324,7 +324,7 @@ export class TerminalStreams {
     if (s.flush && s.flushDue <= due) return;
     s.flush?.cancel();
     s.flushDue = due;
-    s.flush = this.deps.clocks.timers.after(millis(waitMs) as Millis, () => { s.flush = null; this.flushNow(s); });
+    s.flush = this.deps.clocks.timers.after(millis(waitMs), () => { s.flush = null; this.flushNow(s); });
   }
   private flushNow(s: Live): void {
     if (s.flush) { s.flush.cancel(); s.flush = null; }

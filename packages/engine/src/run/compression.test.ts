@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ChatMessage, type ModelRef, type ScriptedCall } from '@rotaris/model';
 import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, type ModelLookup, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
@@ -16,10 +16,10 @@ import { clampSummary, compress, compressionReason, compressorTranscript, rebuil
  * the turn alignment ADR-0060 decision 2 chose; the run half proves REQ-ORCH-093's condense-and-retry and
  * REQ-MONITOR-076's threshold against a real run through `Sessions`.
  */
-const HOST = mintMachineId('0000000000000000000000000000000e') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000e');
 const A1: ModelRef = { providerId: 'a', modelId: 'a1', dialect: 'chat' };
 const A2: ModelRef = { providerId: 'a', modelId: 'a2', dialect: 'chat' };
-const text = (role: 'user' | 'assistant', body: string): ChatMessage => ({ role, content: [{ kind: 'text', text: body }] } as ChatMessage);
+const text = (role: 'user' | 'assistant', body: string): ChatMessage => ({ role, content: [{ kind: 'text', text: body }] });
 const call = (id: string): ChatMessage => ({ role: 'assistant', content: [{ kind: 'tool-call', callId: id, name: 'read_file', args: '{}' }] });
 const result = (id: string): ChatMessage => ({ role: 'tool', content: [{ kind: 'tool-result', callId: id, name: 'read_file', result: 'contents', isError: false }] });
 const TRIGGER: ResolvedTrigger = { tokens: 600, thresholdPercentage: 60, capacity: 1000, advertisedInputLimit: 1000, defaultThreshold: 265_000 };

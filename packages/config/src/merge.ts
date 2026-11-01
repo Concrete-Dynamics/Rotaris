@@ -27,7 +27,7 @@ export function isPlainMap(value: unknown): value is PlainMap {
 }
 
 export function clonePlain<T>(value: T): T {
-  if (Array.isArray(value)) return value.map((v) => clonePlain(v)) as unknown as T;
+  if (Array.isArray(value)) return (value as unknown[]).map((v) => clonePlain(v)) as unknown as T;
   if (isPlainMap(value)) {
     const out: PlainMap = {};
     for (const [k, v] of Object.entries(value)) out[k] = clonePlain(v);
@@ -96,7 +96,7 @@ export function mergeLayers(layers: readonly Layer[], classify: (key: string) =>
           break;
         case 'named': {
           if (!isPlainMap(incoming)) break;
-          const existing = isPlainMap(value[key]) ? (value[key] as PlainMap) : {};
+          const existing = isPlainMap(value[key]) ? (value[key]) : {};
           for (const [name, entry] of Object.entries(incoming)) {
             const current = existing[name];
             if (isPlainMap(entry) && isPlainMap(current)) overlayEntry(current, entry, PLAIN_OPS);
@@ -109,7 +109,7 @@ export function mergeLayers(layers: readonly Layer[], classify: (key: string) =>
           // REQ-CONFIG-054: a bare section key means unset and contributes nothing.
           if (incoming === null || incoming === undefined) break;
           if (!isPlainMap(incoming)) { value[key] = clonePlain(incoming); break; }
-          const current = isPlainMap(value[key]) ? (value[key] as PlainMap) : {};
+          const current = isPlainMap(value[key]) ? (value[key]) : {};
           overlaySection(current, incoming, PLAIN_OPS);
           value[key] = current;
           break;

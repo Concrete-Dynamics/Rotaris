@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRef, type ScriptedCall } from '@rotaris/model';
 import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, type ModelLookup, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
@@ -14,7 +14,7 @@ import type { ResolvedTrigger } from './compression.js';
  * (ADR-0060 decision 1's second reader), the concurrent manual pass through `Sessions.controlAsync`, and the
  * transcript clear by both of REQ-CHAT-084's routes, each against a real run through `Sessions` and a real store.
  */
-const HOST = mintMachineId('0000000000000000000000000000000f') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000f');
 const A1: ModelRef = { providerId: 'a', modelId: 'a1', dialect: 'chat' };
 const TRIGGER: ResolvedTrigger = { tokens: 0, thresholdPercentage: 60, capacity: 1000, advertisedInputLimit: 1000, defaultThreshold: 265_000 };
 
@@ -206,7 +206,7 @@ describe('engine/sessions — forceCompression and clearTranscript in a run (REQ
   it('REQ-MONITOR-090/096: with no run the request is REFUSED with the reason, never failed — a session that never was, and one that has ended', async () => {
     const hold = holdingPort(99);
     const { sessions } = sessionsWith(script, hold.port);
-    expect(await sessions.controlAsync({ op: 'forceCompression', sessionId: 'S404' as SessionId, args: {} })).toEqual({ ok: false, refusal: { code: 'no_run', message: 'No run is active.' } });
+    expect(await sessions.controlAsync({ op: 'forceCompression', sessionId: 'S404', args: {} })).toEqual({ ok: false, refusal: { code: 'no_run', message: 'No run is active.' } });
     const sid = (sessions.start(dal, 'C:/ws', 'do the thing') as { value: SessionId }).value;
     await untilEnded(sid);
     expect(await sessions.controlAsync({ op: 'forceCompression', sessionId: sid, args: {} })).toEqual({ ok: false, refusal: { code: 'no_run', message: 'No run is active.' } });
@@ -260,6 +260,6 @@ describe('engine/sessions — forceCompression and clearTranscript in a run (REQ
     expect(pub.snapshots.length).toBeGreaterThan(snapshotsBefore);
     expect(toasts.at(-1)).toEqual({ kind: 'ok', title: 'Transcript cleared. Session artifacts and agent state were kept.' });
     // A session this process never loaded cannot be addressed by a control (REQ-MONITOR-007's `false`).
-    expect(sessions.control({ op: 'clearTranscript', sessionId: 'S404' as SessionId, args: {} })).toEqual({ ok: false });
+    expect(sessions.control({ op: 'clearTranscript', sessionId: 'S404', args: {} })).toEqual({ ok: false });
   });
 });

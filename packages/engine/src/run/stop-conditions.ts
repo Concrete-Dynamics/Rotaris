@@ -51,6 +51,7 @@ export function resultFromStatus(status: string): { result: TerminalResult; diag
     case 'stopped':
     case 'interrupted':
       return { result: 'interrupted' };
+    case 'starting': case 'running': case 'waiting': case 'background': case 'idle': case 'cancelling': case 'awaiting_plan_decision': case 'pausing':
     default:
       return { result: 'error', diagnostic: `the run ended without a terminal status (execution_status ${JSON.stringify(status)})` };
   }

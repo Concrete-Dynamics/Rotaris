@@ -11,6 +11,19 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   exceptions: `kernel/src/clock/` (it *is* a clock) and `platform/src/clock.ts` (it *is* the adapter).
 - **No `electron` outside the roots** — `rotaris/no-electron-outside-roots`.
 - **No Node built-ins in renderer code** — `no-restricted-imports` over `ui`, `ui-core`, renderer, preload.
+- **Lint reads the types** (since 2026-11-01, R-091) — every `.ts`/`.tsx` is parsed against its project
+  (`parserOptions.projectService`; the root `tools/*.test.ts`, which no tsconfig includes yet, against the root
+  tsconfig's options as a default project) under `typescript-eslint`'s `recommendedTypeChecked`, and four rules are
+  named at `error`: `no-floating-promises` (a promise neither awaited, caught nor marked `void`),
+  `no-misused-promises` (an `async` callback handed where a `() => void` is expected — the clock ports' `after`; the
+  capture seams wrap theirs in `capture/host.ts`'s `settled`, which reports the failure), `await-thenable`, and
+  `switch-exhaustiveness-check` with `considerDefaultExhaustiveForUnions: false`, so a `switch` over a union names
+  every member and a `default` covers no member silently. `no-base-to-string` sends a value of unknown shape to
+  `kernel`'s `textOf` rather than `String()`'s `[object Object]`. Off, each with its reason in `eslint.config.js`:
+  `require-await` (an `async` port with a synchronous body is how a throw becomes a rejection here),
+  `no-unnecessary-condition` (308 findings, the sampled ones TypeScript's narrowing kept across an `await` or a
+  callback; the `strict-type-checked` plan's), and the `no-unsafe-*` family in tests (vitest's asymmetric matchers are
+  `any`; the tools' tests import untyped `.mjs` until E2). The `.js`/`.mjs` files keep the untyped rules.
 - **The IPC payloads carry no secret** — `contracts.test.ts` walks every channel schema.
 - **The symbol artifact is regenerated before collection** — vitest `globalSetup`, same generator as
   the build. A withdrawn identifier is `@deprecated` and warns at every reference (REQ-TRACE-181).

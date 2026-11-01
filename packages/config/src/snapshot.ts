@@ -55,7 +55,7 @@ export function instructionEnabled(master: boolean, overrides: Readonly<Record<s
 }
 
 export function snapshotOf(cfg: LoadedConfiguration, env: InstructionSnapshotEnv = {}): ConfigSnapshot {
-  const rawRuntimeOf = (raw: PlainMap | null): Record<string, unknown> | null => (raw && isPlainMap(raw['runtime']) ? (raw['runtime'] as Record<string, unknown>) : null);
+  const rawRuntimeOf = (raw: PlainMap | null): Record<string, unknown> | null => (raw && isPlainMap(raw['runtime']) ? (raw['runtime']) : null);
   const discovered = instructionFiles(cfg.workspaceRoot, { ...env, globalDir: env.globalDir ?? cfg.files.global.dir });
   return {
     workspaceRoot: cfg.workspaceRoot,
@@ -136,7 +136,7 @@ function toDesktopSave(save: DesktopSavePayload): DesktopSave {
   return {
     ...(save.slots ? { slots: save.slots } : {}),
     ...(save.slotThinking ? { slotThinking: save.slotThinking } : {}),
-    ...(save.runtime ? { runtime: save.runtime as NonNullable<DesktopSave['runtime']> } : {}),
+    ...(save.runtime ? { runtime: save.runtime } : {}),
     ...(save.circuitBreakerEnabled !== undefined ? { circuitBreakerEnabled: save.circuitBreakerEnabled } : {}),
     ...(save.compressorThresholdPercentage !== undefined ? { compressorThresholdPercentage: save.compressorThresholdPercentage } : {}),
     ...(save.delegationStrategy !== undefined ? { delegationStrategy: save.delegationStrategy } : {}),

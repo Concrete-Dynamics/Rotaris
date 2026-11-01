@@ -664,7 +664,7 @@ describe('session.start in a window holding a refused store (REQ-SESSION-089, OQ
 
   it('names the store whose place could not be opened and says nothing was started', async () => {
     const f = facet((workspace) => (canonicalPath(workspace) === canonicalPath(WORKSPACE) ? held : undefined));
-    const r = await f.commands['session.start'](req, windowOn(null as unknown as string));
+    const r = await f.commands['session.start'](req, windowOn(null));
     expect(r).toEqual({ ok: false, code: 'workspace.store-missing', headline: 'Nothing was started: the session store for this workspace could not be opened', detail: held.detail });
     expect(f.asked).toEqual([]);
     expect(f.logs.some((l) => l.includes('run refused before start') && l.includes('workspace.store-missing'))).toBe(true);
@@ -672,6 +672,6 @@ describe('session.start in a window holding a refused store (REQ-SESSION-089, OQ
 
   it('(as before) with no refusal held, a window with no workspace is told to open one', async () => {
     const f = facet(() => undefined);
-    expect(await f.commands['session.start'](req, windowOn(null as unknown as string))).toEqual({ ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' });
+    expect(await f.commands['session.start'](req, windowOn(null))).toEqual({ ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' });
   });
 });

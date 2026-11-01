@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, textOf, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type AgentMessageRow } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ChatMessage, type ModelRef, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type DelegationOps, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type SessionsDeps, type ToolPort } from '../index.js';
@@ -15,7 +15,7 @@ import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
  * conversation under its task id, the iteration recorded with its root's task id, a compression written into the
  * record, and the transcript clear removing the records of closed iterations only.
  */
-const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000a');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 const NONE: Publisher = { increment: () => undefined, snapshot: () => undefined };
 const TRIGGER = { tokens: 0, thresholdPercentage: 60, capacity: 1000, advertisedInputLimit: 1000, defaultThreshold: 265_000 };
@@ -70,7 +70,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
       specs: () => ['delegate', 'wait_for_tasks', 'probe'].map((n) => ({ name: n, description: n, parameters: { type: 'object' } })),
       dispatch: async (c) => {
         const a = JSON.parse(c.rawArgs) as Record<string, unknown>;
-        if (c.name === 'probe') return ok(`probed ${String(a['what'] ?? '')}`, a);
+        if (c.name === 'probe') return ok(`probed ${textOf(a['what'] ?? '')}`, a);
         if (c.name === 'delegate' && ops) {
           const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: [], inheritedContext: [], category: '', runInBackground: a['run_in_background'] !== false });
           return r.status === 'rejected' ? { ...ok(r.message), isError: true, status: 'failed' } : ok(`Task '${r.canonicalName}': ${r.status}\ntask_id: ${r.taskId}`);
@@ -115,7 +115,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     return { sessions, client, warnings };
   }
   /** What a request carried, less the system message the backend puts first. */
-  const sent = (req: ModelRequest): ChatMessage[] => req.messages.slice(1) as ChatMessage[];
+  const sent = (req: ModelRequest): ChatMessage[] => req.messages.slice(1);
   const recorded = (sid: SessionId, taskId: string): ChatMessage[] => conversationOf(dal.agentConversation(sid, taskId));
   const assistant = (text: string): ChatMessage => ({ role: 'assistant', content: [{ kind: 'text', text }] });
 
@@ -302,7 +302,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     const sid = (sessions.start(dal, 'C:/ws', 'probe the thing') as { value: SessionId }).value;
     ref.sid = sid;
     expect((await sessions.running(sid)!).status).toBe('completed');
-    await manual;
+    await (manual as Promise<unknown> | null); // assigned by the model's third turn, which TypeScript's narrowing does not see
     const root = dal.iterationsOf(sid)[0]!.root_task_id;
     const last = client.requests.filter((r) => personaOf(r) === 'orchestrator').at(-1)!;
     // Without the turn closing its conversation, the late pass wrote a replacement the model never saw.
@@ -418,8 +418,8 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
   const personaOf = (req: ModelRequest): string => /^You are the orchestrator/.test(systemOf(req)) ? 'orchestrator' : /summarise/i.test(systemOf(req)) ? 'summariser' : 'child';
   const ok = (text: string): PortToolResult => ({ text, isError: false, status: 'ok', durationMs: 1, label: 'x', args: {} });
   const ROOT = RUN_CONFIG_DEFAULTS.systemPrompt;
-  const CHILD = BUILT_IN_PERSONAS['coding-agent' as RoleName]!;
-  const ORCHESTRATOR = BUILT_IN_PERSONAS['orchestrator' as RoleName]!;
+  const CHILD = BUILT_IN_PERSONAS['coding-agent' as RoleName];
+  const ORCHESTRATOR = BUILT_IN_PERSONAS['orchestrator' as RoleName];
   /** The fingerprint of a persona's definition, as the run takes it (OQ-105 as ruled). */
   const printOf = (prompt: string, persona: typeof CHILD | null) => fingerprintOf(personaDefinitionOf(prompt, persona));
 

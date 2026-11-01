@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, type Clocks } from '@rotaris/kernel';
+import { FakeClock, textOf, type Clocks } from '@rotaris/kernel';
 import { backgroundStreamId, foregroundStreamId } from '@rotaris/contracts';
 import { findExecutable, nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, rejoinConptyWraps, stripVt } from './classify.js';
@@ -1801,7 +1801,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(open.text).not.toContain('__rot_');
       for (const leaked of ['done-later', "printf '%s"]) expect(output(open.text)).not.toContain(leaked);
       // A timeout of 8 s: the call ends at the interrupt, and the session is not reset under it.
-      began = clocks.monotonic.now() as number;
+      began = clocks.monotonic.now();
       interruptAfter(1_000);
       const timed = await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('done-later')}`, timeout: 8 }), ctx());
       expect(diag(timed.text)).toMatchObject({ exit_code: -1, outcome_kind: 'execution_error' });
@@ -2328,7 +2328,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(behind.text).toContain('wedge-done');
       expect(behind.text).not.toContain('__rot_');
       // Handed over, so nothing waits for a poll.
-      expect(String(diag((await t.execute(args({ command: '' }), ctx())).text)['detail'] ?? '')).not.toMatch(/exit code 5/);
+      expect(textOf(diag((await t.execute(args({ command: '' }), ctx())).text)['detail'] ?? '')).not.toMatch(/exit code 5/);
     } finally { await m.dispose(); }
   }, 30_000);
   it('REQ-TOOLS-098/179 (OQ-164): a paused command that ended unpolled is reported by the next command, and a second soft pause no longer loses the first one\'s end', async () => {

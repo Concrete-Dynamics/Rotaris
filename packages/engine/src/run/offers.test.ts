@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ContentPart, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type RunConfig, type RuntimePosture, type ToolPort } from '../index.js';
@@ -15,7 +15,7 @@ import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
  * in the handoff, a resumed root at the continue, and the root of each later iteration of the same run in that
  * iteration's first message.
  */
-const HOST = mintMachineId('0000000000000000000000000000000e') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000e');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 
 describe('PD-ORCH-004 revision 4: a later iteration\'s root is told the open offers', () => {

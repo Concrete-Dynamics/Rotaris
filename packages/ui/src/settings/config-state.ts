@@ -1,4 +1,4 @@
-import { dictationFieldProblem, displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DictationConfigView, type DictationSavePayload, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type ModelSlotName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
+import { dictationFieldProblem, displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DictationConfigView, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type ModelSlotName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
 
 /**
  * The pending settings state (REQ-CONFIG-279..287, 417..426): destination 1's values as the screen holds
@@ -399,7 +399,7 @@ export function savePayload(saved: PendingSettings, pending: PendingSettings): D
   // OQ-457: the keys that changed. `backend` and `local_model` always hold a value; an emptied optional key is removed.
   const dictation: Record<string, string | null> = {};
   for (const key of Object.keys(pending.dictation) as (keyof DictationConfigView)[]) if (pending.dictation[key] !== saved.dictation[key]) dictation[key] = pending.dictation[key];
-  if (Object.keys(dictation).length > 0) out.dictation = dictation as DictationSavePayload;
+  if (Object.keys(dictation).length > 0) out.dictation = dictation;
   if (Object.keys(pending.roles).length > 0) {
     // REQ-CONFIG-259/341: each field's edit travels under the scope it was made at, and the writer applies it at that layer.
     const fieldsOf = (e: PendingRoleFields | undefined) => (e === undefined ? undefined : {

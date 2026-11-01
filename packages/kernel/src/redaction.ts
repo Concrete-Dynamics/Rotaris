@@ -1,3 +1,4 @@
+import { textOf } from './text-of.js';
 /**
  * The ONE redaction pass (REQ-TOOLS-171): every surface that renders or persists text that might
  * carry a credential — approval prompt, audit, event stream, log, error text, persisted documents,
@@ -164,7 +165,7 @@ export function renderArgumentValue(value: unknown): string {
   try {
     return JSON.stringify(value) ?? '';
   } catch {
-    return String(value);
+    return textOf(value);
   }
 }
 

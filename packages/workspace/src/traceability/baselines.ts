@@ -45,7 +45,7 @@ export function parseDebtBaseline(text: string | null, prefix: string, path: str
     }
     const n = Number(m[1]);
     const set = entries.get(n) ?? new Set<DebtFlag>();
-    for (const f of flags) set.add(f as DebtFlag);
+    for (const f of flags) set.add(f);
     entries.set(n, set);
   }
   return { entries, malformed: out };

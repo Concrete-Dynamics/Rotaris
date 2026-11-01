@@ -40,6 +40,7 @@ export function consequenceForDecision(action: BoardAction, id: string): string 
     case 'edit': return `Editing opens the requirement's own source document for ${id}. The work already done keeps its branch and worktree, and the edit is recorded against the requirement.`;
     case 'reject': return `Rejecting the integration leaves every unit branch and worktree intact — nothing is deleted and nothing is merged — and returns ${id} for another pass.`;
     case 'keep-worktree': return `Keeping the worktree leaves the unit's branch and directory on disk so the work can be continued by hand. Nothing is merged and no further run is started for ${id}.`;
+    case 'create': case 'release': case 'return': case 'hold': case 'resume': case 'answer-blocker': case 'accept-proposal': case 'accept-change-work':
     default: return `${id}: this decision states no consequence of its own for the branch or the worktree.`;
   }
 }

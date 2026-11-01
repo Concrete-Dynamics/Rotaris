@@ -14,7 +14,7 @@ const ctxWith = (signal: AbortSignal): ToolContext => ({
 
 function slowExecutor(settle: (signal: AbortSignal) => Promise<{ text: string; isError: boolean }>): ToolExecutor {
   return {
-    name: 'slow', description: 'Answer after a delay.', schema: z.object({ ms: z.number().optional() }) as z.ZodType<unknown>,
+    name: 'slow', description: 'Answer after a delay.', schema: z.object({ ms: z.number().optional() }),
     parameters: { type: 'object' }, label: () => 'slow label',
     execute: (_args, ctx) => settle(ctx.signal),
   };

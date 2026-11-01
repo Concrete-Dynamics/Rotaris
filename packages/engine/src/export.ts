@@ -1,4 +1,4 @@
-import { millis, toIsoUtc, type Millis, type Timers, type WallClock, type SessionId, type Result } from '@rotaris/kernel';
+import { millis, toIsoUtc, type Timers, type WallClock, type SessionId, type Result } from '@rotaris/kernel';
 import { replaceDocument, type RetryLadder } from '@rotaris/platform';
 import { RING_CAPS, type AuditRow, type EventRow, type IssueRow, type SessionRow, type StoreDal, type TimelineRow, type ToolCallRow } from '@rotaris/store';
 import { EVENT_KINDS } from './events.js';
@@ -24,7 +24,7 @@ import { EVENT_KINDS } from './events.js';
  */
 
 /** REQ-TRACE-061: five attempts in total, delays 0.05 / 0.1 / 0.2 / 0.4 s before the four retries. */
-export const EXPORT_LADDER: RetryLadder = { delays: [50, 100, 200, 400].map((n) => millis(n)) as Millis[] };
+export const EXPORT_LADDER: RetryLadder = { delays: [50, 100, 200, 400].map((n) => millis(n)) };
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 

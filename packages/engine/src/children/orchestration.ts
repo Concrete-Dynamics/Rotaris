@@ -1,4 +1,4 @@
-import { type Clocks, countNoun, HAND_OFF_BUDGET, millis, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
+import { textOf, type Clocks, countNoun, HAND_OFF_BUDGET, millis, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
 import { interruptionPhrase, isTerminalChildState, reportStatusToState, resumeStateFor, TASK_ID_PATTERN, type ChildState, type Interruption, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
 import type { ChildRow, StoreDal } from '@rotaris/store';
@@ -295,7 +295,7 @@ export class IterationChildren implements DelegationOps {
     this.scheduler = new Scheduler({
       ledger: this.ledger, runChild: (row) => this.track(this.executeSettling(row)), warn: deps.warn, hasConversation: (taskId) => (deps.record?.load(taskId).length ?? 0) > 0,
       // REQ-ORCH-098: a child the scheduler settles — blocked, or cancelled by the finalize sweep — is torn down as any (OQ-152).
-      teardown: (row, report) => { writeTeardown(deps.writer, row, row.state, String(report['status'] ?? row.state), String(report['summary'] ?? '')); },
+      teardown: (row, report) => { writeTeardown(deps.writer, row, row.state, textOf(report['status'] ?? row.state), textOf(report['summary'] ?? '')); },
     });
     this.scheduler.onTerminal((row) => { const w = this.resumeWaiters.get(row.parent_id); if (w) { this.resumeWaiters.delete(row.parent_id); w(); } });
     // PD-TOOLS-006: a claim lapses at its child's terminal state. Liveness is also read from the ledger at every

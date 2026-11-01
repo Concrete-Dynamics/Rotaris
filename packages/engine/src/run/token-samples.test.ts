@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, mintMachineId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { modelError, type AgentBackend, type TurnReport } from '@rotaris/model';
 import { costLabelOf, durationLabel, parseTokenSamples, RUN_CONFIG_DEFAULTS, Sessions, TOKEN_SAMPLE_CAP, toSessionRecord } from '../index.js';
 
-const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000a');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 
 /**
@@ -77,7 +77,7 @@ describe('REQ-MONITOR-166 the run samples the token history', () => {
     // reopened: the same history from the row (REQ-MONITOR-242's rule applied to the samples)
     expect(toSessionRecord(dal.getSession(sid)!).usageHistory).toEqual(samples);
     // the sessions card's labels
-    const listed = sessions.list(dal, 'C:/ws').find((s) => s.sessionId === (sid as SessionId))!;
+    const listed = sessions.list(dal, 'C:/ws').find((s) => s.sessionId === (sid))!;
     expect(listed.tokens).toBe(350);
     expect(listed.busy).toBe(false);
     expect(listed.requirementId).toBeNull();

@@ -52,10 +52,10 @@ describe('run-host/intent — the pre-flight', () => {
     for (const category of ['explicit_trivial', 'moderate_feature'] as const) {
       const p = await runPreflight(ctx({ intent: { category, confidence: null, reason: 'carried', fallback: false, carried_over: true } }), deps);
       const root = p.playbookFor('orchestrator', true);
-      expect(root).toContain(`ROUTE: ${CATALOGUE.ROUTE!['entry']}`);
+      expect(root).toContain(`ROUTE: ${CATALOGUE.ROUTE['entry']}`);
       expect(root).not.toMatch(/coordinator routed it to you/);
-      expect(p.playbookFor('orchestrator')).toContain(`ROUTE: ${CATALOGUE.ROUTE!['routed']}`);
-      expect(p.playbookFor('coding-agent')).toContain(`ROUTE: ${CATALOGUE.ROUTE!['routed']}`);
+      expect(p.playbookFor('orchestrator')).toContain(`ROUTE: ${CATALOGUE.ROUTE['routed']}`);
+      expect(p.playbookFor('coding-agent')).toContain(`ROUTE: ${CATALOGUE.ROUTE['routed']}`);
       expect(p.resolvedPlaybooks['orchestrator']).toMatchObject({ cell: { ROUTE: 'entry' }, text: root });
       expect(p.resolvedPlaybooks['coding-agent']!.cell.ROUTE).toBe('routed');
     }
@@ -69,7 +69,7 @@ describe('run-host/intent — the pre-flight', () => {
   it('REQ-ORCH-024/027: a run whose entry persona is not the orchestrator is audited and clamped by that persona\'s cell', async () => {
     const p = await runPreflight(ctx({ intent: { category: 'question', confidence: null, reason: 'carried', fallback: false, carried_over: true } }), { ...deps, entryRole: 'coding-agent' });
     const root = p.playbookFor('coding-agent', true);
-    expect(root).toContain(`ROUTE: ${CATALOGUE.ROUTE!['entry']}`);
+    expect(root).toContain(`ROUTE: ${CATALOGUE.ROUTE['entry']}`);
     expect(p.resolvedPlaybooks['coding-agent']).toMatchObject({ cell: { ROUTE: 'entry' }, text: root });
     // No agent was given the orchestrator's entry form: a delegated orchestrator is routed.
     expect(p.resolvedPlaybooks['orchestrator']).toMatchObject({ cell: { ROUTE: 'routed' }, text: p.playbookFor('orchestrator') });

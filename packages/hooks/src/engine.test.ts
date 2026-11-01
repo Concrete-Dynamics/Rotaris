@@ -147,8 +147,9 @@ describe('the HookEngine', () => {
   it('REQ-HOOKS-124/133: hook.start carries the masked command; a broken sink reduces to a log entry and the hook still runs once', async () => {
     const t = harness([hook({ event: 'session_start', command: 'notify --token ghp_example' })]);
     let calls = 0;
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- the harness's sink is an arrow function; the test calls it back unbound on purpose.
     const original = t.engine['deps'].sinks.event;
-    (t.engine['deps'].sinks as { event: HookSinks['event'] }).event = ((kind: 'hook.start' | 'hook.finish', payload: never) => { calls += 1; if (calls === 1) throw new Error('stream down'); (original as (k: string, p: never) => void)(kind, payload); }) as HookSinks['event'];
+    (t.engine['deps'].sinks as { event: HookSinks['event'] }).event = ((kind: 'hook.start' | 'hook.finish', payload: never) => { calls += 1; if (calls === 1) throw new Error('stream down'); (original as (k: string, p: never) => void)(kind, payload); });
     const o = await t.engine.fireLifecycle('session_start', { task: 'do' });
     expect(o.length).toBe(1);
     expect(t.invoked.length).toBe(1);

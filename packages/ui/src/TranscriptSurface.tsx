@@ -296,7 +296,7 @@ export function RowList({ rows, surface, acknowledge, trailers, displays: given,
             expanded={expanded[expansionKey(display.shape, display.key)] ?? defaultExpanded(display, surface)}
             onToggle={() => toggle(expansionKey(display.shape, display.key), defaultExpanded(display, surface))}
             match={null}
-            place={places[i]!}
+            place={places[i]}
           />
         ))}
       </TranscriptSurfaceProvider>

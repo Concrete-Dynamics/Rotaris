@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type RunConfig, type ToolPort } from '../index.js';
@@ -14,7 +14,7 @@ import type { Task } from './todo.js';
  * todo, which closes with the resumed iteration — done when it succeeds, left pending when it is cancelled or fails, so
  * the next iteration takes it up. Driven end to end through the session manager.
  */
-const HOST = mintMachineId('0000000000000000000000000000000c') as MachineId;
+const HOST = mintMachineId('0000000000000000000000000000000c');
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 const PREFLIGHT: Preflight = {
   intent: { category: 'moderate_feature', confidence: 1, reason: 'fixed by the test', fallback: false, carried_over: false },

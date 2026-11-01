@@ -3,6 +3,7 @@ import { parse as parseYaml } from 'yaml';
 import { isPlainMap } from '../merge.js';
 import { info, warn, type Diagnostic, type Staged } from './diagnostics.js';
 import type { McpServerEntry } from './entry.js';
+import { textOf } from '@rotaris/kernel';
 
 /**
  * REQ-MCP-082/083 (the read path), 087, 088, 090: secrets per scope loaded read-only, the merged view, the environment
@@ -35,7 +36,7 @@ export function readSecretsFile(path: string, scope: SecretScope, read: (p: stri
     if (!isPlainMap(block)) continue;
     for (const [rawKey, rawValue] of Object.entries(block)) {
       const key = String(rawKey);
-      const value = rawValue === null || rawValue === undefined ? '' : String(rawValue);
+      const value = rawValue === null || rawValue === undefined ? '' : textOf(rawValue);
       if (key === '' || value === '') {
         diagnostics.push(warn(`${scope} secrets: server '${server}' key '${key}' is ${key === '' ? 'empty' : 'without a value'}; skipped (REQ-MCP-082)`, 'load', `mcp.secret.empty.${scope}.${server}.${key}`, { server, channels: 'log' }));
         continue;

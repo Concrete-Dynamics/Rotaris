@@ -553,7 +553,7 @@ describe('a process the record was reclaimed from stands down — ADR-0055 conse
     await new Promise<void>((resolve) => { silent.listen(silentEndpoint, resolve); });
     writeFileSync(file(), `${JSON.stringify({ pid: PREDECESSOR_PID, host: M, acquired_at: toIsoUtc(clocks.wall.instant()), endpoint: silentEndpoint })}\n`);
     // C: a process that has ended, at an endpoint nothing serves.
-    const deadPid = spawnSync(process.execPath, ['-e', '0']).pid as number;
+    const deadPid = spawnSync(process.execPath, ['-e', '0']).pid;
     const dead = `${JSON.stringify({ pid: deadPid, host: M, acquired_at: toIsoUtc(clocks.wall.instant()), endpoint: join(dir, 'dead.sock') })}\n`;
 
     // The record is replaced by C inside the hand-over's interval: the launch's first timer is that interval's bound.
@@ -876,7 +876,7 @@ describe('the hand-over socket\'s directory — REQ-STARTUP-145, REQ-STARTUP-161
   // OQ-248: the endpoint is the record's, so the reclaim that removes a dead process's record removes its endpoint with it
   // (docs/archive/defects/a-reclaim-leaves-the-dead-instances-socket-behind.md).
   it.skipIf(!posixHost)('a reclaim removes the socket a dead recorded process left, and its own private directory; it leaves a live process\'s endpoint and a name that is not one', async () => {
-    const dead = spawnSync(process.execPath, ['-e', '0']).pid as number;
+    const dead = spawnSync(process.execPath, ['-e', '0']).pid;
     const own = join(dir, 'rotaris-Ab12Cd');
     mkdirSync(own, { mode: 0o700 });
     const stale = join(own, `instance-${dead}-0123abcd.sock`);

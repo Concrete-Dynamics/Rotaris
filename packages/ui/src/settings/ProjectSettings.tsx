@@ -229,7 +229,7 @@ export function TraceabilitySettings({ workspace, onOperate, onCancel }: Traceab
     try {
       const r = await onOperate(operation, operation === 'compare' && base.trim() !== '' ? base.trim() : undefined);
       if (!r.ok) { setMessage(r.reason); return; }
-      const elapsed = isRecord(r.reply) && typeof r.reply['elapsedMs'] === 'number' ? (r.reply['elapsedMs'] as number) : null;
+      const elapsed = isRecord(r.reply) && typeof r.reply['elapsedMs'] === 'number' ? (r.reply['elapsedMs']) : null;
       setLast({ operation, statement: describeOperation(operation, r.reply), elapsedMs: elapsed });
     } finally {
       setInFlight(null);

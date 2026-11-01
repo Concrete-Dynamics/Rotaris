@@ -728,7 +728,7 @@ function ModeSelector({ current, enabled, onSetMode, strip = false, stripCompact
           label: m,
           hint: m === 'autonomous' ? 'runs without asking' : m === 'ask' ? 'asks per tool call' : 'denies by default',
         }))}
-        onChoose={(m) => { if (m === 'autonomous') setConfirming(m as PermissionPreset); else void apply(m as PermissionPreset); }}
+        onChoose={(m) => { if (m === 'autonomous') setConfirming(m); else void apply(m as PermissionPreset); }}
         strip={strip ? { iconOnly: stripCompact ? true : undefined } : undefined}
       />
       {/* REQ-CHAT-007's dual channel: the mode chip never disables, so the description carries the tooltip's sentence. */}

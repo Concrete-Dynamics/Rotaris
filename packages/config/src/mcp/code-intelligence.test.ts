@@ -226,7 +226,7 @@ describe('the token\'s launch and the binding (REQ-MCP-033/034)', () => {
 });
 
 describe('the derived invocation (REQ-MCP-036)', () => {
-  const entry = (patch: Partial<McpServerEntry>): McpServerEntry => ({ type: 'stdio', command: CODE_INTELLIGENCE_TOKEN, args: [...CODE_INTELLIGENCE_DEFAULT_ARGS], url: null, headers: {}, env: {}, cwd: null, enabled: true, request_timeout: null, disabled_tools: [], tool_name_map: {}, tools: [], ...patch } as McpServerEntry);
+  const entry = (patch: Partial<McpServerEntry>): McpServerEntry => ({ type: 'stdio', command: CODE_INTELLIGENCE_TOKEN, args: [...CODE_INTELLIGENCE_DEFAULT_ARGS], url: null, headers: {}, env: {}, cwd: null, enabled: true, request_timeout: null, disabled_tools: [], tool_name_map: {}, tools: [], ...patch });
   it('is the resolved command plus the prefix before the launch subcommand', () => {
     const resolved = { command: 'C:\\App\\Rotaris.exe', args: [CODE_INTELLIGENCE_TOKEN, '--', ...CODE_INTELLIGENCE_DEFAULT_ARGS, CODE_INTELLIGENCE_BINDING.projectPathOption, 'D:\\ws'], builtin: true };
     const r = deriveSetupInvocation(entry({}), resolved);

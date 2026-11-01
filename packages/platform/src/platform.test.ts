@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, readdirSync, mkdirSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, win32 } from 'node:path';
-import { millis, mintMachineId, FakeClock, type MachineId } from '@rotaris/kernel';
+import { millis, mintMachineId, FakeClock } from '@rotaris/kernel';
 import { replaceDocument, replaceDocumentSync, exclusiveCreate, guardedRead, probePid, isLockLive, isLockForeign, canonicalPath, samePath, readOrMintMachineId, resolveUserDirs, dataLayout, claimInstance, endpointFor, nodeClocks, findExecutable, environmentWithout, PreferenceStore, resolvePreferenceRoot, coercePaneLayout, composerDraftKey, xdgBaseDirectory, localAppDataDirectory } from './index.js';
 
 let dir: string;
@@ -287,7 +287,7 @@ describe('platform — the instance claim (ADR-0055 alt I, REQ-STARTUP-161/162/1
     const recordFile = join(dir, 'instance.json');
     const seen: unknown[] = [];
     const deps = (pid: number) => ({
-      recordFile, endpointDir: dir, machineId: M as MachineId, pid, wall: clocks.wall, timers: clocks.timers,
+      recordFile, endpointDir: dir, machineId: M, pid, wall: clocks.wall, timers: clocks.timers,
       handOverIntervalMs: millis(5_000), onHandOver: (h: unknown) => seen.push(h),
     });
     const first = await claimInstance(deps(process.pid));
@@ -310,7 +310,7 @@ describe('platform — the instance claim (ADR-0055 alt I, REQ-STARTUP-161/162/1
     const recordFile = join(dir, 'instance.json');
     writeFileSync(recordFile, JSON.stringify({ pid: 2_147_483_000, host: M, acquired_at: '2026-09-02T00:00:00.000Z', endpoint: '\\\\.\\pipe\\rotaris-nobody' }));
     const r = await claimInstance({
-      recordFile, endpointDir: dir, machineId: M as MachineId, pid: process.pid, wall: clocks.wall, timers: clocks.timers,
+      recordFile, endpointDir: dir, machineId: M, pid: process.pid, wall: clocks.wall, timers: clocks.timers,
       handOverIntervalMs: millis(500), onHandOver: () => {},
     });
     expect(r.outcome).toBe('instance');
@@ -322,7 +322,7 @@ describe('platform — the instance claim (ADR-0055 alt I, REQ-STARTUP-161/162/1
     writeFileSync(recordFile, JSON.stringify({ pid: process.pid, host: M, acquired_at: '2026-09-02T00:00:00.000Z', endpoint: process.platform === 'win32' ? '\\\\.\\pipe\\rotaris-silent-' + process.pid : join(dir, 'silent.sock') }));
     const t0 = Date.now();
     const r = await claimInstance({
-      recordFile, endpointDir: dir, machineId: M as MachineId, pid: process.pid, wall: clocks.wall, timers: clocks.timers,
+      recordFile, endpointDir: dir, machineId: M, pid: process.pid, wall: clocks.wall, timers: clocks.timers,
       handOverIntervalMs: millis(300), onHandOver: () => {},
     });
     expect(Date.now() - t0).toBeLessThan(5_000);

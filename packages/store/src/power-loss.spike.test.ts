@@ -141,7 +141,7 @@ describe.skipIf(phase !== 'kill')("power loss — the kill baseline and the veri
     const wal = join(dryDir, 'workspace.db-wal');
     const before = statSync(wal).size;
     expect(before).toBeGreaterThan(cutAt.walBytes!);
-    truncateSync(wal, cutAt.walBytes!);
+    truncateSync(wal, cutAt.walBytes);
     const cut = survey(dryDir);
     expect(cut.integrity).toBe('ok');
     expect(cut.gaps).toEqual([]);

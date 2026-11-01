@@ -33,6 +33,7 @@ export function resolveUserDirs(e: DirEnv = { platform: process.platform, env: p
   // The platform is a PARAMETER, so the separator is decided by IT and never by the host the code happens to run
   // on. Reading `node:path`'s host-bound `join` here made the Windows answer depend on whether the caller was
   // running Windows, which is the one thing a platform parameter exists to take out of the question.
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- node:path's functions read no `this`.
   const { join } = e.platform === 'win32' ? win32 : posix;
   switch (e.platform) {
     case 'win32': {
@@ -53,6 +54,8 @@ export function resolveUserDirs(e: DirEnv = { platform: process.platform, env: p
         // under Application Support with the sync attribute handled at store creation (IC-3 item 4).
         data: join(e.home, 'Library', 'Application Support', name, 'data'),
       };
+    // Every other platform takes the XDG layout (R-091 names them, so a platform the runtime adds is placed on purpose).
+    case 'aix': case 'android': case 'freebsd': case 'haiku': case 'linux': case 'openbsd': case 'sunos': case 'cygwin': case 'netbsd':
     default: {
       const config = xdgBaseDirectory(e.env['XDG_CONFIG_HOME'], join(e.home, '.config'));
       const data = xdgBaseDirectory(e.env['XDG_DATA_HOME'], join(e.home, '.local', 'share'));
@@ -104,6 +107,7 @@ export function dataLayout(dirs: UserDirs, platform: NodeJS.Platform = process.p
   // sub-location is decided by the platform the answer is FOR, not by the host the code runs on. In
   // production the two always agree (every caller passes no platform). A bare host-bound `join` here
   // spelled the Windows answer with POSIX separators whenever the question was asked off Windows.
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- node:path's functions read no `this`.
   const { join } = platform === 'win32' ? win32 : posix;
   return {
     workspaces: join(dirs.data, 'workspaces'),

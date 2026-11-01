@@ -12,6 +12,8 @@ Part 69 of 69 of the [open-questions record](../open-questions.md), which indexe
 
 **What decides it.** A ruling on whether "that one interval" limits (2) and (3)'s wait alone, or the launch's whole resolution; under the second, (4) has only what remains of it, and a launch that used it all gets no real second attempt.
 
+**Ruled 2026-11-01 by the owner ([R-090](../../product/requests.md#r-090)).** Kind reading, recorded as a directive because it departs from the requirement's words: "that one interval" bounds (2) and (3)'s wait alone, and (4)'s hand-over has an interval of its own, as built. [`PD-STARTUP-009`](../../product/directives/pd-startup-009.md#pd-startup-009) states it beside OQ-461's ruling, and REQ-STARTUP-164 carries the back-pointer.
+
 <a id="oq-461"></a>
 
 **OQ-461 — What does a launch end as when the holder is live and never answers?** *(REQ-STARTUP-161, REQ-STARTUP-164, ADR-0055 consequence 14. Raised 2026-10-31 by the review of the instance's stand-down; [the note](../../defects/a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md).)*
@@ -21,3 +23,5 @@ Part 69 of 69 of the [open-questions record](../open-questions.md), which indexe
 **What the build proceeds under.** (3) leaves a record naming another live claim, on REQ-STARTUP-161's ground; the retry loses; (4) hands over once more; unanswered, `claimInstance` returns `refused` and main ends with exit code 2. One process runs, and no window is surfaced for this launch.
 
 **What decides it.** A ruling on which sentence governs this path: refuse with no window as built, reclaim as (3)'s list reads and accept the brief second process, or some surface that tells the person what happened.
+
+**Ruled 2026-11-01 by the owner ([R-090](../../product/requests.md#r-090)).** Kind change-behaviour: reclaim. A holder that is live and never answers is treated as one that cannot be reached — after (4)'s second hand-over goes unanswered within its interval, the launch reclaims the record and claims it a final time, and a claim that succeeds opens this launch's own window. The first sentence governs over (4)'s "SHALL then end"; the brief second process is the one the requirement already admits. Recorded as [`PD-STARTUP-009`](../../product/directives/pd-startup-009.md#pd-startup-009); not yet built — the repair is owed with the directive's first execution, and the note moves to `fixed/` with it.

@@ -160,6 +160,8 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-STARTUP-006](directives/pd-startup-006.md) | the setup statement names the moments the build carries |
 | [PD-STARTUP-007](directives/pd-startup-007.md) | a reviewed exception may supply the licence identifier a dependency ships the text of and does not declare |
 | [PD-STARTUP-008](directives/pd-startup-008.md) | an update downloads by itself and takes effect at the next start or by `Restart now` |
+| [PD-STARTUP-009](directives/pd-startup-009.md) | each hand-over has its own interval, and a holder that is live and never answers is reclaimed |
+| [PD-STARTUP-010](directives/pd-startup-010.md) | the preparation warning outlasts the no-provider notice |
 
 ### TOOLS
 

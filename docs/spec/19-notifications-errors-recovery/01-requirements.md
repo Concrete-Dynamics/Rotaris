@@ -95,6 +95,11 @@ Part 1 of 7 of [domain 19](../19-notifications-errors-recovery.md), which indexe
 
 **REQ-NOTIFY-024** — One notice is current at any moment, and it is the one published most recently. A publication replaces whatever notice was current, whichever session either concerns, and the replaced notice does not return unprompted. Replacement is a distinct event from clearing: the scoping rules of REQ-NOTIFY-028 and REQ-NOTIFY-029 govern what a starting run clears, and they exempt nothing from being replaced. Single-slot replacement is canonical and no notice is queued, restored or re-presented; a notice replaced before the user read it stays retrievable only through the record of REQ-NOTIFY-268.
 
+> **Narrowed by [`PD-STARTUP-010`](../../product/directives/pd-startup-010.md#pd-startup-010), 2026-11-01.** For one pair
+> alone — REQ-STARTUP-165 (c)'s preparation warning and the notice that no model provider is authenticated — the warning
+> is the current notice once both are published, and the no-provider notice is presented once more after the warning is
+> dismissed or cleared, if it still applies. No other notice returns.
+
 **REQ-NOTIFY-025** — Notice identifiers are unique within an application session and increase monotonically. The notice store belongs to the application process rather than to any window: re-creating the main window within one process neither resets the identifier sequence nor discards the current notice, and the newly created window renders whatever notice is current under REQ-NOTIFY-024. An identifier is unique across every window of that process, so a clear request carrying an identifier under REQ-NOTIFY-026 stays meaningful after a window has been re-created.
 
 **REQ-NOTIFY-026** — A clear request carrying no identifier removes whatever notice is current. A clear request carrying an identifier removes the current notice only where the identifiers match, so dismissing a notice already superseded leaves its successor standing.

@@ -287,7 +287,7 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   /** REQ-TOOLS-063: the approval dialog window asks main for the request it was opened for, and how many others wait. */
   z.object({ kind: z.literal('approval.payload') }),
   /**
-   * Part AC — REQ-CHAT-098/103: the approval trailer row shares the question trailer's one click handler, and an
+   * Part AC — REQ-CHAT-098/103 (098 superseded by PD-CHAT-002): the approval trailer row shares the question trailer's one click handler, and an
    * approval's modal is a separate window (ADR-0019/ADR-0048), so "re-openable while pending" means raising the
    * window that is already up. Main answers false when the named request has no open dialog — a queued request
    * cannot jump the queue (REQ-TOOLS-063 shows one at a time, oldest first).

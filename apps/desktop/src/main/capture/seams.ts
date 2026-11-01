@@ -365,7 +365,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   }
 
   // Part AC's seam. ROTARIS_CAPTURE_QUESTION_ELSEWHERE="<option>@ms": the prompt the open stepper is showing, answered from
-  // ANOTHER surface — main reads the request id off the stepper and sends `answerQuestion` itself. REQ-CHAT-098 then requires
+  // ANOTHER surface — main reads the request id off the stepper and sends `answerQuestion` itself. REQ-CHAT-098 (superseded by PD-CHAT-002) required
   // the modal to close programmatically without emitting a second decision, and the proof asserts exactly that by counting
   // the controls the renderer sent afterwards.
   for (const step of steps(process.env['ROTARIS_CAPTURE_QUESTION_ELSEWHERE'])) {

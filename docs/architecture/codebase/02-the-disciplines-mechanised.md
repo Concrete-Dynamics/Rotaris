@@ -14,6 +14,17 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
 - **The IPC payloads carry no secret** — `contracts.test.ts` walks every channel schema.
 - **The symbol artifact is regenerated before collection** — vitest `globalSetup`, same generator as
   the build. A withdrawn identifier is `@deprecated` and warns at every reference (REQ-TRACE-181).
+- **Every requirement or directive identifier cited in code resolves** — `rotaris/requirement-citations-resolve` (in
+  `pnpm lint`, over every `.ts`, `.tsx`, `.js`, `.mjs` and `.cjs` file under `packages/`, `apps/` and `tools/`) reads every
+  comment and every string, template and JSX-text token, expands the range forms `pnpm req-coverage` reads (its
+  `citationsIn`, imported), and resolves each identifier against the generated artifact: one it does not define fails;
+  one written out that is withdrawn, superseded by a directive or in a retired domain fails unless its line or the
+  line above says `withdrawn`, `superseded` (or names the directive) or `retired`, the mark of a deliberate historical
+  citation. The typed `REQ[…]` symbol gave the paper's property at two sites; this gives it at every citation (R-092,
+  ReqToCode §4.6, `docs/architecture/hardening.md` §6). Its one held identifier, `REQ-ORCH-153`, waits on
+  [OQ-491](../open-questions/69-spikes-and-later-questions-36.md#oq-491) through the rule's `pending` option. The
+  proof scripts under `apps/desktop/scripts/` are outside `eslint .` until they are linted; their citations were made
+  to pass when the rule landed (since 2026-11-01, hrd2 H1).
 - **A window is held by id, never by handle, past its creation** — `webContents` on a destroyed
   window throws, and a throw from a `closed` handler during exit wedges the process behind a modal
   error dialog (ADR-0044 first-execution note). The relay attaches by id; `send` checks `isDestroyed()`.

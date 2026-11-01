@@ -194,11 +194,16 @@ specification's domains are the RequirementSets; its contiguous, never-reused id
 | Falsified reasons and correction blocks sit inside the ADRs' decision text | `docs/architecture/adr/` (66 records) | I2 |
 | 829 repaired defect notes sit under `docs/defects/fixed/` | `docs/defects/fixed/` | I2 |
 | A superseded or withdrawn requirement's text sits in the live specification (268 withdrawn, the superseded ones named by `SUPERSEDED_BY`) | `docs/spec/`; the generator reads definition lines only | I3 |
-| Citations are comment strings: 906 files cite 4,456 distinct identifiers, 2 code sites use the typed symbol; a citation of an undefined identifier passes `pnpm lint` | `grep -rho "REQ-[A-Z]*-[0-9]*" packages apps` | H1 |
+| ~~Citations are comment strings: 906 files cite 4,456 distinct identifiers, 2 code sites use the typed symbol; a citation of an undefined identifier passes `pnpm lint`~~ **Closed 2026-11-01 (H1):** `rotaris/requirement-citations-resolve` fails `pnpm lint` on an identifier the artifact does not define and on a withdrawn, superseded or retired one cited as live; `tools/eslint-rules/rules.test.ts` pins each branch. Its first run found 168 citations in 64 files: 151 of `REQ-ORCH-153`, held by [OQ-491](open-questions/69-spikes-and-later-questions-36.md#oq-491); 8 of `REQ-CHAT-098`/`099` written before `PD-CHAT-002` superseded them, marked; 2 withdrawn (one marked, one removed); 7 made-up fixture identifiers (4 in the rule's own comment, reworded; 3 disabled on their line with the reason). No wrong digit, no renumbered identifier | `grep -rho "REQ-[A-Z]*-[0-9]*" packages apps` | H1 |
 | No branch-relative coverage (the paper's §3.6) | `tools/requirement-coverage/coverage.mjs` | H1 |
 | No drift detection: a requirement edited after the code that cites it was last touched (the paper's §4.7) | the same | H1 |
 | Coverage is report-only; an orphaned requirement never fails anything (the paper computes it in CI) | the same; `.github/workflows/ci.yml` | H2 |
 | A diff does not name the requirements it claims | `tools/verify-plan/` | H2 |
+
+**A citation is checked where it is written** (since H1; `AGENTS.md`'s Traceability paragraph is at its byte cap, so the
+rule is stated here and in [`codebase/02`](codebase/02-the-disciplines-mechanised.md)): a requirement or directive
+identifier written in code must be one `pnpm symbols` defines, and one withdrawn, superseded or retired is cited only as
+history, with the word (`withdrawn`, `superseded` or the directive's identifier, `retired`) on its line or the line above.
 
 **The archive's shape** (settled here as the orchestrator's design; the owner chose what moves, 2026-11-01):
 `docs/archive/` mirrors the record's paths (`archive/architecture/open-questions/<part>.md`,

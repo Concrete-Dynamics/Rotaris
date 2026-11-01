@@ -152,4 +152,16 @@ export default tseslint.config(
       'no-restricted-imports': ['error', { patterns: [{ group: ['node:*', 'fs', 'path', 'os', 'child_process', 'better-sqlite3'], message: 'Renderer code has no filesystem and no store handle (ADR-0044, W-01).' }] }],
     },
   },
+  {
+    // R-092 (ReqToCode §4.6): every requirement or directive identifier a file cites — in a comment, a string, a test
+    // name — resolves against the generated artifact; a withdrawn, superseded or retired one is cited only as history.
+    // The coverage report's own directory is left out as that report leaves it out: its fixtures are made up.
+    files: ['packages/**/*.{ts,tsx,js,mjs,cjs}', 'apps/**/*.{ts,tsx,js,mjs,cjs}', 'tools/**/*.{ts,tsx,js,mjs,cjs}'],
+    ignores: ['tools/requirement-coverage/**'],
+    rules: {
+      // OQ-491: PD-ORCH-002 declares it supersedes REQ-ORCH-153 while its rule narrows one clause of it; the plan
+      // gate's code cites REQ-ORCH-153 for the clauses the directive leaves alone. Leaves with OQ-491's ruling.
+      'rotaris/requirement-citations-resolve': ['error', { pending: { 'REQ-ORCH-153': 'OQ-491' } }],
+    },
+  },
 );

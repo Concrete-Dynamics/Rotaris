@@ -12,7 +12,7 @@
  *                    run host, the waiting call is released at once rather than at the timeout, and the tool
  *                    observes "Questions were cancelled." (REQ-CHAT-101).
  *   3. elsewhere   — the same prompt answered from ANOTHER surface while the modal is open: the modal closes
- *                    programmatically and emits no second decision (REQ-CHAT-098).
+ *                    programmatically and emits no second decision (REQ-CHAT-098, superseded by PD-CHAT-002).
  *   4. stale       — a delivery that no waiting call receives: the modal stays open with REQ-CHAT-102's sentence and
  *                    reports no success.
  *   5. invalid     — an action violating REQ-CHAT-092 is rejected before anything is shown: no trailer ever appears,

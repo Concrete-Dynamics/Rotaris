@@ -57,7 +57,7 @@ const sentence = (o: ExportOutcome, what: string): string => {
   return `Wrote ${n} ${what}${n === 1 ? '' : 's'} to ${o.destination ?? 'the chosen file'}.${o.warnings && o.warnings.length > 0 ? ` ${o.warnings.join(' ')}` : ''}`;
 };
 
-/** REQ-SHELL-126/127, REQ-SESSION-117/118/182/191/041/200: the window-modal browser and its actions (Part U). */
+/** REQ-SHELL-126/127, REQ-SESSION-118/182/191/041/200: the window-modal browser and its actions (Part U). */
 export function SessionBrowser({ sessions, loading, error = null, onOpen, onDismiss, onRefresh, onRepair, onDelete, onExportRecords, onExportTrajectory, onOpenLog, onRevealFiles, onBackup, onRestore }: SessionBrowserProps) {
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);

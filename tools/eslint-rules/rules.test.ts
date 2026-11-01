@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { ESLint } from 'eslint';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+// @ts-expect-error -- a plain JavaScript module without declarations
+import { citationFindings, loadArtifact } from './index.js';
+import { REQ, SUPERSEDED_BY } from '@rotaris/kernel';
 
 /**
  * The boundary matrix and the engine-code timer rule are structural only if
@@ -72,5 +75,82 @@ describe('lint — ADR-0031: arithmetic on an amount lives in kernel/src/money.t
     expect(money(await lintAs('packages/engine/src/x.test.ts', 'export const a = 0.1 * 3; declare const cost: number; export const b = cost * 2;\n'))).toEqual([]);
     const carried = "import { addAmounts } from '@rotaris/kernel';\ndeclare const cost: string;\nexport const total = addAmounts(cost, '0.1');\nexport const same = cost === '0';\nexport const label = `${cost} reported`;\n";
     expect(money(await lintAs('packages/engine/src/fine.ts', carried))).toEqual([]);
+  });
+});
+
+describe('lint — R-092 (ReqToCode §4.6): every cited requirement or directive identifier resolves', () => {
+  // Identifiers are built, never written whole, so this file's own text cites nothing the rule would read.
+  const id = (kind: 'REQ' | 'PD', domain: string, n: string) => [kind, domain, n].join('-');
+  const cites = async (filePath: string, code: string) => {
+    const [result] = await eslint.lintText(code, { filePath: join(repo, filePath) });
+    return (result?.messages ?? []).filter((m) => m.ruleId === 'rotaris/requirement-citations-resolve').map((m) => `${m.line}: ${m.message}`);
+  };
+  const unknown = id('REQ', 'CHAT', '999');
+  const live = id('REQ', 'CHAT', '001');
+  const withdrawn = id('REQ', 'CONFIG', '058');
+  const superseded = id('REQ', 'CHAT', '098');
+  const retired = id('REQ', 'TUI', '001');
+  const lastChat = Object.keys(REQ).filter((k) => k.startsWith('REQ-CHAT-')).map((k) => Number(k.slice(-3))).reduce((a, b) => Math.max(a, b));
+  const pad = (n: number) => String(n).padStart(3, '0');
+
+  it('an identifier the artifact does not define fails, in a comment, a string, a template, a test name and JSX text', async () => {
+    const code = [
+      `// ${unknown}: a line comment`,
+      `/* ${id('PD', 'CHAT', '999')} in a block comment */`,
+      `export const a = '${unknown}';`,
+      `export const b = \`${unknown} \${a}\`;`,
+      `declare function it(name: string, fn: () => void): void;`,
+      `it('${unknown}: a test name', () => {});`,
+    ].join('\n');
+    const found = await cites('packages/engine/src/violation.ts', code);
+    expect(found).toHaveLength(5);
+    expect(found[0]).toBe(`1: cites ${unknown}, which docs/spec/ does not define. Correct it to the identifier meant, or remove it.`);
+    expect(found[1]).toContain('which docs/product/directives/ does not define');
+    expect(await cites('packages/ui/src/violation.tsx', `export const v = <p>see ${unknown}</p>;\n`)).toHaveLength(1);
+  });
+
+  it('a range is expanded: an end past the last identifier fails, and a live range passes', async () => {
+    const found = await cites('packages/engine/src/violation.ts', `// REQ-CHAT-${pad(lastChat - 1)}..${pad(lastChat + 1)}\n`);
+    expect(found).toEqual([`1: cites REQ-CHAT-${pad(lastChat + 1)}, which docs/spec/ does not define. Correct it to the identifier meant, or remove it.`]);
+    expect(await cites('packages/engine/src/fine.ts', `// ${live}..003, ${live} to 003, ${live}/002, ${live}, 002 and 003\n`)).toEqual([]);
+  });
+
+  it('a withdrawn identifier fails unless its line or the line above says withdrawn; a range spanning one does not', async () => {
+    expect(await cites('packages/engine/src/violation.ts', `// the old directory (${withdrawn})\n`)).toEqual([
+      `1: cites ${withdrawn}, withdrawn in place (docs/spec/15-settings-configuration/02-legacy-migration.md:7). Cite what replaced it, or mark a deliberate historical citation with the word \`withdrawn\` on this line or the line above.`,
+    ]);
+    expect(await cites('packages/engine/src/fine.ts', `// the old directory (${withdrawn}, withdrawn)\n`)).toEqual([]);
+    expect(await cites('packages/engine/src/fine.ts', `// Withdrawn, and cited as history:\n// ${withdrawn}\n`)).toEqual([]);
+    expect(await cites('packages/engine/src/fine.ts', `// ${id('REQ', 'CONFIG', '050')}..057 and a span: ${id('REQ', 'CONFIG', '057')}..062\n`)).toEqual([]);
+  });
+
+  it('a superseded identifier fails unless the line names its directive or says superseded', async () => {
+    expect(await cites('packages/ui/src/violation.ts', `// the modal stepper (${superseded})\n`)).toEqual([
+      `1: cites ${superseded}, superseded by PD-CHAT-002, which governs instead. Cite PD-CHAT-002, or mark a deliberate historical citation (\`superseded by PD-CHAT-002\`).`,
+    ]);
+    expect(await cites('packages/ui/src/fine.ts', `// the modal stepper (${superseded}, superseded by ${id('PD', 'CHAT', '002')})\n`)).toEqual([]);
+    expect(await cites('packages/ui/src/fine.ts', `// ${id('PD', 'CHAT', '002')} (was ${superseded})\n`)).toEqual([]);
+  });
+
+  it('an identifier of a retired domain fails unless the line says retired', async () => {
+    expect(await cites('tools/x/violation.mjs', `// ${retired}\n`)).toEqual([
+      `1: cites ${retired}, in the retired TUI domain (docs/spec/README.md). Remove it, or mark a deliberate historical citation with the word \`retired\`.`,
+    ]);
+    expect(await cites('tools/x/fine.mjs', `// ${retired}, retired with the terminal interface\n`)).toEqual([]);
+  });
+
+  it('live identifiers pass, and the scope is packages/, apps/ and tools/ less the coverage report\'s made-up fixtures', async () => {
+    expect(await cites('apps/desktop/src/main/fine.ts', `// ${live}, ${id('PD', 'CHAT', '011')}\nexport const s = '${live}';\n`)).toEqual([]);
+    expect(await cites('tools/requirement-coverage/fixture.test.ts', `// ${unknown}\n`)).toEqual([]);
+    expect(await cites('packages/engine/src/x.test.ts', `// ${unknown}\n`)).toHaveLength(1);
+  });
+
+  it('an identifier the record holds open (`pending`) waits on its question for its lifecycle, never for its existence', async () => {
+    const held = id('REQ', 'ORCH', '153');
+    expect(SUPERSEDED_BY[held as keyof typeof SUPERSEDED_BY]).toBe('PD-ORCH-002');
+    expect(await cites('packages/engine/src/fine.ts', `// the plan gate (${held})\n`)).toEqual([]);
+    const art = loadArtifact();
+    expect(citationFindings(`// ${held}`, '', art).map((f: { kind: string }) => f.kind)).toEqual(['superseded']);
+    expect(citationFindings(`// ${held}`, '', art, { [held]: 'OQ-491' })).toEqual([]);
   });
 });

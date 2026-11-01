@@ -53,8 +53,9 @@ Listed foundation-first, which is also dependency order. "Root" is the compositi
 | `ui-core` | renderer state with no React in it: the transcript replica, the notice store, the per-window acknowledgement stack, pure requirement display mapping | `replica.ts`, `notice.ts`, `acknowledgements.ts`, `requirements/display.ts` | renderer | — |
 | `ui` | every drawn surface: the shell and views, the dialogs, the design system, the transcript engine, the terminal display, Markdown, the slash catalogue, the command vocabulary, Settings, the Library | `AppShell.tsx`, `design-system/`, `transcript/`, `settings/`, `commands/` | renderer | [`ui/CONTEXT.md`](../packages/ui/CONTEXT.md) |
 
-`tools/` holds build-time and lint-time code, not product code: `tools/eslint-rules/` (`rotaris/no-bare-timers`
-and its siblings), `tools/symbol-artifact/` (the generator behind `pnpm symbols`, and `ensure.mjs`, the
+`tools/` holds build-time and lint-time code, not product code: `tools/eslint-rules/` (`rotaris/no-bare-timers`,
+`rotaris/requirement-citations-resolve`
+and their siblings), `tools/symbol-artifact/` (the generator behind `pnpm symbols`, and `ensure.mjs`, the
 plugin `electron.vite.config.ts` carries so a build writes the symbols when they are absent), `tools/release-naming/` (the
 artifact names and the release-tag grammar), `tools/release-guard/` (`pnpm release:guard <tag>`, the pre-build version
 and package-pin guard; `cli.mjs` boots `src/guard.ts` through Vite's module runner because it reads `@rotaris/config`'s

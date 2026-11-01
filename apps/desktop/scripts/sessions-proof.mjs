@@ -475,6 +475,7 @@ const tables = tablesWithSession();
 // and `delivery_runs` is the one table carrying session_id as a fact (`lib/session-cascade.mjs`, pinned beside it).
 const { cascaded, facts, problems: cascadeProblems } = withDb((db) => sessionCascade(db));
 expect(cascadeProblems.length === 0, `the cascade premise: ${cascadeProblems.join('; ')} (tables whose session_id references sessions: ${cascaded.join(', ')}; as a fact: ${facts.join(', ')})`);
+// eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up delivery row's requirement, not a citation
 withDb((db) => db.prepare("INSERT INTO delivery_runs (req_id, unit, session_id, worktree_ref, permissions, status, stage, outcome, started_at, ended_at) VALUES ('REQ-PROOF-001', 'u1', ?, NULL, '', 'running', NULL, NULL, '2026-09-05T09:00:00.000Z', NULL)").run(A));
 // v20 (REQ-SESSION-166): A's VERBATIM plan text is planted so the built-app delete below measures the cascade taking it.
 withDb((db) => db.prepare("INSERT INTO plan_cycles (session_id, cycle, opened_at, plan, intent, todo) VALUES (?, 1, 't', 'proof plan, verbatim', 'small_feature', '')").run(A));

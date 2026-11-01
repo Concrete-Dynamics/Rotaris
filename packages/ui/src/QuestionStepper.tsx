@@ -20,7 +20,7 @@ export interface QuestionFormProps {
   readonly onSubmit: (answers: QuestionAnswers) => Promise<{ delivered: boolean }>;
   /** REQ-CHAT-101/102: cancellation forwarded to the waiting tool. Called at most once by this component. */
   readonly onCancel: () => void;
-  /** Optional surface bookkeeping: the form is dismissed. Never a decision (REQ-CHAT-098). */
+  /** Optional surface bookkeeping: the form is dismissed. Never a decision (REQ-CHAT-098, superseded by PD-CHAT-002). */
   readonly onClose?: (() => void) | undefined;
 }
 
@@ -133,7 +133,7 @@ export function QuestionForm({ prompt, onSubmit, onCancel, onClose }: QuestionFo
             {prompt.persona ? `${prompt.persona} has questions` : 'Agent Questions'} · {stepsPhrase(steps.length)}
           </h2>
         </div>
-        {/* REQ-CHAT-099 pills retained as overall progress indicator */}
+        {/* REQ-CHAT-099 pills (superseded by PD-CHAT-002) retained as overall progress indicator */}
         <ol className="question-form__pills" aria-label={`Question steps (${stepsPhrase(steps.length)})`} data-testid="question-pills">
           {steps.map((s, i) => {
             const isDone = hasAnswer(answers[s.id]);

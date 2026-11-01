@@ -41,7 +41,7 @@ export interface TranscriptPaneProps {
   readonly pendingQuestions: readonly QuestionPrompt[];
   readonly pendingApprovals: readonly ApprovalPayload[];
   /**
-   * Part AC — REQ-CHAT-098 / REQ-CHAT-103: the trailer row is already a control (`Row.tsx`) and this is the one
+   * Part AC — REQ-CHAT-098 (superseded by PD-CHAT-002) / REQ-CHAT-103: the trailer row is already a control (`Row.tsx`) and this is the one
    * handler behind it, for BOTH trailers — a question row opens the stepper, an approval row raises its dialog.
    * Absent leaves the row drawn and inert, which is what it was until this part.
    */

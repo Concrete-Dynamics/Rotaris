@@ -107,4 +107,4 @@ fails while a settled entry is still live.
 | [66](open-questions/66-spikes-and-later-questions-33.md) | Spikes, and the questions raised since (33/35) | OQ-401, OQ-402; OQ-364 [archived](../archive/architecture/open-questions/66-spikes-and-later-questions-33.md) |
 | [67](open-questions/67-spikes-and-later-questions-34.md) | Spikes, and the questions raised since (34/35) | —; OQ-386, OQ-370 [archived](../archive/architecture/open-questions/67-spikes-and-later-questions-34.md) |
 | [68](open-questions/68-spikes-and-later-questions-35.md) | Spikes, and the questions raised since (35/35) | OQ-450 – OQ-458; OQ-378, OQ-459 [archived](../archive/architecture/open-questions/68-spikes-and-later-questions-35.md) |
-| [69](open-questions/69-spikes-and-later-questions-36.md) | Spikes, and the questions raised since (36/36) | OQ-468; OQ-460 – OQ-467 [archived](../archive/architecture/open-questions/69-spikes-and-later-questions-36.md) |
+| [69](open-questions/69-spikes-and-later-questions-36.md) | Spikes, and the questions raised since (36/36) | OQ-468, OQ-491; OQ-460 – OQ-467 [archived](../archive/architecture/open-questions/69-spikes-and-later-questions-36.md) |

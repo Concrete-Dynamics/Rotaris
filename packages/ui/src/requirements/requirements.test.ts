@@ -456,6 +456,7 @@ describe('a blocker answer held behind the launch disclosure (REQ-TRACE-453/454/
  */
 describe('the stated body states (REQ-TRACE-515, over REQ-TRACE-231/380)', () => {
   const dir = { kind: 'store', dir: 'docs/requirements', writable: false, canCreate: false } as const;
+  // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier: the user's repository's, refused here
   const rejected = [{ path: 'docs/requirements/REQ-TODO-003.md', message: 'docs/requirements/REQ-TODO-003.md: req-id "REQ-TODO-003" is not an identifier of the form REQ-<digits>' }];
 
   it('tells a store that will not parse from a store nobody has written to', () => {

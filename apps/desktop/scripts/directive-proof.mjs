@@ -204,6 +204,7 @@ try {
     ['a directive stating no disposition at all', '### PD-CHAT-001 — x\n\nIt says nothing about what it reaches.\n', /states no disposition/],
     ['a disposition naming nothing', '### PD-CHAT-001 — x\n\n> **Supersedes:**\n', /names no requirement identifier/],
     ['the same identifier minted twice', '### PD-CHAT-001 — x\n\n> **New:** none.\n\n### PD-CHAT-001 — y\n\n> **New:** none.\n', /defined twice/],
+    // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up directive the generator must refuse
     ['an identifier in a retired domain', '### PD-CLI-001 — x\n\n> **New:** none.\n', /retired domain/],
     ['a disposition with no directive above it', '> **Supersedes:** REQ-CHAT-004\n', /precedes any directive/],
     // OQ-222 (BP1, R-072): PD-LIBRARY-002's `New:` line named REQ-LIBRARY-017 and stood beside its Extends, and the

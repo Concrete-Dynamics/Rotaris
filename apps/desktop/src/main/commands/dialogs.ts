@@ -15,7 +15,7 @@ export function dialogsCommands(
       return p ? { ok: true, value: p } : { ok: false, code: 'approval.none', headline: 'This window was not opened for an approval' };
     },
     'approval.raise': (req, { w }) => {
-      // Part AC — REQ-CHAT-098/103: the approval trailer re-opens what is already up. Main raises; it never decides.
+      // Part AC — REQ-CHAT-098/103 (098 superseded by PD-CHAT-002): the approval trailer re-opens what is already up. Main raises; it never decides.
       const open = mainWindows.openDialog(w.wcId);
       if (!open || open.requestId !== req.requestId || open.win.isDestroyed()) return { ok: false, code: 'approval.none', headline: 'No approval dialog is open for that request' };
       open.win.show();

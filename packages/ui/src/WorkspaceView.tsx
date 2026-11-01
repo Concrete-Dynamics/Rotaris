@@ -184,7 +184,7 @@ export interface WorkspaceViewProps {
   /** Part AB — REQ-CHAT-010 / REQ-SHELL-069: the transcript/composer divider, persisted per user under `panels/workspace/state`. */
   readonly composerHeight?: number | undefined;
   readonly onComposerHeight?: ((sizes: readonly [number, number]) => void) | undefined;
-  /** Part AC — REQ-CHAT-098/103: clicking a trailer row opens the question stepper or raises the approval dialog. */
+  /** Part AC — REQ-CHAT-098/103 (098 superseded by PD-CHAT-002): clicking a trailer row opens the question stepper or raises the approval dialog. */
   readonly onOpenTrailer?: ((trailer: TrailerRow) => void) | undefined;
   /** PD-CHAT-002: submission and cancellation callbacks for the docked question form. */
   readonly onAnswerQuestions?: ((requestId: string, answers: QuestionAnswers) => Promise<{ delivered: boolean }>) | undefined;

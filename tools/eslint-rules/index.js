@@ -1,6 +1,10 @@
 // @ts-check
 // Project-local ESLint rules. Each exists because a record makes something a
 // structural rule rather than a discipline; the rule is what makes it structural.
+import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { citationsIn, RETIRED_DOMAINS } from '../requirement-coverage/coverage.mjs';
 
 /** ADR-0006: no Date.now, performance.now, setTimeout or setInterval in engine
  * code. Every duration reads from the MonotonicClock port and every timer is
@@ -129,10 +133,148 @@ const moneyOnlyInMoneyTs = {
   },
 };
 
+/** ReqToCode §3.2/§4.6 (arXiv 2603.13999), R-092: a reference to a requirement that does not exist fails the build,
+ * and a reference to a deprecated one is no silent pass. The citations of this repository are text — comments,
+ * strings, test names, JSX text — so the rule reads every comment and every string, template and JSX-text token of a
+ * file, finds each `REQ-…`/`PD-…` identifier with the forms the coverage report expands (`<id>..<nnn>`,
+ * `<id> to <nnn>`, `<id>/<nnn>`, `<id>, <nnn> and <nnn>`: `citationsIn`, imported from that report rather than copied), and
+ * resolves it against the generated artifact `pnpm symbols` writes (`packages/kernel/src/generated/requirements.ts`).
+ *
+ * - An identifier the artifact does not define is an error, whether written out or inside a range.
+ * - An identifier written out that is withdrawn in place, superseded by a directive, or in a retired domain (TUI,
+ *   CLI) is an error unless the line or the line above says so in a word — `withdrawn` (or `withdrawal`),
+ *   `superseded` (or the superseding directive's own identifier), `retired` — which marks the citation as a
+ *   deliberate historical one. An identifier only implied by a range is checked for existence alone: a range that
+ *   spans a withdrawn identifier cites its live neighbours, not the withdrawn one.
+ * - The option `pending` names identifiers whose lifecycle the record has left open, each with the open question
+ *   holding it (`{ 'REQ-ORCH-153': 'OQ-491' }`); their lifecycle check waits on the ruling, and existence is still
+ *   checked. An entry leaves with the ruling that closes its question. */
+const ARTIFACT = fileURLToPath(new URL('../../packages/kernel/src/generated/requirements.ts', import.meta.url));
+const IDENTIFIER_TEXT = /\b(?:REQ|PD)-[A-Z]+-\d{3}(?!\d)/g;
+
+/**
+ * @typedef {{ file: string, line: number, withdrawn: boolean }} CitedSymbol
+ * @typedef {{ REQ: Record<string, CitedSymbol>, PD: Record<string, CitedSymbol>, SUPERSEDED_BY: Record<string, string> }} CitationArtifact
+ */
+/** @type {CitationArtifact | null} */
+let artifact = null;
+/**
+ * The artifact, read once per process. A tree without it has not run `pnpm symbols`, which the gate runs first.
+ * @returns {CitationArtifact}
+ */
+export function loadArtifact() {
+  if (artifact) return artifact;
+  if (!existsSync(ARTIFACT)) {
+    throw new Error(`rotaris/requirement-citations-resolve: no ${ARTIFACT}; run \`pnpm symbols\` first`);
+  }
+  const mod = createRequire(import.meta.url)(ARTIFACT);
+  artifact = { REQ: mod.REQ, PD: mod.PD, SUPERSEDED_BY: mod.SUPERSEDED_BY };
+  return artifact;
+}
+
+/**
+ * Every finding of one line of citation text, pure over the artifact.
+ * @param {string} text the token's or comment's text on this line
+ * @param {string} context this source line and the one above it, where a `withdrawn`/`superseded`/`retired` mark is read
+ * @param {CitationArtifact} art
+ * @param {Record<string, string>} [pending]
+ * @returns {Array<{ id: string, index: number, kind: 'undefined' | 'withdrawn' | 'superseded' | 'retired', data: Record<string, string> }>}
+ */
+export function citationFindings(text, context, art, pending = {}) {
+  /** @type {ReturnType<typeof citationFindings>} */
+  const out = [];
+  /** @type {Map<string, number>} */
+  const written = new Map();
+  for (const m of text.matchAll(IDENTIFIER_TEXT)) if (!written.has(m[0])) written.set(m[0], m.index ?? 0);
+  const first = written.size > 0 ? Math.min(...written.values()) : 0;
+  for (const id of citationsIn(text)) {
+    const at = written.get(id);
+    const explicit = at !== undefined;
+    const index = at ?? first;
+    const [kind, domain] = id.split('-');
+    const symbol = kind === 'PD' ? art.PD[id] : art.REQ[id];
+    if (!symbol) {
+      out.push({ id, index, kind: 'undefined', data: { id, where: kind === 'PD' ? 'docs/product/directives/' : 'docs/spec/' } });
+      continue;
+    }
+    if (!explicit || pending[id]) continue;
+    if (kind === 'REQ' && RETIRED_DOMAINS.includes(domain)) {
+      if (!/\bretire/i.test(context)) out.push({ id, index, kind: 'retired', data: { id, domain } });
+      continue;
+    }
+    const by = kind === 'REQ' ? art.SUPERSEDED_BY[id] : undefined;
+    if (by) {
+      if (!/supersed/i.test(context) && !context.includes(by)) out.push({ id, index, kind: 'superseded', data: { id, by } });
+      continue;
+    }
+    if (symbol.withdrawn && !/\bwithdr[ae]w/i.test(context)) {
+      out.push({ id, index, kind: 'withdrawn', data: { id, at: `${kind === 'PD' ? 'docs/product/' : 'docs/spec/'}${symbol.file}:${symbol.line}` } });
+    }
+  }
+  return out;
+}
+
+/** @type {import('eslint').Rule.RuleModule} */
+const requirementCitationsResolve = {
+  meta: {
+    type: 'problem',
+    docs: { description: 'R-092, ReqToCode §4.6 — every requirement or directive identifier cited in code resolves against the generated artifact' },
+    schema: [{
+      type: 'object',
+      properties: { pending: { type: 'object', additionalProperties: { type: 'string', pattern: '^OQ-\\d+$' } } },
+      additionalProperties: false,
+    }],
+    messages: {
+      undefined: 'cites {{id}}, which {{where}} does not define. Correct it to the identifier meant, or remove it.',
+      withdrawn: 'cites {{id}}, withdrawn in place ({{at}}). Cite what replaced it, or mark a deliberate historical citation with the word `withdrawn` on this line or the line above.',
+      superseded: 'cites {{id}}, superseded by {{by}}, which governs instead. Cite {{by}}, or mark a deliberate historical citation (`superseded by {{by}}`).',
+      retired: 'cites {{id}}, in the retired {{domain}} domain (docs/spec/README.md). Remove it, or mark a deliberate historical citation with the word `retired`.',
+    },
+  },
+  create(context) {
+    /** @type {Record<string, string>} */
+    const pending = context.options[0]?.pending ?? {};
+    const art = loadArtifact();
+    const source = context.sourceCode;
+    const lines = source.lines;
+    /** @type {Set<string>} */
+    const seen = new Set();
+    /** @param {{ range?: [number, number] | undefined, loc?: { start: { line: number, column: number } } | null | undefined }} token */
+    const scan = (token) => {
+      if (!token.range || !token.loc) return;
+      // The token's raw text, so a column is a column of the source; one segment per physical line.
+      const raw = source.text.slice(token.range[0], token.range[1]);
+      if (!/(?:REQ|PD)-/.test(raw)) return;
+      const start = token.loc.start;
+      raw.split('\n').forEach((segment, i) => {
+        const line = start.line + i;
+        const column = i === 0 ? start.column : 0;
+        const here = `${lines[line - 2] ?? ''}\n${lines[line - 1] ?? ''}`;
+        for (const f of citationFindings(segment, here, art, pending)) {
+          const key = `${line}:${f.id}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          context.report({ loc: { line, column: column + f.index }, messageId: f.kind, data: f.data });
+        }
+      });
+    };
+    return {
+      Program() {
+        for (const comment of source.getAllComments()) scan(comment);
+        for (const token of source.ast.tokens ?? []) {
+          // `JSXText` is typescript-estree's token type for text between JSX tags.
+          if (token.type === 'String' || token.type === 'Template' || /** @type {string} */ (token.type) === 'JSXText') scan(token);
+        }
+      },
+    };
+  },
+};
+
 export default {
   rules: {
     'no-bare-timers': noBareTimers,
     'no-electron-outside-roots': noElectronOutsideRoots,
     'money-only-in-money-ts': moneyOnlyInMoneyTs,
+    'requirement-citations-resolve': requirementCitationsResolve,
   },
 };

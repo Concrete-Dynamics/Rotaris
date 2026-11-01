@@ -66,7 +66,8 @@ guard: the checksum manifest, its signature, the key record `key-record.json` an
 `notices.mjs`; the three tables beside it are the reviewed exceptions, the release inputs and the bundled fonts;
 tests in `notices.test.ts`), `tools/build-id/` (the writer behind `pnpm build-id` — `build-id.txt`, REQ-SHELL-140's
 build identifier, open `build-id.mjs`; tests in `build-id.test.ts`), `tools/requirement-coverage/` (the report behind
-`pnpm req-coverage` — every live shipping requirement's implementation, test and proof citations, report-only; open
+`pnpm req-coverage` — every live shipping requirement's implementation, test and proof citations, report-only; `--since`
+the identifiers a branch adds and drops, `--drift` the requirements changed after their code; open
 `coverage.mjs`, tests in `coverage.test.ts`), `tools/test-support-naming/` (since 2026-10-15 the one guard that a module
 only tests reach is named `<unit>.test-support.ts` in every package under `packages/` and that nothing an entry reaches
 imports one; `test-support-naming.test.ts`), `tools/proof-registry/` (the proof registry behind `pnpm proofs:index` —

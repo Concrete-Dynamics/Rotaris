@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-01**
 
+**`pnpm req-coverage --since` and `--drift` (R-092, hardening H1; 2026-11-01).** `01-component-view/03-where-the-responsibilities-sit.md`, the requirement coverage report: the two reports run git read-only (`merge-base`, `diff`, `show`, `log`, `blame`) and the tool imports `REDIRECTING` from `tools/build-id/`. No package, edge, process, message or seam changed.
+
 **A cited requirement or directive identifier resolves, or `pnpm lint` fails (R-092, hardening H1; 2026-11-01).** `01-component-view/03-where-the-responsibilities-sit.md`, the requirement coverage report: `tools/eslint-rules/index.js` now imports its `citationsIn` for `rotaris/requirement-citations-resolve`. No package, edge, process, message or seam changed; `tools/**` stays outside the boundary rule.
 
 **The pnpm supply-chain settings written out (R-091; 2026-11-01, `hardening.md` §3.5 row 8).** `pnpm-workspace.yaml` states `minimumReleaseAge`, `trustPolicy`, `blockExoticSubdeps`, `engineStrict` and a `catalog:` that eleven manifests now take their shared specifiers from; `.node-version` pins CI's Node. Consulted `01-component-view.md`: no package, edge, process, channel, command or store column changed, no resolved version moved (`pnpm-lock.yaml` gains only its `catalogs` block and `catalog:` specifiers), so no view's content changed.

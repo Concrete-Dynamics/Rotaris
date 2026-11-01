@@ -3,11 +3,15 @@
  * identifiers they name; the three kinds of citing file; the live shipping denominator; and the report over the tree.
  * The fixtures' identifiers are made up (`REQ-DEMO-…`), and this directory is not read by the sweep.
  */
-import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PD, REQ, SUPERSEDED_BY } from '@rotaris/kernel';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
-import { buildReport, byDomain, citationsIn, kindOf, MAX_RANGE, readTree, sectionsOf, summaryText, uncitedBySection } from './coverage.mjs';
+import { branchCitations, branchReport, branchText, buildReport, byDomain, citationsIn, definitionSpan, driftReport, driftText, kindOf, MAX_RANGE, parseBlame, parseLastTouch, parseRemoved, readDrift, readTree, sectionsOf, summaryText, uncitedBySection } from './coverage.mjs';
+import { REDIRECTING } from '../build-id/build-id.mjs';
 
 const ids = (text: string): string[] => [...(citationsIn(text) as Set<string>)].sort();
 
@@ -147,5 +151,158 @@ describe('requirement coverage — over this repository', () => {
     for (const r of report.rows as Array<{ id: string; domain: string }>) {
       expect(r.domain === 'TUI' || r.domain === 'CLI' || r.id in SUPERSEDED_BY).toBe(false);
     }
+  });
+});
+
+type Touch = { commit: string; time: number };
+
+describe('requirement coverage — branch-relative citations (--since; ReqToCode §3.6, R-092)', () => {
+  it('names what the touched files cite now and did not, what they no longer cite, and whether a drop is cited elsewhere', () => {
+    const r = branchCitations({
+      before: new Map([['packages/a/src/x.ts', '// REQ-DEMO-001, REQ-DEMO-002'], ['packages/a/src/gone.ts', '// REQ-DEMO-005']]),
+      after: new Map([['packages/a/src/x.ts', '// REQ-DEMO-001, REQ-DEMO-003..004'], ['packages/a/src/gone.ts', ''], ['packages/a/src/new.ts', '// PD-DEMO-001 and REQ-DEMO-003']]),
+      citedInTree: new Set(['REQ-DEMO-002']),
+    });
+    expect(r.files).toEqual(['packages/a/src/gone.ts', 'packages/a/src/new.ts', 'packages/a/src/x.ts']);
+    expect(r.cites).toEqual([
+      { id: 'PD-DEMO-001', files: ['packages/a/src/new.ts'] },
+      { id: 'REQ-DEMO-003', files: ['packages/a/src/new.ts', 'packages/a/src/x.ts'] },
+      { id: 'REQ-DEMO-004', files: ['packages/a/src/x.ts'] },
+    ]);
+    expect(r.drops).toEqual([
+      { id: 'REQ-DEMO-002', files: ['packages/a/src/x.ts'], citedElsewhere: true },
+      { id: 'REQ-DEMO-005', files: ['packages/a/src/gone.ts'], citedElsewhere: false },
+    ]);
+  });
+
+  it('a citation moved between two touched files is neither cited nor dropped', () => {
+    const r = branchCitations({ before: new Map([['a.ts', 'REQ-DEMO-001'], ['b.ts', '']]), after: new Map([['a.ts', ''], ['b.ts', 'REQ-DEMO-001']]) });
+    expect(r.cites).toEqual([]);
+    expect(r.drops).toEqual([]);
+  });
+});
+
+describe('requirement coverage — the git output drift reads (ReqToCode §4.7, R-092)', () => {
+  it('a definition spans its line and the plain lines continuing it, never a note, a list item, a heading or the next one', () => {
+    const lines = ['## S', '- **REQ-DEMO-001** — first', '  1. a numbered step', '  2. another', '', '  > Narrowed by PD-DEMO-001.',
+      '- **REQ-DEMO-002** — second', '**REQ-DEMO-003** — third', '  > Superseded by PD-DEMO-002.', '- **REQ-DEMO-004** — fourth', '- an item'];
+    expect(definitionSpan(lines, 2)).toEqual([2, 4]);
+    expect(definitionSpan(lines, 7)).toEqual([7, 7]);
+    expect(definitionSpan(lines, 8)).toEqual([8, 8]);
+    expect(definitionSpan(lines, 10)).toEqual([10, 10]);
+  });
+
+  it('reads blame porcelain as one commit, committer time and text per final line', () => {
+    const a = 'a'.repeat(40);
+    const b = 'b'.repeat(40);
+    const text = [`${a} 1 1 2`, 'author X', 'committer-time 100', 'filename f.md', '\tline one', `${a} 2 2`, '\tline two',
+      `${b} 5 3 1`, 'committer-time 200', 'filename f.md', '\tline three', ''].join('\n');
+    expect(parseBlame(text)).toEqual([
+      { commit: a, time: 100, text: 'line one' }, { commit: a, time: 100, text: 'line two' }, { commit: b, time: 200, text: 'line three' },
+    ]);
+  });
+
+  it('reads a zero-context diff as the removed lines and where each stood, link targets dropped', () => {
+    const text = ['diff --git a/docs/spec/d.md b/docs/spec/d.md', '--- a/docs/spec/d.md', '+++ /dev/null', '@@ -3,2 +0,0 @@',
+      '-- **REQ-DEMO-001** — see [x](../x.md)', '-- **REQ-DEMO-002** — two', 'diff --git a/docs/spec/d/1.md b/docs/spec/d/1.md',
+      '--- /dev/null', '+++ b/docs/spec/d/1.md', '@@ -0,0 +1,2 @@', '+- **REQ-DEMO-001** — see [x](../../x.md)', '+- **REQ-DEMO-002** — two', ''].join('\n');
+    const removed = parseRemoved(text);
+    expect(removed.get('- **REQ-DEMO-001** — see [x]()')).toEqual({ file: 'docs/spec/d.md', line: 3 });
+    expect(removed.get('- **REQ-DEMO-002** — two')).toEqual({ file: 'docs/spec/d.md', line: 4 });
+    expect(removed.size).toBe(2);
+  });
+
+  it('reads a newest-first name log as each path’s latest commit', () => {
+    const a = 'a'.repeat(40);
+    const b = 'b'.repeat(40);
+    const touched = parseLastTouch([`@@${b} 200`, '', 'x.ts', `@@${a} 100`, '', 'x.ts', 'y.ts', ''].join('\n')) as Map<string, Touch>;
+    expect(touched.get('x.ts')).toEqual({ commit: b, time: 200 });
+    expect(touched.get('y.ts')).toEqual({ commit: a, time: 100 });
+  });
+
+  it('drifts a requirement whose definition changed after every implementation file citing it, and no other', () => {
+    const row = (id: string, implementation: string[], test: string[] = []) => ({ id, domain: 'DEMO', spec: 'd.md', line: 1, section: '',
+      cites: { implementation, test, proof: [] }, directives: [], status: 'tested' });
+    const day = (d: string) => Date.parse(`${d}T00:00:00Z`) / 1000;
+    const at = (commit: string, d: string): Touch => ({ commit, time: day(d) });
+    const report = driftReport({
+      rows: [row('REQ-DEMO-001', ['a.ts', 'b.ts']), row('REQ-DEMO-002', ['a.ts', 'c.ts']), row('REQ-DEMO-003', [], ['t.test.ts']), row('REQ-DEMO-004', ['new.ts'])],
+      definitions: new Map([['REQ-DEMO-001', at('d1', '2026-03-01')], ['REQ-DEMO-002', at('d2', '2026-03-01')],
+        ['REQ-DEMO-003', at('d3', '2026-03-01')], ['REQ-DEMO-004', at('d4', '2026-03-01')]]),
+      touched: new Map([['a.ts', at('ca', '2026-01-01')], ['b.ts', at('cb', '2026-02-01')], ['c.ts', at('cc', '2026-03-01')], ['t.test.ts', at('ct', '2026-01-01')]]),
+    });
+    // 002: its definition is no later than its latest citing file (a tie does not drift); 003: no implementation
+    // citation; 004: its citing file is in no commit (untracked), so it is newer than any definition.
+    expect(report).toEqual({ citedByImplementation: 3, drifted: [
+      { id: 'REQ-DEMO-001', spec: 'docs/spec/d.md:1', definition: { commit: 'd1', date: '2026-03-01' }, latest: { file: 'b.ts', commit: 'cb', date: '2026-02-01' } },
+    ] });
+    expect(driftText(report)).toContain('REQ-DEMO-001  defined 2026-03-01 (d1)  docs/spec/d.md:1  latest citing 2026-02-01 (cb) b.ts');
+  });
+});
+
+describe('requirement coverage — --since and --drift over a fixture repository', () => {
+  /** A commit needs an author, and the operator's own configuration may ask for a signature this test cannot make. */
+  const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@invalid', '-c', 'commit.gpgsign=false'];
+  /** Without the variables an enclosing git process sets (a hook running `pnpm check`), which would aim at this repository. */
+  const ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !(REDIRECTING as readonly string[]).includes(k)));
+  let root = '';
+  const git = (args: string[], date?: string): string => {
+    const env = date ? { ...ENV, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } : ENV;
+    const r = spawnSync('git', ['-C', root, ...IDENTITY, ...args], { encoding: 'utf8', env });
+    if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`);
+    return r.stdout.trim();
+  };
+  const put = (rel: string, text: string) => { mkdirSync(dirname(join(root, rel)), { recursive: true }); writeFileSync(join(root, rel), text); };
+  const commit = (message: string, date: string) => { git(['add', '-A']); git(['commit', '-q', '-m', message], date); return git(['rev-parse', 'HEAD']); };
+  const SPEC = '# D\n\n- **REQ-DEMO-001** — the first, as written; see [the other](other.md)\n- **REQ-DEMO-002** — the second\n';
+  const AMENDED = SPEC.replace('as written', 'as amended');
+  const commits: Record<string, string> = {};
+
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'rotaris-coverage-'));
+    git(['init', '-q']);
+    put('docs/spec/d.md', SPEC);
+    put('packages/a/src/z.ts', '// REQ-DEMO-001\n');
+    put('packages/a/src/y.ts', '// REQ-DEMO-002\n');
+    put('packages/a/src/x.ts', '// REQ-DEMO-002\n');
+    commits.first = commit('the specification and its code', '2026-01-01T00:00:00Z');
+    // REQ-DEMO-001's text changes after the one file citing it was last touched: it drifts.
+    put('docs/spec/d.md', AMENDED);
+    commits.amended = commit('amend REQ-DEMO-001', '2026-02-01T00:00:00Z');
+    // The domain moves verbatim into a part one folder deeper, its link rewritten: no definition changes, so
+    // REQ-DEMO-002 (defined with its code) does not drift.
+    unlinkSync(join(root, 'docs/spec/d.md'));
+    put('docs/spec/d/01-part.md', AMENDED.replace('](other.md)', '](../other.md)'));
+    commits.moved = commit('split the domain into parts', '2026-03-01T00:00:00Z');
+    git(['branch', 'base']);
+    // The branch: x.ts drops REQ-DEMO-002 (y.ts still cites it) and cites REQ-DEMO-003; an untracked file cites 004.
+    put('packages/a/src/x.ts', '// REQ-DEMO-003\n');
+    commits.branch = commit('the branch', '2026-04-01T00:00:00Z');
+    put('packages/a/src/untracked.ts', '// REQ-DEMO-004\n');
+  });
+  afterAll(() => { rmSync(root, { recursive: true, force: true }); });
+
+  it('--since names what the branch cites and drops against its merge-base, the untracked file included', () => {
+    const r = branchReport(root, 'base');
+    expect(r.base).toBe(commits.moved);
+    expect(r.files).toEqual(['packages/a/src/untracked.ts', 'packages/a/src/x.ts']);
+    expect(r.cites.map((c: { id: string }) => c.id)).toEqual(['REQ-DEMO-003', 'REQ-DEMO-004']);
+    expect(r.drops).toEqual([{ id: 'REQ-DEMO-002', files: ['packages/a/src/x.ts'], citedElsewhere: true }]);
+    expect(branchText(r)).toContain('this branch cites: REQ-DEMO-003, REQ-DEMO-004');
+    expect(branchText(r)).toContain('drops: REQ-DEMO-002\n'.trim());
+  });
+
+  it('--drift sees through the verbatim move to the amendment, and drifts only what changed after its code', async () => {
+    const requirements = [
+      { id: 'REQ-DEMO-001', domain: 'DEMO', file: 'd/01-part.md', line: 3, withdrawn: false },
+      { id: 'REQ-DEMO-002', domain: 'DEMO', file: 'd/01-part.md', line: 4, withdrawn: false },
+    ];
+    const files = new Map([['packages/a/src/z.ts', '// REQ-DEMO-001\n'], ['packages/a/src/y.ts', '// REQ-DEMO-002\n']]);
+    const drift = await readDrift(root, buildReport({ requirements, directives: [], files }));
+    expect(drift).toEqual({ citedByImplementation: 2, drifted: [{
+      id: 'REQ-DEMO-001', spec: 'docs/spec/d/01-part.md:3',
+      definition: { commit: commits.amended, date: '2026-02-01' },
+      latest: { file: 'packages/a/src/z.ts', commit: commits.first, date: '2026-01-01' },
+    }] });
   });
 });

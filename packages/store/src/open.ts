@@ -42,6 +42,25 @@ export class StoreOpenError extends Error {
   }
 }
 
+/**
+ * Hardening C1 (SQLite's write-ahead logging page, "Automatic Checkpoint"): every writable connection checkpoints once a
+ * commit leaves the log past this many pages. It is the engine's own default, 1000 pages (about 4 MB at the store's
+ * 4,096-byte page), set by name so that a rebuilt binding with another compiled-in default cannot change it unnoticed: the
+ * run host commits at the publish path's rate and its connection is the one that checkpoints during a run. Growth the
+ * automatic checkpoint cannot stop — a reader holding an old snapshot keeps the log from being reset — is the workspace
+ * service's idle checkpoint's (`checkpoint.ts`).
+ */
+export const WAL_AUTOCHECKPOINT_PAGES = 1000;
+
+/** The automatic checkpoint set on a writable connection by name and READ BACK like WAL; a readback that differs refuses. */
+export function setAutocheckpoint(db: Database.Database): void {
+  db.pragma(`wal_autocheckpoint = ${WAL_AUTOCHECKPOINT_PAGES}`);
+  const back = db.pragma('wal_autocheckpoint', { simple: true });
+  if (back !== WAL_AUTOCHECKPOINT_PAGES) {
+    throw new StoreOpenError('open-failed', `the automatic checkpoint could not be set to ${WAL_AUTOCHECKPOINT_PAGES} pages: readback=${String(back)}`);
+  }
+}
+
 /** How many lines of SQLite's own report a corrupt store's refusal carries: `quick_check(N)` stops after N problems. */
 export const QUICK_CHECK_REPORT_LINES = 5;
 
@@ -148,7 +167,17 @@ export function openStore(file: string, opts: OpenOptions = {}): StoreHandle {
       throw new StoreCorruptError(canonicalFile, report);
     }
   }
+  // NORMAL on every connection, FULL around the critical commits alone (`StoreDal.durableTransaction`): under WAL a NORMAL
+  // commit survives the process's death and may not survive a power cut, and the record decided that shape on measurement
+  // (ADR-0058's durability section, spikes/power-loss.md, REQ-SESSION-034's budget stated in saves). Never FULL globally.
   db.pragma('synchronous = NORMAL');
+  // Hardening C1: the automatic checkpoint, named rather than left to the engine's default, and read back like WAL.
+  try {
+    setAutocheckpoint(db);
+  } catch (e) {
+    db.close();
+    throw e;
+  }
   db.pragma(`busy_timeout = ${opts.busyTimeoutMs ?? 5000}`);
   // Part U's first execution (ADR-0058 note): `foreign_keys` is a PER-CONNECTION setting, and the product set it only
   // in `migrateStore` — the workspace service's connection, never the run host's, which is the connection every

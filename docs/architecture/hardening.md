@@ -94,11 +94,11 @@ handlers still read the older `isOwnPage`, which admits every `file:` URL, until
 | Finding | Evidence | Closes |
 |---|---|---|
 | ~~No `quick_check` before a migration; no corruption-specific refusal~~ | `packages/store/src/open.ts`; `workspace-service/store-open.ts` | C1, closed 2026-11-01: the service's open checks before migrating and refuses as `workspace.store-corrupt`, the log left as found (`packages/store/src/open.test.ts`, `workspace-service/store-open.test.ts`, `main/store-notice.test.ts`); how it is resolved is [OQ-477](open-questions/69-spikes-and-later-questions-36.md#oq-477) |
-| `wal_autocheckpoint` and idle checkpoints left to the engine's defaults | `open.ts` | C1 |
+| ~~`wal_autocheckpoint` and idle checkpoints left to the engine's defaults~~ | `open.ts` | C1, closed 2026-11-01: `WAL_AUTOCHECKPOINT_PAGES` set and read back on every writable open, the service's idle PASSIVE and closing TRUNCATE checkpoints (`packages/store/src/checkpoint.ts`), `synchronous` asserted NORMAL with FULL inside `durableTransaction` only (`checkpoint.test.ts`, `open.test.ts`) |
 | Migration immutability tested as a version sequence only, never as SQL text | `store.test.ts:1807` | C2 |
 | `store` has 3 test files for 17 modules | `packages/store/src` | C2 |
 
-Not a finding: the bundled SQLite is 3.53.4, past the WAL-reset fix of 3.51.3; C1 pins the floor in a test.
+Not a finding: the bundled SQLite is 3.53.4, past the WAL-reset fix of 3.51.3; C1 pins the floor in a test (`packages/store/src/open.test.ts`, "at least 3.51.3", landed 2026-11-01).
 
 ### 3.4 Bounds and sinks
 

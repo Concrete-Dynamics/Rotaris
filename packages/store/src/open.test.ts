@@ -4,7 +4,8 @@ import { closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mintWorkspaceId } from '@rotaris/kernel';
-import { CURRENT_SCHEMA_VERSION, forgetSpelling, openStore, openWorkspaceStore, QUICK_CHECK_REPORT_LINES, StoreCorruptError, StoreDal, StoreOpenError, storeDir, storeFile } from './index.js';
+import type { StoreHandle } from './open.js';
+import { CURRENT_SCHEMA_VERSION, forgetSpelling, ImprovementDal, openStore, openWorkspaceStore, QUICK_CHECK_REPORT_LINES, StoreCorruptError, StoreDal, StoreOpenError, setAutocheckpoint, storeDir, storeFile, WAL_AUTOCHECKPOINT_PAGES } from './index.js';
 
 /**
  * Hardening C1 (REQ-SESSION-089, ADR-0058's detection paragraph): the workspace service's open asks SQLite whether the file
@@ -170,5 +171,70 @@ describe('store — foreign keys after a migration (hardening C1)', () => {
     expect(r.foreignKeyViolations).toBeUndefined();
     r.db.close();
     forgetSpelling(r.dir);
+  });
+});
+
+/** SQLite's `synchronous` values, as `PRAGMA synchronous` reads them back. */
+const NORMAL = 1;
+const FULL = 2;
+
+describe('store — durability settings, asserted (REQ-SESSION-034, REQ-SESSION-067, REQ-EVENTS-029; spikes/power-loss.md)', () => {
+  function runHostConnection(): StoreHandle {
+    const r = openWorkspaceStore(root, id, ws);
+    r.db.close();
+    forgetSpelling(r.dir);
+    // The run host's open: `openStore` with no options (`run-host/dispatch.ts`).
+    return openStore(storeFile(root, id));
+  }
+
+  it('the run host\'s connection commits at NORMAL, with the automatic checkpoint at its named 1,000 pages, read back', () => {
+    const db = runHostConnection();
+    expect(db.pragma('synchronous', { simple: true })).toBe(NORMAL);
+    expect(WAL_AUTOCHECKPOINT_PAGES).toBe(1000);
+    expect(db.pragma('wal_autocheckpoint', { simple: true })).toBe(WAL_AUTOCHECKPOINT_PAGES);
+    expect(db.pragma('journal_mode', { simple: true })).toBe('wal');
+    db.close();
+    forgetSpelling(storeDir(root, id));
+  });
+
+  it('the critical-commit helpers run FULL inside the transaction and NORMAL again after it, a throw included', () => {
+    const db = runHostConnection();
+    for (const dal of [new StoreDal(db), new ImprovementDal(db)]) {
+      let inside: unknown;
+      dal.durableTransaction(() => { inside = db.pragma('synchronous', { simple: true }); });
+      expect(inside).toBe(FULL);
+      expect(db.pragma('synchronous', { simple: true })).toBe(NORMAL);
+      expect(() => dal.durableTransaction(() => { throw new Error('the work failed'); })).toThrow('the work failed');
+      expect(db.pragma('synchronous', { simple: true })).toBe(NORMAL);
+      // An ordinary transaction stays at NORMAL.
+      let ordinary: unknown;
+      dal.transaction(() => { ordinary = db.pragma('synchronous', { simple: true }); });
+      expect(ordinary).toBe(NORMAL);
+    }
+    db.close();
+    forgetSpelling(storeDir(root, id));
+  });
+
+  it('the bundled SQLite is at least 3.51.3, the release that fixed the WAL reset this two-connection shape can meet', () => {
+    const db = runHostConnection();
+    const version = (db.prepare('SELECT sqlite_version() AS v').get() as { v: string }).v;
+    const [major = 0, minor = 0, patch = 0] = version.split('.').map(Number);
+    expect(major * 1_000_000 + minor * 1_000 + patch, `bundled SQLite ${version}`).toBeGreaterThanOrEqual(3_051_003);
+    db.close();
+    forgetSpelling(storeDir(root, id));
+  });
+});
+
+describe('store — the automatic checkpoint, set by name (hardening C1)', () => {
+  it('a connection whose threshold is anything else is set back to WAL_AUTOCHECKPOINT_PAGES, read back', () => {
+    const r = openWorkspaceStore(root, id, ws);
+    r.db.close();
+    forgetSpelling(r.dir);
+    // A raw connection standing for a binding compiled with another default: the open's step sets it, whatever it was.
+    const raw = new Database(storeFile(root, id), { fileMustExist: true });
+    raw.pragma('wal_autocheckpoint = 0');
+    setAutocheckpoint(raw);
+    expect(raw.pragma('wal_autocheckpoint', { simple: true })).toBe(WAL_AUTOCHECKPOINT_PAGES);
+    raw.close();
   });
 });

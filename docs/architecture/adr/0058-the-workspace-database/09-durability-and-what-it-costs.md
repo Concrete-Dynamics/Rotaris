@@ -112,6 +112,18 @@ p50 and 87 % slower at p95** because every commit searches a log that never rese
 in 3,000 commits**, and the deferred work reappears as a single **155 ms** stall the moment anything
 checkpoints. Do not make it configurable and do not turn it off.
 
+*2026-11-01, hardening C1 ([`hardening.md`](../../hardening.md) §3.3 row 2), reported in place.* The automatic schedule is
+kept, now **set by name** on every writable open (`WAL_AUTOCHECKPOINT_PAGES = 1000`, read back like the journal mode), so
+a rebuilt binding with another compiled default cannot move this paragraph's period unnoticed; it is not configurable.
+Two checkpoints are added beside it, in the workspace service only: one PASSIVE when its connection has had no request
+for 30 s, and a TRUNCATE with the busy timeout at 0 on its orderly close (`packages/store/src/checkpoint.ts`), each logged
+at debug. Neither waits on a reader or a writer, and the run host's connection asks for neither. Measured on their first
+execution: the starvation the SQLite page names is real on this two-connection shape (with the run host holding a read
+snapshot, PASSIVE copied fewer frames than the log held, and all of them once the read ended); TRUNCATE beside a writer
+answered busy at once rather than after 5 s; on the built app (Windows 11 ARM64, an idle workspace) the idle checkpoint
+fired 30 s after the last request and the closing one at the quit, both finding 0 frames to copy. `synchronous` stays as
+decided above: the tests now read NORMAL back on the run host's connection and FULL inside `durableTransaction` only.
+
 **Two of this record's smaller claims about cost, checked.** "At `REQ-MONITOR-219`'s coalescing tick, at
 most twenty commits per second per live session" puts the store at **0.37 % duty at p50**; even the ≈64
 publications per second the harness actually ran reached 1.2 %. The publish path is nowhere near the

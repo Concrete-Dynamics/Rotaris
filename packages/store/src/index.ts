@@ -10,3 +10,4 @@ export * from './recover.js';
 export * from './delivery/index.js'; // Part AK
 export * from './improvements/index.js';
 export * from './establish.js';
+export * from './checkpoint.js';

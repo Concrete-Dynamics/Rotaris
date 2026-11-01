@@ -54,8 +54,8 @@ Built as [OQ-386](../../architecture/open-questions/67-spikes-and-later-question
 Pinned by `apps/desktop/src/run-host/dispatch.test.ts` ("the run host answers workspace.opened before it warms the skill
 catalogue, off its loop"). Its first case is red on the `queueMicrotask` warm-up: fifteen synchronous port calls stood ahead of
 the posted reply. The generation cases are red with the guard removed. The equality of the two walks is pinned by
-`packages/config/src/skills/skills.test.ts` ("OQ-386 — the asynchronous walk reaches the synchronous walk's discovery"). No proof
-was run on the built app for this repair, so the 8,201.5 ms launch has not been measured again.
+`packages/config/src/skills/skills.test.ts` ("OQ-386 — the asynchronous walk reaches the synchronous walk's discovery"). ~~No proof
+was run on the built app for this repair, so the 8,201.5 ms launch has not been measured again.~~ Re-measured 2026-11-01 (below).
 
 **Reworked after an independent review, 2026-10-31, before it landed.** Four faults of the first build, none ever on `main`.
 `settled` handed back the raw walk, so a read that never returned held every `skills.*` request for that root with no bound
@@ -78,6 +78,8 @@ skills.read waiting on a warm-up past the bound is refused without one synchrono
 refusal costs: `renderer/main.tsx` reads a refused `skills.read` as no catalogue (the composer) and no projection (Settings), and
 nothing there re-reads when the walk ends, so on a disk slower than the bound the surface stays so until its next read. A failed
 walk still lets its waiter discover on a cold cache, synchronously, as any cold ask does.
+
+**Re-measured on the built app, 2026-11-01** (`5e380705`, Windows 11 ARM64, Node 26.13.0). `compression-proof`'s `automatic` launch logged its first discovery at 9.0 ms and no presenter lapse. That is not a like-for-like reading of the 8,201.5 ms: the tree held one skill and one skip, on an otherwise quiet host, and the old figure was taken beside the full test suite. The launch's reply no longer waits on the walk by construction; the slow case itself stays measured only in the unit cases. Of the 25 proofs `pnpm verify:plan` names, 20 were green. `fetch`, `injection`, `part-j` and `resilience` were red as notes under `docs/defects/` already record; `plan-gate` was red on a control build of `main` too, and has its own note. Two earlier `skills-proof` launches overran while the host was stalling (a 20 s typecheck took 400 minutes in the same stretch, which points at a suspended machine); it was green once the host stayed awake.
 
 **Still owed, and not decided by the ruling** (its "Recorded beside it, not decided here"). The synchronous re-discovery after a
 session creation or a rescan still holds the run host's loop. `onSessionCreated` and `rescan` clear the catalogue, and the next

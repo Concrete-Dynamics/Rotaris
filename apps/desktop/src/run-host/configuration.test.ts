@@ -601,7 +601,7 @@ personas:
     const warned: string[] = [];
     const f = credentialFactory(r.value.cfg, false, {}, () => ({}), async () => 'real-key', (m) => warned.push(m));
     expect(await f({ providerId: 'scripted', modelId: 'scripted', dialect: 'chat' })()).toBe('real-key');
-    expect(warned).toEqual(['credentials: no models: entry produced scripted/scripted; the entry model\'s credential is used for it']);
+    expect(warned).toEqual(['credential lease: no models: entry produced scripted/scripted; the entry model\'s credential is used for it']);
   });
 
   it('in a build with the seams, the same entry is still the scripted client\'s, with no credential (every proof\'s path)', async () => {

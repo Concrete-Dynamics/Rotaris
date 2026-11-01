@@ -250,7 +250,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return launchSession(req, {
         workspaceRoot: s.root, attended: presenters.attended, configuration: configurationDeps, settleConfinement,
         leaseCredentials: async (providers) => {
-          const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credentials: main did not answer the lease (${e.message})`, 'warn'); return null; });
+          const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credential lease: main did not answer the lease (${e.message})`, 'warn'); return null; });
           const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
           // REQ-PROVIDER-068's opening report, said once per workspace root and then only when it changes.
           leaseReports.report(s.root, answer?.kind === 'credentials.leased' ? answer.report : null, (m) => log(m));

@@ -169,7 +169,9 @@ answers with a refusal (its `shutdown` threw, so it closed nothing and Electron'
 listens for the stream's `error` and, from its first failure, writes nothing more, and standard error carries the same
 listener — so a reader that has gone (EPIPE) never becomes an uncaught exception that the uncaught-exception handler
 logs to the same stream without end, which had starved the quit and REQ-MONITOR-131's backstop. A
-line below the threshold is not written. The threshold is `info`, and the environment variable `ROTARIS_APP_LOG_LEVEL`,
+line below the threshold is not written; a line at or above it is run through the one redaction pass (`redact()`,
+REQ-TOOLS-171) before it is formatted, main's own and a forwarded one alike (2026-11-01), which is why the product's
+credential lines begin `credential lease:` and `credential store:` — `credentials: <value>` reads as an assignment. The threshold is `info`, and the environment variable `ROTARIS_APP_LOG_LEVEL`,
 read once when main's module is evaluated, is the only thing that moves it; no message kind, command, configuration key
 or setting reaches it, and it is a different thing from the per-session `session.log`, whose level is
 `session_log_level` (REQ-CONFIG-121). The live-run harness sets the variable from its `--app-log-level` flag, and since

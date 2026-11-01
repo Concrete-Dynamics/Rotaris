@@ -6,7 +6,10 @@
  * exactly when that map is empty". The run host writes that report once per workspace root, whole, as
  * `LeaseReportLog`'s opening line (`apps/desktop/src/run-host/launch.ts`):
  *
- *   credentials: leased for <id>[, <id>…] (workspace <root>)[; unresolved: <id> (<reason>)[, …]]
+ *   credential lease: leased for <id>[, <id>…] (workspace <root>)[; unresolved: <id> (<reason>)[, …]]
+ *
+ * (`credentials: leased for …` until 2026-11-01, when main's application log began passing every line through the
+ * redaction pass and `credentials:` read as an assignment whose value is masked; an older log is read too.)
  *
  * and after it only what changed (`credentials (workspace <root>): …`), which is not the opening report.
  *
@@ -16,7 +19,7 @@
  * `priming-report.test.ts` against `LeaseReportLog`'s own output, so the proof cannot drift from the product again
  * without a red.
  */
-const OPENING = /credentials: leased for (.+?) \(workspace (.+?)\)(?:; unresolved: (.+))?\s*$/;
+const OPENING = /credential(?:s| lease): leased for (.+?) \(workspace (.+?)\)(?:; unresolved: (.+))?\s*$/;
 
 /**
  * The first opening report in `log`, or null: the providers it names as authenticated (`no provider` names none),

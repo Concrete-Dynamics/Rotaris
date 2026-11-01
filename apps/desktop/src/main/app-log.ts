@@ -1,4 +1,5 @@
 import type { ProcessEvent } from '@rotaris/contracts';
+import { redact } from '@rotaris/kernel';
 
 /**
  * The application log (PD-MONITOR-002): what the main process writes to its standard output — its own lines, and
@@ -77,12 +78,21 @@ export interface AppLogDeps {
   readonly write: (line: string) => void;
 }
 
-/** PD-MONITOR-002's predicate, in one place: a line below the threshold is neither stamped nor formatted nor written. */
+/**
+ * PD-MONITOR-002's predicate, in one place: a line below the threshold is neither stamped nor formatted nor written.
+ *
+ * A recorded line passes through the one redaction pass first (REQ-TOOLS-171 names "application log files" among the
+ * surfaces it backs; REQ-PROVIDER-035), main's own lines and the ones a child forwards alike, since both reach here and
+ * nowhere else. Main holds the credentials (ADR-0029, ADR-0030); until 2026-11-01 nothing kept a provider's error text, a
+ * URL with a key in its query or a later log line from writing one as given
+ * (`docs/archive/defects/mains-application-log-lines-bypass-the-redaction-pass.md`). The pass runs after the threshold, so
+ * a line left out costs nothing, and before the message is split into lines, so a PEM block spanning several is masked whole.
+ */
 export function createAppLog(deps: AppLogDeps): AppLog {
   const floor = RANK[deps.threshold];
   return (level, source, message) => {
     if (RANK[level] < floor) return;
-    deps.write(formatAppLogLine(deps.now(), level, source, message));
+    deps.write(formatAppLogLine(deps.now(), level, source, redact(message)));
   };
 }
 

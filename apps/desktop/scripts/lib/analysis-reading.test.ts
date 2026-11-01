@@ -153,7 +153,7 @@ describe('analysis reading (live-run `ask`, REQ-LIBRARY-123..127, PD-LIBRARY-002
 
   it('reads the run host\'s unauthenticated model requests and the runs a launch started (F2\'s shape: no run before the retrospective)', () => {
     const log = [
-      '[main 2026-10-13T23:10:22.440Z] info    run host: credentials: leased for openai-compatible--katalyst (workspace /w)',
+      '[main 2026-10-13T23:10:22.440Z] info    run host: credential lease: leased for openai-compatible--katalyst (workspace /w)',
       '[main 2026-10-13T23:10:22.488Z] info    run host: model request POST http://127.0.0.1:36079/chat/completions (no authorization header)',
     ].join('\n');
     expect(unauthorizedRequests(log)).toBe(1);

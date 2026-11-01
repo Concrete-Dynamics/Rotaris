@@ -9,7 +9,7 @@
  *
  *   the repository read   the workspace service (`repository <root>: git=… in N ms`), not main's command handler;
  *   the Git view          the workspace service (`git view: N reads in M ms (…)`), not main's command handler;
- *   the credentials lease the run host (`credentials: leased for …`, REQ-PROVIDER-068's report), not main's ask handler;
+ *   the credentials lease the run host (`credential lease: leased for …`, REQ-PROVIDER-068's report), not main's ask handler;
  *   a setup step's outcome the run host's step reporter (`mcp setup: <id> succeeded (N ms)`), not `runSetupSteps`.
  *
  * A fifth, of the same class, was found by the duress live run at 1763f7f (finding U4,

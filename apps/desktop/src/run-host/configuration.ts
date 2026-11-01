@@ -210,7 +210,7 @@ export function credentialFactory(cfg: LoadedConfiguration, scripted: boolean, e
     const found = byKey.get(credentialKey(model));
     if (found) return found;
     if (isScriptedProvider(model.providerId)) return async () => '';
-    if (!warned.has(credentialKey(model))) { warned.add(credentialKey(model)); warn(`credentials: no models: entry produced ${model.providerId}/${model.modelId}; the entry model's credential is used for it`); }
+    if (!warned.has(credentialKey(model))) { warned.add(credentialKey(model)); warn(`credential lease: no models: entry produced ${model.providerId}/${model.modelId}; the entry model's credential is used for it`); }
     return entry;
   };
 }

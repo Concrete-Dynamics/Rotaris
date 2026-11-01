@@ -1680,7 +1680,9 @@ if (wanted.includes('ask')) {
     }, ASK_WAIT_MS + 90_000);
     const requests = [...new Set((log.match(/model request POST (\S+)/g) ?? []).map((line) => line.replace('model request POST ', '')))];
     // The lease's report is the run host's (REQ-PROVIDER-068, `LeaseReportLog`); main no longer restates it (a71-9).
-    check(log.includes(`credentials: leased for ${PROVIDER_ID}`), 'main leased the bearer to the run host');
+    // `credential lease:` since 2026-11-01: main's log runs every line through the redaction pass, under which the old
+    // `credentials: leased` read as an assignment and lost its value.
+    check(log.includes(`credential lease: leased for ${PROVIDER_ID}`), 'main leased the bearer to the run host');
     // `appBaseUrl`, not the endpoint: the assertion is about what the PRODUCT did, and when the proxy is recording
     // the product was given the proxy. The traffic file below is what says the call reached the endpoint itself.
     check(requests.some((url) => url.startsWith(`${appBaseUrl}/chat/completions`)), 'a request reached the endpoint', requests.join(', '));

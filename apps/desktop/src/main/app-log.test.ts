@@ -137,6 +137,64 @@ describe('PD-MONITOR-002: a line is recorded only at or above the threshold', ()
  * which main's handler logged through the same stream — without end, so the quit and its 30 s backstop never ran
  * (REQ-MONITOR-131).
  */
+/*
+ * REQ-TOOLS-171 ("application log files" among the surfaces the one pass backs), REQ-PROVIDER-035: every recorded line
+ * passes through `redact()`, main's own and a child's forwarded alike
+ * (`docs/archive/defects/mains-application-log-lines-bypass-the-redaction-pass.md`). The shapes are kernel's
+ * (`packages/kernel/src/redaction.test.ts`); what is pinned here is that the log applies them, to the message only.
+ */
+describe('REQ-TOOLS-171: the application log writes every line through the one redaction pass', () => {
+  /** A written line less its stamp and level: the source, when there is one, and the message. */
+  const message = (line: string) => line.slice(line.indexOf(' ', line.indexOf('] ') + 2)).trimStart();
+
+  it('masks a token-shaped value in main\'s own line and in a line a child forwards', () => {
+    const h = harness('debug');
+    h.log('warn', null, 'provider refused: Authorization: Bearer sk-live-abc123');
+    h.log('info', 'run host', 'export OPENAI_API_KEY=sk-proj-xyz && run');
+    h.log('error', 'workspace service', 'clone failed: https://bob:hunter2@example.com/r.git');
+    h.log('debug', 'run host', '--api-key shhh ghp_0123456789abcdef');
+    expect(h.written.map(message)).toEqual([
+      'provider refused: Authorization: Bearer ***',
+      'run host: export OPENAI_API_KEY=*** && run',
+      'workspace service: clone failed: https://bob:***@example.com/r.git',
+      'run host: --api-key *** ***',
+    ]);
+    for (const secret of ['sk-live-abc123', 'sk-proj-xyz', 'hunter2', 'shhh', 'ghp_0123456789abcdef']) expect(h.written.join('\n')).not.toContain(secret);
+  });
+
+  it('masks a key in a URL\'s query and leaves the rest of the URL legible', () => {
+    const h = harness('info');
+    h.log('warn', 'run host', 'model request GET https://api.example.com/v1/models?api_key=SECRET123 failed: 401');
+    expect(h.written.map(message)).toEqual(['run host: model request GET https://api.example.com/v1/models?api_key=*** failed: 401']);
+  });
+
+  it('writes a line with nothing secret in it byte for byte as before', () => {
+    const plain = 'run 3f2a ended completed after 4 iteration(s): 1,204 tokens in, 88 out; workspace C:\\ws\\a (git=true)';
+    const h = harness('info');
+    h.log('info', 'run host', plain);
+    expect(h.written).toEqual([formatAppLogLine(AT, 'info', 'run host', plain)]);
+  });
+
+  it('masks a PEM block spanning several lines whole, before the message is split into lines', () => {
+    const h = harness('info');
+    h.log('error', null, 'unreadable certificate:\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg\n-----END PRIVATE KEY-----');
+    expect(h.written[0]?.split('\n').map(message)).toEqual(['unreadable certificate:', '-----BEGIN PRIVATE KEY-----', '***', '-----END PRIVATE KEY-----']);
+  });
+
+  it('leaves the credential lease\'s report legible: its prefix is not an assignment the pass masks', () => {
+    const h = harness('info');
+    h.log('info', 'run host', 'credential lease: leased for openai-compatible--katalyst (workspace C:\\w)');
+    h.log('info', null, 'credential store: openai.json is unreadable; treated as absent');
+    expect(h.written.map(message)).toEqual([
+      'run host: credential lease: leased for openai-compatible--katalyst (workspace C:\\w)',
+      'credential store: openai.json is unreadable; treated as absent',
+    ]);
+    // The prefix it replaced: under the pass, `credentials: leased` is an assignment and its value is masked.
+    h.log('info', 'run host', 'credentials: leased for x');
+    expect(message(h.written[2] as string)).toBe('run host: credentials: *** for x');
+  });
+});
+
 describe('REQ-MONITOR-131: a standard stream whose reader has gone never turns the log into a loop of its own failures', () => {
   function stream(opts: { throws?: boolean } = {}) {
     const e = new EventEmitter();

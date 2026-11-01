@@ -152,7 +152,7 @@ export class LeaseReportLog {
     const fingerprint = `${authenticated.join(',')}|${unresolved.map(([id, why]) => `${id}=${why}`).join(',')}`;
     const previous = this.seen.get(workspaceRoot);
     this.seen.set(workspaceRoot, { fingerprint, authenticated: new Set(authenticated), unresolved: new Map(unresolved) });
-    const whole = `credentials: leased for ${authenticated.join(', ') || 'no provider'} (workspace ${workspaceRoot})${unresolved.length > 0 ? `; unresolved: ${unresolved.map(([id, why]) => `${id} (${why})`).join(', ')}` : ''}`;
+    const whole = `credential lease: leased for ${authenticated.join(', ') || 'no provider'} (workspace ${workspaceRoot})${unresolved.length > 0 ? `; unresolved: ${unresolved.map(([id, why]) => `${id} (${why})`).join(', ')}` : ''}`;
     if (previous === undefined) { log(whole); return; }
     if (previous.fingerprint === fingerprint) return;
     const gained = authenticated.filter((id) => !previous.authenticated.has(id) && previous.unresolved.has(id));

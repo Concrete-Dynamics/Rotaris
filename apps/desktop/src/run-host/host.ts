@@ -323,7 +323,7 @@ export function createRunHost() {
     // REQ-SANDBOX-097: the continuation's lease prepares through the start-time gate, so it settles first; `leasedSetup` does not.
     settleConfinement,
     leaseCredentials: async (providers: readonly string[]) => {
-      const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credentials: main did not answer the lease (${e.message})`, 'warn'); return null; });
+      const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credential lease: main did not answer the lease (${e.message})`, 'warn'); return null; });
       const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
       // The re-lease itself stays: it is what fixed the continuation's 401. Only the report is quieted.
       leaseReports.report(workspaceRoot, answer?.kind === 'credentials.leased' ? answer.report : null, (m) => log(m));

@@ -11,7 +11,7 @@ const OWNERS = [
   `${at(0)} info    workspace service: repository /tmp/w: git=true repo=true branch=main base=- +0/-0 touched=0 uncommitted=0 in 41 ms`,
   `${at(1)} info    workspace service: git view: 9 reads in 73 ms (/tmp/w: git=true repo=true branch=main upstream=- +0/-0 worktrees=1 history=3 uncommitted=0)`,
   `${at(2)} info    run host: mcp setup: index succeeded (2271 ms)`,
-  `${at(3)} info    run host: credentials: leased for openai-compatible--katalyst (workspace /tmp/w)`,
+  `${at(3)} info    run host: credential lease: leased for openai-compatible--katalyst (workspace /tmp/w)`,
   `${at(10)} warning run host: mcp code_intelligence: tool discovery failed in 508 ms (Connection closed (code_intelligence exited with code 127; stderr: a | b)); the persona prompt will list this server with no tool details attached (REQ-MCP-048)`,
 ];
 const RESTATEMENTS = [

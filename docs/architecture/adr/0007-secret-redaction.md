@@ -128,3 +128,20 @@ boundary and bounded at 64. No masking outcome changes — the requirement's wor
 before — and `redaction.test.ts` now pins 100 KB under 50 ms (0.5 ms measured). Consequence 2's closed set
 is untouched. This is the eighth first-execution defect of the pattern `implementation-conditions.md`
 decision 3 names, and the first found in a mechanism other than the one being built.
+
+## The application log, and an assignment's value read for its own — 2026-11-01
+
+*Reported back in place by the hardening plan's bundle D1 (R-091).* Main's application log was the one recorder that did
+not use the pass; `createAppLog` now runs every recorded line through it, main's own and the children's forwarded lines
+alike ([the note](../../archive/defects/mains-application-log-lines-bypass-the-redaction-pass.md)). Its first execution
+over real log text found two things. A URL with a key in its query came through whole, because layer 1 consumed the
+value of every assignment it matched, masked or not, and the URL was the value of `https:`.
+
+**The falsified reason, kept:** "an assignment's value is one token, so nothing inside it needs reading" — true of the
+masked value, false of a value left in place, which can hold an assignment REQ-EVENTS-060 requires masked. **The
+replacement:** layer 1 consumes a value only when it masks it, finding the value's extent (`VALUE`, unchanged) for a
+secret-looking key alone; reading it by a lookahead at every key was quadratic again (3.8 s over 100 KB), the shape the
+first execution at size above warned of, so `redaction.test.ts` pins 100 KB of chained assignments under 100 ms
+([the pass's note](../../archive/defects/an-assignment-inside-a-non-secret-assignments-value-is-not-masked.md)). No shape,
+prefix or vocabulary changed. And the log's own `credentials: leased for …` read as an assignment under the pass and lost
+its value; the product's credential lines now begin `credential lease:` and `credential store:`.

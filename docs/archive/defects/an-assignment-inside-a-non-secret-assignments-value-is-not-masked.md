@@ -5,7 +5,7 @@ The redaction pass's first layer (`packages/kernel/src/redaction.ts`, `layerAssi
 secret-looking was never read for an assignment of its own: `GET https://api.example.com/v1/models?api_key=SECRET failed`
 came through unmasked, the URL being the value of `https:`, and so did `error: token=abc` and `status:401 auth=xyz`.
 Found 2026-11-01 while putting main's application log through the pass (bundle D1 of the hardening plan,
-[the log's note](../../defects/mains-application-log-lines-bypass-the-redaction-pass.md)), on the probe of a URL with a key in its query;
+[the log's note](mains-application-log-lines-bypass-the-redaction-pass.md)), on the probe of a URL with a key in its query;
 no leak observed.
 
 ## Specs
@@ -18,6 +18,7 @@ REQ-TOOLS-171 makes this pass the one every surface uses, so every surface misse
 
 - `packages/kernel/src/redaction.ts` — `layerPlainAssignments`, `valueEnd`.
 - `packages/kernel/src/redaction.test.ts` — the cases and the size bound.
+- `docs/architecture/adr/0007-secret-redaction.md` — "The application log, and an assignment's value read for its own", where the falsified reason is kept.
 
 ## Outcome — repaired 2026-11-01 (hardening plan hrd1, bundle D1)
 

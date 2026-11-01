@@ -24,6 +24,8 @@ Last reconciled with the code: **2026-11-02**
 
 Last reconciled with the code: **2026-11-01**
 
+**Every field a renderer command carries is bounded (OQ-467, PD-CHAT-011; 2026-11-01, hardening D1).** `04-seams/01-1-a-renderer-command.md` §1 gains stop 1a, `packages/contracts/src/limits.ts`, and the malformed headline names the field and the bound. No package, edge, process, message or channel changed.
+
 **The import graph is linted beside the matrix (R-091, hardening.md §3.5 rows 2 and 3; 2026-11-01).** `01-component-view/02-the-allowed-edge-matrix-the-lint-rule-verbatim.md` names `eslint-plugin-import-x` beside the boundaries plugin: no cycle, and no undeclared dependency, so `engine` now declares the `config` edge the matrix already allowed. No edge was added or removed. Four cycles broken by moving a shared piece into its own module (`workspace/src/git/invoke.ts` holds the git deny-lists, `engine/src/run/prompt-layers.ts`, `ui/src/agent-tree-rows.ts`, `ui/src/settings/Confirm.tsx`); `docs/archive/defects/the-product-code-holds-four-import-cycles.md`.
 
 **Lint is type-aware (R-091, hardening.md §3.5 row 1; 2026-11-01).** `01-component-view/01-the-packages.md`: the kernel node names `textOf`, the one rendering of a value of unknown shape as text that the type-aware `no-base-to-string` rule sent forty-four `String()` calls to (an object or an array as its JSON, every primitive as `String()` writes it). No edge, process, message or owned fact moved: the rest of the change is `eslint.config.js` and the findings it fixed in place (`codebase/02-the-disciplines-mechanised.md` lists the rules).

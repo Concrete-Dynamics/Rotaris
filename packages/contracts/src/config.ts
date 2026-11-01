@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { jsonBounded, NAME_MAX, PATH_MAX } from './limits.js'; // OQ-467
 import { SKILL_INVOCATION_MODE_NAMES, SKILL_LOAD_MODE_NAMES } from './skills.js'; // ADR-0063
 
 /**
@@ -239,7 +240,7 @@ export type RuntimeView = z.infer<typeof RuntimeViewSchema>;
 
 /** One role's field edits at one scope: a model (null is the baseline, removing the key) or its unset, a reasoning level or its unset. */
 export const RoleFieldEditsSchema = z.object({
-  model: z.string().nullable().optional(),
+  model: z.string().max(NAME_MAX).nullable().optional(),
   unsetModel: z.boolean().optional(),
   thinking: z.enum(ROLE_REASONING_NAMES).nullable().optional(),
   unsetThinking: z.boolean().optional(),
@@ -282,8 +283,8 @@ export type DisplaySavePayload = z.infer<typeof DisplaySaveSchema>;
  */
 export const SkillsSaveSchema = z.object({
   enabled: z.boolean().optional(),
-  overrides: z.record(z.string(), z.enum(SKILL_LOAD_MODE_NAMES).nullable()).optional(),
-  invocationOverrides: z.record(z.string(), z.enum(SKILL_INVOCATION_MODE_NAMES).nullable()).optional(),
+  overrides: z.record(z.string().max(NAME_MAX), z.enum(SKILL_LOAD_MODE_NAMES).nullable()).optional(),
+  invocationOverrides: z.record(z.string().max(NAME_MAX), z.enum(SKILL_INVOCATION_MODE_NAMES).nullable()).optional(),
 });
 export type SkillsSavePayload = z.infer<typeof SkillsSaveSchema>;
 
@@ -297,7 +298,7 @@ export type SkillsSavePayload = z.infer<typeof SkillsSaveSchema>;
  * screen at all.
  */
 export const InstructionsSaveSchema = z.object({
-  overrides: z.record(z.string(), z.enum(INSTRUCTION_STATE_NAMES).nullable()).optional(),
+  overrides: z.record(z.string().max(PATH_MAX), z.enum(INSTRUCTION_STATE_NAMES).nullable()).optional(),
 });
 export type InstructionsSavePayload = z.infer<typeof InstructionsSaveSchema>;
 
@@ -319,11 +320,11 @@ export type DesktopSaveRuntimeKey = (typeof DESKTOP_SAVE_RUNTIME_KEYS)[number];
 /** OQ-457: the changed `dictation:` keys, each held to the loader's rule. A null value removes a key. */
 export const DictationSaveSchema = z.object({
   backend: z.enum(DICTATION_BACKEND_NAMES).optional(),
-  local_model: z.string().nullable().optional(),
-  base_url: z.string().nullable().optional(),
-  model: z.string().nullable().optional(),
-  provider: z.string().nullable().optional(),
-  language: z.string().nullable().optional(),
+  local_model: z.string().max(NAME_MAX).nullable().optional(),
+  base_url: z.string().max(PATH_MAX).nullable().optional(),
+  model: z.string().max(NAME_MAX).nullable().optional(),
+  provider: z.string().max(NAME_MAX).nullable().optional(),
+  language: z.string().max(NAME_MAX).nullable().optional(),
 }).strict().superRefine((save, ctx) => {
   for (const key of ['local_model', 'base_url', 'language'] as const) {
     const problem = dictationFieldProblem(key, save[key] ?? null);
@@ -333,13 +334,14 @@ export const DictationSaveSchema = z.object({
 export type DictationSavePayload = z.infer<typeof DictationSaveSchema>;
 
 export const DesktopSaveSchema = z.object({
-  slots: z.partialRecord(z.enum(MODEL_SLOT_NAMES), z.string().nullable()).optional(),
+  slots: z.partialRecord(z.enum(MODEL_SLOT_NAMES), z.string().max(NAME_MAX).nullable()).optional(),
   slotThinking: z.partialRecord(z.enum(MODEL_SLOT_NAMES), z.enum(REASONING_LEVEL_NAMES).nullable()).optional(),
-  runtime: z.partialRecord(z.enum(DESKTOP_SAVE_RUNTIME_KEYS), z.unknown()).optional(),
+  /** OQ-467: the runtime values are open-shaped (lists of roots and hosts among them), held to FREE_TEXT_MAX as JSON. */
+  runtime: jsonBounded(z.partialRecord(z.enum(DESKTOP_SAVE_RUNTIME_KEYS), z.unknown())).optional(),
   circuitBreakerEnabled: z.boolean().optional(),
   compressorThresholdPercentage: z.number().int().optional(),
   delegationStrategy: z.enum(DELEGATION_STRATEGY_NAMES).optional(),
-  roles: z.record(z.string(), RoleEditSchema).optional(),
+  roles: z.record(z.string().max(NAME_MAX), RoleEditSchema).optional(),
   /** REQ-CONFIG-472 (Part AG): destination 1's four tool-row display fields. */
   display: DisplaySaveSchema.optional(),
   /** REQ-CONFIG-256/258 (ADR-0063): the three `skills` keys. Written SPARSELY — see `SkillsSaveSchema`. */
@@ -353,10 +355,11 @@ export type DesktopSavePayload = z.infer<typeof DesktopSaveSchema>;
 
 /** ADR-0037 Tier B: the settings store's current values, as the run host applies them at run start. */
 export const LiveStateSchema = z.object({
-  slots: z.partialRecord(z.enum(MODEL_SLOT_NAMES), z.string().nullable()).optional(),
+  slots: z.partialRecord(z.enum(MODEL_SLOT_NAMES), z.string().max(NAME_MAX).nullable()).optional(),
   slotThinking: z.partialRecord(z.enum(MODEL_SLOT_NAMES), z.enum(REASONING_LEVEL_NAMES).nullable()).optional(),
   delegationStrategy: z.enum(DELEGATION_STRATEGY_NAMES).optional(),
-  runtime: z.record(z.string(), z.unknown()).optional(),
+  /** OQ-467: open-shaped, held to FREE_TEXT_MAX as JSON. */
+  runtime: jsonBounded(z.record(z.string().max(NAME_MAX), z.unknown())).optional(),
   circuitBreakerEnabled: z.boolean().optional(),
   compressorThresholdPercentage: z.number().int().optional(),
 });

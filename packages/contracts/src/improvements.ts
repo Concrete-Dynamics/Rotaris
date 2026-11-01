@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FREE_TEXT_MAX, NAME_MAX } from './limits.js'; // OQ-467
 
 /** REQ-LIBRARY-002 / REQ-SESSION-021: the persisted marker shared by every run owner. */
 export const RUN_TYPES = ['task_run', 'improvement_run', 'integration_run'] as const;
@@ -204,25 +205,25 @@ export const ImprovementArtifactRecordSchema = z.object({
 export type ImprovementArtifactRecord = z.infer<typeof ImprovementArtifactRecordSchema>;
 
 export const ProposalReviewRequestSchema = z.object({
-  artifact_id: z.string(),
-  proposal_id: z.string(),
+  artifact_id: z.string().max(NAME_MAX),
+  proposal_id: z.string().max(NAME_MAX),
   status: ProposalStatusSchema,
   expected_versions_due: z.number().int().nonnegative().optional(),
 });
 export type ProposalReviewRequest = z.infer<typeof ProposalReviewRequestSchema>;
 
 export const ProposalEditRequestSchema = z.object({
-  artifact_id: z.string(),
-  proposal_id: z.string(),
-  summary: z.string().trim().min(1),
-  recommended_action: z.string().trim().min(1),
+  artifact_id: z.string().max(NAME_MAX),
+  proposal_id: z.string().max(NAME_MAX),
+  summary: z.string().max(FREE_TEXT_MAX).trim().min(1),
+  recommended_action: z.string().max(FREE_TEXT_MAX).trim().min(1),
   expected_versions_due: z.number().int().nonnegative().optional(),
 });
 export type ProposalEditRequest = z.infer<typeof ProposalEditRequestSchema>;
 
 export const ProposalDeleteRequestSchema = z.object({
-  artifact_id: z.string(),
-  proposal_id: z.string(),
+  artifact_id: z.string().max(NAME_MAX),
+  proposal_id: z.string().max(NAME_MAX),
   expected_versions_due: z.number().int().nonnegative().optional(),
 });
 export type ProposalDeleteRequest = z.infer<typeof ProposalDeleteRequestSchema>;
@@ -319,16 +320,16 @@ export type ImprovementRollbackResult = z.infer<typeof ImprovementRollbackResult
 /** Workspace-service command surface; the service owns every mutation (REQ-LIBRARY-158). */
 export const ImprovementCommandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('list') }),
-  z.object({ action: z.literal('get'), artifact_id: z.string() }),
-  z.object({ action: z.literal('history'), artifact_id: z.string() }),
-  z.object({ action: z.literal('approved'), artifact_id: z.string() }),
+  z.object({ action: z.literal('get'), artifact_id: z.string().max(NAME_MAX) }),
+  z.object({ action: z.literal('history'), artifact_id: z.string().max(NAME_MAX) }),
+  z.object({ action: z.literal('approved'), artifact_id: z.string().max(NAME_MAX) }),
   z.object({ action: z.literal('save-collected'), artifact: z.unknown() }),
   z.object({ action: z.literal('review'), request: ProposalReviewRequestSchema }),
   z.object({ action: z.literal('edit'), request: ProposalEditRequestSchema }),
   z.object({ action: z.literal('delete'), request: ProposalDeleteRequestSchema }),
-  z.object({ action: z.literal('prepare'), artifact_id: z.string(), dry_run: z.boolean().optional() }),
-  z.object({ action: z.literal('record-applied'), artifact_id: z.string() }),
-  z.object({ action: z.literal('rollback-preview'), artifact_id: z.string() }),
-  z.object({ action: z.literal('rollback'), artifact_id: z.string(), force: z.boolean().default(false) }),
+  z.object({ action: z.literal('prepare'), artifact_id: z.string().max(NAME_MAX), dry_run: z.boolean().optional() }),
+  z.object({ action: z.literal('record-applied'), artifact_id: z.string().max(NAME_MAX) }),
+  z.object({ action: z.literal('rollback-preview'), artifact_id: z.string().max(NAME_MAX) }),
+  z.object({ action: z.literal('rollback'), artifact_id: z.string().max(NAME_MAX), force: z.boolean().default(false) }),
 ]);
 export type ImprovementCommand = z.infer<typeof ImprovementCommandSchema>;

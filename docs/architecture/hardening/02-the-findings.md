@@ -56,7 +56,7 @@ Not a finding: the bundled SQLite is 3.53.4, past the WAL-reset fix of 3.51.3; C
 
 | Finding | Evidence | Closes |
 |---|---|---|
-| `prompt`, every `path` and every name unbounded in `CommandRequestSchema` | `packages/contracts/src/commands.ts`; [OQ-467](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-467) | D1 |
+| ~~`prompt`, every `path` and every name unbounded in `CommandRequestSchema`~~ | `packages/contracts/src/commands.ts`; [OQ-467](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-467) | D1, closed 2026-11-01: every string, list and open-shaped payload of the union bounded from `contracts/src/limits.ts`, a request past one `command.malformed` naming the field and the bound, never the value (`limits.test.ts`, `command-dispatch.test.ts`) |
 | Main's application log bypasses `redact()` | `main/app-log.ts`; [the note](../../defects/mains-application-log-lines-bypass-the-redaction-pass.md) | D1 |
 | Application log to stdout alone in a packaged build; diagnostics (REQ-STARTUP-129 to REQ-STARTUP-139) not built | `main/app-log.ts` | D2 |
 | Session log unbounded | `run-host/tools.ts:26`; [OQ-465](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-465) | D2 |

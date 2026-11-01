@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FREE_TEXT_MAX, LIST_MAX, NAME_MAX } from './limits.js'; // OQ-467
 import type { EncodedKey, NamedKey } from './terminal-keys.js';
 
 /**
@@ -46,9 +47,9 @@ export type TerminalRefusal = (typeof TERMINAL_REFUSALS)[number];
 export const TERMINAL_AUDIT_KINDS = ['line', 'control', 'took-control', 'released-control', 'kill'] as const;
 export type TerminalAuditKind = (typeof TERMINAL_AUDIT_KINDS)[number];
 
-const NamedKeySchema = z.string().min(1) as unknown as z.ZodType<NamedKey>;
+const NamedKeySchema = z.string().max(NAME_MAX).min(1) as unknown as z.ZodType<NamedKey>;
 const EncodedKeySchema: z.ZodType<EncodedKey> = z.union([
-  z.object({ kind: z.literal('text'), text: z.string() }),
+  z.object({ kind: z.literal('text'), text: z.string().max(FREE_TEXT_MAX) }),
   z.object({ kind: z.literal('named'), key: NamedKeySchema }),
 ]);
 
@@ -62,13 +63,13 @@ const EncodedKeySchema: z.ZodType<EncodedKey> = z.union([
  *  - `terminal.audit`    → REQ-SHELL-107's entry, written by the run host through the session writer, redacted.
  */
 export const TERMINAL_COMMAND_SCHEMAS = [
-  z.object({ kind: z.literal('terminal.streams'), sessionId: z.string().min(1) }),
-  z.object({ kind: z.literal('terminal.sendKeys'), streamId: z.string().min(1), keys: z.array(EncodedKeySchema) }),
-  z.object({ kind: z.literal('terminal.resize'), streamId: z.string().min(1), cols: z.number().int().min(1).max(1000), rows: z.number().int().min(1).max(1000) }),
-  z.object({ kind: z.literal('terminal.interrupt'), streamId: z.string().min(1) }),
-  z.object({ kind: z.literal('terminal.endInput'), streamId: z.string().min(1) }),
-  z.object({ kind: z.literal('terminal.kill'), streamId: z.string().min(1) }),
-  z.object({ kind: z.literal('terminal.audit'), streamId: z.string().min(1), entry: z.object({ kind: z.enum(TERMINAL_AUDIT_KINDS), text: z.string().optional() }) }),
+  z.object({ kind: z.literal('terminal.streams'), sessionId: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('terminal.sendKeys'), streamId: z.string().max(NAME_MAX).min(1), keys: z.array(EncodedKeySchema).max(LIST_MAX) }),
+  z.object({ kind: z.literal('terminal.resize'), streamId: z.string().max(NAME_MAX).min(1), cols: z.number().int().min(1).max(1000), rows: z.number().int().min(1).max(1000) }),
+  z.object({ kind: z.literal('terminal.interrupt'), streamId: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('terminal.endInput'), streamId: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('terminal.kill'), streamId: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('terminal.audit'), streamId: z.string().max(NAME_MAX).min(1), entry: z.object({ kind: z.enum(TERMINAL_AUDIT_KINDS), text: z.string().max(FREE_TEXT_MAX).optional() }) }),
 ] as const;
 export type TerminalCommand = z.infer<(typeof TERMINAL_COMMAND_SCHEMAS)[number]>;
 export type TerminalCommandKind = TerminalCommand['kind'];
@@ -146,9 +147,9 @@ export function terminalRowStreamId(toolName: string, argsJson: string, agentId:
 //  - `window.showWorkspace`    → REQ-SHELL-083's "Go to Workspace": the main window switches to the Workspace view and
 //                                 is raised, as a request.
 export const TERMINAL_WINDOW_COMMAND_SCHEMAS = [
-  z.object({ kind: z.literal('window.openTerminal'), streamId: z.string().min(1).optional() }),
+  z.object({ kind: z.literal('window.openTerminal'), streamId: z.string().max(NAME_MAX).min(1).optional() }),
   z.object({ kind: z.literal('window.terminalPayload') }),
-  z.object({ kind: z.literal('window.terminalSession'), sessionId: z.string().min(1).nullable() }),
+  z.object({ kind: z.literal('window.terminalSession'), sessionId: z.string().max(NAME_MAX).min(1).nullable() }),
   z.object({ kind: z.literal('window.terminalAutoOpen'), value: z.boolean() }),
   z.object({ kind: z.literal('window.showWorkspace') }),
 ] as const;

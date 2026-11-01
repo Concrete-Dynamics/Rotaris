@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NAME_MAX, PATH_MAX } from './limits.js'; // OQ-467
 
 /**
  * ADR-0063 — portable skills on the wire: what a surface is told about a discovered skill, and the four
@@ -119,8 +120,8 @@ export const SKILLS_DISCOVERING_NOTE = 'Discovering portable skills. They are li
 export const SKILLS_COMMAND_SCHEMAS = [
   z.object({ kind: z.literal('skills.read') }),
   z.object({ kind: z.literal('skills.rescan') }),
-  z.object({ kind: z.literal('skills.forceLoad'), name: z.string().min(1) }),
-  z.object({ kind: z.literal('skills.loadFile'), path: z.string().optional() }),
+  z.object({ kind: z.literal('skills.forceLoad'), name: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('skills.loadFile'), path: z.string().max(PATH_MAX).optional() }),
   z.object({ kind: z.literal('skills.list') }),
 ] as const;
 

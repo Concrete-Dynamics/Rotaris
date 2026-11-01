@@ -13,7 +13,7 @@
  * `CommandOutcomeSchema.code` is a free string, so `command.failed` widens no vocabulary.
  */
 import { redact } from '@rotaris/kernel';
-import { CommandRequestSchema, type CommandOutcome, type CommandRequest } from '@rotaris/contracts';
+import { CommandRequestSchema, malformedHeadline, type CommandOutcome, type CommandRequest } from '@rotaris/contracts';
 import type { AppLogLevel } from './app-log.js';
 import type { CommandHandler, CommandHandlers, MainWindowState } from './commands/context.js';
 
@@ -42,7 +42,8 @@ export async function dispatchCommand<W extends MainWindowState>(raw: unknown, s
   const w = deps.forCommand(senderId);
   if (!w) return { ok: false, code: 'window.notMain', headline: 'No main window is open' };
   const parsed = CommandRequestSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, code: 'command.malformed', headline: 'The request could not be read' };
+  // OQ-467: a request past a bound is refused here, its headline naming the field and the bound and never the value.
+  if (!parsed.success) return { ok: false, code: 'command.malformed', headline: malformedHeadline(parsed.error.issues) };
   const req = parsed.data;
   /**
    * A4: the handler the table names, called with the request narrowed to its own kind. The cast is the one place that

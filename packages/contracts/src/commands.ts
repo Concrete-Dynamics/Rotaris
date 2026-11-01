@@ -14,6 +14,7 @@ import { SKILLS_COMMAND_SCHEMAS } from './skills.js'; // ADR-0063
 import { REAUTH_COMMAND_SCHEMAS } from './reauth.js'; // REQ-NOTIFY-071/078
 import { AUTH_RECOVERY_COMMAND_SCHEMAS } from './auth-recovery.js'; // REQ-NOTIFY-072..080
 import { NoticeSeveritySchema } from './notices.js'; // Part AO
+import { DICTATION_AUDIO_MAX_BASE64, FREE_TEXT_MAX, jsonBounded, LIST_MAX, NAME_MAX, PATH_MAX } from './limits.js'; // OQ-467, PD-CHAT-011
 
 /**
  * REQ-SHELL-069: the pane-layout views registered so far — the Overview's, the Git view's (REQ-GIT-153) and,
@@ -71,8 +72,14 @@ const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', .
  * No sixth channel exists for reconciliation: the response is ordinary
  * traffic on channels 1 and 2.
  */
-/** OQ-455: 24 MiB of audio as base64, the size a hosted transcription endpoint itself refuses past. */
-export const DICTATION_AUDIO_MAX_BASE64 = 32 * 1024 * 1024;
+/**
+ * OQ-467 (ruled 2026-11-01 under R-072): every string a command carries is bounded — free text at `FREE_TEXT_MAX`, a path,
+ * URL or key at `PATH_MAX`, a name or identifier at `NAME_MAX`, a list at `LIST_MAX` items, an open-shaped payload by its
+ * JSON length (`limits.ts`, which names each figure and its reason; `limits.test.ts` walks this union and fails a string
+ * or a list left without one). A request past a bound is `command.malformed`, its headline naming the field and the
+ * bound (`malformedHeadline`), never the value. `DICTATION_AUDIO_MAX_BASE64` (OQ-455) moved there too, since an image
+ * attachment takes the same bound (PD-CHAT-011).
+ */
 
 export const CommandOutcomeSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), value: z.unknown().optional() }),
@@ -83,10 +90,10 @@ export type CommandOutcome = z.infer<typeof CommandOutcomeSchema>;
 export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('shell.hello') }),
   z.object({ kind: z.literal('theme.get') }),
-  z.object({ kind: z.literal('theme.set'), name: z.string().min(1) }),
+  z.object({ kind: z.literal('theme.set'), name: z.string().max(NAME_MAX).min(1) }),
   z.object({ kind: z.literal('prefs.get'), key: z.enum(PREFERENCE_COMMAND_KEYS) }),
   /** REQ-SHELL-069: a pane layout is a versioned record under `panels/`, per user. */
-  z.object({ kind: z.literal('prefs.set'), key: z.enum(PREFERENCE_COMMAND_KEYS), value: z.union([z.boolean(), z.string(), PaneLayoutSchema]) }),
+  z.object({ kind: z.literal('prefs.set'), key: z.enum(PREFERENCE_COMMAND_KEYS), value: z.union([z.boolean(), z.string().max(FREE_TEXT_MAX), PaneLayoutSchema]) }),
   /**
    * REQ-CHAT-015 / REQ-SHELL-159 / REQ-NOTIFY-066 (Part AB): the composer draft of the workspace this instance
    * has open. Neither command names a key or a workspace — main resolves `workspaces/{workspace-key}/composerDraft`
@@ -95,14 +102,14 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * text verbatim, including the empty string, which is how a cleared composer is cleared in the store too.
    */
   z.object({ kind: z.literal('composer.readDraft') }),
-  z.object({ kind: z.literal('composer.writeDraft'), text: z.string() }),
+  z.object({ kind: z.literal('composer.writeDraft'), text: z.string().max(FREE_TEXT_MAX) }),
   /**
    * REQ-CHAT-011: a submission with no session starts one; the text becomes row 0, kind `user`.
    * REQ-SHELL-125 / REQ-GIT-021/118/158 (Part O): the launch dialog's choices ride along — isolation with its branch
    * (the id it was derived from is the one main minted through `session.newId`), or an attach path already checked,
    * never both (REQ-GIT-158 makes that refusal unreachable); and the sandbox mode.
    */
-  z.object({ kind: z.literal('session.start'), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), isolation: z.object({ branch: z.string().min(1) }).optional(), attach: z.object({ path: z.string().min(1) }).optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
+  z.object({ kind: z.literal('session.start'), prompt: z.string().max(FREE_TEXT_MAX), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), isolation: z.object({ branch: z.string().max(NAME_MAX).min(1) }).optional(), attach: z.object({ path: z.string().max(PATH_MAX).min(1) }).optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   /**
    * REQ-GIT-118: the id the launch dialog shows in its default branch; main mints it and uses it for the next isolated start.
    * Answered `{sessionId, isolationRequired}`: PD-GIT-001's count for the window's workspace, above zero or unreadable, which
@@ -115,13 +122,13 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * run host, which owns the store and the session's files, exactly as it relays `timeline.append`.
    */
   z.object({ kind: z.literal('artifacts.list') }),
-  z.object({ kind: z.literal('artifacts.body'), ref: z.string().min(1) }),
-  z.object({ kind: z.literal('artifacts.save'), ref: z.string().min(1), body: z.string() }),
+  z.object({ kind: z.literal('artifacts.body'), ref: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('artifacts.save'), ref: z.string().max(NAME_MAX).min(1), body: z.string().max(FREE_TEXT_MAX) }),
   /** REQ-LIBRARY-109..120/166..176: workspace-scoped improvement review and user-chosen exports. */
-  z.object({ kind: z.literal('improvements'), command: ImprovementCommandSchema }),
-  z.object({ kind: z.literal('improvements.export'), artifactId: z.string().min(1).optional() }),
-  z.object({ kind: z.literal('improvements.undoReview'), id: z.string().min(1) }),
-  z.object({ kind: z.literal('improvements.start'), artifactId: z.string().min(1) }),
+  z.object({ kind: z.literal('improvements'), command: jsonBounded(ImprovementCommandSchema) }), // OQ-467: `save-collected` carries an open-shaped artifact, held to FREE_TEXT_MAX as JSON here, at the renderer boundary only
+  z.object({ kind: z.literal('improvements.export'), artifactId: z.string().max(NAME_MAX).min(1).optional() }),
+  z.object({ kind: z.literal('improvements.undoReview'), id: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('improvements.start'), artifactId: z.string().max(NAME_MAX).min(1) }),
   /** PD-LIBRARY-002: the user's explicit gesture, and the only way a retrospective ever starts. */
   z.object({ kind: z.literal('improvements.retrospective') }),
   /**
@@ -130,90 +137,90 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * `improvement:activity`, so a window opened while a retrospective is pending draws the gesture at rest at once.
    */
   z.object({ kind: z.literal('improvements.activity') }),
-  z.object({ kind: z.literal('improvements.rollbackPreview'), artifactId: z.string().min(1) }),
-  z.object({ kind: z.literal('improvements.rollback'), artifactId: z.string().min(1), force: z.boolean() }),
+  z.object({ kind: z.literal('improvements.rollbackPreview'), artifactId: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('improvements.rollback'), artifactId: z.string().max(NAME_MAX).min(1), force: z.boolean() }),
   /** REQ-MONITOR-168 / REQ-GIT-102: the repository card's reads, relayed to the workspace service (ADR-0038). */
   z.object({ kind: z.literal('repository.read') }),
   /** REQ-GIT-105: the Git view's refresh, relayed to the workspace service; a missing Git raises REQ-GIT-104's notice in main. */
   z.object({ kind: z.literal('git.read') }),
   /** REQ-GIT-110/115: the user's own worktree at the user's own path — not under `.rotaris/`. */
-  z.object({ kind: z.literal('worktree.create'), branch: z.string().min(1), path: z.string().min(1) }),
+  z.object({ kind: z.literal('worktree.create'), branch: z.string().max(NAME_MAX).min(1), path: z.string().max(PATH_MAX).min(1) }),
   /** REQ-GIT-111/117: `force` only after Git refused for uncommitted work and the second confirmation was accepted. */
-  z.object({ kind: z.literal('worktree.remove'), path: z.string().min(1), force: z.boolean() }),
+  z.object({ kind: z.literal('worktree.remove'), path: z.string().max(PATH_MAX).min(1), force: z.boolean() }),
   /** REQ-GIT-158: main's folder chooser, then the service's REQ-GIT-011 check; the path and branch or the refusal come back. */
   z.object({ kind: z.literal('worktree.chooseAttach') }),
   /** REQ-GIT-116: whether a directory exists and is non-empty, for the dialog's live message (the renderer has no filesystem). */
-  z.object({ kind: z.literal('worktree.probePath'), path: z.string().min(1) }),
+  z.object({ kind: z.literal('worktree.probePath'), path: z.string().max(PATH_MAX).min(1) }),
   /**
    * ADR-0039 (Part P): the checkpoints card and its restore flow. The listing reads rows only (REQ-GIT-050); the preview
    * and the restore are main's orchestration over the run host (rows, liveness) and the workspace service (Git);
    * one desktop checkpoint operation is in flight at a time (REQ-GIT-091) — a second is declined with code `checkpoint.busy`.
    */
-  z.object({ kind: z.literal('checkpoints.list'), sessionId: z.string().min(1) }),
-  z.object({ kind: z.literal('checkpoints.preview'), sessionId: z.string().min(1), sequence: z.number().int().nonnegative() }),
-  z.object({ kind: z.literal('checkpoints.restore'), sessionId: z.string().min(1), sequence: z.number().int().nonnegative(), force: z.boolean() }),
-  z.object({ kind: z.literal('session.resume'), sessionId: z.string().min(1) }),
+  z.object({ kind: z.literal('checkpoints.list'), sessionId: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('checkpoints.preview'), sessionId: z.string().max(NAME_MAX).min(1), sequence: z.number().int().nonnegative() }),
+  z.object({ kind: z.literal('checkpoints.restore'), sessionId: z.string().max(NAME_MAX).min(1), sequence: z.number().int().nonnegative(), force: z.boolean() }),
+  z.object({ kind: z.literal('session.resume'), sessionId: z.string().max(NAME_MAX).min(1) }),
   /**
    * PD-SHELL-001 revision 3 (OQ-292, ruled 2026-10-14 under R-072): a `focus-session` notice action, pressed in any window.
    * Main reaches `workspace` — the window holding it surfaced, else one added for it — and asks THAT window, on channel 16, to
    * focus the session through its own load. An added window holds the request until its renderer reports `session.focusReady`.
    */
-  z.object({ kind: z.literal('session.focusFromNotice'), sessionId: z.string().min(1), workspace: z.string().min(1) }),
+  z.object({ kind: z.literal('session.focusFromNotice'), sessionId: z.string().max(NAME_MAX).min(1), workspace: z.string().max(PATH_MAX).min(1) }),
   /**
    * The asking main window's renderer listens on channel 16 from now on; answered `{ sessionId }`, the focus request held for
    * it while it could not take one (a window the reach added, still loading), or null. A request is delivered once.
    */
   z.object({ kind: z.literal('session.focusReady') }),
   /** REQ-CHAT-011 again for a loaded session with no active run: append the user row. */
-  z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
+  z.object({ kind: z.literal('session.prompt'), sessionId: z.string().max(NAME_MAX), prompt: z.string().max(FREE_TEXT_MAX), attachments: z.array(ImageAttachmentInputSchema).max(10).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   /** REQ-CHAT-173: thumbnail bytes are fetched on demand and never join a transcript snapshot. */
   /**
    * REQ-NOTIFY-045 / REQ-NOTIFY-030 / REQ-CHAT-173 (OQ-178): a notice's retry with a blank draft — the engine resubmits the
    * session's last submitted prompt with its images, read back from the session's directory (`Sessions.retry`), so the
    * renderer names the session and nothing else: no prompt text and no image bytes cross the boundary again.
    */
-  z.object({ kind: z.literal('session.retry'), sessionId: z.string().min(1) }),
-  z.object({ kind: z.literal('session.readAttachment'), sessionId: z.string().min(1), path: z.string().min(1), digest: z.string().regex(/^[0-9a-f]{64}$/) }),
+  z.object({ kind: z.literal('session.retry'), sessionId: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('session.readAttachment'), sessionId: z.string().max(NAME_MAX).min(1), path: z.string().max(PATH_MAX).min(1), digest: z.string().length(64).regex(/^[0-9a-f]{64}$/) }),
   /**
    * REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause, or continue a paused session or one a crash left (PD-ORCH-005
    * clause 18). `withoutPaused` is clause 6's "continue without them": the agents the rest or the crash left end
    * `cancelled` instead of resuming.
    */
-  z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(PAUSE_RESOLUTIONS), withoutPaused: z.boolean().optional() }),
+  z.object({ kind: z.literal('session.continue'), sessionId: z.string().max(NAME_MAX).min(1), action: z.enum(PAUSE_RESOLUTIONS), withoutPaused: z.boolean().optional() }),
   /**
    * REQ-ORCH-153/154 (ADR-0062): the plan gate's two entries. A session command and not a control operation —
    * the run is PARKED at the gate, so there is no live run to control and the answer must reach a session whose
    * hosting process may have exited since. `planEdit` writes the user's text and approves nothing; `planDecision`
    * carries one of exactly three answers, with the stated changes `revise` hands to the next cycle.
    */
-  z.object({ kind: z.literal('session.planEdit'), sessionId: z.string().min(1), text: z.string() }),
-  z.object({ kind: z.literal('session.planDecision'), sessionId: z.string().min(1), decision: z.enum(PLAN_DECISIONS), changes: z.string().optional() }),
+  z.object({ kind: z.literal('session.planEdit'), sessionId: z.string().max(NAME_MAX).min(1), text: z.string().max(FREE_TEXT_MAX) }),
+  z.object({ kind: z.literal('session.planDecision'), sessionId: z.string().max(NAME_MAX).min(1), decision: z.enum(PLAN_DECISIONS), changes: z.string().max(FREE_TEXT_MAX).optional() }),
   /**
    * PD-ORCH-003: re-arm the gate for a session whose approval released it. The third entry, and a session
    * command for the same reason as the other two. It is the only way back to a held gate inside a session,
    * which is what keeps the release visible rather than permanent — nothing in the run re-arms itself.
    */
-  z.object({ kind: z.literal('session.planRearm'), sessionId: z.string().min(1) }),
+  z.object({ kind: z.literal('session.planRearm'), sessionId: z.string().max(NAME_MAX).min(1) }),
   /**
    * REQ-MONITOR-194 / REQ-MONITOR-146: the composer's "Model for the next run" chose `modelKey` for the session this window
    * follows. The renderer writes the choice to the configuration first (`config.setField`); this tells the engine it was an
    * explicit choice, which clears the exclusion of the pair if the session holds it out of quota (`Sessions.chooseNextModel`).
    */
-  z.object({ kind: z.literal('session.chooseNextModel'), sessionId: z.string().min(1), modelKey: z.string().min(1) }),
+  z.object({ kind: z.literal('session.chooseNextModel'), sessionId: z.string().max(NAME_MAX).min(1), modelKey: z.string().max(NAME_MAX).min(1) }),
   /** REQ-SESSION-109: a surface attached to a session paused at the limit asks main for the dialog; the dialog window reads its payload. */
   z.object({ kind: z.literal('pause.present'), payload: PausePayloadSchema }),
   z.object({ kind: z.literal('pause.payload') }),
   /** Begin following: every attach starts with a whole-session update (REQ-MONITOR-214). */
-  z.object({ kind: z.literal('session.subscribe'), sessionId: z.string() }),
-  z.object({ kind: z.literal('session.unsubscribe'), sessionId: z.string() }),
+  z.object({ kind: z.literal('session.subscribe'), sessionId: z.string().max(NAME_MAX) }),
+  z.object({ kind: z.literal('session.unsubscribe'), sessionId: z.string().max(NAME_MAX) }),
   /**
    * REQ-NOTIFY-031/032 with REQ-MONITOR-249/252: the window no longer shows the session — "New session" released it to run
    * on in the background — so main stops counting it as focused there. The relay subscription stays, so its background
    * notices and terminal frames still reach the window; `session.unsubscribe` is the one that drops it.
    */
-  z.object({ kind: z.literal('session.release'), sessionId: z.string() }),
-  z.object({ kind: z.literal('session.reconcile'), sessionId: z.string() }),
-  z.object({ kind: z.literal('session.pageOlder'), sessionId: z.string(), beforeIndex: z.number().int() }),
+  z.object({ kind: z.literal('session.release'), sessionId: z.string().max(NAME_MAX) }),
+  z.object({ kind: z.literal('session.reconcile'), sessionId: z.string().max(NAME_MAX) }),
+  z.object({ kind: z.literal('session.pageOlder'), sessionId: z.string().max(NAME_MAX), beforeIndex: z.number().int() }),
   /** ADR-0010 channel 1 over channel 5: the shell resolves focus to a session id before sending (ADR-0013). */
   z.object({ kind: z.literal('session.control'), request: ControlRequestSchema }),
   /** REQ-NOTIFY-026: compare-and-clear with an id; no id clears whatever notice is current (Part V). */
@@ -273,7 +280,7 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * message. Main refuses anything that is not `http:` or `https:` — the text is model-authored, and a
    * `file:`, `javascript:` or shell scheme reaching `shell.openExternal` would execute at the reader's expense.
    */
-  z.object({ kind: z.literal('shell.openExternal'), url: z.string().min(1) }),
+  z.object({ kind: z.literal('shell.openExternal'), url: z.string().max(PATH_MAX).min(1) }),
   /**
    * Part AG — REQ-SHELL-142: the About page's third-party licence bundle. It is a **local** file shipped with the
    * build, so it cannot travel through `shell.openExternal`, which refuses every scheme but `http(s)` for the
@@ -289,25 +296,25 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * window that is already up. Main answers false when the named request has no open dialog — a queued request
    * cannot jump the queue (REQ-TOOLS-063 shows one at a time, oldest first).
    */
-  z.object({ kind: z.literal('approval.raise'), requestId: z.string().min(1) }),
+  z.object({ kind: z.literal('approval.raise'), requestId: z.string().max(NAME_MAX).min(1) }),
   /** ADR-0015: the Hooks tab (REQ-HOOKS-103..105/109/136/137) and the review dialog (REQ-HOOKS-106/107). Every read re-reads the sources (REQ-CONFIG-014). */
-  z.object({ kind: z.literal('hooks.summary'), sessionId: z.string().optional() }),
+  z.object({ kind: z.literal('hooks.summary'), sessionId: z.string().max(NAME_MAX).optional() }),
   /**
    * ESC-34 / REQ-NOTIFY-044: `workspace` is the notice action's named workspace. Main reaches it first — the window
    * holding it surfaced, else one added for it (OQ-267) — and reviews THAT workspace's hooks; with none, the window that
    * asked (the Hooks tab's own Review control).
    */
-  z.object({ kind: z.literal('hooks.review'), workspace: z.string().min(1).optional() }),
+  z.object({ kind: z.literal('hooks.review'), workspace: z.string().max(PATH_MAX).min(1).optional() }),
   z.object({ kind: z.literal('hooks.reviewPayload') }),
   z.object({ kind: z.literal('hooks.reviewDecide'), trusted: z.boolean() }),
   z.object({ kind: z.literal('hooks.clearDecision') }),
-  z.object({ kind: z.literal('hooks.setToggle'), agent: z.enum(HOOK_AGENT_IDS), hookId: z.string().nullable(), on: z.boolean() }),
+  z.object({ kind: z.literal('hooks.setToggle'), agent: z.enum(HOOK_AGENT_IDS), hookId: z.string().max(NAME_MAX).nullable(), on: z.boolean() }),
   /** REQ-ORCH-026: the built-in playbook catalogue for the settings listing. */
   z.object({ kind: z.literal('playbooks.catalogue') }),
   /** ADR-0037: Tier A through the workspace service (read, save, write a field); Tier B's live state to the run host. */
   z.object({ kind: z.literal('config.read') }),
   z.object({ kind: z.literal('config.save'), save: DesktopSaveSchema }),
-  z.object({ kind: z.literal('config.setField'), scope: z.enum(CONFIG_SCOPES).optional(), patch: z.record(z.string(), z.unknown()) }),
+  z.object({ kind: z.literal('config.setField'), scope: z.enum(CONFIG_SCOPES).optional(), patch: jsonBounded(z.record(z.string().max(NAME_MAX), z.unknown())) }),
   z.object({ kind: z.literal('config.liveState'), state: LiveStateSchema }),
   /**
    * OQ-455..458: one recording, as the renderer's recorder wrote it, answered `{ text }`. Five minutes of the recorder's default
@@ -316,22 +323,22 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('dictation.transcribe'), audioBase64: z.string().min(1).max(DICTATION_AUDIO_MAX_BASE64), mimeType: z.string().min(1).max(100) }),
   /** ADR-0030 / REQ-PROVIDER-140..143/147: the provider list and its actions, answered by main itself (the store lives there). No reply carries a credential. */
   z.object({ kind: z.literal('providers.list') }),
-  z.object({ kind: z.literal('providers.health'), id: z.string().min(1) }),
+  z.object({ kind: z.literal('providers.health'), id: z.string().max(NAME_MAX).min(1) }),
   /** REQ-PROVIDER-116/117/142: open the authentication window in a mode; the window reads its payload. */
-  z.object({ kind: z.literal('providers.open'), mode: z.enum(PROVIDER_DIALOG_MODES), providerId: z.string().optional() }),
+  z.object({ kind: z.literal('providers.open'), mode: z.enum(PROVIDER_DIALOG_MODES), providerId: z.string().max(NAME_MAX).optional() }),
   z.object({ kind: z.literal('provider.payload') }),
   /** The pasted key travels INWARD here and nowhere else; `openai-compatible` as providerId means a custom instance from label + URL. */
-  z.object({ kind: z.literal('provider.signIn'), providerId: z.string().min(1), label: z.string().optional(), baseUrl: z.string().optional(), apiKey: z.string(), replace: z.boolean().optional(), allowEmpty: z.boolean().optional() }),
-  z.object({ kind: z.literal('providers.save'), id: z.string().min(1), apiKey: z.string(), baseUrl: z.string().nullable(), validate: z.boolean() }),
-  z.object({ kind: z.literal('providers.validate'), id: z.string().min(1) }),
-  z.object({ kind: z.literal('providers.signOut'), id: z.string().min(1) }),
-  z.object({ kind: z.literal('providers.delete'), id: z.string().min(1) }),
-  z.object({ kind: z.literal('providers.refresh'), ids: z.union([z.literal('all'), z.array(z.string())]) }),
+  z.object({ kind: z.literal('provider.signIn'), providerId: z.string().max(NAME_MAX).min(1), label: z.string().max(NAME_MAX).optional(), baseUrl: z.string().max(PATH_MAX).optional(), apiKey: z.string().max(PATH_MAX), replace: z.boolean().optional(), allowEmpty: z.boolean().optional() }),
+  z.object({ kind: z.literal('providers.save'), id: z.string().max(NAME_MAX).min(1), apiKey: z.string().max(PATH_MAX), baseUrl: z.string().max(PATH_MAX).nullable(), validate: z.boolean() }),
+  z.object({ kind: z.literal('providers.validate'), id: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('providers.signOut'), id: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('providers.delete'), id: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('providers.refresh'), ids: z.union([z.literal('all'), z.array(z.string().max(NAME_MAX)).max(LIST_MAX)]) }),
   /** ADR-0034 (Part S) / REQ-MCP-091/092/094/109: the MCP settings category, relayed to the run host, which holds the pipeline, the probe and the session override. */
   z.object({ kind: z.literal('mcp.list') }),
-  z.object({ kind: z.literal('mcp.probe'), name: z.string().min(1).optional() }),
-  z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().min(1), enabled: z.boolean() }),
-  z.object({ kind: z.literal('mcp.secrets'), server: z.string().optional() }),
+  z.object({ kind: z.literal('mcp.probe'), name: z.string().max(NAME_MAX).min(1).optional() }),
+  z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().max(NAME_MAX).min(1), enabled: z.boolean() }),
+  z.object({ kind: z.literal('mcp.secrets'), server: z.string().max(NAME_MAX).optional() }),
   /**
    * ADR-0022 (Part AR) / REQ-SANDBOX-116, REQ-SANDBOX-129: the availability verdict the runtime
    * section's label shows, and the re-check control beside it. `recheck` discards the cached verdict
@@ -355,7 +362,7 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('initialization.read') }),
   z.object({ kind: z.literal('initialization.resolve') }),
   z.object({ kind: z.literal('initialization.start') }),
-  z.object({ kind: z.literal('initialization.skip'), ids: z.array(z.string()) }),
+  z.object({ kind: z.literal('initialization.skip'), ids: z.array(z.string().max(NAME_MAX)).max(LIST_MAX) }),
   z.object({ kind: z.literal('initialization.cancel') }),
   /**
    * PD-WORKSPACE-005 revision 3 (OQ-294, ruled 2026-10-14 under R-072): a project-setup banner's `open-project-init` action,
@@ -363,7 +370,7 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * added for it on PD-SHELL-001's add terms — and asks that window, on channel 15, to open Settings › Project; a window still
    * loading holds the request until its renderer reports `projectInit.ready`.
    */
-  z.object({ kind: z.literal('projectInit.open'), workspace: z.string().min(1) }),
+  z.object({ kind: z.literal('projectInit.open'), workspace: z.string().max(PATH_MAX).min(1) }),
   /** The asking main window's renderer listens on channel 15 from now on; answered `{ owed }`, whether an open was held for it. */
   z.object({ kind: z.literal('projectInit.ready') }),
   /**
@@ -371,7 +378,7 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * persona window for an agent — reuse per persona, the instance's tab selected, a raise as a request (REQ-SHELL-161);
    * `focusSteer` when the inspector's Steer opened it (REQ-MONITOR-137). An unknown agent id is a silent no-op.
    */
-  z.object({ kind: z.literal('window.openPersona'), persona: z.string().min(1), agentId: z.string().min(1), focusSteer: z.boolean().optional() }),
+  z.object({ kind: z.literal('window.openPersona'), persona: z.string().max(NAME_MAX).min(1), agentId: z.string().max(NAME_MAX).min(1), focusSteer: z.boolean().optional() }),
   /** The persona window asks main what it was opened for: its persona, the session the main window follows, the tab to select. */
   z.object({ kind: z.literal('window.personaPayload') }),
   /** PD-SHELL-003: the product-drawn main-window frame. Close still enters BrowserWindow's guarded close event. */
@@ -394,12 +401,12 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * nothing is written until a destination is chosen; `session.openLog` and `session.revealFiles` are REQ-SESSION-191's
    * other two actions over the per-session files that exist (REQ-SESSION-002). None of these is a channel.
    */
-  z.object({ kind: z.literal('session.repair'), sessionId: z.string().min(1).optional() }),
-  z.object({ kind: z.literal('session.delete'), sessionId: z.string().min(1) }),
-  z.object({ kind: z.literal('session.export'), sessionId: z.string().min(1) }),
-  z.object({ kind: z.literal('session.exportTrajectory'), sessionIds: z.array(z.string().min(1)).min(1) }),
-  z.object({ kind: z.literal('session.openLog'), sessionId: z.string().min(1) }),
-  z.object({ kind: z.literal('session.revealFiles'), sessionId: z.string().min(1) }),
+  z.object({ kind: z.literal('session.repair'), sessionId: z.string().max(NAME_MAX).min(1).optional() }),
+  z.object({ kind: z.literal('session.delete'), sessionId: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('session.export'), sessionId: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('session.exportTrajectory'), sessionIds: z.array(z.string().max(NAME_MAX).min(1)).min(1).max(LIST_MAX) }),
+  z.object({ kind: z.literal('session.openLog'), sessionId: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('session.revealFiles'), sessionId: z.string().max(NAME_MAX).min(1) }),
   /**
    * Part X — the saved prompts (REQ-LIBRARY-137/138), mirroring the run host's three requests; main relays each
    * as it relays `timeline.append`, and bumps the library revision on a write (REQ-LIBRARY-105). No session id:
@@ -407,7 +414,7 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * defaulted — REQ-LIBRARY-107 makes keeping and removing two deliberate acts.
    */
   z.object({ kind: z.literal('prompts.read') }),
-  z.object({ kind: z.literal('prompts.push'), list: PromptListSchema, text: z.string() }),
+  z.object({ kind: z.literal('prompts.push'), list: PromptListSchema, text: z.string().max(FREE_TEXT_MAX) }),
   z.object({ kind: z.literal('prompts.take'), list: PromptListSchema, index: z.number().int().nonnegative(), remove: z.boolean() }),
   // Part AK — the requirements family (spec 08; ADR-0041) travels as ONE envelope member carrying the seam's
   // `name`-discriminated command untouched; main stamps the actor and relays it to the workspace service.
@@ -423,7 +430,7 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   // renderer surface raising a PERSISTENT notice through main's one slot (ADR-0049 defect fifty-seven; REQ-CHAT-021 first
   // needed it). `sessionId` absent or empty means the focused run (REQ-NOTIFY-028); the record of REQ-NOTIFY-268 follows.
   ...PROMPTS_COMMAND_SCHEMAS,
-  z.object({ kind: z.literal('notice.report'), severity: NoticeSeveritySchema, title: z.string().min(1), message: z.string().optional(), detail: z.string().optional(), persistent: z.boolean(), sessionId: z.string().optional() }),
+  z.object({ kind: z.literal('notice.report'), severity: NoticeSeveritySchema, title: z.string().max(NAME_MAX).min(1), message: z.string().max(FREE_TEXT_MAX).optional(), detail: z.string().max(FREE_TEXT_MAX).optional(), persistent: z.boolean(), sessionId: z.string().max(NAME_MAX).optional() }),
   // ADR-0063 — portable skills (REQ-WORKSPACE-051..073, 151). None carries a workspace or a session: main names
   // the window's open workspace and the session it follows, and relays to the run host, which owns the catalog.
   ...SKILLS_COMMAND_SCHEMAS,

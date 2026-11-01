@@ -5,10 +5,10 @@ import { isBusy, PERMISSION_PRESETS, resolveTheme, RUN_AGENT_ID, THEME_NAMES, ty
 import { projectSidebarSection } from './settings/project-init.js'; // Part AS
 import { err, ok } from '@rotaris/kernel';
 import {
-  clampComposerHeight, composerChipReason, composerPlaceholderFor, composerReclaimsFocus, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
-  DRAFT_PUBLISH_MS, DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel,
+  clampComposerHeight, composerAfterSubmission, composerChipReason, composerPlaceholderFor, composerReclaimsFocus, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
+  draftErrorAfterWrite, DRAFT_PUBLISH_MS, DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel,
   pausePendingAfter, REASONING_LEVELS, runStateOf, sendRefusal,
-  type HistoryWalk, type PauseScope, type RunState,
+  type DraftWriteOutcome, type HistoryWalk, type PauseScope, type RunState,
 } from './composer.js';
 import { RunHeader } from './RunHeader.js';
 import { annotatedModelOptions } from './model-options.js';
@@ -180,7 +180,11 @@ export interface WorkspaceViewProps {
   /** Part AB — REQ-CHAT-014 (200 ms) and REQ-SHELL-159 (400 ms): two debounces over one keystroke stream, never chained. */
   readonly draft?: string | undefined;
   readonly onPublishDraft?: ((text: string) => void) | undefined;
-  readonly onWriteDraft?: ((text: string) => void) | undefined;
+  /**
+   * PD-CHAT-011 (OQ-467): the store write may answer — a draft past the contract's bound is refused, and the composer then
+   * raises the refusal in its error line (`draftErrorAfterWrite`). A write that answers nothing is not reported.
+   */
+  readonly onWriteDraft?: ((text: string) => void | Promise<DraftWriteOutcome>) | undefined;
   /** Part AB — REQ-CHAT-010 / REQ-SHELL-069: the transcript/composer divider, persisted per user under `panels/workspace/state`. */
   readonly composerHeight?: number | undefined;
   readonly onComposerHeight?: ((sizes: readonly [number, number]) => void) | undefined;
@@ -840,20 +844,34 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   // The text as the timers will find it when they fire, maintained in an effect (a ref is not written during render).
   const latest = useRef(draft ?? '');
   useEffect(() => { latest.current = text; }, [text]);
+  /**
+   * PD-CHAT-011 (OQ-467): every store write goes through here, so a draft main refuses as past its bound raises the
+   * refusal in the error line while the text stays past it, and a later stored write clears that refusal (and only it).
+   */
+  const draftRefusal = useRef<string | null>(null);
+  const writeDraft = useCallback((value: string) => {
+    const answer = onWriteDraft?.(value);
+    if (!(answer instanceof Promise)) return;
+    void answer.then((outcome) => {
+      const refused = draftRefusal.current;
+      if (outcome !== null) draftRefusal.current = outcome.ok ? null : outcome.reason;
+      setError((current) => draftErrorAfterWrite(current, refused, outcome));
+    });
+  }, [onWriteDraft]);
   const flushDraft = useCallback((value?: string) => {
     if (publishTimer.current !== null) { clearTimeout(publishTimer.current); publishTimer.current = null; }
     if (writeTimer.current !== null) { clearTimeout(writeTimer.current); writeTimer.current = null; }
     // A flush caused BY a change carries the new text with it: the effect that mirrors it has not run yet.
     const now = value ?? latest.current;
     onPublishDraft?.(now);
-    onWriteDraft?.(now);
-  }, [onPublishDraft, onWriteDraft]);
+    writeDraft(now);
+  }, [onPublishDraft, writeDraft]);
   const noteKeystroke = useCallback(() => {
     if (publishTimer.current !== null) clearTimeout(publishTimer.current);
     if (writeTimer.current !== null) clearTimeout(writeTimer.current);
     publishTimer.current = setTimeout(() => { publishTimer.current = null; onPublishDraft?.(latest.current); }, DRAFT_PUBLISH_MS);
-    writeTimer.current = setTimeout(() => { writeTimer.current = null; onWriteDraft?.(latest.current); }, DRAFT_WRITE_MS);
-  }, [onPublishDraft, onWriteDraft]);
+    writeTimer.current = setTimeout(() => { writeTimer.current = null; writeDraft(latest.current); }, DRAFT_WRITE_MS);
+  }, [onPublishDraft, writeDraft]);
   // REQ-SHELL-159: the window closing and the workspace being replaced both end this component; the draft is flushed then.
   useEffect(() => () => { flushDraft(); }, [flushDraft]);
   /**
@@ -1096,16 +1114,13 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
       r = { ok: false, reason: cause instanceof Error ? cause.message : String(cause) };
     }
     setBusy(false);
-    if (!r.ok) {
-      // REQ-CHAT-012: the typed text is restored unchanged and the reason is raised.
-      setText(value);
-      setError(r.reason);
-    } else {
-      setError(null);
-      setAttachments([]);
-      // REQ-CHAT-017 / REQ-LIBRARY-137: recorded on run start and on continue, once the prompt was actually sent.
-      onRecordPrompt?.(value);
-    }
+    // REQ-CHAT-012 / PD-CHAT-011: a refusal restores the typed text unchanged, raises the reason and keeps the
+    // attachments; REQ-CHAT-017 / REQ-LIBRARY-137: only an accepted start or continue is recorded (`composerAfterSubmission`).
+    const settled = composerAfterSubmission(value, r);
+    if (settled.restore !== null) setText(settled.restore);
+    setError(settled.error);
+    if (settled.clearAttachments) setAttachments([]);
+    if (settled.record) onRecordPrompt?.(value);
     // REQ-CHAT-014 / REQ-SHELL-159: submit is a flush point — an emptied composer empties the stored draft at once,
     // and a restored one stores exactly what was restored rather than what was typed before it.
     flushDraft(r.ok ? '' : value);

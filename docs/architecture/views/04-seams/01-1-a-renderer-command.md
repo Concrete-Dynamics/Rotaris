@@ -9,6 +9,7 @@ The renderer's only outward path. One IPC channel carries every kind; the union 
 | # | File | What lands here |
 |---|---|---|
 | 1 | `packages/contracts/src/commands.ts` | a member of `CommandRequestSchema` (discriminated on `kind`). The answer is always `CommandOutcomeSchema`: `{ok: true, value?}` or `{ok: false, code, headline, detail?}` |
+| 1a | `packages/contracts/src/limits.ts` | the bound on every field of the member, from the constants there (OQ-467): `.max(FREE_TEXT_MAX)` for free text, `.max(PATH_MAX)` for a path, URL or key, `.max(NAME_MAX)` for a name or id, `.max(LIST_MAX)` on a list, `jsonBounded(…)` around an open-shaped payload. `limits.test.ts` walks the union and fails a field without one |
 | 2 | `apps/desktop/src/main/commands/<facet>.ts` | the handler, filed under its kind: main answers it (preferences, theme, providers, windows, dialogs) **or** relays it |
 | 3 | `packages/contracts/src/process-protocol.ts` | only if it relays: the request and reply that cross to a child |
 | 4 | `apps/desktop/src/run-host/dispatch.ts` or `apps/desktop/src/workspace-service/index.ts` | the child's own dispatch `switch` — in the run host over the `RunHost` it is handed, never over module scope |
@@ -49,7 +50,8 @@ Invariants:
   `main/command-sender.ts`, Electron security checklist 17): `senderFrame`'s URL must pass `isApplicationPage`
   (OQ-466), and a packaged build refuses a sender no main window stands behind; both are `command.untrustedSender`.
   A new window that sends commands is built by main with `parent` set or is registered in `MainWindows`.
-- A request that does not parse is `command.malformed`. Nothing throws out of `runCommand`: an uncaught
+- A request that does not parse is `command.malformed`, its headline from `malformedHeadline` (`limits.ts`): a bound
+  names the field and the figure, never the value (OQ-467, PD-CHAT-011). Nothing throws out of `runCommand`: an uncaught
   exception in main raises the platform's native error box and wedges the loop (`ADR-0019`). `runCommand`
   is `dispatchCommand` (`main/command-dispatch.ts`) — resolve the window, read the request, call the handler — and
   holds no case; a handler that throws is answered `command.failed`, its message redacted and cut to 500 characters.

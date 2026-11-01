@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NAME_MAX, PATH_MAX } from './limits.js'; // OQ-467
 
 /**
  * REQ-NOTIFY-072..077, REQ-NOTIFY-079/080 (the 401 note's parts C and D) — the authentication recovery dialog, as it
@@ -56,8 +57,8 @@ export type AuthRecoveryPayload = z.infer<typeof AuthRecoveryPayloadSchema>;
  */
 export const AUTH_RECOVERY_COMMAND_SCHEMAS = [
   z.object({ kind: z.literal('authRecovery.payload') }),
-  z.object({ kind: z.literal('authRecovery.retry'), modelKey: z.string().min(1) }),
-  z.object({ kind: z.literal('authRecovery.reauthenticate'), apiKey: z.string() }),
+  z.object({ kind: z.literal('authRecovery.retry'), modelKey: z.string().max(NAME_MAX).min(1) }),
+  z.object({ kind: z.literal('authRecovery.reauthenticate'), apiKey: z.string().max(PATH_MAX) }),
   z.object({ kind: z.literal('authRecovery.cancel') }),
 ] as const;
 

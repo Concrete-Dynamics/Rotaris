@@ -13,6 +13,8 @@ Every cross-process shape is a schema in `contracts`, and the two directions are
   `kind`; the answer is always `CommandOutcomeSchema`. A request that does not parse is
   `command.malformed`, and **nothing throws out of `runCommand`** — an uncaught exception in main raises
   the platform's native error box and wedges the loop (ADR-0019); a throwing handler is `command.failed`.
+- **Every string a command carries has a bound** from `contracts/src/limits.ts` (OQ-467) — free text, path or name, a
+  list by its count, an open-shaped payload by `jsonBounded` — and `limits.test.ts` fails a new field left without one.
 - **A command is answered for the window that raised it** — `MainWindows.forCommand(senderId)` (a dialog: its
   parent's), not "the main window" (`REQ-SHELL-020`). With two main windows alive those are different answers.
 - **The sender is checked by origin, not by id alone** (R-091, checklist 17): a `senderFrame` that is not

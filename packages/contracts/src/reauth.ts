@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NAME_MAX, PATH_MAX } from './limits.js'; // OQ-467
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 
 /**
@@ -49,8 +50,8 @@ export type ReauthPromptPublish = z.infer<typeof ReauthPromptPublishSchema>;
  * The key goes to main's credential store or nowhere; it is never logged (REQ-PROVIDER-131).
  */
 export const REAUTH_COMMAND_SCHEMAS = [
-  z.object({ kind: z.literal('reauth.submit'), sessionId: z.string().min(1), apiKey: z.string() }),
-  z.object({ kind: z.literal('reauth.dismiss'), sessionId: z.string().min(1) }),
+  z.object({ kind: z.literal('reauth.submit'), sessionId: z.string().max(NAME_MAX).min(1), apiKey: z.string().max(PATH_MAX) }),
+  z.object({ kind: z.literal('reauth.dismiss'), sessionId: z.string().max(NAME_MAX).min(1) }),
   /** The prompts open now (`{ prompts: ReauthPrompt[] }`), read when a window mounts so a reload or a new window draws them too. */
   z.object({ kind: z.literal('reauth.read') }),
 ] as const;

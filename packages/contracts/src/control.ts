@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FREE_TEXT_MAX, LIST_MAX, NAME_MAX } from './limits.js'; // OQ-467
 
 /**
  * The control channel (ADR-0010 #1): request/response against a run in
@@ -44,13 +45,14 @@ export type ControlOp = (typeof CONTROL_OPS)[number];
 /** Populated string value: exactly these two (REQ-MONITOR-005). */
 export const CONTROL_OPS_WITH_VALUE: ReadonlySet<ControlOp> = new Set<ControlOp>(['createQueuedPrompt', 'submitSteeringPrompt']);
 
-const scalar = z.union([z.string(), z.number(), z.boolean(), z.null()]);
-const simple = z.union([scalar, z.array(scalar), z.record(z.string(), scalar)]);
+/** OQ-467: a control argument is free text at most (a steering or queued prompt), a list or a map of them bounded like every other command field. */
+const scalar = z.union([z.string().max(FREE_TEXT_MAX), z.number(), z.boolean(), z.null()]);
+const simple = z.union([scalar, z.array(scalar).max(LIST_MAX), z.record(z.string().max(NAME_MAX), scalar)]);
 
 export const ControlRequestSchema = z.object({
   op: z.enum(CONTROL_OPS),
-  sessionId: z.string().min(1),
-  args: z.record(z.string(), simple).default({}),
+  sessionId: z.string().max(NAME_MAX).min(1),
+  args: z.record(z.string().max(NAME_MAX), simple).default({}),
 });
 export type ControlRequest = z.infer<typeof ControlRequestSchema>;
 
@@ -99,7 +101,7 @@ export type PauseResolution = (typeof PAUSE_RESOLUTIONS)[number];
 
 /** REQ-ORCH-086 / REQ-SESSION-109: what the pause dialog shows — the count, the limit in force, the two token figures. */
 export const PausePayloadSchema = z.object({
-  sessionId: z.string().min(1),
+  sessionId: z.string().max(NAME_MAX).min(1),
   count: z.number().int().nonnegative(),
   limit: z.number().int().nullable(),
   tokens: z.object({ input: z.number().int().nonnegative(), output: z.number().int().nonnegative() }),

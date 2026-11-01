@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FREE_TEXT_MAX, LIST_MAX, NAME_MAX, PATH_MAX } from './limits.js'; // OQ-467
 import type { Result } from '@rotaris/kernel';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 
@@ -204,28 +205,30 @@ export const ProgressReportSchema = z.discriminatedUnion('kind', [
  * discipline `composer.readDraft` takes for the draft. No member carries an actor: REQ-CONFIG-198 fixes who is a
  * person at the boundary the action arrives through, and main stamps it there.
  */
-const workspace = z.string().min(1);
+const workspace = z.string().max(PATH_MAX).min(1);
+/** OQ-467: a requirement id as a command carries it — the identifier format, held to the name bound at this boundary only. */
+const reqId = ReqIdSchema.max(NAME_MAX);
 export const RequirementsCommandSchema = z.discriminatedUnion('name', [
   z.object({ name: z.literal('requirements.board'), workspace }),
-  z.object({ name: z.literal('requirements.detail'), workspace, id: ReqIdSchema }),
+  z.object({ name: z.literal('requirements.detail'), workspace, id: reqId }),
   z.object({ name: z.literal('requirements.refresh'), workspace }),
-  z.object({ name: z.literal('requirements.reachable'), workspace, id: ReqIdSchema, from: ColumnTokenSchema, to: ColumnTokenSchema }),
-  z.object({ name: z.literal('requirements.act'), workspace, id: ReqIdSchema, action: BoardActionSchema, target: ColumnTokenSchema.optional(), payload: z.record(z.string(), z.string()).optional() }),
-  z.object({ name: z.literal('requirements.operation'), workspace, operation: z.enum(['check', 'regenerate', 'baselines', 'compare']), base: z.string().optional() }),
-  z.object({ name: z.literal('requirements.cancel'), workspace, operation: z.string().min(1) }),
-  z.object({ name: z.literal('requirements.queue.set'), workspace, automatic: z.boolean().optional(), concurrency: z.number().int().positive().max(64).optional(), stop: z.literal(true).optional(), start: z.literal(true).optional(), hold: ReqIdSchema.optional(), release: ReqIdSchema.optional(), disclosure: z.enum(['accepted', 'suppressed', 'off']).optional() }),   // Part AP: `start`, `disclosure`
-  z.object({ name: z.literal('requirements.source.write'), workspace, id: ReqIdSchema.optional(), document: z.string(), location: z.string().optional() }),
-  z.object({ name: z.literal('requirements.source.previewLocation'), workspace, epic: ReqIdSchema.optional() }),
+  z.object({ name: z.literal('requirements.reachable'), workspace, id: reqId, from: ColumnTokenSchema, to: ColumnTokenSchema }),
+  z.object({ name: z.literal('requirements.act'), workspace, id: reqId, action: BoardActionSchema, target: ColumnTokenSchema.optional(), payload: z.record(z.string().max(NAME_MAX), z.string().max(FREE_TEXT_MAX)).optional() }),
+  z.object({ name: z.literal('requirements.operation'), workspace, operation: z.enum(['check', 'regenerate', 'baselines', 'compare']), base: z.string().max(NAME_MAX).optional() }),
+  z.object({ name: z.literal('requirements.cancel'), workspace, operation: z.string().max(NAME_MAX).min(1) }),
+  z.object({ name: z.literal('requirements.queue.set'), workspace, automatic: z.boolean().optional(), concurrency: z.number().int().positive().max(64).optional(), stop: z.literal(true).optional(), start: z.literal(true).optional(), hold: reqId.optional(), release: reqId.optional(), disclosure: z.enum(['accepted', 'suppressed', 'off']).optional() }),   // Part AP: `start`, `disclosure`
+  z.object({ name: z.literal('requirements.source.write'), workspace, id: reqId.optional(), document: z.string().max(FREE_TEXT_MAX), location: z.string().max(PATH_MAX).optional() }),
+  z.object({ name: z.literal('requirements.source.previewLocation'), workspace, epic: reqId.optional() }),
   // Part AP — the run family.
-  z.object({ name: z.literal('requirements.run.preview'), workspace, id: ReqIdSchema, action: BoardActionSchema }),
+  z.object({ name: z.literal('requirements.run.preview'), workspace, id: reqId, action: BoardActionSchema }),
   z.object({ name: z.literal('requirements.run.claim'), workspace }),
-  z.object({ name: z.literal('requirements.run.started'), workspace, id: ReqIdSchema, unit: z.string().min(1), sessionId: z.string().min(1), permissions: z.string() }),
-  z.object({ name: z.literal('requirements.run.ended'), workspace, sessionId: z.string().min(1), outcome: z.enum(['completed', 'failed', 'cancelled']), detail: z.string() }),
-  z.object({ name: z.literal('requirements.run.abandon'), workspace, id: ReqIdSchema, unit: z.string().min(1), reason: z.string() }),
-  z.object({ name: z.literal('requirements.run.waiting'), workspace, sessionId: z.string().min(1), waiting: z.boolean() }),
-  z.object({ name: z.literal('requirements.run.reap'), workspace, live: z.array(z.string()) }),
-  z.object({ name: z.literal('requirements.review'), workspace, id: ReqIdSchema }),
-  z.object({ name: z.literal('requirements.blocker'), workspace, id: ReqIdSchema }),
+  z.object({ name: z.literal('requirements.run.started'), workspace, id: reqId, unit: z.string().max(NAME_MAX).min(1), sessionId: z.string().max(NAME_MAX).min(1), permissions: z.string().max(NAME_MAX) }),
+  z.object({ name: z.literal('requirements.run.ended'), workspace, sessionId: z.string().max(NAME_MAX).min(1), outcome: z.enum(['completed', 'failed', 'cancelled']), detail: z.string().max(FREE_TEXT_MAX) }),
+  z.object({ name: z.literal('requirements.run.abandon'), workspace, id: reqId, unit: z.string().max(NAME_MAX).min(1), reason: z.string().max(FREE_TEXT_MAX) }),
+  z.object({ name: z.literal('requirements.run.waiting'), workspace, sessionId: z.string().max(NAME_MAX).min(1), waiting: z.boolean() }),
+  z.object({ name: z.literal('requirements.run.reap'), workspace, live: z.array(z.string().max(NAME_MAX)).max(LIST_MAX) }),
+  z.object({ name: z.literal('requirements.review'), workspace, id: reqId }),
+  z.object({ name: z.literal('requirements.blocker'), workspace, id: reqId }),
   // Domain 22 (PD-TRACE-001): REQ-ADOPT-028 — no actor and no path; the workspace is main's to replace.
   z.object({ name: z.literal('requirements.adoption'), workspace }),
   z.object({ name: z.literal('requirements.adopt'), workspace, mode: z.enum(['run', 'record']), writeLayout: z.boolean().optional() }),
@@ -396,7 +399,7 @@ export interface BlockerPayload {
 export const RequirementsRunsCommandSchema = z.object({
   kind: z.literal('requirements.runs'),
   op: z.enum(['preview', 'dispatch', 'accept', 'suppress', 'live']),
-  id: ReqIdSchema.optional(),
+  id: reqId.optional(),
   action: BoardActionSchema.optional(),
   suppressed: z.boolean().optional(),
 });

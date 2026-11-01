@@ -1,6 +1,7 @@
 import { CONFIG_SCOPES, ConfigSnapshotSchema, DesktopSaveSchema, SANDBOX_MODE_NAMES } from './config.js';
 import { AcknowledgementKindSchema, NoticeSeveritySchema } from './notices.js';
 import { z } from 'zod';
+import { FREE_TEXT_MAX } from './limits.js'; // OQ-467
 import { HOOK_AGENT_IDS, HooksSummarySchema } from './hooks.js';
 import { McpHealthSchema, McpListingSchema, McpSecretsViewSchema, McpSetupStatusSchema } from './mcp.js';
 import { ConfinementVerdictSchema } from './confinement.js';
@@ -102,7 +103,7 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
    * the base workspace (REQ-GIT-019). `sandboxMode` is REQ-SHELL-125's choice, recorded on the row (ADR-0022: not honoured here).
    * REQ-TRACE-470/471: boardPermissions carries the authorized board grant for this launch.
    */
-  z.object({ kind: z.literal('session.start'), workspaceId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), sessionId: z.string().min(1).optional(), effectiveRoot: z.string().optional(), worktree: WorktreeBindingSchema.optional(), boardPermissions: z.literal('permissive').optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional(), runType: RunTypeSchema.optional(), initialTodo: InitialTodoSchema.optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
+  z.object({ kind: z.literal('session.start'), workspaceId: z.string(), prompt: z.string().max(FREE_TEXT_MAX), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), sessionId: z.string().min(1).optional(), effectiveRoot: z.string().optional(), worktree: WorktreeBindingSchema.optional(), boardPermissions: z.literal('permissive').optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional(), runType: RunTypeSchema.optional(), initialTodo: InitialTodoSchema.optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   z.object({ kind: z.literal('circuit_breaker.status'), workspaceId: z.string() }),
   /** ADR-0037 Tier B: the settings store's current values, handed to the run host ahead of the next run start. */
   z.object({ kind: z.literal('config.liveState'), state: z.record(z.string(), z.unknown()) }),
@@ -137,7 +138,7 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.planRearm'), sessionId: z.string().min(1) }),
   /** REQ-MONITOR-194 / REQ-MONITOR-146: the composer's next-run model chosen explicitly (`Sessions.chooseNextModel`); answered `ack`. */
   z.object({ kind: z.literal('session.chooseNextModel'), sessionId: z.string().min(1), modelKey: z.string().min(1) }),
-  z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
+  z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string().max(FREE_TEXT_MAX), attachments: z.array(ImageAttachmentInputSchema).max(10).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   /** REQ-NOTIFY-045 (OQ-178): resubmit the session's last submitted prompt, images included (`Sessions.retry`); answered `ack`. */
   z.object({ kind: z.literal('session.retry'), sessionId: z.string().min(1) }),
   z.object({ kind: z.literal('session.readAttachment'), sessionId: z.string().min(1), path: z.string().min(1), digest: z.string().regex(/^[0-9a-f]{64}$/) }),

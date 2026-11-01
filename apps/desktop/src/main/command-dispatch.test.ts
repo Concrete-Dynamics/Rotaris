@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CommandOutcome } from '@rotaris/contracts';
+import { FREE_TEXT_MAX, type CommandOutcome } from '@rotaris/contracts';
 import type { AppLogLevel } from './app-log.js';
 import { COMMAND_FAILED_DETAIL_MAX, commandFailed, dispatchCommand, type CommandDispatch } from './command-dispatch.js';
 import type { CommandHandlers, MainWindowState } from './commands/context.js';
@@ -54,5 +54,12 @@ describe('the dispatcher catches what a handler throws (ADR-0019, .claude/rules/
     await expect(dispatchCommand({ kind: 'no.such.kind' }, 7, d)).resolves.toMatchObject({ ok: false, code: 'command.malformed' });
     const none = deps({}, null);
     await expect(dispatchCommand({ kind: 'theme.get' }, 7, none.d)).resolves.toMatchObject({ ok: false, code: 'window.notMain' });
+  });
+  it('OQ-467: answers a request past a bound with command.malformed naming the field and the bound, never the value, before any handler', async () => {
+    const { d } = deps({ 'session.prompt': () => { throw new Error('reached the handler'); } });
+    const prompt = `secret-marker${'x'.repeat(FREE_TEXT_MAX)}`;
+    const outcome = await dispatchCommand({ kind: 'session.prompt', sessionId: 's-1', prompt }, 7, d);
+    expect(outcome).toEqual({ ok: false, code: 'command.malformed', headline: 'The prompt is longer than 1,048,576 characters' });
+    expect(JSON.stringify(outcome)).not.toContain('secret-marker');
   });
 });

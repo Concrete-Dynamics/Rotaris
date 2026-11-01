@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LIST_MAX } from './limits.js'; // OQ-467
 
 /**
  * REQ-MONITOR-168 / REQ-GIT-102 / REQ-GIT-103: what the repository card reads, as the workspace service answers it.
@@ -25,7 +26,7 @@ export const RepositoryStateSchema = z.object({
 export type RepositoryState = z.infer<typeof RepositoryStateSchema>;
 
 /** REQ-SHELL-069: a stored pane layout — version 1, the view's pane count, one size per pane. */
-export const PaneLayoutSchema = z.object({ version: z.literal(1), panes: z.number().int().positive(), sizes: z.array(z.number()) });
+export const PaneLayoutSchema = z.object({ version: z.literal(1), panes: z.number().int().positive(), sizes: z.array(z.number()).max(LIST_MAX) });
 export type PaneLayout = z.infer<typeof PaneLayoutSchema>;
 
 /**

@@ -400,6 +400,34 @@ export function modelChipLabel(loaded: boolean, models: readonly string[], selec
 export const DRAFT_PUBLISH_MS = 200;
 export const DRAFT_WRITE_MS = 400;
 
+/** What a draft write answered: stored, refused with the reason main gave, or no answer at all (the channel is gone). */
+export type DraftWriteOutcome = { readonly ok: true } | { readonly ok: false; readonly reason: string } | null;
+
+/**
+ * PD-CHAT-011 (OQ-467): a draft past `FREE_TEXT_MAX` is refused by main and not stored, and the composer raises the
+ * refusal's headline in its existing error line while the text is past the bound — so the user knows the draft is not
+ * being saved — and keeps the text unchanged. `refused` is the reason the last write raised, if any: a later write that
+ * is stored clears the line only while it still shows that reason, never an error another gesture raised since. No
+ * answer changes nothing.
+ */
+export function draftErrorAfterWrite(error: string | null, refused: string | null, outcome: DraftWriteOutcome): string | null {
+  if (outcome === null) return error;
+  if (!outcome.ok) return outcome.reason;
+  return refused !== null && error === refused ? null : error;
+}
+
+/**
+ * REQ-CHAT-012 with PD-CHAT-011 (OQ-467): what the composer does once a start or a continue has been answered. A
+ * refusal — a prompt or an image past its bound among them — restores the typed text unchanged, raises the reason and
+ * leaves every attachment in place, so nothing the user prepared is lost to the refusal; only an accepted submission
+ * clears the attachments and is recorded in the prompt history (REQ-CHAT-017).
+ */
+export function composerAfterSubmission(value: string, outcome: { readonly ok: true } | { readonly ok: false; readonly reason: string }): { readonly restore: string | null; readonly error: string | null; readonly clearAttachments: boolean; readonly record: boolean } {
+  return outcome.ok
+    ? { restore: null, error: null, clearAttachments: true, record: true }
+    : { restore: value, error: outcome.reason, clearAttachments: false, record: false };
+}
+
 /**
  * Whether the composer takes keyboard focus back once a submission it awaited has settled (a start, a continue, a
  * queue, an executed slash command). It does when focus is nowhere (`null` or the body), in the composer, or still on

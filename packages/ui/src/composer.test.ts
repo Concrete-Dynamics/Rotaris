@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { PRESENTATION_STATUSES } from '@rotaris/contracts';
 import {
-  CANCELLING_REFUSAL, CHIPS_DISABLED_STATES, CHIPS_ENABLED_STATES, clampComposerHeight, composerChipReason, composerPlaceholderFor, composerReclaimsFocus,
+  CANCELLING_REFUSAL, CHIPS_DISABLED_STATES, CHIPS_ENABLED_STATES, clampComposerHeight, composerAfterSubmission, composerChipReason, draftErrorAfterWrite, composerPlaceholderFor, composerReclaimsFocus,
   COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, COMPOSER_PLACEHOLDERS, COMPOSER_WIDGET_MIN_HEIGHT, DEFAULT_REASONING, DRAFT_PUBLISH_MS,
   DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel, MODELS_LOADING_LABEL, pausePendingAfter,
   PROJECT_SETUP_REFUSAL, reasoningChipLabel, runControlReason, runHeaderControlReason, RUN_STATE_LABELS, runStateOf, runTimingLabel,
@@ -500,5 +500,32 @@ describe('composer — the focus after a submission settles (REQ-MONITOR-137, RE
       expect(settled).not.toContain('area.current?.focus()');
     }
     expect(text).toContain('if (composerReclaimsFocus({ now: document.activeElement, atSubmit: focusAtSubmit, body: document.body, composer: area.current })) area.current?.focus();');
+  });
+});
+
+/*
+ * PD-CHAT-011 (OQ-467, ruled 2026-11-01 under R-072): main refuses a draft or an image past the contract's bound as
+ * `command.malformed`. The composer gains no pre-send check; it keeps what the user prepared and says what was refused.
+ */
+describe('PD-CHAT-011: a refusal keeps the text and the attachments, and is shown', () => {
+  const headline = 'The attachments[0].base64 is longer than 33,554,432 characters';
+  it('REQ-CHAT-012: a refused start or continue restores the text, raises the headline and leaves the attachments in place', () => {
+    expect(composerAfterSubmission('the prompt', { ok: false, reason: headline })).toEqual({ restore: 'the prompt', error: headline, clearAttachments: false, record: false });
+  });
+  it('an accepted one clears the composer and the attachments and is recorded (REQ-CHAT-017)', () => {
+    expect(composerAfterSubmission('the prompt', { ok: true })).toEqual({ restore: null, error: null, clearAttachments: true, record: true });
+  });
+  it('a refused draft write raises its headline in the error line; a later stored write clears that refusal and nothing else', () => {
+    const refusal = 'The text is longer than 1,048,576 characters';
+    expect(draftErrorAfterWrite(null, null, { ok: false, reason: refusal })).toBe(refusal);
+    // Still past the bound: the next write is refused again and the line keeps saying so.
+    expect(draftErrorAfterWrite(refusal, refusal, { ok: false, reason: refusal })).toBe(refusal);
+    // Back under the bound: the stored write clears the refusal it raised.
+    expect(draftErrorAfterWrite(refusal, refusal, { ok: true })).toBeNull();
+    // An error another gesture raised since is not the draft's to clear.
+    expect(draftErrorAfterWrite('Message could not be queued because the run is no longer active.', refusal, { ok: true })).toBe('Message could not be queued because the run is no longer active.');
+    expect(draftErrorAfterWrite('other', null, { ok: true })).toBe('other');
+    // No answer (the channel is gone) changes nothing.
+    expect(draftErrorAfterWrite(refusal, refusal, null)).toBe(refusal);
   });
 });

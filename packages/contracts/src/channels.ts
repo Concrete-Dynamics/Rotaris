@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DICTATION_AUDIO_MAX_BASE64, NAME_MAX } from './limits.js'; // OQ-467
 import { IntentStatusSchema } from './intent.js';
 import { PlanGateSchema, ResumableSchema } from './control.js';
 import { ApprovalPayloadSchema, QuestionPromptSchema } from './tools.js';
@@ -90,9 +91,10 @@ const seq = z.number().int().positive();
 
 /** REQ-CHAT-170/173: validated image bytes cross the command boundary once; transcript rows retain metadata only. */
 export const ImageAttachmentInputSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().max(NAME_MAX).min(1),
   mediaType: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
-  base64: z.string().min(1),
+  /** OQ-467 / PD-CHAT-011: bounded provisionally at the dictation audio bound; past it main refuses the request as malformed. */
+  base64: z.string().max(DICTATION_AUDIO_MAX_BASE64).min(1),
   size: z.number().int().positive(),
 });
 export type ImageAttachmentInput = z.infer<typeof ImageAttachmentInputSchema>;

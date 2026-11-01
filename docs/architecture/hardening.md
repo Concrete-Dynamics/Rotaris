@@ -118,7 +118,7 @@ Not a finding: the bundled SQLite is 3.53.4, past the WAL-reset fix of 3.51.3; C
 | No code coverage, no thresholds | `vitest.config.ts` | F1 |
 | No property-based tests; `shell` and `kernel` thin | `packages/shell` (1 test file), `packages/kernel` (4) | F2, F3 |
 | ~~`minimumReleaseAge` implicit; no `trustPolicy`; no `engineStrict`; duplicated specifiers~~ closed 2026-11-01: seven days, `no-downgrade`, `blockExoticSubdeps`, `engineStrict`, a catalog, `.node-version` (`tools/dependency-policy.test.ts`) | `pnpm-workspace.yaml`, `.npmrc` | G1 |
-| No dependency-update bot | `.github/` | G1 |
+| ~~No dependency-update bot~~ closed 2026-11-01: Dependabot for npm (cooldown seven days, three groups) and the SHA-pinned actions (`.github/dependabot.yml`, `tools/dependabot.test.ts`) | `.github/` | G1 |
 | No audit, no SAST, no SBOM, no `SECURITY.md`, no `CODEOWNERS` | `.github/workflows/`, the root | G2 |
 
 Scorecard checks met today: Binary-Artifacts, CI-Tests, Dangerous-Workflow, License, Maintained, Pinned-Dependencies

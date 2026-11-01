@@ -119,6 +119,9 @@ scratch repository by `tools/worktree/`'s tests: real git, only the pnpm steps s
   primary checkout on a directory name alone, so run them on the rebased head in another
   tree: a detached worktree at that head (an orchestrated build's landing worktree is
   one).
+- **A Dependabot pull request lands the same way** (`.github/dependabot.yml`, since 2026-11-01): fetch its branch into a
+  worktree and land it with `pnpm worktree:land`, or an orchestrated build's reviewer lands it; never GitHub's merge
+  button, whose merge or squash commit is a head no gate judged.
 - **Remove the worktree once landed**: `pnpm worktree:land` does it (`--keep` leaves both trees and the
   branch); by hand it is `git worktree remove ../Rotaris-crw-wt-<short>` and `git branch -d <topic>`.
 

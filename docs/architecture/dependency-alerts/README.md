@@ -23,6 +23,16 @@ exception to either is an entry in that file with its reason and the date it goe
 fails any release-age exception and a trust exception that names no exact version (R-091,
 [`hardening.md`](../hardening.md) §3.5).
 
+**Version updates are Dependabot's; a reading here stays the alerts'.** Since 2026-11-01 `.github/dependabot.yml` has
+Dependabot open version-update pull requests weekly: for npm in three groups (`electron`, which moves Electron,
+electron-builder and electron-vite together; `dev-tooling`; `production`), at most five open, each proposing only a
+version at least seven days old (its `cooldown`, matching `minimumReleaseAge` above, so `pnpm install` resolves it); and
+for the SHA-pinned actions in `.github/workflows/`, whose pin and version comment it moves together. Such a pull request
+is a branch, landed by the repository's workflow (rebase, gate green on the rebased head, fast-forward;
+[`agent-workflow.md`](../../clean-room/agent-workflow.md)), never by GitHub's merge button. It does not replace a triage
+pass: an alert is still read here, to its resolved copy and its reach, and a version update that closes one is recorded
+by the next pass as the alert's disposition. `tools/dependabot.test.ts` holds the file's ecosystems, cooldown and groups.
+
 The dispositions a reading uses:
 
 - **patched**: a pull request moves the copy to a version outside the advisory's range, without breaking any dependent's

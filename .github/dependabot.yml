@@ -1,0 +1,62 @@
+# Dependabot version updates (R-091; docs/architecture/hardening.md §3.5 row 9).
+#
+# A Dependabot pull request is a branch like any other and lands by this
+# repository's workflow (docs/clean-room/agent-workflow.md): rebased onto
+# origin/main, `pnpm check` green on the rebased head, the proofs
+# `pnpm verify:plan` names, then a fast-forward push to main, by
+# `pnpm worktree:land` or an orchestrated build's reviewer. Never the merge
+# button: main's history is linear, and a merge commit or a squash made by
+# GitHub lands a head no gate judged.
+#
+# Security alerts are not this file's: their triage record stays
+# docs/architecture/dependency-alerts/, one dated reading per pass.
+#
+# tools/dependabot.test.ts holds the ecosystems, the cooldown and the groups.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Seven days, the release-age window pnpm-workspace.yaml sets
+    # (minimumReleaseAge: 10080 minutes): a version Dependabot proposes is old
+    # enough for `pnpm install` to resolve it.
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - npm
+    commit-message:
+      prefix: chore(deps)
+    # A dependency joins the first group whose pattern matches it, so the
+    # catch-all `production` comes last.
+    groups:
+      # Electron, its packager and its build tool move together.
+      electron:
+        patterns:
+          - electron
+          - electron-builder
+          - electron-vite
+      dev-tooling:
+        patterns:
+          - eslint*
+          - typescript*
+          - vitest*
+          - '@types/*'
+      production:
+        patterns:
+          - '*'
+
+  # Every action in .github/workflows/ is pinned by commit SHA with its version
+  # in a trailing comment; Dependabot moves the SHA and the comment together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: chore(ci)

@@ -189,7 +189,7 @@ specification's domains are the RequirementSets; its contiguous, never-reused id
 | Finding | Evidence | Closes |
 |---|---|---|
 | Ruled, closed and withdrawn open questions sit beside the open ones: 69 parts, 311 entries, most of them history | `docs/architecture/open-questions/` | I1 |
-| The gates read the record by index and parts, with no notion of an archive | `tools/record-parts.mjs`, `check-open-question-claims.mjs`, `check-record-links.mjs`, `check-doc-budget.mjs` | I1 |
+| ~~The gates read the record by index and parts, with no notion of an archive~~ **Closed 2026-11-01 by I1:** `docs/archive/` mirrors the record (`docs/README.md`, ["The archive"](../README.md#the-archive)); `record-parts.mjs` reads it (`archivePartsOf`, `readRecordWithArchive`), the claims gate and the record tests read live and archived entries alike, the link and budget gates walk it, and `tools/archive/migrate.mjs` (`pnpm archive:migrate`, `--dry-run`, `--check`) moves and repoints, idempotent | `tools/record-parts.mjs`, `check-open-question-claims.mjs`, `check-record-links.mjs`, `check-doc-budget.mjs` | I1 |
 | Ruled escalations and gate rulings sit in the live register | `docs/architecture/owner-decisions.md` (15 parts) | I2 |
 | Falsified reasons and correction blocks sit inside the ADRs' decision text | `docs/architecture/adr/` (66 records) | I2 |
 | 829 repaired defect notes sit under `docs/defects/fixed/` | `docs/defects/fixed/` | I2 |

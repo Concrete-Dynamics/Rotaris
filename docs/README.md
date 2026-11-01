@@ -13,6 +13,7 @@ code is [`module-map.md`](module-map.md)'s question, not this file's.
 | [`defects/`](defects/) | Defect notes, open and fixed | [`defects/README.md`](defects/README.md) |
 | [`proofs/`](proofs/) | One record per built-app proof | [`proofs/README.md`](proofs/README.md) |
 | [`research/`](research/) | Measurements and probes that informed a decision | — |
+| `archive/` | Ruled, closed and withdrawn entries, moved out of the live record whole (R-092) | [The archive](#the-archive), below |
 
 ## The document budget
 
@@ -94,3 +95,36 @@ listed file back within the budget fails until its line is removed.
   defect notes: each is one entry, which is not cut in two.
 - `architecture/implementation-conditions.md` and the two `clean-room/` records: owned by other work at the time of
   the split.
+
+## The archive
+
+**A ruled, closed, resolved or withdrawn entry is history, and it leaves the live record for `docs/archive/`** (the
+owner's request [R-092](product/requests.md#r-092), 2026-11-01; the design is
+[`architecture/hardening.md` §6](architecture/hardening.md#6-requirements-traceability-and-the-decision-archive--r-092)).
+An agent that opens a part to read the questions still open loads those, and not the hundreds already answered.
+
+- **The archive mirrors the record's paths.** The archived entries of `architecture/open-questions/<part>.md` are in
+  `archive/architecture/open-questions/<part>.md`, under the same part name; the escalations and gate rulings, the
+  history of an ADR and the repaired defect notes take the same shape (`archive/architecture/owner-decisions/…`,
+  `archive/architecture/adr/<nnnn>-history.md`, `archive/defects/…`), and so does a superseded or withdrawn
+  requirement's text (`archive/spec/<domain>/…`), whose identifier, anchor and definition line stay in `spec/`.
+- **An entry moves whole, under its own anchor** — its heading, its body and the anchors above it, verbatim; only a
+  relative path in it is rewritten to reach the same file from the archive's folder. An entry that had no explicit
+  anchor is given one, `<a id="oq-<n>"></a>`, so that a link can land on it.
+- **The live file keeps one index line per moved entry**, where the entry stood:
+  `- OQ-<n> — <title>; ruled <date>; [archived](../../archive/architecture/open-questions/<part>.md#oq-<n>)`. The part's
+  opening sentence and its row in the record's index say what stays and what is archived.
+- **Every link to a moved anchor is repointed** to the archive, in the record (the files `tools/check-record-links.mjs`
+  reads) and in the code (a `docs/….md#anchor` path under `apps/`, `packages/` or `tools/`). Only the target changes.
+- **Nothing in the archive is edited by hand after it moves.** Only the script writes there.
+- **The archive is under the budget too**: an archived part that would pass it is continued in
+  `<part>-continued-<k>.md`, and `tools/check-doc-budget.mjs` measures the archive like any other folder of `docs/`.
+
+**The move is a script**, `tools/archive/migrate.mjs`: `pnpm archive:migrate` moves and repoints, `--dry-run` lists what
+would move and which files would change, and `--check` (in `pnpm lint` from the first migration on) fails while an entry that qualifies is still
+live. It is idempotent and deterministic, so **ruling a question is followed by `pnpm archive:migrate` in the same
+commit**, and a branch that rebases over a move re-runs it rather than merging moved text by hand, as `pnpm proofs:index`
+regenerates the proof index. An open question qualifies exactly when `tools/check-open-question-claims.mjs` reads it as
+settled (`entryState`: one rule for both); a deferred one stays live. **A gate that asks what the record holds reads the
+live parts and the archived ones alike** through `tools/record-parts.mjs` (`archivePartsOf`, `readRecordWithArchive`):
+a question moved to the archive is still settled for the claims gate.

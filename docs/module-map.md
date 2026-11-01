@@ -84,7 +84,9 @@ preflight; and the landing sequence: rebase onto `origin/main`, the gate and the
 rebased head in a landing worktree of its own, a fast-forward push, cleanup — and the report behind
 `pnpm worktree:overlaps`: every branch worktree's files against its fork from `origin/main`, the files two
 branches share, and where `origin/main` moved too; open `new.mjs`, `land.mjs` and `overlaps.mjs`, tests
-in `new.test.ts`, `land.test.ts` and `overlaps.test.ts`), and the standalone checks `pnpm lint` runs
+in `new.test.ts`, `land.test.ts` and `overlaps.test.ts`), `tools/archive/` (since 2026-11-01 the migration behind
+`pnpm archive:migrate`, R-092 — moves each settled open question to `docs/archive/` and repoints its links; `--check`
+in `pnpm lint` from the first migration on; open `migrate.mjs`, tests in `migrate.test.ts`), and the standalone checks `pnpm lint` runs
 before ESLint. `apps/desktop/launcher/` (since 2026-10-23) is the portable's launcher stub — a Rust crate with no dependency, built by
 `cargo build --release` from `pnpm package` and `pnpm portable-proof`; open `src/main.rs`, its unit tests run with `cargo test
 --release` there — and `apps/desktop/scripts/lib/portable.mjs` assembles the portable around it (ADR-0054 P4).
@@ -119,7 +121,8 @@ Each of these was decided; the authority is in brackets, and none of them is saf
   them. `spec/NN-<domain>.md`, `product/directives.md`, `architecture/open-questions.md`, `architecture/codebase.md`,
   `architecture/README.md` and the others it names are indexes; their text is in the folder of the same name beside
   each (`directives/` holds one file per directive). A gate that reads one whole reads it through
-  `tools/record-parts.mjs`.
+  `tools/record-parts.mjs`. **Its settled entries are in `docs/archive/`**, under the same path ("The archive" in the
+  same README): a gate that asks what the record holds reads both (`readRecordWithArchive`).
 - **Theme data the main process needs before first paint is in `contracts/src/theme/`**, because `main`
   cannot import `ui`.
 - **`apps/desktop/` is the application, not a copy of `packages/`** — the one member of `apps/`, the

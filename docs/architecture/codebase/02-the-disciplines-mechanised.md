@@ -100,6 +100,14 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   ruling. After R-071 a dozen of the first stood, some sixty of the second, and three comments claimed questions no
   entry held, which became OQ-210 to OQ-212 (since 2026-10-06, acceptance F16 and its repair round 1; all three ruled
   2026-10-07 under R-072: OQ-210 and OQ-211 as `PD-LIBRARY-003` and `PD-LIBRARY-004`, OQ-212 confirmed as built).
+- **A settled entry leaves the live record for the archive** — `tools/archive/migrate.mjs` (`pnpm archive:migrate`;
+  R-092, [`docs/README.md`](../../README.md#the-archive), "The archive") moves each open question the claims gate reads as
+  settled (`entryState`, the one rule both share) whole to `docs/archive/architecture/open-questions/<part>.md`, leaves an
+  index line in its place, rewrites the part's "Holds" sentence and its index row, and repoints every link to the moved
+  anchor in the record and in the code; a second run changes nothing. Its `--check`, in `pnpm lint` from the first
+  migration on, fails while a settled entry is still live. The gates read the archive as part of the record:
+  `check-record-links.mjs` and `check-doc-budget.mjs` walk `docs/archive/` with the rest of `docs/`, and the claims gate and the record's tests read
+  live and archived parts together through `tools/record-parts.mjs` (`readRecordWithArchive`) (since 2026-11-01, hrd2).
 - **A whole-session update keeps the transcript rows** — `REQ-MONITOR-216` omits the transcript from it, so
   it cannot say which rows survived; the increment after an attach or a reconcile upserts by index. The
   first run loop's status saves emptied a transcript still being written before this was so (ADR-0043

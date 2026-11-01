@@ -13,7 +13,7 @@ code is [`module-map.md`](module-map.md)'s question, not this file's.
 | [`defects/`](defects/) | Defect notes, open and fixed | [`defects/README.md`](defects/README.md) |
 | [`proofs/`](proofs/) | One record per built-app proof | [`proofs/README.md`](proofs/README.md) |
 | [`research/`](research/) | Measurements and probes that informed a decision | — |
-| `archive/` | Ruled, closed and withdrawn entries, moved out of the live record whole (R-092) | [The archive](#the-archive), below |
+| [`archive/`](archive/) | Ruled, closed and withdrawn entries, moved out of the live record whole (R-092) | [The archive](#the-archive), below |
 
 ## The document budget
 

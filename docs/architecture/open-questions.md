@@ -25,8 +25,17 @@ are parts 01 and 02.
 <a id="oq-400"></a>[OQ-400](../archive/architecture/open-questions/64-spikes-and-later-questions-31.md#oq-400), from
 `implementation-conditions.md`. When that link is repointed to the part, this paragraph goes.
 
+**The archive.** Since 2026-11-01 ([R-092](../product/requests.md#r-092)) a ruled, closed, resolved or withdrawn
+question is not kept here: its entry is in [`docs/archive/architecture/open-questions/`](../archive/architecture/open-questions/),
+in the file named like its part, whole and under its own `oq-<n>` anchor, and the part keeps one index line in its place
+(`- OQ-<n> — <title>; ruled <date>; [archived](…#oq-<n>)`). The parts below hold the questions still open or deferred;
+the table's last column names them, then what of the part is archived. The move is `pnpm archive:migrate`
+([the archive](../README.md#the-archive)); on its first run it moved 301 entries of 296 questions and left 22 live.
+
 **Where a new entry goes.** A question is raised at the end of the last part, as the next free number. When that would
-take the part past the budget, a new part is started with the next number, and a row is added below.
+take the part past the budget, a new part is started with the next number, and a row is added below. **A question
+ruled** is followed by `pnpm archive:migrate` in the same commit, which moves it and repoints its links; `pnpm lint`
+fails while a settled entry is still live.
 
 | Part | Section | Holds |
 |---|---|---|

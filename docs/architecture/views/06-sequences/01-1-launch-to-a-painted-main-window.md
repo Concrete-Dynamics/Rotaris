@@ -87,7 +87,7 @@ nothing reads the tree on the loop, and the warm-up goes on and stores its catal
 which may be parked on a read that never returns, answers `skills.discovery-stalled` instead, and a gesture is told so at once.
 Main answers a `skills.read` its own bound expired on as `skills.no-reply`. The renderer's two readers treat all three as no answer and ask again (`askUntilDiscovered`); each ask waits in the run host,
 so the catalogue lands when the walk ends, Settings says it is being discovered meanwhile (`listNote`), and nothing empty is
-cached for the composer. A request the saved configuration refuses (OQ-279) is refused before it waits, and a
+cached for the composer. Settings' asking ends when Settings unmounts (`readWhileMounted`). A request the saved configuration refuses (OQ-279) is refused before it waits, and a
 warm-up that a clear overtakes stops at its next read instead of finishing beside the next one. Until 2026-10-31 the warm-up was a microtask holding the synchronous walk, which ran before the reply was
 posted, so under load a slow discovery was a slow reply
 (`../../../defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`;

@@ -12,7 +12,7 @@ import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEG
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
 // ADR-0063 — portable skills: the catalog reader, the Settings tab's props and the composer's commands.
-import { askUntilDiscovered, bindSkillsReader } from '@rotaris/ui';
+import { askUntilDiscovered, bindSkillsReader, readWhileMounted } from '@rotaris/ui';
 import { EMPTY_SKILLS_STATE, SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERING_NOTE, SKILLS_DISCOVERY_STALLED, SKILLS_DISCOVERY_STALLED_CODE, type InstructionStateName, type SkillInvocationModeName, type SkillListingOutcome, type SkillLoadModeName, type SkillsState } from '@rotaris/contracts';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
@@ -949,7 +949,8 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
   }, [workspace]);
   // Re-read on a configuration change too: `skills.enabled` and both override maps are configuration, so a Save
   // must put the resolved policy back on the rows rather than leaving the screen's own copy standing.
-  useEffect(() => { queueMicrotask(() => { void readSkillsState(); }); }, [readSkillsState, config.snapshot]);
+  // Leaving Settings unmounts it (AppShell draws the active view alone), so the cleanup retires the read: a wedged walk would otherwise keep one more asker for each visit.
+  useEffect(() => readWhileMounted(() => { void readSkillsState(); }, () => { skillsRead.current += 1; }), [readSkillsState, config.snapshot]);
   const skills = useMemo(() => ({
     state: skillsState,
     listNote: skillsListNote,

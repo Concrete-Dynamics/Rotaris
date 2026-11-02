@@ -41,3 +41,10 @@ run host's three lines now begin `credential lease:` and main's credential store
 `scripts/lib/priming-report.mjs` (which still reads the old form in an older log), `restated-facts.mjs`'s note, the
 live run's lease check. No requirement fixes that wording. PD-MONITOR-002 is unchanged: it fixes the log's levels and
 fields; the redaction is the pass's (REQ-TOOLS-171).
+
+**A third line the proof sweep met (2026-11-02).** The run host's `configuration: loaded …; auth_provider=<id>; …` came out
+`auth_provider=***` on every launch, `none` included; the field is written `sign-in=<id>` since
+(`run-host/configuration.ts`, pinned by `configuration.test.ts`, red without the change). The stall line's
+`token for N seconds`, which the scheme layer reads as `token ***`, is recorded rather than reworded, since the stored
+issue carries the same words
+([`the-application-log-masks-the-word-after-token-in-the-products-own-stall-line.md`](../the-application-log-masks-the-word-after-token-in-the-products-own-stall-line.md)).

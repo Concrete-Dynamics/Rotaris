@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-02**
 
+**The configuration line names the entry model's sign-in legibly under the redaction pass (REQ-TOOLS-171; 2026-11-02, hardening D1).** `02-process-view/05-message-families-4.md`'s application-log paragraph adds that the run host's `configuration: loaded …` line writes the entry model's `auth_provider` as `sign-in=<id>`: written `auth_provider=<id>`, the pass masked the id on every launch. The stall line's `token for` is left as it is and recorded (`../../defects/the-application-log-masks-the-word-after-token-in-the-products-own-stall-line.md`).
+
 **The store's write-ahead log checkpoints named as such (hardening C1, REQ-SESSION-034; 2026-11-02, at the bundle's review).** `packages/store/src/checkpoint.ts` became `wal-checkpoint.ts`, and its names carry `Wal` (`walCheckpoint`, `walCheckpointBeforeClose`, `IdleWalCheckpoint`, `IDLE_WAL_CHECKPOINT_MS`), because the glossary's checkpoint is a session's (REQ-GIT-016) and the workspace service imports both. `03-runtime-view/13-7-the-store-the-run-writes.md` names the module; the entry below is repointed. No package, edge, process, message, channel or ownership changed.
 
 **`pnpm verify:plan` names the requirements a diff cites (R-092, hardening H2; 2026-11-02).** `01-component-view/03-where-the-responsibilities-sit.md`, the requirement coverage report: `tools/verify-plan/plan.mjs` imports its `branchReport` and `readDrift`, a tool-to-tool edge outside the boundary rule. No package, edge, process, message or seam changed.

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock } from '@rotaris/kernel';
+import { FakeClock, redact } from '@rotaris/kernel';
 import { authProvidersOf, classifierSlotsOf, configureRun, credentialFactory, modelRefOf, postRunAnalystOf, prepareRun, restingCatalogueOf, contextLimitsOf, credentialResolver, egressReader, entryTierOf, personaResolverFor, runtimeFromConfiguration } from './configuration.js';
 import { childModelKey } from '@rotaris/engine';
 import { nodeClocks } from '@rotaris/platform';
@@ -60,6 +60,18 @@ describe('the run host resolves the leased bearer for a snapshot model', () => {
     expect(await r.value.model.config.credentialFor(entryModel)()).toBe('sk-or-leased');
     expect(authProvidersOf(r.value.cfg)).toEqual(['openai-compatible--openrouter']);
     expect(entryTierOf(r.value.cfg)).toBe('large');
+  });
+  it('REQ-TOOLS-171: the configuration line names the entry model\'s sign-in in words the redaction pass leaves legible', () => {
+    // Main's application log runs every line through `redact()`; written `auth_provider=`, the provider id came out `***`.
+    mkdirSync(join(dir, 'config'), { recursive: true });
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'config', 'project_settings.yaml'), SNAPSHOT);
+    const logged: string[] = [];
+    const r = configureRun(join(dir, 'ws'), true, { ...deps({}), log: (m: string) => { logged.push(m); } });
+    expect(r.ok).toBe(true);
+    const line = logged.find((m) => m.startsWith('configuration: loaded in')) ?? '';
+    expect(line).toContain('; sign-in=openai-compatible--openrouter; tier=large;');
+    expect(redact(line)).toBe(line);
   });
   it('ADR-0030 per model: two providers each lease their own bearer; an api_key_env model beside them keeps its key; an unleased slot is skipped', async () => {
     mkdirSync(join(dir, 'config'), { recursive: true });

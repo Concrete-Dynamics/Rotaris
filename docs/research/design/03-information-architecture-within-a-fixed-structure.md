@@ -207,10 +207,17 @@ UIR-012 are the precedent for a check stated as a number.
 **Components:** `SectionLabel`, `Card`, `EmptyState`, `Tag`, `Tabs`, `TableCard`, `ToggleSwitch`, `KpiCard`,
 `Sparkline`, `Button`, `Tooltip`; gaps G1, G3, G7, G9 (`docs/design/README/04-4-component-inventory-against-the-specification.md` §4.2).
 
-**Who reads which section.** `design-ui` brief step 3 reads sections 2, 4 and 5 into the brief's §3; its step 10 reads
-section 8 into §10. The `design-ui` audit and `review-ui` step 4 score rubric rows O1 and O2, which cite this guide, and
-section 6's marked checks; its new checks are proposals for the rubric's next version. `build-ui` step 6 walks the
-rubric's "while building" column; its step 8 is section 6's resize check. Section 3 is a walk list for brief and audit.
+**Who reads which section.**
+
+| Derivative | Reads |
+|---|---|
+| `design-ui` brief §1 | §4 step 1 |
+| `design-ui` brief §3 | §2, §4 steps 2–9, §5 |
+| `design-ui` brief §10 | §8 |
+| rubric C2, C3, O2 | §6 |
+| rubric O1 | §2, §6 |
+
+Section 6's new checks are proposals for the rubric's next version.
 
 ## 8. Where this disagrees with the adopted material
 

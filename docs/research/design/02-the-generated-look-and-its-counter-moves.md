@@ -118,12 +118,14 @@ From the ui-review pack or the DOM; rubric ids where the rubric carries the chec
 
 | Reader | Reads |
 |---|---|
-| `design-ui` audit step 2, "walk the tells" | sections 3, 4, 6 |
-| `design-ui` brief | none; it reads guides 03–14 |
-| rubric D1 | section 3; section 4 step 4 |
-| rubric C5, C8, O1 | section 3's card, icon and filler rows; section 6 |
-| `build-ui` step 6, "while building" | section 6 |
-| `review-ui` step 4, step 6 | section 6; section 4 step 7 |
+| `design-ui` brief, rule **Fixed before free** | §4 step 2 |
+| `design-ui` brief, rule **Difficult data first** | §4 step 6 |
+| `design-ui` brief §10 | §8 |
+| `design-ui` audit step 4, the tells walk | §3, §4 steps 3–5 |
+| `design-ui` audit step 5, sorting into lanes | §4 step 2 |
+| rubric C5, O1 | §3, §6 |
+| rubric C8, D3 | §6 |
+| rubric D1 | §3, §4 steps 3–4 |
 
 ## 8. Where this disagrees with the adopted material
 

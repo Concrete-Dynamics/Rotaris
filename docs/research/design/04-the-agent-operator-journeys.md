@@ -116,7 +116,17 @@ From the pack, `app:drive` or the DOM; a rubric id where the rubric has it, "new
 
 **Design language:** §1.1, §1.3, §1.4, §1.7–1.11, §7.2, §7.3; gaps G1–G4, G7, G11, G14, G16. **Tokens:** `--rt-wait`, `--rt-run`, `--rt-done`, `--rt-fail`, `--rt-danger-500`, `--rt-focus`, `--rt-focus-ring-width`, `--rt-surface-2`, `--rt-shadow-md`, `--rt-font-mono`. **Components:** `Button`, `StatusDot`, `Tag`, `Spinner`, `EmptyState`, `ContextRing`, `Dialog`, `CommandPalette`, `NavRail`.
 
-**Who reads what.** `design-ui` brief step 2 (template §2) takes sections 3 and 4; `design-ui` audit step 2 walks section 4's table against section 6. Rubric F1 lifts section 6, whose "new" lines are proposals for F1, F2 and D3; `review-ui` step 4 scores them; `build-ui` step 6 walks the brief's §2 before capturing. Section 8 reaches the open questions through the backlog.
+**Who reads what.**
+
+| Derivative | Reads |
+|---|---|
+| `design-ui` brief §2 | §3, §4 (the journey table) |
+| `design-ui` brief §10 | §8 |
+| `design-ui` audit step 4, the journeys walk | §4's table, §6 |
+| `design-ui` audit step 5, ranking by journey | §4's table |
+| rubric F1 | §4, §6 |
+
+Section 6's "new" lines are proposals for F1, F2 and D3. Section 8 reaches the open questions through the backlog.
 
 **Paid-for lessons:** the tokens hold but composition breaks (§7.1) [43]; UIR-001..012, each repair a moved number [44]; bound the box, not only the child [45]; and a critic that filed an adopted token as an invention, why `review-ui` step 6 reads the source first.
 

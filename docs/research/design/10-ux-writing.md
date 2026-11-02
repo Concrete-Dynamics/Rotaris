@@ -117,12 +117,11 @@ Rubric ids where the rubric carries the criterion; *proposed* where it does not.
 
 | Reader | Reads |
 |---|---|
-| `design-ui` brief §6 (copy), §10 | sections 2–4; section 8 |
-| `design-ui` audit step 2 | sections 3, 6 |
-| rubric F4 | section 6; section 4 steps 1–2 |
-| rubric F2, F3, C7 | section 6, rows so marked |
-| `build-ui` step 6, while building | section 6 |
-| `review-ui` step 4 | section 6; section 5 as an observation's shape |
+| `design-ui` brief §6 (copy) | §2, §3, §4 steps 1–8 |
+| `design-ui` brief §10 | §8 |
+| `design-ui` audit step 4, the tells and vocabulary walks | §3 |
+| rubric F2, C7 | §6 |
+| rubric F4 | §2, §6 |
 
 ## 8. Where this disagrees with the adopted material
 

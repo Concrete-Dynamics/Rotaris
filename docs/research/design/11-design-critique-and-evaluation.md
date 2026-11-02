@@ -116,13 +116,13 @@ From the pack, the DOM or `critique.json`; rubric ids where the rubric carries t
 
 | Reader | Reads |
 |---|---|
-| rubric "Severity"; its version-1 provenance | sections 2, 6 |
-| rubric F1, F3, C6, C7, C9, D3 | section 6; F1 also section 4 step 5 |
-| `review-ui` steps 4–7 | sections 3, 6; section 4 steps 4, 6, 7; section 5's source trap |
-| `review-ui` step 8 | section 4 step 9 |
-| `design-ui` audit step 2 | section 4 steps 4–7 |
-| `design-ui` brief step 11 | section 4 step 3 |
-| `build-ui` step 6 | section 6 |
+| `design-ui` brief §11 | §4 step 3 |
+| `design-ui` audit step 2, capturing what the pack lacks | §4 step 3 |
+| `design-ui` audit step 4, the free read and the journeys walk | §4 steps 4–5 |
+| `design-ui` audit step 5, sorting into lanes, then merging | §3, §4 step 6, §6 |
+| rubric F1 | §4 step 5 |
+| rubric, Critic step 6 | §4 step 10 |
+| rubric, the filing gate | §4 step 6 |
 
 ## 8. Where this disagrees with the adopted material
 

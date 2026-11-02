@@ -30,7 +30,7 @@ Part 6 of 7 of [the design README](../README.md), which indexes every part.
 3. A **brief** (`.agents/skills/design-ui`) precedes `docs/architecture/views/04-seams/08-8-a-drawn-surface.md`'s first
    step for a new or redesigned surface; a restyle inside an existing structure needs none. Once the surface is drawn,
    its row in §7 points at the brief, and an **audit** of a built surface is appended to the same file by date.
-4. Who reads what: `design-ui` the corpus and the brief template; `build-ui` the rubric's "while building" column;
+4. Who reads what: `design-ui` the corpus, the brief template and the rubric; `build-ui` the rubric's "while building" column;
    `review-ui` the rubric; `debug-ui` the rubric when a repair changes composition. The rubric is
    `.agents/skills/review-ui/references/critique-rubric.md`, one file, so the builder builds against what the critic scores.
 

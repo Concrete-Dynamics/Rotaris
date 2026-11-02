@@ -101,7 +101,18 @@ Rubric ids mark rows `.agents/skills/review-ui/references/critique-rubric.md` ca
 
 **Requirements:** `REQ-TOOLS-041`, `REQ-TOOLS-063`, `REQ-TOOLS-184`; `REQ-CHAT-005`, `REQ-CHAT-046`, `REQ-CHAT-057`, `REQ-CHAT-060` – `REQ-CHAT-063`, `REQ-CHAT-092` – `REQ-CHAT-103`, `REQ-CHAT-164`, `REQ-CHAT-175` – `REQ-CHAT-178`; `REQ-MONITOR-105`; `REQ-SESSION-157`; `REQ-NOTIFY-048`; `REQ-SHELL-038`, `REQ-SHELL-137`, `REQ-SHELL-151`, `REQ-SHELL-158`, and `REQ-SHELL-144` – `REQ-SHELL-168`. **Directives:** `PD-CHAT-002`, `PD-CHAT-004`, `PD-CHAT-005`, `PD-CHAT-006`, `PD-CHAT-010`, `PD-ORCH-005`. **Tokens:** `--rt-wait`, `--rt-run`, `--rt-done`, `--rt-fail`, `--rt-viz-1` … `--rt-viz-6`, `--rt-font-mono`, `--rt-overlay`. **Components:** `StatusDot`, `Spinner`, `Tag`, `ContextRing`, `MeterBar`, `Dialog`, `Button`; gaps G2, G3, G4, G7, G10, G14 (§4.2). **Code:** `ApprovalDialog.tsx`, `transcript/Row.tsx`, `TranscriptSurface.tsx`, `QuestionStepper.tsx`, `AgentTree.tsx`, `RunHeader.tsx` in `packages/ui/src/`.
 
-**Readers.** `design-ui` brief §2 (where a surface waits, asks or needs trust) reads sections 2 and 5; brief §4 section 3 and step 5 of section 4; brief §5 steps 6–8; brief §10 section 8. Rubric F1 and F2, and the rows marked in section 6, lift from section 6; `build-ui` step 6 walks them, `review-ui` step 4 scores them, the `design-ui` audit step 2 walks section 3. A **New** check binds only once a rubric version adopts it.
+**Readers.**
+
+| Derivative | Reads |
+|---|---|
+| `design-ui` brief §2 | §2, §4 steps 1–2 |
+| `design-ui` brief §4 | §4 steps 4–5 |
+| `design-ui` brief §5 | §4 steps 6–8 |
+| `design-ui` brief §10 | §8 |
+| `design-ui` audit step 4, the tells walk | §3 |
+| rubric F1 | §2, §6 |
+
+A **New** check binds only once a rubric version adopts it.
 
 **Paid for already.** "The tokens hold but composition breaks", every transcript row a card (`docs/design/README/07-7-fidelity-consult-before-maintain-after.md` §7.1, repaired §7.2), is why only the approval row earns a panel; §7.3 and §7.4 took agent identity and the tool description from the material. UIR-001..012 were each a measured number, three a requirement or missing declaration rather than taste (`docs/architecture/codebase/17-all-twelve-critic-findings-repaired-and.md`). "Bound the box, not only the child" (`.agents/skills/build-ui/SKILL.md` step 8) binds the ellipsized tool description and any queue or cost line. A critic once filed an adopted token as an invention (`.agents/skills/review-ui/SKILL.md` step 6).
 

@@ -105,7 +105,17 @@ Brackets: rubric ids; *new*: a proposed row.
 
 **Tokens:** `--rt-focus`, `--rt-accent-tint-10`, `--rt-accent-300`, `--rt-border-panel`, `--rt-shadow-md`, `--rt-font-mono`. **Components:** `CommandPalette`, `Kbd`, `Table`, `Tabs`, `NavRail`, `Dialog`, `ConfirmDialog`, `Acknowledgement`, `PopoverMenu` (`overlays.tsx`, not in the inventory), `Input`, `ToggleSwitch`, `SegmentedControl`, `Spinner`. **Gaps (§4.2):** G1, G3, G8, G9, G15, G16.
 
-**Who reads what.** The `design-ui` brief §5 reads sections 3 and 4 and takes 5 as its model; brief §10 takes section 8; the audit walks section 3's tells. Rubric C4 and D3 cite this guide and may lift section 6's *new* checks; `build-ui` step 6 walks them, `review-ui` step 4 scores them.
+**Who reads what.**
+
+| Derivative | Reads |
+|---|---|
+| `design-ui` brief §5 | §3, §4 steps 1–10 |
+| `design-ui` brief §10 | §8 |
+| `design-ui` audit step 4, the tells walk | §3 |
+| rubric F3, C2, D3 | §6 |
+| rubric C4 | §3 |
+
+The rubric may lift section 6's *new* checks.
 
 **A gap, not a disagreement:** `REQ-SHELL-025` states no focus after a view switch, and [19], [20], [29] differ.
 

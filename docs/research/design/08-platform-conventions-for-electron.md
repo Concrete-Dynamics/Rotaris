@@ -107,7 +107,15 @@ Rubric ids in brackets; *new* marks a proposed row.
 
 **Tokens:** `--rt-bg`, `--rt-chrome`, `--rt-border`, `--rt-border-strong`, `--rt-hover`, `--rt-focus`, `--rt-focus-ring-width`, `--rt-hairline-width`, `--rt-title-bar-height`, `--rt-text-tertiary`, `--rt-fail`, `--rt-shadow-md`, `--rt-accent`, `--rt-done`. **Components:** `WindowControls` (shell, outside the inventory), `Button`, `Kbd`, `Tooltip`, `Dialog`, `CommandPalette`, `Input`, `TextArea`, `TableCard`, `LogPanel`, `StatusDot`. **Gaps (§4.2):** G1, G2, G10, G11.
 
-**Who reads what.** The `design-ui` brief §5 reads sections 3–5, brief §10 section 8, brief §11 step 12. Rubric F3 cites this guide and may lift section 6's *new* checks; `build-ui` step 6 walks them while building and step 8 answers K2 and K3; `review-ui` step 4 scores them.
+**Who reads what.**
+
+| Derivative | Reads |
+|---|---|
+| `design-ui` brief §5 | §3, §4 steps 1–7 |
+| `design-ui` brief §10 | §8 |
+| rubric F3 | §6 |
+
+The rubric may lift section 6's *new* checks.
 
 **A gap, not a disagreement.** Nothing states the main window's inactive appearance, which [3] and [4] expect of a custom frame: an open-question candidate.
 

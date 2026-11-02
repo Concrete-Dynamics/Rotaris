@@ -343,8 +343,9 @@ autopsy follows it (the profile's `autopsy.method`).
 diff (`pnpm verify:plan`). Unmapped paths require explicit review — never treat them as no proofs.
 
 `build-ui` and `debug-ui` may change source within the authority of the current task. `review-ui` writes only
-evidence under `.ui-review/`, and `design-ui` only the record (`docs/design/briefs/`, an open question). A critique is proposed evidence and reaches implementation through a separate,
-authorized build or debug pass. A complete review loop has at most three iterations.
+evidence under `.ui-review/`, and `design-ui` only the record its "Done when" names. A critique is proposed evidence
+and reaches implementation through a separate, authorized build or debug pass. A complete review loop has at most
+three iterations.
 
 ## Where the time went — the development-time store (R-075)
 

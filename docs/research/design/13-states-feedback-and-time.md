@@ -109,10 +109,13 @@ From the `pnpm ui-review` pack or the DOM; rubric ids mark what the rubric carri
 
 | Derivative | Reads |
 |---|---|
-| `design-ui` brief step 4 (states) | §2, §3, §4 steps 1–4 |
-| `design-ui` brief step 7, audit step 2 | §4 step 8, §6 |
-| rubric F2, C9 | §2 (reasoning), §6 (measures) |
-| `build-ui` step 6, `review-ui` step 4 | §4, §6 |
+| `design-ui` brief §4 (states) | §2, §3, §4 steps 1–4 |
+| `design-ui` brief §7 | §4 step 8 |
+| `design-ui` brief §10 | §8 |
+| `design-ui` brief §11 | §4 step 10 |
+| `design-ui` audit step 2, capturing what the pack lacks | §4 step 1 (the matrix's columns, without a brief), §4 step 10 |
+| rubric F2 | §2, §4 step 1 (the matrix's columns, without a brief), §6 |
+| rubric C9 | §2, §6 |
 
 No dated notes yet.
 

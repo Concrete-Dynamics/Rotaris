@@ -109,7 +109,15 @@ Rubric ids mark rows `.agents/skills/review-ui/references/critique-rubric.md` ca
 
 **Requirements:** `REQ-SHELL-022`, `-029`, `-030`, `-039`, `-047` – `-049`, `-055`, `-057`, `-068`, `-073`, `-128` – `-130`, `-135`, `-137`, `-144` – `-153`, `-160`, `-164`, `-165`; `REQ-NOTIFY-003`, `-008`, `-011`, `-015`, `-019`, `-040`, `-041`, `-258`; `REQ-CHAT-178`; `REQ-TOOLS-063`; `REQ-MONITOR-036` – `-043`, `-052`, `-304`; `REQ-TRACE-328`, `-390`. **Directives:** `PD-WORKSPACE-001` (an acknowledgement's action), `PD-CHAT-004` (a line updating in place). **Tokens:** `--rt-focus`, `--rt-focus-ring-width`, `--rt-control-height-compact`, `--rt-rail-label-size`, `--rt-text-tertiary`, `--rt-accent-tint-07` / `-10` / `-14`, `--rt-border`, `--rt-chrome`, `--rt-title-bar-height`, `--rt-label-column`. **Components:** `Button`, `Kbd`, `Tooltip`, `Tabs`, `NavRail`, `CommandPalette`, `Dialog`, `Acknowledgement`, `StatusDot`, `Spinner`, `ContextRing`, `Sparkline`, `Table`, `TableCard`, `Input`; gaps G1 – G3, G5 – G7, G14 – G16 (§4.2). **Code:** `AgentTree.tsx`, `ContextRing.tsx` in `packages/ui/src/`.
 
-**Readers.** The `design-ui` brief §7 (accessibility obligations) reads sections 2, 6 and 8; brief §5 reads section 3's keyboard rows; brief §10 reads section 8. Rubric F3 and the rows marked in section 6 lift from section 6; `build-ui` step 6 walks them, `review-ui` step 4 scores them, the `design-ui` audit step 2 walks section 4. A **New** check binds only once a rubric version adopts it.
+**Readers.**
+
+| Derivative | Reads |
+|---|---|
+| `design-ui` brief §7 (accessibility obligations) | §2, §4 steps 1–8, §6 |
+| `design-ui` brief §10 | §8 |
+| rubric F3 | §2, §6 |
+
+A **New** check binds only once a rubric version adopts it.
 
 **Already in the record.** Tab strips select on arrow over panes already built (`REQ-SHELL-152`), where automatic activation fits [16]; vertical lists move focus without selecting (`REQ-SHELL-153`) [12]; dividers take keys (`REQ-SHELL-068`); a board move has a key path (`REQ-TRACE-390`); the graph lists its edges as text (`REQ-TRACE-328`); a native dialog's accessibility is the host's (`REQ-SHELL-164`); the approval dialog opens on Deny with no default (`REQ-TOOLS-063`), as [13] advises.
 

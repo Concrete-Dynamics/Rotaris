@@ -119,13 +119,14 @@ Each is answerable from the `pnpm ui-review` pack or the DOM; a rubric id marks 
 
 | Derivative | Reads (this guide's sections) |
 |---|---|
-| `design-ui` brief steps 1 and 12 | 4, steps 1–5 |
-| `design-ui` brief §9, §11 | 3, rows 2–5; 6 |
-| `design-ui` brief §10 | 8 |
-| `design-ui` audit step 2 | 3 |
-| rubric D1 | 3; 6 |
-| `build-ui` steps 1, 2, 6, 7 | 4, steps 1, 6–8 |
-| `review-ui` steps 4 and 6 | 6; 2, items 8–10 |
+| `design-ui` brief, rule **Names, never values** | §4 step 4 |
+| `design-ui` brief, rule **Settle or raise** | §4 step 5 |
+| `design-ui` brief §1 | §4 steps 1–2 |
+| `design-ui` brief §9 | §3 |
+| `design-ui` brief §10 | §8 |
+| `design-ui` brief §11 and its check 1 before `proposed` | §6 |
+| `design-ui` audit step 5, bounding each item | §4 step 6 |
+| rubric D1 | §6 |
 
 No dated notes yet.
 

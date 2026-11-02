@@ -111,12 +111,10 @@ Read from the `pnpm ui-review` pack, the DOM or the source; a rubric id marks wh
 
 | Derivative | Reads |
 |---|---|
-| `build-ui` step 3 (tokens, variants, literal debt) | §3; §4 steps 1–4 and 7 |
-| `design-ui` brief step 9 (components; gaps to §4.2) | §4 steps 1–2; §3 |
-| `design-ui` audit step 2 | §6 |
-| rubric rows C6, C9 | §2 for the reasoning, §6 for the measures |
-| `review-ui` step 6 (read the source) | §4 steps 3–5; §6 |
-| `debug-ui`, a copy or token repair | §4 steps 2–8 |
+| `design-ui` brief §9 (components) | §4 steps 1–2 |
+| `design-ui` brief §10 | §8 |
+| rubric C6 | §2, §6 |
+| rubric C9 | §6 |
 
 No dated notes yet.
 

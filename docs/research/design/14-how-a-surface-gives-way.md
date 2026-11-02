@@ -111,7 +111,17 @@ Brackets: rubric ids; *new*: a proposed row.
 
 **The record's lessons**, as experience: "the tokens hold but composition breaks" (§7.1) [51]; UIR-001's 1847 px strip in a 1400 px window, UIR-014's header squeezed from 76 to 56 px, the worktrees table at 48.56 px a column [52]; "bound the box, not only the child" [53]; the timeout tag on its own line [54].
 
-**Who reads what.** The `design-ui` brief §8 reads sections 3 to 5, §10 takes section 8, §11 takes section 4 step 7 for its sizes. Rubric D4 cites this guide and may lift section 6's *new* checks; `build-ui` step 8 reads sections 2 and 4; `review-ui` step 4 scores section 6; `debug-ui` step 8 follows section 4 steps 7 and 8.
+**Who reads what.**
+
+| Derivative | Reads |
+|---|---|
+| `design-ui` brief §8 | §2, §3, §4 steps 1–6 |
+| `design-ui` brief §10 | §8 |
+| `design-ui` brief §11 | §4 step 7 |
+| `design-ui` audit step 2, the capture sizes | §4 step 7 |
+| rubric D4 | §2, §6 |
+
+The rubric may lift section 6's *new* checks.
 
 ## 8. Where this disagrees with the adopted material
 

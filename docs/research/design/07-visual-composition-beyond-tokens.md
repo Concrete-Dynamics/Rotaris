@@ -125,12 +125,13 @@ Read from the `pnpm ui-review` pack (PNGs, `geometry.json`, `styles.json`) or th
 
 | Derivative | Reads |
 |---|---|
-| `design-ui` brief step 8 (composition intent) | §2, §3, §4 steps 1–5 |
-| `design-ui` audit step 2 | §3, §6 |
-| rubric rows C1–C9, D2, O2 | §2 (reasoning), §6 (measures) |
-| `build-ui` steps 1, 4, 6 | §4, §6 |
-| `review-ui` steps 4 and 6 | §6, §4 step 10 |
-| `debug-ui`, a composition repair | §3, counter-move column |
+| `design-ui` brief §8 (composition intent) | §2, §3, §4 steps 1–9 |
+| `design-ui` brief §10 | §8 |
+| `design-ui` audit step 4, the tells walk | §3 |
+| rubric C1, C2, C4, C6, C7, D2, O2 | §2, §6 |
+| rubric C3 | §4 step 4, §6 |
+| rubric C5 | §4 step 3, §6 |
+| rubric C8 | §6 |
 
 No dated notes yet.
 

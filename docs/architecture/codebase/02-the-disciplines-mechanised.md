@@ -25,7 +25,8 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   ReqToCode §4.6, `docs/architecture/hardening.md` §6). Its one held identifier, `REQ-ORCH-153`, waits on
   [OQ-491](../open-questions/69-spikes-and-later-questions-36.md#oq-491) through the rule's `pending` option. The
   proof scripts under `apps/desktop/scripts/` are outside `eslint .` until they are linted; their citations were made
-  to pass when the rule landed (since 2026-11-01, hrd2 H1).
+  to pass when the rule landed. `tools/requirement-coverage/` is left out, as the report leaves itself out: its
+  identifiers are made-up fixtures (`rules.test.ts` pins the exclusion; since 2026-11-01, hrd2 H1).
 - **A branch's citations and a requirement's drift are read, not guessed** — report-only, beside the summary of
   `pnpm req-coverage`: `--since[=<ref>]` names what the files a branch touches cite now and did not at its merge-base
   (default `origin/main`), and what they dropped; `--drift` names every live requirement whose definition changed, by

@@ -15,6 +15,10 @@
 //   defect notes        (`defects.mjs`) a repaired note under the retired `docs/defects/fixed/`, to
 //                       `docs/archive/defects/<name>.md`, every pointer to it repointed in the record, the code and the
 //                       agent instructions
+//   superseded requirements
+//                       (`spec.mjs`) the text of a withdrawn or superseded requirement beyond its definition paragraph,
+//                       to `docs/archive/spec/<NN-domain>/<part>.md`; the definition line, its marker and its directive
+//                       back-pointer stay in `docs/spec/`, and one `*(Text archived: …)*` line joins them
 //
 // What it does for the open questions, in order, all of it a function of the tree as it stands:
 //
@@ -59,6 +63,7 @@ import { CONTINUED, archiveOrder, archivePathOf, partsOf } from '../record-parts
 import { planAdrHistory, qualifying as adrQualifying } from './adr-history.mjs';
 import { FIXED_DIR, planDefects, qualifying as defectsQualifying, repointDefects } from './defects.mjs';
 import { planOwnerDecisions, qualifying as ownerQualifying } from './owner-decisions.mjs';
+import { planSpec, qualifying as specQualifying } from './spec.mjs';
 import { decoded, hasId, overlay, rebase, relativeLink, rewriteLinkTargets, splitTarget, within } from './text.mjs';
 
 export { rebase, relativeLink, rewriteLinkTargets };
@@ -221,6 +226,7 @@ export function plan(root, options = {}) {
   moves.push(...planOwnerDecisions(root, tree, budget));
   moves.push(...planAdrHistory(root, tree, budget));
   moves.push(...planDefects(root, tree));
+  moves.push(...planSpec(root, tree, budget));
 
   repoint(root, tree);
   repointDefects(root, tree);
@@ -459,6 +465,9 @@ export function stillLive(root) {
       (q) => `${q.file}:${q.line} (an ADR's ${q.kind === 'struck' ? 'struck text' : q.kind} of ${q.date ?? 'an undated day'})`,
     ),
     ...defectsQualifying(root).map((n) => `${FIXED_DIR}/${n} (a repaired note under the retired fixed/ folder)`),
+    ...specQualifying(root).map(
+      (q) => `${q.id} at ${q.file}:${q.line} (${q.lines} line(s) of a requirement ${q.state}, beyond its definition)`,
+    ),
   ];
 }
 

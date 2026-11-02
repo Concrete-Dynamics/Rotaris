@@ -144,6 +144,12 @@ describe('owner decisions — what qualifies', () => {
     // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
     expect(hasLanded(entry, specificationCarries(root))).toEqual({ landed: true, evidence: ['ESC-2: its ruling is PD-X-001, which the specification names'] });
   });
+
+  it('reads the specification\'s archived text too: a ruling a withdrawn requirement\'s moved text carries has landed', () => {
+    expect(specificationCarries(root).rulings.has('ESC-2')).toBe(false);
+    write(root, { 'docs/archive/spec/01-domain.md': '# Archived — Domain\n\nThe round applied ESC-2 here before the requirement was withdrawn.\n' });
+    expect(specificationCarries(root).rulings.get('ESC-2')).toMatch(/^docs\/archive\/spec\/01-domain\.md: The round applied ESC-2/);
+  });
 });
 
 describe('owner decisions — the move', () => {

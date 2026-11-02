@@ -20,7 +20,7 @@
 // authorization, GD-8's spikes, GD-10's first-execution rule) is cited by no requirement and stays where agents read
 // it. Entries under other headings (an OQ ruled in the register, "Sources", "Consequences to carry") are not this
 // kind's and stay.
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { CONTINUED, archiveOrder, archivePathOf, partsOf } from '../record-parts.mjs';
 import { dateIn, hasId, rebase, relativeLink, slashed, within } from './text.mjs';
@@ -139,6 +139,9 @@ export function specificationCarries(root) {
     }
   };
   walk(join(root, 'docs', 'spec'));
+  // A withdrawn or superseded requirement's text archived by `spec.mjs` is still the specification's, verbatim.
+  const archived = join(root, 'docs', 'archive', 'spec');
+  if (existsSync(archived)) walk(archived);
   return { rulings, directives };
 }
 

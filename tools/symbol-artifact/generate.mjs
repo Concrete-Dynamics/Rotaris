@@ -23,10 +23,13 @@
 //
 // Shared by the build (ensure.mjs, when the artifact is absent) and by vitest's globalSetup, so the two cannot drift.
 
-import { readdirSync, readFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { partsOf } from '../record-parts.mjs';
 import { join, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// The definition shapes and the files they are read from, shared with the archive's specification kind (R-092,
+// tools/archive/spec.mjs), which leaves every definition where this generator finds it and so must not drift from it.
+import { BULLET, HEADING, SECTION, WITHDRAWN, specFiles as specFilesOf } from './definitions.mjs';
 // REQ-TRACE-061 / REQ-TRACE-502 (OQ-41): the artifact is replaced atomically, under the requirement's ladder.
 import { replaceAtomically } from './replace.mjs';
 
@@ -37,21 +40,12 @@ const directivesFile = join(repo, 'docs', 'product', 'directives.md');
 const outDir = join(repo, 'packages', 'kernel', 'src', 'generated');
 const outFile = join(outDir, 'requirements.ts');
 
-// Two definition shapes the corpus uses, and only these — matching the
-// registrar's mechanical count of 4,397 identifiers.
-const BULLET = /^-\s+\*\*(REQ-[A-Z]+-\d+)\*\*(.*)$/;
-const HEADING = /^\*\*(REQ-[A-Z]+-\d+)\*\*\s*[—:](.*)$/;
-const SECTION = /^#{2,5}\s+(REQ-[A-Z]+-\d+)(.*)$/;
-const WITHDRAWN = /\*Withdrawn\.?\*/i;
-
 /** @type {Map<string, {domain: string, file: string, line: number, withdrawn: boolean}>} */
 const ids = new Map();
 // A domain over the document budget is an index at `NN-<domain>.md` and its parts in `NN-<domain>/` (since 2026-10-26,
-// tools/record-parts.mjs); each is read in order, and `file` names the one that defines the identifier.
-const specFiles = readdirSync(specDir)
-  .filter((f) => /^\d\d-.*\.md$/.test(f))
-  .sort()
-  .flatMap((f) => [f, ...partsOf(join(specDir, f)).map((p) => relative(specDir, p).split(sep).join('/'))]);
+// tools/record-parts.mjs); each is read in order, and `file` names the one that defines the identifier. Nothing under
+// docs/archive/ is read: the archive defines no identifier (definitions.mjs).
+const specFiles = specFilesOf(specDir);
 for (const file of specFiles) {
   // A checkout under core.autocrlf=true (a git worktree on Windows) carries CRLF; `.` never matches `\r`, so a
   // split on `\n` alone left every definition unmatched and wrote an EMPTY artifact without a word (Part N found it).

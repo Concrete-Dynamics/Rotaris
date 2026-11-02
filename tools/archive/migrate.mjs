@@ -49,9 +49,11 @@
 //   pnpm archive:migrate --dry-run --verbose
 //                                     the same, with each passage an ADR would lose and the evidence each ruling landed
 //   node tools/archive/migrate.mjs --check
-//                                     fail when anything that qualifies, of any kind, is still live (in `pnpm lint`)
+//                                     fail when anything that qualifies, of any kind, is still live, or when the archive
+//                                     differs from its manifest (in `pnpm lint`)
 //
-// Nothing in the archive is edited by hand after it moves; only this script writes there. Reads and writes the tree;
+// Nothing in the archive is edited by hand after it moves; only this script writes there, and every run writes
+// `docs/archive/manifest.json`, one hash per archived entry, which `--check` holds the archive to (`manifest.mjs`). Reads and writes the tree;
 // costs no subprocess. The pure parts are exported for the tests beside this file.
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
@@ -62,6 +64,7 @@ import { anchorsOf, codeFiles, isRelative, recordFiles } from '../check-record-l
 import { CONTINUED, archiveOrder, archivePathOf, partsOf } from '../record-parts.mjs';
 import { planAdrHistory, qualifying as adrQualifying } from './adr-history.mjs';
 import { FIXED_DIR, planDefects, qualifying as defectsQualifying, repointDefects } from './defects.mjs';
+import { MANIFEST, manifestProblems, planManifest } from './manifest.mjs';
 import { planOwnerDecisions, qualifying as ownerQualifying } from './owner-decisions.mjs';
 import { planSpec, qualifying as specQualifying } from './spec.mjs';
 import { decoded, hasId, overlay, rebase, relativeLink, rewriteLinkTargets, splitTarget, within } from './text.mjs';
@@ -230,6 +233,7 @@ export function plan(root, options = {}) {
 
   repoint(root, tree);
   repointDefects(root, tree);
+  planManifest(root, tree);
 
   /** @type {Map<string, string | null>} */
   const changed = new Map();
@@ -477,13 +481,19 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const show = (/** @type {string} */ f) => relative(root, f).split(sep).join('/');
   if (args.has('--check')) {
     const left = stillLive(root);
+    const edited = manifestProblems(root);
     if (left.length > 0) {
       console.error(`archive --check: ${left.length} piece(s) of history still live; run \`pnpm archive:migrate\` and commit what it writes:`);
       for (const q of left) console.error(`  - ${q}`);
       console.error('History moves to docs/archive/ in the same commit that makes it history (docs/README.md, "The archive").');
-      process.exit(1);
     }
-    console.log('archive --check: nothing that qualifies is live; the archive is current');
+    if (edited.length > 0) {
+      console.error(`archive --check: ${edited.length} archived entr${edited.length === 1 ? 'y differs' : 'ies differ'} from ${MANIFEST}:`);
+      for (const q of edited) console.error(`  - ${q}`);
+      console.error('Only `pnpm archive:migrate` writes docs/archive/: undo the hand edit, or run it to take the archive as it stands (docs/archive/README.md).');
+    }
+    if (left.length + edited.length > 0) process.exit(1);
+    console.log('archive --check: nothing that qualifies is live, and the archive matches its manifest');
   } else {
     const verbose = args.has('--verbose');
     if (verbose) {

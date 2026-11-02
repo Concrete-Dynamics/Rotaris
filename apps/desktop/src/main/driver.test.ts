@@ -34,6 +34,7 @@ function fakeWindow(paints: 'at-once' | 'never', id = 7, answer: Answer = () => 
       return new Promise((resolve) => { state.paint = () => resolve(true); });
     },
     sendInputEvent: (event: { type: string; keyCode?: string; modifiers?: string[] }) => { state.inputs.push(event); },
+    getLastWebPreferences: () => ({ sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, enableBlinkFeatures: '', javascript: true }),
     capturePage: (): Promise<{ toPNG: () => Buffer }> => {
       state.calls.push('capture');
       return Promise.resolve({ toPNG: () => Buffer.from('png') });
@@ -313,5 +314,17 @@ describe("the driver's settled click (docs/archive/defects/driver-proof-clicks-p
     expect(await pending).toMatchObject({ ok: true, value: { x: 1343, y: 211 } });
     expect(presses(h.state.inputs)).toEqual([211]);
     expect(w.scripts).toEqual(['locate']);
+  });
+});
+
+describe("the driver's webPreferences (R-091; docs/architecture/hardening.md §3.1)", () => {
+  it('answers the security keys the window was built with as Electron reports them, null where it reports none, and nothing else', async () => {
+    const h = await harness();
+    const reply = await h.send('webPreferences');
+    expect(reply.value).toEqual({
+      windowId: 7, sandbox: true, contextIsolation: true, nodeIntegration: false, nodeIntegrationInWorker: null, nodeIntegrationInSubFrames: null,
+      webSecurity: true, allowRunningInsecureContent: null, experimentalFeatures: null, enableBlinkFeatures: '', webviewTag: null,
+    });
+    expect(reply.ok).toBe(true);
   });
 });

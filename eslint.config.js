@@ -262,6 +262,13 @@ export default tseslint.config(
     },
   },
   {
+    // R-091 (the Electron security checklist, items 3, 4, 6, 8, 9 and 10): every window is built from secureWebPreferences().
+    files: ['apps/desktop/src/**/*.{ts,tsx}', 'packages/shell/src/electron/**/*.{ts,tsx}'],
+    rules: {
+      'rotaris/browser-window-uses-secure-prefs': 'error',
+    },
+  },
+  {
     // R-092 (ReqToCode §4.6): every requirement or directive identifier a file cites — in a comment, a string, a test
     // name — resolves against the generated artifact; a withdrawn, superseded or retired one is cited only as history.
     // The coverage report's own directory is left out as that report leaves it out: its fixtures are made up.

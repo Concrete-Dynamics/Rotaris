@@ -5,6 +5,7 @@ import { millis, type MonotonicClock, type Timers } from '@rotaris/kernel';
 import type { BrowserWindow } from 'electron';
 import type { CommandOutcome } from '@rotaris/contracts';
 import { inputEvent, submitEvents, textEvents } from './capture/probe.js';
+import { SECURITY_PREFERENCE_KEYS } from './secure-web-preferences.js';
 
 /**
  * THE DRIVER — a request/reply seam for the proofs and for a person (or an agent) debugging the built app.
@@ -522,6 +523,22 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
         const win = windowOrThrow(target);
         win.close();
         return { closing: true, windowId: win.webContents.id };
+      }
+      case 'webPreferences': {
+        /**
+         * R-091: what the window's renderer was actually built with, read back from Electron, so a proof asserts the perimeter
+         * of the built application rather than the object a site passed. `getLastWebPreferences()` is on Electron 44's
+         * `WebContents` at run time and absent from its type declarations (measured 2026-11-02), hence the narrow cast; a
+         * build without it answers an error rather than an empty perimeter. The security keys alone, each `null` where
+         * Electron reports none (it reports an empty `enableBlinkFeatures` as `''`, and no preload at all).
+         */
+        const win = windowOrThrow(target);
+        const contents = win.webContents as unknown as { getLastWebPreferences?: () => Record<string, unknown> | null };
+        if (typeof contents.getLastWebPreferences !== 'function') throw new Error('this Electron has no webContents.getLastWebPreferences()');
+        const prefs = contents.getLastWebPreferences() ?? {};
+        const read: Record<string, unknown> = {};
+        for (const key of SECURITY_PREFERENCE_KEYS) read[key] = prefs[key] ?? null;
+        return { windowId: win.webContents.id, ...read };
       }
       case 'command':
         return deps.command(request.request, windowOrThrow(target));

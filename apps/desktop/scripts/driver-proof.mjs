@@ -30,6 +30,11 @@
  * driven page calls `window.open` and sets `location.href` to another origin, and each is refused in main with one `warning`
  * line naming the origin alone while the window keeps the application's page (Electron security checklist 13 and 14).
  *
+ * Since 2026-11-02 (R-091, steps 9c and 9d, 13a and 13c) it reads the web preferences of the main window, the approval dialog and
+ * the persona and terminal windows back from Electron and asserts the secure set every window is built from
+ * (`main/secure-web-preferences.ts`), and asks OQ-459's policy from the application's own page:
+ * the microphone and the clipboard write granted, a camera, a display capture, a location and a notification refused.
+ *
  * Evidence under `.proof/driver-proof/`: `app.log`, `screen.png`, `shots/`, `run-app.log`, `cut-app.log`, `results.json`.
  * `--skip-build` skips the build.
  */
@@ -103,6 +108,16 @@ const check = (name, ok, detail) => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name} — ${detail}`);
 };
 const note = (name, detail) => { results.push({ name, verdict: 'NOTE', detail }); console.log(`NOTE  ${name} — ${detail}`); };
+
+/**
+ * R-091: the web preferences every window is built with (`main/secure-web-preferences.ts`), as the driver's `webPreferences`
+ * op reads them back from Electron. Answers what differs, `[]` when nothing does; an empty `enableBlinkFeatures` reads `''`.
+ */
+const SECURE_PREFERENCES = { sandbox: true, contextIsolation: true, nodeIntegration: false, nodeIntegrationInWorker: false, nodeIntegrationInSubFrames: false, webSecurity: true, allowRunningInsecureContent: false, experimentalFeatures: false, webviewTag: false };
+const looseKeys = (prefs) => [
+  ...Object.entries(SECURE_PREFERENCES).filter(([key, value]) => prefs?.[key] !== value).map(([key]) => `${key}=${JSON.stringify(prefs?.[key])}`),
+  ...(prefs?.enableBlinkFeatures === '' || prefs?.enableBlinkFeatures === null ? [] : [`enableBlinkFeatures=${JSON.stringify(prefs?.enableBlinkFeatures)}`]),
+];
 
 const started = await startApp({ root: join(output, 'app'), workspace, timeoutMs: 90_000 });
 const d = started.driver;
@@ -179,6 +194,26 @@ try {
   const shellStill = await d.waitFor('.app-shell', { timeoutMs: 10_000 }).then(() => true).catch(() => false);
   check('a page sent to another origin stays the application\'s page, with one warning naming the origin alone', navLine !== undefined && /\bwarning\b/.test(navLine) && !navLine.includes('marker') && pageAfter === pageBefore && shellStill, `${navLine ?? 'no line'}; before ${pageBefore}, after ${pageAfter}; shell ${shellStill ? 'present' : 'absent'}`);
   check('each refusal is said once', guardLines.length === 2, `${guardLines.length} guard line(s) in the log`);
+
+  // 9c. One set of web preferences for every window (R-091; Electron security checklist 3, 4, 6, 8, 9 and 10): what the main
+  // window's renderer was BUILT with, read back from Electron (`webContents.getLastWebPreferences()`), not what a site passed.
+  const prefs = await d.webPreferences();
+  const loose = looseKeys(prefs);
+  check('the main window is built with the secure web preferences (R-091)', loose.length === 0, loose.length === 0 ? `${Object.keys(SECURE_PREFERENCES).length} keys as asked; enableBlinkFeatures ${JSON.stringify(prefs.enableBlinkFeatures)}` : `differs: ${loose.join(', ')}`);
+
+  // 9d. OQ-459's policy (ruled 2026-11-01), asked by the application's own page: the microphone and the clipboard write are
+  // granted, a camera, a display capture and a notification are refused. The display capture is refused by the request
+  // handler (it is not audio alone) before the display-media handler is asked; `permissions.test.ts` holds that handler.
+  const ask = (expression) => d.eval(`${expression}.then((answer) => answer, (e) => e.name)`);
+  const display = await ask(`navigator.mediaDevices.getDisplayMedia({ video: true }).then(() => 'granted')`);
+  const camera = await ask(`navigator.mediaDevices.getUserMedia({ video: true }).then((s) => { s.getTracks().forEach((t) => t.stop()); return 'granted'; })`);
+  const states = {};
+  for (const name of ['microphone', 'clipboard-write', 'camera', 'geolocation']) states[name] = await ask(`navigator.permissions.query({ name: '${name}' }).then((s) => s.state)`);
+  const notification = await ask('Notification.requestPermission()');
+  check('OQ-459: the own page is granted the microphone and the clipboard write, and nothing else it asked', states.microphone === 'granted' && states['clipboard-write'] === 'granted' && states.camera === 'denied' && states.geolocation === 'denied' && notification === 'denied', `${JSON.stringify(states)}; Notification ${notification}`);
+  check('OQ-459: a display capture and a camera are refused to the own page', display === 'NotAllowedError' && camera === 'NotAllowedError', `getDisplayMedia ${display}; getUserMedia(video) ${camera}`);
+  const devices = await d.eval(`Promise.all([navigator.hid?.getDevices(), navigator.serial?.getPorts(), navigator.usb?.getDevices()].map((p) => (p ?? Promise.resolve([])).then((l) => l.length, (e) => e.name)))`);
+  note('OQ-459: devices the page already holds (HID, serial, USB)', JSON.stringify(devices));
 
   // 10. The photograph.
   const shot = join(output, 'screen.png');
@@ -278,6 +313,7 @@ try {
   const notes = join(runWorkspace, 'NOTES.md');
   const answered = [];
   let dialogListed = null;
+  let approvalPrefs = null;
   await until(async () => {
     if (existsSync(notes)) return true;
     const open = await r.windows();
@@ -287,12 +323,16 @@ try {
     await r.waitFor('button', { text: 'Approve once', window: 'approval', timeoutMs: 10_000 });
     const [headline] = await r.send('probe', { selector: '#approval-title', window: 'approval' });
     if (answered.length === 0) await r.send('screenshot', { path: join(output, 'shots', 'run-2-approval.png'), window: 'approval' });
+    // R-091: the approval dialog is one of main's own dialog sites (`index.ts`), built apart from the main window's adapter.
+    if (answered.length === 0) approvalPrefs = await r.webPreferences({ window: 'approval' }).catch((cause) => ({ error: cause.message }));
     await r.send('click', { selector: 'button', text: 'Approve once', window: 'approval' });
     answered.push(headline?.text ?? '(no headline)');
     // The next dialog, if any, is presented once this one has closed; wait for the close before looking again.
     await until(() => r.windows(), (w) => !w.auxiliary.some((a) => a.selector === 'approval' && a.wcId === dialog.wcId), { timeoutMs: 10_000, what: 'the answered dialog closing' });
     return existsSync(notes);
   }, (done) => done === true, { timeoutMs: 60_000, what: "the child's write, approved in its dialog" }).catch((cause) => { answered.push(`gave up: ${cause.message}`); });
+  const approvalLoose = approvalPrefs === null ? ['never read'] : looseKeys(approvalPrefs);
+  check('the approval dialog is built with the secure web preferences (R-091)', approvalLoose.length === 0, approvalLoose.length === 0 ? 'every key as asked' : `differs: ${approvalLoose.join(', ')}${approvalPrefs?.error ? ` (${approvalPrefs.error})` : ''}`);
   check('the approval dialog is listed, probed and answered in its own window (REQ-TOOLS-063)', dialogListed !== null && dialogListed.role === 'approval' && answered.some((h) => /write_file/.test(h)) && existsSync(notes), `listed ${JSON.stringify(dialogListed)}; answered ${JSON.stringify(answered)}; NOTES.md ${existsSync(notes) ? 'written' : 'absent'}`);
 
   // 13b. The child's persona window, opened by the Mission view's own Pop out, addressed and probed as a window.
@@ -381,6 +421,12 @@ try {
   check('13c precondition: the persona and terminal windows belong to the first main window while the second is the active one',
     activeIsOther && owned.length === 2 && owned.every((a) => a.owner === ownerIndex),
     `main windows ${JSON.stringify(both.windows.map((w) => w.workspace))}; auxiliary ${JSON.stringify(both.auxiliary.map((a) => ({ selector: a.selector, owner: a.owner })))}`);
+  const childLoose = [];
+  for (const window of ['persona:coding-agent', 'terminal']) {
+    const read = await f.webPreferences({ window }).catch((cause) => ({ error: cause.message }));
+    for (const key of read.error ? [read.error] : looseKeys(read)) childLoose.push(`${window}: ${key}`);
+  }
+  check('the persona and terminal windows are built with the secure web preferences (R-091)', childLoose.length === 0, childLoose.length === 0 ? 'every key as asked in both' : `differs: ${childLoose.join(', ')}`);
   await f.useWindow('persona:coding-agent');
   const personaConfig = await f.command({ kind: 'config.read' });
   await f.useWindow('terminal');

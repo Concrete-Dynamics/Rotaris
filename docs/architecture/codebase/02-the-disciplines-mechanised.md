@@ -10,6 +10,10 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   `workspace`, `store`, `platform`, `model`, `mcp` and the two utility-process roots. Named
   exceptions: `kernel/src/clock/` (it *is* a clock) and `platform/src/clock.ts` (it *is* the adapter).
 - **No `electron` outside the roots** — `rotaris/no-electron-outside-roots`.
+- **Every window is built from one set of web preferences** — `rotaris/browser-window-uses-secure-prefs` over
+  `apps/desktop/src` and shell's Electron adapters: a `new BrowserWindow` passes an object literal whose last
+  `webPreferences` opens with a spread of `secureWebPreferences(preload)` (`main/secure-web-preferences.ts`) and adds
+  no key that decides the perimeter (R-091, `docs/architecture/hardening.md` §3.1; since 2026-11-02, hrd1 A2).
 - **No Node built-ins in renderer code** — `no-restricted-imports` over `ui`, `ui-core`, renderer, preload.
 - **Lint reads the types** (since 2026-11-01, R-091) — every `.ts`/`.tsx` is parsed against its project
   (`parserOptions.projectService`; the root `tools/*.test.ts`, which no tsconfig includes yet, against the root

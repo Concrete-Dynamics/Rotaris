@@ -56,6 +56,7 @@ import { sessionCommands } from './commands/session.js';
 import { dictationCommands } from './commands/dictation.js';
 import { installPermissionHandlers, type ApplicationPages } from './permissions.js';
 import { installWebContentsGuard } from './web-contents-guard.js'; // R-091, OQ-466
+import { secureWebPreferences } from './secure-web-preferences.js'; // R-091: one set of web preferences for every window
 import { dispatchCommand } from './command-dispatch.js'; // R-091: nothing throws out of runCommand (ADR-0019)
 import { refuseCommandSender } from './command-sender.js'; // R-091: who may send a command (checklist 17)
 import { shellCommands } from './commands/shell.js';
@@ -150,27 +151,28 @@ const log = (m: string, level: AppLogLevel = 'info'): void => { logAt(level, nul
 process.on('uncaughtException', (e) => { log(`UNCAUGHT in main: ${e.stack ?? String(e)}`, 'error'); });
 process.on('unhandledRejection', (reason) => { log(`UNHANDLED rejection in main: ${reason instanceof Error ? reason.stack ?? reason.message : String(reason)}`, 'error'); });
 
-// REQ-STARTUP-160 / REQ-SHELL-005: the runtime makes no request of its own. Registered before `app.whenReady()` so the
-// default session is reached while it is built — later is too late (`runtime-requests.ts` says what was measured).
-app.on('session-created', (created) => {
-  withoutRuntimeRequests(created, (m) => { log(m, 'error'); });
-  // OQ-459: the microphone for dictation, and only what the application's own pages need.
-  installPermissionHandlers(created, process.env['ELECTRON_RENDERER_URL']);
-});
-
 /**
  * The application's own page (OQ-466): the built renderer's `index.html` every window loads, or the development server while
- * the application is not packaged. The web-contents guard and the dispatcher's sender check read it.
+ * the application is not packaged. The session permission handlers, the web-contents guard and the dispatcher's sender check read it.
  */
 const applicationPages: ApplicationPages = {
   rendererIndex: join(__dirname, '../renderer/index.html'),
   devServerUrl: app.isPackaged ? undefined : process.env['ELECTRON_RENDERER_URL'],
 };
+
+// REQ-STARTUP-160 / REQ-SHELL-005: the runtime makes no request of its own. Registered before `app.whenReady()` so the
+// default session is reached while it is built — later is too late (`runtime-requests.ts` says what was measured).
+app.on('session-created', (created) => {
+  withoutRuntimeRequests(created, (m) => { log(m, 'error'); });
+  // OQ-459 (ruled 2026-11-01): one default-deny policy on every session — the microphone for dictation and the clipboard write,
+  // to the application's own pages alone; no device and no display capture to any page.
+  installPermissionHandlers(created, applicationPages);
+});
 // R-091 (Electron security checklist 12 to 14): no page navigates its window away from the application, opens a window or
 // attaches a webview. Registered before `app.whenReady()`, so every web contents is guarded from its first navigation.
 installWebContentsGuard(app, applicationPages, (m) => { log(m, 'warn'); });
 // R-091 (Electron security checklist 4): every renderer is sandboxed by the application, not by each window's
-// `webPreferences` alone; each window still states `sandbox: true`. Only callable before the app is ready.
+// `webPreferences` alone; each window still states `sandbox: true` (`secureWebPreferences`). Only callable before the app is ready.
 app.enableSandbox();
 
 /*
@@ -746,7 +748,7 @@ async function main(): Promise<void> {
     const dlg = new BrowserWindow({
       parent, modal: true, width: 560, height: 360, minWidth: 560, minHeight: 360, show: false, title: 'Run paused', backgroundColor: themeBackground(),
       resizable: true, minimizable: false, maximizable: false,
-      webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+      webPreferences: { ...secureWebPreferences(join(__dirname, '../preload/index.cjs')) },
     });
     const wc = dlg.webContents.id;
     pauseWindows.set(payload.sessionId, dlg);
@@ -786,7 +788,7 @@ async function main(): Promise<void> {
     const dlg = new BrowserWindow({
       parent, modal: true, width: AUTH_RECOVERY_DIALOG_WIDTH, height: 600, minWidth: AUTH_RECOVERY_DIALOG_WIDTH, maxWidth: AUTH_RECOVERY_DIALOG_WIDTH, minHeight: 420, show: false, title: 'Authentication failed', backgroundColor: themeBackground(),
       resizable: true, minimizable: false, maximizable: false, fullscreenable: false,
-      webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+      webPreferences: { ...secureWebPreferences(join(__dirname, '../preload/index.cjs')) },
     });
     const wc = dlg.webContents.id;
     authRecoveryWindow = { sessionId: payload.sessionId, win: dlg };
@@ -925,7 +927,7 @@ async function main(): Promise<void> {
     const dlg = new BrowserWindow({
       parent, modal: true, width: 560, height: 560, minWidth: 500, minHeight: 420, show: false, title: mode === 'reauthenticate' ? `Re-authenticate ${name}` : mode === 'authenticate' ? `Authenticate ${name}` : 'Add provider', backgroundColor: themeBackground(),
       resizable: true, minimizable: false, maximizable: false,
-      webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+      webPreferences: { ...secureWebPreferences(join(__dirname, '../preload/index.cjs')) },
     });
     const wc = dlg.webContents.id;
     providerWindow = dlg;
@@ -1023,7 +1025,7 @@ async function main(): Promise<void> {
     const dlg = new BrowserWindow({
       parent: w.win, modal: true, width: 560, height: 380, minWidth: 560, minHeight: 380, show: false, title: 'Permission required', backgroundColor: themeBackground(),
       resizable: true, minimizable: false, maximizable: false,
-      webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+      webPreferences: { ...secureWebPreferences(join(__dirname, '../preload/index.cjs')) },
     });
     const entry = { requestId: payload.request_id, win: dlg, answered: false };
     mainWindows.setOpenDialog(w.wcId, entry);
@@ -1106,7 +1108,7 @@ async function main(): Promise<void> {
     const dlg = new BrowserWindow({
       ...(parent ? { parent, modal: true } : {}), width: 720, height: 520, minWidth: 620, minHeight: 440, show: false, title: "Review this workspace's hooks", backgroundColor: themeBackground(),
       resizable: true, minimizable: false, maximizable: false,
-      webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+      webPreferences: { ...secureWebPreferences(join(__dirname, '../preload/index.cjs')) },
     });
     const wc = dlg.webContents.id;
     const entry = { workspace: r.summary.workspace, workspaceId, entries: r.summary.review, decided: false, win: dlg };
@@ -1462,9 +1464,12 @@ async function main(): Promise<void> {
 
   const electronMainWindowAdapter = createElectronMainWindowAdapter({
     createWindow: (options) => {
+      // R-091: the adapter's options say the window's size and chrome; its renderer is always built with the secure set and the
+      // preload, whatever `options.webPreferences` carries (`mainWindowOptions` and the persona and terminal windows write the
+      // same set, which is what lets `main-window-options.test.ts` read it without Electron).
       const win = new BrowserWindow({
         ...options,
-        webPreferences: { ...options.webPreferences, preload: join(__dirname, '../preload/index.cjs') },
+        webPreferences: { ...secureWebPreferences(join(__dirname, '../preload/index.cjs')) },
       });
       // REQ-SHELL-121 on Windows: the desktop session's end emits no `before-quit`; each main window's `session-end` starts
       // the orderly shutdown, once (`SessionEndShutdown`, `exit.ts`).

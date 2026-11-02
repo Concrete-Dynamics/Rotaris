@@ -95,6 +95,43 @@ describe('lint — ADR-0031: arithmetic on an amount lives in kernel/src/money.t
   });
 });
 
+describe('lint — R-091: every BrowserWindow is built with secureWebPreferences()', () => {
+  const secure = (rules: string[]) => rules.filter((r) => r === 'rotaris/browser-window-uses-secure-prefs');
+  const window = (options: string) => `import { BrowserWindow } from 'electron';\nimport { secureWebPreferences } from './secure-web-preferences.js';\nexport const w = new BrowserWindow(${options});\nexport const f = secureWebPreferences;\n`;
+  const lintMain = (options: string) => lintAs('apps/desktop/src/main/violation.ts', window(options));
+
+  it('passes a window whose webPreferences spread the factory, with a preload and a key that decides nothing', async () => {
+    expect(secure(await lintMain("{ width: 1, webPreferences: { ...secureWebPreferences('/p.cjs') } }"))).toHaveLength(0);
+    expect(secure(await lintMain("{ ...base, webPreferences: { ...secureWebPreferences(), spellcheck: false } }"))).toHaveLength(0);
+  });
+  it('reports the eight sites\' old shape: the three keys written by hand, the rest left to defaults', async () => {
+    expect(secure(await lintMain("{ webPreferences: { preload: '/p.cjs', sandbox: true, contextIsolation: true, nodeIntegration: false } }"))).toHaveLength(1);
+  });
+  it('reports a window with no webPreferences, or options it cannot read', async () => {
+    expect(secure(await lintMain('{ width: 1 }'))).toHaveLength(1);
+    expect(secure(await lintMain('options'))).toHaveLength(1);
+    expect(secure(await lintMain(''))).toHaveLength(1);
+  });
+  it('reports a security key added after the spread, and a second spread', async () => {
+    expect(secure(await lintMain("{ webPreferences: { ...secureWebPreferences(), webSecurity: false } }"))).toHaveLength(1);
+    expect(secure(await lintMain("{ webPreferences: { ...secureWebPreferences(), sandbox: false, nodeIntegration: true } }"))).toHaveLength(2);
+    expect(secure(await lintMain("{ webPreferences: { ...secureWebPreferences(), 'webviewTag': true } }"))).toHaveLength(1);
+    expect(secure(await lintMain("{ webPreferences: { ...secureWebPreferences(), ...loose } }"))).toHaveLength(1);
+  });
+  it('reports the factory spread anywhere but first, or called rather than spread', async () => {
+    expect(secure(await lintMain("{ webPreferences: { nodeIntegration: true, ...secureWebPreferences() } }"))).toHaveLength(1);
+    expect(secure(await lintMain("{ webPreferences: secureWebPreferences() }"))).toHaveLength(1);
+  });
+  it('reports a spread of the options after webPreferences, which could replace them', async () => {
+    expect(secure(await lintMain("{ webPreferences: { ...secureWebPreferences() }, ...options }"))).toHaveLength(1);
+  });
+  it('reads electron.BrowserWindow as well, binds anywhere in the desktop app, and nowhere outside it and shell\'s adapters', async () => {
+    expect(secure(await lintAs('apps/desktop/src/main/violation.ts', "import * as electron from 'electron';\nexport const w = new electron.BrowserWindow({ width: 1 });\n"))).toHaveLength(1);
+    expect(secure(await lintAs('apps/desktop/src/renderer/fine.ts', 'declare class BrowserWindow { constructor(o: unknown) }\nexport const w = new BrowserWindow({});\n'))).toHaveLength(1);
+    expect(secure(await lintAs('tools/fine.ts', 'declare class BrowserWindow { constructor(o: unknown) }\nexport const w = new BrowserWindow({});\n'))).toHaveLength(0);
+  });
+});
+
 describe('lint — R-092 (ReqToCode §4.6): every cited requirement or directive identifier resolves', () => {
   // Identifiers are built, never written whole, so this file's own text cites nothing the rule would read.
   const id = (kind: 'REQ' | 'PD', domain: string, n: string) => [kind, domain, n].join('-');

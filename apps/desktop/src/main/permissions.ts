@@ -1,10 +1,12 @@
 /**
- * What the application grants its renderer's device and browser requests (OQ-459).
+ * What the application grants its renderer's device and browser requests (OQ-459, ruled 2026-11-01).
  *
- * Until dictation no handler was set, and Electron's default answers yes to everything a page asks. Now: the microphone, audio
- * alone, for the application's own pages; the clipboard write its copy buttons use (`navigator.clipboard.writeText`:
- * `Notice.tsx`, `TranscriptSurface.tsx`, `TerminalWindow.tsx`); and nothing else. A page the application navigated to by mistake
- * asks with a different URL and is refused the microphone and the clipboard.
+ * Until dictation no handler was set, and Electron's default answers yes to everything a page asks. Now one default-deny policy,
+ * installed on every session as it is created: the microphone, audio alone, for the application's own pages; the clipboard
+ * write its copy buttons use (`navigator.clipboard.writeText`: `Notice.tsx`, `TranscriptSurface.tsx`, `TerminalWindow.tsx`),
+ * under both names Chromium asks it by; and nothing else, to any page. Since 2026-11-02 (R-091, bundle A2) the device handler
+ * refuses every HID, serial and USB device and the display-media handler grants no stream, so neither falls back to
+ * Electron's default; and "own page" is `isApplicationPage`, OQ-466's one predicate, rather than any `file:` URL.
  *
  * A port, so the rule is tested without Electron. `details` holds what Electron's request and check handlers each pass: the first
  * names `mediaTypes` and `requestingUrl`, the second `mediaType` and `requestingUrl` (where it has one) beside the origin.
@@ -18,9 +20,19 @@ export interface PermissionDetails {
   readonly requestingUrl?: string | undefined;
 }
 
+/** What Electron's display-media handler is answered with: no `video` and no `audio` is a refusal. */
+export interface DisplayMediaStreams {
+  readonly video?: unknown;
+  readonly audio?: unknown;
+}
+
 export interface PermissionSession {
   setPermissionRequestHandler(handler: (webContents: unknown, permission: string, callback: (granted: boolean) => void, details: PermissionDetails) => void): void;
   setPermissionCheckHandler(handler: (webContents: unknown, permission: string, origin: string, details: PermissionDetails) => boolean): void;
+  /** HID, serial and USB (`navigator.hid`, `navigator.serial`, `navigator.usb`): a handler answering false refuses the device. */
+  setDevicePermissionHandler(handler: (details: { readonly deviceType: string; readonly origin: string }) => boolean): void;
+  /** `navigator.mediaDevices.getDisplayMedia`: the callback answered with neither stream refuses the capture. */
+  setDisplayMediaRequestHandler(handler: (request: unknown, callback: (streams: DisplayMediaStreams) => void) => void): void;
 }
 
 /**
@@ -46,9 +58,8 @@ export interface ApplicationPages {
  * separator does not convert to a path at all), another drive, a UNC host, every other scheme (`http:`, `https:`,
  * `javascript:`, `data:`, `about:`), an empty string, and anything that does not parse.
  *
- * The navigation guard (`web-contents-guard.ts`) and the dispatcher's sender check (`command-sender.ts`) read it. The
- * permission handlers below still read `isOwnPage`: OQ-466 moves them onto this predicate together with OQ-459's handler
- * changes, which are bundle A2's (`docs/architecture/hardening.md` §3.1, row 7).
+ * The navigation guard (`web-contents-guard.ts`), the dispatcher's sender check (`command-sender.ts`) and, since 2026-11-02
+ * (bundle A2, `docs/architecture/hardening.md` §3.1 row 7), the permission handlers below read it.
  */
 export function isApplicationPage(url: string | undefined, own: ApplicationPages): boolean {
   if (url === undefined || url === '') return false;
@@ -82,29 +93,32 @@ export function urlOriginForLog(url: string | undefined): string {
   } catch { return 'an unreadable URL'; }
 }
 
-/** Whether a URL is one of the application's own pages: the built `file:` renderer, or the dev server `electron-vite` names. */
-export function isOwnPage(url: string | undefined, devServerUrl: string | undefined): boolean {
-  if (url === undefined) return false;
-  if (url.startsWith('file://')) return true;
-  if (devServerUrl === undefined || devServerUrl === '') return false;
-  try { return new URL(url).origin === new URL(devServerUrl).origin; } catch { return false; }
-}
-
 /**
  * A write with no press behind it (the copy of a line after an await, a window not long focused) reaches the check handler
  * under `clipboard-read`, measured 2026-10-30: `writeText` failed "Write permission denied" until that name was answered yes.
  */
 const CLIPBOARD_WRITE_PERMISSIONS: ReadonlySet<string> = new Set(['clipboard-sanitized-write', 'clipboard-read']);
 
-export function permissionGranted(permission: string, details: PermissionDetails, url: string | undefined, devServerUrl: string | undefined): boolean {
-  if (!isOwnPage(url, devServerUrl)) return false;
+/**
+ * Whether `permission` is granted to the page at `url` (OQ-459's ruling). The page must be the application's own
+ * (`isApplicationPage`). `media` is granted only when what is asked is a list that is not empty, names no `unknown` type and
+ * names `audio` alone: a check that names no type, or `unknown`, is refused (until 2026-11-02 `[].every` granted it).
+ */
+export function permissionGranted(permission: string, details: PermissionDetails, url: string | undefined, own: ApplicationPages): boolean {
+  if (!isApplicationPage(url, own)) return false;
   if (CLIPBOARD_WRITE_PERMISSIONS.has(permission)) return true;
   if (permission !== 'media') return false;
-  const asked = details.mediaTypes ?? (details.mediaType === undefined || details.mediaType === 'unknown' ? [] : [details.mediaType]);
-  return asked.every((type) => type === 'audio');
+  const asked = details.mediaTypes ?? (details.mediaType === undefined ? [] : [details.mediaType]);
+  return asked.length > 0 && asked.every((type) => type === 'audio');
 }
 
-export function installPermissionHandlers(session: PermissionSession, devServerUrl: string | undefined): void {
-  session.setPermissionRequestHandler((_contents, permission, callback, details) => { callback(permissionGranted(permission, details, details.requestingUrl, devServerUrl)); });
-  session.setPermissionCheckHandler((_contents, permission, origin, details) => permissionGranted(permission, details, details.requestingUrl ?? origin, devServerUrl));
+/**
+ * Install the one policy on a session: the request and check handlers over `permissionGranted`, a device handler that refuses
+ * every device, and a display-media handler that grants no stream — to any page, the application's own included (OQ-459).
+ */
+export function installPermissionHandlers(session: PermissionSession, own: ApplicationPages): void {
+  session.setPermissionRequestHandler((_contents, permission, callback, details) => { callback(permissionGranted(permission, details, details.requestingUrl, own)); });
+  session.setPermissionCheckHandler((_contents, permission, origin, details) => permissionGranted(permission, details, details.requestingUrl ?? origin, own));
+  session.setDevicePermissionHandler(() => false);
+  session.setDisplayMediaRequestHandler((_request, callback) => { callback({}); });
 }

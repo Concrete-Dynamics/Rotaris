@@ -11,3 +11,10 @@ Since 2026-11-01 (R-091, `docs/architecture/hardening.md` §3.1) step 9b is the 
 `window.open` returns `null`, that the window still shows the application's page afterwards, and that the application log
 holds exactly two `warning` lines, `window refused: …` and `navigation refused: will-navigate to https://example.invalid, …`,
 each naming the origin and neither the path nor the query (Electron security checklist 13 and 14; PD-MONITOR-002).
+
+Since 2026-11-02 (R-091 bundle A2, `docs/architecture/hardening.md` §3.1 rows 4 and 7) steps 9c, 13a and 13c read the web
+preferences of the main window, the approval dialog and the persona and terminal windows back from Electron through the
+driver's `webPreferences` op (`webContents.getLastWebPreferences()`) and assert the secure set every window spreads
+(`apps/desktop/src/main/secure-web-preferences.ts`); step 9d asks OQ-459's policy from the application's own page —
+the microphone and the clipboard write `granted`, a camera, a location and a notification refused, `getDisplayMedia` and
+`getUserMedia({ video })` `NotAllowedError` — and notes the HID, serial and USB devices the page holds.

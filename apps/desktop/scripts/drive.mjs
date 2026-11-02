@@ -21,6 +21,7 @@
  *   pnpm app:drive resize 1000 680
  *   pnpm app:drive command '{"kind":"theme.set","name":"nocturne"}'
  *   pnpm app:drive windows                              (main windows, and the persona, approval and terminal windows)
+ *   pnpm app:drive webPreferences [--window=approval]   (the security keys the window was built with, read back; R-091)
  *   pnpm app:drive useWindow persona:coding-agent       (every later command acts on that window; no argument: the active main window)
  *   pnpm app:drive probe "#approval-title" --window=approval    (--window= on any command: that window, for that command alone)
  *   pnpm app:drive log [--tail=40]
@@ -195,6 +196,10 @@ switch (command) {
   // The main windows, most recently focused first, and the auxiliary ones by role. `{ windows, auxiliary, selected }`.
   case 'windows':
     await withClient((d) => d.windows());
+    break;
+  // R-091: the security keys the window's renderer was built with, read back from Electron.
+  case 'webPreferences':
+    await withClient((d) => d.send('webPreferences', on));
     break;
   // Every later command acts on the window named; with no name, on the active main window again. Held by the app.
   case 'useWindow':

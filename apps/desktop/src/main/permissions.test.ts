@@ -1,40 +1,98 @@
 import { describe, expect, it } from 'vitest';
-import { installPermissionHandlers, isApplicationPage, isOwnPage, permissionGranted, urlOriginForLog, type ApplicationPages, type PermissionSession } from './permissions.js';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { installPermissionHandlers, isApplicationPage, permissionGranted, urlOriginForLog, type ApplicationPages, type DisplayMediaStreams, type PermissionSession } from './permissions.js';
 
 const OWN = 'file:///opt/rotaris/out/renderer/index.html';
+const PAGES: ApplicationPages = { rendererIndex: '/opt/rotaris/out/renderer/index.html', devServerUrl: undefined, platform: 'linux' };
 
-describe('OQ-459 — what the renderer is granted', () => {
+interface Installed {
+  request?: Parameters<PermissionSession['setPermissionRequestHandler']>[0];
+  check?: Parameters<PermissionSession['setPermissionCheckHandler']>[0];
+  device?: Parameters<PermissionSession['setDevicePermissionHandler']>[0];
+  display?: Parameters<PermissionSession['setDisplayMediaRequestHandler']>[0];
+}
+
+/** A session that records the handlers installed on it, so each can be asked as Electron would ask it. */
+function installed(): Installed {
+  const handlers: Installed = {};
+  installPermissionHandlers({
+    setPermissionRequestHandler: (h) => { handlers.request = h; },
+    setPermissionCheckHandler: (h) => { handlers.check = h; },
+    setDevicePermissionHandler: (h) => { handlers.device = h; },
+    setDisplayMediaRequestHandler: (h) => { handlers.display = h; },
+  }, PAGES);
+  return handlers;
+}
+
+describe('OQ-459 — what the renderer is granted (ruled 2026-11-01)', () => {
   it('grants the microphone, audio alone, to the application\'s own page', () => {
-    expect(permissionGranted('media', { mediaTypes: ['audio'] }, OWN, undefined)).toBe(true);
-    expect(permissionGranted('media', { mediaTypes: ['video'] }, OWN, undefined)).toBe(false);
-    expect(permissionGranted('media', { mediaTypes: ['audio', 'video'] }, OWN, undefined)).toBe(false);
-    expect(permissionGranted('media', { mediaType: 'video' }, OWN, undefined)).toBe(false);
+    expect(permissionGranted('media', { mediaTypes: ['audio'] }, OWN, PAGES)).toBe(true);
+    expect(permissionGranted('media', { mediaTypes: ['audio'] }, `${OWN}?role=main`, PAGES)).toBe(true);
+    expect(permissionGranted('media', { mediaType: 'audio' }, OWN, PAGES)).toBe(true);
+    expect(permissionGranted('media', { mediaTypes: ['video'] }, OWN, PAGES)).toBe(false);
+    expect(permissionGranted('media', { mediaTypes: ['audio', 'video'] }, OWN, PAGES)).toBe(false);
+    expect(permissionGranted('media', { mediaType: 'video' }, OWN, PAGES)).toBe(false);
   });
-  it('refuses a page that is not the application\'s', () => {
-    expect(permissionGranted('media', { mediaTypes: ['audio'] }, 'https://example.com/', undefined)).toBe(false);
-    expect(permissionGranted('clipboard-sanitized-write', {}, 'https://example.com/', undefined)).toBe(false);
-    expect(permissionGranted('media', { mediaTypes: ['audio'] }, undefined, undefined)).toBe(false);
+  it('refuses media when nothing or `unknown` is asked (`[].every` granted it before the ruling)', () => {
+    expect(permissionGranted('media', { mediaTypes: [] }, OWN, PAGES)).toBe(false);
+    expect(permissionGranted('media', {}, OWN, PAGES)).toBe(false);
+    expect(permissionGranted('media', { mediaType: 'unknown' }, OWN, PAGES)).toBe(false);
+    expect(permissionGranted('media', { mediaTypes: ['audio', 'unknown'] }, OWN, PAGES)).toBe(false);
   });
-  it('keeps the clipboard write the copy buttons use, and refuses the rest', () => {
-    expect(permissionGranted('clipboard-sanitized-write', {}, OWN, undefined)).toBe(true);
-    expect(permissionGranted('clipboard-read', {}, OWN, undefined)).toBe(true);
-    for (const permission of ['notifications', 'geolocation', 'openExternal', 'pointerLock', 'midi', 'hid', 'serial']) expect(permissionGranted(permission, {}, OWN, undefined)).toBe(false);
+  it('refuses a page that is not the application\'s own, any other `file:` page included', () => {
+    expect(permissionGranted('media', { mediaTypes: ['audio'] }, 'https://example.com/', PAGES)).toBe(false);
+    expect(permissionGranted('clipboard-sanitized-write', {}, 'https://example.com/', PAGES)).toBe(false);
+    expect(permissionGranted('media', { mediaTypes: ['audio'] }, undefined, PAGES)).toBe(false);
+    // Until 2026-11-02 every `file:` URL was an own page (`isOwnPage`); now only the built renderer's index.html is (OQ-466).
+    expect(permissionGranted('media', { mediaTypes: ['audio'] }, 'file:///home/someone/Downloads/page.html', PAGES)).toBe(false);
+    expect(permissionGranted('clipboard-sanitized-write', {}, 'file:///', PAGES)).toBe(false);
   });
-  it('reads the dev server by origin, never by prefix', () => {
-    expect(isOwnPage('http://localhost:5173/?role=main', 'http://localhost:5173/')).toBe(true);
-    expect(isOwnPage('http://localhost:5173.evil.test/', 'http://localhost:5173/')).toBe(false);
-    expect(isOwnPage('http://localhost:5173/', undefined)).toBe(false);
+  it('reads the dev server by its exact origin, and only while one is named (unpackaged)', () => {
+    const dev: ApplicationPages = { ...PAGES, devServerUrl: 'http://localhost:5173/' };
+    expect(permissionGranted('media', { mediaTypes: ['audio'] }, 'http://localhost:5173/?role=main', dev)).toBe(true);
+    expect(permissionGranted('media', { mediaTypes: ['audio'] }, 'http://localhost:5173.evil.test/', dev)).toBe(false);
+    expect(permissionGranted('media', { mediaTypes: ['audio'] }, 'http://localhost:5173/', PAGES)).toBe(false);
+  });
+  it('keeps the clipboard write the copy buttons use, under both names, and refuses the rest', () => {
+    expect(permissionGranted('clipboard-sanitized-write', {}, OWN, PAGES)).toBe(true);
+    expect(permissionGranted('clipboard-read', {}, OWN, PAGES)).toBe(true);
+    for (const permission of ['notifications', 'geolocation', 'openExternal', 'pointerLock', 'midi', 'midiSysex', 'hid', 'serial', 'usb', 'display-capture', 'fullscreen', 'idle-detection', 'window-management']) {
+      expect(permissionGranted(permission, {}, OWN, PAGES)).toBe(false);
+    }
   });
   it('installs one handler for the request and one for the check, over the same rule', () => {
-    let request!: Parameters<PermissionSession['setPermissionRequestHandler']>[0];
-    let check!: Parameters<PermissionSession['setPermissionCheckHandler']>[0];
-    installPermissionHandlers({ setPermissionRequestHandler: (h) => { request = h; }, setPermissionCheckHandler: (h) => { check = h; } }, undefined);
+    const handlers = installed();
     const answers: boolean[] = [];
-    request(null, 'media', (g) => answers.push(g), { mediaTypes: ['audio'], requestingUrl: OWN });
-    request(null, 'geolocation', (g) => answers.push(g), { requestingUrl: OWN });
-    expect(answers).toEqual([true, false]);
-    expect(check(null, 'media', 'file:///', { mediaType: 'audio' })).toBe(true);
-    expect(check(null, 'media', 'https://example.com', { mediaType: 'audio' })).toBe(false);
+    handlers.request?.(null, 'media', (g) => answers.push(g), { mediaTypes: ['audio'], requestingUrl: OWN });
+    handlers.request?.(null, 'geolocation', (g) => answers.push(g), { requestingUrl: OWN });
+    handlers.request?.(null, 'media', (g) => answers.push(g), { mediaTypes: ['audio'], requestingUrl: 'file:///elsewhere/index.html' });
+    expect(answers).toEqual([true, false, false]);
+    expect(handlers.check?.(null, 'media', 'file:///', { mediaType: 'audio', requestingUrl: OWN })).toBe(true);
+    // A check with no requesting URL is read by its origin, and an origin is never the application's page.
+    expect(handlers.check?.(null, 'media', 'file:///', { mediaType: 'audio' })).toBe(false);
+    expect(handlers.check?.(null, 'media', 'https://example.com', { mediaType: 'audio' })).toBe(false);
+  });
+  it('refuses every device (HID, serial and USB) to every page, the application\'s own included', () => {
+    const handlers = installed();
+    expect(handlers.device).toBeDefined();
+    for (const deviceType of ['hid', 'serial', 'usb']) {
+      for (const origin of ['file://', OWN, 'https://example.com']) expect(handlers.device?.({ deviceType, origin })).toBe(false);
+    }
+  });
+  it('answers every display-media request with no stream, to every page', () => {
+    const handlers = installed();
+    const answered: DisplayMediaStreams[] = [];
+    for (const securityOrigin of ['file://', 'https://example.com']) handlers.display?.({ securityOrigin, videoRequested: true, audioRequested: true }, (streams) => answered.push(streams));
+    expect(answered).toEqual([{}, {}]);
+  });
+  it('the renderer never reads the clipboard, so the `clipboard-read` grant admits the copy buttons\' write alone', () => {
+    const repo = fileURLToPath(new URL('../../../../', import.meta.url));
+    const roots = ['packages/ui/src', 'packages/ui-core/src', 'apps/desktop/src/renderer', 'apps/desktop/src/preload'].map((r) => join(repo, r));
+    const files = roots.flatMap((root) => readdirSync(root, { recursive: true, encoding: 'utf8' }).filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f)).map((f) => join(root, f)));
+    expect(files.length).toBeGreaterThan(50);
+    expect(files.filter((file) => /clipboard\s*\??\.\s*read/.test(readFileSync(file, 'utf8')))).toEqual([]);
   });
 });
 

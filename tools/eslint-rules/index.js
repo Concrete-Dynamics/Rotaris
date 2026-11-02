@@ -279,11 +279,71 @@ const requirementCitationsResolve = {
   },
 };
 
+/** R-091 (`docs/architecture/hardening.md` §3.1; the Electron security checklist, items 3, 4, 6, 8, 9 and 10): every window's
+ * renderer is built from `secureWebPreferences()` (`apps/desktop/src/main/secure-web-preferences.ts`). A `new BrowserWindow(...)`
+ * passes an object literal whose `webPreferences` is an object literal opening with a spread of `secureWebPreferences(...)`,
+ * stands after every other spread of the options (so nothing spread later replaces it), and adds no key of its own that decides
+ * the perimeter. Syntactic, as the repository's lint is: an options object built elsewhere and passed by name is reported too,
+ * because what it holds cannot be read here. Keep `SECURITY_KEYS` equal to `SECURITY_PREFERENCE_KEYS` there. */
+const SECURITY_KEYS = new Set([
+  'sandbox', 'contextIsolation', 'nodeIntegration', 'nodeIntegrationInWorker', 'nodeIntegrationInSubFrames', 'webSecurity',
+  'allowRunningInsecureContent', 'experimentalFeatures', 'enableBlinkFeatures', 'webviewTag',
+]);
+/** The name a non-computed property key is written with, or null. */
+const keyName = (property) => {
+  if (property.computed) return null;
+  if (property.key.type === 'Identifier') return property.key.name;
+  if (property.key.type === 'Literal' && typeof property.key.value === 'string') return property.key.value;
+  return null;
+};
+const isFactoryCall = (node) => node?.type === 'CallExpression' && node.callee.type === 'Identifier' && node.callee.name === 'secureWebPreferences';
+
+const browserWindowUsesSecurePrefs = {
+  meta: {
+    type: 'problem',
+    docs: { description: 'R-091 — every BrowserWindow is built with secureWebPreferences()' },
+    schema: [],
+    messages: {
+      options: 'R-091: pass `new BrowserWindow` an object literal, so its `webPreferences` can be seen to come from `secureWebPreferences()`.',
+      missing: 'R-091: this window states no `webPreferences`; write `webPreferences: { ...secureWebPreferences(preload) }`.',
+      overridden: 'R-091: a spread after `webPreferences` may replace it; put `webPreferences: { ...secureWebPreferences(preload) }` last.',
+      notFactory: 'R-091: `webPreferences` must open with a spread of `secureWebPreferences(preload)` (main/secure-web-preferences.ts).',
+      securityKey: 'R-091: `{{name}}` decides the renderer\'s perimeter and is set by `secureWebPreferences()` alone; remove it here.',
+      spread: 'R-091: a second spread inside `webPreferences` may replace what `secureWebPreferences()` set; name the keys instead.',
+    },
+  },
+  create(context) {
+    return {
+      NewExpression(node) {
+        const callee = node.callee;
+        const named = callee.type === 'Identifier' ? callee.name : callee.type === 'MemberExpression' && !callee.computed && callee.property.type === 'Identifier' ? callee.property.name : null;
+        if (named !== 'BrowserWindow') return;
+        const options = node.arguments[0];
+        if (options?.type !== 'ObjectExpression') { context.report({ node, messageId: 'options' }); return; }
+        const index = options.properties.findLastIndex((p) => p.type === 'Property' && keyName(p) === 'webPreferences');
+        if (index === -1) { context.report({ node: options, messageId: 'missing' }); return; }
+        if (options.properties.slice(index + 1).some((p) => p.type === 'SpreadElement')) { context.report({ node: options.properties[index], messageId: 'overridden' }); return; }
+        const prefs = options.properties[index].value;
+        if (prefs.type !== 'ObjectExpression' || prefs.properties[0]?.type !== 'SpreadElement' || !isFactoryCall(prefs.properties[0].argument)) {
+          context.report({ node: prefs, messageId: 'notFactory' });
+          return;
+        }
+        for (const p of prefs.properties.slice(1)) {
+          if (p.type === 'SpreadElement') { context.report({ node: p, messageId: 'spread' }); continue; }
+          const name = keyName(p);
+          if (name === null || SECURITY_KEYS.has(name)) context.report({ node: p, messageId: 'securityKey', data: { name: name ?? '(a computed key)' } });
+        }
+      },
+    };
+  },
+};
+
 export default {
   rules: {
     'no-bare-timers': noBareTimers,
     'no-electron-outside-roots': noElectronOutsideRoots,
     'money-only-in-money-ts': moneyOnlyInMoneyTs,
     'requirement-citations-resolve': requirementCitationsResolve,
+    'browser-window-uses-secure-prefs': browserWindowUsesSecurePrefs,
   },
 };

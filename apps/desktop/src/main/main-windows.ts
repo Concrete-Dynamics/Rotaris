@@ -4,6 +4,7 @@ import type { BrowserWindow, BrowserWindowConstructorOptions, OpenDialogOptions 
 import { PersonaWindows, TerminalWindows } from './windows.js';
 import { onConsoleWarning } from './capture/console-relay.js';
 import { integrationDeclinesWorkspaceOpen, type WorktreeIntegrationRunning } from './integration-guard.js';
+import { secureWebPreferences } from './secure-web-preferences.js'; // R-091: one set of web preferences for every window
 import { commandWindowFor } from './command-sender.js'; // R-091: a dialog speaks for the window it was raised over
 
 export type MainWindowOrigin = 'launch' | 'open-request' | 'hand-over';
@@ -885,7 +886,7 @@ export function mainWindowOptions(backgroundColor: string): BrowserWindowConstru
     title: 'Rotaris',
     autoHideMenuBar: true,
     frame: false,
-    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+    webPreferences: { ...secureWebPreferences() },
   };
 }
 
@@ -1138,7 +1139,7 @@ export function createElectronMainWindowAdapter(
           show: false,
           title: `Rotaris · ${persona}`,
           backgroundColor: dependencies.themeBackground(),
-          webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+          webPreferences: { ...secureWebPreferences() },
         }),
         load: dependencies.loadPersonaWindow,
         select: (personaWin, agentId, focusSteer) => personaWin.webContents
@@ -1179,7 +1180,7 @@ export function createElectronMainWindowAdapter(
           show: false,
           title: 'Rotaris · Terminal',
           backgroundColor: dependencies.themeBackground(),
-          webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+          webPreferences: { ...secureWebPreferences() },
         }),
         load: dependencies.loadTerminalWindow,
         focusStream: (terminalWin, streamId) => terminalWin.webContents

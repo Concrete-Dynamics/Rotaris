@@ -103,6 +103,8 @@ export async function connect(endpointFile, { timeoutMs = 60_000 } = {}) {
     inspect: (selector) => send('inspect', { selector }),
     probe: (selector) => send('probe', { selector }),
     eval: (expression) => send('eval', { expression }),
+    /** R-091: the security keys the selected window's renderer was built with (`getLastWebPreferences()`), and whether a preload is set. */
+    webPreferences: (options = {}) => send('webPreferences', options),
     deferProjectOffer: (delayMs = 650) => send('deferProjectOffer', { delayMs }),
     screenshot: (path) => send('screenshot', { path }),
     resize: (width, height) => send('resize', { width, height }),

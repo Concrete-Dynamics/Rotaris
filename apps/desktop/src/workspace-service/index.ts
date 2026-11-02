@@ -1,7 +1,7 @@
 import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, ServiceAnswerEnvelopeSchema, WorkspaceServiceRequestSchema, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { countNoun, fileStamp, millis, toIsoUtc, type Millis, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
-import { checkpointBeforeClose, checkpointStore, establishWorkspaceId, forgetSpelling, IDLE_CHECKPOINT_MS, IdleCheckpoint, readWorkspaceId, REFUSAL_LEASE_MS, workspaceIdFile, type CheckpointResult, type ResolvedStore, type RunHostControl } from '@rotaris/store';
+import { walCheckpointBeforeClose, walCheckpoint, establishWorkspaceId, forgetSpelling, IDLE_WAL_CHECKPOINT_MS, IdleWalCheckpoint, readWorkspaceId, REFUSAL_LEASE_MS, workspaceIdFile, type WalCheckpointResult, type ResolvedStore, type RunHostControl } from '@rotaris/store';
 import { assessRestore, backupWorkspace, capture as captureCheckpoint, checkAttach, createWorktree, deleteNamespace, deleteRefs, listRefs, performRestore, preview as previewCheckpoint, readGitView, readRepository, removeWorktree, restore as restoreCheckpoint, sessionWorktreePath, validateBranchName } from '@rotaris/workspace';
 import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
 import { homedir } from 'node:os';
@@ -101,21 +101,21 @@ function expectAck(r: ProcessReply): void {
   if (r.kind !== 'workspace.ack' && r.kind !== 'ack') throw new Error(`run host answered ${r.kind}`);
 }
 
-/** Hardening C1: what a checkpoint the service asked for reported, at debug (`checkpoint.ts`). */
-function checkpointLine(id: string, why: string, r: CheckpointResult): string {
-  return `store ${id}: ${why} checkpoint (${r.mode}): ${r.busy ? 'busy, ' : ''}${r.checkpointed} of ${countNoun(r.logFrames, 'log frame')} copied`;
+/** Hardening C1: what a WAL checkpoint the service asked for reported, at debug (`wal-checkpoint.ts`). */
+function walCheckpointLine(id: string, why: string, r: WalCheckpointResult): string {
+  return `store ${id}: ${why} WAL checkpoint (${r.mode}): ${r.busy ? 'busy, ' : ''}${r.checkpointed} of ${countNoun(r.logFrames, 'log frame')} copied`;
 }
-/** Hardening C1: one PASSIVE checkpoint once the service's connection has had no request for `IDLE_CHECKPOINT_MS`. */
-const idleCheckpoint = new IdleCheckpoint(clocks.timers, IDLE_CHECKPOINT_MS, () => {
+/** Hardening C1: one PASSIVE WAL checkpoint once the service's connection has had no request for `IDLE_WAL_CHECKPOINT_MS`. */
+const idleWalCheckpoint = new IdleWalCheckpoint(clocks.timers, IDLE_WAL_CHECKPOINT_MS, () => {
   if (!open) return;
-  try { log(checkpointLine(open.id, 'idle', checkpointStore(open.db, 'PASSIVE')), 'debug'); } catch (e) { log(`store ${open.id}: the idle checkpoint failed: ${String(e)}`, 'warn'); }
+  try { log(walCheckpointLine(open.id, 'idle', walCheckpoint(open.db, 'PASSIVE')), 'debug'); } catch (e) { log(`store ${open.id}: the idle WAL checkpoint failed: ${String(e)}`, 'warn'); }
 });
 
 function closeOwn(): void {
-  idleCheckpoint.cancel();
+  idleWalCheckpoint.cancel();
   if (!open) return;
   // Hardening C1: the orderly close truncates the log, bounded (a writer beside it answers busy at once); never fatal to the close.
-  try { log(checkpointLine(open.id, 'closing', checkpointBeforeClose(open.db)), 'debug'); } catch (e) { log(`store ${open.id}: the closing checkpoint failed: ${String(e)}`, 'warn'); }
+  try { log(walCheckpointLine(open.id, 'closing', walCheckpointBeforeClose(open.db)), 'debug'); } catch (e) { log(`store ${open.id}: the closing WAL checkpoint failed: ${String(e)}`, 'warn'); }
   try { open.db.close(); } catch { /* */ }
   forgetSpelling(open.dir);
   open = null;
@@ -367,8 +367,8 @@ port.on('message', (e: { data: unknown }) => {
     (r) => reply(env.data.id, r),
     (err) => reply(env.data.id, { kind: 'refused', code: 'request.failed', headline: String(err) }),
   ).finally(() => {
-    // Hardening C1: every settled request re-arms the idle checkpoint while a store is open.
-    if (open) idleCheckpoint.touch();
+    // Hardening C1: every settled request re-arms the idle WAL checkpoint while a store is open.
+    if (open) idleWalCheckpoint.touch();
   });
 });
 

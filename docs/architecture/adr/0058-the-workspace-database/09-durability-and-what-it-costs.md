@@ -116,7 +116,7 @@ checkpoints. Do not make it configurable and do not turn it off.
 kept, now **set by name** on every writable open (`WAL_AUTOCHECKPOINT_PAGES = 1000`, read back like the journal mode), so
 a rebuilt binding with another compiled default cannot move this paragraph's period unnoticed; it is not configurable.
 Two checkpoints are added beside it, in the workspace service only: one PASSIVE when its connection has had no request
-for 30 s, and a TRUNCATE with the busy timeout at 0 on its orderly close (`packages/store/src/checkpoint.ts`), each logged
+for 30 s, and a TRUNCATE with the busy timeout at 0 on its orderly close (`packages/store/src/wal-checkpoint.ts`), each logged
 at debug. Neither waits on a reader or a writer, and the run host's connection asks for neither. Measured on their first
 execution: the starvation the SQLite page names is real on this two-connection shape (with the run host holding a read
 snapshot, PASSIVE copied fewer frames than the log held, and all of them once the read ended); TRUNCATE beside a writer

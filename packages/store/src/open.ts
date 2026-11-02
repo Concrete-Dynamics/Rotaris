@@ -48,7 +48,7 @@ export class StoreOpenError extends Error {
  * 4,096-byte page), set by name so that a rebuilt binding with another compiled-in default cannot change it unnoticed: the
  * run host commits at the publish path's rate and its connection is the one that checkpoints during a run. Growth the
  * automatic checkpoint cannot stop — a reader holding an old snapshot keeps the log from being reset — is the workspace
- * service's idle checkpoint's (`checkpoint.ts`).
+ * service's idle checkpoint's (`wal-checkpoint.ts`).
  */
 export const WAL_AUTOCHECKPOINT_PAGES = 1000;
 

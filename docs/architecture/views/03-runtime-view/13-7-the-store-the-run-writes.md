@@ -30,7 +30,7 @@ what it finds. The run host's open asks nothing. Every writable open, the run ho
 `journal_mode = WAL`, `wal_autocheckpoint = 1000` (`WAL_AUTOCHECKPOINT_PAGES`) and `foreign_keys = ON`, and sets `synchronous = NORMAL`
 and `busy_timeout = 5000`; `durableTransaction` raises `synchronous` to FULL around a terminal save and an explicit flush only
 (ADR-0058, spikes/power-loss.md). The service adds a PASSIVE checkpoint once its connection has had no request for 30 s and a
-TRUNCATE, with the busy timeout at 0, on its orderly close (`checkpoint.ts`, logged at debug; hardening C1).
+TRUNCATE, with the busy timeout at 0, on its orderly close (`wal-checkpoint.ts`, logged at debug; hardening C1).
 Every scan of the workspaces root skips dot-prefixed entries. While the service's own restore is in flight its opens skip the
 first check and refuse rather than create beside the journal. A workspace path or `.rotaris` that is a file is refused first
 (`workspace.not-a-folder`), then an identifier that cannot be read or reached (`workspace.identifier-unreadable`, REQ-SESSION-197),

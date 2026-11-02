@@ -144,66 +144,6 @@ so the pipeline verifies with the updater's own verifier and key set. `.github/w
 process view is unchanged, because nothing the product runs, sends or stores moved. No package, edge, process,
 message, channel or ownership changed.
 
-**The release feed names `Concrete-Dynamics/Rotaris` (O-5 re-ruled by R-078, REQ-STARTUP-105; 2026-10-21).**
-`02-process-view.md`'s FEED node now reads `api.github.com/repos/Concrete-Dynamics/Rotaris/releases/latest`, the endpoint
-`FEED_REPOSITORY` (`apps/desktop/src/main/updater/feed.ts`) names since this repository became the product's public home.
-The request, its timeout, its header and who makes it are unchanged, so no package, edge, process, message, channel or
-ownership changed. The README's date stays 2026-10-21.
-
-**A reader of the saved configuration keeps its answer while every file it read is unchanged (REQ-SANDBOX-038/118;
-2026-10-21).** `03-runtime-view.md`'s `fetch` paragraph, its "one per-call read" item and the requirements reader's sentence
-now say that the egress reader and the queue's reader go through `readSavedConfiguration` (`packages/config/src/saved-read.ts`):
-a full load when a file the last load opened or looked for has changed (modification time, size, file id) or the environment
-has, otherwise that load's answer after one `stat` of each, so a saved edit still reaches the next read. The answer carries no
-tool servers. `04-seams.md`'s tool-seam rule names the reader a per-call read goes through. The kept answer is each process's own memory, not a fact another process owns, so no ownership, package, edge,
-process, message or channel changed. The README's date stays 2026-10-21.
-
-**A PATH lookup lists each directory once and keeps the listing while the directory's time holds (REQ-MCP-037; 2026-10-20).**
-`findExecutable` (`packages/platform/src/spawn.ts`) no longer `stat`s every PATH directory under every PATHEXT extension: it
-reads each directory's names, keeps them in memory in whichever process asks while the directory's modification time is
-unchanged, and `stat`s only a name the listing holds. The lookup's answer is unchanged, so no view states anything new: none
-of them described the lookup's cost, and the cache is the calling process's own memory, not a fact another process owns.
-No package, edge, process, message or channel changed. The README's date stays 2026-10-21.
-
-**Guard (2) and gate (2) at the window's own project, and at the update's closes (OQ-361 ruled 2026-10-20, `PD-SHELL-009`
-revision 3; REQ-SHELL-119, REQ-SHELL-021, REQ-STARTUP-053, REQ-WORKSPACE-012, REQ-NOTIFY-056, REQ-NOTIFY-057; loc1,
-`loc1-guard-2`; 2026-10-21).** `02-process-view.md`'s close-guard paragraph now says guard (2) asks about the closing window's
-own workspace while another main window stays (never refusing a window that holds none) and about the instance at the last
-window, reads main's own record of an integration — never a binding's `merge_status` or REQ-GIT-128's lock — and allows with a
-`warn` line when the record cannot be read; its `workspace.choose` paragraph says gate 2 is asked for the requesting window's
-workspace, a window holding none passing; its `update.install` / `update.restart` paragraph adds guard (2) after the
-unsaved-settings guard, at the click and at the hand-off. `06-sequences.md`'s update sequence draws `integrationAllows` between
-the unsaved-settings guard and the run box at the click, before the successor's start and in `beforeApply`, with a paragraph
-saying why. OQ-361 is named as ruled in both. Main still reads `noWorktreeIntegration`, so nothing a view draws refuses in this
-build.
-
-**The product's own project file for a rename no project file covers (PD-MCP-004 revision 2, OQ-362; loc1, `loc1-rename`).**
-`03-runtime-view.md`'s PD-MCP-004 paragraph now states clause 5 as built: for a rename whose declaring file the runtime serves
-with its TypeScript language and no `tsconfig.json` or `jsconfig.json` covers up to the executor's root, the MCP executor places a
-`jsconfig.json` of the product's own at that root before the search and removes it in the call's `finally`, under a per-root count
-on `McpHost`, with leftovers removed at each run start (`prepare`) or adopted by the next rename, and every placement and removal
-noted in the write journal under a name no agent bears; the paragraph's "OQ-362, open" is replaced. `04-seams.md`'s bullet on
-requests the run host makes on its own gains the file's path through the manifest's `projectFiles` (`projectFileRefusals`,
-`codeIntelligenceProjectFile`). `02-process-view.md`'s files-on-disk table gains `<project root>/jsconfig.json`, written and removed
-by the run host's MCP executor and read by the bundled runtime's TypeScript language server. `01-component-view.md`'s manifest
-paragraph gains `projectFiles` and the bytes constant beside `warmUps`; no edge changed.
-
-**The window's kill of a soft-paused command with a call waiting behind it (REQ-SHELL-092, OQ-164; 2026-10-21, loc1's review).** `02-process-view.md`'s live-terminal paragraph now states that a call waiting behind the killed soft-paused command reports the kill and reads as never having run, with no exit code. No package, edge, process, message or channel changed.
-
-**The claim over a named pipe, pinned on Windows (2026-10-21; the Windows ARM64 session's C6).** `06-sequences.md`'s launch sequence names the Windows endpoint and the test that now pins its order there: `instance-order.test.ts` gained four `it.runIf(win32)` cases. No product code changed.
-
-**Every route into a child's turn pinned past 100 model steps (PD-ORCH-017, REQ-ORCH-088, REQ-ORCH-112; loc1, `loc1-step-belt`; 2026-10-21).** `03-runtime-view.md` §3's step-belt clause now says where every child turn is built (`IterationChildren.execute`'s `turn` closure, `maxStepsPerTurn: null`), which routes reach it (REQ-ORCH-088's retry on the role's fallback among them, pinned in `ladder.test.ts`), and that only the root's turn takes `RunConfig.maxStepsPerTurn`. Tests and the record only: no code changed (`docs/archive/defects/the-final-step-belt-ends-a-working-child-as-succeeded-with-no-final-response.md`). No package, edge or process changed.
-
-**A Windows session's end, observed simulated (2026-10-21; the Windows ARM64 session's C5).** `02-process-view.md`'s "not yet observed on a Windows host" for `SessionEndShutdown` is kept, with the simulated logoff beside it: the two end-session messages sent to the application's own windows ran the orderly shutdown, exit 0 in 0.9–1.9 s, the store as PD-ORCH-005 clause 23 wants; a real logout is still unobserved, and Windows' allowance against the 30 s bounds is OQ-402. No code changed.
-
-**A `workspace.opened` reply that never comes is handled, never an unhandled rejection in main (plan `loc1`,
-`main-rejection`; W-18, ADR-0002 consequence 11, REQ-WORKSPACE-141; OQ-386).** `06-sequences.md` §1 draws the hand-off to
-the run host as `handOffOpenedWorkspace`, bounded at 5 s. Its `alt` schedules the open's slot on `workspace.ack` alone. A reply
-missed within the bound is one warning line, and the window keeps its workspace. A new paragraph says why: `main()` awaits the
-launch, so a rejected open ended main's start-up. Any other rejection of the launch's open now leaves the window standing
-with no workspace open. The paragraph also names the open note on the run host's skill discovery, which runs before the reply
-is posted. No other view changed: no message kind, channel or owner moved.
-
 ## Older entries
 
 Until 2026-10-26 every entry stood in this one file, 3,697 lines by then. The entries before 2026-10-16 were moved
@@ -214,6 +154,7 @@ with the next number, and its row goes at the top of this table.
 
 | Part | "Last reconciled" dates it carries | Its newest entry |
 |---|---|---|
+| [16](reconciliation-log/16.md) | — | The release feed names `Concrete-Dynamics/Rotaris` (O-5 re-ruled by R-078, REQ-STARTUP-105; 2026-10-21). |
 | [15](reconciliation-log/15.md) | — | A retrospective's refusals as built under PD-LIBRARY-002 revision 6 (OQ-363; 2026-10-20). |
 | [14](reconciliation-log/14.md) | 2026-10-19, 2026-10-18 | The handoff — one closing shape (2026-10-19). |
 | [13](reconciliation-log/13.md) | 2026-10-16 | Windows MCP shutdown preserves the runner until its server closes (R-074, REQ-MCP-066/067/113). |

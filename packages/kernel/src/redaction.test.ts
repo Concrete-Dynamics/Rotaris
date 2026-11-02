@@ -111,6 +111,9 @@ describe('the pass at size (REQ-HOOKS-139, found on first execution)', () => {
     const started = process.hrtime.bigint();
     expect(redact(text)).toBe(text);
     expect(redact(`${'x:'.repeat(50_000)}token=s`)).toBe(`${'x:'.repeat(50_000)}token=***`);
-    expect(Number(process.hrtime.bigint() - started) / 1e6).toBeLessThan(100);
+    // The bound separates linear from quadratic, not fast from slow: the quadratic form took 3.8 s here, the linear one
+    // about 40 ms warm, and 126 to 185 ms cold on a host at 100 % CPU with two other trees' gates running (2026-11-02),
+    // which a 100 ms bound failed one run in three.
+    expect(Number(process.hrtime.bigint() - started) / 1e6).toBeLessThan(1_000);
   });
 });

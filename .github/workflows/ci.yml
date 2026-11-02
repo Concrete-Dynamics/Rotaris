@@ -2,7 +2,8 @@
 #
 # Every push to a branch and every pull request runs two jobs on a Windows x64 runner:
 #
-#   gate     `pnpm check` — symbols, typecheck, lint, tests: the commit gate of AGENTS.md
+#   gate     `pnpm check` — symbols, typecheck, lint, tests: the commit gate of AGENTS.md; then `pnpm req-coverage`'s
+#            summary on the run's page (R-092)
 #   package  `pnpm package` — the code-intelligence runtime for win32-x64 (ADR-0035), the native bindings rebuilt and
 #            load-proved under the shipped Electron, the installer named by tools/release-naming (REQ-STARTUP-031), and
 #            the packaged app launched once against a loopback stub model (ADR-0056 rule 4 (b)); the installer is
@@ -87,6 +88,18 @@ jobs:
 
       - name: pnpm check
         run: pnpm check
+
+      # The requirement coverage summary on the run's page (R-092, docs/architecture/hardening.md §6): report-only.
+      # The ratchet on the uncited, `pnpm req-coverage --check`, already ran inside `pnpm check`'s lint.
+      - name: Requirement coverage summary
+        shell: pwsh
+        run: |
+          '## Requirement coverage' >> $env:GITHUB_STEP_SUMMARY
+          '' >> $env:GITHUB_STEP_SUMMARY
+          '```text' >> $env:GITHUB_STEP_SUMMARY
+          pnpm --silent req-coverage >> $env:GITHUB_STEP_SUMMARY
+          if ($LASTEXITCODE -ne 0) { throw "pnpm req-coverage exited $LASTEXITCODE" }
+          '```' >> $env:GITHUB_STEP_SUMMARY
 
   package:
     name: package (windows-x64, development)

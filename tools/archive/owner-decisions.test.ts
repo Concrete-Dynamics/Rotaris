@@ -60,6 +60,7 @@ const FIXTURE: Record<string, string> = {
   'docs/spec/01-domain.md': [
     '# Domain',
     '',
+    // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
     '**REQ-X-1** — Comments are preserved. *Amended 2026-09-01 under ESC-1.*',
     '',
     'The round applied ESC-4, ESC-5 and ESC-7 to ESC-8. ESC-2 is still unmade.',
@@ -136,8 +137,11 @@ describe('owner decisions — what qualifies', () => {
   });
 
   it('reads a ruling the specification carries as a directive, by its back-pointer', () => {
+    // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
     write(root, { 'docs/spec/01-domain.md': `${read('docs/spec/01-domain.md')}\nREQ-X-2 is narrowed by PD-X-001.\n` });
+    // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
     const entry = { ids: ['ESC-2'], body: '**Ruled 2026-10-06:** the built behaviour is kept, by [`PD-X-001`](x.md).' };
+    // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
     expect(hasLanded(entry, specificationCarries(root))).toEqual({ landed: true, evidence: ['ESC-2: its ruling is PD-X-001, which the specification names'] });
   });
 });

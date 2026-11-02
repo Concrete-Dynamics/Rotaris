@@ -245,7 +245,7 @@ describe('requirement coverage — --since and --drift over a fixture repository
   /** A commit needs an author, and the operator's own configuration may ask for a signature this test cannot make. */
   const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@invalid', '-c', 'commit.gpgsign=false'];
   /** Without the variables an enclosing git process sets (a hook running `pnpm check`), which would aim at this repository. */
-  const ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !(REDIRECTING as readonly string[]).includes(k)));
+  const ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !REDIRECTING.includes(k)));
   let root = '';
   const git = (args: string[], date?: string): string => {
     const env = date ? { ...ENV, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } : ENV;

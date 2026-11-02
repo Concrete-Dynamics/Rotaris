@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (36 of 36)
 
-Part 69 of 69 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-468, OQ-477, OQ-491; OQ-460 – OQ-467 archived in [the archive](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md).
+Part 69 of 69 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-468, OQ-477, OQ-490, OQ-491; OQ-460 – OQ-467 archived in [the archive](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md).
 
 - OQ-460 — May clause (4)'s second hand-over wait an interval of its own?; ruled 2026-11-01; [archived](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-460)
 - OQ-461 — What does a launch end as when the holder is live and never answers?; ruled 2026-11-01; [archived](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-461)
@@ -30,6 +30,16 @@ Part 69 of 69 of the [open-questions record](../open-questions.md), which indexe
 **What the build proceeds under.** The refusal is held and raised as an error notice with no action. Its detail says the store was left as it was found, its write-ahead log included, and that no session starts until it is resolved. It names no remedy the product cannot perform. The person resolves it by hand. A copy may be taken and repaired outside the product; and once the store is moved out of its place by hand, the place reads as REQ-SESSION-202's empty place, where Settings › Project admits the restore and the new store (OQ-281).
 
 **What decides it.** A ruling on which of the ladder's steps, and whether the restore, are offered while the refusal is held; what the restore's assessment reports for a target that fails the check; and the notice's action.
+
+<a id="oq-490"></a>
+
+**OQ-490 — Does R-092's "superseded requirements" ask for more than the text beyond a definition line, which is none?** *(R-092, REQ-TRACE-181, `docs/architecture/hardening.md` §6 row 6, `AGENTS.md` "When the owner asks for something". Raised 2026-11-02 by hrd2's bundle I3, building the archive's specification kind.)*
+
+**What is open.** R-092 named superseded requirements among the history to archive, and its classification fixed what stays: "a superseded or withdrawn requirement keeps its identifier, its anchor and its definition line in `docs/spec/`, and its text moves verbatim to the archive". The kind (`tools/archive/spec.mjs`) moves the lines beyond a definition's first paragraph, leaving the directive's back-pointer. Its first run over the 275 requirements that qualify (268 withdrawn in place, 7 superseded by a directive) moved nothing: every one of them is wholly its definition line, and the 7 superseded ones are that line and their back-pointer blockquote. The withdrawn ones' reasons (`*Withdrawn.* Its only surface was a terminal-interface modal … carried by REQ-…`) are written on the definition line itself, so the 88,622 bytes those 275 lines hold (2.1% of `docs/spec/`'s 4,167,448) stay where an agent reading a part loads them. Moving a withdrawal's reason would cut a definition line, which edits the specification in place.
+
+**What the build proceeds under.** The kind is built, in `pnpm archive:migrate` and its `--check`: text written under a withdrawn or superseded definition from now on moves on the next run. No line of `docs/spec/` was changed, and the generated artifact is identical.
+
+**What decides it.** A ruling on whether R-092 is met by the guard as built, or wants the withdrawn definition lines shortened to the identifier, the marker and the requirement that carries the capability, the reasoning archived. The second edits `docs/spec/` in place, against the rule `AGENTS.md` states, so it would be the owner's to allow (an escalation), not a ruling under R-072.
 
 <a id="oq-491"></a>
 

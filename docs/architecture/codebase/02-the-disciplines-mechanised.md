@@ -156,7 +156,11 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   corrections that hold only the falsified reason and its struck sentences beside a dated replacement, to
   `docs/archive/architecture/adr/<nnnn>-history.md`, each leaving a `*History: […](…)*` line; `defects.mjs` every repaired
   note under the retired `docs/defects/fixed/`, to `docs/archive/defects/<name>.md`, with every pointer to it in the record,
-  the code, the agent instructions and the root's files. `--check` reads all four.
+  the code, the agent instructions and the root's files. Since 2026-11-02 (I3) a fifth, `spec.mjs`: a withdrawn or
+  superseded requirement's lines beyond its definition paragraph, less its directive back-pointer, to
+  `docs/archive/spec/<NN-domain>/<part>.md`, read from the artifact and sharing the generator's definition shapes
+  (`tools/symbol-artifact/definitions.mjs`); the definition line stays, so `pnpm symbols` is unchanged and never reads
+  the archive. `--check` reads all five.
 - **A whole-session update keeps the transcript rows** — `REQ-MONITOR-216` omits the transcript from it, so
   it cannot say which rows survived; the increment after an attach or a reconcile upserts by index. The
   first run loop's status saves emptied a transcript still being written before this was so (ADR-0043

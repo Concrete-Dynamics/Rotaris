@@ -129,6 +129,12 @@ how any other implementation achieves it.
     is working in, raised by what an isolated plan-mode run hit. It **withdrew no identifier and minted one** — `REQ-TOOLS-193`,
     `git_read`'s two operations, `head` and `read_ref` — so live behavior grew by 1. *(Recorded here 2026-10-13; the
     table and totals above had not counted it, nor REQ-MCP-118.)*
+- Archived text: a withdrawn or superseded requirement's text beyond its definition paragraph is moved verbatim to
+  `docs/archive/spec/` by `pnpm archive:migrate` (R-092; `tools/archive/spec.mjs`), and one
+  `*(Text archived: …)*` line stays under the definition. The definition line, its `*Withdrawn.*` marker and a
+  directive's back-pointer never move, so every identifier stays defined here and every count above holds; the archive
+  defines none, and `pnpm symbols` never reads it. The first run, 2026-11-02, moved nothing: each of the 275 that qualify
+  is wholly its definition line ([OQ-490](../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-490)).
 - Clean-room audit: 6 domains clean, 15 with minor concerns, 0 contaminated — see
   `docs/clean-room/specification-gate.md` *(removed 2026-10-26)*
 

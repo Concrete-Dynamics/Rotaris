@@ -153,7 +153,13 @@ the passages and the evidence):
   it: a link in the record, a root or relative path in its prose (in the request log, links only), a path in the code,
   in `.agents/`, `.claude/`, `.github/` and in the root's own files. `tools/check-record-links.mjs` fails any pointer into
   the retired folder. Two notes of one name stop the run, naming both.
+- **Superseded and withdrawn requirements** (`spec.mjs`, since 2026-11-02). What qualifies is read from the generated
+  artifact (`withdrawn`, `SUPERSEDED_BY`); the lines beyond the definition's first paragraph (continuation paragraphs,
+  sub-bullets, examples) move verbatim to `archive/spec/<NN-domain>/<part>.md` under `<a id="req-x-nnn"></a>`, less the
+  directive's back-pointer, and one `*(Text archived: […](…#req-x-nnn) — withdrawn)*` line stays under the definition.
+  The definition line and its marker never move, so `pnpm symbols` writes the same artifact; it never reads the archive.
+  A requirement that is one line moves nothing, which the first run found true of all 275 (OQ-490).
 
-`--check` reads every kind, so the commit that lands a ruling in the specification, or writes such a correction or strike
+`--check` reads every kind, so the commit that lands a ruling in the specification, withdraws or supersedes a requirement, or writes such a correction or strike
 into an ADR, runs `pnpm archive:migrate` too; a repaired note is moved straight to `archive/defects/`, and one moved to
 the retired folder from habit fails `--check` until the script moves it.

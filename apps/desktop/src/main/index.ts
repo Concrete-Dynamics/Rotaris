@@ -55,7 +55,7 @@ import { requirementsCommands } from './commands/requirements.js';
 import { sessionCommands } from './commands/session.js';
 import { dictationCommands } from './commands/dictation.js';
 import { installPermissionHandlers, type ApplicationPages } from './permissions.js';
-import { installWebContentsGuard, type GuardedApp } from './web-contents-guard.js'; // R-091, OQ-466
+import { installWebContentsGuard } from './web-contents-guard.js'; // R-091, OQ-466
 import { dispatchCommand } from './command-dispatch.js'; // R-091: nothing throws out of runCommand (ADR-0019)
 import { refuseCommandSender } from './command-sender.js'; // R-091: who may send a command (checklist 17)
 import { shellCommands } from './commands/shell.js';
@@ -168,7 +168,7 @@ const applicationPages: ApplicationPages = {
 };
 // R-091 (Electron security checklist 12 to 14): no page navigates its window away from the application, opens a window or
 // attaches a webview. Registered before `app.whenReady()`, so every web contents is guarded from its first navigation.
-installWebContentsGuard(app as unknown as GuardedApp, applicationPages, (m) => { log(m, 'warn'); });
+installWebContentsGuard(app, applicationPages, (m) => { log(m, 'warn'); });
 // R-091 (Electron security checklist 4): every renderer is sandboxed by the application, not by each window's
 // `webPreferences` alone; each window still states `sandbox: true`. Only callable before the app is ready.
 app.enableSandbox();

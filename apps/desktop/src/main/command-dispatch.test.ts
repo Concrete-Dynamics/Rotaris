@@ -31,6 +31,7 @@ describe('the dispatcher catches what a handler throws (ADR-0019, .claude/rules/
     expect(lines[0]!.message).not.toContain('payload-marker');
   });
   it('answers a handler whose promise rejects the same way, a non-Error reason included', async () => {
+    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- the case is a reason that is not an Error, on purpose.
     const { d } = deps({ 'theme.get': () => Promise.reject('plain reason') });
     await expect(dispatchCommand({ kind: 'theme.get' }, 7, d)).resolves.toEqual({ ok: false, code: 'command.failed', headline: 'The command failed', detail: 'plain reason' });
   });

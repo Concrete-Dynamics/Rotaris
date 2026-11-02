@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { ApplicationPages } from './permissions.js';
-import { guardWebContents, installWebContentsGuard, type GuardedApp, type GuardedContents } from './web-contents-guard.js';
+import { guardWebContents, installWebContentsGuard, type GuardedContents } from './web-contents-guard.js';
 
 const OWN: ApplicationPages = { rendererIndex: '/opt/rotaris/out/renderer/index.html', devServerUrl: undefined, platform: 'linux' };
 const PAGE = 'file:///opt/rotaris/out/renderer/index.html';
@@ -79,7 +79,7 @@ describe('the web-contents guard (Electron security checklist 12, 13, 14; OQ-466
   it('guards every web contents the application builds, from the one registration', () => {
     const app = new EventEmitter();
     const warnings: string[] = [];
-    installWebContentsGuard(app as unknown as GuardedApp, OWN, (m) => warnings.push(m));
+    installWebContentsGuard(app, OWN, (m) => warnings.push(m));
     const first = new FakeContents();
     const second = new FakeContents();
     app.emit('web-contents-created', {}, first);

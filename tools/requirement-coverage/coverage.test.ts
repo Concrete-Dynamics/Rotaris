@@ -389,3 +389,39 @@ describe('requirement coverage — the ratchet on the uncited (--check; ReqToCod
     }
   });
 });
+
+describe('requirement coverage — the tree the ratchet reads (readTree over a fixture repository)', () => {
+  const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@invalid', '-c', 'commit.gpgsign=false'];
+  const ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !(REDIRECTING as readonly string[]).includes(k)));
+  let root = '';
+  const git = (args: string[]): string => {
+    const r = spawnSync('git', ['-C', root, ...IDENTITY, ...args], { encoding: 'utf8', env: ENV });
+    if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`);
+    return r.stdout.trim();
+  };
+  const put = (rel: string, text: string) => { mkdirSync(dirname(join(root, rel)), { recursive: true }); writeFileSync(join(root, rel), text); };
+  const req = (n: string, line: number) =>
+    `  'REQ-DEMO-${n}': { id: 'REQ-DEMO-${n}', domain: 'DEMO', file: 'd.md', line: ${line}, withdrawn: false },\n`;
+
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'rotaris-coverage-tree-'));
+    git(['init', '-q']);
+    put('.gitignore', 'packages/kernel/src/generated/\npackages/a/src/ignored.ts\n');
+    put('packages/kernel/src/generated/requirements.ts', `export const REQ = {\n${req('001', 3)}${req('002', 4)}${req('003', 5)}};\nexport const PD = {};\n`);
+    put('docs/spec/d.md', '# D\n\n- **REQ-DEMO-001** — one\n- **REQ-DEMO-002** — two\n- **REQ-DEMO-003** — three\n');
+    put('packages/a/src/x.ts', '// REQ-DEMO-001\n');
+    git(['add', '-A']);
+    git(['commit', '-q', '-m', 'base']);
+    // Not yet added: a new test citing 002, as a commit about to be made holds it; an ignored file citing 003.
+    put('packages/a/src/new.test.ts', '// REQ-DEMO-002\n');
+    put('packages/a/src/ignored.ts', '// REQ-DEMO-003\n');
+  });
+  afterAll(() => { rmSync(root, { recursive: true, force: true }); });
+
+  it('reads untracked files as the commit will hold them, and never an ignored one', async () => {
+    const report = buildReport(await readTree(root));
+    const status = Object.fromEntries(report.rows.map((r: { id: string; status: string }) => [r.id, r.status]));
+    expect(status).toEqual({ 'REQ-DEMO-001': 'implementation-only', 'REQ-DEMO-002': 'tested', 'REQ-DEMO-003': 'uncited' });
+    expect(baselineOf(report.rows).domains).toEqual({ DEMO: { uncited: 1, requirements: ['REQ-DEMO-003'] } });
+  });
+});

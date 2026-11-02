@@ -1,6 +1,6 @@
 # Design research — how interfaces are designed well, and how this one is
 
-**Version:** 0.1 (scaffold)
+**Version:** 1.0
 **Prepared:** 2026-11-01, for the owner's request of that day (`docs/product/requests.md`, the design-system overhaul)
 **Review date:** 2026-11-01
 **Format:** fourteen guides, this index, a reference catalogue and a ranked backlog.
@@ -15,20 +15,20 @@ This corpus is **guidance, never authority**. It informs craft within [`docs/des
 
 | Guide | Scope | Status | Used by |
 |---|---|---|---|
-| [01 How AI design tools design applications](01-how-ai-design-tools-design.md) | how generative design tools decompose a brief, what they pin, how to brief an agent for design, why generated interfaces converge | planned | `design-ui` brief; rubric D1 |
-| [02 The generated look and its counter-moves](02-the-generated-look-and-its-counter-moves.md) | the tells of a generated interface, each with the counter-move the adopted language already states | planned | rubric D1, C5; audit |
-| [03 Information architecture within a fixed structure](03-information-architecture-within-a-fixed-structure.md) | what remains to design when screens, order, tabs and labels are fixed | planned | brief §3; audit; rubric O1, O2 |
-| [04 The agent operator's journeys](04-the-agent-operator-journeys.md) | job stories and task flows of a developer operating agents, across the seven views | planned | brief §2; rubric F1; audit |
-| [05 Interaction patterns for desktop tools](05-interaction-patterns-for-desktop-tools.md) | palette, keyboard, panes, dense lists, selection, inline edit, undo — as patterns | planned | brief §5; rubric C4, D3 |
-| [06 UX patterns for agent products](06-ux-patterns-for-agent-products.md) | streaming, tool calls, approvals, trust, interruption, cost, attribution | planned | brief §2, §5; rubric F1, F2 |
-| [07 Visual composition beyond tokens](07-visual-composition-beyond-tokens.md) | hierarchy, rhythm, alignment, grouping, density, earned surfaces, colour as signal | planned | rubric C1–C9, D2; `build-ui` |
-| [08 Platform conventions for Electron](08-platform-conventions-for-electron.md) | chrome, menus, dialogs, scrollbars, DPI, focus, system theme on three platforms | planned | brief §5; rubric F3 |
-| [09 Accessibility for a dense desktop tool](09-accessibility-for-a-dense-desktop-tool.md) | WCAG 2.2 AA mapped onto REQ-SHELL-144..168 | planned | brief §7; rubric F3 |
-| [10 UX writing](10-ux-writing.md) | labels, empty states, errors, confirmations, progress, in the adopted voice | planned | brief §6; rubric F4 |
-| [11 Design critique and evaluation](11-design-critique-and-evaluation.md) | heuristics, walkthroughs, severity, taste against defect, critique over a pack | planned | the rubric's provenance; `review-ui` |
-| [12 Design-system governance and drift](12-design-system-governance-and-drift.md) | tokens as contract, lint as governance, review dates, why copies drift | planned | this file; `build-ui` step 3 |
-| [13 States, feedback and time](13-states-feedback-and-time.md) | the states matrix, timing thresholds, acknowledgement against notice, undo windows | planned | brief §4; rubric F2, C9 |
-| [14 How a surface gives way](14-how-a-surface-gives-way.md) | the minimum size and the compact thresholds; bounding the box, not the child | planned | brief §8; rubric D4; `build-ui` step 8 |
+| [01 How AI design tools design applications](01-how-ai-design-tools-design.md) | how generative design tools decompose a brief, what they pin, how to brief an agent for design, why generated interfaces converge | written | `design-ui` brief; rubric D1 |
+| [02 The generated look and its counter-moves](02-the-generated-look-and-its-counter-moves.md) | the tells of a generated interface, each with the counter-move the adopted language already states | written | rubric D1, C5, C8, O1; audit |
+| [03 Information architecture within a fixed structure](03-information-architecture-within-a-fixed-structure.md) | what remains to design when the primary views, their order, tabs and labels are fixed | written | brief §3; audit; rubric O1, O2 |
+| [04 The agent operator's journeys](04-the-agent-operator-journeys.md) | job stories and task flows of a developer operating agents, across the seven views | written | brief §2; rubric F1; audit |
+| [05 Interaction patterns for desktop tools](05-interaction-patterns-for-desktop-tools.md) | palette, keyboard, panes, dense lists, selection, inline edit, undo — as patterns | written | brief §5; rubric C4, D3 |
+| [06 UX patterns for agent products](06-ux-patterns-for-agent-products.md) | streaming, tool calls, approvals, trust, interruption, cost, attribution | written | brief §2, §5; rubric F1, F2 |
+| [07 Visual composition beyond tokens](07-visual-composition-beyond-tokens.md) | hierarchy, rhythm, alignment, grouping, density, earned surfaces, colour as signal | written | brief §8; rubric C1–C9, D2, O2; `build-ui` |
+| [08 Platform conventions for Electron](08-platform-conventions-for-electron.md) | chrome, menus, dialogs, scrollbars, DPI, focus, system theme on three platforms | written | brief §5; rubric F3 |
+| [09 Accessibility for a dense desktop tool](09-accessibility-for-a-dense-desktop-tool.md) | WCAG 2.2 AA mapped onto REQ-SHELL-144..168 | written | brief §7; rubric F3 |
+| [10 UX writing](10-ux-writing.md) | labels, empty states, errors, confirmations, progress, in the adopted voice | written | brief §6; rubric F4, C7 |
+| [11 Design critique and evaluation](11-design-critique-and-evaluation.md) | heuristics, walkthroughs, severity, taste against defect, critique over a pack | written | the rubric's provenance; `review-ui` |
+| [12 Design-system governance and drift](12-design-system-governance-and-drift.md) | tokens as contract, lint as governance, review dates, why copies drift | written | this file; `build-ui` step 3 |
+| [13 States, feedback and time](13-states-feedback-and-time.md) | the states matrix, timing thresholds, acknowledgement against notice, undo windows | written | brief §4; rubric F2, C9 |
+| [14 How a surface gives way](14-how-a-surface-gives-way.md) | the minimum size and the compact thresholds; bounding the box, not the child | written | brief §8; rubric D4; `build-ui` step 8 |
 
 The guides are numbered once and never renumbered; a later guide takes the next number. The [backlog](backlog.md) ranks what the guides' section 8 and §4.2 of the design README propose; the [reference catalogue](REFERENCES.md) deduplicates every source.
 
@@ -36,7 +36,7 @@ The guides are numbered once and never renumbered; a later guide takes the next 
 
 | Stage | Skill | Reads | Writes |
 |---|---|---|---|
-| before a surface is drawn | `design-ui` brief (`.agents/skills/design-ui/SKILL.md`) | guides 03, 04, 05, 06, 08, 09, 10, 13, 14; the brief template | `docs/design/briefs/<slug>.md` (`proposed`) |
+| before a surface is drawn | `design-ui` brief (`.agents/skills/design-ui/SKILL.md`) | guides 03, 04, 05, 06, 07, 08, 09, 10, 13, 14; the brief template | `docs/design/briefs/<slug>.md` (`proposed`) |
 | while drawing | `build-ui` | the rubric's "while building" column; guide 07 | the surface |
 | after drawing | `review-ui` | the rubric | `critique.json` (not committed), the handoff |
 | overhauling a built surface | `design-ui` audit | the rubric; guides 02, 04 | `## Audit` in the surface's brief |

@@ -2,8 +2,9 @@
 #
 # Every push to a branch and every pull request runs two jobs on a Windows x64 runner:
 #
-#   gate     `pnpm check` — symbols, typecheck, lint, tests: the commit gate of AGENTS.md; then `pnpm req-coverage`'s
-#            summary on the run's page (R-092)
+#   gate     `pnpm deps:audit` — `pnpm audit --prod --audit-level=high` over the production tree, blocking (R-091,
+#            docs/architecture/hardening.md §3.5); then `pnpm check` — symbols, typecheck, lint, tests: the commit gate
+#            of AGENTS.md; then `pnpm req-coverage`'s summary on the run's page (R-092)
 #   package  `pnpm package` — the code-intelligence runtime for win32-x64 (ADR-0035), the native bindings rebuilt and
 #            load-proved under the shipped Electron, the installer named by tools/release-naming (REQ-STARTUP-031), and
 #            the packaged app launched once against a loopback stub model (ADR-0056 rule 4 (b)); the installer is
@@ -25,7 +26,15 @@
 #
 # Hardening for a public repository: third-party actions pinned by full commit SHA (the tag in the comment), the token
 # read-only, `pull_request` and never `pull_request_target`, no secret referenced anywhere, checkout without persisted
-# credentials, and a superseded run of the same branch or pull request cancelled.
+# credentials, and a superseded run of the same branch or pull request cancelled. tools/workflows.test.ts holds these
+# rules for every file in .github/workflows/.
+#
+# Static analysis is codeql.yml's (R-091), not a job here. The audit's exceptions: a known advisory that has been read is
+# excepted by its GHSA id under `auditConfig.ignoreGhsas` in pnpm-workspace.yaml, each entry with a comment naming its
+# reading in docs/architecture/dependency-alerts/ — never `--ignore` on this command line, never a silent ignore.
+# `--prod` reads `dependencies` alone, and Electron, the runtime the product ships, is a devDependency of
+# apps/desktop (electron-builder's convention), as are the build tools; the whole tree is therefore audited too, in a
+# step that reports and does not block (docs/architecture/dependency-alerts/2026-11-01-audit-gate.md).
 name: CI
 
 on:
@@ -83,6 +92,23 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # R-091: a production dependency inside a high or critical advisory's range fails the gate. The script is
+      # `pnpm audit --prod --audit-level=high` (root package.json); exceptions as the header says.
+      - name: Dependency audit (production, high and above)
+        run: pnpm deps:audit
+
+      # The whole tree, Electron and the build tools included, for the log and the run's summary only: the report is
+      # written to $GITHUB_STEP_SUMMARY, and a red here marks the step and never fails the job.
+      - name: Dependency audit (whole tree, report only)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $report = pnpm audit --audit-level=high 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          Write-Output $report
+          "## Dependency audit, whole tree (report only)`n`n``````text`n$report`n``````" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          exit $code
+
       - name: Electron runtime
         run: node node_modules/electron/install.js
 
@@ -100,6 +126,10 @@ jobs:
           pnpm --silent req-coverage >> $env:GITHUB_STEP_SUMMARY
           if ($LASTEXITCODE -ne 0) { throw "pnpm req-coverage exited $LASTEXITCODE" }
           '```' >> $env:GITHUB_STEP_SUMMARY
+
+      # TODO(F1, hardening.md §5 lane 5): bundle F1 adds `pnpm test:coverage` (@vitest/coverage-v8). When it has landed,
+      # a step here runs it, uploads coverage/ with actions/upload-artifact (SHA-pinned, as below) and writes the text
+      # summary to $GITHUB_STEP_SUMMARY. It had not landed when this step list was written (2026-11-01).
 
   package:
     name: package (windows-x64, development)

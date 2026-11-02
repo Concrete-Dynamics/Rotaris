@@ -82,6 +82,11 @@ lives in `tools/release-naming`. What the build decided and found:
 installer uploaded as a workflow artifact. It is not this section's workflow: it never runs on a tag, runs no guard,
 writes no manifest and creates no release, and holds a read-only token. Everything below stays owed as written.*
 
+*2026-11-01 ([R-091](../../product/requests.md#r-091), [`hardening.md`](../hardening.md) §3.5 row 10): `ci.yml`'s `gate` job runs
+`pnpm deps:audit` (`pnpm audit --prod --audit-level=high`, blocking) before `pnpm check`, and the whole tree's audit
+beside it without blocking; `.github/workflows/codeql.yml` analyses the code on push to main, pull requests and weekly.
+Neither is this section's workflow nor a release gate (REQ-STARTUP-156 is unchanged).*
+
 **4.2 The tag workflow.** `.github/workflows/release.yml` does not exist yet. It is triggered only by tags
 matching REQ-STARTUP-027's grammar. Channel classification follows REQ-STARTUP-029. The stages, each failing
 the release on its own:

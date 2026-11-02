@@ -1,0 +1,68 @@
+# Static analysis — CodeQL (R-091, docs/product/requests.md#r-091; docs/architecture/hardening.md §3.5).
+#
+# GitHub's CodeQL reads the repository's JavaScript and TypeScript (`javascript-typescript`, build mode `none`: the
+# extractor reads the sources, nothing is built) with the `security-and-quality` query suite, on every push to main,
+# every pull request, and once a week, so a query added upstream reaches code that has not changed. The results are
+# uploaded to the repository's code-scanning alerts.
+#
+# What this workflow is NOT:
+#   - not a gate the landing waits on. The repository's gate is `pnpm check` on the landing head (AGENTS.md;
+#     docs/clean-room/agent-workflow.md), and a landing never waits for this run. Its findings are read like Dependabot's
+#     alerts: each one taken to the code it names and triaged, a reading in docs/architecture/dependency-alerts/ for a
+#     dependency's, a defect note in docs/defects/ for the product's own (docs/defects/README.md). A finding is a lead,
+#     not a verdict; dismissing an alert in GitHub is the repository owner's act.
+#   - not a build: nothing is packaged, launched or signed, and no proof runs here (R-079).
+#
+# Hardening, as in ci.yml (tools/workflows.test.ts holds it): actions pinned by full commit SHA (the tag in the comment),
+# `contents: read` at the top, the one write — `security-events: write`, to upload the results — granted to the one job
+# that analyses, `pull_request` and never `pull_request_target`, no secret referenced, checkout without persisted
+# credentials, and a superseded run of the same branch or pull request cancelled.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Mondays 05:17 UTC.
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-and-quality
+          # Not judged: the requirement symbols (written by `pnpm symbols`, git-ignored), docs/ (the design mockup's
+          # scripts are reference material, docs/design/README.md §2) and the unit tests, whose fixtures are hostile
+          # inputs on purpose (a redaction case holds a key's shape, a fence case a traversal).
+          config: |
+            paths-ignore:
+              - packages/kernel/src/generated
+              - docs
+              - '**/*.test.ts'
+
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:javascript-typescript

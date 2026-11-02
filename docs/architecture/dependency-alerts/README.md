@@ -49,3 +49,4 @@ only with the pull request.
 | File | Read against | Alerts | What it reads |
 | --- | --- | --- | --- |
 | [`2026-10-22-dependabot-triage.md`](2026-10-22-dependabot-triage.md) | `b0d1b3ff` | 51 open | the first pass (R-081): each alert's resolved copy, path and reach; two pull requests (patches; Electron); two residuals |
+| [`2026-11-01-audit-gate.md`](2026-11-01-audit-gate.md) | `9b0b5858` | `pnpm audit`, not the alerts | CI's blocking production audit's first run (R-091): 5 high in `zod`, `undici`, `fast-uri`, patched; what `--prod` does not see (the shipped Electron); how an exception is written |

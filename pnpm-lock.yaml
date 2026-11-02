@@ -43,8 +43,8 @@ catalogs:
       specifier: ^2.9.0
       version: 2.9.0
     zod:
-      specifier: ^4.5.4
-      version: 4.5.4
+      specifier: ^4.6.6
+      version: 4.6.7
     zustand:
       specifier: ^5.0.15
       version: 5.0.15
@@ -127,7 +127,7 @@ importers:
         version: 19.2.8(react@19.2.8)
       zod:
         specifier: 'catalog:'
-        version: 4.5.4
+        version: 4.6.7
       zustand:
         specifier: 'catalog:'
         version: 5.0.15(@types/react@19.2.18)(react@19.2.8)
@@ -235,11 +235,11 @@ importers:
         specifier: 'catalog:'
         version: 1.1.0
       undici:
-        specifier: 7.29.1
-        version: 7.29.1
+        specifier: 7.30.1
+        version: 7.30.1
       zod:
         specifier: 'catalog:'
-        version: 4.5.4
+        version: 4.6.7
 
   packages/config:
     dependencies:
@@ -257,7 +257,7 @@ importers:
         version: 2.9.0
       zod:
         specifier: 'catalog:'
-        version: 4.5.4
+        version: 4.6.7
 
   packages/contracts:
     dependencies:
@@ -266,7 +266,7 @@ importers:
         version: link:../kernel
       zod:
         specifier: 'catalog:'
-        version: 4.5.4
+        version: 4.6.7
 
   packages/engine:
     dependencies:
@@ -326,16 +326,16 @@ importers:
     dependencies:
       '@ai-sdk/openai':
         specifier: 4.0.58
-        version: 4.0.58(zod@4.5.4)
+        version: 4.0.58(zod@4.6.7)
       '@ai-sdk/openai-compatible':
         specifier: 3.0.43
-        version: 3.0.43(zod@4.5.4)
+        version: 3.0.43(zod@4.6.7)
       '@rotaris/kernel':
         specifier: workspace:*
         version: link:../kernel
       ai:
         specifier: 7.0.92
-        version: 7.0.92(zod@4.5.4)
+        version: 7.0.92(zod@4.6.7)
 
   packages/platform:
     dependencies:
@@ -1868,8 +1868,8 @@ packages:
   fast-levenshtein@2.0.6:
     resolution: {integrity: sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw==}
 
-  fast-uri@3.1.8:
-    resolution: {integrity: sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==}
+  fast-uri@3.1.9:
+    resolution: {integrity: sha512-hS/0Wt3Ya043oKXs0sIxrMpKQITXhMLIrVAKKXi4gozGC9v7YRWVnXIZzjNPTO02M9BdxLCWqK1yRXgNziVyJQ==}
 
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
@@ -2783,8 +2783,8 @@ packages:
     resolution: {integrity: sha512-zWpdTVD54H48CIybL0rWQ3ukpb9d23wM7eH5RtfdmeP70cWHNjtfo7P4vZX+5CoDcO53J4Pu5uXp7lNfjc6DRA==}
     engines: {node: '>=18.17'}
 
-  undici@7.29.1:
-    resolution: {integrity: sha512-RYONW2MeafgYlkVOKYKkA/Ag7BmXqgIWCa8t1m0JcxrQg9pI9lEqRhAOruOBCbAohOa/gkCF+iPi9hrgvTzu6Q==}
+  undici@7.30.1:
+    resolution: {integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==}
     engines: {node: '>=20.18.1'}
 
   universalify@0.1.2:
@@ -2978,8 +2978,8 @@ packages:
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
 
-  zod@4.5.4:
-    resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
   zustand@5.0.15:
     resolution: {integrity: sha512-MpSEjRiBkA9crSYeOUH32rJC7SVqAbm0Fqcqge/bUi2PPoLcBWKOsG+C8mevmpr8TwXHBVkChbbJiyvkE+i/3A==}
@@ -3001,33 +3001,33 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/gateway@4.0.74(zod@4.5.4)':
+  '@ai-sdk/gateway@4.0.74(zod@4.6.7)':
     dependencies:
       '@ai-sdk/provider': 4.0.10
-      '@ai-sdk/provider-utils': 5.0.36(zod@4.5.4)
+      '@ai-sdk/provider-utils': 5.0.36(zod@4.6.7)
       '@vercel/oidc': 3.2.0
-      zod: 4.5.4
+      zod: 4.6.7
 
-  '@ai-sdk/openai-compatible@3.0.43(zod@4.5.4)':
+  '@ai-sdk/openai-compatible@3.0.43(zod@4.6.7)':
     dependencies:
       '@ai-sdk/provider': 4.0.10
-      '@ai-sdk/provider-utils': 5.0.36(zod@4.5.4)
-      zod: 4.5.4
+      '@ai-sdk/provider-utils': 5.0.36(zod@4.6.7)
+      zod: 4.6.7
 
-  '@ai-sdk/openai@4.0.58(zod@4.5.4)':
+  '@ai-sdk/openai@4.0.58(zod@4.6.7)':
     dependencies:
       '@ai-sdk/provider': 4.0.10
-      '@ai-sdk/provider-utils': 5.0.36(zod@4.5.4)
-      zod: 4.5.4
+      '@ai-sdk/provider-utils': 5.0.36(zod@4.6.7)
+      zod: 4.6.7
 
-  '@ai-sdk/provider-utils@5.0.36(zod@4.5.4)':
+  '@ai-sdk/provider-utils@5.0.36(zod@4.6.7)':
     dependencies:
       '@ai-sdk/provider': 4.0.10
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.1
-      undici: 7.29.1
-      zod: 4.5.4
+      undici: 7.30.1
+      zod: 4.6.7
 
   '@ai-sdk/provider@4.0.10':
     dependencies:
@@ -3193,7 +3193,7 @@ snapshots:
       semver: 7.8.5
       sumchecker: 3.0.1
     optionalDependencies:
-      undici: 7.29.1
+      undici: 7.30.1
     transitivePeerDependencies:
       - supports-color
 
@@ -3434,11 +3434,11 @@ snapshots:
       eventsource-parser: 3.1.1
       jose: 6.2.11
       pkce-challenge: 5.0.1
-      zod: 4.5.4
+      zod: 4.6.7
 
   '@modelcontextprotocol/core@2.3.0':
     dependencies:
-      zod: 4.5.4
+      zod: 4.6.7
 
   '@napi-rs/wasm-runtime@1.2.3(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
     dependencies:
@@ -3836,12 +3836,12 @@ snapshots:
 
   agent-base@7.1.4: {}
 
-  ai@7.0.92(zod@4.5.4):
+  ai@7.0.92(zod@4.6.7):
     dependencies:
-      '@ai-sdk/gateway': 4.0.74(zod@4.5.4)
+      '@ai-sdk/gateway': 4.0.74(zod@4.6.7)
       '@ai-sdk/provider': 4.0.10
-      '@ai-sdk/provider-utils': 5.0.36(zod@4.5.4)
-      zod: 4.5.4
+      '@ai-sdk/provider-utils': 5.0.36(zod@4.6.7)
+      zod: 4.6.7
 
   ajv@6.15.0:
     dependencies:
@@ -3853,7 +3853,7 @@ snapshots:
   ajv@8.20.0:
     dependencies:
       fast-deep-equal: 3.1.3
-      fast-uri: 3.1.8
+      fast-uri: 3.1.9
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
@@ -4381,8 +4381,8 @@ snapshots:
       '@babel/parser': 7.29.8
       eslint: 10.9.1(jiti@2.7.0)
       hermes-parser: 0.25.1
-      zod: 4.5.4
-      zod-validation-error: 4.0.2(zod@4.5.4)
+      zod: 4.6.7
+      zod-validation-error: 4.0.2(zod@4.6.7)
     transitivePeerDependencies:
       - supports-color
 
@@ -4472,7 +4472,7 @@ snapshots:
 
   fast-levenshtein@2.0.6: {}
 
-  fast-uri@3.1.8: {}
+  fast-uri@3.1.9: {}
 
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
@@ -5341,7 +5341,7 @@ snapshots:
 
   undici@6.28.1: {}
 
-  undici@7.29.1: {}
+  undici@7.30.1: {}
 
   universalify@0.1.2: {}
 
@@ -5500,11 +5500,11 @@ snapshots:
 
   yocto-queue@0.1.0: {}
 
-  zod-validation-error@4.0.2(zod@4.5.4):
+  zod-validation-error@4.0.2(zod@4.6.7):
     dependencies:
-      zod: 4.5.4
+      zod: 4.6.7
 
-  zod@4.5.4: {}
+  zod@4.6.7: {}
 
   zustand@5.0.15(@types/react@19.2.18)(react@19.2.8):
     optionalDependencies:

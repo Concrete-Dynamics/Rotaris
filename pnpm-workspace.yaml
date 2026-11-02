@@ -78,7 +78,7 @@ catalog:
   react-dom: ^19.2.8
   vite: ^8.2.4
   yaml: ^2.9.0
-  zod: ^4.5.4
+  zod: ^4.6.6
   zustand: ^5.0.15
 
 # One flat node_modules (see .npmrc for why); pnpm 11 reads it from here.

@@ -89,7 +89,7 @@ shape). A child's terminal calls are found under its canonical name, the one `to
 records (H-b). A session that never stopped answers `unasked`, a NOTE, where it used to pass (H-c). A run that never
 compressed names its largest prompt against the REQ-CONFIG-134 trigger rather than its iteration count (H-d). And the
 deadline check says **where the time went** (H-h): endpoint, tools alone, launch, and the product with nothing in flight,
-each from the traffic and the store. The notes are in `docs/defects/fixed/`. **Run again on 2026-09-30** (pack
+each from the traffic and the store. The notes are in `docs/archive/defects/`. **Run again on 2026-09-30** (pack
 `.live-run/runs/2026-09-30T05-29-56-712Z`, `katalyst`), the repaired checks read as they claim: the overrun was a NOTE
 (2,406 s of 2,400 s, 99 % the endpoint generating, 1 s of the product with nothing in flight); the session came to rest
 `paused`, `application_shutdown`, with its summary, so the null-summary question was asked and passed; no child

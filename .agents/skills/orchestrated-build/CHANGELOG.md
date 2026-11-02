@@ -3,6 +3,24 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-11-01 — a repaired defect note moves to `docs/archive/defects/`
+
+**Prompted by** the owner's request R-092 (2026-11-01) and its bundle I2 of plan hrd2 (`docs/architecture/hardening.md`
+§6 row 5): the 831 repaired notes under `docs/defects/fixed/` moved to `docs/archive/defects/` by `pnpm archive:migrate`
+(`tools/archive/defects.mjs`), which repointed every link and path to them, and `tools/check-record-links.mjs` now fails
+a pointer into `docs/defects/fixed/` (the folder is retired) and reads one into the archive. `references/repository.md`
+told an agent twice to move a repaired note to `fixed/`: in "Another writer on main" (the orchestrator's forward repair)
+and in the `Records` bullet. Followed after the landing, either sentence would turn the next gate red. **Changed:** both
+name `docs/archive/defects/`, and the `Records` bullet says the old folder is retired and that `pnpm archive:migrate`
+moves a note left there; the stash note's path in "Worktrees and branches" was repointed by the script. The profiles'
+`defectsDir` stays `docs/defects/`, the open notes' folder; the acceptance autopsy's prompt, which told it to check every
+finding against `defectsDir` "(open and fixed)", would have read the open notes alone, so both profiles gain
+`repairedDefectsDir` (`docs/archive/defects/`), the prompt names it beside `defectsDir` (a profile without it keeps the
+old wording), and the self-test holds the Windows profile to the base's value and the rendered autopsy prompt to naming
+both folders. **Verified** by `node .agents/skills/orchestrated-build/scripts/orchestration.mjs self-test` (green; its new
+assertion red with the template's line reverted) and `pnpm lint` green on the moved tree; the independent review of this
+skill change (`references/skill-review.md`) is the orchestrator's, and is owed.
+
 ## 2026-11-01 — a ruled open question moves to the archive
 
 **Prompted by** the owner's request R-092 (2026-11-01) and its bundle I1 of plan hrd2 (`docs/architecture/hardening.md`

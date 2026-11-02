@@ -201,7 +201,7 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     expect(processIdentity(2 ** 22 + 1)).toBeNull();
   });
   // The note `a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md`
-  // (docs/defects/fixed/): between the kernel releasing an exiting process's memory and the process's reaping, `/proc/<pid>/exe`
+  // (docs/archive/defects/): between the kernel releasing an exiting process's memory and the process's reaping, `/proc/<pid>/exe`
   // can still read while `/proc/<pid>/cmdline` reads empty, and that pair read as another program — so a shell ended by a
   // soft-paused `exit 4` was taken for one an `exec` replaced, and the call waiting behind it was told it had replaced the
   // shell. Measured before the repair: in 122 of 300 exits read in a tight loop, the first reading that was not the

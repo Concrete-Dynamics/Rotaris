@@ -620,7 +620,7 @@ revision 4 as [R-064](../requests.md#r-064), revision 5 as [R-067](../requests.m
 > - **Clause 20** ([OQ-106](../../architecture/open-questions.md)). The handoff takes the latest artifact the most recent iteration's root published, known by
 >   the root's task id, and falls back to the latest of any kind.
 >
-> **What building it found in the code before it.** Each was repaired, and each note is in `docs/defects/fixed/`:
+> **What building it found in the code before it.** Each was repaired, and each note is in `docs/archive/defects/`:
 > - a plan decision's relaunch appended the gated prompt as a second task, so every approved prompt was worked twice;
 > - a request queued behind an open approval dialog was denied unshown after ten seconds. That repair's first cut left a
 >   request queued behind a closing window to hang, which the orchestrator's own review found and repaired;

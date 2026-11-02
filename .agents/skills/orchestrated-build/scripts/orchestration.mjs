@@ -446,7 +446,7 @@ export async function selfTest({ quiet = false } = {}) {
       const host = JSON.parse(fs.readFileSync(path.join(SKILL, 'profiles', f), 'utf8')).run
       const base = rawProfile.run
       assert.deepEqual(Object.keys(host).sort(), Object.keys(base).sort(), f + ' names the base profile\'s keys')
-      for (const k of ['gate', 'quickGate', 'tests', 'model', 'mainBranch', 'defectsDir']) assert.equal(host[k], base[k], f + ' keeps the base profile\'s `' + k + '`')
+      for (const k of ['gate', 'quickGate', 'tests', 'model', 'mainBranch', 'defectsDir', 'repairedDefectsDir']) assert.equal(host[k], base[k], f + ' keeps the base profile\'s `' + k + '`')
       assert.ok(host.maxFixRounds >= base.maxFixRounds, f + ' never lowers the repair budget')
       assert.equal(host.proofs.list, base.proofs.list, f + ' sweeps every proof the base sweeps')
       assert.equal(host.autopsy.method, base.autopsy.method, f + ' autopsies as the base does')
@@ -580,6 +580,7 @@ export async function selfTest({ quiet = false } = {}) {
     assert.equal(run.result.acceptance.length, 2)
     assert.ok(run.calls.includes('implement:accept1-1 [high]') && run.calls.includes('implement:accept1-2 [high]') && !run.calls.includes('implement:accept1-3 [high]'), 'findings that share a directory pair; the rest stand alone')
     assert.match(run.prompts['implement:accept1-1'], /st-accept1-1/, 'repair branches carry the plan id')
+    assert.ok(profile.run.repairedDefectsDir && run.prompts['accept:autopsy#1'].includes(profile.run.defectsDir + ' (open) and ' + profile.run.repairedDefectsDir + ' (repaired)'), 'the autopsy checks its findings against the open notes and the repaired ones, wherever the profile keeps them')
     const liveRun = await dryRun(render(buildArgs(plan, liveProfile)), {})
     assert.ok(liveRun.calls.some((c) => c.startsWith('accept:live#1')), 'with authorization the live-runner runs')
     assert.match(liveRun.prompts['implement:a1'], /AUTHORISED[\s\S]*as much as you want/)

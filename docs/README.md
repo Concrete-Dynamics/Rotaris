@@ -147,6 +147,13 @@ the passages and the evidence):
   which is how the record still keeps a falsified reason beside its replacement. Nothing under a Decision or Consequences
   heading moves, nor a correction that states its replacement inside itself, nor a struck word within a sentence: those
   are the record as it now reads.
+- **Repaired defect notes** (`defects.mjs`, since 2026-11-01). A repaired note lives in `archive/defects/<name>.md`, whole;
+  open notes stay in `defects/`. Until that day repaired notes moved to `defects/fixed/`, and the 831 there moved on the
+  first run; the folder is retired, a note found under it moves on the next run, and every pointer to a note moves with
+  it: a link in the record, a root or relative path in its prose (in the request log, links only), a path in the code,
+  in `.agents/`, `.claude/`, `.github/` and in the root's own files. `tools/check-record-links.mjs` fails any pointer into
+  the retired folder. Two notes of one name stop the run, naming both.
 
 `--check` reads every kind, so the commit that lands a ruling in the specification, or writes such a correction or strike
-into an ADR, runs `pnpm archive:migrate` too.
+into an ADR, runs `pnpm archive:migrate` too; a repaired note is moved straight to `archive/defects/`, and one moved to
+the retired folder from habit fails `--check` until the script moves it.

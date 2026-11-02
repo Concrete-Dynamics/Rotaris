@@ -503,7 +503,7 @@ or not it is in scope to fix.
 
 Recording is not repairing and not classifying: a **defect found by building** still owes its amendment
 round and its `first-executions.md` row, and a change the owner asked for is still classified in
-`requests.md` before code. When a note is repaired, **move it to `docs/defects/fixed/`** rather than
+`requests.md` before code. When a note is repaired, **move it to `docs/archive/defects/`** rather than
 deleting it.
 
 ---

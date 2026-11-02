@@ -332,7 +332,7 @@ All three of `apps/*`, `packages/*` and `tools/*` are workspace members (`pnpm-w
   [views](docs/architecture/views/README.md), the [decision records](docs/architecture/adr/), and
   [`codebase.md`](docs/architecture/codebase.md) for what landed and what is owed.
 - **Domain glossary:** [`CONTEXT-MAP.md`](CONTEXT-MAP.md).
-- **Defects:** [`docs/defects/`](docs/defects/README.md), open notes at the top level and repaired ones in `fixed/`.
+- **Defects:** [`docs/defects/`](docs/defects/README.md), open notes; repaired ones in [`docs/archive/defects/`](docs/archive/defects/).
 - **Proofs:** [`docs/proofs/README.md`](docs/proofs/README.md).
 - **Working in the repository:** [`AGENTS.md`](AGENTS.md) — the rules, for every agent and harness; the skills are under `.agents/skills/`.
 

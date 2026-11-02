@@ -237,7 +237,7 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > `d`'s report artifact, whose summary denied the edits `d` had made, because the summariser read only the transcript's
 > head (`a-long-childs-report-denies-the-edits-it-made.md`, ruled as OQ-111). The duress run's own check "no child ended
 > failed with nothing to say" flagged `d`, a false positive of the harness
-> (`the-duress-silent-child-check-flags-a-cut-off-child.md`, repaired 2026-09-29 under R-067 and now in `docs/defects/fixed/`:
+> (`the-duress-silent-child-check-flags-a-cut-off-child.md`, repaired 2026-09-29 under R-067 and now in `docs/archive/defects/`:
 > a cut-off child's `last_response` and `cut_off` are something to say; an error entry alone is not).
 >
 > **What was not measured.** An offer taken up by a later iteration's or a later run's root (revisions 3 and 4): this one

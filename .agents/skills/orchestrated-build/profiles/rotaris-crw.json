@@ -16,6 +16,7 @@
     "build": "pnpm symbols && pnpm build",
     "afterMerge": "pnpm install --prefer-offline (only if pnpm-lock.yaml changed) && pnpm symbols",
     "defectsDir": "docs/defects/",
+    "repairedDefectsDir": "docs/archive/defects/",
     "model": "opus",
     "maxFixRounds": 3,
     "repairPool": 3,

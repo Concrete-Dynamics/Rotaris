@@ -1,17 +1,20 @@
 /**
  * `docs/defects/README.md` fixes a defect note's shape: a `## <name>` title, a description, a `## Specs` section and a
- * `## Relevant files` section. This reads every note, open or fixed, for the two sections a reader looks for first.
- * One fixed note had neither, as created in `90c492f`
+ * `## Relevant files` section. This reads every note, open (`docs/defects/`) or repaired (`docs/archive/defects/`, since
+ * 2026-11-01, R-092; until then the retired `fixed/` folder), for the two sections a reader looks for first.
+ * One repaired note had neither, as created in `90c492f`
  * (`docs/archive/defects/two-fixed-defect-notes-miss-the-schema-or-their-repair.md`).
  */
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const defects = join(import.meta.dirname, '..', 'docs', 'defects');
+const docs = join(import.meta.dirname, '..', 'docs');
+const open = join(docs, 'defects');
+const archived = join(docs, 'archive', 'defects');
 const notes = [
-  ...readdirSync(defects).filter((f) => f.endsWith('.md') && f !== 'README.md'),
-  ...readdirSync(join(defects, 'fixed')).filter((f) => f.endsWith('.md')).map((f) => `fixed/${f}`),
+  ...readdirSync(open).filter((f) => f.endsWith('.md') && f !== 'README.md').map((f) => join(open, f)),
+  ...(existsSync(archived) ? readdirSync(archived).filter((f) => f.endsWith('.md')).map((f) => join(archived, f)) : []),
 ];
 
 describe('defect notes follow docs/defects/README.md', () => {
@@ -21,13 +24,13 @@ describe('defect notes follow docs/defects/README.md', () => {
 
   it('every note opens with a "## " title and carries "## Specs" and "## Relevant files"', () => {
     const missing = notes.flatMap((note) => {
-      const text = readFileSync(join(defects, note), 'utf8');
+      const text = readFileSync(note, 'utf8');
       const gaps = [
         ...(/^## \S/.test(text) ? [] : ['the "## " title']),
         ...(/^## Specs\b/m.test(text) ? [] : ['## Specs']),
         ...(/^## Relevant files\b/m.test(text) ? [] : ['## Relevant files']),
       ];
-      return gaps.length ? [`${note}: ${gaps.join(', ')}`] : [];
+      return gaps.length ? [`${note.slice(docs.length + 1).split('\\').join('/')}: ${gaps.join(', ')}`] : [];
     });
     expect(missing).toEqual([]);
   });

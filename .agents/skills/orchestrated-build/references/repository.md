@@ -54,7 +54,7 @@ prompts rendered from the older copy (SKILL.md §4 refreshes it between runs onl
 intermediate merge of theirs (`a46180d`, before they merged this session's work, read like a lost row). A red base is
 reported to the owner and recorded as a defect note (`docs/defects/README.md`). When a docs-only change repairs it (a
 count line, a link a moved note left behind), the orchestrator repairs it forward on its own branch in its own
-worktree from origin/main, the note moved to `fixed/` in the same commit, landed with the gate green before the next
+worktree from origin/main, the note moved to `docs/archive/defects/` in the same commit, landed with the gate green before the next
 bundle's merge gate meets it; a red that needs code goes to the owner or into a plan. Their commit is never reverted
 (`AGENTS.md`, "The agent workflow": surface a collision with the owner's commit, never reset it).
 
@@ -102,7 +102,8 @@ The same commits as the code carry:
 - a mechanism's first execution reported in place into the record that decided it, plus one row in
   `docs/architecture/first-executions.md`; a falsified claim corrected in place with the old reason kept beside it;
 - a repaired defect note: its outcome written on it (what changed, which test or proof pins it), `git mv` to
-  `docs/defects/fixed/`, every link to its old path repointed (`pnpm lint` runs `tools/check-record-links.mjs`);
+  `docs/archive/defects/` (`docs/defects/fixed/` is retired since 2026-11-01; `pnpm archive:migrate` moves a note left
+  there), every link to its old path repointed (`pnpm lint` runs `tools/check-record-links.mjs`);
 - a defect noticed along the way recorded in `docs/defects/` (schema in `docs/defects/README.md`), fixed or not;
 - a question the specification leaves open appended to the last part of `docs/architecture/open-questions.md` (its
   index names the part) as the next free number, and once it is ruled, closed or withdrawn moved to `docs/archive/` by

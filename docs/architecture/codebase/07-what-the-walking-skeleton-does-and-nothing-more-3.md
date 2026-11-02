@@ -70,7 +70,7 @@ run (`completed`, one settled tool row, the request at `…/v1/chat/completions`
 `explicit_trivial`, `small_feature`, each by `json_schema`, none falling back), spike 6 (four of four), sign-out and the
 refusal — after the runs before it found four defects of the proof, each repaired in the same bundle: the model slots
 named as native selects, the sign-out pressed in a panel that no longer holds it, the run replayed from the newest
-session, and spike 6's figures lost on a green run (notes under `docs/defects/fixed/slice-proof-*`). On a one-model
+session, and spike 6's figures lost on a green run (notes under `docs/archive/defects/slice-proof-*`). On a one-model
 endpoint the sign-in's discovery picks already name the model for every tier, so scenario 2 asserts the tiers through
 the discovered layer (the Models page shows them `discovered`; re-selecting the shown value is no edit) rather than a
 saved file. Recorded in [`first-executions.md`](../first-executions.md).

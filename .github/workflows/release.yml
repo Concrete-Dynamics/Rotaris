@@ -12,7 +12,8 @@
 #             REQ-STARTUP-168 (b)). Exit 1 stops every platform's build.
 #   build     per platform key: `pnpm package` — the notices step first (REQ-STARTUP-037/143: no development flag on a
 #             tag), the code-intelligence runtime, the native bindings rebuilt and load-proved, the installer named by
-#             tools/release-naming — then the portable's assembly (§4.5).
+#             tools/release-naming — then a CycloneDX SBOM of the production tree (R-091; a workflow artifact, not a
+#             release asset, until OQ-487 is ruled) and the portable's assembly (§4.5).
 #   sign      SHA256SUMS.txt over the assets (REQ-STARTUP-032), SHA256SUMS.txt.sig with the release environment's secret
 #             (O-2), and §5's pipeline checks: every digest matches, the signature verifies through the updater's own
 #             verifier against the keys the build carries, and that key is carried by every recorded release this one may
@@ -196,6 +197,22 @@ jobs:
       # (REQ-STARTUP-037); ROTARIS_PACKAGE_WITHOUT_NOTICES is refused on a tag, so no development package can be made here.
       - name: pnpm package
         run: pnpm package
+
+      # R-091 (docs/architecture/hardening.md §3.5 row 10): a CycloneDX SBOM of the production dependency tree, Electron
+      # included, written by pnpm's own `sbom` command over the installed tree (tools/sbom). It is uploaded as a workflow
+      # artifact of its own and is deliberately NOT copied into release-assets/: REQ-STARTUP-031, 036 and 152 close the set
+      # of assets a release publishes, so publishing it beside the installer, and listing it in SHA256SUMS.txt, waits on
+      # OQ-487's ruling (docs/architecture/open-questions.md). tools/workflows.test.ts holds both halves.
+      - name: The SBOM (CycloneDX, production dependencies)
+        run: pnpm sbom:write "$env:TAG" apps/desktop/release
+
+      - name: Upload the SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-${{ matrix.platform }}
+          path: apps/desktop/release/Rotaris-*-sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: The release directory
         shell: pwsh

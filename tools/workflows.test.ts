@@ -3,12 +3,16 @@
  * row 10, bundle G2). Every file in `.github/workflows/` is parsed as YAML and held to the rules its header states:
  * - every action pinned by a full 40-hex commit SHA (`tools/dependabot.test.ts` also holds the version comment beside it);
  * - no `pull_request_target`, no persisted checkout credentials;
- * - a read-only token, with the writes named here and nowhere else: `security-events: write` on CodeQL's one job;
+ * - a read-only token, with the writes named here and nowhere else: `security-events: write` on CodeQL's one job,
+ *   `contents: write` on the release workflow's `draft` job; `release.yml` grants nothing at the top, and its one
+ *   secret reaches its `sign` job alone;
  * - `ci.yml`'s gate audits the production tree, blocking, before `pnpm check`, and excepts nothing on its command line;
  * - `codeql.yml` analyses `javascript-typescript` with `security-and-quality`, on push to main, pull requests and a
  *   schedule, a superseded run cancelled;
  * - an audit exception in `pnpm-workspace.yaml` names an advisory a reading in `docs/architecture/dependency-alerts/`
- *   holds.
+ *   holds;
+ * - `release.yml`'s build job writes the CycloneDX SBOM after `pnpm package` and uploads it as a workflow artifact of
+ *   its own, outside the release directory, until OQ-487 rules whether a release publishes it.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -37,11 +41,14 @@ const stepsOf = (wf: Workflow): Array<{ job: string; step: Step }> =>
 /** The writes a workflow's job may hold, by `<file>:<job>`; every other grant is `read` or `none`. */
 const ALLOWED_WRITES: Record<string, Record<string, string>> = {
   'codeql.yml:analyze': { 'security-events': 'write' },
+  'release.yml:draft': { contents: 'write' },
 };
+/** The workflows whose every job's grant this test reads. */
+const GRANTING = ['ci.yml', 'codeql.yml', 'release.yml'];
 
 describe('.github/workflows', () => {
   it('holds the workflows this test knows', () => {
-    expect(files).toEqual(expect.arrayContaining(['ci.yml', 'codeql.yml']));
+    expect(files).toEqual(expect.arrayContaining(['ci.yml', 'codeql.yml', 'release.yml']));
   });
 
   it.each(files)('%s pins every action by a full commit SHA', (file) => {
@@ -67,9 +74,13 @@ describe('.github/workflows', () => {
     for (const file of ['ci.yml', 'codeql.yml']) expect(workflow(file).permissions, file).toEqual({ contents: 'read' });
   });
 
-  it('grants no write a job of ci.yml or codeql.yml is not listed for', () => {
+  it('gives release.yml no permission at the top, each job granting only what it uses', () => {
+    expect(workflow('release.yml').permissions).toEqual({});
+  });
+
+  it('grants no write a job of ci.yml, codeql.yml or release.yml is not listed for', () => {
     const extra: string[] = [];
-    for (const file of ['ci.yml', 'codeql.yml']) {
+    for (const file of GRANTING) {
       for (const [job, j] of Object.entries(workflow(file).jobs)) {
         const allowed = ALLOWED_WRITES[`${file}:${job}`] ?? {};
         const granted = j.permissions;
@@ -89,6 +100,13 @@ describe('.github/workflows', () => {
 
   it('references no secret in ci.yml or codeql.yml', () => {
     for (const file of ['ci.yml', 'codeql.yml']) expect(text(file), file).not.toMatch(/secrets\./);
+  });
+
+  it('lets the release signing secret reach the sign job alone', () => {
+    const holding = Object.entries(workflow('release.yml').jobs)
+      .filter(([, j]) => /secrets\./.test(JSON.stringify(j)))
+      .map(([job]) => job);
+    expect(holding).toEqual(['sign']);
   });
 });
 
@@ -172,5 +190,36 @@ describe('codeql.yml', () => {
     expect(action('analyze')).toBeGreaterThan(action('init'));
     expect(steps[action('init')]?.with).toMatchObject({ languages: 'javascript-typescript', queries: 'security-and-quality' });
     expect(steps[action('init')]?.uses?.split('@')[1]).toBe(steps[action('analyze')]?.uses?.split('@')[1]);
+  });
+});
+
+describe('release.yml — the SBOM (R-091; OQ-487)', () => {
+  const build = workflow('release.yml').jobs['build']?.steps ?? [];
+  const at = (match: (s: Step) => boolean): number => build.findIndex(match);
+  const writes = (s: Step): boolean => /^pnpm sbom:write "\$env:TAG" apps\/desktop\/release$/.test(s.run?.trim() ?? '');
+  const uploadsSbom = (s: Step): boolean =>
+    s.uses?.startsWith('actions/upload-artifact@') === true && /-sbom\.cdx\.json$/.test(String(s.with?.['path']));
+  const said = (s: Step): string => `${s.run ?? ''} ${JSON.stringify(s.with ?? {})}`;
+
+  it('writes the SBOM in the build job, after pnpm package, for the tag', () => {
+    const pkg = at((s) => s.run?.trim() === 'pnpm package');
+    expect(pkg).toBeGreaterThanOrEqual(0);
+    expect(at(writes)).toBeGreaterThan(pkg);
+  });
+
+  it('uploads it as a workflow artifact of its own, failing when it is missing', () => {
+    const uploads = build.filter(uploadsSbom);
+    expect(uploads).toHaveLength(1);
+    expect(String(uploads[0]?.with?.['name'])).toMatch(/^sbom-/);
+    expect(uploads[0]?.with?.['if-no-files-found']).toBe('error');
+    expect(at(uploadsSbom)).toBeGreaterThan(at(writes));
+  });
+
+  it('keeps it out of the release directory, its manifest and the draft until OQ-487 is ruled', () => {
+    const intoRelease = stepsOf(workflow('release.yml'))
+      .filter(({ step }) => /sbom/i.test(said(step)) && /release-assets/.test(said(step)))
+      .map(({ job, step }) => `${job}: ${step.name ?? step.uses ?? ''}`);
+    expect(intoRelease).toEqual([]);
+    expect(text('release.yml')).toMatch(/OQ-487/);
   });
 });

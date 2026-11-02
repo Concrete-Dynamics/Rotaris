@@ -65,7 +65,9 @@ guard: the checksum manifest, its signature, the key record `key-record.json` an
 `pnpm notices` — `THIRD-PARTY-LICENSES.txt` and its validation, open
 `notices.mjs`; the three tables beside it are the reviewed exceptions, the release inputs and the bundled fonts;
 tests in `notices.test.ts`), `tools/build-id/` (the writer behind `pnpm build-id` — `build-id.txt`, REQ-SHELL-140's
-build identifier, open `build-id.mjs`; tests in `build-id.test.ts`), `tools/requirement-coverage/` (the report behind
+build identifier, open `build-id.mjs`; tests in `build-id.test.ts`), `tools/sbom/` (since 2026-11-02 the writer behind
+`pnpm sbom:write <tag> <dir>` — the release's CycloneDX SBOM from pnpm's own `sbom` command, Electron added; open
+`sbom.mjs`, tests in `sbom.test.ts`; R-091, OQ-487), `tools/requirement-coverage/` (the report behind
 `pnpm req-coverage` — every live shipping requirement's implementation, test and proof citations; `--check` in `pnpm lint` holds `baseline.json`, the uncited per domain, which only shrinks; `--since`
 the identifiers a branch adds and drops, `--drift` the requirements changed after their code; open
 `coverage.mjs`, tests in `coverage.test.ts`), `tools/test-support-naming/` (since 2026-10-15 the one guard that a module

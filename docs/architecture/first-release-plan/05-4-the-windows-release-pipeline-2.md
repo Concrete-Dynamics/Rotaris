@@ -88,6 +88,14 @@ so that the next release can add the updater without stranding anyone.
 - the key record, meaning which verification keys each shipped build carries, committed to the repository with
   each release so that REQ-STARTUP-168 (b) can be decided before publishing.
 
+*2026-11-02 ([R-091](../../product/requests.md#r-091), [`hardening.md`](../hardening.md) §3.5 row 10): the release's
+assets gain no SBOM yet. The `build` job writes `Rotaris-<v>-sbom.cdx.json` after `pnpm package` (`pnpm sbom:write`,
+`tools/sbom/`: CycloneDX 1.6 of the production tree, Electron added) and uploads it as the workflow artifact
+`sbom-<platform>`, outside the release directory: the manifest above does not list it, the signature does not cover it,
+and the draft does not carry it, because REQ-STARTUP-036 and REQ-STARTUP-152 close the asset set to REQ-STARTUP-031's
+names. Whether it joins the assets, listed and signed with them, is
+[OQ-487](../open-questions/69-spikes-and-later-questions-36.md#oq-487).*
+
 *Built 2026-10-22 under [R-080](../../product/requests.md#r-080) (§4.2's first-execution note; ADR-0054).*
 `tools/release-pipeline` — `pnpm release:pipeline manifest | sign | verify`:
 

@@ -9,7 +9,11 @@
  *                                           values into release/electron-builder.package.yml, the configuration the next
  *                                           step runs with — never electron-builder's `${version}` macro, which is the
  *                                           version normalised (`0.1.0rc1` → `0.1.0-rc1`)
- *   2. electron-builder --win               rebuild → pack → hooks (rule 1a, rule 4a, the assets, the naming) → installer
+ *   2. electron-builder --win               rebuild → pack → hooks (rule 1a, rule 4a, the assets, the naming) → the fuses
+ *                                           flipped (electron-builder.yml's electronFuses) and read back (artifactBuildStarted)
+ *                                           → installer
+ *   2‴. the fuses                            read back again from win-unpacked/Rotaris.exe, which every later step packs or
+ *                                           launches (R-091, checklist 19; build-hooks.cjs `checkFuses`), a --dir package too
  *   2′. the portable                         the launcher stub (apps/desktop/launcher) built by Cargo and assembled around
  *                                           win-unpacked into release/portable/Rotaris-{v}-windows-x64-portable.exe
  *                                           (ADR-0054 P4, first-release-plan.md §4.5; lib/portable.mjs) — a subdirectory, so
@@ -218,6 +222,15 @@ try {
     return { declared, names, from: config, configuration: named };
   });
   step(`${STEPS.builder} --win${process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ' --dir' : ''}`, () => run('pnpm', ['exec', 'electron-builder', '--win', ...(process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ['--dir'] : []), '--config', naming.configuration], { env: builderEnv }));
+  // R-091 (Electron security checklist 19; ADR-0054): the fuses electron-builder flipped, read back from the packed executable
+  // that the portable is assembled around and that steps 3 and 3′ launch — the hooks' own rule, so a `--dir` package, which
+  // makes no installer and so meets no artifactBuildStarted, is held to it too. A difference refuses the package.
+  report.fuses = await stepAsync('the fuses read back from the packed executable (R-091, checklist 19)', async () => {
+    const { checkFuses } = require(join(APP, 'scripts', 'build-hooks.cjs'));
+    const read = await checkFuses(join(RELEASE, 'win-unpacked', 'Rotaris.exe'));
+    process.stdout.write(`[package] fuses: ${Object.entries(read.wire).filter(([k]) => k !== 'version').map(([k, v]) => `${k} ${v}`).join(', ')}\n`);
+    return read;
+  });
   /*
    * REQ-STARTUP-031's second Windows artifact (ADR-0054 P4, first-release-plan.md §4.5): NOT electron-builder's `portable`
    * target, which cannot start inside REQ-STARTUP-155's budget at any bundle weight (P1), but the project's launcher stub

@@ -1,6 +1,6 @@
 # ADR-0054 — Packaging, the four artifacts, and self-update — The two bundled assets — 2026-09-27, first execution (`first-release-plan.md` §4.4)
 
-Part 16 of 22 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
+Part 16 of 23 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
 
 ## The two bundled assets — 2026-09-27, first execution (`first-release-plan.md` §4.4)
 

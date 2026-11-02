@@ -19,7 +19,12 @@ binary newer than the marker, byte-identical in `app.asar.unpacked`, no prebuild
 "assets" rule (both files at the root of the artifact's resources as their steps wrote them, the identifier naming the
 tree being packed, the tool server's licence text once — `scripts/lib/about-assets.mjs`) and rule 4
 (`scripts/native-load-probe.cjs` as the packaged `Rotaris.exe` under `ELECTRON_RUN_AS_NODE`, reporting what
-`dlopen` opened); then the packaged application runs a scripted session with a
+`dlopen` opened); then **the fuses** (R-091, Electron security checklist 19; since 2026-11-03): electron-builder flips
+electron-builder.yml's `electronFuses` after afterPack — RunAsNode, `NODE_OPTIONS` and the inspector switches off, cookie
+encryption, embedded asar integrity and `onlyLoadAppFromAsar` on, the file protocol's privileges left on (OQ-466) — and
+`artifactBuildStarted` reads the wire back out of the packed `Rotaris.exe` (`@electron/fuses`, `FUSES` in the hooks) and
+refuses the installer when any reads otherwise; `pnpm package` reads it back once more after electron-builder, which a
+`--dir` package meets too, into `load-proof.json`'s `fuses` (ADR-0054 part 23); then the packaged application runs a scripted session with a
 terminal call against a scratch store under `release/scratch/`. Evidence in `release/load-proof.json`.
 `ROTARIS_IC6_COUNTERFACTUAL=no-force|keep-prebuild` constructs D10's condition; the build must refuse, and a run
 that ends before `electron-builder` says the counterfactual was not exercised. `ROTARIS_PACKAGE_DIR_ONLY=1` stops at

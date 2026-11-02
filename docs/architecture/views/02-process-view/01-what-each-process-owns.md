@@ -22,3 +22,12 @@ statement removes the two variables that name the artifact this launch started f
 `ROTARIS_PORTABLE_ARTIFACT` — after reading them for the updater's classification (`takeArtifactVariables`,
 `packages/platform/src/artifact-environment.ts`). Nothing else is removed. A Rotaris started from inside a Rotaris
 terminal therefore classifies from its own launch alone. Whether the specification says so is **OQ-90**.
+
+**The packaged executable's fuses (R-091, ADR-0054 part 23; 2026-11-03).** A packaged `Rotaris.exe` cannot be started as
+Node (`ELECTRON_RUN_AS_NODE` is ignored), reads no `NODE_OPTIONS` and opens no inspector from its command line, loads the
+application from `resources/app.asar` alone and checks that archive against the header hash electron-builder wrote into the
+executable, and encrypts its cookies; it keeps the `file:` protocol's privileges, the renderer's page being a `file:` page
+(OQ-466). None of the processes changes: the run host and every workspace service are `utilityProcess` children, which need
+no RunAsNode, the native bindings load from `app.asar.unpacked` and the code-intelligence server is `Rotaris.exe
+builtin:code-intelligence -- …` started as the application, handing over to the interpreter under `resources/`. A development
+launch runs the unfused Electron of the checkout.

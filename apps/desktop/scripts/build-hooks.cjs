@@ -10,6 +10,9 @@
  *    npm_config_force_build), and the moment is stamped as the rebuild marker.
  *  artifactBuildCompleted — REQ-STARTUP-031: each produced file carries the name the DECLARED version renders
  *    (`lib/artifact-names.mjs`), never electron-builder's normalised one.
+ *  artifactBuildStarted — R-091 (Electron security checklist 19; ADR-0054, ADR-0056 rule 4): the fuses electron-builder
+ *    flipped in the packed Rotaris.exe after afterPack (electron-builder.yml's `electronFuses`), read back from the binary's
+ *    own fuse wire and compared with `FUSES`; any difference refuses the build before the installer is made from it.
  *  afterPack — rule 1a: for each binding a compiled binary exists in node_modules, is newer than the
  *    marker, is byte-identical to the copy the artifact carries under app.asar.unpacked, and no prebuild
  *    rides in the artifact (neither unpacked nor inside app.asar, where the loader's existsSync would find
@@ -387,4 +390,103 @@ async function afterPack(ctx) {
   }
 }
 
-module.exports = { beforeBuild, afterPack, artifactBuildCompleted, peArchOf, checkRuntime, BINDINGS, checkRule1a, checkRule4, checkNaming, configuredArtifactNames, checkAssets, MARKER, REPORT };
+/**
+ * R-091 — the fuses (Electron security checklist 19; the Electron documentation's `tutorial/fuses`; ADR-0054, ADR-0056
+ * rule 4: evidence about the artifact, never about the command). Each is a byte of the fuse wire @electron/fuses reads out
+ * of Rotaris.exe: `0` (48) disabled, `1` (49) enabled. electron-builder.yml's `electronFuses` names the six it flips, and
+ * this list is what the binary must then read — those six, and the two left at Electron's own value on purpose:
+ * `grantFileProtocolExtraPrivileges` stays enabled (OQ-466's ruling: the renderer is a `file:` page) and
+ * `loadBrowserProcessSpecificV8Snapshot` stays disabled. A wire position past this list (Electron 44.3.0's wire is nine
+ * long, @electron/fuses 1.8.0 names eight) is reported, never judged. `index` is @electron/fuses' `FuseV1Options` value.
+ *
+ * The run host and the workspace service are `utilityProcess` children, which the fuses page says need no RunAsNode; the
+ * code-intelligence server starts Rotaris.exe as the application (`main/sentinel.ts`, `builtin:code-intelligence`); and
+ * afterPack's rule 4 probe, the one launch that runs the packaged binary as Node, runs before electron-builder flips them.
+ */
+const FUSE_ENABLE = 49;
+const FUSE_DISABLE = 48;
+const FUSES = Object.freeze([
+  { index: 0, name: 'runAsNode', expected: false, flipped: true },
+  { index: 1, name: 'enableCookieEncryption', expected: true, flipped: true },
+  { index: 2, name: 'enableNodeOptionsEnvironmentVariable', expected: false, flipped: true },
+  { index: 3, name: 'enableNodeCliInspectArguments', expected: false, flipped: true },
+  { index: 4, name: 'enableEmbeddedAsarIntegrityValidation', expected: true, flipped: true },
+  { index: 5, name: 'onlyLoadAppFromAsar', expected: true, flipped: true },
+  { index: 6, name: 'loadBrowserProcessSpecificV8Snapshot', expected: false, flipped: false },
+  { index: 7, name: 'grantFileProtocolExtraPrivileges', expected: true, flipped: false },
+]);
+
+/** The map electron-builder.yml's `electronFuses` must hold: the flipped fuses alone, by electron-builder's key names. */
+function fuseConfiguration() {
+  return Object.fromEntries(FUSES.filter((f) => f.flipped).map((f) => [f.name, f.expected]));
+}
+
+/** A wire byte as a word: `on`, `off`, or what else it is (`removed`, `inherit`, a byte nobody named). Pure. */
+function fuseWord(state) {
+  if (state === FUSE_ENABLE) return 'on';
+  if (state === FUSE_DISABLE) return 'off';
+  if (state === 114) return 'removed';
+  if (state === 144) return 'inherit';
+  return state === undefined ? 'absent' : `byte ${state}`;
+}
+
+/**
+ * What differs between a fuse wire, as @electron/fuses' `getCurrentFuseWire` returns it (`{ version, 0: 49, 1: 48, … }`),
+ * and `FUSES`: one sentence per fuse that reads otherwise, `[]` when every one reads as listed. Pure.
+ */
+function fuseProblems(wire) {
+  if (wire === null || typeof wire !== 'object') return ['the binary carries no fuse wire'];
+  if (String(wire.version) !== '1') return [`the fuse wire is version ${String(wire.version)}, not the 1 this list is written for`];
+  const problems = [];
+  for (const f of FUSES) {
+    const read = wire[f.index];
+    if (read !== (f.expected ? FUSE_ENABLE : FUSE_DISABLE)) problems.push(`${f.name} reads ${fuseWord(read)}, ${f.flipped ? 'flipped' : 'left'} ${f.expected ? 'on' : 'off'}`);
+  }
+  return problems;
+}
+
+/** The wire read out of `exe`, every fuse by name and every position past the list by its index. */
+function describeWire(wire) {
+  const named = Object.fromEntries(FUSES.map((f) => [f.name, fuseWord(wire[f.index])]));
+  const rest = Object.keys(wire).filter((k) => /^\d+$/.test(k) && Number(k) >= FUSES.length).map((k) => [`fuse ${k}`, fuseWord(wire[k])]);
+  return { version: String(wire.version), ...named, ...Object.fromEntries(rest) };
+}
+
+/** Read the fuse wire out of the packed executable and refuse any fuse that is not as listed. `read` is @electron/fuses' but in the tests. */
+async function checkFuses(exe, read) {
+  if (!existsSync(exe)) throw new Error(`fuses: no packed executable at ${exe}`);
+  const wire = await (read ?? require('@electron/fuses').getCurrentFuseWire)(exe);
+  const problems = fuseProblems(wire);
+  if (problems.length > 0) throw new Error(`fuses: ${exe} — ${problems.join('; ')} (electron-builder.yml's electronFuses; R-091, checklist 19)`);
+  return { exe, wire: describeWire(wire) };
+}
+
+/** The directory electron-builder packs a Windows architecture into: `win-unpacked` for x64, `win-<arch>-unpacked` otherwise. */
+function unpackedDirFor(arch) {
+  const name = typeof arch === 'string' ? arch : ARCH_NAMES[arch];
+  return name === 'x64' || name === undefined ? 'win-unpacked' : `win-${name}-unpacked`;
+}
+
+/**
+ * electron-builder: called as a target starts making its artifact out of the packed tree — after the fuses are flipped
+ * (`doAddElectronFuses` follows afterPack) — so a binary whose fuses do not read as listed never becomes an installer.
+ * The result joins afterPack's report.
+ */
+async function artifactBuildStarted(ctx) {
+  const exe = path.join(path.dirname(ctx.file), unpackedDirFor(ctx.arch), 'Rotaris.exe');
+  let fuses;
+  try {
+    fuses = await checkFuses(exe);
+  } catch (e) {
+    console.error(`[ic6] BUILD REFUSED — ${e.message}`);
+    throw e;
+  }
+  console.log(`[ic6] fuses: ${Object.entries(fuses.wire).filter(([k]) => k !== 'version').map(([k, v]) => `${k} ${v}`).join(', ')} — read back from ${exe}`);
+  if (existsSync(REPORT)) {
+    const report = JSON.parse(readFileSync(REPORT, 'utf8'));
+    report.fuses = { ...fuses, target: ctx.targetPresentableName };
+    writeFileSync(REPORT, JSON.stringify(report, null, 2));
+  }
+}
+
+module.exports = { beforeBuild, afterPack, artifactBuildStarted, artifactBuildCompleted, FUSES, fuseConfiguration, fuseProblems, checkFuses, unpackedDirFor, peArchOf, checkRuntime, BINDINGS, checkRule1a, checkRule4, checkNaming, configuredArtifactNames, checkAssets, MARKER, REPORT };

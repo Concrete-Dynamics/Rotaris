@@ -1,6 +1,6 @@
 # ADR-0054 — Packaging, the four artifacts, and self-update — Ruled — what the update path establishes (was an escalation; ESC-8)
 
-Part 5 of 22 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
+Part 5 of 23 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
 
 ## Ruled — what the update path establishes (was an escalation; ESC-8)
 

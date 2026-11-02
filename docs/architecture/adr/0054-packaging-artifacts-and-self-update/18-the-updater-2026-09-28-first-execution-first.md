@@ -1,6 +1,6 @@
 # ADR-0054 — Packaging, the four artifacts, and self-update — The updater — 2026-09-28, first execution (`first-release-plan.md` §4.6; O-10, R-062)
 
-Part 18 of 22 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
+Part 18 of 23 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
 
 ## The updater — 2026-09-28, first execution (`first-release-plan.md` §4.6; O-10, R-062)
 

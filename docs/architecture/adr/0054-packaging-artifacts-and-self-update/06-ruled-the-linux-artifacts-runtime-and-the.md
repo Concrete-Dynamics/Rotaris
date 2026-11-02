@@ -1,6 +1,6 @@
 # ADR-0054 — Packaging, the four artifacts, and self-update — Ruled — the Linux artifact's runtime, and the sandbox that comes with it (was an escalation; ESC-11)
 
-Part 6 of 22 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
+Part 6 of 23 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
 
 ## Ruled — the Linux artifact's runtime, and the sandbox that comes with it (was an escalation; ESC-11)
 

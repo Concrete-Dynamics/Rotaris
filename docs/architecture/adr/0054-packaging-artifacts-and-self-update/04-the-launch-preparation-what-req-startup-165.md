@@ -1,6 +1,6 @@
 # ADR-0054 — Packaging, the four artifacts, and self-update — The launch preparation — what `REQ-STARTUP-165` leaves to this record (continued)
 
-Part 4 of 22 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
+Part 4 of 23 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
 
 **The stub must not outlive the launch, and must not keep the artifact open.** Two rules, both
 load-bearing and both learned from what the tool's own stub does. First, **the stub must not remain as a

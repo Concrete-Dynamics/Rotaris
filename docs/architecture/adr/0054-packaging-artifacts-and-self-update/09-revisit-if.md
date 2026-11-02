@@ -1,6 +1,6 @@
 # ADR-0054 — Packaging, the four artifacts, and self-update — Revisit if
 
-Part 9 of 22 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
+Part 9 of 23 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
 
 ## Revisit if
 

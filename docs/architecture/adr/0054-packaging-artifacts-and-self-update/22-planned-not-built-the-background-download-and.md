@@ -1,6 +1,6 @@
 # ADR-0054 — Packaging, the four artifacts, and self-update — Planned, not built — the background download and the next-start apply (2026-10-22, R-084)
 
-Part 22 of 22 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
+Part 22 of 23 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
 
 ## Planned, not built — the background download and the next-start apply (2026-10-22, R-084)
 

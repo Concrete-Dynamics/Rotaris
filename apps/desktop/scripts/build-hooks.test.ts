@@ -8,7 +8,7 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -160,5 +160,117 @@ describe('checkRuntime — the packaged interpreter is built for the artifact\'s
     const spawn = () => { throw new Error('spawned'); };
     expect(() => hooks.checkRuntime(appOut(peHeader(X64), { targetArch: 'arm64' }), 'x64', spawn)).toThrow('runtime: bundle.json says the bundle was built for arm64, the artifact is x64');
     expect(() => hooks.checkRuntime(appOut(peHeader(X64), {}), 'x64', spawn)).toThrow(/built for no recorded architecture, the artifact is x64.*--target=win32-x64/);
+  });
+});
+
+/**
+ * R-091 — the fuses (Electron security checklist 19; ADR-0054, ADR-0056 rule 4). electron-builder flips them from
+ * electron-builder.yml's `electronFuses` after afterPack; `artifactBuildStarted` reads them back from the packed binary and
+ * refuses the build when any differs from `FUSES`. These hold the list, the yml and the comparison together; the binary's
+ * own wire is read by `pnpm package` on Windows (`docs/architecture/first-executions.md`).
+ */
+describe('the fuses — flipped at package time and read back (R-091, checklist 19)', () => {
+  const fuses = appRequire('./scripts/build-hooks.cjs') as {
+    FUSES: readonly { index: number; name: string; expected: boolean; flipped: boolean }[];
+    fuseConfiguration: () => Record<string, boolean>;
+    fuseProblems: (wire: unknown) => string[];
+    checkFuses: (exe: string, read?: (exe: string) => Promise<unknown>) => Promise<{ exe: string; wire: Record<string, string> }>;
+    unpackedDirFor: (arch: unknown) => string;
+    artifactBuildStarted: (ctx: { file: string; arch: unknown; targetPresentableName: string }) => Promise<void>;
+  };
+  const yaml = abl('js-yaml') as { load: (text: string) => Record<string, unknown> };
+  const ON = 49;
+  const OFF = 48;
+  /** The wire the list asks for, as @electron/fuses' `getCurrentFuseWire` returns it, with Electron 44.3.0's ninth fuse. */
+  const asked = (): Record<string, unknown> => ({ version: '1', 0: OFF, 1: ON, 2: OFF, 3: OFF, 4: ON, 5: ON, 6: OFF, 7: ON, 8: ON });
+  /** Electron 44.3.0's own wire, as `node_modules/electron/dist/electron.exe` read on 2026-11-02. */
+  const unflipped = (): Record<string, unknown> => ({ version: '1', 0: ON, 1: OFF, 2: ON, 3: ON, 4: OFF, 5: OFF, 6: OFF, 7: ON, 8: ON });
+
+  it('flips the six the checklist names, and leaves the file protocol and the V8 snapshot as Electron ships them (OQ-466)', () => {
+    expect(fuses.fuseConfiguration()).toEqual({
+      runAsNode: false,
+      enableNodeOptionsEnvironmentVariable: false,
+      enableNodeCliInspectArguments: false,
+      enableCookieEncryption: true,
+      enableEmbeddedAsarIntegrityValidation: true,
+      onlyLoadAppFromAsar: true,
+    });
+    expect(fuses.FUSES.filter((f) => !f.flipped)).toEqual([
+      { index: 6, name: 'loadBrowserProcessSpecificV8Snapshot', expected: false, flipped: false },
+      { index: 7, name: 'grantFileProtocolExtraPrivileges', expected: true, flipped: false },
+    ]);
+  });
+  it('electron-builder.yml flips exactly that map, over an asar, and names the hook that reads it back', () => {
+    const config = yaml.load(readFileSync(join(APP, 'electron-builder.yml'), 'utf8'));
+    expect(config['electronFuses']).toEqual(fuses.fuseConfiguration());
+    expect(config['asar']).toBe(true);
+    expect(config['artifactBuildStarted']).toBe('./scripts/build-hooks.cjs');
+  });
+  it('reads a wire flipped as listed as no problem, whatever lies past the list', () => {
+    expect(fuses.fuseProblems(asked())).toEqual([]);
+    expect(fuses.fuseProblems({ ...asked(), 8: OFF, 9: 114 })).toEqual([]);
+  });
+  it('refuses the unflipped binary fuse by fuse, saying what each reads and what was asked', () => {
+    expect(fuses.fuseProblems(unflipped())).toEqual([
+      'runAsNode reads on, flipped off',
+      'enableCookieEncryption reads off, flipped on',
+      'enableNodeOptionsEnvironmentVariable reads on, flipped off',
+      'enableNodeCliInspectArguments reads on, flipped off',
+      'enableEmbeddedAsarIntegrityValidation reads off, flipped on',
+      'onlyLoadAppFromAsar reads off, flipped on',
+    ]);
+  });
+  it('refuses one fuse out of place, a fuse left alone that moved, and a removed or absent one', () => {
+    expect(fuses.fuseProblems({ ...asked(), 0: ON })).toEqual(['runAsNode reads on, flipped off']);
+    expect(fuses.fuseProblems({ ...asked(), 7: OFF })).toEqual(['grantFileProtocolExtraPrivileges reads off, left on']);
+    expect(fuses.fuseProblems({ ...asked(), 5: 114 })).toEqual(['onlyLoadAppFromAsar reads removed, flipped on']);
+    const short = asked();
+    delete short[6];
+    expect(fuses.fuseProblems(short)).toEqual(['loadBrowserProcessSpecificV8Snapshot reads absent, left off']);
+  });
+  it('refuses a wire of another version, and no wire at all', () => {
+    expect(fuses.fuseProblems({ ...asked(), version: '2' })).toEqual(['the fuse wire is version 2, not the 1 this list is written for']);
+    expect(fuses.fuseProblems(null)).toEqual(['the binary carries no fuse wire']);
+  });
+  it('checkFuses answers the wire by name, and refuses with the binary named', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-fuses-'));
+    try {
+      const exe = join(dir, 'Rotaris.exe');
+      writeFileSync(exe, 'stand-in');
+      await expect(fuses.checkFuses(exe, () => Promise.resolve(asked()))).resolves.toEqual({ exe, wire: {
+        version: '1', runAsNode: 'off', enableCookieEncryption: 'on', enableNodeOptionsEnvironmentVariable: 'off', enableNodeCliInspectArguments: 'off',
+        enableEmbeddedAsarIntegrityValidation: 'on', onlyLoadAppFromAsar: 'on', loadBrowserProcessSpecificV8Snapshot: 'off', grantFileProtocolExtraPrivileges: 'on', 'fuse 8': 'on',
+      } });
+      await expect(fuses.checkFuses(exe, () => Promise.resolve(unflipped()))).rejects.toThrow(/^fuses: .*Rotaris\.exe — runAsNode reads on, flipped off; .*electronFuses/);
+      await expect(fuses.checkFuses(join(dir, 'absent.exe'), () => Promise.resolve(asked()))).rejects.toThrow(/no packed executable/);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('artifactBuildStarted reads the packed tree beside the installer it is about to make, and refuses one with no fuse wire', async () => {
+    expect(fuses.unpackedDirFor('x64')).toBe('win-unpacked');
+    expect(fuses.unpackedDirFor(1)).toBe('win-unpacked');
+    expect(fuses.unpackedDirFor('arm64')).toBe('win-arm64-unpacked');
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-fuses-'));
+    try {
+      mkdirSync(join(dir, 'win-unpacked'));
+      // The real reader over a file that is no Electron binary: no fuse wire, so the build is refused.
+      writeFileSync(join(dir, 'win-unpacked', 'Rotaris.exe'), 'no sentinel here');
+      await expect(fuses.artifactBuildStarted({ file: join(dir, 'Rotaris-0.1.0rc1-windows-x64-setup.exe'), arch: 1, targetPresentableName: 'nsis' })).rejects.toThrow();
+      await expect(fuses.artifactBuildStarted({ file: join(dir, 'elsewhere', 'Rotaris-0.1.0rc1-windows-x64-setup.exe'), arch: 1, targetPresentableName: 'nsis' })).rejects.toThrow(/no packed executable/);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe('nothing the application runs needs RunAsNode (R-091, checklist 19)', () => {
+  it('no source under apps/desktop/src or packages/*/src sets ELECTRON_RUN_AS_NODE for a process it starts', () => {
+    const repo = join(APP, '..', '..');
+    const roots = [join(APP, 'src'), ...readdirSync(join(repo, 'packages')).map((p) => join(repo, 'packages', p, 'src'))].filter((r) => existsSync(r));
+    const files = roots.flatMap((root) => readdirSync(root, { recursive: true, encoding: 'utf8' }).filter((f) => /\.(ts|tsx|mts|cts|js|mjs|cjs)$/.test(f) && !/\.test\./.test(f)).map((f) => join(root, f)));
+    expect(files.length).toBeGreaterThan(200);
+    // Setting it: as a property of an environment object, or assigned. Reading it and deleting it start nothing.
+    const sets = /ELECTRON_RUN_AS_NODE['"]?\s*[:=](?!=)|\[\s*['"]ELECTRON_RUN_AS_NODE['"]\s*\]\s*=(?!=)/;
+    expect(files.filter((f) => sets.test(readFileSync(f, 'utf8')))).toEqual([]);
+    // The one reader, main's sentinel, reads it to find its token and deletes it from the interpreter's environment.
+    const readers = files.filter((f) => readFileSync(f, 'utf8').includes('ELECTRON_RUN_AS_NODE')).map((f) => f.slice(repo.length + 1).replace(/\\/g, '/'));
+    expect(readers).toEqual(['apps/desktop/src/main/sentinel.ts']);
   });
 });

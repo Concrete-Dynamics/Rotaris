@@ -14,7 +14,9 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
-Last reconciled with the code: **2026-11-02**
+Last reconciled with the code: **2026-11-03**
+
+**The packaged executable's fuses (R-091 bundle A2; Electron security checklist 19; ADR-0054, ADR-0056 rule 4; 2026-11-03).** `02-process-view/01-what-each-process-owns.md` gains a paragraph after the children's environment: a packaged `Rotaris.exe` is fused by electron-builder.yml's `electronFuses` (RunAsNode, `NODE_OPTIONS`, the inspector switches off; cookie encryption, embedded asar integrity, `onlyLoadAppFromAsar` on; the file protocol's privileges left on, OQ-466), and no process changes for it. No package, edge, process, channel, command, notice or store column changed, and no fact changed owner.
 
 **One set of web preferences for every window, and the device and display-media handlers (R-091 bundle A2; Electron security checklist 3 to 6, 8 to 10; OQ-459, OQ-466; 2026-11-02).** `02-process-view/01-what-each-process-owns.md`'s main row: the session permission handlers now read `isApplicationPage` and add a device handler refusing every HID, serial and USB device and a display-media handler answering no stream, on every session; and main gains `secure-web-preferences.ts`, the one set every window spreads (`rotaris/browser-window-uses-secure-prefs` in `pnpm lint`), read back from the built app by the driver's new `webPreferences` op. No package, edge, process, channel, command, notice or store column changed, and no fact changed owner.
 

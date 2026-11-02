@@ -1,6 +1,6 @@
 # ADR-0054 — Packaging, the four artifacts, and self-update — The tag workflow, the manifest, the signature and the key record — 2026-10-22, first execution (R-080; `first-release-plan.md` §4.2, §4.7, §4.8)
 
-Part 19 of 22 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
+Part 19 of 23 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
 
 ## The tag workflow, the manifest, the signature and the key record — 2026-10-22, first execution (R-080; `first-release-plan.md` §4.2, §4.7, §4.8)
 

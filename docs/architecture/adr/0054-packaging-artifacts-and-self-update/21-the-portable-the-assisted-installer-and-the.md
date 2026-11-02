@@ -1,6 +1,6 @@
 # ADR-0054 — Packaging, the four artifacts, and self-update — The portable, the assisted installer and the icon — 2026-10-23, first execution (`first-release-plan.md` §4.5, §4.9)
 
-Part 21 of 22 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
+Part 21 of 23 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
 
 ## The portable, the assisted installer and the icon — 2026-10-23, first execution (`first-release-plan.md` §4.5, §4.9)
 

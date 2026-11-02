@@ -23,6 +23,7 @@
     "zustand": "catalog:"
   },
   "devDependencies": {
+    "@electron/fuses": "^1.8.0",
     "@electron/rebuild": "^4.2.0",
     "@rotaris/agent-tools": "workspace:*",
     "@rotaris/config": "workspace:*",

@@ -38,6 +38,23 @@ files:
   - "!**/node_modules/node-pty/{prebuilds,build,deps,src,third_party,scripts}/**"
   - "**/node_modules/node-pty/build/Release/{pty,conpty,conpty_console_list}.node"
   - "**/node_modules/node-pty/build/Release/{winpty.dll,winpty-agent.exe}"
+# R-091 (Electron security checklist 19; ADR-0054, ADR-0056 rule 4): the application is an asar, said rather than defaulted,
+# because the fuses below read it — electron-builder writes the archive's header hash into Rotaris.exe's resources
+# (ElectronAsarIntegrity), which `enableEmbeddedAsarIntegrityValidation` makes Electron check before it reads the archive.
+asar: true
+# The fuses, flipped in Rotaris.exe at package time by electron-builder itself (@electron/fuses), after afterPack — whose
+# rule 4 probe still runs the packaged binary as Node — and before any signing (none yet, R-071). `artifactBuildStarted`
+# reads them back from the binary and refuses the installer when any differs (scripts/build-hooks.cjs, `FUSES`, which this
+# map must equal; build-hooks.test.ts holds the two together), and `pnpm package` reads them back again into load-proof.json.
+# Left alone on purpose: grantFileProtocolExtraPrivileges (OQ-466's ruling: the renderer stays on file:) and
+# loadBrowserProcessSpecificV8Snapshot (no browser-process snapshot is built).
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableCookieEncryption: true
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
 asarUnpack:
   # ADR-0058 consequence 1 / ADR-0056 rule 3: native bindings are unpacked, with the helper
   # binaries node-pty's winpty path executes beside them.
@@ -101,4 +118,6 @@ buildDependenciesFromSource: true
 beforeBuild: ./scripts/build-hooks.cjs
 afterPack: ./scripts/build-hooks.cjs
 # REQ-STARTUP-031: each produced file's name equals the declared version's name (the header above).
+# R-091 (checklist 19): the fuses read back from the packed Rotaris.exe before the installer is made from it.
+artifactBuildStarted: ./scripts/build-hooks.cjs
 artifactBuildCompleted: ./scripts/build-hooks.cjs

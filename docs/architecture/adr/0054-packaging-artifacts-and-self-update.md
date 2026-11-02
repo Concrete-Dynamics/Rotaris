@@ -45,3 +45,4 @@ one now names its part.
 | [20](0054-packaging-artifacts-and-self-update/20-linux-and-macos-configuration-prepared-2026-10.md) | Linux and macOS configuration prepared — 2026-10-22 (R-080; not wired, IC-3 and `PD-STARTUP-001` stand) |
 | [21](0054-packaging-artifacts-and-self-update/21-the-portable-the-assisted-installer-and-the.md) | The portable, the assisted installer and the icon — 2026-10-23, first execution (`first-release-plan.md` §4.5, §4.9) |
 | [22](0054-packaging-artifacts-and-self-update/22-planned-not-built-the-background-download-and.md) | Planned, not built — the background download and the next-start apply (2026-10-22, R-084) |
+| [23](0054-packaging-artifacts-and-self-update/23-the-fuses-2026-11-03-first-execution.md) | The fuses — 2026-11-03, first execution (R-091, Electron security checklist 19) |

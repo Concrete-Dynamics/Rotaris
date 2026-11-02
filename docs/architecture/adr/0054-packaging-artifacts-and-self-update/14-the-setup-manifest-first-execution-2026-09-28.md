@@ -1,6 +1,6 @@
 # ADR-0054 — Packaging, the four artifacts, and self-update — The setup manifest — first execution, 2026-09-28 (first-release plan §4.1)
 
-Part 14 of 22 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
+Part 14 of 23 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
 
 ## The setup manifest — first execution, 2026-09-28 (first-release plan §4.1)
 

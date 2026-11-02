@@ -1,6 +1,6 @@
 # ADR-0054 — Packaging, the four artifacts, and self-update — Discharged — the cached-launch clause, retired 2026-09-02
 
-Part 8 of 22 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
+Part 8 of 23 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
 
 ## Discharged — the cached-launch clause, retired 2026-09-02
 

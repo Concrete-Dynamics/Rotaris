@@ -1,6 +1,6 @@
 # ADR-0054 — Packaging, the four artifacts, and self-update — Decision
 
-Part 3 of 22 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
+Part 3 of 23 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
 
 ## Decision
 
@@ -362,3 +362,5 @@ scheduled as though it were. **Both halves of that trade are now measured.** Run
 v1.0.1 left two token-named directories of **73 files / 507.9 MiB each**, each carrying its own marker
 naming its own token, so the cost of not reclaiming is one full payload per version left behind;
 deleting one costs **86.9–90.6 ms**, so the post-show placement is comfortable rather than tight.
+
+**The executable is fused at package time (2026-11-03, R-091).** RunAsNode, `NODE_OPTIONS` and the inspector switches off; cookie encryption, embedded asar integrity and `onlyLoadAppFromAsar` on; the file protocol's privileges left on (OQ-466). electron-builder flips them, and the build reads them back and refuses a difference: [part 23](23-the-fuses-2026-11-03-first-execution.md).

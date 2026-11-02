@@ -1,6 +1,6 @@
 # ADR-0054 — Packaging, the four artifacts, and self-update — Linux and macOS configuration prepared — 2026-10-22 (R-080; not wired, IC-3 and `PD-STARTUP-001` stand)
 
-Part 20 of 22 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
+Part 20 of 23 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), which indexes every part.
 
 ## Linux and macOS configuration prepared — 2026-10-22 (R-080; not wired, IC-3 and `PD-STARTUP-001` stand)
 

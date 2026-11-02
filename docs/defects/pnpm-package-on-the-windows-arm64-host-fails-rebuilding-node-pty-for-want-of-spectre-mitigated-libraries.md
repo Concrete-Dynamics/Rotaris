@@ -13,6 +13,14 @@ compiling with Spectre mitigations on the toolchain of that spike, so this is th
 whether the libraries for the arm64-hosted x64 toolset are all it needs is not measured. Noticed while checking that
 `catalog:` specifiers reach electron-builder (R-091, hardening bundle G1).
 
+Met again on 2026-11-03 (hardening bundle A2, the fuses' first execution; worktree of branch
+`hrd1-secure-windows-and-fuses`, `ROTARIS_PACKAGE_WITHOUT_NOTICES=1 pnpm package`): the same four projects, `MSB8040`, after
+better-sqlite3 had compiled for x64 Electron 44.3.0. The fuses were measured on a tree packed without the rebuild instead
+([ADR-0054 part 23](../architecture/adr/0054-packaging-artifacts-and-self-update/23-the-fuses-2026-11-03-first-execution.md)); the
+release build's own read-back waits on the Windows runner or on these libraries here. The refused rebuild leaves the
+checkout's `node-pty/build/Release` holding only `obj/` and better-sqlite3's `build/Release` an x64 binary (`beforeBuild`
+removed both `build/` directories first); what the development app then loads was not measured.
+
 ## Specs
 
 None. ADR-0056's build (rule 1a: the desktop build rebuilds the bindings itself) cannot run on this host.

@@ -47,7 +47,8 @@ sequenceDiagram
       Note over M: a strictly newer release carrying this flavour's exact asset<br/>and not the waved-off version → the offer notice (REQ-STARTUP-107/108/109/116);<br/>an update already installed or handed off in this process is not offered again (REQ-STARTUP-119);<br/>every failure one log line, never a surface (REQ-STARTUP-110)
     end
     MW->>WS: open(root) — fork one service per workspace
-    WS->>WS: identify workspace, open and migrate the store
+    WS->>WS: identify workspace, open, check (quick_check) and migrate the store
+    Note over WS: a store that fails the check is refused as workspace.store-corrupt,<br/>its write-ahead log left as found, and held by main (REQ-SESSION-089, OQ-477)
     WS->>WS: starter agents.yaml if absent or blank (REQ-CONFIG-025/028), never over a file
     WS-->>MW: workspaceId, storeFile
     MW->>RH: workspace.opened, 5 s (handOffOpenedWorkspace)

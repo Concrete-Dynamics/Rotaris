@@ -1,0 +1,11 @@
+# Code owners (R-091; docs/architecture/hardening.md §3.5 row 10, the OpenSSF Scorecard's review checks).
+#
+# GitHub requests a review from the owner named here on every pull request. Whether a code owner's approval is REQUIRED
+# is a branch-protection setting, the repository owner's alone (hardening.md §3.5: Branch-Protection, Code-Review);
+# this file changes no setting.
+#
+# The repository belongs to the organisation Concrete-Dynamics, and CODEOWNERS takes a user or an organisation's team,
+# never the organisation itself; the organisation has no team. The login below is the account the repository owner's
+# GitHub CLI is signed in as on the build host, an administrator of this repository (read 2026-11-02 with
+# `gh auth status` and the repository's collaborators). The owner confirms it, or replaces it with a team.
+* @theUpsider

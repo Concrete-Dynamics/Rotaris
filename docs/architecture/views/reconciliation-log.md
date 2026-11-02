@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-02**
 
+**`pnpm verify:plan` names the requirements a diff cites (R-092, hardening H2; 2026-11-02).** `01-component-view/03-where-the-responsibilities-sit.md`, the requirement coverage report: `tools/verify-plan/plan.mjs` imports its `branchReport` and `readDrift`, a tool-to-tool edge outside the boundary rule. No package, edge, process, message or seam changed.
+
 **The uncited only shrink: `pnpm req-coverage --check` in `pnpm lint` (R-092, hardening H2; 2026-11-02).** `01-component-view/03-where-the-responsibilities-sit.md`, the requirement coverage report: no longer in no gate; `--check` reads `baseline.json` beside it and `--write-baseline` writes it. No package, edge, process, message or seam changed.
 
 Last reconciled with the code: **2026-11-01**

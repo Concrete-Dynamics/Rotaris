@@ -164,6 +164,7 @@ describe('requirement coverage — branch-relative citations (--since; ReqToCode
       citedInTree: new Set(['REQ-DEMO-002']),
     });
     expect(r.files).toEqual(['packages/a/src/gone.ts', 'packages/a/src/new.ts', 'packages/a/src/x.ts']);
+    expect(r.citing).toEqual(['PD-DEMO-001', 'REQ-DEMO-001', 'REQ-DEMO-003', 'REQ-DEMO-004']);
     expect(r.cites).toEqual([
       { id: 'PD-DEMO-001', files: ['packages/a/src/new.ts'] },
       { id: 'REQ-DEMO-003', files: ['packages/a/src/new.ts', 'packages/a/src/x.ts'] },

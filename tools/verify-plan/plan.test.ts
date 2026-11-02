@@ -3,13 +3,15 @@
  * affected proof suites (AGENTS.md's "run the whole suite a part touches"), the
  * architecture documents, and unmapped paths that require explicit review.
  */
-import { readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
-import { join, resolve } from 'node:path';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
-import { AREAS, NEVER_AUTOMATIC, RULES, classifyPath, collectGitPaths, formatPlan, isMainModule, matchingRules, narrowTests, parseArgs, pathMatches, planFor, proofsInMap, proofScriptOf, resolveCompareRef } from './plan.mjs';
+import { AREAS, NEVER_AUTOMATIC, RULES, classifyPath, collectGitPaths, diffCitations, formatCitations, formatPlan, isMainModule, matchingRules, narrowTests, parseArgs, pathMatches, planFor, proofsInMap, proofScriptOf, readCitations, resolveCompareRef } from './plan.mjs';
+import { REDIRECTING } from '../build-id/build-id.mjs';
 
 const root = join(import.meta.dirname, '..', '..');
 
@@ -209,7 +211,9 @@ describe('verification planner — argv and git', () => {
     expect(parsed.files).toEqual(['AGENTS.md', 'packages/engine/src/run/run.ts']);
     expect(parsed.json).toBe(true);
     expect(parsed.strict).toBe(true);
+    expect(parsed.drift).toBe(false);
     expect(parsed.unknown).toEqual([]);
+    expect(parseArgs(['--drift']).drift).toBe(true);
   });
 
   it('parseArgs accepts --base= and --base <ref>, and flags before --files', () => {
@@ -271,9 +275,11 @@ describe('verification planner — argv and git', () => {
       encoding: 'utf8',
       cwd: root,
     });
-    const plan = JSON.parse(out) as { paths: Array<{ path: string }>; unknown: string[] };
+    const plan = JSON.parse(out) as { paths: Array<{ path: string }>; unknown: string[]; citations: { unread?: string } };
     expect(plan.paths.map((p) => p.path)).toEqual(['AGENTS.md']);
     expect(plan.unknown).toEqual([]);
+    // --files reads no git, so there is no merge-base to read the citations against: said, never an empty list.
+    expect(plan.citations.unread).toMatch(/no merge-base/);
   });
 
   it('CLI unknown argument and --strict unmapped path exit 2', () => {
@@ -333,5 +339,108 @@ describe('verification planner — the map stays honest', () => {
       }
     }
     expect(missing, `rule paths that match nothing: ${missing.join(', ')}`).toEqual([]);
+  });
+});
+
+describe('verification planner — the requirements this diff cites (R-092, hardening H2)', () => {
+  // Made-up identifiers, assembled at run time so that no citation of an undefined one is written here
+  // (`rotaris/requirement-citations-resolve`); the section reads what `pnpm req-coverage --since` returns.
+  const fake = (domain: string, n: string): string => ['REQ', domain, n].join('-');
+  const [D1, D2, D3, D4] = ['001', '002', '003', '004'].map((n) => fake('DEMO', n)) as [string, string, string, string];
+  const OTHER = fake('OTHER', '009');
+  const branch = {
+    ref: 'origin/main',
+    base: '0123456789abcdef0123456789abcdef01234567',
+    files: ['packages/a/src/x.ts', 'packages/a/src/x.test.ts'],
+    citing: [D1, D3],
+    cites: [{ id: D3, files: ['packages/a/src/x.test.ts', 'packages/a/src/x.ts'] }],
+    drops: [
+      { id: D2, files: ['packages/a/src/x.ts'], citedElsewhere: true },
+      { id: D4, files: ['packages/a/src/x.ts'], citedElsewhere: false },
+    ],
+  };
+  const drifted = (id: string) => ({
+    id, spec: 'docs/spec/d.md:3',
+    definition: { commit: 'c'.repeat(40), date: '2026-02-01' },
+    latest: { file: 'packages/a/src/x.ts', commit: 'b'.repeat(40), date: '2026-01-01' },
+  });
+
+  it('names what the diff newly cites and drops, and whether a drop is cited elsewhere', () => {
+    const c = diffCitations(branch);
+    expect(c).toMatchObject({ ref: 'origin/main', files: 2, cited: branch.cites, dropped: branch.drops, drifted: null });
+    const text = formatCitations(c).join('\n');
+    expect(text).toMatch(/^Requirements this diff cites\n/);
+    expect(text).toContain('2 touched files read for citations');
+    expect(text).toContain('against origin/main (merge-base 0123456789)');
+    expect(text).toContain(`newly cited\n    ${D3}  packages/a/src/x.test.ts, packages/a/src/x.ts`);
+    expect(text).toContain(`${D2}  packages/a/src/x.ts  (still cited elsewhere)`);
+    expect(text).toContain(`${D4}  packages/a/src/x.ts  (now cited nowhere)`);
+    expect(text).toContain('drifted: not read (--drift reads it)');
+    expect(text).toContain('a citation is a claim; the test or proof beside it is the evidence');
+  });
+
+  it('with --drift, names the drifted among everything the touched files cite, and no other', () => {
+    const c = diffCitations(branch, { drifted: [drifted(D1), drifted(OTHER)] });
+    expect(c.drifted.map((d: { id: string }) => d.id)).toEqual([D1]);
+    expect(formatCitations(c).join('\n')).toContain(`${D1}  defined 2026-02-01 docs/spec/d.md:3; latest citing 2026-01-01 packages/a/src/x.ts`);
+    expect(formatCitations(diffCitations(branch, { drifted: [] })).join('\n')).toContain('drifted: nothing');
+  });
+
+  it('says nothing was cited or dropped rather than printing an empty heading', () => {
+    const text = formatCitations(diffCitations({ ...branch, files: [], citing: [], cites: [], drops: [] })).join('\n');
+    expect(text).toContain('0 touched files');
+    expect(text).toContain('newly cited: nothing');
+    expect(text).toContain('dropped: nothing');
+  });
+
+  it('the printed plan carries the section after the architecture, and only when it was read', () => {
+    const plan = planFor(['packages/engine/src/run/run.ts']);
+    const text = formatPlan(plan, { citations: diffCitations(branch) });
+    expect(text.indexOf('Requirements this diff cites')).toBeGreaterThan(text.indexOf('Architecture'));
+    expect(formatPlan(plan)).not.toContain('Requirements this diff cites');
+    expect(formatPlan(plan, { citations: { unread: 'git said no' } })).toContain('Requirements this diff cites\n  (not read: git said no)');
+  });
+
+  it('a failure to read the citations is the section\'s, never the plan\'s', async () => {
+    const c = await readCitations(root, 'refs/no-such-ref-for-verify-plan');
+    expect(c).toHaveProperty('unread');
+    expect((c as { unread: string }).unread.length).toBeGreaterThan(0);
+  });
+
+  describe('over a fixture repository', () => {
+    const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@invalid', '-c', 'commit.gpgsign=false'];
+    const ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !(REDIRECTING as readonly string[]).includes(k)));
+    let repo = '';
+    const git = (args: string[]): string => {
+      const r = spawnSync('git', ['-C', repo, ...IDENTITY, ...args], { encoding: 'utf8', env: ENV });
+      if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`);
+      return r.stdout.trim();
+    };
+    const put = (rel: string, text: string) => { mkdirSync(dirname(join(repo, rel)), { recursive: true }); writeFileSync(join(repo, rel), text); };
+
+    beforeAll(() => {
+      repo = mkdtempSync(join(tmpdir(), 'rotaris-verify-plan-'));
+      git(['init', '-q']);
+      put('packages/a/src/x.ts', `// ${D1}, ${D2}\n`);
+      put('packages/a/src/y.ts', `// ${D2}\n`);
+      git(['add', '-A']);
+      git(['commit', '-q', '-m', 'base']);
+      git(['branch', 'base']);
+      // The diff: x.ts drops D2 (y.ts still cites it) and cites D3, uncommitted; a new, untracked test cites D4.
+      put('packages/a/src/x.ts', `// ${D1}, ${D3}\n`);
+      put('packages/a/src/x.test.ts', `// ${D4}\n`);
+    });
+    afterAll(() => { rmSync(repo, { recursive: true, force: true }); });
+
+    it('reads the section through req-coverage\'s branch report, uncommitted and untracked files included', async () => {
+      const c = await readCitations(repo, 'base');
+      expect(c).toMatchObject({
+        ref: 'base',
+        files: 2,
+        cited: [{ id: D3, files: ['packages/a/src/x.ts'] }, { id: D4, files: ['packages/a/src/x.test.ts'] }],
+        dropped: [{ id: D2, files: ['packages/a/src/x.ts'], citedElsewhere: true }],
+        drifted: null,
+      });
+    });
   });
 });

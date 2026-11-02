@@ -221,7 +221,7 @@ before it. **Edges unchanged**: a script reaching a tool, as above.
 the product ships. **Edges unchanged**: `tools/**` is outside the boundary rule, and its test reaches the artifact through
 `@rotaris/kernel`, as `symbol-artifact`'s does. Since 2026-11-01 (R-092, H1) `tools/eslint-rules/index.js` imports its
 `citationsIn`, so `rotaris/requirement-citations-resolve` reads a citation exactly as the report does. Its `--since` and `--drift` (same day) also run `git`
-`merge-base`, `diff`, `show`, `log` and `blame` read-only, and it imports `REDIRECTING` from `tools/build-id/`.
+`merge-base`, `diff`, `show`, `log` and `blame` read-only, and it imports `REDIRECTING` from `tools/build-id/`. `tools/verify-plan/plan.mjs` imports its `branchReport` and `readDrift` (H2).
 
 ### The development-time store behind `pnpm dev-time` (2026-10-18; R-075)
 

@@ -23,6 +23,7 @@ Default input is the working tree, index and untracked files against the merge-b
 3. **Architecture** — read the named views before changing code; update them in the same commit when the change adds, removes or moves what they describe (`docs/architecture/views/README.md`).
 4. **Review required** — stop guessing. An unmapped path, or a shared seam (contracts, run-host dispatch, design-system), is not "no proofs". Name the suites in writing before skipping any. `--strict` exits 2 when this section is present.
 5. **Notes** — `live-run` and `slice-proof` are never automatic. Do not add them because a path looked related.
+6. **Requirements this diff cites** — the identifiers the touched files newly cite and drop against the merge-base (`pnpm req-coverage --since`), and with `--drift` the drifted among all they cite: each new citation is a claim the diff's tests or proofs must carry, and a dropped live requirement marked "now cited nowhere" fails `pnpm lint`'s ratchet (`pnpm req-coverage --check`).
 
 The map lives in `tools/verify-plan/map.mjs`. A new proof script that is not in an area fails `pnpm test` (`plan.test.ts`, "the map stays honest"). Add the path there in the same commit as the script.
 

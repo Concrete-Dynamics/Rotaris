@@ -365,6 +365,8 @@ export function branchCitations({ before, after, citedInTree = new Set() }) {
   const order = (/** @type {string} */ a, /** @type {string} */ b) => a.localeCompare(b);
   return {
     files: [...new Set([...before.keys(), ...after.keys()])].sort(order),
+    // Every identifier the touched files cite now, new or not: what `pnpm verify:plan` reads drift among.
+    citing: [...now.keys()].sort(order),
     cites: [...now.keys()].filter((id) => !was.has(id)).sort(order)
       .map((id) => ({ id, files: [...(now.get(id) ?? [])].sort(order) })),
     drops: [...was.keys()].filter((id) => !now.has(id)).sort(order)
@@ -418,7 +420,7 @@ export function readBranch(root, ref = 'origin/main') {
 
 /**
  * The branch-relative report over the repository at `root`: what `pnpm verify:plan` names as the requirements a diff
- * cites (bundle H2 wires it there).
+ * cites (its section "Requirements this diff cites", since hrd2 H2).
  * @param {string} root
  * @param {string} [ref]
  */

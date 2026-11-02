@@ -7,6 +7,13 @@
 // Makes AGENTS.md's "run the whole suite a part touches" rule mechanical.
 // Proofs measure the built app; live-run and slice-proof are never scheduled.
 //
+// It also names the requirements the diff's files cite (R-092, hardening H2): the
+// identifiers the touched files cite now and did not at the merge-base, the ones
+// they no longer cite, and with --drift those among everything they cite whose
+// definition changed after their code — `pnpm req-coverage`'s `--since` and
+// `--drift`, read by its own functions. A citation is a claim; the test or proof
+// beside it is the evidence.
+//
 // Usage (`pnpm verify:plan [flags]`):
 //   (none)              working tree + index + untracked against merge-base with main
 //                       (origin/main if main is missing)
@@ -14,6 +21,7 @@
 //   --files <path>…     classify these paths; do not read git. Flags after --files stay flags.
 //   --json              the plan as JSON
 //   --strict            exit 2 when review is required
+//   --drift             also name the cited requirements that drifted (slower: it blames the specification)
 //
 // Reads git; writes nothing. The pure classifier is exported for the test beside this file.
 import { execFileSync } from 'node:child_process';
@@ -21,6 +29,7 @@ import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { AREAS, NEVER_AUTOMATIC, RULES } from './map.mjs';
+import { branchReport, buildReport, readDrift, readTree } from '../requirement-coverage/coverage.mjs';
 export { AREAS, NEVER_AUTOMATIC, RULES };
 
 const USAGE = `pnpm verify:plan [flags]
@@ -30,6 +39,7 @@ const USAGE = `pnpm verify:plan [flags]
   --files <path>…     classify these paths; do not read git. Flags after --files stay flags.
   --json              the plan as JSON
   --strict            exit 2 when review is required
+  --drift             also name the cited requirements that drifted (slower: it blames the specification)
 `;
 
 const PROOF_FILE = /^apps\/desktop\/scripts\/([a-z0-9-]+)-proof(?:\.mjs|\/)/;
@@ -282,8 +292,90 @@ export function planFor(files, opts = {}) {
 }
 
 /**
+ * @typedef {{ id: string, files: string[] }} Cited
+ * @typedef {{ id: string, files: string[], citedElsewhere: boolean }} Dropped
+ * @typedef {{ id: string, spec: string, definition: { commit: string, date: string }, latest: { file: string, commit: string, date: string } }} Drifted
+ * @typedef {{
+ *   ref: string,
+ *   base: string,
+ *   files: number,
+ *   cited: Cited[],
+ *   dropped: Dropped[],
+ *   drifted: Drifted[] | null,
+ * }} DiffCitations
+ * @typedef {DiffCitations | { unread: string }} CitationsSection
+ */
+
+/**
+ * The requirements a diff cites, pure over `pnpm req-coverage`'s branch report (`branchReport`) and, when it was
+ * read, its drift report (`readDrift`): newly cited, dropped, and the drifted among every identifier the touched
+ * files cite now — a touched file citing a requirement whose text changed after its code is the place to check it.
+ * @param {{ ref: string, base: string, files: string[], citing: string[], cites: Cited[], drops: Dropped[] }} branch
+ * @param {{ drifted: Drifted[] } | null} [drift]
+ * @returns {DiffCitations}
+ */
+export function diffCitations(branch, drift = null) {
+  const citing = new Set(branch.citing);
+  return {
+    ref: branch.ref,
+    base: branch.base,
+    files: branch.files.length,
+    cited: branch.cites,
+    dropped: branch.drops,
+    drifted: drift ? drift.drifted.filter((d) => citing.has(d.id)) : null,
+  };
+}
+
+/**
+ * The section "Requirements this diff cites".
+ * @param {CitationsSection} c
+ * @returns {string[]}
+ */
+export function formatCitations(c) {
+  const lines = ['Requirements this diff cites'];
+  if ('unread' in c) {
+    lines.push(`  (not read: ${c.unread})`);
+    return lines;
+  }
+  lines.push(`  ${c.files} touched file${c.files === 1 ? '' : 's'} read for citations (source under packages/, apps/, tools/) against ${c.ref} (merge-base ${c.base.slice(0, 10)})`);
+  lines.push(c.cited.length === 0 ? '  newly cited: nothing' : '  newly cited');
+  for (const x of c.cited) lines.push(`    ${x.id}  ${x.files.join(', ')}`);
+  lines.push(c.dropped.length === 0 ? '  dropped: nothing' : '  dropped');
+  for (const x of c.dropped) {
+    lines.push(`    ${x.id}  ${x.files.join(', ')}  (${x.citedElsewhere ? 'still cited elsewhere' : 'now cited nowhere'})`);
+  }
+  if (c.drifted === null) {
+    lines.push('  drifted: not read (--drift reads it)');
+  } else {
+    lines.push(c.drifted.length === 0 ? '  drifted: nothing' : '  drifted  (the definition changed after every implementation file citing it)');
+    for (const x of c.drifted) {
+      lines.push(`    ${x.id}  defined ${x.definition.date} ${x.spec}; latest citing ${x.latest.date} ${x.latest.file}`);
+    }
+  }
+  lines.push('  a citation is a claim; the test or proof beside it is the evidence');
+  return lines;
+}
+
+/**
+ * Reads the section over the repository at `root` against `ref`; a failure is the section's, never the plan's.
+ * @param {string} root
+ * @param {string} ref
+ * @param {{ drift?: boolean }} [opts]
+ * @returns {Promise<CitationsSection>}
+ */
+export async function readCitations(root, ref, opts = {}) {
+  try {
+    const branch = branchReport(root, ref);
+    const drift = opts.drift ? await readDrift(root, buildReport(await readTree(root))) : null;
+    return diffCitations(branch, drift);
+  } catch (err) {
+    return { unread: String(/** @type {Error} */ (err).message).split('\n')[0] || 'unknown failure' };
+  }
+}
+
+/**
  * @param {Plan} plan
- * @param {{ base?: string, count?: number }} [meta]
+ * @param {{ base?: string, count?: number, citations?: CitationsSection }} [meta]
  */
 export function formatPlan(plan, meta = {}) {
   const lines = [];
@@ -334,6 +426,11 @@ export function formatPlan(plan, meta = {}) {
     }
   }
 
+  if (meta.citations !== undefined) {
+    lines.push('');
+    lines.push(...formatCitations(meta.citations));
+  }
+
   if (plan.review.length > 0) {
     lines.push('');
     lines.push('Review required');
@@ -358,6 +455,7 @@ export function formatPlan(plan, meta = {}) {
  *   help: boolean,
  *   json: boolean,
  *   strict: boolean,
+ *   drift: boolean,
  *   base: string | undefined,
  *   files: string[] | null,
  *   unknown: string[],
@@ -373,6 +471,7 @@ export function parseArgs(args) {
   let help = false;
   let json = false;
   let strict = false;
+  let drift = false;
   /** @type {string | undefined} */
   let base;
   /** @type {string[] | null} */
@@ -385,6 +484,7 @@ export function parseArgs(args) {
     if (a === '--help' || a === '-h') { help = true; continue; }
     if (a === '--json') { json = true; continue; }
     if (a === '--strict') { strict = true; continue; }
+    if (a === '--drift') { drift = true; continue; }
     if (a.startsWith('--base=')) {
       base = a.slice('--base='.length);
       if (!base) unknown.push('--base (missing value)');
@@ -410,7 +510,7 @@ export function parseArgs(args) {
     }
     unknown.push(a);
   }
-  return { help, json, strict, base, files, unknown };
+  return { help, json, strict, drift, base, files, unknown };
 }
 
 /**
@@ -476,7 +576,7 @@ export function collectGitPaths(root, requested = 'main', opts = {}) {
       if (line) names.add(normalizePath(line));
     }
   }
-  return { base: mergeBase, files: [...names].sort() };
+  return { base: mergeBase, compare, files: [...names].sort() };
 }
 
 /**
@@ -498,26 +598,30 @@ if (isMainModule(process.argv[1])) {
       process.exit(0);
     }
     if (parsed.unknown.length > 0) {
-      process.stderr.write(`verify-plan: unknown argument ${parsed.unknown.join(' ')} (known: --base --files --json --strict)\n`);
+      process.stderr.write(`verify-plan: unknown argument ${parsed.unknown.join(' ')} (known: --base --files --json --strict --drift)\n`);
       process.exit(2);
     }
     /** @type {string[]} */
     let files;
     /** @type {string | undefined} */
     let against;
+    /** @type {CitationsSection} */
+    let citations;
     if (parsed.files !== null) {
       files = parsed.files;
       against = undefined;
+      citations = { unread: '--files names no merge-base to measure the citations against' };
     } else {
       const collected = collectGitPaths(root, parsed.base ?? 'main');
       files = collected.files;
       against = collected.base;
+      citations = await readCitations(root, collected.compare, { drift: parsed.drift });
     }
     const plan = planFor(files, { exists: (p) => existsSync(join(root, p)) });
     if (parsed.json) {
-      process.stdout.write(`${JSON.stringify({ base: against, ...plan }, null, 2)}\n`);
+      process.stdout.write(`${JSON.stringify({ base: against, ...plan, citations }, null, 2)}\n`);
     } else {
-      process.stdout.write(`${formatPlan(plan, { base: against, count: files.length })}\n`);
+      process.stdout.write(`${formatPlan(plan, { base: against, count: files.length, citations })}\n`);
     }
     if (parsed.strict && (plan.review.length > 0 || plan.unknown.length > 0)) process.exit(2);
   } catch (err) {

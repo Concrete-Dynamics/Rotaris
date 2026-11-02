@@ -74,7 +74,7 @@ imports one; `test-support-naming.test.ts`), `tools/proof-registry/` (the proof 
 `registry.mjs` holds one record per proof entry, `generate.mjs` renders `docs/proofs/README.md` and `pnpm lint` fails
 when it is stale, `flags.mjs` reads the flags a proof script takes from its own argv, and `registry.test.ts` holds
 the registry to the tree), `tools/verify-plan/` (`pnpm verify:plan` —
-given a diff, the gate, the complete affected proof suites and the architecture documents; an unmapped path requires
+given a diff, the gate, the complete affected proof suites, the architecture documents and the requirements its files cite (since 2026-11-02, read through `tools/requirement-coverage/`); an unmapped path requires
 explicit review; open `plan.mjs`, tests in `plan.test.ts`), `tools/dev-time/` (since 2026-10-18 the recorder behind
 `pnpm dev-time` (R-075) — measured spans of setup, build, each gate stage, proofs, repairs and repeated rebases, one
 JSON record a span in an append-only log, `~/.rotaris/dev-time/log.jsonl`; transparent since 2026-10-19 — `pnpm

@@ -1,6 +1,6 @@
 import { contextPercent, DEFAULT_CONTEXT_CAPACITY, isBusy, presentationStatus, PRIMARY_VIEWS, RUN_AGENT_ID, type AgentRecord, type ConfigSnapshot, type EntryRoot, type SessionArtifactLink, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { countNoun } from '@rotaris/kernel';
-import { treeRows } from './AgentTree.js';
+import { treeRows } from './agent-tree-rows.js';
 import { PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL } from './settings/config-state.js';
 
 /**

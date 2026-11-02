@@ -14,7 +14,7 @@ import { createLibraryRevision } from './library.js';
 import { startDriver, type AuxiliaryWindow } from './driver.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
 import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
-import { requirementColumnFoldsKey, type PreferenceKey } from '@rotaris/platform';
+import { requirementColumnFoldsKey, type PreferenceKey, claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // Part AP — the board's run coordinator (spec 08 §Runs Started from the Board; ADR-0041).
 import { createRequirementsRuns } from './requirements-runs.js';
 import { createImprovementCoordinator } from './improvements.js';
@@ -26,7 +26,6 @@ import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { millis, toIsoUtc } from '@rotaris/kernel';
 import { AUTH_RECOVERY_DIALOG_WIDTH, type AuthRecoveryPayload, type AcknowledgementAction, CHANNEL, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ImprovementActivity, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
-import { claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
 import { createUpdater, updateCloseBox } from './updater/updater.js';
 import { createSuccessorWait } from './updater/successor.js';

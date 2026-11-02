@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, posix, win32 } from 'node:path';
 import { loadConfiguration } from '../load.js';
-import { availability, findOnPath, resolveCommand } from './commands.js';
+import { availability, findOnPath, resolveCommand, CODE_INTELLIGENCE_TOKEN } from './commands.js';
 import { describeForRuntime, REMOTE_DESCRIPTION_KEYS, STDIO_DESCRIPTION_KEYS } from './describe.js';
 import { DiagnosticSink, warn } from './diagnostics.js';
 import { discoveryLocations, parseEnvFile, readDiscoveryFiles } from './discovery-files.js';
@@ -14,7 +14,6 @@ import { candidateSpellings, filterServerTools, grantDecision, resolvePersonaMcp
 import { MCP_SECTION_HEADING, NO_MCP_SERVERS_LINE, renderMcpSection } from './prompt.js';
 import { SHIPPED_MCP_SERVERS, BUILT_IN_PERSONA_MCP_SERVERS } from './defaults.js';
 import { CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS, CODE_INTELLIGENCE_MANIFEST, codeIntelligenceProductDescription } from './code-intelligence.js';
-import { CODE_INTELLIGENCE_TOKEN } from './commands.js';
 import type { DiscoveredServers } from './discovery-files.js';
 import { launchedProjectOf, mcpConfigurationForExecutionRoot, resolveMcpConfiguration } from './index.js';
 

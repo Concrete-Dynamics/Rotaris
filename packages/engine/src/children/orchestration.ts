@@ -20,7 +20,7 @@ import { correctiveInstruction, hadCorrectiveMessage, recordCorrectiveMessage, S
 import { fileWriters, scopeWithoutWriterReason, validateWriteScope, WriteClaims, writeScopeBlock, writesFiles, type ClaimHit, type ScopeDisclosure } from './write-scope.js';
 import { admitTodoItem, openServedItems, type CallerPlan, type OpenServedItem } from './todo-item.js';
 import type { HookPort } from '../hooks-port.js';
-import { withContextUnits, withPlaybook } from '../run/run.js';
+import { withContextUnits, withPlaybook } from '../run/prompt-layers.js';
 import { STOP_GRACE } from '../run/grace.js';
 import type { LoopSupervisor } from '../run/supervisor.js';
 import type { TurnResilience } from '../run/ladder.js';

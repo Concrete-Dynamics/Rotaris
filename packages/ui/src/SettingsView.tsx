@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { isBusy, type SessionRecord, type Theme, type ThemeName } from '@rotaris/contracts';
+import { isBusy, type PlaybookCatalogue, type SessionRecord, type Theme, type ThemeName } from '@rotaris/contracts';
 import { HooksSettings, type HooksSettingsProps } from './HooksSettings.js';
 import { ModelsSettings, PersonasSettings, RuntimeSettings, SaveBar, type ConfigSettingsProps } from './settings/ConfigSettings.js';
 import { DisplaySettings, type DisplaySettingsProps } from './settings/DisplaySettings.js';
@@ -8,7 +8,6 @@ import { AboutSettings, type AboutSettingsProps } from './settings/About.js';
 import { McpSettings, type McpSettingsProps } from './settings/McpSettings.js';
 import { SkillsSettings, type SkillsSettingsProps } from './settings/SkillsSettings.js'; // ADR-0063
 import { ProjectInitSettings, TraceabilitySettings, type ProjectInitSettingsProps, type TraceabilitySettingsProps } from './settings/ProjectSettings.js'; // Part AJ2, Part AS
-import type { PlaybookCatalogue } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
 import { RUNTIME_CATEGORY_LABEL } from './settings/config-state.js';
 import { Button as DesignButton, Select as DesignSelect } from './design-system/index.js';

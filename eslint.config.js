@@ -2,7 +2,11 @@
 import tseslint from 'typescript-eslint';
 import boundaries from 'eslint-plugin-boundaries';
 import reactHooks from 'eslint-plugin-react-hooks';
+import { createNodeResolver, importX } from 'eslint-plugin-import-x';
+import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
 import globals from 'globals';
+import { existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import rotaris from './tools/eslint-rules/index.js';
 
 /**
@@ -89,6 +93,21 @@ const ENGINE_CODE = [
   'apps/desktop/src/workspace-service/**',
 ];
 
+/**
+ * Import hygiene (R-091, hardening.md §3.5 row 3): a package imports only what its own `package.json` declares, or the
+ * root's devDependencies where it is a test, a tool or configuration. Every workspace package with a manifest gets its
+ * own block, so `packageDir` names that manifest and the root's; files under no such package answer to the root's.
+ */
+const ROOT = import.meta.dirname;
+const WORKSPACE_PACKAGES = ['packages', 'apps', 'tools'].flatMap((group) =>
+  readdirSync(join(ROOT, group), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(join(ROOT, group, entry.name, 'package.json')))
+    .map((entry) => `${group}/${entry.name}`),
+);
+/** Where a devDependency may be imported: tests and their support, the tools, the proof scripts, configuration. */
+const DEV_FILES = ['**/*.test.{ts,tsx}', '**/*.test-support.ts', '**/vitest.config.ts', '**/electron.vite.config.ts', 'eslint.config.js', 'tools/**', 'apps/desktop/scripts/**', '.agents/**'];
+const extraneous = (packageDir, devDependencies) => ['error', { packageDir, devDependencies, optionalDependencies: false, peerDependencies: true }];
+
 export default tseslint.config(
   {
     // The proof directories hold scratch workspaces a real model may write code into (the slice's third prompt did).
@@ -102,6 +121,8 @@ export default tseslint.config(
   },
   // Type-aware (R-091, hardening.md §3.5 row 1): every TypeScript file is parsed against its project, so the rules
   // that need types (a dropped promise, a switch that misses a member) run in the gate. The stylistic set stays out.
+  // Since R-091: a disable directive that suppresses nothing fails the gate, as a warning does (`--max-warnings 0`).
+  { linterOptions: { reportUnusedDisableDirectives: 'error' } },
   ...tseslint.configs.recommendedTypeChecked,
   // The JavaScript files (the tools' and skills' `.mjs`, this file) belong to no project: they keep the untyped
   // `recommended` rules and are type-checked by nothing here (E2's `checkJs` brings them in).
@@ -162,6 +183,32 @@ export default tseslint.config(
     },
   },
   {
+    // Import hygiene beside the boundaries plugin (R-091, hardening.md §3.5 row 3): the boundaries matrix polices the
+    // edges between the workspace's elements; these rules police the import graph itself and the manifests.
+    files: ['**/*.{ts,tsx,mts,cts,js,mjs,cjs}'],
+    plugins: { 'import-x': importX },
+    settings: {
+      // `import-x`'s own TypeScript settings (`flatConfigs.typescript`): without the parser named for `.ts`, the rules
+      // that read the imported module (`no-cycle`) cannot parse it and see no edge at all.
+      ...importX.flatConfigs.typescript.settings,
+      'import-x/resolver-next': [createTypeScriptImportResolver({ project: join(ROOT, 'tsconfig.json') }), createNodeResolver()],
+    },
+    rules: {
+      'import-x/no-cycle': ['error', { maxDepth: Infinity, ignoreExternal: true }],
+      'import-x/no-duplicates': 'error',
+      'import-x/no-self-import': 'error',
+      'import-x/no-extraneous-dependencies': extraneous([ROOT], DEV_FILES),
+    },
+  },
+  ...WORKSPACE_PACKAGES.map((dir) => ({
+    files: [`${dir}/**/*.{ts,tsx,mts,cts,js,mjs,cjs}`],
+    rules: {
+      // `apps/desktop` is bundled by electron-vite, which inlines its devDependencies (the workspace packages among
+      // them) and keeps `dependencies` external: there a devDependency is a bundled dependency, not a tool.
+      'import-x/no-extraneous-dependencies': extraneous([join(ROOT, dir), ROOT], dir === 'apps/desktop' ? true : DEV_FILES),
+    },
+  })),
+  {
     // The `any`-flow rules hold product code, not tests: vitest's asymmetric matchers (`expect.any`,
     // `expect.stringContaining`) are typed `any`, a test reads a stored record back through `JSON.parse`, and the
     // tools' tests import the tools' untyped `.mjs`, so every value they take from one is `any` until E2 (typecheck
@@ -203,7 +250,9 @@ export default tseslint.config(
     files: ['packages/ui/src/**', 'packages/ui-core/src/**', 'apps/desktop/src/renderer/**', 'apps/desktop/src/preload/**'],
     ignores: ['**/*.test.ts', '**/*.test.tsx'],
     rules: {
-      'no-restricted-imports': ['error', { patterns: [{ group: ['node:*', 'fs', 'path', 'os', 'child_process', 'better-sqlite3'], message: 'Renderer code has no filesystem and no store handle (ADR-0044, W-01).' }] }],
+      // `node:*` holds every built-in's prefixed form; the bare names are listed one by one (R-091 added the network,
+      // crypto and worker modules a sandboxed renderer has no more than it has a file system).
+      'no-restricted-imports': ['error', { patterns: [{ group: ['node:*', 'fs', 'fs/*', 'path', 'os', 'child_process', 'crypto', 'net', 'http', 'https', 'http2', 'tls', 'dgram', 'dns', 'worker_threads', 'cluster', 'better-sqlite3'], message: 'Renderer code has no filesystem, no network socket, no process and no store handle (ADR-0044, W-01).' }] }],
     },
   },
   {

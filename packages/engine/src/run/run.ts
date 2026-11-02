@@ -1,5 +1,5 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
-import type { IterationRow, SessionRow } from '@rotaris/store';
+import type { IterationRow, SessionRow, ChildRow, StoreDal } from '@rotaris/store';
 import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type ApprovalPayload, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
@@ -13,6 +13,7 @@ import { cut } from './cut.js';
 import { planRequestSection, resumedWorkSection } from './plan-text.js';
 import { recordSteeringInjected, runTurn, steeringMessage, type ToolPort, type TurnOutcome } from './turn.js';
 import { childCompletedFields, IterationChildren, refreshing } from '../children/orchestration.js';
+import { withContextUnits, withPlaybook } from './prompt-layers.js';
 import type { DelegationOps } from '../children/delegation.js';
 import type { Budget as ChildBudget } from '../children/ledger.js';
 import { canonicaliseName, mintTaskId, takenTaskIds } from '../children/naming.js';
@@ -26,7 +27,6 @@ import type { CheckpointPort } from '../checkpoint-port.js';
 import type { ArtifactStore } from '../artifacts/store.js';
 import { NO_PREFLIGHT_INTENT, type Preflight } from '../preflight.js';
 import { clampBudget, storeChildReport, writeCancelledTeardown } from '../children/ledger.js';
-import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { LoopSupervisor } from './supervisor.js';
 import { entryInstructionsFor, resolveRole, runOverrideLayer, type Persona, type PersonaResolver } from '../children/personas.js';
 import { agentCell, type AgentResilienceCell, type TurnResilience } from './ladder.js';
@@ -3404,32 +3404,6 @@ export function parseTokenSamples(json: string): [string, number][] {
   } catch { return []; }
 }
 
-/** REQ-ORCH-019/020: the playbook after the role's own instructions, once. */
-export function withPlaybook(systemPrompt: string, playbook: string): string {
-  return playbook === '' ? systemPrompt : `${systemPrompt}\n\n${playbook}`;
-}
-
-/**
- * REQ-WORKSPACE-047/060 (ADR-0063) — the always-active context units, after the role's instructions and its
- * playbook, in the order the caller supplies. REQ-WORKSPACE-060 fixes that order as **workspace context →
- * skill catalog → force-loaded skill bodies → persona memory**, and the caller is the one place that knows
- * all four; this composes what it is given and adds nothing.
- *
- * It is deliberately a **list** rather than four parameters: one of the four units is not built in this release
- * (persona memory), and a signature naming it would have to change when it arrives. Workspace-context injection
- * (REQ-WORKSPACE-041..050) is built and arrives first in the list (`apps/desktop/src/run-host/skills.ts`); until
- * 2026-10-13 this comment listed it as not built too. An empty unit contributes nothing, so a slot that is not
- * filled costs no separator.
- *
- * Applied at the two places a role's prompt becomes an agent's — the entry turn and a child's construction —
- * so REQ-WORKSPACE-065's "every agent built for a session sees the same catalog" holds by construction: the
- * units are a property of the session, composed onto whatever prompt the role resolved.
- */
-export function withContextUnits(systemPrompt: string, units: readonly string[]): string {
-  const present = units.filter((u) => u.trim() !== '');
-  return present.length === 0 ? systemPrompt : [systemPrompt, ...present].join('\n\n');
-}
-
 function describe(e: ModelError): string {
   return [e.headline, e.status === undefined ? '' : `HTTP ${e.status}`, e.providerMessage ?? ''].filter(Boolean).join(' — ');
 }
@@ -3446,3 +3420,6 @@ function storedIds(value: unknown): string[] {
 function storedText(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value : null;
 }
+
+/** The prompt layers live in `prompt-layers.ts` since R-091's cycle repair; the package's barrel still reaches them here. */
+export { withContextUnits, withPlaybook };

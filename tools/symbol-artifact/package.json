@@ -6,5 +6,8 @@
   "description": "Generates the requirement-symbol module from docs/spec (ADR-0040 #4). Shared by the build and the test runner.",
   "bin": {
     "rotaris-symbols": "./generate.mjs"
+  },
+  "devDependencies": {
+    "@rotaris/kernel": "workspace:*"
   }
 }

@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentRecord, CheckpointListPayload, SessionListItemPayload } from '@rotaris/contracts';
+import type { AgentRecord, CheckpointListPayload, SessionListItemPayload, GitViewState, GitWorktreeRow } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
 import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, stateColumnFit, statePhrase, branchLineFloor, branchColumnFit, tableFit, branchFitKey, stateFitKey, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, keepWaitingAction, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
-import type { GitViewState, GitWorktreeRow } from '@rotaris/contracts';
 import { resolveTheme, isBusy, presentationStatus, EXECUTION_STATUSES, PRESENTATION_STATUSES } from '@rotaris/contracts';
 
 describe('ui — the wait header (REQ-NOTIFY-263, REQ-NOTIFY-049)', () => {

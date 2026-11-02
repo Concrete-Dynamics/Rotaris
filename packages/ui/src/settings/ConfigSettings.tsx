@@ -4,6 +4,9 @@ import { CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, clampFor
 import { SecurityPolicy } from './SecurityPolicy.js';
 import { DictationSettings } from './DictationSettings.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
+import { Confirm } from './Confirm.js';
+
+export { Confirm };
 
 /**
  * The three configuration categories (structure from docs/spec, language from docs/design/system):
@@ -223,22 +226,6 @@ export function Toggle({ id, label, hint, on, onChange, disabled, testId }: { id
       {/* REQ-CONFIG-323: the accessible description states enabled or disabled and is regenerated on every change. */}
       <DesignButton type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-labelledby={`${id}-label`} aria-description={`${label} is ${on ? 'enabled' : 'disabled'}.`} aria-checked={on} disabled={disabled} onClick={() => onChange(!on)} {...(testId ? { 'data-testid': testId, 'data-on': on ? 'true' : 'false' } : {})} />
       <span className="text-secondary settings__hint">{hint}</span>
-    </div>
-  );
-}
-
-/** REQ-CONFIG-327: a warning prompt with Yes and Cancel, Cancel as the default. Shared with the Security policy card (REQ-SANDBOX-117). */
-export function Confirm({ title, body, onYes, onCancel }: { title: string; body: string; onYes: () => void; onCancel: () => void }) {
-  return (
-    <div className="dialog-backdrop" role="presentation">
-      <div className="dialog" role="alertdialog" aria-modal="true" aria-labelledby="settings-confirm-title">
-        <h2 id="settings-confirm-title" className="dialog-title">{title}</h2>
-        <p className="dialog-body">{body}</p>
-        <div className="dialog-actions">
-          <DesignButton type="button" className="btn btn-secondary" autoFocus onClick={onCancel}>Cancel</DesignButton>
-          <DesignButton type="button" className="btn btn-warning" onClick={onYes}>Yes</DesignButton>
-        </div>
-      </div>
     </div>
   );
 }

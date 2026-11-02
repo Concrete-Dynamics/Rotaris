@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { ESLint } from 'eslint';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
@@ -23,6 +23,12 @@ const eslint = new ESLint({
   overrideConfigFile: join(repo, 'eslint.config.js'),
   overrideConfig: { files: ['**/*.{ts,tsx,mts,cts}'], languageOptions: { parserOptions: { projectService: { allowDefaultProject: FIXTURES, defaultProject: 'tsconfig.json', maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 64 } } } },
 });
+
+/*
+ * The first lint builds the type-aware program and the import resolver's map of the workspace, which takes tens of
+ * seconds on a loaded host: it is done once here, under its own bound, so that no case's bound pays for it.
+ */
+beforeAll(async () => { await eslint.lintText('export {};\n', { filePath: join(repo, 'packages/store/src/ok.ts') }); }, 300_000);
 
 async function lintAs(filePath: string, code: string): Promise<string[]> {
   const [result] = await eslint.lintText(code, { filePath: join(repo, filePath) });
@@ -196,5 +202,38 @@ describe('lint — the type-aware rules run (R-091, hardening.md §3.5 row 1)', 
   });
   it('an await of a value that is no promise is reported', async () => {
     expect(await lintAs('packages/engine/src/violation.ts', 'export async function f(): Promise<number> { return await 3; }\n')).toContain('@typescript-eslint/await-thenable');
+  });
+});
+
+describe('lint — import hygiene and the zero-warning gate (R-091, hardening.md §3.5 rows 2 and 3)', () => {
+  it('a package importing what its own manifest does not declare is reported', async () => {
+    expect(await lintAs('packages/kernel/src/violation.ts', "import { parse } from 'yaml';\nexport const p = parse;\n")).toContain('import-x/no-extraneous-dependencies');
+    expect(await lintAs('packages/config/src/ok.ts', "import { parse } from 'yaml';\nexport const p = parse;\n")).not.toContain('import-x/no-extraneous-dependencies');
+  });
+  it('a test may import the root devDependencies; product code may not', async () => {
+    expect(await lintAs('packages/engine/src/x.test.ts', "import { it } from 'vitest';\nit('x', () => undefined);\n")).not.toContain('import-x/no-extraneous-dependencies');
+    expect(await lintAs('packages/engine/src/violation.ts', "import { it } from 'vitest';\nexport const t = it;\n")).toContain('import-x/no-extraneous-dependencies');
+  });
+  it('an import that closes a cycle is reported, and the module as it stands is not', async () => {
+    // `agents.ts` imports `agent-tree-rows.ts`; the text below, linted at that module's path, imports `agents.ts` back.
+    const closing = "import { steerOffered } from './agents.js';\nexport const c = steerOffered;\n";
+    expect(await lintAs('packages/ui/src/agent-tree-rows.ts', closing)).toContain('import-x/no-cycle');
+    expect(await lintAs('packages/ui/src/agent-tree-rows.ts', "import { countNoun } from '@rotaris/kernel';\nexport const c = countNoun;\n")).not.toContain('import-x/no-cycle');
+  });
+  it('a module importing itself is reported', async () => {
+    expect(await lintAs('packages/ui/src/agent-tree-rows.ts', "import * as self from './agent-tree-rows.js';\nexport const s = self;\n")).toContain('import-x/no-self-import');
+  });
+  it('one module imported twice is reported', async () => {
+    expect(await lintAs('packages/engine/src/violation.ts', "import { millis } from '@rotaris/kernel';\nimport { ok } from '@rotaris/kernel';\nexport const a = [millis, ok];\n")).toContain('import-x/no-duplicates');
+  });
+  it('renderer code importing a network, crypto or worker built-in is reported, bare or prefixed', async () => {
+    for (const name of ['crypto', 'net', 'http', 'https', 'tls', 'dgram', 'worker_threads', 'node:crypto']) {
+      expect(await lintAs('packages/ui/src/violation.ts', `import * as m from '${name}';\nexport const x = m;\n`), name).toContain('no-restricted-imports');
+    }
+  });
+  it('a disable directive that suppresses nothing is reported as an error', async () => {
+    const [result] = await eslint.lintText('// eslint-disable-next-line no-debugger\nexport const a = 1;\n', { filePath: join(repo, 'packages/engine/src/fine.ts') });
+    const unused = (result?.messages ?? []).filter((m) => m.ruleId === null && /Unused eslint-disable directive/.test(m.message));
+    expect(unused.map((m) => m.severity)).toEqual([2]);
   });
 });

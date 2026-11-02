@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { PROVIDER_STATE_LABELS, type ProviderRow, type ProviderStateName } from '@rotaris/contracts';
-import { Button as DesignButton } from '../design-system/index.js';
-import { Checkbox as DesignCheckbox, Input as DesignInput } from '../design-system/index.js';
-import { ConfirmDialog, EmptyState, Table as DesignTable, TableCard, Tooltip as DesignTooltip } from '../design-system/index.js';
+import { Button as DesignButton, Checkbox as DesignCheckbox, Input as DesignInput, ConfirmDialog, EmptyState, Table as DesignTable, TableCard, Tooltip as DesignTooltip } from '../design-system/index.js';
 
 /**
  * REQ-CONFIG-329's providers card and REQ-PROVIDER-140/141: one right-aligned "Add endpoint" action

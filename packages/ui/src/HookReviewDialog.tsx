@@ -37,7 +37,7 @@ export function HookReviewDialog({ workspace, entries, onDecide }: HookReviewDia
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the listener calls `decide`, re-created each render: it reads `busy`, named here, and `onDecide`, which `renderer/windows.tsx` renders once for the window's life.
   }, [busy]);
   return (
     <div className="approval hook-review" role="dialog" aria-modal="true" aria-labelledby="hook-review-title" aria-describedby="hook-review-body">

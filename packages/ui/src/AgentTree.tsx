@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent } from 'react';
 import type { AgentRecord } from '@rotaris/contracts';
 import { markMotionStart } from './motion.js';
+import { treeRows } from './agent-tree-rows.js';
 import { stalledText, TIMED_OUT_TAG, timeoutLine } from './agents.js';
 import { wholeSeconds } from './composer.js';
 import { Tag as DesignTag } from './design-system/index.js';
@@ -14,35 +15,7 @@ import { Tag as DesignTag } from './design-system/index.js';
  * Home/End, no-ops at a boundary. The run's synthetic root is never a row (REQ-MONITOR-043). State is
  * always text as well as colour (REQ-SHELL-149). Structure from docs/spec; language from the design system.
  */
-export interface TreeRow {
-  readonly agent: AgentRecord;
-  readonly prefix: string;
-  readonly depth: number;
-  readonly hasChildren: boolean;
-}
-
-/** REQ-MONITOR-036/037: depth-first; an agent whose parent is unknown or the run itself is a root row. */
-export function treeRows(agents: readonly AgentRecord[], collapsed: ReadonlySet<string> = new Set()): TreeRow[] {
-  const ids = new Set(agents.map((a) => a.id));
-  const byParent = new Map<string, AgentRecord[]>();
-  for (const a of agents) {
-    const parent = ids.has(a.parentId) ? a.parentId : '';
-    byParent.set(parent, [...(byParent.get(parent) ?? []), a]);
-  }
-  const out: TreeRow[] = [];
-  const visit = (parent: string, depth: number, ancestorLines: boolean[]) => {
-    const kids = byParent.get(parent) ?? [];
-    kids.forEach((a, i) => {
-      const last = i === kids.length - 1;
-      const prefix = depth === 0 ? '' : `${ancestorLines.map((l) => (l ? '│  ' : '   ')).join('')}${last ? '└─ ' : '├─ '}`;
-      const hasChildren = (byParent.get(a.id) ?? []).length > 0;
-      out.push({ agent: a, prefix, depth, hasChildren });
-      if (hasChildren && !collapsed.has(a.id)) visit(a.id, depth + 1, [...ancestorLines, !last]);
-    });
-  };
-  visit('', 0, []);
-  return out;
-}
+export { treeRows, type TreeRow } from './agent-tree-rows.js';
 
 /**
  * REQ-MONITOR-107/110/111 (resolution item 25; the note "a waiting agent's elapsed time is not shown", R-067, OQ-124): the

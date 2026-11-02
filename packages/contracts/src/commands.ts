@@ -1,16 +1,13 @@
-import { PAUSE_RESOLUTIONS, PausePayloadSchema, PLAN_DECISIONS } from './control.js';
-import { CONFIG_SCOPES, DesktopSaveSchema, LiveStateSchema } from './config.js';
+import { PAUSE_RESOLUTIONS, PausePayloadSchema, PLAN_DECISIONS, ControlRequestSchema } from './control.js';
+import { CONFIG_SCOPES, DesktopSaveSchema, LiveStateSchema, SANDBOX_MODE_NAMES } from './config.js';
 import { z } from 'zod';
-import { ControlRequestSchema } from './control.js';
 import { HOOK_AGENT_IDS } from './hooks.js';
 import { PROVIDER_DIALOG_MODES } from './providers.js';
 import { PaneLayoutSchema } from './repository.js';
-import { SANDBOX_MODE_NAMES } from './config.js';
 import { PromptListSchema } from './library.js';
 import { ImprovementCommandSchema } from './improvements.js';
 import { ImageAttachmentInputSchema } from './channels.js';
-import { RequirementsCommandSchema } from './requirements.js'; // Part AK
-import { RequirementsRunsCommandSchema } from './requirements.js'; // Part AP
+import { RequirementsCommandSchema, RequirementsRunsCommandSchema } from './requirements.js'; // Parts AK and AP
 import { TERMINAL_COMMAND_SCHEMAS, TERMINAL_WINDOW_COMMAND_SCHEMAS } from './terminal.js';
 import { PROMPTS_COMMAND_SCHEMAS } from './slash.js'; // Part AO
 import { SKILLS_COMMAND_SCHEMAS } from './skills.js'; // ADR-0063

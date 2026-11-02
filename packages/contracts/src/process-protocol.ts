@@ -1,4 +1,4 @@
-import { CONFIG_SCOPES, ConfigSnapshotSchema, DesktopSaveSchema } from './config.js';
+import { CONFIG_SCOPES, ConfigSnapshotSchema, DesktopSaveSchema, SANDBOX_MODE_NAMES } from './config.js';
 import { AcknowledgementKindSchema, NoticeSeveritySchema } from './notices.js';
 import { z } from 'zod';
 import { HOOK_AGENT_IDS, HooksSummarySchema } from './hooks.js';
@@ -12,7 +12,6 @@ import { ControlRequestSchema, ControlResultSchema, PLAN_DECISIONS } from './con
 import { ApprovalPayloadSchema } from './tools.js';
 import { ArtifactsStateSchema } from './artifacts.js';
 import { GitViewStateSchema, RepositoryStateSchema, WorktreeBindingSchema } from './repository.js';
-import { SANDBOX_MODE_NAMES } from './config.js';
 import { CHECKPOINT_KINDS, CheckpointListSchema, PreviewEntrySchema } from './checkpoints.js';
 import { PromptListSchema, PromptStateSchema } from './library.js';
 import { ActorSchema, RequirementsCommandSchema, STANDING_DISCLOSURES } from './requirements.js'; // Part AK

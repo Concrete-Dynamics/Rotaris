@@ -55,7 +55,7 @@ export function ApprovalDialog({ payload, othersWaiting, onAnswer }: ApprovalDia
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the listener calls `answer`, re-created each render: it reads `busy` and `undeliverable`, named here, and `onAnswer`, which `renderer/windows.tsx` renders once for the window's life.
   }, [busy, undeliverable]);
 
   const disabled = busy || undeliverable;

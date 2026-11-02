@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "node tools/dev-time/cli.mjs run --quiet gate:typecheck -- tsc -p tsconfig.json --noEmit",
-    "lint": "node tools/dev-time/cli.mjs run --quiet --shell gate:lint -- \"node tools/check-line-endings.mjs && node tools/check-conflict-markers.mjs && node tools/check-request-log.mjs && node tools/check-directive-register.mjs && node tools/check-record-links.mjs && node tools/check-doc-budget.mjs && node tools/check-research-guides.mjs && node tools/proof-registry/generate.mjs --check && node tools/check-theme-colours.mjs && node tools/check-ui-language.mjs && node tools/check-plural-markers.mjs && node tools/check-timeline-vocabulary.mjs && node tools/check-open-question-claims.mjs && node tools/archive/migrate.mjs --check && node tools/requirement-coverage/coverage.mjs --check && eslint .\"",
+    "lint": "node tools/dev-time/cli.mjs run --quiet --shell gate:lint -- \"node tools/check-line-endings.mjs && node tools/check-conflict-markers.mjs && node tools/check-request-log.mjs && node tools/check-directive-register.mjs && node tools/check-record-links.mjs && node tools/check-doc-budget.mjs && node tools/check-research-guides.mjs && node tools/proof-registry/generate.mjs --check && node tools/check-theme-colours.mjs && node tools/check-ui-language.mjs && node tools/check-plural-markers.mjs && node tools/check-timeline-vocabulary.mjs && node tools/check-open-question-claims.mjs && node tools/archive/migrate.mjs --check && node tools/requirement-coverage/coverage.mjs --check && eslint . --max-warnings 0\"",
     "mockup": "node tools/mockup.mjs",
     "test": "node tools/dev-time/cli.mjs run --quiet gate:test -- vitest run",
     "test:coverage": "node tools/dev-time/cli.mjs run --quiet other:test-coverage -- vitest run --coverage",
@@ -108,6 +108,7 @@
     "eslint": "^10.9.1",
     "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-boundaries": "^7.2.1",
+    "eslint-plugin-import-x": "^4.17.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.12.0",
     "jiti": "2.7.0",

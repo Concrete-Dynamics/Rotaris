@@ -513,7 +513,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     // `table` was once rebuilt every render, so depending on the object itself re-pinned the tail continuously; it is
     // now rebuilt once per change of rows, width, expansion or a measurement, and its total height is still the only
     // part of it this effect reacts to. (The first execution measured the continuous re-pin: see ADR-0046.)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `table.total` stands for `table`, as the paragraph above says.
   }, [display, table.total, following]);
 
   /** REQ-CHAT-063: while any row is live, refresh at 1000 ms; when none is, nothing repaints on a timer at all. */

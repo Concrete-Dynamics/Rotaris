@@ -24,6 +24,15 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   `no-unnecessary-condition` (308 findings, the sampled ones TypeScript's narrowing kept across an `await` or a
   callback; the `strict-type-checked` plan's), and the `no-unsafe-*` family in tests (vitest's asymmetric matchers are
   `any`; the tools' tests import untyped `.mjs` until E2). The `.js`/`.mjs` files keep the untyped rules.
+- **A warning fails the gate, and so does a disable that disables nothing** (since 2026-11-01, R-091) — `eslint .
+  --max-warnings 0` in `pnpm lint`, and `linterOptions.reportUnusedDisableDirectives: 'error'`. A disable says why on its
+  own line (`-- <reason>`).
+- **The import graph has no cycle, and a package imports only what its manifest declares** (since 2026-11-01, R-091) —
+  `eslint-plugin-import-x` over the TypeScript resolver, beside the boundaries plugin: `import-x/no-cycle` at
+  `maxDepth: Infinity` (external modules aside), `import-x/no-extraneous-dependencies` with one block per workspace
+  manifest (`packageDir` names it and the root's; a devDependency only in tests, test support, the tools, the proof scripts
+  and configuration, and anywhere in `apps/desktop`, whose devDependencies electron-vite bundles), `import-x/no-duplicates`
+  and `import-x/no-self-import`. The renderer's restricted built-ins name the network, crypto and worker modules too.
 - **The IPC payloads carry no secret** — `contracts.test.ts` walks every channel schema.
 - **The symbol artifact is regenerated before collection** — vitest `globalSetup`, same generator as
   the build. A withdrawn identifier is `@deprecated` and warns at every reference (REQ-TRACE-181).

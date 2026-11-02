@@ -74,14 +74,14 @@ export function QuestionForm({ prompt, onSubmit, onCancel, onClose }: QuestionFo
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the listener calls `close`, re-created each render: it reads `busy`, named here, and the `decided` ref, and its `onCancel` names the one request the form is keyed by (`WorkspaceView` keys it by `request_id`).
   }, [busy]);
 
   useEffect(() => {
     const onUnload = () => { if (!decided.current) { decided.current = true; onCancel(); } };
     window.addEventListener('beforeunload', onUnload);
     return () => window.removeEventListener('beforeunload', onUnload);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- subscribed once: the `decided` ref is read live, and `onCancel` names the one request the form is keyed by (`WorkspaceView` keys it by `request_id`).
   }, []);
 
   const setAnswer = (id: string, value: QuestionAnswer) => {

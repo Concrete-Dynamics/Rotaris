@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FakeClock, millis } from '@rotaris/kernel';
-import { CHANNEL, CONTRACT_SCHEMA_VERSION } from '@rotaris/contracts';
-import { PRIMARY_VIEWS, STARTUP_VIEW } from '@rotaris/contracts';
+import { CHANNEL, CONTRACT_SCHEMA_VERSION, PRIMARY_VIEWS, STARTUP_VIEW } from '@rotaris/contracts';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from './index.js';
 
 describe('shell — the seven views (REQ-SHELL-023, -026, -027)', () => {

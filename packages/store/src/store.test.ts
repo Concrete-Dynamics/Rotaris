@@ -7,8 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, fileStamp, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
-import { checkEmptyPlace, establishInEmptyPlace, firstStoreSibling, legacyFirstStoreSibling, plannedAsideName } from './index.js';
-import { CutRestoreError, recoverCutRestore, RestorePendingError, restoreJournal, StorePlaceEmptyError, writeRestoreJournal } from './index.js';
+import { checkEmptyPlace, establishInEmptyPlace, firstStoreSibling, legacyFirstStoreSibling, plannedAsideName, CutRestoreError, recoverCutRestore, RestorePendingError, restoreJournal, StorePlaceEmptyError, writeRestoreJournal } from './index.js';
 import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, FILE_STAMP_LENGTH, openStore, openStoreForInspection, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, storePathLimit, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
 /** PD-ORCH-005 clause 9 / REQ-SESSION-031: what v35 added, undone before v34's so a test that lowers `user_version` below 35 can climb it again. */

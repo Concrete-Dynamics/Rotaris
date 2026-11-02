@@ -4,6 +4,12 @@ Part 2 of 4 of [the component view](../01-component-view.md), which indexes ever
 
 ## The allowed-edge matrix (the lint rule, verbatim)
 
+`eslint-plugin-boundaries` enforces this matrix; beside it, since 2026-11-01 (R-091), `eslint-plugin-import-x` holds what
+the matrix does not see: no import cycle inside or across packages (`import-x/no-cycle`), and no import of a package the
+importer's own `package.json` does not declare (`import-x/no-extraneous-dependencies`), so an edge the matrix allows is
+also written in the manifest — `engine` → `config` was allowed here and undeclared in `packages/engine/package.json`
+until that day.
+
 | From | May import |
 |---|---|
 | `kernel` | — |

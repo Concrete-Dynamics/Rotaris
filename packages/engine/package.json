@@ -12,6 +12,10 @@
     "@rotaris/model": "workspace:*",
     "@rotaris/contracts": "workspace:*",
     "@rotaris/platform": "workspace:*",
-    "@rotaris/store": "workspace:*"
+    "@rotaris/store": "workspace:*",
+    "@rotaris/config": "workspace:*"
+  },
+  "devDependencies": {
+    "@rotaris/ui-core": "workspace:*"
   }
 }

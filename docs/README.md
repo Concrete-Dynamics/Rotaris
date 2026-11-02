@@ -116,13 +116,17 @@ An agent that opens a part to read the questions still open loads those, and not
   opening sentence and its row in the record's index say what stays and what is archived.
 - **Every link to a moved anchor is repointed** to the archive, in the record (the files `tools/check-record-links.mjs`
   reads) and in the code (a `docs/….md#anchor` path under `apps/`, `packages/` or `tools/`). Only the target changes.
-- **Nothing in the archive is edited by hand after it moves.** Only the script writes there.
+- **Nothing in the archive is edited by hand after it moves.** Only the script writes there, and since 2026-11-02 that
+  is checked: every run writes `archive/manifest.json`, one SHA-256 per archived entry, and `--check` fails on an entry
+  that differs from it, one it does not hold and one it holds that is gone, naming each. A deliberate change is made and
+  then registered by `pnpm archive:migrate` in the same commit; a rebase that conflicts on the manifest re-runs it.
+  [`archive/README.md`](archive/README.md) says what is there, how to read an entry from its index line, and the commands.
 - **The archive is under the budget too**: an archived part that would pass it is continued in
   `<part>-continued-<k>.md`, and `tools/check-doc-budget.mjs` measures the archive like any other folder of `docs/`.
 
 **The move is a script**, `tools/archive/migrate.mjs`: `pnpm archive:migrate` moves and repoints, `--dry-run` lists what
 would move and which files would change, and `--check` (in `pnpm lint` from the first migration on) fails while an entry that qualifies is still
-live. It is idempotent and deterministic, so **ruling a question is followed by `pnpm archive:migrate` in the same
+live, of any of the five kinds below, or while the archive differs from its manifest. It is idempotent and deterministic, so **ruling a question is followed by `pnpm archive:migrate` in the same
 commit**, and a branch that rebases over a move re-runs it rather than merging moved text by hand, as `pnpm proofs:index`
 regenerates the proof index. An open question qualifies exactly when `tools/check-open-question-claims.mjs` reads it as
 settled (`entryState`: one rule for both); a deferred one stays live. **A gate that asks what the record holds reads the
@@ -162,4 +166,5 @@ the passages and the evidence):
 
 `--check` reads every kind, so the commit that lands a ruling in the specification, withdraws or supersedes a requirement, or writes such a correction or strike
 into an ADR, runs `pnpm archive:migrate` too; a repaired note is moved straight to `archive/defects/`, and one moved to
-the retired folder from habit fails `--check` until the script moves it.
+the retired folder from habit fails `--check` until the script moves it. A note moved straight to `archive/defects/` is
+registered in the manifest by the next run, and `--check` fails until it is.

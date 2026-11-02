@@ -10,7 +10,8 @@
 The open notes stand here. A repaired note is **moved** to [`docs/archive/defects/`](../archive/defects/) (`AGENTS.md`,
 "Defects noticed along the way"; [the archive](../README.md#the-archive)), its outcome written on it, and every pointer
 that named it at its old path moves with it, in the same commit — the note's own links move too, since one more `../`
-now sits between it and what it cites. `pnpm archive:migrate` does the repointing, and moves any note it finds under
+now sits between it and what it cites. `pnpm archive:migrate` does the repointing, registers the moved note in
+`docs/archive/manifest.json` (`--check` in `pnpm lint` fails until it has, since 2026-11-02), and moves any note it finds under
 `fixed/`: that folder held the repaired notes until 2026-11-01 ([R-092](../product/requests.md#r-092)), when its 831
 moved to the archive, and it is retired. [`tools/check-record-links.mjs`](../../tools/check-record-links.mjs)
 runs in `pnpm lint` and fails on a link left behind, naming the file, the line and the target — and on a

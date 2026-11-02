@@ -213,6 +213,18 @@ citations for its reviewer to hold against the diff's tests. Cited nowhere is no
 nothing), and cited is neither met nor current (`--drift` names the cited requirements whose text changed after their
 code). The ratchet (`--check`, row 10) only stops the uncited growing; CI prints the summary on each run's page.
 
+**The first execution of the whole migration** (2026-11-02, I3; one row in [`first-executions.md`](first-executions.md)).
+The archive holds 301 open-question entries (1,558,999 bytes, 62 files), 45 owner decisions (103,708 bytes, 9 files), 54
+ADR passages (52,393 bytes, 31 files), 831 repaired notes (4,055,729 bytes) and no requirement text: 5,770,829 bytes.
+Outside it, `docs/` went from 20,541,501 bytes in 2,427 files at `76f88029` (the tooling, nothing moved) to 14,991,421
+in 1,601 (23 commits of other work between); the open-question parts from 17,097 lines to 3,035, the owner decisions
+from 1,823 to 600, `docs/defects/` from 52,133 to 2,575. `--check` now also holds the archive to
+[`docs/archive/manifest.json`](../archive/manifest.json) (1,332 entries, one SHA-256 each; [the archive's README](../archive/README.md)):
+a hand edit is red, named. The gate's lint: dev-time's `gate:lint` read 158 s on `76f88029` (2026-11-01) and 100 s on this branch (2026-11-02, CPU at 97 to 100 %), 260 s an hour before on the same tree, so other sessions' load decides it; the record stages alone, three alternating runs a tree at 100 % CPU, agree within that spread but for `--check`, 0.4 to 3.5 s before (it stopped at the first live entry) and 2.2 to 23 s after, its reading about 10 s in one profiled run (owner decisions 2.8 s, the manifest 4.2 s, the spec kind 1.3 s, ADR history 1.2 s). The run found two defects of the record, each a note:
+[three index lines drop a date written before "RULED"](../defects/the-archives-index-line-drops-a-ruling-date-written-before-the-word-ruled.md)
+and [twenty rulings carry no date](../defects/sixteen-owner-decisions-and-four-open-questions-record-a-ruling-without-its-date.md);
+no ruled escalation is left live that the specification does not carry.
+
 **A citation is checked where it is written** (since H1; `AGENTS.md`'s Traceability paragraph is at its byte cap, so the
 rule is stated here and in [`codebase/02`](codebase/02-the-disciplines-mechanised.md)): a requirement or directive
 identifier written in code, with however many digits, must be one `pnpm symbols` defines, and one withdrawn, superseded or retired is cited only as

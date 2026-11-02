@@ -90,7 +90,8 @@ branches share, and where `origin/main` moved too; open `new.mjs`, `land.mjs` an
 in `new.test.ts`, `land.test.ts` and `overlaps.test.ts`), `tools/archive/` (since 2026-11-01 the migration behind
 `pnpm archive:migrate`, R-092 — moves each settled open question, each ruling the specification carries, each ADR's
 history, each repaired defect note and a withdrawn or superseded requirement's text beyond its definition to `docs/archive/` and repoints their links; `--check` in `pnpm lint` from the
-first migration on; open `migrate.mjs`, which runs the kinds `owner-decisions.mjs`, `adr-history.mjs`, `defects.mjs` and `spec.mjs`
+first migration on; open `migrate.mjs`, which runs the kinds `owner-decisions.mjs`, `adr-history.mjs`, `defects.mjs` and `spec.mjs`, then `manifest.mjs` (the
+archive's hashes, `docs/archive/manifest.json`),
 over the shared `text.mjs` (`spec.mjs` reads the definition shapes from `tools/symbol-artifact/definitions.mjs`, the generator's own), tests beside each), and the standalone checks `pnpm lint` runs
 before ESLint. `apps/desktop/launcher/` (since 2026-10-23) is the portable's launcher stub — a Rust crate with no dependency, built by
 `cargo build --release` from `pnpm package` and `pnpm portable-proof`; open `src/main.rs`, its unit tests run with `cargo test

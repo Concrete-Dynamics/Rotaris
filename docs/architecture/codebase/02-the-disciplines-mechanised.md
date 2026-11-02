@@ -160,7 +160,8 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   superseded requirement's lines beyond its definition paragraph, less its directive back-pointer, to
   `docs/archive/spec/<NN-domain>/<part>.md`, read from the artifact and sharing the generator's definition shapes
   (`tools/symbol-artifact/definitions.mjs`); the definition line stays, so `pnpm symbols` is unchanged and never reads
-  the archive. `--check` reads all five.
+  the archive. `--check` reads all five, and holds the archive to `docs/archive/manifest.json`, one SHA-256 per
+  archived entry that every run writes (`manifest.mjs`): an entry edited, added or removed by hand fails it, named.
 - **A whole-session update keeps the transcript rows** — `REQ-MONITOR-216` omits the transcript from it, so
   it cannot say which rows survived; the increment after an attach or a reconcile upserts by index. The
   first run loop's status saves emptied a transcript still being written before this was so (ADR-0043

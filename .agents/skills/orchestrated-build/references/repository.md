@@ -103,7 +103,9 @@ The same commits as the code carry:
   `docs/architecture/first-executions.md`; a falsified claim corrected in place with the old reason kept beside it;
 - a repaired defect note: its outcome written on it (what changed, which test or proof pins it), `git mv` to
   `docs/archive/defects/` (`docs/defects/fixed/` is retired since 2026-11-01; `pnpm archive:migrate` moves a note left
-  there), every link to its old path repointed (`pnpm lint` runs `tools/check-record-links.mjs`);
+  there), every link to its old path repointed (`pnpm lint` runs `tools/check-record-links.mjs`), then
+  `pnpm archive:migrate` run so that `docs/archive/manifest.json` registers it (since 2026-11-02 `--check` fails an
+  archived file or passage the script has not hashed; a rebase that conflicts on the manifest re-runs the script);
 - a defect noticed along the way recorded in `docs/defects/` (schema in `docs/defects/README.md`), fixed or not;
 - a question the specification leaves open appended to the last part of `docs/architecture/open-questions.md` (its
   index names the part) as the next free number, and once it is ruled, closed or withdrawn moved to `docs/archive/` by

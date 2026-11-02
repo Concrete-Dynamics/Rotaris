@@ -3,6 +3,16 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-11-02 — a note moved into the archive is registered by `pnpm archive:migrate`
+
+**Prompted by** bundle I3 of plan hrd2 (R-092; `docs/architecture/hardening.md` §6): `tools/archive/migrate.mjs --check`,
+in `pnpm lint`, now holds `docs/archive/` to `docs/archive/manifest.json`, one SHA-256 per archived entry that every run
+writes, and fails on an entry edited, added or removed by hand. A repaired note moved straight to `docs/archive/defects/`
+with `git mv`, as the `Records` bullet said, is such an added entry, so the next gate would read red until the script ran.
+**Changed:** the `Records` bullet of `references/repository.md` adds the run of `pnpm archive:migrate` after the move, and
+says that a rebase conflicting on the manifest re-runs the script. **Verified** by `tools/archive/manifest.test.ts`
+(an added note is red until a run registers it) and `--check` green on the bundle's tree.
+
 ## 2026-11-01 — a repaired defect note moves to `docs/archive/defects/`
 
 **Prompted by** the owner's request R-092 (2026-11-01) and its bundle I2 of plan hrd2 (`docs/architecture/hardening.md`

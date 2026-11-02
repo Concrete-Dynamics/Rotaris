@@ -12,4 +12,4 @@ Rules:
 
 | Surface | Brief | Last audit |
 |---|---|---|
-| *(none yet; the first is the Overview audit of the design-system overhaul's dry run)* | | |
+| Overview | [`overview.md`](overview.md) | 2026-11-02 (audit only) |

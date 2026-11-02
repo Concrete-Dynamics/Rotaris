@@ -3,7 +3,7 @@
 > **In the record since 2026-10-13** (fin41, `fin41-comments-and-evidence`). Written on 2026-10-13 in the orchestrator's
 > session scratchpad by a read-only examination of the one FAIL of the default live pack `2026-10-13T12-18-40-282Z` at `0bc3eee`, and copied here unchanged so the record that
 > cites it does not depend on the container. Only two things were added: this note, and an HTML comment on each line
-> that names a defect note at the path it was proposed under (every such note now sits in `docs/defects/fixed/`).
+> that names a defect note at the path it was proposed under (every such note now sits in `docs/archive/defects/`, and sat in `docs/defects/fixed/` until 2026-11-01).
 > Paths under `scratchpad/` and `/home/user/Rotaris-crw-wt-live/.live-run/` name the orchestrator's container: the
 > packs are git-ignored and are not carried into the repository. No host, URL, key or token is quoted. The index is
 > [`README.md`](README.md).

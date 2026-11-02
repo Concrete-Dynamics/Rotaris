@@ -12,6 +12,9 @@
 //   ADR history         (`adr-history.mjs`) a revision's explanation, a correction that holds only the falsified
 //                       reason, a struck sentence beside its dated replacement, to
 //                       `docs/archive/architecture/adr/<nnnn>-history.md`
+//   defect notes        (`defects.mjs`) a repaired note under the retired `docs/defects/fixed/`, to
+//                       `docs/archive/defects/<name>.md`, every pointer to it repointed in the record, the code and the
+//                       agent instructions
 //
 // What it does for the open questions, in order, all of it a function of the tree as it stands:
 //
@@ -54,6 +57,7 @@ import { INDEX_LINE, SETTLED, entriesOf, questionStates } from '../check-open-qu
 import { anchorsOf, codeFiles, isRelative, recordFiles } from '../check-record-links.mjs';
 import { CONTINUED, archiveOrder, archivePathOf, partsOf } from '../record-parts.mjs';
 import { planAdrHistory, qualifying as adrQualifying } from './adr-history.mjs';
+import { FIXED_DIR, planDefects, qualifying as defectsQualifying, repointDefects } from './defects.mjs';
 import { planOwnerDecisions, qualifying as ownerQualifying } from './owner-decisions.mjs';
 import { decoded, hasId, overlay, rebase, relativeLink, rewriteLinkTargets, splitTarget, within } from './text.mjs';
 
@@ -216,8 +220,10 @@ export function plan(root, options = {}) {
   moves.push(...planOpenQuestions(root, tree, budget));
   moves.push(...planOwnerDecisions(root, tree, budget));
   moves.push(...planAdrHistory(root, tree, budget));
+  moves.push(...planDefects(root, tree));
 
   repoint(root, tree);
+  repointDefects(root, tree);
 
   /** @type {Map<string, string | null>} */
   const changed = new Map();
@@ -400,6 +406,7 @@ function repoint(root, tree) {
   const written = [...tree.mem.keys()].filter((f) => f.endsWith('.md') && f.startsWith(resolve(docs) + sep));
   const record = [...new Set([...recordFiles(root).map((f) => resolve(f)), ...written])].sort();
   for (const file of record) {
+    if (!tree.exists(file)) continue;
     const text = tree.read(file);
     const next = fromRoot(
       rewriteLinkTargets(text, (target) => {
@@ -451,6 +458,7 @@ export function stillLive(root) {
     ...adrQualifying(root, { read: (/** @type {string} */ p) => readFileSync(p, 'utf8') }).map(
       (q) => `${q.file}:${q.line} (an ADR's ${q.kind === 'struck' ? 'struck text' : q.kind} of ${q.date ?? 'an undated day'})`,
     ),
+    ...defectsQualifying(root).map((n) => `${FIXED_DIR}/${n} (a repaired note under the retired fixed/ folder)`),
   ];
 }
 

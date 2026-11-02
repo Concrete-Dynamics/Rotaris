@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
-import { commit, compress, indexLine, plan, qualifying, rebase, settledAs, tightenIndexLines, titleOf } from './migrate.mjs';
+import { commit, compress, indexLine, plan, qualifying, rebase, settledAs, stillLive, tightenIndexLines, titleOf } from './migrate.mjs';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { checkRecord } from '../check-record-links.mjs';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
@@ -26,7 +26,7 @@ const ARCHIVE2 = 'docs/archive/architecture/open-questions/02-fixture-questions.
 const FIXTURE: Record<string, string> = {
   'docs/README.md': ['# The record', '', '## The archive', '', 'What moves there.', ''].join('\n'),
   // Joined, so that the link gate's code pass does not read a fixture's path as a pointer to a real note.
-  [['docs', 'defects', 'fixed', 'a-note.md'].join('/')]: '# A note\n',
+  [['docs', 'archive', 'defects', 'a-note.md'].join('/')]: '# A note\n',
   'docs/product/requests.md': ['# Requests', '', '| <a id="r-071"></a>R-071 | the owner ruled |', ''].join('\n'),
   'docs/architecture/open-questions.md': [
     '# Open questions',
@@ -45,12 +45,12 @@ const FIXTURE: Record<string, string> = {
     '<a id="oq-1"></a>',
     '',
     // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
-    '**OQ-1 — Still open?** *(REQ-X-1.)* See [OQ-2](#oq-2) and [the note](../../defects/fixed/a-note.md).',
+    '**OQ-1 — Still open?** *(REQ-X-1.)* See [OQ-2](#oq-2) and [the note](../../archive/defects/a-note.md).',
     '',
     '<a id="oq-2"></a>',
     '',
     // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
-    '**OQ-2 — A ruled one?** *(REQ-X-2.)* Cites `../../defects/fixed/a-note.md` and [OQ-1](#oq-1).',
+    '**OQ-2 — A ruled one?** *(REQ-X-2.)* Cites `../../archive/defects/a-note.md` and [OQ-1](#oq-1).',
     '',
     '**Ruled 2026-10-06 by the owner ([R-071](../../product/requests.md#r-071)):** as built.',
     '',
@@ -159,7 +159,7 @@ describe('archive:migrate — what moves', () => {
         '',
         // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
         '**OQ-1 — Still open?** *(REQ-X-1.)* See [OQ-2](../../archive/architecture/open-questions/01-fixture-questions.md#oq-2) ' +
-          'and [the note](../../defects/fixed/a-note.md).',
+          'and [the note](../../archive/defects/a-note.md).',
         '',
         '- OQ-2 — A ruled one?; ruled 2026-10-06; [archived](../../archive/architecture/open-questions/01-fixture-questions.md#oq-2)',
         '',
@@ -187,7 +187,7 @@ describe('archive:migrate — what moves', () => {
         '<a id="oq-2"></a>',
         '',
         // eslint-disable-next-line rotaris/requirement-citations-resolve -- a made-up identifier in a fixture record
-        '**OQ-2 — A ruled one?** *(REQ-X-2.)* Cites `../../../defects/fixed/a-note.md` and [OQ-1](../../../architecture/open-questions/01-fixture-questions.md#oq-1).',
+        '**OQ-2 — A ruled one?** *(REQ-X-2.)* Cites `../../defects/a-note.md` and [OQ-1](../../../architecture/open-questions/01-fixture-questions.md#oq-1).',
         '',
         '**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** as built.',
         '',
@@ -351,9 +351,122 @@ describe('archive:migrate — the pieces', () => {
     const from = join(root, PART1);
     const to = join(root, ARCHIVE1);
     const tree = { exists: (p: string) => existsSync(p) };
-    expect(rebase('[a](#oq-1) [b](../open-questions.md) [c](https://example.com) `../../defects/fixed/a-note.md` `../nowhere.md`', from, to, tree)).toBe(
-      '[a](../../../architecture/open-questions/01-fixture-questions.md#oq-1) [b](../../../architecture/open-questions.md) [c](https://example.com) `../../../defects/fixed/a-note.md` `../nowhere.md`',
+    expect(rebase('[a](#oq-1) [b](../open-questions.md) [c](https://example.com) `../../archive/defects/a-note.md` `../nowhere.md`', from, to, tree)).toBe(
+      '[a](../../../architecture/open-questions/01-fixture-questions.md#oq-1) [b](../../../architecture/open-questions.md) [c](https://example.com) `../../defects/a-note.md` `../nowhere.md`',
     );
   });
 });
 
+
+/*
+ * The defect notes' kind (`tools/archive/defects.mjs`): `docs/defects/fixed/` is retired, and every note under it moves
+ * to `docs/archive/defects/` with every pointer to it. The fixture's repository paths are assembled from parts, so that
+ * the link gate's code pass, which reads this file too, reads no fixture path as a pointer to a real note.
+ */
+describe('archive:migrate — the repaired defect notes', () => {
+  const path = (...parts: string[]) => parts.join('/');
+  const FIXED = path('docs', 'defects', 'fixed');
+  const ARCHIVED = path('docs', 'archive', 'defects');
+  const NOTES: Record<string, string> = {
+    'docs/README.md': '# The record\n\n## The archive\n',
+    [path(FIXED, 'one.md')]: '# One\n\nSee [two](two.md#two), [the open one](../open.md) and [the spec](../../spec/01.md).\n',
+    [path(FIXED, 'two.md')]: '# Two\n\nRepaired; `../../architecture/x.md` holds it.\n',
+    [path('docs', 'defects', 'open.md')]: `# Open\n\nIts sibling was [one](fixed/one.md); see \`${path(FIXED, 'one.md')}\`.\n`,
+    'docs/spec/01.md': '# Spec\n',
+    'docs/architecture/x.md': [
+      '# X',
+      '',
+      `[one](../defects/fixed/one.md#one), \`${path(FIXED, 'two.md')}\`, \`../defects/fixed/two.md\`, and ${path(FIXED, 'one.md')} in text.`,
+      `A path to a note no move made: \`${path(FIXED, 'never.md')}\`.`,
+      '',
+    ].join('\n'),
+    'docs/product/requests.md': `| R-1 | [one](../defects/fixed/one.md) and \`${path(FIXED, 'one.md')}\` |\n`,
+    'packages/kernel/CONTEXT.md': `# Kernel\n\n[two](../../${path(FIXED, 'two.md')})\n`,
+    [path('docs', 'defects', 'linked.md')]: '# Linked\n\nOnly a link: [one](fixed/one.md#one), and the folder, [`fixed/`](fixed/).\n',
+    'docs/architecture/register.md': '# Register\n\nNotes go to [`fixed/`](../defects/fixed/).\n',
+    'apps/desktop/src/a.ts': `// ${path(FIXED, 'one.md')}, and ${path(FIXED, '')} the folder.\nexport const a = 1;\n`,
+    '.agents/skills/s/SKILL.md': `Moved to \`${path(FIXED, 'two.md')}\`.\n`,
+    '.github/workflows/ci.yml': `# (${path(FIXED, 'one.md')})\n`,
+    '.gitattributes': `# (${path(FIXED, 'two.md')})\n*.md text\n`,
+    'tools/gen.mjs': "export const line = '([note](../defects/fixed/two.md)), and [none](../defects/fixed/none.md)';\n",
+  };
+  let at: string;
+  const readAt = (p: string) => readFileSync(join(at, p), 'utf8');
+
+  beforeEach(() => {
+    at = mkdtempSync(join(tmpdir(), 'archive-defects-'));
+    write(at, NOTES);
+  });
+
+  afterEach(() => {
+    rmSync(at, { recursive: true, force: true });
+  });
+
+  it('moves every note under the retired folder and removes the folder, the notes\' own paths reaching what they reached', () => {
+    const { moves } = migrate(at);
+    expect(moves).toEqual([
+      { kind: 'defect', id: 'one.md', from: path(FIXED, 'one.md'), to: path(ARCHIVED, 'one.md') },
+      { kind: 'defect', id: 'two.md', from: path(FIXED, 'two.md'), to: path(ARCHIVED, 'two.md') },
+    ]);
+    expect(existsSync(join(at, FIXED))).toBe(false);
+    expect(readAt(path(ARCHIVED, 'one.md'))).toBe('# One\n\nSee [two](two.md#two), [the open one](../../defects/open.md) and [the spec](../../spec/01.md).\n');
+    expect(readAt(path(ARCHIVED, 'two.md'))).toBe('# Two\n\nRepaired; `../../architecture/x.md` holds it.\n');
+  });
+
+  it('repoints links, root and relative paths in the record, paths in the code, the agent instructions and the root\'s files; in the request log, links alone', () => {
+    migrate(at);
+    expect(readAt('docs/architecture/x.md')).toBe(
+      [
+        '# X',
+        '',
+        `[one](../archive/defects/one.md#one), \`${path(ARCHIVED, 'two.md')}\`, \`../archive/defects/two.md\`, and ${path(ARCHIVED, 'one.md')} in text.`,
+        `A path to a note no move made: \`${path(FIXED, 'never.md')}\`.`,
+        '',
+      ].join('\n'),
+    );
+    expect(readAt(path('docs', 'defects', 'linked.md'))).toBe('# Linked\n\nOnly a link: [one](../archive/defects/one.md#one), and the folder, [`fixed/`](../archive/defects/).\n');
+    expect(readAt('docs/architecture/register.md')).toBe('# Register\n\nNotes go to [`fixed/`](../archive/defects/).\n');
+    expect(readAt(path('docs', 'defects', 'open.md'))).toBe(`# Open\n\nIts sibling was [one](../archive/defects/one.md); see \`${path(ARCHIVED, 'one.md')}\`.\n`);
+    expect(readAt('docs/product/requests.md')).toBe(`| R-1 | [one](../archive/defects/one.md) and \`${path(FIXED, 'one.md')}\` |\n`);
+    expect(readAt('packages/kernel/CONTEXT.md')).toBe(`# Kernel\n\n[two](../../${path(ARCHIVED, 'two.md')})\n`);
+    expect(readAt('apps/desktop/src/a.ts')).toBe(`// ${path(ARCHIVED, 'one.md')}, and ${path(FIXED, '')} the folder.\nexport const a = 1;\n`);
+    expect(readAt('.agents/skills/s/SKILL.md')).toBe(`Moved to \`${path(ARCHIVED, 'two.md')}\`.\n`);
+    expect(readAt('.github/workflows/ci.yml')).toBe(`# (${path(ARCHIVED, 'one.md')})\n`);
+    expect(readAt('.gitattributes')).toBe(`# (${path(ARCHIVED, 'two.md')})\n*.md text\n`);
+    // A generator's relative path reaches the archive by the same prefix, since both folders sit two below docs/.
+    expect(readAt('tools/gen.mjs')).toBe("export const line = '([note](../archive/defects/two.md)), and [none](../defects/fixed/none.md)';\n");
+    // Left as written: a path to a note no move made, which the prose pass names. Every link resolves.
+    expect(checkRecord(at).problems).toEqual([]);
+  });
+
+  it('changes nothing on a second run, and --check is red while a note is under the retired folder', () => {
+    expect(stillLive(at)).toEqual([`${path(FIXED, 'one.md')} (a repaired note under the retired fixed/ folder)`, `${path(FIXED, 'two.md')} (a repaired note under the retired fixed/ folder)`]);
+    migrate(at);
+    const before = snapshot(at);
+    const again = plan(at);
+    expect(again.moves).toEqual([]);
+    expect(again.changed.size).toBe(0);
+    expect(snapshot(at)).toEqual(before);
+    expect(stillLive(at)).toEqual([]);
+  });
+
+  it('moves a note a branch moved to the retired folder before its rebase, and a pointer it added to the old path', () => {
+    migrate(at);
+    write(at, {
+      [path(FIXED, 'three.md')]: '# Three\n\nAfter [one](one.md).\n',
+      'docs/architecture/late.md': '# Late\n\n[three](../defects/fixed/three.md) and [one](../defects/fixed/one.md).\n',
+    });
+    const { moves } = migrate(at);
+    expect(moves).toEqual([{ kind: 'defect', id: 'three.md', from: path(FIXED, 'three.md'), to: path(ARCHIVED, 'three.md') }]);
+    expect(readAt(path(ARCHIVED, 'three.md'))).toBe('# Three\n\nAfter [one](one.md).\n');
+    expect(readAt('docs/architecture/late.md')).toBe('# Late\n\n[three](../archive/defects/three.md) and [one](../archive/defects/one.md).\n');
+    expect(checkRecord(at).problems).toEqual([]);
+  });
+
+  it('refuses two notes of one name, naming both, and writes nothing', () => {
+    write(at, { [path(ARCHIVED, 'one.md')]: '# Another one\n' });
+    const before = snapshot(at);
+    expect(() => plan(at)).toThrow(/one\.md .* are two notes of one name/);
+    expect(snapshot(at)).toEqual(before);
+  });
+});

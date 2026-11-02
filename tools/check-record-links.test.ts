@@ -8,19 +8,22 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
-import { anchorsOf, checkCode, checkCodeFile, checkFile, checkProse, checkProseFile, checkRecord, codeFiles, defectPointers, extractLinks, partialDefectPaths, PROSE_EXEMPT, prosePointers, githubSlug, isRelative, withoutCode } from './check-record-links.mjs';
+import { anchorsOf, checkCode, checkCodeFile, checkFile, checkProse, checkProseFile, checkRecord, codeFiles, defectPointers, extractLinks, isRetired, partialDefectPaths, PROSE_EXEMPT, prosePointers, githubSlug, isRelative, RETIRED_REASON, withoutCode } from './check-record-links.mjs';
 
 let root: string;
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'record-links-'));
   mkdirSync(join(root, 'docs', 'defects', 'fixed'), { recursive: true });
+  mkdirSync(join(root, 'docs', 'archive', 'defects'), { recursive: true });
   mkdirSync(join(root, 'docs', 'architecture'), { recursive: true });
   writeFileSync(
     join(root, 'docs', 'architecture', 'target.md'),
     ['# Target', '', '## 2. The store the run writes (`packages/store/src/schema.ts`, v22)', '', 'body', ''].join('\n'),
   );
-  writeFileSync(join(root, 'docs', 'defects', 'fixed', 'a-note.md'), '## A note\n');
+  writeFileSync(join(root, 'docs', 'archive', 'defects', 'a-note.md'), '## A note\n');
+  // A note left in the folder retired on 2026-11-01 (R-092): present on disk, and still refused.
+  writeFileSync(join(root, 'docs', 'defects', 'fixed', 'left.md'), '## Left\n');
 });
 
 afterEach(() => {
@@ -28,7 +31,7 @@ afterEach(() => {
 });
 
 describe('check-record-links — a dangling link fails, a good anchor passes', () => {
-  it('fails the link to a note at its pre-fixed/ path, naming file, line and target', () => {
+  it('fails the link to a note at its pre-archive path, naming file, line and target', () => {
     const file = join(root, 'docs', 'architecture', 'first-executions.md');
     writeFileSync(
       file,
@@ -51,10 +54,20 @@ describe('check-record-links — a dangling link fails, a good anchor passes', (
     });
   });
 
-  it('passes the same file once the link follows the note into fixed/', () => {
+  it('passes the same file once the link follows the note into the archive', () => {
     const file = join(root, 'docs', 'architecture', 'first-executions.md');
-    writeFileSync(file, '[`a-note.md`](../defects/fixed/a-note.md#a-note) and [§2](target.md#2-the-store-the-run-writes-packagesstoresrcschemats-v22)\n');
+    writeFileSync(file, '[`a-note.md`](../archive/defects/a-note.md#a-note) and [§2](target.md#2-the-store-the-run-writes-packagesstoresrcschemats-v22)\n');
     expect(checkFile(file)).toEqual([]);
+  });
+
+  it('fails a link into the retired docs/defects/fixed/ even while a note still stands there, saying where repaired notes are', () => {
+    const file = join(root, 'docs', 'architecture', 'first-executions.md');
+    writeFileSync(file, '[`left.md`](../defects/fixed/left.md#left)\n');
+    expect(checkFile(file)).toMatchObject([{ line: 1, target: '../defects/fixed/left.md#left', reason: RETIRED_REASON }]);
+    expect(RETIRED_REASON).toMatch(/docs\/archive\/defects\//);
+    expect([isRetired(join(root, 'docs', 'defects', 'fixed', 'x.md')), isRetired(join(root, 'docs', 'defects', 'fixed')), isRetired(join(root, 'docs', 'defects', 'x.md')), isRetired(join(root, 'docs', 'archive', 'defects', 'x.md'))]).toEqual([true, true, false, false]);
+    writeFileSync(file, '[`fixed/`](../defects/fixed/)\n');
+    expect(checkFile(file)).toMatchObject([{ line: 1, target: '../defects/fixed/', reason: RETIRED_REASON }]);
   });
 
   it('fails a fragment that names no heading in an existing file', () => {
@@ -161,19 +174,23 @@ describe('check-record-links — GitHub heading slugs', () => {
  * this file — which the pass reads too — cites no note itself.
  */
 const note = (...parts: string[]): string => ['docs', 'defects', ...parts].join('/');
+const archived = (...parts: string[]): string => ['docs', 'archive', 'defects', ...parts].join('/');
 
 describe('check-record-links — a defect-note path in the code must name a note that exists', () => {
-  it('fails a comment citing a note at its pre-fixed/ path, naming file, line and path, and passes it once it follows the note', () => {
+  it('fails a comment citing a note at its pre-archive path, naming file, line and path, and passes it once it follows the note', () => {
     mkdirSync(join(root, 'packages', 'ui', 'src'), { recursive: true });
     const file = join(root, 'packages', 'ui', 'src', 'row.tsx');
     writeFileSync(file, ['// the row', `// recorded as \`${note('a-note.md')}\`.`, 'export const x = 1;', ''].join('\n'));
     expect(checkCodeFile(root, file)).toEqual([{ file, line: 2, text: 'defect note', target: note('a-note.md'), reason: 'no note at this path' }]);
-    writeFileSync(file, ['// the row', `// recorded as \`${note('fixed', 'a-note.md')}\`.`, 'export const x = 1;', ''].join('\n'));
+    writeFileSync(file, ['// the row', `// recorded as \`${archived('a-note.md')}\`.`, 'export const x = 1;', ''].join('\n'));
     expect(checkCodeFile(root, file)).toEqual([]);
+    // The retired folder is refused even where a note is still there to find.
+    writeFileSync(file, ['// the row', `// recorded as \`${note('fixed', 'left.md')}\`.`, ''].join('\n'));
+    expect(checkCodeFile(root, file)).toEqual([{ file, line: 2, text: 'defect note', target: note('fixed', 'left.md'), reason: RETIRED_REASON }]);
   });
 
   it('reads a path wherever it stands — a string a proof prints, a style sheet — and only a whole note name', () => {
-    expect(defectPointers(`console.log('NOTE ${note('fixed', 'b.md')}');\n/* ${note('c.md')}#anchor */`).map((p: { line: number; target: string }) => [p.line, p.target])).toEqual([[1, note('fixed', 'b.md')], [2, note('c.md')]]);
+    expect(defectPointers(`console.log('NOTE ${note('fixed', 'b.md')}');\n/* ${note('c.md')}#anchor */ ${archived('d.md')}`).map((p: { line: number; target: string }) => [p.line, p.target])).toEqual([[1, note('fixed', 'b.md')], [2, note('c.md')], [2, archived('d.md')]]);
     expect(defectPointers(`${note('…')}.md and ${note('*.md')} and ${note('README.mdx')}`)).toEqual([]);
   });
 
@@ -205,14 +222,16 @@ describe('check-record-links — a defect-note path in the code must name a note
       [3, note('fixed', 'a-no-…')],
       [3, note('…-note.md')],
     ]);
-    writeFileSync(file, `// at a hyphen (\`${note('fixed', 'a-note.md')}\`) and written whole.\n`);
+    writeFileSync(file, `// at a hyphen (\`${archived('a-note.md')}\`) and written whole.\n`);
     expect(checkCodeFile(root, file)).toEqual([]);
+    writeFileSync(file, `// wrapped in the archive (\`${archived('a-note-that-is-')}\n// gone.md\`).\n`);
+    expect(checkCodeFile(root, file).map((p: { line: number; target: string }) => [p.line, p.target])).toEqual([[1, archived('a-note-that-is-')]]);
   });
 
   it('leaves a directory named as a directory and a placeholder that names no note', () => {
     const text = [
       `moved to \`${note('fixed', '')}\`, recorded in ${note('')}.`,
-      `a \`${note('….md')}\` path, a \`${note('…')}\` path, ${note('*.md')}, (\`a-note\`, ${note('fixed', '')})`,
+      `a \`${note('….md')}\` path, a \`${note('…')}\` path, ${note('*.md')}, (\`a-note\`, ${note('fixed', '')}), now in \`${archived('')}\``,
       '',
     ].join('\n');
     expect(partialDefectPaths(text)).toEqual([]);
@@ -229,19 +248,21 @@ describe("check-record-links — a defect-note path in the record's prose must n
   const brief = (problems: Problem[]) => problems.map((p) => [p.line, p.target, p.reason]);
   const mark = (...paths: string[]) => `<!-- historical-path: ${paths.join(' ')} -->`;
 
-  it('fails a path in a sentence or a link\'s text at its pre-fixed/ path, naming file, line and path, and passes it once it follows the note', () => {
+  it('fails a path in a sentence or a link\'s text at its pre-archive path, naming file, line and path, and passes it once it follows the note', () => {
     const file = join(root, 'docs', 'architecture', 'adr.md');
-    writeFileSync(file, ['# ADR', '', `Recorded as \`${note('a-note.md')}\`, which carries the repair.`, `See [\`${note('a-note.md')}\`](../defects/fixed/a-note.md).`, ''].join('\n'));
+    writeFileSync(file, ['# ADR', '', `Recorded as \`${note('a-note.md')}\`, which carries the repair.`, `See [\`${note('a-note.md')}\`](../archive/defects/a-note.md).`, ''].join('\n'));
     expect(checkProseFile(root, file)).toEqual([
       { file, line: 3, text: 'defect note', target: note('a-note.md'), reason: 'no note at this path' },
       { file, line: 4, text: 'defect note', target: note('a-note.md'), reason: 'no note at this path' },
     ]);
-    writeFileSync(file, ['# ADR', '', `Recorded as \`${note('fixed', 'a-note.md')}\`, which carries the repair.`, `See [\`${note('fixed', 'a-note.md')}\`](../defects/fixed/a-note.md).`, ''].join('\n'));
+    writeFileSync(file, ['# ADR', '', `Recorded as \`${archived('a-note.md')}\`, which carries the repair.`, `See [\`${archived('a-note.md')}\`](../archive/defects/a-note.md).`, ''].join('\n'));
     expect(checkProseFile(root, file)).toEqual([]);
+    writeFileSync(file, `Left as \`${note('fixed', 'left.md')}\` and \`../defects/fixed/left.md\`.\n`);
+    expect(brief(checkProseFile(root, file))).toEqual([[1, note('fixed', 'left.md'), RETIRED_REASON], [1, '../defects/fixed/left.md', RETIRED_REASON]]);
   });
 
   it('keeps a path a mark on its own line names, and only that one: not the same path on another line, nor another path beside it', () => {
-    const file = join(root, 'docs', 'defects', 'fixed', 'b-note.md');
+    const file = join(root, 'docs', 'archive', 'defects', 'b-note.md');
     writeFileSync(file, [
       `When written, it cited \`${note('a-note.md')}\` and \`${note('gone.md')}\`. ${mark(note('a-note.md'))}`,
       `~~Not built: \`${note('gone.md')}\`.~~ ${mark(note('gone.md'), note('other.md'))}`,
@@ -255,10 +276,19 @@ describe("check-record-links — a defect-note path in the record's prose must n
     ]);
   });
 
+  it('keeps a mark in the archive whose path reaches an archived note, since nothing there moves again, and only there', () => {
+    const file = join(root, 'docs', 'archive', 'defects', 'b-note.md');
+    writeFileSync(file, `Quoted as \`../defects/a-note.md\`. ${mark('../defects/a-note.md')}\n`);
+    expect(checkProseFile(root, file)).toEqual([]);
+    const live = join(root, 'docs', 'architecture', 'adr.md');
+    writeFileSync(live, `Quoted as \`../archive/defects/a-note.md\`. ${mark('../archive/defects/a-note.md')}\n`);
+    expect(brief(checkProseFile(root, live))).toEqual([[1, '../archive/defects/a-note.md', 'marked historical, but a note is at this path: a live pointer is checked, not kept']]);
+  });
+
   it('fails a mark on a live path, which would hide the pointer from the pass when its note next moved', () => {
     const file = join(root, 'docs', 'architecture', 'adr.md');
-    writeFileSync(file, `Now at \`${note('fixed', 'a-note.md')}\`. ${mark(note('fixed', 'a-note.md'))}\n`);
-    expect(brief(checkProseFile(root, file))).toEqual([[1, note('fixed', 'a-note.md'), 'marked historical, but a note is at this path: a live pointer is checked, not kept']]);
+    writeFileSync(file, `Now at \`${archived('a-note.md')}\`. ${mark(archived('a-note.md'))}\n`);
+    expect(brief(checkProseFile(root, file))).toEqual([[1, archived('a-note.md'), 'marked historical, but a note is at this path: a live pointer is checked, not kept']]);
   });
 
   it('skips fenced code, an HTML comment and a mark shown as inline code, and reads a code span that wraps a line at the line of the path', () => {
@@ -281,18 +311,18 @@ describe("check-record-links — a defect-note path in the record's prose must n
     // notes' moves, unread by a pass that knew only the root form.
     mkdirSync(join(root, 'docs', 'architecture', 'adr'), { recursive: true });
     const file = join(root, 'docs', 'architecture', 'register.md');
-    writeFileSync(file, ['# Register', '', 'Misnamed (`../defects/a-note.md`).', 'Repaired (`../defects/fixed/a-note.md`).', ''].join('\n'));
+    writeFileSync(file, ['# Register', '', 'Misnamed (`../defects/a-note.md`).', 'Repaired (`../archive/defects/a-note.md`).', ''].join('\n'));
     expect(brief(checkProseFile(root, file))).toEqual([[3, '../defects/a-note.md', 'no note at this path']]);
     const adr = join(root, 'docs', 'architecture', 'adr', 'adr.md');
     writeFileSync(adr, [
-      `Recorded: \`../../defects/a-note.md\` (now under \`fixed/\`). ${mark('../../defects/a-note.md')}`,
-      'Now `../../defects/fixed/a-note.md`, and from the wrong depth `../defects/fixed/a-note.md`.',
-      `Marked although live: \`../../defects/fixed/a-note.md\`. ${mark('../../defects/fixed/a-note.md')}`,
+      `Recorded: \`../../defects/a-note.md\` (now in the archive). ${mark('../../defects/a-note.md')}`,
+      'Now `../../archive/defects/a-note.md`, and from the wrong depth `../archive/defects/a-note.md`.',
+      `Marked although live: \`../../archive/defects/a-note.md\`. ${mark('../../archive/defects/a-note.md')}`,
       '',
     ].join('\n'));
     expect(brief(checkProseFile(root, adr))).toEqual([
-      [2, '../defects/fixed/a-note.md', 'no note at this path'],
-      [3, '../../defects/fixed/a-note.md', 'marked historical, but a note is at this path: a live pointer is checked, not kept'],
+      [2, '../archive/defects/a-note.md', 'no note at this path'],
+      [3, '../../archive/defects/a-note.md', 'marked historical, but a note is at this path: a live pointer is checked, not kept'],
     ]);
     // Not a relative pointer: the root form inside a longer path is the root form's, and a name with no `../defects/`.
     expect(prosePointers('`x/../defects/a.md` and `fixed/a-note.md`').pointers).toEqual([]);
@@ -301,7 +331,7 @@ describe("check-record-links — a defect-note path in the record's prose must n
   it('reads every record file but the request log, which it names with the reason', () => {
     mkdirSync(join(root, 'docs', 'product'), { recursive: true });
     writeFileSync(join(root, 'docs', 'product', 'requests.md'), `| R-001 | \`${note('a-note.md')}\` |\n`);
-    writeFileSync(join(root, 'docs', 'architecture', 'adr.md'), `\`${note('a-note.md')}\` ${mark(note('a-note.md'))} and \`${note('fixed', 'a-note.md')}\`\n`);
+    writeFileSync(join(root, 'docs', 'architecture', 'adr.md'), `\`${note('a-note.md')}\` ${mark(note('a-note.md'))} and \`${archived('a-note.md')}\`\n`);
     writeFileSync(join(root, 'AGENTS.md'), `\`${note('gone.md')}\`\n`);
     const { problems, pointers, kept } = checkProse(root);
     expect([brief(problems), pointers, kept]).toEqual([[[1, note('gone.md'), 'no note at this path']], 3, 1]);
@@ -328,7 +358,7 @@ describe('check-record-links — the root README is the record', () => {
   it('passes a README whose links reach existing files and headings, and counts them read', () => {
     writeFileSync(
       join(root, 'README.md'),
-      `[the note](${note('fixed', 'a-note.md')}#a-note), [§2](docs/architecture/target.md#2-the-store-the-run-writes-packagesstoresrcschemats-v22)\n`,
+      `[the note](${archived('a-note.md')}#a-note), [§2](docs/architecture/target.md#2-the-store-the-run-writes-packagesstoresrcschemats-v22)\n`,
     );
     const { problems, links } = checkRecord(root);
     expect(problems).toEqual([]);

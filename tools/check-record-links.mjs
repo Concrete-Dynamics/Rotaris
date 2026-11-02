@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// A defect note is repaired by moving it to `docs/defects/fixed/`, and nothing
-// moved the links that named it at its old path. Six of them dangled on
+// A defect note is repaired by moving it to `docs/archive/defects/` (until 2026-11-01, R-092: `docs/defects/fixed/`,
+// now retired), and nothing moved the links that named it at its old path. Six of them dangled on
 // 2026-09-28, beside an ADR cited by a filename it never had — every one a
 // one-target edit, and every one invisible until somebody followed the link
-// (`docs/defects/fixed/record-links-still-name-defect-notes-at-their-pre-fixed-paths.md`).
+// (`docs/archive/defects/record-links-still-name-defect-notes-at-their-pre-fixed-paths.md`).
 //
 // This gate reads every relative Markdown link in the record and fails on one
 // that reaches nothing: the target file or directory must exist, and a fragment
@@ -17,14 +17,14 @@
 // glossaries the context map names, nested ones included). The README joined it
 // on 2026-10-31: it is the page a visitor reads first and cites paths other
 // lanes move, and a dead link in it had left the gate green
-// (`docs/defects/fixed/the-record-link-check-does-not-read-the-root-readme.md`).
+// (`docs/archive/defects/the-record-link-check-does-not-read-the-root-readme.md`).
 // A `README.md` anywhere else (under `packages/`, say) is not the record.
 //
 // A second pass reads the code. Comments, tests and proof scripts under `apps/`,
 // `packages/` and `tools/` cite defect notes by their repository path
 // (`docs/defects/….md`), which is not a Markdown link, so the first pass never
 // saw one; nineteen such pointers had outlived the move of their note on
-// 2026-10-03 (`docs/defects/fixed/code-comments-cite-defect-notes-at-paths-they-no-longer-have.md`).
+// 2026-10-03 (`docs/archive/defects/code-comments-cite-defect-notes-at-paths-they-no-longer-have.md`).
 // Every such path must name a note that exists, and must be written whole, on one
 // line: the first form of this pass read only a path reaching `.md` on its line,
 // so eleven pointers a comment wrapped onto its next line and two abbreviated
@@ -35,7 +35,7 @@
 // A third pass reads the record's prose. The record cites notes by their
 // repository path written as inline code as well as by link, and moves had left
 // eighteen such paths behind by 2026-10-03, which neither pass read
-// (`docs/defects/fixed/the-records-prose-names-defect-notes-at-paths-they-no-longer-have.md`).
+// (`docs/archive/defects/the-records-prose-names-defect-notes-at-paths-they-no-longer-have.md`).
 // Every `docs/defects/….md` path in an inline code span of a record file must name
 // a note that exists, unless it is history kept on purpose and marked so on its
 // own line (`prosePointers`, `checkProseFile`); `docs/product/requests.md` is not
@@ -44,6 +44,12 @@
 // read only the root form, and two such pointers had outlived their note's move
 // (the verifier of fin15). A bare note name is not read here: it does not say it
 // is a defect note's path.
+//
+// The folder repaired notes stood in until 2026-11-01, `docs/defects/fixed/`, is retired (R-092; `docs/README.md`,
+// "The archive"): every pass fails a pointer into it, a link, a code path or a prose path, even while a file still
+// stands there, so a pointer written from habit or carried in by a rebase is caught; `pnpm archive:migrate` moves
+// such a note to `docs/archive/defects/` and repoints what names it. All three passes read a pointer into the
+// archive (`docs/archive/defects/….md`, `../archive/defects/….md`) as they read one to an open note.
 //
 // Runs as part of `pnpm lint`. Reads the tree; costs no subprocess. The pure
 // parts are exported for the test beside this file.
@@ -129,6 +135,21 @@ export function isRelative(target) {
   if (target.startsWith('//') || target.startsWith('/')) return false;
   return true;
 }
+
+/** The folder repaired notes stood in until 2026-11-01 (R-092), relative to the repository root. */
+export const RETIRED_DIR = 'docs/defects/fixed/';
+/** Why a pointer into it fails. */
+export const RETIRED_REASON = `${RETIRED_DIR} is retired (R-092): a repaired note is in docs/archive/defects/, where \`pnpm archive:migrate\` moves it`;
+/**
+ * Whether a path, absolute or from the repository root, is the retired folder or lies in it.
+ * @param {string} path
+ */
+export const isRetired = (path) => `/${path.replace(/\\/g, '/')}/`.includes(`/${RETIRED_DIR}`);
+/**
+ * Whether a path, absolute or from the repository root, lies in the archive, where nothing moves again.
+ * @param {string} path
+ */
+export const isArchived = (path) => `/${path.replace(/\\/g, '/')}`.includes('/docs/archive/');
 
 // ------------------------------------------------------------- the anchors
 
@@ -226,6 +247,10 @@ export function checkFile(file, io = {}) {
       decodedPath = pathPart;
     }
     const targetPath = decodedPath === '' ? file : resolve(dirname(file), decodedPath);
+    if (isRetired(targetPath)) {
+      problems.push({ file, ...link, reason: RETIRED_REASON });
+      continue;
+    }
     if (!exists(targetPath)) {
       problems.push({ file, ...link, reason: 'the target does not exist' });
       continue;
@@ -300,8 +325,8 @@ const SKIPPED_DIRECTORIES = new Set(['node_modules', 'out', 'dist', 'coverage', 
 const CODE_FILE = /\.(?:[cm]?[jt]sx?|css|html|json|ya?ml)$/;
 
 /**
- * Every repository path to a defect note in a text, with its 1-based line: `docs/defects/` followed by a
- * file name ending `.md`, under `fixed/` or not. A path is read wherever it stands — comment, string or
+ * Every repository path to a defect note in a text, with its 1-based line: `docs/defects/` or `docs/archive/defects/`
+ * followed by a file name ending `.md` (under the retired `fixed/` or not). A path is read wherever it stands — comment, string or
  * template — since a pointer printed by a proof is as much a pointer as one in a comment.
  * @param {string} text
  * @returns {{ line: number, target: string }[]}
@@ -309,7 +334,7 @@ const CODE_FILE = /\.(?:[cm]?[jt]sx?|css|html|json|ya?ml)$/;
 export function defectPointers(text) {
   /** @type {{ line: number, target: string }[]} */
   const pointers = [];
-  for (const match of text.matchAll(/docs\/defects\/[A-Za-z0-9_./-]*?\.md(?![A-Za-z0-9_-])/g)) {
+  for (const match of text.matchAll(/docs\/(?:archive\/)?defects\/[A-Za-z0-9_./-]*?\.md(?![A-Za-z0-9_-])/g)) {
     pointers.push({ line: text.slice(0, match.index).split('\n').length, target: match[0] });
   }
   return pointers;
@@ -320,7 +345,7 @@ export function defectPointers(text) {
  * line (at a hyphen, at a dot, or right after the slash, so the line ends inside the path) or abbreviates with `…`.
  * Such a path is read as written, which is not a note's path, so it passed the gate whether its note had moved or
  * not; a pointer is written whole, on one line. What is left alone is what names no note: the directory itself
- * (`docs/defects/` or `docs/defects/fixed/` followed by anything but a name or the line's end) and a placeholder
+ * (`docs/defects/`, `docs/archive/defects/` or `docs/defects/fixed/` followed by anything but a name or the line's end) and a placeholder
  * of `…` or `*` alone (a `docs/defects/….md` path, a `*.md` glob). A whole path is `defectPointers`'s to read.
  * @param {string} text
  * @returns {{ line: number, target: string }[]}
@@ -328,7 +353,7 @@ export function defectPointers(text) {
 export function partialDefectPaths(text) {
   /** @type {{ line: number, target: string }[]} */
   const partial = [];
-  for (const match of text.matchAll(/docs\/defects\/(?:fixed\/)?/g)) {
+  for (const match of text.matchAll(/docs\/(?:archive\/)?defects\/(?:fixed\/)?/g)) {
     const start = match.index;
     const after = text.slice(start + match[0].length);
     if (/^[A-Za-z0-9_./-]*?\.md(?![A-Za-z0-9_-])/.test(after)) continue; // whole: defectPointers reads it
@@ -378,8 +403,8 @@ export function checkCodeFile(root, file, io = {}) {
   const text = read(file);
   return [
     ...defectPointers(text)
-      .filter((pointer) => !exists(join(root, pointer.target)))
-      .map((pointer) => ({ file, line: pointer.line, text: 'defect note', target: pointer.target, reason: 'no note at this path' })),
+      .filter((pointer) => isRetired(pointer.target) || !exists(join(root, pointer.target)))
+      .map((pointer) => ({ file, line: pointer.line, text: 'defect note', target: pointer.target, reason: isRetired(pointer.target) ? RETIRED_REASON : 'no note at this path' })),
     ...partialDefectPaths(text).map((pointer) => ({
       file,
       line: pointer.line,
@@ -425,7 +450,11 @@ export const PROSE_EXEMPT = new Map([
  * The explicit mark of a deliberate historical path: an HTML comment, which does not render, on the same line as the
  * path and naming it exactly, `<!-- historical-path: docs/defects/….md -->` (several paths separated by spaces). It
  * keeps that path on that line and nothing else, and it is checked itself: a mark naming no path written as inline code
- * on its line, or a path a note is at, fails, so a mark can neither outlive its line nor hide a live pointer.
+ * on its line, or a path a note is at, fails, so a mark can neither outlive its line nor hide a live pointer. One case
+ * is left alone: a mark in the archive whose path reaches a note in the archive. A repaired note's quotes of paths as
+ * other files wrote them (`../defects/<name>.md` from `docs/architecture/`) reach, from `docs/archive/defects/`, the
+ * archived note of that name by accident of depth, and no move can strand a pointer there, since the archive's files
+ * never move again (R-092).
  */
 const HISTORICAL_MARK = /<!--\s*historical-path:([^>]*?)-->/g;
 
@@ -459,8 +488,8 @@ export function prosePointers(text) {
 
 /**
  * Every path to a defect note in a text written RELATIVE to the file it stands in, with its 1-based line: one or more
- * `../` followed by `defects/` and a file name ending `.md`, under `fixed/` or not (`../defects/fixed/….md` from
- * `docs/architecture/`, `../../defects/….md` from an ADR). The record writes a pointer in this form as often as from the
+ * `../` followed by `defects/` or `archive/defects/` and a file name ending `.md` (`../archive/defects/….md` from
+ * `docs/architecture/`, `../../defects/….md` from an ADR; `../defects/fixed/….md` is read to be refused, the folder retired). The record writes a pointer in this form as often as from the
  * root, and two had outlived their note's move after the root form was checked (fin15's verification,
  * `docs/architecture/first-executions.md` and `docs/architecture/open-questions.md`). Left out on purpose: a bare name
  * or a `./`, `fixed/…` or `../<name>.md` path between two notes, which does not say it is a defect note's; such a
@@ -471,7 +500,7 @@ export function prosePointers(text) {
 export function relativeDefectPointers(text) {
   /** @type {{ line: number, target: string }[]} */
   const pointers = [];
-  for (const match of text.matchAll(/(?<![A-Za-z0-9_./-])(?:\.\.\/)+defects\/[A-Za-z0-9_./-]*?\.md(?![A-Za-z0-9_-])/g)) {
+  for (const match of text.matchAll(/(?<![A-Za-z0-9_./-])(?:\.\.\/)+(?:archive\/)?defects\/[A-Za-z0-9_./-]*?\.md(?![A-Za-z0-9_-])/g)) {
     pointers.push({ line: text.slice(0, match.index).split('\n').length, target: match[0] });
   }
   return pointers;
@@ -490,17 +519,19 @@ export function checkProseFile(root, file, io = {}) {
   const read = io.read ?? ((p) => readFileSync(p, 'utf8'));
   const present = io.exists ?? existsSync;
   const { pointers, marks } = prosePointers(read(file));
-  const exists = (/** @type {string} */ target) => present(target.startsWith('.') ? resolve(dirname(file), target) : join(root, target));
+  const at = (/** @type {string} */ target) => (target.startsWith('.') ? resolve(dirname(file), target) : join(root, target));
+  const exists = (/** @type {string} */ target) => present(at(target));
+  const retired = (/** @type {string} */ target) => isRetired(at(target));
   const same = (/** @type {{ line: number, target: string }} */ a, /** @type {{ line: number, target: string }} */ b) => a.line === b.line && a.target === b.target;
   return [
     ...pointers
-      .filter((p) => !exists(p.target) && !marks.some((m) => same(m, p)))
-      .map((p) => ({ file, line: p.line, text: 'defect note', target: p.target, reason: 'no note at this path' })),
+      .filter((p) => (retired(p.target) || !exists(p.target)) && !marks.some((m) => same(m, p)))
+      .map((p) => ({ file, line: p.line, text: 'defect note', target: p.target, reason: retired(p.target) ? RETIRED_REASON : 'no note at this path' })),
     ...marks
       .filter((m) => !pointers.some((p) => same(p, m)))
       .map((m) => ({ file, line: m.line, text: 'historical-path', target: m.target, reason: 'the mark names no path written as inline code on its line' })),
     ...marks
-      .filter((m) => pointers.some((p) => same(p, m)) && exists(m.target))
+      .filter((m) => pointers.some((p) => same(p, m)) && exists(m.target) && !(isArchived(file) && isArchived(at(m.target))))
       .map((m) => ({ file, line: m.line, text: 'historical-path', target: m.target, reason: 'marked historical, but a note is at this path: a live pointer is checked, not kept' })),
   ].sort((a, b) => a.line - b.line);
 }
@@ -543,8 +574,8 @@ if (invokedDirectly) {
     console.error('');
     console.error('A relative link in docs/, CONTEXT-MAP.md, AGENTS.md, README.md or a packages/**/CONTEXT.md must');
     console.error('reach an existing file or directory, and a `#fragment` must name a heading or an explicit anchor');
-    console.error('in that file. A defect note moved to docs/defects/fixed/ takes every link to it along, in the');
-    console.error('same commit (AGENTS.md, "Defects noticed along the way").');
+    console.error('in that file. A repaired defect note moved to docs/archive/defects/ takes every link to it along, in the');
+    console.error('same commit (AGENTS.md, "Defects noticed along the way"); `pnpm archive:migrate` moves it and repoints them.');
   }
   if (code.problems.length > 0) {
     if (problems.length > 0) console.error('');
@@ -553,7 +584,7 @@ if (invokedDirectly) {
     console.error('');
     console.error('A docs/defects/….md path in apps/, packages/ or tools/ — a comment, a test, a proof\'s printed line —');
     console.error('must name a note that exists, written whole on one line so that this pass can read it. A note moved');
-    console.error('to docs/defects/fixed/ takes these pointers along too.');
+    console.error('to docs/archive/defects/ takes these pointers along too; docs/defects/fixed/ is retired.');
   }
   const prose = checkProse(root);
   if (prose.problems.length > 0) {
@@ -562,7 +593,7 @@ if (invokedDirectly) {
     for (const problem of prose.problems) console.error(`  - ${relative(root, problem.file).split(sep).join('/')}:${problem.line}: ${problem.target} — ${problem.reason}`);
     console.error('');
     console.error('A docs/defects/….md path, or one relative to its own file (../defects/….md), written as inline code');
-    console.error('in the record is a pointer like a link: a note moved to docs/defects/fixed/ takes it along. A path kept');
+    console.error('in the record is a pointer like a link: a note moved to docs/archive/defects/ takes it along. A path kept');
     console.error('on purpose as history (a repaired note quoting where a note stood, a struck-through passage) is marked');
     console.error('on its own line: <!-- historical-path: <the path> -->. A bare note name is not read by this pass.');
     console.error(`Not read by this pass: ${[...PROSE_EXEMPT].map(([f, why]) => `${f}, since ${why}`).join('; ')}.`);

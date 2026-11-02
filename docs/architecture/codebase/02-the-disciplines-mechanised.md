@@ -29,8 +29,9 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   own line (`-- <reason>`).
 - **The import graph has no cycle, and a package imports only what its manifest declares** (since 2026-11-01, R-091) —
   `eslint-plugin-import-x` over the TypeScript resolver, beside the boundaries plugin: `import-x/no-cycle` at
-  `maxDepth: Infinity` (external modules aside), `import-x/no-extraneous-dependencies` with one block per workspace
-  manifest (`packageDir` names it and the root's; a devDependency only in tests, test support, the tools, the proof scripts
+  `maxDepth: Infinity` (third-party modules aside; the workspace's `@rotaris/*` packages are internal by
+  `import-x/internal-regex`, so a cycle across packages is traversed too), `import-x/no-extraneous-dependencies` with one
+  block per workspace manifest, `@rotaris/*` included (`packageDir` names it and the root's; a devDependency only in tests, test support, the tools, the proof scripts
   and configuration, and anywhere in `apps/desktop`, whose devDependencies electron-vite bundles), `import-x/no-duplicates`
   and `import-x/no-self-import`. The renderer's restricted built-ins name the network, crypto and worker modules too.
 - **The IPC payloads carry no secret** — `contracts.test.ts` walks every channel schema.

@@ -106,7 +106,9 @@ const WORKSPACE_PACKAGES = ['packages', 'apps', 'tools'].flatMap((group) =>
 );
 /** Where a devDependency may be imported: tests and their support, the tools, the proof scripts, configuration. */
 const DEV_FILES = ['**/*.test.{ts,tsx}', '**/*.test-support.ts', '**/vitest.config.ts', '**/electron.vite.config.ts', 'eslint.config.js', 'tools/**', 'apps/desktop/scripts/**', '.agents/**'];
-const extraneous = (packageDir, devDependencies) => ['error', { packageDir, devDependencies, optionalDependencies: false, peerDependencies: true }];
+// `includeInternal`: the workspace's own `@rotaris/*` packages count as internal (`import-x/internal-regex` below), and a
+// package importing one its manifest does not declare is as extraneous as a third-party one.
+const extraneous = (packageDir, devDependencies) => ['error', { packageDir, devDependencies, optionalDependencies: false, peerDependencies: true, includeInternal: true }];
 
 export default tseslint.config(
   {
@@ -191,6 +193,10 @@ export default tseslint.config(
       // `import-x`'s own TypeScript settings (`flatConfigs.typescript`): without the parser named for `.ts`, the rules
       // that read the imported module (`no-cycle`) cannot parse it and see no edge at all.
       ...importX.flatConfigs.typescript.settings,
+      // The workspace's packages are internal, not external: import-x counts any module outside the linted file's own
+      // package as external, so without this `ignoreExternal` below skipped every `@rotaris/*` edge and a cycle that
+      // crossed packages went unseen (review of R-091's landing). Third-party modules stay external and untraversed.
+      'import-x/internal-regex': '^@rotaris/',
       'import-x/resolver-next': [createTypeScriptImportResolver({ project: join(ROOT, 'tsconfig.json') }), createNodeResolver()],
     },
     rules: {

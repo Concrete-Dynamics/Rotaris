@@ -220,6 +220,14 @@ describe('lint — import hygiene and the zero-warning gate (R-091, hardening.md
     expect(await lintAs('packages/ui/src/agent-tree-rows.ts', closing)).toContain('import-x/no-cycle');
     expect(await lintAs('packages/ui/src/agent-tree-rows.ts', "import { countNoun } from '@rotaris/kernel';\nexport const c = countNoun;\n")).not.toContain('import-x/no-cycle');
   });
+  it('an import that closes a cycle across packages is reported: the workspace packages are traversed, not skipped as external', async () => {
+    // `contracts` imports `@rotaris/kernel`, this barrel; the text below, linted at the barrel's path, imports `contracts` back.
+    expect(await lintAs('packages/kernel/src/index.ts', "import { CHANNEL } from '@rotaris/contracts';\nexport const c = CHANNEL;\n")).toContain('import-x/no-cycle');
+  });
+  it('a package importing a workspace package its manifest does not declare is reported', async () => {
+    expect(await lintAs('packages/model/src/violation.ts', "import { WORKSPACE_PACKAGE } from '@rotaris/workspace';\nexport const w = WORKSPACE_PACKAGE;\n")).toContain('import-x/no-extraneous-dependencies');
+    expect(await lintAs('packages/model/src/ok.ts', "import { textOf } from '@rotaris/kernel';\nexport const t = textOf;\n")).not.toContain('import-x/no-extraneous-dependencies');
+  });
   it('a module importing itself is reported', async () => {
     expect(await lintAs('packages/ui/src/agent-tree-rows.ts', "import * as self from './agent-tree-rows.js';\nexport const s = self;\n")).toContain('import-x/no-self-import');
   });

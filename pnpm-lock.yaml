@@ -53,6 +53,12 @@ importers:
 
   .:
     devDependencies:
+      '@rotaris/kernel':
+        specifier: workspace:*
+        version: link:packages/kernel
+      '@rotaris/release-naming':
+        specifier: workspace:*
+        version: link:tools/release-naming
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3

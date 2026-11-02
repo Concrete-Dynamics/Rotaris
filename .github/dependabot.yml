@@ -43,6 +43,9 @@ updates:
           - eslint*
           - typescript*
           - vitest*
+          # vitest's own scoped packages (its coverage provider) peer on its
+          # exact version, so they move with it in one pull request.
+          - '@vitest/*'
           - '@types/*'
       production:
         patterns:

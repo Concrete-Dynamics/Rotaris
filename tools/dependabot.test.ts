@@ -4,7 +4,8 @@
  * - two ecosystems, `npm` and `github-actions`, each at the repository root and weekly;
  * - npm's cooldown equal to the release-age window `pnpm-workspace.yaml` sets, so a proposed version installs;
  * - npm's groups: `electron` (the three that move together), `dev-tooling`, and `production` last, as the catch-all
- *   that takes the rest (Dependabot puts a dependency in the first group that matches);
+ *   that takes the rest (Dependabot puts a dependency in the first group that matches); vitest's scoped packages
+ *   (`@vitest/coverage-v8`, R-091 hardening F1) in vitest's own group, since each peers on its exact version;
  * - every action the workflows use is pinned by a full commit SHA with its version in a trailing comment, the form
  *   Dependabot updates in place.
  */
@@ -53,8 +54,32 @@ describe('.github/dependabot.yml', () => {
     const groups = ecosystem('npm').groups ?? {};
     expect(Object.keys(groups)).toEqual(['electron', 'dev-tooling', 'production']);
     expect(groups['electron']?.patterns).toEqual(['electron', 'electron-builder', 'electron-vite']);
-    expect(groups['dev-tooling']?.patterns).toEqual(['eslint*', 'typescript*', 'vitest*', '@types/*']);
+    expect(groups['dev-tooling']?.patterns).toEqual(['eslint*', 'typescript*', 'vitest*', '@vitest/*', '@types/*']);
     expect(groups['production']?.patterns).toEqual(['*']);
+  });
+
+  it('moves every @vitest/ package the root manifest names in the same group as vitest, whose exact version it peers on', () => {
+    // Dependabot puts a dependency in the first group with a matching pattern; `*` matches any run of characters.
+    const groups = Object.entries(ecosystem('npm').groups ?? {});
+    const matches = (pattern: string, name: string): boolean => {
+      const [head = '', ...rest] = pattern.split('*');
+      if (rest.length === 0) return name === pattern;
+      if (!name.startsWith(head)) return false;
+      let at = head.length;
+      for (const part of rest.slice(0, -1)) {
+        const found = name.indexOf(part, at);
+        if (found < 0) return false;
+        at = found + part.length;
+      }
+      const tail = rest[rest.length - 1]!;
+      return name.length - tail.length >= at && name.endsWith(tail);
+    };
+    const groupOf = (name: string): string | undefined => groups.find(([, g]) => g.patterns.some((p) => matches(p, name)))?.[0];
+    const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { devDependencies: Record<string, string> };
+    const scoped = Object.keys(manifest.devDependencies).filter((name) => name.startsWith('@vitest/'));
+    expect(scoped).toContain('@vitest/coverage-v8');
+    for (const name of scoped) expect(groupOf(name), name).toBe(groupOf('vitest'));
+    expect(groupOf('vitest')).toBe('dev-tooling');
   });
 
   it('finds every workflow action pinned by SHA with its version beside it', () => {

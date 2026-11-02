@@ -85,6 +85,7 @@ writes no manifest and creates no release, and holds a read-only token. Everythi
 *2026-11-01 ([R-091](../../product/requests.md#r-091), [`hardening.md`](../hardening.md) §3.5 row 10): `ci.yml`'s `gate` job runs
 `pnpm deps:audit` (`pnpm audit --prod --audit-level=high`, blocking) before `pnpm check`, and the whole tree's audit
 beside it without blocking; `.github/workflows/codeql.yml` analyses the code on push to main, pull requests and weekly.
+Since 2026-11-03 the gate job also runs `pnpm test:coverage` after `pnpm check` (hardening F1's floor) and uploads `coverage/`.
 Neither is this section's workflow nor a release gate (REQ-STARTUP-156 is unchanged).*
 
 **4.2 The tag workflow.** `.github/workflows/release.yml` does not exist yet. It is triggered only by tags

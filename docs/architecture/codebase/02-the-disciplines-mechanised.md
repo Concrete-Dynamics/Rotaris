@@ -61,7 +61,7 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   own message until the baseline is rewritten in the same commit. A rebase that meets the file in conflict reruns
   `--write-baseline` rather than merging it by hand (R-092, ReqToCode §3.7; since 2026-11-02, hrd2 H2).
 - **Coverage has a floor that only rises** — `pnpm test:coverage` (`vitest run --coverage`, `@vitest/coverage-v8`; not in
-  `pnpm check`, whose time is the owner's budget; CI runs it once hardening bundle G2 wires it in) measures
+  `pnpm check`, whose time is the owner's budget; CI's gate job runs it after `pnpm check` since 2026-11-03, hardening G2) measures
   `packages/*/src` and `apps/desktop/src`, generated code, tests, test support and spikes aside, and fails below the
   four figures in `vitest.config.ts`. A whole-suite run
   that measures more rewrites them, rounded down to the integer (`thresholds.autoUpdate`; only the four numbers change),

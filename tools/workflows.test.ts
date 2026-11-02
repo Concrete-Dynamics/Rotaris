@@ -7,6 +7,8 @@
  *   `contents: write` on the release workflow's `draft` job; `release.yml` grants nothing at the top, and its one
  *   secret reaches its `sign` job alone;
  * - `ci.yml`'s gate audits the production tree, blocking, before `pnpm check`, and excepts nothing on its command line;
+ * - `ci.yml`'s gate runs `pnpm test:coverage` after `pnpm check`, failing below the floor, its summary on the run page and
+ *   `coverage/` uploaded;
  * - `codeql.yml` analyses `javascript-typescript` with `security-and-quality`, on push to main, pull requests and a
  *   schedule, a superseded run cancelled;
  * - an audit exception in `pnpm-workspace.yaml` names an advisory a reading in `docs/architecture/dependency-alerts/`
@@ -23,7 +25,7 @@ const root = join(import.meta.dirname, '..');
 const workflowsDir = join(root, '.github', 'workflows');
 
 type Permissions = Record<string, string> | 'read-all' | 'write-all' | undefined;
-type Step = { name?: string; uses?: string; run?: string; with?: Record<string, unknown>; 'continue-on-error'?: boolean };
+type Step = { name?: string; uses?: string; run?: string; with?: Record<string, unknown>; 'continue-on-error'?: boolean; if?: string };
 type Job = { permissions?: Permissions; steps?: Step[]; environment?: unknown };
 type Workflow = {
   on: Record<string, unknown>;
@@ -160,6 +162,38 @@ describe('ci.yml — the dependency audit', () => {
       .join('\n');
     const ids = [...(workspace.auditConfig?.ignoreGhsas ?? []), ...(workspace.auditConfig?.ignoreCves ?? [])];
     expect(ids.filter((id) => !readings.includes(id))).toEqual([]);
+  });
+});
+
+describe('ci.yml — coverage (R-091; hardening F1 measures, G2 runs it in CI)', () => {
+  const gate = workflow('ci.yml').jobs['gate']?.steps ?? [];
+  const scripts = (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { scripts: Record<string, string> }).scripts;
+  const measures = (s: Step): boolean => /^pnpm test:coverage\b/m.test(s.run ?? '');
+  const uploads = (s: Step): boolean =>
+    s.uses?.startsWith('actions/upload-artifact@') === true && String(s.with?.['path']).replace(/\/$/, '') === 'coverage';
+
+  it('runs pnpm test:coverage, the script F1 defines, in the gate job after pnpm check, failing the job below the floor', () => {
+    expect(scripts['test:coverage']).toMatch(/vitest run --coverage/);
+    const check = gate.findIndex((s) => s.run?.trim() === 'pnpm check');
+    const at = gate.findIndex(measures);
+    expect(gate.filter(measures)).toHaveLength(1);
+    expect(at).toBeGreaterThan(check);
+    expect(check).toBeGreaterThanOrEqual(0);
+    expect(gate[at]?.['continue-on-error']).not.toBe(true);
+    expect(gate[at]?.run).toMatch(/\$code = \$LASTEXITCODE/);
+    expect(gate[at]?.run).toMatch(/exit \$code\s*$/);
+  });
+
+  it('writes the text summary to the run page', () => {
+    const run = gate.find(measures)?.run ?? '';
+    expect(run).toMatch(/Coverage summary/);
+    expect(run).toMatch(/GITHUB_STEP_SUMMARY/);
+  });
+
+  it('uploads coverage/ as an artifact after the measurement, even when the floor fails it', () => {
+    expect(gate.filter(uploads)).toHaveLength(1);
+    expect(gate.findIndex(uploads)).toBeGreaterThan(gate.findIndex(measures));
+    expect(gate.find(uploads)?.if).toBe('${{ !cancelled() }}');
   });
 });
 

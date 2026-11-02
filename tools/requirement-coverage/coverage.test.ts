@@ -4,13 +4,13 @@
  * The fixtures' identifiers are made up (`REQ-DEMO-…`), and this directory is not read by the sweep.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PD, REQ, SUPERSEDED_BY } from '@rotaris/kernel';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
-import { branchCitations, branchReport, branchText, buildReport, byDomain, citationsIn, definitionSpan, driftReport, driftText, kindOf, MAX_RANGE, parseBlame, parseLastTouch, parseRemoved, readDrift, readTree, sectionsOf, summaryText, uncitedBySection } from './coverage.mjs';
+import { BASELINE, baselineOf, baselineText, branchCitations, branchReport, branchText, buildReport, byDomain, checkBaseline, checkText, citationsIn, definitionSpan, driftReport, driftText, kindOf, MAX_RANGE, parseBlame, parseLastTouch, parseRemoved, readDrift, readTree, sectionsOf, summaryText, uncitedBySection } from './coverage.mjs';
 import { REDIRECTING } from '../build-id/build-id.mjs';
 
 const ids = (text: string): string[] => [...(citationsIn(text) as Set<string>)].sort();
@@ -304,5 +304,87 @@ describe('requirement coverage — --since and --drift over a fixture repository
       definition: { commit: commits.amended, date: '2026-02-01' },
       latest: { file: 'packages/a/src/z.ts', commit: commits.first, date: '2026-01-01' },
     }] });
+  });
+});
+
+describe('requirement coverage — the ratchet on the uncited (--check; ReqToCode §3.7, R-092)', () => {
+  type Row = { id: string; domain: string; status: string };
+  const row = (id: string, status = 'uncited'): Row => ({ id, domain: id.split('-')[1] ?? '', status });
+  // The tree the baseline was written from: DEMO has two uncited of three, OTHER none of one.
+  const written = [row('REQ-DEMO-001'), row('REQ-DEMO-002'), row('REQ-DEMO-003', 'tested'), row('REQ-OTHER-001', 'implementation-only')];
+  const baseline = JSON.parse(baselineText(baselineOf(written)));
+
+  it('writes, per domain, the uncited and their count, every live domain named, in order', () => {
+    expect(baseline.domains).toEqual({
+      DEMO: { uncited: 2, requirements: ['REQ-DEMO-001', 'REQ-DEMO-002'] },
+      OTHER: { uncited: 0, requirements: [] },
+    });
+    expect(Object.keys(baseline)).toEqual(['$comment', 'domains']);
+  });
+
+  it('holds when every domain has the same uncited (equal)', () => {
+    const r = checkBaseline(baseline, written);
+    expect(r).toMatchObject({ ok: true, uncited: 2, domains: 2, rose: [], fell: [], malformed: [] });
+    expect(checkText(r)).toContain(`2 live requirements cited nowhere across 2 domains, as ${BASELINE} holds`);
+  });
+
+  it('fails when a domain rises above its baseline, naming the requirement that lost its last citation (above)', () => {
+    const r = checkBaseline(baseline, [row('REQ-DEMO-001'), row('REQ-DEMO-002'), row('REQ-DEMO-003'), row('REQ-OTHER-001', 'tested')]);
+    expect(r.ok).toBe(false);
+    expect(r.rose).toEqual([{ domain: 'DEMO', now: 3, baseline: 2, requirements: ['REQ-DEMO-003'] }]);
+    expect(r.fell).toEqual([]);
+    const text = checkText(r);
+    expect(text).toContain('requirements cited nowhere that the baseline does not hold');
+    expect(text).toContain('DEMO: 3 cited nowhere, baseline 2; now uncited: REQ-DEMO-003');
+    expect(text).not.toContain('was not lowered');
+  });
+
+  it('fails with a different message when a domain falls below a baseline that was not lowered (below, unlowered)', () => {
+    const r = checkBaseline(baseline, [row('REQ-DEMO-001'), row('REQ-DEMO-002', 'tested'), row('REQ-DEMO-003', 'tested'), row('REQ-OTHER-001', 'tested')]);
+    expect(r.ok).toBe(false);
+    expect(r.rose).toEqual([]);
+    expect(r.fell).toEqual([{ domain: 'DEMO', now: 1, baseline: 2, requirements: ['REQ-DEMO-002'] }]);
+    const text = checkText(r);
+    expect(text).toContain('the baseline holds requirements that are cited now (or no longer live), and was not lowered');
+    expect(text).toContain('DEMO: 1 cited nowhere, baseline 2; cited now: REQ-DEMO-002');
+    expect(text).toContain('pnpm req-coverage --write-baseline');
+    expect(text).not.toContain('does not hold');
+    // Lowered in the same commit, it holds again.
+    const lowered = JSON.parse(baselineText(baselineOf([row('REQ-DEMO-001'), row('REQ-DEMO-002', 'tested'), row('REQ-DEMO-003', 'tested'), row('REQ-OTHER-001', 'tested')])));
+    expect(checkBaseline(lowered, [row('REQ-DEMO-001'), row('REQ-DEMO-002', 'tested'), row('REQ-DEMO-003', 'tested'), row('REQ-OTHER-001', 'tested')]).ok).toBe(true);
+  });
+
+  it('a swap at an equal count still names the requirement that lost its citation; a new domain counts from zero', () => {
+    const r = checkBaseline(baseline, [row('REQ-DEMO-001'), row('REQ-DEMO-002', 'tested'), row('REQ-DEMO-003'), row('REQ-OTHER-001', 'tested'), row('REQ-NEW-001')]);
+    expect(r.rose).toEqual([
+      { domain: 'DEMO', now: 2, baseline: 2, requirements: ['REQ-DEMO-003'] },
+      { domain: 'NEW', now: 1, baseline: 0, requirements: ['REQ-NEW-001'] },
+    ]);
+    expect(r.fell).toEqual([{ domain: 'DEMO', now: 2, baseline: 2, requirements: ['REQ-DEMO-002'] }]);
+  });
+
+  it('refuses a baseline edited by hand: a count that is not its list, or no list', () => {
+    const edited = { domains: { DEMO: { uncited: 1, requirements: ['REQ-DEMO-001', 'REQ-DEMO-002'] }, OTHER: { uncited: 0 } } };
+    const r = checkBaseline(edited, written);
+    expect(r.ok).toBe(false);
+    expect(r.malformed).toEqual([{ domain: 'DEMO', uncited: 1, listed: 2 }, { domain: 'OTHER', uncited: 0, listed: 0 }]);
+    expect(checkText(r)).toContain('is not as --write-baseline writes it');
+    expect(checkBaseline(null, written).rose.map((d: { domain: string }) => d.domain)).toEqual(['DEMO']);
+  });
+
+  it('the committed baseline is as --write-baseline writes it: counts its lists, sorted, live identifiers only', () => {
+    const committed = JSON.parse(readFileSync(join(import.meta.dirname, 'baseline.json'), 'utf8'));
+    const domains = Object.keys(committed.domains);
+    expect(domains).toEqual([...domains].sort());
+    for (const [domain, entry] of Object.entries(committed.domains) as Array<[string, { uncited: number; requirements: string[] }]>) {
+      expect(entry.uncited).toBe(entry.requirements.length);
+      expect(entry.requirements).toEqual([...entry.requirements].sort());
+      for (const id of entry.requirements) {
+        expect(id.startsWith(`REQ-${domain}-`)).toBe(true);
+        const r = (REQ as Record<string, { withdrawn: boolean } | undefined>)[id];
+        expect(r?.withdrawn).toBe(false);
+        expect(id in SUPERSEDED_BY).toBe(false);
+      }
+    }
   });
 });

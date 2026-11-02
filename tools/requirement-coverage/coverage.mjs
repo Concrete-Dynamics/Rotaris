@@ -12,6 +12,14 @@
 // (`--sections` groups the uncited by the specification's own headings: a section wholly uncited reads differently
 // from one requirement missing in a cited section).
 //
+// One mode is a gate (`--check`, in `pnpm lint` since 2026-11-02; ReqToCode §3.7, R-092, hardening H2): a ratchet on
+// the uncited. `baseline.json` beside this file holds, per domain, the live shipping requirements cited nowhere and
+// their count, as `--write-baseline` writes them. `--check` fails when a domain has a requirement cited nowhere that
+// the baseline does not hold — one that lost its last citation, or one newly specified — naming each (so a domain's
+// count can never rise above its baseline unnoticed); and it fails, with a different message, when the baseline holds
+// one that is cited now (or no longer live), so a landing that cites more lowers the floor in the same commit. The
+// ratchet only tightens: the floor moves by `--write-baseline`, visibly, in the diff.
+//
 // What it counts.
 //   - The denominator, "live shipping": every identifier in the generated artifact
 //     (`packages/kernel/src/generated/requirements.ts`, written by `pnpm symbols` from `docs/spec/`) that is not
@@ -41,9 +49,11 @@
 //   --drift           drift (ReqToCode §4.7; R-092): every live requirement whose definition changed in a commit
 //                     later than the last commit touching every implementation file that cites it — the code may
 //                     predate the requirement's current text; with --json, that report alone as JSON
+//   --check           the ratchet against `baseline.json`: exit 1, naming what moved, when it does not hold
+//   --write-baseline  write `baseline.json` from the tree (after citing more, or for a requirement newly specified)
 //
 // Reads the tree and runs `git ls-files` (and, for --since and --drift, `git merge-base`, `diff`, `show`, `log` and
-// `blame`); writes nothing unless `--json=<path>` names a file. The pure parts are exported for the test beside this
+// `blame`); writes nothing unless `--json=<path>` names a file, or `--write-baseline` is given. The pure parts are exported for the test beside this
 // file, and the git readers take the repository root, so the test runs them over a fixture repository.
 import { execFile, execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -274,7 +284,9 @@ export async function readTree(root) {
   const requirements = Object.values(mod.REQ);
   /** @type {Directive[]} */
   const directives = Object.values(mod.PD);
-  const listed = execFileSync('git', ['-C', root, 'ls-files', '-z', 'packages', 'apps', 'tools'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+  // Tracked and untracked-but-not-ignored: a new file cites as it will once committed, so `--check` before `git add`
+  // reads what the commit will hold (`--since` reads the untracked the same way).
+  const listed = execFileSync('git', ['-C', root, 'ls-files', '-z', '--cached', '--others', '--exclude-standard', 'packages', 'apps', 'tools'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
     .split('\0').filter((p) => p && SOURCE.test(p) && !SKIPPED.some((s) => s.test(p)));
   /** @type {Map<string, string>} */
   const files = new Map();
@@ -640,16 +652,147 @@ export function driftText(d) {
   return lines.join('\n');
 }
 
+// ── The ratchet (`--check`, `--write-baseline`; ReqToCode §3.7, R-092, hardening H2) ─────────────────────────────
+
+/** The baseline's path, relative to the repository root. */
+export const BASELINE = 'tools/requirement-coverage/baseline.json';
+
+/**
+ * @typedef {{ uncited: number, requirements: string[] }} DomainBaseline
+ * @typedef {{ domains: Record<string, DomainBaseline> }} Baseline
+ */
+
+/**
+ * The baseline the tree's report gives: every domain with a live shipping requirement, its requirements cited nowhere
+ * (sorted) and their count; the domains in name order, so the file's diff names exactly what moved.
+ * @param {Row[]} rows
+ * @returns {Baseline}
+ */
+export function baselineOf(rows) {
+  /** @type {Map<string, string[]>} */
+  const out = new Map();
+  for (const r of rows) {
+    const list = out.get(r.domain) ?? [];
+    if (r.status === 'uncited') list.push(r.id);
+    out.set(r.domain, list);
+  }
+  /** @type {Record<string, DomainBaseline>} */
+  const domains = {};
+  for (const domain of [...out.keys()].sort()) {
+    const requirements = (out.get(domain) ?? []).sort();
+    domains[domain] = { uncited: requirements.length, requirements };
+  }
+  return { domains };
+}
+
+/** @param {Baseline} baseline */
+export const baselineText = (baseline) => `${JSON.stringify({
+  $comment: 'Per domain, the live shipping requirements cited nowhere: written by `pnpm req-coverage --write-baseline`, held by `pnpm req-coverage --check` in `pnpm lint` (tools/requirement-coverage/coverage.mjs). It only shrinks: cite a requirement, then rewrite this file in the same commit.',
+  ...baseline,
+}, null, 2)}\n`;
+
+/**
+ * The ratchet: the tree's uncited against the baseline, per domain.
+ *   - `rose`: requirements cited nowhere that the baseline does not hold (they lost their last citation, or are newly
+ *     specified), with the domain's count now and in the baseline — a domain above its baseline always has one;
+ *   - `fell`: requirements the baseline holds that are cited now or no longer live — the floor was not lowered;
+ *   - `malformed`: a domain whose recorded count is not the length of its list (an edit `--write-baseline` never makes).
+ * It holds when all three are empty: the same requirements, uncited, in every domain.
+ * @param {unknown} baseline the parsed file
+ * @param {Row[]} rows
+ */
+export function checkBaseline(baseline, rows) {
+  const now = baselineOf(rows).domains;
+  const raw = /** @type {{ domains?: Record<string, Partial<DomainBaseline>> } | null} */ (baseline);
+  const held = raw && typeof raw === 'object' && raw.domains && typeof raw.domains === 'object' ? raw.domains : {};
+  /** @type {Array<{ domain: string, now: number, baseline: number, requirements: string[] }>} */
+  const rose = [];
+  /** @type {Array<{ domain: string, now: number, baseline: number, requirements: string[] }>} */
+  const fell = [];
+  /** @type {Array<{ domain: string, uncited: unknown, listed: number }>} */
+  const malformed = [];
+  for (const domain of [...new Set([...Object.keys(held), ...Object.keys(now)])].sort()) {
+    const entry = held[domain] ?? {};
+    const was = Array.isArray(entry.requirements) ? entry.requirements.filter((x) => typeof x === 'string') : [];
+    const count = typeof entry.uncited === 'number' ? entry.uncited : was.length;
+    if (held[domain] && (entry.uncited !== was.length || !Array.isArray(entry.requirements))) {
+      malformed.push({ domain, uncited: entry.uncited, listed: was.length });
+    }
+    const is = now[domain]?.requirements ?? [];
+    const wasSet = new Set(was);
+    const isSet = new Set(is);
+    const lost = is.filter((id) => !wasSet.has(id));
+    const gained = was.filter((id) => !isSet.has(id)).sort();
+    if (lost.length > 0) rose.push({ domain, now: is.length, baseline: count, requirements: lost });
+    if (gained.length > 0) fell.push({ domain, now: is.length, baseline: count, requirements: gained });
+  }
+  const uncited = Object.values(now).reduce((n, d) => n + d.uncited, 0);
+  return { ok: rose.length === 0 && fell.length === 0 && malformed.length === 0, uncited, domains: Object.keys(now).length, rose, fell, malformed };
+}
+
+/** @param {ReturnType<typeof checkBaseline>} r */
+export function checkText(r) {
+  if (r.ok) return `requirement coverage ratchet: ${r.uncited} live requirements cited nowhere across ${r.domains} domains, as ${BASELINE} holds`;
+  const lines = [];
+  if (r.rose.length > 0) {
+    lines.push('requirement coverage ratchet: requirements cited nowhere that the baseline does not hold (each lost its last citation, or is newly specified):');
+    for (const d of r.rose) lines.push(`  ${d.domain}: ${d.now} cited nowhere, baseline ${d.baseline}; now uncited: ${d.requirements.join(', ')}`);
+    lines.push('  cite each again where it is built (implementation, test or proof); a requirement newly specified and not yet built raises the baseline only by `pnpm req-coverage --write-baseline`, said in the commit');
+  }
+  if (r.fell.length > 0) {
+    if (lines.length > 0) lines.push('');
+    lines.push(`requirement coverage ratchet: the baseline holds requirements that are cited now (or no longer live), and was not lowered:`);
+    for (const d of r.fell) lines.push(`  ${d.domain}: ${d.now} cited nowhere, baseline ${d.baseline}; cited now: ${d.requirements.join(', ')}`);
+    lines.push(`  the ratchet only tightens: run \`pnpm req-coverage --write-baseline\` and commit ${BASELINE} with the citations`);
+  }
+  if (r.malformed.length > 0) {
+    if (lines.length > 0) lines.push('');
+    lines.push(`requirement coverage ratchet: ${BASELINE} is not as --write-baseline writes it:`);
+    for (const d of r.malformed) lines.push(`  ${d.domain}: uncited ${String(d.uncited)}, ${d.listed} listed`);
+    lines.push('  run `pnpm req-coverage --write-baseline`, never edit the file by hand');
+  }
+  return lines.join('\n');
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
   const args = process.argv.slice(2);
   const flag = (/** @type {string} */ name) => args.find((a) => a === `--${name}` || a.startsWith(`--${name}=`));
   const value = (/** @type {string} */ name) => flag(name)?.split('=').slice(1).join('=') || undefined;
-  const known = ['uncited', 'sections', 'domain', 'json', 'since', 'drift'];
+  const known = ['uncited', 'sections', 'domain', 'json', 'since', 'drift', 'check', 'write-baseline'];
   const unknown = args.filter((a) => !known.some((k) => a === `--${k}` || a.startsWith(`--${k}=`)));
   if (unknown.length > 0) {
     process.stderr.write(`req-coverage: unknown argument ${unknown.join(' ')} (known: ${known.map((k) => `--${k}`).join(' ')})\n`);
     process.exit(2);
+  }
+  // The ratchet: `--write-baseline` writes the floor, `--check` holds it; each alone, over the whole tree.
+  if (flag('check') || flag('write-baseline')) {
+    if (args.length > 1) {
+      process.stderr.write('req-coverage: --check and --write-baseline take no other argument\n');
+      process.exit(2);
+    }
+    const report = buildReport(await readTree(root));
+    const path = join(root, BASELINE);
+    if (flag('write-baseline')) {
+      const baseline = baselineOf(report.rows);
+      writeFileSync(path, baselineText(baseline));
+      const total = Object.values(baseline.domains).reduce((n, d) => n + d.uncited, 0);
+      process.stdout.write(`req-coverage: wrote ${BASELINE}: ${total} live requirements cited nowhere across ${Object.keys(baseline.domains).length} domains\n`);
+      process.exit(0);
+    }
+    if (!existsSync(path)) {
+      process.stderr.write(`requirement coverage ratchet: no ${BASELINE}; run \`pnpm req-coverage --write-baseline\` and commit it\n`);
+      process.exit(1);
+    }
+    /** @type {unknown} */
+    let baseline;
+    try { baseline = JSON.parse(readFileSync(path, 'utf8')); } catch (err) {
+      process.stderr.write(`requirement coverage ratchet: ${BASELINE} is not JSON (${/** @type {Error} */ (err).message}); run \`pnpm req-coverage --write-baseline\`\n`);
+      process.exit(1);
+    }
+    const result = checkBaseline(baseline, report.rows);
+    (result.ok ? process.stdout : process.stderr).write(`${checkText(result)}\n`);
+    process.exit(result.ok ? 0 : 1);
   }
   const domain = value('domain');
   // `--since` and `--drift` are their own reports: each prints alone, and with --json the JSON holds only them.

@@ -21,6 +21,8 @@ collected by `vitest.config.ts` — `*.test.ts` only, so a `.tsx` suffix collect
 - **A first execution reports back into the record that decided it**, in place, even when it found nothing, and appends
   a row to `docs/architecture/first-executions.md`.
 - `pnpm live-run` spends the owner's money. It is never automatic; an agent asks first.
+- **A landing that cites a requirement for the first time lowers the baseline** in the same commit:
+  `pnpm req-coverage --write-baseline` rewrites `tools/requirement-coverage/baseline.json`, which `pnpm lint` holds.
 
 The index of which proof covers what is `docs/proofs/README.md`, rendered from `tools/proof-registry/registry.mjs`
 (`pnpm proofs:index` writes it; `pnpm lint` fails when it is stale). `pnpm preflight [proof-id …]` checks the machine

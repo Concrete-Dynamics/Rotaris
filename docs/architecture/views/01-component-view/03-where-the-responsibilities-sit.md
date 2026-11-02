@@ -215,7 +215,7 @@ before it. **Edges unchanged**: a script reaching a tool, as above.
 ### The requirement coverage report (2026-10-13; fin42, whats-next item N90)
 
 `tools/requirement-coverage/` is a **report-time tool** with no `package.json`. It runs from `pnpm req-coverage`
-(`coverage.mjs`, tests in `coverage.test.ts`) and is in no gate. It imports the generated artifact
+(`coverage.mjs`, tests in `coverage.test.ts`); since 2026-11-02 (H2) its `--check` is in `pnpm lint`, against `baseline.json`. It imports the generated artifact
 (`packages/kernel/src/generated/requirements.ts`, through Node's type stripping) and reads the tracked files under
 `packages/`, `apps/` and `tools/` through `git ls-files`. Nothing in `packages/` or `apps/` imports it, and it changes nothing
 the product ships. **Edges unchanged**: `tools/**` is outside the boundary rule, and its test reaches the artifact through

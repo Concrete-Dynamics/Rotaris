@@ -31,7 +31,12 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   `pnpm req-coverage`: `--since[=<ref>]` names what the files a branch touches cite now and did not at its merge-base
   (default `origin/main`), and what they dropped; `--drift` names every live requirement whose definition changed, by
   `git blame` and through verbatim moves, after every implementation file citing it was last touched (R-092, ReqToCode
-  §3.6 and §4.7; since 2026-11-01, hrd2 H1). Neither fails anything; a baseline of the uncited held in `pnpm lint` is bundle H2's.
+  §3.6 and §4.7; since 2026-11-01, hrd2 H1). Neither fails anything.
+- **The uncited only shrink** — `pnpm req-coverage --check`, in `pnpm lint`, holds `tools/requirement-coverage/baseline.json`
+  (per domain, the live shipping requirements cited nowhere and their count, written by `--write-baseline`): a requirement
+  cited nowhere that the baseline does not hold fails, named; one the baseline holds that is cited now fails with its
+  own message until the baseline is rewritten in the same commit. A rebase that meets the file in conflict reruns
+  `--write-baseline` rather than merging it by hand (R-092, ReqToCode §3.7; since 2026-11-02, hrd2 H2).
 - **A window is held by id, never by handle, past its creation** — `webContents` on a destroyed
   window throws, and a throw from a `closed` handler during exit wedges the process behind a modal
   error dialog (ADR-0044 first-execution note). The relay attaches by id; `send` checks `isDestroyed()`.

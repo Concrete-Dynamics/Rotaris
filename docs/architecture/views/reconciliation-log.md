@@ -14,6 +14,10 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-11-02**
+
+**The uncited only shrink: `pnpm req-coverage --check` in `pnpm lint` (R-092, hardening H2; 2026-11-02).** `01-component-view/03-where-the-responsibilities-sit.md`, the requirement coverage report: no longer in no gate; `--check` reads `baseline.json` beside it and `--write-baseline` writes it. No package, edge, process, message or seam changed.
+
 Last reconciled with the code: **2026-11-01**
 
 **A dispatcher that catches and checks its sender (R-091 bundle A1; ADR-0019, ADR-0044, REQ-SHELL-020; Electron security checklist 17; 2026-11-01, `../../archive/defects/the-command-dispatcher-catches-nothing-so-a-handler-that-throws-rejects-the-renderers-invoke.md`).** `02-process-view/01-what-each-process-owns.md`'s main row: the window rule now answers a dialog for the window it was raised over (`MainWindows.standingBehind`, walking `parent`), the active window only for the seams and the driver; the channel's sender check (`main/command-sender.ts`) and `runCommand`'s catch (`main/command-dispatch.ts`) are named. (At review the row's clause on the window rule's 2026-10-03 change, which the insertion had left after the catch, was put back beside the rule it dates.) `04-seams/01-1-a-renderer-command.md`'s invariants gain the sender check and `command.failed`; `06-sequences/02-2-a-permission-approval-end-to-end.md` says the dialog's commands cross the check and are answered for its parent. `.claude/rules/contracts-and-ipc.md` gains the sender-origin sentence. No package, edge, process, channel or store column changed; two outcome codes, `command.failed` and `command.untrustedSender`, are values of the free `code` string; no fact changed owner.

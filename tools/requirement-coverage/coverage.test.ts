@@ -377,6 +377,7 @@ describe('requirement coverage — the ratchet on the uncited (--check; ReqToCod
     const committed = JSON.parse(readFileSync(join(import.meta.dirname, 'baseline.json'), 'utf8'));
     const domains = Object.keys(committed.domains);
     expect(domains).toEqual([...domains].sort());
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- without it tsc reads each entry as `unknown` and refuses its fields.
     for (const [domain, entry] of Object.entries(committed.domains) as Array<[string, { uncited: number; requirements: string[] }]>) {
       expect(entry.uncited).toBe(entry.requirements.length);
       expect(entry.requirements).toEqual([...entry.requirements].sort());
@@ -392,7 +393,7 @@ describe('requirement coverage — the ratchet on the uncited (--check; ReqToCod
 
 describe('requirement coverage — the tree the ratchet reads (readTree over a fixture repository)', () => {
   const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@invalid', '-c', 'commit.gpgsign=false'];
-  const ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !(REDIRECTING as readonly string[]).includes(k)));
+  const ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !REDIRECTING.includes(k)));
   let root = '';
   const git = (args: string[]): string => {
     const r = spawnSync('git', ['-C', root, ...IDENTITY, ...args], { encoding: 'utf8', env: ENV });

@@ -409,7 +409,7 @@ describe('verification planner — the requirements this diff cites (R-092, hard
 
   describe('over a fixture repository', () => {
     const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@invalid', '-c', 'commit.gpgsign=false'];
-    const ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !(REDIRECTING as readonly string[]).includes(k)));
+    const ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !REDIRECTING.includes(k)));
     let repo = '';
     const git = (args: string[]): string => {
       const r = spawnSync('git', ['-C', repo, ...IDENTITY, ...args], { encoding: 'utf8', env: ENV });
